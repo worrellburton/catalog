@@ -1123,33 +1123,43 @@ export default function ProductPage({
               </div>
             )}
 
-            {/* Size & fit + Materials & care spec sheet. Stopgap render
-                of whatever the scraper extracted; "Not available" until
-                the backfill pass covers the rest of the catalog. */}
-            {details && (
-              <section className="pd-specs" aria-label="Size and fit details">
-                <h2 className="pd-specs-title">Size &amp; fit</h2>
-                {/* Structured measurement diagram — self-hides when the
-                    scraper hasn't backfilled the measurements column
-                    for this product yet. Sits above the copy so a
-                    shopper sees the visual spec sheet first. */}
-                <ProductMeasurementsDiagram measurements={details.measurements} />
-                <dl className="pd-specs-list">
-                  <div className="pd-specs-row">
-                    <dt className="pd-specs-label">Fit</dt>
-                    <dd className={`pd-specs-value${details.size_fit ? '' : ' is-empty'}`}>
-                      {details.size_fit || 'Not available'}
-                    </dd>
-                  </div>
-                  <div className="pd-specs-row">
-                    <dt className="pd-specs-label">Materials</dt>
-                    <dd className={`pd-specs-value${details.materials_care ? '' : ' is-empty'}`}>
-                      {details.materials_care || 'Not available'}
-                    </dd>
-                  </div>
-                </dl>
-              </section>
-            )}
+            {/* Size & fit + Materials & care spec sheet. Hidden
+                entirely when the scraper hasn't picked up any of the
+                three signals (size_fit, materials_care, measurements)
+                — there's nothing useful to show, and a stub of
+                "Not available / Not available" was just visual noise
+                on the rest of the catalog. */}
+            {details && (() => {
+              const hasMeasurements = !!details.measurements
+                && Object.values(details.measurements).some(
+                  (v): v is number => typeof v === 'number' && Number.isFinite(v)
+                );
+              const hasFit = !!(details.size_fit && details.size_fit.trim());
+              const hasMaterials = !!(details.materials_care && details.materials_care.trim());
+              if (!hasMeasurements && !hasFit && !hasMaterials) return null;
+              return (
+                <section className="pd-specs" aria-label="Size and fit details">
+                  <h2 className="pd-specs-title">Size &amp; fit</h2>
+                  <ProductMeasurementsDiagram measurements={details.measurements} />
+                  {(hasFit || hasMaterials) && (
+                    <dl className="pd-specs-list">
+                      {hasFit && (
+                        <div className="pd-specs-row">
+                          <dt className="pd-specs-label">Fit</dt>
+                          <dd className="pd-specs-value">{details.size_fit}</dd>
+                        </div>
+                      )}
+                      {hasMaterials && (
+                        <div className="pd-specs-row">
+                          <dt className="pd-specs-label">Materials</dt>
+                          <dd className="pd-specs-value">{details.materials_care}</dd>
+                        </div>
+                      )}
+                    </dl>
+                  )}
+                </section>
+              );
+            })()}
 
             {/* "More from <brand>" rail - fills the negative space below
                 the Shop drawer in the info column with same-brand-mate

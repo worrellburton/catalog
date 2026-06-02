@@ -21,6 +21,7 @@ import { looks as staticLooks, creators as staticCreators } from '~/data/looks';
 import type { Look, Creator } from '~/data/looks';
 import { getLooks, getCreators, invalidateLooksCache } from '~/services/looks';
 import { createLook, addProductToLook } from '~/services/manage-looks';
+import { setGenerationPublished } from '~/services/user-generations';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
 import { inferProductType, auditAllProductTypes } from '~/services/product-types';
 import { inferProductGenderFromName, auditAllProductGenders } from '~/services/genders';
@@ -1483,56 +1484,82 @@ export default function AdminData() {
           console.warn('[publish-inline] addProductToLook failed:', err);
         })
       ));
-      // Same two follow-ups as the dedicated screen - without these
-      // the new row never appears in the Published list.
-      const followUps: Promise<unknown>[] = [];
-      if (supabase && g.video_url) {
-        followUps.push(Promise.resolve(supabase
+      // Critical follow-ups: looks_creative INSERT and looks UPDATE.
+      // Without both, fetchLooksFromSupabase silently drops the look
+      // (it joins looks_creative!inner and filters status='live'), so
+      // the row would land in DB-limbo — present but invisible to the
+      // Published tab AND the consumer feed. Previously these ran in
+      // Promise.all over Promise.resolve(thenable) wrappers that hid
+      // RLS / network failures, leaving orphaned 'draft' rows behind.
+      // Sequential awaits make every failure surface to the outer
+      // catch so the row gets re-added to Unpublished instead of
+      // permanently disappearing.
+      if (!supabase) throw new Error('Supabase client not available');
+      if (g.video_url) {
+        const { data: creativeData, error: creativeErr } = await supabase
           .from('looks_creative')
           .insert({ look_id: look.id, video_url: g.video_url, is_primary: true })
           .select('id')
-          .single()
-          .then(({ data: creativeData, error }: { data: { id: string } | null; error: { message: string } | null }) => {
-            if (error) console.warn('[publish-inline] looks_creative insert failed:', error.message);
-            if (creativeData?.id) {
-              void generateAndStorePoster(look.id, creativeData.id, g.video_url!);
-            }
-          })));
-      }
-      if (supabase) {
-        // Overwrite user_id with the source generation's creator so
-        // the consumer + admin Looks list attribute the look to the
-        // person who *made* it, not the admin who clicked Publish.
-        // manage-looks writes user_id = auth.uid() (the admin), and
-        // fetchLooksFromSupabase keys the profile lookup off user_id.
-        // creator_handle is also synced by the DB trigger
-        // looks_sync_creator_handle, but we set it explicitly when we
-        // have it to avoid the round-trip to creators.
-        const updates: Record<string, unknown> = { status: 'live' };
-        if (g.user_id) {
-          updates.user_id = g.user_id;
-          updates.creator_handle = null; // let trigger backfill from creators
+          .single();
+        if (creativeErr) {
+          throw new Error(`looks_creative insert failed: ${creativeErr.message}`);
         }
-        followUps.push(Promise.resolve(supabase
-          .from('looks')
-          .update(updates)
-          .eq('id', look.id)
-          .then(({ error }: { error: { message: string } | null }) => {
-            if (error) console.warn('[publish-inline] status update failed:', error.message);
-          })));
-        // Also record the admin who actually ran the publish so the
-        // audit trail survives the user_id move.
-        followUps.push((async () => {
-          const { data: { user: authUser } } = await supabase.auth.getUser();
-          if (!authUser?.id) return;
-          const { error } = await supabase
+        if (creativeData?.id) {
+          void generateAndStorePoster(look.id, creativeData.id, g.video_url);
+        }
+      }
+      // Overwrite user_id with the source generation's creator so the
+      // consumer + admin Looks list attribute the look to the person
+      // who *made* it, not the admin who clicked Publish. manage-looks
+      // writes user_id = auth.uid() (the admin), and the trigger
+      // looks_sync_creator_handle backfills creator_handle on user_id
+      // change. Note: when g.user_id === admin's id (admin generated
+      // the look themselves), the trigger only fires on a real
+      // user_id change, so we always pass the value through to keep
+      // the UPDATE statement explicit.
+      const updates: Record<string, unknown> = { status: 'live' };
+      if (g.user_id) {
+        updates.user_id = g.user_id;
+        updates.creator_handle = null;
+      }
+      const { data: statusRow, error: statusErr } = await supabase
+        .from('looks')
+        .update(updates)
+        .eq('id', look.id)
+        .select('id, status')
+        .maybeSingle();
+      if (statusErr) {
+        throw new Error(`status update failed: ${statusErr.message}`);
+      }
+      if (!statusRow || statusRow.status !== 'live') {
+        // RLS silent-rejects an UPDATE by returning 0 rows with no
+        // error. Check the post-update row state and fail loudly so
+        // the look doesn't end up stuck in 'draft'.
+        throw new Error('status update affected 0 rows (likely RLS block)');
+      }
+      // Record the admin who actually ran the publish so the audit
+      // trail survives the user_id move. Non-critical — log and move
+      // on if it fails.
+      try {
+        const { data: { user: authUser } } = await supabase.auth.getUser();
+        if (authUser?.id) {
+          const { error: cbErr } = await supabase
             .from('looks')
             .update({ created_by: authUser.id })
             .eq('id', look.id);
-          if (error) console.warn('[publish-inline] created_by update failed:', error.message);
-        })());
+          if (cbErr) console.warn('[publish-inline] created_by update failed:', cbErr.message);
+        }
+      } catch (cbErr) {
+        console.warn('[publish-inline] created_by update threw:', cbErr);
       }
-      await Promise.all(followUps);
+      // Flip is_published on the source generation so the Unpublished
+      // tab stops showing this row even if the realtime channel misses
+      // a beat. Non-critical — log and move on.
+      try {
+        await setGenerationPublished(g.id, true);
+      } catch (flipErr) {
+        console.warn('[publish-inline] setGenerationPublished failed:', flipErr);
+      }
       invalidateLooksCache();
       // Refresh the Published tab in the background so the new row
       // shows up. This may take a moment but the UI already moved on.
