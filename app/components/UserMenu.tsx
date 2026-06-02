@@ -112,6 +112,24 @@ function UserMenu({
     }
   }, []);
 
+  // External open via the global swipe-left gesture (SwipeMenuGesture
+  // mounted at app root). Treat it as a tap on the trigger but reveal
+  // from the trigger's current position so the page still feels
+  // anchored to the avatar. Mobile-only; the gesture is gated on
+  // matchMedia(max-width:768px) at the source so we don't double-gate.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onOpen = () => {
+      const rect = triggerRef.current?.getBoundingClientRect();
+      if (rect) setPageOrigin({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+      else setPageOrigin({ x: window.innerWidth - 30, y: 50 });
+      setOpen(false);
+      setPageOpen(true);
+    };
+    window.addEventListener('catalog:open-account-menu', onOpen);
+    return () => window.removeEventListener('catalog:open-account-menu', onOpen);
+  }, []);
+
   // Close the page, but let the close animation play first (reverse of
   // the reveal) before unmounting.
   const [pageClosing, setPageClosing] = useState(false);

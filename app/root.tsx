@@ -13,6 +13,7 @@ import TypeAnywhere from "~/components/TypeAnywhere";
 import SessionTrackerHost from "~/components/SessionTrackerHost";
 import PresenceHost from "~/components/PresenceHost";
 import GenerationQueueHost from "~/components/GenerationQueueHost";
+import SwipeMenuGesture from "~/components/SwipeMenuGesture";
 import CreatorLoginToastHost from "~/components/CreatorLoginToastHost";
 import { initSentry, captureException } from "~/utils/sentry";
 
@@ -258,6 +259,12 @@ export default function App() {
           reports here via startGenerationJob(). Renders only when at
           least one job is running. */}
       <GenerationQueueHost />
+      {/* Global mobile gesture: swipe LEFT anywhere → opens the Account
+          menu. Listens at the window level and dispatches a custom
+          event UserMenu picks up. Auto-disables on desktop, in the
+          Flutter shell, inside horizontally-scrollable regions, and
+          while an input is focused — see SwipeMenuGesture for guards. */}
+      <SwipeMenuGesture />
       {/* Once-per-session creator engagement toast. Shows "since
           your last visit, your looks earned X impressions / Y
           clicks" when there's something to report; otherwise stays
