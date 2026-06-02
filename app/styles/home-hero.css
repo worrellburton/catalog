@@ -125,24 +125,14 @@
   animation: sfh-rise 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
 }
 /* Lyric variant — italic + slightly lighter weight so a song line reads
-   as a quote rather than a question. The smart quotes are inlined in
-   JSX. */
+   as a quote rather than a question. The 🎵 emoji on line 1 carries the
+   "this is a song lyric" signal so we don't need an attribution caption
+   underneath — keeps lyric headlines occupying the same vertical shape
+   as the plain ones. */
 .sfh-title--lyric {
   font-style: italic;
   font-weight: 500;
   letter-spacing: -0.005em;
-}
-/* Small caption directly under the title for lyric / quote credits.
-   Centered, muted, and uses the same rise animation as the title with a
-   slight delay so it lands a beat after the headline reads. */
-.sfh-title-credit {
-  margin-top: 12px;
-  font-size: clamp(11px, 1.6vw, 13px);
-  font-weight: 500;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.45);
-  animation: sfh-rise 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.18s both;
 }
 @keyframes sfh-rise {
   from { opacity: 0; transform: translateY(14px); }
@@ -626,26 +616,33 @@
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   font-family: inherit;
-  /* Circular dissolve-in. Each story circle starts at scale 0 + 0deg
-     rotation + 0 opacity and unfurls into place with a soft radial
-     mask (clip-path: circle()). The animation is intentionally long
-     (10s start-to-finish across the whole rail) with ease-in-out on
-     every property, so the row never appears statically — it always
-     reads as "settling into place" on first paint. Per-story
-     animation-delay is computed via the inline --i custom property
-     applied by FollowingRail; stories stagger 60ms apart so each
-     circle's bloom is visually distinct without making the user wait
-     for the row to be useful. */
-  animation: follow-story-bloom 10000ms cubic-bezier(0.42, 0, 0.58, 1) both;
+  /* Circular dissolve-in. Each story circle starts at a contracted,
+     blurred state and unfurls into place with a soft radial reveal.
+     Animation is 10s envelope (visible bloom completes ~1.4s) with
+     per-story stagger via inline --i.
+     RELIABILITY: the at-rest CSS (opacity, transform, clip-path,
+     filter) leaves every story FULLY VISIBLE. The animation overrides
+     during its run, then `forwards` holds the end state. If the
+     animation never runs for any reason (JS deferred, CSS load race,
+     reduced-motion, browser quirk) the story still reads correctly
+     because the base state is already the end state. Previously the
+     animation used `both` fill which painted the FROM (opacity:0) state
+     during the per-story delay, leaving the rail invisible on slow
+     loads or aggressive CSS reflow. */
+  opacity: 1;
+  transform: scale(1) rotate(0deg);
+  clip-path: circle(110% at 50% 50%);
+  filter: blur(0);
+  animation: follow-story-bloom 10000ms cubic-bezier(0.42, 0, 0.58, 1) forwards;
   animation-delay: calc(var(--i, 0) * 60ms);
   will-change: transform, opacity, clip-path;
 }
 @keyframes follow-story-bloom {
-  /* The whole 10s envelope is intentional — the bloom completes within
-     the first ~1.4s of it, then the story holds at its final state for
-     the remainder. That keeps the perceived motion short (the user
-     gets a usable rail almost immediately) while making sure no story
-     ever just snaps into the DOM. */
+  /* The whole 10s envelope is intentional — bloom completes within
+     ~1.4s, then holds. With `forwards` (not `both`), the FROM state
+     only applies once the animation starts; before that the element
+     uses its base CSS (fully visible) so a slow animation start can't
+     orphan the rail in an invisible state. */
   0% {
     opacity: 0;
     transform: scale(0.35) rotate(-22deg);
@@ -671,10 +668,46 @@
 }
 @media (prefers-reduced-motion: reduce) {
   /* Skip the bloom entirely so reduced-motion users see the row at
-     full opacity immediately. */
+     full opacity immediately (the base CSS above is already the end
+     state, so removing the animation just stops the bloom). */
   .follow-story { animation: none; }
 }
 .follow-story:active { transform: scale(0.94); }
+
+/* Skeleton placeholders — shown before the real entries land so the
+   creator rail is already in place (and already blooming) by the time
+   the network responds. Each skeleton has the same width / shape /
+   bloom timing as a real story; the only difference is the avatar
+   slot and name caption are shimmer fills instead of img / text. */
+.follow-story--skeleton { pointer-events: none; cursor: default; }
+.follow-story-avatar--skeleton {
+  background: linear-gradient(90deg,
+    rgba(255, 255, 255, 0.06) 0%,
+    rgba(255, 255, 255, 0.14) 50%,
+    rgba(255, 255, 255, 0.06) 100%);
+  background-size: 200% 100%;
+  animation: follow-story-skel 1.4s ease-in-out infinite;
+  border-radius: 50%;
+}
+.follow-story-name--skeleton {
+  width: 60%;
+  height: 9px;
+  border-radius: 6px;
+  background: linear-gradient(90deg,
+    rgba(255, 255, 255, 0.06) 0%,
+    rgba(255, 255, 255, 0.14) 50%,
+    rgba(255, 255, 255, 0.06) 100%);
+  background-size: 200% 100%;
+  animation: follow-story-skel 1.4s ease-in-out infinite;
+}
+@keyframes follow-story-skel {
+  0%, 100% { background-position: 200% 0; }
+  50%      { background-position: -200% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .follow-story-avatar--skeleton,
+  .follow-story-name--skeleton { animation: none; }
+}
 
 /* Glowing, slowly-rotating gradient ring (silver to stay on-brand vs IG's
    orange/pink), with a breathing glow. Online creators get a green-tinted

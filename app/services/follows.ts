@@ -271,20 +271,27 @@ export async function getPopularCreators(
   const limit = opts.limit ?? 12;
   const exclude = new Set((opts.excludeHandles ?? []).map(h => h.toLowerCase()));
 
-  // 1. Pick creator profiles to consider. When the shopper has a known
-  //    gender, scope to profiles matching it (looks for unisex too so
-  //    creators tagged unisex always surface). When unknown, ignore the
-  //    filter — everyone is eligible.
-  let profilesQ = supabase
-    .from('profiles')
-    .select('id, full_name, avatar_url, gender')
-    .not('full_name', 'is', null);
-  if (gender === 'male' || gender === 'female') {
-    profilesQ = profilesQ.in('gender', [gender, 'unisex']);
-  }
-  const { data: profileRows } = await profilesQ.limit(200);
+  // 1. Pick creator profiles to consider. Try gender-scoped first;
+  //    fall back to no-filter if the gender-scoped query returns 0 (a
+  //    tiny corner of the catalog might have no profiles tagged with
+  //    the shopper's gender — better to show ANY popular creators than
+  //    an empty rail).
   type ProfileRow = { id: string; full_name: string | null; avatar_url: string | null; gender: string | null };
-  const profiles = (profileRows as ProfileRow[] | null) || [];
+  const pullProfiles = async (withGender: boolean): Promise<ProfileRow[]> => {
+    let q = supabase!
+      .from('profiles')
+      .select('id, full_name, avatar_url, gender')
+      .not('full_name', 'is', null);
+    if (withGender && (gender === 'male' || gender === 'female')) {
+      q = q.in('gender', [gender, 'unisex']);
+    }
+    const { data } = await q.limit(200);
+    return (data as ProfileRow[] | null) || [];
+  };
+  let profiles = await pullProfiles(true);
+  if (profiles.length === 0 && (gender === 'male' || gender === 'female')) {
+    profiles = await pullProfiles(false); // fall back: any gender
+  }
   if (profiles.length === 0) return [];
   const profileById = new Map(profiles.map(p => [p.id, p]));
 
@@ -304,7 +311,18 @@ export async function getPopularCreators(
     .limit(2000);
   type LookRow = { user_id: string; creator_handle: string; created_at: string | null };
   const looks = (lookRows as LookRow[] | null) || [];
-  if (looks.length === 0) return [];
+  if (looks.length === 0) {
+    // Last-resort: even without any LIVE looks to score, surface the
+    // candidate profiles themselves as suggested creators so the rail
+    // isn't empty. Better to show real creators with no look count than
+    // a blank rail on first open.
+    return profiles.slice(0, limit).map(p => ({
+      handle: (p.full_name || '').toLowerCase().replace(/[^a-z0-9]+/g, '') || p.id.slice(0, 8),
+      displayName: p.full_name,
+      avatarUrl: p.avatar_url,
+      lookCount: 0,
+    }));
+  }
 
   // 3. Score per creator. Handle uniqueness is the de-dup key (a single
   //    creator might have multiple profile rows historically).

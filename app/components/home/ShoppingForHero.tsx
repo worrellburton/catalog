@@ -17,40 +17,92 @@ const HEADLINE_BASELINE_VISITS = 3;
 interface Headline {
   line1: string;
   line2: string;
-  /** Optional small credit line rendered under the title. Used for lyric
-   *  attributions ("— Spice Girls") so the source is acknowledged
-   *  without crowding the headline itself. */
-  credit?: string;
-  /** When true, the title renders in italic / quoted form to read as a
-   *  lyric rather than a question. */
+  /** When true, the title renders in italic so song lyrics and quotes
+   *  read distinct from questions/prompts. The 🎵 / 🎬 prefix lives in
+   *  the line text itself (kept inline rather than as a separate
+   *  caption — that matches the visual rhythm of the non-lyric
+   *  headlines which are also two-line plain text). */
   lyric?: boolean;
 }
 
 const BASELINE_HEADLINE: Headline = { line1: 'What are you', line2: 'shopping for?' };
 
-// Each entry is two lines (.sfh-title renders the same vertical shape as
-// the baseline). Keep ≤ ~22 chars per line so it doesn't wrap.
+// 50+ variations. Each entry is two lines (.sfh-title renders the same
+// vertical shape as the baseline). Keep each line ≤ ~26 chars so it
+// doesn't wrap on a phone. Mix:
+//   • Plain prompts / cheeky / playful
+//   • Mood-board + aspirational
+//   • Occasion-driven
+//   • Song lyrics (🎵 + italic) — culturally recognizable enough that
+//     the source is implicit; we don't credit explicitly anymore
+//     because the caption competed with the headline.
 const FUN_HEADLINES: ReadonlyArray<Headline> = [
-  // Spice Girls lyric — rendered with quotes + italic + credit.
-  { line1: 'Tell me what you want,', line2: 'what you really, really want.', lyric: true, credit: '— Spice Girls' },
-  // Genuine but playful.
-  { line1: 'What sparks joy', line2: 'today?' },
-  { line1: 'What you got',   line2: 'on your mind?' },
-  { line1: 'Today, you are', line2: 'shopping for…' },
-  // Pop-culture nudges.
-  { line1: "What's in your", line2: 'cart energy?' },
-  { line1: 'Treat yourself.', line2: 'What is it?' },
-  { line1: 'Looking for that', line2: 'one thing?' },
-  { line1: 'Speak it into', line2: 'existence.' },
-  { line1: 'Manifest your',  line2: 'next outfit.' },
-  // Mood-board style.
-  { line1: 'What is the',    line2: 'vibe today?' },
-  { line1: 'Catalog mode:',  line2: 'engaged.' },
-  { line1: 'Type a wish,',   line2: 'get a catalog.' },
-  // Cheeky.
-  { line1: 'Confess.',       line2: 'What do you want?' },
-  { line1: 'Be honest with us.', line2: 'What is it?' },
-  { line1: 'Talk to me,',    line2: 'I am all ears.' },
+  // Song lyrics — italic, 🎵 prefix on line 1.
+  { lyric: true, line1: '🎵 Tell me what you want,',     line2: 'what you really really want.' },
+  { lyric: true, line1: '🎵 I want it that way,',        line2: 'tell me, baby.' },
+  { lyric: true, line1: '🎵 Material girl in a',         line2: 'material world.' },
+  { lyric: true, line1: '🎵 Started from the bottom,',   line2: "now we're scrolling." },
+  { lyric: true, line1: "🎵 Don't stop believin'",       line2: 'in a good fit.' },
+  { lyric: true, line1: '🎵 Hit me, baby,',              line2: 'one more time.' },
+  { lyric: true, line1: "🎵 I'm bringing sexy",          line2: 'back.' },
+  { lyric: true, line1: '🎵 Just a small-town girl,',    line2: 'big-time taste.' },
+  { lyric: true, line1: '🎵 Money, money, money,',       line2: 'must be funny.' },
+  { lyric: true, line1: '🎵 Beat it,',                   line2: 'just shop it.' },
+  { lyric: true, line1: '🎵 Sweet dreams are',           line2: 'made of this.' },
+  { lyric: true, line1: '🎵 Single ladies,',             line2: 'all the single fits.' },
+  { lyric: true, line1: '🎵 Like a virgin,',             line2: 'shopping for the first time.' },
+  { lyric: true, line1: '🎵 California knows',           line2: 'how to dress.' },
+  { lyric: true, line1: '🎵 I will always love',         line2: 'a clean white tee.' },
+
+  // Plain prompts — playful, no italic.
+  { line1: 'What sparks joy',         line2: 'today?' },
+  { line1: 'What you got',            line2: 'on your mind?' },
+  { line1: 'Today, you are',          line2: 'shopping for…' },
+  { line1: "What's in your",          line2: 'cart energy?' },
+  { line1: 'Treat yourself.',         line2: 'What is it?' },
+  { line1: 'Looking for that',        line2: 'one thing?' },
+  { line1: 'Speak it into',           line2: 'existence.' },
+  { line1: 'Manifest your',           line2: 'next outfit.' },
+  { line1: 'What is the',             line2: 'vibe today?' },
+  { line1: 'Catalog mode:',           line2: 'engaged.' },
+  { line1: 'Type a wish,',            line2: 'get a catalog.' },
+  { line1: 'Confess.',                line2: 'What do you want?' },
+  { line1: 'Be honest with us.',      line2: 'What is it?' },
+  { line1: 'Talk to me,',             line2: "I'm all ears." },
+  { line1: 'Out with it.',            line2: "What's the wish?" },
+  { line1: "We're listening.",        line2: 'Whatcha need?' },
+  { line1: 'Words, please.',          line2: 'Any words.' },
+  { line1: 'Spell it out.',           line2: "We've got you." },
+  { line1: "What's calling",          line2: 'your name?' },
+  { line1: 'Let it rip.',             line2: 'What is it?' },
+
+  // Mood-board / aspirational.
+  { line1: 'Match my mood,',          line2: 'match my fit.' },
+  { line1: 'Set the tone.',           line2: "We'll set the cart." },
+  { line1: 'Soft-launch your',        line2: 'next look.' },
+  { line1: 'Quiet luxury,',           line2: 'loud confidence.' },
+  { line1: 'Old money,',              line2: 'new fits.' },
+  { line1: 'Main-character',          line2: 'energy, loaded.' },
+  { line1: 'Off-duty',                line2: 'model mode.' },
+  { line1: "It's giving…",            line2: 'what exactly?' },
+  { line1: 'Dress for the',           line2: 'day you want.' },
+  { line1: 'Look like a',             line2: 'million.' },
+
+  // Occasion / weather / context.
+  { line1: 'Date night or',           line2: 'movie night?' },
+  { line1: 'Brunch or',               line2: 'boardroom?' },
+  { line1: 'Beach or bar?',           line2: 'Yes.' },
+  { line1: 'Cozy, chic,',             line2: 'or chaos?' },
+  { line1: 'Dark academia?',          line2: 'Y2K? Both?' },
+  { line1: 'Pack for the',            line2: 'trip in your head.' },
+  { line1: 'Dressing for',            line2: 'which weather?' },
+  { line1: 'Weekend plans?',          line2: 'Outfit plans?' },
+
+  // Cheeky / weird.
+  { line1: "Let's get weird.",        line2: "What's it gonna be?" },
+  { line1: 'Imagine it.',             line2: "We'll catalog it." },
+  { line1: 'Be specific.',            line2: 'Be wild.' },
+  { line1: 'No bad ideas.',           line2: "What's the idea?" },
 ];
 
 function readVisitCount(): number {
@@ -162,21 +214,16 @@ export default function ShoppingForHero({ onRevealFeed }: ShoppingForHeroProps) 
           </svg>
         </div>
 
-        {/* Lyric headlines render in italic + smart quotes; normal
-            headlines render as-is. Optional `credit` line sits below in
-            a small caption when present. */}
+        {/* Lyric headlines render in italic; non-lyric render plain.
+            The 🎵 / 🎬 prefix on line 1 (when present) is the only
+            "this is a quote" cue — kept inline so the lyric headline
+            occupies the same vertical shape as the plain ones, no
+            attribution caption below. */}
         <h1 className={`sfh-title${headline.lyric ? ' sfh-title--lyric' : ''}`}>
-          {headline.lyric ? '“' : ''}
           {headline.line1}
           <br/>
           {headline.line2}
-          {headline.lyric ? '”' : ''}
         </h1>
-        {headline.credit && (
-          <div className="sfh-title-credit" aria-label="Lyric credit">
-            {headline.credit}
-          </div>
-        )}
       </div>
 
       {/* Scroll-to-best-sellers affordance: an animated mouse with a

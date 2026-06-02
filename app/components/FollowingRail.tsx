@@ -93,25 +93,39 @@ function FollowingRail({ onOpenCreator, mode = 'both', onCreateFollowingCatalog:
   // their gender so the rail isn't empty space on first sign-in. The
   // moment they follow someone, the next render swaps to their actual
   // follows (subscribeFollowingChanges bumps refreshKey + re-runs this
-  // effect).
+  // effect). Wrapped in try/catch so a transient network error never
+  // leaves the rail blank — we fall back to whatever we can get.
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      const handles = await getMyFollowing();
+      let handles: string[] = [];
+      try { handles = await getMyFollowing(); } catch { handles = []; }
       if (cancelled) return;
       if (handles.length === 0) {
         // Cold-start fallback: pick popular creators matching the
-        // shopper's gender. The rail entries are tagged ts=0 (no
-        // last-post ts) which sorts them after any real followed
-        // creators if the user later follows someone mid-session.
-        const suggested = await getPopularCreators(getShopperGender(), { limit: 12 });
-        if (cancelled) return;
-        setFollowingEntries(suggested.map(s => ({
-          handle: s.handle,
-          displayName: s.displayName,
-          avatarUrl: s.avatarUrl,
-          ts: 0,
-        })));
+        // shopper's gender. Three-tier retry inside getPopularCreators
+        // (gender-filtered → any-gender → candidate profiles) means
+        // this returns SOMETHING as long as ANY profile exists. If
+        // even that errors, we keep the existing entries instead of
+        // wiping to [] so a refresh doesn't strip the rail.
+        try {
+          const suggested = await getPopularCreators(getShopperGender(), { limit: 12 });
+          if (cancelled) return;
+          if (suggested.length > 0) {
+            setFollowingEntries(suggested.map(s => ({
+              handle: s.handle,
+              displayName: s.displayName,
+              avatarUrl: s.avatarUrl,
+              ts: 0,
+            })));
+          } else {
+            // Keep prior entries if any; otherwise commit to [] only
+            // once (subsequent retries won't blank a populated rail).
+            setFollowingEntries(prev => prev && prev.length > 0 ? prev : []);
+          }
+        } catch {
+          setFollowingEntries(prev => prev && prev.length > 0 ? prev : []);
+        }
         return;
       }
       if (!supabase) {
@@ -368,8 +382,33 @@ interface FollowingStoriesRailProps {
 /** Instagram-stories-style horizontal scroll of followed creators. Each is a
  *  glowing, slowly-rotating gradient ring around the creator's avatar with a
  *  name caption. Latest-posted creators come first (entries arrive ts-sorted).
- *  Mobile-only — CSS hides it ≥769px. */
+ *  Mobile-only — CSS hides it ≥769px.
+ *  When `entries` is empty (still loading), the rail renders SKELETON
+ *  story slots so the row is already there with its bloom playing by the
+ *  time the real data lands. The real avatar/name then fades into the
+ *  same slot, no layout shift. */
 function FollowingStoriesRail({ entries, onlineHandles, onOpenCreator, onSeeAll }: FollowingStoriesRailProps) {
+  const SKELETON_COUNT = 6;
+  if (entries.length === 0) {
+    return (
+      <div className="follow-stories-rail" role="list" aria-label="Loading creators">
+        {Array.from({ length: SKELETON_COUNT }, (_, i) => (
+          <div
+            key={`skel-${i}`}
+            role="listitem"
+            className="follow-story follow-story--skeleton"
+            style={{ ['--i' as 'order']: i as unknown as number }}
+            aria-hidden="true"
+          >
+            <span className="follow-story-ring">
+              <span className="follow-story-avatar follow-story-avatar--skeleton" />
+            </span>
+            <span className="follow-story-name follow-story-name--skeleton" />
+          </div>
+        ))}
+      </div>
+    );
+  }
   return (
     <div className="follow-stories-rail" role="list" aria-label="Creators you follow">
       {entries.map((c, i) => {
