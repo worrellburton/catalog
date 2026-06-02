@@ -22,6 +22,7 @@ import type { Look, Creator } from '~/data/looks';
 import { getLooks, getCreators, invalidateLooksCache } from '~/services/looks';
 import { createLook, addProductToLook } from '~/services/manage-looks';
 import { setGenerationPublished } from '~/services/user-generations';
+import { promoteGenerationToLook, unpublishLook } from '~/services/promote-generation';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
 import { inferProductType, auditAllProductTypes } from '~/services/product-types';
 import { inferProductGenderFromName, auditAllProductGenders } from '~/services/genders';
@@ -1243,10 +1244,40 @@ export default function AdminData() {
     if (!supabase) { setUnpublishedLoading(false); return; }
     let cancelled = false;
     (async () => {
-      const { data: gens, error } = await supabase
-        .from('user_generations')
-        .select('id, user_id, status, style, height_label, age_label, height_cm, model, veo_model, prompt, fal_request_id, completed_at, storage_path, video_url, error, created_at, user_generation_products(count)')
-        .order('created_at', { ascending: false });
+      // Pull every generation up front (sorted newest first), then drop
+      // any that already have a *live* looks row pointing at them via
+      // source_generation_id. Without the dedupe step, a generation
+      // would show in both Unpublished AND Published, and clicking
+      // Publish on an already-promoted row would race against the
+      // unique index on source_generation_id.
+      const [gensRes, liveLooksRes] = await Promise.all([
+        supabase
+          .from('user_generations')
+          .select('id, user_id, status, style, height_label, age_label, height_cm, model, veo_model, prompt, fal_request_id, completed_at, storage_path, video_url, error, created_at, user_generation_products(count)')
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('looks')
+          .select('source_generation_id')
+          .eq('status', 'live')
+          .not('source_generation_id', 'is', null),
+      ]);
+      const publishedGenIds = new Set(
+        ((liveLooksRes.data || []) as Array<{ source_generation_id: string | null }>)
+          .map(r => r.source_generation_id)
+          .filter((id): id is string => !!id)
+      );
+      const { data: rawGens, error } = gensRes;
+      const gens = ((rawGens || []) as Array<{ id: string }>).filter(g => !publishedGenIds.has(g.id)) as Array<{
+        id: string; user_id: string;
+        status: 'pending' | 'generating' | 'done' | 'failed';
+        style: string; height_label: string | null; age_label: string | null;
+        height_cm: number | null;
+        model: 'fast' | 'pro' | null; veo_model: string | null;
+        prompt: string | null; fal_request_id: string | null;
+        completed_at: string | null; storage_path: string | null;
+        video_url: string | null; error: string | null; created_at: string;
+        user_generation_products: { count: number }[] | null;
+      }>;
       if (error) {
         console.warn('[AdminData] unpublished looks fetch failed:', error);
         if (!cancelled) setUnpublishedLoading(false);
@@ -1446,7 +1477,9 @@ export default function AdminData() {
     flashPublishMsg('This look is published');
 
     try {
-      // Need the linked products to attach after the look is created.
+      // Need the linked products to attach when promoting for the
+      // first time. On a republish (look row already exists),
+      // products are already attached so we skip the lookup.
       let products = unpublishedProducts.get(g.id);
       if (!products && supabase) {
         const { data: prodRows } = await supabase
@@ -1470,96 +1503,22 @@ export default function AdminData() {
             role_tag: r.role_tag,
           }));
       }
+      // promoteGenerationToLook is idempotent: if a looks row already
+      // exists for this generation (legacy duplicate or a previous
+      // unpublish), it flips that row to 'live' instead of inserting
+      // a second one. The Unpublished tab now de-dupes against
+      // looks.source_generation_id so this branch only ever runs for
+      // generations the admin hasn't already promoted.
       const creatorLabel = g.creator_name || g.creator_email || g.user_id.slice(0, 8);
-      const { data: look } = await createLook({
-        title: `${creatorLabel}’s ${g.style} look`,
-        description: `Promoted from generation ${g.id}`,
+      await promoteGenerationToLook({
+        generationId: g.id,
+        creatorUserId: g.user_id,
+        videoUrl: g.video_url,
+        creatorLabel,
+        style: g.style,
         gender: 'unisex',
+        products: (products || []).map(p => ({ id: p.id })),
       });
-      // Don't block the toast / list refresh on per-product attaches.
-      // Each one round-trips the manage-looks edge function and a
-      // failed product shouldn't fail the whole publish.
-      void Promise.all((products || []).map(p =>
-        addProductToLook(look.id, { product_id: p.id }).catch(err => {
-          console.warn('[publish-inline] addProductToLook failed:', err);
-        })
-      ));
-      // Critical follow-ups: looks_creative INSERT and looks UPDATE.
-      // Without both, fetchLooksFromSupabase silently drops the look
-      // (it joins looks_creative!inner and filters status='live'), so
-      // the row would land in DB-limbo — present but invisible to the
-      // Published tab AND the consumer feed. Previously these ran in
-      // Promise.all over Promise.resolve(thenable) wrappers that hid
-      // RLS / network failures, leaving orphaned 'draft' rows behind.
-      // Sequential awaits make every failure surface to the outer
-      // catch so the row gets re-added to Unpublished instead of
-      // permanently disappearing.
-      if (!supabase) throw new Error('Supabase client not available');
-      if (g.video_url) {
-        const { data: creativeData, error: creativeErr } = await supabase
-          .from('looks_creative')
-          .insert({ look_id: look.id, video_url: g.video_url, is_primary: true })
-          .select('id')
-          .single();
-        if (creativeErr) {
-          throw new Error(`looks_creative insert failed: ${creativeErr.message}`);
-        }
-        if (creativeData?.id) {
-          void generateAndStorePoster(look.id, creativeData.id, g.video_url);
-        }
-      }
-      // Overwrite user_id with the source generation's creator so the
-      // consumer + admin Looks list attribute the look to the person
-      // who *made* it, not the admin who clicked Publish. manage-looks
-      // writes user_id = auth.uid() (the admin), and the trigger
-      // looks_sync_creator_handle backfills creator_handle on user_id
-      // change. Note: when g.user_id === admin's id (admin generated
-      // the look themselves), the trigger only fires on a real
-      // user_id change, so we always pass the value through to keep
-      // the UPDATE statement explicit.
-      const updates: Record<string, unknown> = { status: 'live' };
-      if (g.user_id) {
-        updates.user_id = g.user_id;
-        updates.creator_handle = null;
-      }
-      const { data: statusRow, error: statusErr } = await supabase
-        .from('looks')
-        .update(updates)
-        .eq('id', look.id)
-        .select('id, status')
-        .maybeSingle();
-      if (statusErr) {
-        throw new Error(`status update failed: ${statusErr.message}`);
-      }
-      if (!statusRow || statusRow.status !== 'live') {
-        // RLS silent-rejects an UPDATE by returning 0 rows with no
-        // error. Check the post-update row state and fail loudly so
-        // the look doesn't end up stuck in 'draft'.
-        throw new Error('status update affected 0 rows (likely RLS block)');
-      }
-      // Record the admin who actually ran the publish so the audit
-      // trail survives the user_id move. Non-critical — log and move
-      // on if it fails.
-      try {
-        const { data: { user: authUser } } = await supabase.auth.getUser();
-        if (authUser?.id) {
-          const { error: cbErr } = await supabase
-            .from('looks')
-            .update({ created_by: authUser.id })
-            .eq('id', look.id);
-          if (cbErr) console.warn('[publish-inline] created_by update failed:', cbErr.message);
-        }
-      } catch (cbErr) {
-        console.warn('[publish-inline] created_by update threw:', cbErr);
-      }
-      // Flip is_published on the source generation so the Unpublished
-      // tab stops showing this row even if the realtime channel misses
-      // a beat. Non-critical — log and move on.
-      try {
-        await setGenerationPublished(g.id, true);
-      } catch (flipErr) {
-        console.warn('[publish-inline] setGenerationPublished failed:', flipErr);
-      }
       invalidateLooksCache();
       // Refresh the Published tab in the background so the new row
       // shows up. This may take a moment but the UI already moved on.
@@ -1579,6 +1538,104 @@ export default function AdminData() {
       });
     }
   }, [publishingIds, unpublishedProducts, flashPublishMsg]);
+
+  // Inverse of publishUnpublishedInline. Flips a 'live' look back to
+  // 'draft' so it returns to the Unpublished tab — no duplicate row,
+  // just a status toggle. The source generation's is_published flag
+  // also flips so the next Unpublished tab fetch re-surfaces it.
+  // Tracking key is the legacy numeric id (what the Published table
+  // renders). We resolve to the UUID inside the callback since the
+  // unpublish RPC keys off the real looks.id.
+  const [unpublishingLookIds, setUnpublishingLookIds] = useState<Set<number>>(new Set());
+  const unpublishLookInline = useCallback(async (legacyId: number) => {
+    if (unpublishingLookIds.has(legacyId)) return;
+    // Resolve the real looks.id (UUID) from the looks state — the
+    // public Look type uses legacy_id as `id` for backwards-compat
+    // with the seed-list shape, with the real UUID on `uuid`.
+    const target = looks.find(l => l.id === legacyId);
+    const lookUuid = target?.uuid;
+    if (!lookUuid) {
+      flashPublishMsg('Unpublish failed: missing UUID');
+      return;
+    }
+    setUnpublishingLookIds(prev => {
+      const next = new Set(prev);
+      next.add(legacyId);
+      return next;
+    });
+    // Snapshot the row + remove optimistically. On failure we re-add it.
+    const previousLooks = looks;
+    setLooks(prev => prev.filter(l => l.id !== legacyId));
+    flashPublishMsg('Moved back to Unpublished');
+    try {
+      await unpublishLook(lookUuid);
+      invalidateLooksCache();
+      const fresh = await getLooks();
+      setLooks(fresh);
+      // Refetch unpublished list so the row reappears there immediately.
+      if (supabase) {
+        const { data: gens } = await supabase
+          .from('user_generations')
+          .select('id, user_id, status, style, height_label, age_label, height_cm, model, veo_model, prompt, fal_request_id, completed_at, storage_path, video_url, error, created_at, user_generation_products(count)')
+          .order('created_at', { ascending: false });
+        if (gens) {
+          const userIds = Array.from(new Set((gens as Array<{ user_id: string }>).map(g => g.user_id)));
+          const profilesById = new Map<string, { full_name: string | null; avatar_url: string | null; email: string | null; is_ai: boolean }>();
+          if (userIds.length > 0) {
+            const { data: profs } = await supabase
+              .from('profiles')
+              .select('id, full_name, avatar_url, email, is_ai')
+              .in('id', userIds);
+            (profs || []).forEach((p: { id: string; full_name: string | null; avatar_url: string | null; email: string | null; is_ai: boolean | null }) => {
+              profilesById.set(p.id, {
+                full_name: p.full_name,
+                avatar_url: p.avatar_url,
+                email: p.email,
+                is_ai: p.is_ai === true,
+              });
+            });
+          }
+          const rows = (gens as Array<{
+            id: string; user_id: string;
+            status: 'pending' | 'generating' | 'done' | 'failed';
+            style: string; height_label: string | null; age_label: string | null;
+            height_cm: number | null;
+            model: 'fast' | 'pro' | null; veo_model: string | null;
+            prompt: string | null; fal_request_id: string | null;
+            completed_at: string | null; storage_path: string | null;
+            video_url: string | null; error: string | null; created_at: string;
+            user_generation_products: { count: number }[] | null;
+          }>).map(g => {
+            const prof = profilesById.get(g.user_id);
+            return {
+              id: g.id, user_id: g.user_id, status: g.status, style: g.style,
+              height_label: g.height_label, age_label: g.age_label, height_cm: g.height_cm,
+              model: g.model, veo_model: g.veo_model, prompt: g.prompt,
+              fal_request_id: g.fal_request_id, completed_at: g.completed_at,
+              storage_path: g.storage_path, video_url: g.video_url, error: g.error,
+              created_at: g.created_at,
+              product_count: g.user_generation_products?.[0]?.count ?? 0,
+              creator_name: prof?.full_name ?? null,
+              creator_avatar: prof?.avatar_url ?? null,
+              creator_email: prof?.email ?? null,
+              creator_is_ai: prof?.is_ai === true,
+            } as UnpublishedLook;
+          });
+          setUnpublished(rows);
+        }
+      }
+    } catch (err) {
+      console.error('[unpublish-inline] failed:', err);
+      setLooks(previousLooks);
+      flashPublishMsg(err instanceof Error ? `Unpublish failed: ${err.message}` : 'Unpublish failed');
+    } finally {
+      setUnpublishingLookIds(prev => {
+        const next = new Set(prev);
+        next.delete(legacyId);
+        return next;
+      });
+    }
+  }, [unpublishingLookIds, looks, flashPublishMsg]);
 
   const [genModel, setGenModel] = useState<string>(DEFAULT_VIDEO_MODEL);
   // Split mode: generate one ad per model so you can A/B (e.g. Veo vs Seedance).
@@ -3715,14 +3772,21 @@ export default function AdminData() {
                       </td>
                       <td onClick={(e) => e.stopPropagation()}>
                         <div className="admin-product-actions">
+                          {/* Unpublish flips status='draft' on the
+                              same looks row and re-surfaces the
+                              source generation in the Unpublished
+                              tab. No duplicate row is created — the
+                              source_generation_id column ties the
+                              two tabs together. */}
                           <button
                             type="button"
-                            className="admin-btn admin-btn-primary"
+                            className="admin-btn admin-btn-secondary"
                             style={{ fontSize: 11, padding: '4px 10px', marginRight: 6 }}
-                            title="Open the publish flow for this look"
-                            onClick={() => navigate(`/admin/publish/${row.id}`)}
+                            disabled={unpublishingLookIds.has(row.id)}
+                            title="Move this look back to the Unpublished tab"
+                            onClick={() => unpublishLookInline(row.id)}
                           >
-                            Publish
+                            {unpublishingLookIds.has(row.id) ? 'Unpublishing…' : 'Unpublish'}
                           </button>
                           <button className="admin-icon-btn" aria-label="Move up" onClick={() => moveLook(row.id, -1)}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>

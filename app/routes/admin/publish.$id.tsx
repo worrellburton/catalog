@@ -1,10 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from '@remix-run/react';
 import { supabase } from '~/utils/supabase';
-import { createLook, addProductToLook } from '~/services/manage-looks';
 import { invalidateLooksCache } from '~/services/looks';
-import { setGenerationPublished } from '~/services/user-generations';
-import { generateAndStorePoster } from '~/utils/video-poster';
+import { promoteGenerationToLook } from '~/services/promote-generation';
 import { sortByGarmentRole } from '~/utils/garmentOrder';
 
 /* /admin/publish/:id - promote a user-generated look into the curated
@@ -33,6 +31,21 @@ interface PublishDraft {
   creatorAvatar: string | null;
   creatorUserId: string | null;
   products: PublishProduct[];
+  // Pipeline introspection — surfaced in the Generation pipeline
+  // panel so the admin can see what the model received without
+  // jumping back to /admin/data.
+  prompt: string | null;
+  model: 'fast' | 'pro' | null;
+  veoModel: string | null;
+  falRequestId: string | null;
+  heightLabel: string | null;
+  ageLabel: string | null;
+  storagePath: string | null;
+  completedAt: string | null;
+  createdAt: string;
+  error: string | null;
+  /** Reference photos the user uploaded for this generation. */
+  uploads: Array<{ id: string; url: string }>;
 }
 
 export default function AdminPublishScreen() {
@@ -63,15 +76,26 @@ export default function AdminPublishScreen() {
     }
     let cancelled = false;
     (async () => {
-      const [{ data: gen, error: genErr }, { data: prodRows, error: prodErr }] = await Promise.all([
+      const [
+        { data: gen, error: genErr },
+        { data: prodRows, error: prodErr },
+        { data: uploadRows },
+      ] = await Promise.all([
         supabase
           .from('user_generations')
-          .select('id, style, video_url, status, user_id')
+          .select('id, style, video_url, status, user_id, prompt, model, veo_model, fal_request_id, height_label, age_label, storage_path, completed_at, created_at, error')
           .eq('id', id)
           .maybeSingle(),
         supabase
           .from('user_generation_products')
           .select('product_id, role_tag, sort_order, products(id, name, brand, price, image_url)')
+          .eq('generation_id', id)
+          .order('sort_order'),
+        // Face photos the user picked for the gen. Joined via the
+        // link table so we surface them in upload-order.
+        supabase
+          .from('user_generation_uploads')
+          .select('upload_id, sort_order, user_uploads(id, public_url)')
           .eq('generation_id', id)
           .order('sort_order'),
       ]);
@@ -124,6 +148,13 @@ export default function AdminPublishScreen() {
             role_tag: r.role_tag,
           }))
       );
+      const uploads = ((uploadRows || []) as unknown as Array<{
+        upload_id: string;
+        sort_order: number;
+        user_uploads: { id: string; public_url: string } | null;
+      }>)
+        .filter(r => !!r.user_uploads?.public_url)
+        .map(r => ({ id: r.user_uploads!.id, url: r.user_uploads!.public_url }));
       setDraft({
         generationId: gen.id,
         videoUrl: gen.video_url,
@@ -133,6 +164,17 @@ export default function AdminPublishScreen() {
         creatorAvatar,
         creatorUserId: gen.user_id ?? null,
         products,
+        prompt: gen.prompt ?? null,
+        model: gen.model ?? null,
+        veoModel: gen.veo_model ?? null,
+        falRequestId: gen.fal_request_id ?? null,
+        heightLabel: gen.height_label ?? null,
+        ageLabel: gen.age_label ?? null,
+        storagePath: gen.storage_path ?? null,
+        completedAt: gen.completed_at ?? null,
+        createdAt: gen.created_at,
+        error: gen.error ?? null,
+        uploads,
       });
       setTitle(`${creatorName}’s ${gen.style} look`);
       setDescription(`Promoted from generation ${gen.id}`);
@@ -146,73 +188,26 @@ export default function AdminPublishScreen() {
     setPublishing(true);
     setError(null);
     try {
-      const { data: look } = await createLook({
-        title: title.trim() || `${draft.creatorName}’s ${draft.style} look`,
-        description: description.trim() || undefined,
+      // promoteGenerationToLook is the single source of truth for the
+      // generation → looks pipeline. Idempotent — a second submit for
+      // the same generation flips the existing looks row to status=
+      // 'live' instead of creating a duplicate. The Unpublished tab
+      // now de-dupes against source_generation_id so the admin can
+      // only land here for generations that aren't already live, but
+      // the dedupe inside promote keeps us safe under refresh races.
+      const { lookId } = await promoteGenerationToLook({
+        generationId: draft.generationId,
+        creatorUserId: draft.creatorUserId,
+        videoUrl: draft.videoUrl,
+        creatorLabel: draft.creatorName,
+        style: draft.style,
         gender,
+        titleOverride: title.trim() || undefined,
+        descriptionOverride: description.trim() || undefined,
+        products: draft.products.map(p => ({ id: p.id })),
       });
-      // Best-effort attach products. Ignore individual product
-      // failures so a single bad row doesn't fail the whole publish.
-      await Promise.all(draft.products.map(p =>
-        addProductToLook(look.id, { product_id: p.id }).catch(err => {
-          console.warn('[publish] addProductToLook failed:', err);
-        })
-      ));
-      // The Content/Looks list joins `looks_creative!inner` and only
-      // surfaces looks with status='live' - createLook writes draft
-      // and never inserts a creative row, so without these two
-      // follow-ups the published look is silently dropped from the
-      // Published tab.
-      if (supabase && draft.videoUrl) {
-        const { data: creativeData, error: creativeErr } = await supabase
-          .from('looks_creative')
-          .insert({ look_id: look.id, video_url: draft.videoUrl, is_primary: true })
-          .select('id')
-          .single();
-        if (creativeErr) console.warn('[publish] looks_creative insert failed:', creativeErr.message);
-        if (creativeData?.id) {
-          void generateAndStorePoster(look.id, creativeData.id, draft.videoUrl);
-        }
-      }
-      if (supabase) {
-        // Move ownership to the persona who generated the source video
-        // (createLook stamped user_id = auth.uid() = admin). The DB
-        // trigger `looks_sync_creator_handle` will fill creator_handle
-        // from the matching creators row.
-        const updates: Record<string, unknown> = { status: 'live' };
-        if (draft.creatorUserId) {
-          updates.user_id = draft.creatorUserId;
-          updates.creator_handle = null;
-        }
-        const { error: statusErr } = await supabase
-          .from('looks')
-          .update(updates)
-          .eq('id', look.id);
-        if (statusErr) console.warn('[publish] status update failed:', statusErr.message);
-
-        // Preserve the publisher in created_by so the audit trail
-        // survives the user_id move.
-        const { data: { user: authUser } } = await supabase.auth.getUser();
-        if (authUser?.id) {
-          const { error: createdByErr } = await supabase
-            .from('looks')
-            .update({ created_by: authUser.id })
-            .eq('id', look.id);
-          if (createdByErr) console.warn('[publish] created_by update failed:', createdByErr.message);
-        }
-      }
-      // Flip is_published on the source generation so /admin/data's
-      // Unpublished tab stops showing this row — earlier the publish
-      // flow created a new looks row but left the user_generations
-      // row alone, so admins saw the same generation in BOTH the
-      // Unpublished tab and the Published tab.
-      const { error: flipErr } = await setGenerationPublished(draft.generationId, true);
-      if (flipErr) console.warn('[publish] setGenerationPublished failed:', flipErr);
-
-      // Drop the cached promise so the next /admin/data render
-      // refetches and shows the new row in the Published tab.
       invalidateLooksCache();
-      setPublished({ id: look.id });
+      setPublished({ id: lookId });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Publish failed.');
     } finally {
@@ -398,6 +393,198 @@ export default function AdminPublishScreen() {
           </div>
         </div>
       </div>
+
+      {/* Generation pipeline — visible audit trail of what the model
+          received. Replaces a hidden "drill into /admin/data and
+          expand the row" flow so the reviewer can see prompt + face
+          photos + model tier without leaving this page. */}
+      <GenerationPipelinePanel draft={draft} />
+    </div>
+  );
+}
+
+// ── Generation pipeline panel ────────────────────────────────────────────
+// Visual journey of the user_generation row: face photos → picked
+// products → prompt → model call → video → status. Lives here (not in
+// admin/data) because it's the publish-review surface where the admin
+// makes the keep / reject decision and needs the most context.
+
+function GenerationPipelinePanel({ draft }: { draft: PublishDraft }) {
+  const modelLabel = draft.model
+    ? draft.model === 'pro' ? 'Pro (Seedance Pro)' : 'Fast (Seedance Lite)'
+    : '—';
+  const modelTier = draft.veoModel
+    || (draft.model === 'pro' ? 'bytedance/seedance-2.0/reference-to-video'
+        : draft.model === 'fast' ? 'bytedance/seedance-2.0/fast/reference-to-video'
+        : null);
+
+  type NodeStatus = 'done' | 'active' | 'pending' | 'failed';
+  const statusOf = (i: number): NodeStatus => {
+    // 0 uploads, 1 products, 2 prompt, 3 model call, 4 video, 5 status
+    if (draft.status === 'failed') {
+      if (i < 3) return 'done';
+      if (i === 3) return 'failed';
+      return 'pending';
+    }
+    if (draft.status === 'done') return 'done';
+    if (i <= 2) return 'done';
+    if (i === 3) return 'active';
+    return 'pending';
+  };
+
+  const nodes = [
+    {
+      label: 'Face photos',
+      sub: `${draft.uploads.length} uploaded`,
+      detail: draft.uploads.length > 0
+        ? 'Reference photos from /generate (user_uploads)'
+        : 'No reference photos found',
+    },
+    {
+      label: 'Products',
+      sub: `${draft.products.length} item${draft.products.length === 1 ? '' : 's'}`,
+      detail: 'user_generation_products — role-tagged for prompt slotting',
+    },
+    {
+      label: 'Prompt',
+      sub: draft.style,
+      detail: draft.prompt
+        ? `${draft.prompt.length.toLocaleString()} chars`
+        : 'Assembled from style preset + role tags',
+    },
+    {
+      label: 'Model call',
+      sub: modelLabel,
+      detail: draft.falRequestId
+        ? `fal_id ${draft.falRequestId.slice(0, 10)}…`
+        : 'Fal queue submission',
+    },
+    {
+      label: 'Video',
+      sub: draft.videoUrl ? 'Stored' : 'Pending',
+      detail: draft.storagePath || (draft.videoUrl ? 'Hosted on Fal CDN' : '—'),
+    },
+    {
+      label: 'Status',
+      sub: draft.status,
+      detail: draft.completedAt ? new Date(draft.completedAt).toLocaleString() : '—',
+    },
+  ];
+
+  return (
+    <div className="admin-model-panel" style={{ marginTop: 32 }}>
+      <div className="admin-model-panel-head">
+        <h3 className="admin-products-title" style={{ margin: 0 }}>Generation pipeline</h3>
+        <span className="admin-model-panel-meta">
+          gen <code>{draft.generationId.slice(0, 8)}…</code> · created {new Date(draft.createdAt).toLocaleString()}
+        </span>
+      </div>
+
+      <div className="admin-model-flow">
+        {nodes.map((n, i) => (
+          <div key={n.label} className="admin-model-flow-step">
+            <div className={`admin-model-node admin-model-node--${statusOf(i)}`}>
+              <div className="admin-model-node-num">{i + 1}</div>
+              <div className="admin-model-node-body">
+                <div className="admin-model-node-label">{n.label}</div>
+                <div className="admin-model-node-sub">{n.sub}</div>
+                <div className="admin-model-node-detail">{n.detail}</div>
+              </div>
+            </div>
+            {i < nodes.length - 1 && (
+              <svg className="admin-model-arrow" width="22" height="14" viewBox="0 0 22 14" fill="none">
+                <path d="M1 7H19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
+                <path d="M14 1L20 7L14 13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+              </svg>
+            )}
+          </div>
+        ))}
+      </div>
+
+      {draft.uploads.length > 0 && (
+        <div className="admin-model-output" style={{ marginTop: 16 }}>
+          <div className="admin-model-card-label">Uploaded reference photos ({draft.uploads.length})</div>
+          <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', marginTop: 8 }}>
+            {draft.uploads.map(u => (
+              <a
+                key={u.id}
+                href={u.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                title="Open full-size in a new tab"
+                style={{ display: 'block', width: 90, aspectRatio: '3 / 4', borderRadius: 8, overflow: 'hidden', background: '#f1f5f9', border: '1px solid #e5e7eb' }}
+              >
+                <img
+                  src={u.url}
+                  alt=""
+                  style={{ width: '100%', height: '100%', objectFit: 'cover' }}
+                />
+              </a>
+            ))}
+          </div>
+        </div>
+      )}
+
+      <div className="admin-model-grid" style={{ marginTop: 16 }}>
+        <div className="admin-model-card">
+          <div className="admin-model-card-label">Model</div>
+          <div className="admin-model-card-value">{modelLabel}</div>
+          {modelTier && <div className="admin-model-card-sub">{modelTier}</div>}
+        </div>
+        <div className="admin-model-card">
+          <div className="admin-model-card-label">Style preset</div>
+          <div className="admin-model-card-value" style={{ textTransform: 'capitalize' }}>{draft.style}</div>
+        </div>
+        <div className="admin-model-card">
+          <div className="admin-model-card-label">Height</div>
+          <div className="admin-model-card-value">{draft.heightLabel || '—'}</div>
+        </div>
+        <div className="admin-model-card">
+          <div className="admin-model-card-label">Age band</div>
+          <div className="admin-model-card-value">{draft.ageLabel || '—'}</div>
+        </div>
+        <div className="admin-model-card">
+          <div className="admin-model-card-label">Fal request id</div>
+          <div className="admin-model-card-value admin-model-mono">{draft.falRequestId || '—'}</div>
+        </div>
+        <div className="admin-model-card">
+          <div className="admin-model-card-label">Completed at</div>
+          <div className="admin-model-card-value">
+            {draft.completedAt ? new Date(draft.completedAt).toLocaleString() : '—'}
+          </div>
+        </div>
+      </div>
+
+      <div className="admin-model-prompt">
+        <div className="admin-model-card-label">Prompt sent to {modelLabel}</div>
+        <pre className="admin-model-prompt-body">
+          {draft.prompt || '— no prompt recorded —'}
+        </pre>
+      </div>
+
+      {draft.videoUrl && (
+        <div className="admin-model-output">
+          <div className="admin-model-card-label">Output video</div>
+          <a
+            href={draft.videoUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="admin-model-mono admin-model-link"
+          >
+            {draft.videoUrl}
+          </a>
+          {draft.storagePath && (
+            <div className="admin-model-card-sub admin-model-mono">{draft.storagePath}</div>
+          )}
+        </div>
+      )}
+
+      {draft.error && (
+        <div className="admin-model-error">
+          <div className="admin-model-card-label">Error</div>
+          <pre className="admin-model-prompt-body admin-model-error-body">{draft.error}</pre>
+        </div>
+      )}
     </div>
   );
 }
