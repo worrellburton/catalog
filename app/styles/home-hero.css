@@ -424,6 +424,30 @@
 }
 .app-root.home-hero:not(.hero-scrolled) .bottom-bar {
   bottom: 46vh;
+  /* Fade the hero-centered bar out as the shopper scrolls toward
+     the feed peek. --hero-scroll-progress is written by the scroll
+     handler in routes/_index.tsx (0 at the very top → 1 at the
+     50%-viewport threshold where .hero-scrolled flips on). At ratio
+     0.6+ the bar is fully transparent so it never sits awkwardly in
+     the middle of the product grid the way it did in the user's
+     screenshot. Once .hero-scrolled kicks in, this rule no longer
+     matches and the bar reappears at the docked bottom position
+     with opacity 1. Multiplier 1.6 means we hit opacity 0 well
+     before the .hero-scrolled threshold so there's no flash of the
+     bar reappearing during the position transition. */
+  opacity: clamp(0, calc(1 - var(--hero-scroll-progress, 0) * 1.6), 1);
+  transition: opacity 0.18s linear,
+              bottom 0.55s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.55s cubic-bezier(0.16, 1, 0.3, 1),
+              background 0.45s ease, border-color 0.45s ease, box-shadow 0.45s ease;
+}
+/* Pointer-events can't be tied to a CSS variable expression, so the
+   scroll handler toggles the .hero-bar-faded helper class when
+   --hero-scroll-progress crosses the same opacity-0 threshold. With
+   the bar invisible we let taps fall through to whatever product
+   tile sits underneath. */
+.app-root.home-hero.hero-bar-faded:not(.hero-scrolled) .bottom-bar {
+  pointer-events: none;
 }
 
 @media (max-width: 640px) {
