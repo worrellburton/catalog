@@ -8,6 +8,13 @@ import {
   type MusicTrack,
   type SpotifySearchHit,
 } from '~/services/musics';
+import {
+  PROMPT_POLISH_PRIMARY_KEY,
+  PROMPT_PRIMARY_VIDEO_KEY,
+  DEFAULT_POLISH_PRIMARY_PROMPT,
+  DEFAULT_PRIMARY_VIDEO_PROMPT,
+} from '~/constants/ai-prompts';
+import { getAppSetting } from '~/services/app-settings';
 import { useNavigate, useSearchParams } from '@remix-run/react';
 import { extractFabric } from '~/utils/extractFabric';
 import { looks as staticLooks, creators as staticCreators } from '~/data/looks';
@@ -1111,6 +1118,29 @@ function AddProductsModal({ onClose, onIngested, showToast, onPending }: AddProd
 }
 
 export default function AdminData() {
+  // Live AI-prompt values from app_settings. Mirrored into state so the
+  // generation-graph cards (Polish Primary, Primary Video) display the
+  // EXACT same prompt string that the edge functions are about to send to
+  // Gemini / Seedance — no more drift between "what admin sees" and "what
+  // actually runs". Loaded once on mount; the Settings modal saves through
+  // setAppSetting and the next time the graph opens it picks up the new
+  // value. Defaults from constants/ai-prompts.ts are the fallback (matches
+  // the edge functions' inline defaults exactly).
+  const [polishPromptLive, setPolishPromptLive] = useState<string>(DEFAULT_POLISH_PRIMARY_PROMPT);
+  const [primaryVideoPromptLive, setPrimaryVideoPromptLive] = useState<string>(DEFAULT_PRIMARY_VIDEO_PROMPT);
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([
+      getAppSetting(PROMPT_POLISH_PRIMARY_KEY),
+      getAppSetting(PROMPT_PRIMARY_VIDEO_KEY),
+    ]).then(([polish, video]) => {
+      if (cancelled) return;
+      if (polish && polish.trim()) setPolishPromptLive(polish);
+      if (video  && video.trim())  setPrimaryVideoPromptLive(video);
+    });
+    return () => { cancelled = true; };
+  }, []);
+
   // Subtab state is mirrored onto the URL query (?tab=products) so each view
   // is deep-linkable and the browser back button works like users expect.
   const [searchParams, setSearchParams] = useSearchParams();
@@ -6403,8 +6433,15 @@ export default function AdminData() {
                   <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
                     gemini-2.5-flash-image (nano-banana)
                   </div>
-                  <div style={{ fontSize: 11, color: '#475569', lineHeight: 1.45, padding: 8, background: '#fff', borderRadius: 6, border: '1px solid #ede9fe' }}>
-                    Reframe this product image into a standardized 3:4 (portrait) e-commerce shot. Keep the background and product details exactly as-is; centre the product with ~15% padding on all four sides.
+                  <div
+                    title="Live value from app_settings (Settings → Polish Primary). This is the literal prompt sent to Gemini for the next run."
+                    style={{
+                      fontSize: 11, color: '#475569', lineHeight: 1.45, padding: 8,
+                      background: '#fff', borderRadius: 6, border: '1px solid #ede9fe',
+                      whiteSpace: 'pre-wrap', maxHeight: 160, overflowY: 'auto',
+                    }}
+                  >
+                    {polishPromptLive}
                   </div>
                   <div style={{ display: 'flex', gap: 12, fontSize: 11, color: '#64748b' }}>
                     <span>output: 3:4</span>
@@ -6519,8 +6556,15 @@ export default function AdminData() {
                   <div style={{ fontSize: 13, fontWeight: 600, color: '#0f172a', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace' }}>
                     bytedance/seedance-2.0/image-to-video
                   </div>
-                  <div style={{ fontSize: 11, color: '#475569', lineHeight: 1.45, padding: 8, background: '#fff', borderRadius: 6, border: '1px solid #ede9fe' }}>
-                    Use this exact image as the first frame. Static shot, show subtle cinematic motion of the product. If a person is in frame, keep their mouth fully closed — they must not speak, mouth words, or move their lips. Portrait composition.
+                  <div
+                    title="Live value from app_settings (Settings → Primary Video). This is the literal prompt sent to Seedance for the next run."
+                    style={{
+                      fontSize: 11, color: '#475569', lineHeight: 1.45, padding: 8,
+                      background: '#fff', borderRadius: 6, border: '1px solid #ede9fe',
+                      whiteSpace: 'pre-wrap', maxHeight: 160, overflowY: 'auto',
+                    }}
+                  >
+                    {primaryVideoPromptLive}
                   </div>
                   <div style={{ display: 'flex', gap: 12, fontSize: 11, color: '#64748b' }}>
                     <span>aspect: 3:4</span>

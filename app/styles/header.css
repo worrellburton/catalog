@@ -212,6 +212,73 @@ header > .pending-look-pill {
   transform: translateY(-1px);
 }
 
+/* Mobile-only activity indicator. Sits to the LEFT of .header-wallet-pill
+   in .header-right; tap opens the wallet (which hosts the activity feed).
+   Hidden on desktop — the centered toast stack still handles activity
+   there, where there's room for it. */
+.header-activity-pill {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+  padding: 0;
+  font-family: inherit;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+  flex-shrink: 0;
+}
+.header-activity-pill:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  transform: translateY(-1px);
+}
+.header-activity-pill.has-unseen { color: #fff; }
+.header-activity-pill.is-pulsing {
+  animation: header-activity-pulse 1.6s ease-in-out;
+}
+@keyframes header-activity-pulse {
+  0%, 100% { box-shadow: 0 0 0 0   rgba(74, 222, 128, 0); }
+  50%      { box-shadow: 0 0 0 6px rgba(74, 222, 128, 0.22); }
+}
+.header-activity-pill-count {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #22c55e;
+  color: #052e16;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 0 2px #0a0a0c;
+  font-variant-numeric: tabular-nums;
+}
+.light-mode .header-activity-pill {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.08);
+  color: rgba(15, 23, 42, 0.7);
+}
+.light-mode .header-activity-pill:hover { background: rgba(0, 0, 0, 0.08); color: #0f172a; }
+.light-mode .header-activity-pill-count { background: #16a34a; color: #fff; box-shadow: 0 0 0 2px #fff; }
+
+@media (max-width: 768px) {
+  /* Show on mobile; centered .activity-toasts is hidden there (see
+     activity.css), so this pill is the activity surface on phones. */
+  .header-activity-pill { display: inline-flex; }
+}
+
 .logo {
   height: 36px;
   width: auto;

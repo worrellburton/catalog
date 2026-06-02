@@ -6,10 +6,6 @@
 }
 .bottom-bar {
   position: fixed;
-  /* Hugs the URL bar with just enough breathing room — 24px sat too
-     high and read as a floating island; 12px (+ the home-indicator
-     safe area on devices that report one) reads as "anchored above the
-     browser chrome". */
   bottom: calc(12px + env(safe-area-inset-bottom));
   left: 50%;
   transform: translateX(-50%);
@@ -18,15 +14,24 @@
   flex-direction: column;
   align-items: center;
   gap: 0;
-  background: rgba(255, 255, 255, 0.06);
-  backdrop-filter: blur(24px) saturate(1.4);
-  -webkit-backdrop-filter: blur(24px) saturate(1.4);
-  border-radius: 28px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  /* ONE-color glass pill. The previous treatment layered a flat
+     rgba(255,255,255,0.06) wash + an inset highlight on top of an inner
+     .filter-btn pill that had its OWN background — that's where the
+     "two-toned" look came from (the filter chip read as a darker disc
+     inside the outer bar). Replaced with a soft top→bottom gradient
+     that gives the bar a single liquid-glass surface, and stripped the
+     inner pill chrome below so the filter button + send button read as
+     icons sitting on top of the same surface, not as separate pills. */
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.04));
+  backdrop-filter: blur(28px) saturate(1.5);
+  -webkit-backdrop-filter: blur(28px) saturate(1.5);
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
   box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.02);
+    0 12px 36px rgba(0, 0, 0, 0.36),
+    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.18);
   overflow: hidden;
   transition: all 0.3s ease;
 }
@@ -179,6 +184,10 @@
 
 /* Filter button */
 .filter-btn {
+  /* Default (standalone) filter chip — keeps the old pill chrome for
+     legacy callers that render it outside a search-pill context. The
+     in-bar version (.filter-btn.inline below) strips background and
+     border so it reads as an icon on the glass pill, not a second pill. */
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.1);
   color: rgba(255, 255, 255, 0.6);
@@ -202,6 +211,25 @@
   background: rgba(255, 255, 255, 0.9);
   color: #000;
   border-color: transparent;
+}
+
+/* In-bar filter button — strip its own pill chrome so the search bar
+   reads as ONE glass surface, not a chip-inside-a-chip. The icon still
+   reacts on hover via opacity only. */
+.bottom-bar-inner.search-inline > .filter-btn.inline {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.55);
+}
+.bottom-bar-inner.search-inline > .filter-btn.inline:hover {
+  background: transparent;
+  color: #fff;
+}
+.bottom-bar-inner.search-inline > .filter-btn.inline.has-filters {
+  /* Active filters: just a subtle white ring around the icon, no fill. */
+  background: transparent;
+  color: #fff;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.5);
 }
 
 /* Filter panel */
