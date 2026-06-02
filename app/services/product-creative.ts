@@ -281,44 +281,21 @@ export async function getHomeFeed(opts: { ignoreGender?: boolean } = {}): Promis
       is_elite:          p.is_elite ?? undefined,
     },
   }));
-  // Looks that admin tagged with catalog_tags=['home'] should also
-  // render in the home feed — they're a separate content type, but
-  // the consumer grid is a video grid, so we fabricate ProductAd
-  // records on the fly. The renderer doesn't care that they didn't
-  // come from product_creative; look_id is set so downstream code can
-  // distinguish look-tiles from product-tiles if needed.
-  const looksAds = await getHomeLooksAsProductAds();
-  // Honour the admin's UNIFIED feed order: /admin/catalogs ranks looks AND
-  // products in ONE drag sequence (apply_feed_order writes a shared
-  // feed_rank space across both tables). Combine the two lists and sort by
-  // feed_rank so the consumer feed reproduces the admin order exactly.
-  // Ranked items lead in that order; unranked items (feed_rank null) fall to
-  // the end, products-before-looks then recency — a stable sort on the
-  // combined array index, which preserves each list's own pre-sort.
-  const combined = [...deduped, ...looksAds];
-  const rankOf = (a: ProductAd) =>
-    typeof a.feed_rank === 'number' ? a.feed_rank : Number.POSITIVE_INFINITY;
-  const merged: ProductAd[] = combined
-    .map((ad, i) => ({ ad, i }))
-    .sort((x, y) => {
-      const dr = rankOf(x.ad) - rankOf(y.ad);
-      return dr !== 0 ? dr : x.i - y.i;
-    })
-    .map(e => e.ad);
-
-  // Final dedup pass — never show the same look (or same product)
-  // twice in a single feed catalog. Same look_id collapses to the
-  // first occurrence regardless of whether a look-tile and a product-
-  // tile both reference it; same product_id collapses to the first
-  // occurrence. Keeps order stable (first-wins).
-  const seenLook = new Set<string>();
+  // Products only. Looks are fetched separately (getLooks) and combined with
+  // products by the SHARED feed_rank in FeedSection — that is the single place
+  // the two content types are interleaved. Merging look-tiles in here too
+  // double-rendered every look (once as a real look card from the looks lane,
+  // once as a synthesized product tile) and, because looks and products each
+  // carried their own 1..N feed_rank, scrambled the order. getHomeFeed is
+  // strictly the PRODUCT lane now; the consumer order is reproduced by
+  // FeedSection sorting looks+products on one unified feed_rank.
+  //
+  // Dedup defensively by product_id (the query can't emit a product twice
+  // today, but a future join could) while preserving the feed_rank order the
+  // query already applied.
   const seenProd = new Set<string>();
   const uniqMerged: ProductAd[] = [];
-  for (const ad of merged) {
-    if (ad.look_id) {
-      if (seenLook.has(ad.look_id)) continue;
-      seenLook.add(ad.look_id);
-    }
+  for (const ad of deduped) {
     if (ad.product_id) {
       if (seenProd.has(ad.product_id)) continue;
       seenProd.add(ad.product_id);
@@ -330,84 +307,6 @@ export async function getHomeFeed(opts: { ignoreGender?: boolean } = {}): Promis
   return uniqMerged.filter(ad =>
     passesGenderFilter(ad.product as { gender?: string | null } | null),
   );
-}
-
-// Pull looks tagged catalog_tags=['home'] and return them as
-// ProductAd-shaped rows so the consumer feed's existing render path
-// just works. Synthesized id is prefixed `look-` to avoid collisions
-// with real product_creative UUIDs.
-async function getHomeLooksAsProductAds(): Promise<ProductAd[]> {
-  if (!supabase) return [];
-  const { data, error } = await supabase
-    .from('looks')
-    .select(`
-      id, title, creator_handle, gender, created_at, catalog_tags, feed_rank,
-      looks_creative ( video_url, is_primary ),
-      look_products ( product:products(id, name, brand, price, image_url, primary_image_url, primary_video_url, primary_video_poster_url, images, url, type, catalog_tags, is_active, is_elite, gender) )
-    `)
-    .eq('status', 'live')
-    .eq('enabled', true)
-    .is('archived_at', null)
-    .contains('catalog_tags', ['home'])
-    .order('feed_rank', { ascending: true, nullsFirst: false })
-    .order('created_at', { ascending: false })
-    .limit(60);
-  if (error) {
-    console.error('[getHomeLooksAsProductAds] query error:', error.message);
-    return [];
-  }
-  type LookRow = {
-    id: string;
-    title: string | null;
-    creator_handle: string | null;
-    gender: string | null;
-    created_at: string;
-    catalog_tags: string[] | null;
-    feed_rank: number | null;
-    looks_creative: { video_url: string | null; is_primary: boolean }[] | null;
-    look_products: { product: ProductAd['product'] | null }[] | null;
-  };
-  const rows = (data as unknown as LookRow[] | null) || [];
-  const out: ProductAd[] = [];
-  for (const r of rows) {
-    const video = r.looks_creative?.find(c => c.is_primary)?.video_url
-      ?? r.looks_creative?.[0]?.video_url
-      ?? null;
-    if (!video) continue;
-    const firstProduct = r.look_products?.[0]?.product ?? null;
-    out.push({
-      id: `look-${r.id}`,
-      product_id: firstProduct?.id ?? '',
-      look_id: r.id,
-      feed_rank: r.feed_rank,
-      title: r.title,
-      description: null,
-      video_url: video,
-      mobile_video_url: null,
-      storage_path: null,
-      thumbnail_url: null,
-      affiliate_url: firstProduct?.url ?? null,
-      prompt: null,
-      prompt_extra: null,
-      style: 'look',
-      model: null,
-      status: 'live',
-      duration_seconds: null,
-      aspect_ratio: '9:16',
-      resolution: null,
-      cost_usd: null,
-      impressions: 0,
-      clicks: 0,
-      error: null,
-      enabled: true,
-      is_elite: false,
-      created_at: r.created_at,
-      completed_at: null,
-      updated_at: null,
-      product: firstProduct ?? undefined,
-    });
-  }
-  return out;
 }
 
 // ── Home-feed prefetch ──────────────────────────────────────────────────

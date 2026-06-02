@@ -3437,6 +3437,35 @@ export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loadin
   // (not yet saved). Keep commits it to feedOrder; Discard clears it.
   const [previewOrder, setPreviewOrder] = useState<string[] | null>(null);
 
+  // Persistence safety-net. The kept feed order lives in BOTH localStorage
+  // (instant preview) and the DB (feed_rank — the source the live shopper
+  // feed reads). This heavy admin page can evict its localStorage under
+  // quota pressure, which made a "Keep this order" look like it didn't save
+  // after a refresh. So whenever localStorage has no feed order, rebuild it
+  // from the DB's unified feed_rank — the saved order always comes back, and
+  // admin stays in lockstep with the consumer feed.
+  useEffect(() => {
+    if (feedOrder.length > 0 || !supabase) return;
+    let cancelled = false;
+    (async () => {
+      const [looksRes, productsRes] = await Promise.all([
+        supabase!.from('looks').select('id, feed_rank').not('feed_rank', 'is', null),
+        supabase!.from('products').select('id, feed_rank').not('feed_rank', 'is', null),
+      ]);
+      if (cancelled) return;
+      const keyed = [
+        ...(((looksRes.data as { id: string; feed_rank: number }[] | null) || [])
+          .map(r => ({ key: `look:${r.id}`, rank: r.feed_rank }))),
+        ...(((productsRes.data as { id: string; feed_rank: number }[] | null) || [])
+          .map(r => ({ key: `product:${r.id}`, rank: r.feed_rank }))),
+      ].sort((a, b) => a.rank - b.rank);
+      if (keyed.length > 0) setFeedOrder(keyed.map(k => k.key));
+    })();
+    return () => { cancelled = true; };
+    // Mount-only: seed once from the DB when localStorage came up empty.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // ── ALL HOOKS MUST RUN BEFORE EARLY RETURNS (React Rule of Hooks) ──
   // Previously: 3 early returns BEFORE the 5 useCallbacks below,
   // producing React error #310 ("Rendered more hooks than during the
