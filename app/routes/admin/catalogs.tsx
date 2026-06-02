@@ -1090,6 +1090,27 @@ export default function AdminCatalogs() {
     return counts;
   }, [products]);
 
+  // Per-catalog gender mix (male / female / unisex). Replaces the
+  // single-row "Gender filter" column with a richer at-a-glance picture
+  // of who the catalog actually serves — admins kept asking "is this
+  // catalog men-heavy or women-heavy?" and the old gender filter just
+  // said "Any". Untagged products contribute to the "—" bucket but
+  // aren't surfaced as a tier; the renderer drops them so a fully-
+  // untagged catalog reads as empty mix instead of false uniformity.
+  const catalogProductGenderMix = useMemo(() => {
+    const mix = new Map<string, { male: number; female: number; unisex: number }>();
+    products.forEach(p => {
+      const g = (p.gender || '').toLowerCase();
+      if (g !== 'male' && g !== 'female' && g !== 'unisex') return;
+      (p.catalog_tags || []).forEach(tag => {
+        const cur = mix.get(tag) || { male: 0, female: 0, unisex: 0 };
+        cur[g as 'male' | 'female' | 'unisex'] += 1;
+        mix.set(tag, cur);
+      });
+    });
+    return mix;
+  }, [products]);
+
   // Looks tagged per catalog — mirrors catalogProductCounts so the list
   // table can show a Looks count next to Products without expanding each
   // row. Universe catalogs (home / all) show totals instead (handled at
@@ -1877,44 +1898,25 @@ export default function AdminCatalogs() {
 
       <LiveIndicator active={liveActive} tick={liveTick} />
 
-      <CatalogsDashboard
-        catalogs={allUnfiltered}
-        impressionsByName={catalogImpressions}
-        searchCountsByName={searchCounts}
-      />
+      {/* Stripped down per the latest minimal-catalog spec:
+            • Insights strip (Impressions 7d / Top catalog / Biggest riser…)
+              is removed.
+            • Catalog Health panel (zombie / empty / dark inventory cards) is
+              removed.
+            • Filter chips (Rising / Falling / Empty / Zombie / Has issues)
+              are removed from the search bar.
+            • Gender column is replaced with a M/W/Unisex ratio.
+            • "Searches" column is renamed "Views" so views and searches read
+              as the same metric to admins.
+          The lookup catalogs themselves (rising/zombie/empty checks) are
+          still computed for export & the per-row tooltips, but the page no
+          longer surfaces them as a hero panel. */}
 
-      <CatalogsHealthPanel
-        catalogs={allUnfiltered}
-        impressionsByName={catalogImpressions}
-        searchCountsByName={searchCounts}
-        productCountsByName={catalogProductCounts}
-        onJumpToCatalog={(name) => {
-          // Strip the "↑22%" / "↓45%" trailing suffix used in sample
-          // labels for trend issues — the actual catalog name is what
-          // appears before " (".
-          const cleanName = name.split(' (')[0];
-          const match = allUnfiltered.find(c => c.name === cleanName);
-          if (!match) return;
-          // Drop any active filter so the row is actually present.
-          if (tableFilter !== 'all') setTableFilter('all');
-          if (tableQuery) setTableQuery('');
-          setExpanded(prev => new Set(prev).add(match.id));
-          if (!creativeByCatalog[match.id]) loadCreative(match);
-          // Scroll the row into view after the state flush.
-          requestAnimationFrame(() => {
-            const row = document.querySelector(`[data-catalog-row="${match.id}"]`);
-            if (row) row.scrollIntoView({ behavior: 'smooth', block: 'start' });
-          });
-        }}
-      />
-
-      <CatalogsTableFilterBar
+      <CatalogsTableSearch
         query={tableQuery}
-        filter={tableFilter}
         onQuery={setTableQuery}
-        onFilter={setTableFilter}
         total={rankable.length}
-        showing={all.length - (tableQuery || tableFilter !== 'all' ? 0 : 1)}
+        showing={all.length - (tableQuery ? 0 : 1)}
       />
 
       <div className="admin-table-wrap">
@@ -1923,10 +1925,10 @@ export default function AdminCatalogs() {
             <tr>
               <th style={{ textAlign: 'left' }}>Catalog</th>
               <th>Featured</th>
-              <th>Gender</th>
+              <th>Mix</th>
               <th>Products</th>
               <th>Looks</th>
-              <th>Searches</th>
+              <th>Views</th>
               <th>Created</th>
             </tr>
           </thead>
@@ -2012,14 +2014,7 @@ export default function AdminCatalogs() {
                       />
                     </td>
                     <td>
-                      <GenderDropdown
-                        value={(homeCatalog.gender ?? 'all') as CatalogGenderUI}
-                        onChange={async (val) => {
-                          setHomeCatalog(prev => prev ? { ...prev, gender: val } : prev);
-                          const ok = await setCatalogGender(homeCatalog.slug, val);
-                          if (!ok) showToast('Could not save gender');
-                        }}
-                      />
+                      <GenderMixCell mix={catalogProductGenderMix.get(homeCatalog.name)} />
                     </td>
                     <td>
                       {homeProductCount > 0 ? (
@@ -2164,20 +2159,7 @@ export default function AdminCatalogs() {
                   />
                 </td>
                 <td>
-                  {c.id === 'synthetic-all' ? (
-                    <span style={{ fontSize: 11, color: '#cbd5e1' }}>—</span>
-                  ) : (
-                    <GenderDropdown
-                      value={c.gender ?? 'all'}
-                      onChange={async (val) => {
-                        setCustom(prev => prev.map(x => x.id === c.id ? { ...x, gender: val } : x));
-                        if (c.slug) {
-                          const ok = await setCatalogGender(c.slug, val);
-                          if (!ok) showToast('Could not save gender');
-                        }
-                      }}
-                    />
-                  )}
+                  <GenderMixCell mix={catalogProductGenderMix.get(c.name)} />
                 </td>
                 <td>
                   {productCount > 0 ? (
@@ -3018,10 +3000,72 @@ function LiveIndicator({ active, tick }: { active: boolean; tick: number }) {
   );
 }
 
-// ── Table-level search + quick filter ────────────────────────────────
-// Sits between the health panel and the table. Search filters by
-// name substring; quick chips slice by health-style predicates
-// (all / rising / falling / empty / zombie / has issues).
+// ── Mix cell ─────────────────────────────────────────────────────────
+// Renders the M/W/Unisex composition of a catalog's products as a tiny
+// stacked bar + percentage labels. The page-level catalogProductGenderMix
+// passes in a {male, female, unisex} count tuple; we normalise to
+// percentages and skip rendering when the catalog has zero tagged
+// products (so universe catalogs and unscoped tags read as "—").
+function GenderMixCell({ mix }: { mix?: { male: number; female: number; unisex: number } }) {
+  if (!mix) return <span style={{ fontSize: 11, color: '#cbd5e1' }}>—</span>;
+  const total = mix.male + mix.female + mix.unisex;
+  if (total === 0) return <span style={{ fontSize: 11, color: '#cbd5e1' }}>—</span>;
+  const m = Math.round((mix.male   / total) * 100);
+  const w = Math.round((mix.female / total) * 100);
+  // unisex absorbs rounding drift so the three sum to 100 visually.
+  const u = Math.max(0, 100 - m - w);
+  return (
+    <div style={{ display: 'flex', flexDirection: 'column', gap: 3, minWidth: 80 }} title={`Men ${mix.male} · Women ${mix.female} · Unisex ${mix.unisex}`}>
+      <div style={{ display: 'flex', height: 6, borderRadius: 999, overflow: 'hidden', background: '#f1f5f9' }}>
+        {m > 0 && <div style={{ width: `${m}%`, background: '#2563eb' }} />}
+        {w > 0 && <div style={{ width: `${w}%`, background: '#db2777' }} />}
+        {u > 0 && <div style={{ width: `${u}%`, background: '#94a3b8' }} />}
+      </div>
+      <div style={{ fontSize: 10, color: '#64748b', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>
+        {m}/{w}/{u}
+      </div>
+    </div>
+  );
+}
+
+// ── Table-level search ───────────────────────────────────────────────
+// Minimal liquid-glass search bar. Filter chips (Rising/Falling/Empty/
+// Zombie/Has issues) were removed in the minimal-catalog spec —
+// everyone can search anything, that filter axis didn't earn its real
+// estate. Counts on the right keep the "showing X of Y" affordance.
+interface CatalogsTableSearchProps {
+  query: string;
+  onQuery: (q: string) => void;
+  total: number;
+  showing: number;
+}
+
+function CatalogsTableSearch({ query, onQuery, total, showing }: CatalogsTableSearchProps) {
+  return (
+    <div className="catalogs-table-search">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ color: 'rgba(15, 23, 42, 0.5)' }}>
+        <circle cx="11" cy="11" r="8" />
+        <line x1="21" y1="21" x2="16.65" y2="16.65" />
+      </svg>
+      <input
+        type="text"
+        placeholder="Search catalogs…"
+        value={query}
+        onChange={e => onQuery(e.target.value)}
+        className="catalogs-table-search-input"
+        aria-label="Search catalogs"
+      />
+      <span className="catalogs-table-search-count">
+        {!query ? `${total} catalog${total === 1 ? '' : 's'}` : `${Math.max(0, showing)} of ${total}`}
+      </span>
+    </div>
+  );
+}
+
+// ── Table-level search + quick filter (LEGACY) ───────────────────────
+// Kept for the few non-catalog-list views that still want the chip
+// filters; the main /admin/catalogs list now uses CatalogsTableSearch
+// above.
 interface CatalogsTableFilterBarProps {
   query: string;
   filter: 'all' | 'rising' | 'falling' | 'empty' | 'zombie' | 'issues';
