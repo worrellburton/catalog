@@ -315,6 +315,31 @@ function BottomBar({
         />
       )}
 
+      {/* Floating Filters chip that surfaces ABOVE the bar whenever the
+          search sheet is open. Replaces the in-bar filter button — the
+          bar itself is now minimal (input only). Tap opens the full
+          FilterPanel where the heavy controls live. `hasActiveFilters`
+          highlights the chip when any filter is active so the user can
+          see at a glance that the feed is scoped. The chip sits above
+          the search-suggestions strip so it's the first thing reachable
+          when the keyboard is up. */}
+      {searchOpen && (
+        <button
+          type="button"
+          className={`bottom-filters-chip${hasActiveFilters(activeFilters) ? ' is-active' : ''}`}
+          onMouseDown={(e) => e.preventDefault() /* keep keyboard up */}
+          onClick={(e) => { e.stopPropagation(); openFilters(); }}
+          aria-label="Open filters"
+        >
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+            <line x1="4" y1="6" x2="20" y2="6"/>
+            <line x1="7" y1="12" x2="17" y2="12"/>
+            <line x1="10" y1="18" x2="14" y2="18"/>
+          </svg>
+          <span>Filters</span>
+          {hasActiveFilters(activeFilters) && <span className="bottom-filters-chip-dot" aria-hidden />}
+        </button>
+      )}
       {searchOpen && (
         <div className="search-suggestions visible" id="search-suggestions">
           <div className="search-suggestions-track" ref={trackRef}>
@@ -366,17 +391,11 @@ function BottomBar({
             is empty, so there's no separate "all" pill to manage. */}
         <div className="bottom-bar-row">
         <div className="bottom-bar-inner search-inline">
-          <button
-            className={`filter-btn inline ${hasActiveFilters(activeFilters) ? 'has-filters' : ''}`}
-            onMouseDown={(e) => e.preventDefault() /* keep input focus; iOS otherwise eats the first tap on blur */}
-            onClick={(e) => { e.stopPropagation(); filtersOpen ? closeFilters() : openFilters(); }}
-            aria-label="Filters"
-          >
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="7" y1="12" x2="17" y2="12"/><line x1="10" y1="18" x2="14" y2="18"/></svg>
-          </button>
-          {/* My Size moved out of the search bar and into the Filters
-              sheet (FilterPanel → Personalize section). Keeps the bar
-              focused on search; size is still one tap away via Filters. */}
+          {/* Filter button intentionally removed. The bar is now JUST the
+              input — minimal. Filters surface as a floating sheet ABOVE
+              the bar when the user taps in (search-open), see
+              .bottom-filter-anchor below + .bottom-bar.search-open
+              styling in bottom-bar.css. */}
           <input
             ref={searchInputRef}
             type="search"

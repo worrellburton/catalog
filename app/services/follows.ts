@@ -237,3 +237,114 @@ export async function getMyFollowers(): Promise<FollowerInfo[]> {
     };
   });
 }
+
+// ── Suggested creators (cold-start fallback for FollowingRail) ────────
+//
+// When a user hasn't followed anyone yet, the stories rail used to render
+// empty space — bad first impression for a discovery surface. Instead we
+// show "popular creators of your gender" as a default: real creators with
+// real avatars and recent posts, ranked by lifetime look count. Once the
+// user follows their first creator the rail switches to their follows
+// (FollowingRail handles the swap at the consumer site).
+//
+// "Popular by gender" is computed from the creator's own profile.gender
+// (per-creator) rather than per-look, because the gender column on
+// individual looks is auto-synced from the creator's profile (see
+// migration `looks_gender_sync_from_profile`) so they're equivalent and
+// the per-profile query is cheaper.
+
+export interface SuggestedCreator {
+  handle: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+  /** Lookcount used as the popularity proxy — also stuffed into the
+   *  RailEntry.ts slot so the existing "newest-post-first" sort gives
+   *  the rail a coherent order without a second query. */
+  lookCount: number;
+}
+
+export async function getPopularCreators(
+  gender: 'male' | 'female' | 'unknown',
+  opts: { limit?: number; excludeHandles?: string[] } = {},
+): Promise<SuggestedCreator[]> {
+  if (!supabase) return [];
+  const limit = opts.limit ?? 12;
+  const exclude = new Set((opts.excludeHandles ?? []).map(h => h.toLowerCase()));
+
+  // 1. Pick creator profiles to consider. When the shopper has a known
+  //    gender, scope to profiles matching it (looks for unisex too so
+  //    creators tagged unisex always surface). When unknown, ignore the
+  //    filter — everyone is eligible.
+  let profilesQ = supabase
+    .from('profiles')
+    .select('id, full_name, avatar_url, gender')
+    .not('full_name', 'is', null);
+  if (gender === 'male' || gender === 'female') {
+    profilesQ = profilesQ.in('gender', [gender, 'unisex']);
+  }
+  const { data: profileRows } = await profilesQ.limit(200);
+  type ProfileRow = { id: string; full_name: string | null; avatar_url: string | null; gender: string | null };
+  const profiles = (profileRows as ProfileRow[] | null) || [];
+  if (profiles.length === 0) return [];
+  const profileById = new Map(profiles.map(p => [p.id, p]));
+
+  // 2. Pull looks belonging to those creators, group by user_id to count
+  //    lifetime posts + resolve their creator_handle. Cap the query at
+  //    2k rows — that's enough to score even the top-1% of creators by
+  //    look volume, and one round trip keeps this cold-start cheap.
+  const { data: lookRows } = await supabase
+    .from('looks')
+    .select('user_id, creator_handle, created_at')
+    .in('user_id', profiles.map(p => p.id))
+    .eq('status', 'live')
+    .eq('enabled', true)
+    .is('archived_at', null)
+    .not('creator_handle', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(2000);
+  type LookRow = { user_id: string; creator_handle: string; created_at: string | null };
+  const looks = (lookRows as LookRow[] | null) || [];
+  if (looks.length === 0) return [];
+
+  // 3. Score per creator. Handle uniqueness is the de-dup key (a single
+  //    creator might have multiple profile rows historically).
+  type Agg = { handle: string; lookCount: number; latestTs: number; userId: string };
+  const byHandle = new Map<string, Agg>();
+  for (const l of looks) {
+    const handle = l.creator_handle.toLowerCase();
+    if (exclude.has(handle)) continue;
+    const cur = byHandle.get(handle) || { handle: l.creator_handle, lookCount: 0, latestTs: 0, userId: l.user_id };
+    cur.lookCount += 1;
+    const ts = l.created_at ? Date.parse(l.created_at) : 0;
+    if (ts > cur.latestTs) cur.latestTs = ts;
+    byHandle.set(handle, cur);
+  }
+  if (byHandle.size === 0) return [];
+
+  // 4. Pick the top-N by lookCount; for the avatar/displayName we prefer
+  //    the creators table when present (it's the curated row) and fall
+  //    back to the profile.
+  const topAggs = Array.from(byHandle.values())
+    .sort((a, b) => b.lookCount - a.lookCount || b.latestTs - a.latestTs)
+    .slice(0, limit);
+  const handles = topAggs.map(a => a.handle);
+  const { data: creatorRows } = await supabase
+    .from('creators')
+    .select('handle, display_name, avatar_url')
+    .in('handle', handles);
+  type CreatorRow = { handle: string; display_name: string | null; avatar_url: string | null };
+  const creatorByHandle = new Map<string, CreatorRow>(
+    ((creatorRows as CreatorRow[] | null) || []).map(c => [c.handle.toLowerCase(), c]),
+  );
+
+  return topAggs.map(a => {
+    const cr = creatorByHandle.get(a.handle.toLowerCase());
+    const pr = profileById.get(a.userId);
+    return {
+      handle: a.handle,
+      displayName: cr?.display_name || pr?.full_name || null,
+      avatarUrl: cr?.avatar_url || pr?.avatar_url || null,
+      lookCount: a.lookCount,
+    };
+  });
+}

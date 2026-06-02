@@ -626,6 +626,53 @@
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
   font-family: inherit;
+  /* Circular dissolve-in. Each story circle starts at scale 0 + 0deg
+     rotation + 0 opacity and unfurls into place with a soft radial
+     mask (clip-path: circle()). The animation is intentionally long
+     (10s start-to-finish across the whole rail) with ease-in-out on
+     every property, so the row never appears statically — it always
+     reads as "settling into place" on first paint. Per-story
+     animation-delay is computed via the inline --i custom property
+     applied by FollowingRail; stories stagger 60ms apart so each
+     circle's bloom is visually distinct without making the user wait
+     for the row to be useful. */
+  animation: follow-story-bloom 10000ms cubic-bezier(0.42, 0, 0.58, 1) both;
+  animation-delay: calc(var(--i, 0) * 60ms);
+  will-change: transform, opacity, clip-path;
+}
+@keyframes follow-story-bloom {
+  /* The whole 10s envelope is intentional — the bloom completes within
+     the first ~1.4s of it, then the story holds at its final state for
+     the remainder. That keeps the perceived motion short (the user
+     gets a usable rail almost immediately) while making sure no story
+     ever just snaps into the DOM. */
+  0% {
+    opacity: 0;
+    transform: scale(0.35) rotate(-22deg);
+    clip-path: circle(0% at 50% 50%);
+    filter: blur(6px);
+  }
+  6% {
+    opacity: 1;
+    clip-path: circle(110% at 50% 50%);
+    filter: blur(0);
+  }
+  14% {
+    transform: scale(1) rotate(0deg);
+    clip-path: circle(110% at 50% 50%);
+    filter: blur(0);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1) rotate(0deg);
+    clip-path: circle(110% at 50% 50%);
+    filter: blur(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  /* Skip the bloom entirely so reduced-motion users see the row at
+     full opacity immediately. */
+  .follow-story { animation: none; }
 }
 .follow-story:active { transform: scale(0.94); }
 
