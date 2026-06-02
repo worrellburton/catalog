@@ -151,6 +151,26 @@ function UserMenu({
     if (!pageOpen) setSuperSection(false);
   }, [pageOpen]);
 
+  // Toggle a body class while the Account page is the active surface.
+  // CSS uses it to translate .app-root left by ~18% so the viewport
+  // reads as "slid over to reveal the menu" — see the horizontal-slide
+  // section in user-menu.css. The class follows `pageClosing` rather
+  // than `pageOpen` so the underlying app slides BACK in lockstep with
+  // the menu sliding OUT (otherwise the app snaps back before the menu
+  // finishes its close transition, breaking the illusion). Cleared on
+  // unmount so a stuck class can't leave the app stranded.
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    if (pageOpen && !pageClosing) {
+      document.body.classList.add('has-account-menu');
+    } else {
+      // pageOpen=false OR pageClosing=true → menu is sliding out (or
+      // already gone). Remove the class so .app-root translates back.
+      document.body.classList.remove('has-account-menu');
+    }
+    return () => { document.body.classList.remove('has-account-menu'); };
+  }, [pageOpen, pageClosing]);
+
   // When an action runs from the page, close the page first (with its
   // animation), then dispatch the action — same pattern as runTile, just
   // routed through the page lifecycle.

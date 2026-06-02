@@ -622,27 +622,37 @@
   padding-top: max(env(safe-area-inset-top, 0px), 12px);
   padding-bottom: max(env(safe-area-inset-bottom, 0px), 20px);
 }
-/* Reveal: scale + fade from the avatar's tap point. transform-origin is
-   the captured avatar center, so the page appears to grow out of the
-   tapped avatar — without the clip-path-with-CSS-variable fragility that
-   left the page transparent in some WebViews. Always ends fully opaque
-   at scale(1). */
-.user-menu-page.is-open {
-  animation: ump-reveal 0.42s cubic-bezier(0.16, 1, 0.3, 1) both;
-  transform-origin: var(--ump-x, 50%) var(--ump-y, 50%);
+/* Horizontal-slide reveal. The Account page acts as if it lives at
+   `right: -100%` of the main app — opening pulls it onto the screen
+   from the right edge while the underlying viewport (.app-root)
+   translates left by ~18% so the user sees that the menu "exists to
+   the right" of the page rather than overlaying it. Both halves use
+   the same easing so they feel like one continuous slide.
+
+   The page starts AT translateX(100%) (off-screen right) on every
+   mount so the keyframe doesn't need a from{} state and `.is-closing`
+   can just transition back to the start without a separate keyframe. */
+.user-menu-page {
+  transform: translateX(100%);
+  /* Transition handles BOTH directions — opening flips to translateX(0),
+     closing flips back to translateX(100%). No keyframes needed. */
+  transition: transform 0.36s cubic-bezier(0.32, 0.72, 0, 1);
 }
-.user-menu-page.is-closing {
-  animation: ump-conceal 0.3s cubic-bezier(0.7, 0, 0.84, 0) both;
-  transform-origin: var(--ump-x, 50%) var(--ump-y, 50%);
+.user-menu-page.is-open    { transform: translateX(0); }
+.user-menu-page.is-closing { transform: translateX(100%); }
+
+/* The main app surface peels back when the menu is open so it reads
+   as "viewport slid left to reveal the menu" rather than "menu
+   appeared on top". The body class is toggled by UserMenu. */
+body.has-account-menu .app-root {
+  transform: translateX(-18%);
+  transition: transform 0.36s cubic-bezier(0.32, 0.72, 0, 1);
 }
-@keyframes ump-reveal {
-  from { opacity: 0; transform: scale(0.78); }
-  to   { opacity: 1; transform: scale(1); }
+.app-root {
+  transition: transform 0.36s cubic-bezier(0.32, 0.72, 0, 1);
 }
-@keyframes ump-conceal {
-  from { opacity: 1; transform: scale(1); }
-  to   { opacity: 0; transform: scale(0.85); }
-}
+/* Prevent horizontal scrollbar while either half is translating. */
+body.has-account-menu { overflow-x: hidden; }
 
 /* Header — back chevron + title */
 .user-menu-page-top {
