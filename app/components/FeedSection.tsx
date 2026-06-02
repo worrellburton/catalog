@@ -182,11 +182,18 @@ function FeedSection({
           const r = e.type === 'look' ? e.look.feed_rank : e.creative.feed_rank;
           return typeof r === 'number' ? r : Number.POSITIVE_INFINITY;
         };
+        // Looks lead on any rank tie. The admin writes a unified, dense
+        // feed_rank (no collisions), so ties only happen in the UNRANKED
+        // group (feed_rank null → Infinity) — there we keep looks first,
+        // matching the "looks go first" rule, then fall back to input order.
+        const typeRank = (e: DeckEntry) => (e.type === 'look' ? 0 : 1);
         return entries
           .map((e, i) => ({ e, i }))
           .sort((a, b) => {
             const d = rankOf(a.e) - rankOf(b.e);
-            return d !== 0 ? d : a.i - b.i;
+            if (d !== 0) return d;
+            const t = typeRank(a.e) - typeRank(b.e);
+            return t !== 0 ? t : a.i - b.i;
           })
           .map(x => x.e);
       }
