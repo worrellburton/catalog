@@ -955,9 +955,9 @@ html:has(.user-menu-page) .bottom-bar {
   pointer-events: none;
 }
 .app-root.chrome-hidden .bottom-bar {
-  /* The bar uses translateX(-50%) for centering — chain a Y translation
-     on top so it slides off the bottom without losing horizontal anchor. */
-  transform: translateX(-50%) translateY(140%);
+  /* Centering is now margin-based (no translateX), so the hide-state
+     transform is a pure Y slide — nothing to chain. */
+  transform: translateY(140%);
   opacity: 0;
   pointer-events: none;
 }
@@ -967,10 +967,10 @@ body:has(.app-root.chrome-hidden) .ai-bar-wrap {
   pointer-events: none;
 }
 
-/* When the search sheet is open we drag the bar around manually — don't
-   stomp on its inline transform with our hide-state translateX. */
+/* When the search sheet is open the bar still hides with a pure Y
+   slide — centering is margin-based, so no translateX to preserve. */
 .app-root.chrome-hidden .bottom-bar.search-open {
-  transform: translateX(-50%) translateY(140%);
+  transform: translateY(140%);
 }
 
 /* ── Site singleton particle host ───────────────────────────────────────
