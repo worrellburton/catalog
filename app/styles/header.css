@@ -61,17 +61,22 @@ header {
      courts, beauty close-ups, etc.). The fade extends past the
      header chrome so card thumbnails dim naturally as they scroll
      into the title row. */
+  /* Scroll-driven dark underlay. Alpha at each stop grows with
+     --hero-scroll-progress (0 at top, 1 once past the hero) so the
+     header gradient deepens as the feed scrolls underneath, making
+     the Catalog mark + icons "pop" off the moving content. The +0
+     terms keep the at-rest treatment unchanged. */
   background: linear-gradient(
     to bottom,
-    rgba(0, 0, 0, 0.92) 0%,
-    rgba(0, 0, 0, 0.78) 30%,
-    rgba(0, 0, 0, 0.45) 65%,
-    transparent 100%
+    rgba(0, 0, 0, calc(0.92 + var(--hero-scroll-progress, 0) * 0.08)) 0%,
+    rgba(0, 0, 0, calc(0.78 + var(--hero-scroll-progress, 0) * 0.20)) 30%,
+    rgba(0, 0, 0, calc(0.45 + var(--hero-scroll-progress, 0) * 0.40)) 65%,
+    rgba(0, 0, 0, calc(0.00 + var(--hero-scroll-progress, 0) * 0.20)) 100%
   );
+  transition: background 200ms ease;
   /* Taller than the chrome itself so the fade-out is visible past
      the icons rather than ending abruptly. */
   height: 140px;
-  pointer-events: none;
 }
 
 /* Re-enable interactivity for the actual controls inside the
