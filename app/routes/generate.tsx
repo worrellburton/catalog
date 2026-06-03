@@ -419,23 +419,55 @@ export default function GeneratePage() {
     setCategoryQueries(prev => (prev[label] === value ? prev : { ...prev, [label]: value }));
   }, []);
 
+  // Per-category brand filter. Null = no filter active. Selecting a
+  // brand chip narrows the row to just that brand's products; tapping
+  // the active chip again clears it.
+  const [categoryBrandFilters, setCategoryBrandFilters] = useState<Record<string, string | null>>({});
+  const setCategoryBrand = useCallback((label: string, brand: string | null) => {
+    setCategoryBrandFilters(prev => ({ ...prev, [label]: brand }));
+  }, []);
+
   // Slice productResults into the 6 display buckets. Each bucket also
-  // applies its own per-row search query (name/brand contains). Memoized
-  // so re-renders that don't change inputs skip the work entirely.
+  // applies its own per-row search query (name/brand contains) AND its
+  // active brand-chip filter. Memoized so re-renders that don't change
+  // inputs skip the work entirely.
   const productsByCategory = useMemo(() => {
     const out: Record<string, PickedProduct[]> = {};
     for (const group of CATEGORY_GROUPS) {
       const q = (categoryQueries[group.label] || '').trim().toLowerCase();
+      const brand = categoryBrandFilters[group.label] || null;
       out[group.label] = productResults.filter(p => {
         if (!productInCategory(p, group)) return false;
+        if (brand && (p.brand || '').toLowerCase() !== brand.toLowerCase()) return false;
         if (!q) return true;
         const name = (p.name || '').toLowerCase();
-        const brand = (p.brand || '').toLowerCase();
-        return name.includes(q) || brand.includes(q);
+        const pBrand = (p.brand || '').toLowerCase();
+        return name.includes(q) || pBrand.includes(q);
       });
     }
     return out;
-  }, [productResults, categoryQueries]);
+  }, [productResults, categoryQueries, categoryBrandFilters]);
+
+  // Top brands available within each category (pre-filter). We pull
+  // them from the unfiltered productResults so flipping a chip doesn't
+  // change which chips are visible.
+  const brandsByCategory = useMemo(() => {
+    const out: Record<string, string[]> = {};
+    for (const group of CATEGORY_GROUPS) {
+      const tally = new Map<string, number>();
+      for (const p of productResults) {
+        if (!productInCategory(p, group)) continue;
+        const b = (p.brand || '').trim();
+        if (!b) continue;
+        tally.set(b, (tally.get(b) || 0) + 1);
+      }
+      out[group.label] = [...tally.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 4)
+        .map(([b]) => b);
+    }
+    return out;
+  }, [productResults]);
   const [picked, setPicked] = useState<PickedProduct[]>([]);
 
   // Pre-pick a product when the user lands here from a Product page's
@@ -1674,6 +1706,8 @@ export default function GeneratePage() {
               CATEGORY_GROUPS.map(group => {
                 const rowProducts = productsByCategory[group.label] || [];
                 const rowQuery = categoryQueries[group.label] || '';
+                const rowBrands = brandsByCategory[group.label] || [];
+                const activeBrand = categoryBrandFilters[group.label] || null;
                 return (
                   <div key={group.label} className="gen-cat-row">
                     <div className="gen-cat-row-head">
@@ -1687,6 +1721,23 @@ export default function GeneratePage() {
                         aria-label={`Search ${group.label}`}
                       />
                     </div>
+                    {/* Brand chips — top 4 brands present in this
+                        category. Tap one to filter the row to that
+                        brand; tap the active chip to clear it. */}
+                    {rowBrands.length > 0 && (
+                      <div className="gen-cat-row-brands" role="tablist" aria-label={`Filter ${group.label} by brand`}>
+                        {rowBrands.map(b => (
+                          <button
+                            key={b}
+                            type="button"
+                            role="tab"
+                            aria-selected={activeBrand === b}
+                            className={`gen-cat-row-brand${activeBrand === b ? ' is-active' : ''}`}
+                            onClick={() => setCategoryBrand(group.label, activeBrand === b ? null : b)}
+                          >{b}</button>
+                        ))}
+                      </div>
+                    )}
                     <div className="gen-cat-row-scroll">
                       {rowProducts.length === 0 ? (
                         <div className="gen-cat-row-empty">

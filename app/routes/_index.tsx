@@ -69,6 +69,20 @@ const CreatorWallet = lazy(importCreatorWallet);
 const ProfilePage = lazy(importProfilePage);
 const FollowingPage = lazy(importFollowingPage);
 
+/** Pause every currently-playing <video> in the document. Called on
+ *  every product → product navigation so the old hero + rail cards
+ *  don't keep decoding while the new page mounts. The
+ *  IntersectionObserver-driven autoplay in cards will resume whichever
+ *  videos are actually on screen once the new layout settles. */
+function pauseAllVideos(): void {
+  if (typeof document === 'undefined') return;
+  document.querySelectorAll<HTMLVideoElement>('video').forEach(v => {
+    if (!v.paused) {
+      try { v.pause(); } catch { /* WebKit can throw on hostile elements; safe to ignore */ }
+    }
+  });
+}
+
 // Order chosen by likelihood the user will open the surface in the next
 // minute: looks/products dominate, browser is the most-visited tail action,
 // MyLooks is admin-ish so it's last.
@@ -674,6 +688,11 @@ export default function Home() {
 
   const handleOpenProduct = useCallback(async (product: Product) => {
     pushRecent(product);
+    // Pause every currently-playing <video> before the nav lands so
+    // we don't briefly have two heroes + a rail of cards all decoding
+    // at once. The TrailVideoHost pool resumes whichever video the
+    // new page actually shows on mount.
+    pauseAllVideos();
     setProductNavCount(c => c + 1);
     // Remember the look the user came from (if any) so the back button
     // on ProductPage returns to that look instead of the empty feed.
@@ -813,6 +832,7 @@ export default function Home() {
       image: creative.product.primary_image_url || creative.product.image_url || undefined,
     };
     pushRecent(mapped);
+    pauseAllVideos();
     setProductNavCount(c => c + 1);
     setProductOpenedFromLook(selectedLook);
     setSelectedLook(null);
