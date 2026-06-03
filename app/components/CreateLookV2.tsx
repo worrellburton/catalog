@@ -25,6 +25,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createLook, updateLook, addProductToLook, submitLook, uploadLookMedia, type ManagedLook, type AddProductInput } from '~/services/manage-looks';
 import { analyzeLookMedia } from '~/services/analyze-look-media';
+import ParticleBackground from './ParticleBackground';
 
 // ── Detected product shape ─────────────────────────────────────────
 // Mirrors AddProductInput so the publish step can pass it through
@@ -253,54 +254,80 @@ export default function CreateLookV2({ onPublished, onCancel, look: existingLook
       || null;
   }, [existingLook]);
 
+  // The first-paint surface is a particle-only canvas with a small
+  // upload card that springs in. Once the user actually picks media
+  // (or we're in edit mode with an existing poster), we shift to the
+  // working surface with a phone-shaped preview tile + sections below.
+  const showHero = phase === 'empty' && !media && !editPoster;
+
   // ── Render ───────────────────────────────────────────────────────
   return (
-    <div className={`cl-v2${mounted ? ' is-mounted' : ''}`}>
+    <div className={`cl-v2${mounted ? ' is-mounted' : ''}${showHero ? ' is-hero' : ''}`}>
+      {/* Particle field — always on. Sits behind everything; the
+          working-surface sections render on top with a slight scrim. */}
+      <div className="cl-v2-particles" aria-hidden="true">
+        <ParticleBackground />
+      </div>
+
       <header className="cl-v2-head">
         <h2>{isEdit ? 'Edit look' : 'Create a look'}</h2>
         <button type="button" className="cl-v2-close" onClick={onCancel} aria-label="Cancel">×</button>
       </header>
 
-      {/* Phase 1-2: phone-shaped media tile. Tap to upload; fills
-          with the picked file once selected. */}
-      <div className="cl-v2-stage">
-        <div
-          className={`cl-v2-tile${media ? ' has-media' : ''}${phase === 'empty' ? ' is-empty' : ''}`}
-          onClick={!media ? handlePickMedia : undefined}
-          role={!media ? 'button' : undefined}
-          tabIndex={!media ? 0 : undefined}
-        >
-          {media ? (
-            media.kind === 'video' ? (
-              <video src={media.previewUrl} muted loop autoPlay playsInline />
-            ) : (
-              <img src={media.previewUrl} alt="Uploaded media" />
-            )
-          ) : editPoster ? (
-            <img src={editPoster} alt="Existing look" />
-          ) : (
-            <div className="cl-v2-tile-empty">
-              <svg width="36" height="36" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round">
+      {showHero ? (
+        /* Hero/empty state — small centered upload card that springs
+           into view over the particle field. Faded copy underneath
+           reads "upload here to get started". This is the first thing
+           the user sees on Create a Look. */
+        <div className="cl-v2-hero">
+          <button
+            type="button"
+            className="cl-v2-hero-card"
+            onClick={handlePickMedia}
+            aria-label="Upload media"
+          >
+            <span className="cl-v2-hero-icon" aria-hidden>
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
                 <polyline points="17 8 12 3 7 8" />
                 <line x1="12" y1="3" x2="12" y2="15" />
               </svg>
-              <span className="cl-v2-tile-title">Upload media to get started</span>
-              <span className="cl-v2-tile-hint">Photo or video · 9:19 ratio looks best</span>
-            </div>
-          )}
-
-          {media && (
-            <button
-              type="button"
-              className="cl-v2-tile-replace"
-              onClick={(e) => { e.stopPropagation(); handlePickMedia(); }}
-            >
-              Replace
-            </button>
-          )}
+            </span>
+          </button>
+          <span className="cl-v2-hero-label">Upload here to get started</span>
         </div>
-      </div>
+      ) : (
+        /* Working surface — phone-shaped preview tile, fills with the
+           picked file (or the existing look's poster in edit mode). */
+        <div className="cl-v2-stage">
+          <div
+            className={`cl-v2-tile${media ? ' has-media' : ''}`}
+            onClick={!media ? handlePickMedia : undefined}
+            role={!media ? 'button' : undefined}
+            tabIndex={!media ? 0 : undefined}
+          >
+            {media ? (
+              media.kind === 'video' ? (
+                <video src={media.previewUrl} muted loop autoPlay playsInline />
+              ) : (
+                <img src={media.previewUrl} alt="Uploaded media" />
+              )
+            ) : editPoster ? (
+              <img src={editPoster} alt="Existing look" />
+            ) : null}
+
+            {media && (
+              <button
+                type="button"
+                className="cl-v2-tile-replace"
+                onClick={(e) => { e.stopPropagation(); handlePickMedia(); }}
+              >
+                Replace
+              </button>
+            )}
+          </div>
+        </div>
+      )}
       <input
         ref={fileInputRef}
         type="file"
