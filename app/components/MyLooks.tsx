@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from '@remix-run/react';
-import LookForm from './LookForm';
+import CreateLookV2 from './CreateLookV2';
 import { useAuth } from '~/hooks/useAuth';
 import type { ManagedLook, LookStatus } from '~/services/manage-looks';
 import { getMyLooks, deleteLook, archiveLook } from '~/services/manage-looks';
@@ -225,9 +225,9 @@ export default function MyLooks({ onClose }: MyLooksProps) {
     return (
       <div className="my-cat-page my-cat-page--form">
         <div className="my-cat-form-container">
-          <LookForm
+          <CreateLookV2
             look={editingLook}
-            onSaved={handleFormSaved}
+            onPublished={handleFormSaved}
             onCancel={handleFormCancel}
           />
         </div>
@@ -555,6 +555,10 @@ export default function MyLooks({ onClose }: MyLooksProps) {
               <button className="my-cat-tray-action" onClick={() => { const l = trayLook; setTrayLook(null); void handleShare(l); }}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" /></svg>
                 <span>Share</span>
+              </button>
+              <button className="my-cat-tray-action" onClick={() => { setTrayLook(null); setShowAnalytics(true); }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="20" x2="21" y2="20"/><rect x="6"  y="11" width="3" height="9"/><rect x="11" y="6"  width="3" height="14"/><rect x="16" y="14" width="3" height="6"/></svg>
+                <span>Analytics</span>
               </button>
               <button className="my-cat-tray-action" onClick={() => { const id = trayLook.id; setTrayLook(null); void handleArchive(id); }}>
                 {isArchived ? (

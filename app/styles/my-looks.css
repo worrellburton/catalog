@@ -2359,3 +2359,358 @@ html[data-shell="catalog-app"] .my-looks-overlay {
 @media (prefers-reduced-motion: reduce) {
   .wb-ring, .wb-burst { animation: none !important; opacity: 0.2; }
 }
+
+/* ──────────────────────────────────────────────────────────────────
+   CreateLookV2 — rebuilt look-creation form. Dark-themed to match
+   the rest of the catalog feed. Lives inside .my-cat-form-container
+   so the outer page already provides the scroll surface.
+   ────────────────────────────────────────────────────────────────── */
+.cl-v2 {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  padding: 20px 16px 120px;
+  max-width: 720px;
+  margin: 0 auto;
+  color: #fff;
+}
+.cl-v2-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding-bottom: 4px;
+}
+.cl-v2-head h2 {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.cl-v2-close {
+  width: 36px;
+  height: 36px;
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.04);
+  color: #fff;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+.cl-v2-close:hover { background: rgba(255,255,255,0.1); }
+
+.cl-v2-section {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+.cl-v2-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.cl-v2-section-head h3 {
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+}
+.cl-v2-section-hint {
+  font-size: 12px;
+  color: rgba(255,255,255,0.55);
+}
+
+/* Phase 2: upload media */
+.cl-v2-upload-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 56px;
+  border-radius: 12px;
+  border: 1.5px dashed rgba(255,255,255,0.25);
+  background: rgba(255,255,255,0.03);
+  color: #fff;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.cl-v2-upload-btn:hover {
+  border-color: rgba(255,255,255,0.5);
+  background: rgba(255,255,255,0.06);
+}
+.cl-v2-upload-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.cl-v2-media-preview {
+  border-radius: 12px;
+  overflow: hidden;
+  background: #000;
+  aspect-ratio: 3 / 4;
+  max-height: 360px;
+}
+.cl-v2-media-preview img,
+.cl-v2-media-preview video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+/* Phase 3: sample products grid */
+.cl-v2-sample-grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 10px;
+}
+@media (min-width: 600px) {
+  .cl-v2-sample-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+.cl-v2-sample {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  border-radius: 12px;
+  border: 1.5px solid rgba(255,255,255,0.08);
+  background: rgba(0,0,0,0.35);
+  color: #fff;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 160ms ease, transform 160ms ease;
+}
+.cl-v2-sample:hover { border-color: rgba(255,255,255,0.3); }
+.cl-v2-sample.is-picked {
+  border-color: #fff;
+  box-shadow: 0 0 0 1px #fff inset;
+}
+.cl-v2-sample img {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  object-fit: cover;
+  border-radius: 8px;
+  background: #111;
+}
+.cl-v2-sample-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.cl-v2-sample-brand {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(255,255,255,0.6);
+}
+.cl-v2-sample-name {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.cl-v2-sample-price {
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+}
+.cl-v2-sample-check {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 24px;
+  height: 24px;
+  border-radius: 12px;
+  background: rgba(0,0,0,0.6);
+  border: 1px solid rgba(255,255,255,0.5);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.cl-v2-sample.is-picked .cl-v2-sample-check {
+  background: #fff;
+  color: #111;
+  border-color: #fff;
+}
+
+/* Phase 4-5: describe + Claude results */
+.cl-v2-describe {
+  width: 100%;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(0,0,0,0.4);
+  color: #fff;
+  font-family: inherit;
+  font-size: 14px;
+  padding: 12px;
+  resize: vertical;
+  min-height: 88px;
+}
+.cl-v2-describe::placeholder { color: rgba(255,255,255,0.4); }
+.cl-v2-find-btn {
+  align-self: flex-end;
+  padding: 10px 18px;
+  border-radius: 999px;
+  background: #fff;
+  color: #111;
+  font-weight: 600;
+  font-size: 14px;
+  border: none;
+  cursor: pointer;
+}
+.cl-v2-find-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.cl-v2-findings {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cl-v2-finding {
+  display: grid;
+  grid-template-columns: 56px 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 8px;
+  border-radius: 10px;
+  background: rgba(0,0,0,0.4);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+.cl-v2-finding img {
+  width: 56px;
+  height: 56px;
+  border-radius: 8px;
+  object-fit: cover;
+  background: #111;
+}
+.cl-v2-finding-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.cl-v2-import-btn {
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: #fff;
+  color: #111;
+  font-weight: 600;
+  font-size: 13px;
+  border: none;
+  cursor: pointer;
+}
+.cl-v2-import-btn:disabled {
+  background: rgba(255,255,255,0.18);
+  color: rgba(255,255,255,0.6);
+  cursor: default;
+}
+
+.cl-v2-error {
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(255, 80, 80, 0.12);
+  color: #ffb4b4;
+  font-size: 13px;
+}
+
+/* Phase 6-7: preview + publish */
+.cl-v2-preview-btn {
+  width: 100%;
+  height: 52px;
+  border-radius: 14px;
+  background: #fff;
+  color: #111;
+  font-size: 16px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+}
+.cl-v2-preview-btn:disabled {
+  opacity: 0.4;
+  cursor: not-allowed;
+}
+.cl-v2-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+.cl-v2-preview h3 {
+  font-size: 15px;
+  font-weight: 600;
+}
+.cl-v2-preview-tile {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+@media (min-width: 600px) {
+  .cl-v2-preview-tile { grid-template-columns: 240px 1fr; }
+}
+.cl-v2-preview-tile > img,
+.cl-v2-preview-tile > video {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  border-radius: 12px;
+  background: #000;
+}
+.cl-v2-preview-products {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.cl-v2-preview-product {
+  display: grid;
+  grid-template-columns: 40px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  font-size: 13px;
+}
+.cl-v2-preview-product img {
+  width: 40px;
+  height: 40px;
+  border-radius: 6px;
+  object-fit: cover;
+  background: #111;
+}
+.cl-v2-publish-row {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+.cl-v2-back-btn {
+  padding: 12px 18px;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(255,255,255,0.75);
+  border: 1px solid rgba(255,255,255,0.18);
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+}
+.cl-v2-publish-btn {
+  padding: 12px 24px;
+  border-radius: 999px;
+  background: #fff;
+  color: #111;
+  font-weight: 700;
+  font-size: 14px;
+  border: none;
+  cursor: pointer;
+}
+.cl-v2-publish-btn:disabled { opacity: 0.5; cursor: not-allowed; }
