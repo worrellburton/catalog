@@ -60,9 +60,13 @@ export default function ProductMiniMedia({ posterSrc, videoSrc, alt = '', fallba
     );
   }
 
-  // Lightweight thumb pull — 240 px wide is enough resolution for the
-  // 52 px display box at 4× DPR without burning bandwidth.
-  const resolvedPoster = supabaseImage(posterSrc, { width: 240, quality: 70 });
+  // Bumped to 480 px wide @ q=80 so the poster carries enough detail
+  // to read at the 72 px display box on retina screens (288 px effective
+  // resolution at 4× DPR) without falling back to the source URL's
+  // possibly-huge dimensions. The user asked for "full resolution"
+  // poster — 480 px is the sweet spot where every screen renders crisp
+  // without burning bandwidth on a 2000 px-wide product hero.
+  const resolvedPoster = supabaseImage(posterSrc, { width: 480, quality: 80 });
 
   return (
     <>

@@ -374,14 +374,19 @@
 }
 
 .product-card-thumb {
-  width: 52px;
-  height: 52px;
-  border-radius: 10px;
+  /* Bumped from 52×52 → 72×72 so the poster image carries enough detail
+     to read at a glance. The previous box was small enough that the
+     'contain' framing showed mostly letterbox, and 'cover' at that size
+     showed a tight detail crop. 72px with cover lands in the readable
+     middle and matches what shoppers expect from a product card. */
+  width: 72px;
+  height: 72px;
+  border-radius: 12px;
   overflow: hidden;
   flex-shrink: 0;
   background: rgba(255, 255, 255, 0.06);
   /* ProductMiniMedia stacks an absolute <img> + <video> inside; make
-     this the positioning context so they fill the 52×52 box. */
+     this the positioning context so they fill the box. */
   position: relative;
 }
 
@@ -1169,14 +1174,16 @@ body:has(.look-overlay.look-overlay--in) {
 .product-thumb-img {
   width: 100%;
   height: 100%;
-  /* `contain` so the full product silhouette is visible inside the
-     52 px box. Previous `cover` zoomed product photos to a tight
-     center crop that read as a square of fabric for tall products
-     (sweaters, pants, dresses). Contain shows the whole garment with
-     a small amount of padding around it — the dark thumb background
-     is the letterbox. */
-  object-fit: contain;
-  object-position: center;
+  /* `cover` so the poster image fills the box edge-to-edge — the
+     thumb reads as a polished product card instead of a letterboxed
+     icon. We bumped the box up to 72×72 above so the crop has enough
+     room to show the product clearly without showing only fabric.
+     object-position: center 30% biases the visible window toward the
+     top of the poster, where the product silhouette typically lives
+     (a flat-lay shoe centered in the source crops mid-shoe; pulling
+     up shows the whole shoe). */
+  object-fit: cover;
+  object-position: center 30%;
 }
 
 .product-thumb-placeholder {
