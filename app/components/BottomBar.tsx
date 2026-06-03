@@ -73,54 +73,80 @@ function BottomBar({
   // ══════════════════════════════════════════════════════════════
   // SEARCH BAR HORIZONTAL-CENTER — RUNTIME ANCHOR (LOAD-BEARING)
   // ══════════════════════════════════════════════════════════════
-  // CSS `!important` was reported to still drift off-center after
-  // three separate fixes, so this effect bypasses the cascade
-  // entirely. We measure viewport width, compute the exact bar
-  // width and the exact `left:` that centres it, and write those
-  // as inline styles with `setProperty(..., 'important')`. Inline
-  // !important beats every other rule in the cascade — author,
-  // user, animation, media query, you name it. It is impossible
-  // for any future CSS edit to break centring after this.
+  // Three previous rounds of CSS-based fixes were beaten by something
+  // in the cascade. This effect bypasses the cascade entirely by
+  // setting inline `!important` styles via setProperty — inline
+  // !important is the top of CSS specificity and physically cannot
+  // be overridden by author rules.
   //
-  // Re-runs on:
-  //   • mount
-  //   • resize / orientationchange
-  //   • visualViewport resize (iOS URL-bar collapse)
-  //   • search-open transitions (the keyboard handler also pins
-  //     `bottom` inline; we re-apply ours after)
-  //
-  // The keyboard inline style still wins for `bottom` because
-  // it's applied to the same element through React; our effect
-  // only touches `left` and `width`, so the two coexist.
+  // Hardening layers in order of belt-and-suspenders:
+  //   1. Compute exact left + width from window.innerWidth.
+  //   2. Write left/right/margin-inline/width inline with !important.
+  //   3. MutationObserver: if React (or anything else) ever rewrites
+  //      the bar's `style` attribute, we immediately re-pin.
+  //   4. ResizeObserver on body: catches viewport/orientation changes
+  //      that don't fire window.resize on iOS WebKit.
+  //   5. visualViewport.resize: iOS URL-bar collapse triggers it.
+  //   6. rAF on mount: runs after the first paint so the DOM is real.
   useEffect(() => {
     if (typeof window === 'undefined') return;
+    let pinning = false; // guard against MO firing on our own writes
     const pin = () => {
       const el = document.getElementById('bottom-bar');
       if (!el) return;
       const vw = window.innerWidth;
-      // Match the existing CSS clamp: 504/36 on ≤640, 560/48 elsewhere.
       const isMobile = vw <= 640;
       const cap = isMobile ? 504 : 560;
       const margin = isMobile ? 36 : 48;
       const w = Math.min(cap, vw - margin);
       const left = Math.round((vw - w) / 2);
-      // setProperty(..., 'important') is the only API that adds
-      // !important to an inline style. Setting el.style.left = …
-      // alone would lose to any !important rule in the stylesheet.
+      pinning = true;
       el.style.setProperty('left', `${left}px`, 'important');
       el.style.setProperty('right', 'auto', 'important');
       el.style.setProperty('margin-inline', '0', 'important');
       el.style.setProperty('width', `${w}px`, 'important');
+      // Defer release a frame so the MO doesn't pick up our own write.
+      requestAnimationFrame(() => { pinning = false; });
     };
+
     const raf = window.requestAnimationFrame(pin);
     window.addEventListener('resize', pin);
     window.addEventListener('orientationchange', pin);
     window.visualViewport?.addEventListener('resize', pin);
+
+    // MutationObserver — if React re-renders the element with a
+    // style={} that lacks our values, the style attribute is rewritten
+    // and our inline !important goes away. Re-pin immediately.
+    const el = document.getElementById('bottom-bar');
+    let mo: MutationObserver | null = null;
+    if (el) {
+      mo = new MutationObserver(() => {
+        if (pinning) return;
+        // Check if our anchor values are still in place.
+        const sLeft = el.style.getPropertyValue('left');
+        const sWidth = el.style.getPropertyValue('width');
+        if (!sLeft.endsWith('px') || !sWidth.endsWith('px')) {
+          pin();
+        }
+      });
+      mo.observe(el, { attributes: true, attributeFilter: ['style'] });
+    }
+
+    // ResizeObserver on body — iOS doesn't always fire window.resize
+    // when the URL bar collapses, but body height changes do.
+    let ro: ResizeObserver | null = null;
+    if (typeof ResizeObserver !== 'undefined') {
+      ro = new ResizeObserver(() => pin());
+      ro.observe(document.body);
+    }
+
     return () => {
       window.cancelAnimationFrame(raf);
       window.removeEventListener('resize', pin);
       window.removeEventListener('orientationchange', pin);
       window.visualViewport?.removeEventListener('resize', pin);
+      mo?.disconnect();
+      ro?.disconnect();
     };
   }, []);
 
