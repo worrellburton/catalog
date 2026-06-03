@@ -2101,35 +2101,91 @@ export default function AdminData() {
   const [dragLookId, setDragLookId] = useState<number | null>(null);
 
   const deleteLook = useCallback(async (id: number) => {
-    if (!window.confirm('Delete this look? This cannot be undone.')) return;
-    // Optimistic + durable local persist so refresh keeps the deletion.
+    if (!window.confirm('Delete this look? It will be removed from the curated catalog AND from the creator’s My Looks. This cannot be undone.')) return;
+    // Resolve legacy id → UUID + source generation id so we can hit both
+    // sides of the cascade. The looks table is the source of truth; the
+    // FK ON DELETE CASCADE in migration 20260603_looks_source_generation_cascade
+    // ensures deleting the source user_generation auto-deletes the looks
+    // row + its children (looks_creative / look_products). We delete the
+    // SOURCE GEN first so a single statement cascades everywhere instead
+    // of relying on the app to remember to delete both sides.
+    const target = looks.find(l => l.id === id);
+    const lookUuid = target?.uuid;
+    if (!supabase || !lookUuid) {
+      // No backend / unknown look — fall back to the legacy local-only
+      // soft-hide so the UI still removes the row.
+      setDeletedLookIds(prev => {
+        const next = new Set(prev);
+        next.add(id);
+        writeLocalSet(LOCAL_LOOKS_KEY, next);
+        return next;
+      });
+      return;
+    }
+    // Optimistic UI: drop the row locally so it disappears immediately.
     setDeletedLookIds(prev => {
       const next = new Set(prev);
       next.add(id);
       writeLocalSet(LOCAL_LOOKS_KEY, next);
       return next;
     });
-    if (!supabase) return;
-    const { error } = await supabase
-      .from('admin_hidden_looks')
-      .upsert({ look_id: id }, { onConflict: 'look_id' });
-    if (error) {
-      // Missing table = migration not applied yet. Local state already
-      // persisted via localStorage, so the deletion still survives refresh.
-      const tableMissing =
-        error.code === 'PGRST205' ||
-        /schema cache|does not exist|admin_hidden_looks/i.test(error.message);
-      if (tableMissing) return;
-      // Rollback on real error - keep user's data in sync with the server.
+    try {
+      // 1. Pull the source_generation_id (if any) so we know whether
+      //    deleting the look should also delete the creator's gen.
+      const { data: lookRow, error: lookErr } = await supabase
+        .from('looks')
+        .select('source_generation_id')
+        .eq('id', lookUuid)
+        .maybeSingle();
+      if (lookErr) throw new Error(`lookup failed: ${lookErr.message}`);
+      const sourceGenId = (lookRow as { source_generation_id?: string | null } | null)?.source_generation_id ?? null;
+      // 2. If the look was promoted from a generation, delete the
+      //    generation. The FK CASCADE removes the looks row + all its
+      //    children in one shot. If there's no source gen (hand-curated
+      //    seed row), delete the looks row directly + clean up children
+      //    explicitly because the looks row doesn't propagate down.
+      if (sourceGenId) {
+        const { error: genErr } = await supabase
+          .from('user_generations')
+          .delete()
+          .eq('id', sourceGenId);
+        if (genErr) throw new Error(`generation delete failed: ${genErr.message}`);
+      } else {
+        // Manually delete child rows. looks_creative and look_products
+        // both have ON DELETE CASCADE on look_id, so dropping the
+        // looks row removes them; we just need to delete the looks row.
+        const { error: lookDelErr } = await supabase
+          .from('looks')
+          .delete()
+          .eq('id', lookUuid);
+        if (lookDelErr) throw new Error(`look delete failed: ${lookDelErr.message}`);
+      }
+      // Best-effort: tear the localStorage soft-hide entry too, since the
+      // row is now actually gone — keeping a hide for a deleted row is
+      // harmless but stale.
       setDeletedLookIds(prev => {
         const next = new Set(prev);
         next.delete(id);
         writeLocalSet(LOCAL_LOOKS_KEY, next);
         return next;
       });
-      window.alert(`Delete failed: ${error.message}`);
+      // Refresh the published list from source so the row is gone for
+      // real after the next fetch as well.
+      invalidateLooksCache();
+      const fresh = await getLooks();
+      setLooks(fresh);
+    } catch (err) {
+      // Roll back the optimistic hide on any failure so the admin sees
+      // the row again and can retry.
+      setDeletedLookIds(prev => {
+        const next = new Set(prev);
+        next.delete(id);
+        writeLocalSet(LOCAL_LOOKS_KEY, next);
+        return next;
+      });
+      window.alert(err instanceof Error ? `Delete failed: ${err.message}` : 'Delete failed');
     }
-  }, []);
+  }, [looks]);
 
   const moveLook = useCallback((id: number, direction: -1 | 1) => {
     setLookOrder(prev => {
