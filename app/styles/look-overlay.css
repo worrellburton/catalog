@@ -380,6 +380,9 @@
   overflow: hidden;
   flex-shrink: 0;
   background: rgba(255, 255, 255, 0.06);
+  /* ProductMiniMedia stacks an absolute <img> + <video> inside; make
+     this the positioning context so they fill the 52×52 box. */
+  position: relative;
 }
 
 .product-card-info {
@@ -1166,7 +1169,14 @@ body:has(.look-overlay.look-overlay--in) {
 .product-thumb-img {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  /* `contain` so the full product silhouette is visible inside the
+     52 px box. Previous `cover` zoomed product photos to a tight
+     center crop that read as a square of fabric for tall products
+     (sweaters, pants, dresses). Contain shows the whole garment with
+     a small amount of padding around it — the dark thumb background
+     is the letterbox. */
+  object-fit: contain;
+  object-position: center;
 }
 
 .product-thumb-placeholder {

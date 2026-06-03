@@ -5,6 +5,7 @@ import { useTrailVideo } from './TrailVideoHost';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
 import FollowIconButton from './FollowIconButton';
 import { sortByGarmentRole } from '~/utils/garmentOrder';
+import ProductMiniMedia from './ProductMiniMedia';
 
 interface BookmarksInterface {
   isLookBookmarked: (id: number) => boolean;
@@ -137,11 +138,12 @@ export default function InlineLookDetail({ look, onOpenCreator, onOpenBrowser, o
               onClick={() => handleProductClick(p)}
             >
               <div className="inline-product-thumb">
-                {p.image ? (
-                  <img src={p.image} alt={p.name} />
-                ) : (
-                  <div className="inline-product-thumb-placeholder" style={{ background: look.color }} />
-                )}
+                <ProductMiniMedia
+                  posterSrc={p.thumbnail_url || p.image}
+                  videoSrc={p.video_url}
+                  alt={p.name}
+                  fallbackColor={look.color}
+                />
               </div>
               <div className="inline-product-info">
                 {p.brand && (

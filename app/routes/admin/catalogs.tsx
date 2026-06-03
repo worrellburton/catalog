@@ -28,7 +28,7 @@ type CatalogGenderUI = 'all' | 'women' | 'men' | 'unisex';
 export interface Catalog {
   id: string;
   name: string;
-  source: 'featured' | 'custom';
+  source: 'featured' | 'custom' | 'live';
   createdAt: string;
   isHome?: boolean;
   isFeatured?: boolean;
@@ -702,6 +702,65 @@ export default function AdminCatalogs() {
 
   useEffect(() => { loadCatalogs(); }, [loadCatalogs]);
 
+  // Realtime search activity. Every search_logs INSERT is a live shopper
+  // query — we bump the per-name search count in the existing
+  // searchCounts map AND surface unmatched queries as synthetic rows
+  // at the top of the table (see liveOnlySearches below). Combined,
+  // the admin sees the activity stream materialising into the table
+  // without a refresh.
+  //
+  // Tracking lastSearchedAt lets us sort matched catalogs to the top
+  // when their term is being searched — admins curating a catalog see
+  // it light up the moment a shopper asks for it.
+  const [searchActivity, setSearchActivity] = useState<Map<string, { count: number; lastAt: number }>>(new Map());
+  useEffect(() => {
+    if (!supabase) return;
+    let cancelled = false;
+    // Seed: the most recent N searches across the whole platform so
+    // the table opens already showing live demand instead of waiting
+    // for the next insert to land.
+    void (async () => {
+      const { data } = await supabase!
+        .from('search_logs')
+        .select('query, created_at')
+        .order('created_at', { ascending: false })
+        .limit(200);
+      if (cancelled || !data) return;
+      const seed = new Map<string, { count: number; lastAt: number }>();
+      (data as Array<{ query: string; created_at: string }>).forEach(r => {
+        const key = (r.query || '').trim().toLowerCase();
+        if (!key) return;
+        const ms = new Date(r.created_at).getTime();
+        const prev = seed.get(key);
+        if (!prev) seed.set(key, { count: 1, lastAt: ms });
+        else seed.set(key, { count: prev.count + 1, lastAt: Math.max(prev.lastAt, ms) });
+      });
+      setSearchActivity(seed);
+    })();
+    const channel = supabase
+      .channel('catalogs-search-activity')
+      .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'search_logs' }, (payload) => {
+        const row = payload.new as { query?: string | null; created_at?: string };
+        const key = (row.query || '').trim().toLowerCase();
+        if (!key) return;
+        const ms = row.created_at ? new Date(row.created_at).getTime() : Date.now();
+        setSearchActivity(prev => {
+          const next = new Map(prev);
+          const cur = next.get(key);
+          next.set(key, {
+            count: (cur?.count ?? 0) + 1,
+            lastAt: Math.max(cur?.lastAt ?? 0, ms),
+          });
+          return next;
+        });
+      })
+      .subscribe();
+    return () => {
+      cancelled = true;
+      if (channel) void supabase!.removeChannel(channel);
+    };
+  }, []);
+
   // Pre-open the Add Catalog modal when /admin/search links here with ?new=<term>.
   // Lets admins jump straight from a zero-result search to creating that catalog.
   const [searchParams, setSearchParams] = useSearchParams();
@@ -1065,16 +1124,14 @@ export default function AdminCatalogs() {
     createdAt: ' - ',
   }));
 
-  // The 'all' row is a synthesized entry - it represents the aggregate view
-  // of every live look/product/creative. Keep it at the top of the list even
-  // if the user cleared localStorage, and filter it out of `custom` so the
-  // remove (×) button can't drop it.
-  const allRow: Catalog = {
-    id: 'synthetic-all',
-    name: 'all',
-    source: 'custom',
-    createdAt: ' - ',
-  };
+  // The synthetic 'all' row used to live at the top of every table
+  // view as an aggregate placeholder. It carried no real metrics
+  // (search count, gender mix, product / look counts were all blanks
+  // or sums of the rows below) and clicking it didn't open a useful
+  // detail. Per spec we drop the row entirely and keep the table to
+  // genuine catalogs only. We still filter the literal 'all' name out
+  // of `custom` so legacy rows persisted with that name don't sneak
+  // back in.
   const customWithoutAll = custom.filter(c => c.name.trim().toLowerCase() !== 'all');
 
   // Count products tagged with each catalog. Declared HERE (before
@@ -1133,33 +1190,108 @@ export default function AdminCatalogs() {
   // searchCounts.countTotal desc, with countTotal=0 rows preserving
   // the original order (stable sort keeps recent admin work near the
   // top).
+  // Live search count: take the realtime-tracked count from
+  // searchActivity (which seeds from the 200 most recent rows + every
+  // realtime INSERT) as the source of truth, falling back to the
+  // pre-aggregated catalog_search_counts RPC for older history.
   const searchRank = (c: Catalog): number =>
-    searchCounts.get(c.name.toLowerCase())?.countTotal ?? 0;
-  // Ranking: pinned catalogs (sort_order != null) take priority in
-  // their pinned order; unpinned catalogs fall back to search-rank
-  // desc. Drag-reorder updates sort_order so the manual pin order
-  // survives reloads.
+    searchActivity.get(c.name.toLowerCase())?.count
+      ?? searchCounts.get(c.name.toLowerCase())?.countTotal
+      ?? 0;
+  // Last-searched-at recency (ms epoch). Drives the realtime float-to-
+  // top behavior — any catalog whose name was just searched bubbles up
+  // even when its all-time count is small.
+  const lastSearchedAt = (c: Catalog): number =>
+    searchActivity.get(c.name.toLowerCase())?.lastAt ?? 0;
+
+  // Per-name search count for the Views column. Prefers the larger of
+  // (realtime live count, archived RPC count) so a brand-new live INSERT
+  // bumps the cell immediately without waiting for the next reload.
+  // For synthetic live-only rows the archived RPC has no entry, so
+  // realtime is the only source.
+  const mergedSearchCount = (name: string): CatalogSearchCounts | undefined => {
+    const key = name.toLowerCase();
+    const live = searchActivity.get(key);
+    const archived = searchCounts.get(key);
+    if (!live && !archived) return undefined;
+    // Prefer the live count when it surpasses the archived total — that
+    // means a new INSERT landed and we haven't refetched yet.
+    const total = Math.max(live?.count ?? 0, archived?.countTotal ?? 0);
+    return {
+      catalogName: name,
+      count24h: Math.max(live?.count ?? 0, archived?.count24h ?? 0),
+      count7d:  Math.max(live?.count ?? 0, archived?.count7d  ?? 0),
+      countTotal: total,
+    };
+  };
+
+  // Unmatched live searches: queries the shoppers are typing that
+  // don't yet exist as a catalog. Surface them as synthetic rows at
+  // the very top of the table so the admin can one-click 'Create
+  // catalog' from a real demand signal instead of guessing.
+  const existingNames = useMemo(
+    () => new Set([...customWithoutAll, ...featured].map(c => c.name.toLowerCase())),
+    [customWithoutAll, featured],
+  );
+  const liveOnlySearches: Catalog[] = useMemo(() => {
+    const rows: Array<{ row: Catalog; lastAt: number }> = [];
+    searchActivity.forEach((v, key) => {
+      if (existingNames.has(key)) return;
+      rows.push({
+        row: {
+          id: `live-${key}`,
+          name: key,
+          source: 'live',
+          createdAt: new Date(v.lastAt).toISOString(),
+        },
+        lastAt: v.lastAt,
+      });
+    });
+    rows.sort((a, b) => b.lastAt - a.lastAt);
+    return rows.map(r => r.row);
+  }, [searchActivity, existingNames]);
+
+  // Ranking: pinned catalogs first; then catalogs with recent live
+  // search activity sorted by recency desc; then everything else by
+  // all-time search count desc. Drag-reorder still updates sort_order
+  // for the pin layer.
   const rankable = [...customWithoutAll, ...featured].sort((a, b) => {
     const aPinned = a.sortOrder ?? null;
     const bPinned = b.sortOrder ?? null;
     if (aPinned !== null && bPinned !== null) return aPinned - bPinned;
     if (aPinned !== null) return -1;
     if (bPinned !== null) return 1;
+    const aRecent = lastSearchedAt(a);
+    const bRecent = lastSearchedAt(b);
+    // Hot-zone: catalogs searched in the last 60 seconds float above
+    // everything unranked, sorted by recency. Past 60s the recency
+    // signal decays and we fall back to all-time count.
+    const RECENT_MS = 60_000;
+    const now = Date.now();
+    const aHot = aRecent > 0 && now - aRecent < RECENT_MS;
+    const bHot = bRecent > 0 && now - bRecent < RECENT_MS;
+    if (aHot && bHot) return bRecent - aRecent;
+    if (aHot) return -1;
+    if (bHot) return 1;
     return searchRank(b) - searchRank(a);
   });
-  const allUnfiltered = [allRow, ...rankable];
+  // Live-only synthetic rows go to the very top of every view so the
+  // admin sees demand for terms they haven't catalogued yet.
+  const rankableWithLive = [...liveOnlySearches, ...rankable];
+  const allUnfiltered = rankableWithLive;
   // Sync the drag handler's ref now that `rankable` exists.
   rankableRef.current = rankable;
 
-  // Table-level search + quick filter chips. Operate on the
-  // rankable list (skip the synthetic `all` row which always stays
-  // at the top regardless). Empty query + 'all' filter = full list.
+  // Table-level search + quick filter chips. Operate on the rankable
+  // list directly — the synthetic 'all' aggregate row is no longer
+  // injected at the top (see comment above customWithoutAll). Empty
+  // query + 'all' filter = full list.
   const [tableQuery, setTableQuery] = useState('');
   const [tableFilter, setTableFilter] = useState<'all' | 'rising' | 'falling' | 'empty' | 'zombie' | 'issues'>('all');
 
   const all = useMemo(() => {
     const q = tableQuery.trim().toLowerCase();
-    const filtered = rankable.filter(c => {
+    return rankableWithLive.filter(c => {
       // text match first
       if (q && !c.name.toLowerCase().includes(q)) return false;
       // quick filter predicates
@@ -1180,11 +1312,7 @@ export default function AdminCatalogs() {
         default:        return true;
       }
     });
-    // synthetic `all` row only shows when the unfiltered + unsearched
-    // view is up — otherwise it's noise.
-    if (tableQuery || tableFilter !== 'all') return filtered;
-    return [allRow, ...filtered];
-  }, [rankable, tableQuery, tableFilter, allRow, catalogImpressions, searchCounts, catalogProductCounts]);
+  }, [rankableWithLive, tableQuery, tableFilter, catalogImpressions, searchCounts, catalogProductCounts]);
   // allUnfiltered powers the dashboard + health panel — they reflect
   // the whole catalog system, not just the in-table filter. `all` is
   // what the table renders.
@@ -1925,10 +2053,15 @@ export default function AdminCatalogs() {
             <tr>
               <th style={{ textAlign: 'left' }}>Catalog</th>
               <th>Featured</th>
+              {/* Views (= total search count for the catalog's name).
+                  Moved here from column 6 so it sits adjacent to
+                  Featured — admins curating the Featured column kept
+                  asking "is this term actually being searched?" and
+                  scrolling 4 columns right was a friction tax. */}
+              <th title="Total times a shopper searched this catalog name.">Views</th>
               <th>Mix</th>
               <th>Products</th>
               <th>Looks</th>
-              <th>Views</th>
               <th>Created</th>
             </tr>
           </thead>
@@ -2013,6 +2146,7 @@ export default function AdminCatalogs() {
                         onError={(msg) => showToast(msg)}
                       />
                     </td>
+                    <td><SearchCountPill counts={searchCounts.get(homeCatalog.name.toLowerCase())} /></td>
                     <td>
                       <GenderMixCell mix={catalogProductGenderMix.get(homeCatalog.name)} />
                     </td>
@@ -2030,7 +2164,6 @@ export default function AdminCatalogs() {
                         <span style={{ fontSize: 11, color: '#ccc' }}> - </span>
                       )}
                     </td>
-                    <td><SearchCountPill counts={searchCounts.get(homeCatalog.name.toLowerCase())} /></td>
                     <td style={{ fontSize: 12, color: '#888' }}> - </td>
                   </tr>
                   {isOpen && (
@@ -2158,6 +2291,7 @@ export default function AdminCatalogs() {
                     onError={(msg) => showToast(msg)}
                   />
                 </td>
+                <td><SearchCountPill counts={searchCounts.get(c.name.toLowerCase())} /></td>
                 <td>
                   <GenderMixCell mix={catalogProductGenderMix.get(c.name)} />
                 </td>
@@ -2193,7 +2327,6 @@ export default function AdminCatalogs() {
                     <span style={{ fontSize: 11, color: '#ccc' }}> - </span>
                   )}
                 </td>
-                <td><SearchCountPill counts={searchCounts.get(c.name.toLowerCase())} /></td>
                 <td style={{ fontSize: 12, color: '#888' }}>
                   {c.createdAt === ' - ' ? ' - ' : new Date(c.createdAt).toLocaleDateString()}
                 </td>

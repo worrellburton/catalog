@@ -2493,7 +2493,7 @@ export default function AdminData() {
   }, [genJobs, loadAdProductIds]);
 
   const allProducts = useMemo(() => {
-    const productMap = new Map<string, { id?: string; brand: string; name: string; price: string; url: string; image_url?: string | null; images?: string[]; primary_image_url?: string | null; primary_image_polished?: boolean | null; primary_video_url?: string | null; primary_video_poster_url?: string | null; video_urls: string[]; looks: Set<string>; creators: Set<string>; saves: number; clicks: number; impressions: number; connection: 'Look' | 'Crawl' | 'Ad'; is_active?: boolean; is_elite?: boolean; is_platform?: boolean; type?: string | null; gender?: 'male' | 'female' | 'unisex' | null; created_at?: string | null; source?: string | null; size_fit?: string | null; materials_care?: string | null }>();
+    const productMap = new Map<string, { id?: string; brand: string; name: string; price: string; url: string; image_url?: string | null; images?: string[]; primary_image_url?: string | null; primary_image_polished?: boolean | null; primary_video_url?: string | null; primary_video_poster_url?: string | null; video_urls: string[]; looks: Set<string>; creators: Set<string>; saves: number; clicks: number; impressions: number; connection: 'Look' | 'Crawl' | 'Ad'; is_active?: boolean; is_elite?: boolean; is_platform?: boolean; type?: string | null; subtype?: string | null; gender?: 'male' | 'female' | 'unisex' | null; created_at?: string | null; source?: string | null; size_fit?: string | null; materials_care?: string | null }>();
     looks.forEach(look => {
       const c = creators[look.creator];
       look.products.forEach(p => {
@@ -2533,6 +2533,7 @@ export default function AdminData() {
         entry.is_elite = !!cp.is_elite;
         entry.is_platform = cp.is_platform !== false; // default true on legacy rows
         entry.type = cp.type ?? null;
+        entry.subtype = (cp as { subtype?: string | null }).subtype ?? null;
         entry.gender = cp.gender ?? null;
         entry.created_at = cp.created_at ?? null;
         entry.source = cp.source ?? null;
@@ -2569,6 +2570,7 @@ export default function AdminData() {
           is_elite: !!cp.is_elite,
           is_platform: cp.is_platform !== false,
           type: cp.type ?? null,
+          subtype: (cp as { subtype?: string | null }).subtype ?? null,
           gender: cp.gender ?? null,
           created_at: cp.created_at ?? null,
           source: cp.source ?? null,
@@ -4930,6 +4932,7 @@ export default function AdminData() {
                 <th style={{ textAlign: 'left' }}>Primary Video</th>
                 <SortableTh label="Brand" sortKey="brand" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <SortableTh label="Type" sortKey="type" currentSort={productTable.sort} onSort={productTable.handleSort} />
+                <SortableTh label="Subtype" sortKey="subtype" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <SortableTh label="Gender" sortKey="gender" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <th style={{ minWidth: 140 }}>Fabric</th>
                 <SortableTh label="Product" sortKey="name" currentSort={productTable.sort} onSort={productTable.handleSort} />
@@ -5362,6 +5365,25 @@ export default function AdminData() {
                         fontWeight: 500,
                         fontSize: 11,
                       }}>{p.type}</span>
+                    ) : (
+                      <span style={{ color: '#cbd5e1' }}> - </span>
+                    )}
+                  </td>
+                  {/* Subtype: a finer-grained classifier under type.
+                      Shoes → Sneakers/Sandals/Boots/Heels/Loafers/Flats.
+                      Empty for types we haven't split yet — those will
+                      pick up subtype as backfill in a later pass. */}
+                  <td style={{ textAlign: 'left', fontSize: 12 }}>
+                    {p.subtype ? (
+                      <span style={{
+                        display: 'inline-block',
+                        padding: '2px 8px',
+                        borderRadius: 999,
+                        background: '#ecfeff',
+                        color: '#0e7490',
+                        fontWeight: 500,
+                        fontSize: 11,
+                      }}>{p.subtype}</span>
                     ) : (
                       <span style={{ color: '#cbd5e1' }}> - </span>
                     )}

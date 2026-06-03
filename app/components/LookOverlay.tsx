@@ -9,6 +9,7 @@ import { useActiveGenderFilter } from '~/hooks/useActiveGenderFilter';
 import { useTrailVideo, useTrailVideoManager } from './TrailVideoHost';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
 import { supabaseImage } from '~/utils/supabaseImage';
+import ProductMiniMedia from './ProductMiniMedia';
 import { director } from '~/services/video-playback-director';
 import FollowIconButton from './FollowIconButton';
 import { getLookSaveCount, recordLookSave, recordLookUnsave } from '~/services/look-saves';
@@ -802,10 +803,12 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                   {productsEnabled && sortByGarmentRole(look.products).map((p, pi) => (
                     <div key={pi} className="product-card" onClick={() => handleProductClick(p)}>
                       <div className="product-card-thumb">
-                        {p.image
-                          ? <img src={supabaseImage(p.image, { width: 240, quality: 70 })} alt={p.name} className="product-thumb-img" loading="lazy" decoding="async" />
-                          : <div className="product-thumb-placeholder" style={{ background: look.color, opacity: 0.5 }} />
-                        }
+                        <ProductMiniMedia
+                          posterSrc={p.thumbnail_url || p.image}
+                          videoSrc={p.video_url}
+                          alt={p.name}
+                          fallbackColor={look.color}
+                        />
                       </div>
                       <div className="product-card-info">
                         {p.brand && <span className="product-brand">{p.brand}</span>}
