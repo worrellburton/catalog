@@ -87,11 +87,13 @@
   opacity: 1;
 }
 
-/* Touch / mobile: hover isn't a thing, so the overlay stays at half
-   opacity by default — enough to signal "tap me" without obscuring
-   the avatar. */
+/* Touch / mobile: the always-on camera overlay obscured the user's
+   actual photo. Keep the overlay fully hidden by default; show it
+   briefly only while the avatar is being pressed so the user gets
+   visual confirmation of the tap without a permanent icon over their
+   face. */
 @media (hover: none) {
-  .avatar-upload-overlay { opacity: 0.55; }
+  .avatar-upload-overlay { opacity: 0; }
   .avatar-upload-trigger:active .avatar-upload-overlay { opacity: 0.85; }
 }
 

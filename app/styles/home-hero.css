@@ -662,11 +662,14 @@
   }
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar,
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar.search-open {
-    /* Bar's top edge = .sfh stage bottom (= 100% − padding-bottom = 70vh
-       from top, or 58vh from top on the 88svh hero) + ~22px gap. With a
-       ~50px bar height, bottom: 32vh puts the bar top at ~61vh from top
-       on a typical viewport — one chip-spacing under the headline. */
-    bottom: 32vh;
+    /* Pin the bar at the SAME bottom value across mobile, desktop,
+       and the hero/scrolled transition so it never appears to "move"
+       between states. The previous mobile-only override (32vh) sat
+       noticeably lower than the default 46vh, which is what the user
+       saw shift when the cascade landed differently on different
+       devices. .sfh padding-bottom (56vh) already reserves room
+       above this position so the headline lands above the bar. */
+    bottom: 46vh;
   }
 }
 

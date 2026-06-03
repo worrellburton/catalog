@@ -1983,7 +1983,8 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   overflow: hidden;
   flex-shrink: 0;
 }
-.my-cat-tray-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.my-cat-tray-thumb img,
+.my-cat-tray-thumb video { width: 100%; height: 100%; object-fit: cover; display: block; }
 .my-cat-tray-head-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
 .my-cat-tray-title {
   font-size: 15px;
@@ -3374,3 +3375,61 @@ html[data-shell="catalog-app"] .my-looks-overlay {
    onClick) so it doesn't need its own hover ramp. Keep the styling
    but stop it from looking interactive on its own. */
 .my-cat-hero--button .my-cat-hero-info { pointer-events: none; }
+
+/* Analytics is a full-page surface now (was a centered modal). Pin
+   to the viewport, fill exactly one screen, let only the inner body
+   scroll if a tall catalog has lots of top-product detail. The X
+   stays as the only way out — the backdrop-click dismissal is gone
+   because there is no backdrop anymore. */
+.my-cat-analytics-page {
+  position: fixed;
+  inset: 0;
+  z-index: 9100;
+  background: #0a0a0a;
+  display: flex;
+  flex-direction: column;
+  /* dvh, not vh, so the iOS URL bar collapsing/expanding doesn't
+     leak a second scroll axis at the bottom. */
+  height: 100dvh;
+  overflow: hidden;
+}
+.my-cat-analytics-card--page {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: 100%;
+  max-width: 720px;
+  width: 100%;
+  margin: 0 auto;
+  padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+}
+.my-cat-analytics-card--page .my-cat-analytics-head {
+  flex: 0 0 auto;
+}
+.my-cat-analytics-card--page .my-cat-analytics-range {
+  flex: 0 0 auto;
+}
+/* Only the metric grid + detail sections scroll, so the head + pill
+   row stay pinned. Wrap them in a flex child that takes the
+   remaining space and owns its own overflow. */
+.my-cat-analytics-card--page > .my-cat-analytics-grid,
+.my-cat-analytics-card--page > .my-cat-analytics-section,
+.my-cat-analytics-card--page > .my-cat-analytics-empty {
+  flex: 0 0 auto;
+}
+.my-cat-analytics-card--page .my-cat-analytics-grid {
+  margin-top: 4px;
+}
+/* Wrapper around the scrollable body — applied via the existing
+   styles by making the page itself a flex column and letting the
+   scroll happen inside the section list. Cap is the natural growth
+   of the section blocks; once they exceed the remaining viewport
+   they scroll. */
+.my-cat-analytics-card--page {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
