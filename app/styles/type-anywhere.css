@@ -248,24 +248,28 @@ html[data-shell="catalog-app"] .ai-bar-wrap { display: none !important; }
   align-items: center;
   gap: 10px;
   max-width: min(760px, calc(100vw - 48px));
-  animation: catalog-pills-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
   /* Float the pills cloud BELOW the bar without expanding the wrap's
-     flex height. Using `position: absolute` + `top: 100%` pins the
-     cloud's top edge to the bottom of the wrap; the wrap stays
-     bar-sized so the bar's anchor (bottom: 24px / 50vh hero variant)
-     doesn't shift when the cloud appears. */
+     flex height. position: absolute + top: 100% pins the cloud's
+     top edge to the bottom of the wrap; the wrap stays bar-sized
+     so the bar's anchor (bottom: 24px / 50vh hero variant) doesn't
+     shift when the cloud appears. The parent .ai-bar-wrap is
+     already position: fixed (declared at the top of this file),
+     which serves as the positioning ancestor for this absolute
+     element — no extra `position: relative` needed (and adding one
+     would have CLOBBERED the fixed and the bar would vanish from
+     the viewport, which is exactly the regression the user just
+     hit). */
   position: absolute;
   top: calc(100% + 10px);
   left: 50%;
   transform: translateX(-50%);
   width: max-content;
 }
-.ai-bar-wrap { position: relative; }
 @keyframes catalog-pills-in-from-below {
   from { opacity: 0; transform: translate(-50%, -10px); }
   to   { opacity: 1; transform: translate(-50%, 0); }
 }
-.catalog-pills { animation-name: catalog-pills-in-from-below; }
+.catalog-pills { animation: catalog-pills-in-from-below 0.4s cubic-bezier(0.16, 1, 0.3, 1) both; }
 .catalog-pills-label {
   font-size: 11px;
   font-weight: 700;
