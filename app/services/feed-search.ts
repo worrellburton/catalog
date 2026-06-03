@@ -152,6 +152,156 @@ export async function getFeedSearchResults(query: string, limit = 60): Promise<P
   }
 }
 
+// ── Feed-search "why" diagnostics (super-admin debug) ────────────────────
+// Read-only mirror of getFeedSearchResults that reports WHICH lane resolved
+// the query and how many hits each produced, so an admin can see exactly why a
+// catalog's feed looks the way it does. Re-runs the same precedence, so it
+// can't drift from the live pipeline.
+export type FeedLaneId = 'brand' | 'catalog_tags' | 'semantic';
+
+export interface FeedLaneDiag {
+  id: FeedLaneId;
+  label: string;
+  attempted: boolean;
+  rawCount: number;     // hits the lane returned before dedup
+  won: boolean;         // this lane resolved the query (first non-empty wins)
+  error?: string;
+}
+
+export interface FeedSearchItemDiag {
+  id: string;
+  productId: string | null;
+  name: string | null;
+  brand: string | null;
+}
+
+export interface FeedSearchDiagnostics {
+  ok: boolean;
+  query: string;
+  trimmed: string;
+  limit: number;
+  winningLane: FeedLaneId | 'none';
+  lanes: FeedLaneDiag[];
+  rawCount: number;     // winning lane's hits before dedup
+  finalCount: number;   // after dedup (what the feed renders)
+  dedupedOut: number;   // rows dropped as duplicate id / product_id
+  items: FeedSearchItemDiag[];
+}
+
+const LANE_LABELS: Record<FeedLaneId, string> = {
+  brand: 'Brand fast-path (exact brand match)',
+  catalog_tags: 'Tier-1 catalog_tags / product.type match',
+  semantic: 'Semantic vector search (search edge fn)',
+};
+
+function adToItemDiag(c: ProductAd): FeedSearchItemDiag {
+  return {
+    id: c.id,
+    productId: c.product_id ?? null,
+    name: c.product?.name ?? c.title ?? null,
+    brand: c.product?.brand ?? null,
+  };
+}
+
+export async function getFeedSearchDiagnostics(query: string, limit = 60): Promise<FeedSearchDiagnostics> {
+  const trimmed = query.trim();
+  const lanes: FeedLaneDiag[] = (['brand', 'catalog_tags', 'semantic'] as FeedLaneId[])
+    .map(id => ({ id, label: LANE_LABELS[id], attempted: false, rawCount: 0, won: false }));
+  const base: FeedSearchDiagnostics = {
+    ok: false, query, trimmed, limit, winningLane: 'none', lanes,
+    rawCount: 0, finalCount: 0, dedupedOut: 0, items: [],
+  };
+  if (!trimmed) return base;
+
+  const finish = (laneId: FeedLaneId, raw: number, out: ProductAd[]): FeedSearchDiagnostics => {
+    const lane = lanes.find(l => l.id === laneId)!;
+    lane.rawCount = raw;
+    lane.won = true;
+    return {
+      ...base, ok: true, winningLane: laneId, lanes,
+      rawCount: raw, finalCount: out.length, dedupedOut: Math.max(0, raw - out.length),
+      items: out.slice(0, 100).map(adToItemDiag),
+    };
+  };
+
+  // 1. Brand fast-path
+  const brandLane = lanes[0];
+  brandLane.attempted = true;
+  try {
+    const brandHits = await getCreativesByBrandQuery(trimmed, limit);
+    if (brandHits && brandHits.length > 0) {
+      const seen = new Set<string>();
+      const seenProducts = new Set<string>();
+      const out: ProductAd[] = [];
+      for (const c of brandHits) {
+        if (seen.has(c.id)) continue;
+        if (c.product_id && seenProducts.has(c.product_id)) continue;
+        seen.add(c.id);
+        if (c.product_id) seenProducts.add(c.product_id);
+        out.push(c);
+      }
+      return finish('brand', brandHits.length, out);
+    }
+  } catch (err) {
+    brandLane.error = err instanceof Error ? err.message : String(err);
+  }
+
+  // 2. Tier-1 catalog_tags / type match
+  const tagLane = lanes[1];
+  tagLane.attempted = true;
+  try {
+    const tagHits = await getCreativesByCatalogTag(trimmed);
+    if (tagHits.length > 0) {
+      const seen = new Set<string>();
+      const out: ProductAd[] = [];
+      for (const c of tagHits) {
+        if (seen.has(c.id)) continue;
+        seen.add(c.id);
+        out.push(c);
+      }
+      return finish('catalog_tags', tagHits.length, out);
+    }
+  } catch (err) {
+    tagLane.error = err instanceof Error ? err.message : String(err);
+  }
+
+  // 3. Semantic search
+  const semLane = lanes[2];
+  semLane.attempted = true;
+  try {
+    const res = await search(trimmed, { k: limit });
+    if (!res.ok || res.results.length === 0) return { ...base, ok: true };
+    const placeholderProductIds: string[] = [];
+    const semanticAds: ProductAd[] = [];
+    for (const r of res.results) {
+      if (r.is_placeholder || !r.video_url) {
+        if (r.product_id) placeholderProductIds.push(r.product_id);
+      } else {
+        semanticAds.push(semanticToProductAd(r));
+      }
+    }
+    let hydrated: ProductAd[] = [];
+    if (placeholderProductIds.length > 0) {
+      try { hydrated = await getCreativesByProductIds(placeholderProductIds); } catch { /* ignore */ }
+    }
+    const combined = [...semanticAds, ...hydrated];
+    const seen = new Set<string>();
+    const seenProducts = new Set<string>();
+    const out: ProductAd[] = [];
+    for (const c of combined) {
+      if (seen.has(c.id)) continue;
+      if (c.product_id && seenProducts.has(c.product_id)) continue;
+      seen.add(c.id);
+      if (c.product_id) seenProducts.add(c.product_id);
+      out.push(c);
+    }
+    return finish('semantic', res.results.length, out.slice(0, limit));
+  } catch (err) {
+    semLane.error = err instanceof Error ? err.message : String(err);
+    return { ...base, ok: true };
+  }
+}
+
 // ── Bundle: creatives + products + looks ─────────────────────────────────
 // Used by admin surfaces that need all three content types for a query, e.g.
 // the per-catalog detail page's "Feed search results" section.

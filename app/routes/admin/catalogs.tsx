@@ -9,7 +9,9 @@ import {
   type BrainstormedProduct,
   type ProductGender,
 } from '~/services/product-research';
-import { getFeedSearchResults } from '~/services/feed-search';
+import { getFeedSearchResults, getFeedSearchDiagnostics } from '~/services/feed-search';
+import SimilarDebugModal, { buildFeedSearchReport, type SimilarDebugReport } from '~/components/SimilarDebugModal';
+import { useAuth } from '~/hooks/useAuth';
 import type { ProductAd } from '~/services/product-creative';
 import { getShopperGender, setShopperGender, subscribeToShopperGender } from '~/services/product-creative';
 import {
@@ -3626,6 +3628,24 @@ export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loadin
     try { window.localStorage.setItem(VIEW_MODE_LS_KEY, viewMode); } catch { /* private mode */ }
   }, [viewMode]);
 
+  // Super-admin "why this feed?" debug. Re-runs the feed-search pipeline in
+  // diagnostics mode (which lane fired, hit counts, dedup) and surfaces it in
+  // the shared SimilarDebugModal. Lazily computed on open only.
+  const { user } = useAuth();
+  const isSuperAdmin = user?.role === 'super_admin';
+  const [feedDebug, setFeedDebug] = useState<{ open: boolean; loading: boolean; report: SimilarDebugReport | null }>(
+    { open: false, loading: false, report: null },
+  );
+  const openFeedDebug = useCallback(async () => {
+    setFeedDebug({ open: true, loading: true, report: null });
+    try {
+      const diag = await getFeedSearchDiagnostics(catalogName);
+      setFeedDebug({ open: true, loading: false, report: buildFeedSearchReport(diag, catalogName) });
+    } catch {
+      setFeedDebug({ open: true, loading: false, report: null });
+    }
+  }, [catalogName]);
+
   // Unified FEED: which row types are shown, persisted so the admin's
   // choice survives reloads. Both on by default.
   const [showLooks, setShowLooks] = useState<boolean>(() => {
@@ -4029,6 +4049,21 @@ export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loadin
           sort={sort} viewMode={viewMode}
           onSort={setSort} onViewMode={setViewMode}
         />
+        {isSuperAdmin && !isAll && (
+          <button
+            type="button"
+            onClick={openFeedDebug}
+            title="Why these feed results? (super-admin debug)"
+            aria-label="Why these feed results? (super-admin debug)"
+            style={{
+              fontSize: 11, fontWeight: 700, padding: '4px 11px', borderRadius: 999,
+              border: '1px solid #34d399', background: '#ecfdf5', color: '#047857',
+              cursor: 'pointer', whiteSpace: 'nowrap',
+            }}
+          >
+            ⓘ why feed
+          </button>
+        )}
       </div>
 
       {viewMode === 'list' ? (
@@ -4286,6 +4321,14 @@ export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loadin
             </div>
           </div>
         </div>
+      )}
+
+      {feedDebug.open && (
+        <SimilarDebugModal
+          report={feedDebug.report}
+          loading={feedDebug.loading}
+          onClose={() => setFeedDebug({ open: false, loading: false, report: null })}
+        />
       )}
     </div>
   );

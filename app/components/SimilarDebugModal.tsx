@@ -1,6 +1,7 @@
 // imports
 import { useEffect } from 'react';
 import type { SimilarProductDiagnostics } from '~/services/product-creative';
+import type { FeedSearchDiagnostics } from '~/services/feed-search';
 
 // types/interfaces
 export type DebugTone = 'good' | 'bad' | 'muted' | 'accent';
@@ -154,6 +155,86 @@ export function buildProductSimilarReport(
     columns,
     rows,
     footnote: 'The page then drops the seed/dupes, requires a primary video, and reorders cross-brand first with same-brand backfill before painting the rail.',
+  };
+}
+
+/** Translate the feed-search lane diagnostics into the display report. Powers
+ *  the admin → catalogs "why this feed?" popup. */
+export function buildFeedSearchReport(
+  diag: FeedSearchDiagnostics,
+  catalogName: string,
+): SimilarDebugReport {
+  const winLabel = diag.winningLane === 'none'
+    ? 'none — no lane matched'
+    : diag.lanes.find(l => l.id === diag.winningLane)?.label || diag.winningLane;
+
+  const badges: DebugBadge[] = [
+    { label: 'lane', value: diag.winningLane, tone: 'accent' },
+    { label: 'lane hits', value: String(diag.rawCount) },
+    { label: 'deduped out', value: String(diag.dedupedOut), tone: diag.dedupedOut > 0 ? 'bad' : 'muted' },
+    { label: 'shown', value: String(diag.finalCount), tone: 'good' },
+  ];
+
+  const laneLines = diag.lanes.map(l => {
+    if (!l.attempted) return `${l.label} — not reached (an earlier lane already matched).`;
+    if (l.error) return `${l.label} — errored: ${l.error}.`;
+    if (l.won) return `${l.label} — ✓ MATCHED with ${l.rawCount} hit(s). Pipeline stops here.`;
+    return `${l.label} — 0 hits, fell through.`;
+  });
+
+  const sections: DebugSection[] = [
+    {
+      heading: 'How it’s fetched',
+      lines: [
+        `Source: getFeedSearchResults("${catalogName}") — the exact pipeline the consumer feed runs when a shopper types this catalog name in the search bar.`,
+        'Three lanes are tried in order; the FIRST lane that returns anything wins outright (no blending):',
+        '1. Brand fast-path — exact brand-name match → only that brand’s creatives.',
+        '2. Tier-1 catalog_tags / product.type — products tagged with this catalog name.',
+        '3. Semantic search — vector search via the search edge function, hydrating placeholder rows with real creatives.',
+      ],
+    },
+    {
+      heading: `The logic — winning lane: ${diag.winningLane}`,
+      lines: laneLines,
+    },
+    {
+      heading: 'How it calculated this feed',
+      lines: [
+        diag.winningLane === 'none'
+          ? 'No lane returned results — the feed is empty for this catalog name.'
+          : `Lane "${diag.winningLane}" returned ${diag.rawCount} hit(s) → ${diag.dedupedOut} dropped as duplicate id/product_id → ${diag.finalCount} shown.`,
+        'Dedup rule: no repeated creative id, and no two creatives of the same product_id.',
+        `Only creatives with a playable video are kept (image-only rows are filtered, matching the consumer feed).`,
+      ],
+    },
+  ];
+
+  const columns: DebugColumn[] = [
+    { key: 'rank', label: '#' },
+    { key: 'name', label: 'Product' },
+    { key: 'brand', label: 'Brand' },
+    { key: 'pid', label: 'product_id' },
+  ];
+
+  const rows: DebugRow[] = diag.items.map((it, i) => ({
+    id: `${it.id}-${i}`,
+    included: true,
+    cells: {
+      rank: { text: String(i + 1), tone: 'muted' },
+      name: { text: it.name || '—' },
+      brand: { text: it.brand || '—' },
+      pid: { text: it.productId ? `${it.productId.slice(0, 8)}…` : '—', tone: 'muted' },
+    },
+  }));
+
+  return {
+    title: `Feed results — “${catalogName}”`,
+    subtitle: `Resolved via ${winLabel}`,
+    badges,
+    sections,
+    columns,
+    rows,
+    footnote: 'Feed-search products without catalog_tags are merged into this catalog’s Products section so they still surface. The MIX column on the catalogs table is a separate stat: the % male / female / unisex split of this catalog’s tagged products.',
   };
 }
 
