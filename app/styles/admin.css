@@ -726,6 +726,15 @@ html.admin-on-dark-canvas .admin-topbar,
   to   { opacity: 1; transform: translateY(0); }
 }
 
+@keyframes admin-spin { to { transform: rotate(360deg); } }
+.admin-spinner {
+  display: inline-block;
+  border-radius: 50%;
+  border: 2px solid rgba(99, 102, 241, 0.25);
+  border-top-color: #6366f1;
+  animation: admin-spin 0.8s linear infinite;
+}
+
 .admin-clickable-row:hover td {
   background: #f0f0f0 !important;
 }

@@ -38,6 +38,7 @@ import PromptSettingsModal from '~/components/admin/PromptSettingsModal';
 import { startGenerationJob } from '~/services/generation-queue';
 import { useAdminConfirm } from '~/components/AdminConfirm';
 import { generateAndStorePoster } from '~/utils/video-poster';
+import { regeneratePrimaryPoster, PosterRegenError } from '~/services/regenerate-poster';
 
 interface CrawledProduct {
   id: string;
@@ -70,6 +71,11 @@ interface CrawledProduct {
   /** Fal request id used by fal-webhook to match the inbound callback
    *  back to this product row. */
   primary_video_request_id?: string | null;
+  /** 3:4 hero still extracted from primary_video_url (Modal poster job).
+   *  This is the poster the feed renders before the clip plays; null
+   *  rows fall back to the square primary_image_url. Re-extracted via
+   *  the detail-row "Primary Poster" tile's Regen button. */
+  primary_video_poster_url?: string | null;
   scraped_at: string | null;
   scrape_status: string;
   is_crawled: boolean;
@@ -881,7 +887,7 @@ function AddProductsModal({ onClose, onIngested, showToast, onPending }: AddProd
     const { data: inserted, error } = await supabase
       .from('products')
       .insert(rows)
-      .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care');
+      .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, primary_video_poster_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care');
     setIngesting(false);
     if (!error) {
       showToast(`Ingested ${rows.length} product${rows.length === 1 ? '' : 's'}`);
@@ -1888,7 +1894,7 @@ export default function AdminData() {
       // Reload products in the table
       const { data: reloaded } = await supabase
         .from('products')
-        .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care')
+        .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, primary_video_poster_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care')
         .order('scraped_at', { ascending: false });
       if (reloaded) {
         setCrawledProducts((reloaded || []).map(p => ({
@@ -2241,7 +2247,7 @@ export default function AdminData() {
       if (!supabase) { setProductsLoading(false); return; }
       const { data, error } = await supabase
         .from('products')
-        .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care')
+        .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, primary_video_poster_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care')
         .order('scraped_at', { ascending: false });
       if (error) {
         console.error('Failed to load crawled products:', error);
@@ -2363,7 +2369,7 @@ export default function AdminData() {
   }, [genJobs, loadAdProductIds]);
 
   const allProducts = useMemo(() => {
-    const productMap = new Map<string, { id?: string; brand: string; name: string; price: string; url: string; image_url?: string | null; images?: string[]; primary_image_url?: string | null; primary_image_polished?: boolean | null; primary_video_url?: string | null; video_urls: string[]; looks: Set<string>; creators: Set<string>; saves: number; clicks: number; impressions: number; connection: 'Look' | 'Crawl' | 'Ad'; is_active?: boolean; is_elite?: boolean; is_platform?: boolean; type?: string | null; gender?: 'male' | 'female' | 'unisex' | null; created_at?: string | null; source?: string | null; size_fit?: string | null; materials_care?: string | null }>();
+    const productMap = new Map<string, { id?: string; brand: string; name: string; price: string; url: string; image_url?: string | null; images?: string[]; primary_image_url?: string | null; primary_image_polished?: boolean | null; primary_video_url?: string | null; primary_video_poster_url?: string | null; video_urls: string[]; looks: Set<string>; creators: Set<string>; saves: number; clicks: number; impressions: number; connection: 'Look' | 'Crawl' | 'Ad'; is_active?: boolean; is_elite?: boolean; is_platform?: boolean; type?: string | null; gender?: 'male' | 'female' | 'unisex' | null; created_at?: string | null; source?: string | null; size_fit?: string | null; materials_care?: string | null }>();
     looks.forEach(look => {
       const c = creators[look.creator];
       look.products.forEach(p => {
@@ -2386,6 +2392,7 @@ export default function AdminData() {
       const primaryUrl = (cp as { primary_image_url?: string | null }).primary_image_url ?? null;
       const polishedFlag = (cp as { primary_image_polished?: boolean | null }).primary_image_polished ?? false;
       const primaryVideoUrl = (cp as { primary_video_url?: string | null }).primary_video_url ?? null;
+      const primaryVideoPosterUrl = (cp as { primary_video_poster_url?: string | null }).primary_video_poster_url ?? null;
       if (productMap.has(key)) {
         const entry = productMap.get(key)!;
         entry.id = cp.id;
@@ -2394,6 +2401,7 @@ export default function AdminData() {
         entry.primary_image_url = primaryUrl;
         entry.primary_image_polished = polishedFlag;
         entry.primary_video_url = primaryVideoUrl;
+        entry.primary_video_poster_url = primaryVideoPosterUrl;
         entry.video_urls = adVideoMap.get(cp.id) || [];
         entry.impressions = adImpressionsMap.get(cp.id) || 0;
         entry.clicks = adClicksMap.get(cp.id) || 0;
@@ -2425,6 +2433,7 @@ export default function AdminData() {
           primary_image_url: primaryUrl,
           primary_image_polished: polishedFlag,
           primary_video_url: primaryVideoUrl,
+          primary_video_poster_url: primaryVideoPosterUrl,
           video_urls: adVideoMap.get(cp.id) || [],
           looks: new Set(),
           creators: new Set(),
@@ -2664,6 +2673,9 @@ export default function AdminData() {
   // In-flight generate-primary-video calls, keyed by product id. Drives
   // the spinner overlay on the Generate CTA in the detail row.
   const [generatingPrimaryVideoIds, setGeneratingPrimaryVideoIds] = useState<Set<string>>(new Set());
+  // In-flight primary-poster regen calls, keyed by product id. Drives the
+  // spinner overlay on the "Primary Poster" tile's Regen button.
+  const [regeneratingPosterIds, setRegeneratingPosterIds] = useState<Set<string>>(new Set());
   // Start timestamps (ms-since-epoch) for each in-flight generation —
   // drives the progress bar's elapsed time. Cleared on completion.
   const [primaryVideoStartedAt, setPrimaryVideoStartedAt] = useState<Map<string, number>>(new Map());
@@ -2805,6 +2817,32 @@ export default function AdminData() {
       });
       setPrimaryVideoStartedAt(prev => {
         const next = new Map(prev);
+        next.delete(productId);
+        return next;
+      });
+    }
+  }, [showToast, crawledProducts]);
+
+  const regeneratePoster = useCallback(async (productId: string) => {
+    if (!productId) return;
+    const product = crawledProducts.find(pp => pp.id === productId);
+    const primaryVideoUrl = product?.primary_video_url ?? null;
+    const previousPoster = (product as { primary_video_poster_url?: string | null } | undefined)?.primary_video_poster_url ?? null;
+    setRegeneratingPosterIds(prev => new Set(prev).add(productId));
+    try {
+      const posterUrl = await regeneratePrimaryPoster(productId, primaryVideoUrl, previousPoster);
+      setCrawledProducts(prev => prev.map(pp =>
+        pp.id === productId
+          ? ({ ...pp, primary_video_poster_url: posterUrl } as CrawledProduct)
+          : pp,
+      ));
+      showToast('Primary poster regenerated');
+    } catch (err) {
+      const msg = err instanceof PosterRegenError ? err.message : (err as Error).message || 'unknown';
+      showToast(`Poster regen failed: ${msg}`);
+    } finally {
+      setRegeneratingPosterIds(prev => {
+        const next = new Set(prev);
         next.delete(productId);
         return next;
       });
@@ -3371,7 +3409,7 @@ export default function AdminData() {
                   // without a manual page reload.
                   const { data } = await supabase!
                     .from('products')
-                    .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care')
+                    .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, primary_video_poster_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care')
                     .order('created_at', { ascending: false });
                   if (data) {
                     setCrawledProducts(data.map((p) => ({
@@ -3402,7 +3440,7 @@ export default function AdminData() {
                 if (result.updated > 0) {
                   const { data } = await supabase!
                     .from('products')
-                    .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care')
+                    .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, primary_video_poster_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, gender, created_at, source, size_fit, materials_care')
                     .order('created_at', { ascending: false });
                   if (data) {
                     setCrawledProducts(data.map((p) => ({
@@ -5415,7 +5453,7 @@ export default function AdminData() {
                   <tr className="admin-product-detail-row">
                     <td colSpan={18} style={{ padding: 0, background: '#fafbff' }}>
                       <div style={{ padding: '14px 20px', borderTop: '1px solid #e5e7eb', borderBottom: (tagsOpen || linksOpen) ? undefined : '1px solid #e5e7eb' }}>
-                        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(120px, 160px) minmax(120px, 160px) 1fr 1fr', gap: 24 }}>
+                        <div style={{ display: 'grid', gridTemplateColumns: 'minmax(120px, 160px) minmax(120px, 160px) minmax(120px, 160px) 1fr 1fr', gap: 24 }}>
                           {/* Primary preview pinned to the far left so
                               the admin can see the current pick without
                               hunting through the photo grid. Clicking
@@ -5829,6 +5867,164 @@ export default function AdminData() {
                                         >
                                           <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
                                             <polygon points="6 4 20 12 6 20 6 4" />
+                                          </svg>
+                                          <span>Generate</span>
+                                        </button>
+                                      )}
+                                    </>
+                                  )}
+                                </div>
+                              );
+                            })()}
+                          </div>
+                          {/* Primary Poster column — the 3:4 hero still the
+                              feed renders before the clip plays. Extracted
+                              from primary_video_url by the Modal poster job;
+                              the Regen button re-runs that extraction. */}
+                          <div>
+                            <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 8 }}>
+                              Primary Poster
+                            </div>
+                            {(() => {
+                              const posterUrl = (p as { primary_video_poster_url?: string | null }).primary_video_poster_url ?? null;
+                              const primaryVideoUrl = (p as { primary_video_url?: string | null }).primary_video_url ?? null;
+                              const isRegen = p.id ? regeneratingPosterIds.has(p.id) : false;
+                              if (posterUrl) {
+                                return (
+                                  <div style={{ position: 'relative' }}>
+                                    <button
+                                      type="button"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        if (typeof window !== 'undefined' && posterUrl) window.open(posterUrl, '_blank', 'noopener,noreferrer');
+                                      }}
+                                      title="Open poster full-size"
+                                      style={{
+                                        width: '100%',
+                                        aspectRatio: '3 / 4',
+                                        borderRadius: 8,
+                                        border: '2px solid #2563eb',
+                                        boxShadow: '0 0 0 1px #2563eb, 0 4px 14px rgba(37,99,235,0.18)',
+                                        padding: 0,
+                                        background: '#0f172a',
+                                        cursor: 'zoom-in',
+                                        overflow: 'hidden',
+                                        display: 'block',
+                                      }}
+                                    >
+                                      <img
+                                        src={posterUrl}
+                                        alt={`${p.brand} ${p.name} poster`}
+                                        style={{ width: '100%', height: '100%', objectFit: 'contain', display: 'block', pointerEvents: 'none', opacity: isRegen ? 0.4 : 1 }}
+                                      />
+                                    </button>
+                                    {p.id && (
+                                      <button
+                                        type="button"
+                                        onClick={(e) => {
+                                          e.stopPropagation();
+                                          if (!isRegen && p.id) regeneratePoster(p.id);
+                                        }}
+                                        disabled={isRegen}
+                                        title={isRegen ? 'Regenerating poster…' : 'Re-extract the poster from the primary video'}
+                                        style={{
+                                          position: 'absolute',
+                                          top: 8,
+                                          right: 8,
+                                          display: 'inline-flex',
+                                          alignItems: 'center',
+                                          gap: 6,
+                                          padding: '5px 9px',
+                                          borderRadius: 999,
+                                          border: '1px solid rgba(255,255,255,0.4)',
+                                          background: isRegen ? 'rgba(37,99,235,0.85)' : 'rgba(15,23,42,0.7)',
+                                          color: '#fff',
+                                          fontSize: 10,
+                                          fontWeight: 700,
+                                          letterSpacing: '0.04em',
+                                          textTransform: 'uppercase',
+                                          cursor: isRegen ? 'wait' : 'pointer',
+                                          backdropFilter: 'blur(6px)',
+                                        }}
+                                      >
+                                        {isRegen && (
+                                          <span style={{
+                                            width: 11, height: 11,
+                                            border: '1.5px solid rgba(255,255,255,0.45)',
+                                            borderTopColor: '#fff',
+                                            borderRadius: '50%',
+                                            animation: 'wallet-spin 0.7s linear infinite',
+                                          }} />
+                                        )}
+                                        <span>{isRegen ? 'Working' : 'Regen'}</span>
+                                      </button>
+                                    )}
+                                  </div>
+                                );
+                              }
+                              // No poster yet. Offer to generate one when a
+                              // primary video exists to extract from; otherwise
+                              // point the admin to the video step first.
+                              return (
+                                <div style={{
+                                  width: '100%',
+                                  aspectRatio: '3 / 4',
+                                  borderRadius: 8,
+                                  border: '1px dashed #cbd5e1',
+                                  background: '#f8fafc',
+                                  display: 'flex',
+                                  flexDirection: 'column',
+                                  alignItems: 'center',
+                                  justifyContent: 'center',
+                                  gap: 10,
+                                  padding: 12,
+                                }}>
+                                  {isRegen ? (
+                                    <>
+                                      <span style={{
+                                        width: 16, height: 16,
+                                        border: '2px solid #bfdbfe',
+                                        borderTopColor: '#2563eb',
+                                        borderRadius: '50%',
+                                        animation: 'wallet-spin 0.7s linear infinite',
+                                      }} />
+                                      <div style={{ fontSize: 10, color: '#2563eb', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
+                                        Extracting
+                                      </div>
+                                    </>
+                                  ) : (
+                                    <>
+                                      <div style={{ fontSize: 11, color: '#94a3b8', textAlign: 'center', lineHeight: 1.3 }}>
+                                        {primaryVideoUrl ? 'No poster yet.' : 'Generate a primary video first.'}
+                                      </div>
+                                      {primaryVideoUrl && p.id && (
+                                        <button
+                                          type="button"
+                                          onClick={(e) => {
+                                            e.stopPropagation();
+                                            if (p.id) regeneratePoster(p.id);
+                                          }}
+                                          title="Extract poster from primary video"
+                                          style={{
+                                            display: 'inline-flex',
+                                            alignItems: 'center',
+                                            gap: 6,
+                                            padding: '7px 14px',
+                                            borderRadius: 999,
+                                            border: 'none',
+                                            background: '#2563eb',
+                                            color: '#fff',
+                                            fontSize: 11,
+                                            fontWeight: 700,
+                                            letterSpacing: '0.04em',
+                                            textTransform: 'uppercase',
+                                            cursor: 'pointer',
+                                            boxShadow: '0 4px 12px rgba(37,99,235,0.25)',
+                                          }}
+                                        >
+                                          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+                                            <path d="M21 12a9 9 0 1 1-3-6.7" />
+                                            <polyline points="21 4 21 10 15 10" />
                                           </svg>
                                           <span>Generate</span>
                                         </button>
