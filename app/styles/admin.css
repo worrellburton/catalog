@@ -3398,6 +3398,14 @@ html.admin-on-dark-canvas .admin-topbar,
   100% { transform: translateX(100%); }
 }
 
+/* Drives the placeholder shimmer on LazyThumb while the first-frame
+   snapshot is still extracting. Pans the gradient diagonally so the
+   thumb reads as "loading" instead of as a hard black square. */
+@keyframes admin-thumb-shimmer {
+  0%, 100% { background-position: 0% 50%; }
+  50%      { background-position: 100% 50%; }
+}
+
 /* ────────────────────────────────────────────────────────────────────
    Admin → Branding - typeface picker for the Catalog wordmark
    ──────────────────────────────────────────────────────────────────── */
