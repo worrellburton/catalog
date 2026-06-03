@@ -2887,3 +2887,268 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   cursor: pointer;
 }
 .cl-v2-publish-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ──────────────────────────────────────────────────────────────────
+   AddProductV2 — mirrors the Create-a-Look hero pattern (particle
+   backdrop, small glassy card that springs in, faded prompt copy)
+   then walks through search/confirm or paste-link/progress.
+   ────────────────────────────────────────────────────────────────── */
+.apv2 {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 16px;
+  height: 100%;
+  color: #fff;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 320ms cubic-bezier(.32,.72,0,1), transform 320ms cubic-bezier(.32,.72,0,1);
+}
+.apv2.is-mounted { opacity: 1; transform: none; }
+.apv2-particles {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.85;
+}
+.apv2-particles .pw-particles { position: absolute; inset: 0; width: 100%; height: 100%; }
+.apv2 > * { position: relative; z-index: 1; }
+
+.apv2-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 520px;
+  width: 100%;
+  margin: 0 auto;
+}
+.apv2-head h2 { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+.apv2-close {
+  width: 36px; height: 36px; border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.04);
+  color: #fff; font-size: 22px; line-height: 1;
+  cursor: pointer;
+}
+.apv2-close:hover { background: rgba(255,255,255,0.1); }
+
+.apv2-hero {
+  flex: 1;
+  min-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  width: 100%;
+  max-width: 520px;
+  margin: 0 auto;
+}
+.apv2-hero-card {
+  width: 132px;
+  height: 132px;
+  border-radius: 28px;
+  border: 1.5px solid rgba(255,255,255,0.16);
+  background: rgba(255,255,255,0.04);
+  color: rgba(255,255,255,0.92);
+  display: flex; align-items: center; justify-content: center;
+  backdrop-filter: blur(8px) saturate(1.1);
+  -webkit-backdrop-filter: blur(8px) saturate(1.1);
+  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  opacity: 0;
+  transform: scale(0.6);
+  transition:
+    opacity 520ms cubic-bezier(.16, 1, .3, 1) 160ms,
+    transform 520ms cubic-bezier(.16, 1, .3, 1) 160ms;
+}
+.apv2.is-mounted .apv2-hero-card { opacity: 1; transform: scale(1); }
+.apv2-hero-icon { display: inline-flex; align-items: center; justify-content: center; }
+
+.apv2-hero-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.5);
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 480ms ease 360ms, transform 480ms cubic-bezier(.16, 1, .3, 1) 360ms;
+  text-align: center;
+}
+.apv2.is-mounted .apv2-hero-label { opacity: 1; transform: none; }
+
+.apv2-input-row {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  max-width: 420px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 480ms ease 480ms, transform 480ms cubic-bezier(.16, 1, .3, 1) 480ms;
+}
+.apv2.is-mounted .apv2-input-row { opacity: 1; transform: none; }
+.apv2-input {
+  flex: 1;
+  height: 48px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(0,0,0,0.45);
+  color: #fff;
+  font-family: inherit;
+  font-size: 14px;
+  padding: 0 18px;
+  outline: none;
+}
+.apv2-input::placeholder { color: rgba(255,255,255,0.4); }
+.apv2-input:focus { border-color: rgba(255,255,255,0.4); }
+.apv2-go {
+  height: 48px;
+  padding: 0 22px;
+  border-radius: 999px;
+  background: #fff;
+  color: #111;
+  font-weight: 700;
+  font-size: 14px;
+  border: none;
+  cursor: pointer;
+}
+.apv2-go:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.apv2-error {
+  color: #ffb4b4;
+  font-size: 13px;
+  text-align: center;
+  max-width: 380px;
+}
+
+.apv2-status {
+  flex: 1;
+  min-height: 50vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: rgba(255,255,255,0.78);
+  font-size: 14px;
+}
+.apv2-spinner {
+  width: 14px; height: 14px; border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.18);
+  border-top-color: #fff;
+  animation: apv2-spin 0.8s linear infinite;
+}
+@keyframes apv2-spin { to { transform: rotate(360deg); } }
+
+.apv2-confirm {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  width: 100%;
+  max-width: 420px;
+  margin: 0 auto;
+}
+.apv2-confirm-q { font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
+.apv2-confirm-card {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: 14px;
+  padding: 14px;
+  border-radius: 16px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.08);
+  align-items: center;
+}
+.apv2-confirm-card img {
+  width: 96px; height: 96px; border-radius: 12px; object-fit: cover; background: #111;
+}
+.apv2-confirm-card-blank { width: 96px; height: 96px; border-radius: 12px; background: #111; }
+.apv2-confirm-meta { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.apv2-confirm-brand {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+  color: rgba(255,255,255,0.6);
+}
+.apv2-confirm-name {
+  font-size: 14px; font-weight: 500;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.apv2-confirm-price { font-size: 14px; font-weight: 600; }
+.apv2-confirm-row { display: flex; gap: 10px; width: 100%; justify-content: center; }
+
+.apv2-btn-secondary {
+  padding: 12px 18px;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(255,255,255,0.85);
+  border: 1px solid rgba(255,255,255,0.18);
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+}
+.apv2-btn-secondary:hover { background: rgba(255,255,255,0.06); }
+.apv2-btn-primary {
+  padding: 12px 22px;
+  border-radius: 999px;
+  background: #fff;
+  color: #111;
+  font-weight: 700;
+  font-size: 14px;
+  border: none;
+  cursor: pointer;
+}
+.apv2-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.apv2-progress {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  width: 100%;
+  max-width: 420px;
+  margin: 0 auto;
+  text-align: center;
+}
+.apv2-progress-bar {
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.10);
+  overflow: hidden;
+}
+.apv2-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #22c55e, #4ade80);
+  transition: width 200ms linear;
+}
+.apv2-progress-label { font-size: 14px; font-weight: 500; color: rgba(255,255,255,0.9); }
+.apv2-progress-url {
+  font-size: 12px;
+  color: rgba(255,255,255,0.55);
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.apv2-progress-hint {
+  font-size: 13px;
+  color: rgba(255,255,255,0.55);
+  max-width: 320px;
+  line-height: 1.4;
+}
+.apv2-progress-actions { display: flex; gap: 10px; margin-top: 6px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .apv2,
+  .apv2-hero-card,
+  .apv2-hero-label,
+  .apv2-input-row {
+    transition: none;
+    opacity: 1;
+    transform: none;
+  }
+}

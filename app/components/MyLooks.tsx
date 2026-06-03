@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useNavigate } from '@remix-run/react';
 import CreateLookV2 from './CreateLookV2';
+import AddProductV2 from './AddProductV2';
 import { useAuth } from '~/hooks/useAuth';
 import type { ManagedLook, LookStatus } from '~/services/manage-looks';
 import { getMyLooks, deleteLook, archiveLook, submitLook } from '~/services/manage-looks';
@@ -68,6 +69,9 @@ export default function MyLooks({ onClose }: MyLooksProps) {
   // Form state (create or edit).
   const [showForm, setShowForm] = useState(false);
   const [editingLook, setEditingLook] = useState<ManagedLook | null>(null);
+
+  // Add Product flow — same hero pattern as CreateLookV2.
+  const [showAddProduct, setShowAddProduct] = useState(false);
 
   // Delete confirmation.
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
@@ -225,6 +229,17 @@ export default function MyLooks({ onClose }: MyLooksProps) {
     [looks],
   );
 
+  // ── Add product flow — full-screen, same shell as the look form ──
+  if (showAddProduct) {
+    return (
+      <div className="my-cat-page my-cat-page--form">
+        <div className="my-cat-form-container">
+          <AddProductV2 onCancel={() => setShowAddProduct(false)} />
+        </div>
+      </div>
+    );
+  }
+
   // ── Form mode renders the editor full-screen (unchanged behavior) ──
   if (showForm) {
     return (
@@ -347,7 +362,7 @@ export default function MyLooks({ onClose }: MyLooksProps) {
                     </svg>
                   }
                   label="Add product"
-                  onClick={() => { setCreateMenuOpen(false); navigate('/admin/data?tab=products'); }}
+                  onClick={() => { setCreateMenuOpen(false); setShowAddProduct(true); }}
                 />
               </div>
             </>
