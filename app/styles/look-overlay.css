@@ -1191,14 +1191,45 @@ body:has(.look-overlay.look-overlay--in) {
   height: 100%;
 }
 
+.product-brand-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 3px;
+  min-width: 0;
+}
 .product-brand {
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: rgba(255, 255, 255, 0.45);
-  display: block;
-  margin-bottom: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Subtype / type pill next to the brand. Reads as a category tag —
+   "Sandals", "Sneakers", "Top" — so the shopper sees the garment
+   shape before the long product name. Subtle border + cyan tint to
+   distinguish from the brand text without competing with it. */
+.product-subtype-chip {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: rgba(167, 243, 208, 0.92);
+  background: rgba(16, 185, 129, 0.10);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  text-transform: capitalize;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.light-mode .product-subtype-chip {
+  color: #0e7490;
+  background: #ecfeff;
+  border-color: #a5f3fc;
 }
 
 .product-details h4 {

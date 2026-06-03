@@ -69,6 +69,8 @@ interface SupabaseLook {
       primary_image_url: string | null;
       primary_video_url: string | null;
       primary_video_poster_url: string | null;
+      type: string | null;
+      subtype: string | null;
     };
   }[];
 }
@@ -107,7 +109,9 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
           image_url,
           primary_image_url,
           primary_video_url,
-          primary_video_poster_url
+          primary_video_poster_url,
+          type,
+          subtype
         )
       )
     `)
@@ -279,6 +283,8 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
             || lp.products?.primary_image_url
             || lp.products?.image_url
             || undefined,
+          type: lp.products?.type ?? undefined,
+          subtype: lp.products?.subtype ?? undefined,
         })),
     };
   });

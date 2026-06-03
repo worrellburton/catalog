@@ -38,6 +38,15 @@ export interface Product {
   video_url?: string;
   thumbnail_url?: string;
   creative_id?: string;
+  /** Broad category (Shoes / Top / Pants / etc.). Sourced from
+   *  products.type — surfaced in the look-overlay product row as a
+   *  small chip so shoppers see the garment family at a glance. */
+  type?: string;
+  /** Sub-category under type (Sneakers / Sandals / Boots …). Sourced
+   *  from products.subtype. When both type and subtype exist we
+   *  render only subtype (the more specific label); when only type
+   *  exists we render that. */
+  subtype?: string;
 }
 
 export interface Creator {
