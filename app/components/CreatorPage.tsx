@@ -6,6 +6,7 @@ import { useAuth } from '~/hooks/useAuth';
 import { AvatarUpload } from './AvatarCropModal';
 import LookCard from './LookCard';
 import { toggleFollow, isFollowing as fetchIsFollowing, getFollowerCount } from '~/services/follows';
+import { subscribeToLooksChange } from '~/services/looks';
 // (Removed getShopperGender / subscribeToShopperGender import — the creator
 // catalog page no longer filters by shopper gender; see creatorLooks below.)
 
@@ -224,6 +225,17 @@ export default function CreatorPage({
     return () => { cancelled = true; };
   }, [userId, creatorName]);
 
+  // Realtime sync: services/looks.ts maintains a Supabase channel on
+  // the looks + looks_creative tables and broadcasts via
+  // subscribeToLooksChange. Bumping this nonce makes the resolver
+  // effect below re-run, so an admin Delete or Unpublish from a
+  // different tab clears the look from this creator's catalog page
+  // live without a refresh.
+  const [looksLiveNonce, setLooksLiveNonce] = useState(0);
+  useEffect(() => {
+    return subscribeToLooksChange(() => setLooksLiveNonce(n => n + 1));
+  }, []);
+
   // Handle-branch resolver — for `/c/<handle>` URLs that map to real
   // creator_handles in the looks table. Pulls live looks + the
   // owner's profile so the page renders with their actual avatar and
@@ -328,7 +340,7 @@ export default function CreatorPage({
       if (!cancelled) setLoading(false);
     })().catch(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
-  }, [isHandleBranch, creatorName]);
+  }, [isHandleBranch, creatorName, looksLiveNonce]);
 
   // Resolved values that the JSX below reads. When userId is set we use
   // the live data; otherwise the static-seed values.
