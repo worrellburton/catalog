@@ -255,9 +255,21 @@ export default function ShoppingForHero({ onRevealFeed }: ShoppingForHeroProps) 
       <button type="button" className="sfh-scroll-hint" onClick={onRevealFeed} aria-label="Scroll to see most popular">
         {/* Desktop: a scroll-mouse. Mobile: a swiping finger (CSS swaps). */}
         <span className="sfh-mouse" aria-hidden="true"><span className="sfh-mouse-dot" /></span>
+        {/* Pointing-DOWN finger with an animated swipe-trail behind it
+            (CSS keyframes shift the hand 6px down on a 1.6s loop, while
+            the trail dots fade in sequentially below it). Replaces the
+            previous up-pointing tap glyph which didn't communicate the
+            "swipe down for more" gesture the hint label asks for. */}
         <span className="sfh-finger" aria-hidden="true">
-          <svg width="26" height="30" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M13 9V4.5a1.5 1.5 0 0 0-3 0V12L8.2 10.4a1.6 1.6 0 0 0-2.2 2.3l3.4 3.6A5 5 0 0 0 13.1 18H16a4 4 0 0 0 4-4v-3a1.5 1.5 0 0 0-3 0 1.5 1.5 0 0 0-3 0 1.5 1.5 0 0 0-1 .1V9z"/>
+          <span className="sfh-finger-trail" aria-hidden="true">
+            <span /><span /><span />
+          </span>
+          <svg className="sfh-finger-hand" width="22" height="28" viewBox="0 0 24 28" fill="currentColor">
+            {/* Hand: pointing-down index finger + curled fist body.
+                Drawn so the tip sits at the bottom (y≈26) and the
+                knuckles wrap to the top — the inverse of the upward
+                tap-glyph that used to live here. */}
+            <path d="M11 2.5a1.5 1.5 0 0 1 3 0V15l1.6-1.6a1.6 1.6 0 0 1 2.3 2.2l-3.6 3.4a5 5 0 0 1-3.7 1.5H7a4 4 0 0 1-4-4v-3a1.5 1.5 0 0 1 3 0 1.5 1.5 0 0 1 3 0 1.5 1.5 0 0 1 1-.1V2.5z"/>
           </svg>
         </span>
         <span className="sfh-scroll-label">Scroll to see most popular</span>
