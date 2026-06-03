@@ -7,8 +7,25 @@
 .bottom-bar {
   position: fixed;
   bottom: calc(12px + env(safe-area-inset-bottom));
-  left: 50%;
-  transform: translateX(-50%);
+  /* Horizontal centering is transform-free and %-based ON PURPOSE —
+     this is the guard against the "search bar drifts off-axis" class
+     of bug:
+       • margin-inline:auto + left:0/right:0 centers WITHOUT a
+         translateX(-50%). Any animation transform (chrome auto-hide,
+         drag-to-dismiss) therefore can't clobber the horizontal
+         anchor and snap the pill sideways.
+       • the width uses calc(100% - …), NOT 100vw. `100vw` counts the
+         scrollbar/inset gutter while the `%`-based centering does
+         not, so the old `100vw` width + `left:50%` pairing desynced
+         on any viewport with a gutter and shoved the pill left (the
+         exact regression in the screenshot).
+     GUARD — do NOT reintroduce `left:50% + translateX(-50%)` or a
+     `100vw`-based width on .bottom-bar / .bottom-bar-inner. Center
+     new bottom-bar content with margin-inline:auto and size it in %. */
+  left: 0;
+  right: 0;
+  margin-inline: auto;
+  width: min(560px, calc(100% - 48px));
   z-index: 100;
   display: flex;
   flex-direction: column;
@@ -51,7 +68,9 @@
 /* Always-visible inline search variant - replaces the old "all" pill.
    The filter button + input + clear-X stack horizontally inside the bar. */
 .bottom-bar-inner.search-inline {
-  width: min(560px, calc(100vw - 48px));
+  /* Fill the outer pill, which now owns the width (see .bottom-bar).
+     Never set a 100vw width here — it desyncs from the bar's centering. */
+  width: 100%;
   padding: 0 8px 0 4px;
   gap: 6px;
 }
@@ -1509,6 +1528,10 @@ body:has(.bottom-bar.search-open) {
 @media (max-width: 640px) {
   /* The outer bar becomes a pure white pill with a soft shadow. */
   .bottom-bar {
+    /* Mobile width lives on the OUTER bar in % (not 100vw) so it stays
+       in sync with the margin-inline:auto centering — see the guard
+       note on the base .bottom-bar rule. */
+    width: min(504px, calc(100% - 36px));
     background: #fff;
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
@@ -1519,9 +1542,10 @@ body:has(.bottom-bar.search-open) {
       0 6px 22px rgba(0, 0, 0, 0.08);
   }
 
-  /* The inner row: tighter vertical, breathing horizontal. */
+  /* The inner row: tighter vertical, breathing horizontal. Fills the
+     outer pill (which owns the width) — no 100vw here. */
   .bottom-bar-inner.search-inline {
-    width: min(504px, calc(100vw - 36px));
+    width: 100%;
     padding: 7px 12px;
     gap: 9px;
   }

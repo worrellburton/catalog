@@ -345,7 +345,10 @@ function BottomBar({
         className={`bottom-bar is-beam-${beam} ${searchOpen ? 'search-open' : ''} ${filtersOpen ? 'filters-open' : ''}`}
         id="bottom-bar"
         style={searchOpen ? {
-          transform: `translateX(-50%) translateY(${dragOffset}px)`,
+          // Centering is margin-based in CSS now (no translateX), so the
+          // drag transform is a pure Y translate — chaining translateX(-50%)
+          // here would shove the pill off-axis mid-drag.
+          transform: `translateY(${dragOffset}px)`,
           transition: dragging ? 'none' : undefined,
           // Pin flush to the keyboard's top edge (8px breathing gap) the
           // instant a soft keyboard appears. Inline so it beats every CSS
