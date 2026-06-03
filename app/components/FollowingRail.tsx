@@ -4,6 +4,7 @@ import { subscribeFollowingChanges } from '~/hooks/useFollowState';
 import { subscribeOnline } from '~/services/presence';
 import { supabase } from '~/utils/supabase';
 import { getShopperGender } from '~/services/product-creative';
+import { useAuth } from '~/hooks/useAuth';
 
 interface FollowingRailProps {
   onOpenCreator: (handle: string) => void;
@@ -73,6 +74,16 @@ function timeAgo(ms: number): string {
 function FollowingRail({ onOpenCreator, mode = 'both', onCreateFollowingCatalog: _onCreateFollowingCatalog, onOpenFollowingList }: FollowingRailProps) {
   const showFollowing = mode === 'following' || mode === 'both';
   const showFollowers = mode === 'followers' || mode === 'both';
+  // Auth-aware refresh. The rail used to mount BEFORE auth resolved
+  // on cold loads, so getMyFollowing() saw user=null, returned [],
+  // and the cold-start fallback fired with popular creators. When
+  // auth resolved a beat later, nothing re-triggered the effect, so
+  // the rail stayed pinned to the popular set — including handles
+  // the user doesn't actually follow (jimmy2k showing up alongside
+  // Robert Burton in the reported case). Including user?.id in the
+  // deps below makes the resolve flip an auth-null → auth-yes
+  // transition into a fresh re-fetch.
+  const { user } = useAuth();
   const [followingEntries, setFollowingEntries] = useState<RailEntry[] | null>(null);
   const [followerEntries, setFollowerEntries] = useState<FollowerInfo[] | null>(null);
   const [newFollowerHandles, setNewFollowerHandles] = useState<Set<string>>(new Set());
@@ -186,7 +197,7 @@ function FollowingRail({ onOpenCreator, mode = 'both', onCreateFollowingCatalog:
       setFollowingEntries(resolved);
     })();
     return () => { cancelled = true; };
-  }, [refreshKey]);
+  }, [refreshKey, user?.id]);
 
   // Followers list. On every refresh we diff against the previous
   // snapshot — any handle that wasn't in the prior set is "new" and
