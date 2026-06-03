@@ -503,6 +503,17 @@ export default function Home() {
   }, []);
 
   const handleCloseLook = useCallback(() => {
+    // Same back-button parity as handleProductClose: prefer
+    // history.back() so the pushed /l/<slug> entry pops cleanly. The
+    // popstate listener at the bottom of this file then clears
+    // selectedLook. If we're not on /l/ (cold load / no pushed entry)
+    // just clear directly.
+    if (typeof window !== 'undefined'
+        && window.location.pathname.startsWith('/l/')
+        && window.history.length > 1) {
+      window.history.back();
+      return;
+    }
     setSelectedLook(null);
   }, []);
 
@@ -1024,6 +1035,66 @@ export default function Home() {
     window.addEventListener('popstate', sync);
     return () => window.removeEventListener('popstate', sync);
   }, []);
+
+  // Overlay-stack popstate listener. The user's complaint: "click the
+  // fig tree, hit back, it should take me back to THIS look, not
+  // somewhere else." useOverlayRouter pushes /p/<slug> when a product
+  // opens — pressing browser back pops that history entry and fires
+  // popstate here. We detect that selectedProduct is set but the URL
+  // is no longer /p/, fire the same close handler the X button uses
+  // (which restores productOpenedFromLook if it was set), and the
+  // look re-renders underneath. Same logic for /l/: if the URL is
+  // off /l/ but selectedLook is set, clear it.
+  //
+  // We use refs so the listener doesn't reattach on every state
+  // change — it reads the current state through .current at fire
+  // time. This makes the listener stable across re-renders.
+  const productOpenedFromLookRef = useRef(productOpenedFromLook);
+  productOpenedFromLookRef.current = productOpenedFromLook;
+  const selectedProductRef = useRef(selectedProduct);
+  selectedProductRef.current = selectedProduct;
+  const selectedLookRef = useRef(selectedLook);
+  selectedLookRef.current = selectedLook;
+  const brandFilterRef = useRef(brandFilter);
+  brandFilterRef.current = brandFilter;
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onPop = () => {
+      const path = window.location.pathname;
+      const onProduct = path.startsWith('/p/');
+      const onLook    = path.startsWith('/l/');
+      const onBrand   = path.startsWith('/b/');
+      // Product overlay exit: URL is no longer /p/ but a product is
+      // still open in state → user just pressed back out of the
+      // product page. Mirror what the X close button does: clear the
+      // product + its rails, and if it was opened from a look,
+      // restore that look so the underlying surface reappears.
+      if (!onProduct && selectedProductRef.current) {
+        setSelectedProduct(null);
+        setSelectedCreative(null);
+        setSelectedSimilar(null);
+        setSimilarCreatives(null);
+        setBrandCreatives(null);
+        setGraphPairs(null);
+        const fromLook = productOpenedFromLookRef.current;
+        if (fromLook && onLook) {
+          setSelectedLook(fromLook);
+          setProductOpenedFromLook(null);
+        }
+      }
+      // Look overlay exit: URL is no longer /l/ but a look is still
+      // open → user backed out of the look overlay too.
+      if (!onLook && selectedLookRef.current) {
+        setSelectedLook(null);
+      }
+      // Brand overlay exit.
+      if (!onBrand && brandFilterRef.current) {
+        setBrandFilter(null);
+      }
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
   const closeProfile = useCallback(() => {
     history.replaceState({}, '', '/#app');
     setShowProfile(false);
@@ -1044,15 +1115,30 @@ export default function Home() {
   }, []);
   const handleOpenLilyCreator = useCallback(() => setCreatorFilter('@lilywittman'), []);
   const handleProductClose = useCallback(() => {
+    // Prefer history.back() when the product page was pushed via the
+    // overlay router (i.e. the URL is currently /p/<slug>). That pops
+    // the pushed entry, the browser navigates back to the previous URL
+    // (the look's /l/<slug> or the feed at /), and the popstate
+    // listener up the file mirrors the state cleanup + restoreFromLook.
+    // Using history.back() instead of fresh state mutations means the
+    // X close button and the browser back button take the SAME path,
+    // so we never end up with a /l/ pushed on top of /p/ leaking
+    // history entries that have to be tapped through. Falls back to a
+    // direct state cleanup if there's no pushed entry to pop (e.g. the
+    // user opened /p/<slug> as a cold-load — history.length is 1).
+    if (typeof window !== 'undefined'
+        && window.location.pathname.startsWith('/p/')
+        && window.history.length > 1) {
+      window.history.back();
+      return;
+    }
+    // Cold-load / no pushed entry: just clear state directly.
     setSelectedProduct(null);
     setSelectedCreative(null);
     setSelectedSimilar(null);
     setSimilarCreatives(null);
     setBrandCreatives(null);
     setGraphPairs(null);
-    // If the product was opened from a look, restore that look so the
-    // back button feels like back-navigation. Otherwise fall through to
-    // the feed and pop /p/<slug> from the URL.
     if (productOpenedFromLook) {
       setSelectedLook(productOpenedFromLook);
       setProductOpenedFromLook(null);

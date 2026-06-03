@@ -74,7 +74,12 @@ export function useOverlayRouter({
   onOpenLook,
   onOpenBrand,
 }: UseOverlayRouterArgs) {
-  // Push /p/<slug> when a product opens.
+  // Push /p/<slug> when a product opens. We pushState (not replaceState)
+  // when transitioning FROM a different surface (so the browser back
+  // button pops back to the previous overlay), and replaceState when
+  // the URL is just being normalised on a same-product reload. The
+  // distinction is detected by comparing the existing path's overlay
+  // prefix to the one we're about to push.
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (!selectedProduct) return;
@@ -85,12 +90,24 @@ export function useOverlayRouter({
     });
     if (!slug) return;
     const target = `/p/${slug}`;
-    if (window.location.pathname !== target) {
-      window.history.replaceState({}, '', target);
+    const current = window.location.pathname;
+    if (current === target) return;
+    // If we're coming from a look / brand / feed (anywhere that ISN'T
+    // already /p/), push a new entry so back can pop us back to it.
+    // Navigating between two products keeps replaceState so the back
+    // button doesn't have to peel through every product the user
+    // browsed in a single session.
+    if (current.startsWith('/p/')) {
+      window.history.replaceState({ overlay: 'product' }, '', target);
+    } else {
+      window.history.pushState({ overlay: 'product' }, '', target);
     }
   }, [selectedProduct]);
 
-  // Push /l/<slug> when a look opens.
+  // Push /l/<slug> when a look opens. Same push-vs-replace rule as
+  // product above: pushState when transitioning FROM a non-look
+  // surface so back goes back; replaceState when the URL is just
+  // being normalised on the same look.
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (!selectedLook) return;
@@ -102,8 +119,12 @@ export function useOverlayRouter({
     });
     if (!slug) return;
     const target = `/l/${slug}`;
-    if (window.location.pathname !== target) {
-      window.history.replaceState({}, '', target);
+    const current = window.location.pathname;
+    if (current === target) return;
+    if (current.startsWith('/l/')) {
+      window.history.replaceState({ overlay: 'look' }, '', target);
+    } else {
+      window.history.pushState({ overlay: 'look' }, '', target);
     }
   }, [selectedLook]);
 
@@ -119,27 +140,14 @@ export function useOverlayRouter({
     }
   }, [brandFilter]);
 
-  // Pop /b/ when the brand overlay closes. Product close handles its own
-  // pop in the route component (it has more state to clear).
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (brandFilter) return;
-    if (window.location.pathname.startsWith('/b/')) {
-      window.history.replaceState({}, '', '/');
-    }
-  }, [brandFilter]);
-
-  // Pop /l/ when the look overlay closes. Without this the URL stayed
-  // pinned on /l/<slug> after the user backed out of a look, so a tab
-  // refresh re-opened the same look every time and the address bar
-  // stopped reflecting the actual surface.
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (selectedLook) return;
-    if (window.location.pathname.startsWith('/l/')) {
-      window.history.replaceState({}, '', '/');
-    }
-  }, [selectedLook]);
+  // (Removed: the old "pop /l/ on close" and "pop /b/ on close" effects
+  // replaceState'd to '/' whenever the corresponding overlay's state
+  // cleared. With the new pushState-on-open model that was wrong — it
+  // overwrote the pushed history entry and broke the browser back
+  // button. State cleanup is now driven by the popstate listener in
+  // routes/_index.tsx, which fires when the URL changes from /l/ → /
+  // (or /p/ → /l/, etc.) and the in-app close handlers call
+  // history.back() to trigger that same pop path.)
 
   // Fresh-load consumer: on mount, read the route param Remix gave us
   // and open the matching modal once. After this, in-app navigation
