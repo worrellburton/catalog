@@ -469,6 +469,68 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
     setTimeout(onClose, 320);
   }, [onClose]);
 
+  // Mobile drag-to-dismiss on the WHOLE overlay (not just the info
+  // column). The existing onTouchStart/Move/End handlers below only
+  // armed on .look-info-col, so swiping down on the video — the
+  // dominant mobile surface — did nothing. This effect mirrors the
+  // ProductPage approach exactly: attach native listeners to the
+  // scroller root, only engage at scrollTop=0, slide the whole
+  // overlay's transform, and fire handleClose at the same > 96 px /
+  // velocity > 0.6 thresholds. Bails on desktop and ignores any
+  // touch starting from an interactive control (so taps still work).
+  useEffect(() => {
+    const overlay = overlayRef.current;
+    const scroller = scrollRef.current;
+    if (!overlay || !scroller) return;
+    if (typeof window === 'undefined') return;
+    if (window.matchMedia('(min-width: 960px)').matches) return;
+    const drag = { startY: 0, startTime: 0, active: false };
+    const onStart = (e: TouchEvent) => {
+      if (scroller.scrollTop > 0) return;
+      // Don't hijack drags that start on a button / link / input —
+      // the close chevron, bookmark button, product card, etc. all
+      // need their tap to land normally.
+      const t = e.target as HTMLElement | null;
+      if (t && t.closest('button, a, input, textarea, [role="button"]')) return;
+      drag.startY = e.touches[0].clientY;
+      drag.startTime = performance.now();
+      drag.active = true;
+    };
+    const onMove = (e: TouchEvent) => {
+      if (!drag.active) return;
+      const dy = e.touches[0].clientY - drag.startY;
+      if (dy <= 0) {
+        overlay.style.transform = '';
+        overlay.classList.remove('is-dragging');
+        drag.active = false;
+        return;
+      }
+      overlay.classList.add('is-dragging');
+      overlay.style.transform = `translateY(${dy}px)`;
+    };
+    const onEnd = (e: TouchEvent) => {
+      if (!drag.active) return;
+      const endY = e.changedTouches[0].clientY;
+      const dy = endY - drag.startY;
+      const dt = performance.now() - drag.startTime;
+      const velocity = dt > 0 ? dy / dt : 0;
+      overlay.classList.remove('is-dragging');
+      overlay.style.transform = '';
+      drag.active = false;
+      if (dy > 96 || velocity > 0.6) handleClose();
+    };
+    scroller.addEventListener('touchstart', onStart, { passive: true });
+    scroller.addEventListener('touchmove', onMove, { passive: true });
+    scroller.addEventListener('touchend', onEnd, { passive: true });
+    scroller.addEventListener('touchcancel', onEnd, { passive: true });
+    return () => {
+      scroller.removeEventListener('touchstart', onStart);
+      scroller.removeEventListener('touchmove', onMove);
+      scroller.removeEventListener('touchend', onEnd);
+      scroller.removeEventListener('touchcancel', onEnd);
+    };
+  }, [handleClose]);
+
   // Swipe-down to dismiss (mobile handle area)
   const handleTouchStart = useCallback((e: React.TouchEvent) => {
     setTouchStartY(e.touches[0].clientY);
