@@ -45,6 +45,12 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+  /* Bias the visible crop toward the upper portion of the source
+     photo where the face usually sits. With default object-position:
+     center, tightly framed selfies showed only the lower half of the
+     face (eyes/nose/mouth) and chopped the top of the head — exactly
+     what the user just reported on the Profile page. */
+  object-position: center 28%;
   border-radius: 50%;
   display: block;
 }
