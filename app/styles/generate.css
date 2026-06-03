@@ -1655,11 +1655,29 @@ html[data-shell="catalog-app"] .gen-page {
    - Phone-frame max-height tightened so the video doesn't crowd the
      buttons on shorter devices. */
 @media (max-width: 768px) {
+  /* Restyled the mobile result page to feel like a standard look
+     page (LookOverlay): full-bleed 9:16 hero video, the look-overlay
+     product card row style, glass back chevron in the corner.
+     Drops the "Generate" h2 + subhead on mobile because look pages
+     don't carry a title block. */
   .gen-step-result {
-    padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 24px);
+    padding: 0 0 calc(env(safe-area-inset-bottom, 0px) + 24px);
   }
+  .gen-step-result > h2,
+  .gen-step-result > p:first-of-type {
+    display: none;
+  }
+  /* Video frame fills the viewport width like a LookOverlay hero
+     instead of sitting tiny in the middle of the screen. */
   .gen-step-result .gen-build-frame {
-    width: min(280px, 70vw, calc((100dvh - 360px) * 9 / 16));
+    width: 100%;
+    max-width: none;
+    border-radius: 0;
+    aspect-ratio: 9 / 16;
+    max-height: 78dvh;
+  }
+  .gen-step-result .gen-result-stage {
+    width: 100%;
   }
   .gen-step-result .gen-result-actions {
     display: grid;
@@ -1675,9 +1693,73 @@ html[data-shell="catalog-app"] .gen-page {
   .gen-step-result .gen-result-actions .gen-btn-primary {
     grid-column: 1 / -1;
   }
+  /* Mirror LookOverlay's .product-card: 12px gap, 72×72 thumb,
+     name on the right with brand caption + price. */
   .gen-step-result .gen-result-products {
-    padding: 0 12px;
-    margin-top: 16px;
+    padding: 18px 12px 0;
+    margin-top: 0;
+  }
+  .gen-step-result .gen-result-products-label {
+    /* LookOverlay uses tabs, not a label. Closest equivalent is a
+       discreet section heading; tone it to match. */
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    color: rgba(255, 255, 255, 0.55);
+    margin-bottom: 12px;
+  }
+  .gen-step-result .gen-result-product {
+    gap: 12px;
+    padding: 10px 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border: none;
+    border-radius: 12px;
+  }
+  .gen-step-result .gen-result-product-img {
+    width: 72px;
+    height: 72px;
+    border-radius: 12px;
+  }
+  .gen-step-result .gen-result-product-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .gen-step-result .gen-result-product-price {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.45);
+  }
+  .gen-step-result .gen-result-product-role {
+    font-size: 10px;
+    letter-spacing: 0.10em;
+    color: rgba(255, 255, 255, 0.55);
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+  /* Back button on the result page becomes a corner glass chevron
+     like LookOverlay's .look-back-btn-mobile. */
+  .gen-step-result ~ .gen-back-link,
+  .gen-page:has(.gen-step-result) .gen-back-link {
+    position: fixed;
+    top: calc(env(safe-area-inset-top, 0px) + 12px);
+    left: 12px;
+    z-index: 60;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(12px) saturate(1.2);
+    -webkit-backdrop-filter: blur(12px) saturate(1.2);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .gen-page:has(.gen-step-result) .gen-back-link span {
+    display: none;
   }
   .gen-step-result .gen-feedback,
   .gen-step-result .gen-feedback-done {
