@@ -23,6 +23,7 @@ import { useShopperBody } from '~/hooks/useShopperBody';
 import { usePageSections, isSectionEnabled, getSectionLimit } from '~/hooks/usePageSections';
 import SizeMatchBadge, { SizeMatchSummary } from './SizeMatchBadge';
 import { getLookSimilarityThreshold, DEFAULT_LOOK_SIMILARITY } from '~/services/dials';
+import SimilarDebugModal, { type SimilarDebugReport } from './SimilarDebugModal';
 
 /**
  * Pads `arr` to exactly `count` items by cycling duplicates (with synthetic
@@ -294,6 +295,103 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
       moreFromCreator: fillLooks(c, 8),
     };
   }, [look.id, look.creator, look.products, look.gender, allLooks, ymalGenderFilter, lookSimilarityThreshold]);
+
+  // Super-admin "why this rail?" debug for the name-match "Similar looks".
+  // Unlike the product rail (embedding cosine), looks are matched by exact
+  // shared product names + gender, so the report recomputes that math here.
+  const isSuperAdmin = user?.role === 'super_admin';
+  const [simDebug, setSimDebug] = useState<{ open: boolean; report: SimilarDebugReport | null }>(
+    { open: false, report: null },
+  );
+  const openSimilarLooksDebug = useCallback(() => {
+    const SEED_CREATORS = new Set(['@lilywittman', '@garrett']);
+    const source = (allLooks || allLooksData)
+      .filter(l => l.id !== look.id)
+      .filter(l => !SEED_CREATORS.has(l.creator));
+    const seedNames = Array.from(new Set(
+      (look.products || []).map(p => p.name.toLowerCase().trim()).filter(Boolean),
+    ));
+    const seedSet = new Set(seedNames);
+    const effectiveSeedGender: 'men' | 'women' | 'unisex' =
+      look.gender === 'unisex' && ymalGenderFilter !== 'all' ? ymalGenderFilter : look.gender;
+    const minMatches = Math.max(1, Math.ceil(seedSet.size * lookSimilarityThreshold / 100));
+
+    const scored = source.map(l => {
+      const matchCount = (l.products || []).filter(p => seedSet.has(p.name.toLowerCase().trim())).length;
+      const genderOk = effectiveSeedGender === 'unisex' || l.gender === 'unisex' || effectiveSeedGender === l.gender;
+      const included = seedSet.size > 0 && genderOk && matchCount >= minMatches;
+      return { l, matchCount, genderOk, included };
+    });
+    // Show every look that shares ≥1 product (the interesting set), included first.
+    const relevant = scored
+      .filter(s => s.matchCount > 0)
+      .sort((a, b) => (Number(b.included) - Number(a.included)) || (b.matchCount - a.matchCount));
+    const includedCount = scored.filter(s => s.included).length;
+
+    const report: SimilarDebugReport = {
+      title: 'Similar looks — shared products',
+      subtitle: `Seed look #${look.id}${look.creatorDisplayName ? ` · ${look.creatorDisplayName}` : ''}`,
+      badges: [
+        { label: 'dial', value: String(lookSimilarityThreshold), tone: 'accent' },
+        { label: 'seed products', value: String(seedSet.size) },
+        { label: 'min matches', value: String(minMatches), tone: 'bad' },
+        { label: 'gender', value: effectiveSeedGender },
+        { label: 'candidates', value: String(source.length) },
+        { label: 'shown', value: String(includedCount), tone: 'good' },
+      ],
+      sections: [
+        {
+          heading: 'How it’s fetched',
+          lines: [
+            'Source: the in-memory looks dataset (no RPC) — every loaded look except this one and the legacy seed creators (@lilywittman, @garrett).',
+            'No embeddings here: looks are matched purely by the product names they contain.',
+          ],
+        },
+        {
+          heading: 'The logic (gates)',
+          lines: [
+            `1. Gender — seed is "${look.gender}"${look.gender === 'unisex' ? `, resolved to "${effectiveSeedGender}" via the shopper filter` : ''}. A candidate passes if either side is unisex or both match.`,
+            `2. Shared products — the candidate must contain at least minMatches of the seed’s ${seedSet.size} product name(s).`,
+            'Name match is exact (lowercased/trimmed) — "same hat" means the identical product, not just the same category.',
+          ],
+        },
+        {
+          heading: 'How it calculated this rail',
+          lines: [
+            `minMatches = max(1, ceil(${seedSet.size} seed products × dial ${lookSimilarityThreshold}/100)) = ${minMatches}.`,
+            `Seed products: ${seedNames.length ? seedNames.join(', ') : '(none — rail stays empty)'}.`,
+            `${includedCount} look(s) cleared both gates and feed the rail (capped at the section limit).`,
+          ],
+        },
+      ],
+      columns: [
+        { key: 'id', label: 'Look' },
+        { key: 'creator', label: 'Creator' },
+        { key: 'matches', label: 'Matches', align: 'right' },
+        { key: 'gender', label: 'Gender' },
+        { key: 'verdict', label: 'Verdict' },
+      ],
+      rows: relevant.map(s => ({
+        id: String(s.l.id),
+        included: s.included,
+        cells: {
+          id: { text: `#${s.l.id}`, tone: 'muted' },
+          creator: { text: s.l.creatorDisplayName || s.l.creator || '—' },
+          matches: { text: `${s.matchCount}/${minMatches}`, tone: s.matchCount >= minMatches ? 'good' : 'muted' },
+          gender: { text: s.l.gender, tone: s.genderOk ? undefined : 'bad' },
+          verdict: s.included
+            ? { text: 'shown', tone: 'good' }
+            : !s.genderOk
+              ? { text: 'cut · gender', tone: 'bad' }
+              : { text: 'cut · too few matches', tone: 'muted' },
+        },
+      })),
+      footnote: relevant.length > includedCount
+        ? `Rows below the shown set share a product but fell short of the gates. Looks with 0 shared products are omitted from this table.`
+        : undefined,
+    };
+    setSimDebug({ open: true, report });
+  }, [look, allLooks, ymalGenderFilter, lookSimilarityThreshold]);
 
   // About-tab strip: all looks by this creator (including current look when
   // there are no others). Falls back to similar looks so the strip always
@@ -816,7 +914,20 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
             Popular fallback when nothing matches. */}
         {similarEnabled && feedSections.looksLikeThis.length > 0 && (
           <div className="look-feed-section">
-            <h3 className="look-feed-heading">More like this</h3>
+            <h3 className="look-feed-heading">
+              More like this
+              {isSuperAdmin && (
+                <button
+                  type="button"
+                  className="sim-debug-btn"
+                  onClick={openSimilarLooksDebug}
+                  aria-label="Why these? (super-admin debug)"
+                  title="Why these? (super-admin debug)"
+                >
+                  ⓘ why
+                </button>
+              )}
+            </h3>
             <div className="look-feed-grid">
               {feedSections.looksLikeThis.slice(0, similarLimit).map(fl => (
                 <LookCard
@@ -895,6 +1006,12 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
           />
         </div>
       </div>
+      {simDebug.open && (
+        <SimilarDebugModal
+          report={simDebug.report}
+          onClose={() => setSimDebug({ open: false, report: null })}
+        />
+      )}
     </div>
   );
 }

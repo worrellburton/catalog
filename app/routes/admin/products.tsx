@@ -6,6 +6,7 @@ import {
   clickThroughRate,
   type ProductAnalyticsRow,
 } from '~/services/analytics';
+import { regeneratePrimaryPoster, PosterRegenError } from '~/services/regenerate-poster';
 
 interface ProductVariant {
   size: string | null;
@@ -50,6 +51,9 @@ interface ProductRow {
   brand: string | null;
   price: string | null;
   image_url: string | null;
+  primary_image_url: string | null;
+  primary_video_url: string | null;
+  primary_video_poster_url: string | null;
   created_at: string;
 }
 
@@ -95,7 +99,7 @@ function ProductEnrichmentPanel({ productId }: { productId: string }) {
 
   if (loading) {
     return (
-      <td colSpan={7}>
+      <td colSpan={8}>
         <div className="admin-enrichment-panel">
           <div className="admin-empty" style={{ padding: '12px 0' }}>Loading enrichment data…</div>
         </div>
@@ -105,7 +109,7 @@ function ProductEnrichmentPanel({ productId }: { productId: string }) {
 
   if (!data) {
     return (
-      <td colSpan={7}>
+      <td colSpan={8}>
         <div className="admin-enrichment-panel">
           <div className="admin-empty" style={{ padding: '12px 0' }}>No data found.</div>
         </div>
@@ -123,7 +127,7 @@ function ProductEnrichmentPanel({ productId }: { productId: string }) {
     : [];
 
   return (
-    <td colSpan={7}>
+    <td colSpan={8}>
       <div className="admin-enrichment-panel">
         {/* Row 1: images strip */}
         {data.images && data.images.length > 0 && (
@@ -361,9 +365,26 @@ export default function AdminProducts() {
   const [loaded, setLoaded] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [searchParams, setSearchParams] = useSearchParams();
+  // Products with an in-flight poster regeneration, and the last error per row.
+  const [regenerating, setRegenerating] = useState<Set<string>>(new Set());
+  const [regenError, setRegenError] = useState<Record<string, string>>({});
 
   const handleRowClick = useCallback((id: string) => {
     setSelectedId(prev => (prev === id ? null : id));
+  }, []);
+
+  const handleRegenerate = useCallback(async (p: ProductRow) => {
+    setRegenError(prev => { const next = { ...prev }; delete next[p.id]; return next; });
+    setRegenerating(prev => new Set(prev).add(p.id));
+    try {
+      const posterUrl = await regeneratePrimaryPoster(p.id, p.primary_video_url, p.primary_video_poster_url);
+      setProducts(prev => prev.map(row => (row.id === p.id ? { ...row, primary_video_poster_url: posterUrl } : row)));
+    } catch (err) {
+      const msg = err instanceof PosterRegenError ? err.message : 'Poster regeneration failed.';
+      setRegenError(prev => ({ ...prev, [p.id]: msg }));
+    } finally {
+      setRegenerating(prev => { const next = new Set(prev); next.delete(p.id); return next; });
+    }
   }, []);
   const brandFilter = searchParams.get('brand') || null;
 
@@ -372,7 +393,7 @@ export default function AdminProducts() {
     let cancelled = false;
     supabase
       .from('products')
-      .select('id, name, brand, price, image_url, created_at')
+      .select('id, name, brand, price, image_url, primary_image_url, primary_video_url, primary_video_poster_url, created_at')
       .order('created_at', { ascending: false })
       .limit(500)
       .then(({ data }) => {
@@ -480,6 +501,7 @@ export default function AdminProducts() {
                 <th>Product</th>
                 <th>Brand</th>
                 <th>Price</th>
+                <th>Primary poster</th>
                 <th className="admin-th-num">Impressions</th>
                 <th className="admin-th-num">Clicks</th>
                 <th className="admin-th-num">Clickouts</th>
@@ -514,6 +536,54 @@ export default function AdminProducts() {
                       </td>
                       <td className="admin-cell-muted">{p.brand || '—'}</td>
                       <td>{p.price || '—'}</td>
+                      <td onClick={e => e.stopPropagation()}>
+                        {(() => {
+                          const poster = p.primary_video_poster_url || p.primary_image_url;
+                          const busy = regenerating.has(p.id);
+                          const err = regenError[p.id];
+                          return (
+                            <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                              <span style={{
+                                position: 'relative', width: 36, height: 48, borderRadius: 6, flexShrink: 0,
+                                overflow: 'hidden', background: '#f1f5f9', display: 'inline-block',
+                              }}>
+                                {poster ? (
+                                  <img
+                                    src={poster}
+                                    alt=""
+                                    style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block', opacity: busy ? 0.4 : 1 }}
+                                    loading="lazy"
+                                  />
+                                ) : (
+                                  <span style={{ display: 'flex', width: '100%', height: '100%', alignItems: 'center', justifyContent: 'center', fontSize: 9, color: '#bbb' }}>
+                                    none
+                                  </span>
+                                )}
+                                {busy && (
+                                  <span style={{
+                                    position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center',
+                                  }}>
+                                    <span className="admin-spinner" style={{ width: 14, height: 14 }} />
+                                  </span>
+                                )}
+                              </span>
+                              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+                                <button
+                                  type="button"
+                                  className="admin-btn admin-btn-secondary"
+                                  style={{ padding: '4px 10px', fontSize: 12 }}
+                                  disabled={busy || !p.primary_video_url}
+                                  title={!p.primary_video_url ? 'No primary video — nothing to extract a poster from' : 'Re-extract the poster from the primary video'}
+                                  onClick={() => handleRegenerate(p)}
+                                >
+                                  {busy ? 'Regenerating…' : 'Regenerate'}
+                                </button>
+                                {err && <span style={{ fontSize: 10, color: '#b91c1c', maxWidth: 180 }}>{err}</span>}
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </td>
                       <td className="admin-cell-num">{(a?.total_impressions ?? 0).toLocaleString()}</td>
                       <td className="admin-cell-num">{(a?.total_clicks      ?? 0).toLocaleString()}</td>
                       <td className="admin-cell-num">{(a?.total_clickouts   ?? 0).toLocaleString()}</td>
