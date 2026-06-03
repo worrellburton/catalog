@@ -67,6 +67,31 @@ export default function AddProductV2({ onCancel, onQueued }: Props) {
   const [progress, setProgress] = useState(0);
   const [queuedUrl, setQueuedUrl] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
+  const rootRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
+
+  // Track the soft-keyboard height on mobile via visualViewport so the
+  // hero re-centers in the SHRUNKEN viewport when the keyboard opens.
+  // Without this the input slides under the keyboard the moment the
+  // user taps it. We write the height to a CSS variable that the
+  // .apv2-hero rule reads (--apv2-kb).
+  useEffect(() => {
+    const vv = typeof window !== 'undefined' ? window.visualViewport : null;
+    if (!vv) return;
+    const root = rootRef.current;
+    if (!root) return;
+    const sync = () => {
+      const kb = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      root.style.setProperty('--apv2-kb', `${Math.round(kb)}px`);
+    };
+    vv.addEventListener('resize', sync);
+    vv.addEventListener('scroll', sync);
+    sync();
+    return () => {
+      vv.removeEventListener('resize', sync);
+      vv.removeEventListener('scroll', sync);
+    };
+  }, []);
   const tickerRef = useRef<number | null>(null);
 
   // Spring the page in on first frame so the hero card animation hits.
@@ -151,7 +176,7 @@ export default function AddProductV2({ onCancel, onQueued }: Props) {
   }, []);
 
   return (
-    <div className={`apv2${mounted ? ' is-mounted' : ''}`}>
+    <div ref={rootRef} className={`apv2${mounted ? ' is-mounted' : ''}`}>
       {/* Particle field — same backdrop as Create a Look. */}
       <div className="apv2-particles" aria-hidden="true">
         <ParticleBackground />
@@ -177,12 +202,22 @@ export default function AddProductV2({ onCancel, onQueued }: Props) {
           <span className="apv2-hero-label">Tell me the product or paste a link.</span>
           <div className="apv2-input-row">
             <input
+              ref={inputRef}
               type="text"
               className="apv2-input"
               placeholder="e.g. cream linen camp shirt — or https://…"
               value={input}
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void handleGo(); } }}
+              onFocus={() => {
+                // Belt-and-suspenders for browsers without visualViewport
+                // (or where the timing of the variable update lags). Wait
+                // a frame past the keyboard's open animation, then bring
+                // the input into the center of whatever is visible.
+                window.setTimeout(() => {
+                  inputRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
+                }, 250);
+              }}
               autoFocus
             />
             <button

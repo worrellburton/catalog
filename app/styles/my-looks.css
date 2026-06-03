@@ -2936,7 +2936,13 @@ html[data-shell="catalog-app"] .my-looks-overlay {
 
 .apv2-hero {
   flex: 1;
-  min-height: 70vh;
+  /* Re-center inside the VISIBLE viewport (full viewport minus the
+     soft keyboard, written to --apv2-kb by visualViewport on mount).
+     Without subtracting --apv2-kb the input slid under the keyboard
+     the moment the user tapped it. The minus accounts for the
+     header chrome too so the card has room to breathe. */
+  min-height: calc(70vh - var(--apv2-kb, 0px));
+  max-height: calc(100vh - var(--apv2-kb, 0px) - 80px);
   display: flex;
   flex-direction: column;
   align-items: center;
@@ -2945,6 +2951,8 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   width: 100%;
   max-width: 520px;
   margin: 0 auto;
+  transition: min-height 220ms cubic-bezier(.32, .72, 0, 1),
+              max-height 220ms cubic-bezier(.32, .72, 0, 1);
 }
 .apv2-hero-card {
   width: 132px;
