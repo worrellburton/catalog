@@ -26,6 +26,21 @@
   pointer-events: none;
 }
 
+/* While the user is mid-drag we want every frame of the touchmove
+   translate to land instantly — no transition smoothing in the way.
+   When the drag ends we either fire handleClose (which sets
+   .look-overlay--out and the opacity fade lands) or we clear the
+   transform, letting the snap-back happen via a single ~180ms
+   transition restored when .is-dragging is dropped. */
+.look-overlay {
+  transition: opacity 0.28s cubic-bezier(0.32, 0.72, 0, 1),
+              transform 0.18s cubic-bezier(0.32, 0.72, 0, 1);
+  will-change: opacity, transform;
+}
+.look-overlay.is-dragging {
+  transition: opacity 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+}
+
 /* ── Left: media column (42%) ── */
 .look-media-col {
   flex: 0 0 42%;
