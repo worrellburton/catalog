@@ -67,6 +67,8 @@ interface SupabaseLook {
       url: string;
       image_url: string;
       primary_image_url: string | null;
+      primary_video_url: string | null;
+      primary_video_poster_url: string | null;
     };
   }[];
 }
@@ -103,7 +105,9 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
           price,
           url,
           image_url,
-          primary_image_url
+          primary_image_url,
+          primary_video_url,
+          primary_video_poster_url
         )
       )
     `)
@@ -265,6 +269,16 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
           price: lp.products?.price || '',
           url: lp.products?.url || '',
           image: lp.products?.primary_image_url || lp.products?.image_url,
+          // Surfacing the product's own polished video on the look-overlay
+          // product list. LookOverlay renders ProductMiniMedia which starts
+          // with the poster (image) and swaps to the muted+looping video
+          // once it can play. Both fields are nullable — when missing the
+          // poster image alone is shown.
+          video_url: lp.products?.primary_video_url || undefined,
+          thumbnail_url: lp.products?.primary_video_poster_url
+            || lp.products?.primary_image_url
+            || lp.products?.image_url
+            || undefined,
         })),
     };
   });

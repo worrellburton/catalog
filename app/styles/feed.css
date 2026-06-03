@@ -277,12 +277,19 @@
   border-radius: 10px;
   overflow: hidden;
   flex-shrink: 0;
+  /* ProductMiniMedia stacks absolute <img>+<video>. */
+  position: relative;
+  background: rgba(255, 255, 255, 0.06);
 }
 
-.inline-product-thumb img {
+.inline-product-thumb img,
+.inline-product-thumb video {
   width: 100%;
   height: 100%;
-  object-fit: cover;
+  /* contain so the full product silhouette is visible — see the
+     matching note on .product-thumb-img in look-overlay.css. */
+  object-fit: contain;
+  object-position: center;
 }
 
 .inline-product-thumb-placeholder {
