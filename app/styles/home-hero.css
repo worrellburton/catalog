@@ -645,22 +645,20 @@
      into the bar's reserved zone — on tight viewports the flex-end + small
      reservation collapse let the bar overlap "What are you shopping for?". */
   .sfh {
-    /* Mobile: full svh so the spark/headline/search-bar trio keeps its
-       known-good vertical math (justify-content:flex-end + padding-bottom
-       42vh + fixed bar at bottom:32vh). The "feed peek" is produced by a
-       negative margin-top on .home-results-reveal below — that pulls the
-       feed up by ~14svh independent of the hero's internal layout, so the
-       trio stays centered. (Shrinking .sfh itself moved the headline up
-       while the fixed bar held its viewport position, opening a gap.) */
+    /* Mobile reserves enough bottom padding that the headline is
+       GUARANTEED to land above the search bar, regardless of which
+       hero rule wins for `.bottom-bar { bottom }`. The bar can land
+       anywhere from 32vh (intended mobile) to 46vh (default cascade
+       when the mobile rule loses), so the worst-case top edge of
+       the bar is 100 − 46 − 7 ≈ 47vh from top. padding-bottom: 56vh
+       holds the stage bottom at ≤ 44vh from the top — ~3vh of
+       breathing room above the bar in the worst case.
+       Previous 42vh was tuned to bar bottom:32vh only; when 46vh
+       won the cascade the headline fell BELOW the bar (the bug). */
     min-height: 100svh;
-    /* flex-end anchors spark+headline to the inner-area bottom. We need
-       padding-bottom > (100% − bar_top_position) so the stage cannot
-       overflow into the bar zone. Bar top = 100 − bar.bottom − bar.height
-       ≈ 100 − 32 − 7 = 61% from top → padding-bottom must be ≥ 42vh to
-       keep stage bottom at ≤ 58% (a 22px / ~3vh gap above the bar). */
     justify-content: flex-end;
     padding-top: calc(env(safe-area-inset-top, 0px) + 90px);
-    padding-bottom: 42vh;
+    padding-bottom: 56vh;
   }
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar,
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar.search-open {

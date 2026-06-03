@@ -2982,3 +2982,49 @@ html[data-shell="catalog-app"] .gen-page {
   border: 1px solid rgba(251, 191, 36, 0.25);
   color: #fde047;
 }
+
+/* Brand chip row — sits between the row head (label + search) and
+   the scrollable card row. Top 4 brands present in that category.
+   Glowing pill: white-on-dark with a soft outer halo, brighter when
+   active. Tap toggles the filter; the active chip stays lit. */
+.gen-cat-row-brands {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 0 4px 10px;
+  margin-top: -4px;
+  touch-action: pan-x pan-y;
+}
+.gen-cat-row-brands::-webkit-scrollbar { display: none; }
+.gen-cat-row-brand {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.78);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: background 180ms ease, border-color 180ms ease,
+              color 180ms ease, box-shadow 220ms ease;
+}
+.gen-cat-row-brand:hover {
+  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.16);
+}
+.gen-cat-row-brand.is-active {
+  background: rgba(255, 255, 255, 0.92);
+  color: #111;
+  border-color: rgba(255, 255, 255, 0.92);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.45),
+    0 0 14px rgba(255, 255, 255, 0.45),
+    0 6px 18px rgba(255, 255, 255, 0.22);
+}

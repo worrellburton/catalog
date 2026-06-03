@@ -33,11 +33,17 @@ import {
   type ReactNode,
 } from 'react';
 
-// Pool cap. Sized to cover 2 viewports of grid cards (~12) plus the full
-// overlay slot budget (~24 across looksLikeThis / popular / moreFromCreator
-// / aboutCreatorStrip / YMAL). 64 leaves room for both without LRU
-// evictions clearing src on still-visible cards.
-const POOL_MAX = 64;
+// Pool cap. Mobile pays the real cost: 64 live <video> elements is
+// fine on a desktop GPU but on iOS Safari each one holds GPU surfaces
+// AND a software decoder, so after chaining a few product
+// navigations the page felt locked / sluggish. We split the cap so
+// mobile keeps a tight pool (1.5 viewports of grid + the overlay's
+// own slot budget) while desktop keeps the generous 64-slot cap that
+// covers two viewports plus the full overlay rail set.
+const POOL_MAX = typeof window !== 'undefined'
+  && window.matchMedia?.('(max-width: 768px)').matches
+  ? 18
+  : 64;
 
 interface TrailVideoManager {
   /** Attach the element for `id` (creating if needed) into `container`.
