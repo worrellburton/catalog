@@ -1202,6 +1202,95 @@ export default function AdminData() {
     }, { replace: false });
   }, [setSearchParams]);
   const [productFilter, setProductFilter] = useState<'all' | 'no-creative' | 'active' | 'inactive' | 'untagged' | 'soft-deleted'>('all');
+
+  // Date-added filter for the Products table. 'all' lets every row
+  // through. 'week' / 'month' use rolling-window cutoffs (created_at
+  // newer than now() − N days). 'before' / 'after' / 'on' use the
+  // dateRefIso anchor; 'between' uses dateRefIso + dateRefIsoEnd.
+  // We keep ISO strings (yyyy-mm-dd) for the inputs and parse them
+  // into Date boundaries inside the predicate so the UI state
+  // serializes cleanly into the URL later if we want shareable
+  // filter links.
+  type DateFilterMode = 'all' | 'week' | 'month' | 'today' | 'before' | 'on' | 'after' | 'between';
+  const [dateFilter, setDateFilter] = useState<DateFilterMode>('all');
+  const [dateRefIso, setDateRefIso] = useState<string>('');
+  const [dateRefIsoEnd, setDateRefIsoEnd] = useState<string>('');
+  const [datePopoverOpen, setDatePopoverOpen] = useState(false);
+  const datePopoverRef = useRef<HTMLDivElement | null>(null);
+  // Close on click-away or Escape so the popover doesn't sit stuck
+  // open when the admin clicks back into a row.
+  useEffect(() => {
+    if (!datePopoverOpen) return;
+    const onClick = (e: MouseEvent) => {
+      if (datePopoverRef.current && !datePopoverRef.current.contains(e.target as Node)) {
+        setDatePopoverOpen(false);
+      }
+    };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setDatePopoverOpen(false); };
+    document.addEventListener('mousedown', onClick);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('mousedown', onClick);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [datePopoverOpen]);
+
+  // Pre-compute the rolling window boundaries once per render so the
+  // memoised filter doesn't re-instantiate Date objects per row.
+  const dateWindow = useMemo(() => {
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+    const weekAgo = startOfToday - 7 * 24 * 60 * 60 * 1000;
+    const monthAgo = startOfToday - 30 * 24 * 60 * 60 * 1000;
+    const parseAnchor = (iso: string): { startMs: number; endMs: number } | null => {
+      if (!iso) return null;
+      const [y, m, d] = iso.split('-').map(Number);
+      if (!y || !m || !d) return null;
+      const start = new Date(y, m - 1, d).getTime();
+      const end = new Date(y, m - 1, d + 1).getTime();
+      return { startMs: start, endMs: end };
+    };
+    return {
+      startOfToday,
+      weekAgo,
+      monthAgo,
+      ref: parseAnchor(dateRefIso),
+      refEnd: parseAnchor(dateRefIsoEnd),
+    };
+  }, [dateRefIso, dateRefIsoEnd]);
+
+  const matchesDateFilter = useCallback((createdAt: string | null | undefined): boolean => {
+    if (dateFilter === 'all') return true;
+    if (!createdAt) return false;
+    const t = new Date(createdAt).getTime();
+    if (Number.isNaN(t)) return false;
+    switch (dateFilter) {
+      case 'today':  return t >= dateWindow.startOfToday;
+      case 'week':   return t >= dateWindow.weekAgo;
+      case 'month':  return t >= dateWindow.monthAgo;
+      case 'before': return dateWindow.ref ? t < dateWindow.ref.startMs : true;
+      case 'on':     return dateWindow.ref ? (t >= dateWindow.ref.startMs && t < dateWindow.ref.endMs) : true;
+      case 'after':  return dateWindow.ref ? t >= dateWindow.ref.endMs : true;
+      case 'between':
+        if (!dateWindow.ref || !dateWindow.refEnd) return true;
+        return t >= dateWindow.ref.startMs && t < dateWindow.refEnd.endMs;
+      default: return true;
+    }
+  }, [dateFilter, dateWindow]);
+
+  const dateFilterLabel = useMemo(() => {
+    switch (dateFilter) {
+      case 'all':     return 'All time';
+      case 'today':   return 'Added today';
+      case 'week':    return 'This week';
+      case 'month':   return 'This month';
+      case 'before':  return dateRefIso ? `Before ${dateRefIso}` : 'Before…';
+      case 'on':      return dateRefIso ? `On ${dateRefIso}` : 'On…';
+      case 'after':   return dateRefIso ? `After ${dateRefIso}` : 'After…';
+      case 'between': return dateRefIso && dateRefIsoEnd ? `${dateRefIso} → ${dateRefIsoEnd}` : 'Date range…';
+      default:        return 'All time';
+    }
+  }, [dateFilter, dateRefIso, dateRefIsoEnd]);
   const [toast, setToast] = useState<string | null>(null);
   const [generatingIds, setGeneratingIds] = useState<Set<string>>(new Set());
   const [generatePicker, setGeneratePicker] = useState<{ productId: string; productName: string } | null>(null);
@@ -2536,6 +2625,7 @@ export default function AdminData() {
           const hay = `${p.brand} ${p.name}`.toLowerCase();
           if (!hay.includes(adminQuery)) return false;
         }
+        if (!matchesDateFilter(p.created_at)) return false;
         return true;
       }
       if (productFilter === 'no-creative' && p.hasCreative) return false;
@@ -2549,9 +2639,10 @@ export default function AdminData() {
         const hay = `${p.brand} ${p.name}`.toLowerCase();
         if (!hay.includes(adminQuery)) return false;
       }
+      if (!matchesDateFilter(p.created_at)) return false;
       return true;
     }),
-    [allProducts, productFilter, deletedProductKeys, adminQuery, brandFilter]
+    [allProducts, productFilter, deletedProductKeys, adminQuery, brandFilter, matchesDateFilter]
   );
   // sharedTableId opts this table into the cross-admin sort state in
   // app_settings — when one admin clicks a column header, every other
@@ -4323,6 +4414,123 @@ export default function AdminData() {
                 {allProducts.filter(p => deletedProductKeys.has(`${p.brand}-${p.name}`)).length}
               </span>
             </button>
+            {/* Date-added filter. Spacer pushes it to the right edge of
+                the tab row so it reads as a tool, not another category. */}
+            <div style={{ flex: 1 }} />
+            <div ref={datePopoverRef} style={{ position: 'relative' }}>
+              <button
+                type="button"
+                className={`admin-tab ${dateFilter !== 'all' ? 'active' : ''}`}
+                onClick={() => setDatePopoverOpen(v => !v)}
+                title="Filter by when the product was added to the catalog"
+                style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+              >
+                <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="4" width="18" height="18" rx="2" ry="2" />
+                  <line x1="16" y1="2" x2="16" y2="6" />
+                  <line x1="8" y1="2" x2="8" y2="6" />
+                  <line x1="3" y1="10" x2="21" y2="10" />
+                </svg>
+                <span>Date added: {dateFilterLabel}</span>
+                {dateFilter !== 'all' && (
+                  <span
+                    role="button"
+                    aria-label="Clear date filter"
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      setDateFilter('all');
+                      setDateRefIso('');
+                      setDateRefIsoEnd('');
+                    }}
+                    style={{ marginLeft: 4, opacity: 0.7, cursor: 'pointer' }}
+                  >
+                    ×
+                  </span>
+                )}
+              </button>
+              {datePopoverOpen && (
+                <div
+                  style={{
+                    position: 'absolute',
+                    top: 'calc(100% + 6px)',
+                    right: 0,
+                    minWidth: 260,
+                    background: '#fff',
+                    border: '1px solid #e5e7eb',
+                    borderRadius: 12,
+                    boxShadow: '0 18px 50px rgba(0, 0, 0, 0.18)',
+                    padding: 12,
+                    zIndex: 30,
+                    display: 'flex',
+                    flexDirection: 'column',
+                    gap: 8,
+                  }}
+                >
+                  <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#666' }}>
+                    Quick ranges
+                  </div>
+                  <div style={{ display: 'grid', gridTemplateColumns: '1fr 1fr', gap: 6 }}>
+                    {([
+                      ['all',   'All time'],
+                      ['today', 'Today'],
+                      ['week',  'This week'],
+                      ['month', 'This month'],
+                    ] as Array<[DateFilterMode, string]>).map(([mode, label]) => (
+                      <button
+                        key={mode}
+                        type="button"
+                        className={`admin-tab ${dateFilter === mode ? 'active' : ''}`}
+                        onClick={() => {
+                          setDateFilter(mode);
+                          setDateRefIso('');
+                          setDateRefIsoEnd('');
+                          setDatePopoverOpen(false);
+                        }}
+                        style={{ justifyContent: 'center' }}
+                      >
+                        {label}
+                      </button>
+                    ))}
+                  </div>
+                  <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.08em', textTransform: 'uppercase', color: '#666', marginTop: 6 }}>
+                    Custom
+                  </div>
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                    <select
+                      value={dateFilter === 'before' || dateFilter === 'on' || dateFilter === 'after' || dateFilter === 'between' ? dateFilter : 'on'}
+                      onChange={(e) => {
+                        const next = e.target.value as DateFilterMode;
+                        setDateFilter(next);
+                        if (next !== 'between') setDateRefIsoEnd('');
+                      }}
+                      style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 13 }}
+                    >
+                      <option value="before">Before</option>
+                      <option value="on">On</option>
+                      <option value="after">After</option>
+                      <option value="between">Between</option>
+                    </select>
+                    <input
+                      type="date"
+                      value={dateRefIso}
+                      onChange={(e) => setDateRefIso(e.target.value)}
+                      style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 13, flex: 1, minWidth: 0 }}
+                    />
+                  </div>
+                  {dateFilter === 'between' && (
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                      <span style={{ fontSize: 12, color: '#666', width: 70, textAlign: 'right' }}>and</span>
+                      <input
+                        type="date"
+                        value={dateRefIsoEnd}
+                        onChange={(e) => setDateRefIsoEnd(e.target.value)}
+                        style={{ padding: '6px 8px', borderRadius: 8, border: '1px solid #e5e7eb', fontSize: 13, flex: 1, minWidth: 0 }}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
           </div>
         {selectedProductKeys.size > 0 && (
           <div className="admin-bulk-bar" style={{
