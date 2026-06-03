@@ -1875,6 +1875,19 @@ html.admin-on-dark-canvas .admin-topbar,
    Scoped under .admin-toggle (the <label>) so its ::after thumb
    doesn't leak onto the button-based .admin-toggle-btn variant
    below - they share .admin-toggle-track but render differently. */
+/* Status indicator dot for the admin Looks table. Matches the
+   consumer-side palette: green = live in the feed, yellow = inactive
+   (creator hid it OR an admin soft-deleted it via admin_hidden_looks). */
+.admin-status-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.7);
+}
+.admin-status-dot--live     { background: #22c55e; box-shadow: 0 0 6px rgba(34, 197, 94, 0.6); }
+.admin-status-dot--inactive { background: #f59e0b; }
+
 .admin-toggle {
   position: relative;
   display: inline-block;

@@ -382,8 +382,17 @@ export default function MyLooks({ onClose }: MyLooksProps) {
         />
       )}
 
-      {/* Hero — same layout as CreatorPage.creator-hero. */}
-      <div className="my-cat-hero">
+      {/* Hero — the WHOLE block is a button that opens the profile
+          edit screen (photos, name, gender, body, age all live there).
+          The inner "My info" pill is still here for an explicit text
+          affordance, but tapping anywhere on the hero — avatar, name,
+          curated-by, stats — fires the same event. */}
+      <button
+        type="button"
+        className="my-cat-hero my-cat-hero--button"
+        onClick={() => window.dispatchEvent(new CustomEvent('catalog:open-profile'))}
+        aria-label="Edit your catalog identity"
+      >
         {avatarUrl ? (
           <img className="my-cat-hero-avatar" src={avatarUrl} alt={displayName} />
         ) : (
@@ -392,29 +401,27 @@ export default function MyLooks({ onClose }: MyLooksProps) {
         <span className="my-cat-hero-curated">Curated by</span>
         <h1 className="my-cat-hero-name">{displayName}</h1>
 
-        {/* "My info" sits in the same slot where the public CreatorPage
-            shows the Follow button. Tapping it opens the profile/info
-            screen via the catalog:open-profile event the main route
-            listens for. */}
-        <button
-          type="button"
+        {/* "My info" pill still lives in the slot where CreatorPage
+            shows Follow — explicit affordance for the same tap. The
+            inner click stops propagation so the outer hero button
+            doesn't double-fire. */}
+        <span
           className="my-cat-hero-info"
-          onClick={() => window.dispatchEvent(new CustomEvent('catalog:open-profile'))}
-          aria-label="My info"
+          aria-hidden="true"
         >
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <circle cx="12" cy="8" r="4" />
             <path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1" />
           </svg>
           My info
-        </button>
+        </span>
 
         <p className="my-cat-hero-stats">
           {counts.all === 0
             ? 'Your catalog is empty — tap + to publish your first look.'
             : `${counts.all} look${counts.all === 1 ? '' : 's'} · ${counts.live} live · ${counts.draft} draft${counts.draft === 1 ? '' : 's'}`}
         </p>
-      </div>
+      </button>
 
       {/* Status filter pills — replace the old chip row, sit where
           CreatorPage's nav tabs do. */}
@@ -609,18 +616,34 @@ export default function MyLooks({ onClose }: MyLooksProps) {
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="20" x2="21" y2="20"/><rect x="6"  y="11" width="3" height="9"/><rect x="11" y="6"  width="3" height="14"/><rect x="16" y="14" width="3" height="6"/></svg>
                 <span>Analytics</span>
               </button>
-              {/* Live ↔ Hide toggle. Currently live → "Hide" (red dot
-                  on the tile after); anything else (draft, archived,
-                  denied) → "Make live" (green dot after). Same dot
-                  color the tile uses, so the user sees the action map
-                  to the visual state. */}
+              {/* Live ↔ Inactive segmented control. Live on the left
+                  (green), Inactive on the right (yellow). Whichever
+                  pill represents the OTHER state is the action — tap
+                  it to flip there. Mirrors the new tile dot palette
+                  (green=live, yellow=archived/draft/denied). */}
               {(() => {
                 const isLive = trayLook.status === 'live';
                 return (
-                  <button className="my-cat-tray-action" onClick={() => { const l = trayLook; setTrayLook(null); void handleToggleLive(l); }}>
-                    <span className={`my-cat-tray-dot my-cat-tray-dot--${isLive ? 'archived' : 'live'}`} aria-hidden="true" />
-                    <span>{isLive ? 'Hide' : 'Make live'}</span>
-                  </button>
+                  <div className="my-cat-tray-status-row" role="group" aria-label="Visibility">
+                    <button
+                      type="button"
+                      className={`my-cat-tray-status-pill my-cat-tray-status-pill--live${isLive ? ' is-current' : ''}`}
+                      onClick={() => { if (isLive) return; const l = trayLook; setTrayLook(null); void handleToggleLive(l); }}
+                      aria-pressed={isLive}
+                    >
+                      <span className="my-cat-tray-dot my-cat-tray-dot--live" aria-hidden="true" />
+                      <span>{isLive ? 'Live' : 'Go live'}</span>
+                    </button>
+                    <button
+                      type="button"
+                      className={`my-cat-tray-status-pill my-cat-tray-status-pill--inactive${!isLive ? ' is-current' : ''}`}
+                      onClick={() => { if (!isLive) return; const l = trayLook; setTrayLook(null); void handleToggleLive(l); }}
+                      aria-pressed={!isLive}
+                    >
+                      <span className="my-cat-tray-dot my-cat-tray-dot--inactive" aria-hidden="true" />
+                      <span>{!isLive ? 'Inactive' : 'Go inactive'}</span>
+                    </button>
+                  </div>
                 );
               })()}
               <button className="my-cat-tray-action my-cat-tray-action--danger" onClick={() => { const id = trayLook.id; setTrayLook(null); setDeleteConfirm(id); }}>

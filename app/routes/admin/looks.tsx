@@ -4,6 +4,7 @@ import { looks, creators } from '~/data/looks';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
 import { supabase } from '~/utils/supabase';
 import { createLook, addProductToLook } from '~/services/manage-looks';
+import { useHiddenLooks } from '~/hooks/useHiddenLooks';
 
 interface LookRow {
   id: number;
@@ -27,6 +28,9 @@ interface PublishDraft {
 export default function AdminLooks() {
   const [activeTab, setActiveTab] = useState<'active' | 'incoming'>('active');
   const [expandedId, setExpandedId] = useState<number | null>(null);
+  // Mirrors the consumer-side visibility: an entry in admin_hidden_looks
+  // means the look is inactive. Drives the Status column dot below.
+  const hiddenLookIds = useHiddenLooks();
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -197,6 +201,7 @@ export default function AdminLooks() {
             <thead>
               <tr>
                 <th>Thumbnail</th>
+                <th>Status</th>
                 <SortableTh label="Creator" sortKey="creatorDisplay" currentSort={sort} onSort={handleSort} />
                 <th>Created At</th>
                 <th>Platform</th>
@@ -229,6 +234,21 @@ export default function AdminLooks() {
                           />
                         </div>
                       </td>
+                      {/* Status — green dot = live in the consumer feed,
+                          yellow = inactive (creator hid it OR admin
+                          soft-deleted it via admin_hidden_looks). */}
+                      <td>
+                        {(() => {
+                          const isHidden = hiddenLookIds.has(row.id);
+                          return (
+                            <span
+                              className={`admin-status-dot admin-status-dot--${isHidden ? 'inactive' : 'live'}`}
+                              title={isHidden ? 'Inactive' : 'Live'}
+                              aria-label={isHidden ? 'Inactive' : 'Live'}
+                            />
+                          );
+                        })()}
+                      </td>
                       <td>
                         <div className="admin-look-creator">
                           <img
@@ -255,7 +275,7 @@ export default function AdminLooks() {
                     </tr>
                     {isExpanded && (
                       <tr className="admin-look-expanded-row">
-                        <td colSpan={9} style={{ padding: 0 }}>
+                        <td colSpan={10} style={{ padding: 0 }}>
                           <div className="admin-look-products">
                             <h3 className="admin-products-title">Products</h3>
                             <table className="admin-table admin-products-table">
