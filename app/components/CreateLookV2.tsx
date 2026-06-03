@@ -24,6 +24,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createLook, updateLook, addProductToLook, submitLook, uploadLookMedia, type ManagedLook, type AddProductInput } from '~/services/manage-looks';
+import { analyzeLookMedia } from '~/services/analyze-look-media';
 
 // ── Detected product shape ─────────────────────────────────────────
 // Mirrors AddProductInput so the publish step can pass it through
@@ -111,43 +112,48 @@ export default function CreateLookV2({ onPublished, onCancel, look: existingLook
 
   // ── Phase 2 → 3: AI product analysis ─────────────────────────────
   // Today this is a mock that returns a small set of plausible
-  // catalog products after a brief delay so the UX flow is shippable
-  // while the real vision endpoint gets wired. The shape it returns
-  // mirrors what the real edge function will produce so swapping it
-  // in later is a one-line change.
-  const runAnalysis = useCallback(async () => {
-    await new Promise(r => setTimeout(r, 1200));
-    const detected: DetectedProduct[] = [
-      {
-        id: `ai-${Date.now()}-1`,
-        brand: 'Alo Yoga',
-        name: 'Airlift Super Sleek Bra Tank — Black',
-        price: '$88',
-        url: 'https://www.aloyoga.com/products/airlift-super-sleek-bra-tank-black',
+  // Calls the analyze-look-media edge function with the user's
+  // upload. The function runs Claude Vision over a JPEG frame of the
+  // file (the file itself for photos, a canvas-sampled frame for
+  // videos) and returns a small list of detected wearable items.
+  // Empty results are valid ("nothing shoppable seen") — the user can
+  // still describe items manually below the chip grid.
+  const runAnalysis = useCallback(async (file: File) => {
+    try {
+      const detected = await analyzeLookMedia(file);
+      const mapped: DetectedProduct[] = detected.map((d, idx) => ({
+        id: `ai-${Date.now()}-${idx}`,
+        brand: d.brand || '',
+        // Compose a single readable name: "<color> <name>" if color is
+        // distinct from the name's first word; otherwise just the name.
+        // The detection prompt already names items specifically, so we
+        // mostly keep its phrasing.
+        name: d.name,
+        price: '',
+        url: '',
         imageUrl: '',
         source: 'ai',
         confirmed: false,
-      },
-      {
-        id: `ai-${Date.now()}-2`,
-        brand: 'New Balance',
-        name: "Women's 574 Sneaker",
-        price: '$89.99',
-        url: 'https://www.newbalance.com/pd/574/WL574V2-25500.html',
-        imageUrl: '',
-        source: 'ai',
-        confirmed: false,
-      },
-    ];
-    setProducts(detected);
-    setPhase('review');
+      }));
+      setProducts(mapped);
+      setPhase('review');
+    } catch (err) {
+      // Fall through to an empty review state so the user can keep
+      // going — manual entry stays available.
+      console.warn('[CreateLookV2] analyze-look-media failed:', err);
+      setError(err instanceof Error ? err.message : 'Could not analyze the media');
+      setProducts([]);
+      setPhase('review');
+    }
   }, []);
 
-  // Kick analysis off whenever we enter the 'analyzing' phase.
+  // Kick analysis off whenever we enter the 'analyzing' phase. The
+  // current `media` is required — without it there's nothing to analyze.
   useEffect(() => {
     if (phase !== 'analyzing') return;
-    void runAnalysis();
-  }, [phase, runAnalysis]);
+    if (!media) return;
+    void runAnalysis(media.file);
+  }, [phase, media, runAnalysis]);
 
   // ── Phase 3: confirm or remove a detected product ────────────────
   const toggleConfirm = useCallback((id: string) => {
