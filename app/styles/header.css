@@ -90,11 +90,29 @@ header > * {
 }
 
 .header-center {
-  flex: 1;
+  /* Anchor to the true viewport center (left: 50% + translateX(-50%))
+     instead of `flex: 1` between .header-left and .header-right.
+     With space-between the center's midpoint shifts toward whichever
+     sibling is narrower — and our header is asymmetric (one-word
+     wordmark on the left vs $0.00 pill + 3 buttons + avatar on the
+     right), so the creator-stories rail visibly drifted left in the
+     screenshot. Absolute-from-center makes the rail bound to the
+     viewport regardless of sibling widths. pointer-events: none on
+     the wrapper lets clicks fall through the empty gutters; the
+     inner content re-enables them. */
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
   display: flex;
   justify-content: center;
   align-items: center;
   min-width: 0;
+  max-width: min(440px, calc(100% - 320px));
+  pointer-events: none;
+}
+.header-center > * {
+  pointer-events: auto;
 }
 
 /* Thin vertical separator between following and followers groups */
