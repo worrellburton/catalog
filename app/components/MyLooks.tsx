@@ -3,7 +3,7 @@ import { useNavigate } from '@remix-run/react';
 import CreateLookV2 from './CreateLookV2';
 import { useAuth } from '~/hooks/useAuth';
 import type { ManagedLook, LookStatus } from '~/services/manage-looks';
-import { getMyLooks, deleteLook, archiveLook } from '~/services/manage-looks';
+import { getMyLooks, deleteLook, archiveLook, submitLook } from '~/services/manage-looks';
 import { withTransform } from '~/utils/supabase-image';
 import { supabase } from '~/utils/supabase';
 import { lookSlug } from '~/utils/slug';
@@ -150,12 +150,17 @@ export default function MyLooks({ onClose }: MyLooksProps) {
     }
   }, []);
 
-  const handleArchive = useCallback(async (lookId: string) => {
+  // Toggle a look's visibility: live → archived (hidden) and back.
+  // The status dot on the tile reads the same flag — green when
+  // live, red when hidden — so the dot flips in lockstep with this.
+  const handleToggleLive = useCallback(async (look: ManagedLook) => {
     try {
-      const res = await archiveLook(lookId);
-      setLooks(prev => prev.map(l => l.id === lookId ? res.data : l));
+      const res = look.status === 'live'
+        ? await archiveLook(look.id)
+        : await submitLook(look.id);
+      setLooks(prev => prev.map(l => l.id === look.id ? res.data : l));
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Archive failed');
+      setError(err instanceof Error ? err.message : 'Could not update visibility');
     }
   }, []);
 
@@ -461,14 +466,17 @@ export default function MyLooks({ onClose }: MyLooksProps) {
                   <div className="my-cat-tile-scrim" />
                 </div>
 
-                {/* Status pill — always visible so the curator can spot
-                    drafts at a glance (matches the prior MyLooks UX). */}
+                {/* Status dot — green when live, red when hidden
+                    (archived/denied), amber while in review. Less
+                    visual noise than the old text pill but still
+                    glanceable so the curator can spot drafts and
+                    hidden looks instantly. The tray exposes a toggle
+                    to flip live ↔ hidden. */}
                 <span
-                  className="my-cat-tile-status"
-                  style={{ backgroundColor: STATUS_COLORS[managed.status] }}
-                >
-                  {STATUS_LABELS[managed.status]}
-                </span>
+                  className={`my-cat-tile-dot my-cat-tile-dot--${managed.status}`}
+                  aria-label={STATUS_LABELS[managed.status]}
+                  title={STATUS_LABELS[managed.status]}
+                />
 
                 {/* Desktop hover actions — edit / share / delete. Fades
                     in on tile hover (CSS); hidden on touch devices, which
@@ -532,7 +540,6 @@ export default function MyLooks({ onClose }: MyLooksProps) {
           being acted on. */}
       {trayLook && (() => {
         const tp = previewFor(trayLook);
-        const isArchived = trayLook.status === 'archived';
         return (
           <div className="my-cat-tray-backdrop" onClick={() => setTrayLook(null)}>
             <div className="my-cat-tray" onClick={(e) => e.stopPropagation()} role="dialog" aria-label="Look actions">
@@ -560,14 +567,20 @@ export default function MyLooks({ onClose }: MyLooksProps) {
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="20" x2="21" y2="20"/><rect x="6"  y="11" width="3" height="9"/><rect x="11" y="6"  width="3" height="14"/><rect x="16" y="14" width="3" height="6"/></svg>
                 <span>Analytics</span>
               </button>
-              <button className="my-cat-tray-action" onClick={() => { const id = trayLook.id; setTrayLook(null); void handleArchive(id); }}>
-                {isArchived ? (
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="1 4 1 10 7 10" /><path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" /></svg>
-                ) : (
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="21 8 21 21 3 21 3 8" /><rect x="1" y="3" width="22" height="5" /><line x1="10" y1="12" x2="14" y2="12" /></svg>
-                )}
-                <span>{isArchived ? 'Unarchive' : 'Archive'}</span>
-              </button>
+              {/* Live ↔ Hide toggle. Currently live → "Hide" (red dot
+                  on the tile after); anything else (draft, archived,
+                  denied) → "Make live" (green dot after). Same dot
+                  color the tile uses, so the user sees the action map
+                  to the visual state. */}
+              {(() => {
+                const isLive = trayLook.status === 'live';
+                return (
+                  <button className="my-cat-tray-action" onClick={() => { const l = trayLook; setTrayLook(null); void handleToggleLive(l); }}>
+                    <span className={`my-cat-tray-dot my-cat-tray-dot--${isLive ? 'archived' : 'live'}`} aria-hidden="true" />
+                    <span>{isLive ? 'Hide' : 'Make live'}</span>
+                  </button>
+                );
+              })()}
               <button className="my-cat-tray-action my-cat-tray-action--danger" onClick={() => { const id = trayLook.id; setTrayLook(null); setDeleteConfirm(id); }}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" /></svg>
                 <span>Delete</span>

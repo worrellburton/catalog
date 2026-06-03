@@ -15,6 +15,13 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   z-index: 9000;
   background: #111;
   overflow-y: auto;
+  /* Lock horizontal panning — on mobile the wallet's particle ring
+     canvas + the off-screen $0 numeral were spilling past the
+     viewport edges, letting the page slide sideways. Vertical
+     scroll only. overscroll-behavior-x:none also kills the iOS
+     rubber-band swipe-right gesture. */
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
   -webkit-overflow-scrolling: touch;
 }
 
@@ -855,6 +862,12 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   position: relative;
   isolation: isolate;
   min-height: 100%;
+  /* Belt-and-suspenders horizontal clip — the wave canvas and the
+     huge "$0" hero numeral are intentionally drawn larger than the
+     viewport for visual effect, but they MUST stay clipped or the
+     overlay becomes pannable sideways on mobile (see the .my-looks-
+     overlay rule above for the primary guard). */
+  overflow-x: clip;
 }
 
 /* Generative particle-network canvas. Fixed to the viewport so the
@@ -1798,21 +1811,40 @@ html[data-shell="catalog-app"] .my-looks-overlay {
 
 /* Status pill stays visible regardless of mode so the curator can spot
    drafts at a glance. Sits top-left, above the LookCard chrome. */
-.my-cat-tile-status {
+/* Status dot — replaces the old LIVE text pill. Top-left of every
+   tile. Color encodes visibility: green=live, red=hidden (archived
+   or denied), amber=in review/submitted, gray=draft. Soft white halo
+   so it stays legible against any tile poster. */
+.my-cat-tile-dot {
   position: absolute;
-  top: 8px;
-  left: 8px;
+  top: 10px;
+  left: 10px;
   z-index: 3;
-  padding: 4px 10px;
-  border-radius: 999px;
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: #fff;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.85);
   pointer-events: none;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
 }
+.my-cat-tile-dot--live      { background: #22c55e; box-shadow: 0 0 6px rgba(34, 197, 94, 0.65), 0 1px 4px rgba(0, 0, 0, 0.35); }
+.my-cat-tile-dot--submitted,
+.my-cat-tile-dot--in_review { background: #f59e0b; }
+.my-cat-tile-dot--draft     { background: #9ca3af; }
+.my-cat-tile-dot--archived,
+.my-cat-tile-dot--denied    { background: #ef4444; }
+
+/* Small inline dot used inside the mobile tray's "Make live / Hide"
+   toggle — mirrors the color of the FUTURE state so the user sees
+   what the tile dot will become after they tap. */
+.my-cat-tray-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.my-cat-tray-dot--live      { background: #22c55e; box-shadow: 0 0 6px rgba(34, 197, 94, 0.65); }
+.my-cat-tray-dot--archived  { background: #ef4444; }
 
 /* Edit / Archive / Delete row - shown only when Creator Mode is on.
    Top-right of the tile. Stops pointer events from reaching the
