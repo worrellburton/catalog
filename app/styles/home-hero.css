@@ -421,6 +421,14 @@
    The one bottom search bar starts centered under the headline (like the
    prior build) and animates down to its docked position once the shopper
    scrolls into the feed. Smooth on desktop AND mobile (no snap). */
+/* Single source of truth for the hero trio's vertical anchor. Both
+   the search bar's `bottom` AND .sfh's padding-bottom derive from
+   this one variable so they can never desync. Tuned so the spark +
+   headline + bar group centres around mid-screen. Per-breakpoint
+   overrides live in the media queries below. */
+.app-root.home-hero {
+  --hero-bar-bottom: 36vh;
+}
 .app-root.home-hero .bottom-bar {
   transition:
     bottom 0.55s cubic-bezier(0.16, 1, 0.3, 1),
@@ -428,7 +436,7 @@
     background 0.45s ease, border-color 0.45s ease, box-shadow 0.45s ease;
 }
 .app-root.home-hero:not(.hero-scrolled) .bottom-bar {
-  bottom: 46vh;
+  bottom: var(--hero-bar-bottom, 36vh);
   /* Fade the hero-centered bar out as the shopper scrolls toward
      the feed peek. --hero-scroll-progress is written by the scroll
      handler in routes/_index.tsx (0 at the very top → 1 at the
@@ -644,32 +652,33 @@
      justify-content: center (not flex-end) so the stage NEVER overflows
      into the bar's reserved zone — on tight viewports the flex-end + small
      reservation collapse let the bar overlap "What are you shopping for?". */
+  /* Mobile lowers the trio's anchor a touch so the spark + headline +
+     bar group sits dead-centre on phone viewports. Both the bar and
+     the .sfh padding read this same var (see below) so they stay
+     locked together. */
+  .app-root.home-hero {
+    --hero-bar-bottom: 32vh;
+  }
   .sfh {
-    /* Mobile reserves enough bottom padding that the headline is
-       GUARANTEED to land above the search bar, regardless of which
-       hero rule wins for `.bottom-bar { bottom }`. The bar can land
-       anywhere from 32vh (intended mobile) to 46vh (default cascade
-       when the mobile rule loses), so the worst-case top edge of
-       the bar is 100 − 46 − 7 ≈ 47vh from top. padding-bottom: 56vh
-       holds the stage bottom at ≤ 44vh from the top — ~3vh of
-       breathing room above the bar in the worst case.
-       Previous 42vh was tuned to bar bottom:32vh only; when 46vh
-       won the cascade the headline fell BELOW the bar (the bug). */
+    /* The hero trio — spark + headline + search bar — is centred as
+       a GROUP in the viewport. The bar's vertical offset and this
+       padding are both derived from ONE variable (--hero-bar-bottom,
+       set on .app-root.home-hero below) so they can never desync and
+       drop the headline below the bar. padding reserves the bar's
+       zone PLUS a ~12vh cushion so the headline always sits just
+       above the bar with the whole group centred around mid-screen. */
     min-height: 100svh;
     justify-content: flex-end;
     padding-top: calc(env(safe-area-inset-top, 0px) + 90px);
-    padding-bottom: 56vh;
+    padding-bottom: calc(var(--hero-bar-bottom, 34vh) + 12vh);
   }
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar,
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar.search-open {
-    /* Pin the bar at the SAME bottom value across mobile, desktop,
-       and the hero/scrolled transition so it never appears to "move"
-       between states. The previous mobile-only override (32vh) sat
-       noticeably lower than the default 46vh, which is what the user
-       saw shift when the cascade landed differently on different
-       devices. .sfh padding-bottom (56vh) already reserves room
-       above this position so the headline lands above the bar. */
-    bottom: 46vh;
+    /* Single source of truth for the bar's hero position. .sfh's
+       padding-bottom is derived from this same var so the two move
+       together — change this one number and the whole trio re-centres
+       without the headline ever colliding with the bar. */
+    bottom: var(--hero-bar-bottom, 34vh);
   }
 }
 
