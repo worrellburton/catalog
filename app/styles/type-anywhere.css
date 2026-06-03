@@ -249,7 +249,21 @@ html[data-shell="catalog-app"] .ai-bar-wrap { display: none !important; }
   gap: 10px;
   max-width: min(760px, calc(100vw - 48px));
   animation: catalog-pills-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+  /* Render BELOW the bar regardless of DOM order. The cloud renders
+     as the first child of .ai-bar-wrap (so it can stay grouped with
+     the bar for focus management) but it used to stack above —
+     overlapping the home hero headline on the search-open state.
+     order: 2 pushes it underneath the bar. */
+  order: 2;
 }
+.ai-bar-wrap .ai-bar      { order: 1; }
+.ai-bar-wrap .ai-bar-hint { order: 0; }
+@keyframes catalog-pills-in-from-below {
+  from { opacity: 0; transform: translateY(-10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+/* Cloud now rises from BELOW the bar, so the keyframe pans down-to-up. */
+.catalog-pills { animation-name: catalog-pills-in-from-below; }
 .catalog-pills-label {
   font-size: 11px;
   font-weight: 700;
