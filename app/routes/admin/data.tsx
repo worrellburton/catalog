@@ -3977,6 +3977,45 @@ export default function AdminData() {
                             <div className="admin-look-creator-avatar" style={{ background: '#e5e7eb' }} />
                           )}
                           <span>{row.creatorDisplay}</span>
+                          {/* Gender-mismatch flag: lights up when the look's
+                              gender disagrees with any of its products'
+                              genders (e.g. look tagged 'women' but a
+                              product is gender='male'). Catches data
+                              attribution bugs proactively so admins can
+                              spot bad rows without scrolling into the
+                              product list. Pure heuristic — doesn't
+                              detect model-output failures (rendered
+                              gender) which need video inspection. */}
+                          {(() => {
+                            const lg = (look.gender || '').toLowerCase();
+                            if (lg !== 'men' && lg !== 'women') return null;
+                            const lookFlavor = lg === 'men' ? 'male' : 'female';
+                            const mismatched = look.products.find(p => {
+                              const matched = allProducts.find(ap => `${ap.brand}-${ap.name}` === `${p.brand}-${p.name}`);
+                              const pg = (matched?.gender || '').toLowerCase();
+                              return pg && pg !== 'unisex' && pg !== lookFlavor;
+                            });
+                            if (!mismatched) return null;
+                            return (
+                              <span
+                                title={`Look is "${look.gender}" but "${mismatched.name}" is ${(allProducts.find(ap => `${ap.brand}-${ap.name}` === `${mismatched.brand}-${mismatched.name}`)?.gender) || 'untagged'} — review and re-tag or re-publish`}
+                                style={{
+                                  display: 'inline-flex', alignItems: 'center', gap: 3,
+                                  marginLeft: 6, padding: '1px 7px', borderRadius: 999,
+                                  background: '#fef3c7', color: '#92400e',
+                                  fontSize: 10, fontWeight: 600, letterSpacing: 0.2,
+                                  border: '1px solid #fde68a', cursor: 'help',
+                                }}
+                              >
+                                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                                  <line x1="12" y1="9" x2="12" y2="13" />
+                                  <line x1="12" y1="17" x2="12.01" y2="17" />
+                                </svg>
+                                Mismatch
+                              </span>
+                            );
+                          })()}
                         </div>
                       </td>
                       <td className="admin-cell-muted">Feb 17, 2026, 12:16 PM</td>
