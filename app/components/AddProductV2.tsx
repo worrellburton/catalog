@@ -187,18 +187,20 @@ export default function AddProductV2({ onCancel, onQueued }: Props) {
         <button type="button" className="apv2-close" onClick={onCancel} aria-label="Cancel">×</button>
       </header>
 
-      {/* Empty state — the hero card + faded prompt. */}
+      {/* Empty state — the hero icon + faded prompt. The icon used to
+          sit inside a rounded-square frame; the frame implied
+          tap-to-do-something but the icon is decoration only, so we
+          render it bare. The input below is what the user actually
+          interacts with. */}
       {phase === 'empty' && (
         <div className="apv2-hero">
-          <div className="apv2-hero-card">
-            <span className="apv2-hero-icon" aria-hidden>
-              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/>
-                <line x1="3" y1="6" x2="21" y2="6"/>
-                <path d="M16 10a4 4 0 0 1-8 0"/>
-              </svg>
-            </span>
-          </div>
+          <span className="apv2-hero-icon-bare" aria-hidden>
+            <svg width="56" height="56" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/>
+              <line x1="3" y1="6" x2="21" y2="6"/>
+              <path d="M16 10a4 4 0 0 1-8 0"/>
+            </svg>
+          </span>
           <span className="apv2-hero-label">Tell me the product or paste a link.</span>
           <div className="apv2-input-row">
             <input
@@ -210,15 +212,12 @@ export default function AddProductV2({ onCancel, onQueued }: Props) {
               onChange={(e) => setInput(e.target.value)}
               onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void handleGo(); } }}
               onFocus={() => {
-                // Belt-and-suspenders for browsers without visualViewport
-                // (or where the timing of the variable update lags). Wait
-                // a frame past the keyboard's open animation, then bring
-                // the input into the center of whatever is visible.
+                // Wait past the keyboard's open animation, then bring
+                // the input into the center of the visible space.
                 window.setTimeout(() => {
                   inputRef.current?.scrollIntoView({ block: 'center', behavior: 'smooth' });
                 }, 250);
               }}
-              autoFocus
             />
             <button
               type="button"

@@ -1080,14 +1080,27 @@ export default function GeneratePage() {
     }
     // Scroll the freshly-picked card into the visible center of its
     // category row so the user gets immediate confirmation. Only fires
-    // on the pick (not the unpick) and waits a tick for React to apply
-    // the is-picked class before the smooth scroll starts.
+    // on the pick (not the unpick).
+    //
+    // We can't use Element.scrollIntoView({ inline: 'center' }) here —
+    // that method walks EVERY scrollable ancestor and centers each one,
+    // so picking a card in a middle row also page-scrolls the rows
+    // above and below it (the regression in the user's screenshot).
+    // Instead we manually scroll ONLY the row's horizontal scroller by
+    // the delta between the card's centre and the row's centre. The
+    // page stays put.
     if (!wasPicked && typeof document !== 'undefined') {
       requestAnimationFrame(() => {
-        const card = document.querySelector(`[data-gen-card-id="${p.id}"]`);
-        if (card && 'scrollIntoView' in card) {
-          (card as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
-        }
+        const card = document.querySelector(`[data-gen-card-id="${p.id}"]`) as HTMLElement | null;
+        const row = card?.closest('.gen-cat-row-scroll') as HTMLElement | null;
+        if (!card || !row) return;
+        const cardRect = card.getBoundingClientRect();
+        const rowRect = row.getBoundingClientRect();
+        const cardCenter = cardRect.left + cardRect.width / 2;
+        const rowCenter = rowRect.left + rowRect.width / 2;
+        const delta = cardCenter - rowCenter;
+        if (Math.abs(delta) < 4) return; // already centred — nothing to do
+        row.scrollBy({ left: delta, behavior: 'smooth' });
       });
     }
   };
@@ -2134,7 +2147,17 @@ export default function GeneratePage() {
             {limitWarning}
           </div>
         )}
-        <aside className="gen-dock" aria-label="Step controls">
+        <aside
+          className={`gen-dock${
+            // Products step + nothing picked yet → dock slides off
+            // the bottom and waits. The moment the user picks their
+            // first product the class flips and the dock eases up
+            // into view. Other steps (style, review) always show it.
+            step === 'products' && picked.length === 0 ? ' is-hidden' : ' is-revealed'
+          }`}
+          aria-label="Step controls"
+          aria-hidden={step === 'products' && picked.length === 0 ? 'true' : undefined}
+        >
           {/* Picked-products strip stays visible across products → style →
               review so the user always sees what they're building. The
               tap-to-remove × is still wired so they can tweak the lineup

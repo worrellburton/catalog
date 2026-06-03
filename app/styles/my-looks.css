@@ -2911,7 +2911,9 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  opacity: 0.85;
+  /* Bumped from 0.85 so the WebGL particle field reads clearly
+     against the dark base on this page. */
+  opacity: 1;
 }
 .apv2-particles .pw-particles { position: absolute; inset: 0; width: 100%; height: 100%; }
 .apv2 > * { position: relative; z-index: 1; }
@@ -2954,25 +2956,23 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   transition: min-height 220ms cubic-bezier(.32, .72, 0, 1),
               max-height 220ms cubic-bezier(.32, .72, 0, 1);
 }
-.apv2-hero-card {
-  width: 132px;
-  height: 132px;
-  border-radius: 28px;
-  border: 1.5px solid rgba(255,255,255,0.16);
-  background: rgba(255,255,255,0.04);
-  color: rgba(255,255,255,0.92);
-  display: flex; align-items: center; justify-content: center;
-  backdrop-filter: blur(8px) saturate(1.1);
-  -webkit-backdrop-filter: blur(8px) saturate(1.1);
-  box-shadow: 0 12px 36px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+/* Bare hero icon — no card / frame around it. The square the icon
+   used to live in implied "tap me", but the icon is decoration only;
+   the user types into the input below instead. Springs in just like
+   the framed version did. */
+.apv2-hero-icon-bare {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.88);
+  filter: drop-shadow(0 6px 18px rgba(0, 0, 0, 0.45));
   opacity: 0;
   transform: scale(0.6);
   transition:
     opacity 520ms cubic-bezier(.16, 1, .3, 1) 160ms,
     transform 520ms cubic-bezier(.16, 1, .3, 1) 160ms;
 }
-.apv2.is-mounted .apv2-hero-card { opacity: 1; transform: scale(1); }
-.apv2-hero-icon { display: inline-flex; align-items: center; justify-content: center; }
+.apv2.is-mounted .apv2-hero-icon-bare { opacity: 1; transform: scale(1); }
 
 .apv2-hero-label {
   font-size: 14px;
@@ -3152,7 +3152,7 @@ html[data-shell="catalog-app"] .my-looks-overlay {
 
 @media (prefers-reduced-motion: reduce) {
   .apv2,
-  .apv2-hero-card,
+  .apv2-hero-icon-bare,
   .apv2-hero-label,
   .apv2-input-row {
     transition: none;

@@ -2183,7 +2183,6 @@ html[data-shell="catalog-app"] .gen-page {
 .gen-dock {
   position: fixed;
   left: 50%;
-  transform: translateX(-50%);
   bottom: calc(12px + env(safe-area-inset-bottom));
   z-index: 50;
   width: min(720px, calc(100vw - 24px));
@@ -2200,12 +2199,24 @@ html[data-shell="catalog-app"] .gen-page {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.08),
     0 16px 48px rgba(0, 0, 0, 0.55);
-  animation: gen-dock-in 0.22s cubic-bezier(0.32, 0.72, 0, 1) both;
+  /* Two states driven by the is-hidden / is-revealed class on the
+     element. Hidden: parked just below the viewport, fully
+     transparent, pointer-events off so it can't be tapped through.
+     Revealed: eased up into place with a soft ease-in-out so the
+     entry feels intentional, not snappy. translateX(-50%) is chained
+     on every state to preserve horizontal centering. */
+  transition:
+    transform 360ms cubic-bezier(.42, 0, .58, 1),
+    opacity 280ms cubic-bezier(.42, 0, .58, 1);
 }
-
-@keyframes gen-dock-in {
-  from { opacity: 0; transform: translateX(-50%) translateY(8px); }
-  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+.gen-dock.is-hidden {
+  transform: translateX(-50%) translateY(140%);
+  opacity: 0;
+  pointer-events: none;
+}
+.gen-dock.is-revealed {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
 }
 
 /* Picked-products strip - left side of the dock. Horizontal scroll
