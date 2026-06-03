@@ -3917,6 +3917,43 @@ export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loadin
   };
   const discardRecommendedOrder = () => setPreviewOrder(null);
 
+  // Context modal: surfaces the algorithmic reasoning behind the
+  // current feed order so admins don't have to read the source to
+  // understand why a tile is at position N. Lives next to the
+  // Recommend Order button — tap to see the per-row score
+  // breakdown (exploit + explore + interleave rule + sort/filter).
+  const [contextOpen, setContextOpen] = useState(false);
+  const contextRows = useMemo(() => {
+    // Mirror recommendFeedOrder's math so the modal shows the SAME
+    // numbers that drive ordering — single source of truth.
+    const items = [
+      ...sortedLooks.map(l => ({ kind: 'look' as const, id: l.id, key: `look:${l.id}`, title: (l as { title?: string }).title || '', m: l.metrics })),
+      ...sortedProducts.map(p => ({ kind: 'product' as const, id: p.id, key: `product:${p.id}`, title: (p as { name?: string; title?: string }).name || (p as { title?: string }).title || '', m: p.metrics })),
+    ];
+    if (items.length === 0) return [];
+    const totalImp = items.reduce((s, x) => s + (x.m?.impressions ?? 0), 0) + 1;
+    const enriched = items.map(x => {
+      const imp = x.m?.impressions ?? 0;
+      const clk = x.m?.clickouts ?? 0;
+      const ctr = x.m?.ctr ?? 0;
+      const exploit = 0.7 * (imp > 0 ? clk / imp : 0) + 0.3 * ctr;
+      const explore = Math.sqrt(Math.log(totalImp + 1) / (imp + 1));
+      return { ...x, imp, clk, ctr, exploit, explore };
+    });
+    const norm = (vals: number[]) => {
+      let mn = Infinity, mx = -Infinity;
+      for (const v of vals) { if (v < mn) mn = v; if (v > mx) mx = v; }
+      const range = mx - mn || 1;
+      return (v: number) => (v - mn) / range;
+    };
+    const eN = norm(enriched.map(e => e.exploit));
+    const xN = norm(enriched.map(e => e.explore));
+    const EXPLORE_W = 0.6;
+    return enriched
+      .map(e => ({ ...e, score: eN(e.exploit) + EXPLORE_W * xN(e.explore) }))
+      .sort((a, b) => b.score - a.score);
+  }, [sortedLooks, sortedProducts]);
+
   const handleFeedReorder = (from: number, to: number) => {
     if (from === to) return;
     const keys = feedRows.map(r => r.key);
@@ -4025,6 +4062,19 @@ export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loadin
               {onOpenAddLooks && <button type="button" onClick={onOpenAddLooks} className="admin-btn admin-btn-secondary" style={{ fontSize: 11, padding: '3px 10px' }}>+ Add Looks</button>}
               {onOpenAddProducts && <button type="button" onClick={onOpenAddProducts} className="admin-btn admin-btn-secondary" style={{ fontSize: 11, padding: '3px 10px' }}>+ Add Products</button>}
               <button type="button" onClick={runRecommendOrder} className="admin-btn admin-btn-primary" style={{ fontSize: 11, padding: '3px 10px' }} title="Re-rank the feed: proven converters + under-tested items up top, ~2 looks : 1 product">✨ Recommend Order</button>
+              {/* Context button: opens a modal that explains the exact
+                  scores driving the current feed order. Mirrors the
+                  recommendFeedOrder math so admins can see why item N
+                  is at position N without reading source. */}
+              <button
+                type="button"
+                onClick={() => setContextOpen(true)}
+                className="admin-btn admin-btn-secondary"
+                style={{ fontSize: 11, padding: '3px 10px' }}
+                title="Show how this feed was scored — exploit + explore + interleave rule"
+              >
+                ⓘ Context
+              </button>
               {onRecommendLooks && <button type="button" onClick={onRecommendLooks} className="admin-btn admin-btn-secondary" style={{ fontSize: 11, padding: '3px 10px' }}>✨ Recommend Looks</button>}
               {onRecommendProducts && <button type="button" onClick={onRecommendProducts} className="admin-btn admin-btn-secondary" style={{ fontSize: 11, padding: '3px 10px' }}>✨ Recommend Products</button>}
             </div>
@@ -4151,6 +4201,91 @@ export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loadin
 
       {drawer && (
         <DetailDrawer subject={drawer} catalogName={catalogName} onClose={() => setDrawer(null)} />
+      )}
+
+      {/* Context modal — explains the algorithmic reasoning behind the
+          current feed order. Click any of the buttons next to Recommend
+          Order to open. Pure read-only: the same numbers drive the
+          live order, so what the modal shows IS what the feed sees. */}
+      {contextOpen && (
+        <div className="admin-modal-overlay" onClick={() => setContextOpen(false)}>
+          <div
+            className="admin-modal"
+            style={{ width: 820, maxWidth: '94vw', maxHeight: '88vh', display: 'flex', flexDirection: 'column', padding: 0, overflow: 'hidden' }}
+            onClick={e => e.stopPropagation()}
+          >
+            <div style={{ padding: '18px 22px 12px', borderBottom: '1px solid #f0f0f0' }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 8 }}>
+                <h2 style={{ margin: 0, fontSize: 17, fontWeight: 600 }}>
+                  Feed context for &ldquo;{catalogName}&rdquo;
+                </h2>
+                <button
+                  type="button"
+                  onClick={() => setContextOpen(false)}
+                  className="admin-btn admin-btn-secondary"
+                  style={{ fontSize: 11, padding: '4px 10px' }}
+                >Close</button>
+              </div>
+              <p style={{ margin: '6px 0 0', fontSize: 12, color: '#64748b', lineHeight: 1.5 }}>
+                The feed is sorted by a blended <strong>exploit + explore</strong> score, then
+                interleaved <strong>2 looks : 1 product</strong>. Sort / filter / search are applied
+                FIRST so the candidate set matches the table above. Sort: <strong>{sort}</strong>,
+                Filter: <strong>{filter}</strong>{catalogSearch ? <>, Query: &ldquo;<strong>{catalogSearch}</strong>&rdquo;</> : null}.
+              </p>
+              <div style={{ display: 'flex', gap: 12, marginTop: 10, fontSize: 11, color: '#475569', flexWrap: 'wrap' }}>
+                <span><strong>Exploit</strong> = 0.7 × clickout rate + 0.3 × CTR</span>
+                <span><strong>Explore</strong> = √(ln(totalImp+1) / (imp+1)) &nbsp;<em>(UCB1)</em></span>
+                <span><strong>Score</strong> = normalised exploit + 0.6 × normalised explore</span>
+              </div>
+            </div>
+            <div style={{ flex: 1, overflow: 'auto', padding: '8px 0' }}>
+              {contextRows.length === 0 ? (
+                <div style={{ padding: '32px 24px', textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>
+                  Nothing in this catalog yet — add a look or product to see the scoring.
+                </div>
+              ) : (
+                <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 12 }}>
+                  <thead style={{ position: 'sticky', top: 0, background: '#fafafa' }}>
+                    <tr style={{ borderBottom: '1px solid #e5e7eb' }}>
+                      <th style={{ textAlign: 'left',  padding: '8px 14px', fontSize: 10, fontWeight: 700, color: '#64748b', letterSpacing: '0.06em', textTransform: 'uppercase' }}>#</th>
+                      <th style={{ textAlign: 'left',  padding: '8px 14px', fontSize: 10, fontWeight: 700, color: '#64748b', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Kind</th>
+                      <th style={{ textAlign: 'left',  padding: '8px 14px', fontSize: 10, fontWeight: 700, color: '#64748b', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Title</th>
+                      <th style={{ textAlign: 'right', padding: '8px 10px', fontSize: 10, fontWeight: 700, color: '#64748b', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Imp</th>
+                      <th style={{ textAlign: 'right', padding: '8px 10px', fontSize: 10, fontWeight: 700, color: '#64748b', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Clk</th>
+                      <th style={{ textAlign: 'right', padding: '8px 10px', fontSize: 10, fontWeight: 700, color: '#64748b', letterSpacing: '0.06em', textTransform: 'uppercase' }}>CTR</th>
+                      <th style={{ textAlign: 'right', padding: '8px 10px', fontSize: 10, fontWeight: 700, color: '#64748b', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Exploit</th>
+                      <th style={{ textAlign: 'right', padding: '8px 10px', fontSize: 10, fontWeight: 700, color: '#64748b', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Explore</th>
+                      <th style={{ textAlign: 'right', padding: '8px 14px', fontSize: 10, fontWeight: 700, color: '#64748b', letterSpacing: '0.06em', textTransform: 'uppercase' }}>Score</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {contextRows.map((r, i) => (
+                      <tr key={r.key} style={{ borderBottom: '1px solid #f1f5f9' }}>
+                        <td style={{ padding: '8px 14px', color: '#94a3b8', fontVariantNumeric: 'tabular-nums' }}>{i + 1}</td>
+                        <td style={{ padding: '8px 14px' }}>
+                          <span style={{
+                            display: 'inline-block', padding: '1px 7px', borderRadius: 999, fontSize: 10, fontWeight: 600,
+                            background: r.kind === 'look' ? '#f0fdf4' : '#eff6ff',
+                            color: r.kind === 'look' ? '#15803d' : '#1d4ed8',
+                          }}>{r.kind}</span>
+                        </td>
+                        <td style={{ padding: '8px 14px', maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', color: '#111' }} title={r.title}>
+                          {r.title || <span style={{ color: '#cbd5e1' }}>—</span>}
+                        </td>
+                        <td style={{ padding: '8px 10px', textAlign: 'right', color: '#475569', fontVariantNumeric: 'tabular-nums' }}>{r.imp}</td>
+                        <td style={{ padding: '8px 10px', textAlign: 'right', color: '#475569', fontVariantNumeric: 'tabular-nums' }}>{r.clk}</td>
+                        <td style={{ padding: '8px 10px', textAlign: 'right', color: '#475569', fontVariantNumeric: 'tabular-nums' }}>{(r.ctr * 100).toFixed(1)}%</td>
+                        <td style={{ padding: '8px 10px', textAlign: 'right', color: '#475569', fontVariantNumeric: 'tabular-nums' }}>{r.exploit.toFixed(3)}</td>
+                        <td style={{ padding: '8px 10px', textAlign: 'right', color: '#475569', fontVariantNumeric: 'tabular-nums' }}>{r.explore.toFixed(3)}</td>
+                        <td style={{ padding: '8px 14px', textAlign: 'right', color: '#0f172a', fontWeight: 600, fontVariantNumeric: 'tabular-nums' }}>{r.score.toFixed(3)}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              )}
+            </div>
+          </div>
+        </div>
       )}
     </div>
   );
