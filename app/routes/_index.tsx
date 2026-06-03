@@ -379,9 +379,14 @@ export default function Home() {
   }, []);
 
   const handleRemix = useCallback(() => {
+    // Remix is a VIEW shuffle — re-seeds card order + cycles the grid
+    // layout. It used to ALSO rotate the catalog name string, but
+    // that turned every remix click into a new catalog, which is the
+    // opposite of what the user expects (the remix glyph should
+    // refresh the LOOK of the current catalog, not pick a different
+    // one). Catalog name stays put now.
     setShuffleKey(k => k + 1);
     setLayoutMode(m => (m % 3) + 1);
-    setCatalogName(getRandomCatalogName());
   }, []);
 
   // Right-click snaps the grid back to the default uniform layout (mosaic

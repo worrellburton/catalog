@@ -118,17 +118,23 @@ export default function PopularCatalogPills({ onPick, onFollowingCatalog }: Popu
         {pills.map((p) => {
           const meta = KIND_META[p.kind];
           const delay = `${idx++ * 38}ms`;
+          // Render each catalog as a single pill — just the name.
+          // 'On fire' / 'Most popular' / 'Featured' status is conveyed
+          // by the icon glyph (flame / star / sparkle); the redundant
+          // text label that used to render alongside the name read as
+          // a parent-child relationship ('On fire | golf') and made it
+          // unclear what to tap. The tooltip preserves the full status
+          // for accessibility / hover discovery.
           return (
             <button
               key={`${p.kind}-${p.name}`}
               type="button"
-              className="catalog-pill"
+              className={`catalog-pill catalog-pill--${p.kind}`}
               style={{ animationDelay: delay }}
               onClick={() => onPick(p.name)}
               title={meta.tag ? `${meta.tag}: ${p.name}` : p.name}
             >
               <PillIcon name={iconForPill(p.kind, p.name)} />
-              {meta.tag && <span className="catalog-pill-tag">{meta.tag}</span>}
               <span className="catalog-pill-name">{p.name}</span>
             </button>
           );

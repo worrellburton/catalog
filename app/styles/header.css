@@ -569,6 +569,23 @@ header > .pending-look-pill {
   }
 }
 
+/* Desktop: only reveal the remix button once the shopper has scrolled
+   past the hero into the feed. On the cold hero it would just clutter
+   the matte black background without anything to "remix" — the
+   shuffle only affects the feed grid below. The .hero-scrolled flag
+   on .app-root is set by routes/_index.tsx once window.scrollY
+   crosses 50vh, and the existing pushState/popstate path keeps it in
+   sync with the URL. */
+.app-root.home-hero:not(.hero-scrolled) .remix-btn-fixed {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(8px);
+}
+.remix-btn-fixed {
+  transition: opacity 0.25s ease, transform 0.25s ease,
+              background 0.2s ease, box-shadow 0.2s ease;
+}
+
 /* View toggle (mobile only) */
 .view-toggle {
   background: rgba(128, 128, 128, 0.15);

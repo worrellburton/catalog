@@ -335,13 +335,11 @@ html[data-shell="catalog-app"] .ai-bar-wrap { display: none !important; }
   0%, 100% { filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.35)); }
   50%      { filter: drop-shadow(0 0 9px rgba(255, 255, 255, 0.75)); }
 }
+/* The 'Following' pill still uses this label class for its tag text.
+   Removed the +.catalog-pill-name divider rule because each catalog
+   pill now renders the name alone — the kind (fire/popular/featured)
+   is conveyed by the icon glyph, not a redundant text label. */
 .catalog-pill-tag { font-weight: 700; color: #fff; }
-/* Tag + name share a pill ("Most popular | white shoes") — divide them. */
-.catalog-pill-tag + .catalog-pill-name {
-  padding-left: 8px;
-  border-left: 1px solid rgba(255, 255, 255, 0.2);
-  opacity: 0.7;
-}
 
 /* Black & white glass — no per-kind hues. Every chip is the same matte
    glass; the glowing icon is what distinguishes it. */
@@ -354,7 +352,7 @@ html[data-shell="catalog-app"] .ai-bar-wrap { display: none !important; }
   color: #0f172a;
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
 }
-.light-mode .catalog-pill-tag + .catalog-pill-name { border-left-color: rgba(0, 0, 0, 0.15); }
+/* (Removed light-mode override for the tag+name divider — no longer used.) */
 
 @media (prefers-reduced-motion: reduce) {
   .catalog-pills, .catalog-pill { animation: none; }
