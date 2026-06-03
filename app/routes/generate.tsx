@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from '@remix-run/react';
+import CatalogLogo from '~/components/CatalogLogo';
 import { supabase } from '~/utils/supabase';
 import { useAuth } from '~/hooks/useAuth';
 import { startGenerationJob } from '~/services/generation-queue';
@@ -1360,8 +1361,13 @@ export default function GeneratePage() {
         </div>
       )}
       <div className={`gen-head${step === 'products' ? ' gen-head-compact' : ''}`}>
+        {/* On the Products step the back affordance becomes the Catalog
+            wordmark — tap the logo to bail back to the home feed. The
+            text "Back to catalog" + arrow was wide and competed with
+            "Pick your products" below it. Logo reads as the canonical
+            "go home" gesture in every other consumer app. */}
         <button
-          className="gen-back"
+          className={`gen-back${step === 'products' ? ' gen-back-logo' : ''}`}
           onClick={() => {
             // From the result view, "back" should land the shopper on
             // the Photos step (with their looks grid) rather than
@@ -1374,8 +1380,14 @@ export default function GeneratePage() {
           }}
           aria-label={step === 'result' ? 'Back to your looks' : 'Back to catalog'}
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
-          {step === 'result' ? 'Back to your looks' : 'Back to catalog'}
+          {step === 'products' ? (
+            <CatalogLogo className="gen-back-logo-svg" />
+          ) : (
+            <>
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+              {step === 'result' ? 'Back to your looks' : 'Back to catalog'}
+            </>
+          )}
         </button>
         {/* Photos step gets a "Try this on" headline - the actual primary
             verb the page does. Products is dense and gets the back-only

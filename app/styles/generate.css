@@ -89,6 +89,21 @@ html[data-shell="catalog-app"] .gen-page {
   letter-spacing: 0;
 }
 .gen-back:hover { color: #fff; }
+/* Products-step variant: button hosts the Catalog wordmark instead of
+   the back arrow + text. Bigger tap target, no padding-trim, and the
+   wordmark inherits the same hover white-on-fade pattern. */
+.gen-back-logo {
+  padding: 4px 0;
+  color: #fff;
+  opacity: 0.85;
+  transition: opacity 0.18s ease;
+}
+.gen-back-logo:hover { opacity: 1; color: #fff; }
+.gen-back-logo-svg {
+  height: 22px;
+  width: auto;
+  display: block;
+}
 .gen-head h1 {
   margin: 6px 0 2px;
   font-size: clamp(28px, 4vw, 40px);
@@ -2057,10 +2072,23 @@ html[data-shell="catalog-app"] .gen-page {
   scroll-snap-type: x proximity;
   -webkit-overflow-scrolling: touch;
   scroll-behavior: smooth;
+  /* Explicit `pan-x` so iOS Safari doesn't default-guess the user's
+     intent on rows where the content barely overflows. The Hat row
+     in particular (only 3 cards) was reading as 'doesn't scroll' on
+     mobile because the browser interpreted the early touch as a
+     vertical pan and consumed it — even though the scroll WAS
+     available. With pan-x declared the row consistently handles its
+     own horizontal touch and the page scroll handler stops competing
+     for it. */
+  touch-action: pan-x;
   /* Hide scrollbar - the right-edge fade-mask below is the visual cue
      that the row scrolls. */
   scrollbar-width: none;
-  padding: 4px 4px 12px;
+  /* Right padding bumped so even short rows (e.g. Hats with 3 cards)
+     have a guaranteed peek beyond the third card. Without that, the
+     viewport math made the row look 'full' and the scroll affordance
+     was invisible. */
+  padding: 4px 32px 12px 4px;
   /* Right-edge fade so the user sees there's more content. Uses a
      mask-image so the fade respects the underlying dark backdrop. */
   -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 48px), transparent 100%);

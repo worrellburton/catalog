@@ -31,6 +31,17 @@ body {
   color: var(--text);
   cursor: default;
   min-height: 100vh;
+  /* Disable the browser's native pull-to-refresh / overscroll-bounce
+     on the body so the app's own pull-down-from-top gesture (see
+     PullDownActivityGesture.tsx) actually reaches the JS handler
+     instead of being eaten by Safari's refresh affordance. `contain`
+     keeps inner scrollers (look overlay, product page, modals) free
+     to overscroll their own boundaries — only the OUTER document's
+     refresh hook is suppressed. */
+  overscroll-behavior-y: contain;
+}
+html {
+  overscroll-behavior-y: contain;
 }
 
 /* App root */
