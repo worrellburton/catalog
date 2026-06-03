@@ -663,7 +663,62 @@ export default function Home() {
     // on ProductPage returns to that look instead of the empty feed.
     setProductOpenedFromLook(selectedLook);
     setSelectedLook(null);
-    setSelectedCreative(null);
+    // Unify the two product-page surfaces. Opening from a CreativeCard
+    // used to set selectedCreative (so the page rendered with the video
+    // hero), while opening from a Look's product list only set
+    // selectedProduct (so the page rendered with the still poster).
+    // Now that Product carries video_url + thumbnail_url (see
+    // services/looks.ts), we synthesize a creative shell from those
+    // fields whenever the product has a video, so the page is the same
+    // regardless of where the click came from. When the product has no
+    // primary video at all, selectedCreative stays null and the page
+    // falls back to the still poster — same as before.
+    const productVideoUrl = (product as Product & { video_url?: string }).video_url;
+    const productThumb = (product as Product & { thumbnail_url?: string }).thumbnail_url;
+    if (productVideoUrl) {
+      setSelectedCreative({
+        id: (product as Product & { creative_id?: string }).creative_id || '',
+        product_id: (product as Product & { id?: string }).id || '',
+        look_id: null,
+        title: product.name,
+        description: null,
+        video_url: productVideoUrl,
+        mobile_video_url: null,
+        storage_path: null,
+        thumbnail_url: productThumb || product.image || null,
+        affiliate_url: null,
+        prompt: null,
+        prompt_extra: null,
+        style: '',
+        model: null,
+        status: 'live',
+        duration_seconds: null,
+        aspect_ratio: null,
+        resolution: null,
+        cost_usd: null,
+        impressions: 0,
+        clicks: 0,
+        error: null,
+        enabled: true,
+        created_at: '',
+        completed_at: null,
+        updated_at: null,
+        product: {
+          id: (product as Product & { id?: string }).id || '',
+          name: product.name,
+          brand: product.brand,
+          price: product.price,
+          image_url: product.image || null,
+          images: null,
+          url: product.url,
+          type: null,
+          catalog_tags: null,
+          gender: null,
+        },
+      });
+    } else {
+      setSelectedCreative(null);
+    }
     setSelectedProduct(product);
     setSelectedSimilar(null);
     setSimilarCreatives(null);
