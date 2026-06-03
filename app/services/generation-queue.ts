@@ -198,6 +198,23 @@ export function startGenerationJob(input: {
   };
 }
 
+/**
+ * Mark a running local job as failed by id. Mirrors the .fail()
+ * closure returned by startGenerationJob, but reachable from
+ * surfaces that didn't start the job (e.g. the queue popover's
+ * cancel button). No-op if the id isn't a tracked local job —
+ * scrape + creative cancels go through their own DB updates.
+ */
+export function cancelGenerationJobById(id: string, resultMessage = 'Cancelled'): void {
+  const j = jobs.get(id);
+  if (!j || j.status !== 'running') return;
+  j.status = 'failed';
+  j.endedAt = Date.now();
+  j.resultMessage = resultMessage;
+  emit();
+  window.setTimeout(() => { jobs.delete(id); emit(); }, 5000);
+}
+
 /** Test-only helper. */
 export function _resetGenerationQueue() {
   jobs.clear();

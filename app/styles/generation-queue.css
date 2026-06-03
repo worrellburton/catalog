@@ -201,6 +201,41 @@
   font-variant-numeric: tabular-nums;
   flex-shrink: 0;
 }
+/* Per-row cancel pill. Only rendered on running rows; clicking flips
+   the underlying status to 'failed' via the queue source (local bus,
+   products.scrape_status, or product_creative.status) so the row
+   leaves the Active tab in one optimistic tick. */
+.gen-queue-cancel {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.55);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  padding: 0;
+  margin-left: 4px;
+}
+.gen-queue-cancel:hover {
+  background: rgba(248, 113, 113, 0.18);
+  border-color: rgba(248, 113, 113, 0.45);
+  color: #fca5a5;
+}
+.light-mode .gen-queue-cancel {
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.12);
+  color: rgba(0, 0, 0, 0.55);
+}
+.light-mode .gen-queue-cancel:hover {
+  background: rgba(220, 38, 38, 0.1);
+  border-color: rgba(220, 38, 38, 0.35);
+  color: #b91c1c;
+}
 .gen-queue-context {
   display: flex;
   align-items: center;

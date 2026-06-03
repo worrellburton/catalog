@@ -21,6 +21,7 @@ import {
   listGenerationJobs,
   subscribeGenerationQueue,
   subscribeExternalGenerationJobs,
+  cancelGenerationJobById,
   type GenerationJob,
 } from '~/services/generation-queue';
 import { supabase } from '~/utils/supabase';
@@ -225,6 +226,58 @@ function AdminGenerationQueueHost() {
 
   const visible = tab === 'active' ? active : tab === 'history' ? history : failed;
 
+  // Cancel a running queue item. Each source has its own kill-switch:
+  //   • gen     → local bus, just mark failed (the actual worker may
+  //               still complete remotely, but the UI stops tracking it
+  //               and the row drops out of Active).
+  //   • scrape  → flip products.scrape_status='failed' so the queue
+  //               polling sees the row leave the pending set. The Modal
+  //               scraper can't be killed mid-run; this stops admin
+  //               waiting on it and stops the polled progress bar.
+  //   • creative → flip product_creative.status='failed'. The Fal queue
+  //               job may still resolve via webhook later; the webhook
+  //               handler treats already-failed rows as a no-op.
+  const cancelItem = (item: QueueItem) => {
+    if (item.status !== 'running') return;
+    const msg = 'Cancelled by admin';
+    if (item.source === 'gen') {
+      cancelGenerationJobById(item.id, msg);
+      return;
+    }
+    if (!supabase) return;
+    if (item.source === 'scrape') {
+      const productId = item.id.replace(/^scrape-/, '');
+      void supabase
+        .from('products')
+        .update({ scrape_status: 'failed', scrape_error: msg, scraped_at: new Date().toISOString() })
+        .eq('id', productId)
+        .then(({ error }: { error: { message: string } | null }) => {
+          if (error) console.warn('[queue cancel] scrape:', error.message);
+        });
+      // Optimistic: drop the row from the running list immediately so the
+      // popover updates without waiting for the next 5s poll tick.
+      setScrapeItems(prev => prev.map(i => i.id === item.id
+        ? { ...i, status: 'failed', endedAt: Date.now(), resultMessage: msg }
+        : i,
+      ));
+      return;
+    }
+    if (item.source === 'creative') {
+      const creativeId = item.id.replace(/^creative-/, '');
+      void supabase
+        .from('product_creative')
+        .update({ status: 'failed', error: msg, updated_at: new Date().toISOString() })
+        .eq('id', creativeId)
+        .then(({ error }: { error: { message: string } | null }) => {
+          if (error) console.warn('[queue cancel] creative:', error.message);
+        });
+      setCreativeItems(prev => prev.map(i => i.id === item.id
+        ? { ...i, status: 'failed', endedAt: Date.now(), resultMessage: msg }
+        : i,
+      ));
+    }
+  };
+
   return (
     <div className="gen-queue-host" role="status" aria-live="polite">
       <button
@@ -279,7 +332,7 @@ function AdminGenerationQueueHost() {
                 {tab === 'failed'  && 'No failures in the last hour.'}
               </div>
             ) : (
-              visible.map(i => <QueueRow key={i.id} item={i} now={now} />)
+              visible.map(i => <QueueRow key={i.id} item={i} now={now} onCancel={cancelItem} />)
             )}
           </div>
         </div>
@@ -288,7 +341,7 @@ function AdminGenerationQueueHost() {
   );
 }
 
-function QueueRow({ item, now }: { item: QueueItem; now: number }) {
+function QueueRow({ item, now, onCancel }: { item: QueueItem; now: number; onCancel: (item: QueueItem) => void }) {
   const elapsed = (item.endedAt ?? now) - item.startedAt;
   const ratio = item.status === 'running'
     ? Math.min(0.96, elapsed / Math.max(1, item.estimatedMs))
@@ -308,6 +361,20 @@ function QueueRow({ item, now }: { item: QueueItem; now: number }) {
         <div className="gen-queue-row-head">
           <span className="gen-queue-label">{item.label}</span>
           <span className="gen-queue-remaining">{remaining}</span>
+          {item.status === 'running' && (
+            <button
+              type="button"
+              className="gen-queue-cancel"
+              aria-label="Cancel this job"
+              title="Cancel this job"
+              onClick={() => onCancel(item)}
+            >
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+          )}
         </div>
         {(item.context || item.model || kindLabel) && (
           <div className="gen-queue-context">
