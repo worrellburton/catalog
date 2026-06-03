@@ -21,6 +21,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import ParticleBackground from './ParticleBackground';
+import { particleControls } from '~/services/particles';
 import { addProductUrl } from '~/services/scrape-product';
 import { researchProducts, type ResearchedProduct } from '~/services/product-research';
 
@@ -99,6 +100,19 @@ export default function AddProductV2({ onCancel, onQueued }: Props) {
     const id = requestAnimationFrame(() => setMounted(true));
     return () => cancelAnimationFrame(id);
   }, []);
+
+  // Vortex the WebGL particle field while we're talking to the scraper.
+  // particleControls.speed is read every frame by the singleton
+  // ParticleBackground, so writing a high value here spins the field;
+  // we restore the default when the phase ends. Same pattern
+  // SearchCeremony uses for its "searching the world" sweep.
+  useEffect(() => {
+    const SPINNING = phase === 'queuing' || phase === 'searching' || phase === 'progress';
+    if (!SPINNING) return;
+    const prev = particleControls.speed;
+    particleControls.speed = 4.5;
+    return () => { particleControls.speed = prev; };
+  }, [phase]);
 
   // Tick a progress bar from 0 → 100 across the expected scrape window.
   // We start it when we enter 'progress'. It's purely visual — the

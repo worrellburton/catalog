@@ -1829,22 +1829,56 @@ html[data-shell="catalog-app"] .my-looks-overlay {
 }
 .my-cat-tile-dot--live      { background: #22c55e; box-shadow: 0 0 6px rgba(34, 197, 94, 0.65), 0 1px 4px rgba(0, 0, 0, 0.35); }
 .my-cat-tile-dot--submitted,
-.my-cat-tile-dot--in_review { background: #f59e0b; }
-.my-cat-tile-dot--draft     { background: #9ca3af; }
+.my-cat-tile-dot--in_review,
+.my-cat-tile-dot--draft,
 .my-cat-tile-dot--archived,
-.my-cat-tile-dot--denied    { background: #ef4444; }
+.my-cat-tile-dot--denied    { background: #f59e0b; }
 
-/* Small inline dot used inside the mobile tray's "Make live / Hide"
-   toggle — mirrors the color of the FUTURE state so the user sees
-   what the tile dot will become after they tap. */
+/* Small inline dot used inside the mobile tray's status segmented
+   control — same palette as the tile (green=live, yellow=anything
+   else). */
 .my-cat-tray-dot {
   width: 10px;
   height: 10px;
   border-radius: 50%;
   flex-shrink: 0;
 }
-.my-cat-tray-dot--live      { background: #22c55e; box-shadow: 0 0 6px rgba(34, 197, 94, 0.65); }
-.my-cat-tray-dot--archived  { background: #ef4444; }
+.my-cat-tray-dot--live     { background: #22c55e; box-shadow: 0 0 6px rgba(34, 197, 94, 0.65); }
+.my-cat-tray-dot--inactive { background: #f59e0b; }
+.my-cat-tray-dot--archived { background: #f59e0b; }
+
+/* Live / Inactive segmented control row in the tray. Two pills side
+   by side; the one matching the current state is dimmed + inert. */
+.my-cat-tray-status-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 6px 6px 0;
+}
+.my-cat-tray-status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.my-cat-tray-status-pill.is-current {
+  background: rgba(255, 255, 255, 0.10);
+  cursor: default;
+  opacity: 0.85;
+}
+.my-cat-tray-status-pill:not(.is-current):hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.22);
+}
 
 /* Edit / Archive / Delete row - shown only when Creator Mode is on.
    Top-right of the tile. Stops pointer events from reaching the
@@ -3309,3 +3343,34 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   color: rgba(255, 255, 255, 0.75);
   white-space: nowrap;
 }
+
+/* Hero block is now a button — tapping anywhere on it opens the
+   profile / edit screen via catalog:open-profile. Strip native
+   button chrome and make it look like a flat tappable card. */
+.my-cat-hero--button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  width: 100%;
+  padding: 24px 16px 28px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.025);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: background 180ms ease, border-color 180ms ease;
+}
+.my-cat-hero--button:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+.my-cat-hero--button:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.4);
+  outline-offset: 2px;
+}
+/* "My info" pill inside the button is presentation only now (no
+   onClick) so it doesn't need its own hover ramp. Keep the styling
+   but stop it from looking interactive on its own. */
+.my-cat-hero--button .my-cat-hero-info { pointer-events: none; }
