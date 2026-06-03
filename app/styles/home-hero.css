@@ -366,14 +366,19 @@
    fires on a real scroll. Done with margin-top on the feed wrapper
    (not by shrinking the hero box), so the spark + headline + bar trio
    keeps its centered geometry intact. */
+/* Feed-peek: the home feed noses up under the hero so a strip of the
+   first cards is visible above the fold, reading as "there's more
+   below". We previously pulled it up by -7vh / -3.5svh, but that
+   distance covered the "Scroll to see most popular" cue near the
+   bottom of the hero. Dialled back to zero on desktop and +2svh
+   breathing room on mobile so the scroll cue + the swiping-finger
+   glyph both stay fully visible above the peek. */
 .app-root.home-hero:not(.hero-scrolled) .home-feed-wrap {
-  margin-top: -7vh;
+  margin-top: 0;
 }
 @media (max-width: 768px) {
-  /* Mobile: tighter peek so the cards just nose into view + the scroll
-     hint stays visible above them. */
   .app-root.home-hero:not(.hero-scrolled) .home-feed-wrap {
-    margin-top: -3.5svh;
+    margin-top: 2svh;
   }
 }
 
