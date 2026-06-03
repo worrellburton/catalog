@@ -3160,3 +3160,152 @@ html[data-shell="catalog-app"] .my-looks-overlay {
     transform: none;
   }
 }
+
+/* ──────────────────────────────────────────────────────────────────
+   MyLooks: back FAB joins the top-right row + my-info hero button
+   + scrollable analytics modal with time-range pills.
+   ────────────────────────────────────────────────────────────────── */
+
+/* Back FAB — same pill as the analytics + create buttons. Sits as
+   the leftmost item in .my-cat-fab-row. */
+.my-cat-back-fab svg { display: block; }
+
+/* My info pill on the hero — same slot the public CreatorPage uses
+   for Follow. Subtle dark glass with a white outline so it reads
+   as an inline action, not a primary CTA. */
+.my-cat-hero-info {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  margin-bottom: 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.92);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease;
+}
+.my-cat-hero-info:hover {
+  background: rgba(255, 255, 255, 0.10);
+  border-color: rgba(255, 255, 255, 0.24);
+}
+
+/* Analytics modal: scrollable detail. The base
+   .my-cat-analytics-card is fixed-height; this variant relaxes the
+   cap and lets the detail rails (top look, top products by metric)
+   scroll inside the card. */
+.my-cat-analytics-card--scroll {
+  max-height: min(82dvh, 720px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Time-range pill row. Horizontally scrollable on phones — there
+   are 7 options and they'd otherwise wrap awkwardly. */
+.my-cat-analytics-range {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 0 0 12px;
+  margin: -4px 0 6px;
+}
+.my-cat-analytics-range::-webkit-scrollbar { display: none; }
+.my-cat-analytics-range-pill {
+  flex-shrink: 0;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  color: rgba(255, 255, 255, 0.75);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.my-cat-analytics-range-pill.is-active {
+  background: #fff;
+  color: #111;
+  border-color: #fff;
+}
+
+/* Detail sections — top look + product rails. */
+.my-cat-analytics-section {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.my-cat-analytics-section h3 {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.55);
+  margin: 0 0 10px;
+}
+.my-cat-analytics-toplook {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.my-cat-analytics-toplook-title { font-size: 14px; font-weight: 600; color: #fff; }
+.my-cat-analytics-toplook-meta  { font-size: 12px; color: rgba(255,255,255,0.6); }
+
+.my-cat-analytics-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.my-cat-analytics-list-row {
+  display: grid;
+  grid-template-columns: 18px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+}
+.my-cat-analytics-list-rank {
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.45);
+  text-align: center;
+}
+.my-cat-analytics-list-name {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-size: 13px;
+  color: #fff;
+}
+.my-cat-analytics-list-name > span:not(.my-cat-analytics-list-brand) {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.my-cat-analytics-list-brand {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.5);
+}
+.my-cat-analytics-list-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.75);
+  white-space: nowrap;
+}

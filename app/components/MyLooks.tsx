@@ -76,8 +76,11 @@ export default function MyLooks({ onClose }: MyLooksProps) {
   // Delete confirmation.
   const [deleteConfirm, setDeleteConfirm] = useState<string | null>(null);
 
-  // Analytics modal — opened from the bar-chart FAB in the top-right.
-  const [showAnalytics, setShowAnalytics] = useState(false);
+  // Analytics modal. analyticsLook = null means the FAB opened it
+  // (catalog-wide view). analyticsLook = a ManagedLook means the
+  // tile tray opened it (per-look view).
+  const [analyticsLook, setAnalyticsLook] = useState<ManagedLook | null>(null);
+  const [showAnalyticsOpen, setShowAnalyticsOpen] = useState(false);
 
   // Catalog theme is now PINNED to dark across every viewer. The
   // light variant kept getting toggled on by accident and the user
@@ -257,22 +260,24 @@ export default function MyLooks({ onClose }: MyLooksProps) {
 
   return (
     <div className="my-cat-page">
-      {/* Top-left back. Mirrors CreatorPage.creator-back. */}
-      <button className="my-cat-back" onClick={onClose} aria-label="Back">
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <polyline points="15 18 9 12 15 6"/>
-        </svg>
-        Back
-      </button>
-
-      {/* Top-right pair: analytics + create. The catalog theme toggle
-          that used to live first in this row has been removed — every
-          catalog feed is now dark-only (see catalogTheme constant
-          above). */}
+      {/* Top-right trio: Back / Analytics / Create. All three share
+          the same .my-cat-create-fab pill so they sit on the same
+          horizontal plane in the same style — Back is no longer a
+          floating text-link in the opposite corner. */}
       <div className="my-cat-fab-row">
         <button
+          className="my-cat-create-fab my-cat-back-fab"
+          onClick={onClose}
+          aria-label="Back"
+          title="Back"
+        >
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <polyline points="15 18 9 12 15 6"/>
+          </svg>
+        </button>
+        <button
           className="my-cat-create-fab my-cat-analytics-fab"
-          onClick={() => setShowAnalytics(true)}
+          onClick={() => { setAnalyticsLook(null); setShowAnalyticsOpen(true); }}
           aria-label="Analytics"
           title="Analytics"
         >
@@ -370,7 +375,12 @@ export default function MyLooks({ onClose }: MyLooksProps) {
         </div>
       </div>
 
-      {showAnalytics && <CreatorAnalyticsModal onClose={() => setShowAnalytics(false)} />}
+      {showAnalyticsOpen && (
+        <CreatorAnalyticsModal
+          look={analyticsLook}
+          onClose={() => setShowAnalyticsOpen(false)}
+        />
+      )}
 
       {/* Hero — same layout as CreatorPage.creator-hero. */}
       <div className="my-cat-hero">
@@ -381,6 +391,23 @@ export default function MyLooks({ onClose }: MyLooksProps) {
         )}
         <span className="my-cat-hero-curated">Curated by</span>
         <h1 className="my-cat-hero-name">{displayName}</h1>
+
+        {/* "My info" sits in the same slot where the public CreatorPage
+            shows the Follow button. Tapping it opens the profile/info
+            screen via the catalog:open-profile event the main route
+            listens for. */}
+        <button
+          type="button"
+          className="my-cat-hero-info"
+          onClick={() => window.dispatchEvent(new CustomEvent('catalog:open-profile'))}
+          aria-label="My info"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <circle cx="12" cy="8" r="4" />
+            <path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1" />
+          </svg>
+          My info
+        </button>
 
         <p className="my-cat-hero-stats">
           {counts.all === 0
@@ -578,7 +605,7 @@ export default function MyLooks({ onClose }: MyLooksProps) {
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" /></svg>
                 <span>Share</span>
               </button>
-              <button className="my-cat-tray-action" onClick={() => { setTrayLook(null); setShowAnalytics(true); }}>
+              <button className="my-cat-tray-action" onClick={() => { const l = trayLook; setTrayLook(null); setAnalyticsLook(l); setShowAnalyticsOpen(true); }}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="20" x2="21" y2="20"/><rect x="6"  y="11" width="3" height="9"/><rect x="11" y="6"  width="3" height="14"/><rect x="16" y="14" width="3" height="6"/></svg>
                 <span>Analytics</span>
               </button>
@@ -634,65 +661,321 @@ interface CreatorStatsRow {
   total_clickouts: number;
 }
 
+// ── Time-range filter ────────────────────────────────────────────
+// Pill row at the top of the analytics modal. Values resolve to a
+// concrete (startISO, endISO|null) at query time so the same code
+// path serves "today" and "all time" without branching.
+type RangeId = 'all' | 'today' | 'yesterday' | 'thisWeek' | 'lastWeek' | 'thisMonth' | 'lastMonth';
+const RANGE_LABELS: Record<RangeId, string> = {
+  all:       'All time',
+  today:     'Today',
+  yesterday: 'Yesterday',
+  thisWeek:  'This week',
+  lastWeek:  'Last week',
+  thisMonth: 'This month',
+  lastMonth: 'Last month',
+};
+const RANGE_ORDER: RangeId[] = ['all','today','yesterday','thisWeek','lastWeek','thisMonth','lastMonth'];
+
+function rangeBounds(r: RangeId): { startISO: string | null; endISO: string | null } {
+  const now = new Date();
+  const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const startOfWeek = (() => {
+    const d = new Date(startOfToday);
+    const day = (d.getDay() + 6) % 7; // Monday=0
+    d.setDate(d.getDate() - day);
+    return d;
+  })();
+  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  if (r === 'all')       return { startISO: null, endISO: null };
+  if (r === 'today')     return { startISO: startOfToday.toISOString(), endISO: null };
+  if (r === 'yesterday') {
+    const yesterday = new Date(startOfToday); yesterday.setDate(yesterday.getDate() - 1);
+    return { startISO: yesterday.toISOString(), endISO: startOfToday.toISOString() };
+  }
+  if (r === 'thisWeek')  return { startISO: startOfWeek.toISOString(), endISO: null };
+  if (r === 'lastWeek') {
+    const lwStart = new Date(startOfWeek); lwStart.setDate(lwStart.getDate() - 7);
+    return { startISO: lwStart.toISOString(), endISO: startOfWeek.toISOString() };
+  }
+  if (r === 'thisMonth') return { startISO: startOfMonth.toISOString(), endISO: null };
+  // lastMonth
+  const lmStart = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  return { startISO: lmStart.toISOString(), endISO: startOfMonth.toISOString() };
+}
+
+// Shape returned by the loader — handles BOTH per-look and catalog-
+// wide queries. Per-look just leaves the *List arrays empty.
+interface AnalyticsData {
+  impressions: number;
+  clicks: number;
+  clickouts: number;
+  // Catalog-wide detail. Empty in per-look mode.
+  topLook: { id: string; title: string; impressions: number; clicks: number; ctr: number } | null;
+  topProductsByImpressions: { name: string; brand: string | null; count: number }[];
+  topProductsByClicks: { name: string; brand: string | null; count: number }[];
+  topProductsByClickouts: { name: string; brand: string | null; count: number }[];
+}
+
 /**
- * Modal that surfaces the creator's own analytics rollup. Same RPC
- * the admin Creators tab uses (user_creator_analytics_summary) —
- * we filter to the signed-in user's row so the creator sees just
- * their numbers without admin clutter.
+ * Analytics modal. Catalog-wide when `look` is null; per-look when
+ * a ManagedLook is passed in. The time-range pill row at the top
+ * scopes every metric so the user can flick between today / week /
+ * month without leaving the modal.
  */
-function CreatorAnalyticsModal({ onClose }: { onClose: () => void }) {
-  const [row, setRow] = useState<CreatorStatsRow | null>(null);
+function CreatorAnalyticsModal({ look, onClose }: { look: ManagedLook | null; onClose: () => void }) {
+  const { user } = useAuth();
+  const userId = user?.id || null;
+  const [range, setRange] = useState<RangeId>('all');
+  const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      if (!supabase) { setLoading(false); return; }
-      const { data: { user: signedIn } } = await supabase.auth.getUser();
-      if (!signedIn?.id) { if (!cancelled) setLoading(false); return; }
-      const { data } = await supabase.rpc('user_creator_analytics_summary');
-      if (cancelled) return;
-      const mine = (data as CreatorStatsRow[] | null)?.find(r => r.user_id === signedIn.id) ?? null;
-      setRow(mine);
-      setLoading(false);
-    })();
-    return () => { cancelled = true; };
-  }, []);
-
+  // Escape closes the modal — mirrors the legacy behavior.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [onClose]);
 
-  const clickThroughPct = row && row.total_impressions > 0
-    ? ((row.total_clicks / row.total_impressions) * 100).toFixed(1)
+  // Re-fetch whenever the look scope or the time range changes.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!supabase || !userId) { setLoading(false); return; }
+      setLoading(true);
+      const { startISO, endISO } = rangeBounds(range);
+
+      // ── Per-look mode ─────────────────────────────────────────
+      // Three simple counts against user_events. Clickouts are
+      // attributed by joining look_products → user_events on the
+      // product target_uuid.
+      if (look) {
+        const baseImpressions = supabase.from('user_events')
+          .select('id', { count: 'exact', head: true })
+          .eq('event_type', 'impression').eq('target_type', 'look').eq('target_uuid', look.id);
+        const baseClicks = supabase.from('user_events')
+          .select('id', { count: 'exact', head: true })
+          .eq('event_type', 'click').eq('target_type', 'look').eq('target_uuid', look.id);
+
+        const productIds = (look.look_products || [])
+          .map(lp => lp.products?.id).filter((v): v is string => !!v);
+
+        const [imp, clk, clko] = await Promise.all([
+          (startISO ? baseImpressions.gte('created_at', startISO) : baseImpressions),
+          (startISO ? baseClicks.gte('created_at', startISO) : baseClicks),
+          productIds.length > 0
+            ? (() => {
+                let q = supabase!.from('user_events')
+                  .select('id', { count: 'exact', head: true })
+                  .eq('event_type', 'clickout').eq('target_type', 'product').in('target_uuid', productIds);
+                if (startISO) q = q.gte('created_at', startISO);
+                if (endISO) q = q.lt('created_at', endISO);
+                return q;
+              })()
+            : Promise.resolve({ count: 0, data: null, error: null }),
+        ]);
+        if (cancelled) return;
+        setData({
+          impressions: imp.count || 0,
+          clicks: clk.count || 0,
+          clickouts: clko.count || 0,
+          topLook: null,
+          topProductsByImpressions: [],
+          topProductsByClicks: [],
+          topProductsByClickouts: [],
+        });
+        setLoading(false);
+        return;
+      }
+
+      // ── Catalog-wide mode ──────────────────────────────────────
+      // Pull raw events (capped at 10k for sanity) scoped to this
+      // creator's content via target_owner_id, then aggregate in JS
+      // so we can compute "top look" + "top products by metric"
+      // without three more RPCs.
+      let evQ = supabase.from('user_events')
+        .select('event_type, target_type, target_uuid, target_id, context, created_at')
+        .eq('target_owner_id', userId)
+        .in('event_type', ['impression','click','clickout'])
+        .order('created_at', { ascending: false })
+        .limit(10_000);
+      if (startISO) evQ = evQ.gte('created_at', startISO);
+      if (endISO) evQ = evQ.lt('created_at', endISO);
+      const { data: events } = await evQ;
+      if (cancelled) return;
+
+      // Map look_id → counts so we can find the top performer.
+      const lookAgg = new Map<string, { impressions: number; clicks: number }>();
+      const impByProduct = new Map<string, { brand: string | null; name: string; count: number }>();
+      const clkByProduct = new Map<string, { brand: string | null; name: string; count: number }>();
+      const clkoByProduct = new Map<string, { brand: string | null; name: string; count: number }>();
+      let totalImp = 0, totalClk = 0, totalClko = 0;
+
+      const splitContext = (ctx: string | null): { brand: string | null; name: string } => {
+        if (!ctx) return { brand: null, name: 'Product' };
+        const parts = ctx.split(' · ');
+        if (parts.length >= 2) return { brand: parts[0], name: parts.slice(1).join(' · ') };
+        return { brand: null, name: ctx };
+      };
+
+      (events || []).forEach(e => {
+        if (e.event_type === 'impression' && e.target_type === 'look' && e.target_uuid) {
+          totalImp++;
+          const slot = lookAgg.get(e.target_uuid) || { impressions: 0, clicks: 0 };
+          slot.impressions++;
+          lookAgg.set(e.target_uuid, slot);
+        }
+        if (e.event_type === 'click' && e.target_type === 'look' && e.target_uuid) {
+          totalClk++;
+          const slot = lookAgg.get(e.target_uuid) || { impressions: 0, clicks: 0 };
+          slot.clicks++;
+          lookAgg.set(e.target_uuid, slot);
+        }
+        if (e.event_type === 'impression' && e.target_type === 'product' && e.target_uuid) {
+          const key = e.target_uuid;
+          const meta = splitContext(e.context as string | null);
+          const slot = impByProduct.get(key) || { ...meta, count: 0 };
+          slot.count++;
+          impByProduct.set(key, slot);
+        }
+        if (e.event_type === 'click' && e.target_type === 'product' && e.target_uuid) {
+          const key = e.target_uuid;
+          const meta = splitContext(e.context as string | null);
+          const slot = clkByProduct.get(key) || { ...meta, count: 0 };
+          slot.count++;
+          clkByProduct.set(key, slot);
+        }
+        if (e.event_type === 'clickout' && (e.target_type === 'product' || e.target_type === 'product_url')) {
+          totalClko++;
+          const key = (e.target_uuid as string | null) || (e.target_id as string | null) || `_${totalClko}`;
+          const meta = splitContext(e.context as string | null);
+          const slot = clkoByProduct.get(key) || { ...meta, count: 0 };
+          slot.count++;
+          clkoByProduct.set(key, slot);
+        }
+      });
+
+      // Top look by impressions, then resolve its title from props.
+      let topLook: AnalyticsData['topLook'] = null;
+      if (lookAgg.size > 0) {
+        const [topId, topRow] = [...lookAgg.entries()].sort((a, b) => b[1].impressions - a[1].impressions)[0];
+        const title = (events || [])
+          .find(e => e.target_uuid === topId && (e.context as string | null))?.context as string | null
+          || 'Look';
+        topLook = {
+          id: topId,
+          title,
+          impressions: topRow.impressions,
+          clicks: topRow.clicks,
+          ctr: topRow.impressions > 0 ? (topRow.clicks / topRow.impressions) * 100 : 0,
+        };
+      }
+
+      const topN = <T extends { count: number }>(m: Map<string, T>, n: number) =>
+        [...m.values()].sort((a, b) => b.count - a.count).slice(0, n);
+
+      setData({
+        impressions: totalImp,
+        clicks: totalClk,
+        clickouts: totalClko,
+        topLook,
+        topProductsByImpressions: topN(impByProduct, 5),
+        topProductsByClicks: topN(clkByProduct, 5),
+        topProductsByClickouts: topN(clkoByProduct, 5),
+      });
+      setLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [look, userId, range]);
+
+  const ctr = data && data.impressions > 0
+    ? ((data.clicks / data.impressions) * 100).toFixed(1)
     : null;
-  const clickoutPct = row && row.total_clicks > 0
-    ? ((row.total_clickouts / row.total_clicks) * 100).toFixed(1)
+  const clickoutPct = data && data.clicks > 0
+    ? ((data.clickouts / data.clicks) * 100).toFixed(1)
     : null;
+
+  const heading = look ? (look.title || 'This look') : 'Your catalog';
 
   return (
     <div className="my-cat-analytics-backdrop" onClick={onClose} role="dialog" aria-modal="true">
-      <div className="my-cat-analytics-card" onClick={e => e.stopPropagation()}>
+      <div className="my-cat-analytics-card my-cat-analytics-card--scroll" onClick={e => e.stopPropagation()}>
         <header className="my-cat-analytics-head">
-          <h2>Your analytics</h2>
+          <h2>{heading}</h2>
           <button type="button" className="my-cat-analytics-close" onClick={onClose} aria-label="Close">×</button>
         </header>
+
+        {/* Time-range pill row — same options for both views. */}
+        <div className="my-cat-analytics-range" role="tablist" aria-label="Time range">
+          {RANGE_ORDER.map(r => (
+            <button
+              key={r}
+              type="button"
+              role="tab"
+              aria-selected={range === r}
+              className={`my-cat-analytics-range-pill${range === r ? ' is-active' : ''}`}
+              onClick={() => setRange(r)}
+            >{RANGE_LABELS[r]}</button>
+          ))}
+        </div>
+
         {loading ? (
           <div className="my-cat-analytics-empty">Loading…</div>
-        ) : !row ? (
-          <div className="my-cat-analytics-empty">No analytics yet — your looks need impressions before stats land here.</div>
+        ) : !data ? (
+          <div className="my-cat-analytics-empty">No analytics yet.</div>
         ) : (
-          <div className="my-cat-analytics-grid">
-            <Stat label="Looks live"     value={row.looks_posted.toLocaleString()} />
-            <Stat label="Impressions"    value={row.total_impressions.toLocaleString()} />
-            <Stat label="Clicks"         value={row.total_clicks.toLocaleString()} sub={clickThroughPct ? `${clickThroughPct}% CTR` : undefined} />
-            <Stat label="Clickouts"      value={row.total_clickouts.toLocaleString()} sub={clickoutPct ? `${clickoutPct}% of clicks` : undefined} />
-          </div>
+          <>
+            <div className="my-cat-analytics-grid">
+              <Stat label="Impressions" value={data.impressions.toLocaleString()} />
+              <Stat label="Clicks"      value={data.clicks.toLocaleString()} sub={ctr ? `${ctr}% CTR` : undefined} />
+              <Stat label="Clickouts"   value={data.clickouts.toLocaleString()} sub={clickoutPct ? `${clickoutPct}% of clicks` : undefined} />
+            </div>
+
+            {!look && data.topLook && (
+              <section className="my-cat-analytics-section">
+                <h3>Top look</h3>
+                <div className="my-cat-analytics-toplook">
+                  <span className="my-cat-analytics-toplook-title">{data.topLook.title}</span>
+                  <span className="my-cat-analytics-toplook-meta">
+                    {data.topLook.impressions.toLocaleString()} impressions · {data.topLook.clicks.toLocaleString()} clicks · {data.topLook.ctr.toFixed(1)}% CTR
+                  </span>
+                </div>
+              </section>
+            )}
+
+            {!look && data.topProductsByImpressions.length > 0 && (
+              <ProductsSection title="Top products by impressions" rows={data.topProductsByImpressions} unit="impressions" />
+            )}
+            {!look && data.topProductsByClicks.length > 0 && (
+              <ProductsSection title="Top products by clicks" rows={data.topProductsByClicks} unit="clicks" />
+            )}
+            {!look && data.topProductsByClickouts.length > 0 && (
+              <ProductsSection title="Top products by clickouts" rows={data.topProductsByClickouts} unit="clickouts" />
+            )}
+          </>
         )}
       </div>
     </div>
+  );
+}
+
+function ProductsSection({ title, rows, unit }: { title: string; rows: { name: string; brand: string | null; count: number }[]; unit: string }) {
+  return (
+    <section className="my-cat-analytics-section">
+      <h3>{title}</h3>
+      <ol className="my-cat-analytics-list">
+        {rows.map((r, i) => (
+          <li key={`${title}-${i}`} className="my-cat-analytics-list-row">
+            <span className="my-cat-analytics-list-rank">{i + 1}</span>
+            <span className="my-cat-analytics-list-name">
+              {r.brand && <span className="my-cat-analytics-list-brand">{r.brand}</span>}
+              <span>{r.name}</span>
+            </span>
+            <span className="my-cat-analytics-list-count">{r.count.toLocaleString()} {unit}</span>
+          </li>
+        ))}
+      </ol>
+    </section>
   );
 }
 
