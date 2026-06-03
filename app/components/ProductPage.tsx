@@ -9,7 +9,8 @@ import FollowIconButton from '~/components/FollowIconButton';
 import { useTrailVideo } from '~/components/TrailVideoHost';
 import { useInViewport } from '~/hooks/useInViewport';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
-import { trackAdClick, prefetchSimilarProducts, type ProductAd } from '~/services/product-creative';
+import { trackAdClick, prefetchSimilarProducts, getSimilarProductsDiagnostics, type ProductAd } from '~/services/product-creative';
+import SimilarDebugModal, { buildProductSimilarReport, type SimilarDebugReport } from '~/components/SimilarDebugModal';
 import { getProductDetails, type ProductDetails } from '~/services/product-details';
 import ProductMeasurementsDiagram from '~/components/ProductMeasurementsDiagram';
 import { type GraphPair } from '~/services/graph-pairs';
@@ -604,6 +605,28 @@ export default function ProductPage({
     () => pickFrom(similarCreatives),
     [similarCreatives, pickFrom],
   );
+
+  // Super-admin "why this rail?" debug. Lazily computes the full diagnostics
+  // (gender gate, relative band, sparse widen, per-candidate distances) only
+  // when a super admin opens it — the live rail never pays for it.
+  const isSuperAdmin = user?.role === 'super_admin';
+  const [simDebug, setSimDebug] = useState<{ open: boolean; loading: boolean; report: SimilarDebugReport | null }>(
+    { open: false, loading: false, report: null },
+  );
+  const openSimilarDebug = useCallback(async () => {
+    setSimDebug({ open: true, loading: true, report: null });
+    try {
+      const diag = await getSimilarProductsDiagnostics(ownProductId, 18);
+      const report = buildProductSimilarReport(diag, {
+        seedName: product.name,
+        seedBrand: product.brand,
+        ownBrand,
+      });
+      setSimDebug({ open: true, loading: false, report });
+    } catch {
+      setSimDebug({ open: true, loading: false, report: null });
+    }
+  }, [ownProductId, ownBrand, product.name, product.brand]);
 
   // "Popular" — shown only when moreLikeThis is empty.
   // Filtered to the same product type so we never show unrelated items.
@@ -1246,7 +1269,20 @@ export default function ProductPage({
             for open-ended exploration. */}
         {similarEnabled && moreLikeThis.length > 0 && (
           <section className="pd-similar-feed">
-            <h2 className="pd-feed-title">Similar</h2>
+            <h2 className="pd-feed-title">
+              Similar
+              {isSuperAdmin && (
+                <button
+                  type="button"
+                  className="sim-debug-btn"
+                  onClick={openSimilarDebug}
+                  aria-label="Why these? (super-admin debug)"
+                  title="Why these? (super-admin debug)"
+                >
+                  ⓘ why
+                </button>
+              )}
+            </h2>
             <div className="pd-similar-grid">
               {/* CreativeCard handles the layoutId morph + shared video element
                   so a tap here continues the trail with the same fluid handoff. */}
@@ -1336,6 +1372,13 @@ export default function ProductPage({
           ) : null
         )}
       </div>
+      {simDebug.open && (
+        <SimilarDebugModal
+          report={simDebug.report}
+          loading={simDebug.loading}
+          onClose={() => setSimDebug({ open: false, loading: false, report: null })}
+        />
+      )}
     </div>
   );
 }

@@ -1372,6 +1372,114 @@ export async function getSimilarProductsByEmbedding(seedProductId: string, k = 1
   return chosen.slice(0, k).map(c => c.ad);
 }
 
+// ── Similar "why" diagnostics (super-admin debug) ────────────────────────
+// A read-only mirror of getSimilarProductsByEmbedding that returns every
+// internal signal instead of just the final tiles, so a super admin can see
+// exactly how the rail was fetched, filtered and ranked. Kept deliberately
+// separate from the hot path: the live rail never pays for this, and the two
+// can't drift because this re-derives the same anchor / band / widen math.
+export interface SimilarCandidateDiag {
+  rank: number;            // original RPC order (0 = nearest neighbour)
+  id: string;
+  name: string | null;
+  brand: string | null;
+  type: string | null;     // category the RPC gated on
+  gender: string | null;
+  distance: number;        // pgvector cosine distance from the seed embedding
+  passesGender: boolean;   // survives the shopper-gender gate
+  withinStrict: boolean;   // inside the dial's strict relative band
+  chosen: boolean;         // returned to the rail (post gender + band/widen)
+}
+
+export interface SimilarProductDiagnostics {
+  ok: boolean;
+  seedProductId: string;
+  shopperGender: string;
+  threshold: number;        // product_similarity_threshold dial, 0–100
+  dialFrac: number;         // threshold / 100
+  fetchK: number;           // rows requested from the RPC
+  requestedK: number;       // final rail size we slice to
+  rawCount: number;         // rows the RPC returned
+  genderPassCount: number;  // rows surviving the gender gate
+  anchorDistance: number | null; // nearest gender-passing distance
+  strictMax: number;        // strict band cutoff (Infinity when dial = 0)
+  minSimilar: number;       // sparse-band trigger count
+  widened: boolean;         // did the 3× sparse widen kick in
+  widenedMax: number | null;
+  chosenCount: number;
+  candidates: SimilarCandidateDiag[];
+}
+
+export async function getSimilarProductsDiagnostics(
+  seedProductId: string,
+  k = 18,
+): Promise<SimilarProductDiagnostics> {
+  const empty: SimilarProductDiagnostics = {
+    ok: false, seedProductId, shopperGender, threshold: 0, dialFrac: 0,
+    fetchK: 0, requestedK: k, rawCount: 0, genderPassCount: 0,
+    anchorDistance: null, strictMax: Infinity, minSimilar: Math.min(k, 6),
+    widened: false, widenedMax: null, chosenCount: 0, candidates: [],
+  };
+  if (!supabase || !seedProductId) return empty;
+
+  const threshold = await ensureProductSimilarityThreshold();
+  const fetchK = Math.min(k * 5, 100);
+  const { data, error } = await supabase.rpc('find_similar_products', { seed_id: seedProductId, k: fetchK, seed_type: null });
+  if (error || !data) return { ...empty, threshold, dialFrac: threshold / 100, fetchK };
+
+  const rows = (data as SimilarProductRow[]) || [];
+  // Same ordering of gates the live path uses: gender first, then the
+  // dial-relative band anchored on the nearest VISIBLE (gender-passing) row.
+  const genderPass = rows.filter(r => passesGenderFilter({ gender: r.gender }));
+  const anchorDistance = genderPass.length > 0 ? genderPass[0].distance : null;
+  const dialFrac = threshold / 100;
+  const strictMax = dialFrac > 0 && anchorDistance != null ? anchorDistance / dialFrac : Infinity;
+
+  const within = genderPass.filter(r => r.distance <= strictMax);
+  const minSimilar = Math.min(k, 6);
+  const widened = within.length < minSimilar && genderPass.length > 0;
+  const widenedMax = widened && anchorDistance != null
+    ? Math.max(strictMax, anchorDistance * 3)
+    : null;
+
+  const cutoff = widened && widenedMax != null ? widenedMax : strictMax;
+  const chosenIds = new Set(
+    genderPass.filter(r => r.distance <= cutoff).slice(0, k).map(r => r.id),
+  );
+
+  const candidates: SimilarCandidateDiag[] = rows.map((r, i) => ({
+    rank: i,
+    id: r.id,
+    name: r.name,
+    brand: r.brand,
+    type: r.type,
+    gender: r.gender,
+    distance: r.distance,
+    passesGender: passesGenderFilter({ gender: r.gender }),
+    withinStrict: r.distance <= strictMax,
+    chosen: chosenIds.has(r.id),
+  }));
+
+  return {
+    ok: true,
+    seedProductId,
+    shopperGender,
+    threshold,
+    dialFrac,
+    fetchK,
+    requestedK: k,
+    rawCount: rows.length,
+    genderPassCount: genderPass.length,
+    anchorDistance,
+    strictMax,
+    minSimilar,
+    widened,
+    widenedMax,
+    chosenCount: chosenIds.size,
+    candidates,
+  };
+}
+
 const similarProductCache = new Map<string, Promise<ProductAd[]>>();
 
 /** Idempotent prefetch for the description-embedding "Similar" rail, keyed by

@@ -1,0 +1,198 @@
+/* Super-admin "why this rail?" debug — the inline trigger chip and the
+   diagnostics popup. Only ever rendered for role === 'super_admin'. */
+
+/* ── Trigger chip (sits inside the section heading) ────────────────────── */
+.sim-debug-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  margin-left: 10px;
+  padding: 3px 9px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  line-height: 1;
+  vertical-align: middle;
+  color: #b6f0d2;
+  background: rgba(45, 212, 138, 0.12);
+  border: 1px solid rgba(45, 212, 138, 0.35);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.sim-debug-btn:hover {
+  background: rgba(45, 212, 138, 0.22);
+  border-color: rgba(45, 212, 138, 0.6);
+}
+
+/* ── Backdrop + card ──────────────────────────────────────────────────── */
+.simdbg-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 4000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(6, 8, 12, 0.72);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.simdbg-card {
+  width: min(820px, 100%);
+  max-height: min(86vh, 900px);
+  display: flex;
+  flex-direction: column;
+  background: #11151c;
+  color: #e7ecf3;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  box-shadow: 0 24px 80px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+}
+.simdbg-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.simdbg-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+}
+.simdbg-sub {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: #93a0b4;
+}
+.simdbg-close {
+  flex: 0 0 auto;
+  width: 30px;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  line-height: 1;
+  color: #aab4c4;
+  background: rgba(255, 255, 255, 0.06);
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+}
+.simdbg-close:hover { color: #fff; background: rgba(255, 255, 255, 0.12); }
+
+.simdbg-loading {
+  padding: 40px 20px;
+  text-align: center;
+  color: #93a0b4;
+  font-size: 13px;
+}
+.simdbg-body {
+  padding: 16px 20px 22px;
+  overflow-y: auto;
+}
+
+/* ── Stat badges ──────────────────────────────────────────────────────── */
+.simdbg-badges {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-bottom: 18px;
+}
+.simdbg-badge {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 6px;
+  padding: 5px 10px;
+  font-size: 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+}
+.simdbg-badge-k { color: #8492a6; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; }
+.simdbg-badge-v { font-weight: 700; font-variant-numeric: tabular-nums; }
+.simdbg-badge.tone-good  { border-color: rgba(45, 212, 138, 0.4); }
+.simdbg-badge.tone-good  .simdbg-badge-v { color: #4ade9e; }
+.simdbg-badge.tone-bad   { border-color: rgba(248, 165, 92, 0.4); }
+.simdbg-badge.tone-bad   .simdbg-badge-v { color: #f8a55c; }
+.simdbg-badge.tone-accent { border-color: rgba(124, 164, 255, 0.4); }
+.simdbg-badge.tone-accent .simdbg-badge-v { color: #9cb8ff; }
+
+/* ── Prose sections ───────────────────────────────────────────────────── */
+.simdbg-section { margin-bottom: 16px; }
+.simdbg-section-h {
+  margin: 0 0 7px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #7ca4ff;
+}
+.simdbg-lines {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+}
+.simdbg-lines li {
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: #c4cdda;
+}
+
+/* ── Candidate table ──────────────────────────────────────────────────── */
+.simdbg-tablewrap {
+  margin-top: 8px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+  overflow: hidden;
+}
+.simdbg-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.simdbg-table th {
+  text-align: left;
+  padding: 8px 10px;
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #8492a6;
+  background: rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.simdbg-table td {
+  padding: 7px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  color: #d6dde7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 220px;
+}
+.simdbg-table .ta-r { text-align: right; }
+.simdbg-table tr.is-out td { opacity: 0.55; }
+.simdbg-table tr.is-in td { background: rgba(45, 212, 138, 0.06); }
+.simdbg-table td.tone-good   { color: #4ade9e; }
+.simdbg-table td.tone-bad    { color: #f8a55c; }
+.simdbg-table td.tone-muted  { color: #7e8a9c; }
+.simdbg-table td.tone-accent { color: #9cb8ff; }
+
+.simdbg-foot {
+  margin: 14px 0 0;
+  font-size: 11.5px;
+  line-height: 1.5;
+  color: #8492a6;
+}
+
+@media (max-width: 600px) {
+  .simdbg-table td { max-width: 130px; }
+  .simdbg-body { padding: 14px 14px 18px; }
+}
