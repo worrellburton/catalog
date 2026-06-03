@@ -607,6 +607,42 @@ export async function deleteUserGeneration(id: string): Promise<{ error: string 
 }
 
 /**
+ * Re-run a finished generation in place. Resets the user_generations
+ * row back to status='pending' + clears video_url / fal_request_id /
+ * error / completed_at, then invokes the generate-look edge function
+ * so the worker picks it up. Same inputs (uploads, products, prompt,
+ * style, model) — the row id stays the same, the source_generation_id
+ * link on any associated looks row stays intact.
+ *
+ * After the worker completes, the user_generations.video_url updates.
+ * The looks_creative row pointing at the old video is auto-rewritten
+ * by the DB trigger looks_creative_sync_from_user_generations so the
+ * consumer feed picks up the new video without the admin re-
+ * publishing. The realtime channel on looks_creative then propagates
+ * the change to every connected shopper tab.
+ */
+export async function regenerateUserGeneration(id: string): Promise<{ error: string | null }> {
+  if (!supabase) return { error: 'Supabase not configured' };
+  const { error: resetErr } = await supabase
+    .from('user_generations')
+    .update({
+      status: 'pending',
+      video_url: null,
+      fal_request_id: null,
+      completed_at: null,
+      error: null,
+    })
+    .eq('id', id);
+  if (resetErr) return { error: resetErr.message };
+  supabase.functions.invoke('generate-look', {
+    body: { generation_id: id },
+  }).then(({ error }) => {
+    if (error) console.warn('[regenerateUserGeneration] invoke error:', error);
+  }).catch(err => console.warn('[regenerateUserGeneration] invoke exception:', err));
+  return { error: null };
+}
+
+/**
  * Flip is_published on a generation. The consumer feed (when wired to
  * surface user-generated looks) filters on this column so a generation
  * only goes public after the user explicitly opts in via the "How did I

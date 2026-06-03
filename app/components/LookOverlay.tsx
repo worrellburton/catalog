@@ -811,7 +811,18 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                         />
                       </div>
                       <div className="product-card-info">
-                        {p.brand && <span className="product-brand">{p.brand}</span>}
+                        {/* Brand + subtype/type chip on the same line so
+                            the shopper sees both "ALO YOGA" and the
+                            specific shape ("Sandals" / "Sneakers" /
+                            etc.) before reading the long product name.
+                            Subtype wins when present — it's the more
+                            specific signal. */}
+                        <span className="product-brand-row">
+                          {p.brand && <span className="product-brand">{p.brand}</span>}
+                          {(p.subtype || p.type) && (
+                            <span className="product-subtype-chip">{p.subtype || p.type}</span>
+                          )}
+                        </span>
                         <span className="product-card-name">{p.name}</span>
                         <span className="product-card-price">{p.price}</span>
                         {shopperBody.heightCm && <SizeMatchBadge product={p} body={shopperBody} />}
