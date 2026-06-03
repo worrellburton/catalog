@@ -361,15 +361,46 @@ html[data-shell="catalog-app"] .profile-page-overlay {
 
 /* Mobile adjustments */
 @media (max-width: 480px) {
+  /* Goal: the whole profile fits one mobile viewport — no scroll. Pin
+     the overlay to the dynamic viewport height, drop the bottom
+     padding that forced a scroll, and tighten every vertical gap so
+     header → avatar → About → Body → Save → Logout all land on screen.
+     dvh (not vh) so the iOS URL bar collapsing doesn't reopen a scroll. */
+  .profile-page-overlay {
+    overflow: hidden;
+  }
   .profile-page-container {
-    padding: 16px 16px 80px;
+    height: 100dvh;
+    display: flex;
+    flex-direction: column;
+    padding: max(12px, env(safe-area-inset-top)) 16px max(12px, env(safe-area-inset-bottom));
+    overflow: hidden;
   }
+  .profile-page-header { margin-bottom: 10px; }
+  .profile-page-body {
+    flex: 1;
+    min-height: 0;
+    justify-content: space-between;
+  }
+  .profile-page-avatar-section { margin-bottom: 8px; }
   .profile-page-avatar-ring {
-    width: 76px;
-    height: 76px;
+    width: 64px;
+    height: 64px;
   }
+  .profile-page-avatar-hint { font-size: 11px; }
+  .profile-page-section { margin-bottom: 12px; }
+  .profile-page-section-title { margin-bottom: 6px; }
+  /* Descriptions are nice-to-have copy — drop them on mobile to buy
+     the vertical room that keeps the page to one screen. */
+  .profile-page-section-desc { display: none; }
+  .profile-page-field { margin-bottom: 10px; }
+  .profile-page-field:last-child { margin-bottom: 0; }
   .profile-page-field-row {
     grid-template-columns: 1fr 1fr;
     gap: 8px;
   }
+  .profile-page-input,
+  .profile-page-select { padding: 8px 12px; }
+  .profile-page-actions { margin-top: 8px; }
+  .profile-page-footer { margin-top: 8px; }
 }

@@ -19,6 +19,7 @@ import { useShopperBody } from '~/hooks/useShopperBody';
 import { usePageSections, isSectionEnabled, getSectionLimit, isSectionInfinite } from '~/hooks/usePageSections';
 import SizeMatchBadge from '~/components/SizeMatchBadge';
 import { director } from '~/services/video-playback-director';
+import ParticleBackground from '~/components/ParticleBackground';
 import {
   pickVideoUrl,
   pickPosterUrl,
@@ -956,6 +957,12 @@ export default function ProductPage({
       role="dialog"
       aria-modal="true"
     >
+      {/* Ambient particle field over the opaque black base — same live
+          background treatment as the look overlay. Sits behind the
+          scroll content. */}
+      <div className="product-page-particles" aria-hidden="true">
+        <ParticleBackground />
+      </div>
       <div className="product-page" ref={setScrollerRef}>
         <button
           className="pd-back"

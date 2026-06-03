@@ -88,19 +88,6 @@ export default function CreatorPage({
   const [userLooks, setUserLooks] = useState<Look[]>([]);
   const [userProducts, setUserProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState<boolean>(!!userId);
-  // The creator's chosen catalog theme — applied for ALL viewers. null
-  // until resolved; treated as the default dark.
-  const [catalogTheme, setCatalogTheme] = useState<'light' | 'dark' | null>(null);
-
-  // Resolve the creator's catalog theme by handle (public read).
-  useEffect(() => {
-    let cancelled = false;
-    if (!creatorName) return;
-    import('~/services/catalog-theme').then(({ getCreatorTheme }) => {
-      getCreatorTheme(creatorName).then(t => { if (!cancelled) setCatalogTheme(t); });
-    });
-    return () => { cancelled = true; };
-  }, [creatorName]);
 
   useEffect(() => {
     if (!userId) { setLoading(false); return; }
@@ -456,13 +443,11 @@ export default function CreatorPage({
   // Initial-letter avatar fallback when profile.avatar_url is missing.
   const initial = (displayName || 'U').trim().charAt(0).toUpperCase() || 'U';
 
-  // The creator's chosen theme applies for everyone. Light catalogs wrap
-  // the page in `.light-mode` so the global descendant rules
-  // (.light-mode .creator-*) recolor it; dark (default) renders as-is.
-  const wrapClass = catalogTheme === 'light' ? 'creator-theme-wrap light-mode' : undefined;
-
+  // Catalog feeds are dark-only now — the per-creator light theme was
+  // retired so every viewer sees the same dark surface (matches the
+  // consumer feed + My Catalogue). No light-mode wrap.
   return (
-    <div className={wrapClass}>
+    <div>
     <div className="creator-page">
       <button className="creator-back" onClick={onClose}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
@@ -500,23 +485,21 @@ export default function CreatorPage({
         <span className="creator-hero-curated">Curated by</span>
         <h1 className="creator-hero-name">{displayName}</h1>
         {userId && currentUser?.id === userId ? (
-          /* Self-view: this is YOUR creator page. The Follow button
-              doesn't make sense (you can't follow yourself), so we
-              replace it with an Edit button that jumps to the
-              creator's MyCatalog editor. _index listens for
-              `catalog:open-my-catalog` and opens the lazy-loaded
-              MyLooks surface. */
+          /* Self-view: this is YOUR creator page. You can't follow
+              yourself, so the Follow slot becomes "My information" —
+              it opens the profile / info screen. _index listens for
+              `catalog:open-profile` and shows the lazy ProfilePage. */
           <button
             className="creator-follow-btn"
-            onClick={() => window.dispatchEvent(new CustomEvent('catalog:open-my-catalog'))}
-            aria-label="Edit your catalog"
+            onClick={() => window.dispatchEvent(new CustomEvent('catalog:open-profile'))}
+            aria-label="My information"
             style={{ background: '#fff', color: '#0f172a', border: '1px solid #cbd5e1', display: 'inline-flex', alignItems: 'center', gap: 8 }}
           >
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-              <path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7" />
-              <path d="M18.5 2.5a2.121 2.121 0 0 1 3 3L12 15l-4 1 1-4 9.5-9.5z" />
+              <circle cx="12" cy="8" r="4" />
+              <path d="M4 21v-1a6 6 0 0 1 6-6h4a6 6 0 0 1 6 6v1" />
             </svg>
-            Edit your catalog
+            My information
           </button>
         ) : (
           <button

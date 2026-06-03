@@ -330,7 +330,7 @@ const CreativeCardV2 = memo(function CreativeCardV2({
   // Look-mode creator-row data (resolved from the static creators map
   // with the same look-level fallbacks the legacy LookCard used).
   const creatorData = isLook && look ? creators[look.creator] : undefined;
-  const creatorAvatar = isLook && look ? (creatorData?.avatar || look.creatorAvatar || '') : '';
+  const creatorAvatar = isLook && look ? (look.creatorAvatar || creatorData?.avatar || '') : '';
   const creatorName = isLook && look
     ? (creatorData?.displayName
         || look.creatorDisplayName

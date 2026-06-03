@@ -55,13 +55,22 @@ export default function FollowIconButton({
       aria-pressed={following}
       title={following ? 'Following — click to unfollow' : 'Follow this creator'}
       aria-label={following ? `Unfollow ${handle}` : `Follow ${handle}`}
-      className="follow-icon-btn"
+      className={`follow-icon-btn ${following ? 'is-following' : 'is-not-following'}`}
       style={{
         width: size,
         height: size,
         borderRadius: '50%',
-        border: `1.5px solid ${following ? 'rgba(255,255,255,0.45)' : 'rgba(255,255,255,0.85)'}`,
-        background: following ? 'rgba(255,255,255,0.18)' : 'transparent',
+        // Following = a "lit" ring: brighter border + a soft white halo
+        // that wraps around and pools below the pill (the light effect
+        // the user asked for). Not following = a crisp outlined "+"
+        // badge that reads as an add affordance.
+        border: `1.5px solid ${following ? 'rgba(255,255,255,0.92)' : 'rgba(255,255,255,0.85)'}`,
+        background: following
+          ? 'radial-gradient(circle at 50% 38%, rgba(255,255,255,0.42), rgba(255,255,255,0.14))'
+          : 'rgba(0,0,0,0.28)',
+        boxShadow: following
+          ? '0 0 6px rgba(255,255,255,0.7), 0 3px 10px rgba(255,255,255,0.45), 0 6px 16px rgba(255,255,255,0.22)'
+          : '0 1px 3px rgba(0,0,0,0.35)',
         color: '#fff',
         cursor: busy ? 'wait' : 'pointer',
         display: 'inline-flex',
@@ -69,7 +78,7 @@ export default function FollowIconButton({
         justifyContent: 'center',
         padding: 0,
         flexShrink: 0,
-        transition: 'background 160ms ease, border-color 160ms ease, transform 160ms ease',
+        transition: 'background 180ms ease, border-color 180ms ease, box-shadow 220ms ease, transform 160ms ease',
         ...style,
       }}
     >

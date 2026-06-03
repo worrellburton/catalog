@@ -327,7 +327,7 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
             }}
           >
             {(() => {
-              const avatar = creatorData?.avatar || look.creatorAvatar || '';
+              const avatar = look.creatorAvatar || creatorData?.avatar || '';
               const name = creatorData?.displayName
                 || look.creatorDisplayName
                 || (look.creator?.startsWith('user:') ? 'User' : look.creator || '');
