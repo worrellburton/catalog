@@ -1,6 +1,6 @@
 import { useReducer, useEffect, useRef, useCallback, useMemo, useState, memo } from 'react';
 import { looks as staticLooksFallback, type Look, type Product } from '~/data/looks';
-import { getLooks, getCachedLooks } from '~/services/looks';
+import { getLooks, getCachedLooks, subscribeToLooksChange } from '~/services/looks';
 import { trackImpression } from '~/services/session-tracker';
 import { getSimilarLooks } from '~/utils/similarity';
 import FeedSection from './FeedSection';
@@ -216,6 +216,18 @@ function ContinuousFeed({
   useEffect(() => {
     if (initialCachedLooks?.length) primeLookAssets(initialCachedLooks);
   }, [initialCachedLooks]);
+  // Realtime sync: services/looks.ts owns a Supabase channel that
+  // listens to looks + looks_creative changes and broadcasts via
+  // subscribeToLooksChange. Whenever an admin deletes / unpublishes /
+  // newly-publishes a look, this listener refetches and the consumer
+  // feed updates live without a refresh. The cache is invalidated
+  // inside the service before the broadcast fires, so getLooks()
+  // here actually round-trips to the DB.
+  useEffect(() => {
+    return subscribeToLooksChange(() => {
+      getLooks().then(setDbLooks).catch(() => {});
+    });
+  }, []);
   // (Looks are now fetched inside the combined effect below — this
   // useEffect preserves the hook-count contract for HMR stability.)
   useEffect(() => { /* combined fetch below handles looks revalidation */ }, []);

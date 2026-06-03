@@ -372,6 +372,25 @@ export function invalidateLooksCache() {
   looksPromise = null;
   creatorsPromise = null;
   suggestionsPromise = null;
+  // Notify every subscribed surface that the cache is stale. Each
+  // listener picks up the new value lazily on its next getLooks()
+  // call — the broadcast just nudges them to re-fetch.
+  for (const cb of looksChangeListeners) {
+    try { cb(); } catch { /* listener threw — keep others alive */ }
+  }
+}
+
+// Subscribers (ContinuousFeed, CreatorPage, anyone rendering the live
+// catalog) register here. The change notification fires whenever the
+// cache is invalidated, either from an in-tab admin mutation OR from
+// the Supabase realtime channel below (cross-tab / cross-user
+// propagation). Listeners typically respond by calling getLooks()
+// again and setting state — no per-row diffing.
+type LooksChangeListener = () => void;
+const looksChangeListeners = new Set<LooksChangeListener>();
+export function subscribeToLooksChange(cb: LooksChangeListener): () => void {
+  looksChangeListeners.add(cb);
+  return () => { looksChangeListeners.delete(cb); };
 }
 
 // Prime the looks + creators caches at module load time, before any React
@@ -387,4 +406,28 @@ if (typeof window !== 'undefined' && USE_SUPABASE) {
   // comes back, regardless of whether they mount before or after.
   void getLooks().catch(() => { /* surfaced again on the real caller */ });
   void getCreators().catch(() => { /* surfaced again on the real caller */ });
+
+  // Realtime cross-tab / cross-user propagation. When an admin deletes
+  // or unpublishes a look in /admin/data, this listener (subscribed in
+  // every shopper's tab) drops the cached promise and notifies every
+  // surface watching live look state — so the row vanishes from the
+  // home feed without a refresh, the creator catalog updates live,
+  // and so on. Same channel for INSERT (a freshly-published look pops
+  // into the consumer feed in real time) and UPDATE (status flip from
+  // 'live' to 'draft' via Unpublish disappears the row instantly).
+  if (supabase) {
+    supabase
+      .channel('looks-live-sync')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'looks' }, () => {
+        invalidateLooksCache();
+      })
+      // looks_creative drives whether a look surfaces in
+      // fetchLooksFromSupabase at all (the !inner join requires a
+      // primary creative). Without listening to its INSERTs we'd miss
+      // the moment a new published look becomes visible.
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'looks_creative' }, () => {
+        invalidateLooksCache();
+      })
+      .subscribe();
+  }
 }
