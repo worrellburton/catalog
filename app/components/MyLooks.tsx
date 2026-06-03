@@ -595,10 +595,25 @@ export default function MyLooks({ onClose }: MyLooksProps) {
               <div className="my-cat-tray-grip" />
               <div className="my-cat-tray-head">
                 <div className="my-cat-tray-thumb" style={{ backgroundColor: trayLook.color || '#222' }}>
-                  {tp?.poster && <img src={withTransform(tp.poster, { width: 120, quality: 70 })} alt="" />}
+                  {tp?.video ? (
+                    <video
+                      src={tp.video}
+                      poster={tp.poster ? withTransform(tp.poster, { width: 120, quality: 70 }) : undefined}
+                      muted
+                      loop
+                      autoPlay
+                      playsInline
+                      preload="metadata"
+                    />
+                  ) : tp?.poster ? (
+                    <img src={withTransform(tp.poster, { width: 120, quality: 70 })} alt="" />
+                  ) : null}
                 </div>
                 <div className="my-cat-tray-head-text">
-                  <span className="my-cat-tray-title">{trayLook.title || 'Untitled look'}</span>
+                  {/* Title removed at the user's request — the look's
+                      thumbnail (video preferred over poster) is the
+                      identification, and the status label below it
+                      tells the rest of the story. */}
                   <span className="my-cat-tray-status" style={{ color: STATUS_COLORS[trayLook.status] }}>
                     {STATUS_LABELS[trayLook.status]}
                   </span>
@@ -921,8 +936,8 @@ function CreatorAnalyticsModal({ look, onClose }: { look: ManagedLook | null; on
   const heading = look ? (look.title || 'This look') : 'Your catalog';
 
   return (
-    <div className="my-cat-analytics-backdrop" onClick={onClose} role="dialog" aria-modal="true">
-      <div className="my-cat-analytics-card my-cat-analytics-card--scroll" onClick={e => e.stopPropagation()}>
+    <div className="my-cat-analytics-page" role="dialog" aria-modal="true">
+      <div className="my-cat-analytics-card my-cat-analytics-card--page">
         <header className="my-cat-analytics-head">
           <h2>{heading}</h2>
           <button type="button" className="my-cat-analytics-close" onClick={onClose} aria-label="Close">×</button>
