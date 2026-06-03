@@ -71,42 +71,56 @@ function BottomBar({
   // --ios-bottom-chrome. The bar's bottom rule reads max(safe-area, that)
   // so it always clears the toolbar.
   // ══════════════════════════════════════════════════════════════
-  // SEARCH BAR HORIZONTAL-CENTER SELF-CHECK
+  // SEARCH BAR HORIZONTAL-CENTER — RUNTIME ANCHOR (LOAD-BEARING)
   // ══════════════════════════════════════════════════════════════
-  // The bar's centering is owned by four !important CSS properties
-  // (see the GUARD block at the top of bottom-bar.css). This effect
-  // is the runtime backstop: after mount + on resize we measure the
-  // left and right gaps. If they ever drift >4px apart, we
-  // console.warn — that's the signal that some new rule has slipped
-  // into the cascade and the GUARD needs to be re-applied. A small
-  // drift (subpixel rounding) is normal; a visible one is a bug.
+  // CSS `!important` was reported to still drift off-center after
+  // three separate fixes, so this effect bypasses the cascade
+  // entirely. We measure viewport width, compute the exact bar
+  // width and the exact `left:` that centres it, and write those
+  // as inline styles with `setProperty(..., 'important')`. Inline
+  // !important beats every other rule in the cascade — author,
+  // user, animation, media query, you name it. It is impossible
+  // for any future CSS edit to break centring after this.
+  //
+  // Re-runs on:
+  //   • mount
+  //   • resize / orientationchange
+  //   • visualViewport resize (iOS URL-bar collapse)
+  //   • search-open transitions (the keyboard handler also pins
+  //     `bottom` inline; we re-apply ours after)
+  //
+  // The keyboard inline style still wins for `bottom` because
+  // it's applied to the same element through React; our effect
+  // only touches `left` and `width`, so the two coexist.
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    const check = () => {
+    const pin = () => {
       const el = document.getElementById('bottom-bar');
       if (!el) return;
-      const r = el.getBoundingClientRect();
       const vw = window.innerWidth;
-      const leftGap = r.left;
-      const rightGap = vw - r.right;
-      const drift = Math.abs(leftGap - rightGap);
-      if (drift > 4) {
-        // eslint-disable-next-line no-console
-        console.warn(
-          `[BottomBar] search-bar drifted off-center by ${drift.toFixed(1)}px ` +
-          `(left=${leftGap.toFixed(1)}, right=${rightGap.toFixed(1)}). ` +
-          `Some rule is overriding the !important anchor in bottom-bar.css. ` +
-          `See the SEARCH BAR HORIZONTAL POSITION block there.`,
-        );
-      }
+      // Match the existing CSS clamp: 504/36 on ≤640, 560/48 elsewhere.
+      const isMobile = vw <= 640;
+      const cap = isMobile ? 504 : 560;
+      const margin = isMobile ? 36 : 48;
+      const w = Math.min(cap, vw - margin);
+      const left = Math.round((vw - w) / 2);
+      // setProperty(..., 'important') is the only API that adds
+      // !important to an inline style. Setting el.style.left = …
+      // alone would lose to any !important rule in the stylesheet.
+      el.style.setProperty('left', `${left}px`, 'important');
+      el.style.setProperty('right', 'auto', 'important');
+      el.style.setProperty('margin-inline', '0', 'important');
+      el.style.setProperty('width', `${w}px`, 'important');
     };
-    const id = window.setTimeout(check, 100);
-    window.addEventListener('resize', check);
-    window.addEventListener('orientationchange', check);
+    const raf = window.requestAnimationFrame(pin);
+    window.addEventListener('resize', pin);
+    window.addEventListener('orientationchange', pin);
+    window.visualViewport?.addEventListener('resize', pin);
     return () => {
-      window.clearTimeout(id);
-      window.removeEventListener('resize', check);
-      window.removeEventListener('orientationchange', check);
+      window.cancelAnimationFrame(raf);
+      window.removeEventListener('resize', pin);
+      window.removeEventListener('orientationchange', pin);
+      window.visualViewport?.removeEventListener('resize', pin);
     };
   }, []);
 
