@@ -121,6 +121,24 @@
   }
 }
 
+/* Live particle field over the overlay's opaque black base. The base
+   (.product-page-overlay) blocks the feed; this layer makes the
+   background dynamic. Content scroller above it is transparent so the
+   field shows through the gaps. */
+.product-page-particles {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.55;
+}
+.product-page-particles .pw-particles {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
 .product-page {
   width: 100%;
   height: 100%;
@@ -129,8 +147,11 @@
   -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
   scrollbar-color: rgba(255,255,255,0.15) transparent;
-  background: #0a0a0a;
+  /* Transparent — the opaque black comes from .product-page-overlay so
+     the particle layer between them stays visible. */
+  background: transparent;
   position: relative;
+  z-index: 1;
 }
 
 .product-page::-webkit-scrollbar {

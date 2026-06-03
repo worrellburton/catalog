@@ -81,6 +81,56 @@ header > * {
   pointer-events: auto;
 }
 
+/* Glassy frost under the top UI row. Sits above the header's own
+   gradient (negative z-index inside the header's stacking context)
+   and below the logo/icons, so it frosts whatever feed content
+   scrolls beneath the chrome. Masked to fade out toward the bottom
+   edge so ONLY the top row gets the frosted treatment — the gradient
+   handles the soft fade past that. pointer-events:none keeps taps
+   falling through to cards bleeding into the header band. */
+header::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  -webkit-backdrop-filter: blur(7px) saturate(1.15);
+  backdrop-filter: blur(7px) saturate(1.15);
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, rgba(0,0,0,0.55) 42%, transparent 78%);
+  mask-image: linear-gradient(to bottom, #000 0%, rgba(0,0,0,0.55) 42%, transparent 78%);
+}
+
+/* Subtle wavy glass shimmer — two soft light pools that slowly drift
+   sideways and breathe vertically so it reads as light catching a
+   curved glass surface, not page chrome. Very low alpha; masked to
+   the top so it never reaches the feed. */
+header::after {
+  content: '';
+  position: absolute;
+  inset: -25% -12% 0 -12%;
+  z-index: -1;
+  pointer-events: none;
+  background:
+    radial-gradient(120% 60% at 22% 0%, rgba(255,255,255,0.065), transparent 60%),
+    radial-gradient(120% 55% at 78% 12%, rgba(255,255,255,0.045), transparent 62%);
+  -webkit-mask-image: linear-gradient(to bottom, #000 0%, transparent 70%);
+  mask-image: linear-gradient(to bottom, #000 0%, transparent 70%);
+  animation: header-glass-wave 15s ease-in-out infinite alternate;
+}
+@keyframes header-glass-wave {
+  0%   { transform: translateX(-3%) translateY(0)    scaleY(1);    }
+  50%  { transform: translateX(3%)  translateY(-2px) scaleY(1.05); }
+  100% { transform: translateX(-2%) translateY(0)    scaleY(1);    }
+}
+.light-mode header::after {
+  background:
+    radial-gradient(120% 60% at 22% 0%, rgba(255,255,255,0.5), transparent 60%),
+    radial-gradient(120% 55% at 78% 12%, rgba(255,255,255,0.35), transparent 62%);
+}
+@media (prefers-reduced-motion: reduce) {
+  header::after { animation: none; }
+}
+
 .light-mode header {
   background: linear-gradient(
     to bottom,

@@ -990,6 +990,15 @@ export default function Home() {
     window.addEventListener('catalog:open-my-catalog', onOpen);
     return () => window.removeEventListener('catalog:open-my-catalog', onOpen);
   }, [openMyLooks]);
+  // "My information" on your own creator catalog opens the profile /
+  // info screen. Event-based for the same reason as open-my-catalog —
+  // avoids threading a callback prop through CreatorPage's render paths.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onOpen = () => { if (user) setShowProfile(true); };
+    window.addEventListener('catalog:open-profile', onOpen);
+    return () => window.removeEventListener('catalog:open-profile', onOpen);
+  }, [user]);
   // Opening the wallet pushes a real history entry at /earnings so it's
   // deep-linkable AND browser-back returns to the catalog screen the
   // user was on (the navigation push, not an external referrer). Skip

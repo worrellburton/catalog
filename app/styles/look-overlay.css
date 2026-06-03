@@ -582,7 +582,26 @@
 }
 
 /* ── Scrollable wrapper (makes the whole overlay a scrollable page) ── */
+/* Live particle field layered on the opaque black overlay base. Sits
+   behind the scroll content so the page background reads as a dynamic
+   surface, not a flat solid. Low opacity so it stays ambient. */
+.look-overlay-particles {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.55;
+}
+.look-overlay-particles .pw-particles {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
 .look-overlay-scroll {
+  position: relative;
+  z-index: 1;
   width: 100%;
   height: 100%;
   overflow-y: auto;

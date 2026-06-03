@@ -174,6 +174,26 @@ Single-page app with React state-driven views:
 - **localStorage bookmarks** — Custom useBookmarks hook for persistent state
 - **`import.meta.env.BASE_URL`** — Vite's built-in env var used for asset paths (replaces Next.js basePath)
 
+### CSS convention: centering fixed/overlay pills
+
+Center `position: fixed` / `absolute` pills, bars, and overlays with
+`left: 0; right: 0; margin-inline: auto` + an explicit width — **never**
+`left: 50% + transform: translateX(-50%)`. Two reasons this is a hard
+rule (both have already caused production regressions):
+
+1. **Transform clobbering** — any animation that sets `transform`
+   (chrome auto-hide, drag-to-dismiss, hover nudge) overwrites the
+   `translateX(-50%)` and snaps the element off-axis unless every such
+   rule re-chains it. Margin-based centering leaves `transform` free.
+2. **`100vw` desync** — sizing a centered element with `100vw`
+   (or `calc(100vw - x)`) counts the scrollbar/inset gutter while
+   `%`-based centering does not, so the width and the centering drift
+   apart and shove the element sideways. Size widths in `%`
+   (`min(560px, calc(100% - 48px))`), not `vw`.
+
+See `.bottom-bar` in `app/styles/bottom-bar.css` for the reference
+implementation (it carries a GUARD comment to the same effect).
+
 ---
 
 # SECTION 2 — Admin Panel (Frontend)

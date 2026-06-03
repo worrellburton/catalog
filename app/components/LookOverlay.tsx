@@ -10,6 +10,7 @@ import { useTrailVideo, useTrailVideoManager } from './TrailVideoHost';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
 import { supabaseImage } from '~/utils/supabaseImage';
 import ProductMiniMedia from './ProductMiniMedia';
+import ParticleBackground from './ParticleBackground';
 import { director } from '~/services/video-playback-director';
 import FollowIconButton from './FollowIconButton';
 import { getLookSaveCount, recordLookSave, recordLookUnsave } from '~/services/look-saves';
@@ -612,6 +613,12 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
       ref={overlayRef}
       className={`look-overlay${mounted && !isAnimatingOut ? ' look-overlay--in' : ''}${isAnimatingOut ? ' look-overlay--out' : ''}`}
     >
+      {/* Ambient particle field on top of the opaque black base — makes
+          the page background a live, dynamic surface instead of a flat
+          solid. Sits behind all scroll content (z-index 0). */}
+      <div className="look-overlay-particles" aria-hidden="true">
+        <ParticleBackground />
+      </div>
       <div className="look-overlay-scroll" ref={setScrollRef}>
         {/* ═══ HERO: 60/40 split (first viewport) ═══ */}
         <div className="look-hero-section">
@@ -694,10 +701,10 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                   onClick={() => { handleClose(); onOpenCreator(look.creator); }}
                   aria-label={`View ${creatorData?.displayName || look.creator}`}
                 >
-                  {(creatorData?.avatar || look.creatorAvatar) ? (
+                  {(look.creatorAvatar || creatorData?.avatar) ? (
                     <img
                       className="overlay-video-creator__avatar"
-                      src={creatorData?.avatar || look.creatorAvatar}
+                      src={look.creatorAvatar || creatorData?.avatar}
                       alt={creatorData?.displayName || look.creator}
                     />
                   ) : (
@@ -782,7 +789,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
               onClick={() => { handleClose(); onOpenCreator(look.creator); }}
             >
               {(() => {
-                const avatar = creatorData?.avatar || look.creatorAvatar || '';
+                const avatar = look.creatorAvatar || creatorData?.avatar || '';
                 const name =
                   creatorData?.displayName ||
                   look.creatorDisplayName ||
@@ -915,7 +922,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                   <div className="look-creator-about">
                     <div className="look-creator-about-header">
                       {(() => {
-                        const avatar = creatorData?.avatar || look.creatorAvatar || '';
+                        const avatar = look.creatorAvatar || creatorData?.avatar || '';
                         const name =
                           creatorData?.displayName ||
                           look.creatorDisplayName ||
