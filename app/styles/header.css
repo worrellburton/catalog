@@ -44,9 +44,16 @@ header {
   top: 0;
   left: 0;
   right: 0;
-  display: flex;
+  /* Three equal-fr columns with the center column shrinking to its
+     content (auto) so it sits at the viewport's geometric centre
+     regardless of how asymmetric the left/right wrappers get. The
+     previous `flex space-between` placed the center between its
+     siblings, which drifted with content width — see the comment on
+     .header-center below for the failed transform-based fix that
+     broke mobile. */
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: space-between;
   padding: 18px 44px 36px;
   z-index: 100;
   /* Dark scrim so the Catalog title + bookmark/profile icons read
@@ -87,32 +94,25 @@ header > * {
 .header-left {
   display: flex;
   align-items: center;
+  /* Hug the left edge of the grid column so the wordmark sits where
+     the old space-between flex layout used to put it. */
+  justify-self: start;
 }
 
 .header-center {
-  /* Anchor to the true viewport center (left: 50% + translateX(-50%))
-     instead of `flex: 1` between .header-left and .header-right.
-     With space-between the center's midpoint shifts toward whichever
-     sibling is narrower — and our header is asymmetric (one-word
-     wordmark on the left vs $0.00 pill + 3 buttons + avatar on the
-     right), so the creator-stories rail visibly drifted left in the
-     screenshot. Absolute-from-center makes the rail bound to the
-     viewport regardless of sibling widths. pointer-events: none on
-     the wrapper lets clicks fall through the empty gutters; the
-     inner content re-enables them. */
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%);
+  /* Centering is owned by the parent <header>'s grid (see below) — we
+     just stretch to fill our column and center inner content. The
+     previous `position: absolute + transform: translate(-50%, -50%)`
+     fixed the desktop-asymmetry drift but broke the mobile rail: an
+     ancestor with a non-none transform turns position:fixed descendants
+     into containing-block-relative descendants, and the rail's mobile
+     override (position: fixed + left/right: 0) re-anchored to the
+     transformed .header-center instead of the viewport. Grid avoids
+     the transform entirely. */
   display: flex;
   justify-content: center;
   align-items: center;
   min-width: 0;
-  max-width: min(440px, calc(100% - 320px));
-  pointer-events: none;
-}
-.header-center > * {
-  pointer-events: auto;
 }
 
 /* Thin vertical separator between following and followers groups */
@@ -200,6 +200,9 @@ header > .pending-look-pill {
   display: flex;
   align-items: center;
   gap: 12px;
+  /* Hug the right edge of the grid column so the wallet/buttons stack
+     ends where the old space-between flex layout used to end. */
+  justify-self: end;
 }
 
 /* Earnings pill - sits next to the bookmark button in the header.

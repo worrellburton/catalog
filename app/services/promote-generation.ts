@@ -130,14 +130,24 @@ export async function promoteGenerationToLook(input: PromoteInput): Promise<Prom
   ));
 
   // Insert the primary creative + warm the poster so the consumer feed
-  // and admin Published tab can render the row immediately.
+  // and admin Published tab can render the row immediately. The unique
+  // partial index on looks_creative.video_url (where is_primary=true)
+  // blocks a duplicate primary pointing at the same video — if we hit
+  // 23505 here, an earlier promotion of this same video already
+  // happened and the keeper is somewhere else; bail loudly so the
+  // caller can repoint instead of producing a phantom row.
   if (input.videoUrl) {
     const { data: creative, error: creativeErr } = await supabase
       .from('looks_creative')
       .insert({ look_id: look.id, video_url: input.videoUrl, is_primary: true })
       .select('id')
       .single();
-    if (creativeErr) throw new Error(`looks_creative insert failed: ${creativeErr.message}`);
+    if (creativeErr) {
+      if (creativeErr.code === '23505') {
+        throw new Error(`This video is already attached to another look. Find that look in Published / Unpublished and use it instead of creating a new one.`);
+      }
+      throw new Error(`looks_creative insert failed: ${creativeErr.message}`);
+    }
     if (creative?.id) {
       void generateAndStorePoster(look.id, creative.id, input.videoUrl);
     }
