@@ -21,7 +21,7 @@ import { looks as staticLooks, creators as staticCreators } from '~/data/looks';
 import type { Look, Creator } from '~/data/looks';
 import { getLooks, getCreators, invalidateLooksCache } from '~/services/looks';
 import { createLook, addProductToLook } from '~/services/manage-looks';
-import { setGenerationPublished } from '~/services/user-generations';
+import { setGenerationPublished, regenerateUserGeneration } from '~/services/user-generations';
 import { promoteGenerationToLook, unpublishLook } from '~/services/promote-generation';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
 import { inferProductType, auditAllProductTypes } from '~/services/product-types';
@@ -2100,6 +2100,44 @@ export default function AdminData() {
   const [lookOrder, setLookOrder] = useState<number[] | null>(null);
   const [dragLookId, setDragLookId] = useState<number | null>(null);
 
+  // One-click regen: looks up the look's source_generation_id, resets
+  // that generation back to 'pending', and fires the generate-look
+  // edge function. The trigger trg_sync_looks_creative_from_generation
+  // rewrites looks_creative.video_url when the new fal.media URL lands,
+  // so the consumer feed + creator catalog pick up the new video
+  // automatically. Used when the admin spots a model-output failure
+  // (wrong gender body, weird limbs, etc.) and wants a fresh attempt
+  // without manually publishing-from-scratch.
+  const [regeneratingIds, setRegeneratingIds] = useState<Set<number>>(new Set());
+  const regenerateLook = useCallback(async (id: number) => {
+    if (regeneratingIds.has(id)) return;
+    const target = looks.find(l => l.id === id);
+    const lookUuid = target?.uuid;
+    if (!supabase || !lookUuid) return;
+    if (!window.confirm('Re-generate this look? The current video will be replaced once the new one finishes (~3 min).')) return;
+    setRegeneratingIds(prev => { const n = new Set(prev); n.add(id); return n; });
+    try {
+      const { data: lookRow, error: lookErr } = await supabase
+        .from('looks')
+        .select('source_generation_id')
+        .eq('id', lookUuid)
+        .maybeSingle();
+      if (lookErr) throw new Error(lookErr.message);
+      const sourceGenId = (lookRow as { source_generation_id?: string | null } | null)?.source_generation_id ?? null;
+      if (!sourceGenId) {
+        window.alert('This look has no source generation — it was hand-curated. Re-generate is only available for AI-generated looks.');
+        return;
+      }
+      const { error: regenErr } = await regenerateUserGeneration(sourceGenId);
+      if (regenErr) throw new Error(regenErr);
+      window.alert('Re-generation queued. The new video will replace the current one when it finishes (~3 min). Realtime updates the feed automatically.');
+    } catch (err) {
+      window.alert(err instanceof Error ? `Re-generate failed: ${err.message}` : 'Re-generate failed');
+    } finally {
+      setRegeneratingIds(prev => { const n = new Set(prev); n.delete(id); return n; });
+    }
+  }, [regeneratingIds, looks]);
+
   const deleteLook = useCallback(async (id: number) => {
     if (!window.confirm('Delete this look? It will be removed from the curated catalog AND from the creator’s My Looks. This cannot be undone.')) return;
     // Resolve legacy id → UUID + source generation id so we can hit both
@@ -4048,6 +4086,23 @@ export default function AdminData() {
                             onClick={() => unpublishLookInline(row.id)}
                           >
                             {unpublishingLookIds.has(row.id) ? 'Unpublishing…' : 'Unpublish'}
+                          </button>
+                          {/* One-click regen for AI-generated looks. Re-runs the
+                              source user_generation so seedance produces a fresh
+                              video; the DB trigger
+                              trg_sync_looks_creative_from_generation rewrites
+                              looks_creative.video_url when the new URL lands so
+                              the consumer feed picks up the new video without a
+                              manual re-publish. */}
+                          <button
+                            type="button"
+                            className="admin-btn admin-btn-secondary"
+                            style={{ fontSize: 11, padding: '4px 10px', marginRight: 6 }}
+                            disabled={regeneratingIds.has(row.id)}
+                            title="Re-run the source generation — new video replaces the current one when ready"
+                            onClick={() => regenerateLook(row.id)}
+                          >
+                            {regeneratingIds.has(row.id) ? 'Regenning…' : '↻ Re-gen'}
                           </button>
                           <button className="admin-icon-btn" aria-label="Move up" onClick={() => moveLook(row.id, -1)}>
                             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
