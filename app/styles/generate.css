@@ -2072,15 +2072,16 @@ html[data-shell="catalog-app"] .gen-page {
   scroll-snap-type: x proximity;
   -webkit-overflow-scrolling: touch;
   scroll-behavior: smooth;
-  /* Explicit `pan-x` so iOS Safari doesn't default-guess the user's
-     intent on rows where the content barely overflows. The Hat row
-     in particular (only 3 cards) was reading as 'doesn't scroll' on
-     mobile because the browser interpreted the early touch as a
-     vertical pan and consumed it — even though the scroll WAS
-     available. With pan-x declared the row consistently handles its
-     own horizontal touch and the page scroll handler stops competing
-     for it. */
-  touch-action: pan-x;
+  /* Allow BOTH horizontal pans (this row's own scroll) AND vertical
+     pans (the page underneath). The previous value of just `pan-x`
+     consumed every touch that landed inside a row — meaning the
+     moment you touched a product card you could no longer page-scroll
+     vertically. After spending a few seconds on the products step
+     the user would find themselves locked, because almost every part
+     of the visible viewport was a row. `pan-x pan-y` lets the browser
+     decide based on the first-move direction: drag sideways → row
+     scrolls; drag up/down → page scrolls. */
+  touch-action: pan-x pan-y;
   /* Hide scrollbar - the right-edge fade-mask below is the visual cue
      that the row scrolls. */
   scrollbar-width: none;
