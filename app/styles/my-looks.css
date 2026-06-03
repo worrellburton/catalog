@@ -1562,7 +1562,8 @@ html[data-shell="catalog-app"] .my-looks-overlay {
 .my-cat-page {
   position: fixed;
   inset: 0;
-  background: #fff;
+  background: #0a0a0a;
+  color: #fff;
   z-index: 150;
   overflow-y: auto;
   padding: var(--header-height) 28px 28px;
@@ -1586,14 +1587,14 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   align-items: center;
   gap: 6px;
   font-size: 13px;
-  color: rgba(0, 0, 0, 0.5);
+  color: rgba(255, 255, 255, 0.6);
   cursor: pointer;
   border: none;
   background: none;
   padding: 0;
   margin-bottom: 20px;
 }
-.my-cat-back:hover { color: #111; }
+.my-cat-back:hover { color: #fff; }
 
 /* Top-right floating "+" button. Sits over the hero so it's reachable
    on every viewport without competing with the back link. */
@@ -1604,19 +1605,19 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   width: 44px;
   height: 44px;
   border-radius: 50%;
-  background: #111;
+  background: rgba(255, 255, 255, 0.1);
   color: #fff;
-  border: none;
+  border: 1px solid rgba(255, 255, 255, 0.12);
   display: inline-flex;
   align-items: center;
   justify-content: center;
   cursor: pointer;
-  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
   transition: transform 0.15s ease, background 0.15s ease;
   z-index: 5;
 }
 .my-cat-create-fab:hover {
-  background: #000;
+  background: rgba(255, 255, 255, 0.18);
   transform: translateY(-1px);
 }
 .my-cat-create-fab:active { transform: translateY(0); }
@@ -1634,7 +1635,7 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   height: 100px;
   border-radius: 50%;
   object-fit: cover;
-  border: 3px solid rgba(0, 0, 0, 0.08);
+  border: 3px solid rgba(255, 255, 255, 0.14);
   margin-bottom: 20px;
 }
 .my-cat-hero-avatar--initial {
@@ -1651,20 +1652,20 @@ html[data-shell="catalog-app"] .my-looks-overlay {
 .my-cat-hero-curated {
   font-size: 15px;
   font-style: italic;
-  color: rgba(0, 0, 0, 0.4);
+  color: rgba(255, 255, 255, 0.5);
   font-family: Georgia, 'Times New Roman', serif;
 }
 .my-cat-hero-name {
   font-size: clamp(32px, 5vw, 48px);
   font-weight: 600;
-  color: #111;
+  color: #fff;
   margin: 4px 0 20px;
   letter-spacing: -0.02em;
 }
 
 .my-cat-hero-stats {
   font-size: 13px;
-  color: rgba(0, 0, 0, 0.4);
+  color: rgba(255, 255, 255, 0.5);
   margin: 0;
   max-width: 480px;
   line-height: 1.5;
@@ -1676,7 +1677,7 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   display: flex;
   justify-content: center;
   gap: 28px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.10);
   margin: 12px 0 24px;
   flex-wrap: wrap;
 }
@@ -1684,7 +1685,7 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   padding: 14px 4px;
   font-size: 14px;
   font-weight: 500;
-  color: rgba(0, 0, 0, 0.4);
+  color: rgba(255, 255, 255, 0.5);
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
@@ -1692,10 +1693,10 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   transition: color 0.2s, border-color 0.2s;
   font-family: inherit;
 }
-.my-cat-nav-tab:hover { color: rgba(0, 0, 0, 0.7); }
+.my-cat-nav-tab:hover { color: rgba(255, 255, 255, 0.8); }
 .my-cat-nav-tab.active {
-  color: #111;
-  border-bottom-color: #111;
+  color: #fff;
+  border-bottom-color: #fff;
 }
 .my-cat-nav-count {
   display: inline-flex;
@@ -1705,15 +1706,15 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   padding: 0 6px;
   margin-left: 6px;
   border-radius: 999px;
-  background: rgba(0, 0, 0, 0.08);
-  color: rgba(0, 0, 0, 0.7);
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.8);
   font-size: 10px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 .my-cat-nav-tab.active .my-cat-nav-count {
-  background: rgba(0, 0, 0, 0.85);
-  color: #fff;
+  background: rgba(255, 255, 255, 0.9);
+  color: #111;
 }
 
 /* Error banner - light tinted box above the grid. */
@@ -2361,24 +2362,29 @@ html[data-shell="catalog-app"] .my-looks-overlay {
 }
 
 /* ──────────────────────────────────────────────────────────────────
-   CreateLookV2 — rebuilt look-creation form. Dark-themed to match
-   the rest of the catalog feed. Lives inside .my-cat-form-container
-   so the outer page already provides the scroll surface.
+   CreateLookV2 — guided look-creation flow. Dark surface throughout.
+   The hero is a phone-shaped (9:19.5) tile that's the tap target
+   for upload AND the canvas the uploaded media fills. Sections
+   below it animate in once we have something to show.
    ────────────────────────────────────────────────────────────────── */
 .cl-v2 {
   display: flex;
   flex-direction: column;
-  gap: 20px;
-  padding: 20px 16px 120px;
-  max-width: 720px;
+  gap: 18px;
+  padding: 20px 16px 140px;
+  max-width: 520px;
   margin: 0 auto;
   color: #fff;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 320ms cubic-bezier(.32,.72,0,1), transform 320ms cubic-bezier(.32,.72,0,1);
 }
+.cl-v2.is-mounted { opacity: 1; transform: none; }
+
 .cl-v2-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding-bottom: 4px;
 }
 .cl-v2-head h2 {
   font-size: 22px;
@@ -2398,12 +2404,105 @@ html[data-shell="catalog-app"] .my-looks-overlay {
 }
 .cl-v2-close:hover { background: rgba(255,255,255,0.1); }
 
-.cl-v2-section {
+/* Phone-shaped media stage. The tile holds 9:19.5 aspect to mirror
+   how the look will render in the feed. Tapping the empty state
+   triggers the hidden file input. */
+.cl-v2-stage {
+  display: flex;
+  justify-content: center;
+}
+.cl-v2-tile {
+  position: relative;
+  width: 100%;
+  max-width: 360px;
+  aspect-ratio: 9 / 19.5;
+  border-radius: 28px;
+  background: #0d0d0d;
+  border: 1.5px dashed rgba(255,255,255,0.18);
+  overflow: hidden;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: border-color 200ms ease, background 200ms ease, transform 200ms ease;
+}
+.cl-v2-tile.is-empty:hover {
+  border-color: rgba(255,255,255,0.4);
+  background: #111;
+  transform: translateY(-1px);
+}
+.cl-v2-tile.has-media {
+  border: 1px solid rgba(255,255,255,0.08);
+  cursor: default;
+}
+.cl-v2-tile.has-media img,
+.cl-v2-tile.has-media video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.cl-v2-tile-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 24px;
+  text-align: center;
+  color: rgba(255,255,255,0.85);
+}
+.cl-v2-tile-title {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.cl-v2-tile-hint {
+  font-size: 12px;
+  color: rgba(255,255,255,0.5);
+}
+.cl-v2-tile-replace {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(0,0,0,0.55);
+  border: 1px solid rgba(255,255,255,0.18);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+
+/* Analyzing pulse. Sits below the tile so the canvas itself stays
+   stable while the spinner runs. */
+.cl-v2-analyzing {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 14px;
+  color: rgba(255,255,255,0.7);
+  padding: 4px 0 8px;
+}
+.cl-v2-spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.18);
+  border-top-color: #fff;
+  animation: cl-v2-spin 0.8s linear infinite;
+}
+@keyframes cl-v2-spin { to { transform: rotate(360deg); } }
+
+/* Products review card. */
+.cl-v2-products {
   display: flex;
   flex-direction: column;
   gap: 12px;
   padding: 16px;
-  border-radius: 14px;
+  border-radius: 18px;
   background: rgba(255,255,255,0.04);
   border: 1px solid rgba(255,255,255,0.08);
 }
@@ -2415,99 +2514,53 @@ html[data-shell="catalog-app"] .my-looks-overlay {
 .cl-v2-section-head h3 {
   font-size: 15px;
   font-weight: 600;
-  color: #fff;
 }
 .cl-v2-section-hint {
   font-size: 12px;
   color: rgba(255,255,255,0.55);
 }
 
-/* Phase 2: upload media */
-.cl-v2-upload-btn {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  height: 56px;
-  border-radius: 12px;
-  border: 1.5px dashed rgba(255,255,255,0.25);
-  background: rgba(255,255,255,0.03);
-  color: #fff;
-  font-size: 15px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.cl-v2-upload-btn:hover {
-  border-color: rgba(255,255,255,0.5);
-  background: rgba(255,255,255,0.06);
-}
-.cl-v2-upload-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-}
-.cl-v2-media-preview {
-  border-radius: 12px;
-  overflow: hidden;
-  background: #000;
-  aspect-ratio: 3 / 4;
-  max-height: 360px;
-}
-.cl-v2-media-preview img,
-.cl-v2-media-preview video {
-  width: 100%;
-  height: 100%;
-  object-fit: cover;
-  display: block;
-}
-
-/* Phase 3: sample products grid */
-.cl-v2-sample-grid {
+/* Chip grid — one column on phone, two on wider. Each chip is a
+   tappable confirm row with a small × to drop the suggestion. */
+.cl-v2-chip-grid {
   display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 10px;
+  grid-template-columns: 1fr;
+  gap: 8px;
 }
-@media (min-width: 600px) {
-  .cl-v2-sample-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+@media (min-width: 460px) {
+  .cl-v2-chip-grid { grid-template-columns: 1fr 1fr; }
 }
-.cl-v2-sample {
+.cl-v2-chip {
   position: relative;
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-  padding: 8px;
+  align-items: stretch;
   border-radius: 12px;
-  border: 1.5px solid rgba(255,255,255,0.08);
-  background: rgba(0,0,0,0.35);
+  border: 1.5px solid rgba(255,255,255,0.10);
+  background: rgba(0,0,0,0.4);
+  overflow: hidden;
+  transition: border-color 160ms ease, background 160ms ease;
+}
+.cl-v2-chip:hover { border-color: rgba(255,255,255,0.25); }
+.cl-v2-chip.is-confirmed {
+  border-color: #fff;
+  background: rgba(255,255,255,0.08);
+}
+.cl-v2-chip--ai { background: rgba(96, 165, 250, 0.06); }
+.cl-v2-chip-body {
+  flex: 1;
+  display: grid;
+  grid-template-columns: 1fr auto auto;
+  gap: 10px;
+  align-items: center;
+  padding: 12px 14px;
+  background: none;
+  border: none;
   color: #fff;
+  font: inherit;
   text-align: left;
   cursor: pointer;
-  transition: border-color 160ms ease, transform 160ms ease;
 }
-.cl-v2-sample:hover { border-color: rgba(255,255,255,0.3); }
-.cl-v2-sample.is-picked {
-  border-color: #fff;
-  box-shadow: 0 0 0 1px #fff inset;
-}
-.cl-v2-sample img {
-  width: 100%;
-  aspect-ratio: 1 / 1;
-  object-fit: cover;
-  border-radius: 8px;
-  background: #111;
-}
-.cl-v2-sample-meta {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-.cl-v2-sample-brand {
-  font-size: 11px;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: rgba(255,255,255,0.6);
-}
-.cl-v2-sample-name {
+.cl-v2-chip-name {
   font-size: 13px;
   font-weight: 500;
   line-height: 1.3;
@@ -2516,104 +2569,79 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.cl-v2-sample-price {
+.cl-v2-chip-price {
   font-size: 13px;
   font-weight: 600;
   color: #fff;
 }
-.cl-v2-sample-check {
-  position: absolute;
-  top: 12px;
-  right: 12px;
+.cl-v2-chip-check {
   width: 24px;
   height: 24px;
   border-radius: 12px;
   background: rgba(0,0,0,0.6);
-  border: 1px solid rgba(255,255,255,0.5);
+  border: 1px solid rgba(255,255,255,0.4);
   color: #fff;
-  font-size: 14px;
+  font-size: 13px;
   font-weight: 700;
   display: inline-flex;
   align-items: center;
   justify-content: center;
 }
-.cl-v2-sample.is-picked .cl-v2-sample-check {
+.cl-v2-chip.is-confirmed .cl-v2-chip-check {
   background: #fff;
   color: #111;
   border-color: #fff;
 }
+.cl-v2-chip-remove {
+  width: 32px;
+  background: none;
+  border: none;
+  border-left: 1px solid rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.5);
+  font-size: 18px;
+  cursor: pointer;
+}
+.cl-v2-chip-remove:hover { color: #fff; background: rgba(255,255,255,0.06); }
 
-/* Phase 4-5: describe + Claude results */
-.cl-v2-describe {
+/* Manual entry. Hidden until "+ Add a product we missed" is tapped
+   so it doesn't add clutter to the review step. */
+.cl-v2-add-manual {
+  padding: 12px;
+  border-radius: 12px;
+  background: transparent;
+  border: 1.5px dashed rgba(255,255,255,0.18);
+  color: rgba(255,255,255,0.75);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.cl-v2-add-manual:hover {
+  border-color: rgba(255,255,255,0.4);
+  color: #fff;
+}
+.cl-v2-manual {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.cl-v2-manual-desc,
+.cl-v2-manual-link {
   width: 100%;
   border-radius: 10px;
   border: 1px solid rgba(255,255,255,0.12);
-  background: rgba(0,0,0,0.4);
+  background: rgba(0,0,0,0.45);
   color: #fff;
-  font-family: inherit;
+  font: inherit;
   font-size: 14px;
   padding: 12px;
-  resize: vertical;
-  min-height: 88px;
 }
-.cl-v2-describe::placeholder { color: rgba(255,255,255,0.4); }
-.cl-v2-find-btn {
-  align-self: flex-end;
-  padding: 10px 18px;
-  border-radius: 999px;
-  background: #fff;
-  color: #111;
-  font-weight: 600;
-  font-size: 14px;
-  border: none;
-  cursor: pointer;
-}
-.cl-v2-find-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
-.cl-v2-findings {
+.cl-v2-manual-desc { resize: vertical; min-height: 64px; }
+.cl-v2-manual-desc::placeholder,
+.cl-v2-manual-link::placeholder { color: rgba(255,255,255,0.4); }
+.cl-v2-manual-row {
   display: flex;
-  flex-direction: column;
-  gap: 8px;
-}
-.cl-v2-finding {
-  display: grid;
-  grid-template-columns: 56px 1fr auto;
-  gap: 12px;
-  align-items: center;
-  padding: 8px;
-  border-radius: 10px;
-  background: rgba(0,0,0,0.4);
-  border: 1px solid rgba(255,255,255,0.08);
-}
-.cl-v2-finding img {
-  width: 56px;
-  height: 56px;
-  border-radius: 8px;
-  object-fit: cover;
-  background: #111;
-}
-.cl-v2-finding-meta {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
-}
-.cl-v2-import-btn {
-  padding: 8px 14px;
-  border-radius: 999px;
-  background: #fff;
-  color: #111;
-  font-weight: 600;
-  font-size: 13px;
-  border: none;
-  cursor: pointer;
-}
-.cl-v2-import-btn:disabled {
-  background: rgba(255,255,255,0.18);
-  color: rgba(255,255,255,0.6);
-  cursor: default;
+  gap: 10px;
+  justify-content: flex-end;
 }
 
 .cl-v2-error {
@@ -2624,7 +2652,14 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   font-size: 13px;
 }
 
-/* Phase 6-7: preview + publish */
+/* Sticky bottom preview button. Stays a thumb away on phones. */
+.cl-v2-footer {
+  position: sticky;
+  bottom: 0;
+  margin: 16px -16px -8px;
+  padding: 16px;
+  background: linear-gradient(to top, #0a0a0a 60%, rgba(10,10,10,0.6) 100%);
+}
 .cl-v2-preview-btn {
   width: 100%;
   height: 52px;
@@ -2636,16 +2671,16 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   border: none;
   cursor: pointer;
 }
-.cl-v2-preview-btn:disabled {
-  opacity: 0.4;
-  cursor: not-allowed;
-}
+.cl-v2-preview-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Preview surface — mirrors the feed tile shape with the confirmed
+   products listed underneath. */
 .cl-v2-preview {
   display: flex;
   flex-direction: column;
   gap: 14px;
   padding: 16px;
-  border-radius: 14px;
+  border-radius: 18px;
   background: rgba(255,255,255,0.04);
   border: 1px solid rgba(255,255,255,0.08);
 }
@@ -2659,34 +2694,36 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   gap: 14px;
 }
 @media (min-width: 600px) {
-  .cl-v2-preview-tile { grid-template-columns: 240px 1fr; }
+  .cl-v2-preview-tile { grid-template-columns: 220px 1fr; }
 }
 .cl-v2-preview-tile > img,
 .cl-v2-preview-tile > video {
   width: 100%;
-  aspect-ratio: 3 / 4;
+  aspect-ratio: 9 / 19.5;
   object-fit: cover;
-  border-radius: 12px;
+  border-radius: 14px;
   background: #000;
 }
 .cl-v2-preview-products {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: 6px;
 }
 .cl-v2-preview-product {
-  display: grid;
-  grid-template-columns: 40px 1fr auto;
-  gap: 10px;
+  display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 10px;
   font-size: 13px;
+  color: rgba(255,255,255,0.9);
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(0,0,0,0.3);
 }
-.cl-v2-preview-product img {
-  width: 40px;
-  height: 40px;
-  border-radius: 6px;
-  object-fit: cover;
-  background: #111;
+.cl-v2-sample-price {
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
 }
 .cl-v2-publish-row {
   display: flex;
