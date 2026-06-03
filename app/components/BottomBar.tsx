@@ -70,6 +70,46 @@ function BottomBar({
   // toolbar's actual height at any scroll position and feed it to CSS as
   // --ios-bottom-chrome. The bar's bottom rule reads max(safe-area, that)
   // so it always clears the toolbar.
+  // ══════════════════════════════════════════════════════════════
+  // SEARCH BAR HORIZONTAL-CENTER SELF-CHECK
+  // ══════════════════════════════════════════════════════════════
+  // The bar's centering is owned by four !important CSS properties
+  // (see the GUARD block at the top of bottom-bar.css). This effect
+  // is the runtime backstop: after mount + on resize we measure the
+  // left and right gaps. If they ever drift >4px apart, we
+  // console.warn — that's the signal that some new rule has slipped
+  // into the cascade and the GUARD needs to be re-applied. A small
+  // drift (subpixel rounding) is normal; a visible one is a bug.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const check = () => {
+      const el = document.getElementById('bottom-bar');
+      if (!el) return;
+      const r = el.getBoundingClientRect();
+      const vw = window.innerWidth;
+      const leftGap = r.left;
+      const rightGap = vw - r.right;
+      const drift = Math.abs(leftGap - rightGap);
+      if (drift > 4) {
+        // eslint-disable-next-line no-console
+        console.warn(
+          `[BottomBar] search-bar drifted off-center by ${drift.toFixed(1)}px ` +
+          `(left=${leftGap.toFixed(1)}, right=${rightGap.toFixed(1)}). ` +
+          `Some rule is overriding the !important anchor in bottom-bar.css. ` +
+          `See the SEARCH BAR HORIZONTAL POSITION block there.`,
+        );
+      }
+    };
+    const id = window.setTimeout(check, 100);
+    window.addEventListener('resize', check);
+    window.addEventListener('orientationchange', check);
+    return () => {
+      window.clearTimeout(id);
+      window.removeEventListener('resize', check);
+      window.removeEventListener('orientationchange', check);
+    };
+  }, []);
+
   useEffect(() => {
     if (typeof window === 'undefined' || !window.visualViewport) return;
     const vv = window.visualViewport;

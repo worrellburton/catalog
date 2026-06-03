@@ -7,25 +7,37 @@
 .bottom-bar {
   position: fixed;
   bottom: calc(12px + env(safe-area-inset-bottom));
-  /* Horizontal centering is transform-free and %-based ON PURPOSE —
-     this is the guard against the "search bar drifts off-axis" class
-     of bug:
-       • margin-inline:auto + left:0/right:0 centers WITHOUT a
-         translateX(-50%). Any animation transform (chrome auto-hide,
-         drag-to-dismiss) therefore can't clobber the horizontal
-         anchor and snap the pill sideways.
-       • the width uses calc(100% - …), NOT 100vw. `100vw` counts the
-         scrollbar/inset gutter while the `%`-based centering does
-         not, so the old `100vw` width + `left:50%` pairing desynced
-         on any viewport with a gutter and shoved the pill left (the
-         exact regression in the screenshot).
-     GUARD — do NOT reintroduce `left:50% + translateX(-50%)` or a
-     `100vw`-based width on .bottom-bar / .bottom-bar-inner. Center
-     new bottom-bar content with margin-inline:auto and size it in %. */
-  left: 0;
-  right: 0;
-  margin-inline: auto;
-  width: min(560px, calc(100% - 48px));
+
+  /* ══════════════════════════════════════════════════════════════
+     SEARCH BAR HORIZONTAL POSITION — LOAD-BEARING. DO NOT REMOVE
+     `!important` FROM THIS BLOCK.
+     ══════════════════════════════════════════════════════════════
+     The user has reported "bar moved off-center" THREE separate
+     times this project. Every time, the cause was a different rule
+     in the cascade (a media-query width override, a transform
+     animation, an inline style from the keyboard handler) clobbering
+     ONE of the four properties below. Putting `!important` on each
+     means the cascade physically cannot break centering anymore.
+
+     The four properties form a complete, self-contained anchor:
+       1. left:  0    — start of the centering box at viewport left
+       2. right: 0    — end of the centering box at viewport right
+       3. margin-inline: auto — the bar centers in that 100% box
+       4. width: min(560px, calc(100% − 48px))  — known width
+
+     The base rule below is desktop / default. The mobile width
+     override @ ≤640px also uses `!important` for the same reason.
+
+     The runtime self-check in BottomBar.tsx tops this off: after
+     mount it measures the bar's left/right gap and console.warn's
+     if it ever drifts more than 4px. If you ever see that warning,
+     do NOT fight it with a competing rule — find what's overriding
+     this anchor and remove it. */
+  left: 0 !important;
+  right: 0 !important;
+  margin-inline: auto !important;
+  width: min(560px, calc(100% - 48px)) !important;
+
   z-index: 100;
   display: flex;
   flex-direction: column;
@@ -1528,10 +1540,10 @@ body:has(.bottom-bar.search-open) {
 @media (max-width: 640px) {
   /* The outer bar becomes a pure white pill with a soft shadow. */
   .bottom-bar {
-    /* Mobile width lives on the OUTER bar in % (not 100vw) so it stays
-       in sync with the margin-inline:auto centering — see the guard
-       note on the base .bottom-bar rule. */
-    width: min(504px, calc(100% - 36px));
+    /* Mobile width — load-bearing, see the SEARCH BAR HORIZONTAL
+       POSITION block on the base .bottom-bar rule. !important
+       keeps the cascade from breaking the four-property anchor. */
+    width: min(504px, calc(100% - 36px)) !important;
     background: #fff;
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
