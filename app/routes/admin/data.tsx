@@ -5046,18 +5046,34 @@ export default function AdminData() {
                   // Hard path: cascade through every satellite table the
                   // products row is referenced by, in dependency order,
                   // so the final products DELETE doesn't bounce on an FK.
+                  //
+                  // PostgREST encodes .in(col, [...]) as a comma-joined
+                  // URL query string, and the server caps the request
+                  // URL at ~8 KB. 706 UUIDs × 38 chars each = ~27 KB,
+                  // which silently 414's and the bulk delete "doesn't
+                  // do anything" (the user's bug report). Chunk by 50
+                  // ids per request — that lands well under 2 KB per
+                  // call and ~14 round trips for the worst case.
+                  const CHUNK = 50;
+                  const supa = supabase;
+                  const chunks: string[][] = [];
+                  for (let i = 0; i < idsToDelete.length; i += CHUNK) {
+                    chunks.push(idsToDelete.slice(i, i + CHUNK));
+                  }
                   try {
-                    await supabase.from('product_creative').delete().in('product_id', idsToDelete);
-                    await supabase.from('look_products').delete().in('product_id', idsToDelete);
-                    await supabase.from('catalog_products').delete().in('product_id', idsToDelete);
-                    // user_events stores the product id as text in
-                    // target_id AND uuid in target_uuid — wipe both.
-                    await supabase.from('user_events').delete().in('target_uuid', idsToDelete);
-                    await supabase.from('user_events').delete().in('target_id', idsToDelete);
-                    const { error } = await supabase.from('products').delete().in('id', idsToDelete);
-                    if (error) {
-                      showToast(`Hard delete failed: ${error.message}`);
-                      return;
+                    for (const ids of chunks) {
+                      await supa.from('product_creative').delete().in('product_id', ids);
+                      await supa.from('look_products').delete().in('product_id', ids);
+                      await supa.from('catalog_products').delete().in('product_id', ids);
+                      // user_events stores the product id as text in
+                      // target_id AND uuid in target_uuid — wipe both.
+                      await supa.from('user_events').delete().in('target_uuid', ids);
+                      await supa.from('user_events').delete().in('target_id', ids);
+                      const { error } = await supa.from('products').delete().in('id', ids);
+                      if (error) {
+                        showToast(`Hard delete failed: ${error.message}`);
+                        return;
+                      }
                     }
                     setCrawledProducts(prev => prev.filter(r => !idsToDelete.includes(r.id)));
                     // Clear soft-delete marker so the row doesn't ghost
