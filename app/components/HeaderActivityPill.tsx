@@ -15,12 +15,35 @@
 import { useEffect, useState } from 'react';
 import { useNavigate } from '@remix-run/react';
 import { useAuth } from '~/hooks/useAuth';
+import { subscribeGenerationQueue, listGenerationJobs } from '~/services/generation-queue';
 
 export default function HeaderActivityPill() {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [unseen, setUnseen] = useState(0);
   const [hasPulse, setHasPulse] = useState(false);
+  // True while one of the user's generations is running. Drives the green
+  // glow + the waveform↔AI-diamond icon morph so the Activity button reads
+  // as "your look is being made." Lingers ~3s after the last job clears.
+  const [generating, setGenerating] = useState(false);
+  useEffect(() => {
+    let clearTimer: number | null = null;
+    const sync = () => {
+      const active = listGenerationJobs().some(j => j.status === 'running');
+      if (active) {
+        if (clearTimer) { window.clearTimeout(clearTimer); clearTimer = null; }
+        setGenerating(true);
+      } else {
+        // Keep the glow a beat after the job finishes ("a generation
+        // has happened") before settling back to the idle waveform.
+        if (clearTimer) window.clearTimeout(clearTimer);
+        clearTimer = window.setTimeout(() => setGenerating(false), 3000);
+      }
+    };
+    sync();
+    const unsub = subscribeGenerationQueue(sync);
+    return () => { if (clearTimer) window.clearTimeout(clearTimer); unsub(); };
+  }, []);
 
   // The realtime/catch-up pipeline dispatches `catalog:activity-bump` on
   // every detected event. We tally an unseen count locally; tapping the
@@ -59,14 +82,21 @@ export default function HeaderActivityPill() {
   return (
     <button
       type="button"
-      className={`header-activity-pill${unseen > 0 ? ' has-unseen' : ''}${hasPulse ? ' is-pulsing' : ''}`}
+      className={`header-activity-pill${unseen > 0 ? ' has-unseen' : ''}${hasPulse ? ' is-pulsing' : ''}${generating ? ' is-generating' : ''}`}
       onClick={handleClick}
-      aria-label={unseen > 0 ? `${unseen} new activity events` : 'Open activity'}
-      title="Activity"
+      aria-label={unseen > 0 ? `${unseen} new activity events` : (generating ? 'Generating…' : 'Open activity')}
+      title={generating ? 'Generating…' : 'Activity'}
     >
-      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-      </svg>
+      <span className="header-activity-icons" aria-hidden="true">
+        {/* Waveform (idle) ↔ AI diamond (while generating) — cross-faded
+            by .is-generating keyframes in CSS. */}
+        <svg className="hap-icon hap-icon--wave" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+        </svg>
+        <svg className="hap-icon hap-icon--diamond" width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="none">
+          <path d="M12 2c.6 5.4 4 8.8 9.4 9.4C16 12 12.6 15.4 12 20.8 11.4 15.4 8 12 2.6 11.4 8 10.8 11.4 7.4 12 2z" />
+        </svg>
+      </span>
       {unseen > 0 && (
         <span className="header-activity-pill-count">{unseen > 99 ? '99+' : unseen}</span>
       )}

@@ -286,6 +286,42 @@ header > .pending-look-pill {
   0%, 100% { box-shadow: 0 0 0 0   rgba(74, 222, 128, 0); }
   50%      { box-shadow: 0 0 0 6px rgba(74, 222, 128, 0.22); }
 }
+/* Icon stack: waveform (idle) + AI diamond, cross-faded while generating. */
+.header-activity-icons {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+}
+.hap-icon { position: absolute; inset: 0; }
+.hap-icon--diamond { opacity: 0; }
+.header-activity-pill.is-generating .hap-icon--wave {
+  animation: hap-wave 2.4s ease-in-out infinite;
+}
+.header-activity-pill.is-generating .hap-icon--diamond {
+  animation: hap-diamond 2.4s ease-in-out infinite;
+}
+@keyframes hap-wave {
+  0%, 38% { opacity: 1; }
+  50%, 88% { opacity: 0; }
+  100% { opacity: 1; }
+}
+@keyframes hap-diamond {
+  0%, 38% { opacity: 0; transform: scale(0.85) rotate(-8deg); }
+  50%, 88% { opacity: 1; transform: scale(1) rotate(0deg); }
+  100% { opacity: 0; transform: scale(0.85) rotate(-8deg); }
+}
+/* Green glow + ring while a generation is in flight. */
+.header-activity-pill.is-generating {
+  color: #4ade80;
+  border-color: rgba(74, 222, 128, 0.5);
+  animation: header-activity-generating 1.8s ease-in-out infinite;
+}
+@keyframes header-activity-generating {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.0), 0 0 8px rgba(74, 222, 128, 0.25); }
+  50%      { box-shadow: 0 0 0 4px rgba(74, 222, 128, 0.18), 0 0 16px rgba(74, 222, 128, 0.5); }
+}
+
 .header-activity-pill-count {
   position: absolute;
   top: -3px;
