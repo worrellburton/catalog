@@ -2118,6 +2118,12 @@ html[data-shell="catalog-app"] .gen-page {
 .gen-cat-row {
   margin-top: 18px;
   margin-bottom: 4px;
+  /* The products step is a flex column, so this row is a flex item with the
+     default min-width:auto — it won't shrink below its (wide) card content,
+     which made the horizontal scroller expand past the viewport and refuse
+     to scroll (cards cut off on the right). min-width:0 lets the row take
+     the column's width so .gen-cat-row-scroll's overflow-x can engage. */
+  min-width: 0;
 }
 
 .gen-cat-row-head {
@@ -2160,6 +2166,7 @@ html[data-shell="catalog-app"] .gen-page {
 .gen-cat-row-scroll {
   display: flex;
   gap: 10px;
+  min-width: 0;
   overflow-x: auto;
   overflow-y: hidden;
   scroll-snap-type: x proximity;
