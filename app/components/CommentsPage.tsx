@@ -9,8 +9,12 @@ import {
   addComment,
   deleteComment,
   subscribeComments,
+  getReactionsForComments,
+  toggleFire,
+  subscribeReactions,
   type CommentRow,
   type CommentTargetType,
+  type ReactionState,
 } from '~/services/comments';
 import CommentParticles from './CommentParticles';
 import { useCommentTyping } from '~/hooks/useCommentTyping';
@@ -140,7 +144,11 @@ export default function CommentsPage({ targetType, slug, onClose, onOpenCreator 
   const [draft, setDraft] = useState('');
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // 🔥 reactions, keyed by comment id. Live-synced alongside the thread.
+  const [reactions, setReactions] = useState<Record<string, ReactionState>>({});
+  const [milestone, setMilestone] = useState<string | null>(null);
   const listEndRef = useRef<HTMLDivElement>(null);
+  const commentIdsKey = comments.map(c => c.id).join(',');
 
   // Live "someone is typing…" presence over Supabase broadcast.
   const { typingNames, notifyTyping } = useCommentTyping(
@@ -172,6 +180,46 @@ export default function CommentsPage({ targetType, slug, onClose, onOpenCreator 
     const unsub = subscribeComments(targetType, slug, refresh);
     return () => { cancelled = true; unsub(); };
   }, [targetType, slug]);
+
+  // Load + live-subscribe to 🔥 counts for the visible comments.
+  useEffect(() => {
+    let cancelled = false;
+    const ids = commentIdsKey ? commentIdsKey.split(',') : [];
+    if (ids.length === 0) { setReactions({}); return; }
+    const refresh = () => {
+      getReactionsForComments(ids, user?.id ?? null).then(map => {
+        if (!cancelled) setReactions(map);
+      });
+    };
+    refresh();
+    const unsub = subscribeReactions(slug, refresh);
+    return () => { cancelled = true; unsub(); };
+  }, [commentIdsKey, slug, user?.id]);
+
+  const handleFire = async (commentId: string) => {
+    if (!user) { setError('Sign in to react.'); return; }
+    // Optimistic toggle.
+    const prev = reactions[commentId] || { count: 0, mine: false };
+    const optimistic: ReactionState = prev.mine
+      ? { count: Math.max(0, prev.count - 1), mine: false }
+      : { count: prev.count + 1, mine: true };
+    setReactions(r => ({ ...r, [commentId]: optimistic }));
+    const res = await toggleFire(commentId, user.id);
+    if (res.error) {
+      setReactions(r => ({ ...r, [commentId]: prev }));
+      setError(res.error);
+      return;
+    }
+    setReactions(r => ({ ...r, [commentId]: { count: res.count, mine: res.mine } }));
+    if (res.milestone) {
+      setMilestone('🔥 This comment just hit 5 fires!');
+      window.setTimeout(() => setMilestone(null), 4000);
+      // Surface it on the Activity pill too.
+      try {
+        window.dispatchEvent(new CustomEvent('catalog:activity-bump', { detail: { count: 1 } }));
+      } catch { /* no-op */ }
+    }
+  };
 
   const avatars = useMemo(
     () => comments.map(c => c.author?.avatar_url).filter((a): a is string => !!a),
@@ -221,6 +269,10 @@ export default function CommentsPage({ targetType, slug, onClose, onOpenCreator 
       <div className="comments-particles">
         <CommentParticles avatars={avatars} className="comments-particles-canvas" />
       </div>
+
+      {milestone && (
+        <div className="comments-milestone" role="status">{milestone}</div>
+      )}
 
       <div className="comments-shell">
         <button className="comments-back" onClick={goBack} aria-label="Back">
@@ -283,6 +335,20 @@ export default function CommentsPage({ targetType, slug, onClose, onOpenCreator 
                       )}
                     </div>
                     <p className="comment-bubble">{c.body}</p>
+                    <div className="comment-react-row">
+                      <button
+                        type="button"
+                        className={`comment-fire${reactions[c.id]?.mine ? ' is-lit' : ''}`}
+                        onClick={() => void handleFire(c.id)}
+                        aria-pressed={reactions[c.id]?.mine || false}
+                        aria-label={reactions[c.id]?.mine ? 'Remove fire' : 'Add fire'}
+                      >
+                        <span className="comment-fire-emoji" aria-hidden="true">🔥</span>
+                        {(reactions[c.id]?.count ?? 0) > 0 && (
+                          <span className="comment-fire-count">{reactions[c.id].count}</span>
+                        )}
+                      </button>
+                    </div>
                   </div>
                 </div>
               );

@@ -195,3 +195,112 @@ export function subscribeAllComments(onChange: () => void): () => void {
     .subscribe();
   return () => { void supabase!.removeChannel(channel); };
 }
+
+// ── 🔥 reactions ────────────────────────────────────────────────────
+//
+// A single reaction kind ("fire") per (comment, user). Tapping toggles
+// it on/off. See supabase/migrations/…_comment_reactions.sql. We report
+// per-comment counts + whether the current user has reacted so the UI
+// can render a filled/active state and the running total. Hitting five
+// fires is a milestone the Activity surface celebrates.
+
+const FIRE = 'fire';
+
+export interface ReactionState {
+  /** Total fire reactions on the comment. */
+  count: number;
+  /** Whether the current user has fired this comment. */
+  mine: boolean;
+}
+
+/**
+ * Fire counts (+ whether the current user reacted) for a batch of
+ * comments. Returns a map keyed by comment_id; comments with no
+ * reactions are simply absent (callers default to {count:0,mine:false}).
+ */
+export async function getReactionsForComments(
+  commentIds: string[],
+  selfUserId: string | null,
+): Promise<Record<string, ReactionState>> {
+  const out: Record<string, ReactionState> = {};
+  if (!supabase || commentIds.length === 0) return out;
+  const { data, error } = await supabase
+    .from('comment_reactions')
+    .select('comment_id, user_id')
+    .eq('kind', FIRE)
+    .in('comment_id', commentIds);
+  if (error) {
+    console.warn('[comments] reactions fetch failed:', error.message);
+    return out;
+  }
+  for (const r of (data as unknown as Record<string, unknown>[]) || []) {
+    const cid = r.comment_id as string;
+    const uid = r.user_id as string;
+    const cur = out[cid] || { count: 0, mine: false };
+    cur.count += 1;
+    if (selfUserId && uid === selfUserId) cur.mine = true;
+    out[cid] = cur;
+  }
+  return out;
+}
+
+/**
+ * Toggle the current user's fire on a comment. Returns the new state
+ * (count delta applied optimistically by the caller; we return `mine`
+ * so the caller can reconcile). `milestone` is true when this action
+ * pushes the comment to exactly five fires — the Activity celebration
+ * trigger.
+ */
+export async function toggleFire(
+  commentId: string,
+  userId: string,
+): Promise<{ mine: boolean; count: number; milestone: boolean; error?: string }> {
+  if (!supabase) return { mine: false, count: 0, milestone: false, error: 'Supabase not configured' };
+  // Does the user already have a fire on this comment?
+  const { data: existing } = await supabase
+    .from('comment_reactions')
+    .select('id')
+    .eq('comment_id', commentId)
+    .eq('user_id', userId)
+    .eq('kind', FIRE)
+    .maybeSingle();
+  if (existing) {
+    const { error } = await supabase
+      .from('comment_reactions')
+      .delete()
+      .eq('comment_id', commentId)
+      .eq('user_id', userId)
+      .eq('kind', FIRE);
+    if (error) return { mine: true, count: 0, milestone: false, error: error.message };
+  } else {
+    const { error } = await supabase
+      .from('comment_reactions')
+      .insert({ comment_id: commentId, user_id: userId, kind: FIRE });
+    if (error) return { mine: false, count: 0, milestone: false, error: error.message };
+  }
+  // Re-count authoritatively after the write.
+  const { count } = await supabase
+    .from('comment_reactions')
+    .select('id', { count: 'exact', head: true })
+    .eq('comment_id', commentId)
+    .eq('kind', FIRE);
+  const total = count ?? 0;
+  return { mine: !existing, count: total, milestone: !existing && total === 5 };
+}
+
+/** Live-subscribe to fire reactions for a set of comments (one target). */
+export function subscribeReactions(
+  targetId: string,
+  onChange: () => void,
+): () => void {
+  if (!supabase || !targetId) return () => {};
+  const channel = supabase
+    .channel(`comment_reactions:${targetId}`)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'comment_reactions' },
+      () => onChange(),
+    )
+    .subscribe();
+  return () => { void supabase!.removeChannel(channel); };
+}
