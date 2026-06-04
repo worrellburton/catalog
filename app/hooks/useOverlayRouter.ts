@@ -5,6 +5,7 @@ import {
   productSlug,
   lookSlug,
   brandSlug,
+  creatorSlug,
   extractIdPrefix,
   extractLookId,
 } from '~/utils/slug';
@@ -51,10 +52,15 @@ interface UseOverlayRouterArgs {
   selectedProduct: Product | null;
   selectedLook: Look | null;
   brandFilter: string | null;
+  /** Active creator handle (or null). Drives /c/<slug> URL sync so
+   *  browser back returns to the previous surface instead of exiting
+   *  the site. */
+  creatorFilter: string | null;
   onOpenProduct: (product: Product) => void;
   onOpenCreative: (creative: ProductAd) => void;
   onOpenLook: (look: Look) => void;
   onOpenBrand: (brandName: string) => void;
+  onOpenCreator: (creatorName: string) => void;
 }
 
 // Two-way binding between the overlay state (product / look / brand) and
@@ -69,10 +75,12 @@ export function useOverlayRouter({
   selectedProduct,
   selectedLook,
   brandFilter,
+  creatorFilter,
   onOpenProduct,
   onOpenCreative,
   onOpenLook,
   onOpenBrand,
+  onOpenCreator,
 }: UseOverlayRouterArgs) {
   // Push /p/<slug> when a product opens. We pushState (not replaceState)
   // when transitioning FROM a different surface (so the browser back
@@ -139,6 +147,27 @@ export function useOverlayRouter({
       window.history.replaceState({}, '', target);
     }
   }, [brandFilter]);
+
+  // Push /c/<slug> when a creator catalog opens. pushState (not
+  // replace) so the browser back button pops back to whatever the
+  // shopper was on before — previously the URL stayed on /#app and
+  // back exited the site entirely. Same push-vs-replace rule as
+  // product/look: pushState when transitioning FROM a non-/c surface,
+  // replaceState when the URL is being normalised on the same handle.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!creatorFilter) return;
+    const slug = creatorSlug(creatorFilter);
+    if (!slug) return;
+    const target = `/c/${slug}`;
+    const current = window.location.pathname;
+    if (current === target) return;
+    if (current.startsWith('/c/')) {
+      window.history.replaceState({ overlay: 'creator' }, '', target);
+    } else {
+      window.history.pushState({ overlay: 'creator' }, '', target);
+    }
+  }, [creatorFilter]);
 
   // (Removed: the old "pop /l/ on close" and "pop /b/ on close" effects
   // replaceState'd to '/' whenever the corresponding overlay's state
@@ -250,6 +279,37 @@ export function useOverlayRouter({
           const match = (data as { brand: string }[]).find(r => brandSlug(r.brand) === target);
           if (match?.brand) onOpenBrand(match.brand);
         });
+    } else if (path.startsWith('/c/')) {
+      // Creator slug. Two flavors mirror creatorSlug() above:
+      //   • "u-<8hex>"   → owner key, resolve back to user:<uuid>
+      //   • everything else → real handle, query the creators table
+      //     for the canonical handle (kebab inverse can collide on
+      //     unusual casing/punctuation).
+      if (!supabase) return;
+      if (slugParam.startsWith('u-')) {
+        const pfx = slugParam.slice(2).toLowerCase();
+        if (!/^[0-9a-f]{8}$/.test(pfx)) return;
+        const lower = `${pfx}-0000-0000-0000-000000000000`;
+        const next = nextHexPrefix(pfx);
+        let q = supabase.from('profiles').select('id').gte('id', lower);
+        if (next) q = q.lt('id', `${next}-0000-0000-0000-000000000000`);
+        q.limit(1).then(({ data }) => {
+          const row = data?.[0];
+          if (row?.id) onOpenCreator(`user:${row.id}`);
+        });
+      } else {
+        supabase
+          .from('creators')
+          .select('handle')
+          .limit(5000)
+          .then(({ data }) => {
+            if (!data) return;
+            const target = slugParam.toLowerCase();
+            const match = (data as { handle: string }[]).find(r => creatorSlug(r.handle) === target);
+            if (match?.handle) onOpenCreator(match.handle);
+            else onOpenCreator(slugParam); // fallback: pass the slug verbatim
+          });
+      }
     }
     // onOpen* are stable refs from useCallback in the caller; deliberately
     // empty deps so this only runs once. The initialSlugConsumed ref

@@ -96,6 +96,21 @@ export function brandSlug(brand: string): string {
   return kebab(brand);
 }
 
+/** Creator slug for the URL bar. Two flavors:
+ *    • Real creator handles ("janehamilton", "@lily") → kebab(handle)
+ *    • Synthetic owner keys ("user:<uuid>") → "u-<uuid-8>" so the
+ *      bar shows something stable + recognizable instead of leaking
+ *      a 36-char user id into every share link.
+ *  reverseCreatorSlug() in useOverlayRouter handles the inverse. */
+export function creatorSlug(handle: string): string {
+  if (!handle) return '';
+  if (handle.startsWith('user:')) {
+    const uuid = handle.slice(5);
+    return `u-${uuid.slice(0, 8)}`;
+  }
+  return kebab(handle.replace(/^@/, ''));
+}
+
 /** Pull the trailing 8-char UUID prefix off a product slug.
  *  Returns null when the slug doesn't end in a hex octet. */
 export function extractIdPrefix(slug: string): string | null {

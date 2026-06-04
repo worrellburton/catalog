@@ -553,6 +553,17 @@ export default function Home() {
   }, []);
 
   const handleCloseCreator = useCallback(() => {
+    // Prefer history.back() when we landed here via the /c/<slug>
+    // push so the close X and the browser back button take the same
+    // path. The popstate listener above clears creatorFilter when
+    // the URL leaves /c/. Falls back to a direct state clear on cold
+    // load (no pushed entry to pop).
+    if (typeof window !== 'undefined'
+        && window.location.pathname.startsWith('/c/')
+        && window.history.length > 1) {
+      window.history.back();
+      return;
+    }
     setCreatorFilter(null);
   }, []);
 
@@ -1093,6 +1104,8 @@ export default function Home() {
   selectedLookRef.current = selectedLook;
   const brandFilterRef = useRef(brandFilter);
   brandFilterRef.current = brandFilter;
+  const creatorFilterRef = useRef(creatorFilter);
+  creatorFilterRef.current = creatorFilter;
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const onPop = () => {
@@ -1100,6 +1113,7 @@ export default function Home() {
       const onProduct = path.startsWith('/p/');
       const onLook    = path.startsWith('/l/');
       const onBrand   = path.startsWith('/b/');
+      const onCreator = path.startsWith('/c/');
       // Product overlay exit: URL is no longer /p/ but a product is
       // still open in state → user just pressed back out of the
       // product page. Mirror what the X close button does: clear the
@@ -1126,6 +1140,14 @@ export default function Home() {
       // Brand overlay exit.
       if (!onBrand && brandFilterRef.current) {
         setBrandFilter(null);
+      }
+      // Creator catalog exit — URL is no longer /c/ but a creator is
+      // still open in state → user pressed back out of the creator
+      // catalog. Without this clear, back would pop the URL but the
+      // CreatorPage would stay mounted on top, and a second back
+      // would leave the site entirely (the original complaint).
+      if (!onCreator && creatorFilterRef.current) {
+        setCreatorFilter(null);
       }
     };
     window.addEventListener('popstate', onPop);
@@ -1192,10 +1214,12 @@ export default function Home() {
     selectedProduct,
     selectedLook,
     brandFilter,
+    creatorFilter,
     onOpenProduct: handleOpenProduct,
     onOpenCreative: handleOpenCreative,
     onOpenLook: handleOpenLook,
     onOpenBrand: handleOpenBrand,
+    onOpenCreator: handleOpenCreator,
   });
 
   const handleBookmarksOpenLook = useCallback((look: Look) => {
