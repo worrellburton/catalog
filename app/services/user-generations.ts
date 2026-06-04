@@ -984,6 +984,11 @@ export function buildGenerationPrompt(opts: {
   // on flow which forwards the originating Style sheet's occasion via
   // ?occasion= URL param.
   occasion?: string;
+  /** The user's free-text "your style" descriptor, set on the Style page
+   *  and persisted on profiles.custom_style_prompt. Carried into the
+   *  Seedance prompt so generated looks reflect the user's personal
+   *  aesthetic regardless of which preset they pick. Empty when unset. */
+  customStyle?: string | null;
   productLines: { role_tag: string | null; brand: string | null; name: string | null }[];
   durationSeconds?: number;
   /** Shopper gender — drives the neutral-coverage wording for any body
@@ -1024,6 +1029,12 @@ export function buildGenerationPrompt(opts: {
   // style-preset prompt structures (commercial, street, etc.) Empty
   // when not forwarded from the Style flow.
   const occasionClause = opts.occasion ? ` Scene: ${opts.occasion}.` : '';
+  // Personal style direction from the Style page, woven in alongside the
+  // occasion so the user's saved aesthetic shapes the render on every
+  // preset. Trimmed/blank drops the clause.
+  const customStyleClause = opts.customStyle && opts.customStyle.trim()
+    ? ` Style direction: ${opts.customStyle.trim()}.`
+    : '';
 
   if (opts.style === 'commercial') {
     const tones = detectBrandTones(opts.productLines);
@@ -1062,7 +1073,7 @@ export function buildGenerationPrompt(opts: {
       cameraLine,
       beatLine,
       framing,
-      `Lighting: strong key + rim, contrasty, motivated. Aggressive composition shifts that read as edit cuts. ${seconds}-second portrait clip, hero pacing, polished commercial grade.${occasionClause}`,
+      `Lighting: strong key + rim, contrasty, motivated. Aggressive composition shifts that read as edit cuts. ${seconds}-second portrait clip, hero pacing, polished commercial grade.${occasionClause}${customStyleClause}`,
     ].join(' ');
   }
 
@@ -1077,6 +1088,6 @@ export function buildGenerationPrompt(opts: {
     productList ? `Put these products on them: ${productList}.` : 'Put the provided products on them.',
     wardrobe,
     framing,
-    `Natural motion, ${seconds}-second portrait clip${styleTag}.${occasionClause}`,
+    `Natural motion, ${seconds}-second portrait clip${styleTag}.${occasionClause}${customStyleClause}`,
   ].join(' ');
 }

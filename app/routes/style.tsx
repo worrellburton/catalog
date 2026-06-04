@@ -3,7 +3,7 @@ import { useNavigate } from '@remix-run/react';
 import '~/styles/style-page.css';
 import { useAuth } from '~/hooks/useAuth';
 import { listUserUploads, getUserSlots, type UserUpload } from '~/services/user-generations';
-import { getUserHeightAge } from '~/services/profiles';
+import { getUserHeightAge, getUserCustomStyle, updateUserCustomStyle } from '~/services/profiles';
 import { type UserGender } from '~/services/genders';
 import { getLensIngestCounts } from '~/services/lens-search';
 import { supabase } from '~/utils/supabase';
@@ -58,6 +58,13 @@ export default function StylePage() {
   const [editingStats, setEditingStats] = useState(false);
 
   const [occasion, setOccasion] = useState('');
+  // The user's own saved style descriptor — free text that carries into
+  // the Seedance video prompt (/generate). Hydrated from the profile and
+  // saved back on demand.
+  const [customStyle, setCustomStyle] = useState('');
+  const [customStyleSaved, setCustomStyleSaved] = useState('');
+  const [savingStyle, setSavingStyle] = useState(false);
+  const [styleSavedFlash, setStyleSavedFlash] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [submittingOccasion, setSubmittingOccasion] = useState('');
   const [error, setError] = useState<string | null>(null);
@@ -143,8 +150,26 @@ export default function StylePage() {
       });
       setProfileHydrated(true);
     });
+    getUserCustomStyle(user.id).then(s => {
+      if (cancelled) return;
+      setCustomStyle(s ?? '');
+      setCustomStyleSaved(s ?? '');
+    });
     return () => { cancelled = true; };
   }, [user?.id]);
+
+  const handleSaveStyle = async () => {
+    if (!user) return;
+    setSavingStyle(true);
+    const { error: err } = await updateUserCustomStyle(user.id, customStyle);
+    setSavingStyle(false);
+    if (err) { setError(err); return; }
+    const trimmed = customStyle.trim();
+    setCustomStyle(trimmed);
+    setCustomStyleSaved(trimmed);
+    setStyleSavedFlash(true);
+    window.setTimeout(() => setStyleSavedFlash(false), 2200);
+  };
 
   const pickedUploads = useMemo(
     () => pickedIds.map(id => uploads.find(u => u.id === id)).filter((u): u is UserUpload => !!u),
@@ -367,6 +392,40 @@ export default function StylePage() {
           ))}
         </section>
       )}
+
+      {/* Define your own style — free text that threads into the Seedance
+          video prompt on /generate so every generated look reflects the
+          user's personal aesthetic. Pinned at the bottom of the page. */}
+      <section className="style-own">
+        <div className="style-own-head">
+          <h2 className="style-own-title">Your style</h2>
+          <p className="style-own-sub">
+            Describe your aesthetic in your own words. It carries into every look you generate.
+          </p>
+        </div>
+        <textarea
+          className="style-own-input"
+          placeholder="e.g. minimalist, monochrome, tailored streetwear with vintage denim…"
+          value={customStyle}
+          maxLength={400}
+          rows={3}
+          onChange={e => setCustomStyle(e.target.value)}
+          disabled={savingStyle}
+        />
+        <div className="style-own-actions">
+          <span className={`style-own-flash${styleSavedFlash ? ' is-shown' : ''}`} aria-live="polite">
+            Saved · used in your next generation
+          </span>
+          <button
+            type="button"
+            className="style-primary style-own-save"
+            onClick={handleSaveStyle}
+            disabled={savingStyle || customStyle.trim() === customStyleSaved.trim()}
+          >
+            {savingStyle ? 'Saving…' : customStyleSaved ? 'Update style' : 'Save style'}
+          </button>
+        </div>
+      </section>
 
       {lightboxOpen && lightboxOpen.image.image_url && (
         <StyleLightbox

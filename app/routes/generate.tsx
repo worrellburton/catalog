@@ -35,6 +35,7 @@ import { getUserGender, type UserGender } from '~/services/genders';
 import {
   getUserHeightAge,
   updateUserHeightAge,
+  getUserCustomStyle,
   getImpersonationTarget,
   type ImpersonationTarget,
 } from '~/services/profiles';
@@ -484,6 +485,9 @@ export default function GeneratePage() {
   const productUrlPrefilled = useRef(false);
   const [prefilledProductId, setPrefilledProductId] = useState<string | null>(null);
   const [occasionHint, setOccasionHint] = useState<string>('');
+  // The user's saved "your style" descriptor (Style page). Threaded into
+  // the Seedance prompt so generations reflect their personal aesthetic.
+  const [customStyle, setCustomStyle] = useState<string>('');
   useEffect(() => {
     if (productUrlPrefilled.current) return;
     if (typeof window === 'undefined') return;
@@ -596,6 +600,7 @@ export default function GeneratePage() {
       if (saved.ageLabel)    setAgeLabel(saved.ageLabel);
       heightAgeHydrated.current = true;
     });
+    getUserCustomStyle(effectiveUserId).then(s => { if (!cancelled && s) setCustomStyle(s); });
     return () => { cancelled = true; };
   }, [effectiveUserId, effectiveUserReady]);
 
@@ -1292,6 +1297,7 @@ export default function GeneratePage() {
       gender: userGender,
       style,
       occasion: occasionHint || undefined,
+      customStyle: customStyle || undefined,
       durationSeconds: clipSeconds,
       productLines: picked.map(p => ({
         role_tag: p.role_tag,

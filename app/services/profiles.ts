@@ -216,6 +216,39 @@ export async function getUserHeightAge(
 }
 
 /**
+ * The user's free-text "your style" descriptor (set on the Style page).
+ * Persisted on profiles.custom_style_prompt and threaded into the
+ * Seedance video prompt by buildGenerationPrompt so generated looks
+ * reflect the user's personal aesthetic. Returns null when unset.
+ */
+export async function getUserCustomStyle(userId: string): Promise<string | null> {
+  if (!supabase) return null;
+  const { data } = await supabase
+    .from('profiles')
+    .select('custom_style_prompt')
+    .eq('id', userId)
+    .maybeSingle();
+  const v = (data?.custom_style_prompt as string | null) ?? null;
+  return v && v.trim() ? v.trim() : null;
+}
+
+/** Save (or clear, with an empty string) the user's custom style descriptor. */
+export async function updateUserCustomStyle(
+  userId: string,
+  style: string,
+): Promise<{ error?: string }> {
+  if (!supabase) return { error: 'Supabase not configured' };
+  const trimmed = style.trim();
+  if (trimmed.length > 400) return { error: 'Style is too long (400 characters max)' };
+  const { error } = await supabase
+    .from('profiles')
+    .update({ custom_style_prompt: trimmed || null })
+    .eq('id', userId);
+  if (error) return { error: error.message };
+  return {};
+}
+
+/**
  * Update a profile's display name. Used by the AI persona editor on
  * /admin/user/<id> — the create form picks the initial name; admins
  * can rename a persona after the fact without round-tripping through
