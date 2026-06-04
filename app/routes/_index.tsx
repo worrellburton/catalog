@@ -1224,11 +1224,22 @@ export default function Home() {
     setCommentsTarget({ type, slug });
   }, []);
   const closeComments = useCallback(() => {
-    if (typeof window !== 'undefined' && window.location.pathname.startsWith('/comments/')) {
+    const onComments = typeof window !== 'undefined' && window.location.pathname.startsWith('/comments/');
+    if (onComments && window.history.length > 1) {
       window.history.back();
     } else {
+      // Cold load / no history to pop — just clear + normalize the URL.
       setCommentsTarget(null);
+      if (onComments) window.history.replaceState({}, '', '/');
     }
+  }, []);
+
+  // Cold-load deep link: /comments/p|l/<slug> mounts _index (the route
+  // re-exports it). Read the URL once and open the comment overlay.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const m = window.location.pathname.match(/^\/comments\/(p|l)\/(.+)$/);
+    if (m) setCommentsTarget({ type: m[1] === 'p' ? 'product' : 'look', slug: decodeURIComponent(m[2]) });
   }, []);
   const handleLogout = useCallback(async () => {
     await logout();
