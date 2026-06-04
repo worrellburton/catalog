@@ -1055,9 +1055,25 @@ body:has(.bottom-bar.search-open) {
 /* Mobile search now shows a stack of catalog buttons (PopularCatalogPills)
    above the bar instead of the old auto-scrolling text. Bottom-anchored so
    the pills sit just above the search pill; wraps into stacked rows. */
+/* WebGL particle field behind the catalog pills in the mobile search. */
+.bb-search-particles {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.6;
+}
+.bb-search-particles .pw-particles {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
 .bb-pills {
   position: absolute;
   inset: 0;
+  z-index: 1;
   display: flex;
   flex-direction: column;
   justify-content: flex-end;

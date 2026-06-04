@@ -1,6 +1,7 @@
 
 import { useState, useRef, useMemo, useCallback, useEffect, memo } from 'react';
 import PopularCatalogPills from './PopularCatalogPills';
+import ParticleBackground from './ParticleBackground';
 import { useAuth } from '~/hooks/useAuth';
 import { useShopperBody } from '~/hooks/useShopperBody';
 import { useSearchBeam } from '~/hooks/useSearchBeam';
@@ -348,6 +349,12 @@ function BottomBar({
 
       {searchOpen && (
         <div className="search-suggestions visible" id="search-suggestions">
+          {/* Ambient WebGL particle field behind the catalog pills — same
+              drift as the splash / overlays. Explicit speed so it always
+              renders (ignores the site singleton's paused state). */}
+          <div className="bb-search-particles" aria-hidden="true">
+            <ParticleBackground speed={1} />
+          </div>
           {/* Mobile search now mirrors desktop: a stack of tappable catalog
               buttons above the bar (ranked by demand) instead of the old
               auto-scrolling suggestion text. */}
