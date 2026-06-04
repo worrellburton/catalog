@@ -27,27 +27,38 @@ function jsonRes(data: unknown, status = 200) {
 }
 
 // Most-recent models per the project's standard.
-const CLAUDE_MODEL = 'claude-sonnet-4-6';
-const GEMINI_MODEL = 'gemini-2.5-pro';
+// HIGHEST tier of each provider — per user spec, never Sonnet,
+// never Gemini 2.5. Bumped to Claude Opus 4.8 and Gemini 3 Pro.
+const CLAUDE_MODEL = 'claude-opus-4-8';
+const GEMINI_MODEL = 'gemini-3-pro-preview';
 
 // One shared instruction so both models return the same shape.
 const SYSTEM_INSTRUCTION = `You help build a shoppable product catalog.
 
 The user will describe what they're looking for. Your job: return a
-list of DIRECT PRODUCT URLs — one per line — that match the request.
+list of EXACT, REAL, DIRECT PRODUCT URLs — one per line — that match
+the request and resolve to buyable product pages RIGHT NOW.
 
 STRICT RULES:
 - Output URLs ONLY. No headers, no bullets, no prose, no markdown,
-  no descriptions. Each line is exactly one URL.
-- Each URL must be a direct product page on a retailer or brand site
-  (not a category page, not a homepage, not a search results page,
-  not a blog post).
-- Prefer the brand's own .com when it has one; otherwise major
-  retailers (Amazon, Nordstrom, Bloomingdale's, Sephora, Net-a-
-  Porter, REI, etc.).
-- Aim for 12-20 URLs total. Quality over quantity — every URL should
-  land on a buyable product page.
-- Do not invent URLs. Only return URLs you'd recognize as real.
+  no descriptions, no commentary. Each line is exactly one URL.
+- Every URL must be a DEEP LINK to a specific product on a specific
+  retailer's product detail page. Not:
+    × homepages          (https://www.brand.com)
+    × category pages     (https://www.brand.com/men)
+    × search pages       (https://www.brand.com/search?q=...)
+    × blog posts / press
+    × example.com or other placeholder domains
+- The URL must end at a specific product — a slug, an SKU, an item
+  id. If you can't be certain a URL is a real, live product page,
+  DROP IT. Quality over quantity. Better to return 8 URLs you're
+  sure of than 20 with guesses.
+- Prefer the brand's own .com when it has a direct product page;
+  otherwise Amazon, Nordstrom, Bloomingdale's, Sephora, Net-a-Porter,
+  REI, etc. — major retailers with stable product URLs.
+- Do NOT invent URLs. Do NOT use example.com, placeholder paths, or
+  imagined slugs. Only URLs you would recognise as real, live
+  product pages.
 - Do not echo the user's prompt. Just URLs, one per line.`;
 
 interface ModelResult {
