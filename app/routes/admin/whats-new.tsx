@@ -403,7 +403,7 @@ function buildAndPrintReport(commits: GitHubCommit[], range: ReportRange) {
         <td></td>
       </tr></tfoot>
     </table>` : '<div class="empty">No updates shipped in this window.</div>'}
-    <div class="foot">Generated ${esc(now.toLocaleString())} · catalog.shop · Hours are estimates derived from commit type.</div>
+    <div class="foot">Generated ${esc(now.toLocaleString())} · catalog.shop · build ${esc((import.meta.env.VITE_VERCEL_GIT_COMMIT_SHA || 'dev').slice(0, 7))} · Hours are estimates derived from commit type.</div>
   </body></html>`;
 
   const w = window.open('', '_blank');

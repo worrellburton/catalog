@@ -5,6 +5,7 @@ import { subscribeOnline } from '~/services/presence';
 import { supabase } from '~/utils/supabase';
 import { getShopperGender } from '~/services/product-creative';
 import { useAuth } from '~/hooks/useAuth';
+import { highResAvatarUrl } from '~/utils/avatarSrc';
 
 interface FollowingRailProps {
   onOpenCreator: (handle: string) => void;
@@ -493,7 +494,7 @@ function FollowingStoriesRail({ entries, onlineHandles, onOpenCreator, onSeeAll 
             <span className={`follow-story-ring${isOnline ? ' is-online' : ''}`}>
               <span className="follow-story-avatar">
                 {c.avatarUrl
-                  ? <img src={c.avatarUrl} alt="" loading="lazy" />
+                  ? <img src={highResAvatarUrl(c.avatarUrl, 128) || c.avatarUrl} alt="" loading="lazy" decoding="async" />
                   : <span className="follow-story-initial">{name.charAt(0).toUpperCase()}</span>}
               </span>
             </span>
@@ -594,7 +595,7 @@ function AvatarRow({
                 }}
               >
                 {c.avatarUrl
-                  ? <img src={c.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ? <img src={highResAvatarUrl(c.avatarUrl, 96) || c.avatarUrl} alt="" loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   : (c.displayName || c.handle).charAt(0).toUpperCase()}
               </span>
             );
@@ -679,7 +680,7 @@ function AvatarRow({
                     }}
                   >
                     {c.avatarUrl
-                      ? <img src={c.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      ? <img src={highResAvatarUrl(c.avatarUrl, 96) || c.avatarUrl} alt="" loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                       : (c.displayName || c.handle).charAt(0).toUpperCase()}
                   </span>
                   {rowOnline && (
@@ -708,10 +709,11 @@ function AvatarRow({
                     Followers rows carry no thumbnail. */}
                 {c.lastThumb && (
                   <img
-                    src={c.lastThumb}
+                    src={highResAvatarUrl(c.lastThumb, 128) || c.lastThumb}
                     alt=""
                     aria-hidden="true"
                     loading="lazy"
+                    decoding="async"
                     style={{
                       flexShrink: 0,
                       width: 28,
