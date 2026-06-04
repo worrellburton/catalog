@@ -76,6 +76,32 @@ interface PoolEntry {
   lastUsed: number;
 }
 
+// Poster URLs we've already preloaded successfully. The browser will
+// serve subsequent <video poster> requests from cache, so we can skip
+// the gate after the first hit — only the first paint of any given
+// poster URL pays the synchronous wait.
+const POSTER_LOADED = new Set<string>();
+// Cap how long we'll wait for a poster image before letting the video
+// src attach anyway. A broken poster URL must NEVER stall playback.
+const POSTER_WAIT_MAX_MS = 600;
+function preloadPoster(url: string): Promise<void> {
+  if (POSTER_LOADED.has(url)) return Promise.resolve();
+  return new Promise<void>((resolve) => {
+    let done = false;
+    const finish = (success: boolean) => {
+      if (done) return;
+      done = true;
+      if (success) POSTER_LOADED.add(url);
+      resolve();
+    };
+    const img = new Image();
+    img.onload = () => finish(true);
+    img.onerror = () => finish(false);
+    img.src = url;
+    setTimeout(() => finish(false), POSTER_WAIT_MAX_MS);
+  });
+}
+
 export function TrailVideoHost({ children }: { children: ReactNode }) {
   const poolRef = useRef<HTMLDivElement>(null);
   const elementsRef = useRef<Map<string, PoolEntry>>(new Map());
@@ -153,7 +179,18 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
       // BEFORE src so the browser doesn't render a black frame for
       // even one paint cycle.
       if (poster) el.setAttribute('poster', poster);
-      el.src = src;
+      // Hard rule: src (and therefore the MP4 fetch) waits until the
+      // poster image is in cache. Without this gate, a slow-loading
+      // poster races the MP4 and the card paints either black or the
+      // first decoded frame — for AI-gen videos the first frame is
+      // often the static reference still, so the card looks frozen
+      // until the user scrolls past. Capped at 600 ms so a broken
+      // poster URL never blocks playback.
+      if (poster) {
+        void preloadPoster(poster).then(() => { el.src = src; });
+      } else {
+        el.src = src;
+      }
       el.setAttribute('data-trail-id', id);
       el.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
       // Fallback retry: when the first frame arrives, attempt play() again.
