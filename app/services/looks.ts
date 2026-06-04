@@ -233,6 +233,23 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
     });
   }
 
+  // Owner → canonical creator. creators.id === profiles.id (the auth user
+  // id), so a user-published look (no creator_handle) whose owner IS a
+  // creator can be normalized to that creator's handle — otherwise the same
+  // person's looks split between a real handle and a synthetic user:<id>
+  // key and render with different follow chips. See the bug where one
+  // creator's cards looked inconsistent in the feed.
+  const creatorByUserId = new Map<string, { handle: string; display_name: string | null; avatar_url: string | null; is_ai: boolean }>();
+  if (profileUserIds.length > 0) {
+    const { data: ownerCreators } = await supabase
+      .from('creators')
+      .select('id, handle, display_name, avatar_url, is_ai')
+      .in('id', profileUserIds);
+    (ownerCreators || []).forEach((c: { id: string; handle: string; display_name: string | null; avatar_url: string | null; is_ai: boolean | null }) => {
+      if (c.handle) creatorByUserId.set(c.id, { handle: c.handle, display_name: c.display_name, avatar_url: c.avatar_url, is_ai: c.is_ai === true });
+    });
+  }
+
   // is_ai by creator_handle was already populated above when we
   // queried creators for handle validation — single round trip.
 
@@ -246,6 +263,9 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
     const profileUserId = userIdByLookId.get(row.id) || row.user_id || undefined;
     const fallbackProfile = profileUserId ? profileById.get(profileUserId) : undefined;
     const fallbackName = fallbackProfile?.full_name || fallbackProfile?.email?.split('@')[0] || null;
+    // Canonical creator for this look's owner (if they're a creator), used
+    // to normalize handle-less / orphan looks onto one identity.
+    const ownerCreator = profileUserId ? creatorByUserId.get(profileUserId) : undefined;
     return {
       id: row.legacy_id ?? -(index + 1),
       uuid: row.id,
@@ -275,13 +295,16 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
         if (row.creator_handle && mappedName) {
           return row.creator_handle;
         }
+        // Normalize: if the owner is a creator, use their canonical handle
+        // so every one of their looks shares one identity + follow state.
+        if (ownerCreator?.handle) return ownerCreator.handle;
         return profileUserId ? `user:${profileUserId}` : (row.creator_handle || '');
       })(),
-      creatorDisplayName: (row.creator_handle ? (creatorDisplayByHandle.get(row.creator_handle) ?? null) : null) || fallbackName || undefined,
-      creatorAvatar: (row.creator_handle ? (creatorAvatarByHandle.get(row.creator_handle) ?? null) : null) || fallbackProfile?.avatar_url || undefined,
+      creatorDisplayName: (row.creator_handle ? (creatorDisplayByHandle.get(row.creator_handle) ?? null) : null) || ownerCreator?.display_name || fallbackName || undefined,
+      creatorAvatar: (row.creator_handle ? (creatorAvatarByHandle.get(row.creator_handle) ?? null) : null) || ownerCreator?.avatar_url || fallbackProfile?.avatar_url || undefined,
       creatorIsAi: row.creator_handle
         ? (isAiByHandle.get(row.creator_handle) ?? false)
-        : (fallbackProfile?.is_ai ?? false),
+        : (ownerCreator?.is_ai ?? fallbackProfile?.is_ai ?? false),
       description: row.description || '',
       color: row.color || '#888',
       products: (row.look_products || [])
