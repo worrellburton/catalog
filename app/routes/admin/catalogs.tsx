@@ -5277,20 +5277,87 @@ function CreativesListTable({ title, creatives }: { title: string; creatives: Ca
 // ── Phase 5: sort + filter helpers shared by looks and products ─────
 type MetricBearing = { metrics?: ItemMetrics; createdAt?: string | null };
 
-// Recommend Order — a bandit-style ranking that mixes looks + products
-// into one interleaved feed order (~2 looks : 1 product). The score is a
-// blend of EXPLOIT (proven conversion: clickout-rate + CTR, rank-
-// normalised so the best converter tops) and EXPLORE (a UCB term that
-// surfaces under-tested low-impression items near the top to gather a
-// sample size). Proven winners and unproven items both float up; items
-// with lots of impressions but poor conversion sink.
+// Category-group progression. The feed reads home → beauty →
+// accessories → footwear → apparel as a coherent journey, rather than
+// candle-next-to-tshirt-next-to-chair chaos. Within each group, the
+// best-performing types lead; within each type, best-performing items
+// lead. Anything unrecognised falls into 'other' at the tail.
+const CATEGORY_GROUP_ORDER = [
+  'home', 'beauty', 'accessories', 'footwear', 'tops', 'bottoms', 'full-look', 'other',
+] as const;
+type CategoryGroup = typeof CATEGORY_GROUP_ORDER[number];
+
+const TYPE_TO_GROUP: Record<string, CategoryGroup> = {
+  // Home
+  'home fragrance': 'home',
+  decor:            'home',
+  candle:           'home',
+  candles:          'home',
+  food:             'home',
+  electronics:      'home',
+  book:             'home',
+  // Beauty
+  skincare:         'beauty',
+  haircare:         'beauty',
+  beauty:           'beauty',
+  fragrance:        'beauty',
+  makeup:           'beauty',
+  // Accessories
+  sunglasses:       'accessories',
+  bag:              'accessories',
+  belt:             'accessories',
+  jewelry:          'accessories',
+  watch:            'accessories',
+  hat:              'accessories',
+  scarf:            'accessories',
+  // Footwear
+  shoes:            'footwear',
+  sneakers:         'footwear',
+  boots:            'footwear',
+  sandals:          'footwear',
+  // Apparel tops
+  top:              'tops',
+  shirt:            'tops',
+  't-shirt':        'tops',
+  sweater:          'tops',
+  jacket:           'tops',
+  activewear:       'tops',
+  coat:             'tops',
+  hoodie:           'tops',
+  blazer:           'tops',
+  // Apparel bottoms
+  pants:            'bottoms',
+  shorts:           'bottoms',
+  skirt:            'bottoms',
+  jeans:            'bottoms',
+  // Full-look
+  dress:            'full-look',
+  jumpsuit:         'full-look',
+};
+
+function classifyType(type: string | null | undefined): CategoryGroup {
+  if (!type) return 'other';
+  return TYPE_TO_GROUP[type.trim().toLowerCase()] ?? 'other';
+}
+
+// Recommend Order — bandit-style scoring + topical clustering.
+//   - Per-item score: EXPLOIT (clickout-rate + CTR) blended with
+//     EXPLORE (UCB to surface under-tested items), normalised to [0,1].
+//   - Products cluster by type, then by category-group (HOME → BEAUTY
+//     → ACCESSORIES → FOOTWEAR → TOPS → BOTTOMS → FULL-LOOK → OTHER)
+//     so the feed reads as a coherent journey instead of random chaos.
+//   - Inside a category-group, types are ordered by per-type aggregate
+//     score (sum-of-impressions weighted by CTR + clickouts).
+//   - Inside a type, items are ordered by per-item score.
+//   - Looks stay score-sorted (no taxonomy on looks today) and interleave
+//     ~2 looks : 1 product over the type-clustered product stream.
 function recommendFeedOrder(
   looks: { id: string; metrics?: ItemMetrics }[],
-  products: { id: string; metrics?: ItemMetrics }[],
+  products: { id: string; type?: string | null; metrics?: ItemMetrics }[],
 ): string[] {
   const all = [
-    ...looks.map(l => ({ key: `look:${l.id}`, kind: 'look' as const, m: l.metrics })),
-    ...products.map(p => ({ key: `product:${p.id}`, kind: 'product' as const, m: p.metrics })),
+    ...looks.map(l => ({ key: `look:${l.id}`, kind: 'look' as const, type: null as string | null, m: l.metrics })),
+    ...products.map(p => ({ key: `product:${p.id}`, kind: 'product' as const, type: p.type ?? null, m: p.metrics })),
   ];
   if (all.length === 0) return [];
   const totalImp = all.reduce((s, x) => s + (x.m?.impressions ?? 0), 0) + 1;
@@ -5300,7 +5367,7 @@ function recommendFeedOrder(
     const ctr = x.m?.ctr ?? 0;
     const exploit = 0.7 * (imp > 0 ? clk / imp : 0) + 0.3 * ctr;       // blended conversion
     const explore = Math.sqrt(Math.log(totalImp + 1) / (imp + 1));     // UCB: ↑ when under-tested
-    return { ...x, exploit, explore };
+    return { ...x, imp, clk, ctr, exploit, explore };
   });
   const norm = (vals: number[]) => {
     let mn = Infinity, mx = -Infinity;
@@ -5314,16 +5381,68 @@ function recommendFeedOrder(
   const scored = enriched.map(e => ({
     key: e.key,
     kind: e.kind,
+    type: e.type,
+    imp: e.imp,
+    clk: e.clk,
+    ctr: e.ctr,
     score: exploitN(e.exploit) + EXPLORE_W * exploreN(e.explore),
   }));
+
+  // Looks: best-first; no taxonomy.
   const looksSorted = scored.filter(s => s.kind === 'look').sort((a, b) => b.score - a.score);
-  const prodsSorted = scored.filter(s => s.kind === 'product').sort((a, b) => b.score - a.score);
-  // Interleave ~2 looks : 1 product, best-first within each type.
+
+  // Products: bucket by type. Compute a per-type performance score so
+  // the highest-converting types lead inside their category-group.
+  const products_ = scored.filter(s => s.kind === 'product');
+  const byType = new Map<string, typeof products_>();
+  for (const p of products_) {
+    const key = p.type ?? '__null__';
+    const bucket = byType.get(key) ?? [];
+    bucket.push(p);
+    byType.set(key, bucket);
+  }
+  // Per-type aggregate: average per-item score weighted by impression
+  // volume (so types with one lucky high-CTR item don't trump types with
+  // a deep, consistently-performing roster). Falls back to plain average
+  // when nothing in the type has been impressed yet.
+  const typeAgg = new Map<string, number>();
+  for (const [t, items] of byType) {
+    const totalW = items.reduce((s, x) => s + Math.max(1, x.imp), 0);
+    const weighted = items.reduce((s, x) => s + x.score * Math.max(1, x.imp), 0);
+    typeAgg.set(t, totalW > 0 ? weighted / totalW : 0);
+  }
+  // Order types within each category-group by aggregate score.
+  const typesByGroup = new Map<CategoryGroup, string[]>();
+  for (const t of byType.keys()) {
+    const g = classifyType(t === '__null__' ? null : t);
+    const list = typesByGroup.get(g) ?? [];
+    list.push(t);
+    typesByGroup.set(g, list);
+  }
+  for (const [, list] of typesByGroup) {
+    list.sort((a, b) => (typeAgg.get(b) ?? 0) - (typeAgg.get(a) ?? 0));
+  }
+  // Walk groups in the canonical progression, emit each type's items
+  // best-first inside the type.
+  const prodsClustered: typeof products_ = [];
+  for (const g of CATEGORY_GROUP_ORDER) {
+    const types = typesByGroup.get(g);
+    if (!types) continue;
+    for (const t of types) {
+      const items = byType.get(t);
+      if (!items) continue;
+      items.sort((a, b) => b.score - a.score);
+      prodsClustered.push(...items);
+    }
+  }
+
+  // Interleave ~2 looks : 1 product, preserving look-stream order and
+  // the type-clustered product stream.
   const out: string[] = [];
   let li = 0, pi = 0;
-  while (li < looksSorted.length || pi < prodsSorted.length) {
+  while (li < looksSorted.length || pi < prodsClustered.length) {
     for (let k = 0; k < 2 && li < looksSorted.length; k++) out.push(looksSorted[li++].key);
-    if (pi < prodsSorted.length) out.push(prodsSorted[pi++].key);
+    if (pi < prodsClustered.length) out.push(prodsClustered[pi++].key);
   }
   return out;
 }
