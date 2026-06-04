@@ -37,6 +37,14 @@
   flex-direction: column;
   align-items: center;
   gap: 22px;
+  /* Fade the spark + headline out FAST on scroll while the search
+     bar holds its position below. Multiplier 4 means the trio is
+     gone by the time the user has scrolled ~25% of the threshold,
+     so the bar rises into focus as the user moves down. The +0
+     means at scroll=0 the stage is fully visible. */
+  opacity: clamp(0, calc(1 - var(--hero-scroll-progress, 0) * 4), 1);
+  transform: translateY(calc(var(--hero-scroll-progress, 0) * -16px));
+  transition: opacity 0.12s linear, transform 0.18s ease-out;
 }
 /* Hero owns its own ParticleBackground canvas (the same WebGL drift the
    sign-in gate uses, but rendered as AI-diamond sparks). Push it behind
@@ -437,18 +445,12 @@
 }
 .app-root.home-hero:not(.hero-scrolled) .bottom-bar {
   bottom: var(--hero-bar-bottom, 36vh);
-  /* Fade the hero-centered bar out as the shopper scrolls toward
-     the feed peek. --hero-scroll-progress is written by the scroll
-     handler in routes/_index.tsx (0 at the very top → 1 at the
-     50%-viewport threshold where .hero-scrolled flips on). At ratio
-     0.6+ the bar is fully transparent so it never sits awkwardly in
-     the middle of the product grid the way it did in the user's
-     screenshot. Once .hero-scrolled kicks in, this rule no longer
-     matches and the bar reappears at the docked bottom position
-     with opacity 1. Multiplier 1.6 means we hit opacity 0 well
-     before the .hero-scrolled threshold so there's no flash of the
-     bar reappearing during the position transition. */
-  opacity: clamp(0, calc(1 - var(--hero-scroll-progress, 0) * 1.6), 1);
+  /* The bar holds its opacity through the early scroll while the
+     spark + headline fade out fast (see .sfh-stage rule below).
+     Once they're gone, the bar itself fades — multiplier 1.8 means
+     bar opacity hits 0 around ratio 0.56, just before .hero-scrolled
+     fires and the docked-position bar takes over. */
+  opacity: clamp(0, calc(1.2 - var(--hero-scroll-progress, 0) * 1.8), 1);
   transition: opacity 0.18s linear,
               bottom 0.55s cubic-bezier(0.16, 1, 0.3, 1),
               transform 0.55s cubic-bezier(0.16, 1, 0.3, 1),
