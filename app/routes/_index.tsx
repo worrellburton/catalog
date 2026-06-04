@@ -69,6 +69,9 @@ const MyLooks = lazy(importMyLooks);
 const CreatorWallet = lazy(importCreatorWallet);
 const ProfilePage = lazy(importProfilePage);
 const FollowingPage = lazy(importFollowingPage);
+// Shared Saved screen, embedded into My Account + My Catalog. Lazy so it
+// only loads when a saved surface actually mounts.
+const SavedScreen = lazy(() => import('~/components/SavedScreen'));
 
 /** Pause every currently-playing <video> in the document. Called on
  *  every product → product navigation so the old hero + rail cards
@@ -1497,6 +1500,27 @@ export default function Home() {
                 onOpenProduct={handleOpenProduct}
                 onOpenBrowser={handleOpenBrowser}
                 onCreateCatalog={handleCreateCatalog}
+                renderSaved={
+                  // Only the viewer's OWN catalog gets a Saved section —
+                  // it's their personal saves, not the creator's.
+                  user && creatorFilter === `user:${user.id}`
+                    ? () => (
+                        <Suspense fallback={null}>
+                          <SavedScreen
+                            embedded
+                            bookmarks={bookmarks}
+                            savedLooks={savedLooksForMenu}
+                            onOpenLook={handleBookmarksOpenLook}
+                            onOpenBrowser={handleOpenBrowser}
+                            onOpenProduct={handleOpenProduct}
+                            onOpenCreative={handleOpenCreative}
+                            onOpenCreator={handleBookmarksOpenCreator}
+                            onOpenBrand={handleOpenBrand}
+                          />
+                        </Suspense>
+                      )
+                    : undefined
+                }
               />
             </Suspense>
           )}
@@ -1544,7 +1568,25 @@ export default function Home() {
 
           {showProfile && user && (
             <Suspense fallback={null}>
-              <ProfilePage user={user} onClose={closeProfile} />
+              <ProfilePage
+                user={user}
+                onClose={closeProfile}
+                renderSaved={() => (
+                  <Suspense fallback={null}>
+                    <SavedScreen
+                      embedded
+                      bookmarks={bookmarks}
+                      savedLooks={savedLooksForMenu}
+                      onOpenLook={handleBookmarksOpenLook}
+                      onOpenBrowser={handleOpenBrowser}
+                      onOpenProduct={handleOpenProduct}
+                      onOpenCreative={handleOpenCreative}
+                      onOpenCreator={handleBookmarksOpenCreator}
+                      onOpenBrand={handleOpenBrand}
+                    />
+                  </Suspense>
+                )}
+              />
             </Suspense>
           )}
 

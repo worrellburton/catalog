@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, type ReactNode } from 'react';
 import { useEscapeKey } from '~/hooks/useEscapeKey';
 import { AvatarUpload } from './AvatarCropModal';
 import { HEIGHT_OPTIONS, WEIGHT_OPTIONS, AGE_OPTIONS } from '~/constants/stats';
@@ -16,6 +16,9 @@ interface ProfilePageProps {
     role?: string;
   };
   onClose: () => void;
+  /** Renders the shared Saved screen inside the "Saved" tab. When omitted,
+   *  the tab is hidden (e.g. signed-out / no bookmarks plumbing). */
+  renderSaved?: () => ReactNode;
 }
 
 interface ProfileData {
@@ -28,9 +31,10 @@ interface ProfileData {
   gender: UserGender;
 }
 
-export default function ProfilePage({ user, onClose }: ProfilePageProps) {
+export default function ProfilePage({ user, onClose, renderSaved }: ProfilePageProps) {
   useEscapeKey(onClose);
 
+  const [tab, setTab] = useState<'profile' | 'saved'>('profile');
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
@@ -115,11 +119,32 @@ export default function ProfilePage({ user, onClose }: ProfilePageProps) {
                 <line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" />
               </svg>
             </button>
-            <h1 className="profile-page-title">Profile</h1>
+            <h1 className="profile-page-title">{tab === 'saved' ? 'Saved' : 'Profile'}</h1>
           </div>
         </div>
 
-        {loading ? (
+        {renderSaved && (
+          <div className="profile-page-tabs">
+            <button
+              type="button"
+              className={`profile-page-tab${tab === 'profile' ? ' is-active' : ''}`}
+              onClick={() => setTab('profile')}
+            >
+              Account
+            </button>
+            <button
+              type="button"
+              className={`profile-page-tab${tab === 'saved' ? ' is-active' : ''}`}
+              onClick={() => setTab('saved')}
+            >
+              Saved
+            </button>
+          </div>
+        )}
+
+        {tab === 'saved' && renderSaved ? (
+          <div className="profile-page-saved">{renderSaved()}</div>
+        ) : loading ? (
           <div className="profile-page-loading">
             <div className="profile-page-skeleton profile-page-skeleton-avatar" />
             <div className="profile-page-skeleton profile-page-skeleton-line" />

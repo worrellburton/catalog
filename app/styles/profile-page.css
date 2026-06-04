@@ -404,3 +404,32 @@ html[data-shell="catalog-app"] .profile-page-overlay {
   .profile-page-actions { margin-top: 8px; }
   .profile-page-footer { margin-top: 8px; }
 }
+
+/* Account / Saved tab switcher — surfaces the shared SavedScreen inside
+   the profile overlay (My Account). */
+.profile-page-tabs {
+  display: flex;
+  gap: 6px;
+  padding: 0 20px 8px;
+}
+.profile-page-tab {
+  flex: 1;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid rgba(0, 0, 0, 0.1);
+  background: transparent;
+  color: rgba(0, 0, 0, 0.6);
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
+}
+.profile-page-tab.is-active {
+  background: #111;
+  color: #fff;
+  border-color: #111;
+}
+.profile-page-saved { padding: 4px 16px 24px; }
+
+.light-mode .profile-page-tab { border-color: rgba(0,0,0,0.1); color: rgba(0,0,0,0.6); }

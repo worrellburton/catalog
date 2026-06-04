@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useCallback } from 'react';
+import { useMemo, useState, useEffect, useCallback, type ReactNode } from 'react';
 import { looks as seedLooks, creators as seedCreators, Look, Product } from '~/data/looks';
 import { useEscapeKey } from '~/hooks/useEscapeKey';
 import { supabase } from '~/utils/supabase';
@@ -17,9 +17,13 @@ interface CreatorPageProps {
   onOpenProduct?: (product: Product) => void;
   onOpenBrowser?: (url: string, title: string) => void;
   onCreateCatalog?: (query: string) => void;
+  /** Renders the shared Saved screen as a "Saved" tab. Only passed for the
+   *  viewer's own catalog (their personal saves), so the tab is absent on
+   *  other creators' pages. */
+  renderSaved?: () => ReactNode;
 }
 
-type Tab = 'looks' | 'products';
+type Tab = 'looks' | 'products' | 'saved';
 
 interface UserProfile {
   id: string;
@@ -54,6 +58,7 @@ export default function CreatorPage({
   onOpenProduct,
   onOpenBrowser,
   onCreateCatalog,
+  renderSaved,
 }: CreatorPageProps) {
   const [activeTab, setActiveTab] = useState<Tab>('looks');
   const { user: currentUser } = useAuth();
@@ -552,7 +557,20 @@ export default function CreatorPage({
         >
           Shop {allProducts.length > 0 && <span className="creator-nav-count">{allProducts.length}</span>}
         </button>
+        {renderSaved && (
+          <button
+            className={`creator-nav-tab ${activeTab === 'saved' ? 'active' : ''}`}
+            onClick={() => setActiveTab('saved')}
+          >
+            Saved
+          </button>
+        )}
       </div>
+
+      {/* Saved tab — the viewer's own saves (shared SavedScreen). */}
+      {activeTab === 'saved' && renderSaved && (
+        <div className="creator-saved">{renderSaved()}</div>
+      )}
 
       {/* Brand filter chips (products tab only) */}
       {activeTab === 'products' && Object.keys(brandCounts).length > 1 && (
