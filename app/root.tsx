@@ -36,6 +36,7 @@ import "./styles/build-catalog.css";
 import "./styles/type-anywhere.css";
 import "./styles/bookmarks.css";
 import "./styles/saved-screen.css";
+import "./styles/comments.css";
 import "./styles/grid-view.css";
 import "./styles/look-overlay.css";
 import "./styles/product-page.css";
