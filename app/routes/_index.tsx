@@ -147,14 +147,16 @@ export default function Home() {
   useEffect(() => {
     if (!cinematic.active) return;
     try { sessionStorage.setItem('catalog:cold-open-done', '1'); } catch { /* ignore */ }
-    // Resolve the admin config; if disabled, drop the splash immediately.
-    let cancelled = false;
-    getSplashConfig().then(cfg => {
-      if (cancelled) return;
-      if (!cfg.enabled) { setCinematic(c => ({ ...c, active: false })); return; }
-      setCinematic(c => ({ ...c, config: cfg }));
-    }).catch(() => { /* keep default config */ });
-    return () => { cancelled = true; };
+    // SplashScreen + SplashHost were retired — the big "Catalog" wordmark
+    // splash was duplicating the smaller auth-splash above. Drop the
+    // cinematic on the next tick and fire the done event so any
+    // listeners (ActivityRealtimeToasts, etc.) don't hang waiting for a
+    // splash that never paints.
+    const t = setTimeout(() => {
+      setCinematic(c => ({ ...c, active: false }));
+      try { window.dispatchEvent(new Event('catalog:splash-done')); } catch { /* ignore */ }
+    }, 0);
+    return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -1294,24 +1296,14 @@ export default function Home() {
         <WaitlistScreen user={user} onApproved={handleWaitlistApproved} />
       )}
 
-      {showSplash && <SplashScreen />}
-      {/* Cinematic cold-open takes precedence over the basic first-visit
-          splash. When it's active, the legacy SplashScreen is suppressed
-          so the two don't stack. */}
-      {cinematic.active && cinematic.config.variant !== 'none' ? (
-        <SplashHost
-          variant={cinematic.config.variant}
-          durationMs={cinematic.config.durationMs}
-          onDone={() => {
-            setCinematic(c => ({ ...c, active: false }));
-            // Tell anything that was waiting for the splash to finish
-            // (e.g. ActivityRealtimeToasts) it's safe to surface now.
-            try { window.dispatchEvent(new Event('catalog:splash-done')); } catch { /* ignore */ }
-          }}
-        />
-      ) : firstVisit ? (
-        <SplashScreen />
-      ) : null}
+      {/* The big SplashScreen and the cinematic SplashHost were both
+          retired — on desktop they stacked behind the smaller
+          auth-splash and read as two splashes. Only the auth-splash
+          (CatalogLogo above) renders now while auth resolves; once
+          auth settles, the app cross-fades in directly. See the
+          cinematic auto-dismiss effect a few lines down — it fires
+          'catalog:splash-done' for any listeners waiting on splash
+          end so nothing hangs. */}
 
       {view === 'landing' && (
         <Suspense fallback={null}>
