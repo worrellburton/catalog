@@ -412,7 +412,12 @@ const HOME_FEED_TTL_MS = 60_000;
 // extracted from the primary video). Stale v8 rows lack it and would
 // fall back to the square primary_image_url (the zoomed-in poster), so
 // evict them.
-const HOME_FEED_LS_KEY = 'catalog:home-feed-cache:v9';
+// v10: primary-video posters were re-extracted at frame 0 from each
+// product's CURRENT video and re-keyed to .poster-v4.jpg (the old -v3
+// posters were stale — taken from an older, more-zoomed clip). Cached v9
+// rows still hold the stale -v3 thumbnail_url and keep rendering the
+// zoomed poster, so evict them.
+const HOME_FEED_LS_KEY = 'catalog:home-feed-cache:v10';
 const HOME_FEED_LS_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 // Seed the in-memory promise from localStorage on import so the feed
