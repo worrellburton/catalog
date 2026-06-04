@@ -312,6 +312,24 @@ export function ErrorBoundary() {
 
   if (typeof window !== 'undefined') {
     captureException(error, { path: window.location.pathname, source: 'ErrorBoundary' });
+    // Auto-recover from stale-deploy chunk failures. A client still running
+    // an OLD build requests asset chunks whose hashed filenames no longer
+    // exist after a new deploy; the SPA fallback returns index.html (HTML),
+    // which throws "'text/html' is not a valid JavaScript MIME type" or
+    // "Failed to fetch dynamically imported module". One hard reload pulls
+    // the fresh index.html + current chunks. Guarded via sessionStorage so a
+    // genuine (non-stale) module error can't loop.
+    const errMsg = error instanceof Error ? error.message : String(error);
+    if (/valid JavaScript MIME type|dynamically imported module|Importing a module script failed|error loading dynamically imported|Unable to preload/i.test(errMsg)) {
+      try {
+        const KEY = 'catalog:chunk-reload-at';
+        const last = parseInt(window.sessionStorage.getItem(KEY) || '0', 10);
+        if (Date.now() - last > 10000) {
+          window.sessionStorage.setItem(KEY, String(Date.now()));
+          window.location.reload();
+        }
+      } catch { /* sessionStorage blocked — fall through to the error UI */ }
+    }
     const w = window as unknown as { va?: (event: string, data: Record<string, unknown>) => void };
     if (w.va) {
       w.va('event', {
