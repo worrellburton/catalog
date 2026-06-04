@@ -1,6 +1,6 @@
 
 import { useState, useRef, useMemo, useCallback, useEffect, memo } from 'react';
-import { searchSuggestions } from '~/data/looks';
+import PopularCatalogPills from './PopularCatalogPills';
 import { useAuth } from '~/hooks/useAuth';
 import { useShopperBody } from '~/hooks/useShopperBody';
 import { useSearchBeam } from '~/hooks/useSearchBeam';
@@ -48,8 +48,6 @@ function BottomBar({
   // closing rather than the user pressing the keyboard's Done/tick.
   const dismissingRef = useRef(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
-  const trackRef = useRef<HTMLDivElement>(null);
-  const scrollRAF = useRef<number | null>(null);
   // Live height of the on-screen keyboard (+ any bottom browser chrome),
   // measured from window.visualViewport. 0 when no keyboard is up. When the
   // search sheet is open and this is > 0, the bar pins its bottom edge flush
@@ -178,67 +176,6 @@ function BottomBar({
       vv.removeEventListener('scroll', update);
     };
   }, []);
-  const scrollY = useRef(0);
-
-  const shuffledSuggestions = useMemo(() => {
-    const shuffled = [...searchSuggestions];
-    for (let i = shuffled.length - 1; i > 0; i--) {
-      const j = Math.floor(Math.random() * (i + 1));
-      [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-    }
-    // Doubled so the horizontal auto-scroll can wrap seamlessly: when
-    // the first half scrolls off-screen we snap back to the start and
-    // the second half is already mid-frame, so the loop reads as
-    // continuous.
-    return [...shuffled, ...shuffled];
-  }, []);
-
-  // Auto-scroll. Always vertical (translate Y) - both mobile and
-  // desktop render the suggestions as an editorial vertical column
-  // now. The horizontal pill row mode is gone; mobile users were
-  // getting stuck on the search overlay because the vertical feed
-  // peek was hidden under the row.
-  useEffect(() => {
-    if (!searchOpen || !trackRef.current) {
-      if (scrollRAF.current) {
-        cancelAnimationFrame(scrollRAF.current);
-        scrollRAF.current = null;
-      }
-      return;
-    }
-    const track = trackRef.current;
-    const container = track.parentElement as HTMLElement | null;
-    const SPEED = 0.5;
-
-    // On first open, position the track so items enter from the bottom
-    // (near the search bar) rather than appearing at the top of the screen.
-    if (scrollY.current === 0) {
-      const containerH = window.visualViewport?.height ?? container?.clientHeight ?? window.innerHeight;
-      const half = track.scrollHeight / 2;
-      if (half > 0 && containerH > 0) {
-        // translateY(-(half - containerH + 40)) aligns the end of the first
-        // batch with the bottom of the container. Items scroll upward from there.
-        scrollY.current = Math.max(0, half - containerH + 40);
-      }
-    }
-
-    let offset = scrollY.current;
-    function tick() {
-      offset += SPEED;
-      const half = track.scrollHeight / 2;
-      if (half > 0 && offset >= half) offset -= half;
-      track.style.transform = `translateY(-${offset}px)`;
-      scrollY.current = offset;
-      scrollRAF.current = requestAnimationFrame(tick);
-    }
-    scrollRAF.current = requestAnimationFrame(tick);
-    return () => {
-      if (scrollRAF.current) {
-        cancelAnimationFrame(scrollRAF.current);
-        scrollRAF.current = null;
-      }
-    };
-  }, [searchOpen]);
 
   const openSearch = useCallback(() => {
     setSearchOpen(true);
@@ -350,6 +287,20 @@ function BottomBar({
     searchInputRef.current?.blur();
   }, [localSearch, onSelectSuggestion, onSearchChange, closeSearch]);
 
+  // Catalog-pill pick on the mobile search overlay (mirrors the desktop
+  // search cloud): run the catalog as a search and close the sheet.
+  const pickCatalog = useCallback((query: string) => {
+    if (onSelectSuggestion) onSelectSuggestion(query);
+    else emitSearch(query.toLowerCase());
+    setSearchOpen(false);
+  }, [onSelectSuggestion, emitSearch]);
+  const pickFollowing = useCallback((handles: string[]) => {
+    setSearchOpen(false);
+    window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('catalog:following-catalog', { detail: { handles } }));
+    }, 60);
+  }, []);
+
   const handleSuggestionClick = useCallback((query: string, e: React.MouseEvent<HTMLButtonElement>) => {
     const btn = e.currentTarget;
     dismissingRef.current = true;
@@ -397,26 +348,20 @@ function BottomBar({
 
       {searchOpen && (
         <div className="search-suggestions visible" id="search-suggestions">
-          <div className="search-suggestions-track" ref={trackRef}>
+          {/* Mobile search now mirrors desktop: a stack of tappable catalog
+              buttons above the bar (ranked by demand) instead of the old
+              auto-scrolling suggestion text. */}
+          <div className="bb-pills" onMouseDown={(e) => e.preventDefault()}>
             {isAdmin && (
               <button
-                className="search-suggestion"
-                onClick={(e) => handleSuggestionClick('', e)}
-                style={{ fontWeight: 700, opacity: 0.95 }}
+                className="bb-pills-showall"
+                onClick={() => pickCatalog('')}
                 title="Admin-only: show every available look and product without a catalog filter"
               >
                 Show all
               </button>
             )}
-            {shuffledSuggestions.map((s, i) => (
-              <button
-                key={i}
-                className="search-suggestion"
-                onClick={(e) => handleSuggestionClick(s, e)}
-              >
-                {s}
-              </button>
-            ))}
+            <PopularCatalogPills onPick={pickCatalog} onFollowingCatalog={pickFollowing} />
           </div>
         </div>
       )}

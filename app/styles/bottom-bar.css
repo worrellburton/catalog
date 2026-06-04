@@ -1052,6 +1052,50 @@ body:has(.bottom-bar.search-open) {
   visibility: visible;
 }
 
+/* Mobile search now shows a stack of catalog buttons (PopularCatalogPills)
+   above the bar instead of the old auto-scrolling text. Bottom-anchored so
+   the pills sit just above the search pill; wraps into stacked rows. */
+.bb-pills {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
+  padding: 24px 18px var(--suggestions-bar-clear);
+  overflow-y: auto;
+  pointer-events: none;
+}
+.bb-pills-showall {
+  pointer-events: auto;
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.18);
+  color: #fff;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 16px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+/* Reset the desktop cloud's absolute/centered positioning + transform-based
+   entrance (which assume a fixed ai-bar ancestor) so it lays out inline,
+   stacked, inside the mobile overlay. */
+.bb-pills .catalog-pills {
+  position: static;
+  left: auto;
+  transform: none;
+  width: 100%;
+  max-width: 560px;
+  pointer-events: auto;
+  animation: bb-pills-in 0.34s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes bb-pills-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 /* Vertical track - the JS rAF loop translates this on Y. The doubled
    suggestions array makes the loop read as continuous. */
 .search-suggestions-track {
