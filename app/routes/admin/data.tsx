@@ -4552,12 +4552,19 @@ export default function AdminData() {
             </div>
           )}
           <div className="admin-tabs" style={{ marginBottom: 12 }}>
+            {/* Soft-deleted products are excluded from every count
+                here — they only show up in the dedicated "Soft delete"
+                tab on the far right. softDeletedCount + the per-tab
+                filters use a single predicate to keep counts honest. */}
+            {(() => null)()}
             <button
               className={`admin-tab ${productFilter === 'all' ? 'active' : ''}`}
               onClick={() => setProductFilter('all')}
             >
               Show all
-              <span className="admin-tab-badge">{allProducts.length}</span>
+              <span className="admin-tab-badge">
+                {allProducts.filter(p => !deletedProductKeys.has(`${p.brand}-${p.name}`)).length}
+              </span>
             </button>
             <button
               className={`admin-tab ${productFilter === 'active' ? 'active' : ''}`}
@@ -4565,7 +4572,12 @@ export default function AdminData() {
               title="Products currently shown on the feed"
             >
               Showing
-              <span className="admin-tab-badge">{allProducts.filter(p => (p as any).is_active !== false).length}</span>
+              <span className="admin-tab-badge">
+                {allProducts.filter(p =>
+                  (p as { is_active?: boolean }).is_active !== false
+                  && !deletedProductKeys.has(`${p.brand}-${p.name}`)
+                ).length}
+              </span>
             </button>
             <button
               className={`admin-tab ${productFilter === 'inactive' ? 'active' : ''}`}
@@ -4573,14 +4585,24 @@ export default function AdminData() {
               title="Products hidden from the feed - often missing a URL, price, or creative"
             >
               Hidden
-              <span className="admin-tab-badge">{allProducts.filter(p => (p as any).is_active === false).length}</span>
+              <span className="admin-tab-badge">
+                {allProducts.filter(p =>
+                  (p as { is_active?: boolean }).is_active === false
+                  && !deletedProductKeys.has(`${p.brand}-${p.name}`)
+                ).length}
+              </span>
             </button>
             <button
               className={`admin-tab ${productFilter === 'no-creative' ? 'active' : ''}`}
               onClick={() => setProductFilter('no-creative')}
             >
               Show without creative
-              <span className="admin-tab-badge">{allProducts.filter(p => !p.hasCreative).length}</span>
+              <span className="admin-tab-badge">
+                {allProducts.filter(p =>
+                  !p.hasCreative
+                  && !deletedProductKeys.has(`${p.brand}-${p.name}`)
+                ).length}
+              </span>
             </button>
             <button
               className={`admin-tab ${productFilter === 'untagged' ? 'active' : ''}`}
@@ -4588,21 +4610,17 @@ export default function AdminData() {
               title="Products missing a gender tag - leak into every shopper's feed because untagged products bypass the gender filter"
             >
               Untagged
-              <span className="admin-tab-badge">{allProducts.filter(p => p.gender == null).length}</span>
-            </button>
-            <button
-              className={`admin-tab ${productFilter === 'soft-deleted' ? 'active' : ''}`}
-              onClick={() => setProductFilter('soft-deleted')}
-              title="Products you removed from the feed via the trash icon — still in the DB. Click a row's Hard delete to remove permanently."
-              style={productFilter === 'soft-deleted' ? { color: '#b91c1c' } : undefined}
-            >
-              Soft delete
               <span className="admin-tab-badge">
-                {allProducts.filter(p => deletedProductKeys.has(`${p.brand}-${p.name}`)).length}
+                {allProducts.filter(p =>
+                  p.gender == null
+                  && !deletedProductKeys.has(`${p.brand}-${p.name}`)
+                ).length}
               </span>
             </button>
             {/* Date-added filter. Spacer pushes it to the right edge of
-                the tab row so it reads as a tool, not another category. */}
+                the tab row so it reads as a tool, not another category.
+                Soft-delete tab follows it on the far right, styled red
+                so the destructive bucket is visually unmistakable. */}
             <div style={{ flex: 1 }} />
             <div ref={datePopoverRef} style={{ position: 'relative' }}>
               <button
@@ -4718,6 +4736,31 @@ export default function AdminData() {
                 </div>
               )}
             </div>
+            {/* Soft delete — far-right destructive bucket, styled red
+                so it never reads as a normal filter category. */}
+            <button
+              className={`admin-tab admin-tab--danger ${productFilter === 'soft-deleted' ? 'active' : ''}`}
+              onClick={() => setProductFilter('soft-deleted')}
+              title="Soft-deleted products. Open this bucket to permanently hard-delete (removes the row + analytics)."
+              style={{
+                marginLeft: 8,
+                background: productFilter === 'soft-deleted' ? '#dc2626' : '#fee2e2',
+                color: productFilter === 'soft-deleted' ? '#fff' : '#b91c1c',
+                border: `1px solid ${productFilter === 'soft-deleted' ? '#b91c1c' : '#fecaca'}`,
+                fontWeight: 600,
+              }}
+            >
+              Soft delete
+              <span
+                className="admin-tab-badge"
+                style={{
+                  background: productFilter === 'soft-deleted' ? 'rgba(255,255,255,0.22)' : '#fecaca',
+                  color: productFilter === 'soft-deleted' ? '#fff' : '#991b1b',
+                }}
+              >
+                {allProducts.filter(p => deletedProductKeys.has(`${p.brand}-${p.name}`)).length}
+              </span>
+            </button>
           </div>
         {selectedProductKeys.size > 0 && (
           <div className="admin-bulk-bar" style={{
@@ -4953,7 +4996,20 @@ export default function AdminData() {
             <button
               className="bulk-pill bulk-pill--danger"
               onClick={async () => {
-                if (!window.confirm(`Delete ${selectedProductKeys.size} selected product${selectedProductKeys.size === 1 ? '' : 's'}? This will also remove any generated creatives.`)) return;
+                // From the Soft delete bucket, Delete becomes a real
+                // HARD delete — products row, every creative, every
+                // user_events analytics row, every catalog_products
+                // membership, every look_products join. The previous
+                // soft-only path was returning "Bad Request" because
+                // products row deletes were blocked by FK references
+                // from those satellite tables. Surface the consequence
+                // in the confirm so it can't be a surprise.
+                const isHard = productFilter === 'soft-deleted';
+                const n = selectedProductKeys.size;
+                const confirmMessage = isHard
+                  ? `HARD DELETE ${n} product${n === 1 ? '' : 's'}?\n\nThis permanently removes:\n  • the product${n === 1 ? '' : 's'} from the database\n  • every generated creative (videos + posters)\n  • every analytics row (impressions, clicks, clickouts)\n  • every catalog and look that referenced ${n === 1 ? 'it' : 'them'}\n\nThis cannot be undone.`
+                  : `Delete ${n} selected product${n === 1 ? '' : 's'}? This will also remove any generated creatives.`;
+                if (!window.confirm(confirmMessage)) return;
                 // Resolve IDs for real cloud deletes; anything without an id
                 // falls back to the admin_hidden_products table.
                 const selected = [...selectedProductKeys];
@@ -4964,14 +5020,20 @@ export default function AdminData() {
                   if (match?.id) idsToDelete.push(match.id);
                   else if (match) rowsToHide.push({ brand: match.brand, name: match.name });
                 }
-                setDeletedProductKeys(prev => {
-                  const next = new Set(prev);
-                  for (const k of selectedProductKeys) next.add(k);
-                  writeLocalSet(LOCAL_PRODUCTS_KEY, next);
-                  return next;
-                });
-                if (supabase) {
-                  if (idsToDelete.length > 0) {
+                if (!isHard) {
+                  // Soft path: hide locally + add to admin_hidden_products
+                  // so the consumer feed drops them. The product rows
+                  // themselves stay in the DB.
+                  setDeletedProductKeys(prev => {
+                    const next = new Set(prev);
+                    for (const k of selectedProductKeys) next.add(k);
+                    writeLocalSet(LOCAL_PRODUCTS_KEY, next);
+                    return next;
+                  });
+                  if (supabase && rowsToHide.length > 0) {
+                    await supabase.from('admin_hidden_products').upsert(rowsToHide, { onConflict: 'brand,name' });
+                  }
+                  if (supabase && idsToDelete.length > 0) {
                     await supabase.from('product_creative').delete().in('product_id', idsToDelete);
                     const { error } = await supabase.from('products').delete().in('id', idsToDelete);
                     if (error) {
@@ -4980,11 +5042,38 @@ export default function AdminData() {
                     }
                     setCrawledProducts(prev => prev.filter(r => !idsToDelete.includes(r.id)));
                   }
-                  if (rowsToHide.length > 0) {
-                    await supabase.from('admin_hidden_products').upsert(rowsToHide, { onConflict: 'brand,name' });
+                } else if (supabase && idsToDelete.length > 0) {
+                  // Hard path: cascade through every satellite table the
+                  // products row is referenced by, in dependency order,
+                  // so the final products DELETE doesn't bounce on an FK.
+                  try {
+                    await supabase.from('product_creative').delete().in('product_id', idsToDelete);
+                    await supabase.from('look_products').delete().in('product_id', idsToDelete);
+                    await supabase.from('catalog_products').delete().in('product_id', idsToDelete);
+                    // user_events stores the product id as text in
+                    // target_id AND uuid in target_uuid — wipe both.
+                    await supabase.from('user_events').delete().in('target_uuid', idsToDelete);
+                    await supabase.from('user_events').delete().in('target_id', idsToDelete);
+                    const { error } = await supabase.from('products').delete().in('id', idsToDelete);
+                    if (error) {
+                      showToast(`Hard delete failed: ${error.message}`);
+                      return;
+                    }
+                    setCrawledProducts(prev => prev.filter(r => !idsToDelete.includes(r.id)));
+                    // Clear soft-delete marker so the row doesn't ghost
+                    // back in the bucket count.
+                    setDeletedProductKeys(prev => {
+                      const next = new Set(prev);
+                      for (const k of selectedProductKeys) next.delete(k);
+                      writeLocalSet(LOCAL_PRODUCTS_KEY, next);
+                      return next;
+                    });
+                  } catch (err) {
+                    showToast(`Hard delete failed: ${err instanceof Error ? err.message : String(err)}`);
+                    return;
                   }
                 }
-                showToast(`Deleted ${selectedProductKeys.size} product${selectedProductKeys.size === 1 ? '' : 's'}`);
+                showToast(`${isHard ? 'Hard-deleted' : 'Deleted'} ${n} product${n === 1 ? '' : 's'}`);
                 setSelectedProductKeys(new Set());
                 setLastSelectedIndex(null);
               }}
