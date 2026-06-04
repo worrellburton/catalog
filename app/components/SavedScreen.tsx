@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { creators, Look, Product } from '~/data/looks';
 import { type ProductAd } from '~/services/product-creative';
 import { useEscapeKey } from '~/hooks/useEscapeKey';
@@ -63,8 +63,38 @@ export default function SavedScreen({
 
   const [selected, setSelected] = useState<string>('all'); // 'all' | collectionId
   const [creatingName, setCreatingName] = useState<string | null>(null);
-  const [menuKey, setMenuKey] = useState<string | null>(null);
+  // Bottom collection-picker tray target (replaces the clipped per-card popover).
+  const [trayKey, setTrayKey] = useState<{ lookId?: number; productKey?: string } | null>(null);
   const dragRef = useRef<{ kind: 'look' | 'product'; id: string } | null>(null);
+  const [dropChip, setDropChip] = useState<string | null>(null);
+
+  // ── Soft-unsave ───────────────────────────────────────────────────────
+  // Removing a card doesn't yank it instantly: it greys out + unchecks but
+  // stays put so a mistaken tap can be undone by tapping save again. The
+  // real removal is committed when the screen unmounts.
+  const [pendingUnsave, setPendingUnsave] = useState<Set<string>>(new Set());
+  const pendKey = (k: { lookId?: number; productKey?: string }) =>
+    k.lookId != null ? `L:${k.lookId}` : `P:${k.productKey}`;
+  const isPending = (k: { lookId?: number; productKey?: string }) => pendingUnsave.has(pendKey(k));
+  const toggleUnsave = (k: { lookId?: number; productKey?: string }) => {
+    setPendingUnsave(prev => {
+      const next = new Set(prev);
+      const id = pendKey(k);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+  const bookmarksRef = useRef(bookmarks); bookmarksRef.current = bookmarks;
+  const pendingRef = useRef(pendingUnsave); pendingRef.current = pendingUnsave;
+  const productsByKeyRef = useRef<Map<string, Product>>(new Map());
+  useEffect(() => () => {
+    // Commit pending unsaves on unmount — anything left greyed actually
+    // leaves the bookmarks store now.
+    pendingRef.current.forEach(id => {
+      if (id.startsWith('L:')) bookmarksRef.current.toggleLookBookmark(Number(id.slice(2)));
+      else { const p = productsByKeyRef.current.get(id.slice(2)); if (p) bookmarksRef.current.toggleProductBookmark(p); }
+    });
+  }, []);
 
   const looksById = useMemo(() => {
     const m = new Map<number, Look>();
@@ -76,6 +106,7 @@ export default function SavedScreen({
     bookmarks.bookmarkedProducts.forEach(p => m.set(productKeyOf(p), p));
     return m;
   }, [bookmarks.bookmarkedProducts]);
+  productsByKeyRef.current = productsByKey;
 
   const followedCreatorData = useMemo(
     () => bookmarks.followedCreators
@@ -153,63 +184,39 @@ export default function SavedScreen({
     setCreatingName(null);
   }, [creatingName, layout]);
 
-  // ── Card-level collection menu ────────────────────────────────────────
-  const renderCollectionMenu = (key: { lookId?: number; productKey?: string }, menuId: string) => {
-    if (menuKey !== menuId) return null;
+  // Drop a dragged tile onto a collection chip (adds; never removes).
+  const dropOnCollection = (collectionId: string) => {
+    const drag = dragRef.current;
+    dragRef.current = null;
+    setDropChip(null);
+    if (!drag) return;
+    const key = drag.kind === 'look' ? { lookId: Number(drag.id) } : { productKey: drag.id };
+    if (!layout.isInCollection(collectionId, key)) layout.toggleInCollection(collectionId, key);
+  };
+
+  // Card overlay controls: open the collection tray + (soft) remove. The
+  // remove button greys the card and unchecks it; tapping it again restores.
+  const cardControls = (key: { lookId?: number; productKey?: string }) => {
+    const pending = isPending(key);
     return (
-      <div className="saved-col-menu" onClick={e => e.stopPropagation()}>
-        <span className="saved-col-menu-title">Add to collection</span>
-        {layout.collections.length === 0 && <span className="saved-col-menu-empty">No collections yet</span>}
-        {layout.collections.map(c => (
-          <button
-            key={c.id}
-            type="button"
-            className={`saved-col-menu-item${layout.isInCollection(c.id, key) ? ' is-in' : ''}`}
-            onClick={() => layout.toggleInCollection(c.id, key)}
-          >
-            <span className="saved-col-menu-check">{layout.isInCollection(c.id, key) ? '✓' : ''}</span>
-            {c.name}
-          </button>
-        ))}
+      <div className="saved-card-controls" onClick={e => e.stopPropagation()}>
+        <button className="saved-card-ctrl" aria-label="Add to collection" onClick={() => setTrayKey(key)}>
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
+          </svg>
+        </button>
         <button
-          type="button"
-          className="saved-col-menu-new"
-          onClick={() => {
-            const name = window.prompt('New collection name');
-            if (name && name.trim()) { const id = layout.createCollection(name); layout.toggleInCollection(id, key); }
-          }}
+          className={`saved-card-ctrl${pending ? ' is-unsaved' : ''}`}
+          aria-label={pending ? 'Re-save' : 'Remove from saved'}
+          onClick={() => toggleUnsave(key)}
         >
-          + New collection
+          <svg width="14" height="14" viewBox="0 0 24 24" fill={pending ? 'none' : 'currentColor'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+          </svg>
         </button>
       </div>
     );
   };
-
-  // Card overlay controls shared by look + product cards: collection
-  // folder + remove. Stops propagation so taps don't open the item.
-  const cardControls = (
-    key: { lookId?: number; productKey?: string },
-    menuId: string,
-    onRemove: () => void,
-  ) => (
-    <div className="saved-card-controls" onClick={e => e.stopPropagation()}>
-      <button
-        className="saved-card-ctrl"
-        aria-label="Add to collection"
-        onClick={() => setMenuKey(m => (m === menuId ? null : menuId))}
-      >
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z" />
-        </svg>
-      </button>
-      <button className="saved-card-ctrl" aria-label="Remove from saved" onClick={onRemove}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
-        </svg>
-      </button>
-      {renderCollectionMenu(key, menuId)}
-    </div>
-  );
 
   const looksRow = visibleLookIds.map(id => looksById.get(id)).filter((l): l is Look => !!l);
   const productsRow = visibleProductKeys.map(k => productsByKey.get(k)).filter((p): p is Product => !!p);
@@ -233,7 +240,14 @@ export default function SavedScreen({
         <div className="saved-collections-bar" role="tablist" aria-label="Collections">
           <button className={`saved-col-chip${selected === 'all' ? ' is-active' : ''}`} onClick={() => setSelected('all')}>All</button>
           {layout.collections.map(c => (
-            <button key={c.id} className={`saved-col-chip${selected === c.id ? ' is-active' : ''}`} onClick={() => setSelected(c.id)}>
+            <button
+              key={c.id}
+              className={`saved-col-chip${selected === c.id ? ' is-active' : ''}${dropChip === c.id ? ' is-drop-target' : ''}`}
+              onClick={() => setSelected(c.id)}
+              onDragOver={e => { e.preventDefault(); setDropChip(c.id); }}
+              onDragLeave={() => setDropChip(prev => (prev === c.id ? null : prev))}
+              onDrop={() => dropOnCollection(c.id)}
+            >
               {c.name}
               <span className="saved-col-chip-count">{c.lookIds.length + c.productKeys.length}</span>
             </button>
@@ -273,22 +287,20 @@ export default function SavedScreen({
             <section className="saved-row">
               <h3 className="saved-row-title">Looks <span className="saved-row-count">{looksRow.length}</span></h3>
               <div className="saved-row-scroller">
-                {looksRow.map(look => {
-                  const menuId = `look-${look.id}`;
-                  return (
-                    <div
-                      key={look.id}
-                      className="saved-tile saved-tile--look"
-                      draggable
-                      onDragStart={() => { dragRef.current = { kind: 'look', id: String(look.id) }; }}
-                      onDragOver={e => e.preventDefault()}
-                      onDrop={() => onDrop('look', String(look.id))}
-                    >
-                      <LookCard look={look} className="look-card loaded" onOpenLook={onOpenLook} onOpenCreator={() => onOpenCreator?.(look.creator)} />
-                      {cardControls({ lookId: look.id }, menuId, () => bookmarks.toggleLookBookmark(look.id))}
-                    </div>
-                  );
-                })}
+                {looksRow.map(look => (
+                  <div
+                    key={look.id}
+                    className={`saved-tile saved-tile--look${isPending({ lookId: look.id }) ? ' is-pending-unsave' : ''}`}
+                    draggable
+                    onDragStart={() => { dragRef.current = { kind: 'look', id: String(look.id) }; }}
+                    onDragEnd={() => { dragRef.current = null; setDropChip(null); }}
+                    onDragOver={e => e.preventDefault()}
+                    onDrop={() => onDrop('look', String(look.id))}
+                  >
+                    <LookCard look={look} className="look-card loaded" onOpenLook={onOpenLook} onOpenCreator={() => onOpenCreator?.(look.creator)} />
+                    {cardControls({ lookId: look.id })}
+                  </div>
+                ))}
               </div>
             </section>
           )}
@@ -300,13 +312,13 @@ export default function SavedScreen({
               <div className="saved-row-scroller">
                 {productsRow.map(p => {
                   const key = productKeyOf(p);
-                  const menuId = `prod-${key}`;
                   return (
                     <div
                       key={key}
-                      className="saved-tile saved-tile--product"
+                      className={`saved-tile saved-tile--product${isPending({ productKey: key }) ? ' is-pending-unsave' : ''}`}
                       draggable
                       onDragStart={() => { dragRef.current = { kind: 'product', id: key }; }}
+                      onDragEnd={() => { dragRef.current = null; setDropChip(null); }}
                       onDragOver={e => e.preventDefault()}
                       onDrop={() => onDrop('product', key)}
                     >
@@ -322,7 +334,7 @@ export default function SavedScreen({
                           {p.price && <span className="saved-product-price">{p.price}</span>}
                         </div>
                       </button>
-                      {cardControls({ productKey: key }, menuId, () => bookmarks.toggleProductBookmark(p))}
+                      {cardControls({ productKey: key })}
                     </div>
                   );
                 })}
@@ -388,13 +400,54 @@ export default function SavedScreen({
     </div>
   );
 
+  // Bottom collection-picker tray — slides up so the choices are never
+  // clipped by a card's bounds (the old corner popover was getting cut off).
+  const tray = trayKey && (
+    <div className="saved-tray-backdrop" onClick={() => setTrayKey(null)}>
+      <div className="saved-tray" onClick={e => e.stopPropagation()}>
+        <span className="saved-tray-handle" aria-hidden="true" />
+        <div className="saved-tray-title">Add to collection</div>
+        {layout.collections.length === 0 && (
+          <div className="saved-tray-empty">No collections yet — create one below.</div>
+        )}
+        {layout.collections.map(c => {
+          const inIt = layout.isInCollection(c.id, trayKey);
+          return (
+            <button
+              key={c.id}
+              type="button"
+              className={`saved-tray-item${inIt ? ' is-in' : ''}`}
+              onClick={() => layout.toggleInCollection(c.id, trayKey)}
+            >
+              <span className="saved-tray-check">{inIt ? '✓' : ''}</span>
+              <span className="saved-tray-name">{c.name}</span>
+              <span className="saved-tray-count">{c.lookIds.length + c.productKeys.length}</span>
+            </button>
+          );
+        })}
+        <button
+          type="button"
+          className="saved-tray-new"
+          onClick={() => {
+            const name = window.prompt('New collection name');
+            if (name && name.trim()) { const id = layout.createCollection(name); layout.toggleInCollection(id, trayKey); }
+          }}
+        >
+          + New collection
+        </button>
+        <button type="button" className="saved-tray-done" onClick={() => setTrayKey(null)}>Done</button>
+      </div>
+    </div>
+  );
+
   if (embedded) {
-    return <div className="saved-screen saved-screen--embedded" onClick={() => menuKey && setMenuKey(null)}>{header}{body}</div>;
+    return <div className="saved-screen saved-screen--embedded">{header}{body}{tray}</div>;
   }
   return (
-    <div className="saved-screen saved-page" onClick={() => menuKey && setMenuKey(null)}>
+    <div className="saved-screen saved-page">
       {header}
       {body}
+      {tray}
     </div>
   );
 }
