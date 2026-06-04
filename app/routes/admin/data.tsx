@@ -1516,6 +1516,12 @@ export default function AdminData() {
   // don't need a queue.
   const [publishMsg, setPublishMsg] = useState<string | null>(null);
   const [publishingIds, setPublishingIds] = useState<Set<string>>(new Set());
+  // Multi-select for the Unpublished looks table — drives the bulk
+  // action bar (batch publish / batch delete). Selection is by
+  // generation id, NOT look id, because the unpublished list IS the
+  // user_generations table.
+  const [selectedUnpubIds, setSelectedUnpubIds] = useState<Set<string>>(new Set());
+  const [bulkUnpubBusy, setBulkUnpubBusy] = useState(false);
   const publishTimerRef = useRef<number | null>(null);
 
   const flashPublishMsg = useCallback((msg: string) => {
@@ -4236,9 +4242,106 @@ export default function AdminData() {
           className="admin-table-wrap"
           style={{ display: looksFilter === 'unpublished' ? undefined : 'none' }}
         >
+          {/* Bulk action bar — only visible when at least one row is
+              checked. Spans Batch publish (only rows that are
+              status='done' get published; others are skipped silently)
+              and Batch delete (hard-delete the user_generation rows).
+              Inline styles match the existing bulk bar on Products. */}
+          {selectedUnpubIds.size > 0 && (
+            <div
+              className="admin-bulk-bar"
+              style={{
+                position: 'sticky',
+                top: 0,
+                zIndex: 5,
+                display: 'flex',
+                alignItems: 'center',
+                gap: 12,
+                padding: '8px 14px',
+                marginBottom: 10,
+                background: 'rgba(20,20,20,0.92)',
+                color: '#fff',
+                borderRadius: 999,
+              }}
+            >
+              <span style={{ fontWeight: 600, fontSize: 13 }}>
+                {selectedUnpubIds.size} selected
+              </span>
+              <button
+                type="button"
+                className="bulk-pill"
+                style={{ background: 'transparent', color: 'rgba(255,255,255,0.75)', border: '1px solid rgba(255,255,255,0.18)', padding: '4px 12px', borderRadius: 999, fontWeight: 600, fontSize: 12, cursor: 'pointer' }}
+                onClick={() => setSelectedUnpubIds(new Set())}
+              >Clear</button>
+              <div style={{ flex: 1 }} />
+              <button
+                type="button"
+                className="bulk-pill bulk-pill--primary"
+                disabled={bulkUnpubBusy}
+                style={{ background: '#fff', color: '#111', border: 'none', padding: '6px 14px', borderRadius: 999, fontWeight: 700, fontSize: 12, cursor: bulkUnpubBusy ? 'wait' : 'pointer' }}
+                onClick={async () => {
+                  // Batch publish: walks every selected row that's
+                  // status='done' through publishUnpublishedInline.
+                  // Skips rows still pending/failed.
+                  setBulkUnpubBusy(true);
+                  const targets = unpublishedActive.filter(g => selectedUnpubIds.has(g.id) && g.status === 'done');
+                  for (const g of targets) {
+                    try { await publishUnpublishedInline(g); } catch { /* keep going */ }
+                  }
+                  setSelectedUnpubIds(new Set());
+                  setBulkUnpubBusy(false);
+                }}
+              >
+                {bulkUnpubBusy ? 'Working…' : `Publish ${selectedUnpubIds.size}`}
+              </button>
+              <button
+                type="button"
+                className="bulk-pill bulk-pill--danger"
+                disabled={bulkUnpubBusy}
+                style={{ background: 'rgba(220,38,38,0.18)', color: '#fca5a5', border: '1px solid rgba(220,38,38,0.35)', padding: '6px 14px', borderRadius: 999, fontWeight: 700, fontSize: 12, cursor: bulkUnpubBusy ? 'wait' : 'pointer' }}
+                onClick={async () => {
+                  const n = selectedUnpubIds.size;
+                  if (!window.confirm(`Delete ${n} unpublished look${n === 1 ? '' : 's'}?\n\nThis removes the user_generation row${n === 1 ? '' : 's'} permanently. The source media stays in storage but the row${n === 1 ? '' : 's'} won't appear anywhere in the admin again.\n\nCannot be undone.`)) return;
+                  setBulkUnpubBusy(true);
+                  if (supabase) {
+                    const ids = [...selectedUnpubIds];
+                    // Chunk by 50 — same PostgREST URL-length guard
+                    // as the products hard-delete.
+                    const CHUNK = 50;
+                    for (let i = 0; i < ids.length; i += CHUNK) {
+                      const slice = ids.slice(i, i + CHUNK);
+                      await supabase.from('user_generations').delete().in('id', slice);
+                    }
+                    setUnpublished(prev => prev.filter(g => !selectedUnpubIds.has(g.id)));
+                  }
+                  setSelectedUnpubIds(new Set());
+                  setBulkUnpubBusy(false);
+                }}
+              >Delete {selectedUnpubIds.size}</button>
+            </div>
+          )}
           <table className="admin-table">
             <thead>
               <tr>
+                {/* Header checkbox toggles every visible row at once.
+                    Indeterminate when some-but-not-all are selected. */}
+                <th style={{ width: 32 }}>
+                  <input
+                    type="checkbox"
+                    aria-label="Select all unpublished looks"
+                    ref={(el) => {
+                      if (!el) return;
+                      const total = unpublishedActive.length;
+                      const sel = unpublishedActive.filter(g => selectedUnpubIds.has(g.id)).length;
+                      el.checked = total > 0 && sel === total;
+                      el.indeterminate = sel > 0 && sel < total;
+                    }}
+                    onChange={(e) => {
+                      const all = unpublishedActive.map(g => g.id);
+                      setSelectedUnpubIds(e.target.checked ? new Set(all) : new Set());
+                    }}
+                  />
+                </th>
                 <th>Creative</th>
                 <th>Creator</th>
                 <th>Created At</th>
@@ -4252,11 +4355,11 @@ export default function AdminData() {
             <tbody>
               {unpublishedLoading && unpublishedActive.length === 0 ? (
                 <tr>
-                  <td colSpan={8} style={{ textAlign: 'center', padding: 24, color: '#888' }}>Loading…</td>
+                  <td colSpan={9} style={{ textAlign: 'center', padding: 24, color: '#888' }}>Loading…</td>
                 </tr>
               ) : unpublishedActive.length === 0 ? (
                 <tr>
-                  <td colSpan={8} style={{ textAlign: 'center', padding: 24, color: '#888' }}>No user-generated looks yet</td>
+                  <td colSpan={9} style={{ textAlign: 'center', padding: 24, color: '#888' }}>No user-generated looks yet</td>
                 </tr>
               ) : unpublishedActive.map(g => {
                 const creatorLabel = g.creator_name || g.creator_email || g.user_id.slice(0, 8);
@@ -4273,6 +4376,24 @@ export default function AdminData() {
                     onClick={() => toggleUnpublishedExpand(g.id)}
                     style={{ cursor: 'pointer' }}
                   >
+                    {/* Row checkbox — stops propagation so a click on
+                        the checkbox doesn't also toggle the expand row.
+                        Renders a checked state from the shared
+                        selectedUnpubIds set. */}
+                    <td onClick={(e) => e.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={selectedUnpubIds.has(g.id)}
+                        onChange={(e) => {
+                          setSelectedUnpubIds(prev => {
+                            const next = new Set(prev);
+                            if (e.target.checked) next.add(g.id); else next.delete(g.id);
+                            return next;
+                          });
+                        }}
+                        aria-label={`Select ${g.creator_name || g.id}`}
+                      />
+                    </td>
                     <td>
                       <div className="admin-look-thumb">
                         {g.video_url ? (
@@ -4359,7 +4480,7 @@ export default function AdminData() {
                     </td>
                   </tr>
                   <tr className={`admin-look-expanded-row ${isExpanded ? 'open' : ''}`}>
-                    <td colSpan={8} style={{ padding: 0 }}>
+                    <td colSpan={9} style={{ padding: 0 }}>
                       <div className="admin-expand-animate">
                         <div className="admin-look-products">
                           <h3 className="admin-products-title">Products</h3>
