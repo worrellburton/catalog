@@ -9,6 +9,7 @@ import SplashHost from '~/components/splash/SplashHost';
 import { getSplashConfig, DEFAULT_SPLASH_CONFIG, type SplashConfig } from '~/services/splash-config';
 import ContinuousFeed from '~/components/ContinuousFeed';
 import SiteParticleHost from '~/components/SiteParticleHost';
+import ParticleBackground from '~/components/ParticleBackground';
 import BottomBar from '~/components/BottomBar';
 import { TrailVideoHost } from '~/components/TrailVideoHost';
 import { TrailRoot } from '~/components/TrailMotion';
@@ -1312,6 +1313,14 @@ export default function Home() {
           underneath cross-fades in instead of snapping. */}
       {authSplashMounted && (
         <div className={`auth-splash${authSplashLeaving ? ' leaving' : ''}`} aria-hidden="true">
+          {/* Particle field painted INSIDE the splash, above its opaque
+              base but below the wordmark. The site singleton sits behind
+              the opaque splash bg (so it can't show through), so we mount
+              a dedicated instance here with an explicit speed — one-off
+              mounts ignore particleControls.paused and always render. */}
+          <div className="auth-splash-particles">
+            <ParticleBackground speed={1} />
+          </div>
           <CatalogLogo className="auth-splash-logo" />
         </div>
       )}
