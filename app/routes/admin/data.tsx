@@ -1859,6 +1859,70 @@ export default function AdminData() {
   const [brandUrlBusy, setBrandUrlBusy] = useState(false);
   const [brandUrlError, setBrandUrlError] = useState<string | null>(null);
   const [brandBatchProgress, setBrandBatchProgress] = useState<{ done: number; total: number; failed: number } | null>(null);
+
+  // "Add via Claude + Gemini" modal state. The user types a natural-
+  // language prompt; we run it through both models in parallel via the
+  // ai-find-urls edge function and render the URLs side-by-side. Click
+  // any URL to enqueue it through the existing scrape pipeline.
+  const [showClaudeGemini, setShowClaudeGemini] = useState(false);
+  const [claudeGeminiPrompt, setClaudeGeminiPrompt] = useState('');
+  const [claudeGeminiBusy, setClaudeGeminiBusy] = useState(false);
+  const [claudeGeminiError, setClaudeGeminiError] = useState<string | null>(null);
+  const [claudeGeminiResult, setClaudeGeminiResult] = useState<{
+    claude: { urls: string[]; ms: number; error?: string };
+    gemini: { urls: string[]; ms: number; error?: string };
+  } | null>(null);
+  const [claudeGeminiAdded, setClaudeGeminiAdded] = useState<Set<string>>(new Set());
+
+  const runClaudeGeminiSearch = useCallback(async () => {
+    const prompt = claudeGeminiPrompt.trim();
+    if (!prompt || !supabase) return;
+    setClaudeGeminiBusy(true);
+    setClaudeGeminiError(null);
+    setClaudeGeminiResult(null);
+    try {
+      const { data: { session } } = await supabase.auth.getSession();
+      const baseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+      const apikey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY || '';
+      const res = await fetch(`${baseUrl}/functions/v1/ai-find-urls`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+          apikey,
+        },
+        body: JSON.stringify({ prompt }),
+      });
+      const json = await res.json();
+      if (!res.ok) {
+        setClaudeGeminiError(json.error || `Search failed (${res.status})`);
+      } else {
+        setClaudeGeminiResult(json);
+      }
+    } catch (err) {
+      setClaudeGeminiError(err instanceof Error ? err.message : String(err));
+    } finally {
+      setClaudeGeminiBusy(false);
+    }
+  }, [claudeGeminiPrompt]);
+
+  const addClaudeGeminiUrl = useCallback(async (url: string) => {
+    // Mark added optimistically so the user can fire multiple
+    // additions fast without each one waiting on the round trip.
+    // On failure we surface the error in the modal's error slot and
+    // peel the URL back off the added set.
+    setClaudeGeminiAdded(prev => {
+      const next = new Set(prev); next.add(url); return next;
+    });
+    try {
+      await addProductUrl(url);
+    } catch (err) {
+      setClaudeGeminiError(`Failed to queue ${url}: ${err instanceof Error ? err.message : String(err)}`);
+      setClaudeGeminiAdded(prev => {
+        const next = new Set(prev); next.delete(url); return next;
+      });
+    }
+  }, []);
   // Pending product ghost rows — added optimistically when an admin
   // submits an "Add via …" URL. Each row sits at the top of the
   // Products table with an indeterminate progress bar until the real
@@ -3821,6 +3885,7 @@ export default function AdminData() {
                     { label: 'Add via Google Shopping', onClick: () => { setAddMenuOpen(false); setShowAddProducts(true); } },
                     { label: 'Add via Amazon Shopping', onClick: () => { setAddMenuOpen(false); setShowAmazonLookup(true); } },
                     { label: 'Add via Brand Website',   onClick: () => { setAddMenuOpen(false); setBrandUrlInput(''); setBrandUrlError(null); setShowBrandUrl(true); } },
+                    { label: 'Add via Claude + Gemini', onClick: () => { setAddMenuOpen(false); setShowClaudeGemini(true); setClaudeGeminiPrompt(''); setClaudeGeminiResult(null); setClaudeGeminiError(null); } },
                   ].map(item => (
                     <button
                       key={item.label}
@@ -7793,6 +7858,120 @@ export default function AdminData() {
             showToast(`Added ${count} Amazon product${count === 1 ? '' : 's'} - scraping…`);
           }}
         />
+      )}
+
+      {showClaudeGemini && (
+        <div
+          className="admin-modal-overlay"
+          onClick={() => !claudeGeminiBusy && setShowClaudeGemini(false)}
+        >
+          <div
+            className="admin-modal"
+            onClick={(e) => e.stopPropagation()}
+            style={{ maxWidth: 880, width: '90vw' }}
+          >
+            <header style={{ padding: '16px 20px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+              <div>
+                <h2 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 600 }}>Add via Claude + Gemini</h2>
+                <p style={{ margin: 0, fontSize: 12, color: '#666' }}>Side-by-side URL suggestions. Click any URL to queue it for scrape.</p>
+              </div>
+              <button type="button" className="admin-icon-btn" aria-label="Close" disabled={claudeGeminiBusy} onClick={() => setShowClaudeGemini(false)}>
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+              </button>
+            </header>
+            <div style={{ padding: 20 }}>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#444', marginBottom: 6 }}>
+                What are you looking for?
+              </label>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <input
+                  type="text"
+                  value={claudeGeminiPrompt}
+                  onChange={(e) => setClaudeGeminiPrompt(e.target.value)}
+                  placeholder='e.g. Give me the best candles that are out there'
+                  disabled={claudeGeminiBusy}
+                  onKeyDown={async (e) => {
+                    if (e.key === 'Enter' && claudeGeminiPrompt.trim() && !claudeGeminiBusy) {
+                      e.preventDefault();
+                      await runClaudeGeminiSearch();
+                    }
+                  }}
+                  style={{ flex: 1, padding: '10px 12px', fontSize: 14, borderRadius: 8, border: '1px solid #ddd' }}
+                />
+                <button
+                  type="button"
+                  className="admin-btn admin-btn-primary"
+                  disabled={claudeGeminiBusy || !claudeGeminiPrompt.trim()}
+                  onClick={runClaudeGeminiSearch}
+                  style={{ padding: '10px 18px', fontSize: 13 }}
+                >
+                  {claudeGeminiBusy ? 'Searching…' : 'Search'}
+                </button>
+              </div>
+              {claudeGeminiError && (
+                <div style={{ marginTop: 10, fontSize: 12, color: '#b91c1c' }}>{claudeGeminiError}</div>
+              )}
+
+              {claudeGeminiResult && (
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+                  gap: 16,
+                  marginTop: 18,
+                }}>
+                  {[
+                    { key: 'claude', title: 'Claude (Sonnet 4.6)', data: claudeGeminiResult.claude },
+                    { key: 'gemini', title: 'Gemini (2.5 Pro)', data: claudeGeminiResult.gemini },
+                  ].map(col => (
+                    <div key={col.key} style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: 12, background: '#fff' }}>
+                      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: '#111' }}>{col.title}</span>
+                        <span style={{ fontSize: 10, color: '#888' }}>{col.data.urls.length} urls · {col.data.ms}ms</span>
+                      </div>
+                      {col.data.error ? (
+                        <div style={{ fontSize: 11, color: '#b91c1c', padding: 6 }}>{col.data.error}</div>
+                      ) : col.data.urls.length === 0 ? (
+                        <div style={{ fontSize: 11, color: '#666', padding: 6 }}>No URLs returned.</div>
+                      ) : (
+                        <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 360, overflowY: 'auto' }}>
+                          {col.data.urls.map(u => {
+                            const added = claudeGeminiAdded.has(u);
+                            return (
+                              <li key={u} style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                                <button
+                                  type="button"
+                                  disabled={added}
+                                  onClick={() => addClaudeGeminiUrl(u)}
+                                  style={{
+                                    flex: 1,
+                                    textAlign: 'left',
+                                    padding: '6px 10px',
+                                    fontSize: 11,
+                                    border: '1px solid ' + (added ? '#a7f3d0' : '#e5e7eb'),
+                                    background: added ? '#ecfdf5' : '#f9fafb',
+                                    color: added ? '#047857' : '#111',
+                                    borderRadius: 6,
+                                    cursor: added ? 'default' : 'pointer',
+                                    overflow: 'hidden',
+                                    textOverflow: 'ellipsis',
+                                    whiteSpace: 'nowrap',
+                                  }}
+                                  title={u}
+                                >
+                                  {added ? '✓ queued · ' : '+ '}{u}
+                                </button>
+                              </li>
+                            );
+                          })}
+                        </ul>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+            </div>
+          </div>
+        </div>
       )}
 
       {showBrandUrl && (
