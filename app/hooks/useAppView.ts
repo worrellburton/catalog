@@ -179,6 +179,16 @@ export function useAppView({ user, authLoading }: UseAppViewArgs): UseAppViewRes
     setView('landing');
   }, [authLoading, user, beatDone, view]);
 
+  // Access gate: the app (feed, account, profile) is sign-in-only. If we
+  // ever end up on 'app' without a session — a deep link, an #app hash, a
+  // stale restored view — bounce back to the public landing, which gates
+  // entry behind sign-in. Signed-in users are unaffected.
+  useEffect(() => {
+    if (authLoading) return;
+    if (user) return;
+    if (view === 'app') setView('landing');
+  }, [authLoading, user, view]);
+
   // Auto-route on sign-in: approved users enter the app, everyone else
   // goes to the waitlist.
   useEffect(() => {

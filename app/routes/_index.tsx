@@ -202,6 +202,11 @@ export default function Home() {
   const [showWallet, setShowWallet] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showFollowing, setShowFollowing] = useState(false);
+  // Sign-in gate overlay. Shown when a signed-out visitor tries to enter
+  // the app from the landing — the app is sign-in-only. Cleared the moment
+  // a session resolves (the auto-route effect then takes them in).
+  const [showSignIn, setShowSignIn] = useState(false);
+  useEffect(() => { if (user) setShowSignIn(false); }, [user]);
   // Comment thread overlay target. Opening pushes /comments/<type>/<slug>
   // via history.pushState (NOT a route nav) so the product/look overlay
   // underneath stays mounted; backing out just clears this.
@@ -523,17 +528,18 @@ export default function Home() {
   }, []);
 
   const handleLandingToApp = useCallback(() => {
-    // Fixed 2000ms beat — consistent with SplashScreen's internal
-    // timer and useAppView's first-visit SPLASH_MIN/MAX_MS. The user
-    // wants the splash to always feel the same regardless of where
-    // they entered from.
+    // The app is sign-in-only. A signed-out visitor tapping "Open the feed"
+    // gets the sign-in screen, not free access — closing the landing's old
+    // "no signup" hole. Once signed in, the auto-route effect takes them in.
+    if (!user) { setShowSignIn(true); return; }
+    // Fixed 2000ms beat so the splash feels the same regardless of entry.
     setShowSplash(true);
     setView('splash');
     setTimeout(() => {
       setView('app');
       setShowSplash(false);
     }, 2000);
-  }, []);
+  }, [user]);
 
   const handleOpenLook = useCallback((look: Look) => {
     // Trail navigation - when the user opens a look from inside a
@@ -1384,7 +1390,7 @@ export default function Home() {
           <CatalogLogo className="auth-splash-logo" />
         </div>
       )}
-      {view === 'locked' && !authLoading && !user && <PasswordGate />}
+      {(view === 'locked' || showSignIn) && !authLoading && !user && <PasswordGate />}
       {view === 'waitlisted' && user && (
         <WaitlistScreen user={user} onApproved={handleWaitlistApproved} />
       )}
