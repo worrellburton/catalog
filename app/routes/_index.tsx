@@ -228,7 +228,7 @@ export default function Home() {
   const inShell = typeof document !== 'undefined' && document.documentElement.dataset.shell === 'catalog-app';
   const [heroMode, setHeroMode] = useState(() => !inShell);
   const [heroScrolled, setHeroScrolled] = useState(false);
-  const [ceremony, setCeremony] = useState<{ active: boolean; query: string }>({ active: false, query: '' });
+  const [ceremony, setCeremony] = useState<{ active: boolean; query: string; kind: 'search' | 'brand' }>({ active: false, query: '', kind: 'search' });
   const [revealResults, setRevealResults] = useState(false);
   // Chrome auto-hide on scroll-down once you're past the hero. Header
   // slides up offscreen, bottom search bar slides down — full-screen feed.
@@ -335,13 +335,13 @@ export default function Home() {
     if (searchTrigger === prevTriggerRef.current) return;
     prevTriggerRef.current = searchTrigger;
     if (heroMode && searchQuery.trim() && !ceremony.active) {
-      setCeremony({ active: true, query: searchQuery });
+      setCeremony({ active: true, query: searchQuery, kind: 'search' });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchTrigger]);
 
   const handleCeremonyDone = useCallback(() => {
-    setCeremony({ active: false, query: '' });
+    setCeremony({ active: false, query: '', kind: 'search' });
     setHeroMode(false);
     window.scrollTo({ top: 0, behavior: 'auto' });
     setRevealResults(true);
@@ -583,13 +583,11 @@ export default function Home() {
   // BrandPage *underneath* the still-visible ProductPage.
   const handleOpenBrand = useCallback((brandName: string) => {
     if (!brandName) return;
-    // Close any open overlays so the feed below is the visible surface,
-    // then push the brand name into the search bar. The feed treats a
-    // brand match as a Tier-1 catalog hit and renders the brand's
-    // products inline. The ?q= URL effect picks this up and pushes a
-    // history entry so the back button returns the user to wherever
-    // they came from. We also bump searchTrigger so the feed fires the
-    // search immediately instead of waiting on the typing debounce.
+    // Open a brand → play the AI search ceremony FIRST with brand-
+    // specific copy ("Finding everything from <Brand>", etc.), then
+    // let handleCeremonyDone reveal the feed once the loading
+    // narrative has played out. Without this, the brand tap just
+    // snapped to the filtered feed with no transition.
     setSelectedProduct(null);
     setSelectedCreative(null);
     setSelectedLook(null);
@@ -598,6 +596,8 @@ export default function Home() {
     setCatalogName(toCatalogName(brandName));
     bumpSearchTrigger();
     lockGenderOverride();
+    setHeroMode(true);
+    setCeremony({ active: true, query: brandName, kind: 'brand' });
   }, [bumpSearchTrigger, lockGenderOverride]);
 
   const handleCloseBrand = useCallback(() => {
@@ -1453,7 +1453,7 @@ export default function Home() {
 
           {/* Magical loading screen between a hero search and its results. */}
           {ceremony.active && (
-            <SearchCeremony query={ceremony.query} ready={!searchLoading} onDone={handleCeremonyDone} />
+            <SearchCeremony query={ceremony.query} kind={ceremony.kind} ready={!searchLoading} onDone={handleCeremonyDone} />
           )}
 
           <button className="remix-btn-fixed" onClick={handleRemix} onContextMenu={handleRemixReset} title="Click to remix · Right-click to reset layout" aria-label="Remix">

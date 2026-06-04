@@ -22,6 +22,11 @@ import { particleControls } from '~/services/particles';
 
 interface SearchCeremonyProps {
   query: string;
+  /** What triggered the ceremony — drives the narration copy:
+   *    'search' → "Understanding 'X'", generic loading steps
+   *    'brand'  → "Finding everything from X", brand-specific steps
+   *  Defaults to 'search' so existing callers don't have to change. */
+  kind?: 'search' | 'brand';
   /** True once the real search results are in hand. */
   ready: boolean;
   /** Fired once the narration has played out AND ready is true. */
@@ -72,10 +77,32 @@ function pick<T>(arr: T[], n: number): T[] {
   return out;
 }
 
-function buildSteps(query: string): string[] {
+// Brand-specific narration. Subject is the brand name; copy plays
+// up the "we're loading EVERYTHING from this brand" feel the user
+// asked for, with a couple of jokes mixed in for personality.
+const BRAND_MIDDLE_STEPS = (brand: string) => [
+  `Pulling every look from ${brand}`,
+  `Lining up the ${brand} catalog`,
+  `Asking ${brand} for their best fits`,
+  `Sorting the ${brand} drops by buzz`,
+  `Reading every ${brand} product page`,
+  `Decoding what makes ${brand} so good`,
+];
+
+function buildSteps(query: string, kind: 'search' | 'brand'): string[] {
   const q = query.trim();
   const subject = q.length > 32 ? `${q.slice(0, 31)}…` : q;
-  // Roughly 50/50 split — two from each pool, shuffled, sliced to three.
+  if (kind === 'brand' && subject) {
+    // Brand mode: first line names the brand explicitly, three middle
+    // steps from the brand pool, consistent closer.
+    const middle = pick(BRAND_MIDDLE_STEPS(subject), 3);
+    return [
+      `Finding everything from ${subject}`,
+      ...middle,
+      `Composing your ${subject} edit`,
+    ];
+  }
+  // Default search mode — roughly 50/50 serious/funny middle steps.
   const middle: string[] = [];
   middle.push(...pick(SERIOUS_MIDDLE_STEPS, 2));
   middle.push(...pick(FUNNY_MIDDLE_STEPS, 2));
@@ -90,8 +117,8 @@ function buildSteps(query: string): string[] {
   ];
 }
 
-export default function SearchCeremony({ query, ready, onDone }: SearchCeremonyProps) {
-  const steps = useRef(buildSteps(query)).current;
+export default function SearchCeremony({ query, kind = 'search', ready, onDone }: SearchCeremonyProps) {
+  const steps = useRef(buildSteps(query, kind)).current;
   // How many steps are currently visible (they stream in over time).
   const [revealed, setRevealed] = useState(1);
   const [progress, setProgress] = useState(6);
