@@ -1,0 +1,91 @@
+import { useState } from 'react';
+import { useFollowState, toggleFollowShared } from '~/hooks/useFollowState';
+
+/**
+ * Creator identity on feed/detail cards, reduced to just the profile
+ * picture — no name. A "+" badge in the upper-right of the avatar follows
+ * the creator; once following it becomes a "−" to unfollow, and the avatar
+ * gets a lit ring. Tapping the avatar itself opens the creator's catalog.
+ *
+ * One component used everywhere a creator chip used to live (look cards,
+ * product-page look tiles, the look overlay) so follow state + styling
+ * stay consistent across the app.
+ *
+ * Placeholder handles ("user:<uuid>") can't be followed, so the badge is
+ * suppressed for them — the avatar still opens the catalog.
+ */
+
+interface Props {
+  handle: string;
+  avatarUrl?: string | null;
+  /** Used for alt text / initial fallback only — never rendered as text. */
+  displayName?: string | null;
+  /** Avatar diameter in px. Default 40. */
+  size?: number;
+  onOpenCreator?: (handle: string) => void;
+  className?: string;
+}
+
+export default function CreatorAvatarFollow({
+  handle,
+  avatarUrl,
+  displayName,
+  size = 40,
+  onOpenCreator,
+  className,
+}: Props) {
+  const following = useFollowState(handle);
+  const [busy, setBusy] = useState(false);
+
+  const isPlaceholder = !handle || handle.startsWith('user:');
+  // Show the badge only once the shared cache has resolved (avoids a
+  // +/− flicker on first paint) and never for placeholder handles.
+  const showBadge = !isPlaceholder && following !== null;
+  const badgeSize = Math.max(18, Math.round(size * 0.46));
+  const initial = (displayName || handle || '?').charAt(0).toUpperCase();
+
+  const toggle = async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (busy || isPlaceholder) return;
+    setBusy(true);
+    try { await toggleFollowShared(handle); }
+    catch { /* shared cache reverts itself */ }
+    finally { setBusy(false); }
+  };
+
+  return (
+    <div
+      className={`creator-avatar-follow${following ? ' is-following' : ''}${className ? ` ${className}` : ''}`}
+      style={{ width: size, height: size }}
+      onClick={(e) => { e.stopPropagation(); onOpenCreator?.(handle); }}
+      role="button"
+      tabIndex={0}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpenCreator?.(handle); } }}
+      title={displayName ? `Open ${displayName}'s catalog` : 'Open creator catalog'}
+      aria-label={displayName ? `Open ${displayName}'s catalog` : 'Open creator catalog'}
+    >
+      {avatarUrl ? (
+        <img className="creator-avatar-follow__img" src={avatarUrl} alt={displayName || ''} loading="lazy" />
+      ) : (
+        <span className="creator-avatar-follow__img creator-avatar-follow__img--initial" aria-hidden="true">{initial}</span>
+      )}
+      {showBadge && (
+        <button
+          type="button"
+          className={`creator-avatar-follow__badge${following ? ' is-following' : ''}`}
+          style={{ width: badgeSize, height: badgeSize }}
+          onClick={toggle}
+          disabled={busy}
+          aria-label={following ? `Unfollow ${displayName || handle}` : `Follow ${displayName || handle}`}
+          title={following ? 'Following — tap to unfollow' : 'Follow this creator'}
+        >
+          <svg width={Math.round(badgeSize * 0.55)} height={Math.round(badgeSize * 0.55)} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            {following
+              ? <line x1="5" y1="12" x2="19" y2="12" />
+              : <><line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" /></>}
+          </svg>
+        </button>
+      )}
+    </div>
+  );
+}

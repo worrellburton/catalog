@@ -5,7 +5,7 @@ import ContinuousFeed from '~/components/ContinuousFeed';
 import { useActiveGenderFilter } from '~/hooks/useActiveGenderFilter';
 import { useEscapeKey } from '~/hooks/useEscapeKey';
 import CreativeCard from '~/components/CreativeCard';
-import FollowIconButton from '~/components/FollowIconButton';
+import CreatorAvatarFollow from '~/components/CreatorAvatarFollow';
 import { useTrailVideo } from '~/components/TrailVideoHost';
 import { useInViewport } from '~/hooks/useInViewport';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
@@ -371,15 +371,6 @@ function LookTile({
     if (fullResVideoUrl) prefetchVideoBytes(fullResVideoUrl);
   }, [fullResVideoUrl]);
 
-  // Creator click jumps to that creator's catalog page instead of
-  // opening the look. We stopPropagation so the tile-level onClick
-  // (which opens the look overlay) doesn't also fire.
-  const handleCreatorClick = useCallback((e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!onOpenCreator || !look.creator) return;
-    onOpenCreator(look.creator);
-  }, [onOpenCreator, look.creator]);
-
   return (
     <button
       type="button"
@@ -417,33 +408,14 @@ function LookTile({
           via the looks fetcher (see services/looks.ts), so once the
           admin uploads a profile pic via AvatarUpload it lights up
           here automatically. */}
-      <span
-        role="button"
-        tabIndex={0}
-        className="pd-look-tile-meta"
-        onClick={handleCreatorClick}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); handleCreatorClick(e as unknown as React.MouseEvent); }
-        }}
-        title={displayName ? `Open ${displayName}'s catalog` : 'Open creator catalog'}
-        aria-label={displayName ? `Open ${displayName}'s catalog` : 'Open creator catalog'}
-      >
-        {avatarUrl ? (
-          <img
-            className="pd-look-tile-avatar"
-            src={avatarUrl}
-            alt=""
-            loading="lazy"
-          />
-        ) : (
-          <span className="pd-look-tile-avatar pd-look-tile-avatar--initial" aria-hidden="true">
-            {(displayName || look.creator || '?').charAt(0).toUpperCase()}
-          </span>
-        )}
-        <span className="pd-look-tile-creator-name">
-          {displayName || (look.creator?.startsWith('user:') ? 'User' : look.creator || '')}
-        </span>
-        <FollowIconButton handle={look.creator} size={18} style={{ marginLeft: 6 }} />
+      <span className="pd-look-tile-meta">
+        <CreatorAvatarFollow
+          handle={look.creator}
+          avatarUrl={avatarUrl}
+          displayName={displayName}
+          size={34}
+          onOpenCreator={(h) => onOpenCreator?.(h)}
+        />
       </span>
     </button>
   );

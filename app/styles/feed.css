@@ -679,3 +679,70 @@
   color: rgba(0, 0, 0, 0.8);
   border-color: rgba(0, 0, 0, 0.08);
 }
+
+/* Avatar-only creator identity with a +/− follow badge. Replaces the
+   name+avatar chips on feed/detail cards. One component, used app-wide. */
+.creator-avatar-follow {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+  cursor: pointer;
+  border-radius: 50%;
+}
+.creator-avatar-follow__img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #2a2a2a;
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+  display: block;
+}
+.creator-avatar-follow__img--initial {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: 700;
+  color: #e5e5e5;
+  background: linear-gradient(135deg, #3f3f46, #27272a);
+}
+/* Lit ring once following. */
+.creator-avatar-follow.is-following .creator-avatar-follow__img {
+  border-color: #4ade80;
+  box-shadow: 0 0 0 2px rgba(74, 222, 128, 0.35), 0 1px 4px rgba(0, 0, 0, 0.45);
+}
+.creator-avatar-follow__badge {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  border-radius: 50%;
+  border: 2px solid rgba(10, 10, 12, 0.9);
+  background: #f4f4f5;
+  color: #111;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  transition: transform 160ms ease, background 160ms ease;
+}
+.creator-avatar-follow__badge:hover { transform: scale(1.12); }
+.creator-avatar-follow__badge:disabled { opacity: 0.6; cursor: wait; }
+.creator-avatar-follow__badge.is-following {
+  background: #4ade80;
+  color: #07120a;
+}
+
+/* Avatar-only creator row on look cards: drop the old name pill so just
+   the profile picture (+ follow badge) shows. */
+.look-card .card-creator-row.is-avatar-only {
+  background: none !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+  gap: 0 !important;
+  width: auto !important;
+}
