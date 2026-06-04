@@ -421,22 +421,7 @@ function UserMenu({
               </>
             )}
 
-            {/* Try it on - primary CTA. Sits at the top so it's the first
-                thing a returning shopper sees. */}
-            <button className="user-menu-cta" onClick={runItem(() => navigate('/generate'))}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-              <span>Try it on</span>
-              <svg className="user-menu-cta-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-            </button>
-
-            {/* Style — sibling of Try it on. Generates a 4-image style
-                reference sheet from the same context (photos, height, age)
-                using gpt-image-1 + nano-banana-2 via fal.ai. */}
-            <button className="user-menu-cta" onClick={runItem(() => navigate('/style'))}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l1.9 5.85h6.15l-4.97 3.62 1.9 5.85L12 13.7l-4.98 3.62 1.9-5.85L3.95 7.85h6.15z"/><circle cx="12" cy="12" r="9" opacity="0.25"/></svg>
-              <span>Style</span>
-              <svg className="user-menu-cta-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-            </button>
+            {/* Try it on removed; Style moved to the super-admin section below. */}
 
             {/* Recently viewed - products tapped in the trail, newest first. */}
             {recents.length > 0 && onOpenProduct && (
@@ -506,17 +491,17 @@ function UserMenu({
               if (onOpenCreator) onOpenCreator(handle);
               else if (typeof window !== 'undefined') window.location.assign(`/c/${handle}`);
             }} />
-            <button className="user-menu-item" onClick={runItem(onOpenBookmarks)}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
-              <span>Bookmarks</span>
-              {bookmarkCount > 0 && <span className="user-menu-badge">{bookmarkCount}</span>}
-            </button>
             {onOpenMyLooks && (
               <button className="user-menu-item" onClick={runItem(onOpenMyLooks)}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
                 <span>My Catalog</span>
               </button>
             )}
+            <button className="user-menu-item" onClick={runItem(onOpenBookmarks)}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+              <span>Saved</span>
+              {bookmarkCount > 0 && <span className="user-menu-badge">{bookmarkCount}</span>}
+            </button>
             {onOpenWallet && dotsConnected === false && (
               <button className="user-menu-item" onClick={runItem(onOpenWallet)}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
@@ -532,6 +517,12 @@ function UserMenu({
                     ${walletBalance.toFixed(2)}
                   </span>
                 )}
+              </button>
+            )}
+            {isSuperAdmin && (
+              <button className="user-menu-item" onClick={runItem(() => navigate('/style'))}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l1.9 5.85h6.15l-4.97 3.62 1.9 5.85L12 13.7l-4.98 3.62 1.9-5.85L3.95 7.85h6.15z"/></svg>
+                <span>Style</span>
               </button>
             )}
             {isSuperAdmin && (
@@ -705,21 +696,10 @@ function UserMenu({
 
             {!superSection && (
               <>
-                <button className="user-menu-page-cta" onClick={runPageItem(() => navigate('/generate'))}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-                  <span>Try it on</span>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="user-menu-page-cta-chev"><polyline points="9 18 15 12 9 6"/></svg>
-                </button>
-                <button className="user-menu-page-cta" onClick={runPageItem(() => navigate('/style'))}>
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l1.9 5.85h6.15l-4.97 3.62 1.9 5.85L12 13.7l-4.98 3.62 1.9-5.85L3.95 7.85h6.15z"/></svg>
-                  <span>Style</span>
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="user-menu-page-cta-chev"><polyline points="9 18 15 12 9 6"/></svg>
-                </button>
-
-                <PageRow icon="bookmark" label="Bookmarks" badge={bookmarkCount > 0 ? bookmarkCount : undefined} onClick={runPageItem(onOpenBookmarks)} />
                 {onOpenMyLooks && (
                   <PageRow icon="grid" label="My Catalog" onClick={runPageItem(onOpenMyLooks)} />
                 )}
+                <PageRow icon="bookmark" label="Saved" badge={bookmarkCount > 0 ? bookmarkCount : undefined} onClick={runPageItem(onOpenBookmarks)} />
                 {onOpenWallet && dotsConnected === false && (
                   <PageRow icon="star" label="Setup Earnings" onClick={runPageItem(onOpenWallet)} />
                 )}
@@ -781,6 +761,7 @@ function UserMenu({
             {superSection && isSuperAdmin && (
               <>
                 <PageRow icon="shield" label="Admin" onClick={runPageItem(() => navigate('/admin'))} />
+                <PageRow icon="star" label="Style" onClick={runPageItem(() => navigate('/style'))} />
                 <PageRow icon="import" label="Import" onClick={runPageItem(() => navigate('/import'))} />
                 {onOpenDecks && (
                   <PageRow icon="deck" label="Decks" onClick={runPageItem(onOpenDecks)} />
