@@ -17,6 +17,10 @@ import CommentParticles from './CommentParticles';
 interface CommentsPageProps {
   targetType: CommentTargetType;
   slug: string;
+  /** When rendered as an in-app overlay, the host passes this so Back pops
+   *  the pushed /comments URL and reveals the product/look underneath
+   *  unchanged. Standalone route mount omits it and falls back to history. */
+  onClose?: () => void;
 }
 
 interface ResolvedTarget {
@@ -114,7 +118,7 @@ async function resolveLook(slug: string): Promise<ResolvedTarget | null> {
   };
 }
 
-export default function CommentsPage({ targetType, slug }: CommentsPageProps) {
+export default function CommentsPage({ targetType, slug, onClose }: CommentsPageProps) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [target, setTarget] = useState<ResolvedTarget | null>(null);
@@ -183,6 +187,9 @@ export default function CommentsPage({ targetType, slug }: CommentsPageProps) {
   };
 
   const goBack = () => {
+    // Overlay mode: let the host pop the pushed /comments URL so the
+    // product/look underneath is revealed untouched (no re-resolve).
+    if (onClose) { onClose(); return; }
     if (window.history.length > 1) navigate(-1);
     else navigate(target?.href ?? '/', { replace: true });
   };

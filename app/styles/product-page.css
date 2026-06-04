@@ -232,6 +232,14 @@
   background: rgba(255, 255, 255, 1);
 }
 
+/* Green comments FAB sits just above the floating Save on the hero. */
+.product-page .detail-comments-fab {
+  position: absolute;
+  right: 16px;
+  bottom: 64px;
+  z-index: 5;
+}
+
 /* Brief copied-to-clipboard pill shown when navigator.share isn't
    available (desktop Chrome / Firefox). Sits above the Save button so
    it doesn't collide. */

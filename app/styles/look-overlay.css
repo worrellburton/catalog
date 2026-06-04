@@ -173,6 +173,92 @@
   border-color: rgba(255, 215, 92, 0.4);
 }
 
+/* Standalone video-overlay controls (mobile only): close top-left, share
+   top-right, and a bottom-right column (comments above save). Hidden on
+   desktop, where the info-panel topbar carries these. */
+.look-video-close,
+.look-video-share {
+  display: none;
+  position: absolute;
+  top: max(16px, var(--shell-sb, 0px));
+  z-index: 11;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #fff;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+.look-video-close { left: 16px; }
+.look-video-share { right: 16px; }
+.look-video-close:hover,
+.look-video-share:hover { background: rgba(0, 0, 0, 0.65); }
+.look-video-share.is-flashed { background: #16a34a; border-color: #16a34a; }
+
+.look-video-actions {
+  display: none;
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  z-index: 11;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Shared green "comments" FAB (Google-Chat-ish) with a red count bubble.
+   Used on the look video (in .look-video-actions) and the product hero
+   (positioned by .product-page .detail-comments-fab). */
+.detail-comments-fab {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #16a34a;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #fff;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 10px rgba(22, 163, 74, 0.45);
+  transition: transform 0.16s ease, background 0.2s ease;
+  pointer-events: auto;
+}
+.detail-comments-fab:hover { background: #15a34a; transform: scale(1.07); }
+.detail-comments-fab__count {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  border: 2px solid #0a0a0a;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Desktop topbar comment button turns green to match the FAB. */
+.look-comment-btn--green {
+  position: relative;
+  background: #16a34a !important;
+  border-color: #16a34a !important;
+  color: #fff !important;
+}
+.look-comment-btn--green:hover { background: #15a34a !important; }
+
 /* Wrapper to center media within the 60% column */
 .look-media-centered {
   width: 100%;

@@ -1,9 +1,9 @@
 
 import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
-import { useNavigate } from '@remix-run/react';
 import { Look, creators, Product, looks as allLooksData } from '~/data/looks';
 import { lookSlug } from '~/utils/slug';
 import { shareLink } from '~/utils/shareLink';
+import { getCommentCount } from '~/services/comments';
 import { useCommentsEnabled } from '~/hooks/useCommentsEnabled';
 import { useEscapeKey } from '~/hooks/useEscapeKey';
 import LookCard from './LookCard';
@@ -74,9 +74,11 @@ interface LookOverlayProps {
   popularFallback?: ProductAd[];
   /** Opens a product creative (with video context) in ProductPage. */
   onOpenCreative?: (creative: ProductAd) => void;
+  /** Opens the comment thread as an in-app overlay. */
+  onOpenComments?: (type: 'product' | 'look', slug: string) => void;
 }
 
-export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowser, onOpenProduct, onCreateCatalog, onOpenLook, bookmarks, allLooks, popularFallback, onOpenCreative }: LookOverlayProps) {
+export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowser, onOpenProduct, onCreateCatalog, onOpenLook, bookmarks, allLooks, popularFallback, onOpenCreative, onOpenComments }: LookOverlayProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const moreScrollRef = useRef<HTMLDivElement>(null);
@@ -125,7 +127,6 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
 
   const { user } = useAuth();
   const shopperBody = useShopperBody(user?.id);
-  const navigate = useNavigate();
 
   // Comments — gated by the platform dial. Deep-links to the thread page
   // keyed by this look's shareable slug.
@@ -139,6 +140,15 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
     }),
     [look],
   );
+
+  // Comment count for the red bubble on the comments FAB.
+  const [commentCount, setCommentCount] = useState<number | null>(null);
+  useEffect(() => {
+    if (!commentsEnabled || !commentSlug) { setCommentCount(null); return; }
+    let cancelled = false;
+    getCommentCount('look', commentSlug).then(n => { if (!cancelled) setCommentCount(n); });
+    return () => { cancelled = true; };
+  }, [commentsEnabled, commentSlug]);
 
   // Share — upper-right, symmetric with the product page. Shares the look's
   // canonical /l/<slug> URL; flashes a check on clipboard fallback.
@@ -675,28 +685,43 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
               </svg>
             </button>
 
-            {/* Mobile-only: dismiss + bookmark overlaid on top of the video.
-                The chevron points DOWN (instead of left/back) since the
-                overlay also dismisses with a swipe-down — the icon
-                reinforces the same gesture. */}
-            <div className="look-video-overlay-btns">
-              <button className="look-video-back-btn" onClick={handleClose} aria-label="Close">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <polyline points="6 9 12 15 18 9"/>
-                </svg>
-              </button>
-              <button
-                className={`look-video-back-btn${shareFlash ? ' is-flashed' : ''}`}
-                onClick={handleShareLook}
-                aria-label="Share look"
-                title={shareFlash ? 'Link copied' : 'Share'}
-              >
-                {shareFlash ? (
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-                ) : (
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
-                )}
-              </button>
+            {/* Mobile controls overlaid on the video: close (top-left),
+                share (top-right), and a bottom-right column with the
+                comments bubble above the save button. The product-count
+                badge that used to sit bottom-right is gone — Save took
+                its place. */}
+            <button className="look-video-close" onClick={handleClose} aria-label="Close">
+              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="6 9 12 15 18 9"/>
+              </svg>
+            </button>
+            <button
+              className={`look-video-share${shareFlash ? ' is-flashed' : ''}`}
+              onClick={handleShareLook}
+              aria-label="Share look"
+              title={shareFlash ? 'Link copied' : 'Share'}
+            >
+              {shareFlash ? (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+              ) : (
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+              )}
+            </button>
+            <div className="look-video-actions">
+              {commentsEnabled && commentSlug && onOpenComments && (
+                <button
+                  className="detail-comments-fab"
+                  onClick={() => onOpenComments('look', commentSlug)}
+                  aria-label="Comments"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+                  </svg>
+                  {commentCount != null && commentCount > 0 && (
+                    <span className="detail-comments-fab__count">{commentCount > 99 ? '99+' : commentCount}</span>
+                  )}
+                </button>
+              )}
               <button
                 className={`look-video-bookmark-btn${lookBookmarked ? ' active' : ''}`}
                 onClick={handleToggleLookBookmark}
@@ -760,16 +785,8 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                       || (look.creator?.startsWith('user:') ? 'User' : look.creator)}
                   </span>
                 </button>
-
-                {/* Bottom-right: product count badge */}
-                <div className="hotspot-indicator">
-                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M6 2L3 6v14a2 2 0 002 2h14a2 2 0 002-2V6l-3-4z"/>
-                    <line x1="3" y1="6" x2="21" y2="6"/>
-                    <path d="M16 10a4 4 0 01-8 0"/>
-                  </svg>
-                  <span>{look.products.length}</span>
-                </div>
+                {/* Product-count badge removed — Save now occupies the
+                    bottom-right (see .look-video-actions above). */}
               </div>
             </div>
             )}
@@ -828,15 +845,18 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
                 )}
               </button>
-              {commentsEnabled && commentSlug && (
+              {commentsEnabled && commentSlug && onOpenComments && (
                 <button
-                  className="look-comment-btn"
-                  onClick={() => navigate(`/comments/l/${commentSlug}`)}
-                  aria-label="View comments"
+                  className="look-comment-btn look-comment-btn--green"
+                  onClick={() => onOpenComments('look', commentSlug)}
+                  aria-label="Comments"
                 >
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
                   </svg>
+                  {commentCount != null && commentCount > 0 && (
+                    <span className="detail-comments-fab__count">{commentCount > 99 ? '99+' : commentCount}</span>
+                  )}
                 </button>
               )}
             </div>

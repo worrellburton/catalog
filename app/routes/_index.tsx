@@ -72,6 +72,9 @@ const FollowingPage = lazy(importFollowingPage);
 // Shared Saved screen, embedded into My Account + My Catalog. Lazy so it
 // only loads when a saved surface actually mounts.
 const SavedScreen = lazy(() => import('~/components/SavedScreen'));
+// Comment thread, rendered as an in-app overlay (not a route) so backing
+// out of it never tears down / re-resolves the product or look underneath.
+const CommentsPage = lazy(() => import('~/components/CommentsPage'));
 
 /** Pause every currently-playing <video> in the document. Called on
  *  every product → product navigation so the old hero + rail cards
@@ -199,6 +202,10 @@ export default function Home() {
   const [showWallet, setShowWallet] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showFollowing, setShowFollowing] = useState(false);
+  // Comment thread overlay target. Opening pushes /comments/<type>/<slug>
+  // via history.pushState (NOT a route nav) so the product/look overlay
+  // underneath stays mounted; backing out just clears this.
+  const [commentsTarget, setCommentsTarget] = useState<{ type: 'product' | 'look'; slug: string } | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [selectedCreative, setSelectedCreative] = useState<ProductAd | null>(null);
   const [selectedSimilar, setSelectedSimilar] = useState<Product[] | null>(null);
@@ -1132,6 +1139,8 @@ export default function Home() {
   brandFilterRef.current = brandFilter;
   const creatorFilterRef = useRef(creatorFilter);
   creatorFilterRef.current = creatorFilter;
+  const commentsTargetRef = useRef(commentsTarget);
+  commentsTargetRef.current = commentsTarget;
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const onPop = () => {
@@ -1140,6 +1149,13 @@ export default function Home() {
       const onLook    = path.startsWith('/l/');
       const onBrand   = path.startsWith('/b/');
       const onCreator = path.startsWith('/c/');
+      const onComments = path.startsWith('/comments/');
+      // Comments overlay exit: URL left /comments/ but the overlay is still
+      // open → user pressed back out of the thread. Clear it; the product /
+      // look it sat on top of is still mounted underneath, untouched.
+      if (!onComments && commentsTargetRef.current) {
+        setCommentsTarget(null);
+      }
       // Product overlay exit: URL is no longer /p/ but a product is
       // still open in state → user just pressed back out of the
       // product page. Mirror what the X close button does: clear the
@@ -1182,6 +1198,25 @@ export default function Home() {
   const closeProfile = useCallback(() => {
     history.replaceState({}, '', '/#app');
     setShowProfile(false);
+  }, []);
+
+  // Comments overlay. Open pushes the /comments/<type>/<slug> URL so it's
+  // shareable + the back button pops it, but it does NOT navigate routes —
+  // the product/look overlay underneath stays exactly as-is. Close goes
+  // back if we pushed the entry (so the URL pops cleanly), else just clears.
+  const openComments = useCallback((type: 'product' | 'look', slug: string) => {
+    if (!slug) return;
+    if (typeof window !== 'undefined') {
+      window.history.pushState({ overlay: 'comments' }, '', `/comments/${type === 'product' ? 'p' : 'l'}/${slug}`);
+    }
+    setCommentsTarget({ type, slug });
+  }, []);
+  const closeComments = useCallback(() => {
+    if (typeof window !== 'undefined' && window.location.pathname.startsWith('/comments/')) {
+      window.history.back();
+    } else {
+      setCommentsTarget(null);
+    }
   }, []);
   const handleLogout = useCallback(async () => {
     await logout();
@@ -1509,6 +1544,7 @@ export default function Home() {
                 allLooks={liveLooks}
                 popularFallback={popularFallback}
                 onOpenCreative={handleOpenCreative}
+                onOpenComments={openComments}
               />
             </Suspense>
           )}
@@ -1553,6 +1589,16 @@ export default function Home() {
                 brandName={brandFilter}
                 onClose={handleCloseBrand}
                 onOpenProduct={handleOpenCreative}
+              />
+            </Suspense>
+          )}
+
+          {commentsTarget && (
+            <Suspense fallback={null}>
+              <CommentsPage
+                targetType={commentsTarget.type}
+                slug={commentsTarget.slug}
+                onClose={closeComments}
               />
             </Suspense>
           )}
@@ -1644,6 +1690,7 @@ export default function Home() {
                 onOpenCreative={handleOpenCreative}
                 onOpenBrand={handleOpenBrand}
                 onCreateCatalog={handleCreateCatalog}
+                onOpenComments={openComments}
                 creative={
                   selectedCreative?.video_url
                     ? {

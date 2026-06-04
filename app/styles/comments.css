@@ -10,7 +10,9 @@
   inset: 0;
   background: #060606;
   color: #f4f4f5;
-  z-index: 50;
+  /* Above the product (250) and look overlays so it sits on top when
+     opened as an in-app overlay. */
+  z-index: 400;
   overflow: hidden;
 }
 

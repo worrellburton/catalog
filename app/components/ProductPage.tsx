@@ -63,6 +63,9 @@ interface ProductPageProps {
   /** Tap a "Popular in" catalog pill → opens that catalog's feed (runs the
    *  catalog name as a search). Omitted in contexts without a feed behind us. */
   onCreateCatalog?: (query: string) => void;
+  /** Opens the comment thread as an in-app overlay (keeps this product
+   *  mounted underneath so Back returns to the exact same hero). */
+  onOpenComments?: (type: 'product' | 'look', slug: string) => void;
   creative?: ProductPageCreative;
   /** Visually-similar creatives from TwelveLabs/pgvector. Rendered as the
    *  "More like this" video rail below the hero. */
@@ -464,6 +467,7 @@ export default function ProductPage({
   onOpenCreative,
   onOpenBrand,
   onCreateCatalog,
+  onOpenComments,
   creative,
   similarCreatives,
   brandCreatives,
@@ -1183,6 +1187,21 @@ export default function ProductPage({
                 <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
               </svg>
             </button>
+            {commentsEnabled && commentSlug && onOpenComments && (
+              <button
+                type="button"
+                className="detail-comments-fab"
+                onClick={() => onOpenComments('product', commentSlug)}
+                aria-label="Comments"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+                </svg>
+                {commentCount != null && commentCount > 0 && (
+                  <span className="detail-comments-fab__count">{commentCount > 99 ? '99+' : commentCount}</span>
+                )}
+              </button>
+            )}
             {shareToast && (
               <div className="pd-share-toast" role="status">{shareToast}</div>
             )}
@@ -1255,23 +1274,8 @@ export default function ProductPage({
                 </svg>
                 <span>Try it on</span>
               </button>
-              {/* In-row Save removed — main moved Save to a floating button
-                  on the hero media. Comment button stays in the action row. */}
-              {commentsEnabled && commentSlug && (
-                <button
-                  type="button"
-                  className="pd-comment-btn"
-                  onClick={() => navigate(`/comments/p/${commentSlug}`)}
-                  aria-label="View comments"
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
-                  </svg>
-                  <span>{commentCount && commentCount > 0
-                    ? <>Comments <span className="comment-btn-count">{commentCount}</span></>
-                    : 'Comment'}</span>
-                </button>
-              )}
+              {/* Save + Comments now live as floating controls on the hero
+                  media (Save bottom-right, Comments green circle above it). */}
             </div>
 
             {/* Retailer comparison drawer. Hidden until the user taps Shop.
