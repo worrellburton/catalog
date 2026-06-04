@@ -16,7 +16,7 @@ import { supabaseImage } from '~/utils/supabaseImage';
 import ProductMiniMedia from './ProductMiniMedia';
 import ParticleBackground from './ParticleBackground';
 import { director } from '~/services/video-playback-director';
-import FollowIconButton from './FollowIconButton';
+import CreatorAvatarFollow from './CreatorAvatarFollow';
 import { getLookSaveCount, recordLookSave, recordLookUnsave } from '~/services/look-saves';
 import { type ProductAd } from '~/services/product-creative';
 import {
@@ -163,7 +163,6 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   // isSectionEnabled treats null as "enabled" so first paint isn't blank.
   const pageSections = usePageSections('looks');
   const videoEnabled       = isSectionEnabled(pageSections, 'video');
-  const creatorChipEnabled = isSectionEnabled(pageSections, 'creator-chip');
   const tabsEnabled        = isSectionEnabled(pageSections, 'tabs');
   const productsEnabled    = isSectionEnabled(pageSections, 'products');
   const moreFromCreatorEnabled = isSectionEnabled(pageSections, 'more-from-creator');
@@ -762,29 +761,18 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                   data-trail-id={trailId}
                   style={{ position: 'relative', zIndex: 1 }}
                 />
-                {/* Bottom-left: creator avatar + name */}
-                <button
-                  className="overlay-video-creator"
-                  onClick={() => { handleClose(); onOpenCreator(look.creator); }}
-                  aria-label={`View ${creatorData?.displayName || look.creator}`}
-                >
-                  {(look.creatorAvatar || creatorData?.avatar) ? (
-                    <img
-                      className="overlay-video-creator__avatar"
-                      src={look.creatorAvatar || creatorData?.avatar}
-                      alt={creatorData?.displayName || look.creator}
-                    />
-                  ) : (
-                    <span className="overlay-video-creator__avatar overlay-video-creator__avatar--initial">
-                      {(creatorData?.displayName || look.creatorDisplayName || look.creator || '?').charAt(0).toUpperCase()}
-                    </span>
-                  )}
-                  <span className="overlay-video-creator__name">
-                    {creatorData?.displayName
-                      || look.creatorDisplayName
-                      || (look.creator?.startsWith('user:') ? 'User' : look.creator)}
-                  </span>
-                </button>
+                {/* Bottom-left: creator identity — avatar circle + follow
+                    badge only (no name), the single creator reference on
+                    the look (the info-panel duplicate row was removed). */}
+                <div className="overlay-video-creator-avatar">
+                  <CreatorAvatarFollow
+                    handle={look.creator}
+                    avatarUrl={look.creatorAvatar || creatorData?.avatar || ''}
+                    displayName={creatorData?.displayName || look.creatorDisplayName || look.creator}
+                    size={46}
+                    onOpenCreator={(h) => { handleClose(); onOpenCreator(h); }}
+                  />
+                </div>
                 {/* Product-count badge removed — Save now occupies the
                     bottom-right (see .look-video-actions above). */}
               </div>
@@ -868,51 +856,9 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                 (creatorAvatar + creatorDisplayName). Without these
                 fallbacks user-published looks render as a blank avatar
                 + literal "Creator" placeholder. */}
-            {creatorChipEnabled && (
-            <div
-              className="look-creator-row"
-              onClick={() => { handleClose(); onOpenCreator(look.creator); }}
-            >
-              {(() => {
-                const avatar = look.creatorAvatar || creatorData?.avatar || '';
-                const name =
-                  creatorData?.displayName ||
-                  look.creatorDisplayName ||
-                  (showHandle ? look.creator : 'Creator');
-                return avatar ? (
-                  <img className="detail-creator-avatar" src={avatar} alt={name} />
-                ) : (
-                  <span className="detail-creator-avatar detail-creator-avatar--initial" aria-hidden="true">
-                    {(name || '?').charAt(0).toUpperCase()}
-                  </span>
-                );
-              })()}
-              {/* Creator name is intentionally not duplicated here —
-                  the chip overlay on the video card already shows
-                  the creator and the look title below (e.g.
-                  "Amir Malaklou's studio look") repeats it. Without
-                  this guard the same name read three times on the
-                  surface. Handle stays visible because it's the
-                  /c/<handle> link affordance. */}
-              {showHandle && (
-                <div className="look-creator-text">
-                  <span className="look-creator-handle">
-                    {look.creator.startsWith('@') ? look.creator : `@${look.creator}`}
-                  </span>
-                </div>
-              )}
-              <FollowIconButton
-                handle={look.creator}
-                size={22}
-                style={{
-                  marginLeft: 'auto',
-                  borderColor: 'rgba(0,0,0,0.55)',
-                  color: '#0f172a',
-                  background: 'transparent',
-                }}
-              />
-            </div>
-            )}
+            {/* Creator row removed — the avatar + follow badge on the video
+                (overlay-video-creator-avatar) is now the single creator
+                reference, so the @handle row here was a duplicate. */}
 
             {/* Look title removed — the creator chip + avatar already
                 identify ownership; the named title (e.g. "Robert

@@ -1519,3 +1519,12 @@ body:has(.look-overlay.look-overlay--in) {
   color: rgba(0, 0, 0, 0.6);
 }
 
+
+/* Avatar-only creator on the look video (bottom-left) — replaces the old
+   name pill. Single creator reference on the look. */
+.overlay-video-creator-avatar {
+  position: absolute;
+  bottom: 16px;
+  left: 12px;
+  z-index: 5;
+}
