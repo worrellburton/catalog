@@ -97,7 +97,44 @@ function FollowingRail({ onOpenCreator, mode = 'both', onCreateFollowingCatalog:
   useEffect(() => subscribeFollowingChanges(() => setRefreshKey(k => k + 1)), []);
 
   // Live online presence — drives the glowing green ring on avatars.
-  useEffect(() => subscribeOnline((s) => setOnlineHandles(s.handles)), []);
+  // Hysteresis: a handle "going offline" is held for ONLINE_GRACE_MS
+  // before the ring drops, so a brief tab refocus / mobile reconnect
+  // (presence channel emits leave→join in rapid succession) doesn't
+  // strobe the green glow. New "online" transitions are always shown
+  // instantly — only the offline→on-screen-still-glowing path is delayed.
+  useEffect(() => {
+    const ONLINE_GRACE_MS = 8000;
+    const pendingOff = new Map<string, number>(); // handle → setTimeout id
+    return subscribeOnline((s) => {
+      setOnlineHandles(prev => {
+        const next = new Set<string>(s.handles);
+        // Anything previously online that just left presence: keep it lit
+        // until the grace timer fires.
+        for (const h of prev) {
+          if (next.has(h)) continue;
+          if (!pendingOff.has(h)) {
+            const id = window.setTimeout(() => {
+              pendingOff.delete(h);
+              setOnlineHandles(curr => {
+                if (!curr.has(h)) return curr;
+                const drop = new Set(curr);
+                drop.delete(h);
+                return drop;
+              });
+            }, ONLINE_GRACE_MS);
+            pendingOff.set(h, id);
+          }
+          next.add(h);
+        }
+        // Anything that just came (back) online: cancel its grace timer.
+        for (const h of s.handles) {
+          const t = pendingOff.get(h);
+          if (t !== undefined) { window.clearTimeout(t); pendingOff.delete(h); }
+        }
+        return next;
+      });
+    });
+  }, []);
 
   // Following list: handle → display name + avatar + last-post ts.
   // When the user follows NO ONE yet, fall back to popular creators of
