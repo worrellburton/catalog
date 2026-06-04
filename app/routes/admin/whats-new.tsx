@@ -143,18 +143,110 @@ function firstSentence(body: string): string {
   return (m ? m[1] : flat).trim();
 }
 
-type ReportRange = 'week' | 'month' | 'year';
+type ReportRange =
+  | 'today'
+  | 'yesterday'
+  | 'this-week'
+  | 'last-week'
+  | 'this-month'
+  | 'last-month'
+  | 'this-quarter'
+  | 'this-year'
+  | 'last-year'
+  | 'last-30-days'
+  | 'last-90-days'
+  | 'all-time';
+
 const RANGE_LABEL: Record<ReportRange, string> = {
-  week: 'Last week',
-  month: 'This month',
-  year: 'This year',
+  'today':        'Today',
+  'yesterday':    'Yesterday',
+  'this-week':    'This week',
+  'last-week':    'Last week',
+  'this-month':   'This month',
+  'last-month':   'Last month',
+  'this-quarter': 'This quarter',
+  'this-year':    'This year',
+  'last-year':    'Last year',
+  'last-30-days': 'Last 30 days',
+  'last-90-days': 'Last 90 days',
+  'all-time':     'All time',
 };
-function rangeCutoff(range: ReportRange): Date {
-  const d = new Date();
-  if (range === 'week') d.setDate(d.getDate() - 7);
-  else if (range === 'month') d.setMonth(d.getMonth() - 1);
-  else d.setFullYear(d.getFullYear() - 1);
-  return d;
+
+// Range options exposed in the dropdown, in display order.
+const RANGE_OPTIONS: ReportRange[] = [
+  'today',
+  'yesterday',
+  'this-week',
+  'last-week',
+  'this-month',
+  'last-month',
+  'this-quarter',
+  'this-year',
+  'last-year',
+  'last-30-days',
+  'last-90-days',
+  'all-time',
+];
+
+// Calendar window for the selected range. "This month" is the current
+// CALENDAR month (1st → now), not the trailing 30 days; "Last month" is
+// the previous calendar month in full; weeks anchor on Monday so
+// business-week reporting stays predictable. Returns half-open [start, end)
+// in local time, with `end` clamped to now for ranges that include today.
+function rangeWindow(range: ReportRange): { start: Date; end: Date } {
+  const now = new Date();
+  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const endOfDay   = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+  const addDays    = (d: Date, n: number) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+  // Monday of the week containing `d`. getDay(): 0 = Sunday → treat as
+  // 7 so Sunday rolls back to the prior Monday rather than jumping a week.
+  const startOfWeek = (d: Date) => {
+    const dow = d.getDay() || 7;
+    return startOfDay(addDays(d, 1 - dow));
+  };
+  const today = startOfDay(now);
+
+  switch (range) {
+    case 'today':
+      return { start: today, end: now };
+    case 'yesterday': {
+      const y = addDays(today, -1);
+      return { start: y, end: endOfDay(y) };
+    }
+    case 'this-week':
+      return { start: startOfWeek(now), end: now };
+    case 'last-week': {
+      const thisWeek = startOfWeek(now);
+      const lastWeek = addDays(thisWeek, -7);
+      return { start: lastWeek, end: endOfDay(addDays(thisWeek, -1)) };
+    }
+    case 'this-month':
+      return { start: new Date(now.getFullYear(), now.getMonth(), 1), end: now };
+    case 'last-month': {
+      const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      // Day 0 of the current month = last day of the previous month.
+      const end   = endOfDay(new Date(now.getFullYear(), now.getMonth(), 0));
+      return { start, end };
+    }
+    case 'this-quarter': {
+      const qStartMonth = Math.floor(now.getMonth() / 3) * 3;
+      return { start: new Date(now.getFullYear(), qStartMonth, 1), end: now };
+    }
+    case 'this-year':
+      return { start: new Date(now.getFullYear(), 0, 1), end: now };
+    case 'last-year': {
+      const y = now.getFullYear() - 1;
+      return { start: new Date(y, 0, 1), end: endOfDay(new Date(y, 11, 31)) };
+    }
+    case 'last-30-days':
+      return { start: addDays(today, -30), end: now };
+    case 'last-90-days':
+      return { start: addDays(today, -90), end: now };
+    case 'all-time':
+      // 2020-01-01 covers everything in repo history with margin. Using
+      // epoch 0 here makes the printed range string look silly.
+      return { start: new Date(2020, 0, 1), end: now };
+  }
 }
 
 // Hours-per-commit estimate keyed off the conventional-commit prefix.
@@ -189,10 +281,15 @@ function fmtHours(n: number): string {
 // PDF) summarising every shipped update in the chosen window: a headline
 // summary then a full ledger. Opens in a new window and triggers print.
 function buildAndPrintReport(commits: GitHubCommit[], range: ReportRange) {
-  const cutoff = rangeCutoff(range);
+  const { start, end } = rangeWindow(range);
+  const startMs = start.getTime();
+  const endMs   = end.getTime();
   const inRange = commits
     .filter(c => !isMergeNoise(c.commit.message))
-    .filter(c => new Date(c.commit.author.date) >= cutoff)
+    .filter(c => {
+      const t = new Date(c.commit.author.date).getTime();
+      return t >= startMs && t <= endMs;
+    })
     .sort((a, b) => +new Date(b.commit.author.date) - +new Date(a.commit.author.date));
 
   // Tally by type + accumulate hours/cost in a single pass.
@@ -212,7 +309,14 @@ function buildAndPrintReport(commits: GitHubCommit[], range: ReportRange) {
 
   const esc = (s: string) => s.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m]!));
   const now = new Date();
-  const rangeStr = `${cutoff.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} – ${now.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}`;
+  // "Today" / "Yesterday" collapse to a single date label — the start
+  // and end fall on the same day so "Jun 4 – Jun 4" reads silly.
+  const fmtDate = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const rangeStr = range === 'all-time'
+    ? `through ${fmtDate(end)}`
+    : fmtDate(start) === fmtDate(end)
+      ? fmtDate(start)
+      : `${fmtDate(start)} – ${fmtDate(end)}`;
 
   // Headline chips: hours + cost lead, then per-type counts.
   const headChips = `
@@ -320,16 +424,18 @@ export default function AdminWhatsNew() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
-  const [reportRange, setReportRange] = useState<ReportRange>('month');
+  const [reportRange, setReportRange] = useState<ReportRange>('this-month');
   const [generatingReport, setGeneratingReport] = useState(false);
 
   // Build the PDF report: fetch enough commit pages to cover the chosen
   // window (the page only lazy-loads 100 at a time), then hand off to the
-  // matte-black print view.
+  // matte-black print view. For 'all-time' we cap at 6 pages (600 commits)
+  // to keep the print sane; older history can be filtered via narrower
+  // ranges if it ever matters.
   const generateReport = async () => {
     setGeneratingReport(true);
     try {
-      const cutoff = rangeCutoff(reportRange);
+      const { start } = rangeWindow(reportRange);
       const acc: GitHubCommit[] = [];
       for (let p = 1; p <= 6; p++) {
         let batch: GitHubCommit[];
@@ -337,7 +443,7 @@ export default function AdminWhatsNew() {
         acc.push(...batch);
         if (batch.length < PAGE_SIZE) break;
         const oldest = batch.length ? new Date(batch[batch.length - 1].commit.author.date) : null;
-        if (oldest && oldest < cutoff) break;
+        if (oldest && oldest < start) break;
       }
       const seen = new Set<string>();
       const merged = [...acc, ...commits].filter(c => (seen.has(c.sha) ? false : (seen.add(c.sha), true)));
@@ -427,9 +533,9 @@ export default function AdminWhatsNew() {
               onChange={e => setReportRange(e.target.value as ReportRange)}
               style={{ fontSize: 13, padding: '7px 10px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff', color: '#111' }}
             >
-              <option value="week">Last week</option>
-              <option value="month">This month</option>
-              <option value="year">This year</option>
+              {RANGE_OPTIONS.map(r => (
+                <option key={r} value={r}>{RANGE_LABEL[r]}</option>
+              ))}
             </select>
             <button
               className="admin-btn admin-btn-primary"
