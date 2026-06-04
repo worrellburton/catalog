@@ -13,6 +13,7 @@ import {
   type CommentTargetType,
 } from '~/services/comments';
 import CommentParticles from './CommentParticles';
+import { useCommentTyping } from '~/hooks/useCommentTyping';
 
 interface CommentsPageProps {
   targetType: CommentTargetType;
@@ -140,6 +141,13 @@ export default function CommentsPage({ targetType, slug, onClose, onOpenCreator 
   const [posting, setPosting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const listEndRef = useRef<HTMLDivElement>(null);
+
+  // Live "someone is typing…" presence over Supabase broadcast.
+  const { typingNames, notifyTyping } = useCommentTyping(
+    targetType,
+    slug,
+    user ? { id: user.id, name: user.displayName || 'Someone' } : null,
+  );
 
   // Resolve the product/look header once.
   const [resolved, setResolved] = useState(false);
@@ -280,6 +288,18 @@ export default function CommentsPage({ targetType, slug, onClose, onOpenCreator 
               );
             })
           )}
+          {typingNames.length > 0 && (
+            <div className="comment-typing" aria-live="polite">
+              <span className="comment-typing-dots"><i /><i /><i /></span>
+              <span className="comment-typing-label">
+                {typingNames.length === 1
+                  ? `${typingNames[0]} is typing…`
+                  : typingNames.length === 2
+                    ? `${typingNames[0]} and ${typingNames[1]} are typing…`
+                    : 'Several people are typing…'}
+              </span>
+            </div>
+          )}
           <div ref={listEndRef} />
         </div>
 
@@ -294,7 +314,7 @@ export default function CommentsPage({ targetType, slug, onClose, onOpenCreator 
               value={draft}
               maxLength={2000}
               rows={1}
-              onChange={e => setDraft(e.target.value)}
+              onChange={e => { setDraft(e.target.value); notifyTyping(); }}
               onKeyDown={e => {
                 if ((e.metaKey || e.ctrlKey || !e.shiftKey) && e.key === 'Enter') { e.preventDefault(); void handlePost(); }
               }}

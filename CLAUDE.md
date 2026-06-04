@@ -40,6 +40,16 @@
 3. Project ref is `vtarjrnqvcqbhoclvcur`. See Section 7 for the full
    operational reference.
 
+## Working through queued tasks
+
+When several tasks are lined up (the user has stacked multiple requests,
+or one request fans out into several), and you use `AskUserQuestion` to
+sequence them, ALWAYS include an option like **"Do them all — just go in
+order (as they came in)"** as the first/recommended choice. Default to
+working through the whole queue top-to-bottom, shipping each as it's
+done, rather than stopping after one. Only ask for a different ordering
+when there's a genuine dependency or risk worth flagging.
+
 ---
 
 # SECTION 1 — Consumer App (Catalog)

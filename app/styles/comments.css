@@ -261,6 +261,35 @@
   width: auto; height: auto; border-radius: 999px; padding: 11px 20px;
   font-weight: 700; font-size: 13px; box-shadow: 0 0 18px rgba(10,132,255,0.4);
 }
+/* "someone is typing…" — a left bubble with animated dots (iMessage). */
+.comment-typing {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 2px 4px;
+}
+.comment-typing-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255,255,255,0.09);
+  padding: 10px 12px;
+  border-radius: 16px;
+  border-bottom-left-radius: 5px;
+}
+.comment-typing-dots i {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: #9ca3af;
+  animation: comment-typing-bounce 1.2s infinite ease-in-out;
+}
+.comment-typing-dots i:nth-child(2) { animation-delay: 0.15s; }
+.comment-typing-dots i:nth-child(3) { animation-delay: 0.3s; }
+.comment-typing-label { font-size: 12px; color: #8b8b91; }
+@keyframes comment-typing-bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
+
 .comments-error {
   color: #f87171;
   font-size: 12px;
