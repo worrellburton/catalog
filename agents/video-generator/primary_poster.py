@@ -6,11 +6,11 @@ but never a matching poster. The feed then fell back to the square
 primary_image_url, which object-fit:cover magnified into the 3:4 card (the
 "zoomed in" product look).
 
-This module extracts a HERO frame (~80% through the clip, where the
-editorial zoom-in has settled on the product) at the video's native 3:4
+This module extracts the FIRST frame (frame 0) at the video's native 3:4
 size, via asset_encoder, and writes it to products.primary_video_poster_url
-so the poster fills the card with the same framing shoppers see while the
-clip plays — not the zoomed-out first frame.
+so the poster fills the card AND is pixel-identical to the frame the <video>
+paints when it starts playing — the poster→playback handoff is seamless (no
+zoom pop), and frame 0 is the clip's widest, least-zoomed framing.
 
 Single source of truth for both callers:
   • modal_app.generate_primary_poster_job  (event-driven webhook + cron)
@@ -32,12 +32,13 @@ POSTER_RENDER_QUERY = "width=540&quality=72&resize=cover"
 # (external URL) so we can't mirror their storage path — the product id is
 # stable and unambiguous.
 #
-# `-v2`: bumped when the poster frame moved from the zoomed-out first frame
-# to the ~80% hero frame (see asset_encoder.POSTER_SEEK_FRACTION). A NEW
-# object key hands every product a fresh render-CDN URL, so the feed can't
-# serve the stale first-frame transform that was already warmed at the old
-# `.poster.jpg` key. Bump again (v3…) if the frame-selection ever changes.
-POSTER_SUFFIX = ".poster-v2.jpg"
+# `-v4`: bumped to force-refresh posters that had gone STALE — many `-v3`
+# posters were extracted from an OLDER, more-zoomed primary video and never
+# refreshed when the product's video was regenerated, so the poster (zoomed)
+# no longer matched the current clip's frame 0 (wider). A NEW object key hands
+# every product a fresh render-CDN URL AND a fresh frame-0 extraction from the
+# CURRENT video. Bump again (v5…) if the frame-selection or source ever changes.
+POSTER_SUFFIX = ".poster-v4.jpg"
 
 
 def poster_storage_key(product_id: str) -> str:
@@ -77,7 +78,7 @@ def generate_primary_poster(
     product_id: str,
     video_url: str | None = None,
 ) -> str:
-    """Extract product_id's primary-video hero frame (~80% in) and write it
+    """Extract product_id's primary-video first frame (frame 0) and write it
     to products.primary_video_poster_url. Returns the public poster URL.
 
     Pass `video_url` to skip the lookup (the webhook already has it from the
