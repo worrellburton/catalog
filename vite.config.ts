@@ -42,12 +42,13 @@ export default defineConfig({
     minify: "terser",
     terserOptions: {
       compress: {
-        // Hoist function declarations so they're available from any
-        // reference point in the chunk, regardless of source order.
         hoist_funs: true,
-        // Don't inline functions used multiple times — keeps the chunk
-        // init graph simple.
         inline: 1,
+        // Strip console.* and debugger calls from production bundles.
+        // Dev-only logs in services + a handful of console.warn fallbacks
+        // were shipping to every visitor; gone now.
+        drop_console: ["log", "debug", "info"],
+        drop_debugger: true,
       },
       mangle: {
         // Preserve function names so error stacks are readable AND so

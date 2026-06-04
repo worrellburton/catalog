@@ -2,34 +2,41 @@ import { useState } from 'react';
 import { useFollowState, toggleFollowShared } from '~/hooks/useFollowState';
 
 /**
- * Icon-only follow toggle. Renders next to a creator chip — "+" when
- * not following, "✓" when following. No text. Hides itself for
- * placeholder handles ("user:<uuid>") and while the shared follow
- * cache is still resolving for this handle (avoids a flicker of
- * "+" → "✓" on first paint).
+ * Follow affordance attached to a creator chip.
+ *
+ * NEW behavior (per user spec): the BUTTON only renders when the
+ * shopper is NOT following the creator — a small "+" badge that
+ * sits in the upper-right corner of the chip (positioned absolutely
+ * by .follow-corner-badge CSS).
+ *
+ * When the shopper IS following, this component renders nothing —
+ * the chip's parent applies a glow class instead (the "lit pill"
+ * the user described). Use the exported `useFollowState` hook to
+ * read the state at the parent if you need to add that class.
+ *
+ * Hides for placeholder handles ("user:<uuid>") and while the
+ * shared follow cache is still resolving (avoids a "+" → glow
+ * flicker on first paint).
  */
 
 interface Props {
   handle: string | null | undefined;
-  /** Outer button diameter in px. Default 18 — matches the avatar
-   *  ring on the consumer feed creator chip. */
+  /** Outer diameter in px. Default 22 so the corner badge reads
+   *  clearly at small chip sizes. */
   size?: number;
-  /** Optional override for inline styles applied to the button —
-   *  callers can add `marginLeft: 0` for chip layouts where the
-   *  button is the only follow-up affordance. */
+  /** Optional inline style override. Callers can shift the badge
+   *  with `top`/`right` overrides for chip variants. */
   style?: React.CSSProperties;
-  /** Stop event propagation when the user taps the button. Default
-   *  true — most chip parents are themselves clickable (open creator
-   *  page) and a follow click must not bubble. */
+  /** Stop event propagation when the user taps. Default true so the
+   *  chip parent's onClick (open creator) doesn't also fire. */
   stopPropagation?: boolean;
-  /** Onclick handler that fires AFTER the toggle completes. Useful
-   *  for callers that want to refresh a follower count. */
+  /** Fires after the toggle completes. */
   onAfter?: (following: boolean) => void;
 }
 
 export default function FollowIconButton({
   handle,
-  size = 18,
+  size = 22,
   style,
   stopPropagation = true,
   onAfter,
@@ -37,7 +44,12 @@ export default function FollowIconButton({
   const following = useFollowState(handle);
   const [busy, setBusy] = useState(false);
   if (!handle || handle.startsWith('user:')) return null;
+  // Cache still resolving — don't render either state to avoid flicker.
   if (following === null) return null;
+  // Following = the chip itself glows (parent applies .is-following).
+  // The button has no role in that state.
+  if (following) return null;
+
   return (
     <button
       type="button"
@@ -52,25 +64,17 @@ export default function FollowIconButton({
         finally { setBusy(false); }
       }}
       disabled={busy}
-      aria-pressed={following}
-      title={following ? 'Following — click to unfollow' : 'Follow this creator'}
-      aria-label={following ? `Unfollow ${handle}` : `Follow ${handle}`}
-      className={`follow-icon-btn ${following ? 'is-following' : 'is-not-following'}`}
+      title="Follow this creator"
+      aria-label={`Follow ${handle}`}
+      className="follow-corner-badge"
       style={{
         width: size,
         height: size,
         borderRadius: '50%',
-        // Following = a "lit" ring: brighter border + a soft white halo
-        // that wraps around and pools below the pill (the light effect
-        // the user asked for). Not following = a crisp outlined "+"
-        // badge that reads as an add affordance.
-        border: `1.5px solid ${following ? 'rgba(255,255,255,0.92)' : 'rgba(255,255,255,0.85)'}`,
-        background: following
-          ? 'radial-gradient(circle at 50% 38%, rgba(255,255,255,0.42), rgba(255,255,255,0.14))'
-          : 'rgba(0,0,0,0.28)',
-        boxShadow: following
-          ? '0 0 6px rgba(255,255,255,0.7), 0 3px 10px rgba(255,255,255,0.45), 0 6px 16px rgba(255,255,255,0.22)'
-          : '0 1px 3px rgba(0,0,0,0.35)',
+        border: '1.5px solid rgba(255, 255, 255, 0.9)',
+        background: 'rgba(20, 20, 20, 0.85)',
+        boxShadow:
+          '0 1px 3px rgba(0, 0, 0, 0.5), 0 0 0 2px rgba(0, 0, 0, 0.4)',
         color: '#fff',
         cursor: busy ? 'wait' : 'pointer',
         display: 'inline-flex',
@@ -78,20 +82,24 @@ export default function FollowIconButton({
         justifyContent: 'center',
         padding: 0,
         flexShrink: 0,
-        transition: 'background 180ms ease, border-color 180ms ease, box-shadow 220ms ease, transform 160ms ease',
+        transition: 'background 180ms ease, transform 160ms ease',
         ...style,
       }}
     >
-      {following ? (
-        <svg width={Math.round(size * 0.55)} height={Math.round(size * 0.55)} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <polyline points="20 6 9 17 4 12"/>
-        </svg>
-      ) : (
-        <svg width={Math.round(size * 0.55)} height={Math.round(size * 0.55)} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-          <line x1="12" y1="5" x2="12" y2="19"/>
-          <line x1="5" y1="12" x2="19" y2="12"/>
-        </svg>
-      )}
+      <svg
+        width={Math.round(size * 0.55)}
+        height={Math.round(size * 0.55)}
+        viewBox="0 0 24 24"
+        fill="none"
+        stroke="currentColor"
+        strokeWidth="3"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        aria-hidden="true"
+      >
+        <line x1="12" y1="5" x2="12" y2="19" />
+        <line x1="5" y1="12" x2="19" y2="12" />
+      </svg>
     </button>
   );
 }
