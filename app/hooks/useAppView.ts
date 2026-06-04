@@ -103,6 +103,16 @@ export function useAppView({ user, authLoading }: UseAppViewArgs): UseAppViewRes
 
   const [showSplash, setShowSplash] = useState(false);
 
+  // Intro brand beat. The auth splash holds for at least this long on a
+  // cold open so the wordmark + particle field read as a deliberate moment
+  // before we hand off to the landing page — even when auth resolves
+  // instantly (signed-out visitors). Without it the splash would flash by.
+  const [beatDone, setBeatDone] = useState(false);
+  useEffect(() => {
+    const t = window.setTimeout(() => setBeatDone(true), 1500);
+    return () => window.clearTimeout(t);
+  }, []);
+
   // First-paint signal from the feed. ContinuousFeed dispatches
   // `catalog:feed-ready` on the window after its first non-empty
   // commit (one rAF after data lands). The auth splash listens for
@@ -133,7 +143,7 @@ export function useAppView({ user, authLoading }: UseAppViewArgs): UseAppViewRes
   //    blank window covered so the fade reveals real content, not
   //    a dark void.
   const showAuthSplash =
-    (view === 'locked' && (authLoading || !!user)) ||
+    (view === 'locked' && (authLoading || !!user || !beatDone)) ||
     (view === 'app' && !!user && !feedReady);
   const [authSplashLeaving, setAuthSplashLeaving] = useState(false);
   const [authSplashMounted, setAuthSplashMounted] = useState(showAuthSplash);
@@ -148,10 +158,26 @@ export function useAppView({ user, authLoading }: UseAppViewArgs): UseAppViewRes
       // CSS transition completes (240 ms; matching .auth-splash
       // transition duration).
       setAuthSplashLeaving(true);
-      const t = window.setTimeout(() => setAuthSplashMounted(false), 280);
+      // Matches the (longer, more elegant) .auth-splash leaving transition.
+      const t = window.setTimeout(() => setAuthSplashMounted(false), 640);
       return () => window.clearTimeout(t);
     }
   }, [showAuthSplash, authSplashMounted]);
+
+  // Post-splash entry for signed-OUT visitors: once auth has resolved (no
+  // session) and the brand beat has elapsed, hand the splash off to the
+  // landing page rather than the password gate. The auth splash fades out
+  // elegantly over the freshly-mounted landing (see .auth-splash.leaving).
+  // Deep links (/p, /l, /b → view 'app') and #landing/#app hashes have
+  // already moved `view` off 'locked', so this only fires for a plain
+  // cold open at "/".
+  useEffect(() => {
+    if (authLoading) return;
+    if (user) return;
+    if (!beatDone) return;
+    if (view !== 'locked') return;
+    setView('landing');
+  }, [authLoading, user, beatDone, view]);
 
   // Auto-route on sign-in: approved users enter the app, everyone else
   // goes to the waitlist.
