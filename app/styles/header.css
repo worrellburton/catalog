@@ -61,17 +61,16 @@ header {
      courts, beauty close-ups, etc.). The fade extends past the
      header chrome so card thumbnails dim naturally as they scroll
      into the title row. */
-  /* Scroll-driven dark underlay. Toned WAY down from the previous
-     0.92/0.78/0.45 stops which looked harsh on the feed. New base
-     gradient is a soft fade — strong enough to keep the wordmark
-     legible against bright thumbnails, light enough to not feel like
-     a black bar painted over the top of the page. Same gradient
-     applies on mobile (no media-query gating) per user request. */
+  /* Header underlay — toned WAY down per user spec. The previous
+     scroll-driven 0.55/0.32 gradient + frost layer + wavy shimmer
+     read as a heavy bar on the feed. New treatment is a single
+     barely-noticeable dark wash that softly fades to transparent,
+     just enough to keep the wordmark + icons legible against
+     bright thumbnails. No scroll boost, no blur layer, no shimmer. */
   background: linear-gradient(
     to bottom,
-    rgba(0, 0, 0, calc(0.55 + var(--hero-scroll-progress, 0) * 0.20)) 0%,
-    rgba(0, 0, 0, calc(0.32 + var(--hero-scroll-progress, 0) * 0.18)) 45%,
-    rgba(0, 0, 0, calc(0.12 + var(--hero-scroll-progress, 0) * 0.10)) 80%,
+    rgba(0, 0, 0, 0.22) 0%,
+    rgba(0, 0, 0, 0.10) 50%,
     transparent 100%
   );
   transition: background 200ms ease;
@@ -94,48 +93,12 @@ header > * {
    edge so ONLY the top row gets the frosted treatment — the gradient
    handles the soft fade past that. pointer-events:none keeps taps
    falling through to cards bleeding into the header band. */
-header::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: -1;
-  pointer-events: none;
-  -webkit-backdrop-filter: blur(7px) saturate(1.15);
-  backdrop-filter: blur(7px) saturate(1.15);
-  -webkit-mask-image: linear-gradient(to bottom, #000 0%, rgba(0,0,0,0.55) 42%, transparent 78%);
-  mask-image: linear-gradient(to bottom, #000 0%, rgba(0,0,0,0.55) 42%, transparent 78%);
-}
-
-/* Subtle wavy glass shimmer — two soft light pools that slowly drift
-   sideways and breathe vertically so it reads as light catching a
-   curved glass surface, not page chrome. Very low alpha; masked to
-   the top so it never reaches the feed. */
-header::after {
-  content: '';
-  position: absolute;
-  inset: -25% -12% 0 -12%;
-  z-index: -1;
-  pointer-events: none;
-  background:
-    radial-gradient(120% 60% at 22% 0%, rgba(255,255,255,0.065), transparent 60%),
-    radial-gradient(120% 55% at 78% 12%, rgba(255,255,255,0.045), transparent 62%);
-  -webkit-mask-image: linear-gradient(to bottom, #000 0%, transparent 70%);
-  mask-image: linear-gradient(to bottom, #000 0%, transparent 70%);
-  animation: header-glass-wave 15s ease-in-out infinite alternate;
-}
-@keyframes header-glass-wave {
-  0%   { transform: translateX(-3%) translateY(0)    scaleY(1);    }
-  50%  { transform: translateX(3%)  translateY(-2px) scaleY(1.05); }
-  100% { transform: translateX(-2%) translateY(0)    scaleY(1);    }
-}
-.light-mode header::after {
-  background:
-    radial-gradient(120% 60% at 22% 0%, rgba(255,255,255,0.5), transparent 60%),
-    radial-gradient(120% 55% at 78% 12%, rgba(255,255,255,0.35), transparent 62%);
-}
-@media (prefers-reduced-motion: reduce) {
-  header::after { animation: none; }
-}
+/* The glassy frost layer (header::before) and the wavy shimmer
+   (header::after) were retired with the heavy gradient — the new
+   barely-noticeable underlay above is the only header treatment
+   now. Removed because they added GPU cost (backdrop-filter is
+   expensive on iOS) and read as visual noise on top of the soft
+   gradient. */
 
 .light-mode header {
   background: linear-gradient(
