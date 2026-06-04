@@ -255,9 +255,23 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
       thumbnail_url: primary.thumbnail_url || undefined,
       mobile_video_url: primary.mobile_video_url || undefined,
       gender: (row.gender as 'men' | 'women') || 'women',
-      // Synthetic key so the creators-map lookup misses cleanly and
-      // the consumer falls back to creatorDisplayName / Avatar below.
-      creator: row.creator_handle || (profileUserId ? `user:${profileUserId}` : ''),
+      // Resolve creator identity. row.creator_handle is the
+      // authoritative key when it points to a known creator. When the
+      // map lookup MISSES (handle isn't in the creators table — most
+      // user-generation looks fall into this bucket), every field
+      // falls back to the look-owner's profile — display name,
+      // avatar, AND the routing key. Routing to the owner's
+      // synthetic `user:<id>` instead of the unresolved handle is
+      // the fix for the "Robert Burton chip routes to Ava Green" bug:
+      // the unresolved row.creator_handle could be set to any string
+      // by an admin or import, but the display already shows the
+      // owner, so the tap MUST route to the owner too.
+      creator: (() => {
+        if (row.creator_handle && creatorDisplayByHandle.has(row.creator_handle)) {
+          return row.creator_handle;
+        }
+        return profileUserId ? `user:${profileUserId}` : (row.creator_handle || '');
+      })(),
       creatorDisplayName: (row.creator_handle ? (creatorDisplayByHandle.get(row.creator_handle) ?? null) : null) || fallbackName || undefined,
       creatorAvatar: (row.creator_handle ? (creatorAvatarByHandle.get(row.creator_handle) ?? null) : null) || fallbackProfile?.avatar_url || undefined,
       creatorIsAi: row.creator_handle
