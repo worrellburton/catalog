@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { listUserGenerations } from '~/services/user-generations';
+import { listUserGenerations, isGenerationInFlight } from '~/services/user-generations';
 import { useAuth } from '~/hooks/useAuth';
 
 /**
@@ -25,7 +25,10 @@ export default function PendingLookPill({ onOpen }: { onOpen: () => void }) {
     const tick = async () => {
       const rows = await listUserGenerations(user.id);
       if (cancelled) return;
-      const inFlight = rows.find(r => r.status !== 'done' && r.status !== 'failed');
+      // Only count rows that are genuinely still rendering — a zombie
+      // 'pending' row the pipeline never reconciled is excluded by the
+      // staleness cutoff so the pill doesn't haunt the header forever.
+      const inFlight = rows.find(isGenerationInFlight);
       setPending(inFlight ? { id: inFlight.id, status: inFlight.status, style: inFlight.style ?? null } : null);
       if (inFlight) {
         timer = window.setTimeout(tick, 6000);

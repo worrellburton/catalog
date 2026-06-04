@@ -11,6 +11,8 @@
 // play() independently) and gives us a clean recovery path after
 // modal open/close and tab visibility changes.
 
+import { getPrefetchCount } from './video-loading';
+
 // ── Constants ──────────────────────────────────────────────────────────
 //
 // Promotion is viewport-distance based, NOT a fixed top-K. Every card whose
@@ -56,6 +58,16 @@ const SCROLL_VELOCITY_THRESHOLD = 2500;
 const SCROLL_REST_DELAY_MS = 150;
 /** Max play() retries per card before marking it degraded. */
 const MAX_RETRIES = 2;
+/** rootMargin for the "near viewport" observer that gates which cards rank()
+ *  measures. THE fix for the O(N) getBoundingClientRect storm: rank() used to
+ *  call getRect() on EVERY registered card every pass (scroll + rAF), so after
+ *  a long scroll session — thousands of never-unmounted cards — each frame did
+ *  thousands of forced sync layouts and the whole machine lagged. Now rank()
+ *  measures only cards inside this band. It MUST exceed the largest
+ *  RELEASE_MARGIN_VH (1.5) so a card is still tracked through the release band;
+ *  past this band it's released and dropped from the active set. Percentage is
+ *  viewport-relative so it survives resize. */
+const NEAR_BAND_ROOT_MARGIN = '200% 0%';
 
 function isMobileViewport(): boolean {
   return typeof window !== 'undefined' && window.innerWidth <= 600;
@@ -112,6 +124,20 @@ class VideoPlaybackDirector {
   // stops decoding frames under the blur layer (which would otherwise force
   // the compositor to re-rasterize the blur every frame and tank the FPS).
   private scopeStack: string[] = [];
+  // [debug HUD] opt-in via localStorage 'pd-hud'='1'. Records assign→first-
+  // frame reveal latency (the felt "poster hold") so it can be measured on a
+  // real foreground device — a backgrounded preview tab throttles decode and
+  // inflates these numbers. Cheap to keep; only displayed when the flag is on.
+  private revealSamples: { ms: number; via: string }[] = [];
+  private hudEl: HTMLDivElement | null = null;
+  private hudTimer: ReturnType<typeof setInterval> | null = null;
+  // Active-set gating (perf). An IntersectionObserver flags which cards are
+  // near the viewport; rank() measures ONLY these. Per-frame cost is therefore
+  // bounded by what's on/near screen, not by how many cards have mounted over a
+  // long scroll session — fixes the unbounded O(N) rank meltdown.
+  private nearIds = new Set<string>();
+  private nearObserver: IntersectionObserver | null = null;
+  private elToId = new WeakMap<Element, string>();
 
   // Lazy init — safe to import on the server; DOM access only when the
   // first card registers (always in the browser).
@@ -126,6 +152,34 @@ class VideoPlaybackDirector {
       'visibility:hidden;pointer-events:none;overflow:hidden';
     this.parkingDiv.setAttribute('aria-hidden', 'true');
     document.body.appendChild(this.parkingDiv);
+
+    // Near-viewport gate: maintains the set of cards rank() is allowed to
+    // measure. A card entering the band joins the active set; leaving it drops
+    // out AND releases its <video> (it's past the release margin by then).
+    if (typeof IntersectionObserver !== 'undefined') {
+      this.nearObserver = new IntersectionObserver(
+        entries => {
+          for (const e of entries) {
+            const id = this.elToId.get(e.target);
+            if (!id) continue;
+            if (e.isIntersecting) {
+              this.nearIds.add(id);
+            } else {
+              this.nearIds.delete(id);
+              const entry = this.cards.get(id);
+              if (entry?.videoEl) {
+                this.releaseVideoEl(id, entry.videoEl);
+                entry.videoEl = null;
+                entry.status = 'idle';
+                this.emit(id, 'idle');
+              }
+            }
+          }
+          this.scheduleRank();
+        },
+        { rootMargin: NEAR_BAND_ROOT_MARGIN },
+      );
+    }
 
     // Pre-create a small warm pool. The pool grows on demand up to
     // poolMax(); growth past that point is blocked and eviction takes over.
@@ -174,6 +228,51 @@ class VideoPlaybackDirector {
     // has buffered. Critical for search results where videos are cold-cache
     // and play() can be called before bytes arrive.
     setInterval(() => { this.scheduleRank(); }, 1500);
+
+    this.initHud();
+  }
+
+  private now(): number {
+    return typeof performance !== 'undefined' ? performance.now() : Date.now();
+  }
+
+  private recordReveal(ms: number, via: string): void {
+    this.revealSamples.push({ ms: Math.round(ms), via });
+    if (this.revealSamples.length > 30) this.revealSamples.shift();
+  }
+
+  // Opt-in debug HUD. Enable on any device: localStorage.setItem('pd-hud','1')
+  // then reload. Shows pool occupancy, playing count, prewarm count, and the
+  // assign→first-frame reveal latency that issue #1/#2 are about.
+  private initHud(): void {
+    if (typeof localStorage === 'undefined') return;
+    try { if (localStorage.getItem('pd-hud') !== '1') return; } catch { return; }
+    const el = document.createElement('div');
+    el.style.cssText =
+      'position:fixed;left:8px;bottom:8px;z-index:2147483647;' +
+      'font:11px/1.45 ui-monospace,Menlo,monospace;color:#3f6;' +
+      'background:rgba(0,0,0,.78);padding:6px 9px;border-radius:6px;' +
+      'white-space:pre;pointer-events:none;max-width:62vw';
+    el.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(el);
+    this.hudEl = el;
+    this.hudTimer = setInterval(() => this.updateHud(), 300);
+  }
+
+  private updateHud(): void {
+    if (!this.hudEl) return;
+    const assigned = this.pool.filter(p => p.assignedTo).length;
+    let playing = 0;
+    this.cards.forEach(e => { if (e.status === 'playing') playing++; });
+    const s = this.revealSamples;
+    const last = s.length ? s[s.length - 1] : null;
+    const avg = s.length ? Math.round(s.reduce((a, b) => a + b.ms, 0) / s.length) : 0;
+    this.hudEl.textContent =
+      `pool ${assigned}/${this.pool.length}   playing ${playing}\n` +
+      `near ${this.nearIds.size} / mounted ${this.cards.size}\n` +
+      `prewarmed ${getPrefetchCount()}\n` +
+      `reveal last ${last ? `${last.ms}ms (${last.via})` : '—'}\n` +
+      `reveal avg  ${avg}ms  n=${s.length}`;
   }
 
   private createVideoEl(): HTMLVideoElement {
@@ -209,6 +308,7 @@ class VideoPlaybackDirector {
     const existing = this.cards.get(cardId);
     if (existing) {
       // Update mutable fields (slot may have re-mounted into a different node)
+      if (existing.slotEl !== slotEl) this.unobserveNear(existing.slotEl);
       existing.getRect = getRect;
       existing.slotEl = slotEl;
       if (existing.videoUrl !== videoUrl) {
@@ -220,6 +320,7 @@ class VideoPlaybackDirector {
         existing.videoUrl = videoUrl;
         existing.status = 'idle';
       }
+      this.observeNear(cardId, slotEl);
       this.scheduleRank();
       return;
     }
@@ -233,7 +334,23 @@ class VideoPlaybackDirector {
       lastFailureAt: 0,
       status: 'idle',
     });
+    this.observeNear(cardId, slotEl);
     this.scheduleRank();
+  }
+
+  /** Start tracking a card's slot for near-viewport gating. Optimistically
+   *  marks it active so the very next rank() considers it (no first-paint
+   *  delay); the observer prunes it within a tick if it's actually far off. */
+  private observeNear(cardId: string, slotEl: HTMLDivElement): void {
+    this.elToId.set(slotEl, cardId);
+    this.nearIds.add(cardId);
+    this.nearObserver?.observe(slotEl);
+  }
+
+  private unobserveNear(slotEl: Element | null | undefined): void {
+    if (!slotEl) return;
+    this.nearObserver?.unobserve(slotEl);
+    this.elToId.delete(slotEl);
   }
 
   /**
@@ -247,6 +364,8 @@ class VideoPlaybackDirector {
       this.releaseVideoEl(cardId, entry.videoEl);
       entry.videoEl = null;
     }
+    this.unobserveNear(entry.slotEl);
+    this.nearIds.delete(cardId);
     this.cards.delete(cardId);
     this.scheduleRank();
   }
@@ -388,7 +507,13 @@ class VideoPlaybackDirector {
     //   in between                 → keep current state (don't churn)
     type Ranked = { id: string; entry: CardEntry; distance: number };
     const ranked: Ranked[] = [];
-    for (const [id, entry] of this.cards) {
+    // Iterate only the near-viewport set, NOT every registered card. This is
+    // what keeps rank() cheap on a long-scrolled feed: getRect() (a forced
+    // sync layout) runs for ~the cards on/near screen, never for the thousands
+    // that have scrolled out of the band.
+    for (const id of this.nearIds) {
+      const entry = this.cards.get(id);
+      if (!entry) { this.nearIds.delete(id); continue; }
       const rect = entry.getRect();
       // Skip cards that haven't laid out yet (0×0 rect) — happens briefly
       // on mount; the next rank() pass picks them up.
@@ -466,23 +591,36 @@ class VideoPlaybackDirector {
         // card's poster <img>. Setting a new src + load() repaints the
         // element black/empty until the first frame of the NEW clip decodes
         // — flashing over the poster. Hide the element (opacity 0) so the
-        // poster shows through, and fade it back in only once the new src
-        // actually has a frame (loadeddata/playing). Guarded by the target
-        // URL so a listener from a prior assignment can't reveal a
-        // since-recycled element.
+        // poster shows through, and reveal it the instant the first frame is
+        // available (`loadeddata`). The poster is the clip's FRAME 0 (see
+        // asset_encoder.POSTER_SEEK_FRACTION = 0), which is pixel-identical
+        // to that first decoded frame — so the cross-fade is invisible and
+        // the clip simply starts moving from where the poster already was.
+        // Revealing here (not waiting for `playing`) means the video shows as
+        // soon as it CAN, so the grid reads as "already playing" instead of
+        // holding the poster until the network play() settles. `playing`
+        // stays as a backstop in case `loadeddata` was missed (cached
+        // element). Guarded by the target URL so a listener from a prior
+        // assignment can't reveal a since-recycled element.
         const targetUrl = entry.videoUrl;
+        const revealT0 = this.now();
         slot.el.style.opacity = '0';
         slot.el.src = entry.videoUrl;
         slot.el.preload = 'auto';
         // Explicitly call load() so the browser starts buffering immediately.
         try { slot.el.load(); } catch { /* ignore */ }
-        const reveal = () => {
+        let revealed = false;
+        const reveal = (via: 'loadeddata' | 'playing') => {
           if (slot.el.currentSrc === targetUrl || slot.el.src === targetUrl) {
             slot.el.style.opacity = '1';
+            if (!revealed) {
+              revealed = true;
+              this.recordReveal(this.now() - revealT0, via);
+            }
           }
         };
-        slot.el.addEventListener('loadeddata', reveal, { once: true });
-        slot.el.addEventListener('playing', reveal, { once: true });
+        slot.el.addEventListener('loadeddata', () => reveal('loadeddata'), { once: true });
+        slot.el.addEventListener('playing', () => reveal('playing'), { once: true });
       } else {
         // Same src (pool reuse) — already has frames, show immediately.
         slot.el.preload = 'auto';
@@ -500,7 +638,7 @@ class VideoPlaybackDirector {
         objectFit: 'cover',
         zIndex: '2',
         display: 'block',
-        transition: 'opacity 0.22s ease',
+        transition: 'opacity 0.12s ease',
       });
 
       slot.assignedTo = id;

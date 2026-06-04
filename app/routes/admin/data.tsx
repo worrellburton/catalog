@@ -6341,6 +6341,18 @@ export default function AdminData() {
                               const hasPrimaryImage = !!(p as { primary_image_url?: string | null }).primary_image_url;
                               const isGenerating = p.id ? generatingPrimaryVideoIds.has(p.id) : false;
                               if (primaryVideoUrl) {
+                                // Mid-regen progress overlay: while a regen is
+                                // in flight against an EXISTING video, show
+                                // the same ETA bar the empty-card branch
+                                // renders — admins kept clicking Regen twice
+                                // because the only signal was the button text
+                                // changing to "Generating".
+                                const regenStartedAt = p.id ? primaryVideoStartedAt.get(p.id) : undefined;
+                                const regenElapsedMs = regenStartedAt ? Math.max(0, Date.now() - regenStartedAt) : 0;
+                                const regenEta = avgPrimaryVideoDurationMs;
+                                const regenPct = isGenerating && regenEta > 0
+                                  ? Math.min(95, (regenElapsedMs / regenEta) * 100)
+                                  : 0;
                                 return (
                                   <div style={{ position: 'relative' }}>
                                     <video
@@ -6365,8 +6377,55 @@ export default function AdminData() {
                                         display: 'block',
                                         background: '#0f172a',
                                         cursor: 'zoom-in',
+                                        opacity: isGenerating ? 0.35 : 1,
+                                        transition: 'opacity 200ms ease',
                                       }}
                                     />
+                                    {isGenerating && (
+                                      <div style={{
+                                        position: 'absolute',
+                                        left: 0, right: 0, bottom: 0,
+                                        padding: '10px 12px 12px',
+                                        background: 'linear-gradient(180deg, rgba(15,23,42,0) 0%, rgba(15,23,42,0.85) 60%, rgba(15,23,42,0.95) 100%)',
+                                        borderBottomLeftRadius: 8,
+                                        borderBottomRightRadius: 8,
+                                        display: 'flex',
+                                        flexDirection: 'column',
+                                        gap: 6,
+                                        pointerEvents: 'none',
+                                      }}>
+                                        <div style={{
+                                          fontSize: 10,
+                                          color: '#c4b5fd',
+                                          fontWeight: 700,
+                                          letterSpacing: '0.08em',
+                                          textTransform: 'uppercase',
+                                        }}>
+                                          Regenerating
+                                        </div>
+                                        <div style={{
+                                          width: '100%',
+                                          height: 5,
+                                          background: 'rgba(255,255,255,0.18)',
+                                          borderRadius: 999,
+                                          overflow: 'hidden',
+                                        }}>
+                                          <div style={{
+                                            width: `${regenPct}%`,
+                                            height: '100%',
+                                            background: 'linear-gradient(90deg, #7c3aed, #a78bfa)',
+                                            transition: 'width 240ms linear',
+                                          }} />
+                                        </div>
+                                        <div style={{
+                                          fontSize: 10,
+                                          color: '#e2e8f0',
+                                          fontVariantNumeric: 'tabular-nums',
+                                        }}>
+                                          {`${Math.round(regenElapsedMs / 1000)}s / ~${Math.round(regenEta / 1000)}s`}
+                                        </div>
+                                      </div>
+                                    )}
                                     {/* Node-graph button — opens a modal that
                                         renders the generation pipeline as a
                                         DAG (input image → model → video). */}

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from '@remix-run/react';
 import CatalogLogo from '~/components/CatalogLogo';
 import { supabase } from '~/utils/supabase';
@@ -26,6 +26,7 @@ import {
   updateGenerationCrop,
   uploadUserPhoto,
   checkFacePhoto,
+  GENERATION_STALE_MS,
   type UserUpload,
   type UserGeneration,
   type GenerationProductDetail,
@@ -866,10 +867,14 @@ export default function GeneratePage() {
     if (error) setUploadError(error);
   };
 
-  const removeGeneration = async (id: string) => {
+  // useCallback so the LookCard rows (memo'd) don't re-render on every
+  // parent re-render (e.g. typing into the prompt field). Both setState
+  // refs and the deleteUserGeneration module function are stable, so
+  // empty deps are safe.
+  const removeGeneration = useCallback(async (id: string) => {
     setGenerations(prev => prev.filter(g => g.id !== id));
     await deleteUserGeneration(id);
-  };
+  }, []);
 
   // Which slot the next file-picker upload should land in. Tracked via a
   // ref so onFileInput can target a specific slot when the user taps an
@@ -1159,15 +1164,15 @@ export default function GeneratePage() {
 
   // Open a past generation in the Result view. Used when the shopper taps
   // a card in the "Your looks" grid.
-  const openGeneration = (g: UserGeneration) => {
+  const openGeneration = useCallback((g: UserGeneration) => {
     setGeneration(g);
     setStep('result');
-  };
+  }, []);
 
   // Hydrate the wizard from an existing generation and jump to Review so
   // the shopper can tweak + re-submit. A fresh row is created on submit so
   // the history in "Your looks" is preserved.
-  const editGeneration = async (id: string) => {
+  const editGeneration = useCallback(async (id: string) => {
     const detail = await getGenerationDetail(id);
     if (!detail.generation) return;
 
@@ -1209,7 +1214,7 @@ export default function GeneratePage() {
     setGeneration(null);
     setSubmitError(null);
     setStep('review');
-  };
+  }, []);
 
   const startNewLook = () => {
     setGeneration(null);
@@ -1663,9 +1668,9 @@ export default function GeneratePage() {
                       <LookCard
                         key={g.id}
                         generation={g}
-                        onOpen={() => openGeneration(g)}
-                        onRegenerate={() => editGeneration(g.id)}
-                        onDelete={() => removeGeneration(g.id)}
+                        onOpen={openGeneration}
+                        onRegenerate={editGeneration}
+                        onDelete={removeGeneration}
                       />
                     ))}
                   </div>
@@ -2833,26 +2838,38 @@ function CropModal({
   );
 }
 
-function LookCard({
+// memo'd so a parent re-render (e.g. a keystroke in the prompt field on
+// the same screen) does not re-render every row in the looks grid. The
+// id-based callback signatures let the parent hand down stable refs;
+// without that, inline `() => onDelete(g.id)` arrows would defeat memo
+// on every render even when `generation` itself is unchanged.
+const LookCard = memo(function LookCard({
   generation,
   onOpen,
   onRegenerate,
   onDelete,
 }: {
   generation: UserGeneration;
-  onOpen: () => void;
-  onRegenerate: () => void;
-  onDelete: () => void;
+  onOpen: (g: UserGeneration) => void;
+  onRegenerate: (id: string) => void;
+  onDelete: (id: string) => void;
 }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const style = STYLE_PRESETS.find(s => s.value === generation.style);
   const isDone = generation.status === 'done' && generation.video_url;
-  const isFailed = generation.status === 'failed';
-  const isBusy = generation.status === 'pending' || generation.status === 'generating';
+  const startedAt = useMemo(() => new Date(generation.created_at).getTime(), [generation.created_at]);
+  // A row stuck non-terminal far past any real render budget is dead —
+  // the generate-look pipeline never reconciled it. Treat it as failed
+  // ("Timed out") so it stops showing "Queued / 100%" forever and the
+  // delete button works. Mirrors PendingLookPill's staleness guard.
+  const isStale = (generation.status === 'pending' || generation.status === 'generating')
+    && (Date.now() - startedAt) > GENERATION_STALE_MS;
+  const isFailed = generation.status === 'failed' || isStale;
+  const isBusy = (generation.status === 'pending' || generation.status === 'generating') && !isStale;
 
   // Tick once a second while the row is in flight so the mini border
   // progress + phase label stay live on the grid card. We only run
-  // the timer for busy items so done/failed cards stay still.
+  // the timer for busy items so done/failed/stale cards stay still.
   const [, setTick] = useState(0);
   useEffect(() => {
     if (!isBusy) return;
@@ -2860,7 +2877,6 @@ function LookCard({
     return () => window.clearInterval(id);
   }, [isBusy]);
 
-  const startedAt = useMemo(() => new Date(generation.created_at).getTime(), [generation.created_at]);
   const elapsedSec = Math.max(0, (Date.now() - startedAt) / 1000);
   const typicalSec = typicalSecondsFor(generation.duration_seconds);
   const linearPct = (elapsedSec / typicalSec) * 95;
@@ -2876,7 +2892,7 @@ function LookCard({
   return (
     <div className="gen-lookcard">
       <div className="gen-lookcard-media-wrap" style={{ position: 'relative' }}>
-        <button type="button" className="gen-lookcard-media" onClick={onOpen}>
+        <button type="button" className="gen-lookcard-media" onClick={() => onOpen(generation)}>
           {isDone && generation.video_url ? (
             <video
               src={generation.video_url}
@@ -2902,7 +2918,7 @@ function LookCard({
                   <span className="gen-lookcard-pct">{Math.round(pct)}%</span>
                 </>
               )}
-              {isFailed && <span>Failed</span>}
+              {isFailed && <span>{isStale ? 'Timed out' : 'Failed'}</span>}
             </div>
           )}
           {isBusy && <span className="gen-lookcard-chip">{generation.status === 'pending' ? 'Queued' : 'Generating'}</span>}
@@ -2923,7 +2939,7 @@ function LookCard({
           body="This can’t be undone."
           confirmLabel="Delete"
           destructive
-          onConfirm={() => { setConfirmOpen(false); onDelete(); }}
+          onConfirm={() => { setConfirmOpen(false); onDelete(generation.id); }}
           onCancel={() => setConfirmOpen(false)}
         />
       </div>
@@ -2932,14 +2948,14 @@ function LookCard({
         <button
           type="button"
           className="gen-lookcard-regen"
-          onClick={onRegenerate}
+          onClick={() => onRegenerate(generation.id)}
           aria-label="Edit and regenerate"
           title="Edit & regenerate"
         >↻</button>
       </div>
     </div>
   );
-}
+});
 
 function UploadPickerModal({
   slot,

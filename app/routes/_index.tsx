@@ -114,7 +114,29 @@ function prefetchOverlayChunks() {
   else window.setTimeout(tick, 800);
 }
 
+// Disable the browser's scroll restoration on the landing page. Default
+// 'auto' restores the previous scroll position on F5 / pull-to-refresh
+// — which lands the user mid-hero on the home screen. The search bar
+// is pinned at bottom: 38vh from the viewport, but every fixed/sticky
+// header element above it is measured from "top of document", so a
+// mid-page reload offsets the bar off-center until the user scrolls
+// back to 0. Owning the restore manually keeps refresh at the top.
+if (typeof window !== 'undefined' && 'scrollRestoration' in window.history) {
+  try { window.history.scrollRestoration = 'manual'; } catch { /* Safari edge */ }
+}
+
 export default function Home() {
+  // Hard scroll-to-top on every Home mount. Pairs with the
+  // scrollRestoration='manual' above to neutralise both the browser's
+  // restore-on-refresh AND any phantom anchor scroll from a deep-link
+  // (/p/, /l/, /b/) being closed back to "/". The bar pin reads off the
+  // viewport, so even a 40 px stale scroll throws its visual centering
+  // off until the next render.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.scrollTo(0, 0);
+  }, []);
+
   const bookmarks = useBookmarks();
   const { recentProducts, pushRecent } = useRecentProducts();
   const { user, loading: authLoading, logout } = useAuth();

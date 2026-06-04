@@ -67,6 +67,20 @@ export default defineConfig({
         // sees bindings from chunks it has DIRECTLY imported, which
         // load first.
         hoistTransitiveImports: false,
+        // Tighter chunking — without this the server-build chunk was
+        // shipping ~1.6 MB because admin / deck / wallet code rolled
+        // into the shared graph. Lifting each heavy surface into its
+        // own chunk means the consumer first-paint only pulls the
+        // bare app shell + whichever lazy() route the user opened.
+        manualChunks(id: string) {
+          if (id.includes('/routes/admin/')) return 'admin';
+          if (id.includes('/components/DeckView') || id.includes('/components/deck')) return 'deck';
+          if (id.includes('/components/CreatorWallet')) return 'wallet';
+          if (id.includes('/components/MyLooks')
+              || id.includes('/components/CreateLookV2')
+              || id.includes('/components/AddProductV2')) return 'creator-studio';
+          return undefined;
+        },
       },
     },
   },

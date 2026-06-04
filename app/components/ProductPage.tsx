@@ -6,7 +6,7 @@ import { useActiveGenderFilter } from '~/hooks/useActiveGenderFilter';
 import { useEscapeKey } from '~/hooks/useEscapeKey';
 import CreativeCard from '~/components/CreativeCard';
 import FollowIconButton from '~/components/FollowIconButton';
-import { useTrailVideo } from '~/components/TrailVideoHost';
+import { useTrailVideo, useTrailVideoManager } from '~/components/TrailVideoHost';
 import { useInViewport } from '~/hooks/useInViewport';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
 import { trackAdClick, prefetchSimilarProducts, getSimilarProductsDiagnostics, type ProductAd } from '~/services/product-creative';
@@ -24,6 +24,7 @@ import { usePageSections, isSectionEnabled, getSectionLimit, isSectionInfinite }
 import SizeMatchBadge from '~/components/SizeMatchBadge';
 import { director } from '~/services/video-playback-director';
 import ParticleBackground from '~/components/ParticleBackground';
+import { productSlug } from '~/utils/slug';
 import {
   pickVideoUrl,
   pickPosterUrl,
@@ -515,6 +516,23 @@ export default function ProductPage({
     return () => director.popScope(scope);
   }, [product.brand, product.name]);
 
+  // Also pause every TrailVideoHost element except this product's hero.
+  // director.pushScope handles director-managed cards, but LookCard-style
+  // tiles attach video elements directly through the trail host — without
+  // an explicit suspend, their <video> elements keep decoding under the
+  // overlay (CPU + battery cost for invisible frames).
+  const trailMgr = useTrailVideoManager();
+  useEffect(() => {
+    // Exempt the hero by its creative.id when present, otherwise pass a
+    // sentinel so suspendFeed pauses everything.
+    trailMgr?.suspendFeed(creative?.id ?? '');
+    // The feed behind us is fully covered — reclaim the decoders its
+    // parked clips are still holding instead of waiting out each one's
+    // idle timer. Re-entering the feed re-attaches the visible cards.
+    trailMgr?.pruneIdle();
+    return () => { trailMgr?.resumeFeed(); };
+  }, [trailMgr, creative?.id]);
+
   // "Popular in" — curated catalogs this product auto-matched (by name+brand).
   // Resets + refetches on every product change; cancel-guarded so a fast trail
   // of products can't land a stale list. Only fetched when we can navigate
@@ -876,6 +894,33 @@ export default function ProductPage({
     bookmarks.toggleProductBookmark(productToSave);
   }, [bookmarks, product, creative]);
 
+  // Share the deep-link to this product. Uses navigator.share where it's
+  // available (mobile + Safari desktop), otherwise copies the URL to the
+  // clipboard with a fallback toast. Matches the MyLooks share pattern.
+  const [shareToast, setShareToast] = useState<string | null>(null);
+  const handleShare = useCallback(async () => {
+    if (typeof window === 'undefined') return;
+    const slug = productSlug({
+      id: (product as { id?: string }).id ?? null,
+      brand: product.brand ?? null,
+      name: product.name ?? null,
+    });
+    const url = `${window.location.origin}/p/${slug}`;
+    const title = product.brand && product.name ? `${product.brand} — ${product.name}` : product.name || 'Check this out';
+    const nav = navigator as Navigator & { share?: (d: { title?: string; url?: string }) => Promise<void> };
+    try {
+      if (nav.share) {
+        await nav.share({ title, url });
+      } else if (navigator.clipboard) {
+        await navigator.clipboard.writeText(url);
+        setShareToast('Link copied');
+        window.setTimeout(() => setShareToast(null), 1800);
+      }
+    } catch {
+      /* user dismissed the share sheet, or clipboard denied — no-op */
+    }
+  }, [product]);
+
   // Dummy social proof. Stable per product so the count + avatars don't
   // reshuffle on every re-render. Wire to a real `product_saves` table when
   // we ship it.
@@ -1064,6 +1109,37 @@ export default function ProductPage({
               <div className="pd-hero-placeholder" />
             )}
             <div className="pd-hero-scrim" />
+            {/* Top-right share + bottom-right save, both overlaying the
+                hero media. Mirror the .pd-back glass treatment so the
+                three controls (back / share / save) read as a set. */}
+            <button
+              type="button"
+              className="pd-share-floating"
+              onClick={handleShare}
+              aria-label="Share product"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="18" cy="5" r="3" />
+                <circle cx="6" cy="12" r="3" />
+                <circle cx="18" cy="19" r="3" />
+                <line x1="8.59" y1="13.51" x2="15.42" y2="17.49" />
+                <line x1="15.41" y1="6.51" x2="8.59" y2="10.49" />
+              </svg>
+            </button>
+            <button
+              type="button"
+              className={`pd-save-floating ${isSaved ? 'is-saved' : ''}`}
+              onClick={handleToggleSave}
+              aria-label={isSaved ? 'Remove from bookmarks' : 'Save product'}
+              aria-pressed={isSaved}
+            >
+              <svg width="20" height="20" viewBox="0 0 24 24" fill={isSaved ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+              </svg>
+            </button>
+            {shareToast && (
+              <div className="pd-share-toast" role="status">{shareToast}</div>
+            )}
           </section>
 
           <section className="pd-info">
@@ -1132,18 +1208,6 @@ export default function ProductPage({
                   <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
                 </svg>
                 <span>Try it on</span>
-              </button>
-              <button
-                type="button"
-                className={`pd-bookmark-btn ${isSaved ? 'is-saved' : ''}`}
-                onClick={handleToggleSave}
-                aria-label={isSaved ? 'Remove from bookmarks' : 'Save product'}
-                aria-pressed={isSaved}
-              >
-                <svg width="18" height="18" viewBox="0 0 24 24" fill={isSaved ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
-                </svg>
-                <span>{isSaved ? 'Saved' : 'Save'}</span>
               </button>
             </div>
 

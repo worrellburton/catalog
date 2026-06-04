@@ -193,6 +193,70 @@
   background: rgba(0, 0, 0, 0.65);
 }
 
+/* Share + Save overlay the hero media itself. Share mirrors .pd-back at
+   top-right; Save sits in the bottom-right corner of the hero — far
+   enough from the action row beneath the media that it doesn't read
+   as a duplicate of the old in-row Save button. Both share the .pd-back
+   glass treatment so the controls read as a coherent set. */
+.pd-share-floating,
+.pd-save-floating {
+  position: absolute;
+  z-index: 5;
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, transform 0.18s;
+  padding: 0;
+}
+.pd-share-floating { top: 16px; right: 16px; }
+.pd-save-floating  { bottom: 16px; right: 16px; }
+.pd-share-floating:hover,
+.pd-save-floating:hover {
+  background: rgba(0, 0, 0, 0.65);
+}
+.pd-save-floating.is-saved {
+  background: rgba(255, 255, 255, 0.92);
+  color: #0f172a;
+  border-color: rgba(255, 255, 255, 0.95);
+}
+.pd-save-floating.is-saved:hover {
+  background: rgba(255, 255, 255, 1);
+}
+
+/* Brief copied-to-clipboard pill shown when navigator.share isn't
+   available (desktop Chrome / Firefox). Sits above the Save button so
+   it doesn't collide. */
+.pd-share-toast {
+  position: absolute;
+  bottom: 68px;
+  right: 16px;
+  z-index: 6;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.78);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  pointer-events: none;
+  animation: pd-share-toast-in 160ms ease-out;
+}
+@keyframes pd-share-toast-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
 /* Side-rail back button — desktop only. Fixed on the left edge of the
    viewport, vertically centered. Hidden by default; .is-visible fades it
    in once the user has scrolled past the hero (the corner .pd-back is

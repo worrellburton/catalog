@@ -5,6 +5,7 @@ import { subscribeOnline } from '~/services/presence';
 import { supabase } from '~/utils/supabase';
 import { getShopperGender } from '~/services/product-creative';
 import { useAuth } from '~/hooks/useAuth';
+import { highResAvatarUrl } from '~/utils/avatarSrc';
 
 interface FollowingRailProps {
   onOpenCreator: (handle: string) => void;
@@ -32,6 +33,9 @@ interface RailEntry {
    *  animation. For Following rows we pass the look's last-post ts;
    *  for Followers rows we pass the follow's created_at. */
   ts: number;
+  /** Poster of the creator's most-recent look, shown as a thumbnail on
+   *  the right of each Following popover row. Following rows only. */
+  lastThumb?: string | null;
 }
 
 /** Up to 5 stacked avatars in the rail; anything beyond gets a
@@ -97,7 +101,44 @@ function FollowingRail({ onOpenCreator, mode = 'both', onCreateFollowingCatalog:
   useEffect(() => subscribeFollowingChanges(() => setRefreshKey(k => k + 1)), []);
 
   // Live online presence — drives the glowing green ring on avatars.
-  useEffect(() => subscribeOnline((s) => setOnlineHandles(s.handles)), []);
+  // Hysteresis: a handle "going offline" is held for ONLINE_GRACE_MS
+  // before the ring drops, so a brief tab refocus / mobile reconnect
+  // (presence channel emits leave→join in rapid succession) doesn't
+  // strobe the green glow. New "online" transitions are always shown
+  // instantly — only the offline→on-screen-still-glowing path is delayed.
+  useEffect(() => {
+    const ONLINE_GRACE_MS = 8000;
+    const pendingOff = new Map<string, number>(); // handle → setTimeout id
+    return subscribeOnline((s) => {
+      setOnlineHandles(prev => {
+        const next = new Set<string>(s.handles);
+        // Anything previously online that just left presence: keep it lit
+        // until the grace timer fires.
+        for (const h of prev) {
+          if (next.has(h)) continue;
+          if (!pendingOff.has(h)) {
+            const id = window.setTimeout(() => {
+              pendingOff.delete(h);
+              setOnlineHandles(curr => {
+                if (!curr.has(h)) return curr;
+                const drop = new Set(curr);
+                drop.delete(h);
+                return drop;
+              });
+            }, ONLINE_GRACE_MS);
+            pendingOff.set(h, id);
+          }
+          next.add(h);
+        }
+        // Anything that just came (back) online: cancel its grace timer.
+        for (const h of s.handles) {
+          const t = pendingOff.get(h);
+          if (t !== undefined) { window.clearTimeout(t); pendingOff.delete(h); }
+        }
+        return next;
+      });
+    });
+  }, []);
 
   // Following list: handle → display name + avatar + last-post ts.
   // When the user follows NO ONE yet, fall back to popular creators of
@@ -145,19 +186,25 @@ function FollowingRail({ onOpenCreator, mode = 'both', onCreateFollowingCatalog:
       }
       const [creatorRows, lookRows] = await Promise.all([
         supabase.from('creators').select('handle, display_name, avatar_url').in('handle', handles),
+        // Left-join the look's creative so we can show the most-recent
+        // look's poster as a thumbnail in the popover. Left (not inner) so
+        // looks with no creative still count toward the last-post ts —
+        // keeps the existing "posted Xh ago" behaviour unchanged.
         supabase.from('looks')
-          .select('creator_handle, user_id, created_at')
+          .select('creator_handle, user_id, created_at, looks_creative (thumbnail_url, is_primary)')
           .in('creator_handle', handles)
           .order('created_at', { ascending: false })
           .limit(handles.length * 6),
       ]);
       type CRow = { handle: string; display_name: string | null; avatar_url: string | null };
-      type LRow = { creator_handle: string; user_id: string | null; created_at: string | null };
+      type LCreative = { thumbnail_url: string | null; is_primary: boolean | null };
+      type LRow = { creator_handle: string; user_id: string | null; created_at: string | null; looks_creative: LCreative[] | null };
       const creatorByHandle = new Map<string, CRow>(
         ((creatorRows.data || []) as CRow[]).map(r => [r.handle, r]),
       );
       const userIdByHandle = new Map<string, string>();
       const lastPostByHandle = new Map<string, number>();
+      const lastThumbByHandle = new Map<string, string>();
       for (const l of (lookRows.data || []) as LRow[]) {
         if (l.user_id && !userIdByHandle.has(l.creator_handle)) {
           userIdByHandle.set(l.creator_handle, l.user_id);
@@ -165,6 +212,12 @@ function FollowingRail({ onOpenCreator, mode = 'both', onCreateFollowingCatalog:
         if (l.created_at && !lastPostByHandle.has(l.creator_handle)) {
           const ts = Date.parse(l.created_at);
           if (Number.isFinite(ts)) lastPostByHandle.set(l.creator_handle, ts);
+        }
+        // First creative thumbnail we see per handle wins — rows are
+        // already newest-first, so that's the latest look's poster.
+        if (!lastThumbByHandle.has(l.creator_handle) && l.looks_creative?.length) {
+          const primary = l.looks_creative.find(c => c.is_primary) ?? l.looks_creative[0];
+          if (primary?.thumbnail_url) lastThumbByHandle.set(l.creator_handle, primary.thumbnail_url);
         }
       }
       const profileNeeded = Array.from(new Set(
@@ -191,6 +244,7 @@ function FollowingRail({ onOpenCreator, mode = 'both', onCreateFollowingCatalog:
           displayName: cr?.display_name || prof?.full_name || null,
           avatarUrl: cr?.avatar_url || prof?.avatar_url || null,
           ts: lastPostByHandle.get(h) ?? 0,
+          lastThumb: lastThumbByHandle.get(h) ?? null,
         };
       });
       resolved.sort((a, b) => b.ts - a.ts);
@@ -440,7 +494,7 @@ function FollowingStoriesRail({ entries, onlineHandles, onOpenCreator, onSeeAll 
             <span className={`follow-story-ring${isOnline ? ' is-online' : ''}`}>
               <span className="follow-story-avatar">
                 {c.avatarUrl
-                  ? <img src={c.avatarUrl} alt="" loading="lazy" />
+                  ? <img src={highResAvatarUrl(c.avatarUrl, 128) || c.avatarUrl} alt="" loading="lazy" decoding="async" />
                   : <span className="follow-story-initial">{name.charAt(0).toUpperCase()}</span>}
               </span>
             </span>
@@ -541,7 +595,7 @@ function AvatarRow({
                 }}
               >
                 {c.avatarUrl
-                  ? <img src={c.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                  ? <img src={highResAvatarUrl(c.avatarUrl, 96) || c.avatarUrl} alt="" loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                   : (c.displayName || c.handle).charAt(0).toUpperCase()}
               </span>
             );
@@ -626,7 +680,7 @@ function AvatarRow({
                     }}
                   >
                     {c.avatarUrl
-                      ? <img src={c.avatarUrl} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
+                      ? <img src={highResAvatarUrl(c.avatarUrl, 96) || c.avatarUrl} alt="" loading="lazy" decoding="async" style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
                       : (c.displayName || c.handle).charAt(0).toUpperCase()}
                   </span>
                   {rowOnline && (
@@ -651,6 +705,26 @@ function AvatarRow({
                       : `@${c.handle}`}
                   </span>
                 </span>
+                {/* Last-look poster, right-aligned. Following rows only —
+                    Followers rows carry no thumbnail. */}
+                {c.lastThumb && (
+                  <img
+                    src={highResAvatarUrl(c.lastThumb, 128) || c.lastThumb}
+                    alt=""
+                    aria-hidden="true"
+                    loading="lazy"
+                    decoding="async"
+                    style={{
+                      flexShrink: 0,
+                      width: 28,
+                      height: 37,
+                      borderRadius: 5,
+                      objectFit: 'cover',
+                      background: '#e2e8f0',
+                      border: '1px solid #e5e7eb',
+                    }}
+                  />
+                )}
               </button>
               );
             })}

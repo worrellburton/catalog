@@ -5,16 +5,16 @@ The consumer feed paints a black rectangle until the source MP4 has decoded a
 frame, which on mobile cellular is ~2-3 s after the card mounts. Two cheap
 fixes wipe out that latency:
 
-  1. Poster frame  - a HERO frame (~80% through the clip) extracted as a
-     75-quality JPEG, set as the <video poster=...> attribute. The browser
-     paints it instantly while the MP4 streams in the background. We take a
-     LATE frame, not the first: the generated clips do an editorial zoom-in,
-     so frame 0 is the zoomed-OUT source packshot and the product only
-     settles into its hero framing late in the clip. The still shoppers
-     stare at should match the framing they see while it plays. Stored
-     alongside the source MP4 in the same `look-media` bucket; the public
-     URL goes into product_creative.thumbnail_url (or
-     generated_videos.thumbnail_url).
+  1. Poster frame  - the FIRST frame (frame 0) extracted as a 75-quality
+     JPEG, set as the <video poster=...> attribute. The browser paints it
+     instantly while the MP4 streams in the background. We take frame 0 so
+     the poster is IDENTICAL to the frame the <video> shows the instant it
+     starts playing — the still and the first painted video frame are the
+     same pixels, so the poster→video handoff is seamless ("the video is
+     already there") with zero zoom pop. Frame 0 is also the clip's widest,
+     least-zoomed framing. Stored alongside the source MP4 in the same
+     `look-media` bucket; the public URL goes into
+     product_creative.thumbnail_url (or generated_videos.thumbnail_url).
 
   2. Mobile variant - 480p H.264 at ~600 kbps, ~3-5 s clip. ~150-300 KB
      vs ~1-3 MB for the full-res source, so cellular users get a playable
@@ -38,34 +38,14 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Optional
 
-# The generated clips do an editorial zoom-in: frame 0 is the zoomed-OUT
-# source packshot and the product settles into its hero framing late in the
-# clip. Grab the poster from ~80% through so the still matches the framing
-# shoppers see while it plays, not the zoomed-out start. (Trade-off: a small
-# zoom "reveal" when the looping <video> restarts at frame 0 — accepted; the
-# poster looking right wins.)
-POSTER_SEEK_FRACTION = 0.8
-# Seconds-before-EOF fallback used only when ffprobe can't read the
-# duration. Lands in the settled hero portion for the ~5 s clips without
-# needing the duration, instead of regressing to the zoomed-out frame 0.
-POSTER_SEEK_FROM_EOF = -1.0
-
-
-def _hero_seek_seconds(src_path: str) -> Optional[float]:
-    """Timestamp (s) ~POSTER_SEEK_FRACTION through the clip, or None if the
-    duration can't be read (caller falls back to end-relative seeking)."""
-    try:
-        out = subprocess.run(
-            ["ffprobe", "-v", "error", "-show_entries", "format=duration",
-             "-of", "csv=p=0", src_path],
-            capture_output=True, text=True, check=True,
-        )
-        dur = float(out.stdout.strip())
-        if dur > 0:
-            return round(dur * POSTER_SEEK_FRACTION, 3)
-    except Exception:
-        pass
-    return None
+# Poster = frame 0 (the very first frame). The generated clips do an
+# editorial zoom-in from a wide packshot, so frame 0 is the widest,
+# least-zoomed framing AND — critically — the exact frame the <video> paints
+# the instant it starts playing. A frame-0 poster therefore hands off into
+# playback seamlessly: poster pixels == first video frame, no zoom pop, the
+# grid reads as "video already there." (A late/hero-frame poster mismatched
+# the playing clip's start and read as a static, zoomed still.)
+POSTER_SEEK_SECONDS = 0.0
 
 
 @dataclass
@@ -87,12 +67,11 @@ def encode_assets_from_url(
     the first frame as a JPEG and (unless poster_only) transcode a
     mobile-optimized variant. Returns the output paths.
 
-    The poster is a HERO frame (~80% through the clip, where the editorial
-    zoom-in has settled on the product) scaled to the clip's NATIVE aspect
-    ratio (height derived with `-2`), so it still fills the 3:4 card with no
-    crop-zoom. It is deliberately NOT the first frame: frame 0 is the
-    zoomed-out packshot, which is why a first-frame poster read as "zoomed
-    out" next to the framing the video shows while playing.
+    The poster is the FIRST frame (frame 0) scaled to the clip's NATIVE
+    aspect ratio (height derived with `-2`), so it fills the 3:4 card with no
+    crop-zoom. Frame 0 is identical to the frame the <video> paints when it
+    starts playing, so the poster→playback handoff is seamless (no zoom pop),
+    and it's the widest, least-zoomed framing of the clip.
 
     Set poster_only=True for sources that only need a poster (e.g. the
     products.primary_video_poster_url backfill), skipping the costlier
@@ -121,19 +100,13 @@ def encode_assets_from_url(
     with urllib.request.urlopen(video_url) as resp, open(src_path, "wb") as f:
         shutil.copyfileobj(resp, f)
 
-    # 2. Poster: a HERO frame ~80% through the clip (POSTER_SEEK_FRACTION)
-    # at 75% JPEG quality. Cap at 720px wide so the file stays under ~80 KB
-    # even for tall aspect ratios. Seek BEFORE -i for a fast keyframe seek —
-    # a single still doesn't need frame-accurate decode.
-    hero_ss = _hero_seek_seconds(src_path)
-    poster_cmd = ["ffmpeg", "-y", "-loglevel", "error"]
-    if hero_ss is not None:
-        poster_cmd += ["-ss", str(hero_ss), "-i", src_path]
-    else:
-        # Duration unreadable — seek ~1s before EOF so we still land in the
-        # settled hero portion instead of the zoomed-out first frame.
-        poster_cmd += ["-sseof", str(POSTER_SEEK_FROM_EOF), "-i", src_path]
-    poster_cmd += [
+    # 2. Poster: frame 0 (POSTER_SEEK_SECONDS) at 75% JPEG quality. Cap at
+    # 720px wide so the file stays under ~80 KB even for tall aspect ratios.
+    # Seek BEFORE -i for a fast keyframe seek — frame 0 is always a keyframe,
+    # so this lands exactly on the first frame the <video> will paint.
+    poster_cmd = [
+        "ffmpeg", "-y", "-loglevel", "error",
+        "-ss", str(POSTER_SEEK_SECONDS), "-i", src_path,
         "-frames:v", "1",
         "-vf", "scale='min(720,iw)':-2",
         "-q:v", "5",  # ~75% quality

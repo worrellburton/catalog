@@ -67,14 +67,13 @@ export function pickVideoUrl(creative: {
  *  Used as the <video poster=> attribute so the browser paints a
  *  real image on first paint, before the MP4 has decoded a frame.
  *
- *  primary_video_poster_url leads: it's a HERO still extracted from the
- *  primary video at the clip's native 3:4 size (~80% in, where the
- *  editorial zoom-in has settled), so it fills the 3:4 card with no
- *  crop-zoom AND shows the framing the clip rests on while playing — not
- *  the zoomed-out frame 0. (Because it's a late frame, the autoplaying
- *  <video> replays a small zoom-in reveal from its start — intended.)
- *  primary_image_url (the polished packshot) is the fallback for products
- *  whose poster hasn't been backfilled. */
+ *  primary_video_poster_url leads: it's the primary video's FRAME 0 at the
+ *  clip's native 3:4 size, so it fills the 3:4 card with no crop-zoom AND is
+ *  pixel-identical to the frame the <video> paints when it starts — the
+ *  poster→playback handoff is seamless (no zoom pop) and the still is the
+ *  clip's widest, least-zoomed framing. primary_image_url (the polished
+ *  packshot) is the fallback for products whose poster hasn't been
+ *  backfilled. */
 export function pickPosterUrl(creative: {
   thumbnail_url?: string | null;
   product?: { image_url?: string | null; primary_image_url?: string | null; primary_video_poster_url?: string | null; images?: string[] | null } | null;
@@ -130,24 +129,36 @@ function canBackgroundPreload(): boolean {
   return c.effectiveType !== 'slow-2g' && c.effectiveType !== '2g' && c.effectiveType !== '3g';
 }
 
-/** Background-fetch a video URL into the browser's HTTP cache. Range:
- *  bytes=0-262143 (~256KB) is enough to grab the moov atom + first GOP
- *  on a typical short MP4, which is what the <video> element actually
- *  needs to start playing. Pulling the whole file in the background
- *  would double the bytes a scrolling user spends; we'd rather warm
- *  the cache for "the first frame is ready" and let the rest stream
- *  on demand once the user taps in. */
+/** Background-fetch a video URL into the browser's HTTP cache.
+ *  We fetch the FULL file, not a byte range. A 206 Partial-Content
+ *  response is NOT reused by the browser HTTP cache (verified: repeated
+ *  Range fetches get zero speedup), so a `Range: bytes=0-…` prewarm
+ *  warmed nothing the <video> could reuse. A full 200 GET IS cached and
+ *  reused, so the subsequent <video> load — including a scroll-back
+ *  re-entry — is a cache hit. Clips are small and the concurrency cap
+ *  below bounds how many download at once. */
 // Concurrency cap: never have more than this many prewarm fetches in
 // flight at once, so a fast scroll past 20 cards can't open 20 sockets
 // that starve the clip the user is actually watching. Excess URLs queue
 // and start as earlier ones finish.
 const MAX_PREFETCH_CONCURRENCY = 4;
+// Backlog cap. After a fast flick the pending queue would otherwise fill
+// with cards the user has already blown PAST. Keeping it small means the
+// bytes we spend are always for cards near where the user currently is.
+const MAX_PENDING_PREFETCH = 10;
 let prefetchInFlight = 0;
 const prefetchQueue: string[] = [];
 
 function pumpPrefetchQueue(): void {
   while (prefetchInFlight < MAX_PREFETCH_CONCURRENCY && prefetchQueue.length > 0) {
-    const next = prefetchQueue.shift()!;
+    // LIFO: serve the MOST-recently requested URL first. Cards enter the
+    // prewarm band in scroll order, so on a fast flick the clip the user
+    // actually STOPS on is the last one pushed — popping newest-first lets it
+    // start buffering immediately instead of waiting behind a long backlog of
+    // cards already scrolled past (which read as "poster holds for a few
+    // seconds, then plays"). Slow scroll has a near-empty queue, so LIFO vs
+    // FIFO is a no-op there.
+    const next = prefetchQueue.pop()!;
     startPrefetch(next);
   }
 }
@@ -158,6 +169,14 @@ export function prefetchVideoBytes(url: string | null | undefined): void {
   if (!canBackgroundPreload()) return;
   preloadedHighResUrls.add(url);
   prefetchQueue.push(url);
+  // Drop the OLDEST pending entries (front of the queue = farthest from where
+  // the user now is) when the backlog overflows, so we never burn bandwidth on
+  // long-gone cards while the clip under the user's thumb waits. Un-mark them
+  // so they can re-queue if scrolled back into view later.
+  while (prefetchQueue.length > MAX_PENDING_PREFETCH) {
+    const stale = prefetchQueue.shift()!;
+    preloadedHighResUrls.delete(stale);
+  }
   pumpPrefetchQueue();
 }
 
@@ -165,35 +184,25 @@ function startPrefetch(url: string): void {
   prefetchInFlight++;
   const ctrl = new AbortController();
   preloadAbortControllers.set(url, ctrl);
-  // Range request grabs just enough to make first-frame decode instant.
-  // Some Supabase storage URLs ignore the Range header but the response
-  // is still cached, so worst case we paid for the whole file - same as
-  // a direct GET would have done.
+  // Full GET at lowest priority so we don't compete with the in-viewport
+  // clip the user is watching. No Range header — a 206 isn't cache-reused,
+  // a 200 is (see prefetchVideoBytes doc above).
   fetch(url, {
     method: 'GET',
     signal: ctrl.signal,
-    headers: { Range: 'bytes=0-262143' },
-    // Lowest priority so we don't compete with the in-viewport video
-    // that the user is actually watching.
     priority: 'low' as RequestPriority,
-    // Ditto for the credentials policy - default 'same-origin' is fine
-    // for Supabase public URLs.
   } as RequestInit & { priority: RequestPriority })
     .then(async r => {
-      // Read at most 256 KB regardless of whether the server respected
-      // the Range header. If Range was ignored and the server returned
-      // the full file (200 OK), r.arrayBuffer() would buffer the entire
-      // video into memory and saturate bandwidth for in-flight <video>
-      // elements. A bounded stream read limits the memory/bandwidth cost
-      // to the intended 256 KB while still warming the HTTP cache.
+      // Drain the body to EOF so the browser commits a COMPLETE, reusable
+      // cache entry (a half-read 200 may be dropped, same failure mode as a
+      // 206). Chunks are discarded as they arrive, so memory stays flat —
+      // we want the bytes in the HTTP cache, not in JS.
       const reader = r.body?.getReader();
       if (!reader) return;
-      let received = 0;
       try {
-        while (received < 262144) {
-          const { done, value } = await reader.read();
+        for (;;) {
+          const { done } = await reader.read();
           if (done) break;
-          received += value?.byteLength ?? 0;
         }
       } finally {
         await reader.cancel().catch(() => {});
@@ -205,6 +214,11 @@ function startPrefetch(url: string): void {
       prefetchInFlight--;
       pumpPrefetchQueue();
     });
+}
+
+/** Number of distinct URLs prewarmed this page-load. Used by the debug HUD. */
+export function getPrefetchCount(): number {
+  return preloadedHighResUrls.size;
 }
 
 /** Cancels any pending high-res preload. Use on route change so the

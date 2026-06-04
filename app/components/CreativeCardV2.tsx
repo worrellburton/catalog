@@ -123,8 +123,17 @@ const CreativeCardV2 = memo(function CreativeCardV2({
   // ~20 KB WebPs instead of full-res 1-3 MB PNGs. No-op for non-
   // Supabase URLs (external CDNs, etc.) — safe to apply blindly.
   // Width 540px covers a 2-up mobile column at 2× DPR cleanly.
-  const posterUrl = withTransform(rawPosterUrl, { width: 540, quality: 72 }) || rawPosterUrl;
-  const stillImageUrl = withTransform(rawStillImageUrl, { width: 540, quality: 72 }) || rawStillImageUrl;
+  //
+  // resize:'contain' — DOWNSCALE only, preserve the source aspect; do NOT
+  // crop server-side. The default 'cover' with a width-only request crops a
+  // 3:4 poster to 9:16 (Supabase fills width × the source height), which then
+  // got cropped AGAIN by the <img> object-fit:cover → a visibly zoomed poster
+  // that no longer matched the natively-3:4 <video> (which fills the tile
+  // un-cropped). With 'contain' the poster keeps the clip's exact aspect, so
+  // the browser's object-fit:cover fits it to the 3:4 tile identically to the
+  // video — poster and playback match.
+  const posterUrl = withTransform(rawPosterUrl, { width: 540, quality: 72, resize: 'contain' }) || rawPosterUrl;
+  const stillImageUrl = withTransform(rawStillImageUrl, { width: 540, quality: 72, resize: 'contain' }) || rawStillImageUrl;
 
   // Dial: /admin/dials → video_still_ratio controls whether this card
   // renders as a still image or plays video. When the dial pushes the
@@ -138,11 +147,10 @@ const CreativeCardV2 = memo(function CreativeCardV2({
   // renders as the still product image. Looks keep video playback.
   const productsImageOnly = useProductsImageOnly();
   // Product cards backed by a polished primary video AUTOPLAY — they
-  // override the still-vs-video dials. The poster is the clip's HERO frame
-  // (~80% in), so the autoplaying video replays a short zoom-in reveal from
-  // frame 0 up to the poster's framing — intended, not a glitch. Other
-  // product cards (looks with no primary video, no playableUrl) still
-  // honour the dials.
+  // override the still-vs-video dials. The poster is the clip's FRAME 0, so
+  // the autoplaying video starts from exactly the poster's framing — the
+  // handoff is seamless, no zoom pop. Other product cards (looks with no
+  // primary video, no playableUrl) still honour the dials.
   const hasPrimaryVideo = !isLook && !!creative?.product?.primary_video_url;
   const forceStillForProduct = !hasPrimaryVideo && !isLook && !!productsImageOnly && !!creative && !creative.look_id && !!stillImageUrl;
   const renderAsStill = hasPrimaryVideo
@@ -183,10 +191,13 @@ const CreativeCardV2 = memo(function CreativeCardV2({
     posterUrl,
   );
 
-  // Pre-warm look videos: start fetching the first 256 KB of the video
-  // when the card is within 2 viewports — this is the same lead distance
-  // the legacy LookCard's useTrailPrewarm gave. Look files are larger than
-  // AI-generated product clips so they need the extra buffer head-start.
+  // Pre-warm autoplay videos: start fetching the first 256 KB of the clip
+  // when the card is within ~1 viewport. This covers BOTH looks and product
+  // primary videos — any card that will actually autoplay (activeVideoUrl
+  // set). Without this, a product clip hits a cold buffer the instant it
+  // enters the play band, so play() pends on the network and the card holds
+  // its poster for a beat; warming the moov atom + first GOP ahead of time
+  // lets `playing` fire almost immediately (and stay cached on scroll-back).
   // We track the element in a separate ref because containerRef is a
   // callback ref (not an object ref) and useInViewport needs a RefObject.
   const prewarmNodeRef = useRef<HTMLDivElement | null>(null);
@@ -202,10 +213,10 @@ const CreativeCardV2 = memo(function CreativeCardV2({
   // additionally caps concurrency and bails on fast scroll.
   const inPrewarmBand = useInViewport(prewarmNodeRef, '120% 0%');
   useEffect(() => {
-    if (isLook && inPrewarmBand && playableUrl) {
-      prefetchVideoBytes(playableUrl);
+    if (inPrewarmBand && activeVideoUrl) {
+      prefetchVideoBytes(activeVideoUrl);
     }
-  }, [isLook, inPrewarmBand, playableUrl]);
+  }, [inPrewarmBand, activeVideoUrl]);
 
   // Remove shimmer as soon as the director has assigned a video element
   // (status 'loading' = play() in-flight, video appended to DOM).
