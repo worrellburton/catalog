@@ -1200,6 +1200,10 @@ html[data-shell="catalog-app"] .gen-page {
   position: absolute;
   inset: 0;
   border-radius: inherit;
+  /* Decorative only — must not intercept clicks. The media button +
+     delete button sit in the same root stacking context, so without
+     this the overlay swallows taps on the × button (busy cards only). */
+  pointer-events: none;
 }
 .gen-lookcard-pulse {
   position: absolute;
@@ -1209,6 +1213,10 @@ html[data-shell="catalog-app"] .gen-page {
     rgba(167, 139, 250, 0.1) 35%, transparent 70%);
   animation: gen-build-pulse 2.6s ease-in-out infinite;
   z-index: 1;
+  /* Decorative only — see note on .gen-lookcard-busy above. This
+     full-card overlay (z-index:1) was painting above the delete
+     button (z-auto) and eating its click on in-flight cards. */
+  pointer-events: none;
 }
 .gen-lookcard-phase {
   font-size: 10px;
@@ -1282,6 +1290,9 @@ html[data-shell="catalog-app"] .gen-page {
   position: absolute;
   top: 8px;
   right: 8px;
+  /* Above every in-flight overlay (pulse z1, border z2, phase/pct z3)
+     so the × is both visible and clickable on busy cards. */
+  z-index: 4;
   width: 28px;
   height: 28px;
   border-radius: 50%;

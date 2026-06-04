@@ -131,7 +131,10 @@
   padding: 20px;
   z-index: 250;
   opacity: 0;
-  transition: opacity 0.22s ease, backdrop-filter 0.22s ease;
+  /* Only opacity animates on open. The blur value is constant, so listing
+     backdrop-filter here just forced the compositor to re-rasterize the
+     full-viewport blur every frame of the fade for no visual change. */
+  transition: opacity 0.22s ease;
 }
 .avatar-modal--open { opacity: 1; }
 .avatar-modal--saving { opacity: 1; }

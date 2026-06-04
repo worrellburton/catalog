@@ -62,6 +62,29 @@ export interface GenerationProduct {
   sort_order: number;
 }
 
+/**
+ * A generation that has stayed non-terminal far longer than any real
+ * render budget (~3 min for a 5s clip, ~6 min for 10s) is treated as
+ * dead — the generate-look pipeline never reconciled it. 20 minutes is
+ * comfortably past the slowest legitimate render while still clearing a
+ * zombie row within the session.
+ *
+ * Used by the header pill and the grid LookCard so a stuck 'pending'
+ * row stops haunting the UI (an endless "look is rendering" pill +
+ * a card frozen at "Queued / 100%") and becomes deletable instead.
+ */
+export const GENERATION_STALE_MS = 20 * 60 * 1000;
+
+/** True while a generation is genuinely mid-render — non-terminal AND
+ *  not yet past the staleness cutoff. Stale zombie rows return false so
+ *  the UI treats them as finished (failed) rather than in-flight. */
+export function isGenerationInFlight(
+  row: Pick<UserGeneration, 'status' | 'created_at'>,
+): boolean {
+  if (row.status === 'done' || row.status === 'failed') return false;
+  return Date.now() - new Date(row.created_at).getTime() < GENERATION_STALE_MS;
+}
+
 // Eight preset styles - the Generate page dropdown picks one of these; the
 // prompt builder concatenates the label into the Seedance instruction.
 export const STYLE_PRESETS: { value: string; label: string; blurb: string }[] = [

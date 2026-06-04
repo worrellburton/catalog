@@ -868,7 +868,27 @@
      hero-scrolled flicker. The `bottom` transition is declared globally on
      .ai-bar-wrap below so the dock glides smoothly. */
   body:has(.app-root.home-hero) .ai-bar-wrap {
-    bottom: 44vh;
+    /* Desktop hero centering: the trio (spark + CTA + bar) sits true-
+       vertical-centered as a group. Bar bottom 38vh + bar height ~6vh
+       puts bar TOP at ~56vh from top. .sfh padding-bottom (52vh)
+       holds the headline bottom at ~48vh, so the spark/headline/bar
+       trio brackets mid-screen instead of crowding the top third.
+       When the bar gains focus (recommended-options panel about to
+       appear underneath), the trio rises ~18vh so the panel has
+       room below without colliding with the docked feed peek. */
+    bottom: 38vh;
+    transition: bottom 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  body:has(.app-root.home-hero) .ai-bar-wrap:focus-within {
+    bottom: 56vh;
+  }
+  body:has(.app-root.home-hero) .sfh:has(~ * .ai-bar-wrap:focus-within),
+  body:has(.app-root.home-hero .ai-bar-wrap:focus-within) .sfh {
+    /* Slide the spark+headline up a touch when the bar is focused so
+       the focused trio still reads as a centered group above the
+       suggestions panel. Pure transform — doesn't move the bar. */
+    transform: translateY(-12vh);
+    transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1);
   }
   body:has(.app-root.home-hero.hero-scrolled) .ai-bar-wrap {
     bottom: max(env(safe-area-inset-bottom), 24px);

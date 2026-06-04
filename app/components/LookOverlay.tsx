@@ -228,6 +228,8 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   const trailMgr = useTrailVideoManager();
   useEffect(() => {
     trailMgr?.suspendFeed(trailId);
+    // Reclaim decoders held by the now-covered feed's parked clips.
+    trailMgr?.pruneIdle();
     return () => { trailMgr?.resumeFeed(); };
   }, [trailMgr, trailId]);
 

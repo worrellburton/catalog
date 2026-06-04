@@ -59,8 +59,11 @@ const LAYOUT_CONFIGS = [
   { name: 'spotlight', columns: 3 },
 ];
 
-const DEFAULT_BATCH = 12;
-const SUB_BATCH = 6;
+// First-paint batch. Sized to over-fill the first screen on a wide desktop
+// grid (up to 6 columns) so there's no half-empty first viewport waiting on a
+// scroll-triggered grow. Subsequent grows add `batch` more at a time.
+const DEFAULT_BATCH = 24;
+const SUB_BATCH = 8;
 
 // (Math.random shuffle removed - seeded shuffle below means the same
 // inputs always produce the same output, which is what useMemo needs to
@@ -266,22 +269,41 @@ function FeedSection({
     const observer = new IntersectionObserver(
       ([entry]) => {
         if (!entry.isIntersecting) return;
-        if (visibleCount < pool.length) {
-          setVisibleCount(prev => Math.min(prev + batch, pool.length));
+
+        if (searchMode) {
+          // Search mode: grow the rendered set, and page in the next batch of
+          // results once we're at the end of what's loaded.
+          if (visibleCount < pool.length) {
+            setVisibleCount(prev => Math.min(prev + batch, pool.length));
+          } else {
+            onLoadMore?.();
+          }
           return;
         }
-        // We've shown every item the current pool can produce.
-        if (searchMode) {
-          // Search mode: ask the parent for the next page of results.
-          onLoadMore?.();
-        } else if (isInitial) {
-          // Home feed: extend the pool with another shuffled deck cycle so
-          // infinite scroll truly never stalls. The director caps concurrent
-          // video decode regardless of how many cards are mounted.
+
+        // Home/initial + sub-segments: grow what's rendered every time the
+        // sentinel comes near.
+        setVisibleCount(prev => Math.min(prev + batch, pool.length));
+
+        // Keep the pool comfortably AHEAD of the rendered set so the grid
+        // never catches the pool's end. The old code only extended the pool
+        // AFTER visibleCount had already reached pool.length — at that moment
+        // there were no more items to render, so the user scrolled into a
+        // blank gap until the next observer cycle rebuilt a bigger pool and
+        // re-rendered. Extending while we're still a few batches short means
+        // there's always rendered (or instantly-renderable) content below the
+        // fold — no empty space, no fill-in pop. Only the initial home segment
+        // cycles infinitely; bounded sub-segments (similar looks) keep their
+        // fixed pool and simply stop. The director caps concurrent video
+        // decode regardless of how many cards are mounted.
+        if (isInitial && pool.length - visibleCount <= batch * 3) {
           setPoolCycles(c => c + 1);
         }
       },
-      { root: scrollRoot ?? null, rootMargin: '800px' }
+      // Wide lookahead: start filling well before the sentinel is on screen so
+      // rows are already mounted (and warming/playing) by the time they scroll
+      // into view.
+      { root: scrollRoot ?? null, rootMargin: '1600px' }
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
