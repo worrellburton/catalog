@@ -374,3 +374,63 @@
 .light-mode .ap-brand-name,
 .light-mode .ap-ticker-label strong { color: #0f172a; }
 .light-mode .ap-chip-count { background: rgba(34, 197, 94, 0.14); color: #15803d; }
+
+/* ── Conversations (comments + 🔥) ─────────────────────────────────── */
+.ap-milestone {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 14px;
+  padding: 12px 16px;
+  border-radius: 16px;
+  color: #fff;
+  font-weight: 700;
+  font-size: 14px;
+  background: linear-gradient(135deg, rgba(255,120,30,0.95), rgba(255,72,72,0.95));
+  border: 1px solid rgba(255,180,120,0.5);
+  box-shadow: 0 10px 36px rgba(255,90,30,0.4);
+  animation: ap-milestone-in 340ms cubic-bezier(0.16,1,0.3,1);
+}
+.ap-milestone-emoji { font-size: 20px; }
+@keyframes ap-milestone-in {
+  from { opacity: 0; transform: translateY(-10px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.ap-conv-list { display: flex; flex-direction: column; gap: 8px; }
+.ap-conv-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  width: 100%;
+  text-align: left;
+  padding: 11px 13px;
+  border-radius: 14px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.08);
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease, transform 120ms ease;
+}
+.ap-conv-row:hover { background: rgba(255,255,255,0.09); }
+.ap-conv-row:active { transform: scale(0.99); }
+.ap-conv-row--fire { border-color: rgba(255,138,40,0.32); }
+.ap-conv-icon { font-size: 17px; line-height: 1.3; flex-shrink: 0; }
+.ap-conv-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.ap-conv-head {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #e7e7ea;
+}
+.ap-conv-on { color: #9a9aa2; font-weight: 500; }
+.ap-conv-text {
+  font-size: 13px;
+  color: #b6b6bd;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ap-conv-time { font-size: 11px; color: #7d7d85; flex-shrink: 0; padding-top: 1px; }
+
+.light-mode .ap-conv-head { color: #0f172a; }
+.light-mode .ap-conv-text { color: #475569; }
+.light-mode .ap-conv-on { color: #64748b; }

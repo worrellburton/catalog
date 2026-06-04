@@ -14,6 +14,7 @@
 //      thumbnail.
 
 import { supabase } from '~/utils/supabase';
+import type { CommentTargetType } from '~/services/comments';
 
 export interface ActivityLookStat {
   look_id: string;
@@ -247,4 +248,130 @@ export async function getMyRecentEvents(limit = 12): Promise<ActivityRecentEvent
       created_at: r.created_at,
     };
   });
+}
+
+// ── Comments & 🔥 activity ─────────────────────────────────────────────
+//
+// Surfaces the conversational side of the signed-in user's activity:
+//   • mine  — comments you posted
+//   • reply — someone else commented on a thread you're in
+//   • fire  — someone fired one of your comments (with running total +
+//             a milestone flag at five fires)
+// All keyed/linked back to the product or look the thread is about so a
+// tap deep-links into /comments/<type>/<slug>.
+
+export interface CommentActivityItem {
+  id: string;
+  kind: 'mine' | 'reply' | 'fire';
+  body: string;
+  target_type: CommentTargetType;
+  target_id: string;
+  target_label: string | null;
+  created_at: string;
+  actor_name?: string | null;
+  actor_avatar?: string | null;
+  fire_count?: number;
+  milestone?: boolean;
+}
+
+export async function getMyCommentActivity(limit = 30): Promise<CommentActivityItem[]> {
+  if (!supabase) return [];
+  const { data: auth } = await supabase.auth.getUser();
+  const uid = auth?.user?.id;
+  if (!uid) return [];
+
+  // 1) My own comments.
+  const { data: mineRows } = await supabase
+    .from('comments')
+    .select('id, target_type, target_id, target_label, body, created_at')
+    .eq('user_id', uid)
+    .order('created_at', { ascending: false })
+    .limit(80);
+  type Mine = { id: string; target_type: CommentTargetType; target_id: string; target_label: string | null; body: string; created_at: string };
+  const mine = (mineRows as Mine[] | null) || [];
+  const myCommentIds = mine.map(m => m.id);
+  const myThreadIds = Array.from(new Set(mine.map(m => m.target_id)));
+  const labelByThread = new Map<string, string | null>();
+  for (const m of mine) if (!labelByThread.has(m.target_id)) labelByThread.set(m.target_id, m.target_label);
+
+  const items: CommentActivityItem[] = mine.map(m => ({
+    id: `mine:${m.id}`,
+    kind: 'mine' as const,
+    body: m.body,
+    target_type: m.target_type,
+    target_id: m.target_id,
+    target_label: m.target_label,
+    created_at: m.created_at,
+  }));
+
+  // 2) Replies — others' comments on threads I'm in, after my first
+  //    comment there (so we don't surface pre-existing comments).
+  const earliestMineByThread = new Map<string, string>();
+  for (const m of [...mine].reverse()) {
+    if (!earliestMineByThread.has(m.target_id)) earliestMineByThread.set(m.target_id, m.created_at);
+  }
+  if (myThreadIds.length > 0) {
+    const { data: replyRows } = await supabase
+      .from('comments')
+      .select('id, target_type, target_id, target_label, body, created_at, user_id, author:profiles!comments_user_id_fkey ( full_name, avatar_url )')
+      .in('target_id', myThreadIds)
+      .neq('user_id', uid)
+      .eq('hidden', false)
+      .order('created_at', { ascending: false })
+      .limit(60);
+    type Reply = { id: string; target_type: CommentTargetType; target_id: string; target_label: string | null; body: string; created_at: string; author: { full_name: string | null; avatar_url: string | null } | null };
+    for (const r of (replyRows as unknown as Reply[] | null) || []) {
+      const mineAt = earliestMineByThread.get(r.target_id);
+      if (mineAt && Date.parse(r.created_at) <= Date.parse(mineAt)) continue;
+      items.push({
+        id: `reply:${r.id}`,
+        kind: 'reply',
+        body: r.body,
+        target_type: r.target_type,
+        target_id: r.target_id,
+        target_label: r.target_label ?? labelByThread.get(r.target_id) ?? null,
+        created_at: r.created_at,
+        actor_name: r.author?.full_name ?? null,
+        actor_avatar: r.author?.avatar_url ?? null,
+      });
+    }
+  }
+
+  // 3) Fires received on my comments (others only). Grouped to a count +
+  //    milestone flag; dated by the most recent fire.
+  if (myCommentIds.length > 0) {
+    const { data: fireRows } = await supabase
+      .from('comment_reactions')
+      .select('comment_id, user_id, created_at')
+      .eq('kind', 'fire')
+      .in('comment_id', myCommentIds)
+      .neq('user_id', uid);
+    type Fire = { comment_id: string; user_id: string; created_at: string };
+    const byComment = new Map<string, { count: number; latest: string }>();
+    for (const f of (fireRows as Fire[] | null) || []) {
+      const cur = byComment.get(f.comment_id) || { count: 0, latest: f.created_at };
+      cur.count += 1;
+      if (Date.parse(f.created_at) > Date.parse(cur.latest)) cur.latest = f.created_at;
+      byComment.set(f.comment_id, cur);
+    }
+    const mineById = new Map(mine.map(m => [m.id, m]));
+    for (const [cid, { count, latest }] of byComment) {
+      const m = mineById.get(cid);
+      if (!m) continue;
+      items.push({
+        id: `fire:${cid}`,
+        kind: 'fire',
+        body: m.body,
+        target_type: m.target_type,
+        target_id: m.target_id,
+        target_label: m.target_label,
+        created_at: latest,
+        fire_count: count,
+        milestone: count >= 5,
+      });
+    }
+  }
+
+  items.sort((a, b) => Date.parse(b.created_at) - Date.parse(a.created_at));
+  return items.slice(0, limit);
 }

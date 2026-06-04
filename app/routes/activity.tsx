@@ -27,10 +27,12 @@ import {
   getMyTopLooks,
   getMyShopperSelf,
   getMyRecentEvents,
+  getMyCommentActivity,
   type ActivityLookStat,
   type ActivityTypeStat,
   type ActivityBrandStat,
   type ActivityRecentEvent,
+  type CommentActivityItem,
 } from '~/services/activity';
 import CountUp from '~/components/CountUp';
 import SiteParticleHost from '~/components/SiteParticleHost';
@@ -109,6 +111,7 @@ export default function ActivityRoute() {
     totalClickouts: number;
   } | null>(null);
   const [recent, setRecent] = useState<ActivityRecentEvent[] | null>(null);
+  const [commentActivity, setCommentActivity] = useState<CommentActivityItem[] | null>(null);
 
   // Mark the activity pill as "seen" when this route opens — same
   // localStorage key the pill reads on mount.
@@ -126,6 +129,7 @@ export default function ActivityRoute() {
     getMyTopLooks(10).then(v => { if (!cancelled) setTopLooks(v); });
     getMyShopperSelf({ typeLimit: 6, brandLimit: 6 }).then(v => { if (!cancelled) setShopperSelf(v); });
     getMyRecentEvents(12).then(v => { if (!cancelled) setRecent(v); });
+    getMyCommentActivity(30).then(v => { if (!cancelled) setCommentActivity(v); });
     return () => { cancelled = true; };
   }, [user?.id]);
 
@@ -140,9 +144,10 @@ export default function ActivityRoute() {
       if (pending) return;
       pending = true;
       try {
-        const [e, r] = await Promise.all([getEngagementSummary(), getMyRecentEvents(12)]);
+        const [e, r, c] = await Promise.all([getEngagementSummary(), getMyRecentEvents(12), getMyCommentActivity(30)]);
         setEngagement(e);
         setRecent(r);
+        setCommentActivity(c);
       } finally { pending = false; }
     };
     window.addEventListener('catalog:activity-bump', refresh as EventListener);
@@ -179,6 +184,18 @@ export default function ActivityRoute() {
       </header>
 
       <main className="ap-content">
+        {/* ── 🔥 milestone banner — a comment of yours hit 5 fires ──── */}
+        {commentActivity?.some(c => c.kind === 'fire' && c.milestone) && (
+          <div className="ap-milestone" role="status">
+            <span className="ap-milestone-emoji" aria-hidden>🔥</span>
+            <span className="ap-milestone-text">
+              {commentActivity.filter(c => c.kind === 'fire' && c.milestone).length === 1
+                ? 'One of your comments hit 5 fires!'
+                : `${commentActivity.filter(c => c.kind === 'fire' && c.milestone).length} of your comments hit 5 fires!`}
+            </span>
+          </div>
+        )}
+
         {/* ── Live ticker ─────────────────────────────────────────── */}
         <RecentTicker events={recent} />
 
@@ -243,6 +260,40 @@ export default function ActivityRoute() {
           </section>
         )}
 
+        {/* ── Conversations: your comments, replies, fires received ── */}
+        {commentActivity && commentActivity.length > 0 && (
+          <section className="ap-section">
+            <div className="ap-section-head">
+              <h2 className="ap-section-title">Conversations</h2>
+              <span className="ap-section-sub">Your comments, replies &amp; 🔥</span>
+            </div>
+            <div className="ap-conv-list">
+              {commentActivity.map(c => (
+                <button
+                  key={c.id}
+                  type="button"
+                  className={`ap-conv-row ap-conv-row--${c.kind}`}
+                  onClick={() => navigate(`/comments/${c.target_type === 'product' ? 'p' : 'l'}/${c.target_id}`)}
+                >
+                  <span className="ap-conv-icon" aria-hidden>
+                    {c.kind === 'fire' ? '🔥' : c.kind === 'reply' ? '💬' : '✍️'}
+                  </span>
+                  <span className="ap-conv-body">
+                    <span className="ap-conv-head">
+                      {c.kind === 'mine' && 'You commented'}
+                      {c.kind === 'reply' && <>{c.actor_name || 'Someone'} replied</>}
+                      {c.kind === 'fire' && <>Your comment got {c.fire_count} 🔥{c.milestone ? ' — milestone!' : ''}</>}
+                      {c.target_label && <span className="ap-conv-on"> · {c.target_label}</span>}
+                    </span>
+                    <span className="ap-conv-text">{c.body}</span>
+                  </span>
+                  <span className="ap-conv-time">{formatRelative(c.created_at)}</span>
+                </button>
+              ))}
+            </div>
+          </section>
+        )}
+
         {/* ── Shopper-self: what you click on most ────────────────── */}
         {shopperSelf && shopperSelf.totalClickouts > 0 && shopperSelf.topTypes.length > 0 && (
           <section className="ap-section">
@@ -286,7 +337,8 @@ export default function ActivityRoute() {
 
         {/* ── Empty / first-time state ───────────────────────────── */}
         {engagement && engagement.total_impressions === 0 &&
-         (!shopperSelf || shopperSelf.totalClickouts === 0) && (
+         (!shopperSelf || shopperSelf.totalClickouts === 0) &&
+         (!commentActivity || commentActivity.length === 0) && (
           <section className="ap-section ap-empty">
             <div className="ap-empty-mark" aria-hidden>✨</div>
             <h2 className="ap-empty-title">Nothing to show yet</h2>
