@@ -815,8 +815,13 @@ body:has(.look-overlay.look-overlay--in) {
     display: flex;
   }
 
-  /* Show the video-overlay back + bookmark buttons on mobile */
-  .look-video-overlay-btns {
+  /* Show the video-overlay controls on mobile: close (top-left), share
+     (top-right), and the bottom-right actions column (comments + save). */
+  .look-video-close,
+  .look-video-share {
+    display: inline-flex;
+  }
+  .look-video-actions {
     display: flex;
   }
 
