@@ -13,6 +13,10 @@ import { trackAdClick, prefetchSimilarProducts, getSimilarProductsDiagnostics, t
 import SimilarDebugModal, { buildProductSimilarReport, type SimilarDebugReport } from '~/components/SimilarDebugModal';
 import { getProductDetails, type ProductDetails } from '~/services/product-details';
 import ProductMeasurementsDiagram from '~/components/ProductMeasurementsDiagram';
+import ProductSuggestionChips from '~/components/ProductSuggestionChips';
+import ProductCatalogPills from '~/components/ProductCatalogPills';
+import { getProductCatalogs, type ProductCatalog } from '~/services/catalogs';
+import { isFitRelevant, deriveFitLabel, buildSuggestionChipGroups } from '~/utils/productTaxonomy';
 import { type GraphPair } from '~/services/graph-pairs';
 import { useAuth } from '~/hooks/useAuth';
 import { useShopperBody } from '~/hooks/useShopperBody';
@@ -53,6 +57,9 @@ interface ProductPageProps {
   onOpenCreative?: (creative: ProductAd) => void;
   /** Tap on the brand label opens the brand catalog page. */
   onOpenBrand?: (brandName: string) => void;
+  /** Tap a "Popular in" catalog pill → opens that catalog's feed (runs the
+   *  catalog name as a search). Omitted in contexts without a feed behind us. */
+  onCreateCatalog?: (query: string) => void;
   creative?: ProductPageCreative;
   /** Visually-similar creatives from TwelveLabs/pgvector. Rendered as the
    *  "More like this" video rail below the hero. */
@@ -480,6 +487,7 @@ export default function ProductPage({
   onOpenCreator,
   onOpenCreative,
   onOpenBrand,
+  onCreateCatalog,
   creative,
   similarCreatives,
   brandCreatives,
@@ -494,6 +502,7 @@ export default function ProductPage({
   const navigate = useNavigate();
   const [mounted, setMounted] = useState(false);
   const [isAnimatingOut, setIsAnimatingOut] = useState(false);
+  const [productCatalogs, setProductCatalogs] = useState<ProductCatalog[]>([]);
 
   // Suspend the home feed's director-driven playback while this page is open.
   // The feed stays mounted+blurred behind us; left running it decodes dozens
@@ -505,6 +514,21 @@ export default function ProductPage({
     director.pushScope(scope);
     return () => director.popScope(scope);
   }, [product.brand, product.name]);
+
+  // "Popular in" — curated catalogs this product auto-matched (by name+brand).
+  // Resets + refetches on every product change; cancel-guarded so a fast trail
+  // of products can't land a stale list. Only fetched when we can navigate
+  // (onCreateCatalog present), since the pills are otherwise inert.
+  useEffect(() => {
+    let cancelled = false;
+    setProductCatalogs([]);
+    if (!onCreateCatalog) return;
+    getProductCatalogs(product.name, product.brand).then(rows => {
+      if (!cancelled) setProductCatalogs(rows);
+    });
+    return () => { cancelled = true; };
+  }, [product.name, product.brand, onCreateCatalog]);
+
   const { user } = useAuth();
   const shopperBody = useShopperBody(user?.id);
   // Admin-editable section config from /admin/pages. Each section's
@@ -743,6 +767,22 @@ export default function ProductPage({
     });
     return () => { cancelled = true; };
   }, [productId, productUrl, product.brand, product.name, seededFit, seededCare, seededMeas]);
+
+  // Fit gating + suggestion chips. Pull the enrichment metadata from the
+  // lazily-fetched spec sheet, falling back to anything already carried on
+  // the product row. Fit only renders for items where garment fit means
+  // something (apparel/footwear) — a book or a candle never shows a Fit row
+  // or body-type chips. Occasion / season / "style it with" chips are
+  // universal, so non-fashion still gets useful "Great for …" suggestions.
+  const fitIntel = details?.fit_intelligence ?? product.fit_intelligence ?? null;
+  const styling = details?.styling_metadata ?? product.styling_metadata ?? null;
+  const taxonomyCategory =
+    (details?.product_taxonomy ?? product.product_taxonomy)?.category ?? null;
+  const fitRelevant = isFitRelevant(taxonomyCategory, fitIntel);
+  const chipGroups = useMemo(
+    () => buildSuggestionChipGroups({ fitIntel, styling, fitRelevant }),
+    [fitIntel, styling, fitRelevant],
+  );
 
   useEffect(() => {
     requestAnimationFrame(() => setMounted(true));
@@ -1164,7 +1204,17 @@ export default function ProductPage({
                 && Object.values(details.measurements).some(
                   (v): v is number => typeof v === 'number' && Number.isFinite(v)
                 );
-              const hasFit = !!(details.size_fit && details.size_fit.trim());
+              // Fit is only shown for items where garment fit is meaningful
+              // (apparel/footwear). For everything else — books, kitchenware,
+              // home decor — the Fit row is suppressed entirely; Materials
+              // still shows for any category that has it. When the scraper
+              // didn't capture a free-text size_fit sentence we fall back to
+              // a short label derived from fit_intelligence (e.g. "Relaxed
+              // fit · runs small") so a fashion item never shows a blank Fit.
+              const fitText = (details.size_fit && details.size_fit.trim())
+                || deriveFitLabel(fitIntel)
+                || '';
+              const hasFit = fitRelevant && !!fitText;
               const hasMaterials = !!(details.materials_care && details.materials_care.trim());
               if (!hasMeasurements && !hasFit && !hasMaterials) return null;
               return (
@@ -1176,7 +1226,7 @@ export default function ProductPage({
                       {hasFit && (
                         <div className="pd-specs-row">
                           <dt className="pd-specs-label">Fit</dt>
-                          <dd className="pd-specs-value">{details.size_fit}</dd>
+                          <dd className="pd-specs-value">{fitText}</dd>
                         </div>
                       )}
                       {hasMaterials && (
@@ -1190,6 +1240,20 @@ export default function ProductPage({
                 </section>
               );
             })()}
+
+            {/* "Best for" suggestion chips — surfaces the styling/fit
+                metadata we already collect (occasion, body-type, season,
+                works-with) so the product reads as useful, not a bare
+                image + price. Universal for occasion/season/style;
+                body-type ("Suits …") chips are apparel-only. Renders
+                nothing when there's no metadata. */}
+            <ProductSuggestionChips groups={chipGroups} />
+
+            {/* "Popular in" — curated catalogs this product belongs to. Tap a
+                pill to open that catalog's feed. Hidden when it matches none. */}
+            {onCreateCatalog && (
+              <ProductCatalogPills catalogs={productCatalogs} onOpenCatalog={onCreateCatalog} />
+            )}
 
             {/* "More from <brand>" rail - fills the negative space below
                 the Shop drawer in the info column with same-brand-mate
