@@ -27,7 +27,7 @@ BUCKET = "look-media"
 # as called in CreativeCardV2 (width 540, quality 72, resize cover). We warm
 # this exact URL so the first feed view is a CDN HIT, not a 2-6s cold
 # on-demand transform (which left the grid dark on reload).
-POSTER_RENDER_QUERY = "width=540&quality=72&resize=cover"
+POSTER_RENDER_QUERY = "width=540&quality=72&resize=contain"
 # One poster per product, keyed by id. Primary videos live on fal's CDN
 # (external URL) so we can't mirror their storage path — the product id is
 # stable and unambiguous.

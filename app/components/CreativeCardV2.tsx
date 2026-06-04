@@ -123,8 +123,17 @@ const CreativeCardV2 = memo(function CreativeCardV2({
   // ~20 KB WebPs instead of full-res 1-3 MB PNGs. No-op for non-
   // Supabase URLs (external CDNs, etc.) — safe to apply blindly.
   // Width 540px covers a 2-up mobile column at 2× DPR cleanly.
-  const posterUrl = withTransform(rawPosterUrl, { width: 540, quality: 72 }) || rawPosterUrl;
-  const stillImageUrl = withTransform(rawStillImageUrl, { width: 540, quality: 72 }) || rawStillImageUrl;
+  //
+  // resize:'contain' — DOWNSCALE only, preserve the source aspect; do NOT
+  // crop server-side. The default 'cover' with a width-only request crops a
+  // 3:4 poster to 9:16 (Supabase fills width × the source height), which then
+  // got cropped AGAIN by the <img> object-fit:cover → a visibly zoomed poster
+  // that no longer matched the natively-3:4 <video> (which fills the tile
+  // un-cropped). With 'contain' the poster keeps the clip's exact aspect, so
+  // the browser's object-fit:cover fits it to the 3:4 tile identically to the
+  // video — poster and playback match.
+  const posterUrl = withTransform(rawPosterUrl, { width: 540, quality: 72, resize: 'contain' }) || rawPosterUrl;
+  const stillImageUrl = withTransform(rawStillImageUrl, { width: 540, quality: 72, resize: 'contain' }) || rawStillImageUrl;
 
   // Dial: /admin/dials → video_still_ratio controls whether this card
   // renders as a still image or plays video. When the dial pushes the
