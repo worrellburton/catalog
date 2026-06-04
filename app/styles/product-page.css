@@ -232,14 +232,8 @@
   background: rgba(255, 255, 255, 1);
 }
 
-/* Green comments FAB on the product hero, stacked above the floating Save
-   (which sits at bottom:16px). Matches the look overlay's FAB exactly. */
-.pd-comments-fab {
-  position: absolute;
-  right: 16px;
-  bottom: 64px;
-  z-index: 5;
-}
+/* Comments button now sits inline next to "View more info" (see
+   .pd-more-info-row), styled like the other info buttons. */
 
 /* Brief copied-to-clipboard pill shown when navigator.share isn't
    available (desktop Chrome / Firefox). Sits above the Save button so
@@ -402,6 +396,15 @@
   padding-top: 20px;
   border-top: 1px solid rgba(255, 255, 255, 0.08);
 }
+/* Row holding "View more info" + the Comments button side by side. */
+.pd-more-info-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.pd-comments-inline .comment-btn-count,
+.pd-comments-inline span { font-variant-numeric: tabular-nums; }
 
 .pd-more-info-btn {
   display: inline-flex;

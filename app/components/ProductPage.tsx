@@ -1187,24 +1187,6 @@ export default function ProductPage({
                 <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
               </svg>
             </button>
-            {/* Comments — green FAB on the hero, above Save, identical to the
-                look overlay. On the hero (not the info panel) so the tap
-                isn't swallowed by the bottom-sheet drag handlers. */}
-            {commentsEnabled && commentSlug && onOpenComments && (
-              <button
-                type="button"
-                className="detail-comments-fab pd-comments-fab"
-                onClick={() => onOpenComments('product', commentSlug)}
-                aria-label="Comments"
-              >
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
-                </svg>
-                {commentCount != null && commentCount > 0 && (
-                  <span className="detail-comments-fab__count">{commentCount > 99 ? '99+' : commentCount}</span>
-                )}
-              </button>
-            )}
             {shareToast && (
               <div className="pd-share-toast" role="status">{shareToast}</div>
             )}
@@ -1332,39 +1314,60 @@ export default function ProductPage({
                 and "Popular in" behind one toggle so the info column
                 leads with the essentials. The button only renders when at
                 least one of those blocks has content. */}
-            {hasMoreInfo && (
+            {(hasMoreInfo || (commentsEnabled && commentSlug && onOpenComments)) && (
               <div className="pd-more-info">
-                <button
-                  type="button"
-                  className={`pd-more-info-btn${showMoreInfo ? ' is-open' : ''}`}
-                  onClick={() => setShowMoreInfo(v => !v)}
-                  aria-expanded={showMoreInfo}
-                  aria-controls="pd-more-info-panel"
-                >
-                  <span>{showMoreInfo ? 'Hide info' : 'View more info'}</span>
-                  <svg className="pd-more-info-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                    <polyline points="6 9 12 15 18 9" />
-                  </svg>
-                </button>
-                <div
-                  id="pd-more-info-panel"
-                  className={`pd-more-info-panel${showMoreInfo ? ' is-open' : ''}`}
-                  hidden={!showMoreInfo}
-                >
-                  {/* Size & fit + Materials & care spec sheet. */}
-                  {specsNode}
-
-                  {/* "Best for" suggestion chips — occasion, body-type
-                      ("Suits …"), season, works-with. Renders nothing when
-                      there's no metadata. */}
-                  <ProductSuggestionChips groups={chipGroups} />
-
-                  {/* "Popular in" — curated catalogs this product belongs
-                      to. Tap a pill to open that catalog's feed. */}
-                  {onCreateCatalog && (
-                    <ProductCatalogPills catalogs={productCatalogs} onOpenCatalog={onCreateCatalog} />
+                <div className="pd-more-info-row">
+                  {hasMoreInfo && (
+                    <button
+                      type="button"
+                      className={`pd-more-info-btn${showMoreInfo ? ' is-open' : ''}`}
+                      onClick={() => setShowMoreInfo(v => !v)}
+                      aria-expanded={showMoreInfo}
+                      aria-controls="pd-more-info-panel"
+                    >
+                      <span>{showMoreInfo ? 'Hide info' : 'View more info'}</span>
+                      <svg className="pd-more-info-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                        <polyline points="6 9 12 15 18 9" />
+                      </svg>
+                    </button>
+                  )}
+                  {/* Comments — sits next to "View more info", styled like the
+                      other buttons (no longer a green hero FAB). */}
+                  {commentsEnabled && commentSlug && onOpenComments && (
+                    <button
+                      type="button"
+                      className="pd-more-info-btn pd-comments-inline"
+                      onClick={() => onOpenComments('product', commentSlug)}
+                      aria-label="Comments"
+                    >
+                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+                      </svg>
+                      <span>{commentCount != null && commentCount > 0 ? `Comments ${commentCount > 99 ? '99+' : commentCount}` : 'Comments'}</span>
+                    </button>
                   )}
                 </div>
+                {hasMoreInfo && (
+                  <div
+                    id="pd-more-info-panel"
+                    className={`pd-more-info-panel${showMoreInfo ? ' is-open' : ''}`}
+                    hidden={!showMoreInfo}
+                  >
+                    {/* Size & fit + Materials & care spec sheet. */}
+                    {specsNode}
+
+                    {/* "Best for" suggestion chips — occasion, body-type
+                        ("Suits …"), season, works-with. Renders nothing when
+                        there's no metadata. */}
+                    <ProductSuggestionChips groups={chipGroups} />
+
+                    {/* "Popular in" — curated catalogs this product belongs
+                        to. Tap a pill to open that catalog's feed. */}
+                    {onCreateCatalog && (
+                      <ProductCatalogPills catalogs={productCatalogs} onOpenCatalog={onCreateCatalog} />
+                    )}
+                  </div>
+                )}
               </div>
             )}
 
