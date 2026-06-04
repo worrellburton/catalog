@@ -272,7 +272,14 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
     el.playsInline = true;
     el.setAttribute('muted', '');
     el.setAttribute('playsinline', '');
-    el.preload = 'auto';
+    // Mobile: only fetch metadata until the card is actually in the
+    // active band. attach() bumps to 'auto' once the IO marks the slot
+    // as visible. 'auto' on every primed element melted phones once
+    // the priming queue went past ~6 entries.
+    el.preload = typeof window !== 'undefined'
+      && window.matchMedia?.('(max-width: 768px)').matches
+      ? 'metadata'
+      : 'auto';
     el.crossOrigin = 'anonymous';
     if (poster) el.setAttribute('poster', poster);
     el.src = src;

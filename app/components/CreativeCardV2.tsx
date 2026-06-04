@@ -42,6 +42,7 @@ import { useInViewport } from '~/hooks/useInViewport';
 import { useVideoStillRatio } from '~/hooks/useVideoStillRatio';
 import { useProductsImageOnly } from '~/hooks/useProductsImageOnly';
 import FollowIconButton from './FollowIconButton';
+import { useFollowState } from '~/hooks/useFollowState';
 import { useShowBrandLogos } from '~/hooks/useShowBrandLogos';
 import { useBrandLogo } from '~/hooks/useBrandLogoLookup';
 import { shouldBeVideo } from '~/utils/videoStillSplit';
@@ -450,23 +451,12 @@ const CreativeCardV2 = memo(function CreativeCardV2({
         )}
 
         {isLook && look ? (
-          <div
-            className="card-creator-row"
-            onClick={(e) => {
-              e.stopPropagation();
-              onOpenCreator?.(look.creator);
-            }}
-          >
-            {creatorAvatar ? (
-              <img className="card-creator-avatar" src={creatorAvatar} alt={creatorName} />
-            ) : (
-              <span className="card-creator-avatar card-creator-avatar--initial" aria-hidden="true">
-                {(creatorName || look.creator || '?').charAt(0).toUpperCase()}
-              </span>
-            )}
-            <span className="card-creator-name">{creatorName}</span>
-            <FollowIconButton handle={look.creator} style={{ marginLeft: 6 }} />
-          </div>
+          <CreatorChip
+            look={look}
+            creatorAvatar={creatorAvatar}
+            creatorName={creatorName}
+            onOpenCreator={onOpenCreator}
+          />
         ) : creative ? (
           <div className="promo-product-info">
             <div className="promo-product-text">
@@ -536,6 +526,47 @@ export default CreativeCardV2;
 // pixel to white regardless of source palette. The logo is also
 // pinned to the left edge so it lines up with the product name
 // below it (not baseline-centered to the cap height of the SVG).
+/**
+ * Creator chip rendered on look cards. When the shopper follows the
+ * creator, the chip glows (.is-following on .card-creator-row); when
+ * they don't, FollowIconButton renders a "+" badge in the upper-
+ * right corner. useFollowState resolves the follow state from the
+ * shared cache and re-renders when it flips, so the glow ↔ "+"
+ * swap is instant.
+ */
+function CreatorChip({
+  look,
+  creatorAvatar,
+  creatorName,
+  onOpenCreator,
+}: {
+  look: Look;
+  creatorAvatar: string;
+  creatorName: string;
+  onOpenCreator?: (name: string) => void;
+}) {
+  const following = useFollowState(look.creator);
+  return (
+    <div
+      className={`card-creator-row${following ? ' is-following' : ''}`}
+      onClick={(e) => {
+        e.stopPropagation();
+        onOpenCreator?.(look.creator);
+      }}
+    >
+      {creatorAvatar ? (
+        <img className="card-creator-avatar" src={creatorAvatar} alt={creatorName} />
+      ) : (
+        <span className="card-creator-avatar card-creator-avatar--initial" aria-hidden="true">
+          {(creatorName || look.creator || '?').charAt(0).toUpperCase()}
+        </span>
+      )}
+      <span className="card-creator-name">{creatorName}</span>
+      <FollowIconButton handle={look.creator} />
+    </div>
+  );
+}
+
 function BrandLabel({ name }: { name: string }) {
   const showLogos = useShowBrandLogos();
   const logoUrl = useBrandLogo(name);

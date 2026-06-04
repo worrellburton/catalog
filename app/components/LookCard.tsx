@@ -6,8 +6,9 @@ import { hideLookId } from '~/hooks/useHiddenLooks';
 import { useInViewport } from '~/hooks/useInViewport';
 import { useTrailVideo, useTrailPrewarm } from './TrailVideoHost';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
-import { useFollowState, toggleFollowShared } from '~/hooks/useFollowState';
+import { toggleFollowShared } from '~/hooks/useFollowState';
 import FollowIconButton from './FollowIconButton';
+import { useFollowState } from '~/hooks/useFollowState';
 import { trackImpression } from '~/services/session-tracker';
 import { useVideoStillRatio } from '~/hooks/useVideoStillRatio';
 import { shouldBeVideo } from '~/utils/videoStillSplit';
@@ -319,33 +320,11 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
         <div className="card-gradient" />
 
         {!hideCreator && (
-          <div
-            className="card-creator-row"
-            onClick={(e) => {
-              e.stopPropagation();
-              onOpenCreator(look.creator);
-            }}
-          >
-            {(() => {
-              const avatar = look.creatorAvatar || creatorData?.avatar || '';
-              const name = creatorData?.displayName
-                || look.creatorDisplayName
-                || (look.creator?.startsWith('user:') ? 'User' : look.creator || '');
-              return avatar ? (
-                <img className="card-creator-avatar" src={avatar} alt={name} />
-              ) : (
-                <span className="card-creator-avatar card-creator-avatar--initial" aria-hidden="true">
-                  {(name || look.creator || '?').charAt(0).toUpperCase()}
-                </span>
-              );
-            })()}
-            <span className="card-creator-name">
-              {creatorData?.displayName
-                || look.creatorDisplayName
-                || (look.creator?.startsWith('user:') ? 'User' : look.creator)}
-            </span>
-            <FollowIconButton handle={look.creator} style={{ marginLeft: 6 }} />
-          </div>
+          <LookCardCreatorChip
+            look={look}
+            creatorData={creatorData}
+            onOpenCreator={onOpenCreator}
+          />
         )}
       </div>
       {menu && isSuperAdmin && (
@@ -403,5 +382,48 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
     </div>
   );
 });
+
+/**
+ * Creator chip on a look card. When the shopper follows the creator
+ * the chip glows (.is-following on .card-creator-row); when they
+ * don't, FollowIconButton renders a "+" badge in the upper-right
+ * corner of the chip. useFollowState resolves the state from the
+ * shared cache so the glow ↔ "+" swap is instant when the toggle
+ * fires anywhere else in the app.
+ */
+function LookCardCreatorChip({
+  look,
+  creatorData,
+  onOpenCreator,
+}: {
+  look: Look;
+  creatorData: { displayName?: string; avatar?: string; name?: string } | undefined;
+  onOpenCreator: (name: string) => void;
+}) {
+  const following = useFollowState(look.creator);
+  const avatar = look.creatorAvatar || creatorData?.avatar || '';
+  const name = creatorData?.displayName
+    || look.creatorDisplayName
+    || (look.creator?.startsWith('user:') ? 'User' : look.creator || '');
+  return (
+    <div
+      className={`card-creator-row${following ? ' is-following' : ''}`}
+      onClick={(e) => {
+        e.stopPropagation();
+        onOpenCreator(look.creator);
+      }}
+    >
+      {avatar ? (
+        <img className="card-creator-avatar" src={avatar} alt={name} />
+      ) : (
+        <span className="card-creator-avatar card-creator-avatar--initial" aria-hidden="true">
+          {(name || look.creator || '?').charAt(0).toUpperCase()}
+        </span>
+      )}
+      <span className="card-creator-name">{name}</span>
+      <FollowIconButton handle={look.creator} />
+    </div>
+  );
+}
 
 export default LookCard;

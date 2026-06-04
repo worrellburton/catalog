@@ -340,9 +340,6 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  /* Must sit above the gradient (z-index: 3) and the director-appended
-     <video> (z-index: 2). Products use z-index: 3 on .promo-product-info;
-     looks need 4 so the creator row clears the gradient layer too. */
   z-index: 4;
   cursor: pointer;
   text-decoration: none;
@@ -356,6 +353,30 @@
               border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1),
               box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1),
               transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* Following = the chip itself glows with a soft white halo. No
+   "follow" affordance is rendered inside or beside the pill in
+   this state — the glow IS the signal. Border brightens too. */
+.look-card .card-creator-row.is-following {
+  border-color: rgba(255, 255, 255, 0.65);
+  box-shadow:
+    0 0 6px rgba(255, 255, 255, 0.55),
+    0 0 14px rgba(255, 255, 255, 0.32),
+    0 6px 18px rgba(255, 255, 255, 0.18);
+}
+
+/* Not following → FollowIconButton renders a small "+" badge that
+   floats in the upper-right corner of the chip. Anchored via the
+   chip's position:absolute (the row is already an absolute child
+   of .look-card). The badge sits above the chip border, half-out,
+   so it reads as a separate add affordance and doesn't crowd the
+   creator name inside. */
+.look-card .card-creator-row .follow-corner-badge {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  z-index: 5;
 }
 
 /* Card hover: subtle lift on the chip so it reads as part of the card's
@@ -383,15 +404,10 @@
 /* When the creator pill flips to a white background on hover, the
    default white-on-transparent follow icon disappears. Invert the
    stroke + border so the icon stays legible against the new bg. */
-.look-card .card-creator-row:hover .follow-icon-btn {
-  border-color: rgba(0, 0, 0, 0.55) !important;
-  color: #0b0b0b !important;
-  background: transparent !important;
-}
-.look-card .card-creator-row:hover .follow-icon-btn[aria-pressed="true"] {
-  background: rgba(0, 0, 0, 0.08) !important;
-  border-color: rgba(0, 0, 0, 0.4) !important;
-}
+/* The legacy .follow-icon-btn (white-on-transparent in-chip icon) was
+   retired when the chip itself became the glow signal — see
+   .card-creator-row.is-following. Its hover overrides used to live
+   here; nothing to override now. */
 
 .look-card .card-creator-row:active {
   transform: scale(0.97);
