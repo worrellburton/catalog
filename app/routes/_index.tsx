@@ -1554,6 +1554,7 @@ export default function Home() {
                 onOpenCreator={handleOpenCreator}
                 onOpenCreative={handleOpenCreative}
                 onOpenBrand={handleOpenBrand}
+                onCreateCatalog={handleCreateCatalog}
                 creative={
                   selectedCreative?.video_url
                     ? {

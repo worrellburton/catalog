@@ -17,6 +17,29 @@ interface DayCount {
   count: number;
 }
 
+type RangeId = 'daily' | 'monthly' | 'yearly';
+type Audience = 'all' | 'users' | 'admins';
+
+// All-time-since labels for the toggle. "Daily" = last 24h, "Monthly"
+// = last 30d, "Yearly" = last 365d. The number rendered is computed
+// over that window.
+const RANGE_LABELS: Record<RangeId, string> = {
+  daily: 'Daily',
+  monthly: 'Monthly',
+  yearly: 'Yearly',
+};
+const RANGE_WINDOWS_MS: Record<RangeId, number> = {
+  daily: 24 * 60 * 60 * 1000,
+  monthly: 30 * 24 * 60 * 60 * 1000,
+  yearly: 365 * 24 * 60 * 60 * 1000,
+};
+
+const AUDIENCE_LABELS: Record<Audience, string> = {
+  all: 'Users + Admins',
+  users: 'Users only',
+  admins: 'Admins only',
+};
+
 function timeAgo(dateStr: string): string {
   const now = Date.now();
   const then = new Date(dateStr).getTime();
@@ -44,10 +67,65 @@ function getLast7Days(): { day: string; label: string }[] {
   return days;
 }
 
+function formatNumber(n: number | null): string {
+  if (n === null) return '—';
+  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
+  if (n >= 10_000) return `${(n / 1_000).toFixed(0)}K`;
+  if (n >= 1_000) return `${(n / 1_000).toFixed(1)}K`;
+  return n.toLocaleString();
+}
+
+function formatDuration(ms: number): string {
+  if (!ms || ms < 0) return '—';
+  const m = ms / 60000;
+  if (m < 1) return `${Math.round(ms / 1000)}s`;
+  if (m < 60) return `${m.toFixed(1)}m`;
+  const h = m / 60;
+  return `${h.toFixed(1)}h`;
+}
+
+// ── Per-window aggregate shape ───────────────────────────────────
+// Everything in this struct is scoped to the (audience, range) pair.
+interface HomeStats {
+  activeUsers: number | null;
+  avgSessionMs: number | null;
+  impressions: number | null;
+  clicks: number | null;
+  clickouts: number | null;
+  conversionPct: number | null;
+  productsAdded: number | null;
+  looksUploaded: number | null;
+  creatorsFollowed: number | null;
+  newSignups: number | null;
+  searches: number | null;
+  aiGenerations: number | null;
+}
+
+const EMPTY_STATS: HomeStats = {
+  activeUsers: null,
+  avgSessionMs: null,
+  impressions: null,
+  clicks: null,
+  clickouts: null,
+  conversionPct: null,
+  productsAdded: null,
+  looksUploaded: null,
+  creatorsFollowed: null,
+  newSignups: null,
+  searches: null,
+  aiGenerations: null,
+};
+
 export default function AdminHome() {
-  const [totalUsers, setTotalUsers] = useState<number | null>(null);
-  const [productsCount, setProductsCount] = useState<number | null>(null);
-  const [searchesToday, setSearchesToday] = useState<number | null>(null);
+  // ── Filters ───────────────────────────────────────────────────
+  const [range, setRange] = useState<RangeId>('daily');
+  const [audience, setAudience] = useState<Audience>('all');
+
+  // ── Aggregated stats for the active (audience, range) ─────────
+  const [stats, setStats] = useState<HomeStats>(EMPTY_STATS);
+  const [statsLoading, setStatsLoading] = useState(true);
+
+  // ── Sections that don't depend on the toggles ─────────────────
   const [recentActivity, setRecentActivity] = useState<SearchLog[]>([]);
   const [allSearchLogs, setAllSearchLogs] = useState<SearchLog[]>([]);
   const [weeklyData, setWeeklyData] = useState<DayCount[]>([]);
@@ -108,46 +186,10 @@ export default function AdminHome() {
     setBoostingId(null);
   };
 
-  // Local data counts - single source of truth
-  const creatorsCount = Object.keys(creators).length;
-  const looksCount = looks.length;
-
-  // Count unique products across all looks as fallback
-  const localProductsCount = useMemo(() => {
-    const unique = new Set<string>();
-    for (const look of looks) {
-      for (const p of look.products) {
-        unique.add(`${p.brand}::${p.name}`);
-      }
-    }
-    return unique.size;
-  }, []);
-
+  // ── Sticky sections (recent activity, top searches, weekly chart) ──
   useEffect(() => {
-    async function fetchStats() {
+    async function fetchSticky() {
       if (!supabase) return;
-      // Total Users from profiles
-      const { count: usersCount } = await supabase
-        .from('profiles')
-        .select('*', { count: 'exact', head: true });
-      setTotalUsers(usersCount ?? 0);
-
-      // Products from Supabase, fallback to unique products from looks data
-      const { count: dbProducts } = await supabase
-        .from('products')
-        .select('*', { count: 'exact', head: true });
-      setProductsCount(dbProducts ?? localProductsCount);
-
-      // Searches today
-      const todayStart = new Date();
-      todayStart.setHours(0, 0, 0, 0);
-      const { count: todaySearches } = await supabase
-        .from('search_logs')
-        .select('*', { count: 'exact', head: true })
-        .gte('created_at', todayStart.toISOString());
-      setSearchesToday(todaySearches ?? 0);
-
-      // Recent activity (last 6 search logs)
       const { data: recentLogs } = await supabase
         .from('search_logs')
         .select('*')
@@ -155,14 +197,12 @@ export default function AdminHome() {
         .limit(6);
       setRecentActivity(recentLogs ?? []);
 
-      // All search logs for top searches
       const { data: allLogs } = await supabase
         .from('search_logs')
         .select('*')
         .order('created_at', { ascending: false });
       setAllSearchLogs(allLogs ?? []);
 
-      // Weekly search data (last 7 days)
       const weekStart = new Date();
       weekStart.setDate(weekStart.getDate() - 6);
       weekStart.setHours(0, 0, 0, 0);
@@ -180,9 +220,161 @@ export default function AdminHome() {
       });
       setWeeklyData(dayCounts);
     }
+    fetchSticky();
+  }, []);
 
-    fetchStats();
-  }, [localProductsCount]);
+  // ── Window-scoped aggregates ──────────────────────────────────
+  // Recomputes whenever the (audience, range) pair changes. Each
+  // metric is its own query; counts run as head-only for speed.
+  // Audience filters by profiles.is_admin via an IN-list of ids
+  // resolved up front.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      if (!supabase) return;
+      setStatsLoading(true);
+      const now = Date.now();
+      const startISO = new Date(now - RANGE_WINDOWS_MS[range]).toISOString();
+
+      // 1) Resolve the user id set for the current audience filter.
+      //    For "all" we skip the IN-list entirely (every user counts).
+      let userIdsForAudience: string[] | null = null;
+      if (audience !== 'all') {
+        const q = supabase.from('profiles').select('id').limit(10_000);
+        const filtered = audience === 'admins'
+          ? q.eq('is_admin', true)
+          : q.or('is_admin.is.null,is_admin.eq.false');
+        const { data: ids } = await filtered;
+        userIdsForAudience = (ids || []).map(r => r.id);
+        // Avoid empty IN-lists (Postgrest returns an error) by short-
+        // circuiting with a sentinel that never matches.
+        if (userIdsForAudience.length === 0) userIdsForAudience = ['__none__'];
+      }
+
+      const eventBase = () => {
+        let q = supabase!
+          .from('user_events')
+          .select('*', { count: 'exact', head: true })
+          .gte('created_at', startISO);
+        if (userIdsForAudience) q = q.in('user_id', userIdsForAudience);
+        return q;
+      };
+
+      const [
+        activeRes,
+        impRes,
+        clickRes,
+        clickoutRes,
+        productsRes,
+        looksRes,
+        followsRes,
+        signupsRes,
+        searchesRes,
+        gensRes,
+        sessionRes,
+      ] = await Promise.all([
+        // Active users — distinct user_id in window.
+        (async () => {
+          let q = supabase!
+            .from('user_events')
+            .select('user_id')
+            .gte('created_at', startISO)
+            .not('user_id', 'is', null)
+            .limit(50_000);
+          if (userIdsForAudience) q = q.in('user_id', userIdsForAudience);
+          const { data } = await q;
+          const distinct = new Set((data || []).map(r => r.user_id));
+          return distinct.size;
+        })(),
+        eventBase().eq('event_type', 'impression'),
+        eventBase().eq('event_type', 'click'),
+        eventBase().eq('event_type', 'clickout'),
+        // Products added in window — products.created_at, no audience scope.
+        supabase.from('products').select('*', { count: 'exact', head: true }).gte('created_at', startISO),
+        // Looks uploaded — user_generations.created_at, scoped to audience.
+        (async () => {
+          let q = supabase!.from('user_generations').select('*', { count: 'exact', head: true }).gte('created_at', startISO);
+          if (userIdsForAudience) q = q.in('user_id', userIdsForAudience);
+          return q;
+        })(),
+        // Creators followed — creator_follows in window, scoped to audience.
+        (async () => {
+          let q = supabase!.from('creator_follows').select('*', { count: 'exact', head: true }).gte('created_at', startISO);
+          if (userIdsForAudience) q = q.in('user_id', userIdsForAudience);
+          return q;
+        })(),
+        // New signups — profiles.created_at, scoped to audience.
+        (async () => {
+          let q = supabase!.from('profiles').select('*', { count: 'exact', head: true }).gte('created_at', startISO);
+          if (audience === 'admins') q = q.eq('is_admin', true);
+          if (audience === 'users') q = q.or('is_admin.is.null,is_admin.eq.false');
+          return q;
+        })(),
+        // Search queries — search_logs in window.
+        supabase.from('search_logs').select('*', { count: 'exact', head: true }).gte('created_at', startISO),
+        // AI generations — user_generations.created_at + status indicates a real generation.
+        (async () => {
+          let q = supabase!.from('user_generations').select('*', { count: 'exact', head: true }).gte('created_at', startISO);
+          if (userIdsForAudience) q = q.in('user_id', userIdsForAudience);
+          return q;
+        })(),
+        // Avg session time — group user_events by session_id, take
+        // max(created_at) - min(created_at) per session, then mean.
+        // Pulled raw because head-counts can't aggregate per-session.
+        (async () => {
+          let q = supabase!
+            .from('user_events')
+            .select('session_id, created_at')
+            .gte('created_at', startISO)
+            .not('session_id', 'is', null)
+            .limit(20_000);
+          if (userIdsForAudience) q = q.in('user_id', userIdsForAudience);
+          const { data } = await q;
+          const bySession = new Map<string, { min: number; max: number }>();
+          (data || []).forEach(r => {
+            const t = new Date(r.created_at).getTime();
+            const slot = bySession.get(r.session_id) || { min: t, max: t };
+            if (t < slot.min) slot.min = t;
+            if (t > slot.max) slot.max = t;
+            bySession.set(r.session_id, slot);
+          });
+          if (bySession.size === 0) return 0;
+          let total = 0;
+          let n = 0;
+          for (const s of bySession.values()) {
+            const dur = s.max - s.min;
+            // Single-event sessions don't represent active time.
+            if (dur > 0) { total += dur; n++; }
+          }
+          return n > 0 ? Math.round(total / n) : 0;
+        })(),
+      ]);
+
+      if (cancelled) return;
+
+      const impressions = impRes.count ?? 0;
+      const clicks = clickRes.count ?? 0;
+      const clickouts = clickoutRes.count ?? 0;
+      const conversion = clicks > 0 ? (clickouts / clicks) * 100 : 0;
+
+      setStats({
+        activeUsers: activeRes,
+        avgSessionMs: sessionRes,
+        impressions,
+        clicks,
+        clickouts,
+        conversionPct: Number(conversion.toFixed(1)),
+        productsAdded: productsRes.count ?? 0,
+        looksUploaded: looksRes.count ?? 0,
+        creatorsFollowed: followsRes.count ?? 0,
+        newSignups: signupsRes.count ?? 0,
+        searches: searchesRes.count ?? 0,
+        aiGenerations: gensRes.count ?? 0,
+      });
+      setStatsLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [range, audience]);
 
   // Top searches: group by query, sort by count
   const topSearches = useMemo(() => {
@@ -201,6 +393,16 @@ export default function AdminHome() {
 
   const maxWeekly = Math.max(...weeklyData.map((d) => d.count), 1);
 
+  const activeLabel: Record<RangeId, string> = {
+    daily: 'Daily active users',
+    monthly: 'Monthly active users',
+    yearly: 'Yearly active users',
+  };
+
+  // Local seed counts for reference
+  const creatorsCount = Object.keys(creators).length;
+  const looksCount = looks.length;
+
   return (
     <div className="admin-page">
       <div className="admin-page-header">
@@ -208,62 +410,114 @@ export default function AdminHome() {
         <p className="admin-page-subtitle">Platform overview</p>
       </div>
 
-      <div
-        className="admin-stats-grid"
-        style={{
-          gridTemplateColumns: 'repeat(6, minmax(0, 1fr))',
-          gap: 12,
-          marginBottom: 20,
-        }}
-      >
-        <div className="admin-stat-card">
-          <div className="admin-stat-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
-          </div>
-          <div className="admin-stat-label">Total Users</div>
-          <div className="admin-stat-value">{totalUsers ?? '...'}</div>
-          <div className="admin-stat-change neutral">,</div>
+      {/* Filter toggle row — Audience + Range. Single row on desktop,
+          stacked on mobile (see .admin-home-filters CSS). */}
+      <div className="admin-home-filters" role="toolbar" aria-label="Home filters">
+        <div className="admin-home-filter-group" role="tablist" aria-label="Audience">
+          {(Object.keys(AUDIENCE_LABELS) as Audience[]).map(a => (
+            <button
+              key={a}
+              type="button"
+              role="tab"
+              aria-selected={audience === a}
+              className={`admin-home-filter-pill${audience === a ? ' is-active' : ''}`}
+              onClick={() => setAudience(a)}
+            >{AUDIENCE_LABELS[a]}</button>
+          ))}
         </div>
-        <div className="admin-stat-card">
-          <div className="admin-stat-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 10l4.553-2.276A1 1 0 0 1 21 8.618v6.764a1 1 0 0 1-1.447.894L15 14M3 6h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z"/></svg>
-          </div>
-          <div className="admin-stat-label">Creators</div>
-          <div className="admin-stat-value">{creatorsCount}</div>
-          <div className="admin-stat-change neutral">,</div>
+        <div className="admin-home-filter-group" role="tablist" aria-label="Time range">
+          {(Object.keys(RANGE_LABELS) as RangeId[]).map(r => (
+            <button
+              key={r}
+              type="button"
+              role="tab"
+              aria-selected={range === r}
+              className={`admin-home-filter-pill${range === r ? ' is-active' : ''}`}
+              onClick={() => setRange(r)}
+            >{RANGE_LABELS[r]}</button>
+          ))}
         </div>
-        <div className="admin-stat-card">
-          <div className="admin-stat-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
-          </div>
-          <div className="admin-stat-label">Total Looks</div>
-          <div className="admin-stat-value">{looksCount}</div>
-          <div className="admin-stat-change neutral">,</div>
-        </div>
-        <div className="admin-stat-card">
-          <div className="admin-stat-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/><line x1="7" y1="7" x2="7.01" y2="7"/></svg>
-          </div>
-          <div className="admin-stat-label">Products</div>
-          <div className="admin-stat-value">{productsCount ?? '...'}</div>
-          <div className="admin-stat-change neutral">,</div>
-        </div>
-        <div className="admin-stat-card">
-          <div className="admin-stat-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-          </div>
-          <div className="admin-stat-label">Searches Today</div>
-          <div className="admin-stat-value">{searchesToday ?? '...'}</div>
-          <div className="admin-stat-change neutral">,</div>
-        </div>
-        <div className="admin-stat-card">
-          <div className="admin-stat-icon">
-            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
-          </div>
-          <div className="admin-stat-label">Bookmarks</div>
-          <div className="admin-stat-value">0</div>
-          <div className="admin-stat-change neutral">,</div>
-        </div>
+      </div>
+
+      {/* Window-scoped stats grid. Mobile collapses to 2 columns,
+          desktop is 4. Each card shows label + big number + a small
+          secondary metric where useful. */}
+      <div className="admin-home-stats">
+        <StatCard
+          icon={<UserIcon />}
+          label={activeLabel[range]}
+          value={formatNumber(stats.activeUsers)}
+          loading={statsLoading}
+        />
+        <StatCard
+          icon={<ClockIcon />}
+          label="Avg session"
+          value={stats.avgSessionMs != null ? formatDuration(stats.avgSessionMs) : '—'}
+          loading={statsLoading}
+        />
+        <StatCard
+          icon={<EyeIcon />}
+          label="Impressions"
+          value={formatNumber(stats.impressions)}
+          loading={statsLoading}
+        />
+        <StatCard
+          icon={<CursorIcon />}
+          label="Clicks"
+          value={formatNumber(stats.clicks)}
+          sub={stats.impressions && stats.clicks ? `${((stats.clicks / stats.impressions) * 100).toFixed(1)}% CTR` : undefined}
+          loading={statsLoading}
+        />
+        <StatCard
+          icon={<ExternalIcon />}
+          label="Clickouts"
+          value={formatNumber(stats.clickouts)}
+          sub={stats.conversionPct != null ? `${stats.conversionPct}% of clicks` : undefined}
+          loading={statsLoading}
+        />
+        <StatCard
+          icon={<PackageIcon />}
+          label="Products added"
+          value={formatNumber(stats.productsAdded)}
+          loading={statsLoading}
+        />
+        <StatCard
+          icon={<ImageIcon />}
+          label="Looks uploaded"
+          value={formatNumber(stats.looksUploaded)}
+          loading={statsLoading}
+        />
+        <StatCard
+          icon={<HeartIcon />}
+          label="Creator follows"
+          value={formatNumber(stats.creatorsFollowed)}
+          loading={statsLoading}
+        />
+        <StatCard
+          icon={<UserPlusIcon />}
+          label="New signups"
+          value={formatNumber(stats.newSignups)}
+          loading={statsLoading}
+        />
+        <StatCard
+          icon={<SearchIcon />}
+          label="Searches"
+          value={formatNumber(stats.searches)}
+          loading={statsLoading}
+        />
+        <StatCard
+          icon={<SparkleIcon />}
+          label="AI generations"
+          value={formatNumber(stats.aiGenerations)}
+          loading={statsLoading}
+        />
+        <StatCard
+          icon={<TrendIcon />}
+          label="Catalog totals"
+          value={`${creatorsCount} creators`}
+          sub={`${looksCount.toLocaleString()} seed looks`}
+          loading={false}
+        />
       </div>
 
       {/* Trending card */}
@@ -383,68 +637,70 @@ export default function AdminHome() {
 
         <div className="admin-home-card">
           <h3 className="admin-home-card-title">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>
-            Pending Actions
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+            Weekly Activity
           </h3>
-          <div className="admin-home-pending">
-            <div className="admin-home-pending-item">
-              <div className="admin-home-pending-info">
-                <span className="admin-home-pending-count">0</span>
-                <span>Waitlist signups</span>
-              </div>
-              <span className="admin-status admin-status-neutral">nothing pending</span>
-            </div>
-            <div className="admin-home-pending-item">
-              <div className="admin-home-pending-info">
-                <span className="admin-home-pending-count">0</span>
-                <span>Incoming creators</span>
-              </div>
-              <span className="admin-status admin-status-neutral">nothing pending</span>
-            </div>
-            <div className="admin-home-pending-item">
-              <div className="admin-home-pending-info">
-                <span className="admin-home-pending-count">0</span>
-                <span>Flagged content</span>
-              </div>
-              <span className="admin-status admin-status-neutral">nothing pending</span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* Weekly Activity Chart */}
-      <div className="admin-home-card" style={{ marginTop: 16 }}>
-        <h3 className="admin-home-card-title">
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
-          Weekly Activity
-        </h3>
-        <div className="admin-weekly-chart">
-          {weeklyData.map((d, i) => (
-            <div key={d.day} className="admin-weekly-col">
-              <div className="admin-weekly-bars">
-                <div
-                  className="admin-weekly-bar searches"
-                  style={{
-                    height: d.count > 0 ? `${(d.count / maxWeekly) * 100}%` : '2%',
-                    animationDelay: `${i * 0.08}s`,
-                  }}
-                >
-                  <span className="admin-weekly-tooltip">
-                    {d.count} searches
-                  </span>
+          <div className="admin-weekly-chart">
+            {weeklyData.map((d, i) => (
+              <div key={d.day} className="admin-weekly-col">
+                <div className="admin-weekly-bars">
+                  <div
+                    className="admin-weekly-bar searches"
+                    style={{
+                      height: d.count > 0 ? `${(d.count / maxWeekly) * 100}%` : '2%',
+                      animationDelay: `${i * 0.08}s`,
+                    }}
+                  >
+                    <span className="admin-weekly-tooltip">
+                      {d.count} searches
+                    </span>
+                  </div>
                 </div>
+                <span className="admin-weekly-label">{d.label}</span>
               </div>
-              <span className="admin-weekly-label">{d.label}</span>
-            </div>
-          ))}
-        </div>
-        <div className="admin-chart-legend">
-          <span className="admin-legend-item">
-            <span className="admin-legend-dot" style={{ background: '#333' }} />
-            Searches
-          </span>
+            ))}
+          </div>
+          <div className="admin-chart-legend">
+            <span className="admin-legend-item">
+              <span className="admin-legend-dot" style={{ background: '#333' }} />
+              Searches
+            </span>
+          </div>
         </div>
       </div>
     </div>
   );
 }
+
+// ── Tiny presentational helpers ─────────────────────────────────
+function StatCard({ icon, label, value, sub, loading }: {
+  icon: React.ReactNode;
+  label: string;
+  value: string;
+  sub?: string;
+  loading?: boolean;
+}) {
+  return (
+    <div className="admin-home-stat-card">
+      <div className="admin-home-stat-icon">{icon}</div>
+      <div className="admin-home-stat-label">{label}</div>
+      <div className={`admin-home-stat-value${loading ? ' is-loading' : ''}`}>
+        {loading ? '…' : value}
+      </div>
+      {sub && <div className="admin-home-stat-sub">{sub}</div>}
+    </div>
+  );
+}
+
+function UserIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>; }
+function UserPlusIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="8.5" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="23" y1="11" x2="17" y2="11"/></svg>; }
+function ClockIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>; }
+function EyeIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>; }
+function CursorIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M13 2 3 14h9l-1 8 10-12h-9z"/></svg>; }
+function ExternalIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>; }
+function PackageIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="16.5" y1="9.4" x2="7.5" y2="4.21"/><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>; }
+function ImageIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>; }
+function HeartIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>; }
+function SearchIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>; }
+function SparkleIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2 14 9 21 12 14 15 12 22 10 15 3 12 10 9z"/></svg>; }
+function TrendIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>; }

@@ -372,6 +372,139 @@
   font-style: italic;
 }
 
+/* "Best for" suggestion chips — sits directly below the Size & fit spec
+   sheet. Each group is a label-aligned row (matching .pd-specs-row's
+   86px label column) followed by a wrapping flow of informational pills.
+   Chips are non-interactive: they communicate context, not actions. */
+.pd-chips {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.pd-chips-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.6);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 0 0 14px;
+}
+
+.pd-chip-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+}
+
+.pd-chip-group {
+  display: grid;
+  grid-template-columns: 86px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.pd-chip-group-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding-top: 5px;
+}
+
+.pd-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pd-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  line-height: 1.2;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.82);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  white-space: nowrap;
+}
+
+/* Occasion is the headline value ("Great for date night") — give it a
+   touch more presence than the supporting fit/season/style groups. */
+.pd-chip-group--occasion .pd-chip {
+  color: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+@media (max-width: 600px) {
+  .pd-chip-group {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  .pd-chip-group-label {
+    padding-top: 0;
+  }
+}
+
+/* "Popular in" — tappable catalog pills. Same family as the "Best for"
+   chips, but interactive: each opens that catalog's feed. */
+.pd-popular {
+  margin-top: 20px;
+}
+
+.pd-popular-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.6);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 0 0 12px;
+}
+
+.pd-popular-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pd-popular-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  line-height: 1.2;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+
+.pd-popular-pill::before {
+  content: "✦";
+  font-size: 11px;
+  color: rgba(120, 220, 170, 0.9);
+}
+
+.pd-popular-pill:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.24);
+}
+
+.pd-popular-pill:active {
+  transform: scale(0.97);
+}
+
 /* Rail variant of "More from this brand" - desktop-only, 2-up grid
    that fills the negative space below the Shop drawer. Hidden on
    mobile because the full-width strip below the hero is already there. */

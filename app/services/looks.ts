@@ -391,6 +391,66 @@ export async function getSearchSuggestions(): Promise<string[]> {
   return suggestionsPromise;
 }
 
+// ── Seen / unseen catalog ordering ─────────────────────────────
+// Every consumer of a "feed of looks" (home grid, creator catalog,
+// brand catalog) calls reorderBySeen() after fetching. The contract:
+//   • Looks the shopper has NEVER seen come first, in their natural
+//     feed order (preserves admin-curated rank).
+//   • Looks the shopper HAS seen are appended after, shuffled, so the
+//     re-visit doesn't feel like Groundhog Day.
+//   • If the shopper has seen 100% of the catalog, the whole thing
+//     reshuffles every time — pure rotation.
+// "Seen" is derived from user_events impressions (target_type='look'),
+// scoped to the signed-in user. Anonymous shoppers get the natural
+// feed order untouched.
+
+/** Pulls the set of look UUIDs the user has fired at least one
+ *  impression event for. Capped at 50k events to stay responsive on
+ *  heavy accounts; the LRU bias of `order desc` keeps the most
+ *  recent / relevant impressions in the cap window. */
+export async function fetchSeenLookIds(userId: string | null | undefined): Promise<Set<string>> {
+  if (!supabase || !userId) return new Set();
+  const { data } = await supabase
+    .from('user_events')
+    .select('target_uuid')
+    .eq('user_id', userId)
+    .eq('event_type', 'impression')
+    .eq('target_type', 'look')
+    .not('target_uuid', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(50_000);
+  return new Set((data || []).map(r => r.target_uuid as string).filter(Boolean));
+}
+
+function shuffleInPlace<T>(arr: T[]): void {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+}
+
+/** Apply the unseen-first / shuffle-seen reorder rule described
+ *  above. Pure function — does not mutate the input array. */
+export function reorderBySeen(looks: Look[], seenLookIds: Set<string>): Look[] {
+  if (!looks.length) return looks;
+  const unseen: Look[] = [];
+  const seen: Look[] = [];
+  for (const l of looks) {
+    const id = l.uuid;
+    if (id && seenLookIds.has(id)) seen.push(l);
+    else unseen.push(l);
+  }
+  // 100% seen → shuffle everything every visit.
+  if (unseen.length === 0) {
+    const all = [...looks];
+    shuffleInPlace(all);
+    return all;
+  }
+  // Some unseen → unseen in natural order, seen shuffled below.
+  shuffleInPlace(seen);
+  return [...unseen, ...seen];
+}
+
 // Admin surfaces (Content page, etc.) call this after a mutation so the next
 // consumer fetch returns fresh data instead of a stale cached promise.
 export function invalidateLooksCache() {

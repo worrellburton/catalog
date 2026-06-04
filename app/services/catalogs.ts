@@ -272,6 +272,37 @@ export async function autoAssignCatalogProducts(
   };
 }
 
+export interface ProductCatalog {
+  name: string;
+  slug: string;
+  matchScore: number | null;
+}
+
+/**
+ * Catalogs a product is "Popular in" — the live, non-home catalogs whose theme
+ * it auto-matched (plus any manual pins), strongest first. Matched by name
+ * (+ optional brand) via the get_product_catalogs RPC so the caller needn't
+ * carry a product id. Reads the same catalog_products membership the catalog
+ * feed uses, so tapping a result always lands in a feed that contains this
+ * product. Returns [] on any failure (the section just hides).
+ */
+export async function getProductCatalogs(name: string, brand?: string | null): Promise<ProductCatalog[]> {
+  if (!supabase || !name || !name.trim()) return [];
+  const { data, error } = await supabase.rpc('get_product_catalogs', {
+    p_name: name,
+    p_brand: brand ?? null,
+  });
+  if (error || !data) {
+    if (error) console.warn('getProductCatalogs failed:', error.message);
+    return [];
+  }
+  return (data as { name: string; slug: string; match_score: number | null }[]).map(r => ({
+    name: r.name,
+    slug: r.slug,
+    matchScore: r.match_score,
+  }));
+}
+
 export async function removeCatalogProduct(catalogId: string, productId: string): Promise<boolean> {
   if (!supabase) return false;
   const { error } = await supabase

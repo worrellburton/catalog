@@ -6,7 +6,7 @@ import { useAuth } from '~/hooks/useAuth';
 import { AvatarUpload } from './AvatarCropModal';
 import LookCard from './LookCard';
 import { toggleFollow, isFollowing as fetchIsFollowing, getFollowerCount } from '~/services/follows';
-import { subscribeToLooksChange } from '~/services/looks';
+import { subscribeToLooksChange, fetchSeenLookIds, reorderBySeen } from '~/services/looks';
 // (Removed getShopperGender / subscribeToShopperGender import — the creator
 // catalog page no longer filters by shopper gender; see creatorLooks below.)
 
@@ -337,7 +337,20 @@ export default function CreatorPage({
   const avatarUrl = (userId || isHandleBranch)
     ? (profile?.avatar_url || seedCreatorData?.avatar || '')
     : (seedCreatorData?.avatar || '');
-  const rawCreatorLooks = (userId || isHandleBranch) ? userLooks : seedCreatorLooks;
+  // Pull seen-look set for the signed-in shopper so the catalog
+  // applies the unseen-first / shuffle-seen ordering rule defined in
+  // services/looks.ts. Anonymous shoppers fall through with an empty
+  // set (reorderBySeen no-ops in that case).
+  const [seenLookIds, setSeenLookIds] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (!currentUser?.id) { setSeenLookIds(new Set()); return; }
+    fetchSeenLookIds(currentUser.id).then(setSeenLookIds).catch(() => setSeenLookIds(new Set()));
+  }, [currentUser?.id]);
+  const rawCreatorLooksUnordered = (userId || isHandleBranch) ? userLooks : seedCreatorLooks;
+  const rawCreatorLooks = useMemo(
+    () => reorderBySeen(rawCreatorLooksUnordered, seenLookIds),
+    [rawCreatorLooksUnordered, seenLookIds],
+  );
 
   // No gender filter on this page. The home feed filters by shopper
   // gender to keep "men + unisex" or "women + unisex" content in front
