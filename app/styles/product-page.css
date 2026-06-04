@@ -232,40 +232,13 @@
   background: rgba(255, 255, 255, 1);
 }
 
-/* Brand row: brand label left, Comments button right-aligned. */
-.pd-brand-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-}
-.pd-brand-comments {
-  margin-left: auto;
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  padding: 6px 12px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.16);
-  color: rgba(255, 255, 255, 0.8);
-  font-size: 12px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
-  font-family: inherit;
-  cursor: pointer;
-  flex-shrink: 0;
-  transition: background 0.2s, border-color 0.2s, color 0.2s;
-}
-.pd-brand-comments:hover {
-  background: rgba(255, 255, 255, 0.12);
-  border-color: rgba(255, 255, 255, 0.32);
-  color: #fff;
-}
-.pd-brand-comments span:empty { display: none; }
-.light-mode .pd-brand-comments {
-  background: rgba(0, 0, 0, 0.04);
-  border-color: rgba(0, 0, 0, 0.14);
-  color: rgba(0, 0, 0, 0.7);
+/* Green comments FAB on the product hero, stacked above the floating Save
+   (which sits at bottom:16px). Matches the look overlay's FAB exactly. */
+.pd-comments-fab {
+  position: absolute;
+  right: 16px;
+  bottom: 64px;
+  z-index: 5;
 }
 
 /* Brief copied-to-clipboard pill shown when navigator.share isn't
