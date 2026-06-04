@@ -21,6 +21,18 @@ interface CommentsPageProps {
    *  the pushed /comments URL and reveals the product/look underneath
    *  unchanged. Standalone route mount omits it and falls back to history. */
   onClose?: () => void;
+  /** Open a commenter's catalog/profile. Passed by the overlay host so
+   *  tapping an author closes comments and opens their creator page. */
+  onOpenCreator?: (handle: string) => void;
+}
+
+/** Human title from a slug when the product/look row can't be resolved
+ *  (e.g. opened from a creative with no products row) — beats a stuck
+ *  "Loading…". Drops the trailing 8-char id and title-cases the words. */
+function titleFromSlug(slug: string): string {
+  const words = slug.replace(/-[0-9a-f]{8}$/i, '').replace(/-\d+$/, '').split('-').filter(Boolean);
+  if (words.length === 0) return 'This item';
+  return words.map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 }
 
 interface ResolvedTarget {
@@ -118,7 +130,7 @@ async function resolveLook(slug: string): Promise<ResolvedTarget | null> {
   };
 }
 
-export default function CommentsPage({ targetType, slug, onClose }: CommentsPageProps) {
+export default function CommentsPage({ targetType, slug, onClose, onOpenCreator }: CommentsPageProps) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [target, setTarget] = useState<ResolvedTarget | null>(null);
@@ -130,10 +142,12 @@ export default function CommentsPage({ targetType, slug, onClose }: CommentsPage
   const listEndRef = useRef<HTMLDivElement>(null);
 
   // Resolve the product/look header once.
+  const [resolved, setResolved] = useState(false);
   useEffect(() => {
     let cancelled = false;
+    setResolved(false);
     (targetType === 'product' ? resolveProduct(slug) : resolveLook(slug)).then(t => {
-      if (!cancelled) setTarget(t);
+      if (!cancelled) { setTarget(t); setResolved(true); }
     });
     return () => { cancelled = true; };
   }, [targetType, slug]);
@@ -209,13 +223,13 @@ export default function CommentsPage({ targetType, slug, onClose }: CommentsPage
         </button>
 
         {/* The product / look this thread is about, pinned at the top. */}
-        <a className="comments-target" href={target?.href ?? '#'}>
+        <a className="comments-target" href={target?.href ?? `/${targetType === 'product' ? 'p' : 'l'}/${slug}`}>
           {target?.image
             ? <img className="comments-target-img" src={target.image} alt="" />
             : <span className="comments-target-img comments-target-img--blank" aria-hidden="true" />}
           <span className="comments-target-text">
             <span className="comments-target-kind">{targetType === 'product' ? 'Product' : 'Look'}</span>
-            <span className="comments-target-title">{target?.title ?? 'Loading…'}</span>
+            <span className="comments-target-title">{target?.title ?? (resolved ? titleFromSlug(slug) : 'Loading…')}</span>
             {target?.subtitle && <span className="comments-target-sub">{target.subtitle}</span>}
           </span>
         </a>
@@ -230,59 +244,77 @@ export default function CommentsPage({ targetType, slug, onClose }: CommentsPage
           ) : comments.length === 0 ? (
             <div className="comments-empty">No comments yet. Be the first to say something.</div>
           ) : (
-            comments.map(c => (
-              <div key={c.id} className="comment-row">
-                {c.author?.avatar_url
-                  ? <img className="comment-avatar" src={c.author.avatar_url} alt="" />
-                  : <span className="comment-avatar comment-avatar--initial">
-                      {(c.author?.full_name || 'U').charAt(0).toUpperCase()}
-                    </span>}
-                <div className="comment-body">
-                  <div className="comment-meta">
-                    <span className="comment-name">{c.author?.full_name || 'Someone'}</span>
-                    <span className="comment-time">{relativeTime(c.created_at)}</span>
-                    {user?.id === c.user_id && (
-                      <button className="comment-delete" onClick={() => handleDelete(c.id)} aria-label="Delete comment">
-                        Delete
+            comments.map(c => {
+              const own = user?.id === c.user_id;
+              const openAuthor = onOpenCreator ? () => onOpenCreator(`user:${c.user_id}`) : undefined;
+              return (
+                <div key={c.id} className={`comment-row${own ? ' is-own' : ''}`}>
+                  <button
+                    type="button"
+                    className="comment-avatar-btn"
+                    onClick={openAuthor}
+                    disabled={!openAuthor}
+                    aria-label={`Open ${c.author?.full_name || 'user'}'s catalog`}
+                  >
+                    {c.author?.avatar_url
+                      ? <img className="comment-avatar" src={c.author.avatar_url} alt="" />
+                      : <span className="comment-avatar comment-avatar--initial">
+                          {(c.author?.full_name || 'U').charAt(0).toUpperCase()}
+                        </span>}
+                  </button>
+                  <div className="comment-body">
+                    <div className="comment-meta">
+                      <button type="button" className="comment-name" onClick={openAuthor} disabled={!openAuthor}>
+                        {own ? 'You' : (c.author?.full_name || 'Someone')}
                       </button>
-                    )}
+                      <span className="comment-time">{relativeTime(c.created_at)}</span>
+                      {own && (
+                        <button className="comment-delete" onClick={() => handleDelete(c.id)} aria-label="Delete comment">
+                          Delete
+                        </button>
+                      )}
+                    </div>
+                    <p className="comment-bubble">{c.body}</p>
                   </div>
-                  <p className="comment-text">{c.body}</p>
                 </div>
-              </div>
-            ))
+              );
+            })
           )}
           <div ref={listEndRef} />
         </div>
 
-        <div className="comments-composer">
-          {user ? (
-            <>
-              <textarea
-                className="comments-input"
-                placeholder="Add a comment…"
-                value={draft}
-                maxLength={2000}
-                rows={2}
-                onChange={e => setDraft(e.target.value)}
-                onKeyDown={e => {
-                  if ((e.metaKey || e.ctrlKey) && e.key === 'Enter') { e.preventDefault(); void handlePost(); }
-                }}
-              />
-              <button
-                className="comments-post-btn"
-                onClick={() => void handlePost()}
-                disabled={posting || !draft.trim()}
-              >
-                {posting ? 'Posting…' : 'Post'}
-              </button>
-            </>
-          ) : (
-            <div className="comments-signin-hint">
-              <button className="comments-post-btn" onClick={() => navigate('/')}>Sign in to comment</button>
-            </div>
-          )}
-        </div>
+        {user ? (
+          <div className="comments-composer">
+            <button className="comments-filter-btn" aria-hidden="true" tabIndex={-1}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="7" y1="12" x2="17" y2="12"/><line x1="10" y1="18" x2="14" y2="18"/></svg>
+            </button>
+            <textarea
+              className="comments-input"
+              placeholder="Add a comment…"
+              value={draft}
+              maxLength={2000}
+              rows={1}
+              onChange={e => setDraft(e.target.value)}
+              onKeyDown={e => {
+                if ((e.metaKey || e.ctrlKey || !e.shiftKey) && e.key === 'Enter') { e.preventDefault(); void handlePost(); }
+              }}
+            />
+            <button
+              className="comments-send"
+              onClick={() => void handlePost()}
+              disabled={posting || !draft.trim()}
+              aria-label="Send comment"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                <line x1="12" y1="19" x2="12" y2="5" /><polyline points="5 12 12 5 19 12" />
+              </svg>
+            </button>
+          </div>
+        ) : (
+          <div className="comments-composer comments-composer--signin">
+            <button className="comments-send comments-send--signin" onClick={() => navigate('/')}>Sign in to comment</button>
+          </div>
+        )}
         {error && <div className="comments-error">{error}</div>}
       </div>
     </div>

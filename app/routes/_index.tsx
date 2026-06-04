@@ -1599,6 +1599,7 @@ export default function Home() {
                 targetType={commentsTarget.type}
                 slug={commentsTarget.slug}
                 onClose={closeComments}
+                onOpenCreator={(h) => { closeComments(); handleOpenCreator(h); }}
               />
             </Suspense>
           )}

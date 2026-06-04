@@ -12,7 +12,9 @@
 .saved-page {
   position: fixed;
   inset: 0;
-  z-index: 60;
+  /* Above the app header + bottom search bar (both reach z-index 200) so
+     Saved reads as its own full page, not a layer the chrome bleeds over. */
+  z-index: 260;
   background: #0a0a0c;
   overflow-y: auto;
   padding: 16px clamp(14px, 4vw, 40px) 60px;
