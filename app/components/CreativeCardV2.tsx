@@ -41,8 +41,7 @@ import { withTransform } from '~/utils/supabase-image';
 import { useInViewport } from '~/hooks/useInViewport';
 import { useVideoStillRatio } from '~/hooks/useVideoStillRatio';
 import { useProductsImageOnly } from '~/hooks/useProductsImageOnly';
-import FollowIconButton from './FollowIconButton';
-import { useFollowState } from '~/hooks/useFollowState';
+import CreatorAvatarFollow from './CreatorAvatarFollow';
 import { useShowBrandLogos } from '~/hooks/useShowBrandLogos';
 import { useBrandLogo } from '~/hooks/useBrandLogoLookup';
 import { shouldBeVideo } from '~/utils/videoStillSplit';
@@ -538,12 +537,10 @@ export default CreativeCardV2;
 // pinned to the left edge so it lines up with the product name
 // below it (not baseline-centered to the cap height of the SVG).
 /**
- * Creator chip rendered on look cards. When the shopper follows the
- * creator, the chip glows (.is-following on .card-creator-row); when
- * they don't, FollowIconButton renders a "+" badge in the upper-
- * right corner. useFollowState resolves the follow state from the
- * shared cache and re-renders when it flips, so the glow ↔ "+"
- * swap is instant.
+ * Creator identity on feed look cards — just the profile picture with a
+ * +/− follow badge (no name), via the shared CreatorAvatarFollow so every
+ * feed reads the same. avatarOpensCreator=false: tapping the avatar falls
+ * through to open the look; only the badge follows.
  */
 function CreatorChip({
   look,
@@ -556,25 +553,16 @@ function CreatorChip({
   creatorName: string;
   onOpenCreator?: (name: string) => void;
 }) {
-  const following = useFollowState(look.creator);
   return (
-    <div
-      className={`card-creator-row${following ? ' is-following' : ''}`}
-      onClick={(e) => {
-        e.stopPropagation();
-        onOpenCreator?.(look.creator);
-      }}
-    >
-      {creatorAvatar ? (
-        <img className="card-creator-avatar" src={creatorAvatar} alt={creatorName} />
-      ) : (
-        <span className="card-creator-avatar card-creator-avatar--initial" aria-hidden="true">
-          {(creatorName || look.creator || '?').charAt(0).toUpperCase()}
-        </span>
-      )}
-      <span className="card-creator-name">{creatorName}</span>
-      <FollowIconButton handle={look.creator} />
-    </div>
+    <CreatorAvatarFollow
+      handle={look.creator}
+      avatarUrl={creatorAvatar}
+      displayName={creatorName}
+      size={40}
+      onOpenCreator={onOpenCreator}
+      avatarOpensCreator={false}
+      className="card-creator-avatar-pos"
+    />
   );
 }
 
