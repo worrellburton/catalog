@@ -75,6 +75,13 @@ function formatNumber(n: number | null): string {
   return n.toLocaleString();
 }
 
+/** Build the URL for a metric's detail page, preserving the current
+ *  audience + range so the detail view opens with the same scope. */
+function metricLink(id: string, audience: Audience, range: RangeId): string {
+  const params = new URLSearchParams({ audience, range });
+  return `/admin/metrics/${id}?${params.toString()}`;
+}
+
 function formatDuration(ms: number): string {
   if (!ms || ms < 0) return '—';
   const m = ms / 60000;
@@ -490,11 +497,17 @@ export default function AdminHome() {
           desktop is 4. Each card shows label + big number + a small
           secondary metric where useful. */}
       <div className="admin-home-stats">
+        {/* Each card links to /admin/metrics/<id>?audience=…&range=…
+            so the detail view opens with the same scope the shopper
+            was just looking at. metricLink keeps the URL params in
+            sync without sprinkling them at every callsite. */}
+        {(() => null)()}
         <StatCard
           icon={<UserIcon />}
           label={activeLabel[range]}
           value={formatNumber(stats.activeUsers)}
           loading={statsLoading}
+          to={metricLink('active-users', audience, range)}
         />
         <StatCard
           icon={<ClockIcon />}
@@ -504,24 +517,28 @@ export default function AdminHome() {
             ? `${Math.round((stats.avgActiveMs / Math.max(stats.avgSessionMs, 1)) * 100)}% active`
             : undefined}
           loading={statsLoading}
+          to={metricLink('avg-session', audience, range)}
         />
         <StatCard
           icon={<ClockIcon />}
           label="Avg idle"
           value={stats.avgIdleMs != null ? formatDuration(stats.avgIdleMs) : '—'}
           loading={statsLoading}
+          to={metricLink('avg-idle', audience, range)}
         />
         <StatCard
           icon={<ClockIcon />}
           label="Avg active"
           value={stats.avgActiveMs != null ? formatDuration(stats.avgActiveMs) : '—'}
           loading={statsLoading}
+          to={metricLink('avg-active', audience, range)}
         />
         <StatCard
           icon={<EyeIcon />}
           label="Impressions"
           value={formatNumber(stats.impressions)}
           loading={statsLoading}
+          to={metricLink('impressions', audience, range)}
         />
         <StatCard
           icon={<CursorIcon />}
@@ -529,6 +546,7 @@ export default function AdminHome() {
           value={formatNumber(stats.clicks)}
           sub={stats.impressions && stats.clicks ? `${((stats.clicks / stats.impressions) * 100).toFixed(1)}% CTR` : undefined}
           loading={statsLoading}
+          to={metricLink('clicks', audience, range)}
         />
         <StatCard
           icon={<ExternalIcon />}
@@ -536,42 +554,49 @@ export default function AdminHome() {
           value={formatNumber(stats.clickouts)}
           sub={stats.conversionPct != null ? `${stats.conversionPct}% of clicks` : undefined}
           loading={statsLoading}
+          to={metricLink('clickouts', audience, range)}
         />
         <StatCard
           icon={<PackageIcon />}
           label="Products added"
           value={formatNumber(stats.productsAdded)}
           loading={statsLoading}
+          to={metricLink('products-added', audience, range)}
         />
         <StatCard
           icon={<ImageIcon />}
           label="Looks uploaded"
           value={formatNumber(stats.looksUploaded)}
           loading={statsLoading}
+          to={metricLink('looks-uploaded', audience, range)}
         />
         <StatCard
           icon={<HeartIcon />}
           label="Creator follows"
           value={formatNumber(stats.creatorsFollowed)}
           loading={statsLoading}
+          to={metricLink('creator-follows', audience, range)}
         />
         <StatCard
           icon={<UserPlusIcon />}
           label="New signups"
           value={formatNumber(stats.newSignups)}
           loading={statsLoading}
+          to={metricLink('new-signups', audience, range)}
         />
         <StatCard
           icon={<SearchIcon />}
           label="Searches"
           value={formatNumber(stats.searches)}
           loading={statsLoading}
+          to={metricLink('searches', audience, range)}
         />
         <StatCard
           icon={<SparkleIcon />}
           label="AI generations"
           value={formatNumber(stats.aiGenerations)}
           loading={statsLoading}
+          to={metricLink('ai-generations', audience, range)}
         />
         <StatCard
           icon={<TrendIcon />}
@@ -735,23 +760,36 @@ export default function AdminHome() {
 }
 
 // ── Tiny presentational helpers ─────────────────────────────────
-function StatCard({ icon, label, value, sub, loading }: {
+function StatCard({ icon, label, value, sub, loading, to }: {
   icon: React.ReactNode;
   label: string;
   value: string;
   sub?: string;
   loading?: boolean;
+  /** When set, the card becomes a link to the metric detail page —
+   *  /admin/metrics/<id>. Preserves the audience + range query string
+   *  so the detail view opens with the same filters. */
+  to?: string;
 }) {
-  return (
-    <div className="admin-home-stat-card">
+  const body = (
+    <>
       <div className="admin-home-stat-icon">{icon}</div>
       <div className="admin-home-stat-label">{label}</div>
       <div className={`admin-home-stat-value${loading ? ' is-loading' : ''}`}>
         {loading ? '…' : value}
       </div>
       {sub && <div className="admin-home-stat-sub">{sub}</div>}
-    </div>
+    </>
   );
+  if (to) {
+    return (
+      <a
+        href={to}
+        className="admin-home-stat-card admin-home-stat-card--link"
+      >{body}</a>
+    );
+  }
+  return <div className="admin-home-stat-card">{body}</div>;
 }
 
 function UserIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>; }
