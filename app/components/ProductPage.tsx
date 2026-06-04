@@ -6,7 +6,7 @@ import { useActiveGenderFilter } from '~/hooks/useActiveGenderFilter';
 import { useEscapeKey } from '~/hooks/useEscapeKey';
 import CreativeCard from '~/components/CreativeCard';
 import FollowIconButton from '~/components/FollowIconButton';
-import { useTrailVideo } from '~/components/TrailVideoHost';
+import { useTrailVideo, useTrailVideoManager } from '~/components/TrailVideoHost';
 import { useInViewport } from '~/hooks/useInViewport';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
 import { trackAdClick, prefetchSimilarProducts, getSimilarProductsDiagnostics, type ProductAd } from '~/services/product-creative';
@@ -514,6 +514,19 @@ export default function ProductPage({
     director.pushScope(scope);
     return () => director.popScope(scope);
   }, [product.brand, product.name]);
+
+  // Also pause every TrailVideoHost element except this product's hero.
+  // director.pushScope handles director-managed cards, but LookCard-style
+  // tiles attach video elements directly through the trail host — without
+  // an explicit suspend, their <video> elements keep decoding under the
+  // overlay (CPU + battery cost for invisible frames).
+  const trailMgr = useTrailVideoManager();
+  useEffect(() => {
+    // Exempt the hero by its creative.id when present, otherwise pass a
+    // sentinel so suspendFeed pauses everything.
+    trailMgr?.suspendFeed(creative?.id ?? '');
+    return () => { trailMgr?.resumeFeed(); };
+  }, [trailMgr, creative?.id]);
 
   // "Popular in" — curated catalogs this product auto-matched (by name+brand).
   // Resets + refetches on every product change; cancel-guarded so a fast trail
