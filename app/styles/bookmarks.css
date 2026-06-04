@@ -684,3 +684,12 @@ html[data-shell="catalog-app"] .bookmarks-page {
   background: rgba(255, 255, 255, 0.7);
 }
 
+
+/* Share button "copied" flash on the look overlay (reuses look-comment-btn
+   / look-video-back-btn circular styling). */
+.look-comment-btn.is-flashed,
+.look-video-back-btn.is-flashed {
+  background: #16a34a;
+  border-color: #16a34a;
+  color: #fff;
+}

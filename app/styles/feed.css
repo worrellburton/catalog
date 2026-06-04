@@ -736,13 +736,12 @@
   color: #07120a;
 }
 
-/* Avatar-only creator row on look cards: drop the old name pill so just
-   the profile picture (+ follow badge) shows. */
-.look-card .card-creator-row.is-avatar-only {
-  background: none !important;
-  border: none !important;
-  box-shadow: none !important;
-  padding: 0 !important;
-  gap: 0 !important;
-  width: auto !important;
+/* Avatar-only creator identity on look cards — positioned bottom-left.
+   No pill/name; tapping it falls through to open the look (the avatar
+   doesn't navigate), only the +/− badge follows. */
+.look-card .creator-avatar-follow.card-creator-avatar-pos {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  z-index: 4;
 }

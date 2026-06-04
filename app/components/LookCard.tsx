@@ -402,16 +402,20 @@ function LookCardCreatorChip({
   const name = creatorData?.displayName
     || look.creatorDisplayName
     || (look.creator?.startsWith('user:') ? 'User' : look.creator || '');
+  // No .card-creator-row wrapper and avatarOpensCreator=false: tapping the
+  // avatar falls through to the card (opens the look) instead of jumping to
+  // the creator's profile. Only the +/− badge acts on the creator. onOpenCreator
+  // is still threaded so the follow toggle + (future) navigations stay wired.
   return (
-    <div className="card-creator-row is-avatar-only" onClick={(e) => e.stopPropagation()}>
-      <CreatorAvatarFollow
-        handle={look.creator}
-        avatarUrl={avatar}
-        displayName={name}
-        size={40}
-        onOpenCreator={onOpenCreator}
-      />
-    </div>
+    <CreatorAvatarFollow
+      handle={look.creator}
+      avatarUrl={avatar}
+      displayName={name}
+      size={40}
+      onOpenCreator={onOpenCreator}
+      avatarOpensCreator={false}
+      className="card-creator-avatar-pos"
+    />
   );
 }
 

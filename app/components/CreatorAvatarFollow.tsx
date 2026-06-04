@@ -23,6 +23,10 @@ interface Props {
   /** Avatar diameter in px. Default 40. */
   size?: number;
   onOpenCreator?: (handle: string) => void;
+  /** When false, tapping the avatar does nothing (taps fall through to the
+   *  card so the look/product opens) — only the +/− badge acts. Used on feed
+   *  cards + tiles where the whole tile opens the item. Default true. */
+  avatarOpensCreator?: boolean;
   className?: string;
 }
 
@@ -32,10 +36,12 @@ export default function CreatorAvatarFollow({
   displayName,
   size = 40,
   onOpenCreator,
+  avatarOpensCreator = true,
   className,
 }: Props) {
   const following = useFollowState(handle);
   const [busy, setBusy] = useState(false);
+  const navigates = avatarOpensCreator && !!onOpenCreator;
 
   const isPlaceholder = !handle || handle.startsWith('user:');
   // Show the badge only once the shared cache has resolved (avoids a
@@ -57,12 +63,16 @@ export default function CreatorAvatarFollow({
     <div
       className={`creator-avatar-follow${following ? ' is-following' : ''}${className ? ` ${className}` : ''}`}
       style={{ width: size, height: size }}
-      onClick={(e) => { e.stopPropagation(); onOpenCreator?.(handle); }}
-      role="button"
-      tabIndex={0}
-      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpenCreator?.(handle); } }}
-      title={displayName ? `Open ${displayName}'s catalog` : 'Open creator catalog'}
-      aria-label={displayName ? `Open ${displayName}'s catalog` : 'Open creator catalog'}
+      {...(navigates
+        ? {
+            onClick: (e: React.MouseEvent) => { e.stopPropagation(); onOpenCreator!(handle); },
+            role: 'button' as const,
+            tabIndex: 0,
+            onKeyDown: (e: React.KeyboardEvent) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onOpenCreator!(handle); } },
+            title: displayName ? `Open ${displayName}'s catalog` : 'Open creator catalog',
+            'aria-label': displayName ? `Open ${displayName}'s catalog` : 'Open creator catalog',
+          }
+        : {})}
     >
       {avatarUrl ? (
         <img className="creator-avatar-follow__img" src={avatarUrl} alt={displayName || ''} loading="lazy" />

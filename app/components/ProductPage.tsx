@@ -25,6 +25,7 @@ import SizeMatchBadge from '~/components/SizeMatchBadge';
 import { director } from '~/services/video-playback-director';
 import ParticleBackground from '~/components/ParticleBackground';
 import { productSlug } from '~/utils/slug';
+import { shareLink } from '~/utils/shareLink';
 import { useCommentsEnabled } from '~/hooks/useCommentsEnabled';
 import { getCommentCount } from '~/services/comments';
 import {
@@ -415,6 +416,7 @@ function LookTile({
           displayName={displayName}
           size={34}
           onOpenCreator={(h) => onOpenCreator?.(h)}
+          avatarOpensCreator={false}
         />
       </span>
     </button>
@@ -531,6 +533,16 @@ export default function ProductPage({
     getCommentCount('product', commentSlug).then(n => { if (!cancelled) setCommentCount(n); });
     return () => { cancelled = true; };
   }, [commentsEnabled, commentSlug]);
+
+  // Share — upper-right corner, symmetric with the look overlay. Shares the
+  // product's canonical /p/<slug> URL; flashes "Copied" on clipboard fallback.
+  const [shareFlash, setShareFlash] = useState(false);
+  const handleShare = useCallback(async () => {
+    if (!commentSlug) return;
+    const url = `${typeof window !== 'undefined' ? window.location.origin : ''}/p/${commentSlug}`;
+    const result = await shareLink({ url, title: [product.brand, product.name].filter(Boolean).join(' — ') || 'Catalog' });
+    if (result === 'copied') { setShareFlash(true); window.setTimeout(() => setShareFlash(false), 1600); }
+  }, [commentSlug, product.brand, product.name]);
   // Admin-editable section config from /admin/pages. Each section's
   // enabled flag gates whether that block renders below.
   const productSections = usePageSections('product');
@@ -1058,6 +1070,20 @@ export default function ProductPage({
             <polyline points="15 18 9 12 15 6" />
           </svg>
         </button>
+        {commentSlug && (
+          <button
+            className={`pd-share-btn${shareFlash ? ' is-flashed' : ''}`}
+            onClick={handleShare}
+            aria-label="Share product"
+            title={shareFlash ? 'Link copied' : 'Share'}
+          >
+            {shareFlash ? (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+            ) : (
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3" /><circle cx="6" cy="12" r="3" /><circle cx="18" cy="19" r="3" /><line x1="8.59" y1="13.51" x2="15.42" y2="17.49" /><line x1="15.41" y1="6.51" x2="8.59" y2="10.49" /></svg>
+            )}
+          </button>
+        )}
         {/* Side-rail back button — vertically centered on the left edge of
             the browser, desktop only. Fades + slides in once the user has
             scrolled past the hero (corner button is off-screen by then). */}

@@ -3,6 +3,7 @@ import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
 import { useNavigate } from '@remix-run/react';
 import { Look, creators, Product, looks as allLooksData } from '~/data/looks';
 import { lookSlug } from '~/utils/slug';
+import { shareLink } from '~/utils/shareLink';
 import { useCommentsEnabled } from '~/hooks/useCommentsEnabled';
 import { useEscapeKey } from '~/hooks/useEscapeKey';
 import LookCard from './LookCard';
@@ -138,6 +139,16 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
     }),
     [look],
   );
+
+  // Share — upper-right, symmetric with the product page. Shares the look's
+  // canonical /l/<slug> URL; flashes a check on clipboard fallback.
+  const [shareFlash, setShareFlash] = useState(false);
+  const handleShareLook = useCallback(async () => {
+    if (!commentSlug) return;
+    const url = `${typeof window !== 'undefined' ? window.location.origin : ''}/l/${commentSlug}`;
+    const result = await shareLink({ url, title: look.title || 'Catalog look' });
+    if (result === 'copied') { setShareFlash(true); window.setTimeout(() => setShareFlash(false), 1600); }
+  }, [commentSlug, look.title]);
   // Admin-editable section config from /admin/pages. null until loaded;
   // isSectionEnabled treats null as "enabled" so first paint isn't blank.
   const pageSections = usePageSections('looks');
@@ -673,6 +684,18 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                 </svg>
               </button>
               <button
+                className={`look-video-back-btn${shareFlash ? ' is-flashed' : ''}`}
+                onClick={handleShareLook}
+                aria-label="Share look"
+                title={shareFlash ? 'Link copied' : 'Share'}
+              >
+                {shareFlash ? (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                ) : (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+                )}
+              </button>
+              <button
                 className={`look-video-bookmark-btn${lookBookmarked ? ' active' : ''}`}
                 onClick={handleToggleLookBookmark}
                 aria-label="Bookmark look"
@@ -790,6 +813,18 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                 <svg width="18" height="18" viewBox="0 0 24 24" fill={lookBookmarked ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
                 </svg>
+              </button>
+              <button
+                className={`look-comment-btn${shareFlash ? ' is-flashed' : ''}`}
+                onClick={handleShareLook}
+                aria-label="Share look"
+                title={shareFlash ? 'Link copied' : 'Share'}
+              >
+                {shareFlash ? (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+                ) : (
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+                )}
               </button>
               {commentsEnabled && commentSlug && (
                 <button
