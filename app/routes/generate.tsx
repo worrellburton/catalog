@@ -26,6 +26,7 @@ import {
   updateGenerationCrop,
   uploadUserPhoto,
   checkFacePhoto,
+  GENERATION_STALE_MS,
   type UserUpload,
   type UserGeneration,
   type GenerationProductDetail,
@@ -2856,12 +2857,19 @@ const LookCard = memo(function LookCard({
   const [confirmOpen, setConfirmOpen] = useState(false);
   const style = STYLE_PRESETS.find(s => s.value === generation.style);
   const isDone = generation.status === 'done' && generation.video_url;
-  const isFailed = generation.status === 'failed';
-  const isBusy = generation.status === 'pending' || generation.status === 'generating';
+  const startedAt = useMemo(() => new Date(generation.created_at).getTime(), [generation.created_at]);
+  // A row stuck non-terminal far past any real render budget is dead —
+  // the generate-look pipeline never reconciled it. Treat it as failed
+  // ("Timed out") so it stops showing "Queued / 100%" forever and the
+  // delete button works. Mirrors PendingLookPill's staleness guard.
+  const isStale = (generation.status === 'pending' || generation.status === 'generating')
+    && (Date.now() - startedAt) > GENERATION_STALE_MS;
+  const isFailed = generation.status === 'failed' || isStale;
+  const isBusy = (generation.status === 'pending' || generation.status === 'generating') && !isStale;
 
   // Tick once a second while the row is in flight so the mini border
   // progress + phase label stay live on the grid card. We only run
-  // the timer for busy items so done/failed cards stay still.
+  // the timer for busy items so done/failed/stale cards stay still.
   const [, setTick] = useState(0);
   useEffect(() => {
     if (!isBusy) return;
@@ -2869,7 +2877,6 @@ const LookCard = memo(function LookCard({
     return () => window.clearInterval(id);
   }, [isBusy]);
 
-  const startedAt = useMemo(() => new Date(generation.created_at).getTime(), [generation.created_at]);
   const elapsedSec = Math.max(0, (Date.now() - startedAt) / 1000);
   const typicalSec = typicalSecondsFor(generation.duration_seconds);
   const linearPct = (elapsedSec / typicalSec) * 95;
@@ -2911,7 +2918,7 @@ const LookCard = memo(function LookCard({
                   <span className="gen-lookcard-pct">{Math.round(pct)}%</span>
                 </>
               )}
-              {isFailed && <span>Failed</span>}
+              {isFailed && <span>{isStale ? 'Timed out' : 'Failed'}</span>}
             </div>
           )}
           {isBusy && <span className="gen-lookcard-chip">{generation.status === 'pending' ? 'Queued' : 'Generating'}</span>}
