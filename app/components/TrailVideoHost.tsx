@@ -65,6 +65,11 @@ interface TrailVideoManager {
    *  without re-buffering. Use before opening an overlay when the card
    *  was managed by the director rather than TrailVideoHost. */
   donate: (id: string, el: HTMLVideoElement, src: string, poster?: string) => void;
+  /** Immediately strip src from all parked off-screen elements except the
+   *  few most-recently-used, freeing their decoders. Call when a
+   *  full-screen overlay opens so the feed behind it stops holding GPU
+   *  surfaces it can't show. */
+  pruneIdle: () => void;
 }
 
 const TrailVideoContext = createContext<TrailVideoManager | null>(null);
@@ -74,7 +79,25 @@ interface PoolEntry {
   src: string;
   /** Monotonically incrementing access counter - used for LRU eviction. */
   lastUsed: number;
+  /** setTimeout id for the idle-unload countdown. Set while the element
+   *  sits parked in the off-screen pool; cleared the moment it's reused. */
+  idleTimer?: number;
+  /** True once the idle-unload has stripped el.src to free the decoder.
+   *  attach() checks this and restores el.src before handing the element
+   *  back to a slot. */
+  unloaded?: boolean;
 }
+
+// How long a video may sit parked in the off-screen pool before we strip
+// its src to free the GPU surface + software decoder. Parking preserves
+// currentTime for a quick scroll-back, but a clip the user hasn't seen in
+// 20 s isn't worth holding a decoder for — especially on mobile where a
+// handful of live decoders locks the page. Re-attach reloads from zero.
+const IDLE_UNLOAD_MS = 20_000;
+// pruneIdle keeps this many most-recently-used parked elements warm and
+// unloads the rest immediately. Called when a full-screen overlay opens
+// so the dozens of feed clips behind it stop holding decoders.
+const PRUNE_KEEP_WARM = 4;
 
 // Poster URLs we've already preloaded successfully. The browser will
 // serve subsequent <video poster> requests from cache, so we can skip
@@ -114,6 +137,33 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
   // going blank with no way to recover without a full remount.
   const slotStacksRef = useRef<Map<string, HTMLElement[]>>(new Map());
 
+  // Stop any pending idle-unload for an entry. Call whenever the element
+  // is about to be reused so a half-elapsed timer can't strip src out
+  // from under a freshly-attached slot.
+  const cancelIdleUnload = useCallback((entry: PoolEntry) => {
+    if (entry.idleTimer !== undefined) {
+      window.clearTimeout(entry.idleTimer);
+      entry.idleTimer = undefined;
+    }
+  }, []);
+
+  // Strip src to free the decoder. Safe to call on an already-unloaded
+  // element. Guarded so we never unload an element that's back in a slot.
+  const unloadEntry = useCallback((entry: PoolEntry) => {
+    const offscreen = poolRef.current;
+    if (!offscreen || entry.el.parentElement !== offscreen) return;
+    try { entry.el.pause(); entry.el.removeAttribute('src'); entry.el.load(); } catch {}
+    entry.unloaded = true;
+    entry.idleTimer = undefined;
+  }, []);
+
+  // Begin the idle countdown for a parked element. Resets any existing
+  // timer first so the most-recent park wins.
+  const scheduleIdleUnload = useCallback((entry: PoolEntry) => {
+    cancelIdleUnload(entry);
+    entry.idleTimer = window.setTimeout(() => unloadEntry(entry), IDLE_UNLOAD_MS);
+  }, [cancelIdleUnload, unloadEntry]);
+
   const evictIfNeeded = useCallback(() => {
     const pool = elementsRef.current;
     if (pool.size <= POOL_MAX) return;
@@ -127,21 +177,49 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
       .sort((a, b) => a[1].lastUsed - b[1].lastUsed);
     for (const [id, entry] of candidates) {
       if (pool.size <= POOL_MAX) break;
+      cancelIdleUnload(entry);
       try { entry.el.pause(); entry.el.removeAttribute('src'); entry.el.load(); } catch {}
       entry.el.remove();
       pool.delete(id);
     }
-  }, []);
+  }, [cancelIdleUnload]);
+
+  // Immediately unload all parked off-screen elements except the few
+  // most-recently-used. Lets a full-screen overlay (product / look)
+  // reclaim the decoders held by the feed it's covering, without waiting
+  // out the per-element idle timer.
+  const pruneIdle = useCallback(() => {
+    const offscreen = poolRef.current;
+    if (!offscreen) return;
+    const parked = [...elementsRef.current.values()]
+      .filter(e => e.el.parentElement === offscreen && !e.unloaded)
+      .sort((a, b) => b.lastUsed - a.lastUsed);
+    for (const entry of parked.slice(PRUNE_KEEP_WARM)) {
+      cancelIdleUnload(entry);
+      unloadEntry(entry);
+    }
+  }, [cancelIdleUnload, unloadEntry]);
 
   const attach = useCallback((id: string, src: string, container: HTMLElement, poster?: string): (() => void) => {
     const pool = elementsRef.current;
     let entry = pool.get(id);
+
+    // Reusing a pooled element — stop any idle-unload countdown so it
+    // can't strip src mid-attach.
+    if (entry) cancelIdleUnload(entry);
 
     if (entry && entry.src !== src) {
       // Same id, new source - replace. Rare (worker re-render of a creative).
       try { entry.el.pause(); } catch {}
       entry.el.src = src;
       entry.src = src;
+      entry.unloaded = false;
+    } else if (entry && entry.unloaded) {
+      // Idle-unload stripped src while parked. Restore it before the
+      // element goes back on screen. currentTime is lost (reloads from
+      // zero), which is fine for something the user hasn't seen in 20 s.
+      entry.el.src = entry.src;
+      entry.unloaded = false;
     }
 
     // Keep the poster fresh when the caller supplies one (e.g. once the
@@ -259,12 +337,15 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
         if (offscreen && e.el.parentElement === container) {
           offscreen.appendChild(e.el);
           try { e.el.pause(); } catch {}
+          // Start the idle countdown: if nothing re-attaches this element
+          // within IDLE_UNLOAD_MS, strip src to free the decoder.
+          scheduleIdleUnload(e);
         }
       }
       e.lastUsed = ++tickRef.current;
       evictIfNeeded();
     };
-  }, [evictIfNeeded]);
+  }, [evictIfNeeded, cancelIdleUnload, scheduleIdleUnload]);
 
   const suspendFeed = useCallback((heroTrailId: string) => {
     const offscreen = poolRef.current;
@@ -292,9 +373,18 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
     const pool = elementsRef.current;
     const offscreen = poolRef.current;
     if (!offscreen) return;
-    // Already pooled (in-slot or parked) — just refresh the poster, done.
+    // Already pooled (in-slot or parked). prewarm firing again is the
+    // signal the card is back in the render band, so cancel any idle
+    // countdown and restore src if it was stripped — that's the whole
+    // point of prewarm, to have buffering started before attach().
     const existing = pool.get(id);
     if (existing) {
+      cancelIdleUnload(existing);
+      if (existing.unloaded) {
+        existing.el.src = existing.src;
+        existing.unloaded = false;
+      }
+      existing.lastUsed = ++tickRef.current;
       if (poster && existing.el.getAttribute('poster') !== poster) {
         existing.el.setAttribute('poster', poster);
       }
@@ -325,7 +415,7 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
     offscreen.appendChild(el);
     pool.set(id, { el, src, lastUsed: ++tickRef.current });
     evictIfNeeded();
-  }, [evictIfNeeded]);
+  }, [evictIfNeeded, cancelIdleUnload]);
 
   const donate = useCallback((id: string, el: HTMLVideoElement, src: string, poster?: string): void => {
     const pool = elementsRef.current;
@@ -354,7 +444,7 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
     evictIfNeeded();
   }, [evictIfNeeded]);
 
-  const manager = useMemo<TrailVideoManager>(() => ({ attach, prewarm, suspendFeed, resumeFeed, donate }), [attach, prewarm, suspendFeed, resumeFeed, donate]);
+  const manager = useMemo<TrailVideoManager>(() => ({ attach, prewarm, suspendFeed, resumeFeed, donate, pruneIdle }), [attach, prewarm, suspendFeed, resumeFeed, donate, pruneIdle]);
 
   // Visibility + gesture playback recovery. Three sources of frozen-frame
   // bugs we have to handle:
@@ -447,6 +537,11 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
       window.removeEventListener('keydown', onFirstGesture);
       window.removeEventListener('scroll', onFirstGesture, { capture: true } as EventListenerOptions);
       window.removeEventListener('wheel', onFirstGesture);
+      // Clear any pending idle-unload timers so they can't fire after the
+      // host unmounts.
+      for (const entry of elementsRef.current.values()) {
+        if (entry.idleTimer !== undefined) window.clearTimeout(entry.idleTimer);
+      }
     };
   }, []);
 

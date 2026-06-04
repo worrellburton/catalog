@@ -526,6 +526,10 @@ export default function ProductPage({
     // Exempt the hero by its creative.id when present, otherwise pass a
     // sentinel so suspendFeed pauses everything.
     trailMgr?.suspendFeed(creative?.id ?? '');
+    // The feed behind us is fully covered — reclaim the decoders its
+    // parked clips are still holding instead of waiting out each one's
+    // idle timer. Re-entering the feed re-attaches the visible cards.
+    trailMgr?.pruneIdle();
     return () => { trailMgr?.resumeFeed(); };
   }, [trailMgr, creative?.id]);
 
