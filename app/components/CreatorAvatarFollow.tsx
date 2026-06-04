@@ -1,5 +1,31 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { useFollowState, toggleFollowShared } from '~/hooks/useFollowState';
+import { supabase } from '~/utils/supabase';
+
+// Shared, cached avatar resolver. Some looks/products don't carry the
+// creator's avatar inline; rather than render an initial, look it up once
+// per handle (profiles for user:<uuid> keys, creators table for real
+// handles) and cache the result for the session.
+const avatarCache = new Map<string, string | null>();
+const avatarInflight = new Map<string, Promise<string | null>>();
+function resolveCreatorAvatar(handle: string): Promise<string | null> {
+  if (!handle || !supabase) return Promise.resolve(null);
+  if (avatarCache.has(handle)) return Promise.resolve(avatarCache.get(handle)!);
+  const existing = avatarInflight.get(handle);
+  if (existing) return existing;
+  const p = (async (): Promise<string | null> => {
+    try {
+      if (handle.startsWith('user:')) {
+        const { data } = await supabase!.from('profiles').select('avatar_url').eq('id', handle.slice(5)).maybeSingle();
+        return (data?.avatar_url as string) || null;
+      }
+      const { data } = await supabase!.from('creators').select('avatar_url').ilike('handle', handle.replace(/^@/, '')).limit(1).maybeSingle();
+      return (data?.avatar_url as string) || null;
+    } catch { return null; }
+  })().then(v => { avatarCache.set(handle, v); avatarInflight.delete(handle); return v; });
+  avatarInflight.set(handle, p);
+  return p;
+}
 
 /**
  * Creator identity on feed/detail cards, reduced to just the profile
@@ -43,6 +69,16 @@ export default function CreatorAvatarFollow({
   const [busy, setBusy] = useState(false);
   const navigates = avatarOpensCreator && !!onOpenCreator;
 
+  // Fall back to a looked-up avatar when one wasn't passed inline.
+  const [resolvedAvatar, setResolvedAvatar] = useState<string | null>(null);
+  useEffect(() => {
+    if (avatarUrl) { setResolvedAvatar(null); return; }
+    let cancelled = false;
+    resolveCreatorAvatar(handle).then(v => { if (!cancelled && v) setResolvedAvatar(v); });
+    return () => { cancelled = true; };
+  }, [avatarUrl, handle]);
+  const shownAvatar = avatarUrl || resolvedAvatar || '';
+
   const isPlaceholder = !handle || handle.startsWith('user:');
   // Show the badge only once the shared cache has resolved (avoids a
   // +/− flicker on first paint) and never for placeholder handles.
@@ -74,8 +110,8 @@ export default function CreatorAvatarFollow({
           }
         : {})}
     >
-      {avatarUrl ? (
-        <img className="creator-avatar-follow__img" src={avatarUrl} alt={displayName || ''} loading="lazy" />
+      {shownAvatar ? (
+        <img className="creator-avatar-follow__img" src={shownAvatar} alt={displayName || ''} loading="lazy" />
       ) : (
         <span className="creator-avatar-follow__img creator-avatar-follow__img--initial" aria-hidden="true">{initial}</span>
       )}
