@@ -1,5 +1,6 @@
-import { useState, useCallback, useEffect, useRef, useMemo, lazy, Suspense } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo, Suspense } from 'react';
 import { useLocation, useNavigate } from '@remix-run/react';
+import { lazyWithReload } from '~/utils/lazyWithReload';
 import PasswordGate from '~/components/PasswordGate';
 import WaitlistScreen from '~/components/WaitlistScreen';
 import SplashScreen from '~/components/SplashScreen';
@@ -58,23 +59,23 @@ const importCreatorWallet = () => import('~/components/CreatorWallet');
 const importProfilePage = () => import('~/components/ProfilePage');
 const importFollowingPage = () => import('~/components/FollowingPage');
 
-const LandingPage = lazy(importLandingPage);
-const CreatorPage = lazy(importCreatorPage);
-const BrandPage = lazy(importBrandPage);
-const BookmarksPage = lazy(importBookmarksPage);
-const ProductPage = lazy(importProductPage);
-const LookOverlay = lazy(importLookOverlay);
-const InAppBrowser = lazy(importInAppBrowser);
-const MyLooks = lazy(importMyLooks);
-const CreatorWallet = lazy(importCreatorWallet);
-const ProfilePage = lazy(importProfilePage);
-const FollowingPage = lazy(importFollowingPage);
+const LandingPage = lazyWithReload(importLandingPage);
+const CreatorPage = lazyWithReload(importCreatorPage);
+const BrandPage = lazyWithReload(importBrandPage);
+const BookmarksPage = lazyWithReload(importBookmarksPage);
+const ProductPage = lazyWithReload(importProductPage);
+const LookOverlay = lazyWithReload(importLookOverlay);
+const InAppBrowser = lazyWithReload(importInAppBrowser);
+const MyLooks = lazyWithReload(importMyLooks);
+const CreatorWallet = lazyWithReload(importCreatorWallet);
+const ProfilePage = lazyWithReload(importProfilePage);
+const FollowingPage = lazyWithReload(importFollowingPage);
 // Shared Saved screen, embedded into My Account + My Catalog. Lazy so it
 // only loads when a saved surface actually mounts.
-const SavedScreen = lazy(() => import('~/components/SavedScreen'));
+const SavedScreen = lazyWithReload(() => import('~/components/SavedScreen'));
 // Comment thread, rendered as an in-app overlay (not a route) so backing
 // out of it never tears down / re-resolves the product or look underneath.
-const CommentsPage = lazy(() => import('~/components/CommentsPage'));
+const CommentsPage = lazyWithReload(() => import('~/components/CommentsPage'));
 
 /** Pause every currently-playing <video> in the document. Called on
  *  every product → product navigation so the old hero + rail cards
