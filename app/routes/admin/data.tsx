@@ -1,4 +1,5 @@
 import { useState, Fragment, useMemo, useCallback, useEffect, useRef, useId } from 'react';
+import ParticleBackground from '~/components/ParticleBackground';
 import {
   spotifySearch,
   listMusics,
@@ -7864,23 +7865,68 @@ export default function AdminData() {
         <div
           className="admin-modal-overlay"
           onClick={() => !claudeGeminiBusy && setShowClaudeGemini(false)}
+          style={{
+            background: 'rgba(6, 8, 14, 0.65)',
+            backdropFilter: 'blur(24px) saturate(140%)',
+            WebkitBackdropFilter: 'blur(24px) saturate(140%)',
+          }}
         >
           <div
             className="admin-modal"
             onClick={(e) => e.stopPropagation()}
-            style={{ maxWidth: 880, width: '90vw' }}
+            style={{
+              maxWidth: 920,
+              width: '90vw',
+              position: 'relative',
+              background: 'linear-gradient(180deg, rgba(15,18,28,0.78), rgba(15,18,28,0.92))',
+              color: '#fff',
+              border: '1px solid rgba(255,255,255,0.10)',
+              boxShadow: '0 24px 80px rgba(0,0,0,0.6), inset 0 1px 0 rgba(255,255,255,0.10)',
+              overflow: 'hidden',
+              borderRadius: 16,
+            }}
           >
-            <header style={{ padding: '16px 20px', borderBottom: '1px solid #eee', display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+            {/* WebGL particle field — same one the consumer experience
+                uses. Sits behind every layer inside the modal at
+                z-index 0; content blocks below carry z-index:1 so
+                they sit cleanly on top. opacity dialed to 0.85 so the
+                drift reads as ambient rather than busy. */}
+            <div
+              aria-hidden="true"
+              style={{ position: 'absolute', inset: 0, zIndex: 0, pointerEvents: 'none', opacity: 0.85 }}
+            >
+              <ParticleBackground />
+            </div>
+            <header style={{
+              position: 'relative', zIndex: 1,
+              padding: '16px 20px',
+              borderBottom: '1px solid rgba(255,255,255,0.08)',
+              display: 'flex', justifyContent: 'space-between', alignItems: 'center',
+              background: 'linear-gradient(180deg, rgba(255,255,255,0.04), transparent)',
+            }}>
               <div>
-                <h2 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 600 }}>Add via Claude + Gemini</h2>
-                <p style={{ margin: 0, fontSize: 12, color: '#666' }}>Side-by-side URL suggestions. Click any URL to queue it for scrape.</p>
+                <h2 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 600, color: '#fff' }}>Add via Claude + Gemini</h2>
+                <p style={{ margin: 0, fontSize: 12, color: 'rgba(255,255,255,0.6)' }}>Side-by-side URL suggestions. Click any URL to queue it for scrape.</p>
               </div>
-              <button type="button" className="admin-icon-btn" aria-label="Close" disabled={claudeGeminiBusy} onClick={() => setShowClaudeGemini(false)}>
-                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+              <button
+                type="button"
+                aria-label="Close"
+                disabled={claudeGeminiBusy}
+                onClick={() => setShowClaudeGemini(false)}
+                style={{
+                  width: 32, height: 32, borderRadius: '50%',
+                  border: '1px solid rgba(255,255,255,0.16)',
+                  background: 'rgba(255,255,255,0.04)',
+                  color: 'rgba(255,255,255,0.85)',
+                  cursor: claudeGeminiBusy ? 'wait' : 'pointer',
+                  display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                }}
+              >
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
               </button>
             </header>
-            <div style={{ padding: 20 }}>
-              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#444', marginBottom: 6 }}>
+            <div style={{ position: 'relative', zIndex: 1, padding: 20 }}>
+              <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: 'rgba(255,255,255,0.75)', marginBottom: 6 }}>
                 What are you looking for?
               </label>
               <div style={{ display: 'flex', gap: 8 }}>
@@ -7896,20 +7942,31 @@ export default function AdminData() {
                       await runClaudeGeminiSearch();
                     }
                   }}
-                  style={{ flex: 1, padding: '10px 12px', fontSize: 14, borderRadius: 8, border: '1px solid #ddd' }}
+                  style={{
+                    flex: 1, padding: '11px 14px', fontSize: 14, borderRadius: 999,
+                    border: '1px solid rgba(255,255,255,0.16)',
+                    background: 'rgba(0,0,0,0.35)',
+                    color: '#fff',
+                    outline: 'none',
+                  }}
                 />
                 <button
                   type="button"
-                  className="admin-btn admin-btn-primary"
                   disabled={claudeGeminiBusy || !claudeGeminiPrompt.trim()}
                   onClick={runClaudeGeminiSearch}
-                  style={{ padding: '10px 18px', fontSize: 13 }}
+                  style={{
+                    padding: '11px 22px', fontSize: 13, fontWeight: 700, borderRadius: 999,
+                    border: 'none',
+                    background: '#fff', color: '#111',
+                    cursor: claudeGeminiBusy ? 'wait' : 'pointer',
+                    opacity: (claudeGeminiBusy || !claudeGeminiPrompt.trim()) ? 0.5 : 1,
+                  }}
                 >
                   {claudeGeminiBusy ? 'Searching…' : 'Search'}
                 </button>
               </div>
               {claudeGeminiError && (
-                <div style={{ marginTop: 10, fontSize: 12, color: '#b91c1c' }}>{claudeGeminiError}</div>
+                <div style={{ marginTop: 10, fontSize: 12, color: '#fca5a5' }}>{claudeGeminiError}</div>
               )}
 
               {claudeGeminiResult && (
@@ -7920,18 +7977,25 @@ export default function AdminData() {
                   marginTop: 18,
                 }}>
                   {[
-                    { key: 'claude', title: 'Claude (Sonnet 4.6)', data: claudeGeminiResult.claude },
-                    { key: 'gemini', title: 'Gemini (2.5 Pro)', data: claudeGeminiResult.gemini },
+                    { key: 'claude', title: 'Claude (Opus 4.8)', data: claudeGeminiResult.claude },
+                    { key: 'gemini', title: 'Gemini (3 Pro)', data: claudeGeminiResult.gemini },
                   ].map(col => (
-                    <div key={col.key} style={{ border: '1px solid #e5e7eb', borderRadius: 10, padding: 12, background: '#fff' }}>
+                    <div key={col.key} style={{
+                      border: '1px solid rgba(255,255,255,0.10)',
+                      borderRadius: 12,
+                      padding: 12,
+                      background: 'rgba(255,255,255,0.04)',
+                      backdropFilter: 'blur(8px)',
+                      WebkitBackdropFilter: 'blur(8px)',
+                    }}>
                       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline', marginBottom: 8 }}>
-                        <span style={{ fontSize: 12, fontWeight: 700, color: '#111' }}>{col.title}</span>
-                        <span style={{ fontSize: 10, color: '#888' }}>{col.data.urls.length} urls · {col.data.ms}ms</span>
+                        <span style={{ fontSize: 12, fontWeight: 700, color: '#fff' }}>{col.title}</span>
+                        <span style={{ fontSize: 10, color: 'rgba(255,255,255,0.45)' }}>{col.data.urls.length} urls · {col.data.ms}ms</span>
                       </div>
                       {col.data.error ? (
-                        <div style={{ fontSize: 11, color: '#b91c1c', padding: 6 }}>{col.data.error}</div>
+                        <div style={{ fontSize: 11, color: '#fca5a5', padding: 6 }}>{col.data.error}</div>
                       ) : col.data.urls.length === 0 ? (
-                        <div style={{ fontSize: 11, color: '#666', padding: 6 }}>No URLs returned.</div>
+                        <div style={{ fontSize: 11, color: 'rgba(255,255,255,0.5)', padding: 6 }}>No URLs returned.</div>
                       ) : (
                         <ul style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex', flexDirection: 'column', gap: 4, maxHeight: 360, overflowY: 'auto' }}>
                           {col.data.urls.map(u => {
@@ -7945,12 +8009,12 @@ export default function AdminData() {
                                   style={{
                                     flex: 1,
                                     textAlign: 'left',
-                                    padding: '6px 10px',
+                                    padding: '7px 12px',
                                     fontSize: 11,
-                                    border: '1px solid ' + (added ? '#a7f3d0' : '#e5e7eb'),
-                                    background: added ? '#ecfdf5' : '#f9fafb',
-                                    color: added ? '#047857' : '#111',
-                                    borderRadius: 6,
+                                    border: '1px solid ' + (added ? 'rgba(34,197,94,0.45)' : 'rgba(255,255,255,0.12)'),
+                                    background: added ? 'rgba(34,197,94,0.14)' : 'rgba(0,0,0,0.30)',
+                                    color: added ? '#86efac' : '#fff',
+                                    borderRadius: 8,
                                     cursor: added ? 'default' : 'pointer',
                                     overflow: 'hidden',
                                     textOverflow: 'ellipsis',
