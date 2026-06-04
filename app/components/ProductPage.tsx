@@ -506,6 +506,12 @@ export default function ProductPage({
   const [mounted, setMounted] = useState(false);
   const [isAnimatingOut, setIsAnimatingOut] = useState(false);
   const [productCatalogs, setProductCatalogs] = useState<ProductCatalog[]>([]);
+  // "View more info" dropdown — collapses the size & fit, "Best for", and
+  // "Popular in" detail blocks behind a single toggle so the info column
+  // leads with the essentials (brand, name, price, actions). Collapsed by
+  // default; resets on every product navigation.
+  const [showMoreInfo, setShowMoreInfo] = useState(false);
+  useEffect(() => { setShowMoreInfo(false); }, [product.name, product.brand]);
 
   // Suspend the home feed's director-driven playback while this page is open.
   // The feed stays mounted+blurred behind us; left running it decodes dozens
@@ -1012,6 +1018,51 @@ export default function ProductPage({
     }
   }, [lookCreatives]);
 
+  // Size & fit spec sheet — computed up here (was an inline IIFE in the
+  // JSX) so the "View more info" dropdown can both test it for emptiness
+  // and render it. Null when the scraper captured none of the three
+  // signals (size_fit, materials_care, measurements).
+  const specsNode = (() => {
+    if (!details) return null;
+    const hasMeasurements = !!details.measurements
+      && Object.values(details.measurements).some(
+        (v): v is number => typeof v === 'number' && Number.isFinite(v)
+      );
+    const fitText = (details.size_fit && details.size_fit.trim())
+      || deriveFitLabel(fitIntel)
+      || '';
+    const hasFit = fitRelevant && !!fitText;
+    const hasMaterials = !!(details.materials_care && details.materials_care.trim());
+    if (!hasMeasurements && !hasFit && !hasMaterials) return null;
+    return (
+      <section className="pd-specs" aria-label="Size and fit details">
+        <h2 className="pd-specs-title">Size &amp; fit</h2>
+        <ProductMeasurementsDiagram measurements={details.measurements} />
+        {(hasFit || hasMaterials) && (
+          <dl className="pd-specs-list">
+            {hasFit && (
+              <div className="pd-specs-row">
+                <dt className="pd-specs-label">Fit</dt>
+                <dd className="pd-specs-value">{fitText}</dd>
+              </div>
+            )}
+            {hasMaterials && (
+              <div className="pd-specs-row">
+                <dt className="pd-specs-label">Materials</dt>
+                <dd className="pd-specs-value">{details.materials_care}</dd>
+              </div>
+            )}
+          </dl>
+        )}
+      </section>
+    );
+  })();
+  const hasCatalogPills = !!onCreateCatalog && productCatalogs.length > 0;
+  const hasChips = chipGroups.length > 0;
+  // Whether the "View more info" toggle has anything to reveal. When all
+  // three detail blocks are empty the button is suppressed entirely.
+  const hasMoreInfo = !!specsNode || hasChips || hasCatalogPills;
+
   return (
     <div
       ref={overlayRef}
@@ -1230,66 +1281,45 @@ export default function ProductPage({
               </div>
             )}
 
-            {/* Size & fit + Materials & care spec sheet. Hidden
-                entirely when the scraper hasn't picked up any of the
-                three signals (size_fit, materials_care, measurements)
-                — there's nothing useful to show, and a stub of
-                "Not available / Not available" was just visual noise
-                on the rest of the catalog. */}
-            {details && (() => {
-              const hasMeasurements = !!details.measurements
-                && Object.values(details.measurements).some(
-                  (v): v is number => typeof v === 'number' && Number.isFinite(v)
-                );
-              // Fit is only shown for items where garment fit is meaningful
-              // (apparel/footwear). For everything else — books, kitchenware,
-              // home decor — the Fit row is suppressed entirely; Materials
-              // still shows for any category that has it. When the scraper
-              // didn't capture a free-text size_fit sentence we fall back to
-              // a short label derived from fit_intelligence (e.g. "Relaxed
-              // fit · runs small") so a fashion item never shows a blank Fit.
-              const fitText = (details.size_fit && details.size_fit.trim())
-                || deriveFitLabel(fitIntel)
-                || '';
-              const hasFit = fitRelevant && !!fitText;
-              const hasMaterials = !!(details.materials_care && details.materials_care.trim());
-              if (!hasMeasurements && !hasFit && !hasMaterials) return null;
-              return (
-                <section className="pd-specs" aria-label="Size and fit details">
-                  <h2 className="pd-specs-title">Size &amp; fit</h2>
-                  <ProductMeasurementsDiagram measurements={details.measurements} />
-                  {(hasFit || hasMaterials) && (
-                    <dl className="pd-specs-list">
-                      {hasFit && (
-                        <div className="pd-specs-row">
-                          <dt className="pd-specs-label">Fit</dt>
-                          <dd className="pd-specs-value">{fitText}</dd>
-                        </div>
-                      )}
-                      {hasMaterials && (
-                        <div className="pd-specs-row">
-                          <dt className="pd-specs-label">Materials</dt>
-                          <dd className="pd-specs-value">{details.materials_care}</dd>
-                        </div>
-                      )}
-                    </dl>
+            {/* "View more info" dropdown — collapses Size & fit, the
+                "Best for" chips (occasion / season / "Suits …" / style),
+                and "Popular in" behind one toggle so the info column
+                leads with the essentials. The button only renders when at
+                least one of those blocks has content. */}
+            {hasMoreInfo && (
+              <div className="pd-more-info">
+                <button
+                  type="button"
+                  className={`pd-more-info-btn${showMoreInfo ? ' is-open' : ''}`}
+                  onClick={() => setShowMoreInfo(v => !v)}
+                  aria-expanded={showMoreInfo}
+                  aria-controls="pd-more-info-panel"
+                >
+                  <span>{showMoreInfo ? 'Hide info' : 'View more info'}</span>
+                  <svg className="pd-more-info-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </button>
+                <div
+                  id="pd-more-info-panel"
+                  className={`pd-more-info-panel${showMoreInfo ? ' is-open' : ''}`}
+                  hidden={!showMoreInfo}
+                >
+                  {/* Size & fit + Materials & care spec sheet. */}
+                  {specsNode}
+
+                  {/* "Best for" suggestion chips — occasion, body-type
+                      ("Suits …"), season, works-with. Renders nothing when
+                      there's no metadata. */}
+                  <ProductSuggestionChips groups={chipGroups} />
+
+                  {/* "Popular in" — curated catalogs this product belongs
+                      to. Tap a pill to open that catalog's feed. */}
+                  {onCreateCatalog && (
+                    <ProductCatalogPills catalogs={productCatalogs} onOpenCatalog={onCreateCatalog} />
                   )}
-                </section>
-              );
-            })()}
-
-            {/* "Best for" suggestion chips — surfaces the styling/fit
-                metadata we already collect (occasion, body-type, season,
-                works-with) so the product reads as useful, not a bare
-                image + price. Universal for occasion/season/style;
-                body-type ("Suits …") chips are apparel-only. Renders
-                nothing when there's no metadata. */}
-            <ProductSuggestionChips groups={chipGroups} />
-
-            {/* "Popular in" — curated catalogs this product belongs to. Tap a
-                pill to open that catalog's feed. Hidden when it matches none. */}
-            {onCreateCatalog && (
-              <ProductCatalogPills catalogs={productCatalogs} onOpenCatalog={onCreateCatalog} />
+                </div>
+              </div>
             )}
 
             {/* "More from <brand>" rail - fills the negative space below

@@ -323,6 +323,62 @@
    retailer drawer and the brand rail. Two-row dl so the labels align
    vertically; empty rows fade out so the section reads cleanly even
    when the scraper hasn't backfilled the row yet. */
+/* "View more info" dropdown — wraps Size & fit, "Best for", "Popular in". */
+.pd-more-info {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.pd-more-info-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+.pd-more-info-btn:hover {
+  border-color: rgba(255, 255, 255, 0.36);
+  background: rgba(255, 255, 255, 0.09);
+}
+.pd-more-info-chevron {
+  transition: transform 0.24s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.pd-more-info-btn.is-open .pd-more-info-chevron {
+  transform: rotate(180deg);
+}
+
+/* Panel reveal — animates open from the button. `hidden` keeps it out of
+   the a11y tree + layout when collapsed; when open we grid-expand it. */
+.pd-more-info-panel.is-open {
+  animation: pd-more-info-in 0.28s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+@keyframes pd-more-info-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+/* The first detail block inside the panel shouldn't re-draw the divider —
+   the dropdown wrapper already owns the top border. */
+.pd-more-info-panel > .pd-specs:first-child,
+.pd-more-info-panel > .pd-chips:first-child,
+.pd-more-info-panel > .pd-popular:first-child {
+  margin-top: 4px;
+  padding-top: 0;
+  border-top: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pd-more-info-panel.is-open { animation: none; }
+}
+
 .pd-specs {
   margin-top: 28px;
   padding-top: 20px;
