@@ -19,6 +19,7 @@ export interface ActivityLookStat {
   look_id: string;
   title: string | null;
   thumbnail_url: string | null;
+  video_url: string | null;
   impressions: number;
   clicks: number;
   clickouts: number;
@@ -85,23 +86,42 @@ export async function getMyTopLooks(limit = 10): Promise<ActivityLookStat[]> {
     .map(([id]) => id);
   if (topIds.length === 0) return [];
 
-  const { data: looks } = await supabase
-    .from('looks')
-    .select('id, title, thumbnail_url')
-    .in('id', topIds);
+  // Titles come from `looks`; the poster + video live on `looks_creative`
+  // (the `looks` table carries no media columns). Prefer the primary
+  // creative, and the mobile video variant when present (smaller payload).
+  const [{ data: looks }, { data: creatives }] = await Promise.all([
+    supabase.from('looks').select('id, title').in('id', topIds),
+    supabase.from('looks_creative')
+      .select('look_id, is_primary, video_url, mobile_video_url, thumbnail_url')
+      .in('look_id', topIds),
+  ]);
 
-  const byId = new Map<string, { title: string | null; thumbnail_url: string | null }>();
-  for (const l of (looks as Array<{ id: string; title: string | null; thumbnail_url: string | null }> | null) || []) {
-    byId.set(l.id, { title: l.title, thumbnail_url: l.thumbnail_url });
+  const titleById = new Map<string, string | null>();
+  for (const l of (looks as Array<{ id: string; title: string | null }> | null) || []) {
+    titleById.set(l.id, l.title);
+  }
+
+  type Creative = { look_id: string; is_primary: boolean | null; video_url: string | null; mobile_video_url: string | null; thumbnail_url: string | null };
+  const mediaById = new Map<string, { thumbnail_url: string | null; video_url: string | null }>();
+  for (const c of (creatives as Creative[] | null) || []) {
+    const existing = mediaById.get(c.look_id);
+    // First creative wins, but a primary one always overrides.
+    if (!existing || c.is_primary) {
+      mediaById.set(c.look_id, {
+        thumbnail_url: c.thumbnail_url,
+        video_url: c.mobile_video_url || c.video_url,
+      });
+    }
   }
 
   return topIds.map(id => {
     const c = per.get(id) || { impressions: 0, clicks: 0, clickouts: 0 };
-    const l = byId.get(id);
+    const media = mediaById.get(id);
     return {
       look_id: id,
-      title: l?.title ?? null,
-      thumbnail_url: l?.thumbnail_url ?? null,
+      title: titleById.get(id) ?? null,
+      thumbnail_url: media?.thumbnail_url ?? null,
+      video_url: media?.video_url ?? null,
       ...c,
     };
   });

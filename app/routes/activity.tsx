@@ -18,8 +18,9 @@
  * without a second realtime channel.
  */
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from '@remix-run/react';
+import { supabaseImage } from '~/utils/supabaseImage';
 import { useAuth } from '~/hooks/useAuth';
 import { getEngagementSummary, type EngagementSummary } from '~/services/creator-engagement';
 import {
@@ -34,6 +35,60 @@ import {
 import CountUp from '~/components/CountUp';
 import SiteParticleHost from '~/components/SiteParticleHost';
 import '~/styles/activity-page.css';
+
+/**
+ * Top-look thumbnail: paints a tiny (~160px, q60) poster first so it lands
+ * fast (well under ~15KB), then — once the poster is on screen and a video
+ * exists — mounts the muted clip behind it and crossfades to it on canplay.
+ */
+function TopLookThumb({ thumbnailUrl, videoUrl }: { thumbnailUrl: string | null; videoUrl: string | null }) {
+  const [posterLoaded, setPosterLoaded] = useState(false);
+  const [videoReady, setVideoReady] = useState(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const poster = thumbnailUrl ? supabaseImage(thumbnailUrl, { width: 160, quality: 60 }) : null;
+  const mountVideo = !!videoUrl && posterLoaded;
+
+  useEffect(() => {
+    if (!mountVideo) return;
+    const v = videoRef.current;
+    if (!v) return;
+    const onCanPlay = () => setVideoReady(true);
+    v.addEventListener('canplay', onCanPlay, { once: true });
+    return () => v.removeEventListener('canplay', onCanPlay);
+  }, [mountVideo]);
+
+  if (!poster && !videoUrl) return <div className="ap-look-thumb ap-look-thumb--empty" />;
+
+  return (
+    <div className="ap-look-thumb">
+      {poster && (
+        <img
+          className="ap-look-thumb-media"
+          src={poster}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          onLoad={() => setPosterLoaded(true)}
+          onError={() => setPosterLoaded(true)}
+          style={{ opacity: videoReady ? 0 : 1 }}
+        />
+      )}
+      {mountVideo && (
+        <video
+          ref={videoRef}
+          className="ap-look-thumb-media ap-look-thumb-video"
+          src={videoUrl || undefined}
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="auto"
+          style={{ opacity: videoReady ? 1 : 0 }}
+        />
+      )}
+    </div>
+  );
+}
 
 export default function ActivityRoute() {
   const navigate = useNavigate();
@@ -172,11 +227,8 @@ export default function ActivityRoute() {
               {topLooks.map((l, i) => (
                 <div key={l.look_id} className="ap-look-row">
                   <span className="ap-look-rank">{i + 1}</span>
-                  {l.thumbnail_url
-                    ? <img className="ap-look-thumb" src={l.thumbnail_url} alt="" />
-                    : <div className="ap-look-thumb ap-look-thumb--empty" />}
+                  <TopLookThumb thumbnailUrl={l.thumbnail_url} videoUrl={l.video_url} />
                   <div className="ap-look-body">
-                    <div className="ap-look-title">{l.title || 'Untitled look'}</div>
                     <div className="ap-look-metrics">
                       <span><CountUp value={l.impressions} /> impressions</span>
                       <span>·</span>
