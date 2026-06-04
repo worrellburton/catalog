@@ -314,15 +314,15 @@
    (no contrast); a subtle filled disc reads as a proper button without
    competing with the input. */
 .bottom-bar-inner.search-inline > .filter-btn.inline {
-  background: rgba(255, 255, 255, 0.10);
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  color: rgba(255, 255, 255, 0.85);
+  background: transparent;
+  border: 1px solid transparent;
+  color: rgba(255, 255, 255, 0.7);
   transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
 }
 .bottom-bar-inner.search-inline > .filter-btn.inline:hover {
-  background: rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.10);
   color: #fff;
-  border-color: rgba(255, 255, 255, 0.22);
+  border-color: transparent;
 }
 .bottom-bar-inner.search-inline > .filter-btn.inline.has-filters {
   background: rgba(255, 255, 255, 0.95);
@@ -920,21 +920,21 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 46px;
-  height: 46px;
+  width: 40px;
+  height: 40px;
   padding: 0;
   border: none;
   border-radius: 50%;
-  background: rgba(36, 36, 38, 0.78);
-  color: rgba(255, 255, 255, 0.72);
-  backdrop-filter: blur(28px) saturate(1.8);
-  -webkit-backdrop-filter: blur(28px) saturate(1.8);
+  /* Plain icon on the bar's glass — no separate disc "layer". */
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
   box-shadow: none;
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
-  transition: background 0.12s ease, transform 0.1s ease;
+  transition: background 0.12s ease, color 0.12s ease, transform 0.1s ease;
 }
-.bottom-search-close:active { background: rgba(58, 58, 62, 0.88); transform: scale(0.92); }
+.bottom-search-close:hover { color: rgba(255, 255, 255, 0.95); }
+.bottom-search-close:active { background: rgba(255, 255, 255, 0.08); transform: scale(0.92); }
 .light-mode .bottom-search-close {
   background: rgba(220, 220, 225, 0.78);
   color: rgba(0, 0, 0, 0.5);
