@@ -1,6 +1,6 @@
 import { useReducer, useEffect, useRef, useCallback, useMemo, useState, memo } from 'react';
 import { looks as staticLooksFallback, type Look, type Product } from '~/data/looks';
-import { getLooks, getCachedLooks, subscribeToLooksChange } from '~/services/looks';
+import { getLooks, getCachedLooks, subscribeToLooksChange, fetchSeenLookIds, reorderBySeen } from '~/services/looks';
 import { trackImpression } from '~/services/session-tracker';
 import { getSimilarLooks } from '~/utils/similarity';
 import FeedSection from './FeedSection';
@@ -232,14 +232,27 @@ function ContinuousFeed({
   // useEffect preserves the hook-count contract for HMR stability.)
   useEffect(() => { /* combined fetch below handles looks revalidation */ }, []);
 
+  // Seen-look set for the signed-in shopper. Used by the unseen-first
+  // ordering rule applied to allLooks below. Re-fetched on mount and
+  // whenever the cached looks set changes (so a freshly-published look
+  // is treated as unseen until the impression fires).
+  const [seenLookIds, setSeenLookIds] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (!user?.id) { setSeenLookIds(new Set()); return; }
+    fetchSeenLookIds(user.id).then(setSeenLookIds).catch(() => setSeenLookIds(new Set()));
+  }, [user?.id, dbLooks.length]);
+
   const allLooks = useMemo(() => {
-    return dbLooks
+    const filtered = dbLooks
       .filter(l => !hiddenLookIds.has(l.id))
       .map(l => ({
         ...l,
         products: l.products.filter(p => !hiddenProductKeys.has(`${p.brand}-${p.name}`)),
       }));
-  }, [dbLooks, hiddenLookIds, hiddenProductKeys]);
+    // Anonymous shoppers see the natural feed order untouched —
+    // reorderBySeen no-ops with an empty seen set.
+    return reorderBySeen(filtered, seenLookIds);
+  }, [dbLooks, hiddenLookIds, hiddenProductKeys, seenLookIds]);
 
   // Shopper's profile gender, subscribed globally. Declared ABOVE
   // filteredLooks so the useMemo below can read it without tripping
