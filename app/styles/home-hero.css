@@ -979,6 +979,25 @@ body:has(.app-root.chrome-hidden) .ai-bar-wrap {
   pointer-events: none;
 }
 
+/* Desktop overlay handling — when any product/look/brand/creator
+   overlay opens, the desktop search bar should EXIT the viewport
+   downward instead of floating to whatever "hero" or "docked"
+   position the cascade lands on. Previously the bar drifted to
+   centre-screen mid-overlay (the user's "search bar floats to
+   middle" complaint) because none of the overlay paths owned its
+   vertical position. Mobile handles this via .bottom-bar's own
+   rules; this is the desktop equivalent. */
+@media (min-width: 769px) {
+  body:has(.app-root.has-overlay) .ai-bar-wrap {
+    transform: translateY(140%);
+    opacity: 0;
+    pointer-events: none;
+    transition:
+      transform 0.32s cubic-bezier(0.32, 0.72, 0, 1),
+      opacity 0.22s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+}
+
 /* When the search sheet is open the bar still hides with a pure Y
    slide — centering is margin-based, so no translateX to preserve. */
 .app-root.chrome-hidden .bottom-bar.search-open {
