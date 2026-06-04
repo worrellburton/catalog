@@ -20,6 +20,10 @@ import {
   setLookSimilarityThreshold,
   subscribeLookSimilarityThreshold,
   DEFAULT_LOOK_SIMILARITY,
+  getCommentsEnabled,
+  setCommentsEnabled,
+  subscribeCommentsEnabled,
+  DEFAULT_COMMENTS_ENABLED,
 } from '~/services/dials';
 import { backfillBrandLogos, type BackfillResult } from '~/services/brandLogos';
 import { shouldBeVideo } from '~/utils/videoStillSplit';
@@ -182,6 +186,41 @@ export default function AdminDials() {
         setProductsImageOnlySaving(false);
         window.setTimeout(() => {
           if (inflightProductsImageOnly.current === next) inflightProductsImageOnly.current = null;
+        }, 1500);
+      });
+  };
+
+  // ── Comments feature flag ───────────────────────────────────────────
+  // When ON, products + looks show a Comment button that opens the thread
+  // page. When OFF the button and the thread page are hidden everywhere.
+  const [commentsEnabled, setCommentsEnabledState] = useState<boolean>(DEFAULT_COMMENTS_ENABLED);
+  const [commentsLoaded, setCommentsLoaded] = useState(false);
+  const [commentsSaving, setCommentsSaving] = useState(false);
+  const inflightComments = useRef<boolean | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    getCommentsEnabled().then(v => {
+      if (cancelled) return;
+      setCommentsEnabledState(v);
+      setCommentsLoaded(true);
+    });
+    const unsub = subscribeCommentsEnabled(v => {
+      if (cancelled) return;
+      if (inflightComments.current === v) return;
+      setCommentsEnabledState(v);
+    });
+    return () => { cancelled = true; unsub(); };
+  }, []);
+  const onToggleComments = (next: boolean) => {
+    setCommentsEnabledState(next);
+    inflightComments.current = next;
+    setCommentsSaving(true);
+    setCommentsEnabled(next)
+      .catch(err => { setError(err.message || 'Save failed'); })
+      .finally(() => {
+        setCommentsSaving(false);
+        window.setTimeout(() => {
+          if (inflightComments.current === next) inflightComments.current = null;
         }, 1500);
       });
   };
@@ -597,6 +636,58 @@ export default function AdminDials() {
             )}
           </div>
         </div>
+        <div className="admin-detail-card">
+          <h3>Comments on products & looks</h3>
+          <p style={{ fontSize: 13, color: '#888', margin: '4px 0 16px' }}>
+            When ON, every product and look shows a Comment button that
+            opens its comment thread (with the WebGL avatar field of the
+            people in the thread). When OFF the button is hidden
+            everywhere and the thread page reports comments are turned
+            off. Existing comments are preserved either way.
+          </p>
+          {!commentsLoaded ? (
+            <div className="admin-empty" style={{ marginTop: 0 }}>Loading…</div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#111' }}>
+                  {commentsEnabled ? 'On' : 'Off'}
+                </span>
+                <span style={{ fontSize: 11, color: '#999' }}>
+                  {commentsEnabled
+                    ? 'Shoppers can read and post comments.'
+                    : 'Comment buttons hidden platform-wide.'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 11, color: '#999' }}>
+                  {commentsSaving ? 'Saving…' : 'Saved'}
+                </span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={commentsEnabled}
+                  onClick={() => onToggleComments(!commentsEnabled)}
+                  style={{
+                    position: 'relative', width: 44, height: 24, borderRadius: 999,
+                    border: 'none', background: commentsEnabled ? '#16a34a' : '#cbd5e1',
+                    cursor: 'pointer', transition: 'background 160ms ease', padding: 0,
+                  }}
+                >
+                  <span
+                    style={{
+                      position: 'absolute', top: 3, left: commentsEnabled ? 23 : 3,
+                      width: 18, height: 18, borderRadius: '50%',
+                      background: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.25)',
+                      transition: 'left 160ms ease',
+                    }}
+                  />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
         <div className="admin-detail-card">
           <h3>Product "More like this" similarity</h3>
           <p style={{ fontSize: 13, color: '#888', margin: '4px 0 16px' }}>

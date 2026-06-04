@@ -1423,6 +1423,32 @@
   background: rgba(255, 215, 92, 0.08);
 }
 
+/* Comment button — same pill shape as Save, sits in the action row. */
+.pd-comment-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 18px;
+  border-radius: 999px;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, transform 0.16s;
+}
+.pd-comment-btn:hover {
+  border-color: rgba(255, 255, 255, 0.36);
+  background: rgba(255, 255, 255, 0.06);
+}
+.pd-comment-btn:active { transform: scale(0.97); }
+.pd-comment-btn .comment-btn-count {
+  font-weight: 700;
+  opacity: 0.85;
+}
+
 /* Similar-products feed below the info card. Natural page scroll. */
 .pd-feed {
   padding: 32px 24px 56px;

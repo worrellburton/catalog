@@ -78,6 +78,35 @@ html[data-shell="catalog-app"] .bookmarks-page {
   fill: currentColor;
 }
 
+/* Comment button — sits beside the bookmark button in the look topbar. */
+.look-comment-btn {
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  color: rgba(255, 255, 255, 0.7);
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.25s cubic-bezier(0.16, 1, 0.3, 1);
+  flex-shrink: 0;
+  margin-left: 10px;
+}
+.look-comment-btn:hover {
+  background: rgba(255, 255, 255, 0.15);
+  transform: scale(1.1);
+}
+.light-mode .look-comment-btn {
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: rgba(0, 0, 0, 0.5);
+}
+.light-mode .look-comment-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
+}
+
 .light-mode .look-bookmark-btn {
   background: rgba(0, 0, 0, 0.05);
   border-color: rgba(0, 0, 0, 0.1);

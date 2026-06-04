@@ -1,6 +1,9 @@
 
 import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
+import { useNavigate } from '@remix-run/react';
 import { Look, creators, Product, looks as allLooksData } from '~/data/looks';
+import { lookSlug } from '~/utils/slug';
+import { useCommentsEnabled } from '~/hooks/useCommentsEnabled';
 import { useEscapeKey } from '~/hooks/useEscapeKey';
 import LookCard from './LookCard';
 import { sortByGarmentRole } from '~/utils/garmentOrder';
@@ -121,6 +124,20 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
 
   const { user } = useAuth();
   const shopperBody = useShopperBody(user?.id);
+  const navigate = useNavigate();
+
+  // Comments — gated by the platform dial. Deep-links to the thread page
+  // keyed by this look's shareable slug.
+  const commentsEnabled = useCommentsEnabled();
+  const commentSlug = useMemo(
+    () => lookSlug({
+      id: look.id ?? null,
+      creator: look.creator ?? null,
+      creatorDisplayName: look.creatorDisplayName ?? null,
+      title: look.title ?? null,
+    }),
+    [look],
+  );
   // Admin-editable section config from /admin/pages. null until loaded;
   // isSectionEnabled treats null as "enabled" so first paint isn't blank.
   const pageSections = usePageSections('looks');
@@ -774,6 +791,17 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                   <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/>
                 </svg>
               </button>
+              {commentsEnabled && commentSlug && (
+                <button
+                  className="look-comment-btn"
+                  onClick={() => navigate(`/comments/l/${commentSlug}`)}
+                  aria-label="View comments"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
+                  </svg>
+                </button>
+              )}
             </div>
 
             {/* Creator row — prefer the static-seed creator entry if

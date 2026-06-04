@@ -24,6 +24,9 @@ import { usePageSections, isSectionEnabled, getSectionLimit, isSectionInfinite }
 import SizeMatchBadge from '~/components/SizeMatchBadge';
 import { director } from '~/services/video-playback-director';
 import ParticleBackground from '~/components/ParticleBackground';
+import { productSlug } from '~/utils/slug';
+import { useCommentsEnabled } from '~/hooks/useCommentsEnabled';
+import { getCommentCount } from '~/services/comments';
 import {
   pickVideoUrl,
   pickPosterUrl,
@@ -531,6 +534,25 @@ export default function ProductPage({
 
   const { user } = useAuth();
   const shopperBody = useShopperBody(user?.id);
+
+  // Comments — gated by the platform dial. The button deep-links to the
+  // comment thread page keyed by this product's shareable slug.
+  const commentsEnabled = useCommentsEnabled();
+  const commentSlug = useMemo(
+    () => productSlug({
+      id: (product as Product & { id?: string | null }).id ?? null,
+      brand: product.brand ?? null,
+      name: product.name ?? null,
+    }),
+    [product],
+  );
+  const [commentCount, setCommentCount] = useState<number | null>(null);
+  useEffect(() => {
+    if (!commentsEnabled || !commentSlug) { setCommentCount(null); return; }
+    let cancelled = false;
+    getCommentCount('product', commentSlug).then(n => { if (!cancelled) setCommentCount(n); });
+    return () => { cancelled = true; };
+  }, [commentsEnabled, commentSlug]);
   // Admin-editable section config from /admin/pages. Each section's
   // enabled flag gates whether that block renders below.
   const productSections = usePageSections('product');
@@ -1145,6 +1167,21 @@ export default function ProductPage({
                 </svg>
                 <span>{isSaved ? 'Saved' : 'Save'}</span>
               </button>
+              {commentsEnabled && commentSlug && (
+                <button
+                  type="button"
+                  className="pd-comment-btn"
+                  onClick={() => navigate(`/comments/p/${commentSlug}`)}
+                  aria-label="View comments"
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+                  </svg>
+                  <span>{commentCount && commentCount > 0
+                    ? <>Comments <span className="comment-btn-count">{commentCount}</span></>
+                    : 'Comment'}</span>
+                </button>
+              )}
             </div>
 
             {/* Retailer comparison drawer. Hidden until the user taps Shop.

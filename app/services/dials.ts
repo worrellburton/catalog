@@ -100,6 +100,9 @@ export const DEFAULT_PRODUCTS_IMAGE_ONLY = false;
 export const SHOW_BRAND_LOGOS_KEY = 'show_brand_logos';
 export const DEFAULT_SHOW_BRAND_LOGOS = false;
 
+export const COMMENTS_ENABLED_KEY = 'comments_enabled';
+export const DEFAULT_COMMENTS_ENABLED = true;
+
 function parseBool(raw: string | null | undefined, fallback: boolean): boolean {
   if (raw == null) return fallback;
   return raw.trim().toLowerCase() === 'true';
@@ -188,6 +191,50 @@ export function subscribeShowBrandLogos(onChange: (value: boolean) => void): () 
       (payload) => {
         const next = (payload.new as { value?: string } | null)?.value;
         onChange(parseBool(next ?? null, DEFAULT_SHOW_BRAND_LOGOS));
+      },
+    )
+    .subscribe();
+  return () => { void supabase!.removeChannel(channel); };
+}
+
+// ────────────────────────────────────────────────────────────────────
+// "Comments" feature flag. When ON, products and looks show a Comment
+// button that opens the comment thread page; when OFF the button and the
+// thread page are hidden platform-wide. Default ON.
+// ────────────────────────────────────────────────────────────────────
+
+export async function getCommentsEnabled(): Promise<boolean> {
+  if (!supabase) return DEFAULT_COMMENTS_ENABLED;
+  const { data, error } = await supabase
+    .from('app_settings')
+    .select('value')
+    .eq('key', COMMENTS_ENABLED_KEY)
+    .maybeSingle();
+  if (error) {
+    console.warn('[dials] comments_enabled read failed:', error.message);
+    return DEFAULT_COMMENTS_ENABLED;
+  }
+  return parseBool((data?.value as string | undefined) ?? null, DEFAULT_COMMENTS_ENABLED);
+}
+
+export async function setCommentsEnabled(value: boolean): Promise<void> {
+  if (!supabase) throw new Error('Supabase not configured');
+  const { error } = await supabase
+    .from('app_settings')
+    .upsert({ key: COMMENTS_ENABLED_KEY, value: String(value) }, { onConflict: 'key' });
+  if (error) throw error;
+}
+
+export function subscribeCommentsEnabled(onChange: (value: boolean) => void): () => void {
+  if (!supabase) return () => {};
+  const channel = supabase
+    .channel(`dials:${COMMENTS_ENABLED_KEY}`)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'app_settings', filter: `key=eq.${COMMENTS_ENABLED_KEY}` },
+      (payload) => {
+        const next = (payload.new as { value?: string } | null)?.value;
+        onChange(parseBool(next ?? null, DEFAULT_COMMENTS_ENABLED));
       },
     )
     .subscribe();

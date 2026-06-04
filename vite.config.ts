@@ -86,6 +86,8 @@ export default defineConfig({
           route("p/:slug", "routes/p.$slug.tsx");
           route("l/:slug", "routes/l.$slug.tsx");
           route("b/:slug", "routes/b.$slug.tsx");
+          // Comment thread page: /comments/p/<slug> or /comments/l/<slug>.
+          route("comments/:type/:slug", "routes/comments.$type.$slug.tsx");
           // Insights / earnings deep-link. Re-exports _index so the
           // home feed mounts; _index detects /earnings and opens the
           // wallet overlay. Real history entry → browser back returns
@@ -107,6 +109,7 @@ export default defineConfig({
             route("campaigns", "routes/admin/campaigns.tsx");
             route("categories", "routes/admin/categories.tsx");
             route("clickouts", "routes/admin/clickouts.tsx");
+            route("comments", "routes/admin/comments.tsx");
             // /admin/content renamed to /admin/data — file moved with
             // git mv, but the legacy URL still resolves so bookmarks
             // / muscle memory / old cmd-K hits don't 404. Remix
