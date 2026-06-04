@@ -3808,6 +3808,14 @@ export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loadin
     </div>
   ) : null;
 
+  // Context modal open state. Hoisted above the early returns below
+  // so the hook count stays stable across the loading → loaded
+  // transition (React error #310: a previous version declared this
+  // useState BELOW `if (!creative) return ...`, so the hook fired
+  // only on the second render and React saw two different hook
+  // counts on consecutive renders).
+  const [contextOpen, setContextOpen] = useState(false);
+
   // ── Early returns (now AFTER all hooks) ─────────────────────────────
   if (loading && !creative) {
     return (
@@ -3942,8 +3950,13 @@ export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loadin
   // understand why a tile is at position N. Lives next to the
   // Recommend Order button — tap to see the per-row score
   // breakdown (exploit + explore + interleave rule + sort/filter).
-  const [contextOpen, setContextOpen] = useState(false);
-  const contextRows = useMemo(() => {
+  // contextOpen state lives at the top of the component (above the
+  // early returns) — see the React-error-310 comment up there.
+  // contextRows used to be a useMemo but moved to a plain const so
+  // it can sit AFTER the early returns without violating the
+  // rules-of-hooks; the memo was a tiny optimization, not
+  // load-bearing.
+  const contextRows = (() => {
     // Mirror recommendFeedOrder's math so the modal shows the SAME
     // numbers that drive ordering — single source of truth.
     const items = [
@@ -3972,7 +3985,7 @@ export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loadin
     return enriched
       .map(e => ({ ...e, score: eN(e.exploit) + EXPLORE_W * xN(e.explore) }))
       .sort((a, b) => b.score - a.score);
-  }, [sortedLooks, sortedProducts]);
+  })();
 
   const handleFeedReorder = (from: number, to: number) => {
     if (from === to) return;
