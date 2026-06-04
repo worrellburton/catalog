@@ -593,7 +593,20 @@ export default function AdminLayout() {
       />
       <aside className="admin-sidebar">
         <div className="admin-sidebar-header">
-          <CatalogLogo className="admin-logo" />
+          {/* Tap the Catalog wordmark to leave the admin and land
+              back on the shopper home (catalog.shop/). Uses a plain
+              <a> instead of Remix's Link because we want a hard
+              navigation that resets the SPA from any deeply-nested
+              admin state. */}
+          <a
+            href="/"
+            className="admin-logo-link"
+            aria-label="Back to catalog.shop"
+            title="Back to catalog.shop"
+            style={{ display: 'inline-flex', alignItems: 'center', textDecoration: 'none', color: 'inherit', cursor: 'pointer' }}
+          >
+            <CatalogLogo className="admin-logo" />
+          </a>
           <span className="admin-badge">Admin</span>
         </div>
         {/* Sidebar nav search. Filters the full nav (top 7 + Other) by

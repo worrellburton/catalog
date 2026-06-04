@@ -89,6 +89,15 @@ function formatDuration(ms: number): string {
 interface HomeStats {
   activeUsers: number | null;
   avgSessionMs: number | null;
+  /** Average wall-clock time WITHIN a session where no events
+   *  fired beyond the IDLE_THRESHOLD_MS gap. Sums every
+   *  consecutive-event gap > IDLE_THRESHOLD_MS per session, then
+   *  averages across sessions. The user "had the app open but
+   *  wasn't interacting" portion of session length. */
+  avgIdleMs: number | null;
+  /** avgSession − avgIdle. The "actively engaging" portion of
+   *  session length — fires-an-event-every-30s-or-less type time. */
+  avgActiveMs: number | null;
   impressions: number | null;
   clicks: number | null;
   clickouts: number | null;
@@ -101,9 +110,19 @@ interface HomeStats {
   aiGenerations: number | null;
 }
 
+// Anything longer than this between two consecutive events in a
+// session counts as IDLE time (user walked away, switched tabs,
+// looked at one product for ages without scrolling). 30s is a
+// reasonable web-analytics default — short enough that genuine
+// reading still counts as active, long enough that quick taps don't
+// inflate idle.
+const IDLE_THRESHOLD_MS = 30_000;
+
 const EMPTY_STATS: HomeStats = {
   activeUsers: null,
   avgSessionMs: null,
+  avgIdleMs: null,
+  avgActiveMs: null,
   impressions: null,
   clicks: null,
   clickouts: null,
@@ -318,35 +337,61 @@ export default function AdminHome() {
           if (userIdsForAudience) q = q.in('user_id', userIdsForAudience);
           return q;
         })(),
-        // Avg session time — group user_events by session_id, take
-        // max(created_at) - min(created_at) per session, then mean.
-        // Pulled raw because head-counts can't aggregate per-session.
+        // Session length + idle + active. Three numbers from the same
+        // walk over events grouped by session_id:
+        //   • session length = max(t) − min(t) per session
+        //   • idle           = Σ (gap between consecutive events) for
+        //                      gaps > IDLE_THRESHOLD_MS
+        //   • active         = session length − idle
+        // Returns averages across all sessions in the window. Pulled
+        // raw (not head-only) because head-counts can't aggregate
+        // per-session.
         (async () => {
           let q = supabase!
             .from('user_events')
             .select('session_id, created_at')
             .gte('created_at', startISO)
             .not('session_id', 'is', null)
+            .order('created_at', { ascending: true })
             .limit(20_000);
           if (userIdsForAudience) q = q.in('user_id', userIdsForAudience);
           const { data } = await q;
-          const bySession = new Map<string, { min: number; max: number }>();
+          // Bucket timestamps per session_id, sorted asc (the query's
+          // order:asc preserves global order, but we sort inside the
+          // bucket anyway in case PostgREST reorders).
+          const bySession = new Map<string, number[]>();
           (data || []).forEach(r => {
             const t = new Date(r.created_at).getTime();
-            const slot = bySession.get(r.session_id) || { min: t, max: t };
-            if (t < slot.min) slot.min = t;
-            if (t > slot.max) slot.max = t;
-            bySession.set(r.session_id, slot);
+            const arr = bySession.get(r.session_id) || [];
+            arr.push(t);
+            bySession.set(r.session_id, arr);
           });
-          if (bySession.size === 0) return 0;
-          let total = 0;
+          if (bySession.size === 0) return { sessionMs: 0, idleMs: 0, activeMs: 0 };
+          let totalSession = 0;
+          let totalIdle = 0;
           let n = 0;
-          for (const s of bySession.values()) {
-            const dur = s.max - s.min;
-            // Single-event sessions don't represent active time.
-            if (dur > 0) { total += dur; n++; }
+          for (const arr of bySession.values()) {
+            if (arr.length < 2) continue; // single-event sessions skipped
+            arr.sort((a, b) => a - b);
+            const sessionMs = arr[arr.length - 1] - arr[0];
+            if (sessionMs <= 0) continue;
+            let idleMs = 0;
+            for (let i = 1; i < arr.length; i++) {
+              const gap = arr[i] - arr[i - 1];
+              if (gap > IDLE_THRESHOLD_MS) idleMs += gap;
+            }
+            totalSession += sessionMs;
+            totalIdle += idleMs;
+            n++;
           }
-          return n > 0 ? Math.round(total / n) : 0;
+          if (n === 0) return { sessionMs: 0, idleMs: 0, activeMs: 0 };
+          const avgSession = Math.round(totalSession / n);
+          const avgIdle = Math.round(totalIdle / n);
+          return {
+            sessionMs: avgSession,
+            idleMs: avgIdle,
+            activeMs: Math.max(0, avgSession - avgIdle),
+          };
         })(),
       ]);
 
@@ -359,7 +404,9 @@ export default function AdminHome() {
 
       setStats({
         activeUsers: activeRes,
-        avgSessionMs: sessionRes,
+        avgSessionMs: sessionRes.sessionMs,
+        avgIdleMs: sessionRes.idleMs,
+        avgActiveMs: sessionRes.activeMs,
         impressions,
         clicks,
         clickouts,
@@ -453,6 +500,21 @@ export default function AdminHome() {
           icon={<ClockIcon />}
           label="Avg session"
           value={stats.avgSessionMs != null ? formatDuration(stats.avgSessionMs) : '—'}
+          sub={stats.avgSessionMs && stats.avgActiveMs != null
+            ? `${Math.round((stats.avgActiveMs / Math.max(stats.avgSessionMs, 1)) * 100)}% active`
+            : undefined}
+          loading={statsLoading}
+        />
+        <StatCard
+          icon={<ClockIcon />}
+          label="Avg idle"
+          value={stats.avgIdleMs != null ? formatDuration(stats.avgIdleMs) : '—'}
+          loading={statsLoading}
+        />
+        <StatCard
+          icon={<ClockIcon />}
+          label="Avg active"
+          value={stats.avgActiveMs != null ? formatDuration(stats.avgActiveMs) : '—'}
           loading={statsLoading}
         />
         <StatCard
