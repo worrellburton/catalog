@@ -89,6 +89,23 @@ export async function getMyCatalogProducts(): Promise<CatalogProduct[]> {
   return all;
 }
 
+/** A creator's saved product order, keyed by product_id → sort_order.
+ *  Public-readable (RLS) so the creator's CHOSEN order shows on their
+ *  public catalog for every visitor, not just themselves. Returns an
+ *  empty map when the creator hasn't reordered anything yet. */
+export async function getCreatorProductOrder(userId: string): Promise<Map<string, number>> {
+  const map = new Map<string, number>();
+  if (!supabase || !userId) return map;
+  const { data } = await supabase
+    .from('creator_product_order')
+    .select('product_id, sort_order')
+    .eq('user_id', userId);
+  for (const o of (data as { product_id: string; sort_order: number }[] | null) || []) {
+    map.set(o.product_id, o.sort_order);
+  }
+  return map;
+}
+
 /** Persist a new order. `orderedIds` is the full product-id list in the
  *  desired top→bottom order; each row's index becomes its sort_order. */
 export async function reorderMyCatalogProducts(orderedIds: string[]): Promise<void> {

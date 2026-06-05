@@ -1,4 +1,8 @@
 export interface Product {
+  /** DB product id, when the product originated from the products table.
+   *  Optional because seed/look products may not carry one. Used to match
+   *  a creator's saved display order (creator_product_order). */
+  id?: string;
   name: string;
   brand: string;
   price: string;

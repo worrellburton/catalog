@@ -9,6 +9,7 @@ import { toggleFollow, isFollowing as fetchIsFollowing, getFollowerCount } from 
 import { subscribeToLooksChange, fetchSeenLookIds, reorderBySeen } from '~/services/looks';
 import ParticleBackground from './ParticleBackground';
 import { getCreatorAppearance, getCreatorAppearanceById, type CatalogAppearance, DEFAULT_CATALOG_APPEARANCE } from '~/services/catalog-theme';
+import { getCreatorProductOrder } from '~/services/catalog-products';
 // (Removed getShopperGender / subscribeToShopperGender import — the creator
 // catalog page no longer filters by shopper gender; see creatorLooks below.)
 
@@ -95,6 +96,24 @@ export default function CreatorPage({
   const [userLooks, setUserLooks] = useState<Look[]>([]);
   const [userProducts, setUserProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState<boolean>(!!userId);
+  // The creator's auth user id (for the user:/handle branches). Drives the
+  // saved product-order lookup so the Shop tab honors the order the creator
+  // set in My Catalog. Null for static seed creators (no DB order).
+  const [ownerUserId, setOwnerUserId] = useState<string | null>(userId);
+  const [productOrderMap, setProductOrderMap] = useState<Map<string, number>>(new Map());
+  // Keep ownerUserId in sync for the user: branch. The handle branch sets
+  // it from the resolved look rows; seed creators leave it null.
+  useEffect(() => { if (userId) setOwnerUserId(userId); }, [userId]);
+  // Fetch the creator's saved product display order (public-readable) so it
+  // applies for every visitor, not just the owner.
+  useEffect(() => {
+    if (!ownerUserId) { setProductOrderMap(new Map()); return; }
+    let cancelled = false;
+    getCreatorProductOrder(ownerUserId)
+      .then(m => { if (!cancelled) setProductOrderMap(m); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, [ownerUserId]);
 
   useEffect(() => {
     if (!userId) { setLoading(false); return; }
@@ -172,6 +191,7 @@ export default function CreatorPage({
           if (!p) continue;
           if (!productById.has(p.id)) {
             productById.set(p.id, {
+              id: p.id,
               brand: p.brand || '',
               name: p.name || 'Untitled',
               price: p.price || '',
@@ -268,6 +288,7 @@ export default function CreatorPage({
           .map(lp => lp.products)
           .filter((p): p is NonNullable<typeof p> => !!p)
           .map(p => ({
+            id: p.id,
             brand: p.brand || '',
             name: p.name || 'Untitled',
             price: p.price || '',
@@ -288,6 +309,9 @@ export default function CreatorPage({
       });
       if (!cancelled) {
         setUserLooks(mappedLooks);
+        // Capture the creator's user id so the Shop tab can apply their
+        // saved product order.
+        setOwnerUserId(rows.find(r => !!r.user_id)?.user_id || null);
         // Aggregate products across all looks for the Shop tab.
         const seen = new Set<string>();
         const ordered: Product[] = [];
@@ -389,7 +413,7 @@ export default function CreatorPage({
 
   // Brand-grouped product list - powers the Shop tab chips.
   const allProducts = useMemo(() => {
-    if (userId || isHandleBranch) return userProducts;
+    if (userId || isHandleBranch) return applyCreatorOrder(userProducts, productOrderMap);
     const seen = new Set<string>();
     const products: Product[] = [];
     seedCreatorLooks.forEach(look => {
@@ -402,7 +426,7 @@ export default function CreatorPage({
       });
     });
     return products;
-  }, [userId, isHandleBranch, userProducts, seedCreatorLooks]);
+  }, [userId, isHandleBranch, userProducts, seedCreatorLooks, productOrderMap]);
 
   const brandCounts = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -754,6 +778,23 @@ function hashUuid(s: string): number {
 
 function toTitleCase(s: string): string {
   return s.replace(/[_-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+// Apply the creator's saved display order to their Shop-tab products.
+// Products with a saved sort_order lead (ascending); everything else keeps
+// its existing first-seen order behind them. Stable so unordered products
+// don't reshuffle. No-op when the creator hasn't reordered anything.
+function applyCreatorOrder(products: Product[], orderMap: Map<string, number>): Product[] {
+  if (orderMap.size === 0) return products;
+  return products
+    .map((p, i) => ({ p, i }))
+    .sort((a, b) => {
+      const oa = a.p.id && orderMap.has(a.p.id) ? orderMap.get(a.p.id)! : Number.POSITIVE_INFINITY;
+      const ob = b.p.id && orderMap.has(b.p.id) ? orderMap.get(b.p.id)! : Number.POSITIVE_INFINITY;
+      if (oa !== ob) return oa - ob;
+      return a.i - b.i; // stable fallback: preserve original order
+    })
+    .map(({ p }) => p);
 }
 
 // Map a product name to a display "collection" (category). Keyword-based
