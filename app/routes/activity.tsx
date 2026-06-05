@@ -18,7 +18,7 @@
  * without a second realtime channel.
  */
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from '@remix-run/react';
 import { supabaseImage } from '~/utils/supabaseImage';
 import { useAuth } from '~/hooks/useAuth';
@@ -37,7 +37,7 @@ import {
   type CommentMedia,
 } from '~/services/activity';
 import type { CommentTargetType } from '~/services/comments';
-import { listUserGenerations, isGenerationInFlight, type UserGeneration } from '~/services/user-generations';
+import { listUserGenerations, isGenerationInFlight, getLookUuidForGeneration, type UserGeneration } from '~/services/user-generations';
 import CountUp from '~/components/CountUp';
 import SiteParticleHost from '~/components/SiteParticleHost';
 import ConsumerAvatar from '~/components/ConsumerAvatar';
@@ -510,9 +510,20 @@ function YourLooksRail({ generations }: { generations: UserGeneration[] | null }
 }
 
 function GenTile({ gen }: { gen: UserGeneration }) {
+  const navigate = useNavigate();
   const inFlight = isGenerationInFlight(gen);
   const failed = gen.status === 'failed' || (!inFlight && gen.status !== 'done');
   const label = gen.display_name || gen.style || 'New look';
+
+  // Tapping a finished render opens its look screen. The completed
+  // generation auto-landed as a look (source_generation_id); resolve that
+  // uuid and deep-link the home feed to open the look overlay. Falls back
+  // to My Catalog if the look row isn't there yet.
+  const openLook = useCallback(async () => {
+    const uuid = await getLookUuidForGeneration(gen.id);
+    if (uuid) navigate(`/?look=${uuid}`);
+    else window.dispatchEvent(new CustomEvent('catalog:open-my-catalog'));
+  }, [gen.id, navigate]);
   if (inFlight) {
     return (
       <div className="ap-gen ap-gen--rendering" title={`${label} — rendering`}>
@@ -536,14 +547,14 @@ function GenTile({ gen }: { gen: UserGeneration }) {
     );
   }
   return (
-    <div className="ap-gen ap-gen--done" title={label}>
+    <button type="button" className="ap-gen ap-gen--done" title={label} onClick={openLook} aria-label={`Open ${label}`}>
       {gen.video_url
         ? <video className="ap-gen-media" src={gen.video_url} muted loop autoPlay playsInline preload="metadata" />
         : <div className="ap-gen-media ap-gen-media--blank" />}
       <div className="ap-gen-foot">
         <span className="ap-gen-name">{label}</span>
       </div>
-    </div>
+    </button>
   );
 }
 

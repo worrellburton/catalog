@@ -1,5 +1,22 @@
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '~/utils/supabase';
 
+// Resolve the published/promoted look that a completed generation became,
+// so the "Your looks" rail can deep-link a finished render to its look
+// screen. Every completed generation auto-lands as a look with
+// source_generation_id pointing back here; returns that look's uuid (or
+// null if it hasn't been promoted yet).
+export async function getLookUuidForGeneration(genId: string): Promise<string | null> {
+  if (!supabase) return null;
+  const { data } = await supabase
+    .from('looks')
+    .select('id')
+    .eq('source_generation_id', genId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return (data as { id: string } | null)?.id ?? null;
+}
+
 export interface UserUpload {
   id: string;
   user_id: string;

@@ -1078,6 +1078,34 @@ export default function Home() {
     window.history.replaceState({}, '', url);
   }, [location.search, handleCreateCatalog]);
 
+  // Deep-link to a look's screen via /?look=<uuid>. The activity page's
+  // "Your looks" rail uses this to open a finished render's look overlay.
+  // Resolve the uuid against the live look set, open the overlay, then
+  // strip the param so refresh/share doesn't re-fire.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(location.search);
+    const lookUuid = params.get('look');
+    if (!lookUuid) return;
+    if (params.has('code') || params.has('error_description')) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const all = await getLooks();
+        const look = all.find(l => l.uuid === lookUuid);
+        if (!cancelled && look) {
+          setView('app');
+          handleOpenLook(look);
+        }
+      } catch { /* ignore — look may have been removed */ }
+    })();
+    params.delete('look');
+    const remaining = params.toString();
+    const url = `${window.location.pathname}${remaining ? `?${remaining}` : ''}${window.location.hash || ''}`;
+    window.history.replaceState({}, '', url);
+    return () => { cancelled = true; };
+  }, [location.search, handleOpenLook]);
+
   const toggleTheme = useCallback(() => {
     setIsLightMode(prev => !prev);
   }, []);
