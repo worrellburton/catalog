@@ -1011,14 +1011,28 @@ export default function Home() {
   }, [selectedProduct, lookFeedTiles]);
 
   const handleCreateCatalog = useCallback((query: string) => {
-    setSelectedProduct(null);
-    setSelectedLook(null);
-    setSearchQuery(query);
-    // The catalog name is the user's actual query, title-cased - so a
-    // search for "omg shoes" surfaces as "OMG Shoes" under the logo.
-    // Single short tokens (acronyms) stay uppercase.
-    const trimmed = query.trim();
-    setCatalogName(trimmed ? toCatalogName(trimmed) : 'all');
+    const apply = () => {
+      setSelectedProduct(null);
+      setSelectedLook(null);
+      setSearchQuery(query);
+      // The catalog name is the user's actual query, title-cased - so a
+      // search for "omg shoes" surfaces as "OMG Shoes" under the logo.
+      // Single short tokens (acronyms) stay uppercase.
+      const trimmed = query.trim();
+      setCatalogName(trimmed ? toCatalogName(trimmed) : 'all');
+    };
+    // Mobile: if a text input is focused (keyboard up), dismiss it FIRST
+    // and let it start sliding down before the loading ceremony mounts —
+    // otherwise the loading animates up behind the keyboard. The URL/?q=
+    // path has no focused input, so it applies immediately.
+    const active = typeof document !== 'undefined' ? (document.activeElement as HTMLElement | null) : null;
+    const keyboardUp = !!active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable);
+    if (typeof window !== 'undefined' && window.innerWidth <= 768 && keyboardUp) {
+      active!.blur();
+      window.setTimeout(apply, 180);
+      return;
+    }
+    apply();
   }, []);
 
   // The TypeAnywhere overlay (mounted in root.tsx) lands new

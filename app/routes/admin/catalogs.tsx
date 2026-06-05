@@ -3813,7 +3813,13 @@ export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loadin
       const { data } = await supabase.from(table).select('catalog_tags').eq('id', row.id).maybeSingle();
       const tags = ((data?.catalog_tags as string[] | null) || []).filter(t => t !== catalogName);
       const patch: Record<string, unknown> = { catalog_tags: tags };
-      if (row.kind === 'look' && (isUniverse || isAll)) patch.enabled = false;
+      // Home/universe has no tag to strip, so removal = take it off the
+      // live feed. Looks: enabled=false. Products: is_active=false — the
+      // consumer feed's useHiddenProductKeys already filters those out.
+      if (isUniverse || isAll) {
+        if (row.kind === 'look') patch.enabled = false;
+        else patch.is_active = false;
+      }
       await supabase.from(table).update(patch).eq('id', row.id);
       onAfterBulkMutation();
     } finally {
