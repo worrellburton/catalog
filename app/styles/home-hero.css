@@ -768,39 +768,28 @@
 
 /* Unseen-look count badge — a number in a circle that spins (conic ring)
    and glows, signalling new looks from that creator. */
+/* New-looks count on a creator's stories avatar. Matches the saved /
+   bookmark count badge (white pill, dark text) instead of the old red +
+   spinning-gradient treatment — keeps a thin dark ring so it stays legible
+   over avatar photos. */
 .follow-story-unseen {
   position: absolute;
-  top: -1px;
-  right: -1px;
-  min-width: 19px;
-  height: 19px;
+  top: -4px;
+  right: -4px;
+  min-width: 16px;
+  height: 16px;
   padding: 0 4px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  border-radius: 999px;
-  background: #ff3d6e;
-  color: #fff;
-  font-size: 10px;
-  font-weight: 800;
+  border-radius: 8px;
+  background: #fff;
+  color: #000;
+  font-size: 9px;
+  font-weight: 700;
   line-height: 1;
   z-index: 3;
   box-shadow: 0 0 0 2px #0a0a0a;
-  animation: story-unseen-glow 2.2s ease-in-out infinite;
-}
-.follow-story-unseen::before {
-  content: '';
-  position: absolute;
-  inset: -3px;
-  border-radius: 50%;
-  background: conic-gradient(from 0deg, #ffd75c, #ff4d6d, #ff8a3d, #ffd75c);
-  z-index: -1;
-  animation: story-unseen-spin 2.4s linear infinite;
-}
-@keyframes story-unseen-spin { to { transform: rotate(360deg); } }
-@keyframes story-unseen-glow {
-  0%, 100% { box-shadow: 0 0 0 2px #0a0a0a, 0 0 6px 1px rgba(255, 130, 90, 0.55); }
-  50%      { box-shadow: 0 0 0 2px #0a0a0a, 0 0 12px 3px rgba(255, 130, 90, 0.95); }
 }
 .follow-story-ring.is-online {
   background: conic-gradient(from var(--story-angle),
