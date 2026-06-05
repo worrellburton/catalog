@@ -259,7 +259,11 @@ export default function CommentsPage({ targetType, slug, onClose, onOpenCreator 
   };
 
   return (
-    <div className="comments-page">
+    <>
+    {/* Dim scrim behind the sheet — tap to dismiss (TikTok-style). */}
+    <div className="comments-drawer-backdrop" onClick={onClose} aria-hidden="true" />
+    <div className="comments-page comments-page--drawer">
+      <span className="comments-drawer-handle" aria-hidden="true" />
       {/* Ambient WebGL field behind everything — the same singleton
           particle backdrop used on create-a-look / add-product, so the
           comments surface isn't a flat black screen when the thread is
@@ -402,5 +406,6 @@ export default function CommentsPage({ targetType, slug, onClose, onOpenCreator 
         {error && <div className="comments-error">{error}</div>}
       </div>
     </div>
+    </>
   );
 }
