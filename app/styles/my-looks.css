@@ -1759,6 +1759,36 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   transition: transform 0.15s ease;
 }
 .my-cat-tile:hover { transform: translateY(-1px); }
+.my-cat-tile.is-dragging {
+  opacity: 0.55;
+  transform: scale(0.97);
+}
+
+/* Drag-to-reorder grip. touch-action:none so the pointer stream isn't
+   stolen by the scroll container mid-drag. Sits top-left, clear of the
+   status dot (top-right) and the hover action bar. */
+.my-cat-tile-grip {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 6;
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  cursor: grab;
+  touch-action: none;
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+.my-cat-tile-grip:active { cursor: grabbing; }
+.my-cat-tile-grip svg { display: block; }
 
 /* Media area - 3:4 portrait, mirrors .creator-grid .look-card. */
 .my-cat-tile-media {

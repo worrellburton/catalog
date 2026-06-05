@@ -54,6 +54,7 @@ export interface ManagedLook {
   color: string | null;
   status: LookStatus;
   enabled: boolean;
+  sort_order: number;
   created_at: string;
   updated_at: string;
   look_photos: LookPhoto[];
@@ -159,13 +160,14 @@ export async function getMyLooks(params?: { status?: LookStatus; page?: number; 
   let query = supabase
     .from('looks')
     .select(`
-      id, title, description, gender, color, status, enabled, created_at, updated_at,
+      id, title, description, gender, color, status, enabled, sort_order, created_at, updated_at,
       look_photos ( id, order_index, storage_path, url, thumbnail_url, transform ),
       look_videos ( id, order_index, storage_path, url, poster_url, duration_seconds ),
       looks_creative ( id, video_url, thumbnail_url, mobile_video_url, is_primary, status, created_at ),
       look_products ( sort_order, products:products ( id, name, brand, price, url, image_url ) )
     `, { count: 'exact' })
     .eq('user_id', userId)
+    .order('sort_order', { ascending: true })
     .order('created_at', { ascending: false })
     .range(from, to);
 
@@ -191,6 +193,27 @@ export async function getMyLooks(params?: { status?: LookStatus; page?: number; 
     data: looks,
     pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
   };
+}
+
+// Persist a new manual order for the current user's looks: sort_order
+// becomes the array index for each id. Owner-scoped via RLS ("Users can
+// update own looks"), so this writes directly rather than through the
+// edge function. Callers should reorder optimistically and only surface
+// an error if this rejects.
+export async function reorderLooks(orderedIds: string[], startIndex = 0): Promise<void> {
+  if (!supabase) throw new Error('Supabase not configured');
+  const userId = await getCurrentUserId();
+  const results = await Promise.all(
+    orderedIds.map((id, index) =>
+      supabase!
+        .from('looks')
+        .update({ sort_order: startIndex + index })
+        .eq('id', id)
+        .eq('user_id', userId),
+    ),
+  );
+  const failed = results.find(r => r.error);
+  if (failed?.error) throw new Error(failed.error.message);
 }
 
 export async function getLookDetail(lookId: string): Promise<{ success: boolean; data: ManagedLook }> {

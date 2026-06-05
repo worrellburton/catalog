@@ -1,10 +1,10 @@
-import { useState, useEffect, useCallback, useMemo } from 'react';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useNavigate } from '@remix-run/react';
 import CreateLookV2 from './CreateLookV2';
 import AddProductV2 from './AddProductV2';
 import { useAuth } from '~/hooks/useAuth';
 import type { ManagedLook, LookStatus } from '~/services/manage-looks';
-import { getMyLooks, deleteLook, archiveLook, submitLook } from '~/services/manage-looks';
+import { getMyLooks, deleteLook, archiveLook, submitLook, reorderLooks } from '~/services/manage-looks';
 import { withTransform } from '~/utils/supabase-image';
 import { supabase } from '~/utils/supabase';
 import { lookSlug } from '~/utils/slug';
@@ -210,6 +210,54 @@ export default function MyLooks({ onClose }: MyLooksProps) {
     if (touch) setTrayLook(look);
     else handleEdit(look);
   }, [handleEdit]);
+
+  // ── Drag-to-reorder ───────────────────────────────────────────────
+  // Pointer-based (works for touch + mouse) reorder, initiated from the
+  // grip handle so tapping the tile body still opens it. Only offered on
+  // the "All" view — filtered views show a non-contiguous subset, so
+  // writing sequential sort_order there would scramble hidden looks.
+  const canReorder = statusFilter === 'all';
+  const [dragId, setDragId] = useState<string | null>(null);
+  const dragIdRef = useRef<string | null>(null);
+  const looksRef = useRef<ManagedLook[]>([]);
+  useEffect(() => { looksRef.current = looks; }, [looks]);
+
+  const handleGripDown = useCallback((e: React.PointerEvent, id: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragIdRef.current = id;
+    setDragId(id);
+    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+  }, []);
+
+  const handleGripMove = useCallback((e: React.PointerEvent) => {
+    if (!dragIdRef.current) return;
+    e.preventDefault();
+    const el = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+    const overId = el?.closest('[data-look-id]')?.getAttribute('data-look-id');
+    if (!overId || overId === dragIdRef.current) return;
+    setLooks(prev => {
+      const from = prev.findIndex(l => l.id === dragIdRef.current);
+      const to = prev.findIndex(l => l.id === overId);
+      if (from === -1 || to === -1 || from === to) return prev;
+      const next = prev.slice();
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
+  }, []);
+
+  const handleGripUp = useCallback(async (e: React.PointerEvent) => {
+    if (!dragIdRef.current) return;
+    (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
+    dragIdRef.current = null;
+    setDragId(null);
+    try {
+      await reorderLooks(looksRef.current.map(l => l.id), (page - 1) * 12);
+    } catch {
+      showToastMsg('Could not save order');
+    }
+  }, [page, showToastMsg]);
 
   // ── Hero metadata ─────────────────────────────────────────────────
   const displayName = user?.displayName || user?.email?.split('@')[0] || 'My Catalog';
@@ -462,11 +510,31 @@ export default function MyLooks({ onClose }: MyLooksProps) {
             {tiles.map(({ managed, preview }) => (
               <div
                 key={managed.id}
-                className="my-cat-tile"
+                data-look-id={managed.id}
+                className={`my-cat-tile${dragId === managed.id ? ' is-dragging' : ''}`}
                 onClick={() => handleTileClick(managed)}
                 role="button"
                 tabIndex={0}
               >
+                {canReorder && (
+                  <button
+                    type="button"
+                    className="my-cat-tile-grip"
+                    aria-label="Drag to reorder"
+                    title="Drag to reorder"
+                    onPointerDown={(e) => handleGripDown(e, managed.id)}
+                    onPointerMove={handleGripMove}
+                    onPointerUp={handleGripUp}
+                    onPointerCancel={handleGripUp}
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <circle cx="9" cy="6" r="1" /><circle cx="15" cy="6" r="1" />
+                      <circle cx="9" cy="12" r="1" /><circle cx="15" cy="12" r="1" />
+                      <circle cx="9" cy="18" r="1" /><circle cx="15" cy="18" r="1" />
+                    </svg>
+                  </button>
+                )}
                 {/* Image-based preview. We deliberately avoid the
                     consumer LookCard here because its TrailVideoHost
                     handoff is wired to the public feed pool — managed
