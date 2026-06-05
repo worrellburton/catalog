@@ -30,6 +30,22 @@ interface UseAppViewResult {
 export function useAppView({ user, authLoading }: UseAppViewArgs): UseAppViewResult {
   const [view, setView] = useState<AppView>('locked');
 
+  // "Warm" = this tab already booted the app once this session. Set the
+  // moment we first reach 'app' (below). On a warm remount — e.g. the
+  // browser/native Back button returning from a standalone route like
+  // /activity, which tears down and re-mounts the whole SPA shell — we
+  // skip the cold-boot brand beat and the feed-cover splash so the user
+  // lands straight back on the feed instead of watching the auth-splash
+  // replay. Cold first loads (no flag) keep the full branded sequence.
+  const booted = (() => {
+    try { return typeof window !== 'undefined' && window.sessionStorage.getItem('catalog:booted') === '1'; }
+    catch { return false; }
+  })();
+  useEffect(() => {
+    if (view !== 'app') return;
+    try { window.sessionStorage.setItem('catalog:booted', '1'); } catch { /* private mode */ }
+  }, [view]);
+
   // First-visit splash: if the user has never been to catalog on this
   // device, show a branded splash before surfacing the gate / landing.
   // Splash timing is data-aware: hold for at least 800ms (so the brand
@@ -107,11 +123,12 @@ export function useAppView({ user, authLoading }: UseAppViewArgs): UseAppViewRes
   // cold open so the wordmark + particle field read as a deliberate moment
   // before we hand off to the landing page — even when auth resolves
   // instantly (signed-out visitors). Without it the splash would flash by.
-  const [beatDone, setBeatDone] = useState(false);
+  const [beatDone, setBeatDone] = useState(booted);
   useEffect(() => {
+    if (booted) return;
     const t = window.setTimeout(() => setBeatDone(true), 1500);
     return () => window.clearTimeout(t);
-  }, []);
+  }, [booted]);
 
   // First-paint signal from the feed. ContinuousFeed dispatches
   // `catalog:feed-ready` on the window after its first non-empty
@@ -120,10 +137,10 @@ export function useAppView({ user, authLoading }: UseAppViewArgs): UseAppViewRes
   // actually paint underneath. Ceiling timer guarantees it flips
   // true within 2.5s even if the network is dead, so the splash
   // can't hang forever.
-  const [feedReady, setFeedReady] = useState(false);
+  const [feedReady, setFeedReady] = useState(booted);
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (feedReady) return;
+    if (booted || feedReady) return;
     const onReady = () => setFeedReady(true);
     window.addEventListener('catalog:feed-ready', onReady);
     const ceiling = window.setTimeout(() => setFeedReady(true), 2500);
@@ -131,7 +148,7 @@ export function useAppView({ user, authLoading }: UseAppViewArgs): UseAppViewRes
       window.removeEventListener('catalog:feed-ready', onReady);
       window.clearTimeout(ceiling);
     };
-  }, [feedReady]);
+  }, [booted, feedReady]);
 
   // Branded auth splash. Shown whenever:
   //  - we're still in 'locked' AND auth is resolving (or already has
