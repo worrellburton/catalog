@@ -1352,47 +1352,87 @@ html.admin-on-dark-canvas .admin-topbar,
     border: none;
     box-shadow: none;
   }
+  /* Stack the table into a single vertical column of full-width cards —
+     the old 2-column grid squished every card so toggles, names and the
+     trash icon were clipped. One column per row reads cleanly on phones. */
   .admin-users-grid .admin-table,
   .admin-users-grid .admin-table tbody {
-    display: grid;
-    grid-template-columns: 1fr 1fr;
-    gap: 10px;
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
     border: none;
     width: 100%;
   }
   .admin-users-grid .admin-table thead { display: none; }
   .admin-users-grid .admin-table tr {
+    position: relative;
     display: flex;
     flex-direction: column;
-    gap: 4px;
-    padding: 12px 14px;
-    border: 1px solid rgba(15, 23, 42, 0.08);
+    gap: 2px;
+    padding: 14px 16px;
+    border: 1px solid rgba(15, 23, 42, 0.10);
     border-radius: 14px;
     background: #fff;
-    min-width: 0;
+    width: 100%;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
   }
   .admin-dark .admin-users-grid .admin-table tr {
     border-color: rgba(255, 255, 255, 0.08);
     background: rgba(255, 255, 255, 0.03);
   }
+  /* Each cell becomes a labeled row: LABEL on the left (from data-label),
+     value on the right. */
   .admin-users-grid .admin-table td {
     display: flex;
     align-items: center;
-    gap: 8px;
-    padding: 2px 0;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 7px 0;
     border: none;
-    text-align: left;
-    font-size: 12px;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+    text-align: right;
+    font-size: 13px;
     min-width: 0;
   }
-  /* First cell (avatar + name) gets a bigger, top-anchored treatment. */
-  .admin-users-grid .admin-table td:first-child {
-    font-size: 13px;
+  .admin-dark .admin-users-grid .admin-table td { border-bottom-color: rgba(255, 255, 255, 0.06); }
+  .admin-users-grid .admin-table td:last-child { border-bottom: none; }
+  .admin-users-grid .admin-table td[data-label]::before {
+    content: attr(data-label);
+    flex: 0 0 auto;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #94a3b8;
+    text-align: left;
+  }
+  /* Name cell = the card header: avatar + name, prominent, full-width,
+     no label, with room for the floating select checkbox at top-right. */
+  .admin-users-grid .admin-table td.admin-cell-name {
+    justify-content: flex-start;
+    font-size: 16px;
     font-weight: 700;
+    white-space: normal;
+    padding: 0 40px 12px 0;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08);
     margin-bottom: 4px;
   }
-  /* Toggles + small controls inside cells stay aligned naturally
-     because of the flex on `td`. */
+  /* Select checkbox (first cell, no data-label) floats to the card's
+     top-right instead of taking its own stacked row. */
+  .admin-users-grid .admin-table td:first-child {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    padding: 0;
+    border-bottom: none;
+    justify-content: flex-end;
+  }
+  /* Actions cell (toggles / trash) — let the inner flex row left-align and
+     use full width so nothing is clipped off the edge. */
+  .admin-users-grid .admin-table td:last-child > div {
+    justify-content: flex-start !important;
+    width: 100%;
+  }
   .admin-users-grid .admin-table tr:hover td { background: transparent; }
 }
 

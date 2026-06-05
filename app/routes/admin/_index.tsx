@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from 'react';
+import { Link } from '@remix-run/react';
 import { looks, creators } from '~/data/looks';
 import { supabase } from '~/utils/supabase';
 import { boostAd } from '~/services/product-creative';
@@ -604,6 +605,7 @@ export default function AdminHome() {
           value={`${creatorsCount} creators`}
           sub={`${looksCount.toLocaleString()} seed looks`}
           loading={false}
+          to="/admin/creators"
         />
       </div>
 
@@ -782,11 +784,15 @@ function StatCard({ icon, label, value, sub, loading, to }: {
     </>
   );
   if (to) {
+    // Remix Link → client-side nav. A plain <a href> did a hard reload of
+    // the SPA, which inside the admin shell could drop state or 404 on the
+    // static host's deep-route fallback — that's why some cards "didn't go
+    // anywhere". Link keeps it in-app so every card reaches its page.
     return (
-      <a
-        href={to}
+      <Link
+        to={to}
         className="admin-home-stat-card admin-home-stat-card--link"
-      >{body}</a>
+      >{body}</Link>
     );
   }
   return <div className="admin-home-stat-card">{body}</div>;

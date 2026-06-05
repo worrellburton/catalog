@@ -1157,7 +1157,7 @@ export default function AdminUsers() {
                   <AdminAvatar name={u.name} url={u.avatar} isAi={u.isAi} size={32} />
                   {u.name}
                 </td>
-                <td onClick={(e) => e.stopPropagation()}>
+                <td data-label="Role" onClick={(e) => e.stopPropagation()}>
                   <RoleBadge role={u.role} userId={u.id} onRoleChange={handleRoleChange} />
                 </td>
                 {showAdminToggle && (
@@ -1184,7 +1184,7 @@ export default function AdminUsers() {
                     </label>
                   </td>
                 )}
-                <td>
+                <td data-label="Gender">
                   {u.gender === 'male' ? (
                     <span style={{ fontSize: 11, fontWeight: 600, color: '#1d4ed8', background: '#dbeafe', padding: '2px 8px', borderRadius: 999 }}>Male</span>
                   ) : u.gender === 'female' ? (
@@ -1193,13 +1193,13 @@ export default function AdminUsers() {
                     <span style={{ fontSize: 11, color: '#94a3b8' }}> - </span>
                   )}
                 </td>
-                <td>{u.looksCount > 0 ? u.looksCount : '-'}</td>
-                <td><span className="admin-sso-badge">{u.sso}</span></td>
-                <td className="admin-cell-muted">{u.createdAt}</td>
-                <td className="admin-cell-muted">{u.lastSignIn}</td>
-                <td className="admin-cell-muted">{u.location}</td>
-                <td>{u.saved}</td>
-                <td>
+                <td data-label="Looks">{u.looksCount > 0 ? u.looksCount : '-'}</td>
+                <td data-label="SSO"><span className="admin-sso-badge">{u.sso}</span></td>
+                <td data-label="Joined" className="admin-cell-muted">{u.createdAt}</td>
+                <td data-label="Last online" className="admin-cell-muted">{u.lastSignIn}</td>
+                <td data-label="Location" className="admin-cell-muted">{u.location}</td>
+                <td data-label="Saved">{u.saved}</td>
+                <td data-label="Following">
                   <button
                     type="button"
                     className="admin-link-cell"
@@ -1213,7 +1213,7 @@ export default function AdminUsers() {
                     {u.followings}
                   </button>
                 </td>
-                <td>
+                <td data-label="Followers">
                   <button
                     type="button"
                     className="admin-link-cell"
@@ -1227,7 +1227,7 @@ export default function AdminUsers() {
                     {u.followers}
                   </button>
                 </td>
-                <td className="admin-cell-muted">{u.creator}</td>
+                <td data-label="Via creator" className="admin-cell-muted">{u.creator}</td>
                 <td onClick={(e) => e.stopPropagation()}>
                   <div style={{ display: 'flex', alignItems: 'center', gap: 8, justifyContent: 'flex-end' }}>
                     {showPromoteButton && !u.id.startsWith('content-') && (
