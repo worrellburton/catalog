@@ -20,7 +20,7 @@ const STATUS_LABELS: Record<LookStatus, string> = {
   in_review: 'In Review',
   live:      'Live',
   denied:    'Denied',
-  archived:  'Archived',
+  archived:  'Inactive',
 };
 
 const STATUS_COLORS: Record<LookStatus, string> = {
@@ -221,9 +221,8 @@ export default function MyLooks({ onClose }: MyLooksProps) {
   const counts = useMemo(() => {
     const all = looks.length;
     const live = looks.filter(l => l.status === 'live').length;
-    const draft = looks.filter(l => l.status === 'draft').length;
     const archived = looks.filter(l => l.status === 'archived').length;
-    return { all, live, draft, archived };
+    return { all, live, archived };
   }, [looks]);
 
   // Pre-compute previews so the render loop stays cheap.
@@ -418,14 +417,14 @@ export default function MyLooks({ onClose }: MyLooksProps) {
         <p className="my-cat-hero-stats">
           {counts.all === 0
             ? 'Your catalog is empty — tap + to publish your first look.'
-            : `${counts.all} look${counts.all === 1 ? '' : 's'} · ${counts.live} live · ${counts.draft} draft${counts.draft === 1 ? '' : 's'}`}
+            : `${counts.all} look${counts.all === 1 ? '' : 's'} · ${counts.live} live · ${counts.archived} inactive`}
         </p>
       </button>
 
       {/* Status filter pills — replace the old chip row, sit where
           CreatorPage's nav tabs do. */}
       <div className="my-cat-nav">
-        {(['all', 'draft', 'submitted', 'live', 'archived'] as const).map(s => (
+        {(['all', 'live', 'archived'] as const).map(s => (
           <button
             key={s}
             className={`my-cat-nav-tab${statusFilter === s ? ' active' : ''}`}
@@ -434,7 +433,6 @@ export default function MyLooks({ onClose }: MyLooksProps) {
             {s === 'all' ? 'All' : STATUS_LABELS[s]}
             {s === 'all' && counts.all > 0 && <span className="my-cat-nav-count">{counts.all}</span>}
             {s === 'live' && counts.live > 0 && <span className="my-cat-nav-count">{counts.live}</span>}
-            {s === 'draft' && counts.draft > 0 && <span className="my-cat-nav-count">{counts.draft}</span>}
             {s === 'archived' && counts.archived > 0 && <span className="my-cat-nav-count">{counts.archived}</span>}
           </button>
         ))}
