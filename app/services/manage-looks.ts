@@ -296,7 +296,7 @@ export async function uploadLookMedia(
   lookId: string,
   file: File,
   type: 'photo' | 'video',
-  opts?: { posterDataUrl?: string }
+  opts?: { posterDataUrl?: string; trimStart?: number; trimEnd?: number }
 ): Promise<{ storagePath: string; publicUrl: string }> {
   if (!supabase) throw new Error('Supabase not configured');
 
@@ -364,6 +364,8 @@ export async function uploadLookMedia(
       } catch { /* keep the video-url fallback */ }
     }
     record.poster_url = posterUrl;
+    if (opts?.trimStart != null) record.trim_start = opts.trimStart;
+    if (opts?.trimEnd != null) record.trim_end = opts.trimEnd;
   }
 
   const { error: dbError } = await supabase.from(table).insert(record);

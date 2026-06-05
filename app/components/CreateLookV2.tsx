@@ -373,7 +373,7 @@ export default function CreateLookV2({ onPublished, onCancel, look: existingLook
       // Upload every picked file, not just the first.
       for (const m of mediaItems) {
         try {
-          await uploadLookMedia(look.id, m.file, m.kind, { posterDataUrl: m.posterUrl });
+          await uploadLookMedia(look.id, m.file, m.kind, { posterDataUrl: m.posterUrl, trimStart: m.trimStart, trimEnd: m.trimEnd });
         } catch (err) {
           console.warn('[CreateLookV2] media upload failed:', err);
         }
