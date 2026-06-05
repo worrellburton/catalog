@@ -142,7 +142,12 @@ async function getCurrentUserId(): Promise<string> {
 // Look CRUD - reads use direct Supabase, writes use edge function
 // ============================================
 
-export async function getMyLooks(params?: { status?: LookStatus; page?: number; limit?: number }): Promise<PaginatedResponse<ManagedLook[]>> {
+// `status` accepts the literal 'inactive' as a virtual filter meaning
+// "not published" — every look whose status isn't 'live'. This is the
+// creator-facing rule: published === live, everything else === inactive
+// (draft, submitted, in_review, denied, archived all collapse to one
+// Inactive bucket), so completed-but-unpublished looks surface there.
+export async function getMyLooks(params?: { status?: LookStatus | 'inactive'; page?: number; limit?: number }): Promise<PaginatedResponse<ManagedLook[]>> {
   if (!supabase) throw new Error('Supabase not configured');
   const userId = await getCurrentUserId();
 
@@ -171,7 +176,10 @@ export async function getMyLooks(params?: { status?: LookStatus; page?: number; 
     .order('created_at', { ascending: false })
     .range(from, to);
 
-  if (params?.status) {
+  if (params?.status === 'inactive') {
+    // "Not published" — everything that isn't live.
+    query = query.neq('status', 'live');
+  } else if (params?.status) {
     query = query.eq('status', params.status);
   }
 

@@ -2145,7 +2145,10 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   pointer-events: none;
   box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
 }
+/* Binary status light per the published===live / not-published===inactive
+   rule: green when live, amber otherwise. */
 .my-cat-tile-dot--live      { background: #22c55e; box-shadow: 0 0 6px rgba(34, 197, 94, 0.65), 0 1px 4px rgba(0, 0, 0, 0.35); }
+.my-cat-tile-dot--inactive,
 .my-cat-tile-dot--submitted,
 .my-cat-tile-dot--in_review,
 .my-cat-tile-dot--draft,

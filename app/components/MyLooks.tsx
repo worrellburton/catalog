@@ -18,24 +18,6 @@ interface MyLooksProps {
   onClose: () => void;
 }
 
-const STATUS_LABELS: Record<LookStatus, string> = {
-  draft:     'Draft',
-  submitted: 'Submitted',
-  in_review: 'In Review',
-  live:      'Live',
-  denied:    'Denied',
-  archived:  'Inactive',
-};
-
-const STATUS_COLORS: Record<LookStatus, string> = {
-  draft:     '#888',
-  submitted: '#f0ad4e',
-  in_review: '#5bc0de',
-  live:      '#5cb85c',
-  denied:    '#d9534f',
-  archived:  '#777',
-};
-
 // Pick the best preview asset for the tile. looks_creative is where
 // every generated look lands today (video_url + thumbnail_url), so it
 // wins. look_photos / look_videos only get rows from the legacy
@@ -66,7 +48,7 @@ export default function MyLooks({ onClose }: MyLooksProps) {
   const [looks, setLooks] = useState<ManagedLook[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<LookStatus | 'products'>('live');
+  const [statusFilter, setStatusFilter] = useState<'live' | 'inactive' | 'products'>('live');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
 
@@ -147,10 +129,12 @@ export default function MyLooks({ onClose }: MyLooksProps) {
     try {
       const res = await getMyLooks({ page: 1, limit: 200 });
       const ls = res.data;
+      // Published === live; everything else === inactive (the new rule).
+      const live = ls.filter(l => l.status === 'live').length;
       setCounts({
         all: ls.length,
-        live: ls.filter(l => l.status === 'live').length,
-        archived: ls.filter(l => l.status === 'archived').length,
+        live,
+        archived: ls.length - live,
       });
     } catch { /* keep prior counts */ }
   }, []);
@@ -160,8 +144,8 @@ export default function MyLooks({ onClose }: MyLooksProps) {
     setLoading(true);
     setError(null);
     try {
-      const params: { status?: LookStatus; page: number; limit: number } = { page, limit: 12 };
-      if (statusFilter === 'live' || statusFilter === 'archived') params.status = statusFilter;
+      const params: { status?: LookStatus | 'inactive'; page: number; limit: number } = { page, limit: 12 };
+      if (statusFilter === 'live' || statusFilter === 'inactive') params.status = statusFilter;
       const res = await getMyLooks(params);
       setLooks(res.data);
       setTotalPages(res.pagination.totalPages);
@@ -280,7 +264,7 @@ export default function MyLooks({ onClose }: MyLooksProps) {
   // grip handle so tapping the tile body still opens it. Only offered on
   // the "All" view — filtered views show a non-contiguous subset, so
   // writing sequential sort_order there would scramble hidden looks.
-  const canReorder = statusFilter === 'live' || statusFilter === 'archived';
+  const canReorder = statusFilter === 'live' || statusFilter === 'inactive';
   const [dragId, setDragId] = useState<string | null>(null);
   const dragIdRef = useRef<string | null>(null);
   const looksRef = useRef<ManagedLook[]>([]);
@@ -592,15 +576,15 @@ export default function MyLooks({ onClose }: MyLooksProps) {
       {/* Status filter pills — replace the old chip row, sit where
           CreatorPage's nav tabs do. */}
       <div className="my-cat-nav">
-        {(['live', 'archived'] as const).map(s => (
+        {(['live', 'inactive'] as const).map(s => (
           <button
             key={s}
             className={`my-cat-nav-tab${statusFilter === s ? ' active' : ''}`}
             onClick={() => { setStatusFilter(s); setPage(1); }}
           >
-            {STATUS_LABELS[s]}
+            {s === 'live' ? 'Live' : 'Inactive'}
             {s === 'live' && counts.live > 0 && <span className="my-cat-nav-count">{counts.live}</span>}
-            {s === 'archived' && counts.archived > 0 && <span className="my-cat-nav-count">{counts.archived}</span>}
+            {s === 'inactive' && counts.archived > 0 && <span className="my-cat-nav-count">{counts.archived}</span>}
           </button>
         ))}
         {/* Divider separates look-status tabs from the Products view. */}
@@ -784,9 +768,9 @@ export default function MyLooks({ onClose }: MyLooksProps) {
                     hidden looks instantly. The tray exposes a toggle
                     to flip live ↔ hidden. */}
                 <span
-                  className={`my-cat-tile-dot my-cat-tile-dot--${managed.status}`}
-                  aria-label={STATUS_LABELS[managed.status]}
-                  title={STATUS_LABELS[managed.status]}
+                  className={`my-cat-tile-dot my-cat-tile-dot--${managed.status === 'live' ? 'live' : 'inactive'}`}
+                  aria-label={managed.status === 'live' ? 'Live' : 'Inactive'}
+                  title={managed.status === 'live' ? 'Live' : 'Inactive'}
                 />
 
                 {/* Desktop hover actions — edit / share / delete. Fades
@@ -876,8 +860,8 @@ export default function MyLooks({ onClose }: MyLooksProps) {
                       thumbnail (video preferred over poster) is the
                       identification, and the status label below it
                       tells the rest of the story. */}
-                  <span className="my-cat-tray-status" style={{ color: STATUS_COLORS[trayLook.status] }}>
-                    {STATUS_LABELS[trayLook.status]}
+                  <span className="my-cat-tray-status" style={{ color: trayLook.status === 'live' ? '#22c55e' : '#f59e0b' }}>
+                    {trayLook.status === 'live' ? 'Live' : 'Inactive'}
                   </span>
                 </div>
               </div>
