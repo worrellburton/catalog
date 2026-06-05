@@ -17,6 +17,7 @@ import {
   type ReactionState,
 } from '~/services/comments';
 import CommentParticles from './CommentParticles';
+import ParticleBackground from './ParticleBackground';
 import { useCommentTyping } from '~/hooks/useCommentTyping';
 
 interface CommentsPageProps {
@@ -266,6 +267,13 @@ export default function CommentsPage({ targetType, slug, onClose, onOpenCreator 
 
   return (
     <div className="comments-page">
+      {/* Ambient WebGL field behind everything — the same singleton
+          particle backdrop used on create-a-look / add-product, so the
+          comments surface isn't a flat black screen when the thread is
+          empty. The avatar-driven CommentParticles layer sits on top. */}
+      <div className="comments-webgl" aria-hidden="true">
+        <ParticleBackground />
+      </div>
       <div className="comments-particles">
         <CommentParticles avatars={avatars} className="comments-particles-canvas" />
       </div>
@@ -371,9 +379,6 @@ export default function CommentsPage({ targetType, slug, onClose, onOpenCreator 
 
         {user ? (
           <div className="comments-composer">
-            <button className="comments-filter-btn" aria-hidden="true" tabIndex={-1}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="7" y1="12" x2="17" y2="12"/><line x1="10" y1="18" x2="14" y2="18"/></svg>
-            </button>
             <textarea
               className="comments-input"
               placeholder="Add a comment…"

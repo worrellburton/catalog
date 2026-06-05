@@ -83,7 +83,11 @@ export default function FollowingPage({ onOpenCreator, onClose }: FollowingPageP
           <ul className="following-list">
             {entries!.map((c) => {
               const isOnline = online.has(c.handle.toLowerCase());
-              const name = c.displayName || c.handle;
+              // A `user:<uuid>` handle is an internal key, not a vanity
+              // handle — fall back to a generic label if the name didn't
+              // resolve, and never render the raw "@user:uuid" string.
+              const isUserHandle = c.handle.startsWith('user:');
+              const name = c.displayName || (isUserHandle ? 'Catalog user' : c.handle);
               return (
                 <li key={c.handle}>
                   <button
@@ -101,7 +105,7 @@ export default function FollowingPage({ onOpenCreator, onClose }: FollowingPageP
 
                     <span className="following-meta">
                       <span className="following-name">{name}</span>
-                      <span className="following-handle">@{c.handle}</span>
+                      {!isUserHandle && <span className="following-handle">@{c.handle}</span>}
                     </span>
 
                     <span className="following-stats">

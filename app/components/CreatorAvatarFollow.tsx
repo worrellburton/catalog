@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { useFollowState, toggleFollowShared } from '~/hooks/useFollowState';
+import { useAuth } from '~/hooks/useAuth';
 import { supabase } from '~/utils/supabase';
 
 // Shared, cached avatar resolver. Some looks/products don't carry the
@@ -67,7 +68,14 @@ export default function CreatorAvatarFollow({
 }: Props) {
   const following = useFollowState(handle);
   const [busy, setBusy] = useState(false);
-  const navigates = avatarOpensCreator && !!onOpenCreator;
+  const { user } = useAuth();
+  // The signed-in shopper's own avatar. Their looks carry a
+  // `user:<uuid>` creator handle, so a match means "this is me".
+  const isSelf = !!user && handle === `user:${user.id}`;
+  // Tapping your OWN circle always jumps to your catalog — even on feed
+  // cards where every other avatar falls through to open the look
+  // (avatarOpensCreator=false). Everyone else keeps the passed behavior.
+  const navigates = (avatarOpensCreator || isSelf) && !!onOpenCreator;
 
   // Fall back to a looked-up avatar when one wasn't passed inline.
   const [resolvedAvatar, setResolvedAvatar] = useState<string | null>(null);

@@ -130,6 +130,14 @@ export async function getMyFollowingDetailed(): Promise<FollowingDetail[]> {
   const looksCountByHandle = new Map<string, number>();
   const lastPostByHandle = new Map<string, number>();
   const userIdByHandle = new Map<string, string>();
+  // A `user:<uuid>` handle carries the profile id inline — seed it
+  // directly so the profiles fallback below can resolve a real name +
+  // avatar even when the account has no looks (and thus no looks row to
+  // derive the id from). Without this such accounts render as the raw
+  // "user:63c0…" handle string in the following list + rail.
+  for (const h of handles) {
+    if (h.startsWith('user:')) userIdByHandle.set(h, h.slice(5));
+  }
   for (const l of (looksRes.data || []) as LRow[]) {
     looksCountByHandle.set(l.creator_handle, (looksCountByHandle.get(l.creator_handle) ?? 0) + 1);
     if (l.user_id && !userIdByHandle.has(l.creator_handle)) userIdByHandle.set(l.creator_handle, l.user_id);

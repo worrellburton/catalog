@@ -205,6 +205,12 @@ function FollowingRail({ onOpenCreator, mode = 'both', onCreateFollowingCatalog:
       const userIdByHandle = new Map<string, string>();
       const lastPostByHandle = new Map<string, number>();
       const lastThumbByHandle = new Map<string, string>();
+      // `user:<uuid>` handles carry the profile id inline — seed it so the
+      // profiles fallback resolves a real name + avatar even for accounts
+      // with no looks (otherwise the rail shows the raw "user:63c0…" key).
+      for (const h of handles) {
+        if (h.startsWith('user:')) userIdByHandle.set(h, h.slice(5));
+      }
       for (const l of (lookRows.data || []) as LRow[]) {
         if (l.user_id && !userIdByHandle.has(l.creator_handle)) {
           userIdByHandle.set(l.creator_handle, l.user_id);
