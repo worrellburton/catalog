@@ -190,6 +190,23 @@ ordering below — same per-user seen data).
   seen-tracking service.
 
 ### T. Create-a-look — video upload + in/out trimmer
+STATUS: trimmer UX ✅ DONE (app/components/VideoTrimmer.tsx + CreateLookV2
+integration): single-video pick → one-viewport trimmer (scrub + draggable
+in/out handles, looped preview), Done captures the FIRST frame of the
+selection as a JPEG poster; MediaItem carries trimStart/trimEnd/posterUrl,
+thumb shows the poster. DECISION (made): trimmed video = stored clip + the
+first frame is the poster.
+REMAINING (essential — otherwise the trim is discarded on publish):
+  • uploadLookMedia(lookId, file, type) currently ignores poster/trim; the
+    server auto-generates a poster from frame 0. Extend it to accept the
+    client poster (upload the data URL as an image) and set the look's
+    thumbnail to it, so "poster = first frame of selection" holds.
+  • Persist trimStart/trimEnd (looks_creative needs columns, or store as
+    metadata) so look playback uses the [start,end] window. True re-encode
+    cutting would need ffmpeg.wasm; range-based playback is the pragmatic clip.
+  • Verify the poster renders on the published look.
+ORIGINAL NOTE ↓
+### T (orig). Create-a-look — video upload + in/out trimmer
 On the "Create a look" upload screen, the user tried to upload a **video**
 and it didn't work (the file input likely accepts images only, and the
 upload/generation pipeline expects photos). Build proper video support:
