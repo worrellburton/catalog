@@ -349,7 +349,7 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
             onClick={async (e) => {
               e.stopPropagation();
               setMenu(null);
-              await hideLookId(look.id);
+              await hideLookId(look);
             }}
             style={{
               width: '100%',

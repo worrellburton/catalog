@@ -3,7 +3,7 @@ import { useMemo, useRef, useCallback, useEffect, useState } from 'react';
 import { looks as staticLooksFallback, creators, Look } from '~/data/looks';
 import { getLooks } from '~/services/looks';
 import { seededShuffle, hashSeed } from '~/utils/seededShuffle';
-import { useHiddenLooks, useHiddenProductKeys } from '~/hooks/useHiddenLooks';
+import { useHiddenLooks, useHiddenLookUuids, useHiddenProductKeys, isLookHidden } from '~/hooks/useHiddenLooks';
 import LookCard from './LookCard';
 
 interface GridViewProps {
@@ -133,6 +133,7 @@ export default function GridView({ activeFilter, searchQuery, onOpenLook, onOpen
 
   // Hide admin-deleted looks + strip admin-deleted products from remaining looks.
   const hiddenLookIds = useHiddenLooks();
+  const hiddenLookUuids = useHiddenLookUuids();
   const hiddenProductKeys = useHiddenProductKeys();
 
   // Pull the live look set from Supabase so the grid mirrors the admin's
@@ -155,12 +156,12 @@ export default function GridView({ activeFilter, searchQuery, onOpenLook, onOpen
 
   const looks = useMemo(() => (
     dbLooks
-      .filter(l => !hiddenLookIds.has(l.id))
+      .filter(l => !isLookHidden(l, hiddenLookIds, hiddenLookUuids))
       .map(l => ({
         ...l,
         products: l.products.filter(p => !hiddenProductKeys.has(`${p.brand}-${p.name}`)),
       }))
-  ), [dbLooks, hiddenLookIds, hiddenProductKeys]);
+  ), [dbLooks, hiddenLookIds, hiddenLookUuids, hiddenProductKeys]);
 
   const filteredLooks = useMemo(() => {
     // Gender filter: 'men' shows men + unisex (and vice-versa). Unisex

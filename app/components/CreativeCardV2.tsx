@@ -506,7 +506,7 @@ const CreativeCardV2 = memo(function CreativeCardV2({
               e.stopPropagation();
               setMenu(null);
               if (isLook && look) {
-                await hideLookId(look.id);
+                await hideLookId(look);
                 return;
               }
               if (creative && onDelete && confirm(`Delete product "${creative.product?.name || 'this product'}" everywhere?`)) {

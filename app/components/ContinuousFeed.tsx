@@ -13,7 +13,7 @@ import { logSearch } from '~/services/search-log';
 import { useAuth } from '~/hooks/useAuth';
 import { useShopperBody } from '~/hooks/useShopperBody';
 import { lookFitScore } from '~/services/size-match';
-import { useHiddenLooks, useHiddenProductKeys, hideLookId } from '~/hooks/useHiddenLooks';
+import { useHiddenLooks, useHiddenLookUuids, useHiddenProductKeys, hideLookId, isLookHidden } from '~/hooks/useHiddenLooks';
 import { deleteLook as deleteLookService } from '~/services/manage-looks';
 import { useDeleteMode } from '~/hooks/useDeleteMode';
 import { getSeenKeys, partitionUnseen, type SeenKey } from '~/services/seen-feed';
@@ -212,6 +212,7 @@ function ContinuousFeed({
   // ── Filtering uses committedQuery so grid doesn't change while typing ──
   // must never appear in the consumer feed, detail pages, or similar-look rows.
   const hiddenLookIds = useHiddenLooks();
+  const hiddenLookUuids = useHiddenLookUuids();
   const hiddenProductKeys = useHiddenProductKeys();
 
   // Load looks live from Supabase. Stale-while-revalidate: seed from
@@ -250,7 +251,7 @@ function ContinuousFeed({
 
   const allLooks = useMemo(() => {
     const filtered = dbLooks
-      .filter(l => !hiddenLookIds.has(l.id))
+      .filter(l => !isLookHidden(l, hiddenLookIds, hiddenLookUuids))
       .map(l => ({
         ...l,
         products: l.products.filter(p => !hiddenProductKeys.has(`${p.brand}-${p.name}`)),
@@ -262,7 +263,7 @@ function ContinuousFeed({
     // feed (re)entry / shuffle, so the seen-shuffle re-runs and a returning
     // shopper who's seen everything gets a fresh order instead of the same
     // frozen one for the whole SPA session.
-  }, [dbLooks, hiddenLookIds, hiddenProductKeys, seenLookIds, shuffleKey]);
+  }, [dbLooks, hiddenLookIds, hiddenLookUuids, hiddenProductKeys, seenLookIds, shuffleKey]);
 
   // Shopper's profile gender, subscribed globally. Declared ABOVE
   // filteredLooks so the useMemo below can read it without tripping
@@ -989,7 +990,7 @@ function ContinuousFeed({
       return;
     }
     // Seed look — soft hide locally so the admin still gets feedback.
-    try { await hideLookId(look.id); } catch { /* localStorage write */ }
+    try { await hideLookId(look); } catch { /* localStorage write */ }
   }, []);
 
   const handleOpenCreativeProduct = useCallback((creative: ProductAd) => {
