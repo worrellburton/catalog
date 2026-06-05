@@ -322,3 +322,13 @@ STILL TODO (all are large rebuilds / fragile / need live verification):
 - Creator-page Follow button now fires the global follow toast
 - Become-a-creator flow (application + admin approval queue)
 - About-tab Claude summary; no-cache HTML deploy fix; chunk-error recovery
+
+## FINAL (trim-playback shipped)
+T trim-PLAYBACK ✅ DONE: looks_creative.trim_start/end columns; uploadLookMedia
+writes trim to look_videos + the primary looks_creative; looks.ts threads
+Look.trimStart/end + registers src→window (utils/lookTrim); TrailVideoHost
+loops [start,end] for registered srcs (guarded — untrimmed looks keep
+el.loop=true, zero regression). F ✅ DONE (keyboard bar tracks 1:1).
+VERIFY ON PREVIEW (catalogdev.vercel.app, real auth+data): F overlap, C/H
+one-viewport (needs a screenshot of what overflows), and the trim loop on a
+trimmed look. STILL NEEDS A DECISION: feed type-clustering (product grid?).
