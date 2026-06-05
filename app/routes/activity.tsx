@@ -283,13 +283,7 @@ export default function ActivityRoute() {
           </div>
         )}
 
-        {/* ── Your looks — recent generations + rendering progress ──── */}
-        <YourLooksRail generations={myGenerations} />
-
-        {/* ── Who saw your looks — named ledger ────────────────────── */}
-        <RecentLedger events={recent} />
-
-        {/* ── Creator hero: engagement summary ────────────────────── */}
+        {/* ── Your reach — engagement summary, pinned to the top ────── */}
         {isCreator !== false && (
           <section className="ap-section">
             <div className="ap-section-head">
@@ -322,6 +316,12 @@ export default function ActivityRoute() {
             )}
           </section>
         )}
+
+        {/* ── Your looks — recent generations + rendering progress ──── */}
+        <YourLooksRail generations={myGenerations} />
+
+        {/* ── Who saw your looks — collapsible, starts collapsed ────── */}
+        <RecentLedger events={recent} />
 
         {/* ── Per-look performance ────────────────────────────────── */}
         {topLooks && topLooks.length > 0 && (
@@ -568,15 +568,29 @@ function GenTile({ gen }: { gen: UserGeneration }) {
 // old anonymous "Saw your look" ticker — each row names the viewer (from
 // their profile) with their avatar, the verb, and which look.
 function RecentLedger({ events }: { events: ActivityRecentEvent[] | null }) {
+  // Collapsible, and starts collapsed — this list can get long, so it sits
+  // tucked away under a tappable header until the creator opens it.
+  const [open, setOpen] = useState(false);
   if (!events || events.length === 0) return null;
   const verb = (t: ActivityRecentEvent['event_type']) =>
     t === 'impression' ? 'saw' : t === 'click' ? 'tapped' : 'clicked out on';
   return (
     <section className="ap-section">
-      <div className="ap-section-head">
-        <h2 className="ap-section-title">Who saw your looks</h2>
-        <span className="ap-section-sub">Most recent activity</span>
-      </div>
+      <button
+        type="button"
+        className="ap-section-head ap-section-head--toggle"
+        onClick={() => setOpen(o => !o)}
+        aria-expanded={open}
+      >
+        <span className="ap-section-head-text">
+          <h2 className="ap-section-title">Who saw your looks</h2>
+          <span className="ap-section-sub">Most recent activity · {events.length}</span>
+        </span>
+        <svg className={`ap-section-chevron ${open ? 'is-open' : ''}`} width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <polyline points="6 9 12 15 18 9" />
+        </svg>
+      </button>
+      {open && (
       <div className="ap-ledger">
         {events.map(e => (
           <div key={e.id} className={`ap-ledger-row ap-ledger-row--${e.event_type}`}>
@@ -590,6 +604,7 @@ function RecentLedger({ events }: { events: ActivityRecentEvent[] | null }) {
           </div>
         ))}
       </div>
+      )}
     </section>
   );
 }

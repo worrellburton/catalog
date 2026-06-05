@@ -70,6 +70,32 @@
   justify-content: space-between;
   gap: 10px;
 }
+/* Collapsible section header — the whole bar is a toggle. */
+.ap-section-head--toggle {
+  width: 100%;
+  background: none;
+  border: none;
+  padding: 4px 0;
+  margin: 0;
+  cursor: pointer;
+  align-items: center;
+  color: inherit;
+  font: inherit;
+  text-align: left;
+  -webkit-tap-highlight-color: transparent;
+}
+.ap-section-head-text {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  min-width: 0;
+}
+.ap-section-chevron {
+  flex-shrink: 0;
+  color: rgba(248, 250, 252, 0.55);
+  transition: transform 0.22s ease;
+}
+.ap-section-chevron.is-open { transform: rotate(180deg); }
 .ap-section-title {
   margin: 0;
   font-size: 15px;
