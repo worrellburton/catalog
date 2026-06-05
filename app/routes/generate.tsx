@@ -167,9 +167,16 @@ const CATEGORY_GROUPS: Array<{ label: string; tags: string[] | null }> = [
   { label: 'Objects', tags: null },
 ];
 
-/** True if the product belongs to the named bucket. `Objects` matches
- *  anything that doesn't fit a clothing role. */
+// "All" row pinned at the top of the picker: aggregates every product and
+// lets the shopper search across all products + brands in one place. Rendered
+// before the category rows (and defaults to expanded — see `expanded` below).
+const ALL_GROUP: { label: string; tags: string[] | null } = { label: 'All', tags: [] };
+const PICKER_GROUPS = [ALL_GROUP, ...CATEGORY_GROUPS];
+
+/** True if the product belongs to the named bucket. `All` matches every
+ *  product; `Objects` matches anything that doesn't fit a clothing role. */
 function productInCategory(p: { role_tag?: string | null }, group: typeof CATEGORY_GROUPS[number]): boolean {
+  if (group.label === 'All') return true;
   if (group.tags === null) {
     return !p.role_tag || !ROLE_TAGS.includes(p.role_tag);
   }
@@ -444,7 +451,7 @@ export default function GeneratePage() {
   // inputs skip the work entirely.
   const productsByCategory = useMemo(() => {
     const out: Record<string, PickedProduct[]> = {};
-    for (const group of CATEGORY_GROUPS) {
+    for (const group of PICKER_GROUPS) {
       const q = (categoryQueries[group.label] || '').trim().toLowerCase();
       const brand = categoryBrandFilters[group.label] || null;
       out[group.label] = productResults.filter(p => {
@@ -464,7 +471,7 @@ export default function GeneratePage() {
   // change which chips are visible.
   const brandsByCategory = useMemo(() => {
     const out: Record<string, string[]> = {};
-    for (const group of CATEGORY_GROUPS) {
+    for (const group of PICKER_GROUPS) {
       const tally = new Map<string, number>();
       for (const p of productResults) {
         if (!productInCategory(p, group)) continue;
@@ -1728,13 +1735,14 @@ export default function GeneratePage() {
             {productsLoading && productResults.length === 0 ? (
               <div className="gen-empty">Loading products…</div>
             ) : (
-              CATEGORY_GROUPS.map(group => {
+              PICKER_GROUPS.map(group => {
                 const rowProducts = productsByCategory[group.label] || [];
                 const rowQuery = categoryQueries[group.label] || '';
                 const rowBrands = brandsByCategory[group.label] || [];
                 const activeBrand = categoryBrandFilters[group.label] || null;
-                // Collapsed by default; a typed query force-expands the row.
-                const expanded = (expandedCats[group.label] ?? false) || !!rowQuery;
+                // "All" opens expanded; category rows default collapsed.
+                // A typed query force-expands any row.
+                const expanded = (expandedCats[group.label] ?? group.label === 'All') || !!rowQuery;
                 return (
                   <div key={group.label} className={`gen-cat-row${expanded ? ' is-expanded' : ''}`}>
                     <div className="gen-cat-row-head">
