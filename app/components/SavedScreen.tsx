@@ -163,6 +163,9 @@ export default function SavedScreen({
 
   // ── Handlers ──────────────────────────────────────────────────────────
   const handleOpenProductCard = useCallback((p: Product) => {
+    // Tapping a saved product opens the PRODUCT screen first — that's what
+    // the shopper expects (full product detail), not the bare video player.
+    if (onOpenProduct) { onOpenProduct(p); return; }
     if (p.video_url && onOpenCreative) {
       onOpenCreative({
         id: p.creative_id || '', product_id: (p as Product & { id?: string }).id || '', look_id: null,
@@ -175,8 +178,7 @@ export default function SavedScreen({
           image_url: p.image || null, images: null, url: p.url, type: null, catalog_tags: null, gender: null,
         },
       });
-    } else if (onOpenProduct) onOpenProduct(p);
-    else if (p.url) onOpenBrowser(p.url, p.name);
+    } else if (p.url) onOpenBrowser(p.url, p.name);
   }, [onOpenCreative, onOpenProduct, onOpenBrowser]);
 
   const onDrop = useCallback((kind: 'look' | 'product', targetId: string) => {

@@ -55,7 +55,11 @@ export function useAppView({ user, authLoading }: UseAppViewArgs): UseAppViewRes
   // with real content already in cache.
   const [firstVisit, setFirstVisit] = useState(() => {
     try {
-      return typeof window !== 'undefined' && !window.localStorage.getItem('catalog:visited');
+      if (typeof window === 'undefined') return false;
+      // Deep links (e.g. opening a specific look from Activity via ?look=…)
+      // should land straight on the content — never behind the brand splash.
+      if (/[?&]look=/.test(window.location.search)) return false;
+      return !window.localStorage.getItem('catalog:visited');
     } catch { return false; }
   });
   useEffect(() => {
