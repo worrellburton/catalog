@@ -676,24 +676,23 @@ export default function CreatorPage({
             <p>Saved products will appear here once {displayName.split(' ')[0]} adds them to a look.</p>
           </div>
         ) : (
-          <div className="creator-products-grid">
+          <div className="creator-grid">
             {filteredProducts.map((p, i) => (
               <div
                 key={`${p.brand}-${p.name}-${i}`}
-                className="creator-product-card"
+                className="look-card creator-product-feed"
                 onClick={() => handleProductClick(p)}
               >
-                <div className="creator-product-img">
-                  {p.image ? (
-                    <img src={p.image} alt={p.name} loading="lazy" decoding="async" />
-                  ) : (
-                    <div className="creator-product-placeholder" />
-                  )}
-                </div>
-                <div className="creator-product-info">
-                  {p.brand && <span className="creator-product-brand">{p.brand}</span>}
-                  <span className="creator-product-name">{p.name}</span>
-                  {p.price && <span className="creator-product-price">{p.price}</span>}
+                {p.image ? (
+                  <img className="cpf-media" src={p.image} alt={p.name} loading="lazy" decoding="async" />
+                ) : (
+                  <div className="cpf-media cpf-media--blank" />
+                )}
+                <div className="cpf-gradient" />
+                <div className="cpf-info">
+                  {p.brand && <span className="cpf-brand">{p.brand}</span>}
+                  <span className="cpf-name">{p.name}</span>
+                  {p.price && <span className="cpf-price">{p.price}</span>}
                 </div>
               </div>
             ))}

@@ -275,6 +275,72 @@
   margin-top: 4px;
 }
 
+/* Shop-tab products rendered in the SAME feed-card view as looks: a 3:4
+   tile (sized by .creator-grid .look-card) with the product image covering
+   it, a gradient scrim, and the brand/name/price overlaid at the bottom —
+   visually identical to the look cards in the feed. */
+.creator-product-feed {
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.06);
+}
+.cpf-media {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.cpf-media--blank {
+  background: linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02));
+}
+.cpf-gradient {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(0,0,0,0.78) 0%, rgba(0,0,0,0.28) 36%, transparent 62%);
+  pointer-events: none;
+}
+.cpf-info {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 1;
+}
+.cpf-brand {
+  font-size: 10.5px;
+  color: rgba(255, 255, 255, 0.72);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cpf-name {
+  font-size: 13px;
+  color: #fff;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cpf-price {
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  margin-top: 2px;
+}
+@media (max-width: 768px) {
+  .cpf-info { padding: 8px 9px; }
+}
+
 .creator-empty-state {
   display: flex;
   flex-direction: column;
