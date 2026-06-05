@@ -1736,6 +1736,91 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   color: #111;
 }
 
+/* Divider between the look-status tabs and the Products tab. */
+.my-cat-nav-divider {
+  width: 1px;
+  align-self: stretch;
+  margin: 6px 4px;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+/* ── Products tab — vertical, drag-reorderable list ── */
+.my-cat-products-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.my-cat-product-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px 8px 4px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  /* Vertical-only drag: the browser keeps page pans vertical and the grip
+     handles the reorder. */
+  touch-action: pan-y;
+}
+.my-cat-product-row.is-dragging {
+  opacity: 0.6;
+  background: rgba(255, 255, 255, 0.09);
+}
+.my-cat-product-grip {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 44px;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.4);
+  cursor: grab;
+  touch-action: none;
+}
+.my-cat-product-grip:active { cursor: grabbing; }
+.my-cat-product-thumb {
+  flex-shrink: 0;
+  width: 52px;
+  height: 52px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.06);
+}
+.my-cat-product-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.my-cat-product-thumb-blank { width: 100%; height: 100%; }
+.my-cat-product-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  min-width: 0;
+}
+.my-cat-product-brand {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+}
+.my-cat-product-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.my-cat-product-price {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
 /* Error banner - light tinted box above the grid. */
 .my-cat-error {
   margin: 0 0 16px;

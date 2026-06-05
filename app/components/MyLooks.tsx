@@ -5,6 +5,7 @@ import AddProductV2 from './AddProductV2';
 import { useAuth } from '~/hooks/useAuth';
 import type { ManagedLook, LookStatus } from '~/services/manage-looks';
 import { getMyLooks, deleteLook, archiveLook, submitLook, reorderLooks } from '~/services/manage-looks';
+import { getMyCatalogProducts, reorderMyCatalogProducts, type CatalogProduct } from '~/services/catalog-products';
 import { withTransform } from '~/utils/supabase-image';
 import { supabase } from '~/utils/supabase';
 import { lookSlug } from '~/utils/slug';
@@ -62,9 +63,16 @@ export default function MyLooks({ onClose }: MyLooksProps) {
   const [looks, setLooks] = useState<ManagedLook[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<LookStatus | 'all'>('all');
+  const [statusFilter, setStatusFilter] = useState<LookStatus | 'products'>('live');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+
+  // "Products" tab — every product across the creator's looks, drag-orderable.
+  const [catalogProducts, setCatalogProducts] = useState<CatalogProduct[]>([]);
+  const [productsLoading, setProductsLoading] = useState(false);
+  // Counts for the hero stat line + tab badges — fetched independently of the
+  // active filter so removing the "All" tab didn't break the totals.
+  const [counts, setCounts] = useState({ all: 0, live: 0, archived: 0 });
 
   // Form state (create or edit).
   const [showForm, setShowForm] = useState(false);
@@ -106,12 +114,25 @@ export default function MyLooks({ onClose }: MyLooksProps) {
   // Ephemeral confirmation toast ("Link copied", etc.).
   const [toast, setToast] = useState<string | null>(null);
 
+  const refreshCounts = useCallback(async () => {
+    try {
+      const res = await getMyLooks({ page: 1, limit: 200 });
+      const ls = res.data;
+      setCounts({
+        all: ls.length,
+        live: ls.filter(l => l.status === 'live').length,
+        archived: ls.filter(l => l.status === 'archived').length,
+      });
+    } catch { /* keep prior counts */ }
+  }, []);
+
   const fetchLooks = useCallback(async () => {
+    if (statusFilter === 'products') { setLoading(false); return; }
     setLoading(true);
     setError(null);
     try {
       const params: { status?: LookStatus; page: number; limit: number } = { page, limit: 12 };
-      if (statusFilter !== 'all') params.status = statusFilter;
+      if (statusFilter === 'live' || statusFilter === 'archived') params.status = statusFilter;
       const res = await getMyLooks(params);
       setLooks(res.data);
       setTotalPages(res.pagination.totalPages);
@@ -124,7 +145,21 @@ export default function MyLooks({ onClose }: MyLooksProps) {
 
   useEffect(() => {
     fetchLooks();
-  }, [fetchLooks]);
+    refreshCounts();
+  }, [fetchLooks, refreshCounts]);
+
+  // Load the aggregated product list when the Products tab is active.
+  const fetchCatalogProducts = useCallback(async () => {
+    setProductsLoading(true);
+    try {
+      setCatalogProducts(await getMyCatalogProducts());
+    } finally {
+      setProductsLoading(false);
+    }
+  }, []);
+  useEffect(() => {
+    if (statusFilter === 'products') fetchCatalogProducts();
+  }, [statusFilter, fetchCatalogProducts]);
 
   const handleCreateNew = useCallback(() => {
     setEditingLook(null);
@@ -216,7 +251,7 @@ export default function MyLooks({ onClose }: MyLooksProps) {
   // grip handle so tapping the tile body still opens it. Only offered on
   // the "All" view — filtered views show a non-contiguous subset, so
   // writing sequential sort_order there would scramble hidden looks.
-  const canReorder = statusFilter === 'all';
+  const canReorder = statusFilter === 'live' || statusFilter === 'archived';
   const [dragId, setDragId] = useState<string | null>(null);
   const dragIdRef = useRef<string | null>(null);
   const looksRef = useRef<ManagedLook[]>([]);
@@ -259,6 +294,49 @@ export default function MyLooks({ onClose }: MyLooksProps) {
     }
   }, [page, showToastMsg]);
 
+  // ── Products-tab drag-reorder (vertical list, mirrors the look grip) ──
+  const [dragProductId, setDragProductId] = useState<string | null>(null);
+  const dragProductRef = useRef<string | null>(null);
+  const productsRef = useRef<CatalogProduct[]>([]);
+  useEffect(() => { productsRef.current = catalogProducts; }, [catalogProducts]);
+
+  const handleProductGripDown = useCallback((e: React.PointerEvent, id: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragProductRef.current = id;
+    setDragProductId(id);
+    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+  }, []);
+
+  const handleProductGripMove = useCallback((e: React.PointerEvent) => {
+    if (!dragProductRef.current) return;
+    e.preventDefault();
+    const el = document.elementFromPoint(e.clientX, e.clientY) as HTMLElement | null;
+    const overId = el?.closest('[data-product-id]')?.getAttribute('data-product-id');
+    if (!overId || overId === dragProductRef.current) return;
+    setCatalogProducts(prev => {
+      const from = prev.findIndex(p => p.id === dragProductRef.current);
+      const to = prev.findIndex(p => p.id === overId);
+      if (from === -1 || to === -1 || from === to) return prev;
+      const next = prev.slice();
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
+  }, []);
+
+  const handleProductGripUp = useCallback(async (e: React.PointerEvent) => {
+    if (!dragProductRef.current) return;
+    (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
+    dragProductRef.current = null;
+    setDragProductId(null);
+    try {
+      await reorderMyCatalogProducts(productsRef.current.map(p => p.id));
+    } catch {
+      showToastMsg('Could not save order');
+    }
+  }, [showToastMsg]);
+
   // ── Hero metadata ─────────────────────────────────────────────────
   const displayName = user?.displayName || user?.email?.split('@')[0] || 'My Catalog';
   const avatarUrl = user?.avatarUrl;
@@ -266,13 +344,6 @@ export default function MyLooks({ onClose }: MyLooksProps) {
   const myCreatorHandle = user?.id ? `user:${user.id}` : '';
 
   // Counts for the hero stats line.
-  const counts = useMemo(() => {
-    const all = looks.length;
-    const live = looks.filter(l => l.status === 'live').length;
-    const archived = looks.filter(l => l.status === 'archived').length;
-    return { all, live, archived };
-  }, [looks]);
-
   // Pre-compute previews so the render loop stays cheap.
   const tiles = useMemo(
     () => looks.map(m => ({ managed: m, preview: previewFor(m) })),
@@ -472,24 +543,79 @@ export default function MyLooks({ onClose }: MyLooksProps) {
       {/* Status filter pills — replace the old chip row, sit where
           CreatorPage's nav tabs do. */}
       <div className="my-cat-nav">
-        {(['all', 'live', 'archived'] as const).map(s => (
+        {(['live', 'archived'] as const).map(s => (
           <button
             key={s}
             className={`my-cat-nav-tab${statusFilter === s ? ' active' : ''}`}
             onClick={() => { setStatusFilter(s); setPage(1); }}
           >
-            {s === 'all' ? 'All' : STATUS_LABELS[s]}
-            {s === 'all' && counts.all > 0 && <span className="my-cat-nav-count">{counts.all}</span>}
+            {STATUS_LABELS[s]}
             {s === 'live' && counts.live > 0 && <span className="my-cat-nav-count">{counts.live}</span>}
             {s === 'archived' && counts.archived > 0 && <span className="my-cat-nav-count">{counts.archived}</span>}
           </button>
         ))}
+        {/* Divider separates look-status tabs from the Products view. */}
+        <span className="my-cat-nav-divider" aria-hidden="true" />
+        <button
+          className={`my-cat-nav-tab${statusFilter === 'products' ? ' active' : ''}`}
+          onClick={() => { setStatusFilter('products'); setPage(1); }}
+        >
+          Products
+          {catalogProducts.length > 0 && <span className="my-cat-nav-count">{catalogProducts.length}</span>}
+        </button>
       </div>
 
       {error && <div className="my-cat-error">{error}</div>}
 
       {/* Grid / loading / empty states — same pattern as CreatorPage. */}
-      {loading ? (
+      {statusFilter === 'products' ? (
+        productsLoading ? (
+          <div className="my-cat-skeleton-grid">
+            {Array.from({ length: 6 }).map((_, i) => <div key={i} className="my-cat-skeleton-tile" />)}
+          </div>
+        ) : catalogProducts.length === 0 ? (
+          <div className="my-cat-empty">
+            <svg width="42" height="42" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"/><path d="M3 6h18"/><path d="M16 10a4 4 0 0 1-8 0"/>
+            </svg>
+            <h2>No products yet</h2>
+            <p>Products you add to your looks will show up here.</p>
+          </div>
+        ) : (
+          <div className="my-cat-products-list">
+            {catalogProducts.map(p => (
+              <div
+                key={p.id}
+                data-product-id={p.id}
+                className={`my-cat-product-row${dragProductId === p.id ? ' is-dragging' : ''}`}
+              >
+                <button
+                  type="button"
+                  className="my-cat-product-grip"
+                  aria-label="Drag to reorder"
+                  title="Drag to reorder"
+                  onPointerDown={(e) => handleProductGripDown(e, p.id)}
+                  onPointerMove={handleProductGripMove}
+                  onPointerUp={handleProductGripUp}
+                  onPointerCancel={handleProductGripUp}
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="9" cy="5" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="19" r="1"/></svg>
+                </button>
+                <div className="my-cat-product-thumb">
+                  {p.image_url
+                    ? <img src={p.image_url} alt="" loading="lazy" />
+                    : <div className="my-cat-product-thumb-blank" aria-hidden="true" />}
+                </div>
+                <div className="my-cat-product-meta">
+                  {p.brand && <span className="my-cat-product-brand">{p.brand}</span>}
+                  <span className="my-cat-product-name">{p.name}</span>
+                  {p.price && <span className="my-cat-product-price">{p.price}</span>}
+                </div>
+              </div>
+            ))}
+          </div>
+        )
+      ) : loading ? (
         <div className="my-cat-skeleton-grid">
           {Array.from({ length: 6 }).map((_, i) => <div key={i} className="my-cat-skeleton-tile" />)}
         </div>
