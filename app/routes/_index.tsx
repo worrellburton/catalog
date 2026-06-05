@@ -575,6 +575,12 @@ export default function Home() {
       window.history.back();
       return;
     }
+    // Cold-load / no /l/ entry to pop: reset the address bar to the
+    // catalog root so returning to the feed doesn't strand a stale
+    // /l/<slug> URL (the share-link case).
+    if (typeof window !== 'undefined' && window.location.pathname !== '/') {
+      window.history.replaceState({}, '', '/');
+    }
     setSelectedLook(null);
   }, []);
 
