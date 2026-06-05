@@ -94,9 +94,9 @@ function profileToRow(p: Profile): UserRow {
   };
 }
 
-type Tab = 'waitlist' | 'users' | 'admins' | 'ai';
+type Tab = 'waitlist' | 'users' | 'shoppers' | 'admins' | 'ai';
 
-const TAB_VALUES: readonly Tab[] = ['waitlist', 'users', 'admins', 'ai'];
+const TAB_VALUES: readonly Tab[] = ['waitlist', 'users', 'shoppers', 'admins', 'ai'];
 
 function isTab(value: string | null): value is Tab {
   return value !== null && (TAB_VALUES as readonly string[]).includes(value);
@@ -810,6 +810,13 @@ export default function AdminUsers() {
     () => [...dbUsers.filter(u => !u.isAi), ...contentCreators],
     [dbUsers, contentCreators],
   );
+  // "Shoppers & Creators" tab: the Users list minus anyone elevated to
+  // admin/super_admin, so it's the focused view of the two consumer-facing
+  // roles (the Users tab is the catch-all that also folds in admins).
+  const shoppersCreators = useMemo(
+    () => users.filter(u => !(u.isAdmin || u.role === 'admin' || u.role === 'super_admin')),
+    [users],
+  );
   // Admins tab: a user counts as an admin when EITHER the explicit
   // is_admin flag is true OR their primary role is admin / super_admin.
   // Either dimension alone used to be enough to make a user "vanish":
@@ -1009,7 +1016,38 @@ export default function AdminUsers() {
     release(key);
   }, [allUsers, showToast, tryClaim, release]);
 
+  // ── Batch selection + batch edit (shared across every user tab) ──────
+  // One selection set drives the leading checkbox column in renderTable.
+  // Only one tab is visible at a time, so a single set is enough; it's
+  // cleared on tab switch so selections never bleed across tabs.
+  const [selectedUserIds, setSelectedUserIds] = useState<Set<string>>(new Set());
+  useEffect(() => { setSelectedUserIds(new Set()); }, [activeTab]);
+  const toggleUserSelected = useCallback((id: string) => {
+    setSelectedUserIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  }, []);
+  // Batch role change. Persists each row via updateUserRole (the same
+  // call RoleBadge makes) then syncs the optimistic UI through
+  // handleRoleChange. Seed "content-*" creators have no DB profile, so
+  // they're skipped.
+  const [batchBusy, setBatchBusy] = useState(false);
+  const batchSetRole = useCallback(async (role: UserRole) => {
+    const ids = [...selectedUserIds].filter(id => !id.startsWith('content-'));
+    if (ids.length === 0) { setSelectedUserIds(new Set()); return; }
+    setBatchBusy(true);
+    for (const id of ids) {
+      const { error } = await updateUserRole(id, role);
+      handleRoleChange(id, role, error);
+    }
+    setBatchBusy(false);
+    setSelectedUserIds(new Set());
+  }, [selectedUserIds, handleRoleChange]);
+
   const userTable = useSortableTable(users);
+  const shoppersTable = useSortableTable(shoppersCreators);
   const adminTable = useSortableTable(admins);
   const aiUserTable = useSortableTable(aiUsers);
 
@@ -1031,11 +1069,54 @@ export default function AdminUsers() {
       }
       return <p className="admin-detail-empty">No {labelCol.toLowerCase()}s yet</p>;
     }
+    const pageIds = table.sortedData.map(u => u.id);
+    const allSelected = pageIds.length > 0 && pageIds.every(id => selectedUserIds.has(id));
+    const someSelected = pageIds.some(id => selectedUserIds.has(id));
+    const toggleAll = () => setSelectedUserIds(prev => {
+      const next = new Set(prev);
+      if (allSelected) pageIds.forEach(id => next.delete(id));
+      else pageIds.forEach(id => next.add(id));
+      return next;
+    });
     return (
+      <>
+      {selectedUserIds.size > 0 && (
+        <div className="admin-batch-bar" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', marginBottom: 10, background: '#0f172a', color: '#fff', borderRadius: 10, flexWrap: 'wrap' }}>
+          <span style={{ fontWeight: 700, fontSize: 13 }}>{selectedUserIds.size} selected</span>
+          <span style={{ fontSize: 12, opacity: 0.7, marginLeft: 4 }}>Set role:</span>
+          {(['shopper', 'creator', 'admin', 'super_admin'] as UserRole[]).map(r => (
+            <button
+              key={r}
+              type="button"
+              disabled={batchBusy}
+              onClick={() => void batchSetRole(r)}
+              style={{ fontSize: 12, fontWeight: 600, padding: '5px 12px', borderRadius: 999, border: '1px solid rgba(255,255,255,0.25)', background: 'transparent', color: '#fff', cursor: batchBusy ? 'default' : 'pointer', opacity: batchBusy ? 0.5 : 1 }}
+            >
+              {USER_ROLE_LABELS[r]}
+            </button>
+          ))}
+          <button
+            type="button"
+            onClick={() => setSelectedUserIds(new Set())}
+            style={{ marginLeft: 'auto', fontSize: 12, background: 'transparent', border: 'none', color: '#cbd5e1', cursor: 'pointer' }}
+          >
+            Clear
+          </button>
+        </div>
+      )}
       <div className="admin-table-wrap admin-users-grid">
         <table className="admin-table">
           <thead>
             <tr>
+              <th style={{ width: 36 }}>
+                <input
+                  type="checkbox"
+                  aria-label="Select all"
+                  checked={allSelected}
+                  ref={el => { if (el) el.indeterminate = !allSelected && someSelected; }}
+                  onChange={toggleAll}
+                />
+              </th>
               <SortableTh label={labelCol} sortKey="name" currentSort={table.sort} onSort={table.handleSort} />
               <SortableTh label="Role" sortKey="role" currentSort={table.sort} onSort={table.handleSort} />
               {showAdminToggle && (
@@ -1064,6 +1145,14 @@ export default function AdminUsers() {
                 className="admin-clickable-row"
                 onClick={() => navigate(`/admin/user/${u.id}`)}
               >
+                <td onClick={(e) => e.stopPropagation()} style={{ width: 36 }}>
+                  <input
+                    type="checkbox"
+                    aria-label={`Select ${u.name}`}
+                    checked={selectedUserIds.has(u.id)}
+                    onChange={() => toggleUserSelected(u.id)}
+                  />
+                </td>
                 <td className="admin-cell-name" title={u.email || undefined}>
                   <AdminAvatar name={u.name} url={u.avatar} isAi={u.isAi} size={32} />
                   {u.name}
@@ -1214,6 +1303,7 @@ export default function AdminUsers() {
           </tbody>
         </table>
       </div>
+      </>
     );
   };
 
@@ -1279,6 +1369,11 @@ export default function AdminUsers() {
               </button>
             </div>
             <div className="admin-tab-group">
+              <button className={`admin-tab ${activeTab === 'shoppers' ? 'active' : ''}`} onClick={() => setActiveTab('shoppers')}>
+                Shoppers &amp; Creators{shoppersCreators.length > 0 && <span className="admin-tab-count">{shoppersCreators.length}</span>}
+              </button>
+            </div>
+            <div className="admin-tab-group">
               <button className={`admin-tab ${activeTab === 'admins' ? 'active' : ''}`} onClick={() => setActiveTab('admins')}>
                 Admins{admins.length > 0 && <span className="admin-tab-count">{admins.length}</span>}
               </button>
@@ -1302,6 +1397,7 @@ export default function AdminUsers() {
 
       {activeTab === 'waitlist' && <AdminWaitlistPanel />}
       {activeTab === 'users' && renderTable(users, userTable, 'User', { showAdminToggle: false, showPromoteButton: true })}
+      {activeTab === 'shoppers' && renderTable(shoppersCreators, shoppersTable, 'User', { showAdminToggle: false, showPromoteButton: true })}
       {activeTab === 'admins' && renderTable(admins, adminTable, 'Admin', { showSuperToggle: true })}
       {activeTab === 'ai' && (
         <AiUsersTab

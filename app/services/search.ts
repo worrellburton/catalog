@@ -71,6 +71,10 @@ export async function search(
     return { ok: true, query: '', results: [], looks: [], count: 0, took_ms: 0 };
   }
 
+  // Opt-in search variant (e.g. 'v7' = structured facet routing). Set
+  // VITE_SEARCH_VARIANT in the dev Vercel env to A/B without touching prod.
+  const variant = import.meta.env.VITE_SEARCH_VARIANT as string | undefined;
+
   let res: Response;
   try {
     res = await fetch(SEARCH_ENDPOINT, {
@@ -80,7 +84,7 @@ export async function search(
         Authorization:   `Bearer ${SUPABASE_ANON_KEY}`,
         apikey:          SUPABASE_ANON_KEY,
       },
-      body: JSON.stringify({ query: trimmed, k, gender, exclude_ids }),
+      body: JSON.stringify({ query: trimmed, k, gender, exclude_ids, ...(variant ? { variant } : {}) }),
       signal,
     });
   } catch (err) {

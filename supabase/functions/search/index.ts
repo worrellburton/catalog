@@ -84,6 +84,7 @@ Deno.serve(async (req: Request) => {
     gender?: string | null;
     exclude_ids?: string[];
     warmup?: boolean;
+    variant?: string;   // 'v7' opts into the shadow search_products_v7 (facet routing). Default: live.
   };
   try {
     body = await req.json();
@@ -135,8 +136,10 @@ Deno.serve(async (req: Request) => {
   const embeddingStr = queryEmbedding as unknown as string;
   const genderForLooks = gender === 'male' ? 'men' : gender === 'female' ? 'women' : null;
 
+  const productRpc = body.variant === 'v7' ? 'search_products_v7' : 'search_products';
+
   const [productsResult, looksResult] = await Promise.all([
-    supabase.rpc('search_products', {
+    supabase.rpc(productRpc, {
       query_embedding: embeddingStr,
       query_text:      query,
       k,

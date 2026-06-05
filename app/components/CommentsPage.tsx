@@ -147,6 +147,8 @@ export default function CommentsPage({ targetType, slug, onClose, onOpenCreator 
   // 🔥 reactions, keyed by comment id. Live-synced alongside the thread.
   const [reactions, setReactions] = useState<Record<string, ReactionState>>({});
   const [milestone, setMilestone] = useState<string | null>(null);
+  // Comment ids whose author avatar failed to load → fall back to initial.
+  const [avatarErrored, setAvatarErrored] = useState<Set<string>>(new Set());
   const listEndRef = useRef<HTMLDivElement>(null);
   const commentIdsKey = comments.map(c => c.id).join(',');
 
@@ -337,8 +339,13 @@ export default function CommentsPage({ targetType, slug, onClose, onOpenCreator 
                     disabled={!openAuthor}
                     aria-label={`Open ${c.author?.full_name || 'user'}'s catalog`}
                   >
-                    {c.author?.avatar_url
-                      ? <img className="comment-avatar" src={c.author.avatar_url} alt="" />
+                    {c.author?.avatar_url && !avatarErrored.has(c.id)
+                      ? <img
+                          className="comment-avatar"
+                          src={c.author.avatar_url}
+                          alt=""
+                          onError={() => setAvatarErrored(prev => new Set(prev).add(c.id))}
+                        />
                       : <span className="comment-avatar comment-avatar--initial">
                           {(c.author?.full_name || 'U').charAt(0).toUpperCase()}
                         </span>}
