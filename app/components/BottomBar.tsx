@@ -424,7 +424,18 @@ function BottomBar({
       )}
 
       {searchOpen && (
-        <div className="search-suggestions visible" id="search-suggestions">
+        <div
+          className="search-suggestions visible"
+          id="search-suggestions"
+          // Pin the suggestions column's bottom to the SAME keyboard inset
+          // the search bar is pinned to, so the catalog pills + creator
+          // avatars always sit just above the bar in lockstep with the
+          // keyboard. Without this the panel kept a static bottom padding
+          // while the bar rode up the keyboard, so on keyboard show/dismiss
+          // the pills and the bar overlapped. Falls back to CSS when no
+          // keyboard is up.
+          style={kbInset > 0 ? { paddingBottom: kbInset + 60 } : undefined}
+        >
           {/* Ambient WebGL particle field behind the catalog pills — same
               drift as the splash / overlays. Explicit speed so it always
               renders (ignores the site singleton's paused state). */}
