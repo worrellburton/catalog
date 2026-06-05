@@ -259,6 +259,29 @@
 }
 .look-comment-btn--green:hover { background: #15a34a !important; }
 
+/* Labelled "Comments" button in the info body — replaces the floating
+   bubble; mirrors the product page's inline comments button. */
+.look-comments-labeled {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: 100%;
+  margin: 4px 0 12px;
+  padding: 13px 16px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.look-comments-labeled:hover { background: rgba(255, 255, 255, 0.1); }
+.look-comments-labeled svg { flex-shrink: 0; opacity: 0.85; }
+
 /* Wrapper to center media within the 60% column */
 .look-media-centered {
   width: 100%;

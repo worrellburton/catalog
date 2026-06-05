@@ -735,20 +735,8 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
               )}
             </button>
             <div className="look-video-actions">
-              {commentsEnabled && commentSlug && onOpenComments && (
-                <button
-                  className="detail-comments-fab"
-                  onClick={() => onOpenComments('look', commentSlug)}
-                  aria-label="Comments"
-                >
-                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
-                  </svg>
-                  {commentCount != null && commentCount > 0 && (
-                    <span className="detail-comments-fab__count">{commentCount > 99 ? '99+' : commentCount}</span>
-                  )}
-                </button>
-              )}
+              {/* Comments moved off the floating bubble into a labelled
+                  button in the info panel (like the product screen). */}
               <button
                 className={`look-video-bookmark-btn${lookBookmarked ? ' active' : ''}`}
                 onClick={handleToggleLookBookmark}
@@ -870,20 +858,6 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                   <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
                 )}
               </button>
-              {commentsEnabled && commentSlug && onOpenComments && (
-                <button
-                  className="look-comment-btn look-comment-btn--green"
-                  onClick={() => onOpenComments('look', commentSlug)}
-                  aria-label="Comments"
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
-                  </svg>
-                  {commentCount != null && commentCount > 0 && (
-                    <span className="detail-comments-fab__count">{commentCount > 99 ? '99+' : commentCount}</span>
-                  )}
-                </button>
-              )}
             </div>
 
             {/* Creator row — prefer the static-seed creator entry if
@@ -909,6 +883,23 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                 </svg>
                 <span>{saveCount.toLocaleString()} {saveCount === 1 ? 'save' : 'saves'}</span>
               </div>
+            )}
+
+            {/* Comments — a labelled button (like the product screen) in the
+                info body, visible on mobile + desktop. Replaced the floating
+                green bubble that used to sit over the video. */}
+            {commentsEnabled && commentSlug && onOpenComments && (
+              <button
+                type="button"
+                className="look-comments-labeled"
+                onClick={() => onOpenComments('look', commentSlug)}
+                aria-label="Comments"
+              >
+                <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
+                </svg>
+                <span>{commentCount != null && commentCount > 0 ? `Comments ${commentCount > 99 ? '99+' : commentCount}` : 'Comments'}</span>
+              </button>
             )}
 
             {/* Tabs */}
