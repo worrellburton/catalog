@@ -139,6 +139,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   const commentSlug = useMemo(
     () => lookSlug({
       id: look.id ?? null,
+      uuid: look.uuid ?? null,
       creator: look.creator ?? null,
       creatorDisplayName: look.creatorDisplayName ?? null,
       title: look.title ?? null,

@@ -115,6 +115,7 @@ export function useOverlayRouter({
     if (!selectedLook) return;
     const slug = lookSlug({
       id: selectedLook.id ?? null,
+      uuid: selectedLook.uuid ?? null,
       creator: selectedLook.creator ?? null,
       creatorDisplayName: selectedLook.creatorDisplayName ?? null,
       title: selectedLook.title ?? null,
@@ -224,15 +225,12 @@ export function useOverlayRouter({
           });
       }
     } else if (path.startsWith('/l/')) {
-      const id = extractLookId(slugParam);
-      if (id != null) {
-        // Numeric ID: look up in seed data.
-        const look = seedLooks.find(l => l.id === id);
-        if (look) onOpenLook(look);
-      } else {
-        // No numeric ID — try UUID-prefix lookup in the DB looks table.
-        const uuidPfx = extractIdPrefix(slugParam);
-        if (!uuidPfx || !supabase) return;
+      // Try the 8-char UUID prefix FIRST (DB looks). A DB look's uuid
+      // prefix can be all-digits, which extractLookId would otherwise
+      // misread as a numeric seed id — so uuid resolution must precede it.
+      const uuidPfx = extractIdPrefix(slugParam);
+      if (uuidPfx) {
+        if (!supabase) return;
         const lowerUuid = `${uuidPfx}-0000-0000-0000-000000000000`;
         const nextPfx = nextHexPrefix(uuidPfx);
         let lookQ = supabase
@@ -256,6 +254,13 @@ export function useOverlayRouter({
             };
             onOpenLook(look);
           });
+      } else {
+        // No UUID suffix → a seed look with a simple numeric id.
+        const id = extractLookId(slugParam);
+        if (id != null) {
+          const look = seedLooks.find(l => l.id === id);
+          if (look) onOpenLook(look);
+        }
       }
     } else if (path.startsWith('/b/')) {
       // Brand slug is the kebab brand name. Reverse-lookup against the

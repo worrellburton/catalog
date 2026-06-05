@@ -55,6 +55,11 @@ export function productSlug(p: ProductLike): string {
 
 export interface LookLike {
   id?: string | number | null;
+  /** DB looks carry a real UUID. When present it's the only stable,
+   *  resolvable identifier — `id` is often a synthetic negative
+   *  feed-index for DB rows with no legacy_id, which produces an
+   *  unresolvable share slug. Always prefer the uuid suffix. */
+  uuid?: string | null;
   creator?: string | null;
   creatorDisplayName?: string | null;
   title?: string | null;
@@ -79,12 +84,19 @@ function pickCreatorLabel(l: LookLike): string {
 export function lookSlug(l: LookLike): string {
   const creatorLabel = pickCreatorLabel(l);
   const human = kebab([creatorLabel, l.title].filter(Boolean).join(' '));
-  // Look IDs in the seed data are simple numbers; pass them through
-  // verbatim so the URL ends with /quiet-luxury-1 etc. UUID looks
-  // (if/when looks move to the DB) get the same 8-char prefix
-  // treatment products use.
-  const idStr = l.id == null ? '' : String(l.id);
-  const suffix = /^\d+$/.test(idStr) ? idStr : uuidPrefix(idStr);
+  // Suffix priority:
+  //   1. DB look → 8-char UUID prefix (stable, resolvable on cold load).
+  //   2. Seed look → its simple numeric id verbatim (/quiet-luxury-1).
+  // A DB look's numeric `id` is frequently a synthetic negative
+  // feed-index (no legacy_id), which is NOT resolvable — so whenever a
+  // uuid exists it wins.
+  let suffix = '';
+  if (l.uuid) {
+    suffix = uuidPrefix(l.uuid);
+  } else if (l.id != null) {
+    const idStr = String(l.id);
+    suffix = /^\d+$/.test(idStr) ? idStr : uuidPrefix(idStr);
+  }
   if (!human && !suffix) return '';
   if (!suffix) return human;
   return human ? `${human}-${suffix}` : suffix;
