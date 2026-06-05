@@ -241,6 +241,15 @@ export default function ParticleBackground({ speed }: ParticleBackgroundProps = 
       gl.deleteProgram(program);
       gl.deleteShader(vs);
       gl.deleteShader(fs);
+      // CRITICAL: explicitly drop the WebGL context. Deleting GL objects
+      // does NOT free the context itself — without this, every overlay
+      // that mounts a ParticleBackground (comments, wallet, add-product,
+      // create-look, …) leaks a live context. Browsers cap simultaneous
+      // WebGL contexts (~16) and evict the OLDEST when the cap is hit —
+      // which is the app-root SiteParticleHost singleton — silently
+      // blanking the home/hero particle field. Releasing on unmount keeps
+      // the live-context count flat so the singleton is never evicted.
+      gl.getExtension('WEBGL_lose_context')?.loseContext();
     };
   }, []);
 
