@@ -353,28 +353,41 @@ html[data-shell="catalog-app"] .ai-bar-wrap { display: none !important; }
   align-items: center;
   gap: 10px;
   max-width: min(760px, calc(100vw - 48px));
-  /* Float the pills cloud BELOW the bar without expanding the wrap's
-     flex height. position: absolute + top: 100% pins the cloud's
-     top edge to the bottom of the wrap; the wrap stays bar-sized
-     so the bar's anchor (bottom: 24px / 50vh hero variant) doesn't
-     shift when the cloud appears. The parent .ai-bar-wrap is
-     already position: fixed (declared at the top of this file),
-     which serves as the positioning ancestor for this absolute
-     element — no extra `position: relative` needed (and adding one
-     would have CLOBBERED the fixed and the bar would vanish from
-     the viewport, which is exactly the regression the user just
-     hit). */
+  /* Float the cloud ABOVE the bar (pinned by its bottom edge to the top
+     of the wrap) so a click on the docked bar — anywhere in the app, e.g.
+     over the scrolled feed — reveals the recommended catalogs just above
+     it. Absolute positioning keeps the wrap bar-sized so the bar's bottom
+     anchor doesn't shift when the cloud appears. The parent .ai-bar-wrap
+     is position: fixed (top of this file) and serves as the positioning
+     ancestor — do NOT add position: relative here (it would clobber the
+     fixed and the bar would vanish; that regression has bitten before).
+     In the un-scrolled home hero the bar instead rises to mid-screen and
+     the cloud drops BELOW it — see the hero override just below. */
   position: absolute;
-  top: calc(100% + 10px);
+  bottom: calc(100% + 10px);
   left: 50%;
   transform: translateX(-50%);
   width: max-content;
+}
+@keyframes catalog-pills-in-above {
+  from { opacity: 0; transform: translate(-50%, 8px); }
+  to   { opacity: 1; transform: translate(-50%, 0); }
 }
 @keyframes catalog-pills-in-from-below {
   from { opacity: 0; transform: translate(-50%, -10px); }
   to   { opacity: 1; transform: translate(-50%, 0); }
 }
-.catalog-pills { animation: catalog-pills-in-from-below 0.4s cubic-bezier(0.16, 1, 0.3, 1) both; }
+.catalog-pills { animation: catalog-pills-in-above 0.4s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+/* Home hero, before the feed-peek scroll: focusing the bar raises it to
+   mid-screen, so the pill cloud drops BELOW it into the lower half rather
+   than rising up into the headline. Once scrolled (docked at the bottom)
+   the default above-the-bar placement applies. */
+body:has(.app-root.home-hero:not(.hero-scrolled)) .catalog-pills {
+  top: calc(100% + 10px);
+  bottom: auto;
+  animation-name: catalog-pills-in-from-below;
+}
 .catalog-pills-label {
   font-size: 11px;
   font-weight: 700;
