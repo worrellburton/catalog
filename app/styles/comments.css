@@ -94,7 +94,9 @@
 .comments-shell {
   position: relative;
   z-index: 2;
-  width: min(620px, calc(100% - 32px));
+  /* Desktop column widened to 1200px; the max-width: 768px block below
+     keeps mobile on its full-bleed calc width. */
+  width: min(1200px, calc(100% - 32px));
   margin-inline: auto;
   height: 100%;
   display: flex;
@@ -426,3 +428,52 @@
   .comments-shell { width: calc(100% - 24px); padding-top: 12px; }
   .comments-target-img { width: 50px; height: 64px; }
 }
+
+/* ── "White" comments theme (experimental) ──────────────────────────────
+   White surface with the ambient particle field inverted to black, on both
+   mobile and desktop. These rules come after the dark defaults above so
+   they win at equal specificity. Revert by deleting this block. */
+.comments-page { background: #ffffff; color: #18181b; }
+.comments-page::after {
+  background: radial-gradient(120% 80% at 50% 40%, rgba(255,255,255,0) 0%, rgba(255,255,255,0.55) 60%, rgba(255,255,255,0.82) 100%);
+}
+/* Flip the ambient WebGL sparks from silver-white to black. The avatar
+   particle layer is left alone — those are real avatar images. */
+.comments-webgl canvas { filter: invert(1); }
+
+.comments-back { background: rgba(0,0,0,0.05); border-color: rgba(0,0,0,0.12); color: #18181b; }
+.comments-back:hover { background: rgba(0,0,0,0.1); }
+
+.comments-target { background: rgba(0,0,0,0.035); border-color: rgba(0,0,0,0.08); }
+.comments-target:hover { background: rgba(0,0,0,0.06); }
+.comments-target-img { background: #ececec; }
+.comments-target-kind { color: #6b7280; }
+.comments-target-sub { color: #6b7280; }
+
+.comments-heading { color: #18181b; }
+.comments-count { background: rgba(0,0,0,0.08); color: #3f3f46; }
+.comments-empty { color: #6b7280; }
+
+.comment-avatar { background: #e4e4e7; }
+.comment-avatar--initial { color: #52525b; background: linear-gradient(135deg, #e4e4e7, #d4d4d8); }
+.comment-name { color: #27272a; }
+.comment-name:not(:disabled):hover { color: #000; }
+.comment-time { color: #71717a; }
+.comment-delete { color: #71717a; }
+
+.comment-bubble { background: rgba(0,0,0,0.06); color: #18181b; }
+/* own (right-side) bubble keeps its blue accent — already readable on white */
+
+.comment-fire { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.12); color: #52525b; }
+.comment-fire:hover { background: rgba(0,0,0,0.08); }
+
+.comments-composer {
+  background: rgba(0,0,0,0.04);
+  border-color: rgba(0,0,0,0.12);
+  box-shadow: 0 8px 30px rgba(0,0,0,0.1), 0 0 22px rgba(120,170,255,0.08);
+}
+.comments-input { color: #18181b; }
+.comments-input::placeholder { color: #9ca3af; }
+
+.comment-typing-dots { background: rgba(0,0,0,0.06); }
+.comment-typing-label { color: #71717a; }

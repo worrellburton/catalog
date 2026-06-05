@@ -45,6 +45,9 @@ interface ResolvedTarget {
   title: string;
   subtitle: string;
   image: string | null;
+  /** Look targets carry their clip so the thread header plays the video
+   *  (poster falls back to `image`). Null for products. */
+  video: string | null;
   href: string;
 }
 
@@ -91,6 +94,7 @@ async function resolveProduct(slug: string): Promise<ResolvedTarget | null> {
     title: (row.name as string) || 'Product',
     subtitle: [(row.brand as string) || '', (row.price as string) || ''].filter(Boolean).join(' · '),
     image: (row.image_url as string) || null,
+    video: null,
     href: `/p/${slug}`,
   };
 }
@@ -104,7 +108,8 @@ async function resolveLook(slug: string): Promise<ResolvedTarget | null> {
       return {
         title: look.title || 'Look',
         subtitle: look.creatorDisplayName || look.creator || '',
-        image: look.creatorAvatar || null,
+        image: look.thumbnail_url || look.creatorAvatar || null,
+        video: look.video || null,
         href: `/l/${slug}`,
       };
     }
@@ -115,7 +120,7 @@ async function resolveLook(slug: string): Promise<ResolvedTarget | null> {
   const next = nextHexPrefix(prefix);
   let q = supabase
     .from('looks_creative')
-    .select('uuid, title, creator, thumbnail_url')
+    .select('uuid, title, creator, thumbnail_url, video_url')
     .gte('uuid', `${prefix}-0000-0000-0000-000000000000`);
   if (next) q = q.lt('uuid', `${next}-0000-0000-0000-000000000000`);
   const { data } = await q.limit(1);
@@ -125,6 +130,7 @@ async function resolveLook(slug: string): Promise<ResolvedTarget | null> {
     title: (row.title as string) || 'Look',
     subtitle: (row.creator as string) || '',
     image: (row.thumbnail_url as string) || null,
+    video: (row.video_url as string) || null,
     href: `/l/${slug}`,
   };
 }
@@ -289,9 +295,19 @@ export default function CommentsPage({ targetType, slug, onClose, onOpenCreator 
 
         {/* The product / look this thread is about, pinned at the top. */}
         <a className="comments-target" href={target?.href ?? `/${targetType === 'product' ? 'p' : 'l'}/${slug}`}>
-          {target?.image
-            ? <img className="comments-target-img" src={target.image} alt="" />
-            : <span className="comments-target-img comments-target-img--blank" aria-hidden="true" />}
+          {targetType === 'look' && target?.video
+            ? <video
+                className="comments-target-img"
+                src={target.video}
+                poster={target.image ?? undefined}
+                autoPlay
+                muted
+                loop
+                playsInline
+              />
+            : target?.image
+              ? <img className="comments-target-img" src={target.image} alt="" />
+              : <span className="comments-target-img comments-target-img--blank" aria-hidden="true" />}
           <span className="comments-target-text">
             <span className="comments-target-kind">{targetType === 'product' ? 'Product' : 'Look'}</span>
             <span className="comments-target-title">{target?.title ?? (resolved ? titleFromSlug(slug) : 'Loading…')}</span>

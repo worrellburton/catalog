@@ -118,8 +118,9 @@ function FeedSection({
     const seed = ((layoutMode + 1) * 31 + globalIndex * 127) % 100;
     if (seed < 8) return 'look-card look-card-featured';  // ~8%  2x2
     if (seed < 22) return 'look-card look-card-wide';     // ~14% 2x1
-    if (seed < 36) return 'look-card look-card-tall';     // ~14% 1x2
-    return 'look-card';                                   // ~64% 1x1
+    return 'look-card';                                   // ~78% 1x1
+    // look-card-tall (1x2, 3/8) retired — its extreme portrait ratio
+    // clashed with the primary 3/4 grid cell.
   }, [layoutMode]);
 
   // Build the pool by treating looks + creatives as one combined deck.

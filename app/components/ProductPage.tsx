@@ -973,27 +973,6 @@ export default function ProductPage({
   // discount badge.
   const retailerOffers = useMemo(() => buildRetailerOffers(product), [product]);
 
-  // Other looks by the same creator as the one this product was opened
-  // from. Drives the "More from this creator" section in the info column
-  // — same dedicated section LookOverlay surfaces. Skipped (returns [])
-  // when the product was opened cold or the creator only has this look.
-  const creatorMoreLooks = useMemo<Look[]>(() => {
-    if (!fromLook?.creator || !allLooks) return [];
-    const sameCreator = allLooks.filter(
-      l => l.creator === fromLook.creator && l.id !== fromLook.id,
-    );
-    // De-dupe by id and cap so the grid stays tight.
-    const seen = new Set<Look['id']>();
-    const out: Look[] = [];
-    for (const l of sameCreator) {
-      if (seen.has(l.id)) continue;
-      seen.add(l.id);
-      out.push(l);
-      if (out.length >= 6) break;
-    }
-    return out;
-  }, [allLooks, fromLook?.creator, fromLook?.id]);
-
   const heroClassName = `pd-hero${creative ? ' pd-hero--video' : product.image ? ' pd-hero--image' : ' pd-hero--empty'}`;
 
   // Tap-handoff poster: when CreativeCard navigates here, it stashes a
@@ -1423,23 +1402,10 @@ export default function ProductPage({
                 </div>
               </section>
             )}
-            {/* "More from this creator" — mirrors the LookOverlay section,
-                surfaced here so the same-creator browse path follows the
-                shopper into a product detail too. Skipped when the
-                product was opened cold (no parent look) or the creator
-                has no other live looks in scope. */}
-            {creatorMoreLooks.length > 0 && fromLook?.creator && (
-              <section className="pd-info-brand-rail" aria-label={`More from ${fromLook.creatorDisplayName || fromLook.creator}`}>
-                <h2 className="pd-info-brand-rail-title">
-                  More from {fromLook.creatorDisplayName || (fromLook.creator.startsWith('user:') ? 'this creator' : `@${fromLook.creator}`)}
-                </h2>
-                <div className="pd-info-brand-rail-grid">
-                  {creatorMoreLooks.map((l, i) => (
-                    <LookTile key={`creator-more-${l.id}-${i}`} look={l} index={i} onOpen={onOpenLook} onOpenCreator={onOpenCreator} />
-                  ))}
-                </div>
-              </section>
-            )}
+            {/* "More from this creator" rail removed from the product page:
+                a product detail is brand-scoped, so the "More from <brand>"
+                rail above is the correct same-source browse path. Mixing the
+                creator in here conflated the two entities. */}
             {graphPairs && graphPairs.length > 0 && (
               <section className="pd-info-brand-rail" aria-label="Pairs well with">
                 <h2 className="pd-info-brand-rail-title">
