@@ -4,6 +4,7 @@ import { Look, creators, Product, looks as allLooksData } from '~/data/looks';
 import { lookSlug } from '~/utils/slug';
 import { shareLink } from '~/utils/shareLink';
 import { getCommentCount } from '~/services/comments';
+import { getCreatorAbout } from '~/services/creator-about';
 import { useCommentsEnabled } from '~/hooks/useCommentsEnabled';
 import { useEscapeKey } from '~/hooks/useEscapeKey';
 import LookCard from './LookCard';
@@ -460,6 +461,24 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
       id: -(Math.abs(l.id) * 1000 + i + 1),
     }));
   }, [look.id, look.creator, look.creatorDisplayName, allLooks, moreFromCreatorLimit]);
+
+  // AI "about" blurb for the creator — cache-first, generated on demand for
+  // signed-in viewers. Only fetched when the About tab is open and there's
+  // no hand-written bio to show instead.
+  const [aboutSummary, setAboutSummary] = useState<string | null>(null);
+  useEffect(() => {
+    if (activeTab !== 'creator' || creatorData?.bio || !look.creator) return;
+    let cancelled = false;
+    const creatorLooks = [look, ...aboutCreatorStrip];
+    const payload = creatorLooks.slice(0, 40).map(l => ({
+      title: l.title,
+      brands: (l.products || []).map(p => p.brand).filter(Boolean),
+      types: (l.products || []).map(p => p.subtype || p.type).filter((t): t is string => !!t),
+    }));
+    const name = creatorData?.displayName || look.creatorDisplayName || look.creator;
+    getCreatorAbout(look.creator, name, payload).then(s => { if (!cancelled) setAboutSummary(s); });
+    return () => { cancelled = true; };
+  }, [activeTab, look, aboutCreatorStrip, creatorData?.bio, creatorData?.displayName]);
 
   // ── You Might Also Like ─────────────────────────────────────────────────────
   // Reuses the home/feed ContinuousFeed component (gender-aware, autoplay,
@@ -977,9 +996,14 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                         )}
                       </div>
                     </div>
-                    {creatorData?.bio && (
+                    {creatorData?.bio ? (
                       <p className="look-creator-about-bio">{creatorData.bio}</p>
-                    )}
+                    ) : aboutSummary ? (
+                      <p className="look-creator-about-bio look-creator-about-bio--ai">
+                        <span className="look-creator-about-ai-mark" aria-hidden="true">✨</span>
+                        {aboutSummary}
+                      </p>
+                    ) : null}
                     <button
                       className="look-creator-about-btn"
                       onClick={() => { handleClose(); onOpenCreator(look.creator); }}

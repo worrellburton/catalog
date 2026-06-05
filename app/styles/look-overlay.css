@@ -564,6 +564,10 @@
   color: rgba(255, 255, 255, 0.6);
   margin: 0;
 }
+.look-creator-about-ai-mark {
+  margin-right: 6px;
+  opacity: 0.85;
+}
 
 .look-creator-about-btn {
   display: inline-flex;
