@@ -907,6 +907,23 @@
   align-items: center;
 }
 
+/* Button hierarchy in the action row:
+   Row 1 — Shop (primary, white) + Add to a look (secondary) split the
+   width evenly. Row 2 — Comments spans full width beneath them. The
+   "View more info" toggle below already owns its own full-width row.
+   Gives a clean buy / create / discuss ladder instead of an orphaned
+   wrapped pill. */
+.pd-actions > .pd-shop-btn,
+.pd-actions > .pd-tryon-btn {
+  flex: 1 1 0;
+  min-width: 0;
+  justify-content: center;
+}
+.pd-actions > .pd-comments-btn {
+  flex: 1 1 100%;
+  justify-content: center;
+}
+
 .pd-shop-btn {
   display: inline-flex;
   align-items: center;
