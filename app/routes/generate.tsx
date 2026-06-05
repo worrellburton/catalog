@@ -1451,7 +1451,7 @@ export default function GeneratePage() {
             "Generate" framing. */}
         {step === 'photos' && (
           <>
-            <h1>Try this on</h1>
+            <h1>Create a new look</h1>
             <p className="gen-sub">Drop in a few clean shots of yourself, then pick up to five products to dress up in.</p>
           </>
         )}
@@ -1662,27 +1662,8 @@ export default function GeneratePage() {
                 <span className="gen-creator-cta-chevron" aria-hidden="true">›</span>
               </button>
             </div>
-
-            {(generations.length > 0 || loadingList) && (
-              <>
-                <div className="gen-sectionlabel">Your looks</div>
-                {loadingList && generations.length === 0 ? (
-                  <div className="gen-empty">Loading your looks…</div>
-                ) : (
-                  <div className="gen-lookgrid">
-                    {generations.map(g => (
-                      <LookCard
-                        key={g.id}
-                        generation={g}
-                        onOpen={openGeneration}
-                        onRegenerate={editGeneration}
-                        onDelete={removeGeneration}
-                      />
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
+            {/* "Your looks" grid removed from this page — generated looks now
+                live in My Catalog (as Inactive) instead. */}
           </section>
         )}
 
