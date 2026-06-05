@@ -241,17 +241,22 @@ pick) · J (pending pill → follow-toast format) · creator-page follow toast �
 Top-Looks live-only · edit-look vertical scroll · product divider · search
 autocomplete matches-only+creators · generate "Your looks" removal + title
 rename.
-PARTIAL: D — About tab removed + AI summary in "View more info" DONE;
-comments-as-button (remove floating green bubble) STILL TODO (dual mobile/
-desktop layout — verify live). H — Weight row + no Fast↔Pro shift DONE; full
-one-viewport condense STILL TODO. R — collapsible categories DONE; the "All"
-aggregate search row STILL TODO.
+DONE (cont.): **D (look comments → labelled button, floating bubble removed)**
+· **R (collapsible categories + "All" aggregate row)**.
+PARTIAL: H — Weight row + no Fast↔Pro shift DONE; full one-viewport condense
+STILL TODO.
 STILL TODO (all are large rebuilds / fragile / need live verification):
 - **N** analytics rebuild + animated thin-line graphs (header overlap)
 - **T** video upload + in/out trimmer
 - **E** comments → TikTok bottom drawer
-- **M** appearance settings (particles + hue) — NO theme table exists yet,
-  needs creating + settings UI + consumer-side application
+- **M** appearance settings (particles + hue) — EXTEND the existing theme
+  system, don't rebuild: `app/services/catalog-theme.ts` already does
+  light/dark via `creators.catalog_theme` (migration 20260601000011) with
+  getCreatorTheme(handle)/setMyCatalogTheme. Add `catalog_particles` +
+  `catalog_hue` columns to **`creators`** (NOT profiles), extend that
+  service, add a settings gear in My Catalog, and apply on the consumer
+  CreatorPage. (Note: the existing light/dark service isn't wired into any
+  .tsx yet — check where catalog_theme should be applied/toggled.)
 - **S** per-creator unseen-look badge (FollowingRail; needs unseen-by-handle
   from fetchSeenLookIds + looks, badge w/ spin+glow). Avatar render is in a
   FollowingRail sub-stack component.
