@@ -1790,6 +1790,7 @@ export default function GeneratePage() {
               <div className="gen-review-row"><span>Photos</span><span>{pickedUploadIds.length}</span></div>
               <div className="gen-review-row"><span>Products</span><span>{picked.length}</span></div>
               <div className="gen-review-row"><span>Height</span><span>{heightLabel}</span></div>
+              {weightLabel && <div className="gen-review-row"><span>Weight</span><span>{weightLabel}</span></div>}
               <div className="gen-review-row"><span>Age</span><span>{ageLabel}</span></div>
               <div className="gen-review-row"><span>Style</span><span>{STYLE_PRESETS.find(s => s.value === style)?.label || style}</span></div>
               <div className="gen-review-row">
@@ -1828,11 +1829,9 @@ export default function GeneratePage() {
               </div>
             </div>
 
-            {model === 'pro' && (
-              <div className="gen-pro-preview-note">
-                Pro is in preview - your look will run at Fast quality (5-second clip) while Pro is being rolled out.
-              </div>
-            )}
+            {/* Pro-preview note removed: it shifted the layout on every
+                Fast↔Pro toggle and pushed Review past one viewport. The same
+                info lives in the Pro button's tooltip. */}
 
             <div className="gen-review-products">
               {picked.map(p => (
