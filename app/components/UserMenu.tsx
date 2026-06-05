@@ -382,7 +382,18 @@ function UserMenu({
                   onKeyDown={onOpenProfile ? (e) => { if (e.key === 'Enter' || e.key === ' ') runItem(onOpenProfile)(e as unknown as React.MouseEvent); } : undefined}
                   title={onOpenProfile ? 'Edit profile' : undefined}
                 >
-                  <div className="user-menu-avatar-wrap" key={renderedAvatarUrl || 'placeholder'}>
+                  {/* Tapping the avatar must ONLY open the crop/upload flow.
+                      Without stopPropagation the click bubbles to the header
+                      (which opens the Profile page), closing the menu and
+                      unmounting AvatarUpload mid-pick — so the crop modal
+                      never appeared and nothing uploaded. */}
+                  <div
+                    className="user-menu-avatar-wrap"
+                    key={renderedAvatarUrl || 'placeholder'}
+                    onClick={(e) => e.stopPropagation()}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
+                  >
                     <AvatarUpload
                       userId={user.id}
                       currentUrl={renderedAvatarUrl}
