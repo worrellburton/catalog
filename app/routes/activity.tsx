@@ -526,14 +526,20 @@ function GenTile({ gen }: { gen: UserGeneration }) {
   }, [gen.id, navigate]);
   if (inFlight) {
     return (
-      <div className="ap-gen ap-gen--rendering" title={`${label} — rendering`}>
+      <button
+        type="button"
+        className="ap-gen ap-gen--rendering"
+        title={`${label} — rendering`}
+        onClick={() => navigate(`/generate?gen=${gen.id}`)}
+        aria-label={`${label} — rendering, open progress`}
+      >
         <div className="ap-gen-shimmer" />
         <div className="ap-gen-foot">
           <span className="ap-gen-name">{label}</span>
           <span className="ap-gen-status">Rendering…</span>
           <span className="ap-gen-bar"><span className="ap-gen-bar-fill" /></span>
         </div>
-      </div>
+      </button>
     );
   }
   if (failed) {

@@ -518,6 +518,29 @@ export default function GeneratePage() {
   // The user's saved "your style" descriptor (Style page). Threaded into
   // the Seedance prompt so generations reflect their personal aesthetic.
   const [customStyle, setCustomStyle] = useState<string>('');
+  // Resume a render by id — the activity "Your looks" rail links a still-
+  // rendering tile to /generate?gen=<id> so the creator lands straight on
+  // its progress screen (the result step polls it to completion).
+  const genResumeRef = useRef(false);
+  useEffect(() => {
+    if (genResumeRef.current) return;
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    const genId = url.searchParams.get('gen');
+    genResumeRef.current = true;
+    if (!genId) return;
+    url.searchParams.delete('gen');
+    window.history.replaceState({}, '', url.toString());
+    let cancelled = false;
+    (async () => {
+      const g = await getGeneration(genId);
+      if (cancelled || !g) return;
+      setGeneration(g);
+      setStep('result');
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
   useEffect(() => {
     if (productUrlPrefilled.current) return;
     if (typeof window === 'undefined') return;

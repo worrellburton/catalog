@@ -298,9 +298,12 @@
   -webkit-appearance: none;
   appearance: none;
 }
-button.ap-gen--done { cursor: pointer; transition: transform 0.15s ease, border-color 0.15s ease; }
-button.ap-gen--done:hover { transform: translateY(-2px); border-color: rgba(255, 255, 255, 0.22); }
-button.ap-gen--done:active { transform: scale(0.97); }
+button.ap-gen--done,
+button.ap-gen--rendering { cursor: pointer; transition: transform 0.15s ease, border-color 0.15s ease; }
+button.ap-gen--done:hover,
+button.ap-gen--rendering:hover { transform: translateY(-2px); border-color: rgba(255, 255, 255, 0.22); }
+button.ap-gen--done:active,
+button.ap-gen--rendering:active { transform: scale(0.97); }
 .ap-gen-media {
   position: absolute;
   inset: 0;
