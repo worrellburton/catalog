@@ -791,6 +791,15 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                     size={46}
                     onOpenCreator={(h) => { handleClose(); onOpenCreator(h); }}
                   />
+                  {(creatorData?.displayName || look.creatorDisplayName || (showHandle ? look.creator : '')) && (
+                    <button
+                      type="button"
+                      className="overlay-video-creator-name"
+                      onClick={() => { handleClose(); onOpenCreator(look.creator); }}
+                    >
+                      {creatorData?.displayName || look.creatorDisplayName || look.creator}
+                    </button>
+                  )}
                 </div>
                 {/* Product-count badge removed — Save now occupies the
                     bottom-right (see .look-video-actions above). */}
