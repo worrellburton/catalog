@@ -2301,6 +2301,17 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   font-size: 16px;
   font-weight: 700;
   letter-spacing: -0.01em;
+  /* Truncate a long look title instead of letting it bleed across the
+     close button + the range-pill row beneath it. */
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.my-cat-analytics-head .my-cat-analytics-close {
+  flex-shrink: 0;
+  margin-left: 12px;
 }
 .my-cat-analytics-close {
   background: transparent;
