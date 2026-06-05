@@ -196,15 +196,16 @@ in/out handles, looped preview), Done captures the FIRST frame of the
 selection as a JPEG poster; MediaItem carries trimStart/trimEnd/posterUrl,
 thumb shows the poster. DECISION (made): trimmed video = stored clip + the
 first frame is the poster.
-REMAINING (essential — otherwise the trim is discarded on publish):
-  • uploadLookMedia(lookId, file, type) currently ignores poster/trim; the
-    server auto-generates a poster from frame 0. Extend it to accept the
-    client poster (upload the data URL as an image) and set the look's
-    thumbnail to it, so "poster = first frame of selection" holds.
-  • Persist trimStart/trimEnd (looks_creative needs columns, or store as
-    metadata) so look playback uses the [start,end] window. True re-encode
-    cutting would need ffmpeg.wasm; range-based playback is the pragmatic clip.
-  • Verify the poster renders on the published look.
+POSTER PERSISTENCE ✅ DONE: uploadLookMedia now accepts the client first-frame
+poster, uploads it to look-media storage, and sets look_videos.poster_url to
+it (CreateLookV2 passes m.posterUrl). "Poster = first frame of selection" now
+sticks.
+REMAINING:
+  • Trim-range PLAYBACK: add look_videos.trim_start / trim_end columns, store
+    them in uploadLookMedia, and make the consumer video players (LookCard /
+    LookOverlay) play only the [start,end] window. (True re-encode cutting
+    would need ffmpeg.wasm; range-based playback is the pragmatic clip.)
+  • Verify the poster renders on the published look + in the consumer feed.
 ORIGINAL NOTE ↓
 ### T (orig). Create-a-look — video upload + in/out trimmer
 On the "Create a look" upload screen, the user tried to upload a **video**
