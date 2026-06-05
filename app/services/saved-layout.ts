@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Product } from '~/data/looks';
 
 /**
@@ -176,6 +176,18 @@ export function useSavedLayout(
       || JSON.stringify(orderedProductKeys) !== JSON.stringify(saved.productOrder)
     );
   }, [collections, orderedLookIds, orderedProductKeys, saved]);
+
+  // Auto-persist collection membership the moment it changes, so adding or
+  // removing a product/look from a collection survives a refresh WITHOUT
+  // requiring the explicit "Save layout" tap (users don't expect to have to
+  // confirm that). Drag-reorder still commits through save(). Keeping
+  // saved.collections in sync here means these auto-saves don't leave the
+  // Save button stuck in its "dirty" state.
+  useEffect(() => {
+    try { localStorage.setItem(COLLECTIONS_KEY, JSON.stringify(collections)); }
+    catch { /* storage full / disabled — keep working in-memory */ }
+    setSaved(prev => ({ ...prev, collections }));
+  }, [collections]);
 
   const save = useCallback(() => {
     try {
