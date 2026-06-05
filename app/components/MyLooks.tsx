@@ -5,7 +5,7 @@ import AddProductV2 from './AddProductV2';
 import { useAuth } from '~/hooks/useAuth';
 import { downloadLookVideo } from '~/utils/downloadLookVideo';
 import type { ManagedLook, LookStatus } from '~/services/manage-looks';
-import { getMyLooks, deleteLook, archiveLook, submitLook, reorderLooks } from '~/services/manage-looks';
+import { getMyLooks, deleteLook, reorderLooks, setLookLive } from '~/services/manage-looks';
 import { getMyCatalogProducts, reorderMyCatalogProducts, type CatalogProduct } from '~/services/catalog-products';
 import { ensureGenerationsInCatalog } from '~/services/promote-generation';
 import { listUserGenerations, isGenerationInFlight, type UserGeneration } from '~/services/user-generations';
@@ -225,24 +225,36 @@ export default function MyLooks({ onClose }: MyLooksProps) {
   }, []);
 
   // Toggle a look's visibility: live → archived (hidden) and back.
-  // The status dot on the tile reads the same flag — green when
-  // live, red when hidden — so the dot flips in lockstep with this.
-  const handleToggleLive = useCallback(async (look: ManagedLook) => {
-    try {
-      const res = look.status === 'live'
-        ? await archiveLook(look.id)
-        : await submitLook(look.id);
-      setLooks(prev => prev.map(l => l.id === look.id ? res.data : l));
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not update visibility');
-    }
-  }, []);
-
   // Ephemeral toast for action feedback (link copied, etc.).
   const showToastMsg = useCallback((msg: string) => {
     setToast(msg);
     window.setTimeout(() => setToast(curr => (curr === msg ? null : curr)), 2400);
   }, []);
+
+  // The status dot on the tile reads the same flag — green when
+  // live, red when hidden — so the dot flips in lockstep with this.
+  const handleToggleLive = useCallback(async (look: ManagedLook) => {
+    const goingLive = look.status !== 'live';
+    // Optimistic flip so the dot + tab counts update instantly.
+    setLooks(prev => prev.map(l => l.id === look.id
+      ? { ...l, status: goingLive ? 'live' : 'archived' }
+      : l));
+    try {
+      const updated = await setLookLive(look.id, goingLive);
+      setLooks(prev => prev.map(l => l.id === look.id ? updated : l));
+      refreshCounts();
+      showToastMsg(goingLive ? 'Look is live' : 'Look set to inactive');
+      // If the current tab no longer matches the look's new status, drop it
+      // from view (it moved to the other tab).
+      if ((statusFilter === 'live') !== goingLive) {
+        setLooks(prev => prev.filter(l => l.id !== look.id));
+      }
+    } catch (err) {
+      // Roll back the optimistic flip on failure.
+      setLooks(prev => prev.map(l => l.id === look.id ? look : l));
+      setError(err instanceof Error ? err.message : 'Could not update visibility');
+    }
+  }, [refreshCounts, showToastMsg, statusFilter]);
 
   // Share a look's public URL. Native share sheet when available
   // (mobile / supported desktop), otherwise copy to clipboard.

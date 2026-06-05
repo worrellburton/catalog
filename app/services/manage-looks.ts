@@ -290,6 +290,46 @@ export async function archiveLook(lookId: string): Promise<{ success: boolean; d
   return apiFetch(`/${lookId}/archive`, { method: 'POST' });
 }
 
+// Directly flip a look between published (live) and inactive (archived).
+// This is the creator-facing "Go live / Go inactive" control — it publishes
+// straight to the consumer feed with no review queue (the old path called
+// submitLook → status 'submitted', which never went live, so "Go live"
+// appeared to do nothing). Owner-scoped via the "Users can update own looks"
+// RLS policy, so it writes directly rather than through the edge function.
+export async function setLookLive(lookId: string, live: boolean): Promise<ManagedLook> {
+  if (!supabase) throw new Error('Supabase not configured');
+  const userId = await getCurrentUserId();
+  const patch: Record<string, unknown> = live
+    ? { status: 'live', enabled: true, archived_at: null }
+    : { status: 'archived', archived_at: new Date().toISOString() };
+
+  const { data, error } = await supabase
+    .from('looks')
+    .update(patch)
+    .eq('id', lookId)
+    .eq('user_id', userId)
+    .select(`
+      id, title, description, gender, color, status, enabled, sort_order, created_at, updated_at,
+      look_photos ( id, order_index, storage_path, url, thumbnail_url, transform ),
+      look_videos ( id, order_index, storage_path, url, poster_url, duration_seconds ),
+      looks_creative ( id, video_url, thumbnail_url, mobile_video_url, is_primary, status, created_at ),
+      look_products ( sort_order, products:products ( id, name, brand, price, url, image_url ) )
+    `)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error('Could not update visibility (0 rows — not the owner?)');
+
+  const row = data as Record<string, unknown>;
+  return {
+    ...row,
+    look_photos: (row.look_photos as LookPhoto[]) || [],
+    look_videos: (row.look_videos as LookVideo[]) || [],
+    look_products: (row.look_products as LookProduct[]) || [],
+    looks_creative: (row.looks_creative as LookCreative[]) || [],
+  } as ManagedLook;
+}
+
 // ============================================
 // Products
 // ============================================
