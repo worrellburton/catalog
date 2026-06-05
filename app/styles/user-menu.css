@@ -933,6 +933,80 @@ body.has-account-menu { overflow-x: hidden; }
 .user-menu-page-row--toggle.is-on { color: #fca5a5; }
 .user-menu-page-row--toggle.is-on .user-menu-page-row-icon { color: #fca5a5; }
 
+/* Quick row — Activity / Earnings / Saved as glowing columns.
+   auto-fit so it gracefully drops to 2 columns when Earnings is
+   hidden for non-creators. */
+.user-menu-quickrow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  gap: 10px;
+  margin: 4px 0 6px;
+}
+.user-menu-quick {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 16px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  background:
+    radial-gradient(120% 120% at 50% 0%, rgba(120, 150, 255, 0.16), rgba(255, 255, 255, 0.03) 60%);
+  color: #fff;
+  font-family: inherit;
+  cursor: pointer;
+  overflow: hidden;
+  box-shadow: 0 0 0 0 rgba(120, 150, 255, 0.0);
+  animation: user-menu-quick-glow 3.4s ease-in-out infinite;
+  transition: transform 0.16s ease, border-color 0.16s ease;
+}
+.user-menu-quick:nth-child(2) { animation-delay: 0.5s; }
+.user-menu-quick:nth-child(3) { animation-delay: 1s; }
+.user-menu-quick:hover {
+  transform: translateY(-2px);
+  border-color: rgba(140, 170, 255, 0.5);
+}
+.user-menu-quick:active { transform: translateY(0); }
+@keyframes user-menu-quick-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(120, 150, 255, 0.0); border-color: rgba(255,255,255,0.1); }
+  50% { box-shadow: 0 0 20px -2px rgba(120, 150, 255, 0.45); border-color: rgba(140, 170, 255, 0.4); }
+}
+.user-menu-quick-icon {
+  display: inline-flex;
+  color: #c7d2ff;
+}
+.user-menu-quick-label {
+  font-size: 13px;
+  font-weight: 700;
+}
+.user-menu-quick-sub {
+  font-size: 11px;
+  font-weight: 700;
+  color: #4ade80;
+  font-variant-numeric: tabular-nums;
+}
+.user-menu-quick-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: #ff4d6d;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  border-radius: 999px;
+  padding: 1px 6px;
+  min-width: 18px;
+  text-align: center;
+}
+.light-mode .user-menu-quick {
+  color: #1a1a1a;
+  border-color: rgba(0, 0, 0, 0.1);
+  background: radial-gradient(120% 120% at 50% 0%, rgba(90, 120, 255, 0.12), rgba(0, 0, 0, 0.02) 60%);
+}
+.light-mode .user-menu-quick-icon { color: #4a5bd0; }
+
 @media (prefers-reduced-motion: reduce) {
   .user-menu-page.is-open,
   .user-menu-page.is-closing,
@@ -940,6 +1014,7 @@ body.has-account-menu { overflow-x: hidden; }
     animation: none !important;
   }
   .user-menu-page.is-open { opacity: 1; transform: none; }
+  .user-menu-quick { animation: none !important; }
 }
 
 /* Desktop: never use the page surface — desktop keeps the classic popout. */

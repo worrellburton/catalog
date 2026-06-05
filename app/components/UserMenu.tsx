@@ -671,7 +671,7 @@ function UserMenu({
             >
               <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" /></svg>
             </button>
-            <h1 className="user-menu-page-title">{superSection ? 'Super Admin' : 'Account'}</h1>
+            <h1 className="user-menu-page-title">{superSection ? 'Super Admin' : ''}</h1>
             <span style={{ width: 22 }} aria-hidden="true" />
           </header>
 
@@ -710,13 +710,41 @@ function UserMenu({
                 {onOpenMyLooks && (
                   <PageRow icon="grid" label="My Catalog" onClick={runPageItem(onOpenMyLooks)} />
                 )}
-                <PageRow icon="bookmark" label="Saved" badge={bookmarkCount > 0 ? bookmarkCount : undefined} onClick={runPageItem(onOpenBookmarks)} />
-                {onOpenWallet && dotsConnected === false && (
-                  <PageRow icon="star" label="Setup Earnings" onClick={runPageItem(onOpenWallet)} />
-                )}
-                {onOpenWallet && dotsConnected === true && (
-                  <PageRow icon="wallet" label="Wallet" trailing={walletBalance !== null ? `$${walletBalance.toFixed(2)}` : undefined} onClick={runPageItem(onOpenWallet)} />
-                )}
+
+                {/* Quick row — Activity, Earnings, Saved as three glowing
+                    columns. Auto-fits to 2 columns when Earnings is hidden
+                    (non-creators). Each tile pulses with a soft glow. */}
+                <div className="user-menu-quickrow">
+                  <button type="button" className="user-menu-quick" onClick={runPageItem(() => navigate('/activity'))}>
+                    <span className="user-menu-quick-icon" aria-hidden="true">
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                    </span>
+                    <span className="user-menu-quick-label">Activity</span>
+                  </button>
+                  {onOpenWallet && (
+                    <button type="button" className="user-menu-quick" onClick={runPageItem(onOpenWallet)}>
+                      <span className="user-menu-quick-icon" aria-hidden="true">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 5H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3"/><path d="M16 12h5v-2a2 2 0 0 0-2-2h-3a2 2 0 0 0 0 4z"/></svg>
+                      </span>
+                      <span className="user-menu-quick-label">Earnings</span>
+                      {dotsConnected === true && walletBalance !== null && (
+                        <span className="user-menu-quick-sub">${walletBalance.toFixed(2)}</span>
+                      )}
+                      {dotsConnected === false && (
+                        <span className="user-menu-quick-sub">Set up</span>
+                      )}
+                    </button>
+                  )}
+                  <button type="button" className="user-menu-quick" onClick={runPageItem(onOpenBookmarks)}>
+                    <span className="user-menu-quick-icon" aria-hidden="true">
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+                    </span>
+                    <span className="user-menu-quick-label">Saved</span>
+                    {bookmarkCount > 0 && (
+                      <span className="user-menu-quick-badge">{bookmarkCount > 99 ? '99+' : bookmarkCount}</span>
+                    )}
+                  </button>
+                </div>
                 {onChangeCatalogGender && (
                   <div className="user-menu-page-row user-menu-page-row--segmented">
                     <span className="user-menu-page-row-icon">
@@ -726,6 +754,7 @@ function UserMenu({
                     <div className="user-menu-segmented" style={{ marginLeft: 'auto' }}>
                       <button className={`user-menu-segmented-btn ${activeFilter === 'men' ? 'is-on' : ''}`} onClick={() => onChangeCatalogGender('men')}>Men</button>
                       <button className={`user-menu-segmented-btn ${activeFilter === 'women' ? 'is-on' : ''}`} onClick={() => onChangeCatalogGender('women')}>Women</button>
+                      <button className={`user-menu-segmented-btn ${activeFilter === 'all' ? 'is-on' : ''}`} onClick={() => onChangeCatalogGender('all')}>All</button>
                     </div>
                   </div>
                 )}
