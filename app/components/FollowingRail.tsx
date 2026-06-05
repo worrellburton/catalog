@@ -6,6 +6,7 @@ import { supabase } from '~/utils/supabase';
 import { getShopperGender } from '~/services/product-creative';
 import { useAuth } from '~/hooks/useAuth';
 import { highResAvatarUrl } from '~/utils/avatarSrc';
+import { getLooks, fetchSeenLookIds } from '~/services/looks';
 
 interface FollowingRailProps {
   onOpenCreator: (handle: string) => void;
@@ -93,6 +94,27 @@ function FollowingRail({ onOpenCreator, mode = 'both', onCreateFollowingCatalog:
   const [newFollowerHandles, setNewFollowerHandles] = useState<Set<string>>(new Set());
   const [openPopover, setOpenPopover] = useState<'following' | 'followers' | null>(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  // Unseen-look count per creator handle (lower-cased) → drives the spinning
+  // glowing badge on each stories-rail avatar. Empty for signed-out shoppers.
+  const [unseenByHandle, setUnseenByHandle] = useState<Map<string, number>>(new Map());
+  useEffect(() => {
+    let cancelled = false;
+    if (!user?.id) { setUnseenByHandle(new Map()); return; }
+    (async () => {
+      try {
+        const [looks, seen] = await Promise.all([getLooks(), fetchSeenLookIds(user.id)]);
+        if (cancelled) return;
+        const m = new Map<string, number>();
+        for (const l of looks) {
+          if (!l.creator || !l.uuid || seen.has(l.uuid)) continue;
+          const key = l.creator.toLowerCase();
+          m.set(key, (m.get(key) || 0) + 1);
+        }
+        setUnseenByHandle(m);
+      } catch { if (!cancelled) setUnseenByHandle(new Map()); }
+    })();
+    return () => { cancelled = true; };
+  }, [user?.id, refreshKey]);
   // Lower-cased handles of users currently online (Supabase presence).
   const [onlineHandles, setOnlineHandles] = useState<Set<string>>(new Set());
   const wrapperRef = useRef<HTMLDivElement | null>(null);
@@ -348,6 +370,7 @@ function FollowingRail({ onOpenCreator, mode = 'both', onCreateFollowingCatalog:
           <FollowingStoriesRail
             entries={followingEntries!}
             onlineHandles={onlineHandles}
+            unseenByHandle={unseenByHandle}
             onOpenCreator={(h) => { setOpenPopover(null); onOpenCreator(h); }}
             onSeeAll={onOpenFollowingList}
           />
@@ -445,6 +468,8 @@ export default memo(FollowingRail);
 interface FollowingStoriesRailProps {
   entries: RailEntry[];
   onlineHandles: Set<string>;
+  /** handle (lower-cased) → count of the viewer's unseen looks by that creator. */
+  unseenByHandle: Map<string, number>;
   onOpenCreator: (handle: string) => void;
   /** Optional trailing "See all" chip → opens the full Following page. */
   onSeeAll?: () => void;
@@ -458,7 +483,7 @@ interface FollowingStoriesRailProps {
  *  story slots so the row is already there with its bloom playing by the
  *  time the real data lands. The real avatar/name then fades into the
  *  same slot, no layout shift. */
-function FollowingStoriesRail({ entries, onlineHandles, onOpenCreator, onSeeAll }: FollowingStoriesRailProps) {
+function FollowingStoriesRail({ entries, onlineHandles, unseenByHandle, onOpenCreator, onSeeAll }: FollowingStoriesRailProps) {
   const SKELETON_COUNT = 6;
   if (entries.length === 0) {
     return (
@@ -484,6 +509,7 @@ function FollowingStoriesRail({ entries, onlineHandles, onOpenCreator, onSeeAll 
       {entries.map((c) => {
         const isOnline = onlineHandles.has(c.handle.toLowerCase());
         const name = c.displayName || c.handle;
+        const unseen = unseenByHandle.get(c.handle.toLowerCase()) || 0;
         return (
           <button
             key={c.handle}
@@ -503,6 +529,11 @@ function FollowingStoriesRail({ entries, onlineHandles, onOpenCreator, onSeeAll 
                   ? <img src={highResAvatarUrl(c.avatarUrl, 128) || c.avatarUrl} alt="" loading="lazy" decoding="async" />
                   : <span className="follow-story-initial">{name.charAt(0).toUpperCase()}</span>}
               </span>
+              {unseen > 0 && (
+                <span className="follow-story-unseen" aria-label={`${unseen} new look${unseen === 1 ? '' : 's'}`}>
+                  {unseen > 9 ? '9+' : unseen}
+                </span>
+              )}
             </span>
             <span className="follow-story-name">{name}</span>
           </button>

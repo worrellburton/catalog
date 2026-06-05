@@ -748,6 +748,7 @@
   width: 58px; height: 58px;
   border-radius: 50%;
   padding: 2.5px;
+  position: relative;
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -755,6 +756,43 @@
     #ffffff, #cbd5e1, #94a3b8, #e2e8f0, #ffffff);
   animation: follow-story-spin 7s linear infinite,
              follow-story-glow 3.2s ease-in-out infinite;
+}
+
+/* Unseen-look count badge — a number in a circle that spins (conic ring)
+   and glows, signalling new looks from that creator. */
+.follow-story-unseen {
+  position: absolute;
+  top: -1px;
+  right: -1px;
+  min-width: 19px;
+  height: 19px;
+  padding: 0 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  background: #6d28d9;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  z-index: 3;
+  box-shadow: 0 0 0 2px #0a0a0a;
+  animation: story-unseen-glow 2.2s ease-in-out infinite;
+}
+.follow-story-unseen::before {
+  content: '';
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  background: conic-gradient(from 0deg, #a78bfa, #6d28d9, #ec4899, #a78bfa);
+  z-index: -1;
+  animation: story-unseen-spin 2.4s linear infinite;
+}
+@keyframes story-unseen-spin { to { transform: rotate(360deg); } }
+@keyframes story-unseen-glow {
+  0%, 100% { box-shadow: 0 0 0 2px #0a0a0a, 0 0 6px 1px rgba(167, 139, 250, 0.55); }
+  50%      { box-shadow: 0 0 0 2px #0a0a0a, 0 0 12px 3px rgba(167, 139, 250, 0.95); }
 }
 .follow-story-ring.is-online {
   background: conic-gradient(from var(--story-angle),
