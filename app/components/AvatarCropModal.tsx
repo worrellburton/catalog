@@ -92,6 +92,7 @@ export function AvatarCropModal({
   onClose,
 }: AvatarCropModalProps) {
   const [imgDims, setImgDims] = useState<ImageDims | null>(null);
+  const [loadError, setLoadError] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [phase, setPhase] = useState<'enter' | 'open' | 'saving' | 'success' | 'leave'>('enter');
@@ -369,7 +370,8 @@ export function AvatarCropModal({
             src={src}
             alt=""
             draggable={false}
-            onLoad={onImgLoad}
+            onLoad={() => { setLoadError(false); onImgLoad(); }}
+            onError={() => setLoadError(true)}
             className="avatar-modal-img"
             style={{
               transform: `translate(-50%, -50%) translate3d(${offset.x}px, ${offset.y}px, 0) scale(${displayedScale})`,
@@ -392,6 +394,16 @@ export function AvatarCropModal({
           <svg className="avatar-modal-success-check" viewBox="0 0 24 24" aria-hidden="true">
             <polyline points="5 13 10 18 19 7" pathLength={100} />
           </svg>
+
+          {/* The chosen image couldn't be decoded by this browser (e.g. a
+              HEIC on a non-Safari engine where the transcode also failed).
+              Surface it instead of leaving a blank circle the user can't
+              crop. */}
+          {loadError && (
+            <div className="avatar-modal-loaderr" role="alert">
+              <span>Couldn’t open that photo.<br />Try a JPEG or PNG.</span>
+            </div>
+          )}
         </div>
 
         {/* Belt-and-suspenders stopPropagation on the zoom rail —
@@ -516,9 +528,16 @@ export function AvatarUpload({
   // paths inside the drop modal. Validates → HEIC-decodes if needed →
   // creates the object URL → flips state so the crop modal renders.
   const processFile = useCallback(async (file: File) => {
-    const ok = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'].includes(file.type)
-      || /\.(jpe?g|png|webp|heic|heif)$/i.test(file.name);
-    if (!ok) {
+    // Be permissive about what counts as an image. iOS often hands the
+    // file input an empty MIME type (or an unexpected one) for Photos
+    // Library picks, and rejecting those was the bug where choosing a
+    // library photo never opened the crop screen. Accept anything that
+    // looks like an image by type OR extension OR has no type at all.
+    const looksLikeImage =
+      file.type.startsWith('image/')
+      || /\.(jpe?g|png|webp|heic|heif|gif|bmp|tiff?)$/i.test(file.name)
+      || !file.type;
+    if (!looksLikeImage) {
       setError('Use a JPEG, PNG, WebP, or HEIC image.');
       window.setTimeout(() => setError(null), 3000);
       return;
@@ -533,14 +552,18 @@ export function AvatarUpload({
       file.type === 'image/heif' ||
       /\.(heic|heif)$/i.test(file.name)
     ) {
+      // Try to transcode HEIC → JPEG for browsers that can't decode HEIC
+      // (Chrome / Firefox / Android). On Safari this often isn't needed —
+      // it renders HEIC natively — so a heic2any failure must NOT abort
+      // the flow: fall through with the original file and let the crop
+      // modal try to display it. Aborting here was why iPhone (HEIC)
+      // photos never reached the crop screen.
       try {
         const { default: heic2any } = await import('heic2any');
         const out = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.95 });
         blob = Array.isArray(out) ? out[0] : (out as Blob);
       } catch {
-        setError('Couldn’t read that HEIC. Try a JPEG.');
-        window.setTimeout(() => setError(null), 3000);
-        return;
+        blob = file; // keep original — Safari can still render it
       }
     }
 
