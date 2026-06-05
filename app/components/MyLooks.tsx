@@ -3,7 +3,7 @@ import { useNavigate } from '@remix-run/react';
 import CreateLookV2 from './CreateLookV2';
 import AddProductV2 from './AddProductV2';
 import { useAuth } from '~/hooks/useAuth';
-import { downloadLookVideo } from '~/utils/downloadLookVideo';
+import { downloadLookVideo, type DownloadVariant } from '~/utils/downloadLookVideo';
 import type { ManagedLook, LookStatus } from '~/services/manage-looks';
 import { getMyLooks, deleteLook, reorderLooks, setLookLive } from '~/services/manage-looks';
 import { getMyCatalogProducts, reorderMyCatalogProducts, type CatalogProduct } from '~/services/catalog-products';
@@ -124,6 +124,9 @@ export default function MyLooks({ onClose }: MyLooksProps) {
   //   • Touch: tapping a tile opens a bottom tool tray. trayLook holds
   //     the look whose tray is open (null = closed).
   const [trayLook, setTrayLook] = useState<ManagedLook | null>(null);
+  // Whether the Download action's 3-variant sub-tree is expanded in the tray.
+  const [dlOpen, setDlOpen] = useState(false);
+  useEffect(() => { if (!trayLook) setDlOpen(false); }, [trayLook]);
   // Ephemeral confirmation toast ("Link copied", etc.).
   const [toast, setToast] = useState<string | null>(null);
 
@@ -283,12 +286,25 @@ export default function MyLooks({ onClose }: MyLooksProps) {
   // Download the look's video to the device, watermarked with the Catalog
   // wordmark (top-left) and named {username}-catalog-{date}. The watermark
   // re-encode runs for ~the clip's length, so we toast progress.
-  const handleDownload = useCallback(async (look: ManagedLook) => {
+  const handleDownload = useCallback(async (look: ManagedLook, variant: DownloadVariant = 'logo') => {
     const videoUrl = previewFor(look)?.video;
     if (!videoUrl) { showToastMsg('No video to download'); return; }
-    showToastMsg('Preparing download…');
+    showToastMsg(variant === 'logo' ? 'Preparing download…' : 'Composing your video…');
     try {
-      await downloadLookVideo(videoUrl, user?.displayName || user?.email || 'creator');
+      const products = (look.look_products || [])
+        .slice()
+        .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))
+        .map(lp => ({
+          name: lp.products?.name || 'Product',
+          brand: lp.products?.brand ?? null,
+          price: lp.products?.price ?? null,
+          image_url: lp.products?.image_url ?? null,
+        }));
+      await downloadLookVideo(videoUrl, user?.displayName || user?.email || 'creator', {
+        variant,
+        products,
+        creatorHandle: user?.displayName || user?.email?.split('@')[0] || null,
+      });
       showToastMsg('Saved to your device');
     } catch {
       showToastMsg('Download failed');
@@ -937,10 +953,36 @@ export default function MyLooks({ onClose }: MyLooksProps) {
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="20" x2="21" y2="20"/><rect x="6"  y="11" width="3" height="9"/><rect x="11" y="6"  width="3" height="14"/><rect x="16" y="14" width="3" height="6"/></svg>
                 <span>Analytics</span>
               </button>
-              <button className="my-cat-tray-action" onClick={() => { const l = trayLook; setTrayLook(null); void handleDownload(l); }}>
+              <button className="my-cat-tray-action" onClick={() => setDlOpen(o => !o)} aria-expanded={dlOpen}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
                 <span>Download</span>
+                <svg className={`my-cat-tray-chevron${dlOpen ? ' is-open' : ''}`} width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="6 9 12 15 18 9" /></svg>
               </button>
+              {dlOpen && (
+                <div className="my-cat-tray-subtree">
+                  <button className="my-cat-tray-suboption" onClick={() => { const l = trayLook; setTrayLook(null); void handleDownload(l, 'logo'); }}>
+                    <span className="my-cat-tray-subnum">1</span>
+                    <span className="my-cat-tray-subtext">
+                      <span className="my-cat-tray-subtitle">Catalog watermark</span>
+                      <span className="my-cat-tray-subdesc">The logo, top-left</span>
+                    </span>
+                  </button>
+                  <button className="my-cat-tray-suboption" onClick={() => { const l = trayLook; setTrayLook(null); void handleDownload(l, 'products'); }}>
+                    <span className="my-cat-tray-subnum">2</span>
+                    <span className="my-cat-tray-subtext">
+                      <span className="my-cat-tray-subtitle">Product showcase</span>
+                      <span className="my-cat-tray-subdesc">Ad-style — products on top</span>
+                    </span>
+                  </button>
+                  <button className="my-cat-tray-suboption" onClick={() => { const l = trayLook; setTrayLook(null); void handleDownload(l, 'story'); }}>
+                    <span className="my-cat-tray-subnum">3</span>
+                    <span className="my-cat-tray-subtext">
+                      <span className="my-cat-tray-subtitle">Story-ready</span>
+                      <span className="my-cat-tray-subdesc">Made to post to your story</span>
+                    </span>
+                  </button>
+                </div>
+              )}
               {/* Live ↔ Inactive segmented control. Live on the left
                   (green), Inactive on the right (yellow). Whichever
                   pill represents the OTHER state is the action — tap
