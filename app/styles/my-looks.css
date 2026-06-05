@@ -1821,6 +1821,103 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   color: rgba(255, 255, 255, 0.7);
 }
 
+/* ── Catalog appearance: particle layer + settings panel ── */
+.my-cat-particles {
+  position: fixed;
+  inset: 0;
+  z-index: -1; /* over the page bg, behind all content */
+  pointer-events: none;
+  opacity: 0.55;
+}
+.my-cat-settings-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.my-cat-settings-panel {
+  width: 100%;
+  max-width: 380px;
+  background: #161618;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+  padding: 18px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+.my-cat-settings-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.my-cat-settings-head h3 { margin: 0; font-size: 16px; font-weight: 700; color: #fff; }
+.my-cat-settings-close {
+  background: none; border: none; color: rgba(255,255,255,0.6);
+  font-size: 24px; line-height: 1; cursor: pointer; padding: 0 4px;
+}
+.my-cat-settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 12px 4px;
+  background: none;
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  color: #fff;
+  font-family: inherit;
+  cursor: pointer;
+}
+.my-cat-settings-row--col { flex-direction: column; align-items: stretch; gap: 10px; cursor: default; }
+.my-cat-settings-label { font-size: 14px; font-weight: 600; }
+.my-cat-settings-hue-head { display: flex; align-items: center; justify-content: space-between; }
+.my-cat-settings-clear {
+  background: rgba(255,255,255,0.08); border: none; color: rgba(255,255,255,0.75);
+  font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; cursor: pointer;
+}
+/* Toggle */
+.my-cat-toggle {
+  width: 44px; height: 26px; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.15);
+  position: relative; transition: background 0.18s; flex-shrink: 0;
+}
+.my-cat-toggle.is-on { background: #16a34a; }
+.my-cat-toggle-knob {
+  position: absolute; top: 3px; left: 3px;
+  width: 20px; height: 20px; border-radius: 50%;
+  background: #fff; transition: transform 0.18s;
+}
+.my-cat-toggle.is-on .my-cat-toggle-knob { transform: translateX(18px); }
+/* Hue slider */
+.my-cat-hue-slider {
+  width: 100%;
+  -webkit-appearance: none; appearance: none;
+  height: 12px; border-radius: 999px;
+  background: linear-gradient(to right,
+    hsl(0,70%,50%), hsl(60,70%,50%), hsl(120,70%,50%),
+    hsl(180,70%,50%), hsl(240,70%,50%), hsl(300,70%,50%), hsl(360,70%,50%));
+  outline: none; cursor: pointer;
+}
+.my-cat-hue-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 20px; height: 20px; border-radius: 50%;
+  background: #fff; border: 2px solid rgba(0,0,0,0.3); cursor: pointer;
+}
+.my-cat-hue-slider::-moz-range-thumb {
+  width: 20px; height: 20px; border-radius: 50%;
+  background: #fff; border: 2px solid rgba(0,0,0,0.3); cursor: pointer;
+}
+.my-cat-hue-preview {
+  height: 40px; border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
 /* Error banner - light tinted box above the grid. */
 .my-cat-error {
   margin: 0 0 16px;

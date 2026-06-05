@@ -47,3 +47,61 @@ export async function getMyCatalogTheme(): Promise<CatalogTheme> {
   const t = (data as { catalog_theme?: string | null } | null)?.catalog_theme;
   return t === 'light' ? 'light' : 'dark';
 }
+
+// ── Catalog appearance: particle field + background hue ──────────────────────
+// A creator customises their own catalog look; viewers of that creator's
+// catalog (CreatorPage) see it. Backed by creators.catalog_particles +
+// creators.catalog_hue.
+
+export interface CatalogAppearance {
+  particles: boolean;
+  /** 0–360 hue, or null for the default (no tint). */
+  hue: number | null;
+}
+
+export const DEFAULT_CATALOG_APPEARANCE: CatalogAppearance = { particles: true, hue: null };
+
+function rowToAppearance(data: { catalog_particles?: boolean | null; catalog_hue?: number | null } | null): CatalogAppearance {
+  if (!data) return DEFAULT_CATALOG_APPEARANCE;
+  return {
+    particles: data.catalog_particles !== false,
+    hue: data.catalog_hue ?? null,
+  };
+}
+
+/** Read a creator's appearance by handle (consumer CreatorPage). */
+export async function getCreatorAppearance(handle: string): Promise<CatalogAppearance> {
+  if (!supabase || !handle) return DEFAULT_CATALOG_APPEARANCE;
+  const { data } = await supabase
+    .from('creators')
+    .select('catalog_particles, catalog_hue')
+    .eq('handle', handle)
+    .maybeSingle();
+  return rowToAppearance(data as never);
+}
+
+/** Read the signed-in creator's own appearance (My Catalog initial state). */
+export async function getMyCatalogAppearance(): Promise<CatalogAppearance> {
+  if (!supabase) return DEFAULT_CATALOG_APPEARANCE;
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return DEFAULT_CATALOG_APPEARANCE;
+  const { data } = await supabase
+    .from('creators')
+    .select('catalog_particles, catalog_hue')
+    .eq('id', user.id)
+    .maybeSingle();
+  return rowToAppearance(data as never);
+}
+
+/** Persist the signed-in creator's appearance. */
+export async function setMyCatalogAppearance(patch: Partial<CatalogAppearance>): Promise<{ ok: boolean }> {
+  if (!supabase) return { ok: false };
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return { ok: false };
+  const update: Record<string, unknown> = {};
+  if (patch.particles !== undefined) update.catalog_particles = patch.particles;
+  if (patch.hue !== undefined) update.catalog_hue = patch.hue;
+  if (Object.keys(update).length === 0) return { ok: true };
+  const { error } = await supabase.from('creators').update(update).eq('id', user.id);
+  return { ok: !error };
+}

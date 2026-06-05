@@ -6,6 +6,8 @@ import { useAuth } from '~/hooks/useAuth';
 import type { ManagedLook, LookStatus } from '~/services/manage-looks';
 import { getMyLooks, deleteLook, archiveLook, submitLook, reorderLooks } from '~/services/manage-looks';
 import { getMyCatalogProducts, reorderMyCatalogProducts, type CatalogProduct } from '~/services/catalog-products';
+import ParticleBackground from './ParticleBackground';
+import { getMyCatalogAppearance, setMyCatalogAppearance, type CatalogAppearance, DEFAULT_CATALOG_APPEARANCE } from '~/services/catalog-theme';
 import { withTransform } from '~/utils/supabase-image';
 import { supabase } from '~/utils/supabase';
 import { lookSlug } from '~/utils/slug';
@@ -73,6 +75,16 @@ export default function MyLooks({ onClose }: MyLooksProps) {
   // Counts for the hero stat line + tab badges — fetched independently of the
   // active filter so removing the "All" tab didn't break the totals.
   const [counts, setCounts] = useState({ all: 0, live: 0, archived: 0 });
+
+  // Catalog appearance (particles + background hue) — the creator customises
+  // their catalog from the settings gear; applied live to this page.
+  const [appearance, setAppearance] = useState<CatalogAppearance>(DEFAULT_CATALOG_APPEARANCE);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  useEffect(() => { getMyCatalogAppearance().then(setAppearance).catch(() => {}); }, []);
+  const updateAppearance = useCallback((patch: Partial<CatalogAppearance>) => {
+    setAppearance(prev => ({ ...prev, ...patch }));
+    setMyCatalogAppearance(patch).catch(() => {});
+  }, []);
 
   // Form state (create or edit).
   const [showForm, setShowForm] = useState(false);
@@ -377,7 +389,16 @@ export default function MyLooks({ onClose }: MyLooksProps) {
   }
 
   return (
-    <div className="my-cat-page">
+    <div
+      className="my-cat-page"
+      style={appearance.hue != null ? { background: `hsl(${appearance.hue}, 28%, 6%)` } : undefined}
+    >
+      {/* Creator-chosen appearance: particle field behind content (z-index:-1
+          so it floats over the page bg without covering anything) + the hue
+          tint applied to the page background above. */}
+      {appearance.particles && (
+        <div className="my-cat-particles" aria-hidden="true"><ParticleBackground /></div>
+      )}
       {/* Back sits top-LEFT (conventional), styled as the same pill.
           Analytics + Create stay together top-right in the fab row. */}
       <button
@@ -390,8 +411,19 @@ export default function MyLooks({ onClose }: MyLooksProps) {
           <polyline points="15 18 9 12 15 6"/>
         </svg>
       </button>
-      {/* Top-right pair: Analytics / Create. */}
+      {/* Top-right row: Appearance / Analytics / Create. */}
       <div className="my-cat-fab-row">
+        <button
+          className="my-cat-create-fab my-cat-settings-fab"
+          onClick={() => setSettingsOpen(true)}
+          aria-label="Catalog appearance"
+          title="Catalog appearance"
+        >
+          <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="3"/>
+            <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+          </svg>
+        </button>
         <button
           className="my-cat-create-fab my-cat-analytics-fab"
           onClick={() => { setAnalyticsLook(null); setShowAnalyticsOpen(true); }}
@@ -871,6 +903,53 @@ export default function MyLooks({ onClose }: MyLooksProps) {
             <div className="my-cat-confirm-actions">
               <button className="my-cat-btn-cancel" onClick={() => setDeleteConfirm(null)}>Cancel</button>
               <button className="my-cat-btn-danger" onClick={() => handleDelete(deleteConfirm)}>Delete</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {settingsOpen && (
+        <div className="my-cat-settings-backdrop" onClick={() => setSettingsOpen(false)}>
+          <div className="my-cat-settings-panel" onClick={(e) => e.stopPropagation()}>
+            <div className="my-cat-settings-head">
+              <h3>Catalog appearance</h3>
+              <button className="my-cat-settings-close" onClick={() => setSettingsOpen(false)} aria-label="Close">×</button>
+            </div>
+
+            {/* Particles on/off */}
+            <button
+              type="button"
+              className="my-cat-settings-row"
+              onClick={() => updateAppearance({ particles: !appearance.particles })}
+            >
+              <span className="my-cat-settings-label">Particles</span>
+              <span className={`my-cat-toggle${appearance.particles ? ' is-on' : ''}`} aria-hidden="true">
+                <span className="my-cat-toggle-knob" />
+              </span>
+            </button>
+
+            {/* Background hue */}
+            <div className="my-cat-settings-row my-cat-settings-row--col">
+              <div className="my-cat-settings-hue-head">
+                <span className="my-cat-settings-label">Background color</span>
+                {appearance.hue != null && (
+                  <button type="button" className="my-cat-settings-clear" onClick={() => updateAppearance({ hue: null })}>None</button>
+                )}
+              </div>
+              <input
+                type="range"
+                min={0}
+                max={360}
+                value={appearance.hue ?? 210}
+                onChange={(e) => updateAppearance({ hue: parseInt(e.target.value, 10) })}
+                className="my-cat-hue-slider"
+                aria-label="Background hue"
+              />
+              <div
+                className="my-cat-hue-preview"
+                style={{ background: appearance.hue != null ? `hsl(${appearance.hue}, 28%, 14%)` : '#0a0a0a' }}
+                aria-hidden="true"
+              />
             </div>
           </div>
         </div>
