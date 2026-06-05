@@ -862,6 +862,13 @@
   overflow: visible;
   padding: 0;
   gap: 8px;
+  /* While search is open the bar is pinned to the keyboard top via an inline
+     `bottom` (kbInset) that updates continuously as the keyboard animates.
+     The base `transition: all 0.3s` made that `bottom` GLIDE — so on keyboard
+     dismiss the bar drifted through the middle of the screen while the pills
+     snapped, reading as the "broken overlap". Snapping (no position
+     transition) makes the bar track the keyboard 1:1 with no mid-glide. */
+  transition: none;
 }
 
 /* Row wrapper: invisible to layout at rest (display:contents → single child
