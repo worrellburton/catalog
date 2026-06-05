@@ -260,21 +260,20 @@ export default function MyLooks({ onClose }: MyLooksProps) {
 
   return (
     <div className="my-cat-page">
-      {/* Top-right trio: Back / Analytics / Create. All three share
-          the same .my-cat-create-fab pill so they sit on the same
-          horizontal plane in the same style — Back is no longer a
-          floating text-link in the opposite corner. */}
+      {/* Back sits top-LEFT (conventional), styled as the same pill.
+          Analytics + Create stay together top-right in the fab row. */}
+      <button
+        className="my-cat-create-fab my-cat-back-fab"
+        onClick={onClose}
+        aria-label="Back"
+        title="Back"
+      >
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+          <polyline points="15 18 9 12 15 6"/>
+        </svg>
+      </button>
+      {/* Top-right pair: Analytics / Create. */}
       <div className="my-cat-fab-row">
-        <button
-          className="my-cat-create-fab my-cat-back-fab"
-          onClick={onClose}
-          aria-label="Back"
-          title="Back"
-        >
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-            <polyline points="15 18 9 12 15 6"/>
-          </svg>
-        </button>
         <button
           className="my-cat-create-fab my-cat-analytics-fab"
           onClick={() => { setAnalyticsLook(null); setShowAnalyticsOpen(true); }}

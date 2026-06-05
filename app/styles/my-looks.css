@@ -3361,9 +3361,18 @@ html[data-shell="catalog-app"] .my-looks-overlay {
    + scrollable analytics modal with time-range pills.
    ────────────────────────────────────────────────────────────────── */
 
-/* Back FAB — same pill as the analytics + create buttons. Sits as
-   the leftmost item in .my-cat-fab-row. */
+/* Back FAB — same pill as the analytics + create buttons, but pinned to
+   the top-LEFT corner (conventional back placement) instead of sitting in
+   the top-right fab row. It's no longer a child of .my-cat-fab-row, so the
+   base .my-cat-create-fab top-right anchor applies and must be flipped. */
 .my-cat-back-fab svg { display: block; }
+.my-cat-back-fab {
+  position: absolute;
+  top: 24px;
+  left: 24px;
+  right: auto;
+  z-index: 30;
+}
 
 /* My info pill on the hero — same slot the public CreatorPage uses
    for Follow. Subtle dark glass with a white outline so it reads
