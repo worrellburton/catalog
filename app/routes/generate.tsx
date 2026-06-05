@@ -1,6 +1,8 @@
 import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from '@remix-run/react';
 import CatalogLogo from '~/components/CatalogLogo';
+import ParticleBackground from '~/components/ParticleBackground';
+import { particleControls } from '~/services/particles';
 import { supabase } from '~/utils/supabase';
 import { useAuth } from '~/hooks/useAuth';
 import { startGenerationJob } from '~/services/generation-queue';
@@ -2438,6 +2440,24 @@ const BUILD_PHASES = [
   'Final pass',
 ];
 
+// Rotating "analyzing" one-liners shown on the build screen — a words
+// ticker that keeps the wait playful. Cosmetic only; cycles independently
+// of the BUILD_PHASES label so there's always something moving.
+const BUILD_JOKES = [
+  'Analyzing your impeccable taste…',
+  'Consulting the fashion oracle…',
+  'Steaming the pixels…',
+  'Negotiating with the lighting…',
+  'Teaching the fabric to drape…',
+  'Auditioning camera angles…',
+  'Convincing the shoes to behave…',
+  'Whispering to the color grade…',
+  'Removing the awkward blink…',
+  'Tailoring at the speed of light…',
+  'Asking the AI to “make it pop”…',
+  'Polishing every last thread…',
+];
+
 // Friendly summary for known Fal/Seedance failure shapes. Returns a
 // short headline (rendered as the red banner) and a hint that helps the
 // user fix it themselves where possible. Prefers structured error_code
@@ -2603,6 +2623,25 @@ function GenerationProgress({ generation }: { generation: UserGeneration }) {
     return () => clearInterval(id);
   }, []);
 
+  // Crank the shared particle field while the look is building — the
+  // singleton canvas reads particleControls.speed every frame, and we
+  // mount a local ParticleBackground below so the field is visible on
+  // this screen regardless of route. Restore on unmount. (Same pattern
+  // as AddProductV2 / SearchCeremony.)
+  useEffect(() => {
+    const prev = particleControls.speed;
+    particleControls.speed = 5;
+    return () => { particleControls.speed = prev; };
+  }, []);
+
+  // Jokes ticker — rotate a playful "analyzing" line every ~3.4s,
+  // independent of the phase label so something is always in motion.
+  const [jokeIdx, setJokeIdx] = useState(() => Math.floor(Math.random() * BUILD_JOKES.length));
+  useEffect(() => {
+    const id = setInterval(() => setJokeIdx(i => (i + 1) % BUILD_JOKES.length), 3400);
+    return () => clearInterval(id);
+  }, []);
+
   const startedAt = useMemo(() => new Date(generation.created_at).getTime(), [generation.created_at]);
   const elapsedSec = Math.max(0, (Date.now() - startedAt) / 1000);
   const typicalSec = typicalSecondsFor(generation.duration_seconds);
@@ -2630,6 +2669,9 @@ function GenerationProgress({ generation }: { generation: UserGeneration }) {
 
   return (
     <div className="gen-build">
+      <div className="gen-build-particles" aria-hidden="true">
+        <ParticleBackground />
+      </div>
       <div
         className="gen-build-frame is-building"
         role="progressbar"
@@ -2658,6 +2700,7 @@ function GenerationProgress({ generation }: { generation: UserGeneration }) {
         <div className="gen-build-content">
           <span className="gen-vision gen-build-vision">Vision</span>
           <div className="gen-build-phase">{activePhase}</div>
+          <div key={jokeIdx} className="gen-build-joke">{BUILD_JOKES[jokeIdx]}</div>
           <div className="gen-build-sub">{subLabel}</div>
           <div className="gen-build-pct">{Math.round(pct)}%</div>
         </div>

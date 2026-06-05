@@ -2051,6 +2051,25 @@ html[data-shell="catalog-app"] .gen-page {
   width: 100%;
 }
 
+/* Intense particle field behind the building frame — the shared canvas is
+   cranked to high speed in GenerationProgress while a look renders, and
+   this local mount makes it visible on the result stage. Sits behind the
+   opaque frame (z-index 0); the frame + its content overlay paint above. */
+.gen-build-particles {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  border-radius: 22px;
+}
+.gen-build-particles .pw-particles {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
 .gen-build-frame {
   position: relative;
   width: min(360px, 80vw);
@@ -2179,6 +2198,20 @@ html[data-shell="catalog-app"] .gen-page {
   color: rgba(255, 255, 255, 0.92);
   min-height: 20px;
   animation: gen-build-fade 0.4s ease;
+}
+.gen-build-joke {
+  font-size: 12.5px;
+  font-style: italic;
+  color: rgba(255, 255, 255, 0.62);
+  letter-spacing: 0.01em;
+  line-height: 1.3;
+  min-height: 1.3em;
+  max-width: 240px;
+  animation: gen-joke-in 0.5s ease-out both;
+}
+@keyframes gen-joke-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 .gen-build-sub {
   font-size: 12px;
