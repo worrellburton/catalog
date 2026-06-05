@@ -889,9 +889,10 @@
     min-height: 100vh;
     justify-content: flex-end;
     padding-top: calc(env(safe-area-inset-top, 0px) + 96px);
-    /* Headline bottom lands ~48vh from top; bar at 44vh-from-bottom
-       (52-56vh from top) sits just under it — tight centered trio. */
-    padding-bottom: 52vh;
+    /* Headline bottom lands ~54vh from top; bar at 32vh-from-bottom
+       (~62vh from top) sits ~8vh under it — a tight, vertically-centered
+       trio with balanced empty space above and below. */
+    padding-bottom: 46vh;
   }
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar,
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar.search-open {
@@ -912,27 +913,29 @@
      hero-scrolled flicker. The `bottom` transition is declared globally on
      .ai-bar-wrap below so the dock glides smoothly. */
   body:has(.app-root.home-hero) .ai-bar-wrap {
-    /* Desktop hero centering: the trio (spark + CTA + bar) sits true-
-       vertical-centered as a group. Bar bottom 38vh + bar height ~6vh
-       puts bar TOP at ~56vh from top. .sfh padding-bottom (52vh)
-       holds the headline bottom at ~48vh, so the spark/headline/bar
-       trio brackets mid-screen instead of crowding the top third.
-       When the bar gains focus (recommended-options panel about to
-       appear underneath), the trio rises ~18vh so the panel has
-       room below without colliding with the docked feed peek. */
-    bottom: 38vh;
+    /* Desktop hero centering: the trio (spark + headline + bar) sits as a
+       balanced, vertically-centered group. Bar bottom 32vh + bar height
+       ~6vh puts the bar TOP at ~62vh from top; .sfh padding-bottom (46vh)
+       holds the headline bottom at ~54vh — an even ~8vh gap to the bar, so
+       the cluster brackets screen-center with roughly equal empty space
+       above and below (previously it crowded the top third).
+       When the bar gains focus (recommended-options panel about to appear
+       above), the trio rises 18vh (32vh → 50vh) so the panel has room
+       without colliding with the feed peek; .sfh matches with -18vh. */
+    bottom: 32vh;
     transition: bottom 0.32s cubic-bezier(0.32, 0.72, 0, 1);
   }
   body:has(.app-root.home-hero) .ai-bar-wrap:focus-within {
-    bottom: 56vh;
+    bottom: 50vh;
   }
   body:has(.app-root.home-hero) .sfh:has(~ * .ai-bar-wrap:focus-within),
   body:has(.app-root.home-hero .ai-bar-wrap:focus-within) .sfh {
     /* Slide the spark+headline up when the bar is focused so the trio
-       (spark + CTA + bar) rises as one group and clears the suggestions
-       panel that stacks above the bar. Matches the bar's own 18vh rise
-       (38vh → 56vh) so they move together rather than drifting apart —
-       this is what fixed the headline overlapping the prompt chips. */
+       (spark + headline + bar) rises as one group and clears the
+       suggestions panel that stacks above the bar. Matches the bar's own
+       18vh rise (32vh → 50vh) so they move together rather than drifting
+       apart — this is what fixed the headline overlapping the prompt
+       chips. */
     transform: translateY(-18vh);
     transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1);
   }
