@@ -233,19 +233,32 @@ unseen-first / shuffle-seen, but:
 ---
 
 ## Progress (live on `main`) — "do it all" pass
-DONE: A (look creator name) · B (mobile top gradient) · Q (picker scroll after
-brand pick) · J (pending pill → follow-toast format) · creator-page follow
-toast · Top-Looks live-only · edit-look vertical scroll · product divider ·
-search autocomplete matches-only+creators · generate "Your looks" removal +
-title rename.
-PARTIAL: D — About tab removed + AI summary moved into "View more info" DONE;
-comments-as-button (remove floating bubble) STILL TODO (needs live render for
-the mobile/desktop dual layout). H — Weight row + no Fast↔Pro layout shift
-DONE; full one-viewport condense STILL TODO. R — collapsible categories DONE;
-the "All" aggregate search row STILL TODO.
-STILL TODO (larger / need verification): C, E, F, L, M, N, O, P, S, T, the
-"All" row, the comments-button, one-viewport condenses, and the feed-ordering
-algorithm + seen-tracking.
+DONE: **L (Products tab — new table + RLS + drag-reorder)** · **O (generated
+looks auto-add to My Catalog as Inactive)** · **feed reshuffle fix
+(reorderBySeen now depends on shuffleKey)** · **P (mobile feed peek)** · A
+(look creator name) · B (mobile top gradient) · Q (picker scroll after brand
+pick) · J (pending pill → follow-toast format) · creator-page follow toast ·
+Top-Looks live-only · edit-look vertical scroll · product divider · search
+autocomplete matches-only+creators · generate "Your looks" removal + title
+rename.
+PARTIAL: D — About tab removed + AI summary in "View more info" DONE;
+comments-as-button (remove floating green bubble) STILL TODO (dual mobile/
+desktop layout — verify live). H — Weight row + no Fast↔Pro shift DONE; full
+one-viewport condense STILL TODO. R — collapsible categories DONE; the "All"
+aggregate search row STILL TODO.
+STILL TODO (all are large rebuilds / fragile / need live verification):
+- **N** analytics rebuild + animated thin-line graphs (header overlap)
+- **T** video upload + in/out trimmer
+- **E** comments → TikTok bottom drawer
+- **M** appearance settings (particles + hue) — NO theme table exists yet,
+  needs creating + settings UI + consumer-side application
+- **S** per-creator unseen-look badge (FollowingRail; needs unseen-by-handle
+  from fetchSeenLookIds + looks, badge w/ spin+glow). Avatar render is in a
+  FollowingRail sub-stack component.
+- **D-rest / R-rest / C / F** — see PARTIAL + smaller-polish notes
+- **Feed type-clustering** — ambiguous: reorderBySeen operates on LOOKS, not
+  products; "cluster by product type" likely targets a product feed. Confirm
+  target before building.
 
 ## Recently shipped (earlier this session, live on `main`)
 - Search autocomplete: matches-only + creators included (mobile + desktop)
