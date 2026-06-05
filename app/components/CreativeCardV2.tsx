@@ -241,6 +241,15 @@ const CreativeCardV2 = memo(function CreativeCardV2({
           uuid: look.uuid,
           context: look.title?.slice(0, 200),
         });
+        // Real-time unseen-badge clearing: tell the Following stories rail
+        // this look is now seen so its creator's "new looks" count drops
+        // live (no refresh). Mirrors the impression we just logged, which
+        // is the same signal the badge is derived from.
+        if (look.uuid && look.creator && typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('catalog:look-seen', {
+            detail: { uuid: look.uuid, creator: look.creator },
+          }));
+        }
       } else if (creative) {
         trackAdImpression(creative.id);
       }

@@ -779,7 +779,7 @@
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  background: #6d28d9;
+  background: #ff3d6e;
   color: #fff;
   font-size: 10px;
   font-weight: 800;
@@ -793,14 +793,14 @@
   position: absolute;
   inset: -3px;
   border-radius: 50%;
-  background: conic-gradient(from 0deg, #a78bfa, #6d28d9, #ec4899, #a78bfa);
+  background: conic-gradient(from 0deg, #ffd75c, #ff4d6d, #ff8a3d, #ffd75c);
   z-index: -1;
   animation: story-unseen-spin 2.4s linear infinite;
 }
 @keyframes story-unseen-spin { to { transform: rotate(360deg); } }
 @keyframes story-unseen-glow {
-  0%, 100% { box-shadow: 0 0 0 2px #0a0a0a, 0 0 6px 1px rgba(167, 139, 250, 0.55); }
-  50%      { box-shadow: 0 0 0 2px #0a0a0a, 0 0 12px 3px rgba(167, 139, 250, 0.95); }
+  0%, 100% { box-shadow: 0 0 0 2px #0a0a0a, 0 0 6px 1px rgba(255, 130, 90, 0.55); }
+  50%      { box-shadow: 0 0 0 2px #0a0a0a, 0 0 12px 3px rgba(255, 130, 90, 0.95); }
 }
 .follow-story-ring.is-online {
   background: conic-gradient(from var(--story-angle),

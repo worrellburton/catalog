@@ -97,24 +97,55 @@ function FollowingRail({ onOpenCreator, mode = 'both', onCreateFollowingCatalog:
   // Unseen-look count per creator handle (lower-cased) → drives the spinning
   // glowing badge on each stories-rail avatar. Empty for signed-out shoppers.
   const [unseenByHandle, setUnseenByHandle] = useState<Map<string, number>>(new Map());
+  // uuid → creator-handle for every look still counted as unseen. Lets the
+  // real-time 'catalog:look-seen' listener find which creator's badge to
+  // decrement without recomputing the whole map.
+  const unseenUuidToHandle = useRef<Map<string, string>>(new Map());
   useEffect(() => {
     let cancelled = false;
-    if (!user?.id) { setUnseenByHandle(new Map()); return; }
+    if (!user?.id) { setUnseenByHandle(new Map()); unseenUuidToHandle.current = new Map(); return; }
     (async () => {
       try {
         const [looks, seen] = await Promise.all([getLooks(), fetchSeenLookIds(user.id)]);
         if (cancelled) return;
         const m = new Map<string, number>();
+        const idMap = new Map<string, string>();
         for (const l of looks) {
           if (!l.creator || !l.uuid || seen.has(l.uuid)) continue;
           const key = l.creator.toLowerCase();
           m.set(key, (m.get(key) || 0) + 1);
+          idMap.set(l.uuid, key);
         }
+        unseenUuidToHandle.current = idMap;
         setUnseenByHandle(m);
-      } catch { if (!cancelled) setUnseenByHandle(new Map()); }
+      } catch { if (!cancelled) { setUnseenByHandle(new Map()); unseenUuidToHandle.current = new Map(); } }
     })();
     return () => { cancelled = true; };
   }, [user?.id, refreshKey]);
+
+  // Real-time clearing: when a look becomes seen (impression fired in the
+  // feed), drop it from its creator's unseen count so the badge updates
+  // instantly. Each uuid is consumed once (removed from the lookup map).
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onSeen = (e: Event) => {
+      const uuid = (e as CustomEvent<{ uuid?: string; creator?: string }>).detail?.uuid;
+      if (!uuid) return;
+      const handle = unseenUuidToHandle.current.get(uuid);
+      if (!handle) return;
+      unseenUuidToHandle.current.delete(uuid);
+      setUnseenByHandle(prev => {
+        const cur = prev.get(handle) || 0;
+        if (cur <= 0) return prev;
+        const next = new Map(prev);
+        if (cur - 1 <= 0) next.delete(handle);
+        else next.set(handle, cur - 1);
+        return next;
+      });
+    };
+    window.addEventListener('catalog:look-seen', onSeen);
+    return () => window.removeEventListener('catalog:look-seen', onSeen);
+  }, []);
   // Lower-cased handles of users currently online (Supabase presence).
   const [onlineHandles, setOnlineHandles] = useState<Set<string>>(new Set());
   const wrapperRef = useRef<HTMLDivElement | null>(null);
