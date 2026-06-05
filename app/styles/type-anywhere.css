@@ -110,7 +110,10 @@
   width: 100%;
   max-width: 720px;
   min-height: 56px;
-  padding: 8px 8px 8px 14px;
+  /* Symmetric horizontal padding so the filter icon (left) and send
+     button (right) sit equidistant from the pill edges — the bar reads
+     as evenly balanced rather than left-heavy. */
+  padding: 8px 12px;
   /* Match the mobile pill — 999px true pill, single liquid-glass surface
      via a top→bottom rgba gradient (no flat wash + nested chip pills).
      The old 32px radius + flat 0.78 wash + .ai-bar-icon-btn's own
@@ -131,6 +134,18 @@
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   color: #f5f5f7;
   transition: border-color 180ms ease, box-shadow 180ms ease;
+  /* Entrance: the bar rises into position rather than popping in. The
+     wrap owns the exit (slides down via translateY when an overlay opens
+     or chrome auto-hides), so together the bar animates both into and out
+     of position instead of appearing/disappearing instantly. */
+  animation: ai-bar-enter 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes ai-bar-enter {
+  from { opacity: 0; transform: translateY(22px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-bar { animation: none; }
 }
 
 .ai-bar:focus-within {

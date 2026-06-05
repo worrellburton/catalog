@@ -111,7 +111,9 @@ export default function TypeAnywhere() {
       if (sl.startsWith(q)) { starts.push(s); seen.add(sl); }
       else if (sl.includes(q)) { contains.push(s); seen.add(sl); }
     }
-    return [...starts, ...contains].slice(0, 8);
+    // Cap at 5 so the panel stays a tight, scannable list (creators +
+    // terms combined) rather than an overwhelming wall of options.
+    return [...starts, ...contains].slice(0, 5);
   }, [text, allSuggestions]);
 
   // Floating "Just start typing" tooltip above the bar. Shown once
