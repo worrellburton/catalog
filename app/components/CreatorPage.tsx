@@ -438,6 +438,15 @@ export default function CreatorPage({
     try {
       const { following: next } = await toggleFollow(followHandle);
       setFollowing(next);
+      // Mirror the feed avatar's behaviour: celebrate a NEW follow with the
+      // global follow toast (FollowToastHost listens for catalog:followed).
+      if (next && !prev) {
+        try {
+          window.dispatchEvent(new CustomEvent('catalog:followed', {
+            detail: { name: displayName || creatorName, avatarUrl: avatarUrl || null },
+          }));
+        } catch { /* no-op */ }
+      }
     } catch {
       // Revert on error
       setFollowing(prev);
@@ -445,7 +454,7 @@ export default function CreatorPage({
     } finally {
       setFollowBusy(false);
     }
-  }, [following, followBusy, followHandle, currentUser]);
+  }, [following, followBusy, followHandle, currentUser, displayName, creatorName, avatarUrl]);
 
   // Cheap deterministic "trusted by X.Yk" stat - seeded by the userId so
   // it doesn't change on every render. For seed creators we use the
