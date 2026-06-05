@@ -2575,75 +2575,80 @@ html[data-shell="catalog-app"] .my-looks-overlay {
 }
 .cl-v2-close:hover { background: rgba(255,255,255,0.1); }
 
-/* Phone-shaped media stage. The tile holds 9:19.5 aspect to mirror
-   how the look will render in the feed. Tapping the empty state
-   triggers the hidden file input. */
+/* Media stage — pinned in the top third. Instead of one big phone-
+   shaped tile, the working surface now shows a small horizontal row
+   of thumbnails (up to five photos/videos) plus a trailing "+ Add"
+   tile until the cap. Each thumbnail keeps a 9:16-ish portrait shape
+   so it reads as a mini feed card. */
 .cl-v2-stage {
   display: flex;
   justify-content: center;
 }
-.cl-v2-tile {
-  position: relative;
-  width: 100%;
-  max-width: 360px;
-  aspect-ratio: 9 / 19.5;
-  border-radius: 28px;
-  background: #0d0d0d;
-  border: 1.5px dashed rgba(255,255,255,0.18);
-  overflow: hidden;
-  cursor: pointer;
+.cl-v2-thumb-row {
   display: flex;
-  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
   justify-content: center;
-  transition: border-color 200ms ease, background 200ms ease, transform 200ms ease;
+  padding: 4px 0;
 }
-.cl-v2-tile.is-empty:hover {
-  border-color: rgba(255,255,255,0.4);
-  background: #111;
-  transform: translateY(-1px);
-}
-.cl-v2-tile.has-media {
+.cl-v2-thumb {
+  position: relative;
+  width: 84px;
+  aspect-ratio: 9 / 16;
+  border-radius: 14px;
+  background: #0d0d0d;
   border: 1px solid rgba(255,255,255,0.08);
-  cursor: default;
+  overflow: hidden;
+  flex: 0 0 auto;
 }
-.cl-v2-tile.has-media img,
-.cl-v2-tile.has-media video {
+.cl-v2-thumb img,
+.cl-v2-thumb video {
   width: 100%;
   height: 100%;
   object-fit: cover;
 }
-.cl-v2-tile-empty {
+.cl-v2-thumb-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 11px;
+  background: rgba(0,0,0,0.6);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: #fff;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.cl-v2-thumb-remove:hover { background: rgba(0,0,0,0.8); }
+/* Trailing "+ Add" tile — dashed, taps the hidden file input. */
+.cl-v2-thumb-add {
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 10px;
-  padding: 24px;
-  text-align: center;
-  color: rgba(255,255,255,0.85);
-}
-.cl-v2-tile-title {
-  font-size: 16px;
-  font-weight: 600;
-  letter-spacing: -0.01em;
-}
-.cl-v2-tile-hint {
-  font-size: 12px;
-  color: rgba(255,255,255,0.5);
-}
-.cl-v2-tile-replace {
-  position: absolute;
-  top: 12px;
-  right: 12px;
-  padding: 6px 12px;
-  border-radius: 999px;
-  background: rgba(0,0,0,0.55);
-  border: 1px solid rgba(255,255,255,0.18);
-  color: #fff;
-  font-size: 12px;
-  font-weight: 600;
+  justify-content: center;
+  gap: 4px;
+  background: transparent;
+  border: 1.5px dashed rgba(255,255,255,0.18);
+  color: rgba(255,255,255,0.7);
+  font-size: 22px;
   cursor: pointer;
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
+  transition: border-color 200ms ease, color 200ms ease;
+}
+.cl-v2-thumb-add:hover {
+  border-color: rgba(255,255,255,0.4);
+  color: #fff;
+}
+.cl-v2-thumb-add-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
 }
 
 /* Analyzing pulse. Sits below the tile so the canvas itself stays
@@ -2691,17 +2696,18 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   color: rgba(255,255,255,0.55);
 }
 
-/* Chip grid — one column on phone, two on wider. Each chip is a
-   tappable confirm row with a small × to drop the suggestion. */
-.cl-v2-chip-grid {
+/* Product cards — real image + brand + name + price. One column on
+   phone, two on wider. Each card is a tappable confirm target with a
+   small × to drop the suggestion. */
+.cl-v2-card-grid {
   display: grid;
   grid-template-columns: 1fr;
   gap: 8px;
 }
 @media (min-width: 460px) {
-  .cl-v2-chip-grid { grid-template-columns: 1fr 1fr; }
+  .cl-v2-card-grid { grid-template-columns: 1fr 1fr; }
 }
-.cl-v2-chip {
+.cl-v2-pcard {
   position: relative;
   display: flex;
   align-items: stretch;
@@ -2711,27 +2717,85 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   overflow: hidden;
   transition: border-color 160ms ease, background 160ms ease;
 }
-.cl-v2-chip:hover { border-color: rgba(255,255,255,0.25); }
-.cl-v2-chip.is-confirmed {
+.cl-v2-pcard:hover { border-color: rgba(255,255,255,0.25); }
+.cl-v2-pcard.is-confirmed {
   border-color: #fff;
   background: rgba(255,255,255,0.08);
 }
-.cl-v2-chip--ai { background: rgba(96, 165, 250, 0.06); }
-.cl-v2-chip-body {
+/* AI-detected rows get a faint blue wash so they read apart from
+   user-typed / search-result cards. */
+.cl-v2-pcard--ai { background: rgba(96, 165, 250, 0.06); }
+.cl-v2-pcard-body {
   flex: 1;
   display: grid;
-  grid-template-columns: 1fr auto auto;
-  gap: 10px;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
   align-items: center;
-  padding: 12px 14px;
+  padding: 10px 12px;
   background: none;
   border: none;
   color: #fff;
   font: inherit;
   text-align: left;
   cursor: pointer;
+  min-width: 0;
 }
-.cl-v2-chip-name {
+/* Product thumbnail. Has an image → show it as the poster. No image
+   → placeholder carrying the "Video generated after submit" badge. */
+.cl-v2-pcard-media {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  overflow: hidden;
+  flex: 0 0 auto;
+  background: rgba(255,255,255,0.04);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cl-v2-pcard-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.cl-v2-pcard-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  background:
+    repeating-linear-gradient(
+      45deg,
+      rgba(255,255,255,0.04),
+      rgba(255,255,255,0.04) 6px,
+      rgba(255,255,255,0.07) 6px,
+      rgba(255,255,255,0.07) 12px
+    );
+}
+.cl-v2-pcard-badge {
+  font-size: 8px;
+  line-height: 1.15;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: rgba(255,255,255,0.55);
+  padding: 0 3px;
+}
+.cl-v2-pcard-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.cl-v2-pcard-brand {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: rgba(255,255,255,0.6);
+}
+.cl-v2-pcard-name {
   font-size: 13px;
   font-weight: 500;
   line-height: 1.3;
@@ -2740,12 +2804,12 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   -webkit-box-orient: vertical;
   overflow: hidden;
 }
-.cl-v2-chip-price {
-  font-size: 13px;
+.cl-v2-pcard-price {
+  font-size: 12px;
   font-weight: 600;
   color: #fff;
 }
-.cl-v2-chip-check {
+.cl-v2-pcard-check {
   width: 24px;
   height: 24px;
   border-radius: 12px;
@@ -2757,13 +2821,14 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   display: inline-flex;
   align-items: center;
   justify-content: center;
+  flex: 0 0 auto;
 }
-.cl-v2-chip.is-confirmed .cl-v2-chip-check {
+.cl-v2-pcard.is-confirmed .cl-v2-pcard-check {
   background: #fff;
   color: #111;
   border-color: #fff;
 }
-.cl-v2-chip-remove {
+.cl-v2-pcard-remove {
   width: 32px;
   background: none;
   border: none;
@@ -2771,33 +2836,24 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   color: rgba(255,255,255,0.5);
   font-size: 18px;
   cursor: pointer;
+  flex: 0 0 auto;
 }
-.cl-v2-chip-remove:hover { color: #fff; background: rgba(255,255,255,0.06); }
+.cl-v2-pcard-remove:hover { color: #fff; background: rgba(255,255,255,0.06); }
 
-/* Manual entry. Hidden until "+ Add a product we missed" is tapped
-   so it doesn't add clutter to the review step. */
-.cl-v2-add-manual {
-  padding: 12px;
-  border-radius: 12px;
-  background: transparent;
-  border: 1.5px dashed rgba(255,255,255,0.18);
-  color: rgba(255,255,255,0.75);
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-}
-.cl-v2-add-manual:hover {
-  border-color: rgba(255,255,255,0.4);
-  color: #fff;
-}
-.cl-v2-manual {
+/* Type-to-find product search. A text input + Go button; a pasted
+   link is added directly instead of searched. */
+.cl-v2-search {
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
-.cl-v2-manual-desc,
-.cl-v2-manual-link {
-  width: 100%;
+.cl-v2-search-row {
+  display: flex;
+  gap: 8px;
+}
+.cl-v2-search-input {
+  flex: 1;
+  min-width: 0;
   border-radius: 10px;
   border: 1px solid rgba(255,255,255,0.12);
   background: rgba(0,0,0,0.45);
@@ -2806,13 +2862,117 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   font-size: 14px;
   padding: 12px;
 }
-.cl-v2-manual-desc { resize: vertical; min-height: 64px; }
-.cl-v2-manual-desc::placeholder,
-.cl-v2-manual-link::placeholder { color: rgba(255,255,255,0.4); }
-.cl-v2-manual-row {
+.cl-v2-search-input::placeholder { color: rgba(255,255,255,0.4); }
+.cl-v2-search-go {
+  flex: 0 0 auto;
+  min-width: 52px;
+  border-radius: 10px;
+  border: none;
+  background: #fff;
+  color: #111;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.cl-v2-search-go:disabled { opacity: 0.4; cursor: not-allowed; }
+.cl-v2-search-go .cl-v2-spinner {
+  border-color: rgba(0,0,0,0.25);
+  border-top-color: #111;
+}
+.cl-v2-search-hint {
+  font-size: 12px;
+  color: rgba(255,255,255,0.5);
+}
+.cl-v2-search-empty {
+  padding: 14px;
+  border-radius: 10px;
+  border: 1px dashed rgba(255,255,255,0.14);
+  background: rgba(0,0,0,0.3);
+  color: rgba(255,255,255,0.7);
+  font-size: 13px;
+  text-align: center;
+}
+
+/* Real product result cards — image + brand + name + price. Tapping
+   adds the result as a confirmed product. One column on phone, two
+   on wider. */
+.cl-v2-result-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+@media (min-width: 460px) {
+  .cl-v2-result-grid { grid-template-columns: 1fr 1fr; }
+}
+.cl-v2-result {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1.5px solid rgba(255,255,255,0.10);
+  background: rgba(0,0,0,0.4);
+  color: #fff;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+  transition: border-color 160ms ease, background 160ms ease;
+}
+.cl-v2-result:hover { border-color: rgba(255,255,255,0.25); }
+.cl-v2-result.is-added {
+  border-color: rgba(255,255,255,0.3);
+  background: rgba(255,255,255,0.06);
+  cursor: default;
+}
+.cl-v2-result-media {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  overflow: hidden;
+  flex: 0 0 auto;
+  background: rgba(255,255,255,0.04);
   display: flex;
-  gap: 10px;
-  justify-content: flex-end;
+  align-items: center;
+  justify-content: center;
+}
+.cl-v2-result-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.cl-v2-result-media .cl-v2-pcard-placeholder {
+  width: 100%;
+  height: 100%;
+}
+.cl-v2-result-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.cl-v2-result-add {
+  width: 24px;
+  height: 24px;
+  border-radius: 12px;
+  background: rgba(0,0,0,0.6);
+  border: 1px solid rgba(255,255,255,0.4);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+.cl-v2-result.is-added .cl-v2-result-add {
+  background: #fff;
+  color: #111;
+  border-color: #fff;
 }
 
 .cl-v2-error {

@@ -4,19 +4,24 @@
 //
 //   1. Empty state. Animates in. One tap target: "Upload media to
 //      get started" inside a phone-shaped tile (9:19.5).
-//   2. Once media lands, the same tile fills with the upload.
-//   3. The media is sent to a vision pass that names the products
-//      visible in the look. We show those as chips in the middle
-//      of the screen and the user taps to confirm each one.
-//   4. If the chip's product isn't in our catalog, we open a small
-//      "describe + paste link" inline form so the user can add it
-//      manually.
+//   2. Once the first file lands, the surface switches to a small row
+//      of thumbnails pinned in the top third. The user can add up to
+//      five photos/videos (each with its own remove button) plus a
+//      trailing "+ Add" tile until the cap is reached.
+//   3. The first upload is sent to a vision pass that names the
+//      products visible in the look. Those render as real product
+//      cards in the middle of the screen and the user taps to confirm.
+//   4. To add anything the vision pass missed, the user types a query
+//      into "Search for a product…" — that fans out to the real
+//      product-research service (seed DB + live Google Shopping) and
+//      renders tappable result cards. A pasted URL is added as a
+//      link-only product instead.
 //   5. Preview button at the bottom — disabled until media + at
 //      least one product are present. Tapping it expands an inline
 //      preview tile that mirrors how the look will show in the feed.
 //   6. Publish on the preview surface fires createLook + uploadMedia
-//      + addProductToLook + submitLook through the existing edge
-//      function and returns the saved look to MyLooks.
+//      (every picked file) + addProductToLook + submitLook through the
+//      existing edge function and returns the saved look to MyLooks.
 //
 // In edit mode (`look` prop set), the same surface hydrates with the
 // look's existing products and media so the user iterates on top
@@ -25,12 +30,26 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createLook, updateLook, addProductToLook, submitLook, uploadLookMedia, type ManagedLook, type AddProductInput } from '~/services/manage-looks';
 import { analyzeLookMedia } from '~/services/analyze-look-media';
+import { researchProducts, type ResearchedProduct } from '~/services/product-research';
 import ParticleBackground from './ParticleBackground';
+
+// ── Picked-media shape ─────────────────────────────────────────────
+// Each entry owns its object-URL preview so we can revoke it on
+// removal/unmount. `kind` drives whether we render <video> or <img>.
+interface MediaItem {
+  id: string;
+  file: File;
+  previewUrl: string;
+  kind: 'photo' | 'video';
+}
+
+const MAX_MEDIA = 5;
 
 // ── Detected product shape ─────────────────────────────────────────
 // Mirrors AddProductInput so the publish step can pass it through
 // without translation. `source` flags where each row came from so we
-// can render its tile differently (AI-detected vs user-typed).
+// can render its card differently (AI-detected vs user-typed vs
+// search-result).
 interface DetectedProduct {
   id: string;
   brand: string;
@@ -38,7 +57,7 @@ interface DetectedProduct {
   price: string;
   url: string;
   imageUrl: string;
-  source: 'ai' | 'manual';
+  source: 'ai' | 'manual' | 'search';
   confirmed: boolean;
 }
 
@@ -54,18 +73,35 @@ interface Props {
 
 type Phase = 'empty' | 'analyzing' | 'review' | 'preview';
 
+// Loose URL sniff — anything starting with http(s):// or looking like
+// a bare domain is treated as a pasted link rather than a search query.
+function looksLikeUrl(text: string): boolean {
+  const t = text.trim();
+  if (/^https?:\/\//i.test(t)) return true;
+  return /^[\w-]+(\.[\w-]+)+(\/|$)/.test(t) && !t.includes(' ');
+}
+
 export default function CreateLookV2({ onPublished, onCancel, look: existingLook }: Props) {
   const isEdit = !!existingLook;
 
   const [phase, setPhase] = useState<Phase>(isEdit ? 'review' : 'empty');
-  const [media, setMedia] = useState<{ file: File; previewUrl: string; kind: 'photo' | 'video' } | null>(null);
+  const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
   const [products, setProducts] = useState<DetectedProduct[]>([]);
-  const [manualDraft, setManualDraft] = useState<{ desc: string; url: string }>({ desc: '', url: '' });
-  const [showManualForm, setShowManualForm] = useState(false);
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [mounted, setMounted] = useState(false);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
+
+  // Product search state (review phase).
+  const [searchQuery, setSearchQuery] = useState('');
+  const [searching, setSearching] = useState(false);
+  const [searchResults, setSearchResults] = useState<ResearchedProduct[]>([]);
+  const [searched, setSearched] = useState(false);
+
+  // Keep a live ref to the picked media so the unmount cleanup can
+  // revoke every object URL without re-binding the effect on each add.
+  const mediaRef = useRef<MediaItem[]>([]);
+  mediaRef.current = mediaItems;
 
   // Animate-in trigger — sets `mounted=true` on the next frame so
   // the CSS transition picks up the change instead of skipping to
@@ -73,6 +109,13 @@ export default function CreateLookV2({ onPublished, onCancel, look: existingLook
   useEffect(() => {
     const id = requestAnimationFrame(() => setMounted(true));
     return () => cancelAnimationFrame(id);
+  }, []);
+
+  // Revoke every outstanding object URL on unmount to avoid leaks.
+  useEffect(() => {
+    return () => {
+      for (const m of mediaRef.current) URL.revokeObjectURL(m.previewUrl);
+    };
   }, []);
 
   // Edit mode: hydrate from the existing look. We map look_products
@@ -97,38 +140,57 @@ export default function CreateLookV2({ onPublished, onCancel, look: existingLook
     setProducts(hydrated);
   }, [existingLook]);
 
-  // ── Phase 1 → 2: media handler ───────────────────────────────────
+  // ── Media picking ────────────────────────────────────────────────
   const handlePickMedia = useCallback(() => {
     fileInputRef.current?.click();
   }, []);
 
+  // Append the picked files up to the remaining slots (cap at 5).
+  // The first file added kicks off the AI analysis pass.
   const handleMediaFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const kind: 'photo' | 'video' = file.type.startsWith('video/') ? 'video' : 'photo';
-    const previewUrl = URL.createObjectURL(file);
-    setMedia({ file, previewUrl, kind });
-    setPhase('analyzing');
+    const files = e.target.files;
+    if (!files || files.length === 0) return;
+    let analyzeFile: File | null = null;
+    setMediaItems(prev => {
+      const remaining = MAX_MEDIA - prev.length;
+      if (remaining <= 0) return prev;
+      const wasEmpty = prev.length === 0;
+      const next: MediaItem[] = [];
+      for (let i = 0; i < files.length && next.length < remaining; i++) {
+        const file = files[i];
+        const kind: 'photo' | 'video' = file.type.startsWith('video/') ? 'video' : 'photo';
+        next.push({ id: `m-${Date.now()}-${i}`, file, previewUrl: URL.createObjectURL(file), kind });
+      }
+      // Only the very first upload triggers analysis.
+      if (wasEmpty && next.length > 0) analyzeFile = next[0].file;
+      return [...prev, ...next];
+    });
+    // Reset the input so the same file can be re-picked later.
+    e.target.value = '';
+    if (analyzeFile) setPhase('analyzing');
+  }, []);
+
+  const removeMedia = useCallback((id: string) => {
+    setMediaItems(prev => {
+      const target = prev.find(m => m.id === id);
+      if (target) URL.revokeObjectURL(target.previewUrl);
+      return prev.filter(m => m.id !== id);
+    });
   }, []);
 
   // ── Phase 2 → 3: AI product analysis ─────────────────────────────
-  // Today this is a mock that returns a small set of plausible
-  // Calls the analyze-look-media edge function with the user's
-  // upload. The function runs Claude Vision over a JPEG frame of the
-  // file (the file itself for photos, a canvas-sampled frame for
-  // videos) and returns a small list of detected wearable items.
-  // Empty results are valid ("nothing shoppable seen") — the user can
-  // still describe items manually below the chip grid.
+  // Calls the analyze-look-media edge function with the first upload.
+  // The function runs Claude Vision over a JPEG frame of the file (the
+  // file itself for photos, a canvas-sampled frame for videos) and
+  // returns a small list of detected wearable items. Empty results are
+  // valid ("nothing shoppable seen") — the user can still search for
+  // products or paste a link below the cards.
   const runAnalysis = useCallback(async (file: File) => {
     try {
       const detected = await analyzeLookMedia(file);
       const mapped: DetectedProduct[] = detected.map((d, idx) => ({
         id: `ai-${Date.now()}-${idx}`,
         brand: d.brand || '',
-        // Compose a single readable name: "<color> <name>" if color is
-        // distinct from the name's first word; otherwise just the name.
-        // The detection prompt already names items specifically, so we
-        // mostly keep its phrasing.
         name: d.name,
         price: '',
         url: '',
@@ -136,25 +198,28 @@ export default function CreateLookV2({ onPublished, onCancel, look: existingLook
         source: 'ai',
         confirmed: false,
       }));
-      setProducts(mapped);
+      // Keep any products already attached (edit mode) and append the
+      // fresh AI suggestions.
+      setProducts(prev => [...prev, ...mapped]);
       setPhase('review');
     } catch (err) {
       // Fall through to an empty review state so the user can keep
-      // going — manual entry stays available.
+      // going — search/link entry stays available.
       console.warn('[CreateLookV2] analyze-look-media failed:', err);
       setError(err instanceof Error ? err.message : 'Could not analyze the media');
-      setProducts([]);
       setPhase('review');
     }
   }, []);
 
   // Kick analysis off whenever we enter the 'analyzing' phase. The
-  // current `media` is required — without it there's nothing to analyze.
+  // first picked file is required — without it there's nothing to
+  // analyze.
   useEffect(() => {
     if (phase !== 'analyzing') return;
-    if (!media) return;
-    void runAnalysis(media.file);
-  }, [phase, media, runAnalysis]);
+    const first = mediaItems[0];
+    if (!first) return;
+    void runAnalysis(first.file);
+  }, [phase, mediaItems, runAnalysis]);
 
   // ── Phase 3: confirm or remove a detected product ────────────────
   const toggleConfirm = useCallback((id: string) => {
@@ -165,33 +230,91 @@ export default function CreateLookV2({ onPublished, onCancel, look: existingLook
     setProducts(prev => prev.filter(p => p.id !== id));
   }, []);
 
-  // ── Phase 4: manual entry — when AI missed something ─────────────
-  const submitManual = useCallback(() => {
-    const { desc, url } = manualDraft;
-    if (!desc.trim()) return;
+  // ── Phase 3: add by raw URL (paste-a-link fallback) ──────────────
+  // name = the typed text when it isn't itself a URL, otherwise the URL.
+  const addByLink = useCallback((raw: string) => {
+    const url = raw.trim();
+    if (!url) return;
     setProducts(prev => [
       ...prev,
       {
         id: `manual-${Date.now()}`,
         brand: '',
-        name: desc.trim(),
+        name: url,
         price: '',
-        url: url.trim(),
+        url,
         imageUrl: '',
         source: 'manual',
         confirmed: true,
       },
     ]);
-    setManualDraft({ desc: '', url: '' });
-    setShowManualForm(false);
-  }, [manualDraft]);
+  }, []);
+
+  // ── Phase 3: type-to-find real products ──────────────────────────
+  // A pasted URL short-circuits to the link path; anything else runs
+  // the product-research service (seed DB + live Google Shopping, with
+  // the service's own link fallback) so there are always results.
+  const runSearch = useCallback(async () => {
+    const q = searchQuery.trim();
+    if (!q) return;
+    if (looksLikeUrl(q)) {
+      addByLink(q);
+      setSearchQuery('');
+      return;
+    }
+    setSearching(true);
+    setSearched(true);
+    setError(null);
+    try {
+      const { products: found } = await researchProducts(q);
+      setSearchResults(found);
+    } catch (err) {
+      console.warn('[CreateLookV2] researchProducts failed:', err);
+      setSearchResults([]);
+      setError(err instanceof Error ? err.message : 'Search failed');
+    } finally {
+      setSearching(false);
+    }
+  }, [searchQuery, addByLink]);
+
+  // Add a real search result as a confirmed product. Dedupe by
+  // brand+name so tapping the same card twice is a no-op.
+  const addSearchResult = useCallback((r: ResearchedProduct) => {
+    setProducts(prev => {
+      const key = `${r.brand}|${r.name}`.toLowerCase();
+      if (prev.some(p => `${p.brand}|${p.name}`.toLowerCase() === key)) return prev;
+      return [
+        ...prev,
+        {
+          id: `search-${Date.now()}-${prev.length}`,
+          brand: r.brand,
+          name: r.name,
+          price: r.price,
+          url: r.url,
+          imageUrl: r.image_url,
+          source: 'search',
+          confirmed: true,
+        },
+      ];
+    });
+  }, []);
 
   // ── Phase 5: ready-to-preview gating ─────────────────────────────
   const confirmedProducts = useMemo(
     () => products.filter(p => p.confirmed),
     [products],
   );
-  const canPreview = (!!media || isEdit) && confirmedProducts.length > 0;
+  const canPreview = (mediaItems.length > 0 || isEdit) && confirmedProducts.length > 0;
+
+  // Fallback poster for edit mode when no fresh media was picked.
+  const editPoster = useMemo(() => {
+    if (!existingLook) return null;
+    return existingLook.looks_creative?.[0]?.thumbnail_url
+      || existingLook.looks_creative?.[0]?.video_url
+      || existingLook.look_photos?.[0]?.url
+      || existingLook.look_videos?.[0]?.poster_url
+      || null;
+  }, [existingLook]);
 
   // ── Phase 6: publish ─────────────────────────────────────────────
   const handlePublish = useCallback(async () => {
@@ -208,9 +331,10 @@ export default function CreateLookV2({ onPublished, onCancel, look: existingLook
         const { data } = await createLook({ title, gender: 'unisex' });
         look = data;
       }
-      if (media) {
+      // Upload every picked file, not just the first.
+      for (const m of mediaItems) {
         try {
-          await uploadLookMedia(look.id, media.file, media.kind);
+          await uploadLookMedia(look.id, m.file, m.kind);
         } catch (err) {
           console.warn('[CreateLookV2] media upload failed:', err);
         }
@@ -242,23 +366,13 @@ export default function CreateLookV2({ onPublished, onCancel, look: existingLook
     } finally {
       setPublishing(false);
     }
-  }, [canPreview, confirmedProducts, isEdit, existingLook, media, onPublished]);
-
-  // Fallback poster for edit mode when no fresh media was picked.
-  const editPoster = useMemo(() => {
-    if (!existingLook) return null;
-    return existingLook.looks_creative?.[0]?.thumbnail_url
-      || existingLook.looks_creative?.[0]?.video_url
-      || existingLook.look_photos?.[0]?.url
-      || existingLook.look_videos?.[0]?.poster_url
-      || null;
-  }, [existingLook]);
+  }, [canPreview, confirmedProducts, isEdit, existingLook, mediaItems, onPublished]);
 
   // The first-paint surface is a particle-only canvas with a small
-  // upload card that springs in. Once the user actually picks media
+  // upload card that springs in. Once the user actually picks a file
   // (or we're in edit mode with an existing poster), we shift to the
-  // working surface with a phone-shaped preview tile + sections below.
-  const showHero = phase === 'empty' && !media && !editPoster;
+  // working surface with the thumbnail row + sections below.
+  const showHero = phase === 'empty' && mediaItems.length === 0 && !editPoster;
 
   // ── Render ───────────────────────────────────────────────────────
   return (
@@ -297,32 +411,42 @@ export default function CreateLookV2({ onPublished, onCancel, look: existingLook
           <span className="cl-v2-hero-label">Upload here to get started</span>
         </div>
       ) : (
-        /* Working surface — phone-shaped preview tile, fills with the
-           picked file (or the existing look's poster in edit mode). */
+        /* Working surface — a small row of media thumbnails pinned in
+           the top third. Up to five photos/videos, each removable,
+           with a trailing "+ Add" tile until the cap. In edit mode
+           with no fresh uploads, the existing poster shows as the
+           first thumbnail. */
         <div className="cl-v2-stage">
-          <div
-            className={`cl-v2-tile${media ? ' has-media' : ''}`}
-            onClick={!media ? handlePickMedia : undefined}
-            role={!media ? 'button' : undefined}
-            tabIndex={!media ? 0 : undefined}
-          >
-            {media ? (
-              media.kind === 'video' ? (
-                <video src={media.previewUrl} muted loop autoPlay playsInline />
-              ) : (
-                <img src={media.previewUrl} alt="Uploaded media" />
-              )
-            ) : editPoster ? (
-              <img src={editPoster} alt="Existing look" />
-            ) : null}
-
-            {media && (
+          <div className="cl-v2-thumb-row">
+            {mediaItems.length === 0 && editPoster && (
+              <div className="cl-v2-thumb">
+                <img src={editPoster} alt="Existing look" />
+              </div>
+            )}
+            {mediaItems.map(m => (
+              <div key={m.id} className="cl-v2-thumb">
+                {m.kind === 'video' ? (
+                  <video src={m.previewUrl} muted loop autoPlay playsInline />
+                ) : (
+                  <img src={m.previewUrl} alt="Uploaded media" />
+                )}
+                <button
+                  type="button"
+                  className="cl-v2-thumb-remove"
+                  onClick={() => removeMedia(m.id)}
+                  aria-label="Remove media"
+                >×</button>
+              </div>
+            ))}
+            {mediaItems.length < MAX_MEDIA && (
               <button
                 type="button"
-                className="cl-v2-tile-replace"
-                onClick={(e) => { e.stopPropagation(); handlePickMedia(); }}
+                className="cl-v2-thumb cl-v2-thumb-add"
+                onClick={handlePickMedia}
+                aria-label="Add media"
               >
-                Replace
+                <span aria-hidden>+</span>
+                <span className="cl-v2-thumb-add-label">Add</span>
               </button>
             )}
           </div>
@@ -332,6 +456,7 @@ export default function CreateLookV2({ onPublished, onCancel, look: existingLook
         ref={fileInputRef}
         type="file"
         accept="image/*,video/*"
+        multiple
         onChange={handleMediaFile}
         style={{ display: 'none' }}
       />
@@ -345,8 +470,8 @@ export default function CreateLookV2({ onPublished, onCancel, look: existingLook
         </div>
       )}
 
-      {/* Phase 3-4: detected products + manual entry. Only renders
-          once we have something to show. */}
+      {/* Phase 3-4: detected/added products + product search. Only
+          renders once we have something to show. */}
       {(phase === 'review' || phase === 'preview') && (
         <section className="cl-v2-products">
           <div className="cl-v2-section-head">
@@ -355,25 +480,37 @@ export default function CreateLookV2({ onPublished, onCancel, look: existingLook
           </div>
 
           {products.length > 0 && (
-            <div className="cl-v2-chip-grid">
+            <div className="cl-v2-card-grid">
               {products.map(p => (
                 <div
                   key={p.id}
-                  className={`cl-v2-chip${p.confirmed ? ' is-confirmed' : ''} cl-v2-chip--${p.source}`}
+                  className={`cl-v2-pcard${p.confirmed ? ' is-confirmed' : ''} cl-v2-pcard--${p.source}`}
                 >
                   <button
                     type="button"
-                    className="cl-v2-chip-body"
+                    className="cl-v2-pcard-body"
                     onClick={() => toggleConfirm(p.id)}
                     aria-pressed={p.confirmed}
                   >
-                    <span className="cl-v2-chip-name">{p.brand ? `${p.brand} · ${p.name}` : p.name}</span>
-                    {p.price && <span className="cl-v2-chip-price">{p.price}</span>}
-                    <span className="cl-v2-chip-check" aria-hidden>{p.confirmed ? '✓' : '+'}</span>
+                    <span className="cl-v2-pcard-media">
+                      {p.imageUrl ? (
+                        <img src={p.imageUrl} alt="" />
+                      ) : (
+                        <span className="cl-v2-pcard-placeholder">
+                          <span className="cl-v2-pcard-badge">Video generated after submit</span>
+                        </span>
+                      )}
+                    </span>
+                    <span className="cl-v2-pcard-meta">
+                      {p.brand && <span className="cl-v2-pcard-brand">{p.brand}</span>}
+                      <span className="cl-v2-pcard-name">{p.name}</span>
+                      {p.price && <span className="cl-v2-pcard-price">{p.price}</span>}
+                    </span>
+                    <span className="cl-v2-pcard-check" aria-hidden>{p.confirmed ? '✓' : '+'}</span>
                   </button>
                   <button
                     type="button"
-                    className="cl-v2-chip-remove"
+                    className="cl-v2-pcard-remove"
                     onClick={() => removeProduct(p.id)}
                     aria-label="Remove product"
                   >×</button>
@@ -382,45 +519,71 @@ export default function CreateLookV2({ onPublished, onCancel, look: existingLook
             </div>
           )}
 
-          {!showManualForm ? (
-            <button
-              type="button"
-              className="cl-v2-add-manual"
-              onClick={() => setShowManualForm(true)}
-            >
-              + Add a product we missed
-            </button>
-          ) : (
-            <div className="cl-v2-manual">
-              <textarea
-                className="cl-v2-manual-desc"
-                placeholder="Describe the product (e.g. cream linen camp shirt)"
-                value={manualDraft.desc}
-                rows={2}
-                onChange={(e) => setManualDraft(d => ({ ...d, desc: e.target.value }))}
-              />
+          {/* Type-to-find real products. Enter or the Go button runs
+              the search; a pasted link is added directly instead. */}
+          <div className="cl-v2-search">
+            <div className="cl-v2-search-row">
               <input
-                className="cl-v2-manual-link"
-                type="url"
-                placeholder="Paste a link to it (optional)"
-                value={manualDraft.url}
-                onChange={(e) => setManualDraft(d => ({ ...d, url: e.target.value }))}
+                className="cl-v2-search-input"
+                type="text"
+                placeholder="Search for a product…"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); void runSearch(); } }}
               />
-              <div className="cl-v2-manual-row">
-                <button
-                  type="button"
-                  className="cl-v2-back-btn"
-                  onClick={() => { setShowManualForm(false); setManualDraft({ desc: '', url: '' }); }}
-                >Cancel</button>
-                <button
-                  type="button"
-                  className="cl-v2-publish-btn"
-                  onClick={submitManual}
-                  disabled={!manualDraft.desc.trim()}
-                >Add to look</button>
-              </div>
+              <button
+                type="button"
+                className="cl-v2-search-go"
+                onClick={() => void runSearch()}
+                disabled={searching || !searchQuery.trim()}
+                aria-label="Search"
+              >
+                {searching ? <span className="cl-v2-spinner" aria-hidden /> : 'Go'}
+              </button>
             </div>
-          )}
+            <span className="cl-v2-search-hint">Type a product or brand — or paste a link to add it directly.</span>
+
+            {searching && (
+              <div className="cl-v2-analyzing">
+                <span className="cl-v2-spinner" aria-hidden />
+                <span>Searching…</span>
+              </div>
+            )}
+
+            {!searching && searched && searchResults.length === 0 && (
+              <div className="cl-v2-search-empty">
+                No matches — try a brand, or paste a link.
+              </div>
+            )}
+
+            {!searching && searchResults.length > 0 && (
+              <div className="cl-v2-result-grid">
+                {searchResults.map((r, idx) => {
+                  const key = `${r.brand}|${r.name}`.toLowerCase();
+                  const added = products.some(p => `${p.brand}|${p.name}`.toLowerCase() === key);
+                  return (
+                    <button
+                      key={`${key}-${idx}`}
+                      type="button"
+                      className={`cl-v2-result${added ? ' is-added' : ''}`}
+                      onClick={() => addSearchResult(r)}
+                      disabled={added}
+                    >
+                      <span className="cl-v2-result-media">
+                        {r.image_url ? <img src={r.image_url} alt="" /> : <span className="cl-v2-pcard-placeholder" />}
+                      </span>
+                      <span className="cl-v2-result-meta">
+                        {r.brand && <span className="cl-v2-pcard-brand">{r.brand}</span>}
+                        <span className="cl-v2-pcard-name">{r.name}</span>
+                        {r.price && <span className="cl-v2-pcard-price">{r.price}</span>}
+                      </span>
+                      <span className="cl-v2-result-add" aria-hidden>{added ? '✓' : '+'}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </section>
       )}
 
@@ -446,11 +609,11 @@ export default function CreateLookV2({ onPublished, onCancel, look: existingLook
         <section className="cl-v2-preview">
           <h3>Preview</h3>
           <div className="cl-v2-preview-tile">
-            {media ? (
-              media.kind === 'video' ? (
-                <video src={media.previewUrl} muted loop autoPlay playsInline />
+            {mediaItems[0] ? (
+              mediaItems[0].kind === 'video' ? (
+                <video src={mediaItems[0].previewUrl} muted loop autoPlay playsInline />
               ) : (
-                <img src={media.previewUrl} alt="" />
+                <img src={mediaItems[0].previewUrl} alt="" />
               )
             ) : editPoster ? (
               <img src={editPoster} alt="" />
