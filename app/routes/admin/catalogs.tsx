@@ -420,7 +420,11 @@ export async function loadCatalogCreativePayload(
   // by catalog_tags. Use the supplied in-memory list when present,
   // otherwise query directly so the loader is self-contained.
   let catalogProductsBase: ProductRow[];
-  if (opts.allProducts) {
+  // An empty-but-defined allProducts (the product library hasn't finished
+  // loading yet — a load-order race) must NOT short-circuit to "0 products";
+  // fall through to the direct query so the Home/universe feed still loads
+  // its products. This was the intermittent "we lost the products" bug.
+  if (opts.allProducts && opts.allProducts.length > 0) {
     catalogProductsBase = isUniverse
       ? opts.allProducts
       : opts.allProducts.filter(p => (p.catalog_tags || []).includes(catalog.name));
@@ -514,7 +518,7 @@ export async function loadCatalogCreativePayload(
       .filter(id => !existingIds.has(id));
     if (feedProductIds.length > 0) {
       let feedOnlyProducts: ProductRow[];
-      if (opts.allProducts) {
+      if (opts.allProducts && opts.allProducts.length > 0) {
         feedOnlyProducts = opts.allProducts.filter(p => feedProductIds.includes(p.id));
       } else {
         const { data: feedProductRows } = await supabase
