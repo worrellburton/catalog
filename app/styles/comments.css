@@ -24,14 +24,22 @@
   inset: 0;
   z-index: 399;
   background: rgba(0, 0, 0, 0.5);
-  animation: comments-backdrop-in 0.25s ease both;
+  animation: comments-backdrop-in 0.5s ease both;
+}
+.comments-drawer-backdrop.is-closing {
+  animation: comments-backdrop-out 0.36s ease both;
 }
 .comments-page--drawer {
   inset: auto 0 0 0;
   height: 82dvh;
   border-radius: 22px 22px 0 0;
   box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.5);
-  animation: comments-drawer-up 0.34s cubic-bezier(0.32, 0.72, 0, 1) both;
+  /* Slow, smooth ease-in. */
+  animation: comments-drawer-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.comments-page--drawer.is-closing {
+  /* Slow, smooth ease-out before unmount. */
+  animation: comments-drawer-down 0.36s cubic-bezier(0.4, 0, 0.7, 0.2) both;
 }
 /* Tap/drag zone at the top of the sheet — tap to close, drag down to
    dismiss. Wide, touch-action:none so the pointer stream isn't stolen by
@@ -63,7 +71,9 @@
   pointer-events: none;
 }
 @keyframes comments-backdrop-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes comments-backdrop-out { from { opacity: 1; } to { opacity: 0; } }
 @keyframes comments-drawer-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes comments-drawer-down { from { transform: translateY(0); } to { transform: translateY(100%); } }
 @media (prefers-reduced-motion: reduce) {
   .comments-page--drawer,
   .comments-drawer-backdrop { animation: none; }
@@ -137,6 +147,14 @@
   transition: background 140ms ease;
 }
 .comments-back:hover { background: rgba(255,255,255,0.16); }
+/* Down-arrow close button — icon-only, circular. */
+.comments-back--down {
+  gap: 0;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  justify-content: center;
+}
 
 .comments-target {
   display: flex;
