@@ -862,6 +862,43 @@ html[data-shell="catalog-app"] .gen-page {
   scroll-snap-align: start;
 }
 
+/* Review "Continue" CTA — a sparkly button that bursts into an explosion
+   (see utils/explode.ts) when tapped to launch the render. */
+.gen-continue {
+  position: relative;
+  overflow: hidden;
+  background-image: linear-gradient(110deg, #ffffff 0%, #ffffff 40%, #f3e8ff 50%, #ffffff 60%, #ffffff 100%);
+  background-size: 220% 100%;
+  animation: gen-continue-sheen 2.6s linear infinite;
+}
+@keyframes gen-continue-sheen {
+  0%   { background-position: 140% 0; }
+  100% { background-position: -40% 0; }
+}
+/* Twinkling sparkle dots scattered across the button face. */
+.gen-continue-spark {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(circle, rgba(180,130,255,0.95) 0 1.4px, transparent 2px),
+    radial-gradient(circle, rgba(120,170,255,0.9) 0 1.2px, transparent 2px),
+    radial-gradient(circle, rgba(255,255,255,0.95) 0 1.3px, transparent 2px),
+    radial-gradient(circle, rgba(255,180,230,0.9) 0 1px, transparent 1.6px);
+  background-size: 60px 40px, 90px 50px, 50px 60px, 110px 44px;
+  background-position: 8px 10px, 40px 26px, 64px 8px, 24px 30px;
+  animation: gen-continue-twinkle 1.5s steps(1) infinite;
+  opacity: 0.85;
+}
+@keyframes gen-continue-twinkle {
+  0%, 100% { opacity: 0.85; }
+  50%      { opacity: 0.35; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gen-continue { animation: none; }
+  .gen-continue-spark { animation: none; }
+}
+
 /* "Direct your own video" — free-text prompt under the style swiper. */
 .gen-direct { margin-top: 20px; }
 .gen-direct-title { font-size: 16px; font-weight: 700; margin: 0 0 4px; }

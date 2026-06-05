@@ -4,6 +4,7 @@ import CatalogLogo from '~/components/CatalogLogo';
 import { supabase } from '~/utils/supabase';
 import { useAuth } from '~/hooks/useAuth';
 import { startGenerationJob } from '~/services/generation-queue';
+import { playExplosion } from '~/utils/explode';
 
 // /generate-only styles. Used to be in root.tsx where the consumer paid
 // the bundle cost on every page.
@@ -620,11 +621,14 @@ export default function GeneratePage() {
   // or 10. Default 5 for Fast; the model picker bumps it to 10 when
   // Pro is selected (and the user can knock it back to 5 if they
   // want).
-  const [clipSeconds, setClipSeconds] = useState<5 | 10>(5);
+  const [clipSeconds, setClipSeconds] = useState<5 | 10>(10);
   // Seedance 2 variant. 'fast' is fast + cheap + 5s only. 'pro' is
   // longer + higher quality when Fal exposes it; the edge function
   // falls back to /fast if the Pro slug 404s.
-  const [model, setModel] = useState<'fast' | 'pro'>('fast');
+  // Default to the premium path: Pro model, 10-second clip. The review
+  // screen still exposes the Fast / 5s toggles, but every new look starts
+  // as Pro+10s per the product default.
+  const [model, setModel] = useState<'fast' | 'pro'>('pro');
   // Shopper's gender, used to filter the product picker so a male
   // shopper only sees male + unisex (+ untagged) products. 'unknown'
   // disables the filter so we don't hide the catalog from anyone we
@@ -2364,8 +2368,16 @@ export default function GeneratePage() {
               Back
             </button>
             {step === 'review' ? (
-              <button className="gen-btn-primary" onClick={handleSubmit} disabled={submitting}>
-                {submitting ? 'Starting…' : 'Generate look'}
+              <button
+                className="gen-btn-primary gen-continue"
+                onClick={(e) => {
+                  const r = e.currentTarget.getBoundingClientRect();
+                  playExplosion(r.left + r.width / 2, r.top + r.height / 2, () => { void handleSubmit(); });
+                }}
+                disabled={submitting}
+              >
+                <span className="gen-continue-spark" aria-hidden="true" />
+                {submitting ? 'Starting…' : 'Continue'}
               </button>
             ) : (
               <button className="gen-btn-primary" disabled={!canAdvance} onClick={() => goNext(step, setStep)}>
