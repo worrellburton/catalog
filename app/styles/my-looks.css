@@ -2153,7 +2153,7 @@ html[data-shell="catalog-app"] .my-looks-overlay {
 .my-cat-tile-dot--in_review,
 .my-cat-tile-dot--draft,
 .my-cat-tile-dot--archived,
-.my-cat-tile-dot--denied    { background: #f59e0b; }
+.my-cat-tile-dot--denied    { background: #f59e0b; box-shadow: 0 0 6px rgba(245, 158, 11, 0.7), 0 1px 4px rgba(0, 0, 0, 0.35); }
 
 /* Small inline dot used inside the mobile tray's status segmented
    control — same palette as the tile (green=live, yellow=anything

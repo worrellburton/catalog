@@ -171,10 +171,19 @@ export async function getMyLooks(params?: { status?: LookStatus | 'inactive'; pa
       looks_creative ( id, video_url, thumbnail_url, mobile_video_url, is_primary, status, created_at ),
       look_products ( sort_order, products:products ( id, name, brand, price, url, image_url ) )
     `, { count: 'exact' })
-    .eq('user_id', userId)
-    .order('sort_order', { ascending: true })
-    .order('created_at', { ascending: false })
-    .range(from, to);
+    .eq('user_id', userId);
+
+  // Inactive (not-published) reads strictly newest-first by post date — the
+  // creator wants their most recent renders up top. Live keeps the manual
+  // drag order (sort_order) the creator curates.
+  if (params?.status === 'inactive') {
+    query = query.order('created_at', { ascending: false });
+  } else {
+    query = query
+      .order('sort_order', { ascending: true })
+      .order('created_at', { ascending: false });
+  }
+  query = query.range(from, to);
 
   if (params?.status === 'inactive') {
     // "Not published" — everything that isn't live.
