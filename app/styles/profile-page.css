@@ -124,6 +124,9 @@ html[data-shell="catalog-app"] .profile-page-overlay {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  /* Bias the crop toward the top so portrait headshots keep the face in
+     frame instead of cutting off the forehead. */
+  object-position: center 25%;
   border-radius: 0;
 }
 
@@ -131,6 +134,7 @@ html[data-shell="catalog-app"] .profile-page-overlay {
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center 25%;
   display: block;
 }
 
@@ -195,7 +199,7 @@ html[data-shell="catalog-app"] .profile-page-overlay {
 
 .profile-page-field-row {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: repeat(3, 1fr);
   gap: 12px;
 }
 
@@ -396,7 +400,7 @@ html[data-shell="catalog-app"] .profile-page-overlay {
   .profile-page-field { margin-bottom: 10px; }
   .profile-page-field:last-child { margin-bottom: 0; }
   .profile-page-field-row {
-    grid-template-columns: 1fr 1fr;
+    grid-template-columns: repeat(3, 1fr);
     gap: 8px;
   }
   .profile-page-input,

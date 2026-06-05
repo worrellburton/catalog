@@ -119,32 +119,11 @@ export default function ProfilePage({ user, onClose, renderSaved }: ProfilePageP
                 <line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" />
               </svg>
             </button>
-            <h1 className="profile-page-title">{tab === 'saved' ? 'Saved' : 'Profile'}</h1>
+            <h1 className="profile-page-title">Profile</h1>
           </div>
         </div>
 
-        {renderSaved && (
-          <div className="profile-page-tabs">
-            <button
-              type="button"
-              className={`profile-page-tab${tab === 'profile' ? ' is-active' : ''}`}
-              onClick={() => setTab('profile')}
-            >
-              Account
-            </button>
-            <button
-              type="button"
-              className={`profile-page-tab${tab === 'saved' ? ' is-active' : ''}`}
-              onClick={() => setTab('saved')}
-            >
-              Saved
-            </button>
-          </div>
-        )}
-
-        {tab === 'saved' && renderSaved ? (
-          <div className="profile-page-saved">{renderSaved()}</div>
-        ) : loading ? (
+        {loading ? (
           <div className="profile-page-loading">
             <div className="profile-page-skeleton profile-page-skeleton-avatar" />
             <div className="profile-page-skeleton profile-page-skeleton-line" />
@@ -260,22 +239,21 @@ export default function ProfilePage({ user, onClose, renderSaved }: ProfilePageP
                     ))}
                   </select>
                 </label>
+                <label className="profile-page-field">
+                  <span className="profile-page-field-label">Age range</span>
+                  <select
+                    className="profile-page-select"
+                    value={ageLabel ?? ''}
+                    onChange={e => setAgeLabel(e.target.value || null)}
+                    disabled={saving}
+                  >
+                    <option value="">Select</option>
+                    {AGE_OPTIONS.map(a => (
+                      <option key={a} value={a}>{a}</option>
+                    ))}
+                  </select>
+                </label>
               </div>
-
-              <label className="profile-page-field">
-                <span className="profile-page-field-label">Age range</span>
-                <select
-                  className="profile-page-select"
-                  value={ageLabel ?? ''}
-                  onChange={e => setAgeLabel(e.target.value || null)}
-                  disabled={saving}
-                >
-                  <option value="">Select</option>
-                  {AGE_OPTIONS.map(a => (
-                    <option key={a} value={a}>{a}</option>
-                  ))}
-                </select>
-              </label>
             </div>
 
             {error && (
