@@ -777,6 +777,49 @@ html[data-shell="catalog-app"] .gen-page {
   color: rgba(255, 255, 255, 0.6);
 }
 
+/* Horizontal style swiper — fixed-width cards scroll sideways instead of
+   wrapping into a grid, so the style picker reads as a swipeable rail. */
+.gen-styleswiper {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 6px;
+  scrollbar-width: none;
+}
+.gen-styleswiper::-webkit-scrollbar { display: none; }
+.gen-styleswiper > .gen-stylecard {
+  flex: 0 0 auto;
+  width: 200px;
+  scroll-snap-align: start;
+}
+
+/* "Direct your own video" — free-text prompt under the style swiper. */
+.gen-direct { margin-top: 20px; }
+.gen-direct-title { font-size: 16px; font-weight: 700; margin: 0 0 4px; }
+.gen-direct-sub {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.5);
+  margin: 0 0 10px;
+}
+.gen-direct-input {
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 14px;
+  color: #fff;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.4;
+  padding: 12px 14px;
+  resize: vertical;
+  min-height: 80px;
+}
+.gen-direct-input:focus { outline: none; border-color: rgba(255, 255, 255, 0.42); }
+.gen-direct-input::placeholder { color: rgba(255, 255, 255, 0.35); }
+
 .gen-review {
   display: flex;
   flex-direction: column;

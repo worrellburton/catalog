@@ -1821,7 +1821,8 @@ export default function GeneratePage() {
         {step === 'style' && (
           <section className="gen-step">
             <h2>Style</h2>
-            <div className="gen-stylegrid">
+            {/* Horizontal swiper of preset styles. */}
+            <div className="gen-styleswiper">
               {STYLE_PRESETS.map(s => (
                 <button
                   key={s.value}
@@ -1833,6 +1834,23 @@ export default function GeneratePage() {
                   <span className="gen-stylecard-blurb">{s.blurb}</span>
                 </button>
               ))}
+            </div>
+
+            {/* Direct your own video — free-text prompt fed straight into the
+                Seedance generation prompt (buildGenerationPrompt → customStyle
+                → "Style direction: …"). The render notifies globally on
+                completion via the existing generation-status toast. */}
+            <div className="gen-direct">
+              <h3 className="gen-direct-title">Or direct your own video</h3>
+              <p className="gen-direct-sub">Describe the vibe, setting, motion — anything you want your video to be like.</p>
+              <textarea
+                className="gen-direct-input"
+                value={customStyle}
+                onChange={e => setCustomStyle(e.target.value)}
+                placeholder="e.g. slow walk through a neon-lit Tokyo alley at night, cinematic, light rain"
+                rows={3}
+                maxLength={500}
+              />
             </div>
           </section>
         )}
