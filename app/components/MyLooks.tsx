@@ -6,6 +6,7 @@ import { useAuth } from '~/hooks/useAuth';
 import type { ManagedLook, LookStatus } from '~/services/manage-looks';
 import { getMyLooks, deleteLook, archiveLook, submitLook, reorderLooks } from '~/services/manage-looks';
 import { getMyCatalogProducts, reorderMyCatalogProducts, type CatalogProduct } from '~/services/catalog-products';
+import { listUserGenerations, isGenerationInFlight, type UserGeneration } from '~/services/user-generations';
 import ParticleBackground from './ParticleBackground';
 import { getMyCatalogAppearance, setMyCatalogAppearance, type CatalogAppearance, DEFAULT_CATALOG_APPEARANCE } from '~/services/catalog-theme';
 import { withTransform } from '~/utils/supabase-image';
@@ -75,6 +76,22 @@ export default function MyLooks({ onClose }: MyLooksProps) {
   // Counts for the hero stat line + tab badges — fetched independently of the
   // active filter so removing the "All" tab didn't break the totals.
   const [counts, setCounts] = useState({ all: 0, live: 0, archived: 0 });
+
+  // Looks currently rendering — surfaced in a dedicated "Rendering" section
+  // that only appears while at least one generation is in flight.
+  const [rendering, setRendering] = useState<UserGeneration[]>([]);
+  useEffect(() => {
+    if (!user?.id) { setRendering([]); return; }
+    let cancelled = false;
+    const load = () => listUserGenerations(user.id!)
+      .then(gens => { if (!cancelled) setRendering(gens.filter(isGenerationInFlight)); })
+      .catch(() => {});
+    load();
+    // Poll while mounted so a freshly-kicked render appears and clears
+    // without leaving the page.
+    const t = window.setInterval(load, 5000);
+    return () => { cancelled = true; window.clearInterval(t); };
+  }, [user?.id]);
 
   // Catalog appearance (particles + background hue) — the creator customises
   // their catalog from the settings gear; applied live to this page.
@@ -596,6 +613,28 @@ export default function MyLooks({ onClose }: MyLooksProps) {
           {catalogProducts.length > 0 && <span className="my-cat-nav-count">{catalogProducts.length}</span>}
         </button>
       </div>
+
+      {/* Rendering section — only present while looks are mid-render.
+          Disappears entirely once nothing is in flight. */}
+      {rendering.length > 0 && (
+        <section className="my-cat-rendering">
+          <div className="my-cat-rendering-head">
+            <span className="my-cat-rendering-title">Rendering on my catalog</span>
+            <span className="my-cat-rendering-count">{rendering.length}</span>
+          </div>
+          <div className="my-cat-rendering-row">
+            {rendering.map(g => (
+              <div key={g.id} className="my-cat-rendering-tile" title={`${g.display_name || g.style || 'New look'} — rendering`}>
+                <div className="my-cat-rendering-shimmer" />
+                <div className="my-cat-rendering-foot">
+                  <span className="my-cat-rendering-name">{g.display_name || g.style || 'New look'}</span>
+                  <span className="my-cat-rendering-bar"><span className="my-cat-rendering-bar-fill" /></span>
+                </div>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {error && <div className="my-cat-error">{error}</div>}
 

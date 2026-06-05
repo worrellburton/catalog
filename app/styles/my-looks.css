@@ -2,6 +2,106 @@
    MY LOOKS - Management Page
    ============================================ */
 
+/* Rendering section — only mounted while looks are mid-render. */
+.my-cat-rendering {
+  margin: 4px 16px 14px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(255,138,64,0.1), rgba(255,77,109,0.08));
+  border: 1px solid rgba(255,138,64,0.28);
+}
+.my-cat-rendering-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.my-cat-rendering-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: 0.01em;
+}
+.my-cat-rendering-count {
+  font-size: 11px;
+  font-weight: 800;
+  color: #1a1a1a;
+  background: linear-gradient(90deg, #ffd75c, #ff8a3d);
+  border-radius: 999px;
+  padding: 1px 8px;
+  min-width: 18px;
+  text-align: center;
+}
+.my-cat-rendering-row {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.my-cat-rendering-row::-webkit-scrollbar { display: none; }
+.my-cat-rendering-tile {
+  position: relative;
+  flex: 0 0 auto;
+  width: 96px;
+  height: 138px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.08);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+.my-cat-rendering-shimmer {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 20%, rgba(255,255,255,0.1) 50%, transparent 80%);
+  background-size: 200% 100%;
+  animation: my-cat-rendering-shimmer 1.4s linear infinite;
+}
+@keyframes my-cat-rendering-shimmer { to { background-position: -200% 0; } }
+.my-cat-rendering-foot {
+  position: relative;
+  z-index: 1;
+  padding: 7px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  background: linear-gradient(to top, rgba(0,0,0,0.72), transparent);
+}
+.my-cat-rendering-name {
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  text-transform: capitalize;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.my-cat-rendering-bar {
+  display: block;
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.18);
+  overflow: hidden;
+}
+.my-cat-rendering-bar-fill {
+  display: block;
+  height: 100%;
+  width: 40%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #ffd75c, #ff8a3d);
+  animation: my-cat-rendering-bar 1.3s ease-in-out infinite;
+}
+@keyframes my-cat-rendering-bar {
+  0%   { transform: translateX(-110%); }
+  100% { transform: translateX(360%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .my-cat-rendering-shimmer, .my-cat-rendering-bar-fill { animation: none; }
+  .my-cat-rendering-bar-fill { width: 100%; }
+}
+
 /* Native app shell: push content below status bar.
    --shell-sb is injected by the Flutter shell at AT_DOCUMENT_START.
    No Flutter back-bar exists so only the status bar height is needed. */

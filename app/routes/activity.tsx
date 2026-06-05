@@ -37,6 +37,7 @@ import {
   type CommentMedia,
 } from '~/services/activity';
 import type { CommentTargetType } from '~/services/comments';
+import { listUserGenerations, isGenerationInFlight, type UserGeneration } from '~/services/user-generations';
 import CountUp from '~/components/CountUp';
 import SiteParticleHost from '~/components/SiteParticleHost';
 import ConsumerAvatar from '~/components/ConsumerAvatar';
@@ -181,6 +182,9 @@ export default function ActivityRoute() {
   } | null>(null);
   const [recent, setRecent] = useState<ActivityRecentEvent[] | null>(null);
   const [commentActivity, setCommentActivity] = useState<CommentActivityItem[] | null>(null);
+  // The shopper's own recently-created looks (generations). Drives the
+  // "Your looks" rail at the top — in-flight rows show a rendering bar.
+  const [myGenerations, setMyGenerations] = useState<UserGeneration[] | null>(null);
 
   // Mark the activity pill as "seen" when this route opens — same
   // localStorage key the pill reads on mount.
@@ -199,8 +203,22 @@ export default function ActivityRoute() {
     getMyShopperSelf({ typeLimit: 6, brandLimit: 6 }).then(v => { if (!cancelled) setShopperSelf(v); });
     getMyRecentEvents(12).then(v => { if (!cancelled) setRecent(v); });
     getMyCommentActivity(30).then(v => { if (!cancelled) setCommentActivity(v); });
+    listUserGenerations(user.id).then(v => { if (!cancelled) setMyGenerations(v); });
     return () => { cancelled = true; };
   }, [user?.id]);
+
+  // While any generation is mid-render, poll so the rendering bar clears
+  // and the finished look pops in without a manual refresh. Stops polling
+  // once nothing is in flight.
+  useEffect(() => {
+    if (!user?.id) return;
+    const anyInFlight = (myGenerations ?? []).some(isGenerationInFlight);
+    if (!anyInFlight) return;
+    const t = window.setInterval(() => {
+      listUserGenerations(user.id).then(setMyGenerations).catch(() => {});
+    }, 5000);
+    return () => window.clearInterval(t);
+  }, [user?.id, myGenerations]);
 
   // Realtime: on every catalog:activity-bump (dispatched by
   // ActivityRealtimeToasts whenever a new event arrives), refresh the
@@ -264,6 +282,9 @@ export default function ActivityRoute() {
             </span>
           </div>
         )}
+
+        {/* ── Your looks — recent generations + rendering progress ──── */}
+        <YourLooksRail generations={myGenerations} />
 
         {/* ── Who saw your looks — named ledger ────────────────────── */}
         <RecentLedger events={recent} />
@@ -462,6 +483,66 @@ function StatTile({
           +<CountUp value={weekly} duration={900} /> this week
         </div>
       )}
+    </div>
+  );
+}
+
+// "Your looks" rail — the shopper's most recent generations. In-flight
+// rows render a left-to-right progress sweep + "Rendering"; finished rows
+// autoplay the clip; failed rows read as such.
+function YourLooksRail({ generations }: { generations: UserGeneration[] | null }) {
+  if (!generations || generations.length === 0) return null;
+  const recent = generations.slice(0, 10);
+  const renderingCount = recent.filter(isGenerationInFlight).length;
+  return (
+    <section className="ap-section">
+      <div className="ap-section-head">
+        <h2 className="ap-section-title">Your looks</h2>
+        <span className="ap-section-sub">
+          {renderingCount > 0 ? `${renderingCount} rendering now` : 'Recently created'}
+        </span>
+      </div>
+      <div className="ap-gens-rail">
+        {recent.map(g => <GenTile key={g.id} gen={g} />)}
+      </div>
+    </section>
+  );
+}
+
+function GenTile({ gen }: { gen: UserGeneration }) {
+  const inFlight = isGenerationInFlight(gen);
+  const failed = gen.status === 'failed' || (!inFlight && gen.status !== 'done');
+  const label = gen.display_name || gen.style || 'New look';
+  if (inFlight) {
+    return (
+      <div className="ap-gen ap-gen--rendering" title={`${label} — rendering`}>
+        <div className="ap-gen-shimmer" />
+        <div className="ap-gen-foot">
+          <span className="ap-gen-name">{label}</span>
+          <span className="ap-gen-status">Rendering…</span>
+          <span className="ap-gen-bar"><span className="ap-gen-bar-fill" /></span>
+        </div>
+      </div>
+    );
+  }
+  if (failed) {
+    return (
+      <div className="ap-gen ap-gen--failed" title={`${label} — failed`}>
+        <div className="ap-gen-foot">
+          <span className="ap-gen-name">{label}</span>
+          <span className="ap-gen-status">Failed</span>
+        </div>
+      </div>
+    );
+  }
+  return (
+    <div className="ap-gen ap-gen--done" title={label}>
+      {gen.video_url
+        ? <video className="ap-gen-media" src={gen.video_url} muted loop autoPlay playsInline preload="metadata" />
+        : <div className="ap-gen-media ap-gen-media--blank" />}
+      <div className="ap-gen-foot">
+        <span className="ap-gen-name">{label}</span>
+      </div>
     </div>
   );
 }
