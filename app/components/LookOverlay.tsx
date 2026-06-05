@@ -983,7 +983,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                   {commentsEnabled && commentSlug && onOpenComments && (
                     <button
                       type="button"
-                      className="look-comments-labeled look-comments-glow"
+                      className="look-comments-labeled"
                       onClick={() => onOpenComments('look', commentSlug)}
                       aria-label="Comments"
                     >

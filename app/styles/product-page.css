@@ -940,6 +940,16 @@
   justify-content: center;
 }
 
+/* Comments and View more info each take their OWN full-width row, below the
+   Shop / Add-to-a-look pair:
+     Shop      · Add to a look
+     Comments            (full row)
+     View more info      (full row)  */
+.pd-actions > .pd-comments-btn,
+.pd-actions > .pd-more-info-btn {
+  flex-basis: 100%;
+}
+
 /* The View more info toggle, now a member of the action group, matches the
    ghost siblings exactly (Add to a look / Comments) so the set reads as one
    family. The label + chevron stay centered like the others. */
