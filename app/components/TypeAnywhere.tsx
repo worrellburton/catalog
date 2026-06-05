@@ -47,6 +47,14 @@ function persistHintDismissed(): void {
   try { window.localStorage.setItem(TYPE_HINT_DISMISSED_KEY, '1'); } catch { /* quota */ }
 }
 
+interface Suggestion {
+  text: string;
+  /** Present when the suggestion is a creator — drives the avatar +
+   *  routing straight to their catalog instead of a search. */
+  handle?: string;
+  avatar?: string;
+}
+
 export default function TypeAnywhere() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -64,19 +72,27 @@ export default function TypeAnywhere() {
   const rotatingHint = PLACEHOLDER_HINTS[hintIndex];
 
   // Type-ahead suggestion pool (loaded once) + matches for the current text.
-  const [allSuggestions, setAllSuggestions] = useState<string[]>([]);
+  // Structured so creator suggestions can render an avatar and route to
+  // the creator's catalog, while plain search terms run a catalog search.
+  const [allSuggestions, setAllSuggestions] = useState<Suggestion[]>([]);
   useEffect(() => {
     let cancelled = false;
     Promise.all([getSearchSuggestions(), getCreators()])
       .then(([sugg, creators]) => {
         if (cancelled) return;
-        const creatorNames = Object.values(creators)
-          .map(c => c.displayName || c.name || '')
-          .filter(Boolean);
-        const seen = new Set(sugg.map(s => s.toLowerCase()));
-        const merged = [...sugg];
-        for (const n of creatorNames) {
-          if (!seen.has(n.toLowerCase())) { merged.push(n); seen.add(n.toLowerCase()); }
+        const seen = new Set<string>();
+        const merged: Suggestion[] = [];
+        for (const s of sugg) {
+          const sl = s.toLowerCase();
+          if (!seen.has(sl)) { merged.push({ text: s }); seen.add(sl); }
+        }
+        for (const [handle, c] of Object.entries(creators)) {
+          const name = c.displayName || c.name || handle;
+          const sl = name.toLowerCase();
+          if (name && !seen.has(sl)) {
+            merged.push({ text: name, handle, avatar: c.avatar || undefined });
+            seen.add(sl);
+          }
         }
         setAllSuggestions(merged);
       })
@@ -87,10 +103,10 @@ export default function TypeAnywhere() {
     const q = text.trim().toLowerCase();
     if (!q) return [];
     const seen = new Set<string>();
-    const starts: string[] = [];
-    const contains: string[] = [];
+    const starts: Suggestion[] = [];
+    const contains: Suggestion[] = [];
     for (const s of allSuggestions) {
-      const sl = s.toLowerCase();
+      const sl = s.text.toLowerCase();
       if (sl === q || seen.has(sl)) continue;
       if (sl.startsWith(q)) { starts.push(s); seen.add(sl); }
       else if (sl.includes(q)) { contains.push(s); seen.add(sl); }
@@ -217,12 +233,44 @@ export default function TypeAnywhere() {
         {focused && !!text.trim() && !filtersOpen && (
           <div className="ai-bar-autocomplete" onMouseDown={(e) => e.preventDefault()}>
             {suggestionMatches.map(s => (
-              <button key={s} type="button" className="ai-bar-ac-item" onClick={() => submit(s)}>
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                  <circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-                </svg>
-                <span className="ai-bar-ac-text">{s}</span>
-              </button>
+              s.handle ? (
+                // Creator suggestion — avatar + name, taps straight into
+                // their catalog (/c/<slug>) rather than running a search.
+                <button
+                  key={`c:${s.handle}`}
+                  type="button"
+                  className="ai-bar-ac-item ai-bar-ac-item--creator"
+                  onClick={() => {
+                    setFocused(false);
+                    inputRef.current?.blur();
+                    // Same in-app path as a creator-chip tap: _index sets
+                    // creatorFilter, which opens the catalog + syncs /c/<slug>.
+                    try { window.dispatchEvent(new CustomEvent('catalog:open-creator', { detail: { handle: s.handle } })); } catch { /* no-op */ }
+                  }}
+                >
+                  {s.avatar ? (
+                    <img
+                      src={s.avatar}
+                      alt=""
+                      style={{ width: 22, height: 22, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
+                    />
+                  ) : (
+                    <span
+                      aria-hidden="true"
+                      style={{ width: 22, height: 22, borderRadius: '50%', flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg,#3f3f46,#27272a)', color: '#d4d4d8', fontSize: 11, fontWeight: 700 }}
+                    >{s.text.charAt(0).toUpperCase()}</span>
+                  )}
+                  <span className="ai-bar-ac-text">{s.text}</span>
+                  <span style={{ marginLeft: 'auto', fontSize: 10, opacity: 0.5, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Creator</span>
+                </button>
+              ) : (
+                <button key={`t:${s.text}`} type="button" className="ai-bar-ac-item" onClick={() => submit(s.text)}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+                  </svg>
+                  <span className="ai-bar-ac-text">{s.text}</span>
+                </button>
+              )
             ))}
             <button type="button" className="ai-bar-ac-item ai-bar-ac-item--run" onClick={() => submit(text)}>
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">

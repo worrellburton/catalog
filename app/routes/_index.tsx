@@ -598,6 +598,20 @@ export default function Home() {
     setCreatorFilter(creatorName);
   }, []);
 
+  // The global TypeAnywhere search bar dispatches this when a creator
+  // autocomplete row is tapped — open that creator's catalog in-app
+  // (same path as a creator-chip tap, so /c/<slug> syncs too).
+  useEffect(() => {
+    const onOpenCreatorEvent = (e: Event) => {
+      const handle = (e as CustomEvent<{ handle?: string }>).detail?.handle;
+      if (!handle) return;
+      setView('app');
+      handleOpenCreator(handle);
+    };
+    window.addEventListener('catalog:open-creator', onOpenCreatorEvent);
+    return () => window.removeEventListener('catalog:open-creator', onOpenCreatorEvent);
+  }, [handleOpenCreator, setView]);
+
   const handleCloseCreator = useCallback(() => {
     // Prefer history.back() when we landed here via the /c/<slug>
     // push so the close X and the browser back button take the same
