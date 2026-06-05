@@ -267,7 +267,9 @@ header > .pending-look-pill {
    Hidden on desktop — the centered toast stack still handles activity
    there, where there's room for it. */
 .header-activity-pill {
-  display: none;
+  /* Shown on desktop AND mobile — the Activity button is a primary entry
+     point on every viewport now. */
+  display: inline-flex;
   align-items: center;
   justify-content: center;
   position: relative;
@@ -359,11 +361,6 @@ header > .pending-look-pill {
 .light-mode .header-activity-pill:hover { background: rgba(0, 0, 0, 0.08); color: #0f172a; }
 .light-mode .header-activity-pill-count { background: #16a34a; color: #fff; box-shadow: 0 0 0 2px #fff; }
 
-@media (max-width: 768px) {
-  /* Show on mobile; centered .activity-toasts is hidden there (see
-     activity.css), so this pill is the activity surface on phones. */
-  .header-activity-pill { display: inline-flex; }
-}
 
 .logo {
   height: 36px;
