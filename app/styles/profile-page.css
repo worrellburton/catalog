@@ -437,3 +437,37 @@ html[data-shell="catalog-app"] .profile-page-overlay {
 .profile-page-saved { padding: 4px 16px 24px; }
 
 .light-mode .profile-page-tab { border-color: rgba(0,0,0,0.1); color: rgba(0,0,0,0.6); }
+
+/* ── Become-a-creator section ────────────────────────────────────── */
+.profile-page-creator-btn {
+  width: 100%;
+  padding: 12px;
+  border: none;
+  border-radius: 12px;
+  background: #fff;
+  color: #0a0a0a;
+  font-size: 15px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-top: 4px;
+}
+.profile-page-creator-btn:hover:not(:disabled) { background: #e5e5e5; }
+.profile-page-creator-btn:disabled { opacity: 0.35; cursor: default; }
+.profile-page-creator-status {
+  margin: 4px 0 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  font-size: 14px;
+  line-height: 1.5;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.85);
+}
+.profile-page-creator-status--approved {
+  background: rgba(34, 197, 94, 0.12);
+  border-color: rgba(34, 197, 94, 0.35);
+  color: #86efac;
+}
+.profile-page-creator-status--denied { color: rgba(255, 255, 255, 0.6); }

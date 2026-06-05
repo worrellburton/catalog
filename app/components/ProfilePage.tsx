@@ -6,6 +6,7 @@ import { getUserHeightAge, updateUserHeightAge, updateUserFullName } from '~/ser
 import { getUserGender, updateUserGender, type UserGender } from '~/services/genders';
 import { refreshAuthUser } from '~/hooks/useAuth';
 import { supabase } from '~/utils/supabase';
+import BecomeCreatorSection from './BecomeCreatorSection';
 
 interface ProfilePageProps {
   user: {
@@ -193,6 +194,9 @@ export default function ProfilePage({ user, onClose, renderSaved }: ProfilePageP
                 </div>
               )}
             </div>
+
+            {/* Only shoppers (not creators/admins) can apply to create. */}
+            {(!user.role || user.role === 'shopper') && <BecomeCreatorSection />}
 
             <div className="profile-page-section">
               <h2 className="profile-page-section-title">Body profile</h2>
