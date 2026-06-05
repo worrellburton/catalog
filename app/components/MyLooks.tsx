@@ -399,6 +399,10 @@ export default function MyLooks({ onClose }: MyLooksProps) {
   // ── Hero metadata ─────────────────────────────────────────────────
   const displayName = user?.displayName || user?.email?.split('@')[0] || 'My Catalog';
   const avatarUrl = user?.avatarUrl;
+  // Fall back to the initial if the avatar URL fails to load (broken/stale
+  // storage object, OAuth URL hiccup) instead of rendering an empty ring.
+  const [avatarFailed, setAvatarFailed] = useState(false);
+  useEffect(() => { setAvatarFailed(false); }, [avatarUrl]);
   const initial = (displayName || 'M').trim().charAt(0).toUpperCase() || 'M';
   const myCreatorHandle = user?.id ? `user:${user.id}` : '';
 
@@ -589,8 +593,14 @@ export default function MyLooks({ onClose }: MyLooksProps) {
         onClick={() => window.dispatchEvent(new CustomEvent('catalog:open-profile'))}
         aria-label="Edit your catalog identity"
       >
-        {avatarUrl ? (
-          <img className="my-cat-hero-avatar" src={avatarUrl} alt={displayName} />
+        {avatarUrl && !avatarFailed ? (
+          <img
+            className="my-cat-hero-avatar"
+            src={avatarUrl}
+            alt={displayName}
+            referrerPolicy="no-referrer"
+            onError={() => setAvatarFailed(true)}
+          />
         ) : (
           <div className="my-cat-hero-avatar my-cat-hero-avatar--initial">{initial}</div>
         )}

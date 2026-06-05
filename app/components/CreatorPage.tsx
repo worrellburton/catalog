@@ -570,7 +570,7 @@ export default function CreatorPage({
             </span>
           </div>
         ) : avatarUrl ? (
-          <img className="creator-hero-avatar" src={avatarUrl} alt={displayName} />
+          <img className="creator-hero-avatar" src={avatarUrl} alt={displayName} referrerPolicy="no-referrer" />
         ) : (
           <div className="creator-hero-avatar creator-hero-avatar--initial">{initial}</div>
         )}
