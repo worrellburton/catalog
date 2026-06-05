@@ -295,7 +295,8 @@ export async function removeProductFromLook(lookId: string, productId: string): 
 export async function uploadLookMedia(
   lookId: string,
   file: File,
-  type: 'photo' | 'video'
+  type: 'photo' | 'video',
+  opts?: { posterDataUrl?: string }
 ): Promise<{ storagePath: string; publicUrl: string }> {
   if (!supabase) throw new Error('Supabase not configured');
 
@@ -347,7 +348,22 @@ export async function uploadLookMedia(
     record.thumbnail_url = publicUrl;
   } else {
     record.url = publicUrl;
-    record.poster_url = publicUrl; // can be updated later with actual poster
+    // Use the trimmer's first-frame poster when provided; otherwise fall back
+    // to the video URL (server may still generate one).
+    let posterUrl = publicUrl;
+    if (opts?.posterDataUrl) {
+      try {
+        const blob = await (await fetch(opts.posterDataUrl)).blob();
+        const posterPath = `${userId}/${lookId}/posters/${crypto.randomUUID()}.jpg`;
+        const { error: pErr } = await supabase.storage
+          .from('look-media')
+          .upload(posterPath, blob, { contentType: 'image/jpeg', upsert: false });
+        if (!pErr) {
+          posterUrl = supabase.storage.from('look-media').getPublicUrl(posterPath).data.publicUrl;
+        }
+      } catch { /* keep the video-url fallback */ }
+    }
+    record.poster_url = posterUrl;
   }
 
   const { error: dbError } = await supabase.from(table).insert(record);
