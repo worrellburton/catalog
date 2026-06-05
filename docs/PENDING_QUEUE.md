@@ -249,7 +249,14 @@ STILL TODO (all are large rebuilds / fragile / need live verification):
 - **N** analytics rebuild + animated thin-line graphs (header overlap)
 - **T** video upload + in/out trimmer
 - **E** comments → TikTok bottom drawer
-- **M** appearance settings (particles + hue) — EXTEND the existing theme
+- **M** appearance settings — CREATOR-FACING DONE (settings gear in My
+  Catalog: particles toggle + hue slider, saved to creators.catalog_particles
+  / catalog_hue, applied live to My Catalog). REMAINING: apply on the consumer
+  CreatorPage — read by USER ID for user creators (My Catalog saves by
+  creators.id = auth.uid()), by handle for seed creators; use
+  getCreatorAppearance (add a by-id variant) + the same particle/hue layering
+  as MyLooks. Original note below ↓
+- **M (orig note)** appearance settings (particles + hue) — EXTEND the existing theme
   system, don't rebuild: `app/services/catalog-theme.ts` already does
   light/dark via `creators.catalog_theme` (migration 20260601000011) with
   getCreatorTheme(handle)/setMyCatalogTheme. Add `catalog_particles` +
