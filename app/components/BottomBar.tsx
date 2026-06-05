@@ -6,7 +6,7 @@ import { useAuth } from '~/hooks/useAuth';
 import { useShopperBody } from '~/hooks/useShopperBody';
 import { useSearchBeam } from '~/hooks/useSearchBeam';
 import FilterPanel, { ActiveFilters, getEmptyFilters, hasActiveFilters } from './FilterPanel';
-import { getSearchSuggestions } from '~/services/looks';
+import { getSearchSuggestions, getCreators } from '~/services/looks';
 
 interface BottomBarProps {
   activeFilter: 'all' | 'men' | 'women';
@@ -261,16 +261,30 @@ function BottomBar({
     emitSearch(val.trim().toLowerCase());
   }, [emitSearch]);
 
-  // Load the suggestion pool once (cached at the service layer).
+  // Load the suggestion pool once: curated catalog suggestions + creator
+  // names, so typing a creator (e.g. "robert bu") autocompletes them too.
   useEffect(() => {
     let cancelled = false;
-    getSearchSuggestions()
-      .then(s => { if (!cancelled) setAllSuggestions(s); })
+    Promise.all([getSearchSuggestions(), getCreators()])
+      .then(([sugg, creators]) => {
+        if (cancelled) return;
+        const creatorNames = Object.values(creators)
+          .map(c => c.displayName || c.name || '')
+          .filter(Boolean);
+        // Dedupe against the curated list (case-insensitive).
+        const seen = new Set(sugg.map(s => s.toLowerCase()));
+        const merged = [...sugg];
+        for (const n of creatorNames) {
+          if (!seen.has(n.toLowerCase())) { merged.push(n); seen.add(n.toLowerCase()); }
+        }
+        setAllSuggestions(merged);
+      })
       .catch(() => {});
     return () => { cancelled = true; };
   }, []);
 
-  // Type-ahead matches: prefix hits first, then substring, deduped + capped.
+  // Type-ahead matches: only things that actually match what's typed
+  // (prefix hits first, then substring) — never unrelated "ideas".
   const suggestionMatches = useMemo(() => {
     const q = localSearch.trim().toLowerCase();
     if (!q) return [];
@@ -285,11 +299,6 @@ function BottomBar({
     }
     return [...starts, ...contains].slice(0, 8);
   }, [localSearch, allSuggestions]);
-
-  // When the typed text doesn't match any known catalog, still surface
-  // ideas (popular suggestions) so the list is never empty as you type.
-  const ideaSuggestions = useMemo(() => allSuggestions.slice(0, 14), [allSuggestions]);
-  const autocompleteList = suggestionMatches.length > 0 ? suggestionMatches : ideaSuggestions;
 
   // Listen for the 'catalog:close-search' event _index.tsx fires
   // when the Catalog logo is tapped. The logo handler can't reach
@@ -403,10 +412,7 @@ function BottomBar({
                 </svg>
                 <span className="bb-autocomplete-text">Make a catalog for “{localSearch.trim()}”</span>
               </button>
-              {suggestionMatches.length === 0 && (
-                <span className="bb-autocomplete-label">Ideas</span>
-              )}
-              {autocompleteList.map(s => (
+              {suggestionMatches.map(s => (
                 <button key={s} className="bb-autocomplete-item" onClick={() => pickCatalog(s)}>
                   <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                     <circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" />

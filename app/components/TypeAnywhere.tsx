@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useNavigate, useLocation } from '@remix-run/react';
 import FilterPanel, { ActiveFilters, getEmptyFilters, hasActiveFilters } from './FilterPanel';
 import PopularCatalogPills from './PopularCatalogPills';
-import { getSearchSuggestions } from '~/services/looks';
+import { getSearchSuggestions, getCreators } from '~/services/looks';
 
 /* Desktop-only AI-style search bar.
  *
@@ -67,8 +67,19 @@ export default function TypeAnywhere() {
   const [allSuggestions, setAllSuggestions] = useState<string[]>([]);
   useEffect(() => {
     let cancelled = false;
-    getSearchSuggestions()
-      .then(s => { if (!cancelled) setAllSuggestions(s); })
+    Promise.all([getSearchSuggestions(), getCreators()])
+      .then(([sugg, creators]) => {
+        if (cancelled) return;
+        const creatorNames = Object.values(creators)
+          .map(c => c.displayName || c.name || '')
+          .filter(Boolean);
+        const seen = new Set(sugg.map(s => s.toLowerCase()));
+        const merged = [...sugg];
+        for (const n of creatorNames) {
+          if (!seen.has(n.toLowerCase())) { merged.push(n); seen.add(n.toLowerCase()); }
+        }
+        setAllSuggestions(merged);
+      })
       .catch(() => {});
     return () => { cancelled = true; };
   }, []);
