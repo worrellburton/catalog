@@ -376,17 +376,15 @@
    keeps its centered geometry intact. */
 /* Feed-peek: the home feed noses up under the hero so a strip of the
    first cards is visible above the fold, reading as "there's more
-   below". We previously pulled it up by -7vh / -3.5svh, but that
-   distance covered the "Scroll to see most popular" cue near the
-   bottom of the hero. Dialled back to zero on desktop and +2svh
-   breathing room on mobile so the scroll cue + the swiping-finger
-   glyph both stay fully visible above the peek. */
+   below". Pulled up a touch on mobile so a sliver of the first row
+   peeks at the bottom of the first viewport (per request) while the
+   scroll cue + finger glyph stay readable above it. */
 .app-root.home-hero:not(.hero-scrolled) .home-feed-wrap {
   margin-top: 0;
 }
 @media (max-width: 768px) {
   .app-root.home-hero:not(.hero-scrolled) .home-feed-wrap {
-    margin-top: 2svh;
+    margin-top: -6svh;
   }
 }
 
