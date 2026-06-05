@@ -155,6 +155,40 @@ automatically lands in the creator's My Catalog with status **`'archived'`
 - Verify it doesn't double-create on later explicit publish (the
   find-or-promote logic keys off `source_generation_id`).
 
+### P. Home hero — let the feed peek higher
+On the home hero ("Make a catalog for anything"), start the feed a touch
+higher so the top of the product feed is just visible at the bottom of the
+first viewport (bigger peek). FRAGILE: the hero centering is heavily tuned
+(`app/styles/home-hero.css` — `.ai-bar-wrap` bottom %, `.sfh` padding,
+`--hero-scroll-progress`). Adjust the hero band height / feed offset
+carefully; don't reintroduce the transform-centering bugs called out in
+CLAUDE.md.
+
+### Q. Generate / Pick products — horizontal scroll breaks after brand pick
+On the "Pick your products" step, each category row scrolls horizontally —
+but after you tap a brand chip (James Perse, Kith, …) the product row can no
+longer be scrolled horizontally. Fix so the filtered row stays
+horizontally scrollable. Likely a re-render/`touch-action`/overflow issue on
+the row container after the brand filter applies.
+- File: `app/routes/generate.tsx` (`CATEGORY_GROUPS.map`, the per-row brand
+  chips + product scroller, ~line 1714+).
+
+### R. Generate / Pick products — collapsible categories + an "All" row
+- Make Hat / Top / Bottoms / Shoes / Accessories / Objects rows
+  **collapsible**, defaulting to **collapsed**.
+- Add a new row at the very top labelled **"All"** that shows ALL products
+  and lets the user **search across all products and brands** in one place.
+- File: `app/routes/generate.tsx` (products step).
+
+### S. Per-creator unseen-look badge (stories row)
+When a creator you can see has uploaded look(s) you **haven't seen yet**,
+show a count badge on their profile circle in the top stories row: a
+**number in a circle that spins and glows**, indicating how many unseen
+looks you have from them. Ties into the seen/unseen tracking (see Feed
+ordering below — same per-user seen data).
+- Files: the stories/creators row component (top of consumer feed), the
+  seen-tracking service.
+
 ---
 
 ## Feed ordering algorithm (DETAILED SPEC — investigate + implement)
