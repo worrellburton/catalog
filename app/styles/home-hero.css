@@ -850,7 +850,9 @@
     overflow-y: hidden;
     -webkit-overflow-scrolling: touch;
     scrollbar-width: none;
-    padding: 2px 16px;
+    /* Extra top padding so the unseen-count badge (which sits above the
+       avatar) isn't clipped by overflow-y:hidden. */
+    padding: 9px 16px 3px;
     box-sizing: border-box;
     /* Quick fade-in. The wipe / arc / per-story bloom variants all came
        and went; the user landed on "just fade in quickly". 450ms
@@ -956,7 +958,8 @@
     width: auto;
     max-width: min(440px, 36vw);
     gap: 8px;
-    padding: 0;
+    /* Top padding so the unseen badge isn't clipped by the scroll box. */
+    padding: 7px 0 3px;
     overflow-x: auto;
     scrollbar-width: none;
   }
