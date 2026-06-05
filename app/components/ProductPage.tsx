@@ -10,7 +10,7 @@ import { useTrailVideo, useTrailVideoManager } from '~/components/TrailVideoHost
 import { useInViewport } from '~/hooks/useInViewport';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
 import { trackAdClick, prefetchSimilarProducts, getSimilarProductsDiagnostics, type ProductAd } from '~/services/product-creative';
-import SimilarDebugModal, { buildProductSimilarReport, buildGraphPairsReport, type SimilarDebugReport } from '~/components/SimilarDebugModal';
+import SimilarDebugModal, { buildProductSimilarReport, buildGraphPairsReport, buildAffinityReport, type SimilarDebugReport } from '~/components/SimilarDebugModal';
 import { getProductDetails, type ProductDetails } from '~/services/product-details';
 import ProductMeasurementsDiagram from '~/components/ProductMeasurementsDiagram';
 import ProductSuggestionChips from '~/components/ProductSuggestionChips';
@@ -21,6 +21,10 @@ import { type GraphPair } from '~/services/graph-pairs';
 import { useAuth } from '~/hooks/useAuth';
 import { useShopperBody } from '~/hooks/useShopperBody';
 import { usePageSections, isSectionEnabled, getSectionLimit, isSectionInfinite } from '~/hooks/usePageSections';
+import { useUserAffinity } from '~/hooks/useUserAffinity';
+import { useDynamicSectionTitle } from '~/hooks/useDynamicSectionTitle';
+import { useRecentProducts } from '~/hooks/useRecentProducts';
+import { getRecentSearches } from '~/services/recent-searches';
 import SizeMatchBadge from '~/components/SizeMatchBadge';
 import { director } from '~/services/video-playback-director';
 import ParticleBackground from '~/components/ParticleBackground';
@@ -570,6 +574,13 @@ export default function ProductPage({
   // lets an admin flip it back to a bounded grid using popularFallback.
   const ymalInfinite  = isSectionInfinite(productSections, 'you-might-also-like');
 
+  // Dynamic, joke-y heading for the personalized "you might also like" feed.
+  // Re-rolls per product open (regenKey) and leans on the shopper's category
+  // affinity; falls back to "You might also like" when there's no signal yet.
+  const affinity = useUserAffinity();
+  const { recentProducts } = useRecentProducts();
+  const ymalTitle = useDynamicSectionTitle(affinity, `${product.brand}|${product.name}`);
+
   // "Try it on" → /generate with the current product pre-picked.
   // The /generate route looks up the supabase products row by url
   // and prepends it to the picker's selection.
@@ -687,6 +698,17 @@ export default function ProductPage({
     });
     setSimDebug({ open: true, loading: false, report });
   }, [graphPairs, product.name, product.brand]);
+
+  // "Why this?" for the personalized "You might also like" feed. Built
+  // synchronously from the live on-device affinity signal (no fetch).
+  const openAffinityDebug = useCallback(() => {
+    const report = buildAffinityReport(affinity, {
+      heading: ymalTitle,
+      recentProductCount: recentProducts.length,
+      recentSearchCount: getRecentSearches().length,
+    });
+    setSimDebug({ open: true, loading: false, report });
+  }, [affinity, ymalTitle, recentProducts.length]);
 
   // "Popular" — shown only when moreLikeThis is empty.
   // Filtered to the same product type so we never show unrelated items.
@@ -1551,7 +1573,20 @@ export default function ProductPage({
         {ymalEnabled && (
           ymalInfinite ? (
             <section className="pd-similar-feed">
-              <h2 className="pd-feed-title">You might also like</h2>
+              <h2 className="pd-feed-title">
+                {ymalTitle}
+                {isSuperAdmin && (
+                  <button
+                    type="button"
+                    className="sim-debug-btn"
+                    onClick={openAffinityDebug}
+                    aria-label="Why this? (super-admin debug)"
+                    title="Why this? (super-admin debug)"
+                  >
+                    ⓘ why
+                  </button>
+                )}
+              </h2>
               <ContinuousFeed
                 nested
                 scrollRoot={scrollerEl}
@@ -1571,7 +1606,20 @@ export default function ProductPage({
             </section>
           ) : (popularFallback && popularFallback.length > 0) ? (
             <section className="pd-similar-feed">
-              <h2 className="pd-feed-title">You might also like</h2>
+              <h2 className="pd-feed-title">
+                {ymalTitle}
+                {isSuperAdmin && (
+                  <button
+                    type="button"
+                    className="sim-debug-btn"
+                    onClick={openAffinityDebug}
+                    aria-label="Why this? (super-admin debug)"
+                    title="Why this? (super-admin debug)"
+                  >
+                    ⓘ why
+                  </button>
+                )}
+              </h2>
               <div className="pd-similar-grid">
                 {fillToExact(popularFallback, ymalLimit).map((c, i) => (
                   <CreativeCard
