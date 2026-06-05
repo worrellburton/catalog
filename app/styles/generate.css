@@ -2141,6 +2141,33 @@ html[data-shell="catalog-app"] .gen-page {
   color: rgba(255, 255, 255, 0.55);
   flex-shrink: 0;
 }
+/* Collapse toggle on the row head (categories default to collapsed). */
+.gen-cat-row-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: inherit;
+  font-family: inherit;
+}
+.gen-cat-row-chevron {
+  opacity: 0.5;
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+.gen-cat-row-chevron.is-open { transform: rotate(90deg); }
+.gen-cat-row-count {
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  padding: 1px 7px;
+}
 
 .gen-cat-row-search {
   flex: 1;

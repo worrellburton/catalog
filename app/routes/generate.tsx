@@ -429,6 +429,14 @@ export default function GeneratePage() {
     setCategoryBrandFilters(prev => ({ ...prev, [label]: brand }));
   }, []);
 
+  // Per-category collapse. Categories default to COLLAPSED — the picker
+  // opens compact and the user expands the rows they care about (a typed
+  // search auto-expands its row).
+  const [expandedCats, setExpandedCats] = useState<Record<string, boolean>>({});
+  const toggleCat = useCallback((label: string) => {
+    setExpandedCats(prev => ({ ...prev, [label]: !prev[label] }));
+  }, []);
+
   // Slice productResults into the 6 display buckets. Each bucket also
   // applies its own per-row search query (name/brand contains) AND its
   // active brand-chip filter. Memoized so re-renders that don't change
@@ -1700,10 +1708,21 @@ export default function GeneratePage() {
                 const rowQuery = categoryQueries[group.label] || '';
                 const rowBrands = brandsByCategory[group.label] || [];
                 const activeBrand = categoryBrandFilters[group.label] || null;
+                // Collapsed by default; a typed query force-expands the row.
+                const expanded = (expandedCats[group.label] ?? false) || !!rowQuery;
                 return (
-                  <div key={group.label} className="gen-cat-row">
+                  <div key={group.label} className={`gen-cat-row${expanded ? ' is-expanded' : ''}`}>
                     <div className="gen-cat-row-head">
-                      <span className="gen-cat-row-label">{group.label}</span>
+                      <button
+                        type="button"
+                        className="gen-cat-row-toggle"
+                        onClick={() => toggleCat(group.label)}
+                        aria-expanded={expanded}
+                      >
+                        <svg className={`gen-cat-row-chevron${expanded ? ' is-open' : ''}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                        <span className="gen-cat-row-label">{group.label}</span>
+                        {rowProducts.length > 0 && <span className="gen-cat-row-count">{rowProducts.length}</span>}
+                      </button>
                       <input
                         type="search"
                         className="gen-cat-row-search"
@@ -1716,7 +1735,7 @@ export default function GeneratePage() {
                     {/* Brand chips — top 4 brands present in this
                         category. Tap one to filter the row to that
                         brand; tap the active chip to clear it. */}
-                    {rowBrands.length > 0 && (
+                    {expanded && rowBrands.length > 0 && (
                       <div className="gen-cat-row-brands" role="tablist" aria-label={`Filter ${group.label} by brand`}>
                         {rowBrands.map(b => (
                           <button
@@ -1730,6 +1749,7 @@ export default function GeneratePage() {
                         ))}
                       </div>
                     )}
+                    {expanded && (
                     <div className="gen-cat-row-scroll" key={`${group.label}-${activeBrand || 'all'}-${rowQuery}`}>
                       {rowProducts.length === 0 ? (
                         <div className="gen-cat-row-empty">
@@ -1757,6 +1777,7 @@ export default function GeneratePage() {
                         })
                       )}
                     </div>
+                    )}
                   </div>
                 );
               })
