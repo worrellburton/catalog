@@ -392,9 +392,10 @@
    when the scraper hasn't backfilled the row yet. */
 /* "View more info" dropdown — wraps Size & fit, "Best for", "Popular in". */
 .pd-more-info {
-  margin-top: 24px;
-  padding-top: 20px;
-  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  /* Sits flush under the Comments action now — the dividing line moved
+     down to separate this whole info block from the Similar feed (see
+     .pd-similar-feed border-top). */
+  margin-top: 16px;
 }
 /* Row holding "View more info" + the Comments button side by side. */
 .pd-more-info-row {

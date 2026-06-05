@@ -1592,6 +1592,12 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   position: absolute;
   inset: 0;
   overflow-y: auto;
+  /* Lock the create/edit-look flow to vertical scrolling only — no
+     sideways pan/rubber-band, which read as "broken" when a wide child
+     (e.g. the upload thumb row) let the surface drift horizontally. */
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+  touch-action: pan-y;
 }
 
 /* Top-left back link. Style + size copied from .creator-back. */

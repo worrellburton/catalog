@@ -81,28 +81,35 @@ export async function getMyTopLooks(limit = 10): Promise<ActivityLookStat[]> {
     per.set(r.target_uuid, cur);
   }
 
-  // Resolve the top N (by impressions) to actual look rows for titles
-  // + thumbnails. One round trip in the IN(...) clause.
-  const topIds = Array.from(per.entries())
-    .sort((a, b) => b[1].impressions - a[1].impressions)
-    .slice(0, limit)
-    .map(([id]) => id);
-  if (topIds.length === 0) return [];
+  // Rank candidates by impressions, then resolve to real look rows so we
+  // can grab titles/media AND drop any look that isn't LIVE — archived or
+  // deleted looks must not surface in the creator's Top Looks (they read
+  // as blank-thumbnail ghost rows). Pull a wider candidate window than
+  // `limit` so filtering out non-live looks still leaves enough to fill.
+  const ranked = Array.from(per.entries())
+    .sort((a, b) => b[1].impressions - a[1].impressions);
+  const candidateIds = ranked.slice(0, Math.max(limit * 4, 40)).map(([id]) => id);
+  if (candidateIds.length === 0) return [];
 
-  // Titles come from `looks`; the poster + video live on `looks_creative`
-  // (the `looks` table carries no media columns). Prefer the primary
-  // creative, and the mobile video variant when present (smaller payload).
+  // Titles + status come from `looks`; the poster + video live on
+  // `looks_creative`. Prefer the primary creative + the mobile variant.
   const [{ data: looks }, { data: creatives }] = await Promise.all([
-    supabase.from('looks').select('id, title').in('id', topIds),
+    supabase.from('looks').select('id, title, status').in('id', candidateIds),
     supabase.from('looks_creative')
       .select('look_id, is_primary, video_url, mobile_video_url, thumbnail_url')
-      .in('look_id', topIds),
+      .in('look_id', candidateIds),
   ]);
 
+  // Keep only looks that still exist AND are live.
   const titleById = new Map<string, string | null>();
-  for (const l of (looks as Array<{ id: string; title: string | null }> | null) || []) {
-    titleById.set(l.id, l.title);
+  const liveIds = new Set<string>();
+  for (const l of (looks as Array<{ id: string; title: string | null; status: string | null }> | null) || []) {
+    if (l.status === 'live') { liveIds.add(l.id); titleById.set(l.id, l.title); }
   }
+
+  // Final top N = the highest-impression candidates that are live.
+  const topIds = candidateIds.filter(id => liveIds.has(id)).slice(0, limit);
+  if (topIds.length === 0) return [];
 
   type Creative = { look_id: string; is_primary: boolean | null; video_url: string | null; mobile_video_url: string | null; thumbnail_url: string | null };
   const mediaById = new Map<string, { thumbnail_url: string | null; video_url: string | null }>();
