@@ -387,6 +387,14 @@
     margin-top: -6svh;
   }
 }
+@media (min-width: 769px) {
+  /* Desktop feed peek — nose the feed up ~10svh so the top of the first
+     row of cards shows below the hero, signalling "there's more below".
+     Previously desktop had no peek (margin-top: 0). */
+  .app-root.home-hero:not(.hero-scrolled) .home-feed-wrap {
+    margin-top: -10svh;
+  }
+}
 
 /* Results reveal — classic chatbot answer: once the ceremony bows out the
    catalog rises up into position from below the fold (bottom → top) and
@@ -920,10 +928,12 @@
   }
   body:has(.app-root.home-hero) .sfh:has(~ * .ai-bar-wrap:focus-within),
   body:has(.app-root.home-hero .ai-bar-wrap:focus-within) .sfh {
-    /* Slide the spark+headline up a touch when the bar is focused so
-       the focused trio still reads as a centered group above the
-       suggestions panel. Pure transform — doesn't move the bar. */
-    transform: translateY(-12vh);
+    /* Slide the spark+headline up when the bar is focused so the trio
+       (spark + CTA + bar) rises as one group and clears the suggestions
+       panel that stacks above the bar. Matches the bar's own 18vh rise
+       (38vh → 56vh) so they move together rather than drifting apart —
+       this is what fixed the headline overlapping the prompt chips. */
+    transform: translateY(-18vh);
     transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1);
   }
   body:has(.app-root.home-hero.hero-scrolled) .ai-bar-wrap {
@@ -958,6 +968,15 @@
    "Scroll to find amazing things" cue out so the two don't overlap. */
 .sfh-scroll-hint { transition: opacity 0.3s ease, transform 0.3s ease; }
 .app-root.home-hero:has(.bottom-bar.search-open) .sfh-scroll-hint {
+  opacity: 0;
+  transform: translateX(-50%) translateY(8px);
+  pointer-events: none;
+}
+/* Desktop: the search bar is TypeAnywhere (.ai-bar-wrap — a SIBLING of
+   .app-root), so the mobile .search-open selector above can't match it.
+   Fade the scroll hint on bar focus from the shared body :has() ancestor
+   so it doesn't sit behind the rising prompts panel. */
+body:has(.ai-bar-wrap:focus-within) .app-root.home-hero .sfh-scroll-hint {
   opacity: 0;
   transform: translateX(-50%) translateY(8px);
   pointer-events: none;
