@@ -80,6 +80,18 @@ export async function getCreatorAppearance(handle: string): Promise<CatalogAppea
   return rowToAppearance(data as never);
 }
 
+/** Read a creator's appearance by user id (CreatorPage for `user:<uuid>`
+ *  creators — My Catalog saves keyed by creators.id = auth.uid()). */
+export async function getCreatorAppearanceById(userId: string): Promise<CatalogAppearance> {
+  if (!supabase || !userId) return DEFAULT_CATALOG_APPEARANCE;
+  const { data } = await supabase
+    .from('creators')
+    .select('catalog_particles, catalog_hue')
+    .eq('id', userId)
+    .maybeSingle();
+  return rowToAppearance(data as never);
+}
+
 /** Read the signed-in creator's own appearance (My Catalog initial state). */
 export async function getMyCatalogAppearance(): Promise<CatalogAppearance> {
   if (!supabase) return DEFAULT_CATALOG_APPEARANCE;

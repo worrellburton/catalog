@@ -12,6 +12,15 @@
   padding: var(--header-height) 28px 28px;
 }
 
+/* Creator-chosen particle field — over the page bg, behind all content. */
+.creator-page-particles {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.55;
+}
+
 .creator-page.hidden {
   display: none;
 }

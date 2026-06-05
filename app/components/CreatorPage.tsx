@@ -7,6 +7,8 @@ import { AvatarUpload } from './AvatarCropModal';
 import LookCard from './LookCard';
 import { toggleFollow, isFollowing as fetchIsFollowing, getFollowerCount } from '~/services/follows';
 import { subscribeToLooksChange, fetchSeenLookIds, reorderBySeen } from '~/services/looks';
+import ParticleBackground from './ParticleBackground';
+import { getCreatorAppearance, getCreatorAppearanceById, type CatalogAppearance, DEFAULT_CATALOG_APPEARANCE } from '~/services/catalog-theme';
 // (Removed getShopperGender / subscribeToShopperGender import — the creator
 // catalog page no longer filters by shopper gender; see creatorLooks below.)
 
@@ -351,6 +353,21 @@ export default function CreatorPage({
     if (!currentUser?.id) { setSeenLookIds(new Set()); return; }
     fetchSeenLookIds(currentUser.id).then(setSeenLookIds).catch(() => setSeenLookIds(new Set()));
   }, [currentUser?.id]);
+
+  // Creator-chosen catalog appearance (particles + hue). Read by user id for
+  // `user:<uuid>` creators (My Catalog saves keyed by creators.id), else by
+  // handle for seed creators.
+  const [appearance, setAppearance] = useState<CatalogAppearance>(DEFAULT_CATALOG_APPEARANCE);
+  useEffect(() => {
+    let cancelled = false;
+    const load = userId
+      ? getCreatorAppearanceById(userId)
+      : creatorName
+        ? getCreatorAppearance(creatorName)
+        : Promise.resolve(DEFAULT_CATALOG_APPEARANCE);
+    load.then(a => { if (!cancelled) setAppearance(a); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [userId, creatorName]);
   const rawCreatorLooksUnordered = (userId || isHandleBranch) ? userLooks : seedCreatorLooks;
   const rawCreatorLooks = useMemo(
     () => reorderBySeen(rawCreatorLooksUnordered, seenLookIds),
@@ -475,7 +492,15 @@ export default function CreatorPage({
   // consumer feed + My Catalogue). No light-mode wrap.
   return (
     <div>
-    <div className="creator-page">
+    <div
+      className="creator-page"
+      style={appearance.hue != null ? { background: `hsl(${appearance.hue}, 28%, 6%)` } : undefined}
+    >
+      {/* Creator-chosen appearance: particle field behind content + the hue
+          tint on the page background above. */}
+      {appearance.particles && (
+        <div className="creator-page-particles" aria-hidden="true"><ParticleBackground /></div>
+      )}
       <button className="creator-back" onClick={onClose}>
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
         Back
