@@ -189,6 +189,23 @@ ordering below — same per-user seen data).
 - Files: the stories/creators row component (top of consumer feed), the
   seen-tracking service.
 
+### T. Create-a-look — video upload + in/out trimmer
+On the "Create a look" upload screen, the user tried to upload a **video**
+and it didn't work (the file input likely accepts images only, and the
+upload/generation pipeline expects photos). Build proper video support:
+1. Let the user **select a video** (extend the file `accept` AND the
+   upload/generation handling — don't enable selection alone, it'll fail
+   downstream).
+2. On video upload, open a **one-viewport** trimmer screen:
+   - Select **in** and **out** points.
+   - **Click-and-drag** the in/out handles to roll the selection to a new
+     range.
+   - **Scrub** through the video.
+   - **Done** button at the bottom → saves the trimmed selection as their
+     option (persist the chosen segment / extracted frame(s)).
+- Files: `app/components/CreateLookV2.tsx` (upload hero / file input),
+  the upload service (`user-generations` / uploads), generation pipeline.
+
 ---
 
 ## Feed ordering algorithm (DETAILED SPEC — investigate + implement)
