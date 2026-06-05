@@ -2,6 +2,8 @@
 import { useState, useRef, useMemo, useCallback, useEffect, memo } from 'react';
 import PopularCatalogPills from './PopularCatalogPills';
 import ParticleBackground from './ParticleBackground';
+import CatalogLogo from './CatalogLogo';
+import ConsumerAvatar from './ConsumerAvatar';
 import { useAuth } from '~/hooks/useAuth';
 import { useShopperBody } from '~/hooks/useShopperBody';
 import { useSearchBeam } from '~/hooks/useSearchBeam';
@@ -36,6 +38,10 @@ function BottomBar({
   const [activeFilters, setActiveFilters] = useState<ActiveFilters>(getEmptyFilters());
   // Type-ahead suggestion pool (catalog/search suggestions), loaded once.
   const [allSuggestions, setAllSuggestions] = useState<string[]>([]);
+  // Featured creators surfaced in the mobile search recommendations — a
+  // horizontal avatar rail above the catalog pills. Tapping one jumps
+  // straight into that creator's catalog.
+  const [featuredCreators, setFeaturedCreators] = useState<{ name: string; displayName: string; avatar: string }[]>([]);
   // Drag-to-close: the top-docked search sheet can be pulled UP to dismiss,
   // with a grab-handle indicator (Apple-Maps-style sheet feel). dragOffset
   // tracks the live finger delta; dragging disables the snap transition so
@@ -268,7 +274,8 @@ function BottomBar({
     Promise.all([getSearchSuggestions(), getCreators()])
       .then(([sugg, creators]) => {
         if (cancelled) return;
-        const creatorNames = Object.values(creators)
+        const creatorList = Object.values(creators);
+        const creatorNames = creatorList
           .map(c => c.displayName || c.name || '')
           .filter(Boolean);
         // Dedupe against the curated list (case-insensitive).
@@ -278,6 +285,14 @@ function BottomBar({
           if (!seen.has(n.toLowerCase())) { merged.push(n); seen.add(n.toLowerCase()); }
         }
         setAllSuggestions(merged);
+        // Featured creators rail — those with a real avatar read best as
+        // round tiles; cap at 12 so the rail stays a quick scroll.
+        setFeaturedCreators(
+          creatorList
+            .filter(c => !!c.avatar && !!c.name)
+            .slice(0, 12)
+            .map(c => ({ name: c.name, displayName: c.displayName || c.name, avatar: c.avatar })),
+        );
       })
       .catch(() => {});
     return () => { cancelled = true; };
@@ -343,6 +358,16 @@ function BottomBar({
       window.dispatchEvent(new CustomEvent('catalog:following-catalog', { detail: { handles } }));
     }, 60);
   }, []);
+  // Featured-creator tap: close the sheet, then jump into that creator's
+  // catalog via the global event _index listens for.
+  const pickCreator = useCallback((handle: string) => {
+    dismissingRef.current = true;
+    setSearchOpen(false);
+    searchInputRef.current?.blur();
+    window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('catalog:open-creator', { detail: { handle } }));
+    }, 60);
+  }, []);
 
   const handleSuggestionClick = useCallback((query: string, e: React.MouseEvent<HTMLButtonElement>) => {
     const btn = e.currentTarget;
@@ -389,6 +414,15 @@ function BottomBar({
         />
       )}
 
+      {/* Catalog wordmark pinned to the top of the search overlay (mobile).
+          Sits above the masked suggestions layer so it never fades, and
+          anchors the recompose when the keyboard is up. Hidden on desktop. */}
+      {searchOpen && (
+        <div className="bb-search-logo" aria-hidden="true">
+          <CatalogLogo />
+        </div>
+      )}
+
       {searchOpen && (
         <div className="search-suggestions visible" id="search-suggestions">
           {/* Ambient WebGL particle field behind the catalog pills — same
@@ -431,6 +465,25 @@ function BottomBar({
                 >
                   Show all
                 </button>
+              )}
+              {featuredCreators.length > 0 && (
+                <div className="bb-creators">
+                  <div className="bb-creators-label">Featured creators</div>
+                  <div className="bb-creators-row">
+                    {featuredCreators.map(c => (
+                      <button
+                        key={c.name}
+                        type="button"
+                        className="bb-creator"
+                        onClick={() => pickCreator(c.name)}
+                        title={`Open ${c.displayName}'s catalog`}
+                      >
+                        <ConsumerAvatar name={c.displayName} url={c.avatar} size={56} className="bb-creator-avatar" />
+                        <span className="bb-creator-name">{c.displayName}</span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
               )}
               <PopularCatalogPills onPick={pickCatalog} onFollowingCatalog={pickFollowing} />
             </div>
