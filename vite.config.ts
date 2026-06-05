@@ -88,7 +88,7 @@ export default defineConfig({
   plugins: [
     // Dev-only Remix DevTools panel. Guarded by isProduction so it can
     // never participate in the Vercel build; must precede remix().
-    ...(isProduction ? [] : [remixDevTools()]),
+    ...(isProduction ? [] : [remixDevTools({ suppressDeprecationWarning: true })]),
     remix({
       ssr: false,
       basename: basePath,
