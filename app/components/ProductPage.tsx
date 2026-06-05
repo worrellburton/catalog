@@ -1248,19 +1248,36 @@ export default function ProductPage({
                   </svg>
                 </button>
               )}
+              {/* "Add to a look" — kicks off the look-builder (/generate)
+                  with this product pre-picked. Works for any product type
+                  (a candle or a pot can be added to a look even though you
+                  can't "try it on"), so the language is add-to-a-look, not
+                  try-on. */}
               <button
                 type="button"
                 className="pd-tryon-btn"
                 onClick={handleTryOn}
-                aria-label="Try this on"
+                aria-label="Add this to a look"
               >
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" />
+                  <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
                 </svg>
-                <span>Try it on</span>
+                <span>Add to a look</span>
               </button>
-              {/* Save + Comments now live as floating controls on the hero
-                  media (Save bottom-right, Comments green circle above it). */}
+              {/* Comments shares the action row with Shop + Add to a look. */}
+              {commentsEnabled && commentSlug && onOpenComments && (
+                <button
+                  type="button"
+                  className="pd-comments-btn"
+                  onClick={() => onOpenComments('product', commentSlug)}
+                  aria-label="Comments"
+                >
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
+                  </svg>
+                  <span>{commentCount != null && commentCount > 0 ? `Comments ${commentCount > 99 ? '99+' : commentCount}` : 'Comments'}</span>
+                </button>
+              )}
             </div>
 
             {/* Retailer comparison drawer. Hidden until the user taps Shop.
@@ -1314,38 +1331,23 @@ export default function ProductPage({
                 and "Popular in" behind one toggle so the info column
                 leads with the essentials. The button only renders when at
                 least one of those blocks has content. */}
-            {(hasMoreInfo || (commentsEnabled && commentSlug && onOpenComments)) && (
+            {hasMoreInfo && (
               <div className="pd-more-info">
                 <div className="pd-more-info-row">
-                  {hasMoreInfo && (
-                    <button
-                      type="button"
-                      className={`pd-more-info-btn${showMoreInfo ? ' is-open' : ''}`}
-                      onClick={() => setShowMoreInfo(v => !v)}
-                      aria-expanded={showMoreInfo}
-                      aria-controls="pd-more-info-panel"
-                    >
-                      <span>{showMoreInfo ? 'Hide info' : 'View more info'}</span>
-                      <svg className="pd-more-info-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                        <polyline points="6 9 12 15 18 9" />
-                      </svg>
-                    </button>
-                  )}
-                  {/* Comments — sits next to "View more info", styled like the
-                      other buttons (no longer a green hero FAB). */}
-                  {commentsEnabled && commentSlug && onOpenComments && (
-                    <button
-                      type="button"
-                      className="pd-more-info-btn pd-comments-inline"
-                      onClick={() => onOpenComments('product', commentSlug)}
-                      aria-label="Comments"
-                    >
-                      <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z" />
-                      </svg>
-                      <span>{commentCount != null && commentCount > 0 ? `Comments ${commentCount > 99 ? '99+' : commentCount}` : 'Comments'}</span>
-                    </button>
-                  )}
+                  {/* Full-width, prominent — Comments moved up to the action
+                      row, so this toggle owns the whole row now. */}
+                  <button
+                    type="button"
+                    className={`pd-more-info-btn pd-more-info-btn--full${showMoreInfo ? ' is-open' : ''}`}
+                    onClick={() => setShowMoreInfo(v => !v)}
+                    aria-expanded={showMoreInfo}
+                    aria-controls="pd-more-info-panel"
+                  >
+                    <span>{showMoreInfo ? 'Hide info' : 'View more info'}</span>
+                    <svg className="pd-more-info-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="6 9 12 15 18 9" />
+                    </svg>
+                  </button>
                 </div>
                 {hasMoreInfo && (
                   <div

@@ -403,8 +403,6 @@
   gap: 10px;
   flex-wrap: wrap;
 }
-.pd-comments-inline .comment-btn-count,
-.pd-comments-inline span { font-variant-numeric: tabular-nums; }
 
 .pd-more-info-btn {
   display: inline-flex;
@@ -425,6 +423,23 @@
 .pd-more-info-btn:hover {
   border-color: rgba(255, 255, 255, 0.36);
   background: rgba(255, 255, 255, 0.09);
+}
+/* Full-width, prominent variant — spans the info column with the label
+   left and the chevron pushed to the far right. Used now that Comments
+   has moved up to the action row and this toggle owns the whole row. */
+.pd-more-info-btn--full {
+  width: 100%;
+  justify-content: space-between;
+  padding: 14px 20px;
+  font-size: 15px;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.07);
+}
+.pd-more-info-btn--full:hover {
+  background: rgba(255, 255, 255, 0.11);
+}
+.light-mode .pd-more-info-btn--full {
+  background: rgba(0, 0, 0, 0.05);
 }
 .pd-more-info-chevron {
   transition: transform 0.24s cubic-bezier(0.32, 0.72, 0, 1);
@@ -1427,6 +1442,36 @@
   border-color: rgba(180, 130, 30, 0.5);
   color: #b08230;
 }
+
+/* Comments — third action in the row, same ghost treatment as
+   "Add to a look" so Shop / Add to a look / Comments read as a set. */
+.pd-comments-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 18px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+.pd-comments-btn:hover {
+  background: rgba(255, 255, 255, 0.10);
+  border-color: rgba(255, 255, 255, 0.30);
+}
+.pd-comments-btn:active { transform: scale(0.97); }
+.light-mode .pd-comments-btn {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.14);
+  color: #0a0a0a;
+}
+.light-mode .pd-comments-btn:hover { background: rgba(0, 0, 0, 0.08); }
 
 /* Retailer drawer - collapsed by default, expands beneath the action row.
    Uses grid-template-rows 0fr → 1fr for a smooth height animation that
