@@ -191,6 +191,81 @@ export async function promoteGenerationToLook(input: PromoteInput): Promise<Prom
 }
 
 /**
+ * Reconcile My Catalog with the creator's generations: ensure EVERY completed
+ * generation has a looks row (archived/Inactive if it isn't already live).
+ *
+ * The per-generation auto-add in /generate only fires while the creator is
+ * sitting on the result screen at the moment it finishes — so looks that
+ * completed after they navigated away (or were made before auto-add existed)
+ * never landed in My Catalog. Running this when My Catalog opens backfills
+ * those gaps. Idempotent: promoteGenerationToLook keys off
+ * source_generation_id, so existing rows are left untouched.
+ *
+ * Returns the number of looks rows newly created.
+ */
+export async function ensureGenerationsInCatalog(): Promise<number> {
+  if (!supabase) return 0;
+  const { data: auth } = await supabase.auth.getUser();
+  const uid = auth?.user?.id;
+  if (!uid) return 0;
+
+  // 1. The creator's completed generations (have a playable video).
+  const { data: gens } = await supabase
+    .from('user_generations')
+    .select('id, video_url, style, display_name')
+    .eq('user_id', uid)
+    .eq('status', 'done')
+    .not('video_url', 'is', null);
+  const completed = (gens || []) as Array<{
+    id: string; video_url: string | null; style: string | null; display_name: string | null;
+  }>;
+  if (completed.length === 0) return 0;
+
+  // 2. Which already have a looks row (by source_generation_id)?
+  const ids = completed.map(g => g.id);
+  const { data: existing } = await supabase
+    .from('looks')
+    .select('source_generation_id')
+    .in('source_generation_id', ids);
+  const have = new Set((existing || []).map(r => (r as { source_generation_id: string }).source_generation_id));
+  const missing = completed.filter(g => !have.has(g.id));
+  if (missing.length === 0) return 0;
+
+  // 3. Products picked across the missing generations (one round-trip).
+  const { data: prodRows } = await supabase
+    .from('user_generation_products')
+    .select('generation_id, product_id, sort_order')
+    .in('generation_id', missing.map(g => g.id))
+    .order('sort_order');
+  const productsByGen = new Map<string, Array<{ id: string }>>();
+  for (const r of (prodRows || []) as Array<{ generation_id: string; product_id: string }>) {
+    const arr = productsByGen.get(r.generation_id) || [];
+    arr.push({ id: r.product_id });
+    productsByGen.set(r.generation_id, arr);
+  }
+
+  // 4. Create the missing archived looks. Sequential so we don't hammer the
+  //    manage-looks edge function or race RLS; failures skip, never throw.
+  let created = 0;
+  for (const g of missing) {
+    try {
+      const res = await promoteGenerationToLook({
+        generationId: g.id,
+        creatorUserId: uid,
+        videoUrl: g.video_url,
+        creatorLabel: g.display_name || 'You',
+        style: g.style || 'look',
+        gender: 'unisex',
+        status: 'archived',
+        products: productsByGen.get(g.id) || [],
+      });
+      if (res.created) created++;
+    } catch { /* keep going — one bad generation shouldn't block the rest */ }
+  }
+  return created;
+}
+
+/**
  * Move a published look back to the Unpublished tab. Status drops to
  * 'draft' and the source generation's is_published flag flips off so
  * the Unpublished tab re-surfaces it.

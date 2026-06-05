@@ -7,6 +7,7 @@ import { downloadLookVideo } from '~/utils/downloadLookVideo';
 import type { ManagedLook, LookStatus } from '~/services/manage-looks';
 import { getMyLooks, deleteLook, archiveLook, submitLook, reorderLooks } from '~/services/manage-looks';
 import { getMyCatalogProducts, reorderMyCatalogProducts, type CatalogProduct } from '~/services/catalog-products';
+import { ensureGenerationsInCatalog } from '~/services/promote-generation';
 import { listUserGenerations, isGenerationInFlight, type UserGeneration } from '~/services/user-generations';
 import ParticleBackground from './ParticleBackground';
 import { getMyCatalogAppearance, setMyCatalogAppearance, type CatalogAppearance, DEFAULT_CATALOG_APPEARANCE } from '~/services/catalog-theme';
@@ -160,6 +161,23 @@ export default function MyLooks({ onClose }: MyLooksProps) {
   useEffect(() => {
     fetchLooks();
     refreshCounts();
+  }, [fetchLooks, refreshCounts]);
+
+  // Backfill: make sure EVERY completed generation has a looks row, so looks
+  // that finished after the creator left /generate still show up here as
+  // Inactive. Runs once per mount; if it creates anything, refresh the list +
+  // counts so the new Inactive looks appear without a manual reload.
+  const reconciledRef = useRef(false);
+  useEffect(() => {
+    if (reconciledRef.current) return;
+    reconciledRef.current = true;
+    let cancelled = false;
+    ensureGenerationsInCatalog()
+      .then(created => {
+        if (!cancelled && created > 0) { fetchLooks(); refreshCounts(); }
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
   }, [fetchLooks, refreshCounts]);
 
   // Load the aggregated product list when the Products tab is active.
