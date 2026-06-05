@@ -200,12 +200,26 @@ POSTER PERSISTENCE ✅ DONE: uploadLookMedia now accepts the client first-frame
 poster, uploads it to look-media storage, and sets look_videos.poster_url to
 it (CreateLookV2 passes m.posterUrl). "Poster = first frame of selection" now
 sticks.
-REMAINING:
-  • Trim-range PLAYBACK: add look_videos.trim_start / trim_end columns, store
-    them in uploadLookMedia, and make the consumer video players (LookCard /
-    LookOverlay) play only the [start,end] window. (True re-encode cutting
-    would need ffmpeg.wasm; range-based playback is the pragmatic clip.)
-  • Verify the poster renders on the published look + in the consumer feed.
+TRIM CAPTURE ✅ DONE: look_videos.trim_start / trim_end columns added +
+stored on upload (uploadLookMedia opts).
+REMAINING — trim-range PLAYBACK (verified-finding from running the app):
+  • PIPELINE GAP: the consumer feed plays from `looks_creative` (video_url),
+    NOT `look_videos` where the trim is stored. So honoring the window needs
+    the trim to propagate look_videos → looks_creative (or the consumer to
+    read look_videos), THEN the players (LookCard/LookOverlay/TrailVideoHost/
+    video-playback-director) loop [start,end]. Needs live-data verification
+    (sandbox is cert-blocked from Supabase).
+  • True re-encode cutting would need ffmpeg.wasm; range-based playback is the
+    pragmatic clip.
+
+## Environment note (verified this session)
+Ran `npm run dev` (localhost:5173) + drove it with Playwright. The sandbox
+CANNOT verify the auth/data/keyboard-dependent items: (1) /generate + My
+Catalog are sign-in gated, (2) Supabase is cert-blocked (ERR_CERT_AUTHORITY_
+INVALID) so all data fetches fail → empty feed/analytics, (3) no real soft
+keyboard. So C/H (one-viewport in the gated generate flow), F (keyboard
+overlap), and T trim-playback (needs live data) can't be VISUALLY verified
+here — they need a real preview deploy. Everything else was build-verified.
 ORIGINAL NOTE ↓
 ### T (orig). Create-a-look — video upload + in/out trimmer
 On the "Create a look" upload screen, the user tried to upload a **video**
