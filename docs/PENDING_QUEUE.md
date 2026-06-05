@@ -249,6 +249,9 @@ STILL TODO (all are large rebuilds / fragile / need live verification):
 - **S** per-creator unseen-look badge — ✅ DONE. Spinning conic-ring +
   pulsing-glow count badge on each FollowingStoriesRail avatar; computed from
   getLooks + fetchSeenLookIds keyed by handle.
+- **E** comments → bottom drawer — ✅ DONE. CommentsPage renders as an
+  82dvh bottom sheet (grab handle, dim backdrop tap-to-dismiss, slide-up,
+  internal scroll) instead of a full page.
 - **N** analytics — ✅ DONE. Header overlap hardened + "Impressions over
   time" trend graph added (very thin line, L→R draw over 3.8s ease-in-out,
   pulsing glow head; daily-bucketed from events; catalog-wide view;
