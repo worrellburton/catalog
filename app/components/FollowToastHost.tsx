@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
+import ConsumerAvatar from './ConsumerAvatar';
 
 // Mounts once at the app root and shows a transient "You're now following
 // <name>" toast (with the creator's avatar) whenever a follow happens
@@ -40,9 +41,7 @@ export default function FollowToastHost() {
 
   return (
     <div className="follow-toast" role="status" key={toast.id}>
-      {toast.avatarUrl
-        ? <img className="follow-toast-avatar" src={toast.avatarUrl} alt="" loading="lazy" />
-        : <span className="follow-toast-avatar follow-toast-avatar--blank" aria-hidden="true">{toast.name.charAt(0).toUpperCase()}</span>}
+      <ConsumerAvatar className="follow-toast-avatar" name={toast.name} url={toast.avatarUrl} size={34} />
       <span className="follow-toast-text">You&rsquo;re now following <strong>{toast.name}</strong></span>
     </div>
   );

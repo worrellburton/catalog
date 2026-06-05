@@ -484,6 +484,10 @@ export function AvatarUpload({
   // either drops a file onto the zone or picks one through the
   // browser's file dialog. Either path funnels through processFile().
   const [pickerOpen, setPickerOpen] = useState(false);
+  // Broken-image guard for the trigger avatar — a 404/expired currentUrl
+  // drops to the initial instead of the browser's broken-image glyph.
+  const [imgErrored, setImgErrored] = useState(false);
+  useEffect(() => { setImgErrored(false); }, [currentUrl]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
 
@@ -621,8 +625,8 @@ export function AvatarUpload({
         onClick={handleClick}
         aria-label="Change profile photo"
       >
-        {currentUrl ? (
-          <img src={currentUrl} alt="" className="avatar-upload-img" />
+        {currentUrl && !imgErrored ? (
+          <img src={currentUrl} alt="" className="avatar-upload-img" onError={() => setImgErrored(true)} />
         ) : (
           <span className="avatar-upload-fallback">
             {fallbackInitial ? fallbackInitial.toUpperCase() : '·'}
