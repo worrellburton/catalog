@@ -447,6 +447,113 @@ def update_brand_profile(brand: str, fit_intelligence: dict, supabase) -> None:
     print(f"  📊 [{brand}] Brand profile updated (sample #{sample_count})")
 
 
+# --- Alternate URL finder for bot-protected merchants --------------------
+
+
+def _query_from_url_and_row(blocked_url: str, row: dict) -> str:
+    """Build the best search query for a blocked product.
+
+    Priority: name+brand from the DB row (most precise), then URL slug.
+    The slug is the longest hyphen-delimited path segment with pure-numeric
+    segments discarded.
+    """
+    from urllib.parse import urlparse
+
+    name = (row.get("name") or "").strip()
+    brand = (row.get("brand") or "").strip()
+    if name:
+        return f"{brand} {name}".strip()[:120]
+
+    try:
+        path = urlparse(blocked_url).path
+    except Exception:
+        return ""
+    segs = []
+    for seg in path.split("/"):
+        clean = seg.replace("-", " ").replace("_", " ").strip()
+        if clean and not clean.replace(" ", "").isdigit():
+            segs.append(clean)
+    return max(segs, key=len)[:120] if segs else ""
+
+
+def _find_alternate_url(product_id: str, blocked_url: str, supabase):
+    """Find a scrapeable alternate URL for a product whose site blocked us.
+
+    Tries two sources in order:
+      1. Google Shopping via product-search edge function (SerpAPI).
+      2. Amazon via rainforest-product-lookup edge function.
+
+    Returns the first URL on a different domain that is not a Google URL.
+    Returns None if neither source finds anything -- caller marks row failed.
+    """
+    import os, requests
+    from urllib.parse import urlparse
+
+    sb_url = os.environ["SUPABASE_URL"]
+    sb_key = os.environ["SUPABASE_SERVICE_ROLE_KEY"]
+
+    def _domain(u):
+        try:
+            return urlparse(u).netloc.replace("www.", "").lower()
+        except Exception:
+            return ""
+
+    blocked_domain = _domain(blocked_url)
+    headers = {
+        "Authorization": f"Bearer {sb_key}",
+        "apikey": sb_key,
+        "Content-Type": "application/json",
+    }
+
+    row = {}
+    try:
+        row = (supabase.table("products").select("name,brand").eq("id", product_id).single().execute().data) or {}
+    except Exception:
+        pass
+    query = _query_from_url_and_row(blocked_url, row)
+    if not query:
+        return None
+    print(f"  🔎 [{product_id}] Searching for alt URL: {query!r}")
+
+    # Pass 1: Google Shopping (SerpAPI)
+    try:
+        r = requests.post(
+            f"{sb_url}/functions/v1/product-search",
+            headers=headers, json={"query": query}, timeout=45,
+        )
+        if r.ok:
+            for p in (r.json() or {}).get("products") or []:
+                u = (p.get("url") or "").strip()
+                d = _domain(u)
+                if u and d and d != blocked_domain and "google." not in d:
+                    print(f"  🛒 [{product_id}] Google Shopping alt URL: {u}")
+                    return u
+        else:
+            print(f"  ⚠️  [{product_id}] product-search HTTP {r.status_code}: {r.text[:100]}")
+    except Exception as e:
+        print(f"  ⚠️  [{product_id}] product-search failed: {e}")
+
+    # Pass 2: Amazon via Rainforest
+    try:
+        r = requests.post(
+            f"{sb_url}/functions/v1/rainforest-product-lookup",
+            headers=headers, json={"keyword": query, "limit": 5}, timeout=30,
+        )
+        if r.ok:
+            for p in (r.json() or {}).get("products") or []:
+                u = (p.get("url") or "").strip()
+                d = _domain(u)
+                if u and d and d != blocked_domain and "google." not in d:
+                    print(f"  📦 [{product_id}] Rainforest/Amazon alt URL: {u}")
+                    return u
+        else:
+            print(f"  ⚠️  [{product_id}] rainforest-lookup HTTP {r.status_code}: {r.text[:100]}")
+    except Exception as e:
+        print(f"  ⚠️  [{product_id}] rainforest-lookup failed: {e}")
+
+    return None
+
+
 # ─── Shared: scrape one product and update the DB row ──────────────────
 
 
@@ -457,8 +564,15 @@ def update_brand_profile(brand: str, fit_intelligence: dict, supabase) -> None:
     retries=1,          # retry once on transient failures
     max_containers=3,  # max 3 concurrent scrapes to stay within rate limits
 )
-def scrape_and_update(product_id: str, url: str):
-    """Scrape a single product URL and write results back to Supabase."""
+def scrape_and_update(product_id: str, url: str, is_fallback: bool = False):
+    """Scrape a single product URL and write results back to Supabase.
+
+    `is_fallback=True` marks a re-scrape that was queued by the Google
+    Shopping block-recovery path. Such runs never trigger the fallback
+    again (no loops) and, if the alternate retailer also blocks the deep
+    scrape, keep the already-filled Google Shopping data rather than
+    flipping the row back to 'failed'.
+    """
     import os
     from datetime import datetime, timezone
     from supabase import create_client
@@ -676,6 +790,35 @@ def scrape_and_update(product_id: str, url: str):
                 "scrape_error": f"Merchant site blocked scrape; URL resolved only: {err_msg[:300]}",
             }).eq("id", product_id).execute()
             print(f"⚠️  [{product_id}] Merchant blocked scrape, but URL was resolved — marking done")
+            return
+
+        # Automatic alternate-URL fallback for blocked merchants.
+        # Only runs on the first scrape attempt (not is_fallback) to avoid loops.
+        # We never fill data from search results (quality is unreliable) -- only
+        # the URL is used; the re-queued scrape provides the real product data.
+        if is_blocked and not is_fallback:
+            alt_url = None
+            try:
+                alt_url = _find_alternate_url(product_id, url, supabase)
+            except Exception as fe:
+                print(f"  ⚠️  [{product_id}] alt-URL search errored: {fe}")
+            if alt_url:
+                supabase.table("products").update({
+                    "url": alt_url,
+                    "scrape_status": "pending",
+                    "scrape_error": f"SITE_BLOCKED on original URL; re-scraping alternate: {alt_url}",
+                    "scraped_at": datetime.now(timezone.utc).isoformat(),
+                }).eq("id", product_id).execute()
+                print(f"🛟 [{product_id}] Blocked — re-scraping alternate URL: {alt_url}")
+                scrape_and_update.spawn(product_id, alt_url, is_fallback=True)
+                return
+            # No alternate URL found -- mark as failed with a clear label.
+            supabase.table("products").update({
+                "scrape_status": "failed",
+                "scraped_at": datetime.now(timezone.utc).isoformat(),
+                "scrape_error": f"SITE_BLOCKED: {err_msg[:300]} — no scrapeable alternate URL found",
+            }).eq("id", product_id).execute()
+            print(f"🚫 [{product_id}] Blocked — no alternate URL found, marking failed")
             return
 
         supabase.table("products").update({
