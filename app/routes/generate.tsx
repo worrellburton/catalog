@@ -31,6 +31,7 @@ import {
   type UserGeneration,
   type GenerationProductDetail,
 } from '~/services/user-generations';
+import { promoteGenerationToLook } from '~/services/promote-generation';
 import { getUserGender, type UserGender } from '~/services/genders';
 import {
   getUserHeightAge,
@@ -794,6 +795,30 @@ export default function GeneratePage() {
   // interval while the page was backgrounded.
   const generationIdForPoll = generation?.id ?? null;
   const generationIsTerminal = generation?.status === 'done' || generation?.status === 'failed';
+
+  // Auto-add every completed generation to the creator's My Catalog as an
+  // INACTIVE look. Idempotent (promoteGenerationToLook keys off
+  // source_generation_id and leaves an existing row's status alone), fires
+  // once per generation id. The creator flips it Live from My Catalog.
+  const autoArchivedRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const g = generation;
+    if (!g || g.status !== 'done' || !g.video_url || !effectiveUserId) return;
+    if (autoArchivedRef.current.has(g.id)) return;
+    autoArchivedRef.current.add(g.id);
+    const gender: 'men' | 'women' | 'unisex' =
+      userGender === 'male' ? 'men' : userGender === 'female' ? 'women' : 'unisex';
+    promoteGenerationToLook({
+      generationId: g.id,
+      creatorUserId: effectiveUserId,
+      videoUrl: g.video_url,
+      creatorLabel: g.display_name || 'You',
+      style: g.style || 'look',
+      gender,
+      status: 'archived',
+      products: picked.map(p => ({ id: p.id })),
+    }).catch(() => { autoArchivedRef.current.delete(g.id); });
+  }, [generation, effectiveUserId, userGender, picked]);
   useEffect(() => {
     if (!generationIdForPoll || generationIsTerminal) return;
     let cancelled = false;

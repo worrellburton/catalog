@@ -45,6 +45,10 @@ export interface PromoteInput {
   descriptionOverride?: string;
   /** Products to attach when creating a fresh row. Ignored on republish. */
   products?: Array<{ id: string }>;
+  /** Status for a freshly-created row. Defaults to 'live' (admin publish).
+   *  The auto-add-to-My-Catalog flow passes 'archived' so a generated look
+   *  shows up Inactive in the creator's catalog without going live. */
+  status?: 'live' | 'archived';
 }
 
 export interface PromoteResult {
@@ -70,7 +74,15 @@ export async function promoteGenerationToLook(input: PromoteInput): Promise<Prom
     .maybeSingle();
   if (lookupErr) throw new Error(`Lookup failed: ${lookupErr.message}`);
 
+  const targetStatus = input.status ?? 'live';
+
   if (existing?.id) {
+    // Auto-archive is idempotent and non-clobbering: if a row already exists
+    // for this generation (it may already be live / published), leave its
+    // status alone — the only goal is "a row exists in My Catalog".
+    if (targetStatus === 'archived') {
+      return { lookId: existing.id, created: false };
+    }
     // Re-publish path: just flip the existing row to live + sync
     // creator attribution. The looks_creative row already exists, so
     // there's nothing to re-insert.
@@ -153,8 +165,9 @@ export async function promoteGenerationToLook(input: PromoteInput): Promise<Prom
     }
   }
 
-  // Flip the look to live + reassign user_id to the actual creator.
-  const updates: Record<string, unknown> = { status: 'live' };
+  // Set the look's status (live for publish, archived for auto-add) +
+  // reassign user_id to the actual creator.
+  const updates: Record<string, unknown> = { status: targetStatus };
   if (input.creatorUserId) {
     updates.user_id = input.creatorUserId;
     updates.creator_handle = null;
@@ -166,12 +179,14 @@ export async function promoteGenerationToLook(input: PromoteInput): Promise<Prom
     .select('id, status')
     .maybeSingle();
   if (statusErr) throw new Error(`Status update failed: ${statusErr.message}`);
-  if (!statusRow || statusRow.status !== 'live') {
+  if (!statusRow || statusRow.status !== targetStatus) {
     throw new Error('Status update affected 0 rows (likely RLS block)');
   }
 
   await syncCreatedBy(look.id);
-  await flipGenerationFlag(input.generationId, true);
+  // Only mark the generation published when it actually goes live; an
+  // auto-archived look is still "unpublished" for the admin tabs.
+  if (targetStatus === 'live') await flipGenerationFlag(input.generationId, true);
   return { lookId: look.id, created: true };
 }
 
