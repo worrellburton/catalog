@@ -1291,6 +1291,24 @@ export default function ProductPage({
                   <span>{commentCount != null && commentCount > 0 ? `Comments ${commentCount > 99 ? '99+' : commentCount}` : 'Comments'}</span>
                 </button>
               )}
+              {/* View more info joins the action group as the 4th button so
+                  Shop / Add to a look / Comments / View more info read as one
+                  2x2 set instead of three separate rows. The panel it toggles
+                  renders directly below the group. */}
+              {hasMoreInfo && (
+                <button
+                  type="button"
+                  className={`pd-more-info-btn${showMoreInfo ? ' is-open' : ''}`}
+                  onClick={() => setShowMoreInfo(v => !v)}
+                  aria-expanded={showMoreInfo}
+                  aria-controls="pd-more-info-panel"
+                >
+                  <span>{showMoreInfo ? 'Hide info' : 'View more info'}</span>
+                  <svg className="pd-more-info-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="6 9 12 15 18 9" />
+                  </svg>
+                </button>
+              )}
             </div>
 
             {/* Retailer comparison drawer. Hidden until the user taps Shop.
@@ -1339,50 +1357,32 @@ export default function ProductPage({
               </div>
             )}
 
-            {/* "View more info" dropdown — collapses Size & fit, the
+            {/* "View more info" panel — collapses Size & fit, the
                 "Best for" chips (occasion / season / "Suits …" / style),
-                and "Popular in" behind one toggle so the info column
-                leads with the essentials. The button only renders when at
-                least one of those blocks has content. */}
+                and "Popular in" behind the toggle that now lives in the
+                action group above. Renders only when at least one block
+                has content. */}
             {hasMoreInfo && (
               <div className="pd-more-info">
-                <div className="pd-more-info-row">
-                  {/* Full-width, prominent — Comments moved up to the action
-                      row, so this toggle owns the whole row now. */}
-                  <button
-                    type="button"
-                    className={`pd-more-info-btn pd-more-info-btn--full${showMoreInfo ? ' is-open' : ''}`}
-                    onClick={() => setShowMoreInfo(v => !v)}
-                    aria-expanded={showMoreInfo}
-                    aria-controls="pd-more-info-panel"
-                  >
-                    <span>{showMoreInfo ? 'Hide info' : 'View more info'}</span>
-                    <svg className="pd-more-info-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="6 9 12 15 18 9" />
-                    </svg>
-                  </button>
+                <div
+                  id="pd-more-info-panel"
+                  className={`pd-more-info-panel${showMoreInfo ? ' is-open' : ''}`}
+                  hidden={!showMoreInfo}
+                >
+                  {/* Size & fit + Materials & care spec sheet. */}
+                  {specsNode}
+
+                  {/* "Best for" suggestion chips — occasion, body-type
+                      ("Suits …"), season, works-with. Renders nothing when
+                      there's no metadata. */}
+                  <ProductSuggestionChips groups={chipGroups} onSearch={onCreateCatalog} />
+
+                  {/* "Popular in" — curated catalogs this product belongs
+                      to. Tap a pill to open that catalog's feed. */}
+                  {onCreateCatalog && (
+                    <ProductCatalogPills catalogs={productCatalogs} onOpenCatalog={onCreateCatalog} />
+                  )}
                 </div>
-                {hasMoreInfo && (
-                  <div
-                    id="pd-more-info-panel"
-                    className={`pd-more-info-panel${showMoreInfo ? ' is-open' : ''}`}
-                    hidden={!showMoreInfo}
-                  >
-                    {/* Size & fit + Materials & care spec sheet. */}
-                    {specsNode}
-
-                    {/* "Best for" suggestion chips — occasion, body-type
-                        ("Suits …"), season, works-with. Renders nothing when
-                        there's no metadata. */}
-                    <ProductSuggestionChips groups={chipGroups} onSearch={onCreateCatalog} />
-
-                    {/* "Popular in" — curated catalogs this product belongs
-                        to. Tap a pill to open that catalog's feed. */}
-                    {onCreateCatalog && (
-                      <ProductCatalogPills catalogs={productCatalogs} onOpenCatalog={onCreateCatalog} />
-                    )}
-                  </div>
-                )}
               </div>
             )}
 

@@ -232,8 +232,8 @@
   background: rgba(255, 255, 255, 1);
 }
 
-/* Comments button now sits inline next to "View more info" (see
-   .pd-more-info-row), styled like the other info buttons. */
+/* Comments button sits in the action group alongside Shop / Add to a look
+   / View more info, styled like the other ghost actions. */
 
 /* Brief copied-to-clipboard pill shown when navigator.share isn't
    available (desktop Chrome / Firefox). Sits above the Save button so
@@ -392,17 +392,10 @@
    when the scraper hasn't backfilled the row yet. */
 /* "View more info" dropdown — wraps Size & fit, "Best for", "Popular in". */
 .pd-more-info {
-  /* Sits flush under the Comments action — tight 8px gap (matching the
-     action-row gap) so View more info groups with the buttons above
-     instead of floating apart. */
-  margin-top: 8px;
-}
-/* Row holding "View more info" + the Comments button side by side. */
-.pd-more-info-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
+  /* Just wraps the collapsible panel now — the toggle button lives up in
+     the action group. No own margin so it doesn't add a phantom gap while
+     collapsed; the open panel supplies its own breathing room below. */
+  margin-top: 0;
 }
 
 .pd-more-info-btn {
@@ -422,25 +415,17 @@
   transition: background 0.2s, border-color 0.2s;
 }
 .pd-more-info-btn:hover {
-  border-color: rgba(255, 255, 255, 0.36);
-  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.30);
+  background: rgba(255, 255, 255, 0.10);
 }
-/* Full-width, prominent variant — spans the info column with the label
-   left and the chevron pushed to the far right. Used now that Comments
-   has moved up to the action row and this toggle owns the whole row. */
-.pd-more-info-btn--full {
-  width: 100%;
-  justify-content: space-between;
-  padding: 12px 20px;
-  font-size: 14px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.07);
+.light-mode .pd-more-info-btn {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.14);
+  color: #0a0a0a;
 }
-.pd-more-info-btn--full:hover {
-  background: rgba(255, 255, 255, 0.11);
-}
-.light-mode .pd-more-info-btn--full {
-  background: rgba(0, 0, 0, 0.05);
+.light-mode .pd-more-info-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
+  border-color: rgba(0, 0, 0, 0.22);
 }
 .pd-more-info-chevron {
   transition: transform 0.24s cubic-bezier(0.32, 0.72, 0, 1);
@@ -450,8 +435,10 @@
 }
 
 /* Panel reveal — animates open from the button. `hidden` keeps it out of
-   the a11y tree + layout when collapsed; when open we grid-expand it. */
+   the a11y tree + layout when collapsed; when open it sits just below the
+   action group with a small gap so it reads as that toggle's content. */
 .pd-more-info-panel.is-open {
+  margin-top: 10px;
   animation: pd-more-info-in 0.28s cubic-bezier(0.32, 0.72, 0, 1) both;
 }
 @keyframes pd-more-info-in {
@@ -924,7 +911,7 @@
   display: flex;
   gap: 8px;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: stretch;
 }
 
 /* Shop, Add to a look, Comments and the View more info toggle all share
@@ -933,26 +920,32 @@
 .pd-shop-btn,
 .pd-tryon-btn,
 .pd-comments-btn,
-.pd-more-info-btn--full {
+.pd-actions > .pd-more-info-btn {
   min-height: 48px;
   box-sizing: border-box;
 }
 
-/* Button hierarchy in the action row:
-   Row 1 — Shop (primary, white) + Add to a look (secondary) split the
-   width evenly. Row 2 — Comments spans full width beneath them. The
-   "View more info" toggle below already owns its own full-width row.
-   Gives a clean buy / create / discuss ladder instead of an orphaned
-   wrapped pill. */
+/* One cohesive 2-up block: every action takes half the row, so the four
+   buttons stack into a tidy 2x2 grid —
+     Shop      · Add to a look
+     Comments  · View more info
+   A lone wrapped item (e.g. when Comments is disabled, or there's no extra
+   info) grows to fill its whole row instead of orphaning at half width. */
 .pd-actions > .pd-shop-btn,
-.pd-actions > .pd-tryon-btn {
-  flex: 1 1 0;
+.pd-actions > .pd-tryon-btn,
+.pd-actions > .pd-comments-btn,
+.pd-actions > .pd-more-info-btn {
+  flex: 1 1 calc(50% - 4px);
   min-width: 0;
   justify-content: center;
 }
-.pd-actions > .pd-comments-btn {
-  flex: 1 1 100%;
-  justify-content: center;
+
+/* The View more info toggle, now a member of the action group, matches the
+   ghost siblings exactly (Add to a look / Comments) so the set reads as one
+   family. The label + chevron stay centered like the others. */
+.pd-actions > .pd-more-info-btn {
+  padding: 12px 18px;
+  font-size: 14px;
 }
 
 .pd-shop-btn {
@@ -1428,9 +1421,11 @@
   font-family: inherit;
   cursor: pointer;
   transition: transform 0.18s cubic-bezier(0.32, 0.72, 0, 1), box-shadow 0.2s ease, filter 0.2s ease;
-  box-shadow: 0 6px 18px rgba(216, 169, 60, 0.28);
+  /* Soft, contained glow — enough to read as the primary gold CTA without
+     floating above its grouped siblings. */
+  box-shadow: 0 2px 10px rgba(216, 169, 60, 0.20);
 }
-.pd-shop-btn:hover { transform: translateY(-1px); box-shadow: 0 10px 26px rgba(216, 169, 60, 0.42); filter: brightness(1.05); }
+.pd-shop-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(216, 169, 60, 0.34); filter: brightness(1.05); }
 .pd-shop-btn:active { transform: scale(0.97); }
 .pd-shop-chevron {
   transition: transform 0.24s cubic-bezier(0.32, 0.72, 0, 1);
