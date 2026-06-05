@@ -140,6 +140,21 @@ Rebuild requirements:
 - Easing **ease-in-out**, **very slow and subtle**.
 - Keep it tasteful and on-brand (dark theme, hairline strokes).
 
+### O. Auto-add every generated look to My Catalog as INACTIVE
+Today a `looks` row is only created when the user explicitly publishes a
+generation (`promoteGenerationToLook` → status `'live'`,
+`app/services/promote-generation.ts`). Change it so **every generated look**
+automatically lands in the creator's My Catalog with status **`'archived'`
+(Inactive)** as soon as it's generated — the creator can then flip it Live.
+- Likely hook point: generation-complete pipeline (`supabase/functions/
+  fal-webhook/index.ts` and/or the trigger in
+  `20260603_looks_creative_sync_from_generation.sql` /
+  `20260601000005_backfill_primary_video_and_autopromote.sql`). Auto-create
+  the `looks` row at completion with `status='archived'`; keep the existing
+  publish flow (promote → `'live'`) working on top of it.
+- Verify it doesn't double-create on later explicit publish (the
+  find-or-promote logic keys off `source_generation_id`).
+
 ---
 
 ## Feed ordering algorithm (DETAILED SPEC — investigate + implement)
