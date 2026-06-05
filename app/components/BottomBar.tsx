@@ -6,6 +6,7 @@ import { useAuth } from '~/hooks/useAuth';
 import { useShopperBody } from '~/hooks/useShopperBody';
 import { useSearchBeam } from '~/hooks/useSearchBeam';
 import FilterPanel, { ActiveFilters, getEmptyFilters, hasActiveFilters } from './FilterPanel';
+import { getSearchSuggestions } from '~/services/looks';
 
 interface BottomBarProps {
   activeFilter: 'all' | 'men' | 'women';
@@ -33,6 +34,8 @@ function BottomBar({
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [localSearch, setLocalSearch] = useState(searchQuery);
   const [activeFilters, setActiveFilters] = useState<ActiveFilters>(getEmptyFilters());
+  // Type-ahead suggestion pool (catalog/search suggestions), loaded once.
+  const [allSuggestions, setAllSuggestions] = useState<string[]>([]);
   // Drag-to-close: the top-docked search sheet can be pulled UP to dismiss,
   // with a grab-handle indicator (Apple-Maps-style sheet feel). dragOffset
   // tracks the live finger delta; dragging disables the snap transition so
@@ -258,6 +261,31 @@ function BottomBar({
     emitSearch(val.trim().toLowerCase());
   }, [emitSearch]);
 
+  // Load the suggestion pool once (cached at the service layer).
+  useEffect(() => {
+    let cancelled = false;
+    getSearchSuggestions()
+      .then(s => { if (!cancelled) setAllSuggestions(s); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+
+  // Type-ahead matches: prefix hits first, then substring, deduped + capped.
+  const suggestionMatches = useMemo(() => {
+    const q = localSearch.trim().toLowerCase();
+    if (!q) return [];
+    const seen = new Set<string>();
+    const starts: string[] = [];
+    const contains: string[] = [];
+    for (const s of allSuggestions) {
+      const sl = s.toLowerCase();
+      if (sl === q || seen.has(sl)) continue;
+      if (sl.startsWith(q)) { starts.push(s); seen.add(sl); }
+      else if (sl.includes(q)) { contains.push(s); seen.add(sl); }
+    }
+    return [...starts, ...contains].slice(0, 8);
+  }, [localSearch, allSuggestions]);
+
   // Listen for the 'catalog:close-search' event _index.tsx fires
   // when the Catalog logo is tapped. The logo handler can't reach
   // into BottomBar's local searchOpen / filtersOpen state directly,
@@ -358,18 +386,40 @@ function BottomBar({
           {/* Mobile search now mirrors desktop: a stack of tappable catalog
               buttons above the bar (ranked by demand) instead of the old
               auto-scrolling suggestion text. */}
-          <div className="bb-pills" onMouseDown={(e) => e.preventDefault()}>
-            {isAdmin && (
+          {localSearch.trim() ? (
+            <div className="bb-autocomplete" onMouseDown={(e) => e.preventDefault()}>
+              {suggestionMatches.map(s => (
+                <button key={s} className="bb-autocomplete-item" onClick={() => pickCatalog(s)}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+                  </svg>
+                  <span className="bb-autocomplete-text">{s}</span>
+                </button>
+              ))}
               <button
-                className="bb-pills-showall"
-                onClick={() => pickCatalog('')}
-                title="Admin-only: show every available look and product without a catalog filter"
+                className="bb-autocomplete-item bb-autocomplete-item--run"
+                onClick={() => pickCatalog(localSearch.trim())}
               >
-                Show all
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
+                </svg>
+                <span className="bb-autocomplete-text">Make a catalog for “{localSearch.trim()}”</span>
               </button>
-            )}
-            <PopularCatalogPills onPick={pickCatalog} onFollowingCatalog={pickFollowing} />
-          </div>
+            </div>
+          ) : (
+            <div className="bb-pills" onMouseDown={(e) => e.preventDefault()}>
+              {isAdmin && (
+                <button
+                  className="bb-pills-showall"
+                  onClick={() => pickCatalog('')}
+                  title="Admin-only: show every available look and product without a catalog filter"
+                >
+                  Show all
+                </button>
+              )}
+              <PopularCatalogPills onPick={pickCatalog} onFollowingCatalog={pickFollowing} />
+            </div>
+          )}
         </div>
       )}
 
