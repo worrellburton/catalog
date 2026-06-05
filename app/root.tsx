@@ -16,6 +16,7 @@ import GenerationQueueHost from "~/components/GenerationQueueHost";
 import SwipeMenuGesture from "~/components/SwipeMenuGesture";
 import PullDownActivityGesture from "~/components/PullDownActivityGesture";
 import CreatorLoginToastHost from "~/components/CreatorLoginToastHost";
+import FollowToastHost from "~/components/FollowToastHost";
 import { initSentry, captureException } from "~/utils/sentry";
 
 /* ── Modular styles ──
@@ -293,6 +294,7 @@ export default function App() {
           clicks" when there's something to report; otherwise stays
           silent. Renders nothing for anonymous visitors. */}
       <CreatorLoginToastHost />
+      <FollowToastHost />
       <Outlet />
     </>
   );

@@ -97,8 +97,18 @@ export default function CreatorAvatarFollow({
   const toggle = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (busy || isPlaceholder) return;
+    const wasFollowing = following;
     setBusy(true);
-    try { await toggleFollowShared(handle); }
+    try {
+      await toggleFollowShared(handle);
+      // Celebrate a NEW follow with a global toast (avatar + name). Skip
+      // it on unfollow. FollowToastHost (mounted at root) renders it.
+      if (!wasFollowing) {
+        window.dispatchEvent(new CustomEvent('catalog:followed', {
+          detail: { name: displayName || handle, avatarUrl: shownAvatar || null },
+        }));
+      }
+    }
     catch { /* shared cache reverts itself */ }
     finally { setBusy(false); }
   };
