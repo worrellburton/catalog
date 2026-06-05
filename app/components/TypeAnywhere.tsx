@@ -1,7 +1,8 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useNavigate, useLocation } from '@remix-run/react';
 import FilterPanel, { ActiveFilters, getEmptyFilters, hasActiveFilters } from './FilterPanel';
 import PopularCatalogPills from './PopularCatalogPills';
+import { getSearchSuggestions } from '~/services/looks';
 
 /* Desktop-only AI-style search bar.
  *
@@ -61,6 +62,30 @@ export default function TypeAnywhere() {
   // they've started - no point distracting them).
   const [hintIndex, setHintIndex] = useState(() => Math.floor(Math.random() * PLACEHOLDER_HINTS.length));
   const rotatingHint = PLACEHOLDER_HINTS[hintIndex];
+
+  // Type-ahead suggestion pool (loaded once) + matches for the current text.
+  const [allSuggestions, setAllSuggestions] = useState<string[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    getSearchSuggestions()
+      .then(s => { if (!cancelled) setAllSuggestions(s); })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+  const suggestionMatches = useMemo(() => {
+    const q = text.trim().toLowerCase();
+    if (!q) return [];
+    const seen = new Set<string>();
+    const starts: string[] = [];
+    const contains: string[] = [];
+    for (const s of allSuggestions) {
+      const sl = s.toLowerCase();
+      if (sl === q || seen.has(sl)) continue;
+      if (sl.startsWith(q)) { starts.push(s); seen.add(sl); }
+      else if (sl.includes(q)) { contains.push(s); seen.add(sl); }
+    }
+    return [...starts, ...contains].slice(0, 8);
+  }, [text, allSuggestions]);
 
   // Floating "Just start typing" tooltip above the bar. Shown once
   // per device until the user types anything; then it fades out and
@@ -174,6 +199,27 @@ export default function TypeAnywhere() {
             the input focused through the click. */}
         {focused && !text && !filtersOpen && (
           <PopularCatalogPills onPick={submit} onFollowingCatalog={handleFollowingCatalog} />
+        )}
+        {/* Type-ahead matches — replaces the cloud once the user types.
+            onMouseDown-preventDefault keeps the input focused through a
+            pick (the cloud uses the same guard). */}
+        {focused && !!text.trim() && !filtersOpen && (
+          <div className="ai-bar-autocomplete" onMouseDown={(e) => e.preventDefault()}>
+            {suggestionMatches.map(s => (
+              <button key={s} type="button" className="ai-bar-ac-item" onClick={() => submit(s)}>
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                  <circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+                </svg>
+                <span className="ai-bar-ac-text">{s}</span>
+              </button>
+            ))}
+            <button type="button" className="ai-bar-ac-item ai-bar-ac-item--run" onClick={() => submit(text)}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
+              </svg>
+              <span className="ai-bar-ac-text">Make a catalog for “{text.trim()}”</span>
+            </button>
+          </div>
         )}
         {!hintDismissed && (
           <div className="ai-bar-hint" aria-hidden="true">Just start typing</div>
