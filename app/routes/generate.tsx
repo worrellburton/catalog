@@ -222,6 +222,20 @@ function readStepFromUrl(): Step {
   return 'photos';
 }
 
+// Per-style glyph for the style cards. Animated (float / pop) via CSS so
+// each 3:4 card has a little moving icon above its label.
+const STYLE_ICONS: Record<string, string> = {
+  street:     '🚶',
+  editorial:  '📸',
+  commercial: '🎬',
+  lifestyle:  '☕',
+  studio:     '💡',
+  athletic:   '🏃',
+  evening:    '🌃',
+  beach:      '🏖️',
+  cinematic:  '🎞️',
+};
+
 export default function GeneratePage() {
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
@@ -872,6 +886,23 @@ export default function GeneratePage() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [generation?.id, generation?.status]);
 
+  // Generating view = the in-flight result screen. The design wants it to
+  // read as one focused moment: header says "Generating" and the whole
+  // screen is pinned to a single mobile viewport with no page scroll.
+  const isGeneratingView = step === 'result'
+    && (generation?.status === 'pending' || generation?.status === 'generating');
+  useEffect(() => {
+    if (!isGeneratingView) return;
+    const prevBody = document.body.style.overflow;
+    const prevHtml = document.documentElement.style.overflow;
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prevBody;
+      document.documentElement.style.overflow = prevHtml;
+    };
+  }, [isGeneratingView]);
+
   // Tapping an existing upload toggles its membership in the slots - drops
   // it into the first empty slot, or removes it if it's already placed.
   const onPickExistingUpload = (id: string) => {
@@ -1418,7 +1449,7 @@ export default function GeneratePage() {
   }
 
   return (
-    <div className="gen-page">
+    <div className={`gen-page${isGeneratingView ? ' gen-page--generating' : ''}`}>
       {confirmHostModal}
       {impersonate && (
         <div
@@ -1497,8 +1528,12 @@ export default function GeneratePage() {
         )}
         {step !== 'products' && step !== 'photos' && (
           <>
-            <h1>Generate</h1>
-            <p className="gen-sub">Upload a face, pick up to five products, and we'll compose the look.</p>
+            <h1>{isGeneratingView ? 'Generating' : 'Generate'}</h1>
+            <p className="gen-sub">
+              {isGeneratingView
+                ? 'Hang tight — we’re composing your look.'
+                : "Upload a face, pick up to five products, and we'll compose the look."}
+            </p>
           </>
         )}
       </div>
@@ -1829,7 +1864,9 @@ export default function GeneratePage() {
                   type="button"
                   className={`gen-stylecard${style === s.value ? ' is-picked' : ''}`}
                   onClick={() => setStyle(s.value)}
+                  aria-pressed={style === s.value}
                 >
+                  <span className="gen-stylecard-icon" aria-hidden="true">{STYLE_ICONS[s.value] ?? '✨'}</span>
                   <span className="gen-stylecard-label">{s.label}</span>
                   <span className="gen-stylecard-blurb">{s.blurb}</span>
                 </button>

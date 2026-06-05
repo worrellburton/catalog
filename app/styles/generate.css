@@ -33,6 +33,30 @@
   letter-spacing: -0.005em;
 }
 
+/* Generating view — pin the in-flight result screen to a single viewport
+   so it can't scroll up or down at all (the progress moment is one focused
+   frame). The inner result layout flexes to fill the remaining height under
+   the header. */
+.gen-page--generating {
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  padding-bottom: calc(24px + env(safe-area-inset-bottom));
+}
+.gen-page--generating .gen-main {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.gen-page--generating .gen-step-result,
+.gen-page--generating .gen-result-layout {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
 /* Step container holds the wizard content. It no longer owns scroll —
    the parent .gen-page is the scroll container. We keep the flex
    column for layout but let the step grow with its content so the
@@ -753,28 +777,70 @@ html[data-shell="catalog-app"] .gen-page {
 }
 
 .gen-stylecard {
+  position: relative;
   display: flex;
   flex-direction: column;
-  gap: 4px;
-  padding: 14px;
-  border-radius: 12px;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 6px;
+  padding: 16px 12px;
+  border-radius: 16px;
   border: 1.5px solid rgba(255, 255, 255, 0.1);
   background: rgba(255, 255, 255, 0.03);
   color: #fff;
   cursor: pointer;
-  text-align: left;
+  text-align: center;
+  overflow: hidden;
+  transition: border-color 0.2s ease, background 0.2s ease, transform 0.15s ease;
 }
 .gen-stylecard.is-picked {
   border-color: #ffffff;
   background: rgba(255, 255, 255, 0.08);
 }
+.gen-stylecard:active { transform: scale(0.97); }
+
+/* Animated glyph — gently floats; pops when the card is picked. */
+.gen-stylecard-icon {
+  font-size: 34px;
+  line-height: 1;
+  margin-top: 16px;
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.45));
+  animation: gen-style-float 3s ease-in-out infinite;
+}
+.gen-stylecard.is-picked .gen-stylecard-icon {
+  animation: gen-style-pop 2.2s ease-in-out infinite;
+}
+@keyframes gen-style-float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-6px); }
+}
+@keyframes gen-style-pop {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  50%      { transform: scale(1.14) rotate(-5deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gen-stylecard-icon { animation: none; }
+}
+
 .gen-stylecard-label {
   font-size: 15px;
   font-weight: 700;
+  margin-top: auto;
 }
+/* Description stays hidden until the card is tapped (picked), then reveals. */
 .gen-stylecard-blurb {
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.6);
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.62);
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease, opacity 0.3s ease, margin-top 0.3s ease;
+}
+.gen-stylecard.is-picked .gen-stylecard-blurb {
+  max-height: 90px;
+  opacity: 1;
+  margin-top: 4px;
 }
 
 /* Horizontal style swiper — fixed-width cards scroll sideways instead of
@@ -791,7 +857,8 @@ html[data-shell="catalog-app"] .gen-page {
 .gen-styleswiper::-webkit-scrollbar { display: none; }
 .gen-styleswiper > .gen-stylecard {
   flex: 0 0 auto;
-  width: 200px;
+  width: 132px;
+  aspect-ratio: 3 / 4;
   scroll-snap-align: start;
 }
 
