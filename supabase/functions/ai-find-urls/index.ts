@@ -28,9 +28,16 @@ function jsonRes(data: unknown, status = 200) {
 
 // Most-recent models per the project's standard.
 // HIGHEST tier of each provider — per user spec, never Sonnet,
-// never Gemini 2.5. Bumped to Claude Opus 4.8 and Gemini 3 Pro.
+// never Gemini 2.5. Claude Opus 4.8 + Gemini 3.1 Pro.
+// (gemini-3-pro-preview was retired by Google in March 2026; the GA
+//  replacement is gemini-3.1-pro-preview.)
 const CLAUDE_MODEL = 'claude-opus-4-8';
-const GEMINI_MODEL = 'gemini-3-pro-preview';
+const GEMINI_MODEL = 'gemini-3.1-pro-preview';
+
+// Anthropic server-side web-search tool. Without it Claude has no way
+// to confirm a URL resolves to a live product page, so under the strict
+// "drop anything you're not sure of" prompt below it returns nothing.
+const CLAUDE_WEB_SEARCH_TOOL = { type: 'web_search_20260209', name: 'web_search' };
 
 // One shared instruction so both models return the same shape.
 const SYSTEM_INSTRUCTION = `You help build a shoppable product catalog.
@@ -38,6 +45,10 @@ const SYSTEM_INSTRUCTION = `You help build a shoppable product catalog.
 The user will describe what they're looking for. Your job: return a
 list of EXACT, REAL, DIRECT PRODUCT URLs — one per line — that match
 the request and resolve to buyable product pages RIGHT NOW.
+
+ALWAYS use web search to find and verify these URLs. Do not answer
+from memory — search for the products, open the candidates, and only
+return links you have confirmed point at a live product detail page.
 
 STRICT RULES:
 - Output URLs ONLY. No headers, no bullets, no prose, no markdown,
@@ -101,8 +112,9 @@ async function runClaude(prompt: string, apiKey: string): Promise<ModelResult> {
       },
       body: JSON.stringify({
         model: CLAUDE_MODEL,
-        max_tokens: 2000,
+        max_tokens: 4000,
         system: SYSTEM_INSTRUCTION,
+        tools: [CLAUDE_WEB_SEARCH_TOOL],
         messages: [{ role: 'user', content: prompt }],
       }),
     });
@@ -114,7 +126,9 @@ async function runClaude(prompt: string, apiKey: string): Promise<ModelResult> {
     if (!res.ok || data.error) {
       return { model: CLAUDE_MODEL, urls: [], error: data.error?.message || `Claude ${res.status}`, ms: Date.now() - t0 };
     }
-    const text = data.content?.find(b => b.type === 'text')?.text || '';
+    // Web search interleaves several text blocks with tool-use/result
+    // blocks — concatenate every text block, not just the first.
+    const text = (data.content ?? []).filter(b => b.type === 'text').map(b => b.text || '').join('\n');
     return {
       model: CLAUDE_MODEL,
       urls: extractUrls(text),
@@ -138,6 +152,9 @@ async function runGemini(prompt: string, apiKey: string): Promise<ModelResult> {
       body: JSON.stringify({
         systemInstruction: { parts: [{ text: SYSTEM_INSTRUCTION }] },
         contents: [{ role: 'user', parts: [{ text: prompt }] }],
+        // Google Search grounding so Gemini returns real, live URLs
+        // instead of guessing from training data.
+        tools: [{ google_search: {} }],
         generationConfig: { temperature: 0.7, maxOutputTokens: 2000 },
       }),
     });

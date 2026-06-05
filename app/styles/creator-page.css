@@ -9,7 +9,10 @@
   color: #fff;
   z-index: 150;
   overflow-y: auto;
-  padding: var(--header-height) 28px 28px;
+  /* Background stays full-bleed; horizontal padding grows on wide
+     viewports so the content column is capped at 1200px and centered.
+     max() collapses to the base 28px gutter on mobile. */
+  padding: var(--header-height) max(28px, calc((100% - 1200px) / 2)) 28px;
 }
 
 /* Creator-chosen particle field — over the page bg, behind all content. */
@@ -23,6 +26,41 @@
 
 .creator-page.hidden {
   display: none;
+}
+
+/* Elegant staggered fade-in when the catalog opens (desktop only).
+   Slow easeOutExpo so elements drift up and settle gently, one after
+   another. Gated to pointer/desktop + prefers-reduced-motion so mobile
+   and motion-sensitive users get the content at full opacity instantly
+   (no rule → no opacity:0). */
+@keyframes creator-fade-in {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@media (min-width: 769px) and (prefers-reduced-motion: no-preference) {
+  .creator-hero-avatar,
+  .creator-hero-curated,
+  .creator-hero-name,
+  .creator-follow-btn,
+  .creator-hero-trust,
+  .creator-hero-socials,
+  .creator-nav,
+  .creator-brand-chips,
+  .creator-grid,
+  .creator-products-grid {
+    opacity: 0;
+    animation: creator-fade-in 1.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .creator-hero-avatar   { animation-delay: 0.06s; }
+  .creator-hero-curated  { animation-delay: 0.20s; }
+  .creator-hero-name     { animation-delay: 0.34s; }
+  .creator-follow-btn    { animation-delay: 0.48s; }
+  .creator-hero-trust    { animation-delay: 0.60s; }
+  .creator-hero-socials  { animation-delay: 0.70s; }
+  .creator-nav           { animation-delay: 0.82s; }
+  .creator-brand-chips   { animation-delay: 0.92s; }
+  .creator-grid,
+  .creator-products-grid { animation-delay: 0.98s; }
 }
 
 /* Creator Hero - Nara Smith style centered profile */
