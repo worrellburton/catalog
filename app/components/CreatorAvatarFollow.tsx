@@ -79,6 +79,9 @@ export default function CreatorAvatarFollow({
 
   // Fall back to a looked-up avatar when one wasn't passed inline.
   const [resolvedAvatar, setResolvedAvatar] = useState<string | null>(null);
+  // Broken-image guard: if the resolved URL 404s (deleted file, expired
+  // token), drop to the initial instead of a broken-image icon.
+  const [imgErrored, setImgErrored] = useState(false);
   useEffect(() => {
     if (avatarUrl) { setResolvedAvatar(null); return; }
     let cancelled = false;
@@ -86,6 +89,8 @@ export default function CreatorAvatarFollow({
     return () => { cancelled = true; };
   }, [avatarUrl, handle]);
   const shownAvatar = avatarUrl || resolvedAvatar || '';
+  // Give a freshly-changed source another chance to load.
+  useEffect(() => { setImgErrored(false); }, [shownAvatar]);
 
   const isPlaceholder = !handle || handle.startsWith('user:');
   // Show the badge only once the shared cache has resolved (avoids a
@@ -128,8 +133,8 @@ export default function CreatorAvatarFollow({
           }
         : {})}
     >
-      {shownAvatar ? (
-        <img className="creator-avatar-follow__img" src={shownAvatar} alt={displayName || ''} loading="lazy" />
+      {shownAvatar && !imgErrored ? (
+        <img className="creator-avatar-follow__img" src={shownAvatar} alt={displayName || ''} loading="lazy" onError={() => setImgErrored(true)} />
       ) : (
         <span className="creator-avatar-follow__img creator-avatar-follow__img--initial" aria-hidden="true">{initial}</span>
       )}

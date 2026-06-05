@@ -3796,6 +3796,27 @@ export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loadin
     }
   }, [selectedLookIds, selectedProductIds, catalogName, clearSelection, onAfterBulkMutation]);
 
+  // Per-row "remove from this catalog" (the minus button in the FEED list).
+  // Named catalog → strip the catalog tag (inverse of bulkAddToCatalog).
+  // Home/universe has no tag, so additionally unpublish looks
+  // (enabled=false) — the same lever the consumer feed already respects —
+  // so removing a look from Home actually takes it off the live feed.
+  const removeFromCatalog = useCallback(async (row: FeedRow) => {
+    if (!supabase) return;
+    setBulkBusy(true);
+    try {
+      const table = row.kind === 'look' ? 'looks' : 'products';
+      const { data } = await supabase.from(table).select('catalog_tags').eq('id', row.id).maybeSingle();
+      const tags = ((data?.catalog_tags as string[] | null) || []).filter(t => t !== catalogName);
+      const patch: Record<string, unknown> = { catalog_tags: tags };
+      if (row.kind === 'look' && (isUniverse || isAll)) patch.enabled = false;
+      await supabase.from(table).update(patch).eq('id', row.id);
+      onAfterBulkMutation();
+    } finally {
+      setBulkBusy(false);
+    }
+  }, [catalogName, isUniverse, isAll, onAfterBulkMutation]);
+
   // Row controls (toggles + add/suggest/assemble) relocated from the
   // table columns into this detail header. Rendered in every state —
   // including empty — since that's exactly when "Add products" matters.
@@ -4157,6 +4178,7 @@ export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loadin
               selectedProductIds={selectedProductIds}
               onSelectLook={(id, idx, ext) => toggleSelection('look', id, idx, sortedLooks, ext)}
               onSelectProduct={(id, idx, ext) => toggleSelection('product', id, idx, sortedProducts, ext)}
+              onRemove={removeFromCatalog}
               onSelectAll={(next) => {
                 setSelectedLookIds(prev => {
                   const out = new Set(prev);
@@ -5044,7 +5066,11 @@ function FeedTypeChip({ kind }: { kind: 'look' | 'product' }) {
 // gender-balanced without expanding rows. Untagged rows render a muted
 // dash so a missing gender stands out as actionable.
 function FeedGenderChip({ gender }: { gender?: string | null }) {
-  const g = (gender || '').toLowerCase();
+  const raw = (gender || '').toLowerCase().trim();
+  // Looks store gender as 'men'/'women'; products store 'male'/'female'.
+  // Normalize to the chip's vocabulary so look rows render their gender
+  // instead of a "untagged" dash.
+  const g = raw === 'men' ? 'male' : raw === 'women' ? 'female' : raw;
   if (g !== 'male' && g !== 'female' && g !== 'unisex') {
     return <span style={{ fontSize: 11, color: '#cbd5e1', fontWeight: 600 }}>—</span>;
   }
@@ -5072,6 +5098,7 @@ function FeedListTable({
   draggable,
   onReorder,
   onOpenDetail,
+  onRemove,
 }: {
   rows: FeedRow[];
   selectedLookIds?: Set<string>;
@@ -5082,6 +5109,8 @@ function FeedListTable({
   draggable?: boolean;
   onReorder?: (from: number, to: number) => void;
   onOpenDetail?: (row: FeedRow) => void;
+  /** Per-row "remove from this catalog" (minus button). */
+  onRemove?: (row: FeedRow) => void;
 }) {
   const [dragIdx, setDragIdx] = useState<number | null>(null);
   const [dropIdx, setDropIdx] = useState<number | null>(null);
@@ -5109,6 +5138,7 @@ function FeedListTable({
               />
             </th>
           )}
+          {onRemove && <th style={{ ...listHeadCellStyle, width: 30 }}></th>}
           <th style={{ ...listHeadCellStyle, width: 56 }}></th>
           <th style={listHeadCellStyle}>Title</th>
           <th style={{ ...listHeadCellStyle, width: 70 }}>Type</th>
@@ -5166,6 +5196,19 @@ function FeedListTable({
               {selectable && (
                 <td style={listBodyCellStyle}>
                   <input type="checkbox" readOnly checked={checked} tabIndex={-1} />
+                </td>
+              )}
+              {onRemove && (
+                <td style={listBodyCellStyle}>
+                  <button
+                    type="button"
+                    onClick={(e) => { e.stopPropagation(); onRemove(row); }}
+                    title="Remove from this catalog"
+                    aria-label="Remove from this catalog"
+                    style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22, borderRadius: '50%', border: '1px solid #fecaca', background: '#fff', color: '#dc2626', cursor: 'pointer', lineHeight: 0 }}
+                  >
+                    <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round"><line x1="5" y1="12" x2="19" y2="12" /></svg>
+                  </button>
                 </td>
               )}
               <td style={listBodyCellStyle}>

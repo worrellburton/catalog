@@ -108,10 +108,19 @@ export default function SavedScreen({
   }, [bookmarks.bookmarkedProducts]);
   productsByKeyRef.current = productsByKey;
 
+  // The static `creators` seed map is empty now (real creators live in the
+  // DB), so the old `.filter(c => c.data)` dropped EVERY followed creator —
+  // the Creators row never rendered. Synthesize a display name from the
+  // handle and fall back to an initial when no seed avatar exists, so the
+  // row always shows the people the shopper follows.
   const followedCreatorData = useMemo(
-    () => bookmarks.followedCreators
-      .map(handle => ({ handle, data: creators[handle] }))
-      .filter(c => c.data),
+    () => bookmarks.followedCreators.map(handle => {
+      const seed = creators[handle];
+      const isUserKey = handle.startsWith('user:');
+      const displayName = seed?.displayName
+        || (isUserKey ? 'Creator' : handle.replace(/^@/, '').replace(/[-_]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase()));
+      return { handle, displayName, avatar: seed?.avatar || '' };
+    }),
     [bookmarks.followedCreators],
   );
 
@@ -347,17 +356,25 @@ export default function SavedScreen({
             <section className="saved-row">
               <h3 className="saved-row-title">Creators <span className="saved-row-count">{followedCreatorData.length}</span></h3>
               <div className="saved-row-scroller">
-                {followedCreatorData.map(({ handle, data }) => (
+                {followedCreatorData.map(({ handle, displayName, avatar }) => (
                   <div key={handle} className="saved-creator" onClick={() => onOpenCreator?.(handle)}>
                     <div className="saved-creator-avatar-wrap">
-                      <img className="saved-creator-avatar" src={data.avatar} alt={data.displayName} />
+                      {avatar ? (
+                        <img className="saved-creator-avatar" src={avatar} alt={displayName} />
+                      ) : (
+                        <span
+                          className="saved-creator-avatar"
+                          aria-hidden="true"
+                          style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg, #3f3f46, #27272a)', color: '#d4d4d8', fontWeight: 700 }}
+                        >{displayName.charAt(0).toUpperCase()}</span>
+                      )}
                       <button
                         className="saved-creator-toggle"
                         aria-label="Unfollow"
                         onClick={(e) => { e.stopPropagation(); bookmarks.toggleCreatorFollow(handle); }}
                       >−</button>
                     </div>
-                    <span className="saved-creator-name">{data.displayName}</span>
+                    <span className="saved-creator-name">{displayName}</span>
                   </div>
                 ))}
               </div>

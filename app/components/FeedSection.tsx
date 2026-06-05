@@ -191,7 +191,7 @@ function FeedSection({
         // group (feed_rank null → Infinity) — there we keep looks first,
         // matching the "looks go first" rule, then fall back to input order.
         const typeRank = (e: DeckEntry) => (e.type === 'look' ? 0 : 1);
-        return entries
+        const sorted = entries
           .map((e, i) => ({ e, i }))
           .sort((a, b) => {
             const d = rankOf(a.e) - rankOf(b.e);
@@ -200,6 +200,20 @@ function FeedSection({
             return t !== 0 ? t : a.i - b.i;
           })
           .map(x => x.e);
+        // Guarantee creator looks lead the home feed. The unified feed_rank
+        // can place products ahead of every gender-surviving look (with 0
+        // unisex looks, a gendered shopper only ever sees half the looks),
+        // which makes the feed read as product-only — the #1 reason "I don't
+        // see any looks". If no look lands in the first FRONT cells, pull the
+        // highest-ranked surviving look forward to just behind the lead item.
+        // Everything else keeps the admin's exact feed_rank order.
+        const FRONT = 4;
+        const firstLookIdx = sorted.findIndex(e => e.type === 'look');
+        if (firstLookIdx >= FRONT) {
+          const [lookEntry] = sorted.splice(firstLookIdx, 1);
+          sorted.splice(1, 0, lookEntry);
+        }
+        return sorted;
       }
       return seededShuffle<DeckEntry>(entries, cycleSeed);
     };
