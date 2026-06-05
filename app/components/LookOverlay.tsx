@@ -100,6 +100,8 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   }, []);
   const [mounted, setMounted] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>('products');
+  // "View more info" disclosure (replaced the old About tab).
+  const [showLookInfo, setShowLookInfo] = useState(false);
   // Side-rail back button: fades in once the user has scrolled past the
   // hero (the corner .look-back-btn has scrolled off). Desktop only —
   // mobile has its own dedicated bottom-sheet dismiss affordance.
@@ -467,7 +469,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   // no hand-written bio to show instead.
   const [aboutSummary, setAboutSummary] = useState<string | null>(null);
   useEffect(() => {
-    if (activeTab !== 'creator' || creatorData?.bio || !look.creator) return;
+    if (creatorData?.bio || !look.creator) return;
     let cancelled = false;
     const creatorLooks = [look, ...aboutCreatorStrip];
     const payload = creatorLooks.slice(0, 40).map(l => ({
@@ -478,7 +480,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
     const name = creatorData?.displayName || look.creatorDisplayName || look.creator;
     getCreatorAbout(look.creator, name, payload).then(s => { if (!cancelled) setAboutSummary(s); });
     return () => { cancelled = true; };
-  }, [activeTab, look, aboutCreatorStrip, creatorData?.bio, creatorData?.displayName]);
+  }, [look, aboutCreatorStrip, creatorData?.bio, creatorData?.displayName]);
 
   // ── You Might Also Like ─────────────────────────────────────────────────────
   // Reuses the home/feed ContinuousFeed component (gender-aware, autoplay,
@@ -912,12 +914,6 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                 Products
                 <span className="look-tab-count">{look.products.length}</span>
               </button>
-              <button
-                className={`look-tab${activeTab === 'creator' ? ' active' : ''}`}
-                onClick={() => setActiveTab('creator')}
-              >
-                About
-              </button>
             </div>
             )}
 
@@ -972,11 +968,21 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                 </div>
               )}
 
-              {/* "More from this creator" no longer lives up here as a
-                  horizontal strip — it renders below as a 2-column grid
-                  AFTER "More like this" / "Popular" (see the feed sections). */}
+              {/* "View more info" — replaces the old About tab. Reveals the
+                  creator card + the ✨ AI summary in place. */}
+              {(aboutSummary || creatorData?.bio) && (
+                <button
+                  type="button"
+                  className={`look-more-info-btn${showLookInfo ? ' is-open' : ''}`}
+                  onClick={() => setShowLookInfo(v => !v)}
+                  aria-expanded={showLookInfo}
+                >
+                  <span>{showLookInfo ? 'Hide info' : 'View more info'}</span>
+                  <svg className="look-more-info-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+                </button>
+              )}
 
-              {activeTab === 'creator' && (
+              {showLookInfo && (
                 <>
                   <div className="look-creator-about">
                     <div className="look-creator-about-header">

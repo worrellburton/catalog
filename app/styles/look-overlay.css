@@ -569,6 +569,28 @@
   opacity: 0.85;
 }
 
+/* "View more info" toggle (replaced the About tab). */
+.look-more-info-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin: 4px 0 0;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  color: #fff;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.look-more-info-btn:hover { background: rgba(255, 255, 255, 0.08); }
+.look-more-info-chevron { transition: transform 0.2s ease; opacity: 0.7; }
+.look-more-info-btn.is-open .look-more-info-chevron { transform: rotate(180deg); }
+
 .look-creator-about-btn {
   display: inline-flex;
   align-items: center;
