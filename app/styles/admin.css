@@ -1155,6 +1155,23 @@ html.admin-on-dark-canvas .admin-topbar,
   color: #fff;
 }
 
+/* Look status indicator — green=Live (published), amber=Inactive
+   (not published), red=Failed. Mirrors the consumer My Catalog dot so
+   the published===live / not-published===inactive rule reads the same
+   in admin. */
+.admin-status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+.admin-status-dot--live     { background: #22c55e; box-shadow: 0 0 5px rgba(34, 197, 94, 0.6); }
+.admin-status-dot--inactive { background: #f59e0b; }
+.admin-status-dot--failed   { background: #ef4444; }
+
 /* Liquid-glass search bar for /admin/catalogs (replaced the old text-input
    + filter-chips strip in the minimal-catalog rebuild). Frosted background
    + subtle inner glow, sits above the table on the light admin surface. */
