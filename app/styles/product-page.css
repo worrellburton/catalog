@@ -583,6 +583,25 @@
   white-space: nowrap;
 }
 
+/* Tappable variant — each chip runs its label as a feed search, mirroring
+   the "Popular in" pills. Reset the <button> chrome back to the chip look,
+   then add the interactive affordances. */
+.pd-chip--tappable {
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+
+.pd-chip--tappable:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.24);
+}
+
+.pd-chip--tappable:active {
+  transform: scale(0.97);
+}
+
 /* Occasion is the headline value ("Great for date night") — give it a
    touch more presence than the supporting fit/season/style groups. */
 .pd-chip-group--occasion .pd-chip {

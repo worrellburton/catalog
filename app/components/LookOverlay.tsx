@@ -28,6 +28,8 @@ import {
 import { useAuth } from '~/hooks/useAuth';
 import { useShopperBody } from '~/hooks/useShopperBody';
 import { usePageSections, isSectionEnabled, getSectionLimit } from '~/hooks/usePageSections';
+import { useUserAffinity } from '~/hooks/useUserAffinity';
+import { useDynamicSectionTitle } from '~/hooks/useDynamicSectionTitle';
 import SizeMatchBadge, { SizeMatchSummary } from './SizeMatchBadge';
 import { getLookSimilarityThreshold, DEFAULT_LOOK_SIMILARITY } from '~/services/dials';
 import SimilarDebugModal, { type SimilarDebugReport } from './SimilarDebugModal';
@@ -249,6 +251,11 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   // Declared before feedSections so it can be used as a tiebreaker when the
   // seed look is tagged 'unisex' (e.g. because a product says "Unisex T-Shirt").
   const ymalGenderFilter = useActiveGenderFilter();
+
+  // Dynamic, joke-y heading for the personalized "you might also like" feed.
+  // Re-rolls per look open and leans on the shopper's category affinity.
+  const ymalAffinity = useUserAffinity();
+  const ymalTitle = useDynamicSectionTitle(ymalAffinity, look.id);
 
   // Admin dial: minimum fraction of seed products a candidate look must share.
   // 0 = any 1 match (default/current). Loaded once on overlay open.
@@ -1140,7 +1147,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
         )}
 
         <div className="look-feed-section">
-          <h3 className="look-feed-heading">You might also like</h3>
+          <h3 className="look-feed-heading">{ymalTitle}</h3>
           <ContinuousFeed
             nested
             slotPrefix={`look:${look.id}`}

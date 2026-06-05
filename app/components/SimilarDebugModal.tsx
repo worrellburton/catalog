@@ -2,6 +2,8 @@
 import { useEffect } from 'react';
 import type { SimilarProductDiagnostics } from '~/services/product-creative';
 import type { FeedSearchDiagnostics } from '~/services/feed-search';
+import type { GraphPair } from '~/services/graph-pairs';
+import { AFFINITY_MIN_SIGNAL, MAX_PROMOTION, type UserAffinity } from '~/services/user-affinity';
 
 // types/interfaces
 export type DebugTone = 'good' | 'bad' | 'muted' | 'accent';
@@ -235,6 +237,212 @@ export function buildFeedSearchReport(
     columns,
     rows,
     footnote: 'Feed-search products without catalog_tags are merged into this catalog’s Products section so they still surface. The MIX column on the catalogs table is a separate stat: the % male / female / unisex split of this catalog’s tagged products.',
+  };
+}
+
+/** How each edge type was derived — used to explain the "Pairs well with" rail. */
+const EDGE_LABEL: Record<string, string> = {
+  pairs_with: 'co-appears in looks',
+  same_brand: 'same brand',
+  same_type: 'same category',
+  same_outfit: 'same outfit',
+  same_aesthetic: 'same aesthetic',
+  same_occasion: 'same occasion',
+};
+
+/** Translate the entity_edges graph pairs into the display report. Powers the
+ *  "Pairs well with" rail's "why these?" popup. Unlike the embedding report,
+ *  this needs no extra fetch — the rail already carries the edge metadata that
+ *  explains each tile, so we build the report straight from the rendered rows. */
+export function buildGraphPairsReport(
+  pairs: GraphPair[],
+  ctx: { seedName?: string | null; seedBrand?: string | null; shownCount: number },
+): SimilarDebugReport {
+  const shown = Math.min(ctx.shownCount, pairs.length);
+  const edgeCounts = pairs.reduce<Record<string, number>>((acc, p) => {
+    acc[p.edge_type] = (acc[p.edge_type] || 0) + 1;
+    return acc;
+  }, {});
+  const edgeSummary = Object.entries(edgeCounts)
+    .map(([t, n]) => `${n}× ${EDGE_LABEL[t] || t}`)
+    .join(' · ') || 'none';
+
+  const badges: DebugBadge[] = [
+    { label: 'connected', value: String(pairs.length), tone: 'accent' },
+    { label: 'shown', value: String(shown), tone: 'good' },
+    ...Object.entries(edgeCounts).map(([t, n]): DebugBadge => ({
+      label: EDGE_LABEL[t] || t,
+      value: String(n),
+      tone: t === 'pairs_with' ? 'good' : 'muted',
+    })),
+  ];
+
+  const sections: DebugSection[] = [
+    {
+      heading: 'How it’s fetched',
+      lines: [
+        'Source: get_graph_pairs RPC (migration 20260515) — a lookup over the entity_edges knowledge graph, NOT an embedding search.',
+        'Returns active products that share an explicit relationship edge with this product, deduped and sorted by edge weight (strongest connection first).',
+        'Edge types traversed: pairs_with (products that co-appear in the same look) and same_brand. Same category (same_type) edges are not requested for this rail.',
+      ],
+    },
+    {
+      heading: 'The logic (why each tile is here)',
+      lines: [
+        '• pairs_with — the two products were worn together in one or more looks. Weight is the normalised look co-occurrence (0–1): the more looks they share, the higher it ranks.',
+        '• same_brand — fixed weight 0.5. A fallback connection so the rail still fills when a product has few or no look co-occurrences.',
+        `This rail’s mix: ${edgeSummary}.`,
+      ],
+    },
+    {
+      heading: 'How it calculated this rail',
+      lines: [
+        `${pairs.length} connected product(s) returned by the graph, sorted by edge weight desc.`,
+        `The rail paints the top ${ctx.shownCount}; any beyond that are listed below as “cut · over rail cap”.`,
+      ],
+    },
+  ];
+
+  const columns: DebugColumn[] = [
+    { key: 'rank', label: '#' },
+    { key: 'name', label: 'Product' },
+    { key: 'brand', label: 'Brand' },
+    { key: 'edge', label: 'Connection' },
+    { key: 'weight', label: 'Weight', align: 'right' },
+    { key: 'verdict', label: 'Verdict' },
+  ];
+
+  const rows: DebugRow[] = pairs.map((p, i) => {
+    const inRail = i < ctx.shownCount;
+    return {
+      id: p.product_id,
+      included: inRail,
+      cells: {
+        rank: { text: String(i + 1), tone: 'muted' },
+        name: { text: p.name || '—' },
+        brand: { text: p.brand || '—' },
+        edge: {
+          text: EDGE_LABEL[p.edge_type] || p.edge_type,
+          tone: p.edge_type === 'pairs_with' ? 'good' : 'muted',
+        },
+        weight: { text: p.edge_weight.toFixed(3), tone: 'muted' },
+        verdict: inRail
+          ? { text: 'shown', tone: 'good' }
+          : { text: 'cut · over rail cap', tone: 'muted' },
+      },
+    };
+  });
+
+  return {
+    title: 'Pairs well with — knowledge graph',
+    subtitle: ctx.seedName
+      ? `Seed: ${ctx.seedName}${ctx.seedBrand ? ` · ${ctx.seedBrand}` : ''}`
+      : 'Seed product',
+    badges,
+    sections,
+    columns,
+    rows,
+    footnote: 'pairs_with edges come from the offline look co-occurrence builder (build_entity_edges_from_looks); same_brand edges are derived directly from the products table. Both live in entity_edges.',
+  };
+}
+
+/** Explains the personalized "You might also like" feed: the per-shopper
+ *  category affinity (from taps + searches), whether it's strong enough to
+ *  re-rank the feed, and how the joke-y heading is chosen. No fetch needed —
+ *  the affinity is already computed client-side, so the report is built
+ *  synchronously from the live signal. Super-admin only. */
+export function buildAffinityReport(
+  affinity: UserAffinity,
+  ctx: {
+    heading: string;
+    recentProductCount: number;
+    recentSearchCount: number;
+  },
+): SimilarDebugReport {
+  const active = affinity.total >= AFFINITY_MIN_SIGNAL;
+  const maxWeight = affinity.entries[0]?.weight ?? 0;
+  const climbFor = (w: number) => (maxWeight > 0 ? (w / maxWeight) * MAX_PROMOTION : 0);
+
+  const badges: DebugBadge[] = [
+    { label: 'signal', value: affinity.total.toFixed(2), tone: 'accent' },
+    { label: 'threshold', value: AFFINITY_MIN_SIGNAL.toFixed(1) },
+    { label: 're-rank', value: active ? 'ACTIVE' : 'dormant', tone: active ? 'good' : 'muted' },
+    { label: 'dominant', value: affinity.dominant ?? '—', tone: affinity.dominant ? 'good' : 'muted' },
+    { label: 'categories', value: String(affinity.entries.length) },
+    { label: 'max climb', value: `${MAX_PROMOTION} pos` },
+  ];
+
+  const sections: DebugSection[] = [
+    {
+      heading: 'What this is',
+      lines: [
+        'The "You might also like" feed is the home continuous feed, personalized to this shopper. Two things are tuned: the order of the tiles (soft re-rank) and the section heading (a joke-y, per-view name).',
+        'Everything here is derived ON-DEVICE from localStorage — no server profile, no PII. Anonymous shoppers build a signal too.',
+      ],
+    },
+    {
+      heading: 'Signal sources (newest-first, recency-decayed)',
+      lines: [
+        `Tapped products: ${ctx.recentProductCount} in catalog.recentProducts → grouped by products.type. Most-recent tap weighted 1.0, decaying ×0.95 per step back.`,
+        `Searches: ${ctx.recentSearchCount} in catalog.recentSearches → mapped to canonical types via resolveCatalogTypes (same table the search bar uses), counted at 0.5× a tap.`,
+        affinity.entries.length === 0
+          ? 'No categorized signal yet → affinity is cold.'
+          : `Resulting lean: ${affinity.entries.map(e => `${e.type} ${e.weight.toFixed(2)}`).join(' · ')}.`,
+      ],
+    },
+    {
+      heading: 'The logic',
+      lines: [
+        `1. Gate — total signal ${affinity.total.toFixed(2)} ${active ? '≥' : '<'} ${AFFINITY_MIN_SIGNAL} → re-rank ${active ? 'APPLIES' : 'is skipped (feed stays in natural order)'}.`,
+        `2. Soft re-rank — each tile climbs by (its category weight ÷ strongest weight) × ${MAX_PROMOTION}, capped at ${MAX_PROMOTION} positions. Stable sort preserves original order for ties, so variety is kept (never an all-one-category wall).`,
+        '3. Heading — cold → "You might also like". Warm → an instant local joke-y line, upgraded to a Claude (Haiku) line from the dynamic-feed-name edge function, cached per dominant category per session.',
+      ],
+    },
+    {
+      heading: 'Heading shown now',
+      lines: [
+        `"${ctx.heading}"`,
+        affinity.dominant
+          ? `Built around dominant category "${affinity.dominant}".`
+          : 'Neutral default — not enough signal to theme it yet.',
+      ],
+    },
+  ];
+
+  const columns: DebugColumn[] = [
+    { key: 'rank', label: '#' },
+    { key: 'cat', label: 'Category' },
+    { key: 'weight', label: 'Weight', align: 'right' },
+    { key: 'share', label: 'Share', align: 'right' },
+    { key: 'climb', label: 'Climb', align: 'right' },
+    { key: 'verdict', label: 'Effect' },
+  ];
+
+  const rows: DebugRow[] = affinity.entries.map((e, i) => ({
+    id: e.type,
+    included: active,
+    cells: {
+      rank: { text: String(i + 1), tone: 'muted' },
+      cat: { text: e.type, tone: e.type === affinity.dominant ? 'accent' : undefined },
+      weight: { text: e.weight.toFixed(2), tone: 'muted' },
+      share: { text: `${((e.weight / (affinity.total || 1)) * 100).toFixed(0)}%`, tone: 'muted' },
+      climb: { text: `+${climbFor(e.weight).toFixed(1)}`, tone: 'muted' },
+      verdict: active
+        ? { text: `boosts ${e.type} tiles`, tone: 'good' }
+        : { text: 'dormant · below threshold', tone: 'muted' },
+    },
+  }));
+
+  return {
+    title: 'You might also like — personalization',
+    subtitle: affinity.dominant
+      ? `Leaning toward: ${affinity.topTypes.slice(0, 3).join(' · ')}`
+      : 'Cold start — no behavioural signal yet',
+    badges,
+    sections,
+    columns,
+    rows,
+    footnote: 'Signal lives in localStorage (catalog.recentProducts / catalog.recentSearches) on this device only. Clearing site data resets it. The Claude heading is fetched once per category per session; the local line is used instantly and as the fallback.',
   };
 }
 

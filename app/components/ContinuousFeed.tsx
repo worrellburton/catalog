@@ -19,6 +19,9 @@ import { useDeleteMode } from '~/hooks/useDeleteMode';
 import { getSeenKeys, partitionUnseen, type SeenKey } from '~/services/seen-feed';
 import { useSearch } from '~/hooks/useSearch';
 import { director } from '~/services/video-playback-director';
+import { useUserAffinity } from '~/hooks/useUserAffinity';
+import { rankCreativesByAffinity } from '~/services/user-affinity';
+import { recordRecentSearch } from '~/services/recent-searches';
 
 interface BookmarksInterface {
   isLookBookmarked: (id: number) => boolean;
@@ -154,6 +157,9 @@ function ContinuousFeed({
   // The same `user` is reused by the search-log telemetry block further down.
   const { user } = useAuth();
   const shopperBody = useShopperBody(user?.id);
+  // Per-shopper category lean (clicks + searches). Drives the soft affinity
+  // re-rank applied to the default home / "you might also like" feed below.
+  const affinity = useUserAffinity();
 
   // ── Committed query - the feed only updates when nl-search resolves ─────
   // While the user is typing (or nl-search is in flight), committedQuery stays
@@ -821,9 +827,13 @@ function ContinuousFeed({
       return out;
     }
     const tagMatch = q && tagQueryRef.current === q ? tagMatchedCreatives : [];
-    // Default home feed (no typed/tag match) → hide already-seen products.
+    // Default home feed (no typed/tag match) → hide already-seen products,
+    // then softly lean the order toward the shopper's favoured categories
+    // (e.g. taps a lot of shoes → shoes surface earlier). No-ops until there's
+    // enough signal; preserves variety rather than collapsing to one category.
     if (tagMatch.length === 0) {
-      return partitionUnseen(semanticallyOrderedCreatives, seenKeys, c => c.product_id ? `product:${c.product_id}` : null);
+      const unseen = partitionUnseen(semanticallyOrderedCreatives, seenKeys, c => c.product_id ? `product:${c.product_id}` : null);
+      return rankCreativesByAffinity(unseen, affinity);
     }
 
     // Tier-1 found typed products - return those exclusively.
@@ -839,7 +849,7 @@ function ContinuousFeed({
       out.push(c);
     }
     return out;
-  }, [brandMatchedCreatives, tagMatchedCreatives, semanticallyOrderedCreatives, committedQuery, seenKeys]);
+  }, [brandMatchedCreatives, tagMatchedCreatives, semanticallyOrderedCreatives, committedQuery, seenKeys, affinity]);
 
   // Log search queries through the batch endpoint. Debounced 1.5 s and
   // prefix-deduped so mid-typing keystrokes don't each enqueue an entry;
@@ -853,6 +863,9 @@ function ContinuousFeed({
     if (q === last || last.startsWith(q)) return;
     const timer = setTimeout(() => {
       lastLoggedQueryRef.current = q;
+      // Personalization signal: remember this search locally so the affinity
+      // model can lean the feed toward the categories the shopper searches for.
+      recordRecentSearch(q);
       const handle = user?.displayName || user?.email || localStorage.getItem('catalog_user_handle') || (() => {
         const h = `user_${Math.random().toString(36).slice(2, 8)}`;
         localStorage.setItem('catalog_user_handle', h);
