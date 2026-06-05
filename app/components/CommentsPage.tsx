@@ -266,12 +266,48 @@ export default function CommentsPage({ targetType, slug, onClose, onOpenCreator 
     else navigate(target?.href ?? '/', { replace: true });
   };
 
+  // Drag-to-dismiss for the bottom sheet. The grab handle is also a button:
+  // a tap closes; a downward drag past the threshold closes; a short drag
+  // snaps back. dy is mirrored in a ref so pointerup reads the latest value.
+  const [dragOffset, setDragOffset] = useState(0);
+  const closeSheet = () => { if (onClose) onClose(); else goBack(); };
+  const dragRef = useRef<{ startY: number; active: boolean; dy: number }>({ startY: 0, active: false, dy: 0 });
+  const onHandlePointerDown = (e: React.PointerEvent) => {
+    dragRef.current = { startY: e.clientY, active: true, dy: 0 };
+    try { (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId); } catch { /* ignore */ }
+  };
+  const onHandlePointerMove = (e: React.PointerEvent) => {
+    if (!dragRef.current.active) return;
+    const dy = Math.max(0, e.clientY - dragRef.current.startY);
+    dragRef.current.dy = dy;
+    setDragOffset(dy);
+  };
+  const onHandlePointerUp = () => {
+    if (!dragRef.current.active) return;
+    dragRef.current.active = false;
+    const dy = dragRef.current.dy;
+    setDragOffset(0);
+    if (dy > 110 || dy < 6) closeSheet(); // big drag OR a tap → dismiss
+  };
+
   return (
     <>
     {/* Dim scrim behind the sheet — tap to dismiss (TikTok-style). */}
     <div className="comments-drawer-backdrop" onClick={onClose} aria-hidden="true" />
-    <div className="comments-page comments-page--drawer">
-      <span className="comments-drawer-handle" aria-hidden="true" />
+    <div
+      className="comments-page comments-page--drawer"
+      style={dragOffset ? { transform: `translateY(${dragOffset}px)`, transition: 'none' } : undefined}
+    >
+      <button
+        type="button"
+        className="comments-drawer-handle-btn"
+        aria-label="Close comments"
+        onPointerDown={onHandlePointerDown}
+        onPointerMove={onHandlePointerMove}
+        onPointerUp={onHandlePointerUp}
+      >
+        <span className="comments-drawer-handle" aria-hidden="true" />
+      </button>
       {/* Ambient WebGL field behind everything — the same singleton
           particle backdrop used on create-a-look / add-product, so the
           comments surface isn't a flat black screen when the thread is

@@ -33,17 +33,33 @@
   box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.5);
   animation: comments-drawer-up 0.34s cubic-bezier(0.32, 0.72, 0, 1) both;
 }
-.comments-drawer-handle {
+/* Tap/drag zone at the top of the sheet — tap to close, drag down to
+   dismiss. Wide, touch-action:none so the pointer stream isn't stolen by
+   scroll. */
+.comments-drawer-handle-btn {
   position: absolute;
-  top: 8px;
+  top: 0;
   left: 0;
   right: 0;
-  margin-inline: auto;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  z-index: 7;
+  cursor: grab;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.comments-drawer-handle-btn:active { cursor: grabbing; }
+.comments-drawer-handle {
   width: 40px;
   height: 4px;
   border-radius: 2px;
   background: rgba(255, 255, 255, 0.35);
-  z-index: 6;
   pointer-events: none;
 }
 @keyframes comments-backdrop-in { from { opacity: 0; } to { opacity: 1; } }
