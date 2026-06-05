@@ -413,11 +413,28 @@ export default function CreatorPage({
     return counts;
   }, [allProducts]);
 
+  // Collections — derived from each product's category (Shoes, Tops,
+  // Bags, …) so the Shop tab offers a swipeable "collection" selector
+  // even without an explicit collections backend. Ordered by size so the
+  // biggest collections lead the swiper.
+  const collectionCounts = useMemo(() => {
+    const counts: Record<string, number> = {};
+    allProducts.forEach(p => {
+      const cat = productCategory(p.name);
+      counts[cat] = (counts[cat] || 0) + 1;
+    });
+    return Object.fromEntries(Object.entries(counts).sort((a, b) => b[1] - a[1]));
+  }, [allProducts]);
+
   const [activeBrand, setActiveBrand] = useState<string | null>(null);
+  const [activeCollection, setActiveCollection] = useState<string | null>(null);
   const filteredProducts = useMemo(() => {
-    if (!activeBrand) return allProducts;
-    return allProducts.filter(p => (p.brand || 'Other') === activeBrand);
-  }, [allProducts, activeBrand]);
+    return allProducts.filter(p => {
+      if (activeBrand && (p.brand || 'Other') !== activeBrand) return false;
+      if (activeCollection && productCategory(p.name) !== activeCollection) return false;
+      return true;
+    });
+  }, [allProducts, activeBrand, activeCollection]);
 
   const handleProductClick = (p: Product) => {
     if (onOpenProduct) onOpenProduct(p);
@@ -605,6 +622,30 @@ export default function CreatorPage({
         <div className="creator-saved">{renderSaved()}</div>
       )}
 
+      {/* Collections selector (products tab only) — a swipeable row of
+          the creator's collections (Shoes, Tops, Bags…). Selecting one
+          shows just that collection. Only shown when there's more than
+          one real collection to choose between. */}
+      {activeTab === 'products' && Object.keys(collectionCounts).filter(c => c !== 'Other').length > 1 && (
+        <div className="creator-collections">
+          <button
+            className={`creator-collection-chip ${!activeCollection ? 'active' : ''}`}
+            onClick={() => setActiveCollection(null)}
+          >
+            All
+          </button>
+          {Object.entries(collectionCounts).map(([cat, count]) => (
+            <button
+              key={cat}
+              className={`creator-collection-chip ${activeCollection === cat ? 'active' : ''}`}
+              onClick={() => setActiveCollection(c => c === cat ? null : cat)}
+            >
+              {cat} <span className="creator-collection-count">{count}</span>
+            </button>
+          ))}
+        </div>
+      )}
+
       {/* Brand filter chips (products tab only) */}
       {activeTab === 'products' && Object.keys(brandCounts).length > 1 && (
         <div className="creator-brand-chips">
@@ -713,4 +754,21 @@ function hashUuid(s: string): number {
 
 function toTitleCase(s: string): string {
   return s.replace(/[_-]+/g, ' ').replace(/\b\w/g, c => c.toUpperCase());
+}
+
+// Map a product name to a display "collection" (category). Keyword-based
+// so it works on the public catalog's product data with no extra schema.
+// Falls back to "Other" so every product lands in exactly one collection.
+function productCategory(name: string | null | undefined): string {
+  const n = (name || '').toLowerCase();
+  if (/\b(sneaker|trainer|shoe|boot|heel|loafer|sandal|slipper|clog|mule|pump)\b/.test(n)) return 'Shoes';
+  if (/\b(bag|tote|clutch|purse|backpack|handbag|crossbody|satchel|duffel)\b/.test(n)) return 'Bags';
+  if (/\b(dress|gown)\b/.test(n)) return 'Dresses';
+  if (/\b(jacket|coat|parka|blazer|bomber|puffer|trench|vest|outerwear)\b/.test(n)) return 'Outerwear';
+  if (/\b(pant|trouser|chino|jean|denim|legging|jogger|short|skirt|cargo)\b/.test(n)) return 'Bottoms';
+  if (/\b(hat|cap|beanie|fedora|visor|bucket)\b/.test(n)) return 'Headwear';
+  if (/\b(necklace|ring|earring|bracelet|chain|pendant|jewel)\b/.test(n)) return 'Jewelry';
+  if (/\b(sunglass|shades|aviator|glasses|watch|belt|scarf|sock|glove|tie|wallet)\b/.test(n)) return 'Accessories';
+  if (/\b(shirt|tee|top|sweater|hoodie|polo|henley|tank|sweatshirt|knit|cardigan|blouse|jersey)\b/.test(n)) return 'Tops';
+  return 'Other';
 }

@@ -170,6 +170,59 @@
   border-bottom-color: #fff;
 }
 
+/* Collections selector — a swipeable row of the creator's collections
+   (derived from product category). Bolder/pill-shaped so it reads as the
+   primary "browse by collection" control above the secondary brand chips. */
+.creator-collections {
+  display: flex;
+  gap: 8px;
+  padding: 0 0 14px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  scroll-snap-type: x proximity;
+}
+.creator-collections::-webkit-scrollbar { display: none; }
+.creator-collection-chip {
+  scroll-snap-align: start;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.75);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.18s, color 0.18s, border-color 0.18s;
+  font-family: inherit;
+}
+.creator-collection-chip:hover { color: #fff; background: rgba(255, 255, 255, 0.1); }
+.creator-collection-chip.active {
+  color: #1a1a1a;
+  background: #fff;
+  border-color: #fff;
+}
+.creator-collection-count {
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0.55;
+  font-variant-numeric: tabular-nums;
+}
+.light-mode .creator-collection-chip {
+  color: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.1);
+}
+.light-mode .creator-collection-chip.active {
+  color: #fff;
+  background: #1a1a1a;
+  border-color: #1a1a1a;
+}
+
 /* Brand filter chips */
 .creator-brand-chips {
   display: flex;
