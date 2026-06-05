@@ -10,7 +10,7 @@ import { useTrailVideo, useTrailVideoManager } from '~/components/TrailVideoHost
 import { useInViewport } from '~/hooks/useInViewport';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
 import { trackAdClick, prefetchSimilarProducts, getSimilarProductsDiagnostics, type ProductAd } from '~/services/product-creative';
-import SimilarDebugModal, { buildProductSimilarReport, type SimilarDebugReport } from '~/components/SimilarDebugModal';
+import SimilarDebugModal, { buildProductSimilarReport, buildGraphPairsReport, type SimilarDebugReport } from '~/components/SimilarDebugModal';
 import { getProductDetails, type ProductDetails } from '~/services/product-details';
 import ProductMeasurementsDiagram from '~/components/ProductMeasurementsDiagram';
 import ProductSuggestionChips from '~/components/ProductSuggestionChips';
@@ -675,6 +675,18 @@ export default function ProductPage({
       setSimDebug({ open: true, loading: false, report: null });
     }
   }, [ownProductId, ownBrand, product.name, product.brand]);
+
+  // "Why these?" for the "Pairs well with" rail. No fetch needed — the rail
+  // already carries the edge metadata (edge_type / edge_weight) that explains
+  // each tile, so the report is built synchronously from the rendered rows.
+  const openGraphPairsDebug = useCallback(() => {
+    const report = buildGraphPairsReport(graphPairs || [], {
+      seedName: product.name,
+      seedBrand: product.brand,
+      shownCount: 6,
+    });
+    setSimDebug({ open: true, loading: false, report });
+  }, [graphPairs, product.name, product.brand]);
 
   // "Popular" — shown only when moreLikeThis is empty.
   // Filtered to the same product type so we never show unrelated items.
@@ -1361,7 +1373,7 @@ export default function ProductPage({
                     {/* "Best for" suggestion chips — occasion, body-type
                         ("Suits …"), season, works-with. Renders nothing when
                         there's no metadata. */}
-                    <ProductSuggestionChips groups={chipGroups} />
+                    <ProductSuggestionChips groups={chipGroups} onSearch={onCreateCatalog} />
 
                     {/* "Popular in" — curated catalogs this product belongs
                         to. Tap a pill to open that catalog's feed. */}
@@ -1408,7 +1420,20 @@ export default function ProductPage({
             )}
             {graphPairs && graphPairs.length > 0 && (
               <section className="pd-info-brand-rail" aria-label="Pairs well with">
-                <h2 className="pd-info-brand-rail-title">Pairs well with</h2>
+                <h2 className="pd-info-brand-rail-title">
+                  Pairs well with
+                  {isSuperAdmin && (
+                    <button
+                      type="button"
+                      className="sim-debug-btn"
+                      onClick={openGraphPairsDebug}
+                      aria-label="Why these? (super-admin debug)"
+                      title="Why these? (super-admin debug)"
+                    >
+                      ⓘ why
+                    </button>
+                  )}
+                </h2>
                 <div className="pd-info-brand-rail-grid">
                   {graphPairs.slice(0, 6).map(pair => (
                     <button
