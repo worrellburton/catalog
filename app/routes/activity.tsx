@@ -346,7 +346,7 @@ export default function ActivityRoute() {
                   <span className="ap-conv-thumb-wrap">
                     <ConvThumb targetType={c.target_type} targetId={c.target_id} />
                     <span className="ap-conv-kind" aria-hidden>
-                      {c.kind === 'fire' ? '🔥' : c.kind === 'reply' ? '💬' : '✍️'}
+                      {c.kind === 'fire' ? '🔥' : c.kind === 'reply' ? '💬' : '✏️'}
                     </span>
                   </span>
                   <span className="ap-conv-body">
