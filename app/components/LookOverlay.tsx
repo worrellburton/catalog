@@ -955,32 +955,10 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
               <>
                 <>
                   <div className="look-creator-about">
-                    <div className="look-creator-about-header">
-                      {(() => {
-                        const avatar = look.creatorAvatar || creatorData?.avatar || '';
-                        const name =
-                          creatorData?.displayName ||
-                          look.creatorDisplayName ||
-                          (showHandle ? look.creator : 'Creator');
-                        return avatar ? (
-                          <img className="look-creator-about-avatar" src={avatar} alt={name} />
-                        ) : (
-                          <span className="look-creator-about-avatar look-creator-about-avatar--initial" aria-hidden="true">
-                            {(name || '?').charAt(0).toUpperCase()}
-                          </span>
-                        );
-                      })()}
-                      <div>
-                        <div className="look-creator-about-name">
-                          {creatorData?.displayName || look.creatorDisplayName || (showHandle ? look.creator : 'Creator')}
-                        </div>
-                        {showHandle && (
-                          <div className="look-creator-about-handle">
-                            {look.creator.startsWith('@') ? look.creator : `@${look.creator}`}
-                          </div>
-                        )}
-                      </div>
-                    </div>
+                    {/* Creator avatar + name intentionally omitted here — the
+                        floating top-left creator badge already shows the
+                        identity, so this card stays slim (just the summary +
+                        "View all looks"). */}
                     {creatorData?.bio ? (
                       <p className="look-creator-about-bio">{creatorData.bio}</p>
                     ) : aboutSummary ? (
