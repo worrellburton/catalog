@@ -4161,10 +4161,10 @@ export default function AdminData() {
                             className="admin-btn admin-btn-secondary"
                             style={{ fontSize: 11, padding: '4px 10px', marginRight: 6 }}
                             disabled={unpublishingLookIds.has(row.id)}
-                            title="Move this look back to the Unpublished tab"
+                            title="Set this look inactive (back to the Unpublished tab)"
                             onClick={() => unpublishLookInline(row.id)}
                           >
-                            {unpublishingLookIds.has(row.id) ? 'Unpublishing…' : 'Unpublish'}
+                            {unpublishingLookIds.has(row.id) ? 'Going inactive…' : 'Go inactive'}
                           </button>
                           {/* One-click regen for AI-generated looks. Re-runs the
                               source user_generation so seedance produces a fresh
@@ -4545,10 +4545,10 @@ export default function AdminData() {
                         className="admin-btn admin-btn-primary"
                         style={{ fontSize: 11, padding: '4px 10px' }}
                         disabled={g.status !== 'done' || publishingIds.has(g.id)}
-                        title={g.status === 'done' ? 'Publish this look to the curated catalog' : `Can't publish - status is ${g.status}`}
+                        title={g.status === 'done' ? 'Set this look live in the catalog' : `Can't go live - status is ${g.status}`}
                         onClick={() => publishUnpublishedInline(g)}
                       >
-                        {publishingIds.has(g.id) ? 'Publishing…' : 'Publish'}
+                        {publishingIds.has(g.id) ? 'Going live…' : 'Go live'}
                       </button>
                     </td>
                   </tr>
