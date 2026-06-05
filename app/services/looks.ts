@@ -1,4 +1,5 @@
 import { supabase } from '~/utils/supabase';
+import { registerLookTrim } from '~/utils/lookTrim';
 import type { Look, Product, Creator } from '~/data/looks';
 import { looks as staticLooks, creators as staticCreators, searchSuggestions as staticSuggestions } from '~/data/looks';
 
@@ -57,6 +58,8 @@ interface SupabaseLook {
     thumbnail_url: string | null;
     mobile_video_url: string | null;
     is_primary: boolean;
+    trim_start: number | null;
+    trim_end: number | null;
   }[];
   look_products: {
     sort_order: number;
@@ -97,7 +100,9 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
         video_url,
         thumbnail_url,
         mobile_video_url,
-        is_primary
+        is_primary,
+        trim_start,
+        trim_end
       ),
       look_products (
         sort_order,
@@ -274,6 +279,8 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
       video: primary.video_url || '',
       thumbnail_url: primary.thumbnail_url || undefined,
       mobile_video_url: primary.mobile_video_url || undefined,
+      trimStart: primary.trim_start ?? undefined,
+      trimEnd: primary.trim_end ?? undefined,
       gender: (row.gender as 'men' | 'women') || 'women',
       // Resolve creator identity. The CONTRACT we enforce: the chip's
       // displayed name and the routing key must point at the same
@@ -330,6 +337,15 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
         })),
     };
   });
+
+  // Register trim windows so TrailVideoHost loops [start,end] for trimmed
+  // looks (both the desktop + mobile video variants).
+  for (const l of result) {
+    if (l.trimStart != null || l.trimEnd != null) {
+      registerLookTrim(l.video, l.trimStart, l.trimEnd);
+      registerLookTrim(l.mobile_video_url, l.trimStart, l.trimEnd);
+    }
+  }
 
   writeLooksToStorage(result);
   return result;

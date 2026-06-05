@@ -1,6 +1,11 @@
 // TrailVideoHost - a single HTMLVideoElement per creative id, owned by the
 // app root and shuttled between slots (grid card → overlay hero → trail rail).
 //
+// Trim playback: looks with a trimmer in/out window register their video src
+// here; attach() then loops [start,end] on that pooled element instead of the
+// whole clip. Untrimmed looks aren't registered → default el.loop=true is
+// untouched (so existing playback can't regress). See applyTrimLoop below.
+//
 // Why this exists
 // ───────────────
 // React's render model normally remounts a <video> when its parent changes
@@ -32,6 +37,7 @@ import {
   useRef,
   type ReactNode,
 } from 'react';
+import { getLookTrim } from '~/utils/lookTrim';
 
 // Pool cap. Mobile pays the real cost: 64 live <video> elements is
 // fine on a desktop GPU but on iOS Safari each one holds GPU surfaces
@@ -44,6 +50,29 @@ const POOL_MAX = typeof window !== 'undefined'
   && window.matchMedia?.('(max-width: 768px)').matches
   ? 18
   : 64;
+
+type TrimmableVideo = HTMLVideoElement & { __trimCleanup?: () => void };
+
+/** Apply (or clear) the trim loop on a pooled element for the given src.
+ *  Guarded: only touches elements whose src is registered with a window;
+ *  everything else keeps the default el.loop=true. Idempotent — clears any
+ *  prior trim handler first so a pool-reused element can't keep a stale one. */
+function applyTrimLoop(elRaw: HTMLVideoElement, src: string): void {
+  const el = elRaw as TrimmableVideo;
+  if (el.__trimCleanup) { el.__trimCleanup(); el.__trimCleanup = undefined; }
+  const trim = getLookTrim(src);
+  if (!trim) { el.loop = true; return; }
+  const start = Math.max(0, trim.start);
+  const end = trim.end;
+  el.loop = false;
+  const onTime = () => {
+    if (end != null && el.currentTime >= end - 0.04) { try { el.currentTime = start; } catch { /* seeking */ } }
+    else if (el.currentTime < start - 0.15) { try { el.currentTime = start; } catch { /* seeking */ } }
+  };
+  el.addEventListener('timeupdate', onTime);
+  el.__trimCleanup = () => { el.removeEventListener('timeupdate', onTime); el.loop = true; };
+  if (el.currentTime < start) { try { el.currentTime = start; } catch { /* not seekable yet */ } }
+}
 
 interface TrailVideoManager {
   /** Attach the element for `id` (creating if needed) into `container`.
@@ -284,6 +313,10 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
 
     const e = entry; // narrow for closure
     e.lastUsed = ++tickRef.current;
+
+    // Trim playback: loop [start,end] if this src registered a window; else
+    // restore the default full-clip loop (covers pool-reused elements).
+    applyTrimLoop(e.el, e.src);
 
     // Track this container in the per-id slot stack. When an overlay steals
     // the video from a grid card, the card's container remains beneath the

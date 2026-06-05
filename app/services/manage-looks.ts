@@ -371,6 +371,17 @@ export async function uploadLookMedia(
   const { error: dbError } = await supabase.from(table).insert(record);
   if (dbError) throw new Error(`Failed to save media record: ${dbError.message}`);
 
+  // Propagate the trim window to the consumer creative (which the feed plays
+  // from) so look video players loop [start,end]. Best-effort: no-ops when the
+  // look has no primary creative yet.
+  if (type === 'video' && (opts?.trimStart != null || opts?.trimEnd != null)) {
+    await supabase
+      .from('looks_creative')
+      .update({ trim_start: opts?.trimStart ?? null, trim_end: opts?.trimEnd ?? null })
+      .eq('look_id', lookId)
+      .eq('is_primary', true);
+  }
+
   return { storagePath, publicUrl };
 }
 

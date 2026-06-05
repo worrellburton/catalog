@@ -93,6 +93,10 @@ export interface Look {
    *  Renderer picks this on narrow viewports / slow connections, same
    *  contract as ProductAd.mobile_video_url. */
   mobile_video_url?: string;
+  /** Trimmer in/out window (seconds). When set, look video players loop
+   *  [trimStart, trimEnd] instead of the whole clip. */
+  trimStart?: number;
+  trimEnd?: number;
   /** Static cover image - alternative to thumbnail_url, used by some
    *  legacy looks. Lower priority than thumbnail_url because it's
    *  often a product still rather than a video frame. */
