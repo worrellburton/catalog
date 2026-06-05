@@ -3,6 +3,7 @@ import { useNavigate } from '@remix-run/react';
 import CreateLookV2 from './CreateLookV2';
 import AddProductV2 from './AddProductV2';
 import { useAuth } from '~/hooks/useAuth';
+import { downloadLookVideo } from '~/utils/downloadLookVideo';
 import type { ManagedLook, LookStatus } from '~/services/manage-looks';
 import { getMyLooks, deleteLook, archiveLook, submitLook, reorderLooks } from '~/services/manage-looks';
 import { getMyCatalogProducts, reorderMyCatalogProducts, type CatalogProduct } from '~/services/catalog-products';
@@ -248,6 +249,21 @@ export default function MyLooks({ onClose }: MyLooksProps) {
       // User dismissed the share sheet, or clipboard denied — no-op.
     }
   }, [user?.id, user?.displayName, showToastMsg]);
+
+  // Download the look's video to the device, watermarked with the Catalog
+  // wordmark (top-left) and named {username}-catalog-{date}. The watermark
+  // re-encode runs for ~the clip's length, so we toast progress.
+  const handleDownload = useCallback(async (look: ManagedLook) => {
+    const videoUrl = previewFor(look)?.video;
+    if (!videoUrl) { showToastMsg('No video to download'); return; }
+    showToastMsg('Preparing download…');
+    try {
+      await downloadLookVideo(videoUrl, user?.displayName || user?.email || 'creator');
+      showToastMsg('Saved to your device');
+    } catch {
+      showToastMsg('Download failed');
+    }
+  }, [user?.displayName, user?.email, showToastMsg]);
 
   // Tile click routing: touch devices open the bottom tool tray;
   // hover-capable devices open the editor directly (the hover action
@@ -876,6 +892,10 @@ export default function MyLooks({ onClose }: MyLooksProps) {
               <button className="my-cat-tray-action" onClick={() => { const l = trayLook; setTrayLook(null); setAnalyticsLook(l); setShowAnalyticsOpen(true); }}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="20" x2="21" y2="20"/><rect x="6"  y="11" width="3" height="9"/><rect x="11" y="6"  width="3" height="14"/><rect x="16" y="14" width="3" height="6"/></svg>
                 <span>Analytics</span>
+              </button>
+              <button className="my-cat-tray-action" onClick={() => { const l = trayLook; setTrayLook(null); void handleDownload(l); }}>
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                <span>Download</span>
               </button>
               {/* Live ↔ Inactive segmented control. Live on the left
                   (green), Inactive on the right (yellow). Whichever
