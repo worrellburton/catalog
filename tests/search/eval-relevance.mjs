@@ -34,6 +34,11 @@ const VARIANT = getArg('variant') || process.env.SEARCH_VARIANT || null;
 
 // Footwear surfaces under several (sometimes mis-applied) type labels.
 const FOOTWEAR = ['Shoes', 'Sneakers', 'Sandals', 'Loungewear', 'Boots'];
+// Apparel "department" — what an aesthetic/trend query must stay within.
+const APPAREL = [
+  ...FOOTWEAR, 'Top', 'Shirt', 'T-Shirt', 'Shorts', 'Pants', 'Jacket', 'Sweater',
+  'Dress', 'Skirt', 'Belt', 'Sunglasses', 'Activewear', 'Hat',
+];
 
 /**
  * Each query carries optional HARD assertions (failing → exit 1):
@@ -56,7 +61,17 @@ const QUERIES = [
   // ---- vibe queries: must not pull obviously-wrong items ----
   { q: 'date night',  intent: 'vibe', forbid: [/detergent|psychology of money|\bnovel\b|romance/i], wantSomeName: [/dress|heel|slip/i], note: 'date apparel; NOT detergent/book' },
   { q: 'cozy sunday', intent: 'vibe', forbid: [/detergent|laptop|sparkling water/i], note: 'loungewear/knits/soft home' },
-  { q: 'quiet luxury',intent: 'vibe', forbid: [/detergent|sparkling water/i], note: 'understated lux; candles-only is a known soft miss' },
+
+  // ---- aesthetic / trend queries: MUST stay in the apparel department ----
+  { q: 'quiet luxury',   intent: 'aesthetic', allowedTypes: APPAREL, note: 'understated apparel; NOT candles/skincare/tech' },
+  { q: 'old money',      intent: 'aesthetic', allowedTypes: APPAREL, note: 'classic/tailored apparel; NOT a finance book' },
+  { q: 'clean girl',     intent: 'aesthetic', allowedTypes: APPAREL, note: 'minimal/effortless apparel' },
+  { q: 'streetwear',     intent: 'aesthetic', allowedTypes: APPAREL, note: 'streetwear apparel/footwear' },
+  { q: 'coastal grandma',intent: 'aesthetic', allowedTypes: APPAREL, note: 'linen/relaxed/resort apparel' },
+
+  // ---- occasion queries (recall) ----
+  { q: 'wedding guest',  intent: 'occasion', allowedTypes: APPAREL, note: 'dressy apparel' },
+  { q: 'job interview',  intent: 'occasion', allowedTypes: APPAREL, note: 'professional apparel' },
 
   // ---- keyword / brand sanity ----
   { q: 'laundry detergent', intent: 'keyword', wantTop: /tide/i, note: 'Tide should top' },
