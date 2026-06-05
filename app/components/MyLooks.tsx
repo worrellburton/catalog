@@ -1018,6 +1018,8 @@ interface AnalyticsData {
   impressions: number;
   clicks: number;
   clickouts: number;
+  /** Daily impression counts (ascending) for the trend graph. */
+  series: { day: string; count: number }[];
   // Catalog-wide detail. Empty in per-look mode.
   topLook: { id: string; title: string; impressions: number; clicks: number; ctr: number } | null;
   topProductsByImpressions: { name: string; brand: string | null; count: number }[];
@@ -1087,6 +1089,7 @@ function CreatorAnalyticsModal({ look, onClose }: { look: ManagedLook | null; on
           impressions: imp.count || 0,
           clicks: clk.count || 0,
           clickouts: clko.count || 0,
+          series: [], // per-look path uses count queries; no daily series here
           topLook: null,
           topProductsByImpressions: [],
           topProductsByClicks: [],
@@ -1118,6 +1121,7 @@ function CreatorAnalyticsModal({ look, onClose }: { look: ManagedLook | null; on
       const clkByProduct = new Map<string, { brand: string | null; name: string; count: number }>();
       const clkoByProduct = new Map<string, { brand: string | null; name: string; count: number }>();
       let totalImp = 0, totalClk = 0, totalClko = 0;
+      const dayImp = new Map<string, number>(); // YYYY-MM-DD → impressions
 
       const splitContext = (ctx: string | null): { brand: string | null; name: string } => {
         if (!ctx) return { brand: null, name: 'Product' };
@@ -1132,6 +1136,8 @@ function CreatorAnalyticsModal({ look, onClose }: { look: ManagedLook | null; on
           const slot = lookAgg.get(e.target_uuid) || { impressions: 0, clicks: 0 };
           slot.impressions++;
           lookAgg.set(e.target_uuid, slot);
+          const day = ((e.created_at as string) || '').slice(0, 10);
+          if (day) dayImp.set(day, (dayImp.get(day) || 0) + 1);
         }
         if (e.event_type === 'click' && e.target_type === 'look' && e.target_uuid) {
           totalClk++;
@@ -1182,10 +1188,15 @@ function CreatorAnalyticsModal({ look, onClose }: { look: ManagedLook | null; on
       const topN = <T extends { count: number }>(m: Map<string, T>, n: number) =>
         [...m.values()].sort((a, b) => b.count - a.count).slice(0, n);
 
+      const series = [...dayImp.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([day, count]) => ({ day, count }));
+
       setData({
         impressions: totalImp,
         clicks: totalClk,
         clickouts: totalClko,
+        series,
         topLook,
         topProductsByImpressions: topN(impByProduct, 5),
         topProductsByClicks: topN(clkByProduct, 5),
@@ -1238,6 +1249,8 @@ function CreatorAnalyticsModal({ look, onClose }: { look: ManagedLook | null; on
               <Stat label="Clicks"      value={data.clicks.toLocaleString()} sub={ctr ? `${ctr}% CTR` : undefined} />
               <Stat label="Clickouts"   value={data.clickouts.toLocaleString()} sub={clickoutPct ? `${clickoutPct}% of clicks` : undefined} />
             </div>
+
+            <AnalyticsTrend series={data.series} />
 
             {!look && data.topLook && (
               <section className="my-cat-analytics-section">
@@ -1294,6 +1307,31 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
       <span className="my-cat-stat-value">{value}</span>
       {sub && <span className="my-cat-stat-sub">{sub}</span>}
     </div>
+  );
+}
+
+/** Impressions-over-time trend. A very thin line that draws left→right with
+ *  a slow ease-in-out and a pulsing glow at the leading edge. Needs ≥2 points;
+ *  renders nothing otherwise. */
+function AnalyticsTrend({ series }: { series: { day: string; count: number }[] }) {
+  if (!series || series.length < 2) return null;
+  const W = 320, H = 60, pad = 5;
+  const max = Math.max(...series.map(s => s.count), 1);
+  const pts = series.map((s, i) => {
+    const x = pad + (i / (series.length - 1)) * (W - pad * 2);
+    const y = H - pad - (s.count / max) * (H - pad * 2);
+    return [x, y] as const;
+  });
+  const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(' ');
+  const [ex, ey] = pts[pts.length - 1];
+  return (
+    <section className="my-cat-analytics-section an-trend">
+      <h3>Impressions over time</h3>
+      <svg className="an-trend-svg" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Impressions trend">
+        <path className="an-trend-line" d={d} pathLength={1} />
+        <circle className="an-trend-head" cx={ex} cy={ey} r={2.4} />
+      </svg>
+    </section>
   );
 }
 
