@@ -1,6 +1,7 @@
 import { vitePlugin as remix } from "@remix-run/dev";
 import { defineConfig } from "vite";
 import tsconfigPaths from "vite-tsconfig-paths";
+import { remixDevTools } from "remix-development-tools";
 import { copyFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 
@@ -85,6 +86,9 @@ export default defineConfig({
     },
   },
   plugins: [
+    // Dev-only Remix DevTools panel. Guarded by isProduction so it can
+    // never participate in the Vercel build; must precede remix().
+    ...(isProduction ? [] : [remixDevTools()]),
     remix({
       ssr: false,
       basename: basePath,
