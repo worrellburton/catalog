@@ -232,7 +232,22 @@ unseen-first / shuffle-seen, but:
 
 ---
 
-## Recently shipped (this session, live on `main`)
+## Progress (live on `main`) — "do it all" pass
+DONE: A (look creator name) · B (mobile top gradient) · Q (picker scroll after
+brand pick) · J (pending pill → follow-toast format) · creator-page follow
+toast · Top-Looks live-only · edit-look vertical scroll · product divider ·
+search autocomplete matches-only+creators · generate "Your looks" removal +
+title rename.
+PARTIAL: D — About tab removed + AI summary moved into "View more info" DONE;
+comments-as-button (remove floating bubble) STILL TODO (needs live render for
+the mobile/desktop dual layout). H — Weight row + no Fast↔Pro layout shift
+DONE; full one-viewport condense STILL TODO. R — collapsible categories DONE;
+the "All" aggregate search row STILL TODO.
+STILL TODO (larger / need verification): C, E, F, L, M, N, O, P, S, T, the
+"All" row, the comments-button, one-viewport condenses, and the feed-ordering
+algorithm + seen-tracking.
+
+## Recently shipped (earlier this session, live on `main`)
 - Search autocomplete: matches-only + creators included (mobile + desktop)
 - Activity Top Looks: exclude non-live (ghost) looks
 - Edit-look: vertical-only scroll
