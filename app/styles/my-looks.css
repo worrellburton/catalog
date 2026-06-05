@@ -3807,9 +3807,17 @@ html[data-shell="catalog-app"] .my-looks-overlay {
 }
 .my-cat-analytics-card--page .my-cat-analytics-head {
   flex: 0 0 auto;
+  /* Guarantee the title row can never be overlapped by the range pills,
+     whatever the runtime layout does: solid bg + its own stacking level. */
+  position: relative;
+  z-index: 2;
+  background: #0a0a0a;
 }
 .my-cat-analytics-card--page .my-cat-analytics-range {
   flex: 0 0 auto;
+  position: relative;
+  z-index: 1;
+  margin-top: 0; /* drop the -4px pull that nudged pills toward the title */
 }
 /* Only the metric grid + detail sections scroll, so the head + pill
    row stay pinned. Wrap them in a flex child that takes the
