@@ -146,13 +146,20 @@ header > * {
   background: rgba(0, 0, 0, 0.18);
 }
 
-/* Pending look pill — sits below the header row, centered */
+/* Pending look pill — floats as a toast BELOW the header row, centered, so
+   it never overlaps the header's right-side buttons (bookmark / profile /
+   add). It previously pulled up -28px into the header row and sat on top of
+   those controls, blocking taps. High z-index so it reads as a transient
+   notification over the creators rail beneath the header. */
 header > .pending-look-pill {
   position: absolute;
   top: 100%;
-  left: 50%;
-  transform: translateX(-50%);
-  margin-top: -28px;
+  left: 0;
+  right: 0;
+  margin-inline: auto;
+  width: max-content;
+  margin-top: 8px;
+  z-index: 40;
 }
 
 /* "Your <style> look is rendering" pill — appears in the header
