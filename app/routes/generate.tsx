@@ -1730,7 +1730,7 @@ export default function GeneratePage() {
                         ))}
                       </div>
                     )}
-                    <div className="gen-cat-row-scroll">
+                    <div className="gen-cat-row-scroll" key={`${group.label}-${activeBrand || 'all'}-${rowQuery}`}>
                       {rowProducts.length === 0 ? (
                         <div className="gen-cat-row-empty">
                           {rowQuery ? `No ${group.label.toLowerCase()} match "${rowQuery}"` : `No ${group.label.toLowerCase()} yet`}
