@@ -2,7 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from '@remix-run/react';
 import { supabase } from '~/utils/supabase';
 import { useAuth } from '~/hooks/useAuth';
-import { extractIdPrefix, extractLookId } from '~/utils/slug';
+import { extractIdPrefix, extractLookId, nextHexPrefix } from '~/utils/slug';
 import { looks as seedLooks } from '~/data/looks';
 import {
   listComments,
@@ -46,13 +46,6 @@ interface ResolvedTarget {
   subtitle: string;
   image: string | null;
   href: string;
-}
-
-/** Increment an 8-char hex prefix (for the UUID range lookup). */
-function nextHexPrefix(prefix: string): string | null {
-  const n = parseInt(prefix, 16) + 1;
-  if (n > 0xffffffff) return null;
-  return n.toString(16).padStart(8, '0');
 }
 
 function relativeTime(iso: string): string {

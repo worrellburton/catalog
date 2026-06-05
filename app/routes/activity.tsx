@@ -28,12 +28,15 @@ import {
   getMyShopperSelf,
   getMyRecentEvents,
   getMyCommentActivity,
+  resolveCommentMedia,
   type ActivityLookStat,
   type ActivityTypeStat,
   type ActivityBrandStat,
   type ActivityRecentEvent,
   type CommentActivityItem,
+  type CommentMedia,
 } from '~/services/activity';
+import type { CommentTargetType } from '~/services/comments';
 import CountUp from '~/components/CountUp';
 import SiteParticleHost from '~/components/SiteParticleHost';
 import '~/styles/activity-page.css';
@@ -89,6 +92,71 @@ function TopLookThumb({ thumbnailUrl, videoUrl }: { thumbnailUrl: string | null;
         />
       )}
     </div>
+  );
+}
+
+/**
+ * Conversation-card thumbnail. Resolves the comment's target (product or
+ * look slug) to a poster + primary video, paints the still first, then
+ * crossfades to the muted clip on canplay — same pattern as TopLookThumb,
+ * sized for the conversation row. Renders inline elements only so it's
+ * valid inside the row <button>.
+ */
+function ConvThumb({ targetType, targetId }: { targetType: CommentTargetType; targetId: string }) {
+  const [media, setMedia] = useState<CommentMedia | null>(null);
+  const [posterLoaded, setPosterLoaded] = useState(false);
+  const [videoReady, setVideoReady] = useState(false);
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    resolveCommentMedia(targetType, targetId).then(m => { if (!cancelled) setMedia(m); });
+    return () => { cancelled = true; };
+  }, [targetType, targetId]);
+
+  const poster = media?.image ? supabaseImage(media.image, { width: 120, quality: 60 }) : null;
+  const videoUrl = media?.video || null;
+  const mountVideo = !!videoUrl && posterLoaded;
+
+  useEffect(() => {
+    if (!mountVideo) return;
+    const v = videoRef.current;
+    if (!v) return;
+    const onCanPlay = () => setVideoReady(true);
+    v.addEventListener('canplay', onCanPlay, { once: true });
+    return () => v.removeEventListener('canplay', onCanPlay);
+  }, [mountVideo]);
+
+  if (!poster && !videoUrl) return <span className="ap-conv-thumb ap-conv-thumb--empty" aria-hidden />;
+
+  return (
+    <span className="ap-conv-thumb" aria-hidden>
+      {poster && (
+        <img
+          className="ap-conv-thumb-media"
+          src={poster}
+          alt=""
+          loading="lazy"
+          decoding="async"
+          onLoad={() => setPosterLoaded(true)}
+          onError={() => setPosterLoaded(true)}
+          style={{ opacity: videoReady ? 0 : 1 }}
+        />
+      )}
+      {mountVideo && (
+        <video
+          ref={videoRef}
+          className="ap-conv-thumb-media ap-conv-thumb-video"
+          src={videoUrl || undefined}
+          autoPlay
+          muted
+          loop
+          playsInline
+          preload="auto"
+          style={{ opacity: videoReady ? 1 : 0 }}
+        />
+      )}
+    </span>
   );
 }
 
@@ -275,8 +343,11 @@ export default function ActivityRoute() {
                   className={`ap-conv-row ap-conv-row--${c.kind}`}
                   onClick={() => navigate(`/comments/${c.target_type === 'product' ? 'p' : 'l'}/${c.target_id}`)}
                 >
-                  <span className="ap-conv-icon" aria-hidden>
-                    {c.kind === 'fire' ? '🔥' : c.kind === 'reply' ? '💬' : '✍️'}
+                  <span className="ap-conv-thumb-wrap">
+                    <ConvThumb targetType={c.target_type} targetId={c.target_id} />
+                    <span className="ap-conv-kind" aria-hidden>
+                      {c.kind === 'fire' ? '🔥' : c.kind === 'reply' ? '💬' : '✍️'}
+                    </span>
                   </span>
                   <span className="ap-conv-body">
                     <span className="ap-conv-head">

@@ -111,6 +111,14 @@ export function creatorSlug(handle: string): string {
   return kebab(handle.replace(/^@/, ''));
 }
 
+/** Increment an 8-char hex prefix by 1 (for UUID range lookups).
+ *  Returns null on overflow (all-f prefix). */
+export function nextHexPrefix(prefix: string): string | null {
+  const n = parseInt(prefix, 16) + 1;
+  if (n > 0xffffffff) return null;
+  return n.toString(16).padStart(8, '0');
+}
+
 /** Pull the trailing 8-char UUID prefix off a product slug.
  *  Returns null when the slug doesn't end in a hex octet. */
 export function extractIdPrefix(slug: string): string | null {

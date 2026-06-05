@@ -8,17 +8,11 @@ import {
   creatorSlug,
   extractIdPrefix,
   extractLookId,
+  nextHexPrefix,
 } from '~/utils/slug';
 import { looks as seedLooks } from '~/data/looks';
 import { supabase } from '~/utils/supabase';
 import { getCreativesByProductIds, type ProductAd } from '~/services/product-creative';
-
-/** Increment an 8-char hex string by 1. Returns null on overflow (all-f prefix). */
-function nextHexPrefix(prefix: string): string | null {
-  const n = parseInt(prefix, 16) + 1;
-  if (n > 0xffffffff) return null;
-  return n.toString(16).padStart(8, '0');
-}
 
 /**
  * Fetch a product by its 8-char UUID prefix. UUID columns don't support ILIKE

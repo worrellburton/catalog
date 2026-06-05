@@ -415,6 +415,42 @@
 .ap-conv-row:active { transform: scale(0.99); }
 .ap-conv-row--fire { border-color: rgba(255,138,40,0.32); }
 .ap-conv-icon { font-size: 17px; line-height: 1.3; flex-shrink: 0; }
+/* Conversation thumbnail: product/look poster that crossfades to its
+   clip, with the activity kind (✍️/💬/🔥) as a small corner badge. */
+.ap-conv-thumb-wrap { position: relative; flex-shrink: 0; }
+.ap-conv-thumb {
+  position: relative;
+  display: block;
+  width: 40px;
+  height: 52px;
+  border-radius: 7px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+.ap-conv-thumb-media {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  transition: opacity 240ms ease;
+}
+.ap-conv-thumb--empty {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+}
+.ap-conv-kind {
+  position: absolute;
+  left: -6px;
+  top: -6px;
+  font-size: 12px;
+  line-height: 1;
+  background: #121212;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  padding: 3px;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+}
 .ap-conv-body { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
 .ap-conv-head {
   font-size: 12.5px;

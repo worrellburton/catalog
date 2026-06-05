@@ -15,6 +15,8 @@
 
 import { supabase } from '~/utils/supabase';
 import type { CommentTargetType } from '~/services/comments';
+import { extractIdPrefix, extractLookId, nextHexPrefix } from '~/utils/slug';
+import { looks as seedLooks } from '~/data/looks';
 
 export interface ActivityLookStat {
   look_id: string;
@@ -272,6 +274,74 @@ export interface CommentActivityItem {
   actor_avatar?: string | null;
   fire_count?: number;
   milestone?: boolean;
+}
+
+export interface CommentMedia {
+  image: string | null;
+  video: string | null;
+}
+
+// UUID range bounds for an 8-char prefix lookup (same trick the overlay
+// router + CommentsPage use to turn a slug suffix into a row).
+const UUID_RANGE_TAIL = '-0000-0000-0000-000000000000';
+
+/**
+ * Resolve a comment's target (product/look slug) to a poster image +
+ * primary video, so the Activity "Conversations" cards can paint a still
+ * and then autoplay the clip. Returns nulls when nothing matches so the
+ * caller can fall back to a placeholder.
+ */
+export async function resolveCommentMedia(
+  targetType: CommentTargetType,
+  targetId: string,
+): Promise<CommentMedia> {
+  if (!supabase) return { image: null, video: null };
+
+  if (targetType === 'product') {
+    const prefix = extractIdPrefix(targetId);
+    if (!prefix) return { image: null, video: null };
+    const next = nextHexPrefix(prefix);
+    let q = supabase
+      .from('products')
+      .select('primary_image_url, image_url, primary_video_url, primary_video_poster_url')
+      .gte('id', `${prefix}${UUID_RANGE_TAIL}`);
+    if (next) q = q.lt('id', `${next}${UUID_RANGE_TAIL}`);
+    const { data } = await q.limit(1);
+    const row = data?.[0] as {
+      primary_image_url: string | null; image_url: string | null;
+      primary_video_url: string | null; primary_video_poster_url: string | null;
+    } | undefined;
+    if (!row) return { image: null, video: null };
+    return {
+      image: row.primary_video_poster_url || row.primary_image_url || row.image_url || null,
+      video: row.primary_video_url || null,
+    };
+  }
+
+  // Look — numeric seed ids resolve to the bundled catalog; DB looks use
+  // the looks_creative uuid-prefix range.
+  const numericId = extractLookId(targetId);
+  if (numericId != null) {
+    const seed = seedLooks.find(l => l.id === numericId);
+    if (seed) return { image: seed.creatorAvatar || null, video: null };
+  }
+  const prefix = extractIdPrefix(targetId);
+  if (!prefix) return { image: null, video: null };
+  const next = nextHexPrefix(prefix);
+  let q = supabase
+    .from('looks_creative')
+    .select('thumbnail_url, video_url, mobile_video_url')
+    .gte('uuid', `${prefix}${UUID_RANGE_TAIL}`);
+  if (next) q = q.lt('uuid', `${next}${UUID_RANGE_TAIL}`);
+  const { data } = await q.limit(1);
+  const row = data?.[0] as {
+    thumbnail_url: string | null; video_url: string | null; mobile_video_url: string | null;
+  } | undefined;
+  if (!row) return { image: null, video: null };
+  return {
+    image: row.thumbnail_url || null,
+    video: row.mobile_video_url || row.video_url || null,
+  };
 }
 
 export async function getMyCommentActivity(limit = 30): Promise<CommentActivityItem[]> {
