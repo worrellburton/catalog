@@ -286,6 +286,11 @@ function BottomBar({
     return [...starts, ...contains].slice(0, 8);
   }, [localSearch, allSuggestions]);
 
+  // When the typed text doesn't match any known catalog, still surface
+  // ideas (popular suggestions) so the list is never empty as you type.
+  const ideaSuggestions = useMemo(() => allSuggestions.slice(0, 14), [allSuggestions]);
+  const autocompleteList = suggestionMatches.length > 0 ? suggestionMatches : ideaSuggestions;
+
   // Listen for the 'catalog:close-search' event _index.tsx fires
   // when the Catalog logo is tapped. The logo handler can't reach
   // into BottomBar's local searchOpen / filtersOpen state directly,
@@ -388,14 +393,7 @@ function BottomBar({
               auto-scrolling suggestion text. */}
           {localSearch.trim() ? (
             <div className="bb-autocomplete" onMouseDown={(e) => e.preventDefault()}>
-              {suggestionMatches.map(s => (
-                <button key={s} className="bb-autocomplete-item" onClick={() => pickCatalog(s)}>
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-                  </svg>
-                  <span className="bb-autocomplete-text">{s}</span>
-                </button>
-              ))}
+              {/* Primary action: run exactly what they typed. */}
               <button
                 className="bb-autocomplete-item bb-autocomplete-item--run"
                 onClick={() => pickCatalog(localSearch.trim())}
@@ -405,6 +403,17 @@ function BottomBar({
                 </svg>
                 <span className="bb-autocomplete-text">Make a catalog for “{localSearch.trim()}”</span>
               </button>
+              {suggestionMatches.length === 0 && (
+                <span className="bb-autocomplete-label">Ideas</span>
+              )}
+              {autocompleteList.map(s => (
+                <button key={s} className="bb-autocomplete-item" onClick={() => pickCatalog(s)}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+                  </svg>
+                  <span className="bb-autocomplete-text">{s}</span>
+                </button>
+              ))}
             </div>
           ) : (
             <div className="bb-pills" onMouseDown={(e) => e.preventDefault()}>
