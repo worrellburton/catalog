@@ -252,7 +252,11 @@ function ContinuousFeed({
     // Anonymous shoppers see the natural feed order untouched —
     // reorderBySeen no-ops with an empty seen set.
     return reorderBySeen(filtered, seenLookIds);
-  }, [dbLooks, hiddenLookIds, hiddenProductKeys, seenLookIds]);
+    // shuffleKey is a deliberate dep (not read inside): it bumps on every
+    // feed (re)entry / shuffle, so the seen-shuffle re-runs and a returning
+    // shopper who's seen everything gets a fresh order instead of the same
+    // frozen one for the whole SPA session.
+  }, [dbLooks, hiddenLookIds, hiddenProductKeys, seenLookIds, shuffleKey]);
 
   // Shopper's profile gender, subscribed globally. Declared ABOVE
   // filteredLooks so the useMemo below can read it without tripping
