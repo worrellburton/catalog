@@ -116,11 +116,11 @@ function FeedSection({
     if (!isDesktop) return 'look-card';
     // Hash the seed so distribution doesn't cluster at regular intervals.
     const seed = ((layoutMode + 1) * 31 + globalIndex * 127) % 100;
-    if (seed < 8) return 'look-card look-card-featured';  // ~8%  2x2
-    if (seed < 22) return 'look-card look-card-wide';     // ~14% 2x1
-    return 'look-card';                                   // ~78% 1x1
-    // look-card-tall (1x2, 3/8) retired — its extreme portrait ratio
-    // clashed with the primary 3/4 grid cell.
+    if (seed < 8) return 'look-card look-card-featured';  // ~8%  2x2 (still 3/4)
+    return 'look-card';                                   // ~92% 1x1
+    // look-card-wide (2x1, 16:9) and look-card-tall (1x2, 3/8) retired —
+    // their landscape/portrait ratios clashed with the primary 3/4 grid
+    // cell. The 2x2 featured stays: scaling both dims keeps it at 3/4.
   }, [layoutMode]);
 
   // Build the pool by treating looks + creatives as one combined deck.
