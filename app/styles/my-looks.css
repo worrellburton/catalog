@@ -2053,8 +2053,8 @@ html[data-shell="catalog-app"] .my-looks-overlay {
 }
 
 /* Drag-to-reorder grip. touch-action:none so the pointer stream isn't
-   stolen by the scroll container mid-drag. Sits top-left, clear of the
-   status dot (top-right) and the hover action bar. */
+   stolen by the scroll container mid-drag. Sits top-left; the coloured
+   status dot now lives in the bottom-left so the two never overlap. */
 .my-cat-tile-grip {
   position: absolute;
   top: 8px;
@@ -2127,15 +2127,15 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
 }
 
-/* Status pill stays visible regardless of mode so the curator can spot
-   drafts at a glance. Sits top-left, above the LookCard chrome. */
-/* Status dot — replaces the old LIVE text pill. Top-left of every
-   tile. Color encodes visibility: green=live, red=hidden (archived
-   or denied), amber=in review/submitted, gray=draft. Soft white halo
-   so it stays legible against any tile poster. */
+/* Status dot — replaces the old LIVE text pill. Sits in the BOTTOM-left
+   corner so it's clear of the drag grip (top-left); the grip stays a
+   neutral handle and this coloured light alone signals live/active.
+   Color encodes visibility: green=live, amber=anything not live
+   (in review / draft / archived / denied). Soft white halo so it stays
+   legible against any tile poster (the scrim darkens this corner too). */
 .my-cat-tile-dot {
   position: absolute;
-  top: 10px;
+  bottom: 10px;
   left: 10px;
   z-index: 3;
   width: 11px;
