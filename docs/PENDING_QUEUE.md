@@ -246,7 +246,12 @@ DONE (cont.): **D (look comments → labelled button, floating bubble removed)**
 PARTIAL: H — Weight row + no Fast↔Pro shift DONE; full one-viewport condense
 STILL TODO.
 STILL TODO (all are large rebuilds / fragile / need live verification):
+- **S** per-creator unseen-look badge — ✅ DONE. Spinning conic-ring +
+  pulsing-glow count badge on each FollowingStoriesRail avatar; computed from
+  getLooks + fetchSeenLookIds keyed by handle.
 - **N** analytics rebuild + animated thin-line graphs (header overlap)
+  — header overlap HARDENED (couldn't repro from CSS); the animated graphs
+  remain (need live verification to tune the draw/pulse).
 - **T** video upload + in/out trimmer
 - **E** comments → TikTok bottom drawer
 - **M** appearance settings — ✅ DONE END-TO-END. Settings gear in My Catalog
