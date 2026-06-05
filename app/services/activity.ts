@@ -227,16 +227,38 @@ export async function getMyRecentEvents(limit = 12): Promise<ActivityRecentEvent
   const uid = auth?.user?.id;
   if (!uid) return [];
 
+  // Exclude the creator's OWN views (`user_id <> uid`) and anonymous ones
+  // (`user_id` not null) at the DB level. Self-views — the creator scrubbing
+  // their own feed — were the source of the endless "Someone saw your look"
+  // rows: they have no other person to name, so they fell back to "Someone".
+  // Filtering them in the query (not just the JS map) means the limit returns
+  // the most recent *real* viewers instead of being eaten by self-view noise.
+  // Over-fetch so the per-(viewer, look) dedup below can still fill `limit`.
+  const fetchLimit = Math.min(Math.max(limit * 8, 48), 200);
   const { data, error } = await supabase
     .from('user_events')
     .select('id, event_type, target_uuid, target_type, created_at, user_id')
     .eq('target_owner_id', uid)
+    .neq('user_id', uid)
+    .not('user_id', 'is', null)
     .order('created_at', { ascending: false })
-    .limit(limit);
+    .limit(fetchLimit);
   if (error || !data) return [];
 
   type Row = { id: string; event_type: string; target_uuid: string | null; target_type: string; created_at: string; user_id: string | null };
-  const rows = data as Row[];
+  // Collapse repeats: one row per (viewer, look), keeping the most recent
+  // interaction. Without this a single shopper scrolling past a look a dozen
+  // times floods the ledger with identical rows. Source is ordered newest
+  // first, so the first time we see a pair is the one we keep.
+  const seenPairs = new Set<string>();
+  const rows: Row[] = [];
+  for (const r of data as Row[]) {
+    const key = `${r.user_id}|${r.target_uuid ?? ''}`;
+    if (seenPairs.has(key)) continue;
+    seenPairs.add(key);
+    rows.push(r);
+    if (rows.length >= limit) break;
+  }
   const lookIds = Array.from(new Set(rows.filter(r => r.target_type === 'look' && r.target_uuid).map(r => r.target_uuid!)));
   const titleById = new Map<string, { title: string | null; thumbnail_url: string | null }>();
   if (lookIds.length > 0) {
