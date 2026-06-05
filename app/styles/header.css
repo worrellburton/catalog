@@ -164,14 +164,18 @@ header > .pending-look-pill {
   display: inline-flex;
   align-items: center;
   gap: 8px;
-  padding: 6px 14px 6px 8px;
+  /* Matches the global follow-toast format (.follow-toast) so the app's
+     transient notifications share one visual language: dark glass, hairline
+     border, soft drop shadow, light text. */
+  padding: 8px 16px 8px 8px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
-  background: rgba(15, 23, 42, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(20, 20, 22, 0.92);
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
-  color: #fff;
-  font-size: 12px;
+  color: #f4f4f5;
+  font-size: 13px;
   font-weight: 500;
   letter-spacing: 0.005em;
   cursor: pointer;
@@ -183,9 +187,8 @@ header > .pending-look-pill {
   transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
 }
 .pending-look-pill:hover {
-  background: rgba(15, 23, 42, 0.92);
-  border-color: rgba(255, 255, 255, 0.32);
-  transform: translateY(-1px);
+  background: rgba(28, 28, 30, 0.95);
+  border-color: rgba(255, 255, 255, 0.2);
 }
 .pending-look-pill-spinner {
   width: 12px;
