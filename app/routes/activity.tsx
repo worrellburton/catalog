@@ -39,6 +39,7 @@ import {
 import type { CommentTargetType } from '~/services/comments';
 import CountUp from '~/components/CountUp';
 import SiteParticleHost from '~/components/SiteParticleHost';
+import ConsumerAvatar from '~/components/ConsumerAvatar';
 import '~/styles/activity-page.css';
 
 /**
@@ -264,8 +265,8 @@ export default function ActivityRoute() {
           </div>
         )}
 
-        {/* ── Live ticker ─────────────────────────────────────────── */}
-        <RecentTicker events={recent} />
+        {/* ── Who saw your looks — named ledger ────────────────────── */}
+        <RecentLedger events={recent} />
 
         {/* ── Creator hero: engagement summary ────────────────────── */}
         {isCreator !== false && (
@@ -465,24 +466,33 @@ function StatTile({
   );
 }
 
-function RecentTicker({ events }: { events: ActivityRecentEvent[] | null }) {
+// Named ledger of who recently interacted with your looks. Replaces the
+// old anonymous "Saw your look" ticker — each row names the viewer (from
+// their profile) with their avatar, the verb, and which look.
+function RecentLedger({ events }: { events: ActivityRecentEvent[] | null }) {
   if (!events || events.length === 0) return null;
+  const verb = (t: ActivityRecentEvent['event_type']) =>
+    t === 'impression' ? 'saw' : t === 'click' ? 'tapped' : 'clicked out on';
   return (
-    <div className="ap-ticker" role="status" aria-live="polite">
-      <div className="ap-ticker-track">
+    <section className="ap-section">
+      <div className="ap-section-head">
+        <h2 className="ap-section-title">Who saw your looks</h2>
+        <span className="ap-section-sub">Most recent activity</span>
+      </div>
+      <div className="ap-ledger">
         {events.map(e => (
-          <span key={e.id} className={`ap-ticker-pill ap-ticker-pill--${e.event_type}`}>
-            <span className="ap-ticker-dot" />
-            <span className="ap-ticker-label">
-              {e.event_type === 'impression' ? 'Saw' : e.event_type === 'click' ? 'Tapped' : 'Clicked out'}
-              {' '}
-              <strong>{e.title || 'your look'}</strong>
+          <div key={e.id} className={`ap-ledger-row ap-ledger-row--${e.event_type}`}>
+            <ConsumerAvatar name={e.actor_name || 'Someone'} url={e.actor_avatar} size={36} className="ap-ledger-avatar" />
+            <span className="ap-ledger-label">
+              <strong>{e.actor_name || 'Someone'}</strong>
+              {' '}{verb(e.event_type)}{' '}
+              <span className="ap-ledger-look">{e.title || 'your look'}</span>
             </span>
-            <span className="ap-ticker-time">{formatRelative(e.created_at)}</span>
-          </span>
+            <span className="ap-ledger-time">{formatRelative(e.created_at)}</span>
+          </div>
         ))}
       </div>
-    </div>
+    </section>
   );
 }
 

@@ -46,6 +46,10 @@ export interface ActivityRecentEvent {
   title: string | null;
   thumbnail_url: string | null;
   created_at: string;
+  /** Who performed the action (the viewer). Resolved from the event's
+   *  user_id → profiles. Null for signed-out / unresolved viewers. */
+  actor_name: string | null;
+  actor_avatar: string | null;
 }
 
 // ── Creator-side ──────────────────────────────────────────────────────
@@ -225,13 +229,13 @@ export async function getMyRecentEvents(limit = 12): Promise<ActivityRecentEvent
 
   const { data, error } = await supabase
     .from('user_events')
-    .select('id, event_type, target_uuid, target_type, created_at')
+    .select('id, event_type, target_uuid, target_type, created_at, user_id')
     .eq('target_owner_id', uid)
     .order('created_at', { ascending: false })
     .limit(limit);
   if (error || !data) return [];
 
-  type Row = { id: string; event_type: string; target_uuid: string | null; target_type: string; created_at: string };
+  type Row = { id: string; event_type: string; target_uuid: string | null; target_type: string; created_at: string; user_id: string | null };
   const rows = data as Row[];
   const lookIds = Array.from(new Set(rows.filter(r => r.target_type === 'look' && r.target_uuid).map(r => r.target_uuid!)));
   const titleById = new Map<string, { title: string | null; thumbnail_url: string | null }>();
@@ -245,9 +249,25 @@ export async function getMyRecentEvents(limit = 12): Promise<ActivityRecentEvent
     }
   }
 
+  // Resolve the viewer (actor) identity so the ledger names who saw the
+  // look instead of an anonymous "Saw your look". Skip self-views — the
+  // creator scrubbing their own look isn't ledger-worthy.
+  const actorIds = Array.from(new Set(rows.map(r => r.user_id).filter((u): u is string => !!u && u !== uid)));
+  const actorById = new Map<string, { full_name: string | null; avatar_url: string | null }>();
+  if (actorIds.length > 0) {
+    const { data: profs } = await supabase
+      .from('profiles')
+      .select('id, full_name, avatar_url')
+      .in('id', actorIds);
+    for (const p of (profs as Array<{ id: string; full_name: string | null; avatar_url: string | null }> | null) || []) {
+      actorById.set(p.id, { full_name: p.full_name, avatar_url: p.avatar_url });
+    }
+  }
+
   return rows.map(r => {
     const m = r.target_uuid ? titleById.get(r.target_uuid) : null;
     const et = r.event_type as ActivityRecentEvent['event_type'];
+    const actor = r.user_id && r.user_id !== uid ? actorById.get(r.user_id) : null;
     return {
       id: r.id,
       event_type: et === 'impression' || et === 'click' || et === 'clickout' ? et : 'impression',
@@ -255,6 +275,8 @@ export async function getMyRecentEvents(limit = 12): Promise<ActivityRecentEvent
       title: m?.title ?? null,
       thumbnail_url: m?.thumbnail_url ?? null,
       created_at: r.created_at,
+      actor_name: actor?.full_name ?? null,
+      actor_avatar: actor?.avatar_url ?? null,
     };
   });
 }

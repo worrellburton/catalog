@@ -267,47 +267,38 @@
 }
 
 /* Recent ticker (top of page) ──────────────────────────────────────── */
-.ap-ticker {
-  margin-bottom: 2px;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.05);
-  overflow: hidden;
-}
-.ap-ticker-track {
+/* Named "who saw your looks" ledger — vertical list, one named row per
+   recent interaction. */
+.ap-ledger {
   display: flex;
-  gap: 8px;
-  padding: 10px 12px;
-  overflow-x: auto;
-  scrollbar-width: none;
+  flex-direction: column;
+  gap: 6px;
 }
-.ap-ticker-track::-webkit-scrollbar { display: none; }
-.ap-ticker-pill {
-  flex-shrink: 0;
-  display: inline-flex;
+.ap-ledger-row {
+  display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 12px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.05);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  font-size: 11.5px;
-  color: rgba(248, 250, 252, 0.85);
-  font-weight: 500;
+  gap: 10px;
+  padding: 9px 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.07);
 }
-.ap-ticker-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: #4ade80;
-  box-shadow: 0 0 8px rgba(74, 222, 128, 0.7);
+.ap-ledger-avatar { flex-shrink: 0; }
+.ap-ledger-label {
+  flex: 1;
+  min-width: 0;
+  font-size: 13px;
+  color: rgba(248, 250, 252, 0.78);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ap-ledger-label strong { color: #f5f5f7; font-weight: 700; }
+.ap-ledger-look { color: #cbd5e1; font-weight: 600; }
+.ap-ledger-row--clickout { border-color: rgba(74, 222, 128, 0.28); }
+.ap-ledger-row--click { border-color: rgba(255, 138, 64, 0.24); }
+.ap-ledger-time {
   flex-shrink: 0;
-}
-.ap-ticker-pill--click .ap-ticker-dot    { background: #c4b5fd; box-shadow: 0 0 8px rgba(167, 139, 250, 0.7); }
-.ap-ticker-pill--clickout .ap-ticker-dot { background: #4ade80; box-shadow: 0 0 8px rgba(74, 222, 128, 0.7); }
-.ap-ticker-pill--impression .ap-ticker-dot { background: #e2e8f0; box-shadow: 0 0 8px rgba(226, 232, 240, 0.5); }
-.ap-ticker-label strong { color: #f5f5f7; font-weight: 700; margin-left: 2px; }
-.ap-ticker-time {
   font-size: 10.5px;
   font-weight: 600;
   color: rgba(248, 250, 252, 0.4);
@@ -364,7 +355,7 @@
 .light-mode .ap-look-row,
 .light-mode .ap-chip,
 .light-mode .ap-brand-tile,
-.light-mode .ap-ticker,
+.light-mode .ap-ledger-row,
 .light-mode .ap-empty {
   background: rgba(255, 255, 255, 0.7);
   border-color: rgba(15, 23, 42, 0.08);
@@ -372,7 +363,7 @@
 .light-mode .ap-stat-value,
 .light-mode .ap-look-title,
 .light-mode .ap-brand-name,
-.light-mode .ap-ticker-label strong { color: #0f172a; }
+.light-mode .ap-ledger-label strong { color: #0f172a; }
 .light-mode .ap-chip-count { background: rgba(34, 197, 94, 0.14); color: #15803d; }
 
 /* ── Conversations (comments + 🔥) ─────────────────────────────────── */
