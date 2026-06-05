@@ -282,6 +282,25 @@
 .look-comments-labeled:hover { background: rgba(255, 255, 255, 0.1); }
 .look-comments-labeled svg { flex-shrink: 0; opacity: 0.85; }
 
+/* Glowing, gently-pulsing Comments CTA — the always-on comments button
+   under the creator info. A soft animated glow + a slow breathing scale
+   draw the eye without being noisy. Honours reduced-motion. */
+.look-comments-glow {
+  border-color: rgba(120, 170, 255, 0.5);
+  background: rgba(120, 170, 255, 0.10);
+  box-shadow: 0 0 0 rgba(120, 170, 255, 0.0);
+  animation: look-comments-glow-pulse 2.6s ease-in-out infinite;
+}
+.look-comments-glow:hover { background: rgba(120, 170, 255, 0.18); }
+.look-comments-glow svg { opacity: 1; }
+@keyframes look-comments-glow-pulse {
+  0%, 100% { box-shadow: 0 0 14px rgba(120, 170, 255, 0.18); border-color: rgba(120, 170, 255, 0.42); }
+  50%      { box-shadow: 0 0 26px rgba(120, 170, 255, 0.42); border-color: rgba(120, 170, 255, 0.75); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .look-comments-glow { animation: none; box-shadow: 0 0 18px rgba(120, 170, 255, 0.3); }
+}
+
 /* Wrapper to center media within the 60% column */
 .look-media-centered {
   width: 100%;

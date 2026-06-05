@@ -950,37 +950,9 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                 </div>
               )}
 
-              {/* Comments — labelled button, moved to sit directly above
-                  "View more info" (was above the product list). */}
-              {commentsEnabled && commentSlug && onOpenComments && (
-                <button
-                  type="button"
-                  className="look-comments-labeled"
-                  onClick={() => onOpenComments('look', commentSlug)}
-                  aria-label="Comments"
-                >
-                  <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
-                  </svg>
-                  <span>{commentCount != null && commentCount > 0 ? `Comments ${commentCount > 99 ? '99+' : commentCount}` : 'Comments'}</span>
-                </button>
-              )}
-
-              {/* "View more info" — replaces the old About tab. Reveals the
-                  creator card + the ✨ AI summary in place. */}
-              {(aboutSummary || creatorData?.bio) && (
-                <button
-                  type="button"
-                  className={`look-more-info-btn${showLookInfo ? ' is-open' : ''}`}
-                  onClick={() => setShowLookInfo(v => !v)}
-                  aria-expanded={showLookInfo}
-                >
-                  <span>{showLookInfo ? 'Hide info' : 'View more info'}</span>
-                  <svg className="look-more-info-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-                </button>
-              )}
-
-              {showLookInfo && (
+              {/* Creator info — always shown (the "View more info" toggle
+                  was removed). */}
+              <>
                 <>
                   <div className="look-creator-about">
                     <div className="look-creator-about-header">
@@ -1028,33 +1000,23 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                     </button>
                   </div>
 
-                  {aboutCreatorStrip.length > 0 && (
-                    <div className="look-creator-more-section">
-                      <h3 className="look-feed-heading">More looks</h3>
-                      <div className="look-creator-more-scroll-wrap">
-                        <button className="look-scroll-arrow look-scroll-arrow--left" onClick={scrollMoreLeft} aria-label="Scroll left">
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
-                        </button>
-                        <div className="look-creator-more-scroll" ref={moreScrollRef}>
-                          {aboutCreatorStrip.map(fl => (
-                            <LookCard
-                              key={`about-creator-${fl.id}`}
-                              look={fl}
-                              className="look-card"
-                              onOpenLook={fl.id !== look.id ? handleFeedLookClick : (() => {})}
-                              onOpenCreator={onOpenCreator}
-                              onCreateCatalog={onCreateCatalog}
-                            />
-                          ))}
-                        </div>
-                        <button className="look-scroll-arrow look-scroll-arrow--right" onClick={scrollMoreRight} aria-label="Scroll right">
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-                        </button>
-                      </div>
-                    </div>
+                  {/* Comments — glowing, animated button with a live count,
+                      sits directly under the (always-shown) creator info. */}
+                  {commentsEnabled && commentSlug && onOpenComments && (
+                    <button
+                      type="button"
+                      className="look-comments-labeled look-comments-glow"
+                      onClick={() => onOpenComments('look', commentSlug)}
+                      aria-label="Comments"
+                    >
+                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
+                      </svg>
+                      <span>{commentCount != null ? `Comments ${commentCount > 99 ? '99+' : commentCount}` : 'Comments'}</span>
+                    </button>
                   )}
                 </>
-              )}
+              </>
             </div>
           </div>
         </div>
