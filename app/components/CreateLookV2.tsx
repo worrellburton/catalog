@@ -32,6 +32,7 @@ import { createLook, updateLook, addProductToLook, submitLook, uploadLookMedia, 
 import { analyzeLookMedia } from '~/services/analyze-look-media';
 import { researchProducts, type ResearchedProduct } from '~/services/product-research';
 import ParticleBackground from './ParticleBackground';
+import VideoTrimmer, { type VideoTrimResult } from './VideoTrimmer';
 
 // ── Picked-media shape ─────────────────────────────────────────────
 // Each entry owns its object-URL preview so we can revoke it on
@@ -41,6 +42,11 @@ interface MediaItem {
   file: File;
   previewUrl: string;
   kind: 'photo' | 'video';
+  /** Trim window (seconds) for videos chosen via the trimmer. */
+  trimStart?: number;
+  trimEnd?: number;
+  /** First-frame poster (JPEG data URL) captured by the trimmer. */
+  posterUrl?: string;
 }
 
 const MAX_MEDIA = 5;
@@ -86,6 +92,8 @@ export default function CreateLookV2({ onPublished, onCancel, look: existingLook
 
   const [phase, setPhase] = useState<Phase>(isEdit ? 'review' : 'empty');
   const [mediaItems, setMediaItems] = useState<MediaItem[]>([]);
+  // A single picked video opens the trimmer first (in/out + first-frame poster).
+  const [trimFile, setTrimFile] = useState<File | null>(null);
   const [products, setProducts] = useState<DetectedProduct[]>([]);
   const [publishing, setPublishing] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -150,6 +158,13 @@ export default function CreateLookV2({ onPublished, onCancel, look: existingLook
   const handleMediaFile = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (!files || files.length === 0) return;
+    // A single video opens the trimmer (in/out + first-frame poster) before
+    // it's added. Photos (and multi-select) add directly as before.
+    if (files.length === 1 && files[0].type.startsWith('video/')) {
+      if (mediaRef.current.length < MAX_MEDIA) setTrimFile(files[0]);
+      e.target.value = '';
+      return;
+    }
     let analyzeFile: File | null = null;
     setMediaItems(prev => {
       const remaining = MAX_MEDIA - prev.length;
@@ -177,6 +192,30 @@ export default function CreateLookV2({ onPublished, onCancel, look: existingLook
       return prev.filter(m => m.id !== id);
     });
   }, []);
+
+  // Trimmer "Done" → add the video as a media item with its in/out window +
+  // first-frame poster. Kicks analysis if it's the first upload.
+  const handleTrimConfirm = useCallback((result: VideoTrimResult) => {
+    const file = trimFile;
+    setTrimFile(null);
+    if (!file) return;
+    let analyzeFile: File | null = null;
+    setMediaItems(prev => {
+      if (prev.length >= MAX_MEDIA) return prev;
+      const wasEmpty = prev.length === 0;
+      if (wasEmpty) analyzeFile = file;
+      return [...prev, {
+        id: `m-${Date.now()}`,
+        file,
+        previewUrl: URL.createObjectURL(file),
+        kind: 'video',
+        trimStart: result.start,
+        trimEnd: result.end,
+        posterUrl: result.poster || undefined,
+      }];
+    });
+    if (analyzeFile) setPhase('analyzing');
+  }, [trimFile]);
 
   // ── Phase 2 → 3: AI product analysis ─────────────────────────────
   // Calls the analyze-look-media edge function with the first upload.
@@ -377,6 +416,13 @@ export default function CreateLookV2({ onPublished, onCancel, look: existingLook
   // ── Render ───────────────────────────────────────────────────────
   return (
     <div className={`cl-v2${mounted ? ' is-mounted' : ''}${showHero ? ' is-hero' : ''}`}>
+      {trimFile && (
+        <VideoTrimmer
+          file={trimFile}
+          onCancel={() => setTrimFile(null)}
+          onConfirm={handleTrimConfirm}
+        />
+      )}
       {/* Particle field — always on. Sits behind everything; the
           working-surface sections render on top with a slight scrim. */}
       <div className="cl-v2-particles" aria-hidden="true">
@@ -426,7 +472,7 @@ export default function CreateLookV2({ onPublished, onCancel, look: existingLook
             {mediaItems.map(m => (
               <div key={m.id} className="cl-v2-thumb">
                 {m.kind === 'video' ? (
-                  <video src={m.previewUrl} muted loop autoPlay playsInline />
+                  <video src={m.previewUrl} poster={m.posterUrl} muted loop autoPlay playsInline />
                 ) : (
                   <img src={m.previewUrl} alt="Uploaded media" />
                 )}

@@ -2678,6 +2678,110 @@ html[data-shell="catalog-app"] .my-looks-overlay {
 }
 .cl-v2.is-mounted { opacity: 1; transform: none; }
 
+/* ── Video trimmer (one viewport: header / video / scrub timeline) ── */
+.vtrim {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  background: #0a0a0a;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+}
+.vtrim-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: max(12px, env(safe-area-inset-top)) 16px 12px;
+  flex: 0 0 auto;
+}
+.vtrim-cancel, .vtrim-done {
+  background: none;
+  border: none;
+  color: #fff;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 6px 4px;
+}
+.vtrim-done { color: #a78bfa; }
+.vtrim-done:disabled { opacity: 0.5; cursor: default; }
+.vtrim-title { font-size: 15px; font-weight: 700; }
+.vtrim-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  overflow: hidden;
+}
+.vtrim-video {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 12px;
+  background: #000;
+}
+.vtrim-controls { padding: 14px 20px max(20px, env(safe-area-inset-bottom)); flex: 0 0 auto; }
+.vtrim-times {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+  margin-bottom: 10px;
+}
+.vtrim-times-dur { color: #a78bfa; font-weight: 600; }
+.vtrim-track {
+  position: relative;
+  height: 44px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  touch-action: none;
+  user-select: none;
+}
+.vtrim-track-scrub { position: absolute; inset: 0; cursor: pointer; }
+.vtrim-sel {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: rgba(167, 139, 250, 0.18);
+  border: 2px solid #a78bfa;
+  border-radius: 10px;
+  pointer-events: none;
+}
+.vtrim-playhead {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  background: #fff;
+  pointer-events: none;
+}
+.vtrim-handle {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 18px;
+  margin-left: -9px;
+  border-radius: 6px;
+  background: #a78bfa;
+  cursor: ew-resize;
+  touch-action: none;
+}
+.vtrim-handle::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 2px;
+  height: 14px;
+  background: #fff;
+  border-radius: 1px;
+}
+.vtrim-hint { text-align: center; font-size: 12px; color: rgba(255, 255, 255, 0.5); margin: 12px 0 0; }
+
 /* Hero (empty) state — fills the full form container with a
    particle backdrop + a small centered upload card. Drop the
    default page padding so the card can true-center vertically; the
