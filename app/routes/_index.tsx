@@ -28,7 +28,7 @@ import { useShopperGender } from '~/hooks/useShopperGender';
 import { toCatalogName, getRandomCatalogName } from '~/utils/catalogName';
 import { prefetchSimilarProducts, prefetchCreativesByBrand, prefetchHomeFeed, type ProductAd } from '~/services/product-creative';
 import { getGraphPairs, type GraphPair } from '~/services/graph-pairs';
-import { getLooks } from '~/services/looks';
+import { getLooks, getLookByUuid } from '~/services/looks';
 import { primeTrailAssets } from '~/utils/trailPrefetch';
 import { supabase } from '~/utils/supabase';
 import { trackClick, trackCreativeImpressions, resolveProductIdByUrl, trackProductClickout } from '~/services/session-tracker';
@@ -1091,8 +1091,11 @@ export default function Home() {
     let cancelled = false;
     (async () => {
       try {
+        // Live looks come from the cached public set; an inactive/unpublished
+        // look (e.g. a creator's fresh render) isn't in there, so fall back to
+        // a direct status-agnostic fetch.
         const all = await getLooks();
-        const look = all.find(l => l.uuid === lookUuid);
+        const look = all.find(l => l.uuid === lookUuid) ?? await getLookByUuid(lookUuid);
         if (!cancelled && look) {
           setView('app');
           handleOpenLook(look);

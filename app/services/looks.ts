@@ -387,6 +387,88 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
   return result;
 }
 
+// Fetch a single look by uuid REGARDLESS of status, so creator-facing
+// surfaces (e.g. the activity "Your looks" rail) can open the look screen
+// for an inactive/unpublished render that the public getLooks() filters out.
+export async function getLookByUuid(uuid: string): Promise<Look | null> {
+  if (!supabase) return null;
+  const { data, error } = await supabase
+    .from('looks')
+    .select(`
+      id, legacy_id, title, gender, creator_handle, user_id, description, color, status, feed_rank,
+      looks_creative ( video_url, thumbnail_url, mobile_video_url, is_primary, trim_start, trim_end ),
+      look_products ( sort_order, products ( name, brand, price, url, image_url, primary_image_url, primary_video_url, primary_video_poster_url, type, subtype ) )
+    `)
+    .eq('id', uuid)
+    .limit(1)
+    .maybeSingle();
+  if (error || !data) return null;
+  const row = data as unknown as SupabaseLook;
+  const primary = (row.looks_creative || []).find(c => c.is_primary) ?? row.looks_creative?.[0];
+  if (!primary?.video_url) return null;
+
+  // Best-effort creator identity (name + avatar); the overlay falls back to
+  // the handle if these are missing.
+  let displayName: string | undefined;
+  let avatar: string | undefined;
+  let isAi = false;
+  if (row.creator_handle) {
+    const { data: c } = await supabase
+      .from('creators').select('display_name, avatar_url, is_ai')
+      .eq('handle', row.creator_handle).maybeSingle();
+    const cr = c as { display_name: string | null; avatar_url: string | null; is_ai: boolean | null } | null;
+    displayName = cr?.display_name ?? undefined;
+    avatar = cr?.avatar_url ?? undefined;
+    isAi = cr?.is_ai === true;
+  }
+  if ((!displayName || !avatar) && row.user_id) {
+    const { data: p } = await supabase
+      .from('profiles').select('full_name, avatar_url, email, is_ai')
+      .eq('id', row.user_id).maybeSingle();
+    const pr = p as { full_name: string | null; avatar_url: string | null; email: string | null; is_ai: boolean | null } | null;
+    displayName = displayName || pr?.full_name || pr?.email?.split('@')[0] || undefined;
+    avatar = avatar || pr?.avatar_url || undefined;
+    isAi = isAi || pr?.is_ai === true;
+  }
+
+  if (primary.trim_start != null || primary.trim_end != null) {
+    registerLookTrim(primary.video_url, primary.trim_start ?? undefined, primary.trim_end ?? undefined);
+    registerLookTrim(primary.mobile_video_url ?? undefined, primary.trim_start ?? undefined, primary.trim_end ?? undefined);
+  }
+
+  return {
+    id: row.legacy_id ?? stableLookId(row.id),
+    uuid: row.id,
+    feed_rank: row.feed_rank,
+    title: row.title,
+    video: primary.video_url || '',
+    thumbnail_url: primary.thumbnail_url || undefined,
+    mobile_video_url: primary.mobile_video_url || undefined,
+    trimStart: primary.trim_start ?? undefined,
+    trimEnd: primary.trim_end ?? undefined,
+    gender: (row.gender as 'men' | 'women') || 'women',
+    creator: row.creator_handle || (row.user_id ? `user:${row.user_id}` : ''),
+    creatorDisplayName: displayName,
+    creatorAvatar: avatar,
+    creatorIsAi: isAi,
+    description: row.description || '',
+    color: row.color || '#888',
+    products: (row.look_products || [])
+      .sort((a, b) => a.sort_order - b.sort_order)
+      .map((lp) => ({
+        name: lp.products?.name || '',
+        brand: lp.products?.brand || '',
+        price: lp.products?.price || '',
+        url: lp.products?.url || '',
+        image: lp.products?.primary_image_url || lp.products?.image_url,
+        video_url: lp.products?.primary_video_url || undefined,
+        thumbnail_url: lp.products?.primary_video_poster_url || lp.products?.primary_image_url || lp.products?.image_url || undefined,
+        type: lp.products?.type ?? undefined,
+        subtype: lp.products?.subtype ?? undefined,
+      })),
+  };
+}
+
 async function fetchCreatorsFromSupabase(): Promise<Record<string, Creator>> {
   if (!supabase) return staticCreators;
   const { data, error } = await supabase
