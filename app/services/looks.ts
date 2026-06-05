@@ -78,6 +78,39 @@ interface SupabaseLook {
   }[];
 }
 
+// Stable synthetic id for DB looks that have no legacy_id (every DB-native
+// look today). Derived deterministically from the uuid so it never changes
+// across fetches. The old `-(index + 1)` reshuffled on every load, which
+// silently broke everything keyed on look.id — bookmarks, seen-state, admin
+// hides (a stored hide matched a different look next fetch). Negative space
+// keeps these clear of the positive ids carried by legacy seed looks; the
+// magnitude stays modest so downstream id arithmetic (e.g. the `id * 1000`
+// dedup in similar-look fill) stays well inside Number.MAX_SAFE_INTEGER.
+function stableLookId(uuid: string): number {
+  let h = 0;
+  for (let i = 0; i < uuid.length; i++) {
+    h = (Math.imul(h, 31) + uuid.charCodeAt(i)) | 0;
+  }
+  return -((Math.abs(h) % 2_000_000_000) + 1);
+}
+
+// Disambiguate looks that would render an identical title. Titles are
+// auto-generated as "<creator>'s <style> look", so a creator with two
+// cinematic looks produces two cards labelled identically — they read as
+// duplicates even though each is a distinct video with its own products.
+// This is purely cosmetic (no DB write): the first keeps the bare title,
+// later collisions get a " 2", " 3" … suffix in stable feed order.
+function disambiguateTitles(looks: Look[]): void {
+  const seen = new Map<string, number>();
+  for (const l of looks) {
+    const base = (l.title || '').trim();
+    if (!base) continue;
+    const n = (seen.get(base) ?? 0) + 1;
+    seen.set(base, n);
+    if (n > 1) l.title = `${base} ${n}`;
+  }
+}
+
 async function fetchLooksFromSupabase(): Promise<Look[]> {
   if (!supabase) return staticLooks;
   // Join the primary creative for each look - looks_creative supersedes the
@@ -258,7 +291,7 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
   // is_ai by creator_handle was already populated above when we
   // queried creators for handle validation — single round trip.
 
-  const result = filteredLooks.map((row, index) => {
+  const result = filteredLooks.map((row) => {
     const primary = row.looks_creative[0];
     // Always look up profile by user_id when available — the avatar
     // belongs to the human/AI who owns this look, regardless of
@@ -272,7 +305,7 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
     // to normalize handle-less / orphan looks onto one identity.
     const ownerCreator = profileUserId ? creatorByUserId.get(profileUserId) : undefined;
     return {
-      id: row.legacy_id ?? -(index + 1),
+      id: row.legacy_id ?? stableLookId(row.id),
       uuid: row.id,
       feed_rank: row.feed_rank,
       title: row.title,
@@ -346,6 +379,9 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
       registerLookTrim(l.mobile_video_url, l.trimStart, l.trimEnd);
     }
   }
+
+  // Make repeated auto-generated titles read as distinct cards (cosmetic).
+  disambiguateTitles(result);
 
   writeLooksToStorage(result);
   return result;
