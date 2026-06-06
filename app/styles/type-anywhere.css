@@ -352,7 +352,12 @@ html[data-shell="catalog-app"] .ai-bar-wrap { display: none !important; }
   flex-direction: column;
   align-items: center;
   gap: 10px;
-  max-width: min(760px, calc(100vw - 48px));
+  /* Centre with auto margins + an explicit max-width, NOT
+     left:50%+translateX(-50%). The transform approach desynced from the
+     100vw-based row width (scrollbar/inset gutter) and shoved the cloud
+     off-screen on mobile — see the CLAUDE.md "centering fixed/overlay
+     pills" rule. Size in % so width and centering can't drift apart. */
+  max-width: min(760px, calc(100% - 32px));
   /* Float the cloud ABOVE the bar (pinned by its bottom edge to the top
      of the wrap) so a click on the docked bar — anywhere in the app, e.g.
      over the scrolled feed — reveals the recommended catalogs just above
@@ -365,17 +370,18 @@ html[data-shell="catalog-app"] .ai-bar-wrap { display: none !important; }
      the cloud drops BELOW it — see the hero override just below. */
   position: absolute;
   bottom: calc(100% + 10px);
-  left: 50%;
-  transform: translateX(-50%);
+  left: 0;
+  right: 0;
+  margin-inline: auto;
   width: max-content;
 }
 @keyframes catalog-pills-in-above {
-  from { opacity: 0; transform: translate(-50%, 8px); }
-  to   { opacity: 1; transform: translate(-50%, 0); }
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 @keyframes catalog-pills-in-from-below {
-  from { opacity: 0; transform: translate(-50%, -10px); }
-  to   { opacity: 1; transform: translate(-50%, 0); }
+  from { opacity: 0; transform: translateY(-10px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 .catalog-pills { animation: catalog-pills-in-above 0.4s cubic-bezier(0.16, 1, 0.3, 1) both; }
 
@@ -400,10 +406,11 @@ body:has(.app-root.home-hero:not(.hero-scrolled)) .catalog-pills {
   flex-wrap: wrap;
   justify-content: center;
   gap: 8px;
-  /* Cap to the viewport so the wrapping row never runs off both edges on
-     mobile — the parent cloud is max-content, which would otherwise let the
-     pills lay out on one over-wide line. */
-  max-width: calc(100vw - 32px);
+  /* Cap to the parent (which is already viewport-bounded) so the wrapping
+     row never runs off either edge on mobile — the parent cloud is
+     max-content, which would otherwise let the pills lay out on one
+     over-wide line. % (not vw) so it can't desync from the centering. */
+  max-width: 100%;
 }
 @keyframes catalog-pills-in {
   from { opacity: 0; transform: translateY(10px); }

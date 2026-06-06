@@ -8,7 +8,7 @@ import { useAuth } from '~/hooks/useAuth';
 import { useShopperBody } from '~/hooks/useShopperBody';
 import { useSearchBeam } from '~/hooks/useSearchBeam';
 import FilterPanel, { ActiveFilters, getEmptyFilters, hasActiveFilters } from './FilterPanel';
-import { getSearchSuggestions, getCreators } from '~/services/looks';
+import { getSearchSuggestions, getCreators, getLooks } from '~/services/looks';
 
 // Filter fields that carry real search intent (men/women are the gender
 // toggle, price/creator aren't search terms). A few tokens get humanized so
@@ -290,8 +290,8 @@ function BottomBar({
   // names, so typing a creator (e.g. "robert bu") autocompletes them too.
   useEffect(() => {
     let cancelled = false;
-    Promise.all([getSearchSuggestions(), getCreators()])
-      .then(([sugg, creators]) => {
+    Promise.all([getSearchSuggestions(), getCreators(), getLooks()])
+      .then(([sugg, creators, looks]) => {
         if (cancelled) return;
         const creatorList = Object.values(creators);
         const creatorNames = creatorList
@@ -304,11 +304,20 @@ function BottomBar({
           if (!seen.has(n.toLowerCase())) { merged.push(n); seen.add(n.toLowerCase()); }
         }
         setAllSuggestions(merged);
+        // Post counts per creator handle — only creators with 4+ live looks
+        // are worth recommending, so we don't surface near-empty profiles.
+        const lookCounts = new Map<string, number>();
+        for (const l of looks) {
+          if (!l.creator) continue;
+          const k = l.creator.toLowerCase();
+          lookCounts.set(k, (lookCounts.get(k) || 0) + 1);
+        }
         // Featured creators rail — those with a real avatar read best as
-        // round tiles; cap at 12 so the rail stays a quick scroll.
+        // round tiles; require 4+ posts; cap at 12 so the rail stays a
+        // quick scroll.
         setFeaturedCreators(
           creatorList
-            .filter(c => !!c.avatar && !!c.name)
+            .filter(c => !!c.avatar && !!c.name && (lookCounts.get(c.name.toLowerCase()) || 0) >= 4)
             .slice(0, 12)
             .map(c => ({ name: c.name, displayName: c.displayName || c.name, avatar: c.avatar })),
         );
