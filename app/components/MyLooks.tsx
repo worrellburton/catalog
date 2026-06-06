@@ -1420,13 +1420,22 @@ function CreatorAnalyticsModal({ look, onClose }: { look: ManagedLook | null; on
           <div className="my-cat-analytics-empty">No analytics yet.</div>
         ) : (
           <>
-            <div className="my-cat-analytics-grid">
-              <Stat label="Impressions" value={data.impressions.toLocaleString()} />
-              <Stat label="Clicks"      value={data.clicks.toLocaleString()} sub={ctr ? `${ctr}% CTR` : undefined} />
-              <Stat label="Clickouts"   value={data.clickouts.toLocaleString()} sub={clickoutPct ? `${clickoutPct}% of clicks` : undefined} />
+            {/* Impressions hero — the headline metric with its trend drawn
+                right inside the card, so the chart reads as part of the
+                number instead of a stray floating line. */}
+            <div className="my-cat-analytics-hero">
+              <div className="my-cat-analytics-hero-head">
+                <span className="my-cat-stat-label">Impressions</span>
+                <span className="my-cat-analytics-hero-value">{data.impressions.toLocaleString()}</span>
+              </div>
+              <AnalyticsTrend series={data.series} />
             </div>
 
-            <AnalyticsTrend series={data.series} />
+            {/* Clicks + clickouts as a clean 2-up — no more empty 4th cell. */}
+            <div className="my-cat-analytics-duo">
+              <Stat label="Clicks"    value={data.clicks.toLocaleString()}    sub={ctr ? `${ctr}% CTR` : '—'} />
+              <Stat label="Clickouts" value={data.clickouts.toLocaleString()} sub={clickoutPct ? `${clickoutPct}% of clicks` : '—'} />
+            </div>
 
             {!look && data.topLook && (
               <section className="my-cat-analytics-section">
@@ -1486,28 +1495,50 @@ function Stat({ label, value, sub }: { label: string; value: string; sub?: strin
   );
 }
 
-/** Impressions-over-time trend. A very thin line that draws left→right with
- *  a slow ease-in-out and a pulsing glow at the leading edge. Needs ≥2 points;
- *  renders nothing otherwise. */
+/** Impressions-over-time trend embedded in the hero card: a soft gradient
+ *  area under a drawing line, with a pulsing glow at the leading edge. With
+ *  fewer than two data points it shows a faint flat baseline so the hero
+ *  never looks broken/empty. */
 function AnalyticsTrend({ series }: { series: { day: string; count: number }[] }) {
-  if (!series || series.length < 2) return null;
-  const W = 320, H = 60, pad = 5;
-  const max = Math.max(...series.map(s => s.count), 1);
-  const pts = series.map((s, i) => {
-    const x = pad + (i / (series.length - 1)) * (W - pad * 2);
-    const y = H - pad - (s.count / max) * (H - pad * 2);
-    return [x, y] as const;
-  });
-  const d = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(' ');
-  const [ex, ey] = pts[pts.length - 1];
+  const W = 320, H = 96, pad = 8;
+  const enough = !!series && series.length >= 2;
+
+  let line: string;
+  let area: string;
+  let head: readonly [number, number] | null = null;
+
+  if (enough) {
+    const max = Math.max(...series.map(s => s.count), 1);
+    const pts = series.map((s, i) => {
+      const x = pad + (i / (series.length - 1)) * (W - pad * 2);
+      const y = H - pad - (s.count / max) * (H - pad * 2.5);
+      return [x, y] as const;
+    });
+    line = pts.map((p, i) => `${i === 0 ? 'M' : 'L'}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join(' ');
+    area = `${line} L${(W - pad).toFixed(1)} ${H} L${pad} ${H} Z`;
+    head = pts[pts.length - 1];
+  } else {
+    // Flat baseline — reads as "no movement yet", not a glitch.
+    const y = H - pad - 2;
+    line = `M${pad} ${y} L${W - pad} ${y}`;
+    area = `${line} L${W - pad} ${H} L${pad} ${H} Z`;
+  }
+
   return (
-    <section className="my-cat-analytics-section an-trend">
-      <h3>Impressions over time</h3>
-      <svg className="an-trend-svg" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Impressions trend">
-        <path className="an-trend-line" d={d} pathLength={1} />
-        <circle className="an-trend-head" cx={ex} cy={ey} r={2.4} />
+    <div className={`an-trend${enough ? '' : ' an-trend--flat'}`}>
+      <div className="an-trend-caption">Impressions over time</div>
+      <svg className="an-trend-svg" viewBox={`0 0 ${W} ${H}`} role="img" aria-label="Impressions over time">
+        <defs>
+          <linearGradient id="anTrendFill" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%"   stopColor="#a78bfa" stopOpacity="0.34" />
+            <stop offset="100%" stopColor="#a78bfa" stopOpacity="0" />
+          </linearGradient>
+        </defs>
+        <path className="an-trend-area" d={area} fill="url(#anTrendFill)" />
+        <path className="an-trend-line" d={line} pathLength={1} />
+        {head && <circle className="an-trend-head" cx={head[0]} cy={head[1]} r={3} />}
       </svg>
-    </section>
+    </div>
   );
 }
 
