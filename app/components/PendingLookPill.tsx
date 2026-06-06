@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react';
-import { listUserGenerations, isGenerationInFlight } from '~/services/user-generations';
+import { listUserGenerations, isGenerationInFlight, getGenerationDetail } from '~/services/user-generations';
 import { useAuth } from '~/hooks/useAuth';
 
 /**
@@ -8,14 +8,15 @@ import { useAuth } from '~/hooks/useAuth';
  * discovering". Tapping the pill returns to /generate so they can
  * watch progress or run another action against the in-flight job.
  *
- * Polls listUserGenerations every 6s while at least one row is
- * unfinished. When everything is 'done' (or 'failed') the pill
- * disappears on the next tick so it doesn't haunt the header. Hidden
- * for signed-out shoppers.
+ * Shows the look's face photos + chosen products orbiting in a small 3D
+ * ring (mirrors the full "Vision composes…" screen). Only visible at the
+ * very top of the feed — it hides once the shopper scrolls into the grid.
+ * Polls listUserGenerations every 6s while at least one row is unfinished.
  */
 export default function PendingLookPill({ onOpen }: { onOpen: () => void }) {
   const { user } = useAuth();
   const [pending, setPending] = useState<{ id: string; status: string; style: string | null } | null>(null);
+  const [images, setImages] = useState<string[]>([]);
   // Only surface the pill at the very top of the feed — once the shopper
   // scrolls into the grid it shouldn't keep hovering over the content.
   const [atTop, setAtTop] = useState(true);
@@ -51,6 +52,21 @@ export default function PendingLookPill({ onOpen }: { onOpen: () => void }) {
     };
   }, [user]);
 
+  // Pull the in-flight look's face photos + products so they can orbit in
+  // the pill. Refetched whenever the in-flight generation changes; capped so
+  // the tiny ring never gets too busy.
+  useEffect(() => {
+    if (!pending?.id) { setImages([]); return; }
+    let cancelled = false;
+    getGenerationDetail(pending.id).then((d) => {
+      if (cancelled) return;
+      const faces = d.uploads.map((u) => u.public_url).filter((u): u is string => !!u);
+      const products = d.products.map((p) => p.product?.image_url).filter((u): u is string => !!u);
+      setImages([...faces, ...products].slice(0, 6));
+    }).catch(() => { /* keep the spinner fallback */ });
+    return () => { cancelled = true; };
+  }, [pending?.id]);
+
   if (!pending || !atTop) return null;
   const label = pending.style ? `Your ${pending.style.toLowerCase()} look is rendering` : 'Your look is rendering';
   return (
@@ -61,7 +77,19 @@ export default function PendingLookPill({ onOpen }: { onOpen: () => void }) {
       aria-label={label}
       title={label}
     >
-      <span className="pending-look-pill-spinner" aria-hidden="true" />
+      {images.length > 0 ? (
+        <span className="pending-look-pill-orbit" aria-hidden="true">
+          <span className="pending-look-pill-orbit-ring" style={{ ['--n' as string]: images.length }}>
+            {images.map((src, i) => (
+              <span key={`${src}-${i}`} className="pending-look-pill-orbit-item" style={{ ['--i' as string]: i }}>
+                <img src={src} alt="" loading="lazy" decoding="async" />
+              </span>
+            ))}
+          </span>
+        </span>
+      ) : (
+        <span className="pending-look-pill-spinner" aria-hidden="true" />
+      )}
       <span className="pending-look-pill-label">{label}</span>
     </button>
   );

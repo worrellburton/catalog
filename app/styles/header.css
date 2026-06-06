@@ -210,6 +210,46 @@ header > .pending-look-pill {
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
+/* Mini 3D orbit of the look's face + products inside the pill. Same idea as
+   the full "Vision composes…" ring, shrunk to header size. */
+.pending-look-pill-orbit {
+  position: relative;
+  width: 24px;
+  height: 24px;
+  flex-shrink: 0;
+  perspective: 200px;
+}
+.pending-look-pill-orbit-ring {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  animation: pending-look-orbit-spin 7s linear infinite;
+}
+.pending-look-pill-orbit-item {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 18px;
+  height: 18px;
+  margin: -9px 0 0 -9px;
+  transform: rotateY(calc(var(--i) * (360deg / var(--n)))) translateZ(15px);
+}
+.pending-look-pill-orbit-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: #111;
+}
+@keyframes pending-look-orbit-spin {
+  from { transform: rotateY(0deg); }
+  to   { transform: rotateY(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pending-look-pill-orbit-ring { animation: none; }
+}
 @keyframes pending-look-spin {
   to { transform: rotate(360deg); }
 }
