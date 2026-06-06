@@ -836,10 +836,15 @@ export default function GeneratePage() {
       if (q) query = query.or(`name.ilike.%${q}%,brand.ilike.%${q}%`);
       const { data } = await query;
       if (cancelled) return;
-      setProductResults(((data || []) as PickedProduct[]).map(p => ({
+      const mapped = ((data || []) as PickedProduct[]).map(p => ({
         ...p,
         role_tag: roleTagFromName(p.name),
-      })));
+      }));
+      // Dresses are women-only: never surface them to a male creator, even
+      // when the row's gender tag is unisex / untagged.
+      setProductResults(
+        userGender === 'male' ? mapped.filter(p => p.role_tag !== 'Dress') : mapped,
+      );
       setProductsLoading(false);
     };
     const handle = window.setTimeout(run, 180);

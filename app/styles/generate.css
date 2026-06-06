@@ -858,30 +858,29 @@ html[data-shell="catalog-app"] .gen-page {
   margin-top: 4px;
 }
 
-/* Horizontal style swiper — fixed-width cards scroll sideways instead of
-   wrapping into a grid, so the style picker reads as a swipeable rail. */
+/* Style picker as a contained, wrapping grid — every preset fits within the
+   viewport with no horizontal bleed (was a sideways-scrolling rail that ran
+   off the right edge on mobile). auto-fill keeps it responsive: ~3 columns on
+   a phone, more on wider screens. */
 .gen-styleswiper {
-  display: flex;
-  gap: 10px;
-  overflow-x: auto;
-  scroll-snap-type: x proximity;
-  -webkit-overflow-scrolling: touch;
-  padding-bottom: 6px;
-  scrollbar-width: none;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 8px;
+  max-width: 100%;
+  min-width: 0;
 }
-.gen-styleswiper::-webkit-scrollbar { display: none; }
 .gen-styleswiper > .gen-stylecard {
-  flex: 0 0 auto;
-  width: 96px;
-  aspect-ratio: 3 / 4;
-  scroll-snap-align: start;
+  width: auto;
+  aspect-ratio: 1 / 1;
+}
+/* A picked card reveals its blurb, so let it grow past the square. */
+.gen-styleswiper > .gen-stylecard.is-picked {
+  aspect-ratio: auto;
 }
 
-/* Mobile fit: the style step and its free-text textarea must never push past
-   the viewport. The horizontal swiper scrolls internally; everything else is
-   clamped to 100% so the "direct your own video" box matches the screen width. */
+/* Mobile fit: the style step and its free-text textarea never exceed the
+   viewport width. */
 .gen-step { min-width: 0; max-width: 100%; }
-.gen-styleswiper { max-width: 100%; min-width: 0; }
 .gen-direct { max-width: 100%; }
 .gen-direct-input { max-width: 100%; }
 
