@@ -79,6 +79,25 @@
   .comments-drawer-backdrop { animation: none; }
 }
 
+/* Desktop: instead of a bottom sheet, the thread is a right-side panel that
+   slides in from the right edge and occupies roughly the right third of the
+   screen. Mobile keeps the bottom-up drawer above. */
+@media (min-width: 769px) {
+  .comments-page--drawer {
+    inset: 0 0 0 auto;
+    width: clamp(380px, 33vw, 560px);
+    height: 100dvh;
+    border-radius: 22px 0 0 22px;
+    box-shadow: -12px 0 40px rgba(0, 0, 0, 0.5);
+    animation: comments-drawer-right 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .comments-page--drawer.is-closing {
+    animation: comments-drawer-right-out 0.34s cubic-bezier(0.4, 0, 0.7, 0.2) both;
+  }
+  @keyframes comments-drawer-right { from { transform: translateX(100%); } to { transform: translateX(0); } }
+  @keyframes comments-drawer-right-out { from { transform: translateX(0); } to { transform: translateX(100%); } }
+}
+
 /* Ambient WebGL backdrop — sits behind the avatar particle field. Both
    live at z-index 0; DOM order (this first) keeps it underneath. */
 .comments-webgl {

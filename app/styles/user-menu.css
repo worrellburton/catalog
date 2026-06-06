@@ -1055,6 +1055,40 @@ body.has-account-menu { overflow-x: hidden; }
   color: #fff;
 }
 
+/* Desktop super-admin Admin shortcut, sitting just under the profile header.
+   Hidden on mobile/touch where the Super Admin → Admin path is used. */
+.user-menu-admin-quicklink {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  width: fit-content;
+  margin: 10px 0 2px;
+  padding: 8px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: #f4f4f5;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.user-menu-admin-quicklink:hover {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+.user-menu-admin-quicklink svg { opacity: 0.85; }
+.light-mode .user-menu-admin-quicklink {
+  border-color: rgba(0, 0, 0, 0.1);
+  background: rgba(0, 0, 0, 0.04);
+  color: #18181b;
+}
+/* Desktop only — touch devices fall back to the Super Admin sub-section. */
+@media (hover: none), (max-width: 768px) {
+  .user-menu-admin-quicklink { display: none; }
+}
+
 /* Invite & earn row — same list-row shell; the upload-style arrow on the
    right signals "share". Trailing $ shows running referral earnings. */
 .user-menu-invite-row .user-menu-page-row-chev { color: rgba(255, 255, 255, 0.45); }

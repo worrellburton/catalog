@@ -6,9 +6,12 @@
 
 .activity-toasts {
   position: fixed;
-  top: 84px;
-  left: 50%;
-  transform: translateX(-50%);
+  /* Sits below the header's centered creator row so summary toasts never
+     overlap the top-two creator avatars. */
+  top: 116px;
+  left: 0;
+  right: 0;
+  margin-inline: auto;
   z-index: 10000;
   display: flex;
   flex-direction: column;
@@ -16,7 +19,7 @@
   gap: 10px;
   pointer-events: none;
   width: max-content;
-  max-width: min(420px, calc(100vw - 24px));
+  max-width: min(420px, calc(100% - 24px));
 }
 
 .activity-toast {
@@ -125,11 +128,11 @@
   font-variant-numeric: tabular-nums;
 }
 .activity-toast-count {
-  /* Was 18px — slightly smaller now that the whole chip is tighter, but
-     still the largest text in the pill so the count-up animation reads. */
-  font-size: 15px;
-  font-weight: 800;
-  letter-spacing: -0.02em;
+  /* Matched to the header wallet/earnings pill (12px / 700) so the toast
+     reads at the same scale as the rest of the header chrome. */
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
   color: #f8fafc;
   text-shadow: 0 0 18px rgba(74, 222, 128, 0.45);
   animation: activity-toast-count-pop 380ms cubic-bezier(0.34, 1.56, 0.64, 1) both;

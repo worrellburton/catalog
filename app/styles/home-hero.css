@@ -193,9 +193,9 @@
    bar (which is the single search input on the hero). */
 .sfh-scroll-hint {
   position: absolute;
-  /* Sit closer to the iOS browser chrome so the cluster above has visual
-     breathing room — was 96px, felt cramped against the centered bar. */
-  bottom: calc(38px + env(safe-area-inset-bottom));
+  /* Lifted above the peeking feed cards at the bottom of the hero so the
+     "Scroll to see most popular" label never overlaps their tops. */
+  bottom: calc(104px + env(safe-area-inset-bottom));
   left: 50%;
   transform: translateX(-50%);
   display: inline-flex;

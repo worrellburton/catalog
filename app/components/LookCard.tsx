@@ -411,7 +411,7 @@ function LookCardCreatorChip({
       handle={look.creator}
       avatarUrl={avatar}
       displayName={name}
-      size={33}
+      size={23}
       onOpenCreator={onOpenCreator}
       avatarOpensCreator={false}
       className="card-creator-avatar-pos"

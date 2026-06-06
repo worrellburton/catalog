@@ -567,7 +567,7 @@ function CreatorChip({
       handle={look.creator}
       avatarUrl={creatorAvatar}
       displayName={creatorName}
-      size={40}
+      size={28}
       onOpenCreator={onOpenCreator}
       avatarOpensCreator={false}
       className="card-creator-avatar-pos"

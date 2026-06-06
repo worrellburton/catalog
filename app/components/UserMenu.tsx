@@ -428,6 +428,20 @@ function UserMenu({
                     </svg>
                   )}
                 </div>
+                {/* Desktop super-admin shortcut — a direct Admin button right
+                    under the profile picture. Hidden on mobile (CSS) where the
+                    Super Admin → Admin path is used instead. */}
+                {isSuperAdmin && (
+                  <button
+                    type="button"
+                    className="user-menu-admin-quicklink"
+                    onClick={runItem(() => navigate('/admin'))}
+                    aria-label="Open Admin"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 2l9 4v6c0 5-3.7 9.4-9 10-5.3-.6-9-5-9-10V6l9-4z"/></svg>
+                    <span>Admin</span>
+                  </button>
+                )}
                 <div className="user-menu-divider" />
               </>
             )}
