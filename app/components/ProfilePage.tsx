@@ -30,6 +30,8 @@ interface ProfileData {
   weightLabel: string | null;
   ageLabel: string | null;
   gender: UserGender;
+  instagram: string;
+  tiktok: string;
 }
 
 export default function ProfilePage({ user, onClose, renderSaved }: ProfilePageProps) {
@@ -49,6 +51,8 @@ export default function ProfilePage({ user, onClose, renderSaved }: ProfilePageP
   const [weightLabel, setWeightLabel] = useState<string | null>(null);
   const [ageLabel, setAgeLabel] = useState<string | null>(null);
   const [gender, setGender] = useState<UserGender>('unknown');
+  const [instagram, setInstagram] = useState('');
+  const [tiktok, setTiktok] = useState('');
 
   const [initial, setInitial] = useState<ProfileData | null>(null);
 
@@ -56,17 +60,25 @@ export default function ProfilePage({ user, onClose, renderSaved }: ProfilePageP
     if (!user.id) { setLoading(false); return; }
     let cancelled = false;
     (async () => {
-      const [stats, g] = await Promise.all([
+      const [stats, g, socialsRes] = await Promise.all([
         getUserHeightAge(user.id!),
         getUserGender(user.id!),
+        supabase
+          ? supabase.from('profiles').select('instagram_handle, tiktok_handle').eq('id', user.id!).maybeSingle()
+          : Promise.resolve({ data: null }),
       ]);
       if (cancelled) return;
+      const social = (socialsRes.data as { instagram_handle: string | null; tiktok_handle: string | null } | null) ?? null;
+      const ig = social?.instagram_handle ?? '';
+      const tt = social?.tiktok_handle ?? '';
       setHeightCm(stats.heightCm);
       setHeightLabel(stats.heightLabel);
       setWeightKg(stats.weightKg);
       setWeightLabel(stats.weightLabel);
       setAgeLabel(stats.ageLabel);
       setGender(g);
+      setInstagram(ig);
+      setTiktok(tt);
       setInitial({
         fullName: user.displayName ?? '',
         heightCm: stats.heightCm,
@@ -75,6 +87,8 @@ export default function ProfilePage({ user, onClose, renderSaved }: ProfilePageP
         weightLabel: stats.weightLabel,
         ageLabel: stats.ageLabel,
         gender: g,
+        instagram: ig,
+        tiktok: tt,
       });
       setLoading(false);
     })();
@@ -86,27 +100,44 @@ export default function ProfilePage({ user, onClose, renderSaved }: ProfilePageP
     heightCm !== initial.heightCm ||
     weightKg !== initial.weightKg ||
     ageLabel !== initial.ageLabel ||
-    gender !== initial.gender
+    gender !== initial.gender ||
+    instagram.trim() !== initial.instagram ||
+    tiktok.trim() !== initial.tiktok
   );
+
+  // Strip a leading @ and any IG/TikTok URL chrome so we store the bare handle.
+  const normalizeHandle = (v: string): string =>
+    v.trim()
+      .replace(/^https?:\/\/(www\.)?(instagram|tiktok)\.com\//i, '')
+      .replace(/^@/, '')
+      .replace(/[/?#].*$/, '')
+      .trim();
 
   const handleSave = useCallback(async () => {
     if (!user.id || saving) return;
     setSaving(true);
     setError(null);
     setSaved(false);
+    const ig = normalizeHandle(instagram);
+    const tt = normalizeHandle(tiktok);
     const results = await Promise.all([
       updateUserHeightAge(user.id, { heightCm, heightLabel, weightKg, weightLabel, ageLabel }),
       updateUserGender(user.id, gender),
       fullName.trim() !== (initial?.fullName ?? '') ? updateUserFullName(user.id, fullName) : Promise.resolve({}),
+      supabase
+        ? supabase.from('profiles').update({ instagram_handle: ig || null, tiktok_handle: tt || null }).eq('id', user.id)
+        : Promise.resolve({}),
     ]);
     setSaving(false);
     const firstError = results.find(r => 'error' in r && (r as { error?: string }).error);
     if (firstError && 'error' in firstError) { setError((firstError as { error: string }).error); return; }
-    setInitial({ fullName: fullName.trim(), heightCm, heightLabel, weightKg, weightLabel, ageLabel, gender });
+    setInstagram(ig);
+    setTiktok(tt);
+    setInitial({ fullName: fullName.trim(), heightCm, heightLabel, weightKg, weightLabel, ageLabel, gender, instagram: ig, tiktok: tt });
     setSaved(true);
     refreshAuthUser();
     setTimeout(() => setSaved(false), 2000);
-  }, [user.id, saving, fullName, heightCm, heightLabel, weightKg, weightLabel, ageLabel, gender, initial]);
+  }, [user.id, saving, fullName, heightCm, heightLabel, weightKg, weightLabel, ageLabel, gender, instagram, tiktok, initial]);
 
   const renderedAvatar = avatarOverride || user.avatarUrl;
 
@@ -193,6 +224,43 @@ export default function ProfilePage({ user, onClose, renderSaved }: ProfilePageP
                   <div className="profile-page-readonly">{user.email}</div>
                 </div>
               )}
+
+              <div className="profile-page-field-row">
+                <label className="profile-page-field">
+                  <span className="profile-page-field-label">Instagram</span>
+                  <div className="profile-page-handle-input">
+                    <span className="profile-page-handle-at">@</span>
+                    <input
+                      type="text"
+                      className="profile-page-input profile-page-input-handle"
+                      value={instagram}
+                      onChange={e => setInstagram(e.target.value)}
+                      placeholder="username"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      disabled={saving}
+                    />
+                  </div>
+                </label>
+                <label className="profile-page-field">
+                  <span className="profile-page-field-label">TikTok</span>
+                  <div className="profile-page-handle-input">
+                    <span className="profile-page-handle-at">@</span>
+                    <input
+                      type="text"
+                      className="profile-page-input profile-page-input-handle"
+                      value={tiktok}
+                      onChange={e => setTiktok(e.target.value)}
+                      placeholder="username"
+                      autoCapitalize="none"
+                      autoCorrect="off"
+                      spellCheck={false}
+                      disabled={saving}
+                    />
+                  </div>
+                </label>
+              </div>
             </div>
 
             {/* Only shoppers (not creators/admins) can apply to create. */}

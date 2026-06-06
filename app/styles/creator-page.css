@@ -130,12 +130,18 @@
   color: rgba(255, 255, 255, 0.35);
 }
 
-.creator-hero-socials svg {
-  cursor: pointer;
+.creator-hero-social {
+  display: inline-flex;
+  color: inherit;
   transition: color 0.2s;
 }
 
-.creator-hero-socials svg:hover {
+.creator-hero-socials svg {
+  cursor: pointer;
+  display: block;
+}
+
+.creator-hero-social:hover {
   color: rgba(255, 255, 255, 0.7);
 }
 

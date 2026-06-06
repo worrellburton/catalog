@@ -34,6 +34,8 @@ interface UserProfile {
   avatar_url: string | null;
   email: string | null;
   gender: string | null;
+  instagram: string | null;
+  tiktok: string | null;
 }
 
 // Detect "user:<uuid>" handles and pull the trailing uuid.
@@ -127,7 +129,7 @@ export default function CreatorPage({
       // resolves; gens + products fade in when they land.
       const [profRes, gensRes] = await Promise.all([
         supabase!.from('profiles')
-          .select('id, full_name, avatar_url, email, gender')
+          .select('id, full_name, avatar_url, email, gender, instagram_handle, tiktok_handle')
           .eq('id', userId).maybeSingle(),
         supabase!.from('user_generations')
           .select('id, status, video_url, storage_path, style, age_label, height_label, created_at, completed_at, display_name')
@@ -140,12 +142,22 @@ export default function CreatorPage({
       if (cancelled) return;
 
       if (profRes.data) {
-        setProfile(profRes.data as UserProfile);
+        const pr = profRes.data as Record<string, unknown>;
+        setProfile({
+          id: pr.id as string,
+          full_name: (pr.full_name as string) ?? null,
+          avatar_url: (pr.avatar_url as string) ?? null,
+          email: (pr.email as string) ?? null,
+          gender: (pr.gender as string) ?? null,
+          instagram: (pr.instagram_handle as string) ?? null,
+          tiktok: (pr.tiktok_handle as string) ?? null,
+        });
       } else {
         // Profile row missing / RLS blocked - synth a placeholder so the
         // header renders with the truncated UUID rather than crashing.
         setProfile({
           id: userId, full_name: null, avatar_url: null, email: null, gender: null,
+          instagram: null, tiktok: null,
         });
       }
 
@@ -335,12 +347,12 @@ export default function CreatorPage({
       const ownerId = rows.find(r => r.user_id)?.user_id;
       const [profRes, creatorRes] = await Promise.all([
         ownerId
-          ? supabase!.from('profiles').select('id, full_name, avatar_url, email, gender').eq('id', ownerId).maybeSingle()
+          ? supabase!.from('profiles').select('id, full_name, avatar_url, email, gender, instagram_handle, tiktok_handle').eq('id', ownerId).maybeSingle()
           : Promise.resolve({ data: null }),
         supabase!.from('creators').select('handle, display_name, avatar_url, is_ai').eq('handle', creatorName).maybeSingle(),
       ]);
       if (cancelled) return;
-      const prof = (profRes as { data: { id: string; full_name: string | null; avatar_url: string | null; email: string | null; gender: string | null } | null }).data;
+      const prof = (profRes as { data: { id: string; full_name: string | null; avatar_url: string | null; email: string | null; gender: string | null; instagram_handle: string | null; tiktok_handle: string | null } | null }).data;
       const creatorRow = (creatorRes as { data: { handle: string; display_name: string | null; avatar_url: string | null } | null }).data;
       // Merge: prefer profile values, fall back to creators row.
       const mergedAvatar = prof?.avatar_url || creatorRow?.avatar_url || null;
@@ -352,6 +364,8 @@ export default function CreatorPage({
           avatar_url: mergedAvatar,
           email: prof?.email ?? null,
           gender: prof?.gender ?? null,
+          instagram: prof?.instagram_handle ?? null,
+          tiktok: prof?.tiktok_handle ?? null,
         });
       }
 
@@ -611,10 +625,32 @@ export default function CreatorPage({
               ? 'Loading catalog...'
               : formatFollowerCount(followerCount, trustCount)}
         </p>
-        <div className="creator-hero-socials">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg>
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.34-6.34V8.98a8.18 8.18 0 004.76 1.52V7.05a4.83 4.83 0 01-1-.36z"/></svg>
-        </div>
+        {(profile?.instagram || profile?.tiktok) && (
+          <div className="creator-hero-socials">
+            {profile?.instagram && (
+              <a
+                href={`https://instagram.com/${profile.instagram}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="creator-hero-social"
+                aria-label={`@${profile.instagram} on Instagram`}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2.163c3.204 0 3.584.012 4.85.07 3.252.148 4.771 1.691 4.919 4.919.058 1.265.069 1.645.069 4.849 0 3.205-.012 3.584-.069 4.849-.149 3.225-1.664 4.771-4.919 4.919-1.266.058-1.644.07-4.85.07-3.204 0-3.584-.012-4.849-.07-3.26-.149-4.771-1.699-4.919-4.92-.058-1.265-.07-1.644-.07-4.849 0-3.204.013-3.583.07-4.849.149-3.227 1.664-4.771 4.919-4.919 1.266-.057 1.645-.069 4.849-.069zM12 0C8.741 0 8.333.014 7.053.072 2.695.272.273 2.69.073 7.052.014 8.333 0 8.741 0 12c0 3.259.014 3.668.072 4.948.2 4.358 2.618 6.78 6.98 6.98C8.333 23.986 8.741 24 12 24c3.259 0 3.668-.014 4.948-.072 4.354-.2 6.782-2.618 6.979-6.98.059-1.28.073-1.689.073-4.948 0-3.259-.014-3.667-.072-4.947-.196-4.354-2.617-6.78-6.979-6.98C15.668.014 15.259 0 12 0zm0 5.838a6.162 6.162 0 100 12.324 6.162 6.162 0 000-12.324zM12 16a4 4 0 110-8 4 4 0 010 8zm6.406-11.845a1.44 1.44 0 100 2.881 1.44 1.44 0 000-2.881z"/></svg>
+              </a>
+            )}
+            {profile?.tiktok && (
+              <a
+                href={`https://tiktok.com/@${profile.tiktok}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="creator-hero-social"
+                aria-label={`@${profile.tiktok} on TikTok`}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor"><path d="M19.59 6.69a4.83 4.83 0 01-3.77-4.25V2h-3.45v13.67a2.89 2.89 0 01-2.88 2.5 2.89 2.89 0 01-2.89-2.89 2.89 2.89 0 012.89-2.89c.28 0 .54.04.79.1V9.01a6.33 6.33 0 00-.79-.05 6.34 6.34 0 00-6.34 6.34 6.34 6.34 0 006.34 6.34 6.34 6.34 0 006.34-6.34V8.98a8.18 8.18 0 004.76 1.52V7.05a4.83 4.83 0 01-1-.36z"/></svg>
+              </a>
+            )}
+          </div>
+        )}
       </div>
 
       {/* Navigation tabs */}

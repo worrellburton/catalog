@@ -252,6 +252,38 @@ html[data-shell="catalog-app"] .profile-page-overlay {
   font-size: 15px;
 }
 
+/* Social handle inputs (@ prefix + bare-username field) */
+.profile-page-handle-input {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+  padding-left: 12px;
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
+}
+.profile-page-handle-input:focus-within {
+  border-color: rgba(255,255,255,0.22);
+  background: rgba(255,255,255,0.05);
+}
+.profile-page-handle-at {
+  color: rgba(255,255,255,0.4);
+  font-size: 15px;
+  line-height: 1;
+}
+.profile-page-input-handle {
+  flex: 1;
+  min-width: 0;
+  padding-left: 2px;
+  background: transparent !important;
+  border: none !important;
+}
+.profile-page-input-handle:focus {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+}
+
 /* Segmented control (gender) */
 .profile-page-segmented {
   display: flex;
