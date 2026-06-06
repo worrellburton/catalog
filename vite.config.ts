@@ -74,6 +74,17 @@ export default defineConfig({
         // own chunk means the consumer first-paint only pulls the
         // bare app shell + whichever lazy() route the user opened.
         manualChunks(id: string) {
+          // Pin React + ReactDOM + scheduler into one stable vendor chunk.
+          // Without this, Rollup floats them into whichever feature chunk
+          // (admin / deck / …) its shared-dependency math picks, and adding a
+          // route that bridges chunks (e.g. a public deck link) re-splits
+          // them across the admin/deck boundary — the admin chunk then
+          // requires React from a not-yet-loaded lazy chunk and the whole
+          // SPA fails to mount. A dedicated vendor chunk keeps React in one
+          // place that always loads first, regardless of route changes.
+          if (id.includes('node_modules/react/')
+              || id.includes('node_modules/react-dom/')
+              || id.includes('node_modules/scheduler/')) return 'react-vendor';
           if (id.includes('/routes/admin/')) return 'admin';
           if (id.includes('/components/DeckView') || id.includes('/components/deck')) return 'deck';
           if (id.includes('/components/CreatorWallet')) return 'wallet';
@@ -111,6 +122,10 @@ export default defineConfig({
           // wallet overlay. Real history entry → browser back returns
           // to the user's prior in-app screen, not an external page.
           route("earnings", "routes/earnings.tsx");
+
+          // Public, unguessable share link for the short deck (deck is lazy;
+          // React is pinned to react-vendor so this can't re-split React).
+          route("deck-9f4k2x7m3q8", "routes/deck-public.tsx");
 
           // Admin routes
           route("admin", "routes/admin/route.tsx", () => {
