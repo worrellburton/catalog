@@ -620,13 +620,14 @@
   .follow-rail-wrap--center .follow-rail-separator {
     display: none !important;
   }
-  /* The flat horizontal stories scroll is replaced by the 3D orbit
-     carousel on phones. */
+  /* The 3D orbit carousel is built and ready (.follow-orbit), but we're
+     back on the flat horizontal stories scroll for now. Flip these two to
+     re-enable the orbit. */
   .follow-rail-wrap--center .follow-stories-rail {
-    display: none;
+    display: flex;
   }
   .follow-rail-wrap--center .follow-orbit {
-    display: block;
+    display: none;
   }
 
   /* Reposition the center rail to a full-width row pinned at the top, BELOW
