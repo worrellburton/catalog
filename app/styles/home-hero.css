@@ -913,11 +913,23 @@
        When the bar gains focus (recommended-options panel about to appear
        above), the trio rises 18vh (32vh → 50vh) so the panel has room
        without colliding with the feed peek; .sfh matches with -18vh. */
-    bottom: 32vh;
+    bottom: 40vh;
     transition: bottom 0.32s cubic-bezier(0.32, 0.72, 0, 1);
   }
   body:has(.app-root.home-hero) .ai-bar-wrap:focus-within {
-    bottom: 50vh;
+    bottom: 52vh;
+  }
+  /* Equal side padding with the header: the logo sits 44px from the left and
+     the wallet/profile cluster 44px from the right, so on the resting hero the
+     search bar spans to those SAME 44px gutters — its left edge lines up under
+     the logo, its right edge under the CTA. Reverts to the centered 720px cap
+     once docked into the feed (.hero-scrolled) so the feed bar is unchanged. */
+  body:has(.app-root.home-hero:not(.hero-scrolled)) .ai-bar-wrap {
+    padding-left: 44px;
+    padding-right: 44px;
+  }
+  body:has(.app-root.home-hero:not(.hero-scrolled)) .ai-bar {
+    max-width: none;
   }
   body:has(.app-root.home-hero) .sfh:has(~ * .ai-bar-wrap:focus-within),
   body:has(.app-root.home-hero .ai-bar-wrap:focus-within) .sfh {
