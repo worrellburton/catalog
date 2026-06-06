@@ -1932,7 +1932,7 @@ export default function GeneratePage() {
                   key={s.value}
                   type="button"
                   className={`gen-stylecard${style === s.value ? ' is-picked' : ''}`}
-                  onClick={() => setStyle(s.value)}
+                  onClick={() => { setStyle(s.value); setCustomStyle(''); }}
                   aria-pressed={style === s.value}
                 >
                   <span className="gen-stylecard-icon" aria-hidden="true"><StyleGlyph value={s.value} /></span>
@@ -1952,7 +1952,13 @@ export default function GeneratePage() {
               <textarea
                 className="gen-direct-input"
                 value={customStyle}
-                onChange={e => setCustomStyle(e.target.value)}
+                onChange={e => {
+                  const v = e.target.value;
+                  setCustomStyle(v);
+                  // One or the other: typing a custom direction deselects the
+                  // preset cards; clearing it restores the default preset.
+                  setStyle(v.trim() ? '' : 'street');
+                }}
                 placeholder="e.g. slow walk through a neon-lit Tokyo alley at night, cinematic, light rain"
                 rows={3}
                 maxLength={500}

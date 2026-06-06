@@ -366,8 +366,11 @@ export async function getPopularCreators(
   //    the creators table when present (it's the curated row) and fall
   //    back to the profile.
   const topAggs = Array.from(byHandle.values())
+    // Only feature creators with a real catalog — more than 4 live looks.
+    .filter(a => a.lookCount > 4)
     .sort((a, b) => b.lookCount - a.lookCount || b.latestTs - a.latestTs)
     .slice(0, limit);
+  if (topAggs.length === 0) return [];
   const handles = topAggs.map(a => a.handle);
   const { data: creatorRows } = await supabase
     .from('creators')
