@@ -555,71 +555,10 @@
   }
 }
 
-/* Mobile: swap the scroll-mouse for a swiping finger. The hand glyph
-   itself points DOWN and bobs ~8 px on a 1.6 s loop; three trail dots
-   below it fade in sequentially to communicate the "swipe down" arc.
-   The wrapper is a positioning context so the trail can sit absolutely
-   below the hand without affecting layout flow. */
-.sfh-finger { display: none; }
+/* Mobile shows no scroll glyph at all — just the "Scroll to see most
+   popular" label + chevron. The desktop scroll-mouse is hidden here. */
 @media (max-width: 768px) {
   .sfh-mouse { display: none; }
-  .sfh-finger {
-    display: inline-flex;
-    order: 1;
-    position: relative;
-    width: 28px;
-    height: 44px;
-    color: rgba(255, 255, 255, 0.78);
-    align-items: flex-start;
-    justify-content: center;
-  }
-}
-.sfh-finger-hand {
-  display: block;
-  animation: sfh-swipe-down 1.6s ease-in-out infinite;
-  transform-origin: 50% 0%;
-}
-@keyframes sfh-swipe-down {
-  0%   { transform: translateY(-3px); opacity: 0.55; }
-  40%  { transform: translateY(2px);  opacity: 1; }
-  70%  { transform: translateY(8px);  opacity: 0.9; }
-  100% { transform: translateY(-3px); opacity: 0.55; }
-}
-/* Three vertically stacked dots sitting below the hand, fading in
-   sequentially so the eye reads "downward swipe". They're absolute so
-   the hand's keyframe translateY doesn't push them. */
-.sfh-finger-trail {
-  position: absolute;
-  left: 50%;
-  bottom: 0;
-  transform: translateX(-50%);
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 2px;
-  pointer-events: none;
-}
-.sfh-finger-trail > span {
-  width: 3px;
-  height: 3px;
-  border-radius: 50%;
-  background: currentColor;
-  opacity: 0;
-  animation: sfh-swipe-trail 1.6s ease-in-out infinite;
-}
-.sfh-finger-trail > span:nth-child(1) { animation-delay: 0s; }
-.sfh-finger-trail > span:nth-child(2) { animation-delay: 0.18s; }
-.sfh-finger-trail > span:nth-child(3) { animation-delay: 0.36s; }
-@keyframes sfh-swipe-trail {
-  0%, 100% { opacity: 0; transform: translateY(-4px); }
-  40%      { opacity: 0.7; transform: translateY(0); }
-  80%      { opacity: 0; transform: translateY(4px); }
-}
-@media (prefers-reduced-motion: reduce) {
-  .sfh-finger-hand,
-  .sfh-finger-trail > span {
-    animation: none;
-  }
 }
 
 /* ── Mobile: following / followers profile icons at the TOP of the hero,
