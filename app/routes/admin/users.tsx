@@ -686,35 +686,10 @@ export default function AdminUsers() {
     };
   }, [showToast]);
 
-  // Pass 4: refetch on tab focus + soft 30s interval. The realtime
-  // sub above is the hot path, but a periodic re-read catches missed
-  // events (websocket drops, network blips, etc.) and the focus-
-  // refetch covers tabs that were backgrounded across a change. Both
-  // are best-effort: failures are silent.
-  useEffect(() => {
-    if (!supabase) return;
-    let cancelled = false;
-    const refresh = async () => {
-      const profiles = await getProfiles();
-      if (cancelled) return;
-      setAllUsers(prev => {
-        const byId = new Map(prev.map(u => [u.id, u]));
-        return profiles.map(p => {
-          const row = profileToRow(p);
-          const prevRow = byId.get(p.id);
-          return { ...row, looksCount: prevRow?.looksCount ?? 0 };
-        });
-      });
-    };
-    const onFocus = () => { if (document.visibilityState === 'visible') void refresh(); };
-    document.addEventListener('visibilitychange', onFocus);
-    const interval = window.setInterval(() => void refresh(), 30_000);
-    return () => {
-      cancelled = true;
-      document.removeEventListener('visibilitychange', onFocus);
-      window.clearInterval(interval);
-    };
-  }, []);
+  // (A duplicate 30s poll loop lived here — removed. The 60s poll + focus
+  // refetch above, plus the realtime subscription, already cover missed-event
+  // recovery; the second loop just doubled the full-`profiles`-table reads and
+  // registered a second visibilitychange listener.)
 
   const handleRoleChange = useCallback((userId: string, newRole: UserRole, error?: string) => {
     if (error) {
