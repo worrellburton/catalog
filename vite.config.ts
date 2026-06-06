@@ -143,6 +143,7 @@ export default defineConfig({
             route("finance", "routes/admin/finance.tsx");
             route("fundraising", "routes/admin/fundraising.tsx");
             route("model", "routes/admin/model.tsx");
+            route("metrics/:id", "routes/admin/metrics.$id.tsx");
             route("projections", "routes/admin/projections.tsx");
             route("creative", "routes/admin/creative.tsx");
             route("catalogs", "routes/admin/catalogs.tsx");
