@@ -107,6 +107,16 @@ export function isLookHidden(
   return false;
 }
 
+/**
+ * Warm the admin-hidden look/product sets at boot so they load in parallel
+ * with the feed fetch instead of serializing after the first GridView mount.
+ * Reuses the singleton in-flight caches above, so it's safe to call repeatedly.
+ */
+export function prefetchHiddenContent(): void {
+  void getHiddenLookIds();
+  void getHiddenProductKeys();
+}
+
 function readLocalLookIds(): Set<number> {
   try {
     const raw = typeof window !== 'undefined'

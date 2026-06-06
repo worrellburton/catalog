@@ -261,16 +261,6 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
       .filter((v): v is string => !!v),
   ));
   const profileById = new Map<string, { full_name: string | null; avatar_url: string | null; email: string | null; is_ai: boolean }>();
-  if (profileUserIds.length > 0) {
-    const { data: profs } = await supabase
-      .from('profiles')
-      .select('id, full_name, avatar_url, email, is_ai')
-      .in('id', profileUserIds);
-    (profs || []).forEach((p: { id: string; full_name: string | null; avatar_url: string | null; email: string | null; is_ai: boolean | null }) => {
-      profileById.set(p.id, { full_name: p.full_name, avatar_url: p.avatar_url, email: p.email, is_ai: p.is_ai === true });
-    });
-  }
-
   // Owner → canonical creator. creators.id === profiles.id (the auth user
   // id), so a user-published look (no creator_handle) whose owner IS a
   // creator can be normalized to that creator's handle — otherwise the same
@@ -279,11 +269,24 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
   // creator's cards looked inconsistent in the feed.
   const creatorByUserId = new Map<string, { handle: string; display_name: string | null; avatar_url: string | null; is_ai: boolean }>();
   if (profileUserIds.length > 0) {
-    const { data: ownerCreators } = await supabase
-      .from('creators')
-      .select('id, handle, display_name, avatar_url, is_ai')
-      .in('id', profileUserIds);
-    (ownerCreators || []).forEach((c: { id: string; handle: string; display_name: string | null; avatar_url: string | null; is_ai: boolean | null }) => {
+    // profiles (avatar/name) and owner-creator normalization both key off the
+    // same profileUserIds and populate independent maps — run them together
+    // instead of back-to-back. These two were the tail of the look-enrichment
+    // serial chain (looks → validate → user_generations → profiles → creators).
+    const [profsRes, ownerRes] = await Promise.all([
+      supabase
+        .from('profiles')
+        .select('id, full_name, avatar_url, email, is_ai')
+        .in('id', profileUserIds),
+      supabase
+        .from('creators')
+        .select('id, handle, display_name, avatar_url, is_ai')
+        .in('id', profileUserIds),
+    ]);
+    (profsRes.data || []).forEach((p: { id: string; full_name: string | null; avatar_url: string | null; email: string | null; is_ai: boolean | null }) => {
+      profileById.set(p.id, { full_name: p.full_name, avatar_url: p.avatar_url, email: p.email, is_ai: p.is_ai === true });
+    });
+    (ownerRes.data || []).forEach((c: { id: string; handle: string; display_name: string | null; avatar_url: string | null; is_ai: boolean | null }) => {
       if (c.handle) creatorByUserId.set(c.id, { handle: c.handle, display_name: c.display_name, avatar_url: c.avatar_url, is_ai: c.is_ai === true });
     });
   }

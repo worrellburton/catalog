@@ -29,6 +29,9 @@ import { toCatalogName, getRandomCatalogName } from '~/utils/catalogName';
 import { prefetchSimilarProducts, prefetchCreativesByBrand, prefetchHomeFeed, type ProductAd } from '~/services/product-creative';
 import { getGraphPairs, type GraphPair } from '~/services/graph-pairs';
 import { getLooks, getLookByUuid } from '~/services/looks';
+import { prefetchDials } from '~/services/dials';
+import { prefetchHiddenContent } from '~/hooks/useHiddenLooks';
+import { prefetchBrandLogos } from '~/hooks/useBrandLogoLookup';
 import { primeTrailAssets } from '~/utils/trailPrefetch';
 import { supabase } from '~/utils/supabase';
 import { trackClick, trackCreativeImpressions, resolveProductIdByUrl, trackProductClickout } from '~/services/session-tracker';
@@ -974,6 +977,12 @@ export default function Home() {
   // fetch per session; reused across every overlay open.
   useEffect(() => {
     let cancelled = false;
+    // Fire the independent boot reads in parallel with the feed fetch so they
+    // collapse into the first wave instead of serializing after the grid
+    // renders: prefetchDials() batches all app_settings dials into one query,
+    // prefetchHiddenContent() warms the admin-hidden sets early.
+    void prefetchDials();
+    prefetchHiddenContent();
     getLooks().then(rows => { if (!cancelled) setLiveLooks(rows); }).catch(() => {});
     return () => { cancelled = true; };
   }, []);
@@ -988,6 +997,9 @@ export default function Home() {
         if (cancelled) return;
         primeTrailAssets(rows.slice(0, 32));
         setPopularFallback(rows);
+        // Batch-warm brand logos from the feed's products in a single query
+        // instead of the per-brand tier-1 lookup each card fires on mount.
+        void prefetchBrandLogos(rows.map(r => r.product).filter((p): p is NonNullable<typeof p> => !!p));
       })
       .catch(() => { /* leave fallback empty rather than throw */ });
     return () => { cancelled = true; };

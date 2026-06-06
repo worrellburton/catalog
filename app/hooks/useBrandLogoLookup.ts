@@ -79,6 +79,57 @@ async function fetchLogo(key: string): Promise<void> {
   notify(key, null);
 }
 
+/**
+ * Batch-warm the logo cache for many brands in ONE query instead of the
+ * per-brand tier-1 lookup fetchLogo() fires. Curated rows come from a single
+ * `.in('brand', …)` on brand_logos; brands without a curated row fall back to
+ * a Brandfetch URL derived from the product URLs already in memory (no extra
+ * query). Call once after the home feed loads.
+ *
+ * Brands with neither a curated row nor a derivable in-memory domain settle to
+ * the text fallback (url=null) — the same tier-3 result the lazy path reaches.
+ * In-memory products are exactly the feed's cards, so domain coverage is high.
+ */
+export async function prefetchBrandLogos(
+  products: ReadonlyArray<{ brand?: string | null; url?: string | null }>,
+): Promise<void> {
+  if (!supabase) return;
+  const domainByBrand = new Map<string, string>();
+  const brands = new Set<string>();
+  for (const p of products) {
+    const key = (p.brand || '').toLowerCase().trim();
+    if (!key) continue;
+    brands.add(key);
+    if (!domainByBrand.has(key)) {
+      const domain = domainFromUrl(p.url);
+      if (domain && !domain.includes('google.com') && !domain.endsWith('amazon.com')) {
+        domainByBrand.set(key, domain);
+      }
+    }
+  }
+  // Skip brands already resolved (a non-loading cache entry).
+  const todo = [...brands].filter(b => { const e = cache.get(b); return !e || e.loading; });
+  if (todo.length === 0) return;
+  // Reserve them so concurrent useBrandLogo() mounts await our notify() rather
+  // than each firing their own per-brand tier-1 query.
+  for (const b of todo) cache.set(b, { url: null, loading: true });
+  // Tier 1 — a single query for every curated row.
+  const curated = new Map<string, string>();
+  const { data } = await supabase
+    .from('brand_logos').select('brand, logo_url').in('brand', todo);
+  for (const row of (data || []) as { brand: string; logo_url: string | null }[]) {
+    const k = (row.brand || '').toLowerCase().trim();
+    if (k && row.logo_url) curated.set(k, row.logo_url);
+  }
+  // Resolve: curated row > Brandfetch-by-domain > text fallback (null).
+  for (const b of todo) {
+    const url = curated.get(b)
+      ?? (domainByBrand.has(b) ? brandfetchUrl(domainByBrand.get(b)!) : null);
+    cache.set(b, { url, loading: false });
+    notify(b, url);
+  }
+}
+
 export function useBrandLogo(brand: string | null | undefined): string | null {
   const key = (brand || '').toLowerCase().trim();
   const [url, setUrl] = useState<string | null>(() => cache.get(key)?.url ?? null);

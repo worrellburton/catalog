@@ -1,5 +1,34 @@
 import { supabase } from '~/utils/supabase';
 
+// ── Dial cache + batch prefetch ──────────────────────────────────────
+// Every dial is one row in app_settings. Read à la carte, the boot path
+// fires a separate round-trip per key (video_still_ratio, products_image_only,
+// show_brand_logos, comments_enabled, …). readDial() memoises each value and
+// prefetchDials() warms them all in a single `.in('key', …)` query, so a warm
+// boot resolves every dial from cache with zero extra requests.
+const dialCache = new Map<string, string | null>();
+let dialPrefetch: Promise<void> | null = null;
+
+async function readDial(key: string): Promise<string | null> {
+  if (dialCache.has(key)) return dialCache.get(key) ?? null;
+  // A batch prefetch in flight will populate this key — await it instead of
+  // racing a duplicate per-key query.
+  if (dialPrefetch) {
+    try { await dialPrefetch; } catch { /* fall through to a direct read */ }
+    if (dialCache.has(key)) return dialCache.get(key) ?? null;
+  }
+  if (!supabase) return null;
+  const { data, error } = await supabase
+    .from('app_settings').select('value').eq('key', key).maybeSingle();
+  if (error) {
+    console.warn('[dials] read failed:', key, error.message);
+    return null;
+  }
+  const value = (data?.value as string | undefined) ?? null;
+  dialCache.set(key, value);
+  return value;
+}
+
 /**
  * Global tuning dials backed by app_settings (text key/value).
  * Phase 2 of the /admin/dials buildout — adds the read/write API
@@ -28,17 +57,7 @@ function parseRatio(raw: string | null | undefined): number {
 /** One-shot read. Returns the default when Supabase isn't configured
  *  or the row doesn't exist yet — never throws to the caller. */
 export async function getVideoStillRatio(): Promise<number> {
-  if (!supabase) return DEFAULT_VIDEO_STILL_RATIO;
-  const { data, error } = await supabase
-    .from('app_settings')
-    .select('value')
-    .eq('key', VIDEO_STILL_RATIO_KEY)
-    .maybeSingle();
-  if (error) {
-    console.warn('[dials] read failed:', error.message);
-    return DEFAULT_VIDEO_STILL_RATIO;
-  }
-  return parseRatio((data?.value as string | undefined) ?? null);
+  return parseRatio(await readDial(VIDEO_STILL_RATIO_KEY));
 }
 
 /** Persist a new ratio. Clamps to 0..100 before the round-trip.
@@ -103,23 +122,46 @@ export const DEFAULT_SHOW_BRAND_LOGOS = false;
 export const COMMENTS_ENABLED_KEY = 'comments_enabled';
 export const DEFAULT_COMMENTS_ENABLED = true;
 
+/**
+ * Warm every boot-time dial in a single round-trip. Call once early in the
+ * app boot (in parallel with the feed fetch). After it resolves, the dial
+ * getters above — and the singleton hydrate hooks that wrap them — resolve
+ * from cache instead of firing one app_settings query per key.
+ */
+export function prefetchDials(): Promise<void> {
+  if (dialPrefetch) return dialPrefetch;
+  dialPrefetch = (async () => {
+    if (!supabase) return;
+    const keys = [
+      VIDEO_STILL_RATIO_KEY,
+      PRODUCTS_IMAGE_ONLY_KEY,
+      SHOW_BRAND_LOGOS_KEY,
+      COMMENTS_ENABLED_KEY,
+    ];
+    const { data, error } = await supabase
+      .from('app_settings').select('key, value').in('key', keys);
+    if (error) {
+      // Leave the cache cold so readDial() falls back to per-key reads.
+      dialPrefetch = null;
+      return;
+    }
+    const byKey = new Map(
+      ((data as { key: string; value: string | null }[]) || []).map(r => [r.key, r.value ?? null]),
+    );
+    // Seed every requested key — a missing row caches as null (→ default)
+    // so we never re-query it.
+    for (const k of keys) dialCache.set(k, byKey.get(k) ?? null);
+  })();
+  return dialPrefetch;
+}
+
 function parseBool(raw: string | null | undefined, fallback: boolean): boolean {
   if (raw == null) return fallback;
   return raw.trim().toLowerCase() === 'true';
 }
 
 export async function getProductsImageOnly(): Promise<boolean> {
-  if (!supabase) return DEFAULT_PRODUCTS_IMAGE_ONLY;
-  const { data, error } = await supabase
-    .from('app_settings')
-    .select('value')
-    .eq('key', PRODUCTS_IMAGE_ONLY_KEY)
-    .maybeSingle();
-  if (error) {
-    console.warn('[dials] products_image_only read failed:', error.message);
-    return DEFAULT_PRODUCTS_IMAGE_ONLY;
-  }
-  return parseBool((data?.value as string | undefined) ?? null, DEFAULT_PRODUCTS_IMAGE_ONLY);
+  return parseBool(await readDial(PRODUCTS_IMAGE_ONLY_KEY), DEFAULT_PRODUCTS_IMAGE_ONLY);
 }
 
 export async function setProductsImageOnly(value: boolean): Promise<void> {
@@ -160,17 +202,7 @@ export function subscribeProductsImageOnly(
 // ────────────────────────────────────────────────────────────────────
 
 export async function getShowBrandLogos(): Promise<boolean> {
-  if (!supabase) return DEFAULT_SHOW_BRAND_LOGOS;
-  const { data, error } = await supabase
-    .from('app_settings')
-    .select('value')
-    .eq('key', SHOW_BRAND_LOGOS_KEY)
-    .maybeSingle();
-  if (error) {
-    console.warn('[dials] show_brand_logos read failed:', error.message);
-    return DEFAULT_SHOW_BRAND_LOGOS;
-  }
-  return parseBool((data?.value as string | undefined) ?? null, DEFAULT_SHOW_BRAND_LOGOS);
+  return parseBool(await readDial(SHOW_BRAND_LOGOS_KEY), DEFAULT_SHOW_BRAND_LOGOS);
 }
 
 export async function setShowBrandLogos(value: boolean): Promise<void> {
@@ -204,17 +236,7 @@ export function subscribeShowBrandLogos(onChange: (value: boolean) => void): () 
 // ────────────────────────────────────────────────────────────────────
 
 export async function getCommentsEnabled(): Promise<boolean> {
-  if (!supabase) return DEFAULT_COMMENTS_ENABLED;
-  const { data, error } = await supabase
-    .from('app_settings')
-    .select('value')
-    .eq('key', COMMENTS_ENABLED_KEY)
-    .maybeSingle();
-  if (error) {
-    console.warn('[dials] comments_enabled read failed:', error.message);
-    return DEFAULT_COMMENTS_ENABLED;
-  }
-  return parseBool((data?.value as string | undefined) ?? null, DEFAULT_COMMENTS_ENABLED);
+  return parseBool(await readDial(COMMENTS_ENABLED_KEY), DEFAULT_COMMENTS_ENABLED);
 }
 
 export async function setCommentsEnabled(value: boolean): Promise<void> {
