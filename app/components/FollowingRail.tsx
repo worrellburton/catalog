@@ -425,6 +425,18 @@ function FollowingRail({ onOpenCreator, mode = 'both', onCreateFollowingCatalog:
             onSeeAll={onOpenFollowingList}
           />
         )}
+        {/* Mobile 3D orbit carousel — replaces the flat stories scroll on
+            phones. The flat rail above stays for the desktop header-center
+            compact row (CSS toggles which one is visible). */}
+        {hasFollowing && (
+          <FollowingOrbitRail
+            entries={followingDisplay}
+            onlineHandles={onlineHandles}
+            unseenByHandle={unseenByHandle}
+            onOpenCreator={(h) => { setOpenPopover(null); handleOpenFollowing(h); }}
+            onSeeAll={onOpenFollowingList}
+          />
+        )}
         {hasFollowing && (
           <AvatarRow
             railKind="following"
@@ -607,6 +619,181 @@ function FollowingStoriesRail({ entries, onlineHandles, unseenByHandle, onOpenCr
           </span>
           <span className="follow-story-name">See all</span>
         </button>
+      )}
+    </div>
+  );
+}
+
+// ─── internal FollowingOrbitRail (mobile 3D carousel) ───────────────
+
+/** A modern 3D ring of creator avatars. Each creator is a circle placed on a
+ *  horizontal cylinder; the whole ring slowly auto-rotates in 3D space so the
+ *  front avatars read large and bright while the ones turning toward the back
+ *  lean away, dim, and recede — you "kinda see the back of the circle". Drag
+ *  horizontally to spin it yourself; release and it resumes its slow drift.
+ *  The front-most creator's name shows in a caption below.
+ *
+ *  Mobile-only (CSS hides it ≥769px, where the compact stories rail shows
+ *  instead). Renders a static skeleton ring while entries load.
+ *
+ *  All per-frame work (rotation, depth opacity, z-order, caption) is written
+ *  straight to the DOM via refs so the loop never triggers React re-renders.
+ *  The loop idles whenever the rail is display:none (desktop), off-screen,
+ *  or the tab is hidden. */
+function FollowingOrbitRail({ entries, onlineHandles, unseenByHandle, onOpenCreator, onSeeAll }: FollowingStoriesRailProps) {
+  const rootRef = useRef<HTMLDivElement | null>(null);
+  const stageRef = useRef<HTMLDivElement | null>(null);
+  const captionRef = useRef<HTMLSpanElement | null>(null);
+  const angleRef = useRef(0);
+  const draggingRef = useRef(false);
+  const dragStartXRef = useRef(0);
+  const dragStartAngleRef = useRef(0);
+  const movedRef = useRef(0);
+  const frontIdxRef = useRef(-1);
+
+  const count = entries.length;
+  const step = count > 0 ? 360 / count : 0;
+  // Radius spreads the avatars evenly around the cylinder so neighbours never
+  // collide at the front, growing with the number of creators.
+  const ITEM = 58;
+  const GAP = 22;
+  const radius = count > 1
+    ? Math.max(104, (ITEM + GAP) / (2 * Math.sin(Math.PI / count)))
+    : 0;
+
+  // Seat each avatar at its fixed slot on the ring (set once per layout).
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    const kids = Array.from(stage.children) as HTMLElement[];
+    kids.forEach((el, i) => {
+      el.style.transform = `rotateY(${i * step}deg) translateZ(${radius}px)`;
+    });
+  }, [step, radius, count]);
+
+  // Auto-rotation + per-frame depth shading. Pauses while dragging, off-screen,
+  // tab-hidden, or fully display:none (desktop).
+  useEffect(() => {
+    if (count === 0) return;
+    const reduced = typeof window !== 'undefined'
+      && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
+    const SPEED = reduced ? 0 : 7; // deg / second — a slow, premium drift
+    let raf = 0;
+    let last = performance.now();
+    const tick = (now: number) => {
+      raf = requestAnimationFrame(tick);
+      const stage = stageRef.current;
+      const root = rootRef.current;
+      // offsetParent is null when an ancestor is display:none → idle fully.
+      if (!stage || !root || root.offsetParent === null) { last = now; return; }
+      const dt = Math.min(64, now - last) / 1000;
+      last = now;
+      if (!draggingRef.current && !document.hidden) angleRef.current += SPEED * dt;
+      const a = angleRef.current;
+      stage.style.transform = `rotateY(${a}deg)`;
+      const kids = stage.children as HTMLCollectionOf<HTMLElement>;
+      let bestC = -2, bestI = -1;
+      for (let i = 0; i < kids.length; i++) {
+        const c = Math.cos(((i * step + a) * Math.PI) / 180); // 1 front … -1 back
+        const el = kids[i];
+        el.style.opacity = String(0.2 + 0.8 * (c * 0.5 + 0.5));
+        el.style.zIndex = String(Math.round((c + 1) * 100));
+        el.style.pointerEvents = c > 0.4 ? 'auto' : 'none';
+        if (c > bestC) { bestC = c; bestI = i; }
+      }
+      if (bestI !== frontIdxRef.current) {
+        frontIdxRef.current = bestI;
+        const e = entries[bestI];
+        if (captionRef.current && e) captionRef.current.textContent = e.displayName || e.handle;
+      }
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+  }, [count, step, entries]);
+
+  const onPointerDown = (e: React.PointerEvent) => {
+    draggingRef.current = true;
+    dragStartXRef.current = e.clientX;
+    dragStartAngleRef.current = angleRef.current;
+    movedRef.current = 0;
+    (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+  };
+  const onPointerMove = (e: React.PointerEvent) => {
+    if (!draggingRef.current) return;
+    const dx = e.clientX - dragStartXRef.current;
+    movedRef.current = Math.max(movedRef.current, Math.abs(dx));
+    angleRef.current = dragStartAngleRef.current + dx * 0.55;
+  };
+  const endDrag = (e: React.PointerEvent) => {
+    draggingRef.current = false;
+    (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
+  };
+
+  if (count === 0) {
+    return (
+      <div className="follow-orbit follow-orbit--skeleton" aria-hidden="true">
+        <div className="follow-orbit-viewport">
+          <div className="follow-orbit-stage">
+            {Array.from({ length: 6 }, (_, i) => (
+              <span key={`orbit-skel-${i}`} className="follow-orbit-item" style={{ transform: `rotateY(${i * 60}deg) translateZ(110px)` }}>
+                <span className="follow-orbit-ring"><span className="follow-orbit-avatar follow-orbit-avatar--skeleton" /></span>
+              </span>
+            ))}
+          </div>
+        </div>
+        <span className="follow-orbit-caption" />
+      </div>
+    );
+  }
+
+  return (
+    <div
+      className="follow-orbit"
+      ref={rootRef}
+      role="group"
+      aria-label="Creators you follow"
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={endDrag}
+      onPointerCancel={endDrag}
+    >
+      <div className="follow-orbit-viewport">
+        <div className="follow-orbit-stage" ref={stageRef}>
+          {entries.map((c) => {
+            const isOnline = onlineHandles.has(c.handle.toLowerCase());
+            const name = c.displayName || c.handle;
+            const unseen = unseenByHandle.get(c.handle.toLowerCase()) || 0;
+            return (
+              <button
+                key={c.handle}
+                type="button"
+                className="follow-orbit-item"
+                // A drag shouldn't register as a tap — only open the creator
+                // if the pointer barely moved.
+                onClick={() => { if (movedRef.current < 6) onOpenCreator(c.handle); }}
+                title={name}
+                aria-label={`Open ${name}'s catalog`}
+              >
+                <span className={`follow-orbit-ring${isOnline ? ' is-online' : ''}`}>
+                  <span className="follow-orbit-avatar">
+                    {c.avatarUrl
+                      ? <img src={highResAvatarUrl(c.avatarUrl, 128) || c.avatarUrl} alt="" loading="lazy" decoding="async" draggable={false} />
+                      : <span className="follow-orbit-initial">{name.charAt(0).toUpperCase()}</span>}
+                  </span>
+                  {unseen > 0 && (
+                    <span className="follow-orbit-unseen" aria-label={`${unseen} new look${unseen === 1 ? '' : 's'}`}>
+                      {unseen > 9 ? '9+' : unseen}
+                    </span>
+                  )}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+      <span className="follow-orbit-caption" ref={captionRef}>{entries[0]?.displayName || entries[0]?.handle || ''}</span>
+      {onSeeAll && (
+        <button type="button" className="follow-orbit-seeall" onClick={onSeeAll}>See all</button>
       )}
     </div>
   );
