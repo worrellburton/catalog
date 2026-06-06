@@ -934,8 +934,11 @@ export default function GeneratePage() {
   // screen is pinned to a single mobile viewport with no page scroll.
   const isGeneratingView = step === 'result'
     && (generation?.status === 'pending' || generation?.status === 'generating');
+  // The Review step is also pinned to a single viewport (no page scroll) —
+  // the selected products live in the bottom dock, so the body stays short.
+  const lockOneViewport = isGeneratingView || step === 'review';
   useEffect(() => {
-    if (!isGeneratingView) return;
+    if (!lockOneViewport) return;
     const prevBody = document.body.style.overflow;
     const prevHtml = document.documentElement.style.overflow;
     document.body.style.overflow = 'hidden';
@@ -944,7 +947,7 @@ export default function GeneratePage() {
       document.body.style.overflow = prevBody;
       document.documentElement.style.overflow = prevHtml;
     };
-  }, [isGeneratingView]);
+  }, [lockOneViewport]);
 
   // Tapping an existing upload toggles its membership in the slots - drops
   // it into the first empty slot, or removes it if it's already placed.
@@ -1492,7 +1495,7 @@ export default function GeneratePage() {
   }
 
   return (
-    <div className={`gen-page${isGeneratingView ? ' gen-page--generating' : ''}`}>
+    <div className={`gen-page${isGeneratingView ? ' gen-page--generating' : ''}${step === 'review' ? ' gen-page--review' : ''}`}>
       {confirmHostModal}
       {impersonate && (
         <div
@@ -1981,21 +1984,10 @@ export default function GeneratePage() {
               </div>
             </div>
 
-            {/* Pro-preview note removed: it shifted the layout on every
-                Fast↔Pro toggle and pushed Review past one viewport. The same
-                info lives in the Pro button's tooltip. */}
-
-            <div className="gen-review-products">
-              {picked.map(p => (
-                <div key={p.id} className="gen-review-product">
-                  {p.image_url && <img src={p.image_url} alt="" />}
-                  <div>
-                    <div className="gen-review-product-name">{p.name}</div>
-                    <div className="gen-review-product-role">{p.role_tag || 'Auto'}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
+            {/* The per-product list used to live here, but it duplicated the
+                selected-products strip already shown in the bottom dock — and
+                pushed Review past one viewport. The summary row "Products: N"
+                above + the dock thumbnails cover it. */}
             {submitError && <div className="gen-error">{submitError}</div>}
           </section>
         )}

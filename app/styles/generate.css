@@ -44,6 +44,17 @@
   overflow: hidden;
   padding-bottom: calc(24px + env(safe-area-inset-bottom));
 }
+
+/* Review view — same single-viewport lock. The selected products live in the
+   bottom dock, so the body (summary table) stays short enough to fit without
+   page scroll. */
+.gen-page--review {
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  padding-bottom: calc(24px + env(safe-area-inset-bottom));
+}
 .gen-page--generating .gen-main {
   flex: 1 1 auto;
   min-height: 0;
