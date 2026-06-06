@@ -1281,8 +1281,16 @@ export default function GeneratePage() {
         const cardCenter = cardRect.left + cardRect.width / 2;
         const rowCenter = rowRect.left + rowRect.width / 2;
         const delta = cardCenter - rowCenter;
-        if (Math.abs(delta) < 4) return; // already centred — nothing to do
-        row.scrollBy({ left: delta, behavior: 'smooth' });
+        if (Math.abs(delta) >= 4) row.scrollBy({ left: delta, behavior: 'smooth' });
+        // Also bring the card to the vertical middle of the screen by
+        // scrolling ONLY the page container (never scrollIntoView, which
+        // would center every ancestor and yank the whole layout). Target
+        // ~46% of the viewport so the dock at the bottom doesn't cover it.
+        const page = card.closest('.gen-page') as HTMLElement | null;
+        if (page) {
+          const vDelta = (cardRect.top + cardRect.height / 2) - window.innerHeight * 0.46;
+          if (Math.abs(vDelta) > 10) page.scrollBy({ top: vDelta, behavior: 'smooth' });
+        }
       });
     }
   };
@@ -2339,7 +2347,7 @@ export default function GeneratePage() {
                   CSS so the existing single-column flow is preserved. */}
               <aside className="gen-result-side" aria-label="Your other looks">
                 <div className="gen-result-side-label">
-                  {generation?.status === 'done' ? 'Your looks' : 'While Vision composes…'}
+                  {generation?.status === 'done' ? 'Your looks' : 'While we compose your look…'}
                 </div>
                 {generations.filter(g => g.id !== generation?.id && g.video_url).length === 0 ? (
                   <div className="gen-result-side-empty">
@@ -2400,11 +2408,12 @@ export default function GeneratePage() {
           aria-label="Step controls"
           aria-hidden={step === 'products' && picked.length === 0 ? 'true' : undefined}
         >
-          {/* Picked-products strip stays visible across products → style →
-              review so the user always sees what they're building. The
-              tap-to-remove × is still wired so they can tweak the lineup
-              without scrolling back to the products step. */}
-          {picked.length > 0 && (
+          {/* Picked-products strip stays visible across products → style so
+              the user always sees what they're building. Hidden on REVIEW —
+              the floating circles already show the face + products there, so
+              the thumbnail strip just crowds the dock. The tap-to-remove × is
+              still wired on the earlier steps. */}
+          {picked.length > 0 && step !== 'review' && (
             <div className="gen-dock-picks-strip" role="region" aria-label="Selected products">
               {picked.map(p => (
                 <div
@@ -2441,7 +2450,7 @@ export default function GeneratePage() {
                 disabled={submitting}
               >
                 <span className="gen-continue-spark" aria-hidden="true" />
-                {submitting ? 'Starting…' : 'Continue'}
+                {submitting ? 'Starting…' : 'Build'}
               </button>
             ) : (
               <button className="gen-btn-primary" disabled={!canAdvance} onClick={() => goNext(step, setStep)}>
@@ -2760,7 +2769,6 @@ function GenerationProgress({ generation, images }: { generation: UserGeneration
         )}
 
         <div className="gen-build-meta">
-          <span className="gen-vision gen-build-vision">Vision</span>
           <div className="gen-build-phase">{activePhase}</div>
           <div key={jokeIdx} className="gen-build-joke">{BUILD_JOKES[jokeIdx]}</div>
           <div className="gen-build-bar" aria-hidden="true">
@@ -3149,7 +3157,6 @@ const LookCard = memo(function LookCard({
                     <rect className="gen-build-track" x="1" y="1" width="88" height="158" rx="6" ry="6" pathLength={100} />
                     <rect className="gen-build-fill" x="1" y="1" width="88" height="158" rx="6" ry="6" pathLength={100} strokeDasharray={`${pct} 100`} />
                   </svg>
-                  <span className="gen-vision">Vision</span>
                   <span className="gen-lookcard-phase">{BUILD_PHASES[phaseIdx]}</span>
                   <span className="gen-lookcard-pct">{Math.round(pct)}%</span>
                 </>
