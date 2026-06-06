@@ -1745,22 +1745,10 @@ html[data-shell="catalog-app"] .my-looks-overlay {
 .my-cat-create-fab:active { transform: translateY(0); }
 
 /* Hero - same flex column / centered layout as CreatorPage. */
-/* Auto-hiding sticky top: the hero + tabs stay pinned to the top of the
-   catalog, slide up out of the way as the user scrolls down into the grid,
-   and slide back when they scroll up, stop, or return to the very top.
-   z-index sits below the corner FABs (z 30) so those stay tappable. */
+/* The hero + tabs scroll normally with the page; the corner FABs (back /
+   settings / analytics / add) are the elements pinned to the top instead. */
 .my-cat-top {
-  position: sticky;
-  top: 0;
-  z-index: 15;
-  background: inherit;
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-}
-.my-cat-top.is-hidden {
-  transform: translateY(-100%);
-}
-@media (prefers-reduced-motion: reduce) {
-  .my-cat-top { transition: none; }
+  position: static;
 }
 
 .my-cat-hero {
@@ -2571,7 +2559,7 @@ html[data-shell="catalog-app"] .my-looks-overlay {
 
 /* Top-right action FAB row — analytics + upload as siblings. */
 .my-cat-fab-row {
-  position: absolute;
+  position: fixed;
   top: 24px;
   right: 24px;
   display: flex;
@@ -3835,7 +3823,7 @@ html[data-shell="catalog-app"] .my-looks-overlay {
    base .my-cat-create-fab top-right anchor applies and must be flipped. */
 .my-cat-back-fab svg { display: block; }
 .my-cat-back-fab {
-  position: absolute;
+  position: fixed;
   top: 24px;
   left: 24px;
   right: auto;
