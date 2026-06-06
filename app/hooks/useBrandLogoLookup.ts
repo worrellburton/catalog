@@ -43,17 +43,36 @@ function notify(key: string, url: string | null) {
   for (const cb of set) cb(url);
 }
 
+// The brand_logos table is small + admin-curated, so fetch it ONCE in full and
+// share the Map across every lookup instead of a per-brand tier-1 query. This
+// is what keeps the feed's tier-1 cost at a single round trip no matter how
+// many distinct brands — or brand sources (looks' products, creatives) — the
+// cards pull from.
+let curatedLogosPromise: Promise<Map<string, string>> | null = null;
+function getCuratedLogos(): Promise<Map<string, string>> {
+  if (!curatedLogosPromise) {
+    curatedLogosPromise = (async () => {
+      if (!supabase) return new Map<string, string>();
+      const { data, error } = await supabase.from('brand_logos').select('brand, logo_url');
+      if (error) { curatedLogosPromise = null; return new Map<string, string>(); }
+      const m = new Map<string, string>();
+      for (const r of (data || []) as { brand: string; logo_url: string | null }[]) {
+        const k = (r.brand || '').toLowerCase().trim();
+        if (k && r.logo_url) m.set(k, r.logo_url);
+      }
+      return m;
+    })();
+  }
+  return curatedLogosPromise;
+}
+
 async function fetchLogo(key: string): Promise<void> {
   if (!supabase) { cache.set(key, { url: null, loading: false }); notify(key, null); return; }
-  // Tier 1: admin-curated row in brand_logos.
-  const { data: curated } = await supabase
-    .from('brand_logos')
-    .select('logo_url')
-    .eq('brand', key)
-    .maybeSingle();
-  if (curated?.logo_url) {
-    cache.set(key, { url: curated.logo_url as string, loading: false });
-    notify(key, curated.logo_url as string);
+  // Tier 1: admin-curated row, served from the one-time full-table fetch.
+  const curatedUrl = (await getCuratedLogos()).get(key);
+  if (curatedUrl) {
+    cache.set(key, { url: curatedUrl, loading: false });
+    notify(key, curatedUrl);
     return;
   }
   // Tier 2: Brandfetch CDN via a domain we can derive from any
@@ -80,15 +99,14 @@ async function fetchLogo(key: string): Promise<void> {
 }
 
 /**
- * Batch-warm the logo cache for many brands in ONE query instead of the
- * per-brand tier-1 lookup fetchLogo() fires. Curated rows come from a single
- * `.in('brand', …)` on brand_logos; brands without a curated row fall back to
- * a Brandfetch URL derived from the product URLs already in memory (no extra
- * query). Call once after the home feed loads.
+ * Batch-warm the logo cache for many brands without firing the per-brand
+ * tier-1 lookup fetchLogo() does. Curated rows come from the shared one-time
+ * full brand_logos fetch (getCuratedLogos); brands without a curated row fall
+ * back to a Brandfetch URL derived from the product URLs already in memory (no
+ * extra query). Call once after a feed of products loads.
  *
  * Brands with neither a curated row nor a derivable in-memory domain settle to
  * the text fallback (url=null) — the same tier-3 result the lazy path reaches.
- * In-memory products are exactly the feed's cards, so domain coverage is high.
  */
 export async function prefetchBrandLogos(
   products: ReadonlyArray<{ brand?: string | null; url?: string | null }>,
@@ -113,14 +131,8 @@ export async function prefetchBrandLogos(
   // Reserve them so concurrent useBrandLogo() mounts await our notify() rather
   // than each firing their own per-brand tier-1 query.
   for (const b of todo) cache.set(b, { url: null, loading: true });
-  // Tier 1 — a single query for every curated row.
-  const curated = new Map<string, string>();
-  const { data } = await supabase
-    .from('brand_logos').select('brand, logo_url').in('brand', todo);
-  for (const row of (data || []) as { brand: string; logo_url: string | null }[]) {
-    const k = (row.brand || '').toLowerCase().trim();
-    if (k && row.logo_url) curated.set(k, row.logo_url);
-  }
+  // Tier 1 — shared one-time full-table fetch (no per-brand or per-batch query).
+  const curated = await getCuratedLogos();
   // Resolve: curated row > Brandfetch-by-domain > text fallback (null).
   for (const b of todo) {
     const url = curated.get(b)
