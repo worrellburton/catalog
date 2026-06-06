@@ -422,7 +422,7 @@ const DeckViewV2: React.FC<DeckViewV2Props> = () => {
               <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
               <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
             </svg>
-            @catalog
+            @Catalog
           </a>
           <a className="deck-v2-tm-pill" href={`${basePath}/trademark.pdf`} target="_blank" rel="noopener noreferrer">
             <svg className="deck-v2-tm-glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
