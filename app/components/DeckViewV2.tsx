@@ -45,6 +45,17 @@ const PLATFORMS: { key: string; name: string; color: string; val: number }[] = [
   { key: 'shopmy',    name: 'ShopMy',    color: '#a78bfa', val: 20 },
 ];
 
+// Fisher-Yates shuffle (returns a new array) so the background feed isn't
+// clustered by product type - no run of mice or candles in a row.
+function shuffle<T>(arr: T[]): T[] {
+  const a = arr.slice();
+  for (let i = a.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [a[i], a[j]] = [a[j], a[i]];
+  }
+  return a;
+}
+
 /* The combined-surface chart for slide 2. Five single-colour bars on the
    left (each platform, standing alone) feed an arrow into one stacked
    column on the right whose segments are the same five colours at the same
@@ -147,16 +158,21 @@ const DeckViewV2: React.FC<DeckViewV2Props> = () => {
   const [homeFeed, setHomeFeed] = useState<ProductAd[]>([]);
   const [looks, setLooks] = useState<Look[]>([]);
 
-  // Background mix is 80% products / 20% creator looks: one look dropped in
-  // after every four product clips. Every product appears once; looks cycle
-  // to fill the 20% slots.
+  // Background mix is 80% products / 20% creator looks. Both pools are
+  // shuffled so the feed reads as a varied, random catalog - no clusters of
+  // the same product type - and a look is dropped in after every four
+  // products. Strict video-only filter so no tile is ever a blank/black cell.
   const bgClips = useMemo(() => {
-    const products = homeFeed
-      .filter((p) => !!p.video_url)
-      .map((p, i) => ({ key: `p:${p.id}:${i}`, url: p.video_url as string, poster: p.thumbnail_url ?? undefined }));
-    const lookClips = looks
-      .filter((l) => !!l.video)
-      .map((l, i) => ({ key: `l:${l.uuid ?? l.id}:${i}`, url: l.video, poster: l.thumbnail_url }));
+    const products = shuffle(
+      homeFeed
+        .filter((p) => !!p.video_url)
+        .map((p) => ({ key: `p:${p.id}`, url: p.video_url as string, poster: p.thumbnail_url ?? undefined })),
+    );
+    const lookClips = shuffle(
+      looks
+        .filter((l) => !!l.video)
+        .map((l) => ({ key: `l:${l.uuid ?? l.id}`, url: l.video, poster: l.thumbnail_url })),
+    );
     if (products.length === 0) return lookClips;
     if (lookClips.length === 0) return products;
     const out: { key: string; url: string; poster?: string }[] = [];
@@ -319,7 +335,7 @@ const DeckViewV2: React.FC<DeckViewV2Props> = () => {
           <div className="deck-step deck-v2-pillar">
             <span className="deck-step-num">01</span>
             <h3>Elegant discovery</h3>
-            <p>Curated by creators you trust , not a search bar.</p>
+            <p>Creator taste, indexed by vector-database AI.</p>
           </div>
           <div className="deck-step deck-v2-pillar">
             <span className="deck-step-num">02</span>
@@ -334,40 +350,40 @@ const DeckViewV2: React.FC<DeckViewV2Props> = () => {
         </div>
       </div>
 
-      {/* Slide 4: Market opportunity - a global AI shopping platform. */}
+      {/* Slide 4: Market opportunity - social commerce. */}
       <div className="deck-slide deck-v2-market">
         <span className="deck-label">Market Opportunity</span>
-        <h2 className="deck-v2-market-h2">If shopping runs through one AI,<br />the market is all of it.</h2>
+        <h2 className="deck-v2-market-h2">Shopping is going social.<br />Catalog is the AI layer.</h2>
         <p className="deck-v2-market-sub">
-          Catalog isn&apos;t chasing a slice of commerce , it&apos;s the shopping layer for the whole thing. A global AI platform for shopping has a ceiling the size of retail itself.
+          Discovery is moving from the search bar to the feed. Social commerce is the fastest-growing channel in retail , and it needs an intelligence layer. That&apos;s Catalog.
         </p>
         <div className="deck-stats deck-v2-market-stats">
           <div className="deck-stat">
-            <span className="deck-stat-num">$32T</span>
-            <span className="deck-stat-label">Global retail spend a year , the ceiling for an AI you shop through</span>
+            <span className="deck-stat-num">$1.2T</span>
+            <span className="deck-stat-label">Global social commerce in 2025</span>
             <div className="stat-growth">
-              <div className="growth-line" style={{ '--grow-width': '70%' } as React.CSSProperties} />
-              <span className="growth-rate">all commerce</span>
+              <div className="growth-line" style={{ '--grow-width': '55%' } as React.CSSProperties} />
+              <span className="growth-rate">the channel today</span>
             </div>
           </div>
           <div className="deck-stat">
-            <span className="deck-stat-num">$6.9T</span>
-            <span className="deck-stat-label">Online by 2027, growing double digits while stores stay flat</span>
+            <span className="deck-stat-num">$8.5T</span>
+            <span className="deck-stat-label">Social commerce by 2030</span>
             <div className="stat-growth">
-              <div className="growth-line" style={{ '--grow-width': '88%' } as React.CSSProperties} />
-              <span className="growth-rate">+9% CAGR</span>
+              <div className="growth-line" style={{ '--grow-width': '92%' } as React.CSSProperties} />
+              <span className="growth-rate">~30% CAGR</span>
             </div>
           </div>
           <div className="deck-stat">
-            <span className="deck-stat-num">$69B</span>
-            <span className="deck-stat-label">Just 1% of global e-commerce routed through Catalog</span>
+            <span className="deck-stat-num">$85B</span>
+            <span className="deck-stat-label">Just 1% of social commerce routed through Catalog</span>
             <div className="stat-growth">
-              <div className="growth-line" style={{ '--grow-width': '38%' } as React.CSSProperties} />
+              <div className="growth-line" style={{ '--grow-width': '40%' } as React.CSSProperties} />
               <span className="growth-rate">our wedge</span>
             </div>
           </div>
         </div>
-        <p className="deck-note deck-v2-market-note">Directional , global retail + e-commerce scale. The point: an AI platform for shopping has a TAM the size of commerce itself.</p>
+        <p className="deck-note deck-v2-market-note">Directional , social-commerce market estimates (Grand View, eMarketer). The point: Catalog is the AI layer on the fastest-growing slice of retail.</p>
       </div>
 
       {/* Slide 5: Potential partnership - exclusive affiliate rights. */}
