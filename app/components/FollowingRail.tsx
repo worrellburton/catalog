@@ -655,8 +655,8 @@ function FollowingOrbitRail({ entries, onlineHandles, unseenByHandle, onOpenCrea
   const step = count > 0 ? 360 / count : 0;
   // Radius spreads the avatars evenly around the cylinder so neighbours never
   // collide at the front, growing with the number of creators.
-  const ITEM = 58;
-  const GAP = 22;
+  const ITEM = 46;
+  const GAP = 20;
   const radius = count > 1
     ? Math.max(104, (ITEM + GAP) / (2 * Math.sin(Math.PI / count)))
     : 0;
@@ -735,7 +735,7 @@ function FollowingOrbitRail({ entries, onlineHandles, unseenByHandle, onOpenCrea
         <div className="follow-orbit-viewport">
           <div className="follow-orbit-stage">
             {Array.from({ length: 6 }, (_, i) => (
-              <span key={`orbit-skel-${i}`} className="follow-orbit-item" style={{ transform: `rotateY(${i * 60}deg) translateZ(110px)` }}>
+              <span key={`orbit-skel-${i}`} className="follow-orbit-item" style={{ transform: `rotateY(${i * 60}deg) translateZ(92px)` }}>
                 <span className="follow-orbit-ring"><span className="follow-orbit-avatar follow-orbit-avatar--skeleton" /></span>
               </span>
             ))}

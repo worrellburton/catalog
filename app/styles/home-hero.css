@@ -854,8 +854,8 @@
 .follow-orbit-viewport {
   position: relative;
   width: 100%;
-  height: 76px;
-  perspective: 520px;
+  height: 62px;
+  perspective: 480px;
   perspective-origin: 50% 50%;
 }
 .follow-orbit-stage {
@@ -871,9 +871,9 @@
   position: absolute;
   left: 0;
   top: 0;
-  width: 58px;
-  height: 58px;
-  margin: -29px 0 0 -29px; /* centre on the stage origin before its 3D seat */
+  width: 46px;
+  height: 46px;
+  margin: -23px 0 0 -23px; /* centre on the stage origin before its 3D seat */
   background: none;
   border: none;
   padding: 0;
@@ -884,10 +884,10 @@
 }
 .follow-orbit-ring {
   position: relative;
-  width: 58px;
-  height: 58px;
+  width: 46px;
+  height: 46px;
   border-radius: 50%;
-  padding: 2.5px;
+  padding: 2px;
   display: inline-flex;
   align-items: center;
   justify-content: center;
