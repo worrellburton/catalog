@@ -1,8 +1,10 @@
 
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import CatalogLogo from './CatalogLogo';
 import ParticleBackground from './ParticleBackground';
 import { getHomeFeed, type ProductAd } from '~/services/product-creative';
+import { getLooks } from '~/services/looks';
+import type { Look } from '~/data/looks';
 
 interface DeckViewV2Props {
   onSeeApp: () => void;
@@ -136,8 +138,6 @@ function CombinedChart() {
 }
 
 const DeckViewV2: React.FC<DeckViewV2Props> = ({
-  onSeeApp,
-  onVisitWebsite,
   onBack,
   isLightMode,
   onToggleTheme,
@@ -145,13 +145,31 @@ const DeckViewV2: React.FC<DeckViewV2Props> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
   const [activeSlideIdx, setActiveSlideIdx] = useState(0);
-  // The rising background mirrors the real consumer home feed - every
-  // product with a polished primary video (products.primary_video_url),
-  // not stock clips. Empty until the fetch lands; the dark overlay keeps
-  // the slides legible regardless.
+  // The rising background mirrors the real catalog: product primary videos
+  // AND creator look videos, interleaved. Empty until the fetches land; the
+  // dark overlay keeps the slides legible regardless.
   const [homeFeed, setHomeFeed] = useState<ProductAd[]>([]);
+  const [looks, setLooks] = useState<Look[]>([]);
 
-  const slideTitles = ['Catalog', 'The AI for Shopping', 'Human taste', 'Market', 'The future'];
+  // Interleave product creatives and creator looks so the feed reads as the
+  // real mix - a product clip, then a creator look, then a product, ...
+  const bgClips = useMemo(() => {
+    const products = homeFeed
+      .filter((p) => !!p.video_url)
+      .map((p, i) => ({ key: `p:${p.id}:${i}`, url: p.video_url as string }));
+    const lookClips = looks
+      .filter((l) => !!l.video)
+      .map((l, i) => ({ key: `l:${l.uuid ?? l.id}:${i}`, url: l.video }));
+    const out: { key: string; url: string }[] = [];
+    const max = Math.max(products.length, lookClips.length);
+    for (let i = 0; i < max; i++) {
+      if (products[i]) out.push(products[i]);
+      if (lookClips[i]) out.push(lookClips[i]);
+    }
+    return out;
+  }, [homeFeed, looks]);
+
+  const slideTitles = ['Catalog', 'The AI for Shopping', 'Human taste', 'Market', 'Partnership', 'The future'];
 
   useEffect(() => {
     const container = containerRef.current;
@@ -204,6 +222,13 @@ const DeckViewV2: React.FC<DeckViewV2Props> = ({
       .catch((err) => {
         console.error('[DeckViewV2] getHomeFeed failed:', err);
       });
+    getLooks()
+      .then((list) => {
+        if (!cancelled) setLooks(list.filter((l) => !!l.video));
+      })
+      .catch((err) => {
+        console.error('[DeckViewV2] getLooks failed:', err);
+      });
     return () => {
       cancelled = true;
     };
@@ -211,18 +236,18 @@ const DeckViewV2: React.FC<DeckViewV2Props> = ({
 
   return (
     <div className="deck-view deck-view-v8 deck-view-v2 deck-v8-bg-revealed active" ref={containerRef}>
-      {/* Rising product feed (same drift the longer decks use), sourced from
-          the live catalog's primary product videos. Up to 48 tiles cycle
-          through the feed (homeFeed[i % len]) so even a small live pool
-          fills the tall grid edge-to-edge. */}
+      {/* Rising feed (same drift the longer decks use), sourced from the live
+          catalog: product creatives + creator looks interleaved. Up to 48
+          tiles cycle through the combined pool so even a small set fills the
+          tall grid edge-to-edge. */}
       <div className="deck-v8-bg deck-v2-bg" aria-hidden="true">
         <div className="deck-insight-grid">
-          {Array.from({ length: homeFeed.length === 0 ? 0 : 48 }).map((_, i) => {
-            const clip = homeFeed[i % homeFeed.length];
+          {Array.from({ length: bgClips.length === 0 ? 0 : 48 }).map((_, i) => {
+            const clip = bgClips[i % bgClips.length];
             return (
               <video
-                key={`${clip.id}:${i}`}
-                src={clip.video_url ?? undefined}
+                key={`${clip.key}:${i}`}
+                src={clip.url}
                 muted
                 loop
                 playsInline
@@ -350,16 +375,46 @@ const DeckViewV2: React.FC<DeckViewV2Props> = ({
         <p className="deck-note deck-v2-market-note">Directional , global retail + e-commerce scale. The point: an AI you go to shop has a TAM the size of commerce itself.</p>
       </div>
 
-      {/* Slide 5: Close. */}
+      {/* Slide 5: Potential partnership - exclusive affiliate rights. */}
+      <div className="deck-slide deck-v2-partner">
+        <span className="deck-label">Potential Partnership</span>
+        <h2 className="deck-v2-partner-h2">Exclusive affiliate rights.<br />A partnership that compounds.</h2>
+        <p className="deck-v2-partner-sub">
+          Catalog runs on your affiliate network , exclusively. You earn on every sale we drive, and your equity in Catalog grows as the platform scales.
+        </p>
+        <div className="deck-v2-partner-cards">
+          <div className="deck-v2-partner-card">
+            <span className="deck-v2-partner-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9" /><path d="M14.8 9.2A2.4 2.4 0 0 0 12.6 8h-1.2a2.2 2.2 0 0 0 0 4.4h1.2a2.2 2.2 0 0 1 0 4.4h-1.2A2.4 2.4 0 0 1 9.2 15.6" /><path d="M12 6.4v1.2M12 16.4v1.2" /></svg>
+            </span>
+            <h3>Earn cash now</h3>
+            <p>Every purchase through Catalog flows through your affiliate links. You get paid from day one, on the volume we generate.</p>
+          </div>
+          <div className="deck-v2-partner-plus" aria-hidden="true">+</div>
+          <div className="deck-v2-partner-card">
+            <span className="deck-v2-partner-icon" aria-hidden="true">
+              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round"><path d="M3 17l6-6 4 4 7-7" /><path d="M14 8h6v6" /></svg>
+            </span>
+            <h3>Asset value grows</h3>
+            <p>As an equity partner, your stake compounds with the platform. The bigger Catalog gets, the more your position is worth.</p>
+          </div>
+        </div>
+        <p className="deck-note deck-v2-partner-note">Exclusive rights , cash today, asset value tomorrow. A partnership built to win on both sides.</p>
+      </div>
+
+      {/* Slide 6: Close - Catalog wordmark + Instagram. */}
       <div className="deck-slide deck-cover deck-v2-close">
         <CatalogLogo className="deck-logo deck-v2-close-logo" />
         <p className="deck-subtitle deck-v2-close-sub">The AI you go to shop.</p>
-        <div className="deck-end-actions">
-          <button className="deck-mvp-btn" onClick={onSeeApp}>See the product</button>
-          <button className="deck-website-btn" onClick={onVisitWebsite}>Visit website</button>
-          <a className="deck-website-btn" href="https://instagram.com/catalog" target="_blank" rel="noopener noreferrer">@catalog</a>
-          <a className="deck-mvp-btn" href={`${basePath}/trademark.pdf`} target="_blank" rel="noopener noreferrer">Trademark</a>
-        </div>
+        <a className="deck-v2-ig-btn" href="https://instagram.com/catalog" target="_blank" rel="noopener noreferrer">
+          <svg className="deck-v2-ig-glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
+            <path d="M16 11.37A4 4 0 1 1 12.63 8 4 4 0 0 1 16 11.37z" />
+            <line x1="17.5" y1="6.5" x2="17.51" y2="6.5" />
+          </svg>
+          @catalog
+        </a>
+        <a className="deck-v2-tm-link" href={`${basePath}/trademark.pdf`} target="_blank" rel="noopener noreferrer">Trademark</a>
       </div>
     </div>
   );

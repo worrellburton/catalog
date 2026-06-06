@@ -206,13 +206,111 @@
   text-align: center;
 }
 
-/* ── Slide 4: close ─────────────────────────────────────────────────── */
+/* ── Slide 5: potential partnership ─────────────────────────────────── */
+.deck-v2-partner {
+  align-items: center;
+  text-align: center;
+}
+.deck-v2-partner-h2 {
+  margin-bottom: 14px;
+}
+.deck-v2-partner-sub {
+  margin: 0 auto 34px;
+  max-width: 640px;
+}
+.deck-v2-partner-cards {
+  display: flex;
+  align-items: stretch;
+  justify-content: center;
+  gap: 18px;
+  width: 100%;
+  max-width: 780px;
+  margin: 0 auto;
+}
+.deck-v2-partner-card {
+  flex: 1;
+  text-align: left;
+  padding: 22px 22px 24px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.deck-v2-partner-icon {
+  display: inline-flex;
+  width: 38px;
+  height: 38px;
+  color: #4ade80;
+  margin-bottom: 14px;
+}
+.deck-v2-partner-icon svg {
+  width: 100%;
+  height: 100%;
+}
+.deck-v2-partner-card h3 {
+  font-size: 17px;
+  font-weight: 600;
+  color: #fff;
+  margin-bottom: 8px;
+}
+.deck-v2-partner-card p {
+  font-size: 14px;
+  line-height: 1.6;
+  color: rgba(255, 255, 255, 0.5);
+}
+.deck-v2-partner-plus {
+  align-self: center;
+  font-size: 30px;
+  font-weight: 300;
+  color: rgba(255, 255, 255, 0.3);
+  flex: 0 0 auto;
+}
+.deck-v2-partner-note {
+  margin: 30px auto 0;
+  text-align: center;
+}
+
+/* ── Slide 6: close ─────────────────────────────────────────────────── */
 .deck-v2-close-logo {
   height: 60px;
 }
 .deck-v2-close-sub {
   margin-top: 16px;
   font-size: 15px;
+}
+/* Instagram-branded button: the IG gradient + glyph, handle @catalog. */
+.deck-v2-ig-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 30px;
+  padding: 13px 26px;
+  border-radius: 999px;
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+  text-decoration: none;
+  background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
+  box-shadow: 0 8px 28px rgba(220, 39, 67, 0.35);
+  transition: transform 0.15s ease, box-shadow 0.15s ease;
+}
+.deck-v2-ig-btn:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 34px rgba(220, 39, 67, 0.45);
+}
+.deck-v2-ig-glyph {
+  width: 20px;
+  height: 20px;
+}
+.deck-v2-tm-link {
+  margin-top: 18px;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.4);
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+.deck-v2-tm-link:hover {
+  color: rgba(255, 255, 255, 0.7);
 }
 
 /* Light mode: soften the green accents that were tuned for black. */
@@ -277,5 +375,39 @@
   .deck-v2-market-note {
     font-size: 11px;
     margin-top: 16px;
+  }
+  /* Stats stack vertically on phones instead of a cramped 2-up grid. */
+  .deck-v2-market-stats {
+    grid-template-columns: 1fr;
+    max-width: 360px;
+  }
+
+  /* Partnership: cards stack vertically, drop the inline plus. */
+  .deck-v2-partner-sub {
+    font-size: 12.5px;
+    line-height: 1.5;
+    max-width: 92%;
+    margin-bottom: 18px;
+  }
+  .deck-v2-partner-cards {
+    flex-direction: column;
+    gap: 12px;
+    max-width: 380px;
+  }
+  .deck-v2-partner-plus {
+    display: none;
+  }
+  .deck-v2-partner-card {
+    padding: 16px 18px;
+  }
+  .deck-v2-partner-card p {
+    font-size: 12.5px;
+  }
+  .deck-v2-partner-note {
+    font-size: 11px;
+    margin-top: 18px;
+  }
+  .deck-v2-ig-btn {
+    margin-top: 24px;
   }
 }
