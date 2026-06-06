@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import type { Product } from '~/data/looks';
+import { useAuth } from '~/hooks/useAuth';
+import { getCreatorCollections, syncCreatorCollections } from './creator-collections';
 
 /**
  * Saved-screen layout persistence. The saved items themselves live in
@@ -81,6 +83,9 @@ export function useSavedLayout(
   liveLookIds: number[],
   liveProductKeys: string[],
 ): UseSavedLayout {
+  const { user } = useAuth();
+  const userId = user?.id;
+
   const [collections, setCollections] = useState<SavedCollection[]>(() => load(COLLECTIONS_KEY, []));
   const [lookOrder, setLookOrder] = useState<number[]>(() => load(ORDER_LOOKS_KEY, []));
   const [productOrder, setProductOrder] = useState<string[]>(() => load(ORDER_PRODUCTS_KEY, []));
@@ -187,7 +192,31 @@ export function useSavedLayout(
     try { localStorage.setItem(COLLECTIONS_KEY, JSON.stringify(collections)); }
     catch { /* storage full / disabled — keep working in-memory */ }
     setSaved(prev => ({ ...prev, collections }));
-  }, [collections]);
+    // Mirror to the cloud for signed-in users so collections roam across
+    // devices and surface publicly on the creator's catalog. Fire-and-forget.
+    if (userId) { syncCreatorCollections(userId, collections).catch(() => { /* best-effort */ }); }
+  }, [collections, userId]);
+
+  // Hydrate from the cloud on sign-in so collections authored on another
+  // device show up here. The cloud copy is authoritative for collections it
+  // knows about; any local-only (not-yet-synced) collections are kept and the
+  // auto-persist effect above pushes them back up.
+  useEffect(() => {
+    if (!userId) return;
+    let cancelled = false;
+    getCreatorCollections(userId).then(remote => {
+      if (cancelled || remote.length === 0) return;
+      setCollections(prev => {
+        const remoteCols: SavedCollection[] = remote.map(r => ({
+          id: r.clientId, name: r.name, lookIds: r.lookIds, productKeys: r.productKeys,
+        }));
+        const remoteIds = new Set(remoteCols.map(c => c.id));
+        const localOnly = prev.filter(c => !remoteIds.has(c.id));
+        return [...remoteCols, ...localOnly];
+      });
+    }).catch(() => { /* offline — keep local */ });
+    return () => { cancelled = true; };
+  }, [userId]);
 
   const save = useCallback(() => {
     try {

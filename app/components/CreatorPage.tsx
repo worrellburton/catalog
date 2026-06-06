@@ -10,6 +10,7 @@ import { subscribeToLooksChange, fetchSeenLookIds, reorderBySeen } from '~/servi
 import ParticleBackground from './ParticleBackground';
 import { getCreatorAppearance, getCreatorAppearanceById, type CatalogAppearance, DEFAULT_CATALOG_APPEARANCE } from '~/services/catalog-theme';
 import { getCreatorProductOrder } from '~/services/catalog-products';
+import { getCreatorCollections, type CreatorCollection } from '~/services/creator-collections';
 // (Removed getShopperGender / subscribeToShopperGender import — the creator
 // catalog page no longer filters by shopper gender; see creatorLooks below.)
 
@@ -451,28 +452,48 @@ export default function CreatorPage({
     return counts;
   }, [allProducts]);
 
-  // Collections — derived from each product's category (Shoes, Tops,
-  // Bags, …) so the Shop tab offers a swipeable "collection" selector
-  // even without an explicit collections backend. Ordered by size so the
-  // biggest collections lead the swiper.
-  const collectionCounts = useMemo(() => {
-    const counts: Record<string, number> = {};
-    allProducts.forEach(p => {
-      const cat = productCategory(p.name);
-      counts[cat] = (counts[cat] || 0) + 1;
-    });
-    return Object.fromEntries(Object.entries(counts).sort((a, b) => b[1] - a[1]));
-  }, [allProducts]);
+  // Collections — the creator's own named collections (e.g. "Cool"),
+  // authored on the Saved screen and synced to the cloud. We only surface a
+  // collection on the Shop tab when at least one of its products is actually
+  // in this catalog (intersect membership with the live products). Each
+  // collection carries the matching count for its chip.
+  const [dbCollections, setDbCollections] = useState<CreatorCollection[]>([]);
+  const creatorUserId = useMemo(() => {
+    if (userId) return userId;
+    const pid = profile?.id;
+    return pid && /^[0-9a-f-]{36}$/i.test(pid) ? pid : null;
+  }, [userId, profile?.id]);
+  useEffect(() => {
+    if (!creatorUserId) { setDbCollections([]); return; }
+    let cancelled = false;
+    getCreatorCollections(creatorUserId)
+      .then(c => { if (!cancelled) setDbCollections(c); })
+      .catch(() => { if (!cancelled) setDbCollections([]); });
+    return () => { cancelled = true; };
+  }, [creatorUserId]);
+
+  const shopCollections = useMemo(() => {
+    if (dbCollections.length === 0) return [];
+    const liveKeys = new Set(allProducts.map(p => `${p.brand}::${p.name}`));
+    return dbCollections
+      .map(c => ({ id: c.clientId, name: c.name, keys: new Set(c.productKeys), count: c.productKeys.filter(k => liveKeys.has(k)).length }))
+      .filter(c => c.count > 0);
+  }, [dbCollections, allProducts]);
 
   const [activeBrand, setActiveBrand] = useState<string | null>(null);
+  // Holds the active collection's client id (or null for "All").
   const [activeCollection, setActiveCollection] = useState<string | null>(null);
+  const activeCollectionKeys = useMemo(
+    () => shopCollections.find(c => c.id === activeCollection)?.keys ?? null,
+    [shopCollections, activeCollection],
+  );
   const filteredProducts = useMemo(() => {
     return allProducts.filter(p => {
       if (activeBrand && (p.brand || 'Other') !== activeBrand) return false;
-      if (activeCollection && productCategory(p.name) !== activeCollection) return false;
+      if (activeCollectionKeys && !activeCollectionKeys.has(`${p.brand}::${p.name}`)) return false;
       return true;
     });
-  }, [allProducts, activeBrand, activeCollection]);
+  }, [allProducts, activeBrand, activeCollectionKeys]);
 
   const handleProductClick = (p: Product) => {
     if (onOpenProduct) onOpenProduct(p);
@@ -686,7 +707,7 @@ export default function CreatorPage({
           the creator's collections (Shoes, Tops, Bags…). Selecting one
           shows just that collection. Only shown when there's more than
           one real collection to choose between. */}
-      {activeTab === 'products' && Object.keys(collectionCounts).filter(c => c !== 'Other').length > 1 && (
+      {activeTab === 'products' && shopCollections.length > 0 && (
         <div className="creator-collections">
           <button
             className={`creator-collection-chip ${!activeCollection ? 'active' : ''}`}
@@ -694,13 +715,13 @@ export default function CreatorPage({
           >
             All
           </button>
-          {Object.entries(collectionCounts).map(([cat, count]) => (
+          {shopCollections.map(col => (
             <button
-              key={cat}
-              className={`creator-collection-chip ${activeCollection === cat ? 'active' : ''}`}
-              onClick={() => setActiveCollection(c => c === cat ? null : cat)}
+              key={col.id}
+              className={`creator-collection-chip ${activeCollection === col.id ? 'active' : ''}`}
+              onClick={() => setActiveCollection(c => c === col.id ? null : col.id)}
             >
-              {cat} <span className="creator-collection-count">{count}</span>
+              {col.name} <span className="creator-collection-count">{col.count}</span>
             </button>
           ))}
         </div>
@@ -831,21 +852,4 @@ function applyCreatorOrder(products: Product[], orderMap: Map<string, number>): 
       return a.i - b.i; // stable fallback: preserve original order
     })
     .map(({ p }) => p);
-}
-
-// Map a product name to a display "collection" (category). Keyword-based
-// so it works on the public catalog's product data with no extra schema.
-// Falls back to "Other" so every product lands in exactly one collection.
-function productCategory(name: string | null | undefined): string {
-  const n = (name || '').toLowerCase();
-  if (/\b(sneaker|trainer|shoe|boot|heel|loafer|sandal|slipper|clog|mule|pump)\b/.test(n)) return 'Shoes';
-  if (/\b(bag|tote|clutch|purse|backpack|handbag|crossbody|satchel|duffel)\b/.test(n)) return 'Bags';
-  if (/\b(dress|gown)\b/.test(n)) return 'Dresses';
-  if (/\b(jacket|coat|parka|blazer|bomber|puffer|trench|vest|outerwear)\b/.test(n)) return 'Outerwear';
-  if (/\b(pant|trouser|chino|jean|denim|legging|jogger|short|skirt|cargo)\b/.test(n)) return 'Bottoms';
-  if (/\b(hat|cap|beanie|fedora|visor|bucket)\b/.test(n)) return 'Headwear';
-  if (/\b(necklace|ring|earring|bracelet|chain|pendant|jewel)\b/.test(n)) return 'Jewelry';
-  if (/\b(sunglass|shades|aviator|glasses|watch|belt|scarf|sock|glove|tie|wallet)\b/.test(n)) return 'Accessories';
-  if (/\b(shirt|tee|top|sweater|hoodie|polo|henley|tank|sweatshirt|knit|cardigan|blouse|jersey)\b/.test(n)) return 'Tops';
-  return 'Other';
 }
