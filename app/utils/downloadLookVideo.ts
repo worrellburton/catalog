@@ -433,7 +433,34 @@ async function watermarkToBlob(
   return { blob, ext: extFor(mime) };
 }
 
+function blobToDataUrl(blob: Blob): Promise<string> {
+  return new Promise((resolve, reject) => {
+    const r = new FileReader();
+    r.onload = () => resolve(r.result as string);
+    r.onerror = reject;
+    r.readAsDataURL(blob);
+  });
+}
+
 async function deliver(blob: Blob, filename: string): Promise<void> {
+  // In the Flutter native shell, hand the rendered file to the app so it can
+  // save straight to the camera roll (Photos). Requires the Flutter side to
+  // register a `saveMedia` handler; until then callHandler resolves null and
+  // we fall through to the web share/download path. Web can't write to Photos
+  // directly, and the navigator.share trick below is unreliable because the
+  // watermark render consumes the originating user gesture.
+  try {
+    const inShell = typeof document !== 'undefined'
+      && document.documentElement.dataset.shell === 'catalog-app';
+    const bridge = (window as unknown as {
+      flutter_inappwebview?: { callHandler?: (name: string, ...args: unknown[]) => Promise<unknown> };
+    }).flutter_inappwebview;
+    if (inShell && bridge?.callHandler) {
+      const dataUrl = await blobToDataUrl(blob);
+      const ok = await bridge.callHandler('saveMedia', { filename, dataUrl, mime: blob.type || 'video/mp4' });
+      if (ok) return;
+    }
+  } catch { /* fall through to web share / download */ }
   try {
     const file = new File([blob], filename, { type: blob.type || 'video/mp4' });
     const nav = navigator as Navigator & { canShare?: (data: ShareData) => boolean };
