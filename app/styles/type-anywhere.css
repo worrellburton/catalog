@@ -400,6 +400,10 @@ body:has(.app-root.home-hero:not(.hero-scrolled)) .catalog-pills {
   flex-wrap: wrap;
   justify-content: center;
   gap: 8px;
+  /* Cap to the viewport so the wrapping row never runs off both edges on
+     mobile — the parent cloud is max-content, which would otherwise let the
+     pills lay out on one over-wide line. */
+  max-width: calc(100vw - 32px);
 }
 @keyframes catalog-pills-in {
   from { opacity: 0; transform: translateY(10px); }
