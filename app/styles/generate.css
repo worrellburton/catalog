@@ -2412,6 +2412,11 @@ html[data-shell="catalog-app"] .gen-page {
      decide based on the first-move direction: drag sideways → row
      scrolls; drag up/down → page scrolls. */
   touch-action: pan-x pan-y;
+  /* Contain ONLY horizontal overscroll so a rail's sideways scroll doesn't
+     chain to the page (which reads as a "stuck" rubber-band on iOS). Never
+     contain the y-axis here — that would swallow the vertical page scroll
+     the moment a finger lands on a rail. */
+  overscroll-behavior-x: contain;
   /* Hide scrollbar - the right-edge fade-mask below is the visual cue
      that the row scrolls. */
   scrollbar-width: none;
