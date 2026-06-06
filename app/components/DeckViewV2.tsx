@@ -41,7 +41,7 @@ const PLATFORMS: { key: string; name: string; color: string; val: number }[] = [
   { key: 'amazon',    name: 'Amazon',    color: '#ff9900', val: 75 },
   { key: 'tiktok',    name: 'TikTok',    color: '#25f4ee', val: 45 },
   { key: 'pinterest', name: 'Pinterest', color: '#e60023', val: 30 },
-  { key: 'shop',      name: 'Shop',      color: '#95bf47', val: 55 },
+  { key: 'ltk',       name: 'LTK',       color: '#ec4899', val: 55 },
   { key: 'shopmy',    name: 'ShopMy',    color: '#a78bfa', val: 20 },
 ];
 
@@ -151,8 +151,9 @@ const DeckViewV2: React.FC<DeckViewV2Props> = ({
   const [homeFeed, setHomeFeed] = useState<ProductAd[]>([]);
   const [looks, setLooks] = useState<Look[]>([]);
 
-  // Interleave product creatives and creator looks so the feed reads as the
-  // real mix - a product clip, then a creator look, then a product, ...
+  // Background mix is 80% products / 20% creator looks: one look dropped in
+  // after every four product clips. Every product appears once; looks cycle
+  // to fill the 20% slots.
   const bgClips = useMemo(() => {
     const products = homeFeed
       .filter((p) => !!p.video_url)
@@ -160,12 +161,17 @@ const DeckViewV2: React.FC<DeckViewV2Props> = ({
     const lookClips = looks
       .filter((l) => !!l.video)
       .map((l, i) => ({ key: `l:${l.uuid ?? l.id}:${i}`, url: l.video }));
+    if (products.length === 0) return lookClips;
+    if (lookClips.length === 0) return products;
     const out: { key: string; url: string }[] = [];
-    const max = Math.max(products.length, lookClips.length);
-    for (let i = 0; i < max; i++) {
-      if (products[i]) out.push(products[i]);
-      if (lookClips[i]) out.push(lookClips[i]);
-    }
+    let li = 0;
+    products.forEach((p, idx) => {
+      out.push(p);
+      if (idx % 4 === 3) {
+        out.push(lookClips[li % lookClips.length]);
+        li += 1;
+      }
+    });
     return out;
   }, [homeFeed, looks]);
 
@@ -310,7 +316,7 @@ const DeckViewV2: React.FC<DeckViewV2Props> = ({
         <span className="deck-label">The AI for shopping</span>
         <h2 className="deck-v2-thesis-h2">Everything they do.<br />One AI to shop.</h2>
         <p className="deck-v2-thesis-sub">
-          Amazon, TikTok, Pinterest, Shop, ShopMy , shopping is scattered across a dozen apps. Catalog does what all of them do , in one. The AI you go to shop.
+          Amazon, TikTok, Pinterest, LTK, ShopMy , shopping is scattered across a dozen apps. Catalog does what all of them do , in one. The AI you go to shop.
         </p>
         <CombinedChart />
       </div>
