@@ -665,7 +665,7 @@
      the .sfh padding read this same var (see below) so they stay
      locked together. */
   .app-root.home-hero {
-    --hero-bar-bottom: 32vh;
+    --hero-bar-bottom: 36vh;
   }
   .sfh {
     /* The hero trio — spark + headline + search bar — is centred as
