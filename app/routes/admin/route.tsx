@@ -617,6 +617,9 @@ export default function AdminLayout() {
             style={{ display: 'inline-flex', alignItems: 'center', textDecoration: 'none', color: 'inherit', cursor: 'pointer' }}
           >
             <CatalogLogo className="admin-logo" />
+            {/* Collapsed-rail monogram — the wordmark clips at 64px, so a
+                compact "C" mark stands in until the sidebar expands. */}
+            <span className="admin-logo-mark" aria-hidden="true">C</span>
           </a>
           <span className="admin-badge">Admin</span>
         </div>

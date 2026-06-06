@@ -20,6 +20,8 @@ export interface GtmAssumptions {
   budgetDistEarly: number;
   /** Relative spend weight in the final month (shapes the tail). */
   budgetDistLate: number;
+  /** Share of the acquired base that's active on a given day (DAU/MAU). */
+  dauMauRatio: number;
 }
 
 export const GTM_DEFAULTS: GtmAssumptions = {
@@ -28,6 +30,7 @@ export const GTM_DEFAULTS: GtmAssumptions = {
   budget: 250_000,
   budgetDistEarly: 0.6,
   budgetDistLate: 1.8,
+  dauMauRatio: 0.4,
 };
 
 export const GTM_STORAGE_KEY = 'catalog:gtm:assumptions:v1';
@@ -56,8 +59,10 @@ export interface GtmMonth {
   organicAdds: number;
   /** paidAdds + organicAdds. */
   newUsers: number;
-  /** Running total of all users acquired through this month. */
+  /** Running total of all users acquired through this month (≈ MAU). */
   cumulativeUsers: number;
+  /** Daily active users this month — cumulativeUsers × dauMauRatio. */
+  dau: number;
   /** Cumulative spend ÷ cumulative users at this point in time. */
   blendedCacToDate: number;
 }
@@ -99,6 +104,7 @@ export function buildGtmSeries(a: GtmAssumptions): GtmMonth[] {
       organicAdds,
       newUsers,
       cumulativeUsers,
+      dau: cumulativeUsers * a.dauMauRatio,
       blendedCacToDate: cumulativeUsers > 0 ? cumulativeSpend / cumulativeUsers : 0,
     });
   }

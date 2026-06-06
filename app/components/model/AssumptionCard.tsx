@@ -21,6 +21,9 @@ export interface FieldDef {
 export function formatForInput(value: number, format: FieldFormat): string {
   if (format === 'percent') return (value * 100).toFixed(2);
   if (format === 'integer') return String(Math.round(value));
+  // Currency carries thousands separators (250,000) so big budgets stay
+  // readable. parseInputToNumber strips the commas back out on input.
+  if (format === 'currency') return value.toLocaleString('en-US', { maximumFractionDigits: 2 });
   return String(value);
 }
 
@@ -54,12 +57,15 @@ export default function AssumptionCard({
       <span className="proj-card-input-wrap">
         {field.format === 'currency' && <span className="proj-card-prefix">$</span>}
         <input
-          type="number"
+          // Currency uses a text input so the comma-formatted value
+          // (e.g. "250,000") renders — a number input would reject it.
+          type={field.format === 'currency' ? 'text' : 'number'}
+          inputMode={field.format === 'currency' ? 'numeric' : undefined}
           className="proj-card-input"
           value={local}
-          step={field.step}
-          min={field.min}
-          max={field.max}
+          step={field.format === 'currency' ? undefined : field.step}
+          min={field.format === 'currency' ? undefined : field.min}
+          max={field.format === 'currency' ? undefined : field.max}
           onChange={(e) => {
             setLocal(e.target.value);
             const n = parseInputToNumber(e.target.value, field.format);
