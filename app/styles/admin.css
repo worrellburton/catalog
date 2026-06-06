@@ -5351,3 +5351,26 @@ tr:hover .admin-stats-col { background: rgba(99, 102, 241, 0.10); }
 }
 .admin-creator-request-status--approved { background: #dcfce7; color: #15803d; }
 .admin-creator-request-status--denied { background: #f3f4f6; color: #6b7280; }
+
+/* Admin publish-look page (publish.$id) — two columns (video preview +
+   form) on desktop, stacked to one column on mobile so the form fields and
+   the Publish button aren't squished off the right edge. The sticky preview
+   becomes a small, centered, non-sticky thumbnail on phones. */
+.admin-publish-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 320px) 1fr;
+  gap: 24px;
+  margin-top: 16px;
+  align-items: flex-start;
+}
+@media (max-width: 768px) {
+  .admin-publish-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .admin-publish-preview {
+    position: static !important;
+    max-width: 180px;
+    margin: 0 auto !important;
+  }
+}

@@ -282,8 +282,8 @@ export default function AdminPublishScreen() {
         </Link>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'minmax(220px, 320px) 1fr', gap: 24, marginTop: 16, alignItems: 'flex-start' }}>
-        <div style={{ width: '100%', aspectRatio: '9 / 16', borderRadius: 12, overflow: 'hidden', background: '#000', position: 'sticky', top: 20 }}>
+      <div className="admin-publish-grid">
+        <div className="admin-publish-preview" style={{ width: '100%', aspectRatio: '9 / 16', borderRadius: 12, overflow: 'hidden', background: '#000', position: 'sticky', top: 20 }}>
           {draft.videoUrl ? (
             <video src={draft.videoUrl} autoPlay muted loop playsInline style={{ width: '100%', height: '100%', objectFit: 'cover' }} />
           ) : (
