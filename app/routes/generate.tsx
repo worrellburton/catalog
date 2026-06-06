@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from '@remix-run/react';
 import CatalogLogo from '~/components/CatalogLogo';
 import ParticleBackground from '~/components/ParticleBackground';
+import ProductPicker from '~/components/generate/ProductPicker';
 import { particleControls } from '~/services/particles';
 import { supabase } from '~/utils/supabase';
 import { useAuth } from '~/hooks/useAuth';
@@ -11,6 +12,7 @@ import { playExplosion } from '~/utils/explode';
 // /generate-only styles. Used to be in root.tsx where the consumer paid
 // the bundle cost on every page.
 import '~/styles/generate.css';
+import '~/styles/generate-picker.css';
 import {
   STYLE_PRESETS,
   buildGenerationPrompt,
@@ -518,6 +520,7 @@ export default function GeneratePage() {
     return out;
   }, [productResults]);
   const [picked, setPicked] = useState<PickedProduct[]>([]);
+  const pickedIds = useMemo(() => new Set(picked.map(p => p.id)), [picked]);
 
   // Pre-pick a product when the user lands here from a Product page's
   // "Try it on" button (?product_url=…). One-shot — once we hydrate we
@@ -1251,7 +1254,7 @@ export default function GeneratePage() {
     if (!wasPicked && typeof document !== 'undefined') {
       requestAnimationFrame(() => {
         const card = document.querySelector(`[data-gen-card-id="${p.id}"]`) as HTMLElement | null;
-        const row = card?.closest('.gen-cat-row-scroll') as HTMLElement | null;
+        const row = card?.closest('.gp-rail') as HTMLElement | null;
         if (!card || !row) return;
         const cardRect = card.getBoundingClientRect();
         const rowRect = row.getBoundingClientRect();
@@ -1813,89 +1816,24 @@ export default function GeneratePage() {
                 - Hat / Top / Bottoms / Shoes / Accessories / Objects.
                 Empty rows are still rendered so the layout is predictable
                 across catalog states; they show a quiet empty hint. */}
-            {productsLoading && productResults.length === 0 ? (
-              <div className="gen-empty">Loading products…</div>
-            ) : (
-              PICKER_GROUPS.map(group => {
-                const rowProducts = productsByCategory[group.label] || [];
-                const rowQuery = categoryQueries[group.label] || '';
-                const rowBrands = brandsByCategory[group.label] || [];
-                const activeBrand = categoryBrandFilters[group.label] || null;
-                // "All" opens expanded; category rows default collapsed.
-                // A typed query force-expands any row.
-                const expanded = (expandedCats[group.label] ?? group.label === 'All') || !!rowQuery;
-                return (
-                  <div key={group.label} className={`gen-cat-row${expanded ? ' is-expanded' : ''}`}>
-                    <div className="gen-cat-row-head">
-                      <button
-                        type="button"
-                        className="gen-cat-row-toggle"
-                        onClick={() => toggleCat(group.label)}
-                        aria-expanded={expanded}
-                      >
-                        <svg className={`gen-cat-row-chevron${expanded ? ' is-open' : ''}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-                        <span className="gen-cat-row-label">{group.label}</span>
-                        {rowProducts.length > 0 && <span className="gen-cat-row-count">{rowProducts.length}</span>}
-                      </button>
-                      <input
-                        type="search"
-                        className="gen-cat-row-search"
-                        placeholder={`Search ${group.label.toLowerCase()}…`}
-                        value={rowQuery}
-                        onChange={e => setCategoryQuery(group.label, e.target.value)}
-                        aria-label={`Search ${group.label}`}
-                      />
-                    </div>
-                    {/* Brand chips — top 4 brands present in this
-                        category. Tap one to filter the row to that
-                        brand; tap the active chip to clear it. */}
-                    {expanded && rowBrands.length > 0 && (
-                      <div className="gen-cat-row-brands" role="tablist" aria-label={`Filter ${group.label} by brand`}>
-                        {rowBrands.map(b => (
-                          <button
-                            key={b}
-                            type="button"
-                            role="tab"
-                            aria-selected={activeBrand === b}
-                            className={`gen-cat-row-brand${activeBrand === b ? ' is-active' : ''}`}
-                            onClick={() => setCategoryBrand(group.label, activeBrand === b ? null : b)}
-                          >{b}</button>
-                        ))}
-                      </div>
-                    )}
-                    {expanded && (
-                    <div className="gen-cat-row-scroll" key={`${group.label}-${activeBrand || 'all'}-${rowQuery}`}>
-                      {rowProducts.length === 0 ? (
-                        <div className="gen-cat-row-empty">
-                          {rowQuery ? `No ${group.label.toLowerCase()} match "${rowQuery}"` : `No ${group.label.toLowerCase()} yet`}
-                        </div>
-                      ) : (
-                        rowProducts.map(p => {
-                          const isPicked = picked.some(x => x.id === p.id);
-                          return (
-                            <button
-                              key={p.id}
-                              type="button"
-                              className={`gen-cat-card${isPicked ? ' is-picked' : ''}`}
-                              data-gen-card-id={p.id}
-                              onClick={() => togglePick(p)}
-                              /* No disabled state - a tap on a 6th card
-                                 surfaces the limit toast instead of
-                                 silently doing nothing. */
-                            >
-                              {p.image_url && <img src={p.image_url} alt="" loading="lazy" />}
-                              <span className="gen-cat-card-name">{p.name || 'Product'}</span>
-                              <span className="gen-cat-card-brand">{p.brand}</span>
-                            </button>
-                          );
-                        })
-                      )}
-                    </div>
-                    )}
-                  </div>
-                );
-              })
-            )}
+            <ProductPicker
+              groups={PICKER_GROUPS}
+              loading={productsLoading}
+              productsByCategory={productsByCategory}
+              brandsByCategory={brandsByCategory}
+              queries={categoryQueries}
+              brandFilters={categoryBrandFilters}
+              expanded={expandedCats}
+              pickedIds={pickedIds}
+              defaultExpanded="All"
+              onToggleExpand={toggleCat}
+              onSearch={setCategoryQuery}
+              onBrand={setCategoryBrand}
+              onTogglePick={(p) => {
+                const full = productResults.find(x => x.id === p.id);
+                if (full) togglePick(full);
+              }}
+            />
           </section>
         )}
 
