@@ -18,22 +18,27 @@ export interface GtmAssumptions {
   budget: number;
   /** Relative spend weight in month 1 (shapes the front of the curve). */
   budgetDistEarly: number;
-  /** Relative spend weight in the final month (shapes the tail). */
+  /** Share of spend in the final month. Complements budgetDistEarly to
+      total 100% (both stored as 0..1). */
   budgetDistLate: number;
-  /** Share of the acquired base that's active on a given day (DAU/MAU). */
-  dauMauRatio: number;
 }
+
+// DAU/MAU is a fixed modelling assumption, not a user lever — DAU is
+// surfaced as a result (averages on the dials + the graph tooltip).
+export const DAU_MAU_RATIO = 0.4;
 
 export const GTM_DEFAULTS: GtmAssumptions = {
   cpa: 12,
   organicGrowth: 0.18,
   budget: 250_000,
-  budgetDistEarly: 0.6,
-  budgetDistLate: 1.8,
-  dauMauRatio: 0.4,
+  budgetDistEarly: 0.2,
+  budgetDistLate: 0.8,
 };
 
-export const GTM_STORAGE_KEY = 'catalog:gtm:assumptions:v1';
+// v2: budget distribution switched from relative weights to a 0..1
+// split, and dauMauRatio dropped as an input — bump so stale v1 values
+// don't render as nonsense percentages.
+export const GTM_STORAGE_KEY = 'catalog:gtm:assumptions:v2';
 
 export function readGtmStored(): GtmAssumptions {
   if (typeof window === 'undefined') return GTM_DEFAULTS;
@@ -104,7 +109,7 @@ export function buildGtmSeries(a: GtmAssumptions): GtmMonth[] {
       organicAdds,
       newUsers,
       cumulativeUsers,
-      dau: cumulativeUsers * a.dauMauRatio,
+      dau: cumulativeUsers * DAU_MAU_RATIO,
       blendedCacToDate: cumulativeUsers > 0 ? cumulativeSpend / cumulativeUsers : 0,
     });
   }
@@ -122,6 +127,10 @@ export interface GtmSummary {
   cacEfficiency: number;
   peakMonthlyAdds: number;
   exitMonthlyAdds: number;
+  /** Mean monthly active users across the horizon (a result, not a lever). */
+  avgMau: number;
+  /** Mean daily active users across the horizon. */
+  avgDau: number;
 }
 
 export function summarizeGtm(series: GtmMonth[], a: GtmAssumptions): GtmSummary {
@@ -132,6 +141,9 @@ export function summarizeGtm(series: GtmMonth[], a: GtmAssumptions): GtmSummary 
   const blendedCac = totalUsers > 0 ? totalSpend / totalUsers : 0;
   const peakMonthlyAdds = series.reduce((acc, s) => Math.max(acc, s.newUsers), 0);
   const exitMonthlyAdds = series[series.length - 1]?.newUsers ?? 0;
+  const n = series.length || 1;
+  const avgMau = series.reduce((acc, s) => acc + s.cumulativeUsers, 0) / n;
+  const avgDau = series.reduce((acc, s) => acc + s.dau, 0) / n;
   return {
     totalUsers,
     totalSpend,
@@ -142,5 +154,7 @@ export function summarizeGtm(series: GtmMonth[], a: GtmAssumptions): GtmSummary 
     cacEfficiency: blendedCac > 0 ? a.cpa / blendedCac : 0,
     peakMonthlyAdds,
     exitMonthlyAdds,
+    avgMau,
+    avgDau,
   };
 }
