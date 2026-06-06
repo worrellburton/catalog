@@ -532,15 +532,23 @@
   }
 }
 
-/* On the hero, the search bar starts centered (46vh). When the shopper taps
-   it on mobile a soft keyboard appears and BottomBar pins the bar inline to
-   the keyboard's top edge — that inline value overrides this, so the bar
-   glides down from center to ride the keyboard (the 0.55s transition above
-   makes it elegant). This 46vh rule remains the resting/no-keyboard value
-   (desktop has its own 50vh rule below, and stays centered since there's no
-   soft keyboard). */
-.app-root.home-hero:not(.hero-scrolled) .bottom-bar.search-open {
-  bottom: 46svh;
+/* Desktop has no soft keyboard, so the hero search bar stays centered while
+   searching (its own 50vh rule lives below). */
+@media (min-width: 769px) {
+  .app-root.home-hero:not(.hero-scrolled) .bottom-bar.search-open {
+    bottom: 46svh;
+  }
+}
+/* Mobile: dock the hero search bar to the BOTTOM of the screen whenever the
+   keyboard is down. When the keyboard is up, BottomBar pins the bar inline to
+   the keyboard's top edge (kbInset), overriding this; the moment the keyboard
+   drops, the bar glides back down here instead of stranding mid-screen above
+   the (bottom-anchored) pill cloud. Net effect: the bar always rides the
+   keyboard, and the recommended tags always sit just above the bar. */
+@media (max-width: 768px) {
+  .app-root.home-hero:not(.hero-scrolled) .bottom-bar.search-open {
+    bottom: max(env(safe-area-inset-bottom), 16px);
+  }
 }
 
 /* Mobile: swap the scroll-mouse for a swiping finger. The hand glyph

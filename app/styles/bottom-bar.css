@@ -912,6 +912,17 @@
 .bottom-bar.search-open .bottom-bar-inner.search-inline .bottom-search-input::placeholder {
   color: rgba(255, 255, 255, 0.5);
 }
+/* Lock the placeholder/typed text dead-center vertically. A fixed height +
+   matching line-height centres single-line text deterministically, instead of
+   relying on the input's intrinsic baseline (which iOS Safari renders a hair
+   high on type="search"). Zero the vertical padding so only the line-height
+   governs height. */
+.bottom-bar.search-open .bottom-bar-inner.search-inline .bottom-search-input {
+  height: 40px;
+  line-height: 40px;
+  padding-top: 0;
+  padding-bottom: 0;
+}
 .light-mode .bottom-bar.search-open .bottom-bar-inner.search-inline .bottom-search-input,
 .light-mode .bottom-bar.search-open .bottom-bar-inner.search-inline .bottom-search-input:focus {
   color: #111;
@@ -950,14 +961,11 @@
 /* Grab-handle indicator on the search sheet — Apple-Maps-style pull tab,
    centered above the pill. The drag-to-dismiss gesture itself lives on the
    dimmed backdrop (BottomBar onSheetDrag*), so this is purely a visual cue. */
-.search-drag-handle { display: none; }
-html:not([data-shell="catalog-app"]) .bottom-bar.search-open .search-drag-handle {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 100%;
-  padding: 2px 0 4px;
-}
+/* The little grab-handle that used to float above the open search pill read
+   as a stray "notch" on top of the bar, so it's hidden everywhere now. The
+   swipe-to-dismiss gesture still works — its handler lives on the dimmed
+   backdrop (BottomBar onSheetDrag*), not on this handle. */
+.search-drag-handle { display: none !important; }
 .search-drag-handle-bar {
   width: 40px;
   height: 5px;
