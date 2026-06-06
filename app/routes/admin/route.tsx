@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef, useEffect, useCallback, Fragment } from 'react';
-import { Outlet, NavLink, useNavigate, useSearchParams, useLocation } from '@remix-run/react';
+import { Outlet, NavLink, useNavigate, useSearchParams, useLocation, useRouteError, isRouteErrorResponse } from '@remix-run/react';
 import CatalogLogo from '~/components/CatalogLogo';
 import { useAuth } from '~/hooks/useAuth';
 import { isAdminRole } from '~/types/roles';
@@ -787,5 +787,40 @@ export default function AdminLayout() {
       </main>
     </div>
     </AdminConfirmProvider>
+  );
+}
+
+// Catches render/runtime errors anywhere in the admin route tree so a single
+// thrown error (e.g. a malformed Supabase row dereferenced during render)
+// degrades to a recoverable fallback instead of white-screening the whole
+// panel with no way back. Inline styles so it renders even if admin CSS
+// hasn't loaded.
+export function ErrorBoundary() {
+  const error = useRouteError();
+  const detail = isRouteErrorResponse(error)
+    ? `${error.status} ${error.statusText}`
+    : error instanceof Error
+      ? error.message
+      : 'An unexpected error occurred.';
+  return (
+    <div style={{
+      minHeight: '100vh', display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center', gap: 16, padding: 24,
+      background: '#0b0b0c', color: '#e7e7ea', textAlign: 'center',
+      fontFamily: 'system-ui, sans-serif',
+    }}>
+      <div style={{ fontSize: 15, fontWeight: 700 }}>Something went wrong in the admin panel</div>
+      <div style={{ fontSize: 13, opacity: 0.7, maxWidth: 480, wordBreak: 'break-word' }}>{detail}</div>
+      <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+        <button
+          onClick={() => window.location.reload()}
+          style={{ padding: '8px 16px', borderRadius: 8, border: 'none', cursor: 'pointer', background: '#e7e7ea', color: '#0b0b0c', fontWeight: 600, fontSize: 13 }}
+        >Reload</button>
+        <a
+          href="/admin"
+          style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #333', cursor: 'pointer', color: '#e7e7ea', textDecoration: 'none', fontWeight: 600, fontSize: 13 }}
+        >Back to dashboard</a>
+      </div>
+    </div>
   );
 }
