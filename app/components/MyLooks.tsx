@@ -315,11 +315,11 @@ export default function MyLooks({ onClose }: MyLooksProps) {
   // hover-capable devices open the editor directly (the hover action
   // bar covers share/delete there).
   const handleTileClick = useCallback((look: ManagedLook) => {
-    const touch = typeof window !== 'undefined'
-      && window.matchMedia('(hover: none)').matches;
-    if (touch) setTrayLook(look);
-    else handleEdit(look);
-  }, [handleEdit]);
+    // Same action popup on every platform — desktop used to jump straight to
+    // Edit, but it should surface the same tray (View / Edit / Share /
+    // Analytics / Download) that mobile shows.
+    setTrayLook(look);
+  }, []);
 
   // ── Drag-to-reorder ───────────────────────────────────────────────
   // Pointer-based (works for touch + mouse) reorder, initiated from the
