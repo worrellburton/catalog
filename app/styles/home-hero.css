@@ -919,18 +919,6 @@
   body:has(.app-root.home-hero) .ai-bar-wrap:focus-within {
     bottom: 52vh;
   }
-  /* Equal side padding with the header: the logo sits 44px from the left and
-     the wallet/profile cluster 44px from the right, so on the resting hero the
-     search bar spans to those SAME 44px gutters — its left edge lines up under
-     the logo, its right edge under the CTA. Reverts to the centered 720px cap
-     once docked into the feed (.hero-scrolled) so the feed bar is unchanged. */
-  body:has(.app-root.home-hero:not(.hero-scrolled)) .ai-bar-wrap {
-    padding-left: 44px;
-    padding-right: 44px;
-  }
-  body:has(.app-root.home-hero:not(.hero-scrolled)) .ai-bar {
-    max-width: none;
-  }
   body:has(.app-root.home-hero) .sfh:has(~ * .ai-bar-wrap:focus-within),
   body:has(.app-root.home-hero .ai-bar-wrap:focus-within) .sfh {
     /* Slide the spark+headline up when the bar is focused so the trio

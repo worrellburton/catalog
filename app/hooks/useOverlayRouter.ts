@@ -11,6 +11,7 @@ import {
   nextHexPrefix,
 } from '~/utils/slug';
 import { looks as seedLooks } from '~/data/looks';
+import { getLooks } from '~/services/looks';
 import { supabase } from '~/utils/supabase';
 import { getCreativesByProductIds, type ProductAd } from '~/services/product-creative';
 
@@ -225,43 +226,40 @@ export function useOverlayRouter({
           });
       }
     } else if (path.startsWith('/l/')) {
-      // Try the 8-char UUID prefix FIRST (DB looks). A DB look's uuid
-      // prefix can be all-digits, which extractLookId would otherwise
-      // misread as a numeric seed id — so uuid resolution must precede it.
+      // Resolve against the SAME getLooks() set the feed renders, so the
+      // opened Look is fully-formed (creator name, video, products) and we
+      // don't depend on the looks_creative schema. getLooks() is cached, so
+      // this is the same fetch the feed makes — no extra cost on cold load.
+      const slugForLook = (l: Look) => lookSlug({
+        id: l.id ?? null, uuid: l.uuid ?? null, creator: l.creator ?? null,
+        creatorDisplayName: l.creatorDisplayName ?? null, title: l.title ?? null,
+      });
       const uuidPfx = extractIdPrefix(slugParam);
-      if (uuidPfx) {
-        if (!supabase) return;
-        const lowerUuid = `${uuidPfx}-0000-0000-0000-000000000000`;
-        const nextPfx = nextHexPrefix(uuidPfx);
-        let lookQ = supabase
-          .from('looks_creative')
-          .select('id, uuid, title, creator, video_url, thumbnail_url, gender, description, color')
-          .gte('uuid', lowerUuid);
-        if (nextPfx) lookQ = lookQ.lt('uuid', `${nextPfx}-0000-0000-0000-000000000000`);
-        lookQ.limit(1).then(({ data }) => {
-            const row = data?.[0];
-            if (!row) return;
-            const look: Look = {
-              id: row.id,
-              uuid: row.uuid,
-              title: row.title || '',
-              creator: row.creator || '',
-              video: row.video_url || '',
-              gender: row.gender || 'unisex',
-              description: row.description || '',
-              color: row.color || '',
-              products: [],
-            };
-            onOpenLook(look);
-          });
-      } else {
-        // No UUID suffix → a seed look with a simple numeric id.
-        const id = extractLookId(slugParam);
-        if (id != null) {
-          const look = seedLooks.find(l => l.id === id);
-          if (look) onOpenLook(look);
+      // Human part of the requested slug (trailing uuid/numeric suffix removed)
+      // — rescues legacy links minted before the look carried a uuid suffix,
+      // e.g. `/l/robert-burton-...-look-1`.
+      const wantHuman = slugParam.replace(/-([0-9a-f]{8}|\d+)$/i, '');
+      getLooks().then(looks => {
+        let match: Look | undefined;
+        // 1. Exact slug match (covers current uuid- and numeric-suffixed links).
+        match = looks.find(l => slugForLook(l) === slugParam);
+        // 2. UUID-prefix match.
+        if (!match && uuidPfx) {
+          match = looks.find(l => !!l.uuid && l.uuid.toLowerCase().startsWith(uuidPfx.toLowerCase()));
         }
-      }
+        // 3. Human-part match (creator+title, then title-only) for legacy links.
+        if (!match) {
+          match = looks.find(l => lookSlug({ creator: l.creator ?? null, title: l.title ?? null }) === wantHuman)
+            || looks.find(l => lookSlug({ creatorDisplayName: l.creatorDisplayName ?? null, title: l.title ?? null }) === wantHuman)
+            || looks.find(l => lookSlug({ title: l.title ?? null }) === wantHuman);
+        }
+        // 4. Seed fallback by numeric id (only if nothing above matched).
+        if (!match) {
+          const id = extractLookId(slugParam);
+          if (id != null) match = seedLooks.find(l => l.id === id);
+        }
+        if (match) onOpenLook(match);
+      });
     } else if (path.startsWith('/b/')) {
       // Brand slug is the kebab brand name. Reverse-lookup against the
       // products table to find the canonical brand string (preserves
