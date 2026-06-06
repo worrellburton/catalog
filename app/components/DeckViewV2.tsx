@@ -237,7 +237,7 @@ const DeckViewV2: React.FC<DeckViewV2Props> = () => {
           even a small set fills the tall grid edge-to-edge. */}
       <div className="deck-v8-bg deck-v2-bg" aria-hidden="true">
         <div className="deck-insight-grid">
-          {Array.from({ length: bgClips.length === 0 ? 0 : 48 }).map((_, i) => {
+          {Array.from({ length: bgClips.length === 0 ? 0 : 24 }).map((_, i) => {
             const clip = bgClips[i % bgClips.length];
             return (
               <video

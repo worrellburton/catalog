@@ -585,7 +585,10 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
       overlay.classList.remove('is-dragging');
       overlay.style.transform = '';
       drag.active = false;
-      if (dy > 96 || velocity > 0.6) handleClose();
+      // Require a deliberate downward pull from the top — a casual / quick
+      // scroll gesture shouldn't dismiss the look. (Was dy>96 || velocity>0.6,
+      // which closed on the first small flick.)
+      if (dy > 150 && velocity > 0.25) handleClose();
     };
     scroller.addEventListener('touchstart', onStart, { passive: true });
     scroller.addEventListener('touchmove', onMove, { passive: true });
