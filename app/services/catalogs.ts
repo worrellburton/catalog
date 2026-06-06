@@ -447,7 +447,9 @@ const CURATED_FALLBACK_PILLS = [
   'Office siren', 'Streetwear', 'Cozy season', 'Going out', 'Athleisure',
 ];
 
-const MAX_PILLS = 12;
+// One fewer than before (was 12) — the cloud read a touch crowded on mobile
+// once the Following pill was added on top.
+const MAX_PILLS = 11;
 
 let popularPillsPromise: Promise<CatalogPill[]> | null = null;
 let popularPillsAt = 0;

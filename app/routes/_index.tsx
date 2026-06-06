@@ -1658,6 +1658,7 @@ export default function Home() {
             searchLoading={searchLoading}
             mySizeOnly={mySizeOnly}
             onMySizeChange={setMySizeOnly}
+            onOpenHotItem={handleOpenCreative}
           />
 
           {/* Magical loading screen between a hero search and its results. */}

@@ -547,10 +547,11 @@
    keyboard, and the recommended tags always sit just above the bar. */
 @media (max-width: 768px) {
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar.search-open {
-    /* +8px matches the pill cloud's reserved clearance (--suggestions-bar-clear
-       = bar height + 8), so the docked bar's top edge lands exactly where the
-       bottom-anchored tags stop — they sit just above it, never under it. */
-    bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
+    /* Clear the home indicator AND iOS Safari's bottom URL toolbar
+       (--ios-bottom-chrome), then add an 18px breathing gap so the bar
+       doesn't hug the very bottom edge. The pill cloud's reserved
+       clearance below is bumped to match so the tags still sit above it. */
+    bottom: calc(max(env(safe-area-inset-bottom, 0px), var(--ios-bottom-chrome, 0px)) + 18px);
   }
 }
 

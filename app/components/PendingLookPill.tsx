@@ -2,6 +2,24 @@ import { useEffect, useState } from 'react';
 import { listUserGenerations, isGenerationInFlight, getGenerationDetail } from '~/services/user-generations';
 import { useAuth } from '~/hooks/useAuth';
 
+// Rotating, tongue-in-cheek status lines shown while a look is cooking — a
+// playful stand-in for the dry word "rendering". Cycles every few seconds so
+// the pill feels alive instead of stuck.
+const PENDING_QUIPS = [
+  'Steaming the pixels…',
+  'Teaching the fabric to drape…',
+  'Auditioning camera angles…',
+  'Convincing the shoes to behave…',
+  'Negotiating with the lighting…',
+  'Adding main-character energy…',
+  'Whispering to the color grade…',
+  'Picking the perfect pose…',
+  'Stitching the look together…',
+  'Consulting the style oracle…',
+  'Removing the awkward blink…',
+  'Steaming out the wrinkles…',
+];
+
 /**
  * Header indicator that surfaces when the signed-in user has a look
  * still rendering after they've left the /generate screen via "Keep
@@ -20,6 +38,9 @@ export default function PendingLookPill({ onOpen }: { onOpen: () => void }) {
   // Only surface the pill at the very top of the feed — once the shopper
   // scrolls into the grid it shouldn't keep hovering over the content.
   const [atTop, setAtTop] = useState(true);
+  // Index into PENDING_QUIPS — advances on a timer so the pill rotates
+  // through the humorous status lines while a look is in flight.
+  const [quipIdx, setQuipIdx] = useState(() => Math.floor(Math.random() * PENDING_QUIPS.length));
   useEffect(() => {
     const onScroll = () => setAtTop(window.scrollY < 8);
     onScroll();
@@ -67,15 +88,26 @@ export default function PendingLookPill({ onOpen }: { onOpen: () => void }) {
     return () => { cancelled = true; };
   }, [pending?.id]);
 
-  if (!pending || !atTop) return null;
-  const label = pending.style ? `Your ${pending.style.toLowerCase()} look is rendering` : 'Your look is rendering';
+  const showing = !!pending && atTop;
+  // Rotate the quip every ~2.8s while the pill is actually on screen.
+  useEffect(() => {
+    if (!showing) return;
+    const t = window.setInterval(() => {
+      setQuipIdx(i => (i + 1) % PENDING_QUIPS.length);
+    }, 2800);
+    return () => window.clearInterval(t);
+  }, [showing]);
+
+  if (!showing) return null;
+  const quip = PENDING_QUIPS[quipIdx];
+  const ariaLabel = 'Your look is on the way — tap to watch it come together';
   return (
     <button
       type="button"
       onClick={onOpen}
       className="pending-look-pill"
-      aria-label={label}
-      title={label}
+      aria-label={ariaLabel}
+      title={ariaLabel}
     >
       {images.length > 0 ? (
         <span className="pending-look-pill-orbit" aria-hidden="true">
@@ -90,7 +122,7 @@ export default function PendingLookPill({ onOpen }: { onOpen: () => void }) {
       ) : (
         <span className="pending-look-pill-spinner" aria-hidden="true" />
       )}
-      <span className="pending-look-pill-label">{label}</span>
+      <span key={quipIdx} className="pending-look-pill-label pending-look-pill-label--quip">{quip}</span>
     </button>
   );
 }

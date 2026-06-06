@@ -9,6 +9,7 @@ import { useShopperBody } from '~/hooks/useShopperBody';
 import { useSearchBeam } from '~/hooks/useSearchBeam';
 import FilterPanel, { ActiveFilters, getEmptyFilters, hasActiveFilters } from './FilterPanel';
 import { getSearchSuggestions, getCreators, getLooks } from '~/services/looks';
+import { getHomeFeed, type ProductAd } from '~/services/product-creative';
 
 // Filter fields that carry real search intent (men/women are the gender
 // toggle, price/creator aren't search terms). A few tokens get humanized so
@@ -38,10 +39,12 @@ interface BottomBarProps {
   searchLoading?: boolean;
   mySizeOnly?: boolean;
   onMySizeChange?: (v: boolean) => void;
+  /** Open a product creative (the "Hot item" card at the top of search). */
+  onOpenHotItem?: (ad: ProductAd) => void;
 }
 
 function BottomBar({
-  activeFilter, onFilterChange, searchQuery, onSearchChange, onSelectSuggestion, onOpenCreators, catalogName, searchLoading = false, mySizeOnly = false, onMySizeChange,
+  activeFilter, onFilterChange, searchQuery, onSearchChange, onSelectSuggestion, onOpenCreators, catalogName, searchLoading = false, mySizeOnly = false, onMySizeChange, onOpenHotItem,
 }: BottomBarProps) {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
@@ -58,6 +61,26 @@ function BottomBar({
   // horizontal avatar rail above the catalog pills. Tapping one jumps
   // straight into that creator's catalog.
   const [featuredCreators, setFeaturedCreators] = useState<{ name: string; displayName: string; avatar: string }[]>([]);
+  // A single "Hot item" surfaced at the top of the search panel — a product
+  // the shopper might like, picked from the live feed. Tapping it opens the
+  // product. Loaded once; resilient to fetch errors (just hides the card).
+  const [hotItem, setHotItem] = useState<ProductAd | null>(null);
+  useEffect(() => {
+    if (!onOpenHotItem) return;
+    let cancelled = false;
+    getHomeFeed({ ignoreGender: false })
+      .then(list => {
+        if (cancelled) return;
+        // Pick from the top of the feed (already demand-ranked) but with a
+        // little randomness so it isn't the same product every open.
+        const withImg = list.filter(a => a.product?.image_url || a.product?.primary_image_url || a.thumbnail_url);
+        if (withImg.length === 0) return;
+        const pool = withImg.slice(0, 12);
+        setHotItem(pool[Math.floor(Math.random() * pool.length)]);
+      })
+      .catch(() => { /* no hot item — card just won't render */ });
+    return () => { cancelled = true; };
+  }, [onOpenHotItem]);
   // Drag-to-close: the top-docked search sheet can be pulled UP to dismiss,
   // with a grab-handle indicator (Apple-Maps-style sheet feel). dragOffset
   // tracks the live finger delta; dragging disables the snap transition so
@@ -512,6 +535,37 @@ function BottomBar({
                   title="Admin-only: show every available look and product without a catalog filter"
                 >
                   Show all
+                </button>
+              )}
+              {/* Hot item — a product the shopper might like, at the very top. */}
+              {hotItem && onOpenHotItem && (
+                <button
+                  type="button"
+                  className="bb-hotitem"
+                  onClick={() => { onOpenHotItem(hotItem); closeSearch(); }}
+                  title={`${hotItem.product?.brand ? hotItem.product.brand + ' · ' : ''}${hotItem.product?.name || 'Product'}`}
+                >
+                  <span className="bb-hotitem-thumb">
+                    <img
+                      src={hotItem.product?.image_url || hotItem.product?.primary_image_url || hotItem.thumbnail_url || ''}
+                      alt=""
+                      loading="lazy"
+                      decoding="async"
+                    />
+                  </span>
+                  <span className="bb-hotitem-text">
+                    <span className="bb-hotitem-eyebrow">
+                      <span className="bb-hotitem-flame" aria-hidden="true">
+                        <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2c1.2 3 4 4.2 4 7.8A4 4 0 0 1 8 10c0-1.6.8-2.6 1.6-3.4M9.5 14.6A2.4 2.4 0 0 0 14 14c0-1.8-1.8-2.4-1.3-4.4"/></svg>
+                      </span>
+                      Hot item
+                    </span>
+                    <span className="bb-hotitem-name">{hotItem.product?.name || hotItem.title || 'Product'}</span>
+                    {hotItem.product?.brand && <span className="bb-hotitem-brand">{hotItem.product.brand}</span>}
+                  </span>
+                  <span className="bb-hotitem-go" aria-hidden="true">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+                  </span>
                 </button>
               )}
               {featuredCreators.length > 0 && (
