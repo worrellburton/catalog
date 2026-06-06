@@ -442,13 +442,84 @@ function blobToDataUrl(blob: Blob): Promise<string> {
   });
 }
 
+function canShareFiles(file: File): boolean {
+  if (typeof navigator === 'undefined' || typeof navigator.share !== 'function') return false;
+  const nav = navigator as Navigator & { canShare?: (data: ShareData) => boolean };
+  return !!nav.canShare?.({ files: [file] });
+}
+
+/**
+ * One-tap "Save to Photos" sheet. The watermark render takes a few seconds,
+ * which consumes the user gesture that the OS share sheet (Web Share API)
+ * requires — so calling navigator.share() straight after the render throws
+ * NotAllowedError on iOS Safari and the file silently lands in Files instead
+ * of Photos. This little sheet gives the user a FRESH tap, so the share sheet
+ * (which carries "Save Video" → Photos) actually opens. Self-contained inline
+ * styles so it works on any route without a CSS dependency.
+ */
+function promptSaveToPhotos(file: File, blob: Blob, filename: string): Promise<void> {
+  return new Promise((resolve) => {
+    const overlay = document.createElement('div');
+    overlay.style.cssText =
+      'position:fixed;inset:0;z-index:99999;display:flex;align-items:flex-end;justify-content:center;' +
+      'background:rgba(0,0,0,0.55);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);' +
+      'padding:0 16px calc(20px + env(safe-area-inset-bottom));animation:savephotos-fade .2s ease;';
+    const card = document.createElement('div');
+    card.style.cssText =
+      'width:100%;max-width:420px;background:#18181b;border:1px solid rgba(255,255,255,0.1);' +
+      'border-radius:20px;padding:20px 18px 16px;color:#fff;text-align:center;' +
+      'box-shadow:0 24px 60px rgba(0,0,0,0.5);animation:savephotos-up .28s cubic-bezier(0.16,1,0.3,1);';
+    card.innerHTML =
+      '<div style="font-size:17px;font-weight:700;letter-spacing:-0.01em">Your video is ready</div>' +
+      '<div style="font-size:13px;color:rgba(255,255,255,0.55);margin:6px 0 16px">Save it straight to your camera roll.</div>';
+    const saveBtn = document.createElement('button');
+    saveBtn.type = 'button';
+    saveBtn.textContent = 'Save to Photos';
+    saveBtn.style.cssText =
+      'width:100%;padding:14px;border:none;border-radius:14px;background:#fff;color:#111;' +
+      'font-size:15px;font-weight:700;font-family:inherit;cursor:pointer';
+    const dismissBtn = document.createElement('button');
+    dismissBtn.type = 'button';
+    dismissBtn.textContent = 'Download to Files instead';
+    dismissBtn.style.cssText =
+      'width:100%;padding:12px;margin-top:8px;border:none;border-radius:14px;background:transparent;' +
+      'color:rgba(255,255,255,0.55);font-size:13px;font-weight:600;font-family:inherit;cursor:pointer';
+
+    let styleTag: HTMLStyleElement | null = null;
+    if (!document.getElementById('savephotos-kf')) {
+      styleTag = document.createElement('style');
+      styleTag.id = 'savephotos-kf';
+      styleTag.textContent =
+        '@keyframes savephotos-fade{from{opacity:0}to{opacity:1}}' +
+        '@keyframes savephotos-up{from{opacity:0;transform:translateY(24px)}to{opacity:1;transform:none}}';
+      document.head.appendChild(styleTag);
+    }
+
+    const cleanup = () => { overlay.remove(); resolve(); };
+    saveBtn.addEventListener('click', async () => {
+      try {
+        await navigator.share({ files: [file] });
+      } catch (err) {
+        // Cancelled is fine; anything else → fall back to a file download.
+        if ((err as Error)?.name !== 'AbortError') triggerDownload(blob, filename);
+      }
+      cleanup();
+    });
+    dismissBtn.addEventListener('click', () => { triggerDownload(blob, filename); cleanup(); });
+    overlay.addEventListener('click', (e) => { if (e.target === overlay) cleanup(); });
+
+    card.appendChild(saveBtn);
+    card.appendChild(dismissBtn);
+    overlay.appendChild(card);
+    document.body.appendChild(overlay);
+  });
+}
+
 async function deliver(blob: Blob, filename: string): Promise<void> {
-  // In the Flutter native shell, hand the rendered file to the app so it can
-  // save straight to the camera roll (Photos). Requires the Flutter side to
-  // register a `saveMedia` handler; until then callHandler resolves null and
-  // we fall through to the web share/download path. Web can't write to Photos
-  // directly, and the navigator.share trick below is unreliable because the
-  // watermark render consumes the originating user gesture.
+  // 1. In the Flutter native shell, hand the rendered file to the app so it
+  //    saves straight to the camera roll (Photos). Requires the Flutter side
+  //    to register a `saveMedia` handler (see docs/flutter-save-media.md);
+  //    until then callHandler resolves falsy and we fall through.
   try {
     const inShell = typeof document !== 'undefined'
       && document.documentElement.dataset.shell === 'catalog-app';
@@ -461,17 +532,25 @@ async function deliver(blob: Blob, filename: string): Promise<void> {
       if (ok) return;
     }
   } catch { /* fall through to web share / download */ }
-  try {
-    const file = new File([blob], filename, { type: blob.type || 'video/mp4' });
-    const nav = navigator as Navigator & { canShare?: (data: ShareData) => boolean };
-    if (typeof navigator !== 'undefined' && typeof navigator.share === 'function'
-        && nav.canShare?.({ files: [file] })) {
+
+  // 2. Web (mobile browsers): the share sheet is the only route to Photos.
+  //    Try it immediately in case the gesture is still live (fast/no render);
+  //    if the OS rejects it because the render consumed the gesture, surface a
+  //    one-tap "Save to Photos" sheet that supplies a fresh one.
+  const file = new File([blob], filename, { type: blob.type || 'video/mp4' });
+  if (canShareFiles(file)) {
+    try {
       await navigator.share({ files: [file] });
       return;
+    } catch (err) {
+      const name = (err as Error)?.name;
+      if (name === 'AbortError') return; // user cancelled — done
+      await promptSaveToPhotos(file, blob, filename);
+      return;
     }
-  } catch (err) {
-    if ((err as Error)?.name === 'AbortError') return;
   }
+
+  // 3. Desktop / no file-share support → plain download.
   triggerDownload(blob, filename);
 }
 
