@@ -12,60 +12,79 @@ import {
 } from '~/services/projections';
 import {
   type GtmAssumptions,
-  DAU_MAU_RATIO,
   GTM_DEFAULTS,
   GTM_STORAGE_KEY,
   readGtmStored,
   summarizeGtm,
 } from '~/services/go-to-market';
 import { buildModel } from '~/services/model';
+import {
+  type EconAssumptions,
+  type ScenarioId,
+  ECON_DEFAULTS,
+  ECON_STORAGE_KEY,
+  buildCashflow,
+  cohortRetention,
+  investorMetrics,
+  readEconStored,
+  scenarioValues,
+  sensitivity,
+  toCsv,
+} from '~/services/model-metrics';
 import AssumptionCard, { type FieldDef } from '~/components/model/AssumptionCard';
 import ModelRow from '~/components/model/ModelRow';
 import UnifiedModelChart from '~/components/model/UnifiedModelChart';
+import ModelHeadline from '~/components/model/ModelHeadline';
+import SensitivityChart from '~/components/model/SensitivityChart';
+import RetentionSparkline from '~/components/model/RetentionSparkline';
+import FunnelTable from '~/components/model/FunnelTable';
 
-const COLORS = { acquisition: '#6366f1', engagement: '#f59e0b', revenue: '#10b981' };
+const COLORS = { acquisition: '#6366f1', engagement: '#f59e0b', revenue: '#10b981', costs: '#14b8a6' };
 const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
 
-// Acquisition — budget leads, per request.
 const ACQ_FIELDS: FieldDef[] = [
   { key: 'budget',          label: 'Total advertising spend',     hint: 'Total ad spend across 16 months',    format: 'currency', step: 5000, min: 0 },
-  { key: 'cpa',             label: 'CPA',                         hint: 'Cost per paid acquisition',          format: 'currency', step: 1,    min: 0 },
-  { key: 'organicGrowth',   label: 'Organic growth',              hint: 'Word-of-mouth adds, % of base / mo', format: 'percent',  step: 0.01, min: 0, max: 1 },
+  { key: 'cpa',             label: 'CPA',                         hint: 'Cost per paid acquisition',          format: 'currency', step: 1,    min: 0, benchmark: '$5–$30 consumer' },
+  { key: 'organicGrowth',   label: 'Organic growth',              hint: 'Word-of-mouth adds, % of base / mo', format: 'percent',  step: 0.01, min: 0, max: 1, benchmark: '10–30%/mo early' },
   { key: 'budgetDistEarly', label: 'Budget split (early)',        hint: 'Share of spend up front · totals 100%', format: 'percent', step: 0.01, min: 0, max: 1 },
   { key: 'budgetDistLate',  label: 'Budget split (late)',         hint: 'Share of spend at the tail · totals 100%', format: 'percent', step: 0.01, min: 0, max: 1 },
 ];
 
-// Engagement — session behaviour that turns MAU into sales.
+const CHURN_FIELD: FieldDef = { key: 'churn', label: 'Monthly churn', hint: "Active users who don't return / mo", format: 'percent', step: 0.01, min: 0, max: 1, benchmark: '3–8%/mo consumer' };
+
 const ENGAGEMENT_FIELDS: FieldDef[] = [
-  { key: 'sessionsPerUserPerMonth',  label: 'Sessions / user / mo',  hint: 'Avg sessions per MAU per month', format: 'number',  step: 0.5,   min: 0 },
-  { key: 'sessionTimeMinutes',       label: 'Session time (min)',    hint: 'Average session length',         format: 'number',  step: 0.5,   min: 0 },
-  { key: 'avgImpressionsPerSession', label: 'Impressions / session', hint: 'Product views per session',      format: 'integer', step: 1,     min: 0 },
-  { key: 'productConversion',        label: 'Product conversion',    hint: 'Sale per impression',            format: 'percent', step: 0.001, min: 0, max: 0.5 },
+  { key: 'sessionsPerUserPerMonth',  label: 'Sessions / user / mo',  hint: 'Avg sessions per MAU per month', format: 'number',  step: 0.5,   min: 0, benchmark: '6–12' },
+  { key: 'sessionTimeMinutes',       label: 'Session time (min)',    hint: 'Average session length',         format: 'number',  step: 0.5,   min: 0, benchmark: '3–6 min' },
+  { key: 'avgImpressionsPerSession', label: 'Impressions / session', hint: 'Product views per session',      format: 'integer', step: 1,     min: 0, benchmark: '10–40' },
+  { key: 'productConversion',        label: 'Product conversion',    hint: 'Sale per impression',            format: 'percent', step: 0.001, min: 0, max: 0.5, benchmark: '1–2% marketplace' },
 ];
 
-// Churn lives on the acquisition assumptions (it reshapes the active
-// base) but is surfaced in the Engagement card per the model's framing.
-const CHURN_FIELD: FieldDef = { key: 'churn', label: 'Monthly churn', hint: "Active users who don't return / mo", format: 'percent', step: 0.01, min: 0, max: 1 };
-
-// Revenue — monetisation applied to sales.
 const REVENUE_FIELDS: FieldDef[] = [
-  { key: 'avgCostPerSale',         label: 'Avg cost per sale',        hint: 'Average order value', format: 'currency', step: 5,     min: 0 },
-  { key: 'avgAffiliateCommission', label: 'Avg affiliate commission', hint: 'Take rate per sale',  format: 'percent',  step: 0.005, min: 0, max: 0.5 },
+  { key: 'avgCostPerSale',         label: 'Avg cost per sale',        hint: 'Average order value', format: 'currency', step: 5,     min: 0, benchmark: '$40–$120 AOV' },
+  { key: 'avgAffiliateCommission', label: 'Avg affiliate commission', hint: 'Take rate per sale',  format: 'percent',  step: 0.005, min: 0, max: 0.5, benchmark: '8–15%' },
 ];
 
-type RowKey = 'acquisition' | 'engagement' | 'revenue';
-const DEFAULT_ORDER: RowKey[] = ['acquisition', 'engagement', 'revenue'];
+const COSTS_FIELDS: FieldDef[] = [
+  { key: 'grossMargin',  label: 'Gross margin',  hint: 'Margin on revenue',          format: 'percent',  step: 0.01,   min: 0, max: 1, benchmark: '80–90% affiliate' },
+  { key: 'monthlyOpex',  label: 'Monthly OpEx',  hint: 'Fixed operating cost / mo',  format: 'currency', step: 5000,   min: 0 },
+  { key: 'startingCash', label: 'Cash raised',   hint: 'Cash on hand at month 0',    format: 'currency', step: 100000, min: 0 },
+];
+
+type RowKey = 'acquisition' | 'engagement' | 'revenue' | 'costs';
+const DEFAULT_ORDER: RowKey[] = ['acquisition', 'engagement', 'revenue', 'costs'];
 
 interface ModelUi {
   order: RowKey[];
   show: Record<RowKey, boolean>;
   open: Record<RowKey, boolean>;
+  showFunnel: boolean;
 }
-const UI_KEY = 'catalog:model:ui:v2';
+const UI_KEY = 'catalog:model:ui:v3';
 const UI_DEFAULTS: ModelUi = {
   order: DEFAULT_ORDER,
-  show: { acquisition: true, engagement: true, revenue: true },
-  open: { acquisition: true, engagement: false, revenue: false },
+  show: { acquisition: true, engagement: true, revenue: true, costs: false },
+  open: { acquisition: true, engagement: false, revenue: false, costs: false },
+  showFunnel: false,
 };
 
 function readUi(): ModelUi {
@@ -74,14 +93,13 @@ function readUi(): ModelUi {
     const raw = window.localStorage.getItem(UI_KEY);
     if (!raw) return UI_DEFAULTS;
     const p = JSON.parse(raw);
-    // Guard the order against missing/extra keys so a stale blob can't
-    // drop or duplicate a row.
     const order = (Array.isArray(p.order) ? p.order : DEFAULT_ORDER).filter((k: RowKey) => DEFAULT_ORDER.includes(k));
     for (const k of DEFAULT_ORDER) if (!order.includes(k)) order.push(k);
     return {
       order,
       show: { ...UI_DEFAULTS.show, ...(p.show || {}) },
       open: { ...UI_DEFAULTS.open, ...(p.open || {}) },
+      showFunnel: !!p.showFunnel,
     };
   } catch { return UI_DEFAULTS; }
 }
@@ -89,23 +107,28 @@ function readUi(): ModelUi {
 export default function AdminModel() {
   const [rev, setRev] = useState<Assumptions>(() => readStored());
   const [acq, setAcq] = useState<GtmAssumptions>(() => readGtmStored());
+  const [econ, setEcon] = useState<EconAssumptions>(() => readEconStored());
   const [ui, setUi] = useState<ModelUi>(() => readUi());
 
   useEffect(() => { try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(rev)); } catch { /* quota */ } }, [rev]);
   useEffect(() => { try { window.localStorage.setItem(GTM_STORAGE_KEY, JSON.stringify(acq)); } catch { /* quota */ } }, [acq]);
+  useEffect(() => { try { window.localStorage.setItem(ECON_STORAGE_KEY, JSON.stringify(econ)); } catch { /* quota */ } }, [econ]);
   useEffect(() => { try { window.localStorage.setItem(UI_KEY, JSON.stringify(ui)); } catch { /* quota */ } }, [ui]);
 
-  // Acquisition always supplies the MAU the funnel runs on.
   const { revenue, acquisition } = useMemo(() => buildModel(rev, acq, true), [rev, acq]);
   const revSummary = useMemo(() => summarize(revenue), [revenue]);
   const acqSummary = useMemo(() => summarizeGtm(acquisition, acq), [acquisition, acq]);
+  const cash = useMemo(() => buildCashflow(revenue, acquisition, econ), [revenue, acquisition, econ]);
+  const metrics = useMemo(() => investorMetrics(rev, acq, revenue, acquisition, acqSummary, econ, cash), [rev, acq, revenue, acquisition, acqSummary, econ, cash]);
+  const sens = useMemo(() => sensitivity(rev, acq), [rev, acq]);
+  const retention = useMemo(() => cohortRetention(acq.churn), [acq.churn]);
   const lastAcq = acquisition[acquisition.length - 1];
   const totalSales = useMemo(() => revenue.reduce((a, s) => a + s.sales, 0), [revenue]);
 
   const setRevField = (k: keyof Assumptions, v: number) => setRev(prev => ({ ...prev, [k]: v }));
   const setAcqField = (k: keyof GtmAssumptions, v: number) => setAcq(prev => ({ ...prev, [k]: v }));
+  const setEconField = (k: keyof EconAssumptions, v: number) => setEcon(prev => ({ ...prev, [k]: v }));
 
-  // Budget split is a complementary pair that always totals 100%.
   const onAcqChange = (k: keyof GtmAssumptions, n: number) => {
     if (k === 'budgetDistEarly') setAcq(p => ({ ...p, budgetDistEarly: clamp01(n), budgetDistLate: clamp01(1 - n) }));
     else if (k === 'budgetDistLate') setAcq(p => ({ ...p, budgetDistLate: clamp01(n), budgetDistEarly: clamp01(1 - n) }));
@@ -120,7 +143,21 @@ export default function AdminModel() {
   };
   const resetRevenue = () => setRev(p => ({ ...p, avgCostPerSale: DEFAULTS.avgCostPerSale, avgAffiliateCommission: DEFAULTS.avgAffiliateCommission }));
 
-  // Drag-to-reorder the cards.
+  const applyScenario = (id: ScenarioId) => {
+    const v = scenarioValues(id);
+    setRev(v.rev); setAcq(v.acq); setEcon(v.econ);
+  };
+  const exportCsv = () => {
+    const csv = toCsv(revenue, acquisition, cash);
+    const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url; a.download = 'catalog-model.csv';
+    document.body.appendChild(a); a.click(); a.remove();
+    URL.revokeObjectURL(url);
+  };
+
+  // Drag-to-reorder.
   const dragKey = useRef<RowKey | null>(null);
   const [overKey, setOverKey] = useState<RowKey | null>(null);
   const onDrop = (target: RowKey) => {
@@ -182,6 +219,21 @@ export default function AdminModel() {
         </ModelRow>
       );
     }
+    if (key === 'costs') {
+      return (
+        <ModelRow {...common} title="Costs & cash" subtitle="Margin, OpEx, runway → cash line">
+          <div className="model-row-actions">
+            <button className="admin-btn admin-btn-secondary" onClick={() => setEcon(ECON_DEFAULTS)}>Reset costs</button>
+          </div>
+          <p className="model-link-note">Burn = marketing + OpEx − gross profit. The checkbox plots the <strong style={{ color: COLORS.costs }}>cash</strong> balance.</p>
+          <div className="proj-cards model-cards">
+            {COSTS_FIELDS.map(f => (
+              <AssumptionCard key={f.key} field={f} value={econ[f.key as keyof EconAssumptions]} onChange={(n) => setEconField(f.key as keyof EconAssumptions, n)} />
+            ))}
+          </div>
+        </ModelRow>
+      );
+    }
     return (
       <ModelRow {...common} title="Revenue" subtitle="AOV × commission → revenue">
         <div className="model-row-actions">
@@ -201,8 +253,10 @@ export default function AdminModel() {
     <div className="admin-page model-page">
       <div className="admin-page-header">
         <h1>Model</h1>
-        <p className="admin-page-subtitle">Acquisition → MAU, Engagement → sales, Revenue → $. Each feeds the next. Toggle any line, drag to reorder.</p>
+        <p className="admin-page-subtitle">Acquisition → MAU, Engagement → sales, Revenue → $, Costs → runway. Toggle any line, drag to reorder.</p>
       </div>
+
+      <ModelHeadline m={metrics} onScenario={applyScenario} onExportCsv={exportCsv} onPrint={() => window.print()} />
 
       <div className="model-layout">
         <div className="model-left">
@@ -210,7 +264,6 @@ export default function AdminModel() {
             {ui.order.map(renderRow)}
           </div>
 
-          {/* Headline dials — results, including DAU/MAU averages. */}
           <div className="proj-summary model-dials">
             {ui.show.revenue && (
               <>
@@ -219,9 +272,9 @@ export default function AdminModel() {
                   <span className="proj-summary-value">{fmtCurrency(revSummary.total)}</span>
                 </div>
                 <div className="proj-summary-card">
-                  <span className="proj-summary-label">Exit run-rate (ARR)</span>
-                  <span className="proj-summary-value">{fmtCurrency(revSummary.finalRunRate)}</span>
-                  <span className="proj-summary-sub">Final month × 12</span>
+                  <span className="proj-summary-label">Take rate</span>
+                  <span className="proj-summary-value">{fmtPercent(metrics.takeRate, 0)}</span>
+                  <span className="proj-summary-sub">GMV {fmtCurrency(metrics.gmvTotal, { compact: true })}</span>
                 </div>
               </>
             )}
@@ -246,6 +299,13 @@ export default function AdminModel() {
                 </div>
               </>
             )}
+            {ui.show.costs && (
+              <div className="proj-summary-card gtm-dial-cash">
+                <span className="proj-summary-label">Cash at month {MONTHS}</span>
+                <span className="proj-summary-value">{fmtCurrency(metrics.cashEnd)}</span>
+                <span className="proj-summary-sub">{metrics.breakevenMonth == null ? 'not yet break-even' : `break-even m${metrics.breakevenMonth + 1}`}</span>
+              </div>
+            )}
           </div>
         </div>
 
@@ -253,11 +313,37 @@ export default function AdminModel() {
           <UnifiedModelChart
             revenue={revenue}
             acquisition={acquisition}
+            cash={cash}
             showRevenue={ui.show.revenue}
             showAcquisition={ui.show.acquisition}
             showEngagement={ui.show.engagement}
+            showCash={ui.show.costs}
           />
         </div>
+      </div>
+
+      {/* Investor analysis: sensitivity + cohort retention, plus the full funnel. */}
+      <div className="model-analysis">
+        <div className="model-analysis-grid">
+          <section className="model-card">
+            <h3>Sensitivity — exit ARR swing at ±20%</h3>
+            <SensitivityChart rows={sens} />
+          </section>
+          <section className="model-card">
+            <h3>Cohort retention at {fmtPercent(acq.churn, 0)} churn</h3>
+            <RetentionSparkline data={retention} />
+            <p className="model-card-note">Of a cohort acquired in month 1, the share still active each month after.</p>
+          </section>
+        </div>
+        <section className="model-card">
+          <div className="model-card-head">
+            <h3>Monthly funnel</h3>
+            <button className="admin-btn admin-btn-secondary" onClick={() => setUi(p => ({ ...p, showFunnel: !p.showFunnel }))}>
+              {ui.showFunnel ? 'Hide' : 'Show'} table
+            </button>
+          </div>
+          {ui.showFunnel && <FunnelTable revenue={revenue} acquisition={acquisition} />}
+        </section>
       </div>
     </div>
   );

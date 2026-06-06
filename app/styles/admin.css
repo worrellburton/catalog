@@ -5236,6 +5236,87 @@ html.admin-on-dark-canvas .admin-topbar,
 .model-right .proj-chart { min-width: 0; }
 .model-right .proj-chart-wrap { overflow: visible; }
 
+/* Benchmark line under a card's hint — italic, quieter than the hint. */
+.proj-card-bench {
+  font-size: 9.5px;
+  font-style: italic;
+  color: #a78bfa;
+  line-height: 1.3;
+}
+.admin-dark .proj-card-bench { color: #a78bfa; }
+
+/* Headline strip: scenario presets + export + investor metric chips. */
+.model-headline { margin: 8px 0 16px; }
+.model-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
+.model-toolbar-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8; }
+.model-toolbar-spacer { flex: 1; }
+.model-scenarios { display: inline-flex; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; }
+.model-scenarios button {
+  padding: 6px 14px; border: 0; background: #fff; cursor: pointer;
+  font-family: inherit; font-size: 12.5px; font-weight: 600; color: #475569;
+  border-right: 1px solid #e5e7eb;
+}
+.model-scenarios button:last-child { border-right: 0; }
+.model-scenarios button:hover { background: #f1f5f9; }
+.admin-dark .model-scenarios { border-color: #3f3f46; }
+.admin-dark .model-scenarios button { background: #18181b; color: #d4d4d8; border-right-color: #3f3f46; }
+.admin-dark .model-scenarios button:hover { background: #27272a; }
+
+.model-chips { display: grid; grid-template-columns: repeat(auto-fit, minmax(130px, 1fr)); gap: 10px; }
+.model-chip {
+  display: flex; flex-direction: column; gap: 2px;
+  padding: 12px 14px; border-radius: 12px;
+  background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%); color: #fff;
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.18);
+}
+.model-chip-label { font-size: 10.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: #94a3b8; }
+.model-chip-value { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; line-height: 1.1; }
+.model-chip-sub { font-size: 10.5px; color: #cbd5e1; }
+.model-chip-good { box-shadow: inset 3px 0 0 #10b981, 0 6px 20px rgba(15, 23, 42, 0.18); }
+.model-chip-good .model-chip-value { color: #34d399; }
+.model-chip-warn { box-shadow: inset 3px 0 0 #f59e0b, 0 6px 20px rgba(15, 23, 42, 0.18); }
+.model-chip-warn .model-chip-value { color: #fbbf24; }
+
+.gtm-dial-cash { box-shadow: inset 3px 0 0 #14b8a6, 0 6px 20px rgba(15, 23, 42, 0.18); }
+
+/* Investor analysis blocks below the chart. */
+.model-analysis { display: flex; flex-direction: column; gap: 16px; margin-top: 20px; }
+.model-analysis-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+@media (min-width: 900px) { .model-analysis-grid { grid-template-columns: 1.4fr 1fr; } }
+.model-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04); }
+.model-card h3 { margin: 0 0 12px; font-size: 13px; font-weight: 700; color: #0f172a; letter-spacing: -0.01em; }
+.model-card-head { display: flex; align-items: center; justify-content: space-between; }
+.model-card-head h3 { margin: 0; }
+.model-card-note { margin: 10px 0 0; font-size: 11.5px; color: #94a3b8; }
+.admin-dark .model-card { background: #18181b; border-color: #27272a; }
+.admin-dark .model-card h3 { color: #f4f4f5; }
+
+/* Sensitivity tornado. */
+.sens { display: flex; flex-direction: column; gap: 8px; }
+.sens-row { display: grid; grid-template-columns: 120px 1fr 78px; align-items: center; gap: 10px; }
+.sens-label { font-size: 12px; font-weight: 600; color: #475569; }
+.sens-track { height: 14px; background: #f1f5f9; border-radius: 999px; overflow: hidden; }
+.sens-bar { height: 100%; background: linear-gradient(90deg, #6366f1, #8b5cf6); border-radius: 999px; }
+.sens-val { font-size: 11.5px; font-weight: 700; color: #0f172a; text-align: right; font-variant-numeric: tabular-nums; }
+.admin-dark .sens-label { color: #d4d4d8; }
+.admin-dark .sens-track { background: #27272a; }
+.admin-dark .sens-val { color: #f4f4f5; }
+
+/* Cohort retention sparkline. */
+.retention-svg { width: 100%; height: 90px; display: block; }
+.retention-marks { display: flex; gap: 18px; margin-top: 6px; font-size: 11.5px; color: #94a3b8; }
+.retention-marks strong { color: #6366f1; }
+
+/* Funnel table. */
+.funnel-table-wrap { overflow-x: auto; margin-top: 12px; }
+.funnel-table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+.funnel-table th, .funnel-table td { padding: 6px 10px; text-align: right; white-space: nowrap; border-bottom: 1px solid #f1f5f9; }
+.funnel-table th:first-child, .funnel-table td:first-child { text-align: left; }
+.funnel-table th { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8; font-weight: 600; }
+.funnel-table tbody tr:hover { background: #f8fafc; }
+.admin-dark .funnel-table th, .admin-dark .funnel-table td { border-bottom-color: #27272a; }
+.admin-dark .funnel-table tbody tr:hover { background: #1f1f22; }
+
 /* Dark mode */
 .admin-dark .model-row { background: #18181b; border-color: #27272a; }
 .admin-dark .model-row-title-btn { color: #f4f4f5; }

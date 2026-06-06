@@ -16,6 +16,8 @@ export interface FieldDef {
   step: number;
   min?: number;
   max?: number;
+  /** Optional industry benchmark, shown under the hint for defensibility. */
+  benchmark?: string;
 }
 
 export function formatForInput(value: number, format: FieldFormat): string {
@@ -76,6 +78,7 @@ export default function AssumptionCard({
         {field.format === 'percent' && <span className="proj-card-suffix">%</span>}
       </span>
       <span className="proj-card-hint">{field.hint}</span>
+      {field.benchmark && <span className="proj-card-bench">≈ {field.benchmark}</span>}
     </label>
   );
 }
