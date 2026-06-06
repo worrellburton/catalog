@@ -133,6 +133,11 @@ const CreativeCard = memo(function CreativeCard({ creative, className = 'look-ca
   // background) and on a 1 s heartbeat for the first ~10 s after mount,
   // for any element that the autoplay policy initially refused.
   useEffect(() => {
+    // The <video> now only mounts while the card is in viewport (decode is
+    // bounded to visible tiles — a product page no longer spins up 20-30 eager
+    // decoders), so the autoplay-recovery heartbeat only needs to run then, and
+    // re-arms each time the card scrolls back into view.
+    if (!inViewport) return;
     const v = videoRef.current;
     if (!v) return;
     let cancelled = false;
@@ -150,7 +155,7 @@ const CreativeCard = memo(function CreativeCard({ creative, className = 'look-ca
       window.clearInterval(interval);
       window.clearTimeout(stopAt);
     };
-  }, []);
+  }, [inViewport]);
 
   const handleClick = useCallback(() => {
     trackAdClick(creative.id);
@@ -286,7 +291,7 @@ const CreativeCard = memo(function CreativeCard({ creative, className = 'look-ca
             heuristic if set after src or after a play() call.
             Skipped entirely when the Dial dropped this card into the
             still-image path. */}
-        {playableUrl && !renderAsStill && (
+        {playableUrl && !renderAsStill && inViewport && (
           <video
             ref={videoRef}
             className="card-video-slot"

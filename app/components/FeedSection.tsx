@@ -64,6 +64,13 @@ const LAYOUT_CONFIGS = [
 // scroll-triggered grow. Subsequent grows add `batch` more at a time.
 const DEFAULT_BATCH = 24;
 const SUB_BATCH = 8;
+// D1 — max cards kept mounted on the infinite MOBILE feed. Cards scrolled
+// further than this above the viewport are unmounted and their height replaced
+// by the grid's padding-top (so scroll position is preserved). ~160 ≈ many
+// screens of look-back, far beyond the director's play + warm bands, so a card
+// always re-mounts and re-warms before it scrolls back into view. Desktop and
+// the pre-measurement state keep windowStart = 0 → identical to before.
+const MAX_WINDOW = 160;
 
 // (Math.random shuffle removed - seeded shuffle below means the same
 // inputs always produce the same output, which is what useMemo needs to
@@ -98,6 +105,11 @@ function FeedSection({
   // grow. Sub-segments render a fixed `looks.length` and don't cycle.
   const [poolCycles, setPoolCycles] = useState(1);
   const sentinelRef = useRef<HTMLDivElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+  // D1: measured (columns, row height) of the mobile grid, so we can unmount
+  // cards far above the viewport and replace their height with padding-top.
+  // Null until measured → windowStart stays 0 (current behaviour).
+  const [rowMetrics, setRowMetrics] = useState<{ cols: number; rowH: number } | null>(null);
   const layout = LAYOUT_CONFIGS[layoutMode % LAYOUT_CONFIGS.length];
 
   const gridStyle = useMemo(() => {
@@ -276,7 +288,55 @@ function FeedSection({
     return items;
   }, [looks, creatives, creativesLoading, isInitial, layoutMode, searchMode, poolCycles]);
 
-  const displayItems = useMemo(() => pool.slice(0, visibleCount), [pool, visibleCount]);
+  // ── D1: mobile DOM windowing ────────────────────────────────────────────
+  // A long mobile scroll otherwise mounts every card ever seen (hundreds →
+  // thousands of nodes) — the dominant memory + style-recalc cost on a phone.
+  // Cap the mounted set: drop whole rows far above the viewport and replace
+  // their height with padding-top so scroll position holds (overflow-anchor
+  // absorbs any residual). Desktop + the pre-measure state keep windowStart = 0,
+  // so this is byte-identical to the old behaviour until it can safely engage.
+  const mobileWindowing = isInitial
+    && typeof window !== 'undefined' && window.innerWidth <= 768;
+
+  const windowStart = useMemo(() => {
+    if (!mobileWindowing || !rowMetrics || visibleCount <= MAX_WINDOW) return 0;
+    const startRow = Math.floor((visibleCount - MAX_WINDOW) / rowMetrics.cols);
+    return Math.max(0, startRow * rowMetrics.cols);
+  }, [mobileWindowing, rowMetrics, visibleCount]);
+
+  const displayItems = useMemo(() => pool.slice(windowStart, visibleCount), [pool, windowStart, visibleCount]);
+
+  const padTop = windowStart > 0 && rowMetrics
+    ? (windowStart / rowMetrics.cols) * rowMetrics.rowH
+    : 0;
+
+  // Measure the mobile grid's column count + row height once its cards exist,
+  // re-measuring on resize. All children share a height (uniform 3:4 grid on
+  // mobile), so columns = the run of cards sharing the first card's offsetTop
+  // and rowH = the gap to the next row. Until measured, windowStart stays 0.
+  useEffect(() => {
+    if (!mobileWindowing) return;
+    const grid = gridRef.current;
+    if (!grid) return;
+    const measure = () => {
+      const cards = grid.querySelectorAll<HTMLElement>(':scope > *');
+      if (cards.length < 4) return;
+      const firstTop = cards[0].offsetTop;
+      let cols = 0;
+      for (let i = 0; i < cards.length; i++) {
+        if (cards[i].offsetTop === firstTop) cols++; else break;
+      }
+      if (cols < 1) return;
+      const nextRow = cards[cols];
+      const rowH = nextRow ? nextRow.offsetTop - firstTop : cards[0].offsetHeight;
+      if (rowH <= 0) return;
+      setRowMetrics(prev =>
+        prev && prev.cols === cols && Math.abs(prev.rowH - rowH) < 1 ? prev : { cols, rowH });
+    };
+    if (!rowMetrics) measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [mobileWindowing, visibleCount, rowMetrics]);
 
   useEffect(() => {
     const sentinel = sentinelRef.current;
@@ -336,8 +396,16 @@ function FeedSection({
   return (
     <div className={`feed-section layout-${layout.name}`}>
       {title && <div className="feed-section-header">{title}</div>}
-      <div className="feed-section-grid" id={isInitial ? 'grid-container' : undefined} style={gridStyle}>
+      <div
+        ref={gridRef}
+        className="feed-section-grid"
+        id={isInitial ? 'grid-container' : undefined}
+        style={padTop ? { ...gridStyle, paddingTop: padTop } : gridStyle}
+      >
         {displayItems.map((item, idx) => {
+          // Stable, pool-position index — keys/slotIds/priority must NOT shift
+          // when windowStart advances, or surviving cards would remount.
+          const globalIndex = windowStart + idx;
           if (item.type === 'placeholder') {
             return (
               <div key={item.key} className="look-card promo-card creative-placeholder" aria-hidden="true">
@@ -359,14 +427,14 @@ function FeedSection({
           if (item.type === 'creative') {
             return (
               <CreativeCardV2
-                key={`creative-${item.creative.id}-${idx}`}
-                slotId={`${slotPrefix ? `${slotPrefix}:` : ''}creative-${item.creative.id}-${idx}`}
+                key={`creative-${item.creative.id}-${globalIndex}`}
+                slotId={`${slotPrefix ? `${slotPrefix}:` : ''}creative-${item.creative.id}-${globalIndex}`}
                 creative={item.creative}
-                className={getCardClass(idx)}
+                className={getCardClass(globalIndex)}
                 onOpenProduct={onOpenCreativeProduct}
                 canDelete={canDeleteCreative}
                 onDelete={onDeleteCreative}
-                priority={idx < 6}
+                priority={globalIndex < 6}
               />
             );
           }
@@ -375,12 +443,12 @@ function FeedSection({
               key={`${item.look.id}-${item.look.displayIndex}`}
               slotId={`${slotPrefix ? `${slotPrefix}:` : ''}look-${item.look.id}-${item.look.displayIndex}`}
               look={item.look}
-              className={getCardClass(idx)}
+              className={getCardClass(globalIndex)}
               onOpenLook={onOpenLook}
               onOpenCreator={onOpenCreator}
               canDelete={canDeleteCreative}
               onDeleteLook={onDeleteLook}
-              priority={idx < 6}
+              priority={globalIndex < 6}
             />
           );
         })}
