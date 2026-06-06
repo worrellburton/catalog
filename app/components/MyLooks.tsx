@@ -119,7 +119,8 @@ export default function MyLooks({ onClose }: MyLooksProps) {
   const [createMenuOpen, setCreateMenuOpen] = useState(false);
   // The "+" menu is two-level: root (Add look / Add product) → 'look' shows
   // the two ways to add a look (own media vs AI).
-  const [createMenuView, setCreateMenuView] = useState<'root' | 'look'>('root');
+  // Full-screen "Add look" chooser (own media vs AI) — opened from the + menu.
+  const [addLookOpen, setAddLookOpen] = useState(false);
   const navigate = useNavigate();
 
   // Per-look actions surface two ways:
@@ -432,6 +433,45 @@ export default function MyLooks({ onClose }: MyLooksProps) {
     [looks],
   );
 
+  // ── "Add look" chooser — its own full page: two big tap targets, the
+  // own-media path up top and the AI path on the bottom half. ──
+  if (addLookOpen) {
+    return (
+      <div className="my-cat-addlook">
+        <button className="my-cat-addlook-close" onClick={() => setAddLookOpen(false)} aria-label="Back">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+        </button>
+        <button
+          className="my-cat-addlook-option my-cat-addlook-option--top"
+          onClick={() => { setAddLookOpen(false); handleCreateNew(); }}
+        >
+          <span className="my-cat-addlook-icon" aria-hidden="true">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+          </span>
+          <span className="my-cat-addlook-title">Use your own pictures &amp; videos</span>
+          <span className="my-cat-addlook-sub">Upload your own media and build the look yourself.</span>
+        </button>
+        <button
+          className="my-cat-addlook-option my-cat-addlook-option--bottom"
+          onClick={() => { setAddLookOpen(false); navigate('/generate'); }}
+        >
+          <span className="my-cat-addlook-icon" aria-hidden="true">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 2l1.7 4.3L18 8l-4.3 1.7L12 14l-1.7-4.3L6 8l4.3-1.7L12 2z"/>
+              <path d="M19 14l1 2.5 2.5 1L20 18.5 19 21l-1-2.5L15.5 17.5 18 16.5z"/>
+            </svg>
+          </span>
+          <span className="my-cat-addlook-title">Create a look with AI</span>
+          <span className="my-cat-addlook-sub">Upload a face, pick products, and let AI compose the look.</span>
+        </button>
+      </div>
+    );
+  }
+
   // ── Add product flow — full-screen, same shell as the look form ──
   if (showAddProduct) {
     return (
@@ -510,7 +550,7 @@ export default function MyLooks({ onClose }: MyLooksProps) {
         <div style={{ position: 'relative' }}>
           <button
             className="my-cat-create-fab my-cat-create-fab--dropdown"
-            onClick={() => { setCreateMenuOpen(v => !v); setCreateMenuView('root'); }}
+            onClick={() => setCreateMenuOpen(v => !v)}
             aria-label="Add"
             title="Add"
             aria-expanded={createMenuOpen}
@@ -533,7 +573,7 @@ export default function MyLooks({ onClose }: MyLooksProps) {
             <>
               {/* Tap-out scrim so any click outside the menu dismisses it */}
               <div
-                onClick={() => { setCreateMenuOpen(false); setCreateMenuView('root'); }}
+                onClick={() => setCreateMenuOpen(false)}
                 style={{ position: 'fixed', inset: 0, zIndex: 38, background: 'transparent' }}
                 aria-hidden="true"
               />
@@ -556,55 +596,27 @@ export default function MyLooks({ onClose }: MyLooksProps) {
                   gap: 2,
                 }}
               >
-                {createMenuView === 'root' ? (
-                  <>
-                    <MenuItem
-                      icon={
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <rect x="2" y="4" width="20" height="16" rx="2"/>
-                          <polygon points="10 9 15 12 10 15 10 9"/>
-                        </svg>
-                      }
-                      label="Add look"
-                      onClick={() => setCreateMenuView('look')}
-                    />
-                    <MenuItem
-                      icon={
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/>
-                          <line x1="3" y1="6" x2="21" y2="6"/>
-                          <path d="M16 10a4 4 0 0 1-8 0"/>
-                        </svg>
-                      }
-                      label="Add product"
-                      onClick={() => { setCreateMenuOpen(false); setShowAddProduct(true); }}
-                    />
-                  </>
-                ) : (
-                  <>
-                    <MenuItem
-                      icon={
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                          <polyline points="17 8 12 3 7 8"/>
-                          <line x1="12" y1="3" x2="12" y2="15"/>
-                        </svg>
-                      }
-                      label="With your own pictures & videos"
-                      onClick={() => { setCreateMenuOpen(false); setCreateMenuView('root'); handleCreateNew(); }}
-                    />
-                    <MenuItem
-                      icon={
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                          <path d="M12 2l1.7 4.3L18 8l-4.3 1.7L12 14l-1.7-4.3L6 8l4.3-1.7L12 2z"/>
-                          <path d="M19 14l1 2.5 2.5 1L20 18.5 19 21l-1-2.5L15.5 17.5 18 16.5z"/>
-                        </svg>
-                      }
-                      label="Create a look with AI"
-                      onClick={() => { setCreateMenuOpen(false); setCreateMenuView('root'); navigate('/generate'); }}
-                    />
-                  </>
-                )}
+                <MenuItem
+                  icon={
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="2" y="4" width="20" height="16" rx="2"/>
+                      <polygon points="10 9 15 12 10 15 10 9"/>
+                    </svg>
+                  }
+                  label="Add look"
+                  onClick={() => { setCreateMenuOpen(false); setAddLookOpen(true); }}
+                />
+                <MenuItem
+                  icon={
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M6 2 3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4Z"/>
+                      <line x1="3" y1="6" x2="21" y2="6"/>
+                      <path d="M16 10a4 4 0 0 1-8 0"/>
+                    </svg>
+                  }
+                  label="Add product"
+                  onClick={() => { setCreateMenuOpen(false); setShowAddProduct(true); }}
+                />
               </div>
             </>
           )}
