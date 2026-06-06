@@ -19,6 +19,11 @@ import CreatorLoginToastHost from "~/components/CreatorLoginToastHost";
 import FollowToastHost from "~/components/FollowToastHost";
 import { initSentry, captureException } from "~/utils/sentry";
 
+// Dev-only data-stream waterfall probe. Installs window.__waterfall() and
+// __waterfallWatch() for profiling Supabase/asset network waterfalls from the
+// console. Guarded by import.meta.env.DEV so the bundler drops it in prod.
+if (import.meta.env.DEV) void import("~/utils/perf-waterfall");
+
 /* ── Modular styles ──
  * Only stylesheets needed by the consumer feed (and the locked/landing
  * surfaces every visitor sees) live here. Per-route stylesheets
