@@ -1745,6 +1745,24 @@ html[data-shell="catalog-app"] .my-looks-overlay {
 .my-cat-create-fab:active { transform: translateY(0); }
 
 /* Hero - same flex column / centered layout as CreatorPage. */
+/* Auto-hiding sticky top: the hero + tabs stay pinned to the top of the
+   catalog, slide up out of the way as the user scrolls down into the grid,
+   and slide back when they scroll up, stop, or return to the very top.
+   z-index sits below the corner FABs (z 30) so those stay tappable. */
+.my-cat-top {
+  position: sticky;
+  top: 0;
+  z-index: 15;
+  background: inherit;
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.my-cat-top.is-hidden {
+  transform: translateY(-100%);
+}
+@media (prefers-reduced-motion: reduce) {
+  .my-cat-top { transition: none; }
+}
+
 .my-cat-hero {
   display: flex;
   flex-direction: column;

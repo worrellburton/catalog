@@ -52,6 +52,31 @@ export default function MyLooks({ onClose }: MyLooksProps) {
   const [error, setError] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<'live' | 'inactive' | 'products'>('live');
   const [page, setPage] = useState(1);
+  // Auto-hiding top UI: the hero + tabs stay stuck to the top, slide away as
+  // the user scrolls down into the grid, and slide back when they scroll up,
+  // stop, or return to the very top.
+  const pageRef = useRef<HTMLDivElement>(null);
+  const [topHidden, setTopHidden] = useState(false);
+  useEffect(() => {
+    const el = pageRef.current;
+    if (!el) return;
+    let last = el.scrollTop;
+    let stopTimer: number | null = null;
+    const onScroll = () => {
+      const y = el.scrollTop;
+      if (y <= 8) setTopHidden(false);
+      else if (y > last + 4) setTopHidden(true);
+      else if (y < last - 4) setTopHidden(false);
+      last = y;
+      if (stopTimer != null) window.clearTimeout(stopTimer);
+      stopTimer = window.setTimeout(() => setTopHidden(false), 220);
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      el.removeEventListener('scroll', onScroll);
+      if (stopTimer != null) window.clearTimeout(stopTimer);
+    };
+  }, []);
   const [totalPages, setTotalPages] = useState(1);
 
   // "Products" tab — every product across the creator's looks, drag-orderable.
@@ -457,6 +482,7 @@ export default function MyLooks({ onClose }: MyLooksProps) {
 
   return (
     <div
+      ref={pageRef}
       className="my-cat-page"
       style={appearance.hue != null ? { background: `hsl(${appearance.hue}, 28%, 6%)` } : undefined}
     >
@@ -603,6 +629,7 @@ export default function MyLooks({ onClose }: MyLooksProps) {
           The inner "My info" pill is still here for an explicit text
           affordance, but tapping anywhere on the hero — avatar, name,
           curated-by, stats — fires the same event. */}
+      <div className={`my-cat-top${topHidden ? ' is-hidden' : ''}`}>
       <button
         type="button"
         className="my-cat-hero my-cat-hero--button"
@@ -668,6 +695,7 @@ export default function MyLooks({ onClose }: MyLooksProps) {
           Products
           {catalogProducts.length > 0 && <span className="my-cat-nav-count">{catalogProducts.length}</span>}
         </button>
+      </div>
       </div>
 
       {/* Rendering section — only present while looks are mid-render.
