@@ -25,7 +25,10 @@
      header, bottom reserves the bar's zone — so the spark + headline
      auto-center in the band BETWEEN them. Result: header → headline → bar
      fall into one evenly-spaced, vertically-centered column with no overlap. */
-  padding: calc(env(safe-area-inset-top, 0px) + 72px) 20px 54vh;
+  /* svh to match min-height: 100svh above — mixing vh here let the centered
+     spark+headline overflow down into the (svh-referenced) bar's zone on
+     mobile, so the search bar overlapped the headline. */
+  padding: calc(env(safe-area-inset-top, 0px) + 72px) 20px 54svh;
   text-align: center;
   overflow: hidden;
 }
@@ -441,7 +444,7 @@
    headline + bar group centres around mid-screen. Per-breakpoint
    overrides live in the media queries below. */
 .app-root.home-hero {
-  --hero-bar-bottom: 36vh;
+  --hero-bar-bottom: 36svh;
 }
 .app-root.home-hero .bottom-bar {
   transition:
@@ -450,7 +453,7 @@
     background 0.45s ease, border-color 0.45s ease, box-shadow 0.45s ease;
 }
 .app-root.home-hero:not(.hero-scrolled) .bottom-bar {
-  bottom: var(--hero-bar-bottom, 36vh);
+  bottom: var(--hero-bar-bottom, 36svh);
   /* The bar holds its opacity through the early scroll while the
      spark + headline fade out fast (see .sfh-stage rule below).
      Once they're gone, the bar itself fades — multiplier 1.8 means
@@ -537,7 +540,7 @@
    (desktop has its own 50vh rule below, and stays centered since there's no
    soft keyboard). */
 .app-root.home-hero:not(.hero-scrolled) .bottom-bar.search-open {
-  bottom: 46vh;
+  bottom: 46svh;
 }
 
 /* Mobile: swap the scroll-mouse for a swiping finger. The hand glyph
@@ -665,7 +668,7 @@
      the .sfh padding read this same var (see below) so they stay
      locked together. */
   .app-root.home-hero {
-    --hero-bar-bottom: 36vh;
+    --hero-bar-bottom: 36svh;
   }
   .sfh {
     /* The hero trio — spark + headline + search bar — is centred as
@@ -678,7 +681,7 @@
     min-height: 100svh;
     justify-content: flex-end;
     padding-top: calc(env(safe-area-inset-top, 0px) + 90px);
-    padding-bottom: calc(var(--hero-bar-bottom, 34vh) + 12vh);
+    padding-bottom: calc(var(--hero-bar-bottom, 36svh) + 12svh);
   }
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar,
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar.search-open {
@@ -686,7 +689,7 @@
        padding-bottom is derived from this same var so the two move
        together — change this one number and the whole trio re-centres
        without the headline ever colliding with the bar. */
-    bottom: var(--hero-bar-bottom, 34vh);
+    bottom: var(--hero-bar-bottom, 36svh);
   }
 }
 
