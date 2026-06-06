@@ -15,7 +15,7 @@
      status bar on iOS PWA / standalone Safari fullscreen. Horizontal
      padding is also capped so wide phones don't push content off the
      side. */
-  padding: max(env(safe-area-inset-top, 0px), 16px) clamp(16px, 4vw, 56px)
+  padding: max(env(safe-area-inset-top, 0px), 44px) clamp(16px, 4vw, 56px)
            calc(180px + env(safe-area-inset-bottom));
   color: #fff;
   min-height: 100vh;

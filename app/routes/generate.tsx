@@ -174,7 +174,7 @@ const CATEGORY_GROUPS: Array<{ label: string; tags: string[] | null }> = [
 // lets the shopper search across all products + brands in one place. Rendered
 // before the category rows (and defaults to expanded — see `expanded` below).
 const ALL_GROUP: { label: string; tags: string[] | null } = { label: 'All', tags: [] };
-const PICKER_GROUPS = [ALL_GROUP, ...CATEGORY_GROUPS];
+const PICKER_GROUPS = [...CATEGORY_GROUPS, ALL_GROUP];
 
 /** True if the product belongs to the named bucket. `All` matches every
  *  product; `Objects` matches anything that doesn't fit a clothing role. */
