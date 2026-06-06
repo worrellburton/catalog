@@ -587,7 +587,11 @@ function CreatorChip({
 
 function BrandLabel({ name }: { name: string }) {
   const showLogos = useShowBrandLogos();
-  const logoUrl = useBrandLogo(name);
+  // Only look up (and network-fetch) a brand logo when the dial is actually on.
+  // DEFAULT_SHOW_BRAND_LOGOS is false, so without this gate every uncached brand
+  // fired a products?brand=ilike… query whose result was then discarded. Passing
+  // null makes the hook a no-op (it early-returns on an empty key).
+  const logoUrl = useBrandLogo(showLogos ? name : null);
   const [imageBroken, setImageBroken] = useState(false);
   if (showLogos && logoUrl && !imageBroken) {
     return (

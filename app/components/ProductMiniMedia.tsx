@@ -18,7 +18,7 @@
 // poster-then-video pattern at this size.
 
 import { useEffect, useRef, useState } from 'react';
-import { supabaseImage } from '~/utils/supabaseImage';
+import { withTransform } from '~/utils/supabase-image';
 
 interface Props {
   /** Static poster — product photo (primary_image_url) or the video's
@@ -66,7 +66,7 @@ export default function ProductMiniMedia({ posterSrc, videoSrc, alt = '', fallba
   // possibly-huge dimensions. The user asked for "full resolution"
   // poster — 480 px is the sweet spot where every screen renders crisp
   // without burning bandwidth on a 2000 px-wide product hero.
-  const resolvedPoster = supabaseImage(posterSrc, { width: 480, quality: 80 });
+  const resolvedPoster = withTransform(posterSrc, { width: 480, quality: 80, format: 'webp' }) ?? '';
 
   return (
     <>

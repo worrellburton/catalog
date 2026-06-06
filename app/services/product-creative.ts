@@ -1,4 +1,5 @@
 import { supabase } from '~/utils/supabase';
+import { withTransform } from '~/utils/supabase-image';
 import {
   getProductSimilarityThreshold,
   subscribeProductSimilarityThreshold,
@@ -278,7 +279,7 @@ export async function getHomeFeed(opts: { ignoreGender?: boolean } = {}): Promis
   // content lands on top of the grid.
   const { data, error } = await supabase
     .from('products')
-    .select('id, name, brand, price, image_url, primary_image_url, primary_video_url, primary_video_poster_url, primary_video_generated_at, images, url, type, catalog_tags, is_active, is_elite, gender, created_at, feed_rank')
+    .select('id, name, brand, price, image_url, primary_image_url, primary_video_url, primary_video_poster_url, primary_video_generated_at, url, type, catalog_tags, is_active, is_elite, gender, created_at, feed_rank')
     .eq('is_active', true)
     .not('primary_video_url', 'is', null)
     // Admin-chosen catalog order (Recommend Order / saved order) leads;
@@ -286,7 +287,11 @@ export async function getHomeFeed(opts: { ignoreGender?: boolean } = {}): Promis
     .order('feed_rank',                 { ascending: true,  nullsFirst: false })
     .order('is_elite',                  { ascending: false, nullsFirst: false })
     .order('primary_video_generated_at',{ ascending: false, nullsFirst: false })
-    .order('created_at',                { ascending: false });
+    .order('created_at',                { ascending: false })
+    // Feed cycles + paginates client-side (FeedSection) and only ~60 rows are
+    // cached, so this cap is invisible to the user but bounds the wire payload,
+    // JSON parse, and in-memory ProductAd[] as the catalog grows.
+    .limit(300);
   if (error) {
     console.error('[getHomeFeed] query error:', error.message);
     return [];
@@ -298,7 +303,7 @@ export async function getHomeFeed(opts: { ignoreGender?: boolean } = {}): Promis
     primary_video_url: string | null;
     primary_video_poster_url: string | null;
     primary_video_generated_at: string | null;
-    images: string[] | null; url: string | null;
+    url: string | null;
     type: string | null; catalog_tags: string[] | null;
     is_active: boolean; is_elite: boolean | null;
     gender: string | null; created_at: string;
@@ -348,7 +353,11 @@ export async function getHomeFeed(opts: { ignoreGender?: boolean } = {}): Promis
       primary_image_url: p.primary_image_url,
       primary_video_url: p.primary_video_url,
       primary_video_poster_url: p.primary_video_poster_url,
-      images:            p.images,
+      // Derived from the primary image instead of selecting the full images[]
+      // array — the only consumer is images[0] as a poster fallback
+      // (video-loading.ts, ProductPage), so a 1-element array preserves that
+      // while dropping a JSON blob the feed never otherwise reads.
+      images:            p.primary_image_url ? [p.primary_image_url] : (p.image_url ? [p.image_url] : null),
       url:               p.url,
       type:              p.type,
       catalog_tags:      p.catalog_tags,
@@ -498,7 +507,12 @@ function warmAboveTheFoldAssets(rows: ProductAd[]): void {
   for (const ad of head) {
     // Image cache hit for the poster - the <img loading=eager> on the
     // card immediately reuses this without a fresh round-trip.
-    const poster = ad.thumbnail_url || ad.product?.primary_image_url || ad.product?.image_url;
+    const posterRaw = ad.thumbnail_url || ad.product?.primary_image_url || ad.product?.image_url;
+    // Warm the SAME 540px transform the card actually paints (CreativeCardV2 /
+    // primeTrailAssets) — NOT the raw full-res original. Warming the raw URL
+    // fetched a 1–3 MB original the card never displays AND still cache-missed
+    // the 540px variant it does, so the top tiles paid a double download.
+    const poster = withTransform(posterRaw, { width: 540, quality: 72, resize: 'contain' }) || posterRaw;
     if (poster) {
       try {
         const img = new Image();
@@ -1508,24 +1522,37 @@ export function prefetchSimilarProducts(seedProductId: string, k = 18): Promise<
 // dedupes scroll-spam (a card flickering across the IO threshold during
 // fast scroll) and gives the browser breathing room.
 //
-// We still fire N RPCs per flush - Supabase doesn't currently expose a
-// bulk-increment endpoint - but they're issued in parallel from a single
-// idle tick instead of staggered across the first second of the session.
+// One bulk RPC per flush collapses those N increments into a SINGLE request
+// (one radio wakeup, one connection) — see migration
+// 20260606140000_bulk_product_creative_impressions. Falls back to the per-id
+// RPC when the bulk function isn't deployed yet, so the client is safe to ship
+// ahead of the migration and never double-counts (a failed bulk does nothing).
 
 const impressionQueue = new Map<string, number>();
 let flushTimer: number | null = null;
 
-function flushImpressions() {
-  flushTimer = null;
-  if (!supabase || impressionQueue.size === 0) return;
-  const ids = [...impressionQueue.keys()];
-  impressionQueue.clear();
+function flushImpressionsPerId(ids: string[]) {
+  if (!supabase) return;
   // Parallel issue. .catch swallows so a single network failure doesn't
   // kill the rest of the flush.
   for (const id of ids) {
     supabase.rpc('increment_product_creative_impressions', { creative_id: id })
       .then(() => undefined, () => undefined);
   }
+}
+
+function flushImpressions() {
+  flushTimer = null;
+  if (!supabase || impressionQueue.size === 0) return;
+  const ids = [...impressionQueue.keys()];
+  impressionQueue.clear();
+  // One request for the whole batch; fall back to N per-id calls if the bulk
+  // function is missing (error) or the call rejects (network).
+  supabase.rpc('increment_product_creative_impressions_bulk', { creative_ids: ids })
+    .then(
+      ({ error }: { error: { message: string } | null }) => { if (error) flushImpressionsPerId(ids); },
+      () => flushImpressionsPerId(ids),
+    );
 }
 
 export function trackAdImpression(id: string): void {

@@ -23,6 +23,11 @@ interface TransformOpts {
   /** How the image fits the requested box. `cover` crops; `contain`
    *  letterboxes. Defaults to `cover` since most tiles are cropped. */
   resize?: 'cover' | 'contain' | 'fill';
+  /** Output format. OMITTED by default so existing callers' URLs stay byte-for-
+   *  byte identical (emitting it would cache-miss every already-warmed image).
+   *  Pass `'webp'` for ~25–35% smaller thumbnails where alpha isn't needed —
+   *  this is what the former `supabaseImage` helper did by default. */
+  format?: 'webp' | 'origin';
 }
 
 const SUPABASE_OBJECT_RE = /\/storage\/v1\/object\/public\//;
@@ -36,6 +41,7 @@ export function withTransform(url: string | null | undefined, opts: TransformOpt
   if (opts.height) params.set('height', String(opts.height));
   params.set('quality', String(opts.quality ?? 75));
   params.set('resize', opts.resize ?? 'cover');
+  if (opts.format) params.set('format', opts.format);
   return `${transformed}?${params.toString()}`;
 }
 

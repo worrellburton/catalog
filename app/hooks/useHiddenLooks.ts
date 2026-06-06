@@ -14,26 +14,21 @@ const notify = (set: Set<Listener>) => set.forEach(l => l());
 // 3 Supabase round-trips (admin_hidden_looks, admin_hidden_products,
 // products?is_active=eq.false) for each component. Pooling collapses
 // those into one fetch each, regardless of how many components ask.
-let hiddenLookIdsPromise: Promise<Set<number>> | null = null;
-let hiddenLookUuidsPromise: Promise<Set<string>> | null = null;
+let hiddenLooksPromise: Promise<{ ids: Set<number>; uuids: Set<string> }> | null = null;
 let hiddenProductKeysPromise: Promise<Set<string>> | null = null;
 
-async function fetchHiddenLookIds(): Promise<Set<number>> {
-  if (!supabase) return new Set();
-  const { data, error } = await supabase.from('admin_hidden_looks').select('look_id');
-  if (error || !data) return new Set();
-  return new Set<number>(
-    (data as { look_id: number }[]).map(r => r.look_id).filter(n => Number.isFinite(n)),
-  );
-}
-
-async function fetchHiddenLookUuids(): Promise<Set<string>> {
-  if (!supabase) return new Set();
-  const { data, error } = await supabase.from('admin_hidden_looks').select('look_uuid');
-  if (error || !data) return new Set();
-  return new Set<string>(
-    (data as { look_uuid: string | null }[]).map(r => r.look_uuid).filter((s): s is string => !!s),
-  );
+// Single fetch for BOTH the numeric-id and uuid hidden sets — they come from
+// the same admin_hidden_looks rows, so selecting both columns once collapses
+// what used to be two independent REST round-trips on every cold feed load.
+async function fetchHiddenLooks(): Promise<{ ids: Set<number>; uuids: Set<string> }> {
+  if (!supabase) return { ids: new Set(), uuids: new Set() };
+  const { data, error } = await supabase.from('admin_hidden_looks').select('look_id, look_uuid');
+  if (error || !data) return { ids: new Set(), uuids: new Set() };
+  const rows = data as { look_id: number | null; look_uuid: string | null }[];
+  return {
+    ids: new Set<number>(rows.map(r => r.look_id).filter((n): n is number => Number.isFinite(n as number))),
+    uuids: new Set<string>(rows.map(r => r.look_uuid).filter((s): s is string => !!s)),
+  };
 }
 
 async function fetchHiddenProductKeys(): Promise<Set<string>> {
@@ -57,24 +52,23 @@ async function fetchHiddenProductKeys(): Promise<Set<string>> {
   return keys;
 }
 
-function getHiddenLookIds(): Promise<Set<number>> {
-  if (!hiddenLookIdsPromise) {
-    hiddenLookIdsPromise = fetchHiddenLookIds().catch(err => {
-      hiddenLookIdsPromise = null;
+function getHiddenLooks(): Promise<{ ids: Set<number>; uuids: Set<string> }> {
+  if (!hiddenLooksPromise) {
+    hiddenLooksPromise = fetchHiddenLooks().catch(err => {
+      hiddenLooksPromise = null;
       throw err;
     });
   }
-  return hiddenLookIdsPromise;
+  return hiddenLooksPromise;
+}
+
+// Both keyed views derive from the one shared fetch above (no extra request).
+function getHiddenLookIds(): Promise<Set<number>> {
+  return getHiddenLooks().then(r => r.ids);
 }
 
 function getHiddenLookUuids(): Promise<Set<string>> {
-  if (!hiddenLookUuidsPromise) {
-    hiddenLookUuidsPromise = fetchHiddenLookUuids().catch(err => {
-      hiddenLookUuidsPromise = null;
-      throw err;
-    });
-  }
-  return hiddenLookUuidsPromise;
+  return getHiddenLooks().then(r => r.uuids);
 }
 
 function getHiddenProductKeys(): Promise<Set<string>> {

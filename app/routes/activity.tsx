@@ -20,7 +20,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
 import { useNavigate } from '@remix-run/react';
-import { supabaseImage } from '~/utils/supabaseImage';
+import { withTransform } from '~/utils/supabase-image';
 import { useAuth } from '~/hooks/useAuth';
 import { getEngagementSummary, type EngagementSummary } from '~/services/creator-engagement';
 import {
@@ -57,7 +57,7 @@ function TopLookThumb({ thumbnailUrl, videoUrl }: { thumbnailUrl: string | null;
   const [posterLoaded, setPosterLoaded] = useState(false);
   const [videoReady, setVideoReady] = useState(false);
   const videoRef = useRef<HTMLVideoElement | null>(null);
-  const poster = thumbnailUrl ? supabaseImage(thumbnailUrl, { width: 160, quality: 60 }) : null;
+  const poster = thumbnailUrl ? (withTransform(thumbnailUrl, { width: 160, quality: 60, format: 'webp' }) ?? null) : null;
   const mountVideo = !!videoUrl && posterLoaded;
 
   useEffect(() => {
@@ -121,7 +121,7 @@ function ConvThumb({ targetType, targetId }: { targetType: CommentTargetType; ta
     return () => { cancelled = true; };
   }, [targetType, targetId]);
 
-  const poster = media?.image ? supabaseImage(media.image, { width: 120, quality: 60 }) : null;
+  const poster = media?.image ? (withTransform(media.image, { width: 120, quality: 60, format: 'webp' }) ?? null) : null;
   const videoUrl = media?.video || null;
   const mountVideo = !!videoUrl && posterLoaded;
 
