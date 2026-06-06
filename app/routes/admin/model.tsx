@@ -3,18 +3,14 @@ import {
   type Assumptions,
   DEFAULTS,
   MONTHS,
-  STORAGE_KEY,
   fmtCurrency,
   fmtNumber,
   fmtPercent,
-  readStored,
   summarize,
 } from '~/services/projections';
 import {
   type GtmAssumptions,
   GTM_DEFAULTS,
-  GTM_STORAGE_KEY,
-  readGtmStored,
   summarizeGtm,
 } from '~/services/go-to-market';
 import { buildModel } from '~/services/model';
@@ -22,15 +18,14 @@ import {
   type EconAssumptions,
   type ScenarioId,
   ECON_DEFAULTS,
-  ECON_STORAGE_KEY,
   buildCashflow,
   cohortRetention,
   investorMetrics,
-  readEconStored,
   scenarioValues,
   sensitivity,
   toCsv,
 } from '~/services/model-metrics';
+import { useSharedModelSettings } from '~/hooks/useSharedModelSettings';
 import AssumptionCard, { type FieldDef } from '~/components/model/AssumptionCard';
 import ModelRow from '~/components/model/ModelRow';
 import UnifiedModelChart from '~/components/model/UnifiedModelChart';
@@ -105,14 +100,12 @@ function readUi(): ModelUi {
 }
 
 export default function AdminModel() {
-  const [rev, setRev] = useState<Assumptions>(() => readStored());
-  const [acq, setAcq] = useState<GtmAssumptions>(() => readGtmStored());
-  const [econ, setEcon] = useState<EconAssumptions>(() => readEconStored());
+  // Model numbers are shared + real-time (one app_settings row, synced
+  // across every admin session). UI prefs (order, open/closed, which lines
+  // show) stay per-browser.
+  const { rev, acq, econ, setRev, setAcq, setEcon, live } = useSharedModelSettings();
   const [ui, setUi] = useState<ModelUi>(() => readUi());
 
-  useEffect(() => { try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(rev)); } catch { /* quota */ } }, [rev]);
-  useEffect(() => { try { window.localStorage.setItem(GTM_STORAGE_KEY, JSON.stringify(acq)); } catch { /* quota */ } }, [acq]);
-  useEffect(() => { try { window.localStorage.setItem(ECON_STORAGE_KEY, JSON.stringify(econ)); } catch { /* quota */ } }, [econ]);
   useEffect(() => { try { window.localStorage.setItem(UI_KEY, JSON.stringify(ui)); } catch { /* quota */ } }, [ui]);
 
   const { revenue, acquisition } = useMemo(() => buildModel(rev, acq, true), [rev, acq]);
@@ -252,8 +245,14 @@ export default function AdminModel() {
   return (
     <div className="admin-page model-page">
       <div className="admin-page-header">
-        <h1>Model</h1>
-        <p className="admin-page-subtitle">Acquisition → MAU, Engagement → sales, Revenue → $, Costs → runway. Toggle any line, drag to reorder.</p>
+        <h1>
+          Model
+          <span className={`model-live${live ? ' is-live' : ''}`} title={live ? 'Saved for everyone — edits sync live across admins' : 'Shared model — connecting…'}>
+            <span className="model-live-dot" />
+            {live ? 'Live · shared' : 'Shared'}
+          </span>
+        </h1>
+        <p className="admin-page-subtitle">Acquisition → MAU, Engagement → sales, Revenue → $, Costs → runway. Numbers are shared with every admin in real time. Toggle any line, drag to reorder.</p>
       </div>
 
       <ModelHeadline m={metrics} onScenario={applyScenario} onExportCsv={exportCsv} onPrint={() => window.print()} />
@@ -263,7 +262,11 @@ export default function AdminModel() {
           <div className="model-rows">
             {ui.order.map(renderRow)}
           </div>
+        </div>
 
+        <div className="model-right">
+          {/* Dials sit at the top of the chart so the headline results read
+              right above the curve they come from. */}
           <div className="proj-summary model-dials">
             {ui.show.revenue && (
               <>
@@ -307,9 +310,7 @@ export default function AdminModel() {
               </div>
             )}
           </div>
-        </div>
 
-        <div className="model-right">
           <UnifiedModelChart
             revenue={revenue}
             acquisition={acquisition}

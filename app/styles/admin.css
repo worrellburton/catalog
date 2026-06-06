@@ -5245,6 +5245,31 @@ html.admin-on-dark-canvas .admin-topbar,
 }
 .admin-dark .proj-card-bench { color: #a78bfa; }
 
+/* Dials sit above the chart on the right — give them room before the curve. */
+.model-right .model-dials { margin-bottom: 14px; }
+
+/* "Live · shared" pill next to the page title. */
+.model-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 12px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: #64748b;
+  background: #f1f5f9;
+  border: 1px solid #e5e7eb;
+  vertical-align: middle;
+}
+.model-live-dot { width: 7px; height: 7px; border-radius: 50%; background: #94a3b8; }
+.model-live.is-live { color: #047857; background: rgba(16, 185, 129, 0.10); border-color: rgba(16, 185, 129, 0.3); }
+.model-live.is-live .model-live-dot { background: #10b981; box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2); }
+.admin-dark .model-live { color: #a1a1aa; background: #27272a; border-color: #3f3f46; }
+.admin-dark .model-live.is-live { color: #34d399; background: rgba(16, 185, 129, 0.12); border-color: rgba(16, 185, 129, 0.35); }
+
 /* Headline strip: scenario presets + export + investor metric chips. */
 .model-headline { margin: 8px 0 16px; }
 .model-toolbar { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin-bottom: 12px; }
