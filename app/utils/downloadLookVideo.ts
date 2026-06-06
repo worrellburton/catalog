@@ -139,13 +139,15 @@ function ellipsize(ctx: CanvasRenderingContext2D, text: string, maxWidth: number
 
 interface ResolvedProduct extends DownloadProduct { img: HTMLImageElement | null }
 
-function drawLogo(ctx: CanvasRenderingContext2D, logo: HTMLImageElement | null, x: number, y: number, w: number) {
+function drawLogo(ctx: CanvasRenderingContext2D, logo: HTMLImageElement | null, x: number, y: number, w: number, shadow = true) {
   if (!logo) return;
   const h = w * CATALOG_LOGO_ASPECT;
   ctx.save();
-  ctx.shadowColor = 'rgba(0,0,0,0.5)';
-  ctx.shadowBlur = h * 0.45;
-  ctx.shadowOffsetY = 2;
+  if (shadow) {
+    ctx.shadowColor = 'rgba(0,0,0,0.5)';
+    ctx.shadowBlur = h * 0.45;
+    ctx.shadowOffsetY = 2;
+  }
   ctx.globalAlpha = 0.95;
   ctx.drawImage(logo, x, y, w, h);
   ctx.restore();
@@ -400,7 +402,9 @@ async function watermarkToBlob(
     } else if (variant === 'story') {
       drawStoryOverlay(ctx, w, h, t, logo, resolvedProducts, opts.creatorHandle ?? null);
     } else {
-      drawLogo(ctx, logo, Math.round(w * 0.04), Math.round(w * 0.04), w * 0.20);
+      // Plain embedded watermark: 30% larger than before (0.20 → 0.26) and
+      // no drop shadow per design.
+      drawLogo(ctx, logo, Math.round(w * 0.04), Math.round(w * 0.04), w * 0.26, false);
     }
   };
 
