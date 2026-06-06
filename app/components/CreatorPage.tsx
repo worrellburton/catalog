@@ -604,11 +604,12 @@ export default function CreatorPage({
         )}
         <span className="creator-hero-curated">Curated by</span>
         <h1 className="creator-hero-name">{displayName}</h1>
-        {userId && currentUser?.id === userId ? (
-          /* Self-view: this is YOUR creator page. You can't follow
-              yourself, so the Follow slot becomes "My information" —
-              it opens the profile / info screen. _index listens for
-              `catalog:open-profile` and shows the lazy ProfilePage. */
+        {currentUser?.id && creatorUserId === currentUser.id ? (
+          /* Self-view: this is YOUR creator page (matched by resolved owner
+              id so it also catches the handle-route, not just user:<uuid>).
+              You can't follow yourself, so the Follow slot becomes "My
+              information" — it opens the profile / info screen. _index
+              listens for `catalog:open-profile` and shows the ProfilePage. */
           <button
             className="creator-follow-btn"
             onClick={() => window.dispatchEvent(new CustomEvent('catalog:open-profile'))}

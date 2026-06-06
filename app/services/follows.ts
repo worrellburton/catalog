@@ -18,6 +18,10 @@ export async function toggleFollow(handle: string): Promise<{ following: boolean
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return { following: false };
 
+  // No self-follows: a creator's own handle is `user:<their id>`. Guard here
+  // so a stray tap can never create the self-follow row.
+  if (handle === `user:${user.id}`) return { following: false };
+
   const { count } = await supabase
     .from('creator_follows')
     .select('follower_id', { count: 'exact', head: true })
