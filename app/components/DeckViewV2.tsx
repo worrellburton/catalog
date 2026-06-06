@@ -62,10 +62,10 @@ function CombinedChart() {
   const stackX = 466;
   const stackW = 96;
 
-  // The Catalog column is one unified bar - NOT the five platforms stacked.
-  // It dwarfs the scattered bars so it reads as "the one place that does what
-  // all of them do", not "all of them folded together".
-  const catalogH = 262;
+  // The Catalog column equals the SUM of the five platform bars at the same
+  // scale - so it literally reads as "all of them combined into one", not an
+  // arbitrarily taller bar.
+  const catalogH = PLATFORMS.reduce((sum, p) => sum + p.val, 0) * SCALE;
 
   return (
     <div className="deck-v2-chart">
