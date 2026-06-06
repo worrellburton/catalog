@@ -782,9 +782,9 @@ html[data-shell="catalog-app"] .gen-page {
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
-  gap: 6px;
-  padding: 16px 12px;
-  border-radius: 16px;
+  gap: 4px;
+  padding: 10px 8px;
+  border-radius: 12px;
   border: 1.5px solid rgba(255, 255, 255, 0.1);
   background: rgba(255, 255, 255, 0.03);
   color: #fff;
@@ -799,14 +799,18 @@ html[data-shell="catalog-app"] .gen-page {
 }
 .gen-stylecard:active { transform: scale(0.97); }
 
-/* Animated glyph — gently floats; pops when the card is picked. */
+/* Animated glyph — small line-art SVG; gently floats, pops when picked. */
 .gen-stylecard-icon {
-  font-size: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
   line-height: 1;
-  margin-top: 16px;
-  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.45));
+  margin-top: 10px;
+  filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.5));
   animation: gen-style-float 3s ease-in-out infinite;
 }
+.gen-stylecard-icon svg { width: 20px; height: 20px; display: block; }
 .gen-stylecard.is-picked .gen-stylecard-icon {
   animation: gen-style-pop 2.2s ease-in-out infinite;
 }
@@ -823,7 +827,7 @@ html[data-shell="catalog-app"] .gen-page {
 }
 
 .gen-stylecard-label {
-  font-size: 15px;
+  font-size: 13px;
   font-weight: 700;
   margin-top: auto;
 }
@@ -857,10 +861,18 @@ html[data-shell="catalog-app"] .gen-page {
 .gen-styleswiper::-webkit-scrollbar { display: none; }
 .gen-styleswiper > .gen-stylecard {
   flex: 0 0 auto;
-  width: 132px;
+  width: 96px;
   aspect-ratio: 3 / 4;
   scroll-snap-align: start;
 }
+
+/* Mobile fit: the style step and its free-text textarea must never push past
+   the viewport. The horizontal swiper scrolls internally; everything else is
+   clamped to 100% so the "direct your own video" box matches the screen width. */
+.gen-step { min-width: 0; max-width: 100%; }
+.gen-styleswiper { max-width: 100%; min-width: 0; }
+.gen-direct { max-width: 100%; }
+.gen-direct-input { max-width: 100%; }
 
 /* Review "Continue" CTA — a sparkly button that bursts into an explosion
    (see utils/explode.ts) when tapped to launch the render. */

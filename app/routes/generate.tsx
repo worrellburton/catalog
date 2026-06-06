@@ -227,17 +227,31 @@ function readStepFromUrl(): Step {
 
 // Per-style glyph for the style cards. Animated (float / pop) via CSS so
 // each 3:4 card has a little moving icon above its label.
-const STYLE_ICONS: Record<string, string> = {
-  street:     '🚶',
-  editorial:  '📸',
-  commercial: '🎬',
-  lifestyle:  '☕',
-  studio:     '💡',
-  athletic:   '🏃',
-  evening:    '🌃',
-  beach:      '🏖️',
-  cinematic:  '🎞️',
-};
+// Per-style line-art glyph (SVG, no emoji) for the style cards.
+function StyleGlyph({ value }: { value: string }) {
+  const p = { width: 20, height: 20, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+  switch (value) {
+    case 'editorial': // camera
+      return <svg {...p}><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>;
+    case 'commercial': // megaphone (ad)
+      return <svg {...p}><path d="M3 11l16-5v12L3 14z"/><path d="M11.5 16.5a3 3 0 1 1-5.7-1.6"/><line x1="21" y1="9" x2="21" y2="13"/></svg>;
+    case 'lifestyle': // coffee cup
+      return <svg {...p}><path d="M18 8h1a3 3 0 0 1 0 6h-1"/><path d="M3 8h15v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4z"/><line x1="7" y1="2" x2="7" y2="5"/><line x1="11" y1="2" x2="11" y2="5"/></svg>;
+    case 'studio': // lightbulb
+      return <svg {...p}><line x1="9" y1="18" x2="15" y2="18"/><line x1="10" y1="22" x2="14" y2="22"/><path d="M12 2a7 7 0 0 0-4 12.7c.6.4 1 1.1 1 1.8v.5h6v-.5c0-.7.4-1.4 1-1.8A7 7 0 0 0 12 2z"/></svg>;
+    case 'athletic': // bolt
+      return <svg {...p}><polyline points="13 2 4 14 11 14 10 22 20 9 13 9 13 2"/></svg>;
+    case 'evening': // moon
+      return <svg {...p}><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></svg>;
+    case 'beach': // sun
+      return <svg {...p}><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>;
+    case 'cinematic': // film strip
+      return <svg {...p}><rect x="2.5" y="3" width="19" height="18" rx="2"/><line x1="7" y1="3" x2="7" y2="21"/><line x1="17" y1="3" x2="17" y2="21"/><line x1="2.5" y1="12" x2="21.5" y2="12"/></svg>;
+    case 'street':
+    default: // walking person
+      return <svg {...p}><circle cx="13" cy="4" r="2"/><path d="M13 22l-2-6-3-2 1-5 4 2 2 3"/><path d="M11 9l-3 1-2 4"/></svg>;
+  }
+}
 
 export default function GeneratePage() {
   const navigate = useNavigate();
@@ -1895,7 +1909,7 @@ export default function GeneratePage() {
                   onClick={() => setStyle(s.value)}
                   aria-pressed={style === s.value}
                 >
-                  <span className="gen-stylecard-icon" aria-hidden="true">{STYLE_ICONS[s.value] ?? '✨'}</span>
+                  <span className="gen-stylecard-icon" aria-hidden="true"><StyleGlyph value={s.value} /></span>
                   <span className="gen-stylecard-label">{s.label}</span>
                   <span className="gen-stylecard-blurb">{s.blurb}</span>
                 </button>
