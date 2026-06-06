@@ -1759,12 +1759,24 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   z-index: 200;
   display: flex;
   flex-direction: column;
-  background: #0a0a0a;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(120% 90% at 50% 0%, #15161b 0%, #0a0a0a 60%);
+  overflow: hidden;
 }
+/* Ambient particle field behind the cards. */
+.my-cat-addlook-particles {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  opacity: 0.6;
+  pointer-events: none;
+}
+.my-cat-addlook-particles canvas { width: 100%; height: 100%; }
 .my-cat-addlook-close {
   position: fixed;
-  top: 24px;
-  left: 24px;
+  top: max(env(safe-area-inset-top), 18px);
+  left: 18px;
   z-index: 5;
   width: 40px;
   height: 40px;
@@ -1779,46 +1791,205 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
 }
-.my-cat-addlook-option {
-  flex: 1 1 50%;
+.my-cat-addlook-cards {
+  position: relative;
+  z-index: 1;
+  width: 100%;
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 12px;
+  gap: 16px;
   padding: 24px;
-  border: none;
+  box-sizing: border-box;
+}
+.my-cat-addlook-heading {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+  opacity: 0;
+  animation: addlook-card-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.02s forwards;
+}
+/* The two paths are now cards, not full-height halves. */
+.my-cat-addlook-option {
+  width: min(440px, calc(100% - 8px));
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 22px 22px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  background: linear-gradient(160deg, rgba(32, 34, 40, 0.72), rgba(14, 15, 18, 0.72));
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   color: #fff;
   cursor: pointer;
-  text-align: center;
+  text-align: left;
   font-family: inherit;
-  transition: background 0.2s ease;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.4);
+  transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+  opacity: 0;
+  transform: translateY(18px) scale(0.98);
+  animation: addlook-card-in 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
-.my-cat-addlook-option--top {
-  background: linear-gradient(160deg, #1b1e26, #0d0e12);
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+.my-cat-addlook-option--own { animation-delay: 0.08s; }
+.my-cat-addlook-option--ai { animation-delay: 0.16s; }
+.my-cat-addlook-option:active { transform: scale(0.985); }
+@media (hover: hover) {
+  .my-cat-addlook-option:hover {
+    border-color: rgba(255, 255, 255, 0.24);
+    background: linear-gradient(160deg, rgba(40, 42, 49, 0.8), rgba(18, 19, 22, 0.8));
+  }
 }
-.my-cat-addlook-option--bottom {
-  background: linear-gradient(200deg, #1a1410, #0d0e12);
-}
-.my-cat-addlook-option:active {
-  background: rgba(255, 255, 255, 0.05);
+.my-cat-addlook-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
 }
 .my-cat-addlook-icon {
-  color: rgba(255, 255, 255, 0.88);
+  flex-shrink: 0;
+  width: 58px;
+  height: 58px;
+  border-radius: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+/* The upload glyph gently bobs. */
+.my-cat-addlook-option--own .my-cat-addlook-icon svg {
+  animation: addlook-bob 3.4s ease-in-out infinite;
 }
 .my-cat-addlook-title {
-  font-size: clamp(22px, 6vw, 30px);
+  font-size: 18px;
   font-weight: 700;
-  letter-spacing: -0.02em;
-  max-width: 360px;
-  line-height: 1.15;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
 }
 .my-cat-addlook-sub {
-  font-size: 14px;
-  color: rgba(255, 255, 255, 0.5);
-  max-width: 320px;
-  line-height: 1.5;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.52);
+  line-height: 1.45;
+}
+
+/* ── AI card: extra "magical", particle-y treatment (grayscale) ─────── */
+.my-cat-addlook-option--ai {
+  border-color: rgba(255, 255, 255, 0.16);
+}
+/* A slow grayscale shimmer sweeps across the AI card. */
+.my-cat-addlook-option--ai::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(115deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.35) 50%,
+    transparent 70%);
+  background-size: 250% 100%;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  animation: addlook-border-sweep 4.5s linear infinite;
+}
+.my-cat-addlook-spark {
+  position: relative;
+  flex-shrink: 0;
+  width: 58px;
+  height: 58px;
+  border-radius: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  overflow: visible;
+}
+.my-cat-addlook-spark-glow {
+  position: absolute;
+  inset: -6px;
+  border-radius: 20px;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.32) 0%, transparent 68%);
+  animation: addlook-glow-breathe 2.8s ease-in-out infinite;
+}
+.my-cat-addlook-spark-glyph {
+  position: relative;
+  z-index: 2;
+  color: #fff;
+  animation: addlook-twinkle 2.6s ease-in-out infinite;
+}
+/* Orbiting motes — the "particle-y / magical" bit. A ring of small dots
+   spins around the sparkle, each twinkling on its own beat. Grayscale. */
+.my-cat-addlook-spark-orbit {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  animation: addlook-orbit-spin 7s linear infinite;
+}
+.my-cat-addlook-spark-orbit i {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 3px;
+  height: 3px;
+  margin: -1.5px 0 0 -1.5px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 0 5px rgba(255, 255, 255, 0.8);
+  animation: addlook-mote-twinkle 1.8s ease-in-out infinite;
+}
+.my-cat-addlook-spark-orbit i:nth-child(1) { transform: rotate(0deg) translateX(30px); }
+.my-cat-addlook-spark-orbit i:nth-child(2) { transform: rotate(60deg) translateX(30px); animation-delay: 0.3s; }
+.my-cat-addlook-spark-orbit i:nth-child(3) { transform: rotate(120deg) translateX(30px); animation-delay: 0.6s; }
+.my-cat-addlook-spark-orbit i:nth-child(4) { transform: rotate(180deg) translateX(30px); animation-delay: 0.9s; }
+.my-cat-addlook-spark-orbit i:nth-child(5) { transform: rotate(240deg) translateX(30px); animation-delay: 1.2s; }
+.my-cat-addlook-spark-orbit i:nth-child(6) { transform: rotate(300deg) translateX(30px); animation-delay: 1.5s; }
+
+@keyframes addlook-card-in {
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes addlook-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+@keyframes addlook-twinkle {
+  0%, 100% { transform: scale(1) rotate(0deg); opacity: 0.9; }
+  50% { transform: scale(1.12) rotate(8deg); opacity: 1; }
+}
+@keyframes addlook-glow-breathe {
+  0%, 100% { opacity: 0.45; transform: scale(0.92); }
+  50% { opacity: 0.9; transform: scale(1.08); }
+}
+@keyframes addlook-orbit-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes addlook-mote-twinkle {
+  0%, 100% { opacity: 0.25; }
+  50% { opacity: 1; }
+}
+@keyframes addlook-border-sweep {
+  0% { background-position: 150% 0; }
+  100% { background-position: -150% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .my-cat-addlook-option,
+  .my-cat-addlook-heading,
+  .my-cat-addlook-option--own .my-cat-addlook-icon svg,
+  .my-cat-addlook-spark-glyph,
+  .my-cat-addlook-spark-glow,
+  .my-cat-addlook-spark-orbit,
+  .my-cat-addlook-spark-orbit i,
+  .my-cat-addlook-option--ai::before {
+    animation: none;
+  }
+  .my-cat-addlook-option { opacity: 1; transform: none; }
 }
 
 .my-cat-hero {

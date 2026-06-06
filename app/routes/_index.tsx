@@ -62,6 +62,7 @@ const importMyLooks = () => import('~/components/MyLooks');
 const importCreatorWallet = () => import('~/components/CreatorWallet');
 const importProfilePage = () => import('~/components/ProfilePage');
 const importFollowingPage = () => import('~/components/FollowingPage');
+const importCommentsPage = () => import('~/components/CommentsPage');
 
 const LandingPage = lazyWithReload(importLandingPage);
 const CreatorPage = lazyWithReload(importCreatorPage);
@@ -79,7 +80,11 @@ const FollowingPage = lazyWithReload(importFollowingPage);
 const SavedScreen = lazyWithReload(() => import('~/components/SavedScreen'));
 // Comment thread, rendered as an in-app overlay (not a route) so backing
 // out of it never tears down / re-resolves the product or look underneath.
-const CommentsPage = lazyWithReload(() => import('~/components/CommentsPage'));
+// Its chunk is idle-prefetched (see IDLE_PREFETCH_ORDER) so tapping the
+// comments button never hits a cold/stale lazy-load — that failure path
+// triggered a full-page reload (auth-splash → home → comment deep-link),
+// which is the "splash then home then comments" jump we're killing here.
+const CommentsPage = lazyWithReload(importCommentsPage);
 
 /** Pause every currently-playing <video> in the document. Called on
  *  every product → product navigation so the old hero + rail cards
@@ -101,6 +106,9 @@ function pauseAllVideos(): void {
 const IDLE_PREFETCH_ORDER: Array<() => Promise<unknown>> = [
   importLookOverlay,
   importProductPage,
+  // Comments open straight from product/look surfaces, so warm it early —
+  // a stale lazy-load here forces a full reload (splash → home → comments).
+  importCommentsPage,
   importInAppBrowser,
   importBookmarksPage,
   importCreatorPage,
