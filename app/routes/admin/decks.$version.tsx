@@ -5,6 +5,7 @@ import { useState, lazy, Suspense } from 'react';
 // deck-view stylesheet alone is ~6k lines.
 import '~/styles/deck-view.css';
 import '~/styles/deck-v6.css';
+import '~/styles/deck-v2.css';
 import '~/styles/deck-selector.css';
 // admin.css carries the .proj-chart-wrap / .proj-tooltip styles that the
 // v1.2 Projections slide reuses verbatim from /admin/projections.
@@ -14,6 +15,7 @@ import '~/styles/admin.css';
 // Lazy-loading splits them into per-version chunks so the admin viewer
 // only pulls down the bytes for the version the user actually opened.
 const DeckView = lazy(() => import('~/components/DeckView'));
+const DeckViewV2 = lazy(() => import('~/components/DeckViewV2'));
 const DeckViewV1 = lazy(() => import('~/components/DeckViewV1'));
 const DeckViewV1_1 = lazy(() => import('~/components/DeckViewV1_1'));
 const DeckViewV1_2 = lazy(() => import('~/components/DeckViewV1_2'));
@@ -40,6 +42,7 @@ export default function AdminDeckViewer() {
   };
 
   const Deck =
+    version === 'v2' ? DeckViewV2 :
     version === 'v5' ? DeckView :
     version === 'v6' ? DeckViewV6 :
     version === 'v7' ? DeckViewV7 :

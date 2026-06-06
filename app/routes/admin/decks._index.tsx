@@ -8,13 +8,14 @@ interface DeckInfo {
 }
 
 const CURRENT_DECK: DeckInfo = {
-  id: 'v1-2',
-  label: 'Deck v1.2',
-  description: 'Latest investor deck',
+  id: 'v2',
+  label: 'Deck v2',
+  description: 'Short 4-page deck',
   current: true,
 };
 
 const PREVIOUS_DECKS: DeckInfo[] = [
+  { id: 'v1-2', label: 'Deck v1.2', description: 'Latest investor deck' },
   { id: 'v1-1', label: 'Deck v1.1', description: 'Previous version' },
   { id: 'v1', label: 'Deck v.1', description: 'Previous version' },
   { id: 'v9', label: 'Deck v.9', description: 'Previous version' },

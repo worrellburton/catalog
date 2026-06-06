@@ -1,0 +1,235 @@
+/* ────────────────────────────────────────────────────────────────────
+   Deck v2 - the short "4-page" deck.
+
+   Reuses the v8 base (rising product feed + matte slides) and layers an
+   ambient particle field on top. Everything here is namespaced under
+   .deck-view-v2 so it can't bleed into the longer decks. Designed to read
+   identically on desktop and mobile: the chart is a single viewBox SVG
+   that scales uniformly, and the legend / pillars reflow to one column
+   under 768px.
+   ──────────────────────────────────────────────────────────────────── */
+
+/* Particle field sits above the product feed (z 0) and below the slides
+   (bumped to z 2 below). pointer-events off so it never eats scroll. */
+.deck-v2-particles {
+  position: fixed;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  opacity: 0.9;
+}
+
+/* The deck route doesn't ship password-gate.css, so spell out the canvas
+   fill here rather than relying on the global .pw-particles base. */
+.deck-v2-particles .pw-particles {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+/* Slides must clear the particle layer. */
+.deck-view-v2 .deck-slide {
+  position: relative;
+  z-index: 2;
+}
+
+/* The rising feed reads a touch softer here so particles + slides stay
+   the focus. */
+.deck-view-v2 .deck-v8-bg .deck-insight-grid {
+  animation-duration: 60s;
+}
+
+/* ── Slide 1: cover ─────────────────────────────────────────────────── */
+.deck-v2-cover-logo {
+  height: 64px;
+}
+.deck-v2-cover-sub {
+  margin-top: 18px;
+  font-size: 15px;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.45);
+}
+.deck-v2-scroll-cue {
+  position: absolute;
+  bottom: 40px;
+  left: 0;
+  right: 0;
+  margin-inline: auto;
+  width: 22px;
+  height: 22px;
+  color: rgba(255, 255, 255, 0.4);
+  animation: deckV2Bob 2s ease-in-out infinite;
+}
+@keyframes deckV2Bob {
+  0%, 100% { transform: translateY(0); opacity: 0.4; }
+  50%      { transform: translateY(6px); opacity: 0.85; }
+}
+
+/* ── Slide 2: thesis + combined chart ───────────────────────────────── */
+.deck-v2-thesis {
+  align-items: center;
+  text-align: center;
+}
+.deck-v2-thesis-h2 {
+  margin-bottom: 16px;
+}
+.deck-v2-thesis-sub {
+  margin: 0 auto;
+  max-width: 620px;
+}
+
+.deck-v2-chart {
+  width: 100%;
+  max-width: 560px;
+  margin: 30px auto 0;
+}
+.deck-v2-chart-svg {
+  width: 100%;
+  height: auto;
+  display: block;
+  overflow: visible;
+}
+
+/* Bars grow from the baseline once the slide is visible, staggered by
+   --bar-i. transform-box/origin keep the scale anchored to the bottom. */
+.deck-v2-bar {
+  transform: scaleY(0);
+  transform-box: fill-box;
+  transform-origin: bottom;
+  transition: transform 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+  transition-delay: calc(var(--bar-i, 0) * 0.1s);
+}
+.deck-slide.visible .deck-v2-bar-left {
+  transform: scaleY(1);
+}
+/* The stacked column lands after the fragmented bars (0.6s base offset). */
+.deck-slide.visible .deck-v2-bar-stack {
+  transform: scaleY(1);
+  transition-delay: calc(0.6s + var(--bar-i, 0) * 0.12s);
+}
+
+.deck-v2-stack-frame {
+  opacity: 0;
+  filter: drop-shadow(0 0 10px rgba(74, 222, 128, 0.4));
+  transition: opacity 0.7s ease 1.4s;
+}
+.deck-slide.visible .deck-v2-stack-frame {
+  opacity: 1;
+}
+
+.deck-v2-chart-caption {
+  fill: rgba(255, 255, 255, 0.4);
+  font-size: 13px;
+  font-weight: 500;
+  opacity: 0;
+  transition: opacity 0.6s ease 1.2s;
+}
+.deck-slide.visible .deck-v2-chart-caption {
+  opacity: 1;
+}
+.deck-v2-chart-caption-strong {
+  fill: #4ade80;
+  font-weight: 600;
+}
+
+.deck-v2-chart-arrow {
+  opacity: 0;
+  transition: opacity 0.5s ease 1s;
+}
+.deck-slide.visible .deck-v2-chart-arrow {
+  opacity: 1;
+}
+
+.deck-v2-legend {
+  list-style: none;
+  margin: 18px 0 0;
+  padding: 0;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px 18px;
+}
+.deck-v2-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.55);
+}
+.deck-v2-legend-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  display: inline-block;
+}
+.deck-v2-legend-item-sum {
+  color: #4ade80;
+  font-weight: 600;
+}
+.deck-v2-legend-dot-sum {
+  background: #4ade80;
+  box-shadow: 0 0 8px rgba(74, 222, 128, 0.6);
+}
+
+/* ── Slide 3: representative pillars ────────────────────────────────── */
+.deck-v2-rep-h2 {
+  margin-bottom: 36px;
+}
+.deck-v2-pillars {
+  margin-top: 0;
+}
+
+/* ── Slide 4: close ─────────────────────────────────────────────────── */
+.deck-v2-close-logo {
+  height: 60px;
+}
+.deck-v2-close-sub {
+  margin-top: 16px;
+  font-size: 15px;
+}
+
+/* Light mode: soften the green accents that were tuned for black. */
+.light-mode .deck-v2-thesis-sub,
+.light-mode .deck-v2-legend-item {
+  color: rgba(20, 20, 22, 0.6);
+}
+
+/* ── Mobile parity: keep slide 2 inside one viewport ────────────────── */
+@media (max-width: 768px) {
+  .deck-v2-cover-logo {
+    height: 48px;
+  }
+  .deck-v2-cover-sub {
+    font-size: 13px;
+  }
+  .deck-v2-thesis-sub {
+    font-size: 12.5px;
+    line-height: 1.5;
+    max-width: 92%;
+  }
+  .deck-v2-chart {
+    max-width: 100%;
+    margin-top: 18px;
+  }
+  .deck-v2-chart-caption {
+    font-size: 15px;
+  }
+  .deck-v2-legend {
+    gap: 6px 12px;
+    margin-top: 12px;
+  }
+  .deck-v2-legend-item {
+    font-size: 11px;
+  }
+  .deck-v2-rep-h2 {
+    margin-bottom: 18px;
+  }
+  /* Pillars stack (shared deck mobile rule already collapses .deck-steps);
+     tighten spacing so all three fit above the fold. */
+  .deck-v2-pillar p {
+    font-size: 12px !important;
+    line-height: 1.45;
+  }
+}
