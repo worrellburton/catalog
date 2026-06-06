@@ -2,6 +2,7 @@ import { useState, useMemo, useRef, useEffect, useCallback, Fragment } from 'rea
 import { Outlet, NavLink, useNavigate, useSearchParams, useLocation } from '@remix-run/react';
 import CatalogLogo from '~/components/CatalogLogo';
 import { useAuth } from '~/hooks/useAuth';
+import { isAdminRole } from '~/types/roles';
 import { supabase } from '~/utils/supabase';
 import { promoteQueuedAds } from '~/services/product-creative';
 import { getAdminNavOrder, saveAdminNavOrder } from '~/services/admin-nav-order';
@@ -550,7 +551,10 @@ export default function AdminLayout() {
   }, [searchQuery]);
 
   useEffect(() => {
-    if (!loading && !user) {
+    // Admin panel is admin/super_admin only. A signed-out visitor OR a
+    // signed-in non-admin (shopper/creator) is bounced to the consumer app —
+    // previously ANY authenticated account could reach every admin surface.
+    if (!loading && (!user || !isAdminRole(user.role))) {
       navigate('/', { replace: true });
     }
   }, [user, loading, navigate]);
@@ -590,7 +594,7 @@ export default function AdminLayout() {
     return () => document.removeEventListener('mousedown', handler);
   }, [userMenuOpen]);
 
-  if (loading || !user) {
+  if (loading || !user || !isAdminRole(user.role)) {
     return null;
   }
 
