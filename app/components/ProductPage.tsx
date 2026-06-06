@@ -973,7 +973,16 @@ export default function ProductPage({
   // discount badge.
   const retailerOffers = useMemo(() => buildRetailerOffers(product), [product]);
 
-  const heroClassName = `pd-hero${creative ? ' pd-hero--video' : product.image ? ' pd-hero--image' : ' pd-hero--empty'}`;
+  // On a cold / direct load (refresh, shared URL) there's no feed-card
+  // handoff, so `creative` is undefined and the hero used to fall back to a
+  // static image. When the product itself carries a primary video, synthesize
+  // a hero creative from it so the hero plays the primary video instead.
+  const effectiveCreative: ProductPageCreative | undefined = creative
+    ?? (product.video_url
+      ? { id: `product:${product.brand}-${product.name}`, videoUrl: product.video_url, thumbnailUrl: product.image ?? null }
+      : undefined);
+
+  const heroClassName = `pd-hero${effectiveCreative ? ' pd-hero--video' : product.image ? ' pd-hero--image' : ' pd-hero--empty'}`;
 
   // Tap-handoff poster: when CreativeCard navigates here, it stashes a
   // canvas snapshot of the playing card frame on window.__feedTapPosters.
@@ -982,10 +991,10 @@ export default function ProductPage({
   // Cleared after read so the next tap doesn't reuse a stale snapshot.
   const tapHandoffPoster = (() => {
     if (typeof window === 'undefined') return '';
-    if (!creative?.id) return '';
+    if (!effectiveCreative?.id) return '';
     const w = window as Window & { __feedTapPosters?: Record<string, string> };
-    const url = w.__feedTapPosters?.[creative.id];
-    if (url && w.__feedTapPosters) delete w.__feedTapPosters[creative.id];
+    const url = w.__feedTapPosters?.[effectiveCreative.id];
+    if (url && w.__feedTapPosters) delete w.__feedTapPosters[effectiveCreative.id];
     return url || '';
   })();
   // Poster fallback chain — the primary image (creative.thumbnailUrl is
@@ -995,7 +1004,7 @@ export default function ProductPage({
   // product.image (which itself is primary_image_url → image_url →
   // first photo) so the hero never paints as a black void while waiting
   // for the trail-video host to attach.
-  const heroPoster = tapHandoffPoster || creative?.thumbnailUrl || product.image || '';
+  const heroPoster = tapHandoffPoster || effectiveCreative?.thumbnailUrl || product.image || '';
 
   // Take ownership of the shared <video> element keyed by creative.id. The
   // TrailVideoHost moves the running DOM node from the card slot into this
@@ -1005,8 +1014,8 @@ export default function ProductPage({
   // path where the pool element was evicted between card unmount and
   // hero attach.
   const setHeroSlot = useTrailVideo(
-    creative?.id,
-    creative?.videoUrl,
+    effectiveCreative?.id,
+    effectiveCreative?.videoUrl,
     heroPoster || undefined,
   );
 
@@ -1138,7 +1147,7 @@ export default function ProductPage({
         {heroEnabled && (
         <div className="pd-split">
           <section className={heroClassName}>
-            {creative ? (
+            {effectiveCreative ? (
               <>
                 {/* Phase 9 instant poster: paints synchronously on mount
                     using either the canvas-frame stashed by the tapped
@@ -1158,7 +1167,7 @@ export default function ProductPage({
                 <div
                   ref={setHeroSlot}
                   className="pd-hero-media pd-hero-video-slot"
-                  data-trail-id={creative.id}
+                  data-trail-id={effectiveCreative.id}
                   style={{ position: 'relative', zIndex: 1 }}
                 />
               </>
