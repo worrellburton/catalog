@@ -547,7 +547,10 @@
    keyboard, and the recommended tags always sit just above the bar. */
 @media (max-width: 768px) {
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar.search-open {
-    bottom: max(env(safe-area-inset-bottom), 16px);
+    /* +8px matches the pill cloud's reserved clearance (--suggestions-bar-clear
+       = bar height + 8), so the docked bar's top edge lands exactly where the
+       bottom-anchored tags stop — they sit just above it, never under it. */
+    bottom: calc(env(safe-area-inset-bottom, 0px) + 8px);
   }
 }
 
@@ -697,12 +700,14 @@
     padding-top: calc(env(safe-area-inset-top, 0px) + 90px);
     padding-bottom: calc(var(--hero-bar-bottom, 36svh) + 12svh);
   }
-  .app-root.home-hero:not(.hero-scrolled) .bottom-bar,
-  .app-root.home-hero:not(.hero-scrolled) .bottom-bar.search-open {
-    /* Single source of truth for the bar's hero position. .sfh's
+  .app-root.home-hero:not(.hero-scrolled) .bottom-bar:not(.search-open) {
+    /* Single source of truth for the bar's RESTING hero position. .sfh's
        padding-bottom is derived from this same var so the two move
        together — change this one number and the whole trio re-centres
-       without the headline ever colliding with the bar. */
+       without the headline ever colliding with the bar. The search-open
+       bar is intentionally excluded: it docks to the bottom of the screen
+       (see the mobile search-open rule above) so the keyboard rides it
+       down and the catalog tags sit above it. */
     bottom: var(--hero-bar-bottom, 36svh);
   }
 }
