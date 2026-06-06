@@ -71,7 +71,9 @@ function CombinedChart() {
   const leftGap = 14;
   const leftX0 = 30;
   const stackX = 470;
-  const stackW = 84;
+  // Same width as a platform bar so the Catalog column's AREA (volume) equals
+  // the five bars' combined area - height is already their summed height.
+  const stackW = leftBarW;
 
   // The Catalog column equals the SUM of the five platform bars at the same
   // scale - so it literally reads as "all of them combined into one", not an
@@ -127,7 +129,7 @@ function CombinedChart() {
           style={{ '--bar-i': 0 } as React.CSSProperties}
         />
         <text className="deck-v2-chart-caption deck-v2-chart-caption-strong" x={stackX + stackW / 2} y={BASE_Y + 22} textAnchor="middle">
-          One AI to shop
+          Catalog
         </text>
       </svg>
 

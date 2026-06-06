@@ -1757,6 +1757,9 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   height: 100px;
   border-radius: 50%;
   object-fit: cover;
+  /* Bias the crop toward the top so portrait/legacy (non-square) avatars
+     keep the head in frame instead of cutting it off at the hairline. */
+  object-position: center 20%;
   border: 3px solid rgba(255, 255, 255, 0.14);
   margin-bottom: 20px;
 }
