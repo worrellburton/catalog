@@ -3,8 +3,6 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import CatalogLogo from './CatalogLogo';
 import ParticleBackground from './ParticleBackground';
 import { getHomeFeed, type ProductAd } from '~/services/product-creative';
-import { getLooks } from '~/services/looks';
-import type { Look } from '~/data/looks';
 
 interface DeckViewV2Props {
   onSeeApp: () => void;
@@ -154,39 +152,22 @@ const DeckViewV2: React.FC<DeckViewV2Props> = () => {
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
   const [activeSlideIdx, setActiveSlideIdx] = useState(0);
   // The rising background mirrors the real catalog: product primary videos
-  // AND creator look videos, interleaved. Empty until the fetches land; the
-  // dark overlay keeps the slides legible regardless.
+  // only. Empty until the fetch lands; the dark overlay keeps the slides
+  // legible regardless.
   const [homeFeed, setHomeFeed] = useState<ProductAd[]>([]);
-  const [looks, setLooks] = useState<Look[]>([]);
 
-  // Background mix is 80% products / 20% creator looks. Both pools are
-  // shuffled so the feed reads as a varied, random catalog - no clusters of
-  // the same product type - and a look is dropped in after every four
-  // products. Strict video-only filter so no tile is ever a blank/black cell.
-  const bgClips = useMemo(() => {
-    const products = shuffle(
-      homeFeed
-        .filter((p) => !!p.video_url)
-        .map((p) => ({ key: `p:${p.id}`, url: p.video_url as string, poster: p.thumbnail_url ?? undefined })),
-    );
-    const lookClips = shuffle(
-      looks
-        .filter((l) => !!l.video)
-        .map((l) => ({ key: `l:${l.uuid ?? l.id}`, url: l.video, poster: l.thumbnail_url })),
-    );
-    if (products.length === 0) return lookClips;
-    if (lookClips.length === 0) return products;
-    const out: { key: string; url: string; poster?: string }[] = [];
-    let li = 0;
-    products.forEach((p, idx) => {
-      out.push(p);
-      if (idx % 4 === 3) {
-        out.push(lookClips[li % lookClips.length]);
-        li += 1;
-      }
-    });
-    return out;
-  }, [homeFeed, looks]);
+  // Products only, shuffled so the feed reads as a varied, random catalog
+  // (no clusters of the same product type). Strict video-only filter so no
+  // tile is ever a blank/black cell.
+  const bgClips = useMemo(
+    () =>
+      shuffle(
+        homeFeed
+          .filter((p) => !!p.video_url)
+          .map((p) => ({ key: `p:${p.id}`, url: p.video_url as string, poster: p.thumbnail_url ?? undefined })),
+      ),
+    [homeFeed],
+  );
 
   const slideTitles = ['Catalog', 'The AI for Shopping', 'Human taste', 'Market', 'Partnership', 'The future'];
 
@@ -241,13 +222,6 @@ const DeckViewV2: React.FC<DeckViewV2Props> = () => {
       .catch((err) => {
         console.error('[DeckViewV2] getHomeFeed failed:', err);
       });
-    getLooks()
-      .then((list) => {
-        if (!cancelled) setLooks(list.filter((l) => !!l.video));
-      })
-      .catch((err) => {
-        console.error('[DeckViewV2] getLooks failed:', err);
-      });
     return () => {
       cancelled = true;
     };
@@ -256,9 +230,8 @@ const DeckViewV2: React.FC<DeckViewV2Props> = () => {
   return (
     <div className="deck-view deck-view-v8 deck-view-v2 deck-v8-bg-revealed active" ref={containerRef}>
       {/* Rising feed (same drift the longer decks use), sourced from the live
-          catalog: product creatives + creator looks interleaved. Up to 48
-          tiles cycle through the combined pool so even a small set fills the
-          tall grid edge-to-edge. */}
+          catalog's product videos. Up to 48 tiles cycle through the pool so
+          even a small set fills the tall grid edge-to-edge. */}
       <div className="deck-v8-bg deck-v2-bg" aria-hidden="true">
         <div className="deck-insight-grid">
           {Array.from({ length: bgClips.length === 0 ? 0 : 48 }).map((_, i) => {
