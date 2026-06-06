@@ -1031,21 +1031,22 @@ html:has(.user-menu-page) .bottom-bar {
     opacity 0.3s cubic-bezier(0.32, 0.72, 0, 1);
   will-change: transform;
 }
+/* Pure Y-slide off the screen — no opacity fade. The opacity transition was
+   being clobbered by product-page.css's header/bottom-bar transition (which
+   only lists transform/filter), so opacity snapped to 0 and the chrome
+   "just disappeared" instead of easing. Sliding fully off-screen (header up,
+   bars down) eases smoothly via the always-transitioned transform and hides
+   them just as completely. */
 .app-root.chrome-hidden header {
   transform: translateY(-130%);
-  opacity: 0;
   pointer-events: none;
 }
 .app-root.chrome-hidden .bottom-bar {
-  /* Centering is now margin-based (no translateX), so the hide-state
-     transform is a pure Y slide — nothing to chain. */
   transform: translateY(140%);
-  opacity: 0;
   pointer-events: none;
 }
 body:has(.app-root.chrome-hidden) .ai-bar-wrap {
   transform: translateY(140%);
-  opacity: 0;
   pointer-events: none;
 }
 
