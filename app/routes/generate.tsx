@@ -1418,10 +1418,14 @@ export default function GeneratePage() {
     // from the photos step. The model needs both anchors to render a
     // believable look, so we gate at the entry point.
     if (step === 'photos') return pickedUploadIds.length > 0 && !uploading && !!heightLabel && !!ageLabel;
-    if (step === 'products') return picked.length > 0;
-    if (step === 'style') return !!style;
+    // Products are optional — a shopper can render a styled video of just
+    // themselves (photos only), or drive it purely with a custom text
+    // direction. Don't block Next on having picked a product.
+    if (step === 'products') return true;
+    // A preset style OR a typed custom direction is enough to proceed.
+    if (step === 'style') return !!style || !!customStyle.trim();
     return true;
-  }, [step, pickedUploadIds.length, uploading, picked.length, heightLabel, ageLabel, style]);
+  }, [step, pickedUploadIds.length, uploading, heightLabel, ageLabel, style, customStyle]);
 
   const handleSubmit = async () => {
     if (!effectiveUserId) {
@@ -1846,7 +1850,7 @@ export default function GeneratePage() {
                 const activeBrand = categoryBrandFilters[group.label] || null;
                 // "All" opens expanded; category rows default collapsed.
                 // A typed query force-expands any row.
-                const expanded = (expandedCats[group.label] ?? group.label === 'All') || !!rowQuery;
+                const expanded = (expandedCats[group.label] ?? true) || !!rowQuery;
                 return (
                   <div key={group.label} className={`gen-cat-row${expanded ? ' is-expanded' : ''}`}>
                     <div className="gen-cat-row-head">
