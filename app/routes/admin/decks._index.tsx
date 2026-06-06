@@ -19,7 +19,7 @@ const CURRENT_DECK: DeckInfo = {
 };
 
 const PREVIOUS_DECKS: DeckInfo[] = [
-  { id: 'v2', label: 'Deck v2', description: 'Short 4-page deck', publicUrl: 'https://catalog.shop/quickdeck' },
+  { id: 'v2', label: 'Deck v2', description: 'Short 4-page deck' },
   { id: 'v1-1', label: 'Deck v1.1', description: 'Previous version' },
   { id: 'v1', label: 'Deck v.1', description: 'Previous version' },
   { id: 'v9', label: 'Deck v.9', description: 'Previous version' },

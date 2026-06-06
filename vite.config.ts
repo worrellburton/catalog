@@ -112,10 +112,6 @@ export default defineConfig({
           // to the user's prior in-app screen, not an external page.
           route("earnings", "routes/earnings.tsx");
 
-          // Public, fixed link for the short investor deck (deck loaded
-          // lazily inside the route so it never enters the boot graph).
-          route("quickdeck", "routes/quickdeck.tsx");
-
           // Admin routes
           route("admin", "routes/admin/route.tsx", () => {
             route("", "routes/admin/_index.tsx", { index: true });
