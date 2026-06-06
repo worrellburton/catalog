@@ -1132,3 +1132,20 @@ body:has(.app-root.chrome-hidden) .ai-bar-wrap {
     rgba(0, 0, 0, 0.96) 100%);
 }
 .empty-catalog-content { position: relative; z-index: 1; }
+
+/* ── Hero overlap protection on short desktop windows ──────────────────
+   The resting bar sits at 40vh (a nicely-raised position) on tall screens.
+   But the headline is a FIXED px size, so as the window gets shorter it eats
+   a larger share of the height and its bottom edge drops toward the bar
+   (positioned in vh). Stepping the bar back down as the viewport shortens
+   keeps a clear gap between the headline and the search bar at every window
+   size — no overlap when you resize. These come after the base desktop rule
+   so they win at equal specificity. */
+@media (min-width: 769px) and (max-height: 880px) {
+  body:has(.app-root.home-hero) .ai-bar-wrap { bottom: 32vh; }
+  body:has(.app-root.home-hero) .ai-bar-wrap:focus-within { bottom: 48vh; }
+}
+@media (min-width: 769px) and (max-height: 720px) {
+  body:has(.app-root.home-hero) .ai-bar-wrap { bottom: 24vh; }
+  body:has(.app-root.home-hero) .ai-bar-wrap:focus-within { bottom: 42vh; }
+}
