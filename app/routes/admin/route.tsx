@@ -51,7 +51,7 @@ const navItems: NavItem[] = [
   { to: '/admin/dials', label: 'Dials', icon: 'M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10zM12 6v6l4 2' },
   { to: '/admin/decks', label: 'Decks', icon: 'M4 4h16v4H4zM4 10h16v4H4zM4 16h16v4H4z' },
   { to: '/admin/fundraising', label: 'Fundraising', icon: 'M12 1v22M17 5H9.5a3.5 3.5 0 1 0 0 7h5a3.5 3.5 0 1 1 0 7H6' },
-  { to: '/admin/projections', label: 'Projections', icon: 'M3 3v18h18M7 17l5-5 4 4 5-7' },
+  { to: '/admin/model', label: 'Model', icon: 'M3 3v18h18M7 17l5-5 4 4 5-7' },
   { to: '/admin/sharing', label: 'Sharing', icon: 'M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13' },
 ];
 
@@ -99,7 +99,9 @@ const allSearchItems: SearchItem[] = [
   { label: "What's New", type: 'Page', to: '/admin/whats-new' },
   { label: 'Decks', type: 'Page', to: '/admin/decks' },
   { label: 'Fundraising', type: 'Page', to: '/admin/fundraising' },
-  { label: 'Projections', type: 'Page', to: '/admin/projections' },
+  { label: 'Model', type: 'Page', to: '/admin/model' },
+  { label: 'Projections', type: 'Page', to: '/admin/model' },
+  { label: 'Go to Market', type: 'Page', to: '/admin/model?tab=gtm' },
   { label: 'Pitch', type: 'Page', to: '/admin/fundraising?section=pitch' },
   { label: '30 min pitch', type: 'Page', to: '/admin/fundraising?section=pitch&pitch=30' },
   { label: '60 min pitch', type: 'Page', to: '/admin/fundraising?section=pitch&pitch=60' },
@@ -389,6 +391,13 @@ export default function AdminLayout() {
     () => applyMruOrder(navItems, mruOrder),
     [mruOrder],
   );
+
+  // The nav item for the page we're on — collapsed sidebar shows just
+  // this one icon, centred, until the admin hovers to expand the rail.
+  const activeNavItem = useMemo(() => {
+    const matchedTo = pickNavMatch(location.pathname, navItems);
+    return navItems.find(i => i.to === matchedTo) ?? navItems[0];
+  }, [location.pathname]);
 
   // Sync the topbar query to the URL ?q= so any admin page can read it
   // via useAdminSearch() and live-filter its visible data. Debounced so
@@ -701,6 +710,18 @@ export default function AdminLayout() {
             <span className="admin-user-name">{user.displayName || user.email || 'User'}</span>
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
           </button>
+        </div>
+        {/* Collapsed rail: when the sidebar is slim (not hovered) the
+            whole nav + search fade out and only the current page's icon
+            shows, centred. Hovering expands the sidebar, fades this out
+            and slides the full nav back in. Desktop-only — mobile keeps
+            the slide-over drawer. */}
+        <div className="admin-nav-rail" aria-hidden="true">
+          <span className="admin-nav-rail-icon" title={activeNavItem.label}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d={activeNavItem.icon} />
+            </svg>
+          </span>
         </div>
       </aside>
       <main className="admin-main">
