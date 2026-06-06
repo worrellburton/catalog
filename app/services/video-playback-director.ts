@@ -554,10 +554,15 @@ class VideoPlaybackDirector {
         continue;
       }
 
-      // Need a slot. Try free first; if none, grow up to poolMax(); if at
-      // cap, evict the most-distant currently-assigned card that is farther
-      // than this one.
-      let slot = this.pool.find(p => p.assignedTo === null);
+      // Need a slot. Prefer a free slot that ALREADY holds this card's clip
+      // — after a detail overlay released the feed, this lets a card reclaim
+      // its own element (no src swap, no reload, no black flash, instant
+      // resume from where it paused). Fall back to any free slot; if none,
+      // grow up to poolMax(); if at cap, evict the most-distant currently-
+      // assigned card that is farther than this one.
+      let slot =
+        this.pool.find(p => p.assignedTo === null && p.el.src === entry.videoUrl) ||
+        this.pool.find(p => p.assignedTo === null);
       if (!slot && this.pool.length < max) {
         slot = { el: this.createVideoEl(), assignedTo: null };
         this.pool.push(slot);
@@ -585,46 +590,30 @@ class VideoPlaybackDirector {
         slot = victim.slot;
       }
 
-      // (Re-)configure the element.
+      // (Re-)configure the element. A recycled pooled <video> sits at z-index
+      // 2, above the card's poster <img> (z-index 1). It MUST stay transparent
+      // until it actually has a frame to paint, or it flashes black over the
+      // poster — revealVideoWhenReady enforces that for both branches below.
       if (slot.el.src !== entry.videoUrl) {
-        // STROBE FIX: a recycled pooled <video> sits at z-index 2, above the
-        // card's poster <img>. Setting a new src + load() repaints the
-        // element black/empty until the first frame of the NEW clip decodes
-        // — flashing over the poster. Hide the element (opacity 0) so the
-        // poster shows through, and reveal it the instant the first frame is
-        // available (`loadeddata`). The poster is the clip's FRAME 0 (see
-        // asset_encoder.POSTER_SEEK_FRACTION = 0), which is pixel-identical
-        // to that first decoded frame — so the cross-fade is invisible and
-        // the clip simply starts moving from where the poster already was.
-        // Revealing here (not waiting for `playing`) means the video shows as
-        // soon as it CAN, so the grid reads as "already playing" instead of
-        // holding the poster until the network play() settles. `playing`
-        // stays as a backstop in case `loadeddata` was missed (cached
-        // element). Guarded by the target URL so a listener from a prior
-        // assignment can't reveal a since-recycled element.
-        const targetUrl = entry.videoUrl;
-        const revealT0 = this.now();
-        slot.el.style.opacity = '0';
+        // New clip: point the element at the src and start buffering. The
+        // poster (the clip's FRAME 0) covers the gap until the first decoded
+        // frame reveals the video.
         slot.el.src = entry.videoUrl;
         slot.el.preload = 'auto';
         // Explicitly call load() so the browser starts buffering immediately.
         try { slot.el.load(); } catch { /* ignore */ }
-        let revealed = false;
-        const reveal = (via: 'loadeddata' | 'playing') => {
-          if (slot.el.currentSrc === targetUrl || slot.el.src === targetUrl) {
-            slot.el.style.opacity = '1';
-            if (!revealed) {
-              revealed = true;
-              this.recordReveal(this.now() - revealT0, via);
-            }
-          }
-        };
-        slot.el.addEventListener('loadeddata', () => reveal('loadeddata'), { once: true });
-        slot.el.addEventListener('playing', () => reveal('playing'), { once: true });
+        this.revealVideoWhenReady(slot.el, entry.videoUrl);
       } else {
-        // Same src (pool reuse) — already has frames, show immediately.
+        // Same src (pool reuse). The element still points at the right clip,
+        // but its decoded surface may NOT have survived: while a detail
+        // overlay was open this element sat parked off-screen, and mobile
+        // browsers routinely drop the GPU surface of a parked <video>. The
+        // old code revealed it at opacity 1 unconditionally on the assumption
+        // it "already has frames" — which flashed BLACK over the poster on
+        // every return from a look/product. Gate the reveal on a real frame
+        // instead so the poster covers the gap when the surface was dropped.
         slot.el.preload = 'auto';
-        slot.el.style.opacity = '1';
+        this.revealVideoWhenReady(slot.el, entry.videoUrl);
       }
       const poster = entry.posterUrl;
       if (poster && slot.el.getAttribute('poster') !== poster) {
@@ -653,6 +642,39 @@ class VideoPlaybackDirector {
       entry.slotEl.appendChild(slot.el);
       this.playEl(id, entry);
     }
+  }
+
+  /**
+   * Reveal a (re)assigned pool element only once it actually has a frame to
+   * paint. The card's poster <img> sits beneath the pooled <video> (z-index
+   * 1 vs 2); revealing the video before its first frame is decoded flashes
+   * black over that poster — the "grid card goes black on return from a
+   * look/product" bug. If the element already holds a decoded current frame
+   * (readyState >= HAVE_CURRENT_DATA) it's shown at once (the seamless
+   * scroll-back / resume case); otherwise it stays transparent until
+   * `loadeddata`, with `playing` as a backstop. The target-URL guard stops a
+   * stale once-listener from a prior assignment revealing a recycled element.
+   */
+  private revealVideoWhenReady(el: HTMLVideoElement, targetUrl: string): void {
+    const matches = () => el.currentSrc === targetUrl || el.src === targetUrl;
+    // HAVE_CURRENT_DATA (2): the current frame is decoded and paintable.
+    if (el.readyState >= 2 && matches()) {
+      el.style.opacity = '1';
+      return;
+    }
+    el.style.opacity = '0';
+    const revealT0 = this.now();
+    let revealed = false;
+    const reveal = (via: 'loadeddata' | 'playing') => {
+      if (!matches()) return;
+      el.style.opacity = '1';
+      if (!revealed) {
+        revealed = true;
+        this.recordReveal(this.now() - revealT0, via);
+      }
+    };
+    el.addEventListener('loadeddata', () => reveal('loadeddata'), { once: true });
+    el.addEventListener('playing', () => reveal('playing'), { once: true });
   }
 
   private playEl(cardId: string, entry: CardEntry): void {

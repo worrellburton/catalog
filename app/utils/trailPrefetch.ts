@@ -113,7 +113,13 @@ export function primeLookAssets(rows: Look[]): void {
   if (!rows?.length) return;
 
   for (const row of rows.slice(0, POSTERS_TO_WARM)) {
-    const rawPoster = row.thumbnail_url || row.cover;
+    // Mirror CreativeCardV2's look-poster fallback EXACTLY (thumbnail → cover →
+    // first product image) so the warmed URL is the same one the card renders.
+    // ~60% of feed looks have no thumbnail_url and now poster off a product
+    // image; warming only thumbnail/cover left those cold, so they painted
+    // black for the download window when scrolled into view or on overlay
+    // return. Warming the product-image fallback makes them a cache hit.
+    const rawPoster = row.thumbnail_url || row.cover || row.products?.find(p => !!p.image)?.image;
     if (!rawPoster) continue;
     const poster = withTransform(rawPoster, POSTER_TRANSFORM) || rawPoster;
     if (warmedPosters.has(poster)) continue;
