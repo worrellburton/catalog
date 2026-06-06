@@ -1530,6 +1530,12 @@ export default function Home() {
                 onOpenCreator={handleOpenCreator}
                 onCreateFollowingCatalog={handleCreateFollowingCatalog}
                 onOpenFollowingList={openFollowingList}
+                selfEntry={
+                  (user?.role === 'creator' || user?.role === 'admin' || user?.role === 'super_admin') && user?.id
+                    ? { handle: `user:${user.id}`, displayName: user.displayName ?? null, avatarUrl: user.avatarUrl ?? null, ts: Number.MAX_SAFE_INTEGER }
+                    : null
+                }
+                onOpenSelf={openMyLooks}
               />
             </div>
             <PendingLookPill onOpen={() => navigate('/generate')} />

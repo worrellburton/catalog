@@ -24,6 +24,12 @@ interface FollowingRailProps {
    *  list-view page instead of the inline popover. Desktop keeps the quick
    *  popover. */
   onOpenFollowingList?: () => void;
+  /** When the viewer is a creator, their own entry to pin FIRST in the
+   *  following rail (even if they don't follow themselves). */
+  selfEntry?: RailEntry | null;
+  /** Tapping the pinned self entry opens the viewer's own My Catalog
+   *  (creator management view) instead of the shopper-facing creator page. */
+  onOpenSelf?: () => void;
 }
 
 interface RailEntry {
@@ -76,7 +82,7 @@ function timeAgo(ms: number): string {
  *
  * Hidden when both rails are empty.
  */
-function FollowingRail({ onOpenCreator, mode = 'both', onCreateFollowingCatalog: _onCreateFollowingCatalog, onOpenFollowingList }: FollowingRailProps) {
+function FollowingRail({ onOpenCreator, mode = 'both', onCreateFollowingCatalog: _onCreateFollowingCatalog, onOpenFollowingList, selfEntry, onOpenSelf }: FollowingRailProps) {
   const showFollowing = mode === 'following' || mode === 'both';
   const showFollowers = mode === 'followers' || mode === 'both';
   // Auth-aware refresh. The rail used to mount BEFORE auth resolved
@@ -352,10 +358,23 @@ function FollowingRail({ onOpenCreator, mode = 'both', onCreateFollowingCatalog:
     return () => document.removeEventListener('mousedown', onDoc);
   }, [openPopover]);
 
-  const followingReady = followingEntries !== null;
+  // A creator's own entry is pinned first (deduped against any self-follow),
+  // so the rail has content even before the follows query resolves and even
+  // if they follow no one.
+  const followingDisplay: RailEntry[] = selfEntry
+    ? [selfEntry, ...(followingEntries ?? []).filter(e => e.handle !== selfEntry.handle)]
+    : (followingEntries ?? []);
+  // Tapping the pinned self entry opens My Catalog; everyone else opens the
+  // shopper-facing creator page.
+  const handleOpenFollowing = (h: string) => {
+    if (selfEntry && onOpenSelf && h === selfEntry.handle) { onOpenSelf(); return; }
+    onOpenCreator(h);
+  };
+
+  const followingReady = followingEntries !== null || !!selfEntry;
   const followersReady = followerEntries !== null;
   if (!followingReady && !followersReady) return null;
-  const hasFollowing = (followingEntries?.length ?? 0) > 0;
+  const hasFollowing = followingDisplay.length > 0;
   const hasFollowers = (followerEntries?.length ?? 0) > 0;
   if (mode === 'following' && !hasFollowing) return null;
   if (mode === 'followers' && !hasFollowers) return null;
@@ -399,10 +418,10 @@ function FollowingRail({ onOpenCreator, mode = 'both', onCreateFollowingCatalog:
             shows the overlapping avatar stacks below instead. */}
         {hasFollowing && (
           <FollowingStoriesRail
-            entries={followingEntries!}
+            entries={followingDisplay}
             onlineHandles={onlineHandles}
             unseenByHandle={unseenByHandle}
-            onOpenCreator={(h) => { setOpenPopover(null); onOpenCreator(h); }}
+            onOpenCreator={(h) => { setOpenPopover(null); handleOpenFollowing(h); }}
             onSeeAll={onOpenFollowingList}
           />
         )}
@@ -410,13 +429,13 @@ function FollowingRail({ onOpenCreator, mode = 'both', onCreateFollowingCatalog:
           <AvatarRow
             railKind="following"
             ariaLabel="Following"
-            titleText={`Following ${followingEntries!.length} creator${followingEntries!.length === 1 ? '' : 's'}`}
-            entries={followingEntries!}
+            titleText={`Following ${followingDisplay.length} creator${followingDisplay.length === 1 ? '' : 's'}`}
+            entries={followingDisplay}
             newSet={null}
             isOpen={openPopover === 'following'}
             onToggle={onFollowingTrigger}
-            onSelect={(h) => { setOpenPopover(null); onOpenCreator(h); }}
-            popoverTitle={`Following · ${followingEntries!.length}`}
+            onSelect={(h) => { setOpenPopover(null); handleOpenFollowing(h); }}
+            popoverTitle={`Following · ${followingDisplay.length}`}
             tooltipPrefix={null}
             onlineHandles={onlineHandles}
           />
@@ -474,13 +493,13 @@ function FollowingRail({ onOpenCreator, mode = 'both', onCreateFollowingCatalog:
         <AvatarRow
           railKind="following"
           ariaLabel="Following"
-          titleText={`Following ${followingEntries!.length} creator${followingEntries!.length === 1 ? '' : 's'}`}
-          entries={followingEntries!}
+          titleText={`Following ${followingDisplay.length} creator${followingDisplay.length === 1 ? '' : 's'}`}
+          entries={followingDisplay}
           newSet={null}
           isOpen={openPopover === 'following'}
           onToggle={onFollowingTrigger}
-          onSelect={(h) => { setOpenPopover(null); onOpenCreator(h); }}
-          popoverTitle={`Following · ${followingEntries!.length}`}
+          onSelect={(h) => { setOpenPopover(null); handleOpenFollowing(h); }}
+          popoverTitle={`Following · ${followingDisplay.length}`}
           tooltipPrefix={null}
           onlineHandles={onlineHandles}
         />
