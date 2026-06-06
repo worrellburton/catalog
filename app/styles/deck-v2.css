@@ -277,21 +277,39 @@
   margin-top: 16px;
   font-size: 15px;
 }
-/* Instagram-branded button: the IG gradient + glyph, handle @catalog. */
-.deck-v2-ig-btn {
+/* "Holding" label introduces the assets the company holds (the @catalog
+   handle + the trademark). */
+.deck-v2-holding-label {
+  margin-top: 30px;
+  margin-bottom: 0;
+}
+/* The two held-asset pills sit side by side under the Holding label. */
+.deck-v2-close-pills {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  margin-top: 16px;
+}
+/* Pill shared shape. */
+.deck-v2-ig-btn,
+.deck-v2-tm-pill {
   display: inline-flex;
   align-items: center;
   gap: 10px;
-  margin-top: 30px;
-  padding: 13px 26px;
+  padding: 13px 24px;
   border-radius: 999px;
   font-size: 15px;
   font-weight: 600;
   color: #fff;
   text-decoration: none;
+  transition: transform 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+/* Instagram-branded: the IG gradient + glyph, handle @catalog. */
+.deck-v2-ig-btn {
   background: linear-gradient(45deg, #f09433 0%, #e6683c 25%, #dc2743 50%, #cc2366 75%, #bc1888 100%);
   box-shadow: 0 8px 28px rgba(220, 39, 67, 0.35);
-  transition: transform 0.15s ease, box-shadow 0.15s ease;
 }
 .deck-v2-ig-btn:hover {
   transform: translateY(-2px);
@@ -301,32 +319,39 @@
   width: 20px;
   height: 20px;
 }
-.deck-v2-tm-link {
-  margin-top: 18px;
-  font-size: 12px;
-  letter-spacing: 0.04em;
-  color: rgba(255, 255, 255, 0.4);
-  text-decoration: underline;
-  text-underline-offset: 3px;
+/* Trademark: neutral glass pill with a document glyph. */
+.deck-v2-tm-pill {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
 }
-.deck-v2-tm-link:hover {
-  color: rgba(255, 255, 255, 0.7);
+.deck-v2-tm-pill:hover {
+  transform: translateY(-2px);
+  background: rgba(255, 255, 255, 0.14);
 }
-
-/* Light mode: soften the green accents that were tuned for black. */
-.light-mode .deck-v2-thesis-sub,
-.light-mode .deck-v2-legend-item {
-  color: rgba(20, 20, 22, 0.6);
+.deck-v2-tm-glyph {
+  width: 18px;
+  height: 18px;
 }
 
-/* ── Mobile parity: keep slide 2 inside one viewport ────────────────── */
+/* ── Mobile parity ──────────────────────────────────────────────────── */
 @media (max-width: 768px) {
+  /* Background feed: 3 columns of portrait product tiles at the right
+     aspect. Overrides the shared v8 rule (which forced 4 explicit rows and
+     blew the tiles up to full-screen strips). */
+  .deck-view-v2 .deck-v8-bg .deck-insight-grid {
+    grid-template-columns: repeat(3, 1fr);
+    grid-template-rows: none;
+    grid-auto-rows: 28vh;
+  }
+
   .deck-v2-cover-logo {
     height: 48px;
   }
   .deck-v2-cover-sub {
     font-size: 13px;
   }
+
+  /* Slide 2 */
   .deck-v2-thesis-sub {
     font-size: 12.5px;
     line-height: 1.5;
@@ -346,6 +371,8 @@
   .deck-v2-legend-item {
     font-size: 11px;
   }
+
+  /* Slide 3 */
   .deck-v2-rep-h2 {
     margin-bottom: 10px;
   }
@@ -353,61 +380,86 @@
     margin-bottom: 16px;
     font-size: 13px;
   }
-  /* Pillars stack (shared deck mobile rule already collapses .deck-steps);
-     tighten spacing so all three fit above the fold. */
   .deck-v2-pillar p {
     font-size: 12px !important;
     line-height: 1.45;
   }
-  /* Market: keep heading + 3 stats + note inside one viewport. */
-  .deck-v2-market-sub {
-    font-size: 12.5px;
-    line-height: 1.5;
-    max-width: 92%;
-    margin-bottom: 18px;
+
+  /* Slides 4 + 5 must fit one viewport: condense and drop the footnotes. */
+  .deck-v2-market,
+  .deck-v2-partner {
+    padding-top: 26px;
+    padding-bottom: 26px;
   }
-  .deck-v2-market-stats {
-    gap: 6px 18px;
+  .deck-v2-market h2,
+  .deck-v2-partner h2 {
+    font-size: 20px;
+    margin-bottom: 10px;
   }
-  .deck-v2-market-stats .deck-stat {
-    padding: 12px 0;
-  }
-  .deck-v2-market-note {
-    font-size: 11px;
-    margin-top: 16px;
-  }
-  /* Stats stack vertically on phones instead of a cramped 2-up grid. */
-  .deck-v2-market-stats {
-    grid-template-columns: 1fr;
-    max-width: 360px;
+  .deck-v2-market-note,
+  .deck-v2-partner-note {
+    display: none;
   }
 
-  /* Partnership: cards stack vertically, drop the inline plus. */
-  .deck-v2-partner-sub {
-    font-size: 12.5px;
-    line-height: 1.5;
-    max-width: 92%;
-    margin-bottom: 18px;
+  /* Slide 4: market */
+  .deck-v2-market .deck-v2-market-sub {
+    font-size: 12px;
+    line-height: 1.45;
+    max-width: 94%;
+    margin-bottom: 16px;
+  }
+  .deck-v2-market-stats {
+    grid-template-columns: 1fr;
+    max-width: 340px;
+    gap: 0;
+  }
+  .deck-v2-market-stats .deck-stat {
+    padding: 10px 0;
+  }
+  .deck-v2-market-stats .deck-stat-num {
+    font-size: 26px;
+  }
+  .deck-v2-market-stats .deck-stat-label {
+    font-size: 11.5px;
+  }
+  .deck-v2-market-stats .stat-growth {
+    margin-top: 8px;
+  }
+
+  /* Slide 5: partnership */
+  .deck-v2-partner .deck-v2-partner-sub {
+    font-size: 12px;
+    line-height: 1.45;
+    max-width: 94%;
+    margin-bottom: 16px;
   }
   .deck-v2-partner-cards {
     flex-direction: column;
-    gap: 12px;
-    max-width: 380px;
+    gap: 10px;
+    max-width: 360px;
   }
   .deck-v2-partner-plus {
     display: none;
   }
   .deck-v2-partner-card {
-    padding: 16px 18px;
+    padding: 14px 16px;
+  }
+  .deck-v2-partner-icon {
+    width: 30px;
+    height: 30px;
+    margin-bottom: 8px;
+  }
+  .deck-v2-partner-card h3 {
+    font-size: 15px;
+    margin-bottom: 5px;
   }
   .deck-v2-partner-card p {
-    font-size: 12.5px;
+    font-size: 12px;
+    line-height: 1.4;
   }
-  .deck-v2-partner-note {
-    font-size: 11px;
-    margin-top: 18px;
-  }
-  .deck-v2-ig-btn {
-    margin-top: 24px;
+
+  /* Close */
+  .deck-v2-holding-label {
+    margin-top: 22px;
   }
 }
