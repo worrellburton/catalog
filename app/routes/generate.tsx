@@ -2219,7 +2219,13 @@ export default function GeneratePage() {
                   <button
                     type="button"
                     className="gen-btn-secondary gen-btn-keep-discovering"
-                    onClick={() => navigate('/#app')}
+                    onClick={() => {
+                      navigate('/#app');
+                      // Land at the very top of the feed, not wherever it was
+                      // last scrolled — otherwise the home opens mid-page.
+                      requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'auto' }));
+                      window.setTimeout(() => window.scrollTo({ top: 0, behavior: 'auto' }), 60);
+                    }}
                   >
                     <span className="gen-btn-keep-discovering-label">Keep discovering</span>
                     <span className="gen-btn-keep-discovering-sub">

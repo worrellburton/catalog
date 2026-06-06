@@ -159,7 +159,9 @@ header > .pending-look-pill {
   margin-inline: auto;
   width: max-content;
   margin-top: 8px;
-  z-index: 40;
+  /* Sit above the creator row so the in-flight render reads as the priority
+     notification, not something tucked behind the avatars. */
+  z-index: 200;
 }
 
 /* "Your <style> look is rendering" pill — appears in the header
@@ -176,9 +178,11 @@ header > .pending-look-pill {
      border, soft drop shadow, light text. */
   padding: 8px 16px 8px 8px;
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  background: rgba(20, 20, 22, 0.92);
-  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+  /* Green active accent + glow so the "rendering" notice dominates the
+     creator row instead of blending into the header chrome. */
+  border: 1px solid rgba(74, 222, 128, 0.55);
+  background: rgba(16, 20, 17, 0.95);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 22px rgba(74, 222, 128, 0.28);
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   color: #f4f4f5;
