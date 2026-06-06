@@ -12,7 +12,8 @@
 
 import type { ProductAd } from '~/services/product-creative';
 import type { Look } from '~/data/looks';
-import { supabaseImage } from './supabaseImage';
+import { withTransform } from './supabase-image';
+import { pickPosterUrl } from '~/services/video-loading';
 
 const POSTERS_TO_WARM = 16;
 // Warm the first ~2 viewports of cards. At ~6 cards per mobile viewport
@@ -20,6 +21,12 @@ const POSTERS_TO_WARM = 16;
 // initial set before the in-page IntersectionObserver has time to trigger
 // the regular preload chain.
 const VIDEOS_TO_WARM = 18;
+
+// Match CreativeCardV2's poster transform EXACTLY (same width/quality/resize
+// AND the pickPosterUrl source) so the warmed URL is a byte-for-byte cache hit
+// when the card mounts. A mismatch means the prefetch downloads one variant and
+// the card downloads another — double the bytes, zero benefit.
+const POSTER_TRANSFORM = { width: 540, quality: 72, resize: 'contain' as const };
 
 const warmedPosters = new Set<string>();
 const warmedVideos = new Set<string>();
@@ -77,14 +84,14 @@ async function decodeImage(url: string): Promise<void> {
 export function primeTrailAssets(rows: ProductAd[]): void {
   if (!rows?.length) return;
 
-  // Poster warm: only need a thumbnail for the first ~12 cards above-the-fold.
-  // Run Supabase Storage URLs through the render endpoint with width=480 so
-  // we pull a ~30 KB resized JPEG instead of a 1–2 MB original. External
-  // URLs (Unsplash, brand sites) pass through unchanged.
+  // Poster warm: the first ~16 cards above-the-fold. Derive the source AND the
+  // transform exactly the way CreativeCardV2 does (pickPosterUrl → withTransform)
+  // so the preload is a cache hit when the card mounts — not a second,
+  // differently-parameterised download. External URLs pass through unchanged.
   for (const row of rows.slice(0, POSTERS_TO_WARM)) {
-    const rawPoster = row.thumbnail_url || row.product?.image_url;
+    const rawPoster = pickPosterUrl(row);
     if (!rawPoster) continue;
-    const poster = supabaseImage(rawPoster, { width: 480, quality: 70 });
+    const poster = withTransform(rawPoster, POSTER_TRANSFORM) || rawPoster;
     if (warmedPosters.has(poster)) continue;
     warmedPosters.add(poster);
     injectPreload(poster, 'image');
@@ -106,9 +113,9 @@ export function primeLookAssets(rows: Look[]): void {
   if (!rows?.length) return;
 
   for (const row of rows.slice(0, POSTERS_TO_WARM)) {
-    const rawPoster = row.thumbnail_url;
+    const rawPoster = row.thumbnail_url || row.cover;
     if (!rawPoster) continue;
-    const poster = supabaseImage(rawPoster, { width: 480, quality: 70 });
+    const poster = withTransform(rawPoster, POSTER_TRANSFORM) || rawPoster;
     if (warmedPosters.has(poster)) continue;
     warmedPosters.add(poster);
     injectPreload(poster, 'image');
