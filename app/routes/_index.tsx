@@ -1146,7 +1146,14 @@ export default function Home() {
   // wrappers on BottomBar and UserMenu actually cut renders - inline
   // arrow functions in JSX would create new identities every render.
   const openBookmarks = useCallback(() => setShowBookmarks(true), []);
-  const openMyLooks = useCallback(() => setShowMyLooks(true), []);
+  const openMyLooks = useCallback(() => {
+    // Reflect My Catalog in the URL so it's shareable / back-navigable
+    // (matches the Flutter bridge opener that already pushes /my-looks).
+    if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/my-looks')) {
+      history.pushState({}, '', '/my-looks');
+    }
+    setShowMyLooks(true);
+  }, []);
   // Cross-component "open MyCatalog" hook. CreatorPage's self-view
   // Edit button fires `catalog:open-my-catalog` instead of taking a
   // prop callback through every render path — same pattern as

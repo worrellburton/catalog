@@ -1679,7 +1679,10 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   color: #fff;
   z-index: 150;
   overflow-y: auto;
-  padding: var(--header-height) 28px 28px;
+  /* Cap the content column at 1200px centered — identical to .creator-page —
+     so My Catalog reads at the same width as the public creator catalogs
+     instead of stretching its cards full-bleed on wide desktops. */
+  padding: var(--header-height) max(28px, calc((100% - 1200px) / 2)) 28px;
 }
 
 /* Form-mode root - swaps the page padding so the LookForm fills the
