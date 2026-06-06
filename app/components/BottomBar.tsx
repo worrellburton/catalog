@@ -10,6 +10,22 @@ import { useSearchBeam } from '~/hooks/useSearchBeam';
 import FilterPanel, { ActiveFilters, getEmptyFilters, hasActiveFilters } from './FilterPanel';
 import { getSearchSuggestions, getCreators } from '~/services/looks';
 
+// Filter fields that carry real search intent (men/women are the gender
+// toggle, price/creator aren't search terms). A few tokens get humanized so
+// the semantic search reads them naturally.
+const FILTER_QUERY_FIELDS: (keyof ActiveFilters)[] = ['occasion', 'type', 'style', 'room', 'vibe', 'location'];
+const FILTER_TOKEN_HUMANIZE: Record<string, string> = {
+  datenight: 'date night', midcentury: 'mid-century',
+};
+/** Turn the chosen Build-a-Catalog filters into a search query so the feed
+ *  actually searches for that catalog instead of just relabeling. */
+function composeFilterQuery(f: ActiveFilters): string {
+  const tokens: string[] = [];
+  for (const field of FILTER_QUERY_FIELDS) tokens.push(...f[field]);
+  tokens.push(...f.who.filter(w => w !== 'men' && w !== 'women')); // dogs/cats are real intent
+  return tokens.map(t => FILTER_TOKEN_HUMANIZE[t] || t).join(' ').trim();
+}
+
 interface BottomBarProps {
   activeFilter: 'all' | 'men' | 'women';
   onFilterChange: (filter: 'all' | 'men' | 'women') => void;
@@ -397,8 +413,17 @@ function BottomBar({
     } else {
       onFilterChange('all');
     }
+    // Actually SEARCH the catalog the filters describe — compose a query from
+    // the chosen occasion/type/style/etc. and run it through the same
+    // semantic search the typed bar uses. Without this, Build only relabeled
+    // the feed and never searched.
+    const query = composeFilterQuery(activeFilters);
+    if (query) {
+      if (onSelectSuggestion) onSelectSuggestion(query);
+      else onSearchChange(query);
+    }
     closeFilters();
-  }, [activeFilters, onFilterChange, closeFilters]);
+  }, [activeFilters, onFilterChange, onSelectSuggestion, onSearchChange, closeFilters]);
 
   const handleBackdropClick = useCallback(() => {
     if (searchOpen) closeSearch();
