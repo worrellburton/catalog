@@ -81,12 +81,21 @@ function growthRateAtTransition(a: Assumptions, transitionIndex: number): number
   return a.mauGrowthStart + (a.mauGrowthEnd - a.mauGrowthStart) * t;
 }
 
-export function buildSeries(a: Assumptions): MonthBreakdown[] {
+// `mauOverride` lets the Go-to-Market / Acquisition model drive the user
+// base instead of the internal growth taper: pass a per-month MAU array
+// (length MONTHS) and the revenue funnel runs on those counts, so
+// Acquisition "replaces the growth" on Revenue. Omit it for the
+// standalone revenue model (deck, etc.) — behaviour is unchanged.
+export function buildSeries(a: Assumptions, mauOverride?: number[]): MonthBreakdown[] {
   const out: MonthBreakdown[] = [];
   let mau = a.mauStart;
   for (let i = 0; i < MONTHS; i++) {
     let appliedGrowth = 0;
-    if (i > 0) {
+    if (mauOverride) {
+      const prev = mau;
+      mau = mauOverride[i] ?? mau;
+      appliedGrowth = i > 0 && prev > 0 ? mau / prev - 1 : 0;
+    } else if (i > 0) {
       appliedGrowth = growthRateAtTransition(a, i - 1);
       mau = mau * (1 + appliedGrowth);
     }
