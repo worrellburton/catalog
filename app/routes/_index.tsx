@@ -12,6 +12,7 @@ import ContinuousFeed from '~/components/ContinuousFeed';
 import SiteParticleHost from '~/components/SiteParticleHost';
 import ParticleBackground from '~/components/ParticleBackground';
 import BottomBar from '~/components/BottomBar';
+import LookSignInGate from '~/components/LookSignInGate';
 import { TrailVideoHost } from '~/components/TrailVideoHost';
 import { TrailRoot } from '~/components/TrailMotion';
 import CatalogLogo from '~/components/CatalogLogo';
@@ -1678,6 +1679,12 @@ export default function Home() {
                 onOpenComments={openComments}
               />
             </Suspense>
+          )}
+
+          {/* Signed-out visitors see the look (behind) then a Sign-In gate —
+              only registered users get full access (shop / save / follow). */}
+          {selectedLook && !authLoading && !user && (
+            <LookSignInGate onClose={handleCloseLook} />
           )}
 
           {creatorFilter && (

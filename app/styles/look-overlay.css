@@ -1617,3 +1617,84 @@ body:has(.look-overlay.look-overlay--in) {
   color: #fff;
   text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
 }
+
+/* ── Signed-out look gate ──────────────────────────────────────────────
+   Sits above the look overlay (z 200) with a translucent scrim so the look
+   shows through behind the sign-in card. */
+.look-signin-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 9300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  animation: lsg-fade 0.22s ease both;
+}
+@keyframes lsg-fade { from { opacity: 0; } to { opacity: 1; } }
+.lsg-card {
+  position: relative;
+  width: 100%;
+  max-width: 380px;
+  background: #161618;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 22px;
+  padding: 30px 26px 26px;
+  text-align: center;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6);
+  animation: lsg-pop 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes lsg-pop { from { opacity: 0; transform: translateY(14px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
+.lsg-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.lsg-close:hover { background: rgba(255, 255, 255, 0.16); }
+.lsg-title {
+  font-size: 21px;
+  font-weight: 700;
+  color: #fff;
+  margin: 4px 0 8px;
+  letter-spacing: -0.01em;
+}
+.lsg-sub {
+  font-size: 14px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.6);
+  margin: 0 0 22px;
+}
+.lsg-google {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 13px 16px;
+  border-radius: 14px;
+  border: none;
+  background: #fff;
+  color: #18181b;
+  font-size: 15px;
+  font-weight: 650;
+  font-family: inherit;
+  cursor: pointer;
+  transition: transform 0.12s ease, opacity 0.15s ease;
+}
+.lsg-google:hover { transform: translateY(-1px); }
+.lsg-google:disabled { opacity: 0.6; cursor: default; }
+.lsg-error { color: #f87171; font-size: 13px; margin: 12px 0 0; }
