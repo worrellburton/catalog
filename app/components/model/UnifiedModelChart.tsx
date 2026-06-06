@@ -43,7 +43,7 @@ function pctChange(curr: number, prev: number | undefined): { text: string; posi
 export default function UnifiedModelChart({ revenue, acquisition, showRevenue, showAcquisition, showEngagement }: ChartProps) {
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
 
-  const W = 1200, H = 440;
+  const W = 1200, H = 520;
   const PAD_L = 72, PAD_R = 72, PAD_T = 24, PAD_B = 44;
   const innerW = W - PAD_L - PAD_R;
   const innerH = H - PAD_T - PAD_B;

@@ -2738,11 +2738,14 @@ html.admin-on-dark-canvas .admin-topbar,
   }
   .admin-main { margin-left: 64px; }
 
-  /* Expanded on hover. */
+  /* Expanded on hover. Raised above the sticky topbar (z-index 20) so the
+     expanding rail cleanly overlays it instead of sliding underneath —
+     otherwise the topbar clipped the wordmark + nav search at the top. */
   .admin-sidebar:hover {
     width: 208px;
     overflow: visible;
     box-shadow: 8px 0 32px rgba(15, 23, 42, 0.12);
+    z-index: 30;
   }
   .admin-dark .admin-sidebar:hover {
     box-shadow: 8px 0 32px rgba(0, 0, 0, 0.45);
@@ -5188,21 +5191,23 @@ html.admin-on-dark-canvas .admin-topbar,
 }
 .model-link-note strong { color: #6366f1; }
 
-/* Two-column layout: calculations (rows + dials) on the left, the graph
-   on the right. On a big screen the whole thing fits without scrolling;
-   it stacks below 1100px. */
+/* Layout: by default the graph stacks UNDER the calculations (single
+   column). Only when the browser is wide/maximised does it move to the
+   right — and there it takes the larger share of the row so it reads big.
+   The left column also caps its width when stacked so the cards don't
+   stretch absurdly wide. */
 .model-layout {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+  grid-template-columns: 1fr;
   gap: 16px;
   align-items: start;
 }
 .model-left { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
-.model-right { min-width: 0; position: sticky; top: 68px; }
+.model-right { min-width: 0; }
 .model-rows { margin: 0; }
-@media (max-width: 1100px) {
-  .model-layout { grid-template-columns: 1fr; }
-  .model-right { position: static; }
+@media (min-width: 1500px) {
+  .model-layout { grid-template-columns: minmax(380px, 0.72fr) minmax(0, 1.5fr); }
+  .model-right { position: sticky; top: 68px; }
 }
 
 /* Compact dials in the left column so the calculations + results fit

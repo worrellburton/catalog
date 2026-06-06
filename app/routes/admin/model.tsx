@@ -43,6 +43,10 @@ const ENGAGEMENT_FIELDS: FieldDef[] = [
   { key: 'productConversion',        label: 'Product conversion',    hint: 'Sale per impression',            format: 'percent', step: 0.001, min: 0, max: 0.5 },
 ];
 
+// Churn lives on the acquisition assumptions (it reshapes the active
+// base) but is surfaced in the Engagement card per the model's framing.
+const CHURN_FIELD: FieldDef = { key: 'churn', label: 'Monthly churn', hint: "Active users who don't return / mo", format: 'percent', step: 0.01, min: 0, max: 1 };
+
 // Revenue — monetisation applied to sales.
 const REVENUE_FIELDS: FieldDef[] = [
   { key: 'avgCostPerSale',         label: 'Avg cost per sale',        hint: 'Average order value', format: 'currency', step: 5,     min: 0 },
@@ -110,7 +114,10 @@ export default function AdminModel() {
 
   const setShow = (k: RowKey, v: boolean) => setUi(p => ({ ...p, show: { ...p.show, [k]: v } }));
   const toggleOpen = (k: RowKey) => setUi(p => ({ ...p, open: { ...p.open, [k]: !p.open[k] } }));
-  const resetEngagement = () => setRev(p => ({ ...p, sessionsPerUserPerMonth: DEFAULTS.sessionsPerUserPerMonth, sessionTimeMinutes: DEFAULTS.sessionTimeMinutes, avgImpressionsPerSession: DEFAULTS.avgImpressionsPerSession, productConversion: DEFAULTS.productConversion }));
+  const resetEngagement = () => {
+    setRev(p => ({ ...p, sessionsPerUserPerMonth: DEFAULTS.sessionsPerUserPerMonth, sessionTimeMinutes: DEFAULTS.sessionTimeMinutes, avgImpressionsPerSession: DEFAULTS.avgImpressionsPerSession, productConversion: DEFAULTS.productConversion }));
+    setAcq(p => ({ ...p, churn: GTM_DEFAULTS.churn }));
+  };
   const resetRevenue = () => setRev(p => ({ ...p, avgCostPerSale: DEFAULTS.avgCostPerSale, avgAffiliateCommission: DEFAULTS.avgAffiliateCommission }));
 
   // Drag-to-reorder the cards.
@@ -161,12 +168,13 @@ export default function AdminModel() {
     }
     if (key === 'engagement') {
       return (
-        <ModelRow {...common} title="Engagement" subtitle="Sessions × impressions × conversion → sales">
+        <ModelRow {...common} title="Engagement" subtitle="Retention × sessions × conversion → sales">
           <div className="model-row-actions">
             <button className="admin-btn admin-btn-secondary" onClick={resetEngagement}>Reset engagement</button>
           </div>
-          <p className="model-link-note">Runs on <strong style={{ color: COLORS.acquisition }}>Acquisition</strong>'s MAU and feeds <strong style={{ color: COLORS.revenue }}>Revenue</strong>'s sales.</p>
+          <p className="model-link-note">Churn trims <strong style={{ color: COLORS.acquisition }}>Acquisition</strong>'s MAU; the rest turns it into <strong style={{ color: COLORS.revenue }}>Revenue</strong>'s sales.</p>
           <div className="proj-cards model-cards">
+            <AssumptionCard key="churn" field={CHURN_FIELD} value={acq.churn} onChange={(n) => setAcqField('churn', clamp01(n))} />
             {ENGAGEMENT_FIELDS.map(f => (
               <AssumptionCard key={f.key} field={f} value={rev[f.key as keyof Assumptions]} onChange={(n) => setRevField(f.key as keyof Assumptions, n)} />
             ))}
