@@ -540,12 +540,19 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
     // still image, indistinguishable from the static product photo).
     const onFirstGesture = () => resumeInSlot();
 
-    // Heartbeat: every 1 s, kick any in-slot video that has stalled. A
-    // tighter interval matters most in the first few seconds after the
-    // grid mounts - that's when the muted-autoplay flag is being
-    // evaluated and a play() retry can flip a paused element into
-    // playing without the user touching anything.
-    const heartbeat = window.setInterval(resumeInSlot, 1000);
+    // Heartbeat: kick any in-slot video that has stalled. A tight 1 s cadence
+    // matters most in the first ~10 s after the grid mounts — that's when the
+    // muted-autoplay flag is being evaluated and a play() retry can flip a
+    // paused element into playing without the user touching anything. After
+    // that window stalls are rare, so we relax to 3 s to stop waking the CPU
+    // every second on a settled feed; the beat is skipped while hidden (videos
+    // are paused then anyway, and onVisibility resumes them on return).
+    const beat = () => { if (!document.hidden) resumeInSlot(); };
+    let heartbeat = window.setInterval(beat, 1000);
+    const relaxHeartbeat = window.setTimeout(() => {
+      window.clearInterval(heartbeat);
+      heartbeat = window.setInterval(beat, 3000);
+    }, 10_000);
 
     document.addEventListener('visibilitychange', onVisibility);
     window.addEventListener('pageshow', onResumeFromBackground);
@@ -561,6 +568,7 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
     window.addEventListener('wheel',       onFirstGesture, { once: true, passive: true });
 
     return () => {
+      window.clearTimeout(relaxHeartbeat);
       window.clearInterval(heartbeat);
       document.removeEventListener('visibilitychange', onVisibility);
       window.removeEventListener('pageshow', onResumeFromBackground);

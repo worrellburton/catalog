@@ -18,6 +18,7 @@ import {
 } from '~/services/comments';
 import CommentParticles from './CommentParticles';
 import ParticleBackground from './ParticleBackground';
+import { isMobileViewport } from '~/services/video-loading';
 import { useCommentTyping } from '~/hooks/useCommentTyping';
 
 interface CommentsPageProps {
@@ -335,8 +336,10 @@ export default function CommentsPage({ targetType, slug, onClose, onOpenCreator,
           particle backdrop used on create-a-look / add-product, so the
           comments surface isn't a flat black screen when the thread is
           empty. The avatar-driven CommentParticles layer sits on top. */}
+      {/* Desktop only — see LookOverlay: spares mobile a scarce WebGL context
+          + GPU draw. The avatar-driven CommentParticles layer below still renders. */}
       <div className="comments-webgl" aria-hidden="true">
-        <ParticleBackground />
+        {!isMobileViewport() && <ParticleBackground />}
       </div>
       <div className="comments-particles">
         <CommentParticles avatars={avatars} className="comments-particles-canvas" />

@@ -31,6 +31,11 @@ import { getPrefetchCount } from './video-loading';
  *  so the row about to scroll into view is already playing — no
  *  poster→video pop. */
 const PLAY_MARGIN_VH_DESKTOP = 0.6;
+// 0.5 = ~half a screen of lookahead each side. This head-start is what lets a
+// card's <video> buffer + decode its first frame BEFORE it scrolls into view,
+// so playback reveals instantly instead of holding on the poster. Do not
+// tighten this to "save decodes" — it directly reintroduces the poster→video
+// delay (the decode-count win isn't worth the visible lag).
 const PLAY_MARGIN_VH_MOBILE = 0.5;
 /** Multiplier on viewport height for the release zone (each side). */
 const RELEASE_MARGIN_VH_DESKTOP = 1.5;
@@ -136,6 +141,10 @@ class VideoPlaybackDirector {
   // bounded by what's on/near screen, not by how many cards have mounted over a
   // long scroll session — fixes the unbounded O(N) rank meltdown.
   private nearIds = new Set<string>();
+  // Cards currently holding a pooled <video> (bounded by poolMax). Lets the
+  // overlay-open / tab-hide pause loops iterate just these instead of every
+  // registered card — O(poolMax), not O(mounted-over-a-long-scroll).
+  private assignedIds = new Set<string>();
   private nearObserver: IntersectionObserver | null = null;
   private elToId = new WeakMap<Element, string>();
 
@@ -223,11 +232,19 @@ class VideoPlaybackDirector {
     window.addEventListener('pageshow', onResume);
     document.addEventListener('resume', onResume as EventListener);
 
-    // Heartbeat: every 1.5 s, re-rank so any card whose play() failed
-    // (degraded or paused after retries) gets another attempt once data
-    // has buffered. Critical for search results where videos are cold-cache
-    // and play() can be called before bytes arrive.
-    setInterval(() => { this.scheduleRank(); }, 1500);
+    // Heartbeat: re-rank so any card whose play() failed (paused after retries)
+    // gets another attempt once data has buffered. Critical for search results
+    // where videos are cold-cache and play() can be called before bytes arrive.
+    // BUT only pay for the (forced-layout) re-rank when something near the
+    // viewport isn't playing yet — once the feed is settled (all near cards
+    // playing) a periodic rank() is pure idle drain that keeps the CPU awake on
+    // a static screen. Skipped while hidden; the nearIds scan is bounded + cheap.
+    setInterval(() => {
+      if (typeof document !== 'undefined' && document.hidden) return;
+      for (const id of this.nearIds) {
+        if (this.cards.get(id)?.status !== 'playing') { this.scheduleRank(); break; }
+      }
+    }, 1500);
 
     this.initHud();
   }
@@ -419,8 +436,12 @@ class VideoPlaybackDirector {
    */
   notifyDetail(action: 'open' | 'close', cardId?: string): void {
     if (action === 'open') {
-      for (const [id, entry] of this.cards) {
-        if (id !== cardId && entry.videoEl && !entry.videoEl.paused) {
+      // Only cards holding a pooled <video> can be playing — iterate that
+      // bounded set, not every registered card (O(poolMax), not O(mounted)).
+      for (const id of this.assignedIds) {
+        if (id === cardId) continue;
+        const entry = this.cards.get(id);
+        if (entry?.videoEl && !entry.videoEl.paused) {
           try { entry.videoEl.pause(); } catch { /* ignore */ }
           entry.status = 'paused';
           this.emit(id, 'paused');
@@ -467,6 +488,7 @@ class VideoPlaybackDirector {
     // TrailVideoHost's offscreen pool before the overlay can attach() it.
     const slotIdx = this.pool.findIndex(p => p.el === el);
     if (slotIdx !== -1) this.pool.splice(slotIdx, 1);
+    this.assignedIds.delete(cardId);
     entry.videoEl = null;
     entry.status = 'idle';
     this.emit(cardId, 'idle');
@@ -631,6 +653,7 @@ class VideoPlaybackDirector {
       });
 
       slot.assignedTo = id;
+      this.assignedIds.add(id);
       entry.videoEl = slot.el;
       entry.status = 'loading';
 
@@ -724,6 +747,7 @@ class VideoPlaybackDirector {
 
   private releaseVideoEl(cardId: string, el: HTMLVideoElement): void {
     try { el.pause(); } catch { /* ignore */ }
+    this.assignedIds.delete(cardId);
     const slot = this.pool.find(p => p.el === el);
     if (slot) slot.assignedTo = null;
     if (this.parkingDiv) {
@@ -732,8 +756,10 @@ class VideoPlaybackDirector {
   }
 
   private pauseAll(): void {
-    for (const [id, entry] of this.cards) {
-      if (entry.videoEl && !entry.videoEl.paused) {
+    // Bounded by poolMax: only assigned cards can hold a playing <video>.
+    for (const id of this.assignedIds) {
+      const entry = this.cards.get(id);
+      if (entry?.videoEl && !entry.videoEl.paused) {
         try { entry.videoEl.pause(); } catch { /* ignore */ }
         entry.status = 'paused';
         this.emit(id, 'paused');

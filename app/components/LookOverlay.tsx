@@ -13,7 +13,6 @@ import ContinuousFeed from './ContinuousFeed';
 import { useActiveGenderFilter } from '~/hooks/useActiveGenderFilter';
 import { useTrailVideo, useTrailVideoManager } from './TrailVideoHost';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
-import { supabaseImage } from '~/utils/supabaseImage';
 import ProductMiniMedia from './ProductMiniMedia';
 import ParticleBackground from './ParticleBackground';
 import { director } from '~/services/video-playback-director';
@@ -684,8 +683,13 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
       {/* Ambient particle field on top of the opaque black base — makes
           the page background a live, dynamic surface instead of a flat
           solid. Sits behind all scroll content (z-index 0). */}
+      {/* Desktop only: on phones the ambient field is barely visible and a
+          second WebGL context competes for the ~16-context cap (evicting the
+          app-root singleton) and GPU. The opaque black base reads fine without
+          it. A1 already stops this field drawing when opened over the feed
+          (paused), so this just spares mobile the context + any hero-opened draw. */}
       <div className="look-overlay-particles" aria-hidden="true">
-        <ParticleBackground />
+        {!isMobileViewport() && <ParticleBackground />}
       </div>
       <div className="look-overlay-scroll" ref={setScrollRef}>
         {/* ═══ HERO: 60/40 split (first viewport) ═══ */}

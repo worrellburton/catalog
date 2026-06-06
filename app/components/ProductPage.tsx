@@ -1117,8 +1117,10 @@ export default function ProductPage({
       {/* Ambient particle field over the opaque black base — same live
           background treatment as the look overlay. Sits behind the
           scroll content. */}
+      {/* Desktop only — see LookOverlay: spares mobile a scarce WebGL context
+          + GPU draw; opaque base reads fine and A1 already pauses it over the feed. */}
       <div className="product-page-particles" aria-hidden="true">
-        <ParticleBackground />
+        {!isMobileViewport() && <ParticleBackground />}
       </div>
       <div className="product-page" ref={setScrollerRef}>
         <button

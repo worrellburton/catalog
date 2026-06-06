@@ -205,8 +205,12 @@ export default function ParticleBackground({ speed }: ParticleBackgroundProps = 
       // spends zero GPU on a hidden canvas. One-off mounts (ceremony, which
       // pass `speed`) always render.
       if (localSpeed === undefined && particleControls.paused) {
-        last = performance.now();
-        raf = requestAnimationFrame(frame);
+        // Singleton + feed covering it: fully STOP the loop instead of spinning
+        // a no-op rAF every frame. That 60fps heartbeat kept the main thread
+        // awake on the feed — the screen users actually sit on — for zero
+        // pixels drawn. particleControls.onPausedChange restarts us the instant
+        // the field is uncovered again (hero / landing / search ceremony).
+        running = false;
         return;
       }
       const now = performance.now();
@@ -232,9 +236,25 @@ export default function ParticleBackground({ speed }: ParticleBackgroundProps = 
     };
     document.addEventListener('visibilitychange', onVisibility);
 
+    // The singleton fully stops its loop while paused (see frame()), so it
+    // needs a nudge to resume the instant the feed uncovers it. One-off mounts
+    // (localSpeed set) ignore `paused` and never subscribe.
+    const onPausedChange = () => {
+      if (localSpeed !== undefined || reduced) return;
+      if (!particleControls.paused && !running && !document.hidden) {
+        running = true;
+        last = performance.now();
+        frame();
+      }
+    };
+    const unsubPaused = localSpeed === undefined
+      ? particleControls.onPausedChange(onPausedChange)
+      : null;
+
     return () => {
       running = false;
       cancelAnimationFrame(raf);
+      unsubPaused?.();
       window.removeEventListener('resize', resize);
       document.removeEventListener('visibilitychange', onVisibility);
       gl.deleteBuffer(buf);

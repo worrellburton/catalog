@@ -146,11 +146,20 @@ export default function SearchCeremony({ query, kind = 'search', ready, onDone }
   useEffect(() => {
     let raf = 0;
     const tick = () => {
+      // `settled` flips true once progress has eased to within a hair of its
+      // current target; we then STOP the loop instead of re-scheduling forever
+      // (the old code kept firing setProgress(100) at 60fps after completion,
+      // and kept ticking toward the interim cap while waiting). The effect
+      // re-arms on the next `revealed`/`finalDone` change, so the bar animates
+      // to each new target then parks — no idle 60fps spin.
+      let settled = false;
       setProgress(p => {
         const target = finalDone ? 100 : Math.min(88, 12 + revealed * 16);
         const next = p + (target - p) * (finalDone ? 0.25 : 0.06);
+        if (Math.abs(target - next) < 0.1) { settled = true; return finalDone ? 100 : target; }
         return next > 99.5 ? 100 : next;
       });
+      if (settled) return;
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);
