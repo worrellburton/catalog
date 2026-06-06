@@ -864,18 +864,24 @@ html[data-shell="catalog-app"] .gen-page {
    a phone, more on wider screens. */
 .gen-styleswiper {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  grid-auto-flow: column;
+  grid-template-rows: auto auto;
+  grid-auto-columns: calc((100% - 16px) / 3);
   gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
   max-width: 100%;
   min-width: 0;
+  padding-bottom: 4px;
 }
+.gen-styleswiper::-webkit-scrollbar { display: none; }
 .gen-styleswiper > .gen-stylecard {
   width: auto;
   aspect-ratio: 1 / 1;
-}
-/* A picked card reveals its blurb, so let it grow past the square. */
-.gen-styleswiper > .gen-stylecard.is-picked {
-  aspect-ratio: auto;
+  scroll-snap-align: start;
 }
 
 /* Mobile fit: the style step and its free-text textarea never exceed the

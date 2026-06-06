@@ -35,11 +35,14 @@ interface DeckViewV2Props {
 // "Catalog" column so the eye reads "these five, together, are Catalog".
 // `val` is a directional weight (not a precise GMV figure) - it only sets
 // each segment's share of the combined column.
+// `val` sets each bar's relative height — scaled to read like real company
+// size so Amazon clearly dwarfs the rest (LTK / ShopMy are niche by
+// comparison), rather than every platform looking equally large.
 const PLATFORMS: { key: string; name: string; color: string; val: number }[] = [
-  { key: 'amazon',    name: 'Amazon',    color: '#ff9900', val: 75 },
-  { key: 'pinterest', name: 'Pinterest', color: '#e60023', val: 30 },
-  { key: 'ltk',       name: 'LTK',       color: '#ec4899', val: 55 },
-  { key: 'shopmy',    name: 'ShopMy',    color: '#a78bfa', val: 20 },
+  { key: 'amazon',    name: 'Amazon',    color: '#ff9900', val: 100 },
+  { key: 'pinterest', name: 'Pinterest', color: '#e60023', val: 34 },
+  { key: 'ltk',       name: 'LTK',       color: '#ec4899', val: 18 },
+  { key: 'shopmy',    name: 'ShopMy',    color: '#a78bfa', val: 10 },
 ];
 
 // Fisher-Yates shuffle (returns a new array) so the background feed isn't
