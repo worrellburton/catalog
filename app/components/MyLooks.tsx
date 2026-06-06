@@ -709,16 +709,20 @@ export default function MyLooks({ onClose }: MyLooksProps) {
             <p>Products you add to your looks will show up here.</p>
           </div>
         ) : (
-          <div className="my-cat-products-list">
+          <div className="creator-grid my-cat-products-grid">
             {catalogProducts.map(p => (
               <div
                 key={p.id}
                 data-product-id={p.id}
-                className={`my-cat-product-row${dragProductId === p.id ? ' is-dragging' : ''}`}
+                className={`look-card creator-product-feed my-cat-product-feed${dragProductId === p.id ? ' is-dragging' : ''}`}
               >
+                {p.image_url
+                  ? <img className="cpf-media" src={p.image_url} alt={p.name} loading="lazy" decoding="async" />
+                  : <div className="cpf-media cpf-media--blank" />}
+                <div className="cpf-gradient" />
                 <button
                   type="button"
-                  className="my-cat-product-grip"
+                  className="my-cat-product-grip my-cat-product-grip--feed"
                   aria-label="Drag to reorder"
                   title="Drag to reorder"
                   onPointerDown={(e) => handleProductGripDown(e, p.id)}
@@ -728,15 +732,10 @@ export default function MyLooks({ onClose }: MyLooksProps) {
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="9" cy="5" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="19" r="1"/></svg>
                 </button>
-                <div className="my-cat-product-thumb">
-                  {p.image_url
-                    ? <img src={p.image_url} alt="" loading="lazy" />
-                    : <div className="my-cat-product-thumb-blank" aria-hidden="true" />}
-                </div>
-                <div className="my-cat-product-meta">
-                  {p.brand && <span className="my-cat-product-brand">{p.brand}</span>}
-                  <span className="my-cat-product-name">{p.name}</span>
-                  {p.price && <span className="my-cat-product-price">{p.price}</span>}
+                <div className="cpf-info">
+                  {p.brand && <span className="cpf-brand">{p.brand}</span>}
+                  <span className="cpf-name">{p.name}</span>
+                  {p.price && <span className="cpf-price">{p.price}</span>}
                 </div>
               </div>
             ))}
