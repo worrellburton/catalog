@@ -285,6 +285,23 @@ export default function Home() {
     import('~/services/referrals').then(({ redeemStoredRef }) => { void redeemStoredRef(); });
   }, [user]);
 
+  // Backfill missing look posters in the background. Looks without a poster
+  // render as blank grey cards (Saved screen, etc.); generating one from the
+  // video frame fixes them everywhere. Gated to admins, who have write
+  // access, and fired once per session, idle, so it never blocks the feed.
+  useEffect(() => {
+    if (user?.role !== 'admin' && user?.role !== 'super_admin') return;
+    const run = () => import('~/services/poster-backfill')
+      .then(({ backfillMissingLookPosters }) => backfillMissingLookPosters())
+      .catch(() => {});
+    const ric = (window as unknown as { requestIdleCallback?: (cb: () => void) => number }).requestIdleCallback;
+    const id = ric ? ric(run) : window.setTimeout(run, 4000);
+    return () => {
+      const cic = (window as unknown as { cancelIdleCallback?: (h: number) => void }).cancelIdleCallback;
+      if (ric && cic) cic(id); else window.clearTimeout(id);
+    };
+  }, [user?.role]);
+
   // Pause the site singleton particle field whenever the feed is the focus
   // (hero dismissed or scrolled past) — it's fully covered there, so drawing
   // it is wasted GPU that competes with video decode on scroll.
