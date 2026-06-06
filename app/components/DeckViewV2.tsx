@@ -316,7 +316,7 @@ const DeckViewV2: React.FC<DeckViewV2Props> = ({
         <span className="deck-label">The AI for shopping</span>
         <h2 className="deck-v2-thesis-h2">Everything they do.<br />One AI to shop.</h2>
         <p className="deck-v2-thesis-sub">
-          Amazon, TikTok, Pinterest, LTK, ShopMy , shopping is scattered across a dozen apps. Catalog does what all of them do , in one. The AI you go to shop.
+          Amazon, TikTok, Pinterest, LTK, ShopMy , shopping is scattered across a dozen apps. Catalog does what all of them do , in one. The AI platform for shopping.
         </p>
         <CombinedChart />
       </div>
@@ -350,7 +350,7 @@ const DeckViewV2: React.FC<DeckViewV2Props> = ({
         <span className="deck-label">Market Opportunity</span>
         <h2 className="deck-v2-market-h2">If shopping runs through one AI,<br />the market is all of it.</h2>
         <p className="deck-v2-market-sub">
-          Catalog isn&apos;t chasing a slice of commerce , it&apos;s the shopping layer for the whole thing. A global AI you go to shop has a ceiling the size of retail itself.
+          Catalog isn&apos;t chasing a slice of commerce , it&apos;s the shopping layer for the whole thing. A global AI platform for shopping has a ceiling the size of retail itself.
         </p>
         <div className="deck-stats deck-v2-market-stats">
           <div className="deck-stat">
@@ -378,7 +378,7 @@ const DeckViewV2: React.FC<DeckViewV2Props> = ({
             </div>
           </div>
         </div>
-        <p className="deck-note deck-v2-market-note">Directional , global retail + e-commerce scale. The point: an AI you go to shop has a TAM the size of commerce itself.</p>
+        <p className="deck-note deck-v2-market-note">Directional , global retail + e-commerce scale. The point: an AI platform for shopping has a TAM the size of commerce itself.</p>
       </div>
 
       {/* Slide 5: Potential partnership - exclusive affiliate rights. */}
@@ -411,7 +411,7 @@ const DeckViewV2: React.FC<DeckViewV2Props> = ({
       {/* Slide 6: Close - Catalog wordmark + Instagram. */}
       <div className="deck-slide deck-cover deck-v2-close">
         <CatalogLogo className="deck-logo deck-v2-close-logo" />
-        <p className="deck-subtitle deck-v2-close-sub">The AI you go to shop.</p>
+        <p className="deck-subtitle deck-v2-close-sub">The AI platform for shopping.</p>
         <a className="deck-v2-ig-btn" href="https://instagram.com/catalog" target="_blank" rel="noopener noreferrer">
           <svg className="deck-v2-ig-glyph" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
             <rect x="2" y="2" width="20" height="20" rx="5" ry="5" />
