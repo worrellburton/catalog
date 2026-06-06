@@ -542,9 +542,9 @@ button.ap-gen--rendering:active { transform: scale(0.97); }
 .ap-conv-thumb {
   position: relative;
   display: block;
-  width: 40px;
-  height: 52px;
-  border-radius: 7px;
+  width: 56px;
+  height: 72px;
+  border-radius: 9px;
   overflow: hidden;
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.1);
@@ -595,3 +595,64 @@ button.ap-gen--rendering:active { transform: scale(0.97); }
 .light-mode .ap-conv-head { color: #0f172a; }
 .light-mode .ap-conv-text { color: #475569; }
 .light-mode .ap-conv-on { color: #64748b; }
+
+/* Minimized conversation dock — a pill anchored bottom-center that restores
+   the thread on tap. Sits above the page, below the full sheet. Centered with
+   margin-inline (never translateX) per the repo's overlay-centering rule. */
+.ap-conv-dock {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: calc(16px + env(safe-area-inset-bottom, 0px));
+  z-index: 1200;
+  width: min(420px, calc(100% - 28px));
+  margin-inline: auto;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: rgba(22, 22, 24, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(14px);
+  cursor: pointer;
+  animation: ap-conv-dock-in 220ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes ap-conv-dock-in {
+  from { opacity: 0; transform: translateY(12px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.ap-conv-dock-icon { font-size: 18px; line-height: 1; flex-shrink: 0; }
+.ap-conv-dock-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; flex: 1; }
+.ap-conv-dock-label {
+  font-size: 13.5px;
+  font-weight: 650;
+  color: #f4f4f5;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ap-conv-dock-hint { font-size: 11px; color: #9b9ba3; }
+.ap-conv-dock-close {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  border: none;
+  color: #d4d4d8;
+  cursor: pointer;
+  transition: background 140ms ease;
+}
+.ap-conv-dock-close:hover { background: rgba(255, 255, 255, 0.16); }
+.light-mode .ap-conv-dock {
+  background: rgba(255, 255, 255, 0.96);
+  border-color: rgba(0, 0, 0, 0.1);
+}
+.light-mode .ap-conv-dock-label { color: #0f172a; }
+.light-mode .ap-conv-dock-hint { color: #64748b; }
+.light-mode .ap-conv-dock-close { background: rgba(0, 0, 0, 0.06); color: #334155; }

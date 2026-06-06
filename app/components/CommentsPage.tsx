@@ -30,6 +30,15 @@ interface CommentsPageProps {
   /** Open a commenter's catalog/profile. Passed by the overlay host so
    *  tapping an author closes comments and opens their creator page. */
   onOpenCreator?: (handle: string) => void;
+  /** Collapse the thread to a docked bar without losing the host's place
+   *  (e.g. the Activity "Conversations" pager). Renders a minimize button. */
+  onMinimize?: () => void;
+  /** Step to the previous / next thread in the host's list. When provided,
+   *  prev/next controls render so the user can tab through conversations. */
+  onPrev?: () => void;
+  onNext?: () => void;
+  hasPrev?: boolean;
+  hasNext?: boolean;
 }
 
 /** Human title from a slug when the product/look row can't be resolved
@@ -135,7 +144,7 @@ async function resolveLook(slug: string): Promise<ResolvedTarget | null> {
   };
 }
 
-export default function CommentsPage({ targetType, slug, onClose, onOpenCreator }: CommentsPageProps) {
+export default function CommentsPage({ targetType, slug, onClose, onOpenCreator, onMinimize, onPrev, onNext, hasPrev, hasNext }: CommentsPageProps) {
   const navigate = useNavigate();
   const { user } = useAuth();
   const [target, setTarget] = useState<ResolvedTarget | null>(null);
@@ -278,6 +287,13 @@ export default function CommentsPage({ targetType, slug, onClose, onOpenCreator 
     setClosing(true);
     window.setTimeout(() => { if (onClose) onClose(); else goBack(); }, 360);
   };
+  // Minimize eases the sheet down (same animation as close) then hands back
+  // to the host, which docks a restore bar instead of unmounting outright.
+  const requestMinimize = () => {
+    if (!onMinimize || closing) return;
+    setClosing(true);
+    window.setTimeout(() => { onMinimize(); }, 360);
+  };
   const dragRef = useRef<{ startY: number; active: boolean; dy: number }>({ startY: 0, active: false, dy: 0 });
   const onHandlePointerDown = (e: React.PointerEvent) => {
     dragRef.current = { startY: e.clientY, active: true, dy: 0 };
@@ -336,6 +352,46 @@ export default function CommentsPage({ targetType, slug, onClose, onOpenCreator 
             <polyline points="6 9 12 15 18 9" />
           </svg>
         </button>
+
+        {/* Host pager chrome — prev/next steps through the host's thread list
+            (Activity "Conversations"); minimize docks the sheet. Only renders
+            when the host wires the callbacks. */}
+        {(onPrev || onNext || onMinimize) && (
+          <div className="comments-host-nav">
+            {(onPrev || onNext) && (
+              <>
+                <button
+                  type="button"
+                  className="comments-host-btn"
+                  onClick={onPrev}
+                  disabled={!hasPrev}
+                  aria-label="Previous conversation"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+                </button>
+                <button
+                  type="button"
+                  className="comments-host-btn"
+                  onClick={onNext}
+                  disabled={!hasNext}
+                  aria-label="Next conversation"
+                >
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6" /></svg>
+                </button>
+              </>
+            )}
+            {onMinimize && (
+              <button
+                type="button"
+                className="comments-host-btn"
+                onClick={requestMinimize}
+                aria-label="Minimize"
+              >
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12" /></svg>
+              </button>
+            )}
+          </div>
+        )}
 
         {/* The product / look this thread is about, pinned at the top. */}
         <a className="comments-target" href={target?.href ?? `/${targetType === 'product' ? 'p' : 'l'}/${slug}`}>

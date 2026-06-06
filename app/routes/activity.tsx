@@ -18,7 +18,7 @@
  * without a second realtime channel.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, lazy, Suspense } from 'react';
 import { useNavigate } from '@remix-run/react';
 import { supabaseImage } from '~/utils/supabaseImage';
 import { useAuth } from '~/hooks/useAuth';
@@ -42,6 +42,11 @@ import CountUp from '~/components/CountUp';
 import SiteParticleHost from '~/components/SiteParticleHost';
 import ConsumerAvatar from '~/components/ConsumerAvatar';
 import '~/styles/activity-page.css';
+
+// Comment thread opens as an in-app overlay (kept on this route) rather than
+// navigating to /comments/… — that deep-link cold-boots the SPA into the
+// splash screen. Lazy so the heavy particle/comment chunk loads on demand.
+const CommentsPage = lazy(() => import('~/components/CommentsPage'));
 
 /**
  * Top-look thumbnail: paints a tiny (~160px, q60) poster first so it lands
@@ -182,6 +187,10 @@ export default function ActivityRoute() {
   } | null>(null);
   const [recent, setRecent] = useState<ActivityRecentEvent[] | null>(null);
   const [commentActivity, setCommentActivity] = useState<CommentActivityItem[] | null>(null);
+  // Conversation thread overlay: index into commentActivity (or null), plus a
+  // minimized flag so the user can dock it and keep browsing the activity page.
+  const [convIdx, setConvIdx] = useState<number | null>(null);
+  const [convMinimized, setConvMinimized] = useState(false);
   // The shopper's own recently-created looks (generations). Drives the
   // "Your looks" rail at the top — in-flight rows show a rendering bar.
   const [myGenerations, setMyGenerations] = useState<UserGeneration[] | null>(null);
@@ -358,12 +367,12 @@ export default function ActivityRoute() {
               <span className="ap-section-sub">Your comments, replies &amp; 🔥</span>
             </div>
             <div className="ap-conv-list">
-              {commentActivity.map(c => (
+              {commentActivity.map((c, i) => (
                 <button
                   key={c.id}
                   type="button"
                   className={`ap-conv-row ap-conv-row--${c.kind}`}
-                  onClick={() => navigate(`/comments/${c.target_type === 'product' ? 'p' : 'l'}/${c.target_id}`)}
+                  onClick={() => { setConvIdx(i); setConvMinimized(false); }}
                 >
                   <span className="ap-conv-thumb-wrap">
                     <ConvThumb targetType={c.target_type} targetId={c.target_id} />
@@ -453,6 +462,47 @@ export default function ActivityRoute() {
           </section>
         )}
       </main>
+
+      {/* Conversation thread overlay — opens in place (no splash), pages
+          through the Conversations list, and minimizes to a dock bar. */}
+      {convIdx != null && commentActivity && commentActivity[convIdx] && !convMinimized && (
+        <Suspense fallback={null}>
+          <CommentsPage
+            key={`${commentActivity[convIdx].target_type}:${commentActivity[convIdx].target_id}`}
+            targetType={commentActivity[convIdx].target_type}
+            slug={commentActivity[convIdx].target_id}
+            onClose={() => { setConvIdx(null); setConvMinimized(false); }}
+            onMinimize={() => setConvMinimized(true)}
+            onPrev={() => setConvIdx(i => (i != null ? Math.max(0, i - 1) : i))}
+            onNext={() => setConvIdx(i => (i != null ? Math.min(commentActivity.length - 1, i + 1) : i))}
+            hasPrev={convIdx > 0}
+            hasNext={convIdx < commentActivity.length - 1}
+            onOpenCreator={(h) => { setConvIdx(null); setConvMinimized(false); window.location.assign(`/c/${h}`); }}
+          />
+        </Suspense>
+      )}
+
+      {/* Minimized dock — tap to re-expand the thread, ✕ to dismiss. */}
+      {convIdx != null && convMinimized && commentActivity?.[convIdx] && (
+        <div className="ap-conv-dock" role="button" tabIndex={0}
+          onClick={() => setConvMinimized(false)}
+          onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') setConvMinimized(false); }}
+        >
+          <span className="ap-conv-dock-icon" aria-hidden>💬</span>
+          <span className="ap-conv-dock-text">
+            <span className="ap-conv-dock-label">{commentActivity[convIdx].target_label || 'Conversation'}</span>
+            <span className="ap-conv-dock-hint">Tap to expand</span>
+          </span>
+          <button
+            type="button"
+            className="ap-conv-dock-close"
+            aria-label="Close conversation"
+            onClick={(e) => { e.stopPropagation(); setConvIdx(null); setConvMinimized(false); }}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+          </button>
+        </div>
+      )}
     </div>
   );
 }
