@@ -111,8 +111,8 @@ function CombinedChart() {
 
         {/* Arrow: fragmented -> unified */}
         <g className="deck-v2-chart-arrow">
-          <line x1="290" y1={BASE_Y - 120} x2="430" y2={BASE_Y - 120} stroke="rgba(255,255,255,0.45)" strokeWidth="2" />
-          <polyline points={`420,${BASE_Y - 128} 432,${BASE_Y - 120} 420,${BASE_Y - 112}`} fill="none" stroke="rgba(255,255,255,0.45)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
+          <line x1="362" y1={BASE_Y - 120} x2="428" y2={BASE_Y - 120} stroke="rgba(255,255,255,0.5)" strokeWidth="3.5" strokeLinecap="round" />
+          <polyline points={`416,${BASE_Y - 130} 433,${BASE_Y - 120} 416,${BASE_Y - 110}`} fill="none" stroke="rgba(255,255,255,0.5)" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round" />
         </g>
 
         {/* Right: one unified Catalog column. A single solid bar - Catalog
@@ -171,6 +171,18 @@ const DeckViewV2: React.FC<DeckViewV2Props> = () => {
       ),
     [homeFeed],
   );
+
+  // The rising grid loops by translating up 50% of its own height, so the
+  // tile set must be duplicated: the second half is an exact copy of the
+  // first, which means when the animation wraps there's never an empty
+  // band at the bottom — the feed reads as one continuous, infinite scroll.
+  // We fill a base block from the (cycled) clip pool, then repeat it.
+  const bgTiles = useMemo(() => {
+    if (bgClips.length === 0) return [] as { key: string; url: string; poster?: string }[];
+    const BASE = 30;
+    const base = Array.from({ length: BASE }, (_, i) => bgClips[i % bgClips.length]);
+    return [...base, ...base];
+  }, [bgClips]);
 
   const slideTitles = ['Catalog', 'The AI for Shopping', 'Human taste', 'Market', 'Partnership', 'The future'];
 
@@ -233,12 +245,11 @@ const DeckViewV2: React.FC<DeckViewV2Props> = () => {
   return (
     <div className="deck-view deck-view-v8 deck-view-v2 deck-v8-bg-revealed active" ref={containerRef}>
       {/* Rising feed (same drift the longer decks use), sourced from the live
-          catalog's product videos. Up to 48 tiles cycle through the pool so
-          even a small set fills the tall grid edge-to-edge. */}
+          catalog's product videos. The tile set is duplicated (see bgTiles)
+          so the upward drift loops seamlessly — the feed never runs out. */}
       <div className="deck-v8-bg deck-v2-bg" aria-hidden="true">
         <div className="deck-insight-grid">
-          {Array.from({ length: bgClips.length === 0 ? 0 : 24 }).map((_, i) => {
-            const clip = bgClips[i % bgClips.length];
+          {bgTiles.map((clip, i) => {
             return (
               <video
                 key={`${clip.key}:${i}`}
