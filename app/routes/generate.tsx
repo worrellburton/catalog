@@ -714,6 +714,24 @@ export default function GeneratePage() {
     return () => { cancelled = true; };
   }, [generation?.id, step]);
 
+  // Images that orbit on the "Vision composes…" screen: the shopper's face
+  // photos + their chosen products. Prefer the data fetched for the
+  // generation being viewed (resultRefs / resultProducts); fall back to the
+  // in-session picks (slots + picked) for a just-submitted look.
+  const orbitImages = useMemo(() => {
+    const facesFromRefs = resultRefs.map(u => u.public_url).filter((u): u is string => !!u);
+    const facesFromSlots = slots
+      .map(id => existingUploads.find(u => u.id === id)?.public_url)
+      .filter((u): u is string => !!u);
+    const faces = facesFromRefs.length ? facesFromRefs : facesFromSlots;
+    const prodFromResult = resultProducts
+      .map(p => p.product?.image_url)
+      .filter((u): u is string => !!u);
+    const prodFromPicked = picked.map(p => p.image_url).filter((u): u is string => !!u);
+    const prods = prodFromResult.length ? prodFromResult : prodFromPicked;
+    return [...faces, ...prods];
+  }, [resultRefs, slots, existingUploads, resultProducts, picked]);
+
   // Load the user's existing uploads once we know who they are, so the
   // dropzone can offer "use a face you already uploaded" instead of
   // forcing a re-upload on every session. We also fetch the saved
@@ -2004,7 +2022,7 @@ export default function GeneratePage() {
               <div className="gen-result-stage">
             {!generation && <div className="gen-empty">Loading…</div>}
             {(generation?.status === 'pending' || generation?.status === 'generating') && (
-              <GenerationProgress generation={generation} />
+              <GenerationProgress generation={generation} images={orbitImages} />
             )}
             {generation?.status === 'failed' && (
               <GenerationErrorBox generation={generation} pickedCount={picked.length} faceCount={slots.filter(Boolean).length} />
@@ -2625,7 +2643,7 @@ function GenerationErrorBox({
   );
 }
 
-function GenerationProgress({ generation }: { generation: UserGeneration }) {
+function GenerationProgress({ generation, images }: { generation: UserGeneration; images: string[] }) {
   // Tick four times a second so the border-progress + phase rotation
   // feel alive between polls.
   const [, setTick] = useState(0);
@@ -2709,6 +2727,19 @@ function GenerationProgress({ generation }: { generation: UserGeneration }) {
         <div className="gen-build-pulse" aria-hidden="true" />
 
         <div className="gen-build-content">
+          {/* The shopper's face + chosen products orbit in a 3D ring while
+              Vision composes the look. */}
+          {images.length > 0 && (
+            <div className="gen-orbit" aria-hidden="true">
+              <div className="gen-orbit-ring" style={{ ['--n' as string]: images.length }}>
+                {images.map((src, i) => (
+                  <span key={`${src}-${i}`} className="gen-orbit-item" style={{ ['--i' as string]: i }}>
+                    <img src={src} alt="" loading="lazy" decoding="async" />
+                  </span>
+                ))}
+              </div>
+            </div>
+          )}
           <span className="gen-vision gen-build-vision">Vision</span>
           <div className="gen-build-phase">{activePhase}</div>
           <div key={jokeIdx} className="gen-build-joke">{BUILD_JOKES[jokeIdx]}</div>
