@@ -49,19 +49,22 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  -webkit-mask-image: linear-gradient(135deg, transparent 0%, transparent 38%, #000 64%, #000 100%);
-  mask-image: linear-gradient(135deg, transparent 0%, transparent 38%, #000 64%, #000 100%);
+  -webkit-mask-image: linear-gradient(135deg, transparent 0%, #000 70%);
+  mask-image: linear-gradient(135deg, transparent 0%, #000 70%);
   -webkit-mask-repeat: no-repeat;
   mask-repeat: no-repeat;
-  -webkit-mask-size: 240% 240%;
-  mask-size: 240% 240%;
-  -webkit-mask-position: 0% 0%;
-  mask-position: 0% 0%;
-  opacity: 0.2;
-  transform: scale(0.96);
+  -webkit-mask-size: 220% 220%;
+  mask-size: 220% 220%;
+  /* Start partially revealed (lower-right showing) so the slide is never
+     pure black on load; the sweep finishes the reveal toward the top-left. */
+  -webkit-mask-position: 34% 34%;
+  mask-position: 34% 34%;
+  opacity: 0.55;
+  transform: scale(0.975);
 }
 .deck-slide.visible .deck-v2-reveal {
-  animation: deckV2Reveal 4.8s ease-in forwards;
+  /* Ease-out: most of the reveal lands fast, then settles slowly + elegantly. */
+  animation: deckV2Reveal 3.4s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 @keyframes deckV2Reveal {
   to {
