@@ -16,6 +16,15 @@ import { useAuth } from '~/hooks/useAuth';
 export default function PendingLookPill({ onOpen }: { onOpen: () => void }) {
   const { user } = useAuth();
   const [pending, setPending] = useState<{ id: string; status: string; style: string | null } | null>(null);
+  // Only surface the pill at the very top of the feed — once the shopper
+  // scrolls into the grid it shouldn't keep hovering over the content.
+  const [atTop, setAtTop] = useState(true);
+  useEffect(() => {
+    const onScroll = () => setAtTop(window.scrollY < 8);
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
 
   useEffect(() => {
     if (!user) { setPending(null); return; }
@@ -42,7 +51,7 @@ export default function PendingLookPill({ onOpen }: { onOpen: () => void }) {
     };
   }, [user]);
 
-  if (!pending) return null;
+  if (!pending || !atTop) return null;
   const label = pending.style ? `Your ${pending.style.toLowerCase()} look is rendering` : 'Your look is rendering';
   return (
     <button
