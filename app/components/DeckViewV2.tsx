@@ -59,8 +59,8 @@ function CombinedChart() {
   const leftBarW = 30;
   const leftGap = 14;
   const leftX0 = 30;
-  const stackX = 466;
-  const stackW = 96;
+  const stackX = 470;
+  const stackW = 84;
 
   // The Catalog column equals the SUM of the five platform bars at the same
   // scale - so it literally reads as "all of them combined into one", not an
@@ -291,8 +291,10 @@ const DeckViewV2: React.FC<DeckViewV2Props> = () => {
 
       {/* Slide 1: Cover - just the wordmark over the texture. */}
       <div className="deck-slide deck-cover deck-v2-cover">
-        <CatalogLogo className="deck-logo deck-v2-cover-logo" />
-        <p className="deck-subtitle deck-v2-cover-sub">The AI for shopping</p>
+        <div className="deck-v2-reveal">
+          <CatalogLogo className="deck-logo deck-v2-cover-logo" />
+          <p className="deck-subtitle deck-v2-cover-sub">The AI for shopping</p>
+        </div>
         <span className="deck-v2-scroll-cue" aria-hidden="true">
           <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
         </span>
@@ -317,17 +319,17 @@ const DeckViewV2: React.FC<DeckViewV2Props> = () => {
           <div className="deck-step deck-v2-pillar">
             <span className="deck-step-num">01</span>
             <h3>Elegant discovery</h3>
-            <p>Every look is curated by a creator you trust and indexed by AI , so finding what you want feels like a recommendation from a friend, not a search bar.</p>
+            <p>Curated by creators you trust , not a search bar.</p>
           </div>
           <div className="deck-step deck-v2-pillar">
             <span className="deck-step-num">02</span>
             <h3>Revenue source for creators</h3>
-            <p>Creators earn three ways , their own affiliate links, brand-direct deals we sign as a Shopify app, and daily payouts on engagement.</p>
+            <p>Three income streams, paid out daily.</p>
           </div>
           <div className="deck-step deck-v2-pillar">
             <span className="deck-step-num">03</span>
             <h3>Built for everyone</h3>
-            <p>Built for all demographics, every kind of shopping, and all categories , not one niche.</p>
+            <p>Every demographic. Every category. No niche.</p>
           </div>
         </div>
       </div>
@@ -397,6 +399,7 @@ const DeckViewV2: React.FC<DeckViewV2Props> = () => {
 
       {/* Slide 6: Close - Catalog wordmark + the assets we hold. */}
       <div className="deck-slide deck-cover deck-v2-close">
+        <div className="deck-v2-reveal">
         <CatalogLogo className="deck-logo deck-v2-close-logo" />
         <p className="deck-subtitle deck-v2-close-sub">The AI platform for shopping.</p>
         <span className="deck-label deck-v2-holding-label">Holding</span>
@@ -418,6 +421,7 @@ const DeckViewV2: React.FC<DeckViewV2Props> = () => {
             </svg>
             Trademark
           </a>
+        </div>
         </div>
       </div>
     </div>

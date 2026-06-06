@@ -41,6 +41,48 @@
   animation-duration: 60s;
 }
 
+/* ── Reveal effect (cover + close) ──────────────────────────────────────
+   The content scales in subtly while a diagonal gradient mask sweeps it
+   into view from the lower-right to the upper-left. The hidden state lives
+   on the element; the animation runs when the slide becomes .visible. */
+.deck-v2-reveal {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  -webkit-mask-image: linear-gradient(135deg, transparent 0%, transparent 38%, #000 64%, #000 100%);
+  mask-image: linear-gradient(135deg, transparent 0%, transparent 38%, #000 64%, #000 100%);
+  -webkit-mask-repeat: no-repeat;
+  mask-repeat: no-repeat;
+  -webkit-mask-size: 240% 240%;
+  mask-size: 240% 240%;
+  -webkit-mask-position: 0% 0%;
+  mask-position: 0% 0%;
+  opacity: 0.2;
+  transform: scale(0.96);
+}
+.deck-slide.visible .deck-v2-reveal {
+  animation: deckV2Reveal 4.8s ease-in forwards;
+}
+@keyframes deckV2Reveal {
+  to {
+    -webkit-mask-position: 100% 100%;
+    mask-position: 100% 100%;
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .deck-v2-reveal {
+    -webkit-mask-image: none;
+    mask-image: none;
+    opacity: 1;
+    transform: none;
+  }
+  .deck-slide.visible .deck-v2-reveal {
+    animation: none;
+  }
+}
+
 /* ── Slide 1: cover ─────────────────────────────────────────────────── */
 .deck-v2-cover-logo {
   height: 64px;
@@ -107,7 +149,7 @@
 /* The Catalog column lands after the fragmented bars (0.6s offset) and
    carries a green glow so it reads as the one destination, not a sum. */
 .deck-v2-bar-catalog {
-  filter: drop-shadow(0 0 20px rgba(74, 222, 128, 0.6));
+  filter: drop-shadow(0 0 11px rgba(74, 222, 128, 0.4));
 }
 .deck-slide.visible .deck-v2-bar-catalog {
   transform: scaleY(1);
@@ -335,13 +377,17 @@
 
 /* ── Mobile parity ──────────────────────────────────────────────────── */
 @media (max-width: 768px) {
-  /* Background feed: 3 columns of portrait product tiles at the right
-     aspect. Overrides the shared v8 rule (which forced 4 explicit rows and
-     blew the tiles up to full-screen strips). */
+  /* Background feed: 3 columns, with rows auto-sized so every tile is a
+     proper 3:4 product card. Overrides the shared v8 rule (which forced 4
+     explicit rows and blew the tiles up to full-screen strips). */
   .deck-view-v2 .deck-v8-bg .deck-insight-grid {
     grid-template-columns: repeat(3, 1fr);
     grid-template-rows: none;
-    grid-auto-rows: 28vh;
+    grid-auto-rows: auto;
+  }
+  .deck-view-v2 .deck-v8-bg .deck-insight-video {
+    aspect-ratio: 3 / 4;
+    height: auto;
   }
 
   .deck-v2-cover-logo {
