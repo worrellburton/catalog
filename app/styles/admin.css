@@ -2759,12 +2759,15 @@ html.admin-on-dark-canvas .admin-topbar,
     pointer-events: none;
   }
 
-  /* Header: hide the "Admin" badge, keep the logo from wrapping. */
-  .admin-sidebar:not(:hover) .admin-badge { opacity: 0; }
+  /* Header: keep the logo from wrapping. */
   .admin-sidebar-header { overflow: hidden; white-space: nowrap; }
 
-  /* Collapsed: swap the clipped wordmark for a compact "C" monogram. */
+  /* Collapsed: drop the badge + wordmark out of layout entirely (opacity
+     alone left them occupying width, shoving the monogram off-screen)
+     and centre a compact "C" monogram in the 64px rail. */
+  .admin-sidebar:not(:hover) .admin-badge { display: none; }
   .admin-sidebar:not(:hover) .admin-logo { display: none; }
+  .admin-sidebar:not(:hover) .admin-logo-link { width: 100%; justify-content: center; }
   .admin-sidebar:not(:hover) .admin-sidebar-header { justify-content: center; padding: 0; }
   .admin-logo-mark {
     display: none;
@@ -5167,9 +5170,48 @@ html.admin-on-dark-canvas .admin-topbar,
 }
 .model-link-note strong { color: #6366f1; }
 
+/* Two-column layout: calculations (rows + dials) on the left, the graph
+   on the right. On a big screen the whole thing fits without scrolling;
+   it stacks below 1100px. */
+.model-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.05fr);
+  gap: 16px;
+  align-items: start;
+}
+.model-left { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.model-right { min-width: 0; position: sticky; top: 68px; }
+.model-rows { margin: 0; }
+@media (max-width: 1100px) {
+  .model-layout { grid-template-columns: 1fr; }
+  .model-right { position: static; }
+}
+
+/* Compact dials in the left column so the calculations + results fit
+   alongside the graph. */
+.model-dials { grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; gap: 10px; }
+.model-dials .proj-summary-card { padding: 12px 14px; }
+.model-dials .proj-summary-value { font-size: 20px; }
+
 /* Inside a row the cards shed their own top margin (the row body owns
-   the spacing). */
-.model-cards { margin: 8px 0 0; }
+   the spacing) and run as an even, tight grid with smaller type so a
+   whole model fits on screen. */
+.model-cards {
+  margin: 8px 0 0;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+}
+.model-cards > .proj-card:nth-child(-n+3) { grid-column: span 1; }
+.model-cards .proj-card { padding: 9px 12px; gap: 3px; }
+.model-cards .proj-card-label { font-size: 9.5px; }
+.model-cards .proj-card-input { font-size: 15px; }
+.model-cards .proj-card-prefix,
+.model-cards .proj-card-suffix { font-size: 12px; }
+.model-cards .proj-card-hint { font-size: 9.5px; }
+
+/* Let the chart shrink to fit the right column instead of forcing a
+   720px min-width (which would add a horizontal scrollbar). */
+.model-right .proj-chart { min-width: 0; }
+.model-right .proj-chart-wrap { overflow: visible; }
 
 /* Dark mode */
 .admin-dark .model-row { background: #18181b; border-color: #27272a; }
