@@ -104,19 +104,14 @@
 .deck-slide.visible .deck-v2-bar-left {
   transform: scaleY(1);
 }
-/* The stacked column lands after the fragmented bars (0.6s base offset). */
-.deck-slide.visible .deck-v2-bar-stack {
+/* The Catalog column lands after the fragmented bars (0.6s offset) and
+   carries a green glow so it reads as the one destination, not a sum. */
+.deck-v2-bar-catalog {
+  filter: drop-shadow(0 0 12px rgba(74, 222, 128, 0.45));
+}
+.deck-slide.visible .deck-v2-bar-catalog {
   transform: scaleY(1);
-  transition-delay: calc(0.6s + var(--bar-i, 0) * 0.12s);
-}
-
-.deck-v2-stack-frame {
-  opacity: 0;
-  filter: drop-shadow(0 0 10px rgba(74, 222, 128, 0.4));
-  transition: opacity 0.7s ease 1.4s;
-}
-.deck-slide.visible .deck-v2-stack-frame {
-  opacity: 1;
+  transition-delay: 0.6s;
 }
 
 .deck-v2-chart-caption {
@@ -175,10 +170,40 @@
 
 /* ── Slide 3: representative pillars ────────────────────────────────── */
 .deck-v2-rep-h2 {
-  margin-bottom: 36px;
+  margin-bottom: 14px;
+}
+.deck-v2-rep-sub {
+  margin: 0 0 34px;
+  color: rgba(255, 255, 255, 0.62);
+  font-weight: 500;
 }
 .deck-v2-pillars {
   margin-top: 0;
+}
+
+/* ── Slide 4: market opportunity ────────────────────────────────────── */
+.deck-v2-market {
+  align-items: center;
+  text-align: center;
+}
+.deck-v2-market-h2 {
+  margin-bottom: 14px;
+}
+.deck-v2-market-sub {
+  margin: 0 auto 30px;
+  max-width: 640px;
+}
+.deck-v2-market-stats {
+  width: 100%;
+  max-width: 780px;
+  margin: 0 auto;
+}
+.deck-v2-market-stats .deck-stat {
+  text-align: left;
+}
+.deck-v2-market-note {
+  margin: 28px auto 0;
+  text-align: center;
 }
 
 /* ── Slide 4: close ─────────────────────────────────────────────────── */
@@ -224,12 +249,33 @@
     font-size: 11px;
   }
   .deck-v2-rep-h2 {
-    margin-bottom: 18px;
+    margin-bottom: 10px;
+  }
+  .deck-v2-rep-sub {
+    margin-bottom: 16px;
+    font-size: 13px;
   }
   /* Pillars stack (shared deck mobile rule already collapses .deck-steps);
      tighten spacing so all three fit above the fold. */
   .deck-v2-pillar p {
     font-size: 12px !important;
     line-height: 1.45;
+  }
+  /* Market: keep heading + 3 stats + note inside one viewport. */
+  .deck-v2-market-sub {
+    font-size: 12.5px;
+    line-height: 1.5;
+    max-width: 92%;
+    margin-bottom: 18px;
+  }
+  .deck-v2-market-stats {
+    gap: 6px 18px;
+  }
+  .deck-v2-market-stats .deck-stat {
+    padding: 12px 0;
+  }
+  .deck-v2-market-note {
+    font-size: 11px;
+    margin-top: 16px;
   }
 }

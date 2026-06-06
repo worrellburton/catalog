@@ -2,6 +2,7 @@
 import React, { useEffect, useRef, useState } from 'react';
 import CatalogLogo from './CatalogLogo';
 import ParticleBackground from './ParticleBackground';
+import { getHomeFeed, type ProductAd } from '~/services/product-creative';
 
 interface DeckViewV2Props {
   onSeeApp: () => void;
@@ -55,10 +56,12 @@ function CombinedChart() {
   const leftGap = 14;
   const leftX0 = 30;
   const stackX = 470;
-  const stackW = 78;
+  const stackW = 82;
 
-  // Running offsets for the stacked column (built bottom-up).
-  let stackAcc = 0;
+  // The Catalog column is one unified bar - NOT the five platforms stacked.
+  // Its height tops the scattered bars so it reads as "the one place that
+  // does what all of them do", not "all of them folded together".
+  const catalogH = 232;
 
   return (
     <div className="deck-v2-chart">
@@ -86,7 +89,7 @@ function CombinedChart() {
           );
         })}
         <text className="deck-v2-chart-caption" x={leftX0 + (5 * leftBarW + 4 * leftGap) / 2} y={BASE_Y + 22} textAnchor="middle">
-          Five storefronts, scattered
+          Five apps, scattered
         </text>
 
         {/* Arrow: fragmented -> unified */}
@@ -95,38 +98,21 @@ function CombinedChart() {
           <polyline points={`420,${BASE_Y - 128} 432,${BASE_Y - 120} 420,${BASE_Y - 112}`} fill="none" stroke="rgba(255,255,255,0.45)" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
         </g>
 
-        {/* Right: one stacked Catalog column (same colours, same scale) */}
-        {PLATFORMS.map((p, i) => {
-          const h = p.val * SCALE;
-          const y = BASE_Y - stackAcc - h;
-          stackAcc += h;
-          return (
-            <rect
-              key={p.key}
-              className="deck-v2-bar deck-v2-bar-stack"
-              x={stackX}
-              y={y}
-              width={stackW}
-              height={h}
-              fill={p.color}
-              style={{ '--bar-i': i } as React.CSSProperties}
-            />
-          );
-        })}
-        {/* Glow frame + label for the Catalog column */}
+        {/* Right: one unified Catalog column. A single solid bar - Catalog
+            is the one AI that does what all of them do, not the five
+            platforms folded together into a stack. */}
         <rect
-          className="deck-v2-stack-frame"
-          x={stackX - 4}
-          y={BASE_Y - stackAcc - 4}
-          width={stackW + 8}
-          height={stackAcc + 4}
-          rx="6"
-          fill="none"
-          stroke="#4ade80"
-          strokeWidth="1.5"
+          className="deck-v2-bar deck-v2-bar-catalog"
+          x={stackX}
+          y={BASE_Y - catalogH}
+          width={stackW}
+          height={catalogH}
+          rx="5"
+          fill="#4ade80"
+          style={{ '--bar-i': 0 } as React.CSSProperties}
         />
         <text className="deck-v2-chart-caption deck-v2-chart-caption-strong" x={stackX + stackW / 2} y={BASE_Y + 22} textAnchor="middle">
-          One Catalog feed
+          One AI to shop
         </text>
       </svg>
 
@@ -155,15 +141,14 @@ const DeckViewV2: React.FC<DeckViewV2Props> = ({
   onToggleTheme,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
-  const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
   const [activeSlideIdx, setActiveSlideIdx] = useState(0);
+  // The rising background mirrors the real consumer home feed - every
+  // product with a polished primary video (products.primary_video_url),
+  // not stock clips. Empty until the fetch lands; the dark overlay keeps
+  // the slides legible regardless.
+  const [homeFeed, setHomeFeed] = useState<ProductAd[]>([]);
 
-  // The rising product feed behind the slides. Static public clips (no
-  // Supabase dependency in the admin viewer) cycled into a tall grid so the
-  // texture is present on slide 1 from the first paint.
-  const bgVideos = ['girl2.mp4', 'guy.mp4', 'Untitled.mp4', 'girl.mp4', 'qm1navb8bjo8fjlgjs5x.mp4'];
-
-  const slideTitles = ['Catalog', 'The AI for Shopping', 'What we build', 'The future'];
+  const slideTitles = ['Catalog', 'The AI for Shopping', 'Human taste', 'Market', 'The future'];
 
   useEffect(() => {
     const container = containerRef.current;
@@ -202,23 +187,47 @@ const DeckViewV2: React.FC<DeckViewV2Props> = ({
     return () => observer.disconnect();
   }, []);
 
+  // Pull the real home feed once on mount. Same contract as the consumer
+  // app and Deck v1.2: products with a live primary video. ignoreGender so
+  // the background shows the full catalog, not the current toggle's slice.
+  // Filtered to rows that actually have a video_url so the grid stays
+  // motion-only.
+  useEffect(() => {
+    let cancelled = false;
+    getHomeFeed({ ignoreGender: true })
+      .then((list) => {
+        if (!cancelled) setHomeFeed(list.filter((r) => !!r.video_url));
+      })
+      .catch((err) => {
+        console.error('[DeckViewV2] getHomeFeed failed:', err);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+
   return (
     <div className="deck-view deck-view-v8 deck-view-v2 deck-v8-bg-revealed active" ref={containerRef}>
-      {/* Rising product feed (same drift the longer decks use). Present from
-          the first paint so the cover already carries the texture. */}
+      {/* Rising product feed (same drift the longer decks use), sourced from
+          the live catalog's primary product videos. Up to 48 tiles cycle
+          through the feed (homeFeed[i % len]) so even a small live pool
+          fills the tall grid edge-to-edge. */}
       <div className="deck-v8-bg deck-v2-bg" aria-hidden="true">
         <div className="deck-insight-grid">
-          {Array.from({ length: 24 }).map((_, i) => (
-            <video
-              key={i}
-              src={`${basePath}/${bgVideos[i % bgVideos.length]}`}
-              muted
-              loop
-              playsInline
-              autoPlay
-              className="deck-insight-video"
-            />
-          ))}
+          {Array.from({ length: homeFeed.length === 0 ? 0 : 48 }).map((_, i) => {
+            const clip = homeFeed[i % homeFeed.length];
+            return (
+              <video
+                key={`${clip.id}:${i}`}
+                src={clip.video_url ?? undefined}
+                muted
+                loop
+                playsInline
+                autoPlay
+                className="deck-insight-video"
+              />
+            );
+          })}
         </div>
         <div className="deck-insight-overlay" />
       </div>
@@ -271,27 +280,28 @@ const DeckViewV2: React.FC<DeckViewV2Props> = ({
       {/* Slide 2: The AI for Shopping - combined-surface chart. */}
       <div className="deck-slide deck-v2-thesis">
         <span className="deck-label">The AI for shopping</span>
-        <h2 className="deck-v2-thesis-h2">Every storefront,<br />one intelligent feed.</h2>
+        <h2 className="deck-v2-thesis-h2">Everything they do.<br />One AI to shop.</h2>
         <p className="deck-v2-thesis-sub">
-          Amazon, TikTok, Pinterest, Shop, ShopMy , discovery is scattered across a dozen apps. Catalog folds them into a single feed that learns what you love.
+          Amazon, TikTok, Pinterest, Shop, ShopMy , shopping is scattered across a dozen apps. Catalog does what all of them do , in one. The AI you go to shop.
         </p>
         <CombinedChart />
       </div>
 
-      {/* Slide 3: Representative of the company - what we build. */}
+      {/* Slide 3: Representative of the company. */}
       <div className="deck-slide deck-v2-rep">
         <span className="deck-label">What we build</span>
-        <h2 className="deck-v2-rep-h2">Creators curate.<br />AI indexes.<br />You shop.</h2>
+        <h2 className="deck-v2-rep-h2">Human taste,<br />powered by AI.</h2>
+        <p className="deck-v2-rep-sub">Creators curate. AI indexes. Shoppers shop.</p>
         <div className="deck-steps deck-v2-pillars">
           <div className="deck-step deck-v2-pillar">
             <span className="deck-step-num">01</span>
-            <h3>Taste, not keywords</h3>
+            <h3>Elegant discovery like never before</h3>
             <p>Every look is curated by a creator you trust and indexed by AI , so discovery feels like a friend, not a search bar.</p>
           </div>
           <div className="deck-step deck-v2-pillar">
             <span className="deck-step-num">02</span>
-            <h3>Shoppable by default</h3>
-            <p>Tap any look to buy the exact products in it. The feed is the storefront , no tab-hopping, no dead ends.</p>
+            <h3>The best revenue source for creators out there</h3>
+            <p>Earn on every click , layered affiliate, brand-direct, and referral income that compounds daily. No better place to monetize taste.</p>
           </div>
           <div className="deck-step deck-v2-pillar">
             <span className="deck-step-num">03</span>
@@ -301,10 +311,46 @@ const DeckViewV2: React.FC<DeckViewV2Props> = ({
         </div>
       </div>
 
-      {/* Slide 4: Close. */}
+      {/* Slide 4: Market opportunity - a global AI shopping platform. */}
+      <div className="deck-slide deck-v2-market">
+        <span className="deck-label">Market Opportunity</span>
+        <h2 className="deck-v2-market-h2">If shopping runs through one AI,<br />the market is all of it.</h2>
+        <p className="deck-v2-market-sub">
+          Catalog isn&apos;t chasing a slice of commerce , it&apos;s the shopping layer for the whole thing. A global AI you go to shop has a ceiling the size of retail itself.
+        </p>
+        <div className="deck-stats deck-v2-market-stats">
+          <div className="deck-stat">
+            <span className="deck-stat-num">$32T</span>
+            <span className="deck-stat-label">Global retail spend a year , the ceiling for an AI you shop through</span>
+            <div className="stat-growth">
+              <div className="growth-line" style={{ '--grow-width': '70%' } as React.CSSProperties} />
+              <span className="growth-rate">all commerce</span>
+            </div>
+          </div>
+          <div className="deck-stat">
+            <span className="deck-stat-num">$6.9T</span>
+            <span className="deck-stat-label">Online by 2027, growing double digits while stores stay flat</span>
+            <div className="stat-growth">
+              <div className="growth-line" style={{ '--grow-width': '88%' } as React.CSSProperties} />
+              <span className="growth-rate">+9% CAGR</span>
+            </div>
+          </div>
+          <div className="deck-stat">
+            <span className="deck-stat-num">$69B</span>
+            <span className="deck-stat-label">Just 1% of global e-commerce routed through Catalog</span>
+            <div className="stat-growth">
+              <div className="growth-line" style={{ '--grow-width': '38%' } as React.CSSProperties} />
+              <span className="growth-rate">our wedge</span>
+            </div>
+          </div>
+        </div>
+        <p className="deck-note deck-v2-market-note">Directional , global retail + e-commerce scale. The point: an AI you go to shop has a TAM the size of commerce itself.</p>
+      </div>
+
+      {/* Slide 5: Close. */}
       <div className="deck-slide deck-cover deck-v2-close">
         <CatalogLogo className="deck-logo deck-v2-close-logo" />
-        <p className="deck-subtitle deck-v2-close-sub">Human taste, powered by AI.</p>
+        <p className="deck-subtitle deck-v2-close-sub">The AI you go to shop.</p>
         <div className="deck-end-actions">
           <button className="deck-mvp-btn" onClick={onSeeApp}>See the product</button>
           <button className="deck-website-btn" onClick={onVisitWebsite}>Visit website</button>
