@@ -109,7 +109,7 @@
   font-size: 13px;
   font-weight: 600;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
-  z-index: 300;
+  z-index: 2147483001;
   animation: avatar-toast-in 0.24s cubic-bezier(0.32, 0.72, 0, 1);
 }
 @keyframes avatar-toast-in {
@@ -129,7 +129,11 @@
   align-items: center;
   justify-content: center;
   padding: 20px;
-  z-index: 250;
+  /* Top layer — the crop overlay must sit above EVERY in-app surface
+     (account menu z-index 12000, Profile overlay 9000, etc.). It opens from
+     those menus, so anything lower renders behind them and the user can't
+     see or use the crop. Near-max so nothing in-app outranks it. */
+  z-index: 2147483000;
   opacity: 0;
   /* Only opacity animates on open. The blur value is constant, so listing
      backdrop-filter here just forced the compositor to re-rasterize the
@@ -549,7 +553,9 @@
   align-items: center;
   justify-content: center;
   padding: 20px;
-  z-index: 240;
+  /* Same top-layer treatment as the crop modal — the file-pick sheet also
+     opens from high-z menus, so it must outrank them too. */
+  z-index: 2147483000;
   opacity: 0;
   transition: opacity 0.22s ease;
 }
