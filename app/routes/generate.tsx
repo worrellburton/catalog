@@ -2730,57 +2730,45 @@ function GenerationProgress({ generation, images }: { generation: UserGeneration
     : 'Almost there…';
 
   return (
-    <div className="gen-build">
+    <div
+      className="gen-build gen-build-v2"
+      role="progressbar"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={Math.round(pct)}
+      aria-label={`Generating - ${activePhase}`}
+    >
       <div className="gen-build-particles" aria-hidden="true">
         <ParticleBackground />
       </div>
-      <div
-        className="gen-build-frame is-building"
-        role="progressbar"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={Math.round(pct)}
-        aria-label={`Generating - ${activePhase}`}
-      >
-        {/* Border progress: stroke a single rect along its perimeter
-            using `pathLength="100"` so the dasharray maps cleanly to
-            percent. preserveAspectRatio="none" lets the stroke trace
-            the 9:16 frame regardless of its rendered size. */}
-        <svg className="gen-build-border" viewBox="0 0 90 160" preserveAspectRatio="none" aria-hidden="true">
-          <rect className="gen-build-track" x="1" y="1" width="88" height="158" rx="6" ry="6" pathLength={100} />
-          <rect
-            className="gen-build-fill"
-            x="1" y="1" width="88" height="158" rx="6" ry="6"
-            pathLength={100}
-            strokeDasharray={`${pct} 100`}
-          />
-        </svg>
 
-        <div className="gen-build-shimmer" aria-hidden="true" />
-        <div className="gen-build-pulse" aria-hidden="true" />
-
-        <div className="gen-build-content">
-          {/* The shopper's face + chosen products orbit in a 3D ring while
-              Vision composes the look. */}
-          {images.length > 0 && (
-            <div className="gen-orbit" aria-hidden="true">
-              <div className="gen-orbit-ring" style={{ ['--n' as string]: images.length }}>
-                {images.map((src, i) => (
-                  <span key={`${src}-${i}`} className="gen-orbit-item" style={{ ['--i' as string]: i }}>
-                    <img src={src} alt="" loading="lazy" decoding="async" />
-                  </span>
-                ))}
-              </div>
+      {/* Frameless generating stage: the face + product circles (flowed in
+          from the review screen) orbit inside a soft glow halo over the
+          particle field — no phone frame. */}
+      <div className="gen-build-stage">
+        <div className="gen-build-halo" aria-hidden="true" />
+        {images.length > 0 && (
+          <div className="gen-orbit" aria-hidden="true">
+            <div className="gen-orbit-ring" style={{ ['--n' as string]: images.length }}>
+              {images.map((src, i) => (
+                <span key={`${src}-${i}`} className="gen-orbit-item" style={{ ['--i' as string]: i }}>
+                  <img src={src} alt="" loading="lazy" decoding="async" />
+                </span>
+              ))}
             </div>
-          )}
+          </div>
+        )}
+
+        <div className="gen-build-meta">
           <span className="gen-vision gen-build-vision">Vision</span>
           <div className="gen-build-phase">{activePhase}</div>
           <div key={jokeIdx} className="gen-build-joke">{BUILD_JOKES[jokeIdx]}</div>
-          <div className="gen-build-sub">{subLabel}</div>
-          <div className="gen-build-pct">{Math.round(pct)}%</div>
+          <div className="gen-build-bar" aria-hidden="true">
+            <div className="gen-build-bar-fill" style={{ width: `${pct}%` }} />
+          </div>
+          <div className="gen-build-sub">{subLabel} &middot; {Math.round(pct)}%</div>
         </div>
       </div>
-
     </div>
   );
 }

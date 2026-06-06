@@ -2098,6 +2098,70 @@ html[data-shell="catalog-app"] .gen-page {
   height: 100%;
 }
 
+/* ── v2 build screen: frameless, centered, elegant ──────────────────────
+   No phone frame — the face + product orbit sits in a soft glow halo over
+   the particle field with minimal progress text below. Centered in the
+   stage so the top is never clipped (fixes the can't-scroll-to-top issue). */
+.gen-build-v2 {
+  justify-content: center;
+  gap: 0;
+  min-height: 66vh;
+  min-height: 66svh;
+}
+.gen-build-stage {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 24px;
+}
+.gen-build-halo {
+  position: absolute;
+  top: 36%;
+  left: 50%;
+  width: min(360px, 80vw);
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle, rgba(150,170,255,0.22) 0%, rgba(150,170,255,0.07) 42%, transparent 70%);
+  filter: blur(6px);
+  pointer-events: none;
+  z-index: 0;
+  animation: gen-halo-pulse 4.2s ease-in-out infinite;
+}
+@keyframes gen-halo-pulse {
+  0%, 100% { opacity: 0.7;  transform: translate(-50%, -50%) scale(1); }
+  50%      { opacity: 1;    transform: translate(-50%, -50%) scale(1.08); }
+}
+.gen-build-v2 .gen-orbit { position: relative; z-index: 1; }
+.gen-build-meta {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+.gen-build-bar {
+  width: min(260px, 70vw);
+  height: 4px;
+  margin-top: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+.gen-build-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #c7d2fe, #ffffff);
+  transition: width 0.5s ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .gen-build-halo { animation: none; }
+}
+
 .gen-build-frame {
   position: relative;
   width: min(360px, 80vw);

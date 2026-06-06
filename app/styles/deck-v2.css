@@ -40,6 +40,15 @@
 .deck-view-v2 .deck-v8-bg .deck-insight-grid {
   animation-duration: 60s;
 }
+/* Each background tile fades in once its poster/first frame is ready (the
+   .is-loaded class is added on load) — nothing ever pops into place. */
+.deck-view-v2 .deck-insight-video {
+  opacity: 0;
+  transition: opacity 0.8s ease;
+}
+.deck-view-v2 .deck-insight-video.is-loaded {
+  opacity: 1;
+}
 
 /* ── Reveal effect (cover + close) ──────────────────────────────────────
    The content scales in subtly while a diagonal gradient mask sweeps it
@@ -392,6 +401,7 @@
     aspect-ratio: 3 / 4;
     height: auto;
   }
+  /* Mobile fade-in handled by the shared rule below. */
 
   .deck-v2-cover-logo {
     height: 48px;

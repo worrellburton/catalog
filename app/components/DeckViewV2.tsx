@@ -252,8 +252,11 @@ const DeckViewV2: React.FC<DeckViewV2Props> = () => {
                 // Poster shows first; nudge playback once data is ready since
                 // some webviews don't honour the autoPlay attribute on their
                 // own for muted inline video.
-                onLoadedData={(e) => { e.currentTarget.play().catch(() => { /* autoplay blocked */ }); }}
-                onCanPlay={(e) => { e.currentTarget.play().catch(() => {}); }}
+                // Fade each tile in once its first frame/poster is ready so
+                // nothing ever pops into place; nudge playback at the same time
+                // since some webviews ignore the autoPlay attribute.
+                onLoadedData={(e) => { e.currentTarget.classList.add('is-loaded'); e.currentTarget.play().catch(() => { /* autoplay blocked */ }); }}
+                onCanPlay={(e) => { e.currentTarget.classList.add('is-loaded'); e.currentTarget.play().catch(() => {}); }}
                 className="deck-insight-video"
               />
             );
