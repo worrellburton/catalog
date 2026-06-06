@@ -39,7 +39,6 @@ interface DeckViewV2Props {
 // each segment's share of the combined column.
 const PLATFORMS: { key: string; name: string; color: string; val: number }[] = [
   { key: 'amazon',    name: 'Amazon',    color: '#ff9900', val: 75 },
-  { key: 'tiktok',    name: 'TikTok',    color: '#25f4ee', val: 45 },
   { key: 'pinterest', name: 'Pinterest', color: '#e60023', val: 30 },
   { key: 'ltk',       name: 'LTK',       color: '#ec4899', val: 55 },
   { key: 'shopmy',    name: 'ShopMy',    color: '#a78bfa', val: 20 },
@@ -105,8 +104,8 @@ function CombinedChart() {
             </g>
           );
         })}
-        <text className="deck-v2-chart-caption" x={leftX0 + (5 * leftBarW + 4 * leftGap) / 2} y={BASE_Y + 22} textAnchor="middle">
-          Five apps, scattered
+        <text className="deck-v2-chart-caption" x={leftX0 + (PLATFORMS.length * leftBarW + (PLATFORMS.length - 1) * leftGap) / 2} y={BASE_Y + 22} textAnchor="middle">
+          Four apps, scattered
         </text>
 
         {/* Arrow: fragmented -> unified */}
@@ -269,11 +268,16 @@ const DeckViewV2: React.FC<DeckViewV2Props> = () => {
                 key={`${clip.key}:${i}`}
                 src={clip.url}
                 poster={clip.poster}
-                preload="metadata"
+                preload="auto"
                 muted
                 loop
                 playsInline
                 autoPlay
+                // Poster shows first; nudge playback once data is ready since
+                // some webviews don't honour the autoPlay attribute on their
+                // own for muted inline video.
+                onLoadedData={(e) => { e.currentTarget.play().catch(() => { /* autoplay blocked */ }); }}
+                onCanPlay={(e) => { e.currentTarget.play().catch(() => {}); }}
                 className="deck-insight-video"
               />
             );
@@ -323,7 +327,7 @@ const DeckViewV2: React.FC<DeckViewV2Props> = () => {
         <span className="deck-label">The AI for shopping</span>
         <h2 className="deck-v2-thesis-h2">Everything they do.<br />One AI to shop.</h2>
         <p className="deck-v2-thesis-sub">
-          Amazon, TikTok, Pinterest, LTK, ShopMy , shopping is scattered across a dozen apps. Catalog does what all of them do , in one. The AI platform for shopping.
+          Amazon, Pinterest, LTK, ShopMy , shopping is scattered across a dozen apps. Catalog does what all of them do , in one. The AI platform for shopping.
         </p>
         <CombinedChart />
       </div>
@@ -352,40 +356,40 @@ const DeckViewV2: React.FC<DeckViewV2Props> = () => {
         </div>
       </div>
 
-      {/* Slide 4: Market opportunity - social commerce. */}
+      {/* Slide 4: Market opportunity - a global AI shopping platform. */}
       <div className="deck-slide deck-v2-market">
         <span className="deck-label">Market Opportunity</span>
-        <h2 className="deck-v2-market-h2">Shopping is going social.<br />Catalog is the AI layer.</h2>
+        <h2 className="deck-v2-market-h2">If shopping runs through one AI,<br />the market is all of it.</h2>
         <p className="deck-v2-market-sub">
-          Discovery is moving from the search bar to the feed. Social commerce is the fastest-growing channel in retail , and it needs an intelligence layer. That&apos;s Catalog.
+          Catalog isn&apos;t chasing a slice of commerce , it&apos;s the shopping layer for the whole thing. A global AI platform for shopping has a ceiling the size of retail itself.
         </p>
         <div className="deck-stats deck-v2-market-stats">
           <div className="deck-stat">
-            <span className="deck-stat-num">$1.2T</span>
-            <span className="deck-stat-label">Global social commerce in 2025</span>
+            <span className="deck-stat-num">$32T</span>
+            <span className="deck-stat-label">Global retail spend a year , the ceiling for an AI you shop through</span>
             <div className="stat-growth">
-              <div className="growth-line" style={{ '--grow-width': '55%' } as React.CSSProperties} />
-              <span className="growth-rate">the channel today</span>
+              <div className="growth-line" style={{ '--grow-width': '70%' } as React.CSSProperties} />
+              <span className="growth-rate">all commerce</span>
             </div>
           </div>
           <div className="deck-stat">
             <span className="deck-stat-num">$8.5T</span>
-            <span className="deck-stat-label">Social commerce by 2030</span>
+            <span className="deck-stat-label">Global social commerce by 2030 , the fastest-growing channel</span>
             <div className="stat-growth">
-              <div className="growth-line" style={{ '--grow-width': '92%' } as React.CSSProperties} />
+              <div className="growth-line" style={{ '--grow-width': '88%' } as React.CSSProperties} />
               <span className="growth-rate">~30% CAGR</span>
             </div>
           </div>
           <div className="deck-stat">
-            <span className="deck-stat-num">$85B</span>
-            <span className="deck-stat-label">Just 1% of social commerce routed through Catalog</span>
+            <span className="deck-stat-num">$69B</span>
+            <span className="deck-stat-label">Just 1% of global e-commerce routed through Catalog</span>
             <div className="stat-growth">
-              <div className="growth-line" style={{ '--grow-width': '40%' } as React.CSSProperties} />
+              <div className="growth-line" style={{ '--grow-width': '38%' } as React.CSSProperties} />
               <span className="growth-rate">our wedge</span>
             </div>
           </div>
         </div>
-        <p className="deck-note deck-v2-market-note">Directional , social-commerce market estimates (Grand View, eMarketer). The point: Catalog is the AI layer on the fastest-growing slice of retail.</p>
+        <p className="deck-note deck-v2-market-note">Directional , global retail + e-commerce scale. The point: an AI platform for shopping has a TAM the size of commerce itself.</p>
       </div>
 
       {/* Slide 5: Potential partnership - exclusive affiliate rights. */}
