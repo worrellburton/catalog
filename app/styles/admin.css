@@ -5136,6 +5136,24 @@ html.admin-on-dark-canvas .admin-topbar,
   transform: rotate(45deg);
 }
 
+.model-row-grip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 28px;
+  margin-right: -4px;
+  color: #cbd5e1;
+  cursor: grab;
+  flex-shrink: 0;
+}
+.model-row-grip:hover { color: #94a3b8; }
+.model-row-grip:active { cursor: grabbing; }
+.model-row.is-dragging { opacity: 0.5; }
+.model-row.is-drag-over { box-shadow: 0 0 0 2px #6366f1; }
+.admin-dark .model-row-grip { color: #52525b; }
+.admin-dark .model-row-grip:hover { color: #a1a1aa; }
+
 .model-row-title-btn {
   flex: 1;
   display: flex;
@@ -5238,9 +5256,10 @@ html.admin-on-dark-canvas .admin-topbar,
 .gtm-summary-sub { margin-top: -6px; }
 .gtm-summary-sub .proj-summary-value { font-size: 24px; }
 
-/* Paid / organic accent stripe on the matching dials. */
+/* Paid / organic / engagement accent stripe on the matching dials. */
 .gtm-dial-paid { box-shadow: inset 3px 0 0 #6366f1, 0 6px 20px rgba(15, 23, 42, 0.18); }
 .gtm-dial-organic { box-shadow: inset 3px 0 0 #10b981, 0 6px 20px rgba(15, 23, 42, 0.18); }
+.gtm-dial-engage { box-shadow: inset 3px 0 0 #f59e0b, 0 6px 20px rgba(15, 23, 42, 0.18); }
 
 /* Chart legend (paid vs organic). */
 .gtm-legend {
@@ -5265,10 +5284,15 @@ html.admin-on-dark-canvas .admin-topbar,
 }
 .admin-dark .gtm-legend-item { color: #a1a1aa; }
 
-/* Tooltip "paid" pill — indigo to match the paid band. */
+/* Tooltip "paid" pill — indigo to match the MAU line. */
 .proj-tooltip-row-delta.gtm-paid {
   background: rgba(99, 102, 241, 0.20);
   color: #a5b4fc;
+}
+/* Tooltip "sales" pill — amber to match the engagement line. */
+.proj-tooltip-row-delta.gtm-eng {
+  background: rgba(245, 158, 11, 0.20);
+  color: #fcd34d;
 }
 
 /* Stats column tint - everything in the Stats group (header + body cells)

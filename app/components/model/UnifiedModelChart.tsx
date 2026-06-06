@@ -14,10 +14,12 @@ interface ChartProps {
   acquisition: GtmMonth[];
   showRevenue: boolean;
   showAcquisition: boolean;
+  showEngagement: boolean;
 }
 
 const REVENUE = '#10b981'; // green — revenue ($, left axis)
 const ACQ = '#6366f1';     // indigo — MAU (count, right axis)
+const ENGAGE = '#f59e0b';  // amber — sales (count, right axis)
 
 function smoothLine(points: { x: number; y: number }[]): string {
   if (points.length === 0) return '';
@@ -38,24 +40,29 @@ function pctChange(curr: number, prev: number | undefined): { text: string; posi
   return { text: `${sign}${(pct * 100).toFixed(pct >= 1 ? 0 : 1)}%`, positive: pct >= 0 };
 }
 
-export default function UnifiedModelChart({ revenue, acquisition, showRevenue, showAcquisition }: ChartProps) {
+export default function UnifiedModelChart({ revenue, acquisition, showRevenue, showAcquisition, showEngagement }: ChartProps) {
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
 
   const W = 1200, H = 440;
   const PAD_L = 72, PAD_R = 72, PAD_T = 24, PAD_B = 44;
   const innerW = W - PAD_L - PAD_R;
   const innerH = H - PAD_T - PAD_B;
-  const TIP_W = 240, TIP_H = 180;
+  const TIP_W = 244, TIP_H = 196;
 
   const revMax = niceCeiling(Math.max(1, ...revenue.map(s => s.revenue)));
-  const acqMax = niceCeiling(Math.max(1, ...acquisition.map(s => s.cumulativeUsers)));
+  // MAU and sales share the right (count) axis — both are user-scale.
+  const countMax = niceCeiling(Math.max(
+    1,
+    showAcquisition ? Math.max(...acquisition.map(s => s.cumulativeUsers)) : 0,
+    showEngagement ? Math.max(...revenue.map(s => s.sales)) : 0,
+  ));
 
   const xFor = (i: number) => PAD_L + (innerW * i) / (MONTHS - 1);
   const yRev = (v: number) => PAD_T + innerH - (innerH * v) / revMax;
-  const yAcq = (v: number) => PAD_T + innerH - (innerH * v) / acqMax;
+  const yCount = (v: number) => PAD_T + innerH - (innerH * v) / countMax;
 
   const gridSteps = [0, 0.25, 0.5, 0.75, 1];
-  const revKey = revenue.map(s => Math.round(s.revenue)).join('|');
+  const revKey = revenue.map(s => `${Math.round(s.revenue)}/${Math.round(s.sales)}`).join('|');
   const acqKey = acquisition.map(s => Math.round(s.cumulativeUsers)).join('|');
 
   const revLine = useMemo(
@@ -70,18 +77,25 @@ export default function UnifiedModelChart({ revenue, acquisition, showRevenue, s
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [revKey, revMax]);
   const acqLine = useMemo(
-    () => smoothLine(acquisition.map((s, i) => ({ x: xFor(i), y: yAcq(s.cumulativeUsers) }))),
+    () => smoothLine(acquisition.map((s, i) => ({ x: xFor(i), y: yCount(s.cumulativeUsers) }))),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [acqKey, acqMax],
+    [acqKey, countMax],
+  );
+  const engLine = useMemo(
+    () => smoothLine(revenue.map((s, i) => ({ x: xFor(i), y: yCount(s.sales) }))),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [revKey, countMax],
   );
 
-  const nothingOn = !showRevenue && !showAcquisition;
+  const anyCount = showAcquisition || showEngagement;
+  const nothingOn = !showRevenue && !anyCount;
 
   return (
     <div className="proj-chart-wrap">
       <div className="gtm-legend">
         {showRevenue && <span className="gtm-legend-item"><i style={{ background: REVENUE }} /> Revenue</span>}
-        {showAcquisition && <span className="gtm-legend-item"><i style={{ background: ACQ }} /> Acquisition (MAU)</span>}
+        {showEngagement && <span className="gtm-legend-item"><i style={{ background: ENGAGE }} /> Sales</span>}
+        {showAcquisition && <span className="gtm-legend-item"><i style={{ background: ACQ }} /> MAU</span>}
       </div>
       <svg className="proj-chart" viewBox={`0 0 ${W} ${H}`} preserveAspectRatio="xMidYMid meet">
         <defs>
@@ -101,9 +115,9 @@ export default function UnifiedModelChart({ revenue, acquisition, showRevenue, s
                   {fmtCurrency(revMax * t, { compact: true })}
                 </text>
               )}
-              {showAcquisition && (
-                <text x={W - PAD_R + 10} y={y + 4} textAnchor="start" fontSize="11" fill={ACQ}>
-                  {fmtNumber(acqMax * t)}
+              {anyCount && (
+                <text x={W - PAD_R + 10} y={y + 4} textAnchor="start" fontSize="11" fill="#94a3b8">
+                  {fmtNumber(countMax * t)}
                 </text>
               )}
             </g>
@@ -112,13 +126,14 @@ export default function UnifiedModelChart({ revenue, acquisition, showRevenue, s
 
         {nothingOn && (
           <text x={W / 2} y={H / 2} textAnchor="middle" fontSize="14" fill="#94a3b8">
-            Toggle Revenue or Acquisition to plot a line.
+            Toggle a line on to plot it.
           </text>
         )}
 
         {showRevenue && <path d={revArea} fill="url(#model-rev-grad)" />}
         {showRevenue && <path d={revLine} fill="none" stroke={REVENUE} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />}
-        {showAcquisition && <path d={acqLine} fill="none" stroke={ACQ} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" strokeDasharray={showRevenue ? '0' : '0'} />}
+        {showEngagement && <path d={engLine} fill="none" stroke={ENGAGE} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />}
+        {showAcquisition && <path d={acqLine} fill="none" stroke={ACQ} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />}
 
         {!nothingOn && revenue.map((s, i) => {
           const x = xFor(i);
@@ -126,7 +141,8 @@ export default function UnifiedModelChart({ revenue, acquisition, showRevenue, s
           return (
             <g key={`pt-${i}`}>
               {showRevenue && <circle cx={x} cy={yRev(s.revenue)} r={isHover ? 6 : 3.5} fill="#fff" stroke={REVENUE} strokeWidth={isHover ? 3 : 2} style={{ pointerEvents: 'none' }} />}
-              {showAcquisition && <circle cx={x} cy={yAcq(acquisition[i].cumulativeUsers)} r={isHover ? 6 : 3.5} fill="#fff" stroke={ACQ} strokeWidth={isHover ? 3 : 2} style={{ pointerEvents: 'none' }} />}
+              {showEngagement && <circle cx={x} cy={yCount(s.sales)} r={isHover ? 6 : 3.5} fill="#fff" stroke={ENGAGE} strokeWidth={isHover ? 3 : 2} style={{ pointerEvents: 'none' }} />}
+              {showAcquisition && <circle cx={x} cy={yCount(acquisition[i].cumulativeUsers)} r={isHover ? 6 : 3.5} fill="#fff" stroke={ACQ} strokeWidth={isHover ? 3 : 2} style={{ pointerEvents: 'none' }} />}
               <rect
                 x={x - 28} y={PAD_T} width={56} height={innerH}
                 fill="transparent"
@@ -144,14 +160,19 @@ export default function UnifiedModelChart({ revenue, acquisition, showRevenue, s
         {hoverIdx !== null && !nothingOn && (() => {
           const i = hoverIdx;
           const x = xFor(i);
-          const anchorY = showRevenue ? yRev(revenue[i].revenue) : yAcq(acquisition[i].cumulativeUsers);
+          const anchorY = showRevenue ? yRev(revenue[i].revenue)
+            : showAcquisition ? yCount(acquisition[i].cumulativeUsers)
+            : yCount(revenue[i].sales);
           const tipX = Math.min(W - PAD_R - TIP_W, Math.max(PAD_L, x - TIP_W / 2));
           const tipY = Math.max(PAD_T, anchorY - TIP_H - 14);
           const rev = pctChange(revenue[i].revenue, i >= 1 ? revenue[i - 1].revenue : undefined);
           const mau = pctChange(acquisition[i].cumulativeUsers, i >= 1 ? acquisition[i - 1].cumulativeUsers : undefined);
-          const rows: { label: string; value: string; delta: string; positive: boolean; tone: 'rev' | 'acq' }[] = [];
+          const rows: { label: string; value: string; delta: string; positive: boolean; tone: 'rev' | 'acq' | 'eng' }[] = [];
           if (showRevenue) {
             rows.push({ label: 'Revenue', value: fmtCurrency(revenue[i].revenue), delta: `${rev.text} MoM`, positive: rev.positive, tone: 'rev' });
+          }
+          if (showEngagement) {
+            rows.push({ label: 'Sales', value: fmtNumber(revenue[i].sales), delta: 'orders', positive: true, tone: 'eng' });
           }
           if (showAcquisition) {
             rows.push({ label: 'MAU', value: fmtNumber(acquisition[i].cumulativeUsers), delta: `${mau.text} MoM`, positive: mau.positive, tone: 'acq' });
@@ -171,7 +192,7 @@ export default function UnifiedModelChart({ revenue, acquisition, showRevenue, s
                       <div key={r.label} className="proj-tooltip-row">
                         <span className="proj-tooltip-row-label">{r.label}</span>
                         <span className="proj-tooltip-row-current">{r.value}</span>
-                        <span className={`proj-tooltip-row-delta ${r.tone === 'acq' ? 'gtm-paid' : r.positive ? 'positive' : 'negative'}`}>{r.delta}</span>
+                        <span className={`proj-tooltip-row-delta ${r.tone === 'acq' ? 'gtm-paid' : r.tone === 'eng' ? 'gtm-eng' : r.positive ? 'positive' : 'negative'}`}>{r.delta}</span>
                       </div>
                     ))}
                   </div>

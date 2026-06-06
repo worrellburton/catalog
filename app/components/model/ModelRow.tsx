@@ -2,7 +2,8 @@ import type { ReactNode } from 'react';
 
 // A toggle row at the top of the Model page. The checkbox turns the
 // series' line on/off in the shared graph; clicking the title drops down
-// that model's assumptions. Two of these stack: Revenue and Acquisition.
+// that model's assumptions; the grip handle drags to reorder. Three of
+// these stack: Acquisition, Engagement and Revenue.
 
 export default function ModelRow({
   title,
@@ -13,6 +14,12 @@ export default function ModelRow({
   open,
   onToggle,
   children,
+  onDragStart,
+  onDragEnter,
+  onDragEnd,
+  onDrop,
+  isDragging,
+  isDragOver,
 }: {
   title: string;
   subtitle: string;
@@ -22,10 +29,35 @@ export default function ModelRow({
   open: boolean;
   onToggle: () => void;
   children: ReactNode;
+  onDragStart?: () => void;
+  onDragEnter?: () => void;
+  onDragEnd?: () => void;
+  onDrop?: () => void;
+  isDragging?: boolean;
+  isDragOver?: boolean;
 }) {
   return (
-    <div className={`model-row${open ? ' is-open' : ''}${checked ? ' is-on' : ''}`}>
+    <div
+      className={`model-row${open ? ' is-open' : ''}${checked ? ' is-on' : ''}${isDragging ? ' is-dragging' : ''}${isDragOver ? ' is-drag-over' : ''}`}
+      onDragOver={(e) => { if (onDrop) e.preventDefault(); }}
+      onDragEnter={onDragEnter}
+      onDrop={(e) => { if (onDrop) { e.preventDefault(); onDrop(); } }}
+    >
       <div className="model-row-head">
+        <span
+          className="model-row-grip"
+          draggable
+          onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; onDragStart?.(); }}
+          onDragEnd={onDragEnd}
+          title="Drag to reorder"
+          aria-label="Drag to reorder"
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+            <circle cx="9" cy="6" r="1.6" /><circle cx="15" cy="6" r="1.6" />
+            <circle cx="9" cy="12" r="1.6" /><circle cx="15" cy="12" r="1.6" />
+            <circle cx="9" cy="18" r="1.6" /><circle cx="15" cy="18" r="1.6" />
+          </svg>
+        </span>
         <label className="model-row-check" title={checked ? 'Hide line' : 'Show line'}>
           <input
             type="checkbox"
