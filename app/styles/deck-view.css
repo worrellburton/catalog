@@ -15,6 +15,12 @@
   scroll-behavior: smooth;
 }
 
+/* Hide the global generation-queue FAB while a deck is open - a presentation
+   surface shouldn't show the admin queue widget in the corner. */
+body:has(.deck-view.active) .gen-queue-host {
+  display: none !important;
+}
+
 .deck-slide {
   scroll-snap-align: start;
 }

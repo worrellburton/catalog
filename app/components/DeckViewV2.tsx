@@ -51,17 +51,19 @@ const PLATFORMS: { key: string; name: string; color: string; val: number }[] = [
 function CombinedChart() {
   // Geometry in SVG user units; the viewBox scales the whole thing on mobile.
   const BASE_Y = 290;
-  const SCALE = 1; // 1 unit of `val` == 1px tall, shared by both sides.
+  // Left bars are deliberately small; the Catalog column towers over them so
+  // the contrast carries the point at a glance.
+  const SCALE = 0.78;
   const leftBarW = 30;
   const leftGap = 14;
   const leftX0 = 30;
-  const stackX = 470;
-  const stackW = 82;
+  const stackX = 466;
+  const stackW = 96;
 
   // The Catalog column is one unified bar - NOT the five platforms stacked.
-  // Its height tops the scattered bars so it reads as "the one place that
-  // does what all of them do", not "all of them folded together".
-  const catalogH = 232;
+  // It dwarfs the scattered bars so it reads as "the one place that does what
+  // all of them do", not "all of them folded together".
+  const catalogH = 262;
 
   return (
     <div className="deck-v2-chart">
@@ -141,6 +143,7 @@ const DeckViewV2: React.FC<DeckViewV2Props> = ({
   onToggleTheme,
 }) => {
   const containerRef = useRef<HTMLDivElement>(null);
+  const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
   const [activeSlideIdx, setActiveSlideIdx] = useState(0);
   // The rising background mirrors the real consumer home feed - every
   // product with a polished primary video (products.primary_video_url),
@@ -295,18 +298,18 @@ const DeckViewV2: React.FC<DeckViewV2Props> = ({
         <div className="deck-steps deck-v2-pillars">
           <div className="deck-step deck-v2-pillar">
             <span className="deck-step-num">01</span>
-            <h3>Elegant discovery like never before</h3>
-            <p>Every look is curated by a creator you trust and indexed by AI , so discovery feels like a friend, not a search bar.</p>
+            <h3>Elegant discovery</h3>
+            <p>Every look is curated by a creator you trust and indexed by AI , so finding what you want feels like a recommendation from a friend, not a search bar.</p>
           </div>
           <div className="deck-step deck-v2-pillar">
             <span className="deck-step-num">02</span>
-            <h3>The best revenue source for creators out there</h3>
-            <p>Earn on every click , layered affiliate, brand-direct, and referral income that compounds daily. No better place to monetize taste.</p>
+            <h3>Revenue source for creators</h3>
+            <p>Creators earn three ways , their own affiliate links, brand-direct deals we sign as a Shopify app, and daily payouts on engagement.</p>
           </div>
           <div className="deck-step deck-v2-pillar">
             <span className="deck-step-num">03</span>
             <h3>Built for everyone</h3>
-            <p>Shoppers discover, creators earn on every click, and brands get clean, full-funnel attribution.</p>
+            <p>Built for all demographics, every kind of shopping, and all categories , not one niche.</p>
           </div>
         </div>
       </div>
@@ -354,6 +357,8 @@ const DeckViewV2: React.FC<DeckViewV2Props> = ({
         <div className="deck-end-actions">
           <button className="deck-mvp-btn" onClick={onSeeApp}>See the product</button>
           <button className="deck-website-btn" onClick={onVisitWebsite}>Visit website</button>
+          <a className="deck-website-btn" href="https://instagram.com/catalog" target="_blank" rel="noopener noreferrer">@catalog</a>
+          <a className="deck-mvp-btn" href={`${basePath}/trademark.pdf`} target="_blank" rel="noopener noreferrer">Trademark</a>
         </div>
       </div>
     </div>

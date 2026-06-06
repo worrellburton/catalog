@@ -107,7 +107,7 @@
 /* The Catalog column lands after the fragmented bars (0.6s offset) and
    carries a green glow so it reads as the one destination, not a sum. */
 .deck-v2-bar-catalog {
-  filter: drop-shadow(0 0 12px rgba(74, 222, 128, 0.45));
+  filter: drop-shadow(0 0 20px rgba(74, 222, 128, 0.6));
 }
 .deck-slide.visible .deck-v2-bar-catalog {
   transform: scaleY(1);
