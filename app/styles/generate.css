@@ -2247,13 +2247,64 @@ html[data-shell="catalog-app"] .gen-page {
   border: 1.5px solid rgba(255, 255, 255, 0.2);
   box-shadow: 0 8px 22px rgba(0, 0, 0, 0.55);
   background: #111;
+  /* Settle-in: each thumbnail pops into the ring on mount (staggered), so
+     the review circles read as flowing into the build orbit. */
+  animation: gen-orbit-in 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: calc(var(--i, 0) * 0.06s);
 }
 @keyframes gen-orbit-spin {
   from { transform: rotateY(0deg); }
   to   { transform: rotateY(360deg); }
 }
+@keyframes gen-orbit-in {
+  from { opacity: 0; transform: scale(0.15); }
+  to   { opacity: 1; transform: scale(1); }
+}
 @media (prefers-reduced-motion: reduce) {
   .gen-orbit-ring { animation: none; }
+  .gen-orbit-item img { animation: none; }
+}
+
+/* Review screen — the face + chosen products as gently-floating circles
+   arranged around a ring (upright via the rotate/translate/un-rotate
+   trick), staggered bob so they drift. They settle into the 3D orbit on the
+   build screen. */
+.gen-review-circles {
+  position: relative;
+  width: 100%;
+  height: 188px;
+  margin: 6px 0 18px;
+}
+.gen-review-circle {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%)
+             rotate(calc(var(--i) * (360deg / var(--n))))
+             translate(72px)
+             rotate(calc(-1 * var(--i) * (360deg / var(--n))));
+}
+.gen-review-circle-bob {
+  display: block;
+  animation: gen-rc-float 5.5s ease-in-out infinite;
+  animation-delay: calc(var(--i) * -0.7s);
+}
+@keyframes gen-rc-float {
+  0%, 100% { transform: translateY(-5px); }
+  50%      { transform: translateY(5px); }
+}
+.gen-review-circle img {
+  display: block;
+  width: 54px;
+  height: 54px;
+  border-radius: 50%;
+  object-fit: cover;
+  border: 2px solid rgba(255, 255, 255, 0.22);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+  background: #111;
+}
+@media (prefers-reduced-motion: reduce) {
+  .gen-review-circle-bob { animation: none; }
 }
 .gen-build-vision {
   font-size: clamp(34px, 6vw, 52px);

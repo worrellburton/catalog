@@ -1970,6 +1970,23 @@ export default function GeneratePage() {
         {step === 'review' && (
           <section className="gen-step">
             <h2>Review</h2>
+            {/* The face + chosen products float as circles here, then settle
+                into the 3D ring on the build screen. */}
+            {orbitImages.length > 0 && (
+              <div className="gen-review-circles" aria-hidden="true">
+                {orbitImages.slice(0, 7).map((src, i, arr) => (
+                  <span
+                    key={`${src}-${i}`}
+                    className="gen-review-circle"
+                    style={{ ['--i' as string]: i, ['--n' as string]: arr.length }}
+                  >
+                    <span className="gen-review-circle-bob">
+                      <img src={src} alt="" loading="lazy" decoding="async" />
+                    </span>
+                  </span>
+                ))}
+              </div>
+            )}
             <div className="gen-review">
               <div className="gen-review-row"><span>Photos</span><span>{pickedUploadIds.length}</span></div>
               <div className="gen-review-row"><span>Products</span><span>{picked.length}</span></div>
