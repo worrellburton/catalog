@@ -5,7 +5,7 @@ import { supabase } from '~/utils/supabase';
 import { useAuth } from '~/hooks/useAuth';
 import { AvatarUpload } from './AvatarCropModal';
 import LookCard from './LookCard';
-import { toggleFollow, isFollowing as fetchIsFollowing, getFollowerCount } from '~/services/follows';
+import { toggleFollow, isFollowing as fetchIsFollowing, getFollowerCount, getFollowingCount } from '~/services/follows';
 import { subscribeToLooksChange, fetchSeenLookIds, reorderBySeen } from '~/services/looks';
 import ParticleBackground from './ParticleBackground';
 import { getCreatorAppearance, getCreatorAppearanceById, type CatalogAppearance, DEFAULT_CATALOG_APPEARANCE } from '~/services/catalog-theme';
@@ -49,14 +49,6 @@ function extractUserIdFromHandle(handle: string): string | null {
 // "Trusted by N shoppers" → uses the real follower count when we
 // have it (>=1), falls back to the deterministic "X.Yk" stat
 // otherwise so the line never reads "0 shoppers" on cold creators.
-function formatFollowerCount(real: number | null, fallback: string): string {
-  if (real !== null && real > 0) {
-    const label = real === 1 ? 'shopper' : 'shoppers';
-    return `${real.toLocaleString()} ${label} follow`;
-  }
-  return `Trusted by ${fallback} shoppers`;
-}
-
 export default function CreatorPage({
   creatorName,
   onClose,
@@ -506,7 +498,16 @@ export default function CreatorPage({
   const followHandle = creatorName;
   const [following, setFollowing] = useState<boolean>(false);
   const [followerCount, setFollowerCount] = useState<number | null>(null);
+  const [followingCount, setFollowingCount] = useState<number | null>(null);
   const [followBusy, setFollowBusy] = useState(false);
+  // How many creators THIS creator follows — shown alongside their follower
+  // count in the hero. Keyed by the resolved creator user id.
+  useEffect(() => {
+    if (!creatorUserId) { setFollowingCount(null); return; }
+    let cancelled = false;
+    getFollowingCount(creatorUserId).then(n => { if (!cancelled) setFollowingCount(n); }).catch(() => {});
+    return () => { cancelled = true; };
+  }, [creatorUserId]);
   useEffect(() => {
     let cancelled = false;
     Promise.all([fetchIsFollowing(followHandle), getFollowerCount(followHandle)]).then(([f, n]) => {
@@ -552,14 +553,6 @@ export default function CreatorPage({
   // Cheap deterministic "trusted by X.Yk" stat - seeded by the userId so
   // it doesn't change on every render. For seed creators we use the
   // creator handle as the seed.
-  const trustCount = useMemo(() => {
-    const seed = userId || creatorName;
-    let h = 0;
-    for (let i = 0; i < seed.length; i++) h = ((h << 5) - h + seed.charCodeAt(i)) | 0;
-    const k = Math.abs(h % 90) / 10 + 1; // 1.0 - 10.0
-    return `${k.toFixed(1)}k`;
-  }, [userId, creatorName]);
-
   // Initial-letter avatar fallback when profile.avatar_url is missing.
   const initial = (displayName || 'U').trim().charAt(0).toUpperCase() || 'U';
 
@@ -640,11 +633,19 @@ export default function CreatorPage({
           </button>
         )}
         <p className="creator-hero-trust">
-          {creatorLooks.length > 0
-            ? `${creatorLooks.length} look${creatorLooks.length === 1 ? '' : 's'} · ${allProducts.length} product${allProducts.length === 1 ? '' : 's'} · ${formatFollowerCount(followerCount, trustCount)}`
-            : loading
-              ? 'Loading catalog...'
-              : formatFollowerCount(followerCount, trustCount)}
+          {loading && creatorLooks.length === 0
+            ? 'Loading catalog...'
+            : (
+              <>
+                <span className="creator-hero-stat">
+                  <strong>{(followerCount ?? 0).toLocaleString()}</strong> {followerCount === 1 ? 'follower' : 'followers'}
+                </span>
+                <span className="creator-hero-stat-sep">·</span>
+                <span className="creator-hero-stat">
+                  <strong>{(followingCount ?? 0).toLocaleString()}</strong> following
+                </span>
+              </>
+            )}
         </p>
         {(profile?.instagram || profile?.tiktok) && (
           <div className="creator-hero-socials">

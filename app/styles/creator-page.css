@@ -122,7 +122,16 @@
   font-size: 13px;
   color: rgba(255, 255, 255, 0.4);
   margin-bottom: 12px;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
 }
+.creator-hero-stat strong {
+  color: rgba(255, 255, 255, 0.82);
+  font-weight: 700;
+}
+.creator-hero-stat-sep { opacity: 0.5; }
+.light-mode .creator-hero-stat strong { color: rgba(0, 0, 0, 0.7); }
 
 .creator-hero-socials {
   display: flex;

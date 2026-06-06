@@ -105,7 +105,10 @@ function BottomBar({
       const vw = window.innerWidth;
       const isMobile = vw <= 640;
       const cap = isMobile ? 504 : 560;
-      const margin = isMobile ? 36 : 48;
+      // Mobile gutter matches the header's 12px side padding (logo + CTA), so
+      // the search bar's left/right edges line up with the wordmark and the
+      // profile cluster — equal padding across all three.
+      const margin = isMobile ? 24 : 48;
       const w = Math.min(cap, vw - margin);
       const left = Math.round((vw - w) / 2);
       pinning = true;

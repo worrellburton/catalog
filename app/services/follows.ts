@@ -64,6 +64,17 @@ export async function getFollowerCount(handle: string): Promise<number> {
   return count ?? 0;
 }
 
+/** How many creators a given user follows — for the creator-hero stats.
+ *  Counts creator_follows rows authored by this user (follower_id). */
+export async function getFollowingCount(userId: string): Promise<number> {
+  if (!supabase || !userId) return 0;
+  const { count } = await supabase
+    .from('creator_follows')
+    .select('followee_handle', { count: 'exact', head: true })
+    .eq('follower_id', userId);
+  return count ?? 0;
+}
+
 /** All creators the signed-in shopper follows, most recent first. */
 export async function getMyFollowing(): Promise<string[]> {
   if (!supabase) return [];
