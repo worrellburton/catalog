@@ -551,7 +551,7 @@ type LookSource = 'all' | 'human' | 'ai';
 // back is instant (no re-fetch). The wrapper also keeps the
 // <video> mounted across hidden-tab toggles since the parent
 // table is now display:none rather than conditionally rendered.
-function LazyThumb({ url, thumbnail }: { url: string; thumbnail?: string | null }) {
+function LazyThumb({ url, thumbnail, stillOnly }: { url: string; thumbnail?: string | null; stillOnly?: boolean }) {
   const ref = useRef<HTMLDivElement | null>(null);
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const [inView, setInView] = useState(false);
@@ -670,7 +670,7 @@ function LazyThumb({ url, thumbnail }: { url: string; thumbnail?: string | null 
           }}
         />
       )}
-      {inView && (
+      {inView && !stillOnly && (
         <>
           <video
             ref={videoRef}
@@ -4250,11 +4250,9 @@ export default function AdminData() {
                               </figure>
                               <figure className="admin-look-creative-fig">
                                 <div className="admin-look-creative-media">
-                                  {lookPoster
-                                    ? <img src={lookPoster} alt="Poster frame" />
-                                    : (lookVideoSrc ? <video src={lookVideoSrc} muted playsInline preload="metadata" /> : <div className="admin-look-creative-empty" />)}
+                                  {lookVideoSrc ? <LazyThumb url={lookVideoSrc} stillOnly /> : <div className="admin-look-creative-empty" />}
                                 </div>
-                                <figcaption>Poster frame</figcaption>
+                                <figcaption>Poster frame (first frame)</figcaption>
                               </figure>
                             </div>
                           </div>
