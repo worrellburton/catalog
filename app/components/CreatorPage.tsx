@@ -5,7 +5,7 @@ import { supabase } from '~/utils/supabase';
 import { useAuth } from '~/hooks/useAuth';
 import { AvatarUpload } from './AvatarCropModal';
 import LookCard from './LookCard';
-import { toggleFollow, isFollowing as fetchIsFollowing, getFollowerCount, getFollowingCount } from '~/services/follows';
+import { toggleFollow, isFollowing as fetchIsFollowing, getFollowerCount, getFollowingCount, getFollowers, getFollowing, type FollowUser } from '~/services/follows';
 import { subscribeToLooksChange, fetchSeenLookIds, reorderBySeen } from '~/services/looks';
 import ParticleBackground from './ParticleBackground';
 import { getCreatorAppearance, getCreatorAppearanceById, type CatalogAppearance, DEFAULT_CATALOG_APPEARANCE } from '~/services/catalog-theme';
@@ -508,6 +508,25 @@ export default function CreatorPage({
   const [followerCount, setFollowerCount] = useState<number | null>(null);
   const [followingCount, setFollowingCount] = useState<number | null>(null);
   const [followBusy, setFollowBusy] = useState(false);
+
+  // Followers / following list overlay. Tapping a stat opens a sheet of users;
+  // tapping a user opens their catalog via the in-app open-creator event.
+  const [followList, setFollowList] = useState<{ kind: 'followers' | 'following'; users: FollowUser[]; loading: boolean } | null>(null);
+  const openFollowList = useCallback((kind: 'followers' | 'following') => {
+    setFollowList({ kind, users: [], loading: true });
+    const p = kind === 'followers'
+      ? getFollowers(followHandle)
+      : (creatorUserId ? getFollowing(creatorUserId) : Promise.resolve([] as FollowUser[]));
+    p.then(users => setFollowList(prev => (prev && prev.kind === kind ? { kind, users, loading: false } : prev)))
+     .catch(() => setFollowList(prev => (prev ? { ...prev, loading: false } : prev)));
+  }, [followHandle, creatorUserId]);
+  const openCreatorFromList = useCallback((handle: string) => {
+    setFollowList(null);
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new CustomEvent('catalog:open-creator', { detail: { handle } }));
+    }
+  }, []);
+
   // How many creators THIS creator follows — shown alongside their follower
   // count in the hero. Keyed by the resolved creator user id.
   useEffect(() => {
@@ -652,13 +671,21 @@ export default function CreatorPage({
             ? 'Loading catalog...'
             : (
               <>
-                <span className="creator-hero-stat">
+                <button
+                  type="button"
+                  className="creator-hero-stat creator-hero-stat--btn"
+                  onClick={() => openFollowList('followers')}
+                >
                   <strong>{(followerCount ?? 0).toLocaleString()}</strong> {followerCount === 1 ? 'follower' : 'followers'}
-                </span>
+                </button>
                 <span className="creator-hero-stat-sep">·</span>
-                <span className="creator-hero-stat">
+                <button
+                  type="button"
+                  className="creator-hero-stat creator-hero-stat--btn"
+                  onClick={() => openFollowList('following')}
+                >
                   <strong>{(followingCount ?? 0).toLocaleString()}</strong> following
-                </span>
+                </button>
               </>
             )}
         </p>
@@ -838,6 +865,62 @@ export default function CreatorPage({
         )
       )}
     </div>
+
+    {/* Followers / following list sheet. Tap a row to open that user's
+        catalog (in-app, via the open-creator event). */}
+    {followList && (
+      <div
+        className="follow-list-overlay"
+        role="dialog"
+        aria-modal="true"
+        aria-label={followList.kind === 'followers' ? 'Followers' : 'Following'}
+        onClick={() => setFollowList(null)}
+      >
+        <div className="follow-list-sheet" onClick={(e) => e.stopPropagation()}>
+          <div className="follow-list-head">
+            <h2 className="follow-list-title">
+              {followList.kind === 'followers' ? 'Followers' : 'Following'}
+            </h2>
+            <button
+              type="button"
+              className="follow-list-close"
+              onClick={() => setFollowList(null)}
+              aria-label="Close"
+            >×</button>
+          </div>
+          <div className="follow-list-body">
+            {followList.loading ? (
+              <p className="follow-list-empty">Loading…</p>
+            ) : followList.users.length === 0 ? (
+              <p className="follow-list-empty">
+                {followList.kind === 'followers' ? 'No followers yet.' : 'Not following anyone yet.'}
+              </p>
+            ) : (
+              followList.users.map((u) => (
+                <button
+                  key={u.handle}
+                  type="button"
+                  className="follow-list-row"
+                  onClick={() => openCreatorFromList(u.handle)}
+                >
+                  {u.avatarUrl ? (
+                    <img className="follow-list-avatar" src={u.avatarUrl} alt={u.displayName} referrerPolicy="no-referrer" />
+                  ) : (
+                    <span className="follow-list-avatar follow-list-avatar--initial">
+                      {(u.displayName || 'U').trim().charAt(0).toUpperCase()}
+                    </span>
+                  )}
+                  <span className="follow-list-name">{u.displayName}</span>
+                  <svg className="follow-list-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                    <polyline points="9 18 15 12 9 6" />
+                  </svg>
+                </button>
+              ))
+            )}
+          </div>
+        </div>
+      </div>
+    )}
     </div>
   );
 }

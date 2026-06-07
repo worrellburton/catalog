@@ -154,6 +154,124 @@
 .creator-hero-stat-sep { opacity: 0.5; }
 .light-mode .creator-hero-stat strong { color: rgba(0, 0, 0, 0.7); }
 
+/* Tappable follower / following stats. */
+.creator-hero-stat--btn {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+.creator-hero-stat--btn:hover { color: rgba(255, 255, 255, 0.85); }
+.light-mode .creator-hero-stat--btn:hover { color: rgba(0, 0, 0, 0.8); }
+
+/* ── Followers / following list sheet ───────────────────────────────── */
+.follow-list-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  animation: follow-list-fade 160ms ease;
+}
+@keyframes follow-list-fade { from { opacity: 0; } to { opacity: 1; } }
+.follow-list-sheet {
+  width: min(420px, 100%);
+  max-height: 72vh;
+  display: flex;
+  flex-direction: column;
+  background: #161618;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 18px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+}
+.follow-list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.follow-list-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #fafafa;
+}
+.follow-list-close {
+  width: 30px;
+  height: 30px;
+  border: none;
+  background: none;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+.follow-list-close:hover { color: #fff; }
+.follow-list-body {
+  overflow-y: auto;
+  padding: 8px;
+  -webkit-overflow-scrolling: touch;
+}
+.follow-list-empty {
+  margin: 0;
+  padding: 28px 12px;
+  text-align: center;
+  font-size: 13.5px;
+  color: rgba(255, 255, 255, 0.5);
+}
+.follow-list-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 12px;
+  background: none;
+  color: #fff;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s;
+}
+.follow-list-row:hover { background: rgba(255, 255, 255, 0.06); }
+.follow-list-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.08);
+}
+.follow-list-avatar--initial {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 17px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.8);
+}
+.follow-list-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.follow-list-chevron { color: rgba(255, 255, 255, 0.35); flex-shrink: 0; }
+
 .creator-hero-socials {
   display: flex;
   gap: 16px;

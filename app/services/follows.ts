@@ -92,6 +92,88 @@ export async function getMyFollowing(): Promise<string[]> {
   return ((data || []) as { followee_handle: string }[]).map(r => r.followee_handle);
 }
 
+/** A user shown in a followers / following list — enough to render a row and
+ *  open their catalog (via the `catalog:open-creator` event with `handle`). */
+export interface FollowUser {
+  /** Handle to open their catalog: `user:<id>` for shoppers, or a creator handle. */
+  handle: string;
+  displayName: string;
+  avatarUrl: string | null;
+}
+
+/** Everyone who follows this creator (handle), newest first. Each follower is a
+ *  signed-in user, so we resolve their profile and hand back a `user:<id>`
+ *  handle that opens their own catalog. */
+export async function getFollowers(handle: string): Promise<FollowUser[]> {
+  if (!supabase || !handle) return [];
+  const { data } = await supabase
+    .from('creator_follows')
+    .select('follower_id, created_at')
+    .eq('followee_handle', handle)
+    .order('created_at', { ascending: false });
+  const ids = [...new Set(((data || []) as { follower_id: string }[]).map(r => r.follower_id))];
+  if (ids.length === 0) return [];
+  const { data: profs } = await supabase
+    .from('profiles')
+    .select('id, full_name, email, avatar_url')
+    .in('id', ids);
+  const byId = new Map(
+    ((profs || []) as { id: string; full_name: string | null; email: string | null; avatar_url: string | null }[])
+      .map(p => [p.id, p]),
+  );
+  return ids.map(id => {
+    const p = byId.get(id);
+    return {
+      handle: `user:${id}`,
+      displayName: p?.full_name || p?.email?.split('@')[0] || 'Shopper',
+      avatarUrl: p?.avatar_url || null,
+    };
+  });
+}
+
+/** Every creator a given user follows, newest first. followee_handle is either
+ *  `user:<uuid>` (resolve via profiles) or a plain creator handle (resolve via
+ *  the creators table); either way the handle opens their catalog. */
+export async function getFollowing(userId: string): Promise<FollowUser[]> {
+  if (!supabase || !userId) return [];
+  const { data } = await supabase
+    .from('creator_follows')
+    .select('followee_handle, created_at')
+    .eq('follower_id', userId)
+    .order('created_at', { ascending: false });
+  const handles = [...new Set(((data || []) as { followee_handle: string }[]).map(r => r.followee_handle))];
+  if (handles.length === 0) return [];
+
+  const userIds = handles
+    .filter(h => /^user:[0-9a-f-]{36}$/i.test(h))
+    .map(h => h.slice(5));
+  const plainHandles = handles.filter(h => !/^user:/.test(h));
+
+  const [profsRes, creatorsRes] = await Promise.all([
+    userIds.length
+      ? supabase.from('profiles').select('id, full_name, email, avatar_url').in('id', userIds)
+      : Promise.resolve({ data: [] as Array<{ id: string; full_name: string | null; email: string | null; avatar_url: string | null }> }),
+    plainHandles.length
+      ? supabase.from('creators').select('handle, display_name, avatar_url').in('handle', plainHandles)
+      : Promise.resolve({ data: [] as Array<{ handle: string; display_name: string | null; avatar_url: string | null }> }),
+  ]);
+  const profById = new Map(((profsRes.data || []) as Array<{ id: string; full_name: string | null; email: string | null; avatar_url: string | null }>).map(p => [p.id, p]));
+  const creatorByHandle = new Map(((creatorsRes.data || []) as Array<{ handle: string; display_name: string | null; avatar_url: string | null }>).map(c => [c.handle, c]));
+
+  return handles.map(h => {
+    if (/^user:/.test(h)) {
+      const p = profById.get(h.slice(5));
+      return {
+        handle: h,
+        displayName: p?.full_name || p?.email?.split('@')[0] || 'Creator',
+        avatarUrl: p?.avatar_url || null,
+      };
+    }
+    const c = creatorByHandle.get(h);
+    return { handle: h, displayName: c?.display_name || h, avatarUrl: c?.avatar_url || null };
+  });
+}
+
 /** A creator the shopper follows, enriched with the stats the Following
  *  list-view page shows: how many looks they've posted, how many followers
  *  they have, when they last posted, and when you started following them. */
