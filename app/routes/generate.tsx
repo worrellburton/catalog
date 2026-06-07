@@ -1566,10 +1566,9 @@ export default function GeneratePage() {
 
   return (
     <div className={`gen-page${isGeneratingView ? ' gen-page--generating' : ''}${step === 'review' ? ' gen-page--review' : ''}`}>
-      {/* Pick-products: a live WebGL particle field sits behind the picker so
-          the products read as floating in space (the cards drift in 3D over
-          it — see .gen-cat-card img float). */}
-      {step === 'products' && (
+      {/* Pick + Review: a live WebGL particle field sits behind the screen so
+          products/photos read as floating in 3D space over it. */}
+      {(step === 'products' || step === 'review') && (
         <div className="gen-products-particles" aria-hidden="true">
           <ParticleBackground />
         </div>
