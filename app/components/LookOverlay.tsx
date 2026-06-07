@@ -6,7 +6,8 @@ import { shareLink } from '~/utils/shareLink';
 import { getCommentCount } from '~/services/comments';
 import { getCreatorAbout } from '~/services/creator-about';
 import { getLookDescription } from '~/services/look-description';
-import { lookPoster } from '~/services/media-resolver';
+import { lookPoster, productPoster } from '~/services/media-resolver';
+import { emitSavedToast } from '~/utils/savedToast';
 import { useCommentsEnabled } from '~/hooks/useCommentsEnabled';
 import { useEscapeKey } from '~/hooks/useEscapeKey';
 import LookCard from './LookCard';
@@ -526,9 +527,14 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
     return () => director.popScope(scope);
   }, [look.id]);
 
-  // Trigger enter animation after first paint
+  // Trigger enter animation after first paint. Double rAF so the browser
+  // paints the parked (translateY) base state once before flipping to
+  // --in — a single frame sometimes skips the slide-up entirely.
   useEffect(() => {
-    requestAnimationFrame(() => setMounted(true));
+    const raf = requestAnimationFrame(() =>
+      requestAnimationFrame(() => setMounted(true)),
+    );
+    return () => cancelAnimationFrame(raf);
   }, []);
 
   const scrollMoreLeft = () => {
@@ -638,6 +644,11 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
     const wasBookmarked = lookBookmarked;
     bookmarks.toggleLookBookmark(look.id);
     setLookBookmarked(b => !b);
+    emitSavedToast({
+      name: look.title || look.creator || 'this look',
+      imageUrl: lookPoster(look),
+      saved: !wasBookmarked,
+    });
     // Sync to Supabase and update the displayed count
     if (look.uuid) {
       if (wasBookmarked) {
@@ -651,11 +662,18 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   };
 
   const handleToggleProductBookmark = (index: number) => {
-    bookmarks.toggleProductBookmark(look.products[index]);
+    const product = look.products[index];
+    const wasBookmarked = !!productBookmarks[index];
+    bookmarks.toggleProductBookmark(product);
     setProductBookmarks(prev => {
       const next = [...prev];
       next[index] = !next[index];
       return next;
+    });
+    emitSavedToast({
+      name: product.name || 'this product',
+      imageUrl: productPoster(product),
+      saved: !wasBookmarked,
     });
   };
 

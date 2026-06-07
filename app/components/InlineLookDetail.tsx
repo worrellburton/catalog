@@ -6,7 +6,8 @@ import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
 import FollowIconButton from './FollowIconButton';
 import { sortByGarmentRole } from '~/utils/garmentOrder';
 import ProductMiniMedia from './ProductMiniMedia';
-import { lookPoster } from '~/services/media-resolver';
+import { lookPoster, productPoster } from '~/services/media-resolver';
+import { emitSavedToast } from '~/utils/savedToast';
 
 interface BookmarksInterface {
   isLookBookmarked: (id: number) => boolean;
@@ -53,13 +54,26 @@ export default function InlineLookDetail({ look, onOpenCreator, onOpenBrowser, o
   );
 
   const handleToggleLookBookmark = useCallback(() => {
+    const wasBookmarked = bookmarks.isLookBookmarked(look.id);
     bookmarks.toggleLookBookmark(look.id);
     setLookBookmarked(b => !b);
-  }, [bookmarks, look.id]);
+    emitSavedToast({
+      name: look.title || look.creator || 'this look',
+      imageUrl: lookPoster(look),
+      saved: !wasBookmarked,
+    });
+  }, [bookmarks, look]);
 
   const handleToggleProductBookmark = useCallback((idx: number) => {
-    bookmarks.toggleProductBookmark(sortedProducts[idx]);
+    const product = sortedProducts[idx];
+    const wasBookmarked = bookmarks.isProductBookmarked(product);
+    bookmarks.toggleProductBookmark(product);
     setProductBookmarks(prev => prev.map((b, i) => i === idx ? !b : b));
+    emitSavedToast({
+      name: product.name || 'this product',
+      imageUrl: productPoster(product),
+      saved: !wasBookmarked,
+    });
   }, [bookmarks, sortedProducts]);
 
   const handleProductClick = useCallback((p: Product) => {

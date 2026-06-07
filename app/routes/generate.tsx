@@ -1585,7 +1585,7 @@ export default function GeneratePage() {
   }
 
   return (
-    <div className={`gen-page${isGeneratingView ? ' gen-page--generating' : ''}${step === 'review' ? ' gen-page--review' : ''}`}>
+    <div className={`gen-page${isGeneratingView ? ' gen-page--generating' : ''}${step === 'review' ? ' gen-page--review' : ''}${step === 'style' ? ' gen-page--style' : ''}`}>
       {/* Pick + Review: a live WebGL particle field sits behind the screen so
           products/photos read as floating in 3D space over it. */}
       {(step === 'products' || step === 'review') && (
@@ -1651,29 +1651,51 @@ export default function GeneratePage() {
             text "Back to catalog" + arrow was wide and competed with
             "Pick your products" below it. Logo reads as the canonical
             "go home" gesture in every other consumer app. */}
-        <button
-          className={`gen-back${step === 'products' ? ' gen-back-logo' : ''}`}
-          onClick={() => {
-            // From the result view, "back" should land the shopper on
-            // the Photos step (with their looks grid) rather than
-            // bouncing them all the way out to the catalog.
-            if (step === 'result') {
-              setStep('photos');
-              return;
-            }
-            navigate('/#app');
-          }}
-          aria-label={step === 'result' ? 'Back to your looks' : 'Back to catalog'}
-        >
-          {step === 'products' ? (
-            <CatalogLogo className="gen-back-logo-svg" />
-          ) : (
-            <>
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
-              {step === 'result' ? 'Back to your looks' : 'Back to catalog'}
-            </>
-          )}
-        </button>
+        {(() => {
+          // On the mid-wizard steps (style, review) the back affordance
+          // should walk one step back through the flow — not bail all the
+          // way out to the catalog — and the label names the screen you'll
+          // land on. Review → "Back to style" (the screen right before it),
+          // Style → "Back to products". Everything else keeps the
+          // catalog/your-looks exits.
+          const PREV_LABEL: Partial<Record<Step, string>> = {
+            review: 'Back to style',
+            style: 'Back to products',
+          };
+          const prevLabel = PREV_LABEL[step];
+          const label =
+            step === 'result' ? 'Back to your looks' : prevLabel || 'Back to catalog';
+          return (
+            <button
+              className={`gen-back${step === 'products' ? ' gen-back-logo' : ''}`}
+              onClick={() => {
+                // From the result view, "back" should land the shopper on
+                // the Photos step (with their looks grid) rather than
+                // bouncing them all the way out to the catalog.
+                if (step === 'result') {
+                  setStep('photos');
+                  return;
+                }
+                // Style / review step back to the previous wizard screen.
+                if (prevLabel) {
+                  goPrev(step, setStep);
+                  return;
+                }
+                navigate('/#app');
+              }}
+              aria-label={label}
+            >
+              {step === 'products' ? (
+                <CatalogLogo className="gen-back-logo-svg" />
+              ) : (
+                <>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+                  {label}
+                </>
+              )}
+            </button>
+          );
+        })()}
         {/* Photos step gets a "Try this on" headline - the actual primary
             verb the page does. Products is dense and gets the back-only
             header. Other secondary steps fall back to the original
@@ -2052,72 +2074,85 @@ export default function GeneratePage() {
 
         {step === 'review' && (
           <section className="gen-step gen-step-review">
-            {/* The page header already reads "Review" on this step, so the
-                duplicate <h2> was removed. */}
-            {/* The face + chosen products float as circles here, then settle
-                into the 3D ring on the build screen. */}
-            {orbitImages.length > 0 && (
-              <div className="gen-review-circles" aria-hidden="true">
-                {orbitImages.slice(0, 7).map((src, i, arr) => (
-                  <span
-                    key={`${src}-${i}`}
-                    className="gen-review-circle"
-                    style={{ ['--i' as string]: i, ['--n' as string]: arr.length }}
-                  >
-                    <span className="gen-review-circle-bob">
+            {/* Rebuilt review — one centred stage, locked to a single
+                viewport. The chosen PRODUCTS are the hero in the middle of
+                the screen; the reference FACES sit above them as a single
+                connected chain (overlapping circles joined by a thread) so
+                they read as "these combine into one model". Build lives in
+                the fixed bottom dock. */}
+            <div className="gen-rv-stage">
+              {filledPublicUrls.length > 0 && (
+                <div className="gen-rv-faces" aria-label="Your reference photos">
+                  <span className="gen-rv-faces-thread" aria-hidden="true" />
+                  {filledPublicUrls.slice(0, 5).map((src, i, arr) => (
+                    <span
+                      key={`${src}-${i}`}
+                      className="gen-rv-face"
+                      style={{ ['--i' as string]: i, ['--n' as string]: arr.length }}
+                    >
                       <img src={src} alt="" loading="lazy" decoding="async" />
                     </span>
-                  </span>
-                ))}
-              </div>
-            )}
-            <div className="gen-review">
-              <div className="gen-review-row"><span>Photos</span><span>{pickedUploadIds.length}</span></div>
-              <div className="gen-review-row"><span>Products</span><span>{picked.length}</span></div>
-              <div className="gen-review-row"><span>Height</span><span>{heightLabel}</span></div>
-              {weightLabel && <div className="gen-review-row"><span>Weight</span><span>{weightLabel}</span></div>}
-              <div className="gen-review-row"><span>Age</span><span>{ageLabel}</span></div>
-              <div className="gen-review-row"><span>Style</span><span>{STYLE_PRESETS.find(s => s.value === style)?.label || style}</span></div>
-              <div className="gen-review-row">
-                <span>Model</span>
-                <div className="gen-review-toggle">
-                  <button
-                    type="button"
-                    className={`gen-review-toggle-btn${model === 'fast' ? ' is-picked' : ''}`}
-                    onClick={() => { setModel('fast'); setClipSeconds(5); }}
-                    title="Fast: cheaper, ~3 min, 5-second output"
-                  >Fast</button>
-                  <button
-                    type="button"
-                    className={`gen-review-toggle-btn${model === 'pro' ? ' is-picked' : ''}`}
-                    onClick={() => setModel('pro')}
-                    title="Pro is in preview - currently runs at Fast quality (5-second clips) while Pro is being rolled out."
-                  >Pro</button>
+                  ))}
                 </div>
-              </div>
-              <div className="gen-review-row">
-                <span>Length</span>
-                {model === 'pro' ? (
+              )}
+
+              {picked.length > 0 && (
+                <div className="gen-rv-products" role="list" aria-label="Selected products">
+                  {picked.map((p, i) => (
+                    <span
+                      key={p.id}
+                      role="listitem"
+                      className="gen-rv-product"
+                      style={{ ['--i' as string]: i }}
+                    >
+                      {p.image_url && <img src={p.image_url} alt={p.name || 'Product'} loading="lazy" decoding="async" />}
+                      <span className="gen-rv-product-name">{p.name || 'Product'}</span>
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* Only the controls that change the build live here now —
+                  Model + Length. Height / age / style are already locked in
+                  on earlier steps, so the cluttered summary table is gone. */}
+              <div className="gen-rv-controls">
+                <div className="gen-rv-control">
+                  <span className="gen-rv-control-label">Model</span>
                   <div className="gen-review-toggle">
-                    {[5, 10].map(sec => (
-                      <button
-                        key={sec}
-                        type="button"
-                        className={`gen-review-toggle-btn${clipSeconds === sec ? ' is-picked' : ''}`}
-                        onClick={() => setClipSeconds(sec as 5 | 10)}
-                      >{sec}s</button>
-                    ))}
+                    <button
+                      type="button"
+                      className={`gen-review-toggle-btn${model === 'fast' ? ' is-picked' : ''}`}
+                      onClick={() => { setModel('fast'); setClipSeconds(5); }}
+                      title="Fast: cheaper, ~3 min, 5-second output"
+                    >Fast</button>
+                    <button
+                      type="button"
+                      className={`gen-review-toggle-btn${model === 'pro' ? ' is-picked' : ''}`}
+                      onClick={() => setModel('pro')}
+                      title="Pro is in preview - currently runs at Fast quality (5-second clips) while Pro is being rolled out."
+                    >Pro</button>
                   </div>
-                ) : (
-                  <span>{clipSeconds}s</span>
-                )}
+                </div>
+                <div className="gen-rv-control">
+                  <span className="gen-rv-control-label">Length</span>
+                  {model === 'pro' ? (
+                    <div className="gen-review-toggle">
+                      {[5, 10].map(sec => (
+                        <button
+                          key={sec}
+                          type="button"
+                          className={`gen-review-toggle-btn${clipSeconds === sec ? ' is-picked' : ''}`}
+                          onClick={() => setClipSeconds(sec as 5 | 10)}
+                        >{sec}s</button>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="gen-rv-control-value">{clipSeconds}s</span>
+                  )}
+                </div>
               </div>
             </div>
 
-            {/* The per-product list used to live here, but it duplicated the
-                selected-products strip already shown in the bottom dock — and
-                pushed Review past one viewport. The summary row "Products: N"
-                above + the dock thumbnails cover it. */}
             {submitError && <div className="gen-error">{submitError}</div>}
           </section>
         )}

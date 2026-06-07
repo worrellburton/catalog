@@ -30,7 +30,8 @@ import { toCatalogName, getRandomCatalogName } from '~/utils/catalogName';
 import { prefetchSimilarProducts, prefetchCreativesByBrand, prefetchHomeFeed, type ProductAd } from '~/services/product-creative';
 import { getGraphPairs, type GraphPair } from '~/services/graph-pairs';
 import { getLooks, getLookByUuid } from '~/services/looks';
-import { creativeStill, creativePoster } from '~/services/media-resolver';
+import { creativeStill, creativePoster, productPoster } from '~/services/media-resolver';
+import { emitSavedToast } from '~/utils/savedToast';
 import { prefetchDials } from '~/services/dials';
 import { prefetchHiddenContent } from '~/hooks/useHiddenLooks';
 import { prefetchBrandLogos } from '~/hooks/useBrandLogoLookup';
@@ -1917,7 +1918,12 @@ export default function Home() {
             title={browserState.title}
             product={browserState.product}
             isSaved={browserState.product ? bookmarks.isProductBookmarked(browserState.product) : undefined}
-            onToggleSave={browserState.product ? bookmarks.toggleProductBookmark : undefined}
+            onToggleSave={browserState.product ? (() => {
+              const p = browserState.product!;
+              const wasSaved = bookmarks.isProductBookmarked(p);
+              bookmarks.toggleProductBookmark(p);
+              emitSavedToast({ name: p.name || 'this product', imageUrl: productPoster(p), saved: !wasSaved });
+            }) : undefined}
             onClose={handleBrowserClose}
           />
         </Suspense>

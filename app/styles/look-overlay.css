@@ -13,12 +13,17 @@
   z-index: 200;
   background: #0a0a0a;
   opacity: 0;
+  /* Start parked just below the screen so OPEN slides up into place —
+     the mirror of the swipe-down dismiss. Without this the overlay only
+     cross-faded and taps felt like an instant cut with no motion. */
+  transform: translateY(8%);
   transition: opacity 0.28s cubic-bezier(0.32, 0.72, 0, 1);
   overflow: hidden;
 }
 
 .look-overlay--in {
   opacity: 1;
+  transform: translateY(0);
 }
 
 .look-overlay--out {
@@ -844,14 +849,14 @@ body:has(.look-overlay.look-overlay--in) {
   .look-media-col {
     flex: 0 0 auto;
     width: 100%;
-    /* The media column IS the first full viewport — owns 100dvh so the
-       look reads as the entire screen on landing. Info column flows
-       below it via normal document order; the page-level scroll on
-       .look-overlay-scroll reveals it. */
+    /* The media column IS the first full viewport — owns the ENTIRE
+       100dvh (edge-to-edge, flush to the very top under the status bar)
+       so the look reads as the whole screen on landing AND so dragging
+       the overlay down can never expose a black gap above the media.
+       The top controls already clear the status bar via their own
+       `top: max(16px, --shell-sb)` offset. Info column flows below it
+       via normal document order; .look-overlay-scroll owns scroll. */
     height: 100dvh;
-    /* Subtract the iOS safe-area top inset so the status bar doesn't
-       eat into the video frame on notched devices. */
-    height: calc(100dvh - env(safe-area-inset-top));
     flex-shrink: 0;
   }
   /* Drop the 40px padding so the video uses every pixel of the
@@ -1023,6 +1028,21 @@ body:has(.look-overlay.look-overlay--in) {
   aspect-ratio: 3 / 4;
   border-radius: 6px;
   background: #111;
+}
+
+/* GUARD — every poster/video inside the creator grid must FILL its 3:4
+   cell via cover, never stretch. All look posters are stored 9:16
+   (720×1280), so a 9:16 source dropped into a 3:4 cell should crop its
+   top/bottom and stay in proportion. This pins cover defensively so a
+   stray `fill`/`contain`/`100% 100%` placement can never squish a card
+   (which read as a "distorted" subject). */
+.look-feed-grid .look-card .card-video-slot {
+  background-size: cover !important;
+  background-position: center !important;
+}
+.look-feed-grid .look-card video,
+.look-feed-grid .look-card img {
+  object-fit: cover !important;
 }
 
 /* Inside the feed grid, simplify the creator chip to match pd-look-tile */

@@ -76,8 +76,13 @@
   opacity: 0.7;
 }
 .gen-page > .gen-head,
-.gen-page > .gen-main,
-.gen-page > .gen-dock { position: relative; z-index: 1; }
+.gen-page > .gen-main { position: relative; z-index: 1; }
+/* The dock MUST stay fixed to the bottom of the viewport on every step
+   (this selector has higher specificity than the base `.gen-dock` rule,
+   so it has to re-assert position:fixed — otherwise it falls into normal
+   flow and the Build button drops below the fold on long/locked steps
+   like Review). z-index keeps it above the particle field. */
+.gen-page > .gen-dock { position: fixed; z-index: 50; }
 
 /* ── Unified product field (pick step) ─────────────────────────────────── */
 .gen-cloud-controls {
@@ -134,10 +139,22 @@
 
 .gen-cloud {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
-  gap: 14px;
-  padding: 16px 4px 28px;
+  /* Mobile: exactly three equal columns. `minmax(0, 1fr)` (not the
+     default `1fr` = `minmax(auto, 1fr)`) lets every column shrink to
+     share the row evenly, so the grid can NEVER outgrow its container
+     and bleed off the right edge. No horizontal padding here — the
+     page-level gutter already insets both sides symmetrically. */
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+  padding: 16px 0 28px;
+  width: 100%;
   /* Flows with the page so the user can scroll through ALL products. */
+}
+@media (min-width: 700px) {
+  .gen-cloud {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 14px;
+  }
 }
 .gen-cloud-card {
   position: relative;
@@ -224,6 +241,17 @@
   overflow: hidden;
   padding-bottom: calc(24px + env(safe-area-inset-bottom));
 }
+/* Style view — locked to a single viewport like Review so the screen
+   can't drift up and down. The style grid + "direct your own video"
+   field sit above the fixed dock; the body stays short enough to fit. */
+.gen-page--style {
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  padding-bottom: calc(24px + env(safe-area-inset-bottom));
+}
+
 .gen-page--generating .gen-main {
   flex: 1 1 auto;
   min-height: 0;
@@ -401,7 +429,7 @@ html[data-shell="catalog-app"] .gen-page {
   .gen-lookgrid {
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   }
-  .gen-heightgrid, .gen-stylegrid, .gen-productgrid, .gen-review, .gen-review-products {
+  .gen-heightgrid, .gen-stylegrid, .gen-productgrid {
     max-width: 880px;
     margin-left: auto;
     margin-right: auto;
@@ -1121,57 +1149,124 @@ html[data-shell="catalog-app"] .gen-page {
 .gen-direct-input:focus { outline: none; border-color: rgba(255, 255, 255, 0.42); }
 .gen-direct-input::placeholder { color: rgba(255, 255, 255, 0.35); }
 
-.gen-review {
+/* ===== Rebuilt Review stage =====
+   One centred stage that fills the locked viewport: reference faces as a
+   connected chain on top, the chosen products as the hero cluster in the
+   middle, the Model/Length controls below. Build lives in the fixed dock. */
+.gen-step-review {
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 2px;
-  border-radius: 14px;
+  padding-bottom: calc(104px + env(safe-area-inset-bottom));
+}
+.gen-rv-stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(18px, 4.5vh, 44px);
+}
+
+/* Reference faces — overlapping chain joined by a thin thread so they
+   read as one linked group that combines into a single model. */
+.gen-rv-faces {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.gen-rv-faces-thread {
+  position: absolute;
+  left: 14%;
+  right: 14%;
+  top: 50%;
+  height: 2px;
+  transform: translateY(-50%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+  z-index: 0;
+}
+.gen-rv-face {
+  position: relative;
+  z-index: 1;
+  width: clamp(52px, 15vw, 72px);
+  height: clamp(52px, 15vw, 72px);
+  border-radius: 50%;
+  overflow: hidden;
+  margin-left: -16px;
+  border: 2px solid rgba(255, 255, 255, 0.88);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+  background: #1a1a1a;
+  animation: gen-rv-face-in 0.5s cubic-bezier(0.32, 0.72, 0, 1) both;
+  animation-delay: calc(var(--i) * 60ms);
+}
+.gen-rv-face:first-child { margin-left: 0; }
+.gen-rv-face img { width: 100%; height: 100%; object-fit: cover; display: block; }
+@keyframes gen-rv-face-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.82); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Products — the centrepiece cluster. */
+.gen-rv-products {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 12px;
+  max-width: 520px;
+}
+.gen-rv-product {
+  position: relative;
+  width: clamp(84px, 26vw, 120px);
+  aspect-ratio: 3 / 4;
+  border-radius: 16px;
   overflow: hidden;
   background: rgba(255, 255, 255, 0.05);
-  margin-bottom: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+  animation: gen-rv-prod-in 0.55s cubic-bezier(0.32, 0.72, 0, 1) both;
+  animation-delay: calc(120ms + var(--i) * 80ms);
 }
-.gen-review-row {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  /* Roomier rows — the summary was reading cramped. */
-  padding: 13px 18px;
-  background: rgba(0, 0, 0, 0.4);
-  font-size: 14px;
+.gen-rv-product img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.gen-rv-product::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.62), transparent 42%);
+}
+.gen-rv-product-name {
+  position: absolute;
+  left: 6px; right: 6px; bottom: 5px;
+  z-index: 1;
+  font-size: 10px; font-weight: 600; color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+@keyframes gen-rv-prod-in {
+  from { opacity: 0; transform: translateY(16px) scale(0.9); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-/* Review step reserves room below its content for the fixed Back/Build
-   dock so the last summary row (Style/Length) is never hidden behind it. */
-.gen-step-review {
-  padding-bottom: calc(96px + env(safe-area-inset-bottom));
-}
-.gen-review-row span:first-child { color: rgba(255, 255, 255, 0.55); }
-.gen-review-row span:last-child { font-weight: 600; }
-
-.gen-review-products {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 8px;
-}
-.gen-review-product {
+/* Build controls — Model + Length, side by side, compact. */
+.gen-rv-controls {
   display: flex;
-  gap: 10px;
-  align-items: center;
-  padding: 10px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  gap: 28px;
+  align-items: flex-start;
+  justify-content: center;
+  flex-wrap: wrap;
 }
-.gen-review-product img {
-  width: 44px; height: 44px; object-fit: cover; border-radius: 6px;
+.gen-rv-control { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.gen-rv-control-label {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
 }
-.gen-review-product-name {
-  font-size: 12px; font-weight: 600;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  max-width: 160px;
-}
-.gen-review-product-role {
-  font-size: 11px; color: rgba(255, 255, 255, 0.85);
+.gen-rv-control-value { font-size: 14px; font-weight: 600; }
+
+@media (prefers-reduced-motion: reduce) {
+  .gen-rv-face, .gen-rv-product { animation: none; }
 }
 
 /* .gen-foot is no longer used - Back/Next live inside the unified
@@ -2477,53 +2572,6 @@ html[data-shell="catalog-app"] .gen-page {
   .gen-orbit-item img { animation: none; }
 }
 
-/* Review screen — the face + chosen products as gently-floating circles
-   arranged around a ring (upright via the rotate/translate/un-rotate
-   trick), staggered bob so they drift. They settle into the 3D orbit on the
-   build screen. */
-.gen-review-circles {
-  position: relative;
-  width: 100%;
-  height: 168px;
-  margin: 4px 0 14px;
-  perspective: 900px;
-  perspective-origin: 50% 45%;
-}
-.gen-review-circle {
-  position: absolute;
-  left: 50%;
-  top: 50%;
-  transform: translate(-50%, -50%)
-             rotate(calc(var(--i) * (360deg / var(--n))))
-             translate(66px)
-             rotate(calc(-1 * var(--i) * (360deg / var(--n))));
-}
-.gen-review-circle-bob {
-  display: block;
-  transform-style: preserve-3d;
-  animation: gen-rc-float 6s ease-in-out infinite;
-  animation-delay: calc(var(--i) * -0.8s);
-}
-/* Dramatic 3D drift — the photos + products move around in space over the
-   particle field. */
-@keyframes gen-rc-float {
-  0%, 100% { transform: translateZ(0) translateY(-5px) rotateY(0deg); }
-  33%      { transform: translateZ(28px) translateY(6px) rotateY(-9deg); }
-  66%      { transform: translateZ(14px) translateY(-4px) rotateY(8deg); }
-}
-.gen-review-circle img {
-  display: block;
-  width: 52px;
-  height: 52px;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 2px solid rgba(255, 255, 255, 0.26);
-  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5);
-  background: #111;
-}
-@media (prefers-reduced-motion: reduce) {
-  .gen-review-circle-bob { animation: none; }
-}
 .gen-build-phase {
   font-size: 14px;
   font-weight: 600;
@@ -3275,14 +3323,6 @@ html[data-shell="catalog-app"] .gen-page {
   background: rgba(255, 255, 255, 0.95);
   color: #0a0a0a;
   border-color: rgba(255, 255, 255, 0.95);
-}
-
-/* Review-step product list scrolls within its own card so the wizard
-   stays single-viewport even when the user picked the max 5 products. */
-.gen-step .gen-review-products {
-  max-height: 38vh;
-  overflow-y: auto;
-  padding-right: 4px;
 }
 
 /* "How did I do?" feedback bar - sits below the result video on the

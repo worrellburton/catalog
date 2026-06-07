@@ -39,6 +39,7 @@ import {
   markFeedMilestone,
 } from '~/services/video-loading';
 import { lookPoster, productPoster } from '~/services/media-resolver';
+import { emitSavedToast } from '~/utils/savedToast';
 
 interface ProductPageCreative {
   /** The product_creative.id - used to resolve the shared <video> element
@@ -853,7 +854,13 @@ export default function ProductPage({
   );
 
   useEffect(() => {
-    requestAnimationFrame(() => setMounted(true));
+    // Double rAF: let the browser paint the parked (translateY(100%))
+    // base state once before flipping to --in, otherwise the open
+    // transition is skipped and the page appears with no slide-up.
+    const raf = requestAnimationFrame(() =>
+      requestAnimationFrame(() => setMounted(true)),
+    );
+    return () => cancelAnimationFrame(raf);
   }, []);
 
   // Reset scroll to top on every product navigation. useLayoutEffect runs
@@ -945,10 +952,16 @@ export default function ProductPage({
   const isSaved = bookmarks.isProductBookmarked(product);
 
   const handleToggleSave = useCallback(() => {
+    const wasSaved = bookmarks.isProductBookmarked(product);
     const productToSave = creative
       ? { ...product, video_url: creative.videoUrl, thumbnail_url: creative.thumbnailUrl ?? undefined, creative_id: creative.id }
       : product;
     bookmarks.toggleProductBookmark(productToSave);
+    emitSavedToast({
+      name: product.name || 'this product',
+      imageUrl: productPoster(product),
+      saved: !wasSaved,
+    });
   }, [bookmarks, product, creative]);
 
   // Share the deep-link to this product. Uses navigator.share where it's
