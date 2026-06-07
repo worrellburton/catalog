@@ -1026,33 +1026,3 @@ header > .pending-look-pill {
   }
 }
 
-
-
-/* Desktop super-admin header button — circular icon button matching the
-   bookmark toggle, shield glyph. Hidden on mobile (the Account page's
-   super-admin sub-section covers that). */
-.header-super-admin-btn {
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.14);
-  background: rgba(255, 255, 255, 0.06);
-  color: rgba(255, 255, 255, 0.7);
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: background 0.18s ease, color 0.18s ease;
-}
-.header-super-admin-btn:hover {
-  background: rgba(255, 255, 255, 0.14);
-  color: #fff;
-}
-.light-mode .header-super-admin-btn {
-  background: rgba(0, 0, 0, 0.05);
-  color: rgba(0, 0, 0, 0.55);
-  border-color: rgba(0, 0, 0, 0.1);
-}
-@media (max-width: 768px) {
-  .header-super-admin-btn { display: none; }
-}
