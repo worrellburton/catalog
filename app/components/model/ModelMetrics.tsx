@@ -36,7 +36,7 @@ export default function ModelMetrics({
 }) {
   const [hover, setHover] = useState<{ i: number; x: number; y: number } | null>(null);
 
-  const lifetime = acq.churn > 0 ? Math.min(60, 1 / acq.churn) : 60;
+  const lifetime = acq.mauChurn > 0 ? Math.min(60, 1 / acq.mauChurn) : 60;
   const finalMonthRev = metrics.exitArr / 12;
 
   const items: MetricItem[] = [
@@ -51,7 +51,7 @@ export default function ModelMetrics({
     { label: 'Avg MAU', value: fmtNumber(acqSummary.avgMau), sub: `DAU ${fmtNumber(acqSummary.avgDau)}`,
       detail: `Mean monthly active users over ${MONTHS} months. DAU = MAU × ${fmtPercent(DAU_MAU_RATIO, 0)}.` },
     { label: 'LTV', value: fmtCurrency(metrics.ltv),
-      detail: `ARPU ${fmtCurrency(metrics.avgArpu)}/mo × ${fmtPercent(econ.grossMargin, 0)} gross margin × ${lifetime.toFixed(0)}-mo lifetime (1 ÷ ${fmtPercent(acq.churn, 0)} churn).` },
+      detail: `ARPU ${fmtCurrency(metrics.avgArpu)}/mo × ${fmtPercent(econ.grossMargin, 0)} gross margin × ${lifetime.toFixed(0)}-mo lifetime (1 ÷ ${fmtPercent(acq.mauChurn, 0)} MAU churn).` },
     { label: 'Blended CAC', value: fmtCurrency(acqSummary.blendedCac), sub: `${fmtPercent(acqSummary.organicShare, 0)} organic`,
       detail: `Total ad spend ${fmtCurrency(acq.budget, { compact: true })} ÷ every user acquired (paid + organic). Organic users (${fmtPercent(acqSummary.organicShare, 0)}) cost nothing, pulling it below the ${fmtCurrency(acq.cpa)} paid CPA.` },
     { label: 'LTV : CAC', value: `${metrics.ltvCac.toFixed(1)}×`, sub: metrics.ltvCac >= 3 ? '≥3× healthy' : 'below 3×', tone: metrics.ltvCac >= 3 ? 'good' : 'warn',

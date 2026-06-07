@@ -48,7 +48,10 @@ const ACQ_FIELDS: FieldDef[] = [
   { key: 'budgetDistLate',  label: 'Budget split (late)',         hint: 'Share of spend at the tail · totals 100%', format: 'percent', step: 0.01, min: 0, max: 1 },
 ];
 
-const CHURN_FIELD: FieldDef = { key: 'churn', label: 'Monthly churn', hint: "Active users who don't return / mo", format: 'percent', step: 0.01, min: 0, max: 1, benchmark: '3–8%/mo consumer' };
+// New users churn far harder than the established base, so retention is
+// split into two inputs surfaced in the Engagement card.
+const RETENTION_FIELD: FieldDef = { key: 'newUserRetention', label: 'New-user retention', hint: 'New users who return next month', format: 'percent', step: 0.01, min: 0, max: 1, benchmark: '25–45% M1' };
+const MAU_CHURN_FIELD: FieldDef = { key: 'mauChurn', label: 'Monthly active churn', hint: 'Retained base lost / mo', format: 'percent', step: 0.01, min: 0, max: 1, benchmark: '3–6%/mo' };
 
 const ENGAGEMENT_FIELDS: FieldDef[] = [
   { key: 'sessionsPerUserPerMonth',  label: 'Sessions / user / mo',  hint: 'Avg sessions per MAU per month', format: 'number',  step: 0.5,   min: 0, benchmark: '6–12' },
@@ -134,7 +137,7 @@ export default function AdminModel() {
   const cash = useMemo(() => buildCashflow(revenue, acquisition, eecon, hasOpex ? opexSchedule : undefined), [revenue, acquisition, eecon, hasOpex, opexSchedule]);
   const metrics = useMemo(() => investorMetrics(erev, eacq, revenue, acquisition, acqSummary, eecon, cash), [erev, eacq, revenue, acquisition, acqSummary, eecon, cash]);
   const sens = useMemo(() => sensitivity(erev, eacq), [erev, eacq]);
-  const retention = useMemo(() => cohortRetention(eacq.churn), [eacq.churn]);
+  const retention = useMemo(() => cohortRetention(eacq.newUserRetention, eacq.mauChurn), [eacq.newUserRetention, eacq.mauChurn]);
   const totalSales = useMemo(() => revenue.reduce((a, s) => a + s.sales, 0), [revenue]);
 
   const setRevField = (k: keyof Assumptions, v: number) => setRev(prev => ({ ...prev, [k]: v }));
@@ -151,7 +154,7 @@ export default function AdminModel() {
   const toggleOpen = (k: RowKey) => setUi(p => ({ ...p, open: { ...p.open, [k]: !p.open[k] } }));
   const resetEngagement = () => {
     setRev(p => ({ ...p, sessionsPerUserPerMonth: DEFAULTS.sessionsPerUserPerMonth, sessionTimeMinutes: DEFAULTS.sessionTimeMinutes, avgImpressionsPerSession: DEFAULTS.avgImpressionsPerSession, productConversion: DEFAULTS.productConversion }));
-    setAcq(p => ({ ...p, churn: GTM_DEFAULTS.churn }));
+    setAcq(p => ({ ...p, newUserRetention: GTM_DEFAULTS.newUserRetention, mauChurn: GTM_DEFAULTS.mauChurn }));
   };
   const resetRevenue = () => setRev(p => ({ ...p, avgCostPerSale: DEFAULTS.avgCostPerSale, avgAffiliateCommission: DEFAULTS.avgAffiliateCommission }));
 
@@ -212,9 +215,10 @@ export default function AdminModel() {
     if (key === 'engagement') {
       return (
         <ModelRow {...common} title="Engagement" subtitle="Retention × sessions × conversion → sales" onReset={readOnly ? undefined : resetEngagement}>
-          <p className="model-link-note">Churn trims <strong style={{ color: COLORS.acquisition }}>Acquisition</strong>'s MAU; the rest turns it into <strong style={{ color: COLORS.revenue }}>Revenue</strong>'s sales.</p>
+          <p className="model-link-note">Retention &amp; churn shape <strong style={{ color: COLORS.acquisition }}>Acquisition</strong>'s MAU; the rest turns it into <strong style={{ color: COLORS.revenue }}>Revenue</strong>'s sales.</p>
           <div className="proj-cards model-cards">
-            <AssumptionCard key="churn" field={CHURN_FIELD} value={eacq.churn} readOnly={readOnly} onChange={(n) => setAcqField('churn', clamp01(n))} />
+            <AssumptionCard key="newUserRetention" field={RETENTION_FIELD} value={eacq.newUserRetention} readOnly={readOnly} onChange={(n) => setAcqField('newUserRetention', clamp01(n))} />
+            <AssumptionCard key="mauChurn" field={MAU_CHURN_FIELD} value={eacq.mauChurn} readOnly={readOnly} onChange={(n) => setAcqField('mauChurn', clamp01(n))} />
             {ENGAGEMENT_FIELDS.map(f => (
               <AssumptionCard key={f.key} field={f} value={erev[f.key as keyof Assumptions]} readOnly={readOnly} onChange={(n) => setRevField(f.key as keyof Assumptions, n)} />
             ))}
@@ -307,7 +311,7 @@ export default function AdminModel() {
             <SensitivityChart rows={sens} />
           </section>
           <section className="model-card">
-            <h3>Cohort retention at {fmtPercent(acq.churn, 0)} churn</h3>
+            <h3>Cohort retention — {fmtPercent(eacq.newUserRetention, 0)} M1, {fmtPercent(eacq.mauChurn, 0)}/mo after</h3>
             <RetentionSparkline data={retention} />
             <p className="model-card-note">Of a cohort acquired in month 1, the share still active each month after.</p>
           </section>

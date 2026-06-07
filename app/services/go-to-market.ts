@@ -21,8 +21,12 @@ export interface GtmAssumptions {
   /** Share of spend in the final month. Complements budgetDistEarly to
       total 100% (both stored as 0..1). */
   budgetDistLate: number;
-  /** Monthly churn — share of the active base that doesn't return. */
-  churn: number;
+  /** Share of newly-acquired users who return the following month. New
+      users churn far harder than the established base, so they get their
+      own rate. */
+  newUserRetention: number;
+  /** Monthly churn of the established (already-retained) active base. */
+  mauChurn: number;
 }
 
 // DAU/MAU is a fixed modelling assumption, not a user lever — DAU is
@@ -35,12 +39,13 @@ export const GTM_DEFAULTS: GtmAssumptions = {
   budget: 250_000,
   budgetDistEarly: 0.2,
   budgetDistLate: 0.8,
-  churn: 0.06,
+  newUserRetention: 0.35,
+  mauChurn: 0.04,
 };
 
-// v3: added monthly churn, so MAU is now a retained active base rather
-// than a cumulative total — bump the key so stale blobs don't mislead.
-export const GTM_STORAGE_KEY = 'catalog:gtm:assumptions:v3';
+// v4: churn split into new-user retention + established-base churn for a
+// more accurate cohort model — bump so stale single-churn blobs don't load.
+export const GTM_STORAGE_KEY = 'catalog:gtm:assumptions:v4';
 
 export function readGtmStored(): GtmAssumptions {
   if (typeof window === 'undefined') return GTM_DEFAULTS;
@@ -94,22 +99,30 @@ function spendWeights(a: GtmAssumptions): number[] {
 export function buildGtmSeries(a: GtmAssumptions): GtmMonth[] {
   const weights = spendWeights(a);
   const out: GtmMonth[] = [];
-  // `activeBase` is the retained MAU; `everAcquired` is the gross count
-  // (paid + organic) used for blended CAC so churn doesn't flatter it.
-  let activeBase = 0;
+  // `established` is the retained base carried into each month; new users
+  // this month are active too but only `newUserRetention` of them survive
+  // into the established base next month. `everAcquired` is the gross count
+  // (paid + organic) used for blended CAC so churn can't flatter it.
+  let established = 0;
   let everAcquired = 0;
   let cumulativeSpend = 0;
   const cpa = a.cpa > 0 ? a.cpa : 1;
-  const churn = Math.min(1, Math.max(0, a.churn));
+  const mauChurn = Math.min(1, Math.max(0, a.mauChurn));
+  const newRet = Math.min(1, Math.max(0, a.newUserRetention));
 
   for (let i = 0; i < MONTHS; i++) {
     const spend = a.budget * weights[i];
     const paidAdds = spend / cpa;
-    // Organic + churn both work off the base we carried into this month.
-    const organicAdds = activeBase * a.organicGrowth;
-    const churned = activeBase * churn;
+    // Organic is word-of-mouth from the established base.
+    const organicAdds = established * a.organicGrowth;
     const newUsers = paidAdds + organicAdds;
-    activeBase = Math.max(0, activeBase - churned + newUsers);
+    // Everyone is active this month (the MAU); churn applies on the way
+    // into next month.
+    const activeMAU = established + newUsers;
+    const churnedEstablished = established * mauChurn;
+    const churnedNew = newUsers * (1 - newRet);
+    const churned = churnedEstablished + churnedNew;
+    established = Math.max(0, established - churnedEstablished + newUsers * newRet);
     everAcquired += newUsers;
     cumulativeSpend += spend;
     out.push({
@@ -119,8 +132,8 @@ export function buildGtmSeries(a: GtmAssumptions): GtmMonth[] {
       organicAdds,
       newUsers,
       churned,
-      cumulativeUsers: activeBase,
-      dau: activeBase * DAU_MAU_RATIO,
+      cumulativeUsers: activeMAU,
+      dau: activeMAU * DAU_MAU_RATIO,
       blendedCacToDate: everAcquired > 0 ? cumulativeSpend / everAcquired : 0,
     });
   }

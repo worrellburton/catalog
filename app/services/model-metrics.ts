@@ -113,7 +113,7 @@ export function investorMetrics(
   }
   const avgArpu = cnt ? arpuSum / cnt : 0;
 
-  const lifetime = acq.churn > 0 ? Math.min(LIFETIME_CAP_MONTHS, 1 / acq.churn) : LIFETIME_CAP_MONTHS;
+  const lifetime = acq.mauChurn > 0 ? Math.min(LIFETIME_CAP_MONTHS, 1 / acq.mauChurn) : LIFETIME_CAP_MONTHS;
   const contribPerUser = avgArpu * econ.grossMargin;
   const ltv = contribPerUser * lifetime;
   const ltvCac = acqSummary.blendedCac > 0 ? ltv / acqSummary.blendedCac : 0;
@@ -151,13 +151,13 @@ export function sensitivity(rev: Assumptions, acq: GtmAssumptions, delta = 0.2):
   const scale = (factor: number) => ({
     cpa:        () => ({ rev, acq: { ...acq, cpa: acq.cpa * factor } }),
     conversion: () => ({ rev: { ...rev, productConversion: rev.productConversion * factor }, acq }),
-    churn:      () => ({ rev, acq: { ...acq, churn: Math.min(1, acq.churn * factor) } }),
+    churn:      () => ({ rev, acq: { ...acq, mauChurn: Math.min(1, acq.mauChurn * factor) } }),
     organic:    () => ({ rev, acq: { ...acq, organicGrowth: acq.organicGrowth * factor } }),
     aov:        () => ({ rev: { ...rev, avgCostPerSale: rev.avgCostPerSale * factor }, acq }),
     spend:      () => ({ rev, acq: { ...acq, budget: acq.budget * factor } }),
   });
   const labels: Record<string, string> = {
-    cpa: 'CPA', conversion: 'Conversion', churn: 'Churn',
+    cpa: 'CPA', conversion: 'Conversion', churn: 'MAU churn',
     organic: 'Organic growth', aov: 'Avg order value', spend: 'Ad spend',
   };
   return Object.keys(labels).map(key => {
@@ -170,9 +170,13 @@ export function sensitivity(rev: Assumptions, acq: GtmAssumptions, delta = 0.2):
 }
 
 // ── Cohort retention curve ──────────────────────────────────────
-export function cohortRetention(churn: number, months = MONTHS): number[] {
-  const c = Math.min(1, Math.max(0, churn));
-  return Array.from({ length: months }, (_, m) => Math.pow(1 - c, m));
+// Month 0 is the acquisition month (100% active). Only newUserRetention
+// survive into month 1, after which the cohort decays at the established
+// mauChurn rate.
+export function cohortRetention(newUserRetention: number, mauChurn: number, months = MONTHS): number[] {
+  const r = Math.min(1, Math.max(0, newUserRetention));
+  const c = Math.min(1, Math.max(0, mauChurn));
+  return Array.from({ length: months }, (_, m) => (m === 0 ? 1 : r * Math.pow(1 - c, m - 1)));
 }
 
 // ── Scenarios (Base is the source of truth; Bear/Bull derive from it) ─
@@ -192,18 +196,18 @@ interface Factors {
 const SCENARIO_FACTORS: Record<'bear' | 'bull', Factors> = {
   bear: {
     rev: { productConversion: 0.6, avgCostPerSale: 0.85, avgAffiliateCommission: 0.85, sessionsPerUserPerMonth: 0.85, avgImpressionsPerSession: 0.85 },
-    acq: { cpa: 1.6, organicGrowth: 0.5, budget: 0.7, churn: 1.8 },
+    acq: { cpa: 1.6, organicGrowth: 0.5, budget: 0.7, newUserRetention: 0.6, mauChurn: 1.8 },
     econ: { grossMargin: 0.92, monthlyOpex: 1.3, startingCash: 0.8 },
   },
   bull: {
     rev: { productConversion: 1.6, avgCostPerSale: 1.2, avgAffiliateCommission: 1.2, sessionsPerUserPerMonth: 1.15, avgImpressionsPerSession: 1.15 },
-    acq: { cpa: 0.6, organicGrowth: 1.5, budget: 1.4, churn: 0.5 },
+    acq: { cpa: 0.6, organicGrowth: 1.5, budget: 1.4, newUserRetention: 1.3, mauChurn: 0.5 },
     econ: { grossMargin: 1.05, monthlyOpex: 0.9, startingCash: 1.3 },
   },
 };
 
 // Fields that are rates and must stay within [0, 1] after scaling.
-const RATE_KEYS = new Set(['productConversion', 'avgAffiliateCommission', 'organicGrowth', 'churn', 'grossMargin', 'budgetDistEarly', 'budgetDistLate']);
+const RATE_KEYS = new Set(['productConversion', 'avgAffiliateCommission', 'organicGrowth', 'newUserRetention', 'mauChurn', 'grossMargin', 'budgetDistEarly', 'budgetDistLate']);
 
 function scaleSet<T extends object>(base: T, factors: Partial<Record<keyof T, number>>): T {
   const out = { ...base } as Record<string, number>;
