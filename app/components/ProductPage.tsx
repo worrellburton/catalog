@@ -416,15 +416,25 @@ function LookTile({
           via the looks fetcher (see services/looks.ts), so once the
           admin uploads a profile pic via AvatarUpload it lights up
           here automatically. */}
-      <span className="pd-look-tile-meta">
+      <span className="pd-look-tile-meta" onClick={(e) => e.stopPropagation()}>
         <CreatorAvatarFollow
           handle={look.creator}
           avatarUrl={avatarUrl}
           displayName={displayName}
-          size={34}
+          size={22}
           onOpenCreator={(h) => onOpenCreator?.(h)}
-          avatarOpensCreator={false}
+          avatarOpensCreator
         />
+        {displayName && (
+          <span
+            className="card-creator-tag-name"
+            role="button"
+            tabIndex={0}
+            onClick={(e) => { e.stopPropagation(); onOpenCreator?.(look.creator); }}
+          >
+            {displayName}
+          </span>
+        )}
       </span>
     </button>
   );
