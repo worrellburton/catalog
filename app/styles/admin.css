@@ -5057,6 +5057,8 @@ html.admin-on-dark-canvas .admin-topbar,
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 .proj-tooltip-row:last-child { border-bottom: 0; }
+/* Separator between idea groups (money vs. demand). */
+.proj-tooltip-row--group { margin-top: 7px; padding-top: 7px; border-top: 1px solid rgba(255, 255, 255, 0.14); }
 .proj-tooltip-row-label {
   color: #94a3b8;
   font-weight: 500;

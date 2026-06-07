@@ -191,17 +191,19 @@ export default function UnifiedModelChart({ revenue, acquisition, cash, showReve
           const tipY = Math.max(PAD_T, anchorY - TIP_H - 14);
           const rev = pctChange(revenue[i].revenue, i >= 1 ? revenue[i - 1].revenue : undefined);
           const mau = pctChange(acquisition[i].cumulativeUsers, i >= 1 ? acquisition[i - 1].cumulativeUsers : undefined);
-          const rows: { label: string; value: string; delta: string; positive: boolean; tone: 'rev' | 'acq' | 'eng' | 'cash' }[] = [];
-          if (showRevenue) rows.push({ label: 'Revenue', value: fmtCurrency(revenue[i].revenue), delta: `${rev.text} MoM`, positive: rev.positive, tone: 'rev' });
-          if (showCash) rows.push({ label: 'Cash', value: fmtCurrency(cash[i].cash), delta: `${cash[i].net >= 0 ? '+' : ''}${fmtCurrency(cash[i].net, { compact: true })}`, positive: cash[i].net >= 0, tone: 'cash' });
-          if (showPayout) rows.push({ label: 'Payout', value: fmtCurrency(cash[i].creatorPayout, { compact: true }), delta: revenue[i].revenue > 0 ? `${Math.round((cash[i].creatorPayout / revenue[i].revenue) * 100)}% of rev` : '—', positive: true, tone: 'eng' });
+          // Grouped into ideas: money (revenue/cash/payout/opex) vs. demand
+          // (sales + audience). A divider separates the groups in the tooltip.
+          const rows: { label: string; value: string; delta: string; positive: boolean; tone: 'rev' | 'acq' | 'eng' | 'cash'; group: 'money' | 'demand' }[] = [];
+          if (showRevenue) rows.push({ label: 'Revenue', value: fmtCurrency(revenue[i].revenue), delta: `${rev.text} MoM`, positive: rev.positive, tone: 'rev', group: 'money' });
+          if (showCash) rows.push({ label: 'Cash', value: fmtCurrency(cash[i].cash), delta: `${cash[i].net >= 0 ? '+' : ''}${fmtCurrency(cash[i].net, { compact: true })}`, positive: cash[i].net >= 0, tone: 'cash', group: 'money' });
+          if (showPayout) rows.push({ label: 'Payout', value: fmtCurrency(cash[i].creatorPayout, { compact: true }), delta: revenue[i].revenue > 0 ? `${Math.round((cash[i].creatorPayout / revenue[i].revenue) * 100)}% of rev` : '—', positive: true, tone: 'eng', group: 'money' });
           // OpEx includes creator payout (payroll + expenses + payout).
-          rows.push({ label: 'OpEx', value: fmtCurrency(cash[i].opex + cash[i].creatorPayout, { compact: true }), delta: `mktg ${fmtCurrency(cash[i].marketing, { compact: true })}`, positive: false, tone: 'cash' });
-          if (showEngagement) rows.push({ label: 'Sales', value: fmtNumber(revenue[i].sales), delta: 'orders', positive: true, tone: 'eng' });
+          rows.push({ label: 'OpEx', value: fmtCurrency(cash[i].opex + cash[i].creatorPayout, { compact: true }), delta: `mktg ${fmtCurrency(cash[i].marketing, { compact: true })}`, positive: false, tone: 'cash', group: 'money' });
+          if (showEngagement) rows.push({ label: 'Sales', value: fmtNumber(revenue[i].sales), delta: 'orders', positive: true, tone: 'eng', group: 'demand' });
           if (showAcquisition) {
-            rows.push({ label: 'MAU', value: fmtNumber(acquisition[i].cumulativeUsers), delta: `${mau.text} MoM`, positive: mau.positive, tone: 'acq' });
-            rows.push({ label: 'DAU', value: fmtNumber(acquisition[i].dau), delta: 'daily', positive: true, tone: 'acq' });
-            rows.push({ label: 'New users', value: fmtNumber(acquisition[i].newUsers), delta: `spend ${fmtCurrency(acquisition[i].spend, { compact: true })}`, positive: true, tone: 'acq' });
+            rows.push({ label: 'MAU', value: fmtNumber(acquisition[i].cumulativeUsers), delta: `${mau.text} MoM`, positive: mau.positive, tone: 'acq', group: 'demand' });
+            rows.push({ label: 'DAU', value: fmtNumber(acquisition[i].dau), delta: 'daily', positive: true, tone: 'acq', group: 'demand' });
+            rows.push({ label: 'New users', value: fmtNumber(acquisition[i].newUsers), delta: `spend ${fmtCurrency(acquisition[i].spend, { compact: true })}`, positive: true, tone: 'acq', group: 'demand' });
           }
           // Operating margin = operating income (net) ÷ revenue, featured
           // as the headline at the bottom of the tooltip.
@@ -215,8 +217,8 @@ export default function UnifiedModelChart({ revenue, acquisition, cash, showReve
                     <span className="proj-tooltip-month">{monthLabel(i)}</span>
                   </div>
                   <div className="proj-tooltip-rows">
-                    {rows.map(r => (
-                      <div key={r.label} className="proj-tooltip-row">
+                    {rows.map((r, ri) => (
+                      <div key={r.label} className={`proj-tooltip-row${ri > 0 && rows[ri - 1].group !== r.group ? ' proj-tooltip-row--group' : ''}`}>
                         <span className="proj-tooltip-row-label">{r.label}</span>
                         <span className="proj-tooltip-row-current">{r.value}</span>
                         <span className={`proj-tooltip-row-delta ${r.tone === 'acq' ? 'gtm-paid' : r.tone === 'eng' ? 'gtm-eng' : r.tone === 'cash' ? (r.positive ? 'positive' : 'negative') : r.positive ? 'positive' : 'negative'}`}>{r.delta}</span>

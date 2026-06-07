@@ -145,7 +145,7 @@ export default function AdminModel() {
   // "Rate my assumptions" — compact model snapshot sent to Claude + Gemini.
   const [showRate, setShowRate] = useState(false);
   const ratePayload = useMemo(() => ({
-    business: 'Consumer fashion shopping app earning affiliate commission',
+    business: 'Consumer fashion shopping platform (web + iOS/Android app) earning affiliate commission',
     horizonMonths: MONTHS,
     scenario: ui.scenario,
     acquisition: {
