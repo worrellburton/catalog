@@ -194,7 +194,7 @@ export default function UnifiedModelChart({ revenue, acquisition, cash, showReve
           const rows: { label: string; value: string; delta: string; positive: boolean; tone: 'rev' | 'acq' | 'eng' | 'cash' }[] = [];
           if (showRevenue) rows.push({ label: 'Revenue', value: fmtCurrency(revenue[i].revenue), delta: `${rev.text} MoM`, positive: rev.positive, tone: 'rev' });
           if (showCash) rows.push({ label: 'Cash', value: fmtCurrency(cash[i].cash), delta: `${cash[i].net >= 0 ? '+' : ''}${fmtCurrency(cash[i].net, { compact: true })}`, positive: cash[i].net >= 0, tone: 'cash' });
-          if (showPayout) rows.push({ label: 'Creator payout', value: fmtCurrency(cash[i].creatorPayout, { compact: true }), delta: revenue[i].revenue > 0 ? `${Math.round((cash[i].creatorPayout / revenue[i].revenue) * 100)}% of rev` : '—', positive: true, tone: 'eng' });
+          if (showPayout) rows.push({ label: 'Payout', value: fmtCurrency(cash[i].creatorPayout, { compact: true }), delta: revenue[i].revenue > 0 ? `${Math.round((cash[i].creatorPayout / revenue[i].revenue) * 100)}% of rev` : '—', positive: true, tone: 'eng' });
           // OpEx includes creator payout (payroll + expenses + payout).
           rows.push({ label: 'OpEx', value: fmtCurrency(cash[i].opex + cash[i].creatorPayout, { compact: true }), delta: `mktg ${fmtCurrency(cash[i].marketing, { compact: true })}`, positive: false, tone: 'cash' });
           if (showEngagement) rows.push({ label: 'Sales', value: fmtNumber(revenue[i].sales), delta: 'orders', positive: true, tone: 'eng' });
