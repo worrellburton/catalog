@@ -30,12 +30,14 @@
      toast reads as a notification chip instead of a banner. The number
      itself stays prominent (.activity-toast-count below) so the count-up
      animation still draws the eye. */
-  gap: 9px;
-  padding: 7px 13px 7px 8px;
+  /* Sized to match the global follow/unfollow toast (.follow-toast) so the
+     two notification styles read as one system. */
+  gap: 10px;
+  padding: 8px 16px 8px 8px;
   border-radius: 999px;
   background: rgba(15, 23, 42, 0.92);
   color: #f8fafc;
-  font-size: 11.5px;
+  font-size: 14px;
   font-weight: 600;
   letter-spacing: -0.005em;
   border: 1px solid rgba(255, 255, 255, 0.08);
@@ -66,15 +68,15 @@
   align-items: center;
   justify-content: center;
   /* Same proportional shrink as the rest of the toast. */
-  width: 22px;
-  height: 22px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   background: rgba(34, 197, 94, 0.15);
   color: #4ade80;
   border: 1px solid rgba(34, 197, 94, 0.35);
   flex-shrink: 0;
 }
-.activity-toast-icon-disc svg { width: 12px; height: 12px; }
+.activity-toast-icon-disc svg { width: 14px; height: 14px; }
 
 /* Kind accents — tint the icon disc to match the event. */
 .activity-toast--click    .activity-toast-icon-disc { background: rgba(124, 58, 237, 0.18); color: #c4b5fd; border-color: rgba(167, 139, 250, 0.42); }
@@ -84,8 +86,8 @@
 
 /* ── Per-event toast (avatar + message + thumb) ───────────────────── */
 .activity-toast-avatar {
-  width: 26px;
-  height: 26px;
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   object-fit: cover;
   flex-shrink: 0;
@@ -97,13 +99,13 @@
   align-items: center;
   justify-content: center;
   color: #f8fafc;
-  font-size: 11px;
+  font-size: 13px;
   font-weight: 700;
   text-transform: uppercase;
 }
 .activity-toast-thumb {
-  width: 26px;
-  height: 34px;
+  width: 30px;
+  height: 40px;
   border-radius: 6px;
   object-fit: cover;
   flex-shrink: 0;
