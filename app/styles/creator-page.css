@@ -592,7 +592,9 @@
   right: 8px;
   top: 50%;
   transform: translateY(-50%);
-  z-index: 120;
+  /* Above .creator-page (z-index:150) — as a sibling at a lower z-index the
+     dial was painting BEHIND the full-screen page, so it never showed. */
+  z-index: 200;
   /* Mobile only — desktop keeps its 3-column default and shows no dial.
      Flipped to flex inside the max-width:768px block below. */
   display: none;
