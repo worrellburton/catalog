@@ -1203,6 +1203,25 @@ interface AnalyticsData {
   topProductsByClickouts: { name: string; brand: string | null; count: number }[];
 }
 
+// Per-product totals for the breakdown rail in per-look mode. Each
+// product in the look gets its impressions / clicks / clickouts scoped
+// to the active time range, keyed by product id.
+interface ProductMetrics {
+  impressions: number;
+  clicks: number;
+  clickouts: number;
+}
+
+// The product picked from the per-look breakdown — drives the in-modal
+// drill-down without leaving the look context. Carries just enough to
+// render the header (image + brand + name) alongside its analytics.
+interface ProductScope {
+  id: string;
+  name: string;
+  brand: string | null;
+  image_url: string | null;
+}
+
 /**
  * Analytics modal. Catalog-wide when `look` is null; per-look when
  * a ManagedLook is passed in. The time-range pill row at the top
@@ -1216,12 +1235,27 @@ function CreatorAnalyticsModal({ look, onClose }: { look: ManagedLook | null; on
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [loading, setLoading] = useState(true);
 
-  // Escape closes the modal — mirrors the legacy behavior.
+  // Per-look breakdown: product id → its impressions/clicks/clickouts
+  // for the active range. Only populated in per-look mode.
+  const [productMetrics, setProductMetrics] = useState<Record<string, ProductMetrics>>({});
+
+  // Drill-down: the product whose own analytics are being shown inside
+  // the same modal. null = the look view. Set by tapping a product row.
+  const [productScope, setProductScope] = useState<ProductScope | null>(null);
+  const [scopeData, setScopeData] = useState<AnalyticsData | null>(null);
+  const [scopeLoading, setScopeLoading] = useState(false);
+
+  // Escape closes the drill-down first, then the modal — so the back
+  // gesture feels natural one level at a time.
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key !== 'Escape') return;
+      if (productScope) { setProductScope(null); return; }
+      onClose();
+    };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [onClose]);
+  }, [onClose, productScope]);
 
   // Re-fetch whenever the look scope or the time range changes.
   useEffect(() => {
@@ -1272,6 +1306,39 @@ function CreatorAnalyticsModal({ look, onClose }: { look: ManagedLook | null; on
           topProductsByClickouts: [],
         });
         setLoading(false);
+
+        // Per-product breakdown — one count query per (product, metric)
+        // scoped to the same range bounds, all fired in parallel. head-
+        // only counts mirror the look-level pattern above.
+        if (productIds.length > 0) {
+          const countFor = (pid: string, eventType: 'impression' | 'click' | 'clickout') => {
+            let q = supabase!.from('user_events')
+              .select('id', { count: 'exact', head: true })
+              .eq('event_type', eventType).eq('target_type', 'product').eq('target_uuid', pid);
+            if (startISO) q = q.gte('created_at', startISO);
+            if (endISO) q = q.lt('created_at', endISO);
+            return q;
+          };
+          const results = await Promise.all(
+            productIds.flatMap(pid => [
+              countFor(pid, 'impression'),
+              countFor(pid, 'click'),
+              countFor(pid, 'clickout'),
+            ]),
+          );
+          if (cancelled) return;
+          const next: Record<string, ProductMetrics> = {};
+          productIds.forEach((pid, i) => {
+            next[pid] = {
+              impressions: results[i * 3].count || 0,
+              clicks: results[i * 3 + 1].count || 0,
+              clickouts: results[i * 3 + 2].count || 0,
+            };
+          });
+          setProductMetrics(next);
+        } else {
+          setProductMetrics({});
+        }
         return;
       }
 
@@ -1383,6 +1450,71 @@ function CreatorAnalyticsModal({ look, onClose }: { look: ManagedLook | null; on
     return () => { cancelled = true; };
   }, [look, userId, range]);
 
+  // ── Drill-down fetch ────────────────────────────────────────────
+  // When a product is selected, load that product's own analytics:
+  // three count queries (impression / click / clickout) plus a raw
+  // impression pull so we can aggregate a daily series for the trend,
+  // mirroring the catalog-wide branch. Honors the same range bounds.
+  useEffect(() => {
+    if (!productScope) { setScopeData(null); return; }
+    let cancelled = false;
+    (async () => {
+      if (!supabase) { setScopeLoading(false); return; }
+      setScopeLoading(true);
+      const { startISO, endISO } = rangeBounds(range);
+      const pid = productScope.id;
+
+      const countFor = (eventType: 'impression' | 'click' | 'clickout') => {
+        let q = supabase!.from('user_events')
+          .select('id', { count: 'exact', head: true })
+          .eq('event_type', eventType).eq('target_type', 'product').eq('target_uuid', pid);
+        if (startISO) q = q.gte('created_at', startISO);
+        if (endISO) q = q.lt('created_at', endISO);
+        return q;
+      };
+
+      // Raw impression rows → daily series. Capped for sanity, same as
+      // the catalog-wide branch.
+      let rawImpQ = supabase.from('user_events')
+        .select('created_at')
+        .eq('event_type', 'impression').eq('target_type', 'product').eq('target_uuid', pid)
+        .order('created_at', { ascending: false })
+        .limit(10_000);
+      if (startISO) rawImpQ = rawImpQ.gte('created_at', startISO);
+      if (endISO) rawImpQ = rawImpQ.lt('created_at', endISO);
+
+      const [imp, clk, clko, raw] = await Promise.all([
+        countFor('impression'),
+        countFor('click'),
+        countFor('clickout'),
+        rawImpQ,
+      ]);
+      if (cancelled) return;
+
+      const dayImp = new Map<string, number>(); // YYYY-MM-DD → impressions
+      ((raw.data as { created_at: string }[] | null) || []).forEach(r => {
+        const day = (r.created_at || '').slice(0, 10);
+        if (day) dayImp.set(day, (dayImp.get(day) || 0) + 1);
+      });
+      const series = [...dayImp.entries()]
+        .sort(([a], [b]) => a.localeCompare(b))
+        .map(([day, count]) => ({ day, count }));
+
+      setScopeData({
+        impressions: imp.count || 0,
+        clicks: clk.count || 0,
+        clickouts: clko.count || 0,
+        series,
+        topLook: null,
+        topProductsByImpressions: [],
+        topProductsByClicks: [],
+        topProductsByClickouts: [],
+      });
+      setScopeLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, [productScope, range]);
+
   const ctr = data && data.impressions > 0
     ? ((data.clicks / data.impressions) * 100).toFixed(1)
     : null;
@@ -1390,17 +1522,87 @@ function CreatorAnalyticsModal({ look, onClose }: { look: ManagedLook | null; on
     ? ((data.clickouts / data.clicks) * 100).toFixed(1)
     : null;
 
-  const heading = look ? (look.title || 'This look') : 'Your catalog';
+  // Drill-down derived metrics — mirror the look-level CTR/clickout %
+  // so the product-scoped view reads identically to the look view.
+  const scopeCtr = scopeData && scopeData.impressions > 0
+    ? ((scopeData.clicks / scopeData.impressions) * 100).toFixed(1)
+    : null;
+  const scopeClickoutPct = scopeData && scopeData.clicks > 0
+    ? ((scopeData.clickouts / scopeData.clicks) * 100).toFixed(1)
+    : null;
+
+  // Look media for the per-look header — reuse the same preview picker
+  // the tiles use so the thumbnail matches what the creator sees in the grid.
+  const lookPreview = look ? previewFor(look) : null;
+  // Products in this look, in their authored order, for the breakdown rail.
+  const lookProducts = (look?.look_products || [])
+    .filter(lp => !!lp.products?.id)
+    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0));
+
+  const heading = productScope
+    ? (productScope.name || 'Product')
+    : look ? (look.title || 'This look') : 'Your catalog';
 
   return (
     <div className="my-cat-analytics-page" role="dialog" aria-modal="true">
       <div className="my-cat-analytics-card my-cat-analytics-card--page">
         <header className="my-cat-analytics-head">
+          {/* Back affordance only exists one level deep — in the drill-down. */}
+          {productScope && (
+            <button
+              type="button"
+              className="my-cat-analytics-back"
+              onClick={() => setProductScope(null)}
+              aria-label="Back to look"
+            >‹ Back</button>
+          )}
           <h2>{heading}</h2>
           <button type="button" className="my-cat-analytics-close" onClick={onClose} aria-label="Close">×</button>
         </header>
 
-        {/* Time-range pill row — same options for both views. */}
+        {/* Per-look header — a small poster/video of the look beside its
+            title. Only in look view (hidden in the catalog-wide and
+            product-scoped modes). */}
+        {look && !productScope && (
+          <div className="my-cat-analytics-look">
+            <div className="my-cat-analytics-look-media">
+              {lookPreview?.video ? (
+                <video
+                  src={lookPreview.video}
+                  poster={lookPreview.poster || undefined}
+                  muted
+                  loop
+                  autoPlay
+                  playsInline
+                />
+              ) : lookPreview?.poster ? (
+                <img src={lookPreview.poster} alt="" />
+              ) : (
+                <div className="my-cat-analytics-look-media--empty" aria-hidden="true" />
+              )}
+            </div>
+            <span className="my-cat-analytics-look-title">{look.title || 'This look'}</span>
+          </div>
+        )}
+
+        {/* Product-scoped header — the product's thumbnail + brand/name. */}
+        {productScope && (
+          <div className="my-cat-analytics-look">
+            <div className="my-cat-analytics-look-media my-cat-analytics-look-media--product">
+              {productScope.image_url ? (
+                <img src={productScope.image_url} alt="" />
+              ) : (
+                <div className="my-cat-analytics-look-media--empty" aria-hidden="true" />
+              )}
+            </div>
+            <span className="my-cat-analytics-look-title">
+              {productScope.brand && <span className="my-cat-analytics-list-brand">{productScope.brand}</span>}
+              <span>{productScope.name}</span>
+            </span>
+          </div>
+        )}
+
+        {/* Time-range pill row — same options for every view. */}
         <div className="my-cat-analytics-range" role="tablist" aria-label="Time range">
           {RANGE_ORDER.map(r => (
             <button
@@ -1414,7 +1616,34 @@ function CreatorAnalyticsModal({ look, onClose }: { look: ManagedLook | null; on
           ))}
         </div>
 
-        {loading ? (
+        {/* ── Product drill-down view ──────────────────────────────── */}
+        {productScope ? (
+          scopeLoading ? (
+            <div className="my-cat-analytics-empty">Loading…</div>
+          ) : !scopeData ? (
+            <div className="my-cat-analytics-empty">No analytics yet.</div>
+          ) : (
+            <>
+              <div className="my-cat-analytics-hero">
+                <div className="my-cat-analytics-hero-head">
+                  <span className="my-cat-stat-label">Impressions</span>
+                  <span className="my-cat-analytics-hero-value">{scopeData.impressions.toLocaleString()}</span>
+                </div>
+                <AnalyticsTrend series={scopeData.series} />
+              </div>
+
+              <div className="my-cat-analytics-duo">
+                <Stat label="Clicks"    value={scopeData.clicks.toLocaleString()}    sub={scopeCtr ? `${scopeCtr}% CTR` : '—'} />
+                <Stat label="Clickouts" value={scopeData.clickouts.toLocaleString()} sub={scopeClickoutPct ? `${scopeClickoutPct}% of clicks` : '—'} />
+              </div>
+
+              {/* No sales source in this DB — surfaced honestly, never faked. */}
+              <div className="my-cat-analytics-duo my-cat-analytics-duo--single">
+                <Stat label="Converted to sales" value="Coming soon" sub="sales tracking coming soon" />
+              </div>
+            </>
+          )
+        ) : loading ? (
           <div className="my-cat-analytics-empty">Loading…</div>
         ) : !data ? (
           <div className="my-cat-analytics-empty">No analytics yet.</div>
@@ -1436,6 +1665,50 @@ function CreatorAnalyticsModal({ look, onClose }: { look: ManagedLook | null; on
               <Stat label="Clicks"    value={data.clicks.toLocaleString()}    sub={ctr ? `${ctr}% CTR` : '—'} />
               <Stat label="Clickouts" value={data.clickouts.toLocaleString()} sub={clickoutPct ? `${clickoutPct}% of clicks` : '—'} />
             </div>
+
+            {/* Converted to sales — per-look only. No sales source exists in
+                this database, so it's surfaced as a placeholder, never faked. */}
+            {look && (
+              <div className="my-cat-analytics-duo my-cat-analytics-duo--single">
+                <Stat label="Converted to sales" value="Coming soon" sub="sales tracking coming soon" />
+              </div>
+            )}
+
+            {/* Per-product breakdown — every product in this look with its
+                impressions / clicks / clickouts for the active range. Each
+                row drills into that product's own analytics. */}
+            {look && lookProducts.length > 0 && (
+              <section className="my-cat-analytics-section">
+                <h3>Products in this look</h3>
+                <ul className="my-cat-analytics-list">
+                  {lookProducts.map(lp => {
+                    const p = lp.products;
+                    const m = productMetrics[p.id];
+                    return (
+                      <li key={p.id}>
+                        <button
+                          type="button"
+                          className="my-cat-analytics-prow"
+                          onClick={() => setProductScope({ id: p.id, name: p.name, brand: p.brand, image_url: p.image_url })}
+                        >
+                          <span className="my-cat-analytics-prow-media">
+                            {p.image_url ? <img src={p.image_url} alt="" /> : <span className="my-cat-analytics-look-media--empty" aria-hidden="true" />}
+                          </span>
+                          <span className="my-cat-analytics-prow-name">
+                            {p.brand && <span className="my-cat-analytics-list-brand">{p.brand}</span>}
+                            <span>{p.name}</span>
+                          </span>
+                          <span className="my-cat-analytics-prow-stats">
+                            {(m?.impressions ?? 0).toLocaleString()} impr · {(m?.clicks ?? 0).toLocaleString()} clicks · {(m?.clickouts ?? 0).toLocaleString()} clickouts
+                          </span>
+                          <span className="my-cat-analytics-prow-chevron" aria-hidden="true">›</span>
+                        </button>
+                      </li>
+                    );
+                  })}
+                </ul>
+              </section>
+            )}
 
             {!look && data.topLook && (
               <section className="my-cat-analytics-section">

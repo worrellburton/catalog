@@ -3068,6 +3068,12 @@ export default function AdminData() {
       model: 'seedance-2.0',
       thumbnailUrl: product?.primary_image_url || product?.image_url || null,
     });
+    // Tracks whether the invoke succeeded and the clip is now rendering
+    // async on fal's queue. When true we KEEP the start timestamp alive
+    // past the finally block so the inline cell can show a real progress
+    // bar + countdown for the whole 60–120s render (not just the ~2s
+    // synchronous invoke) — the pending poll clears it on done/failed.
+    let wentPending = false;
     try {
       const { data, error } = await supabase.functions.invoke('generate-primary-video', {
         body: { product_id: productId },
@@ -3096,6 +3102,7 @@ export default function AdminData() {
           : pp,
       ));
       pendingVideoJobsRef.current.set(productId, { job: queueJob, startedAt: Date.now() });
+      wentPending = true;
       // Wake the poll so it picks this product up on the next tick.
       setPendingVideoTick(t => t + 1);
     } catch (err) {
@@ -3103,16 +3110,23 @@ export default function AdminData() {
       queueJob.fail(msg);
       showToast(`Primary video generation failed: ${msg}`);
     } finally {
+      // The synchronous invoke is done — drop the "Generating" (sync) flag.
       setGeneratingPrimaryVideoIds(prev => {
         const next = new Set(prev);
         next.delete(productId);
         return next;
       });
-      setPrimaryVideoStartedAt(prev => {
-        const next = new Map(prev);
-        next.delete(productId);
-        return next;
-      });
+      // Keep the start timestamp ONLY while the clip is still rendering on
+      // fal's queue (wentPending). The pending poll clears it when the
+      // status flips to done/failed. On a hard failure we clear it here so
+      // the cell falls back to the idle "Generate" state.
+      if (!wentPending) {
+        setPrimaryVideoStartedAt(prev => {
+          const next = new Map(prev);
+          next.delete(productId);
+          return next;
+        });
+      }
     }
   }, [showToast, crawledProducts]);
 
@@ -3157,14 +3171,18 @@ export default function AdminData() {
     return () => { cancelled = true; };
   }, []);
 
-  // Tick the progress bar at 250ms while any generation is running.
-  // Single setInterval at the parent — cells read elapsed time off
+  // Tick the progress bar at 250ms while any generation is running OR a
+  // submitted clip is still rendering async on fal's queue. Both states
+  // keep a start timestamp in primaryVideoStartedAt, so ticking on a
+  // non-empty map covers the full sync-invoke → background-render window
+  // and the inline cell's bar/countdown advances the whole time. Single
+  // setInterval at the parent — cells read elapsed time off
   // primaryVideoStartedAt + Date.now() on every render.
   useEffect(() => {
-    if (generatingPrimaryVideoIds.size === 0) return;
+    if (generatingPrimaryVideoIds.size === 0 && primaryVideoStartedAt.size === 0) return;
     const handle = window.setInterval(() => setPrimaryVideoTick(t => t + 1), 250);
     return () => window.clearInterval(handle);
-  }, [generatingPrimaryVideoIds]);
+  }, [generatingPrimaryVideoIds, primaryVideoStartedAt]);
   // Reference the tick so the hook isn't flagged unused — its job is
   // purely to trigger re-renders, the value itself is meaningless.
   void primaryVideoTick;
@@ -3196,6 +3214,12 @@ export default function AdminData() {
           const observed = Date.now() - entry.startedAt;
           entry.job.finish(observed, 'Generated');
           pendingVideoJobsRef.current.delete(row.id);
+          // Stop the inline progress bar — the render landed.
+          setPrimaryVideoStartedAt(prev => {
+            const next = new Map(prev);
+            next.delete(row.id);
+            return next;
+          });
           setCrawledProducts(prev => prev.map(pp =>
             pp.id === row.id
               ? ({ ...pp, primary_video_url: row.primary_video_url, primary_video_status: 'done' } as CrawledProduct)
@@ -3204,6 +3228,11 @@ export default function AdminData() {
         } else if (row.primary_video_status === 'failed') {
           entry.job.fail('Generation failed');
           pendingVideoJobsRef.current.delete(row.id);
+          setPrimaryVideoStartedAt(prev => {
+            const next = new Map(prev);
+            next.delete(row.id);
+            return next;
+          });
           setCrawledProducts(prev => prev.map(pp =>
             pp.id === row.id
               ? ({ ...pp, primary_video_status: 'failed' } as CrawledProduct)
@@ -6510,9 +6539,15 @@ export default function AdminData() {
                               const startedAt = p.id ? primaryVideoStartedAt.get(p.id) : undefined;
                               const elapsedMs = startedAt ? Math.max(0, Date.now() - startedAt) : 0;
                               const eta = avgPrimaryVideoDurationMs;
-                              const pct = isGenerating && eta > 0
-                                ? Math.min(95, (elapsedMs / eta) * 100)
-                                : 0;
+                              const isPendingRender = (p as { primary_video_status?: string | null }).primary_video_status === 'pending';
+                              // Determinate progress whenever we know when the run
+                              // started — covers BOTH the sync invoke (isGenerating)
+                              // and the async fal render (isPendingRender). Capped at
+                              // 95% so the bar never reads "done" before the webhook
+                              // actually lands the clip.
+                              const showProgress = (isGenerating || isPendingRender) && !!startedAt && eta > 0;
+                              const pct = showProgress ? Math.min(95, (elapsedMs / eta) * 100) : 0;
+                              const remainingS = showProgress ? Math.max(0, Math.round((eta - elapsedMs) / 1000)) : 0;
                               return (
                                 <div style={{
                                   position: 'relative',
@@ -6565,23 +6600,54 @@ export default function AdminData() {
                                       <div style={{ fontSize: 10, color: '#7c3aed', fontWeight: 700, letterSpacing: '0.08em', textTransform: 'uppercase' }}>
                                         Rendering · background
                                       </div>
-                                      <div style={{
-                                        width: '88%', height: 6,
-                                        background: '#e2e8f0',
-                                        borderRadius: 999,
-                                        overflow: 'hidden',
-                                        position: 'relative',
-                                      }}>
-                                        <div style={{
-                                          position: 'absolute', inset: 0,
-                                          background: 'linear-gradient(90deg, transparent, #a78bfa, transparent)',
-                                          animation: 'admin-primary-video-shimmer 1.6s linear infinite',
-                                        }} />
-                                      </div>
-                                      <style>{`@keyframes admin-primary-video-shimmer {
-                                        0% { transform: translateX(-100%); }
-                                        100% { transform: translateX(100%); }
-                                      }`}</style>
+                                      {showProgress ? (
+                                        <>
+                                          {/* Determinate bar + countdown — same start
+                                              timestamp + rolling-avg ETA the floating
+                                              queue panel uses, so the inline cell reads
+                                              as actively working the whole render. */}
+                                          <div style={{
+                                            width: '88%', height: 6,
+                                            background: '#e2e8f0',
+                                            borderRadius: 999,
+                                            overflow: 'hidden',
+                                            position: 'relative',
+                                          }}>
+                                            <div style={{
+                                              width: `${pct}%`,
+                                              height: '100%',
+                                              background: 'linear-gradient(90deg, #7c3aed, #a78bfa)',
+                                              transition: 'width 240ms linear',
+                                            }} />
+                                          </div>
+                                          <div style={{ fontSize: 10, color: '#64748b', fontVariantNumeric: 'tabular-nums' }}>
+                                            {remainingS > 0 ? `${Math.round(pct)}% · ~${remainingS}s left` : `${Math.round(pct)}% · finishing…`}
+                                          </div>
+                                        </>
+                                      ) : (
+                                        <>
+                                          {/* No start timestamp (e.g. page reloaded
+                                              mid-render) — fall back to an indeterminate
+                                              shimmer so the cell still reads as busy. */}
+                                          <div style={{
+                                            width: '88%', height: 6,
+                                            background: '#e2e8f0',
+                                            borderRadius: 999,
+                                            overflow: 'hidden',
+                                            position: 'relative',
+                                          }}>
+                                            <div style={{
+                                              position: 'absolute', inset: 0,
+                                              background: 'linear-gradient(90deg, transparent, #a78bfa, transparent)',
+                                              animation: 'admin-primary-video-shimmer 1.6s linear infinite',
+                                            }} />
+                                          </div>
+                                          <style>{`@keyframes admin-primary-video-shimmer {
+                                            0% { transform: translateX(-100%); }
+                                            100% { transform: translateX(100%); }
+                                          }`}</style>
+                                        </>
+                                      )}
                                       <div style={{ fontSize: 10, color: '#64748b', textAlign: 'center', lineHeight: 1.35 }}>
                                         Submitted to Seedance.<br />Webhook updates this tile when ready.
                                       </div>

@@ -1,5 +1,6 @@
 import { supabase } from '~/utils/supabase';
 import { registerLookTrim } from '~/utils/lookTrim';
+import { withTransform } from '~/utils/supabase-image';
 import type { Look, Product, Creator } from '~/data/looks';
 import { looks as staticLooks, creators as staticCreators, searchSuggestions as staticSuggestions } from '~/data/looks';
 
@@ -638,6 +639,46 @@ export function subscribeToLooksChange(cb: LooksChangeListener): () => void {
   return () => { looksChangeListeners.delete(cb); };
 }
 
+// Warm the image/HTTP cache for the first few above-the-fold LOOK tiles
+// during the splash window. Posters go through new Image() with the SAME
+// 540px transform the cards paint (a cache hit, not a wasted full-res
+// download); the first few look videos are warmed with a low-priority
+// byte-range fetch. Unlike primeLookAssets' <link rel=preload as=video>
+// (which is gated off on non-4g connections), the byte-range fetch runs
+// on mobile too — so the hero look clips start downloading behind the
+// splash even on a cellular connection. Small fan-out on purpose: only
+// the top of the grid is visible on first paint and mobile bytes matter.
+const warmedLookAssets = new Set<string>();
+function warmAboveTheFoldLookAssets(rows: Look[]): void {
+  if (typeof window === 'undefined' || !rows?.length) return;
+  // Posters: first ~6 looks. Mirror CreativeCardV2's look-poster fallback
+  // (thumbnail → cover → first product image) so the warmed URL matches.
+  for (const row of rows.slice(0, 6)) {
+    const rawPoster = row.thumbnail_url || row.cover || row.products?.find(p => !!p.image)?.image;
+    if (!rawPoster) continue;
+    const poster = withTransform(rawPoster, { width: 540, quality: 72, resize: 'contain' }) || rawPoster;
+    if (warmedLookAssets.has(poster)) continue;
+    warmedLookAssets.add(poster);
+    try {
+      const img = new Image();
+      img.decoding = 'async';
+      img.src = poster;
+    } catch { /* ignore */ }
+  }
+  // Videos: first ~3 looks. Byte-range, low priority, NOT network-gated.
+  for (const row of rows.slice(0, 3)) {
+    const url = row.mobile_video_url || row.video;
+    if (!url || !/^https?:\/\//i.test(url) || warmedLookAssets.has(url)) continue;
+    warmedLookAssets.add(url);
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      fetch(url, { headers: { Range: 'bytes=0-262143' }, priority: 'low' as any })
+        .then(r => r.arrayBuffer())
+        .catch(() => { /* ignore */ });
+    } catch { /* ignore */ }
+  }
+}
+
 // Prime the looks + creators caches at module load time, before any React
 // component mounts. The fetch starts as soon as the JS bundle parses,
 // running in parallel with rendering instead of waiting for useEffect.
@@ -649,7 +690,16 @@ if (typeof window !== 'undefined' && USE_SUPABASE) {
   // Fire-and-forget; populates the singleton promises. Component callers
   // .then() on the same promises and get the result whenever the network
   // comes back, regardless of whether they mount before or after.
-  void getLooks().catch(() => { /* surfaced again on the real caller */ });
+  //
+  // On resolve we ALSO warm the first above-the-fold look posters + video
+  // bytes — while the splash / auth screen is still up — so the looks lane
+  // (the hero video content interleaved at the top of the feed) paints from
+  // cache the moment ContinuousFeed mounts at view==='app'. Mirrors
+  // product-creative's warmAboveTheFoldAssets; the product lane already did
+  // this but looks were left cold until the feed component mounted.
+  void getLooks()
+    .then(rows => warmAboveTheFoldLookAssets(rows))
+    .catch(() => { /* surfaced again on the real caller */ });
   void getCreators().catch(() => { /* surfaced again on the real caller */ });
 
   // Realtime cross-tab / cross-user propagation. When an admin deletes

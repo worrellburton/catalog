@@ -888,6 +888,33 @@ export default function Home() {
           setSimilarCreatives(rows);
         })
         .catch(() => { /* leave rail empty rather than throw */ });
+      // Products opened from a look/search/recents can arrive WITHOUT the
+      // live primary video inline (the look's cached product data may
+      // predate the render). Fetch it and patch selectedProduct so the
+      // desktop hero plays the primary video instead of a static poster —
+      // ProductPage synthesizes a video hero from product.video_url.
+      if (!productVideoUrl && supabase) {
+        void supabase
+          .from('products')
+          .select('primary_video_url, primary_video_poster_url, primary_image_url, image_url')
+          .eq('id', productId)
+          .maybeSingle()
+          .then(({ data }) => {
+            const vurl = (data?.primary_video_url as string | null) || null;
+            if (!vurl) return;
+            const poster = (data?.primary_video_poster_url
+              || data?.primary_image_url
+              || data?.image_url
+              || product.image
+              || (product as Product & { thumbnail_url?: string }).thumbnail_url
+              || null) as string | null;
+            setSelectedProduct(prev =>
+              prev && prev.url === product.url && prev.name === product.name
+                ? { ...prev, video_url: vurl, thumbnail_url: poster ?? prev.thumbnail_url }
+                : prev,
+            );
+          });
+      }
     }).catch(() => {});
 
     if (product.brand) {
@@ -1576,20 +1603,10 @@ export default function Home() {
                   /activity (a dedicated screen, not the wallet). */}
               <HeaderWalletPill onOpenWallet={openWallet} />
               <HeaderActivityPill />
-              {/* Desktop super-admin entry — its own button in the header so
-                  the admin surface isn't buried in the profile menu. Mobile
-                  uses the Account page's super-admin sub-section instead;
-                  this button is hidden ≤768px via CSS. */}
-              {user?.role === 'super_admin' && (
-                <button
-                  className="header-super-admin-btn"
-                  onClick={() => navigate('/admin')}
-                  aria-label="Super Admin"
-                  title="Super Admin"
-                >
-                  <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l9 4v6c0 5-3.7 9.4-9 10-5.3-.6-9-5-9-10V6l9-4z"/></svg>
-                </button>
-              )}
+              {/* Super-admin entry lives under the profile picture now (the
+                  Admin quicklink directly below the avatar in UserMenu's
+                  popout, and the Super Admin section in the mobile Account
+                  page) — no standalone header button so the bar stays clean. */}
               <button className="bookmark-toggle" onClick={openBookmarks} aria-label="Bookmarks">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
                 {bookmarks.totalCount > 0 && <span className="bookmark-count">{bookmarks.totalCount}</span>}

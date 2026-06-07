@@ -213,8 +213,19 @@
   cursor: pointer;
 }
 .sfh-scroll-hint:hover { color: rgba(255, 255, 255, 0.85); }
-.sfh-scroll-label { order: 2; }
-.sfh-scroll-chev { order: 3; animation: sfh-bob 2.2s ease-in-out infinite; }
+.sfh-scroll-label { order: 2; font-weight: 700; font-size: 14px; letter-spacing: 0.01em; color: rgba(255, 255, 255, 0.9); }
+/* Fun, educational sub-line under "Your daily feed". */
+.sfh-scroll-sub {
+  order: 3;
+  max-width: min(380px, 82vw);
+  text-align: center;
+  font-size: 11.5px;
+  line-height: 1.5;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.5);
+}
+.sfh-scroll-sub em { font-style: italic; color: rgba(255, 255, 255, 0.7); }
+.sfh-scroll-chev { order: 4; animation: sfh-bob 2.2s ease-in-out infinite; }
 @keyframes sfh-bob {
   0%, 100% { transform: translateY(0); opacity: 0.6; }
   50%      { transform: translateY(5px); opacity: 1; }

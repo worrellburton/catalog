@@ -955,18 +955,26 @@ html[data-shell="catalog-app"] .gen-page {
 .gen-review {
   display: flex;
   flex-direction: column;
-  gap: 1px;
-  border-radius: 12px;
+  gap: 2px;
+  border-radius: 14px;
   overflow: hidden;
   background: rgba(255, 255, 255, 0.05);
   margin-bottom: 12px;
 }
 .gen-review-row {
   display: flex;
+  align-items: center;
   justify-content: space-between;
-  padding: 8px 14px;
+  /* Roomier rows — the summary was reading cramped. */
+  padding: 13px 18px;
   background: rgba(0, 0, 0, 0.4);
-  font-size: 13px;
+  font-size: 14px;
+}
+
+/* Review step reserves room below its content for the fixed Back/Build
+   dock so the last summary row (Style/Length) is never hidden behind it. */
+.gen-step-review {
+  padding-bottom: calc(96px + env(safe-area-inset-bottom));
 }
 .gen-review-row span:first-child { color: rgba(255, 255, 255, 0.55); }
 .gen-review-row span:last-child { font-weight: 600; }

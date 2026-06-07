@@ -45,6 +45,8 @@ interface MetricDef {
   description: string;
   /** "events" / "users" / "products" — drives the count label. */
   unit: string;
+  /** Heading for the optional contributors list (defaults to "Top contributors"). */
+  contributorsTitle?: string;
   run(args: { startISO: string; userIdSet: string[] | null; bucketMs: number; buckets: { startISO: string; endISO: string; label: string }[] }): Promise<MetricResult>;
 }
 
@@ -63,6 +65,16 @@ function formatDuration(ms: number): string {
   if (m < 1) return `${Math.round(ms / 1000)}s`;
   if (m < 60) return `${m.toFixed(1)}m`;
   return `${(m / 60).toFixed(1)}h`;
+}
+
+/** "just now" / "12m ago" / "3h ago" / "2d ago" for a past-elapsed span. */
+function formatAgo(ms: number): string {
+  if (ms < 60_000) return 'just now';
+  const m = Math.floor(ms / 60_000);
+  if (m < 60) return `${m}m ago`;
+  const h = Math.floor(m / 60);
+  if (h < 24) return `${h}h ago`;
+  return `${Math.floor(h / 24)}d ago`;
 }
 
 /** Build N evenly-spaced time buckets covering the active range. */
@@ -122,10 +134,12 @@ async function activeUsers(args: { buckets: { startISO: string; endISO: string; 
   if (!supabase) return { value: '—', series: [] };
   const supa = supabase;
   const total = args.buckets[0]?.startISO || new Date(0).toISOString();
-  let q = supa.from('user_events').select('user_id, created_at').gte('created_at', total).not('user_id', 'is', null).limit(50_000);
+  // Pull session_id too so we can compute per-user active time (the same
+  // wall-clock-minus-idle model the session metrics use).
+  let q = supa.from('user_events').select('user_id, session_id, created_at').gte('created_at', total).not('user_id', 'is', null).limit(50_000);
   if (args.userIdSet) q = q.in('user_id', args.userIdSet);
   const { data } = await q;
-  const rows = (data || []) as { user_id: string; created_at: string }[];
+  const rows = (data || []) as { user_id: string; session_id: string | null; created_at: string }[];
   const distinctOverall = new Set(rows.map(r => r.user_id));
   const series = args.buckets.map(b => {
     const s = new Date(b.startISO).getTime();
@@ -136,7 +150,63 @@ async function activeUsers(args: { buckets: { startISO: string; endISO: string; 
     }).map(r => r.user_id));
     return { label: b.label, count: set.size };
   });
-  return { value: formatNumber(distinctOverall.size), series };
+
+  // ── Per-user roll-up: who was on, their active session time + stats ──
+  type Agg = { events: number; sessions: Map<string, number[]>; lastSeen: number };
+  const byUser = new Map<string, Agg>();
+  for (const r of rows) {
+    const t = new Date(r.created_at).getTime();
+    let a = byUser.get(r.user_id);
+    if (!a) { a = { events: 0, sessions: new Map(), lastSeen: 0 }; byUser.set(r.user_id, a); }
+    a.events++;
+    if (t > a.lastSeen) a.lastSeen = t;
+    const sid = r.session_id || '__nosession__';
+    const arr = a.sessions.get(sid) || [];
+    arr.push(t);
+    a.sessions.set(sid, arr);
+  }
+  const userStats = Array.from(byUser.entries()).map(([userId, a]) => {
+    let activeMs = 0;
+    for (const arr of a.sessions.values()) {
+      if (arr.length < 2) continue;
+      arr.sort((x, y) => x - y);
+      const sessionMs = arr[arr.length - 1] - arr[0];
+      if (sessionMs <= 0) continue;
+      let idleMs = 0;
+      for (let j = 1; j < arr.length; j++) {
+        const gap = arr[j] - arr[j - 1];
+        if (gap > IDLE_THRESHOLD_MS) idleMs += gap;
+      }
+      activeMs += Math.max(0, sessionMs - idleMs);
+    }
+    return { userId, events: a.events, sessions: a.sessions.size, activeMs, lastSeen: a.lastSeen };
+  });
+  // Most-engaged first (active time, then raw events). Cap the list so the
+  // profiles lookup stays one bounded round-trip.
+  userStats.sort((x, y) => y.activeMs - x.activeMs || y.events - x.events);
+  const top = userStats.slice(0, 50);
+
+  // Resolve display names for the listed users in one query.
+  const nameById = new Map<string, { name: string; isAdmin: boolean }>();
+  if (top.length > 0) {
+    const { data: profs } = await supa
+      .from('profiles')
+      .select('id, full_name, email, is_admin')
+      .in('id', top.map(u => u.userId));
+    for (const p of (profs || []) as { id: string; full_name: string | null; email: string | null; is_admin: boolean | null }[]) {
+      nameById.set(p.id, { name: p.full_name || p.email || `User ${p.id.slice(0, 8)}`, isAdmin: !!p.is_admin });
+    }
+  }
+  const now = Date.now();
+  const contributors = top.map(u => {
+    const prof = nameById.get(u.userId);
+    const name = prof?.name || `User ${u.userId.slice(0, 8)}`;
+    const adminTag = prof?.isAdmin ? ' · admin' : '';
+    const sub = `${formatDuration(u.activeMs)} active · ${u.sessions} session${u.sessions === 1 ? '' : 's'} · last seen ${formatAgo(now - u.lastSeen)}${adminTag}`;
+    return { label: name, sub, count: u.events };
+  });
+
+  return { value: formatNumber(distinctOverall.size), series, contributors };
 }
 
 async function countCreatedByBucket(args: {
@@ -167,6 +237,7 @@ const METRICS: Record<string, MetricDef> = {
   'active-users': {
     id: 'active-users', title: 'Active users', unit: 'users',
     description: 'Distinct users who fired at least one event in the window.',
+    contributorsTitle: 'Who was on · active time + stats',
     run: ({ buckets, userIdSet }) => activeUsers({ buckets, userIdSet }),
   },
   'avg-session': {
@@ -402,7 +473,7 @@ export default function AdminMetricDetail() {
 
       {result?.contributors && result.contributors.length > 0 && (
         <div className="admin-metric-list-card">
-          <h3 className="admin-home-card-title">Top contributors</h3>
+          <h3 className="admin-home-card-title">{metric.contributorsTitle || 'Top contributors'}</h3>
           <ol className="admin-metric-list">
             {result.contributors.map((c, i) => (
               <li key={i} className="admin-metric-list-row">

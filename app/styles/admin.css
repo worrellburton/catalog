@@ -198,7 +198,12 @@
   border-radius: 8px;
   cursor: pointer;
   transition: background 140ms ease, color 140ms ease;
+  /* Keep the "Other Pages" label on a single line — in flex it would
+     otherwise shrink and wrap to "Other / Pages" once the count chip +
+     chevron claim the row width. */
+  white-space: nowrap;
 }
+.admin-nav-other-toggle > span:first-of-type { flex: 1; min-width: 0; }
 .admin-nav-other-toggle:hover {
   background: rgba(255, 255, 255, 0.04);
   color: #f8fafc;

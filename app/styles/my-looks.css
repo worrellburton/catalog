@@ -4390,6 +4390,7 @@ html[data-shell="catalog-app"] .my-looks-overlay {
 .my-cat-analytics-card--page > .my-cat-analytics-hero,
 .my-cat-analytics-card--page > .my-cat-analytics-duo,
 .my-cat-analytics-card--page > .my-cat-analytics-section,
+.my-cat-analytics-card--page > .my-cat-analytics-look,
 .my-cat-analytics-card--page > .my-cat-analytics-empty {
   flex: 0 0 auto;
 }
@@ -4401,4 +4402,138 @@ html[data-shell="catalog-app"] .my-looks-overlay {
 .my-cat-analytics-card--page {
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+}
+
+/* ── Per-look / per-product header ──────────────────────────────────────
+   The look (or drilled-in product) shown in the upper-left: a small
+   poster/video thumbnail beside the title, above the range pills. */
+.my-cat-analytics-look {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 4px 0 12px;
+}
+.my-cat-analytics-look-media {
+  flex: 0 0 auto;
+  width: 56px;
+  height: 72px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+}
+.my-cat-analytics-look-media--product {
+  /* Products read better as a square crop than the 3:4 look poster. */
+  height: 56px;
+}
+.my-cat-analytics-look-media video,
+.my-cat-analytics-look-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.my-cat-analytics-look-media--empty {
+  width: 100%;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.04);
+}
+.my-cat-analytics-look-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+}
+
+/* Back affordance in the drill-down header. */
+.my-cat-analytics-back {
+  flex: 0 0 auto;
+  margin-right: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  color: rgba(255, 255, 255, 0.8);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.my-cat-analytics-back:hover { background: rgba(255, 255, 255, 0.10); }
+
+/* Single-card row — the "Converted to sales" placeholder sits alone,
+   reusing the duo grid but spanning the full width. */
+.my-cat-analytics-duo--single {
+  grid-template-columns: 1fr;
+}
+
+/* ── Per-product breakdown rows ─────────────────────────────────────────
+   Each product in the look, scoped to the active range, tappable to drill
+   into that product's own analytics. */
+.my-cat-analytics-prow {
+  display: grid;
+  grid-template-columns: 40px 1fr auto 14px;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  color: #fff;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.my-cat-analytics-prow:hover { background: rgba(255, 255, 255, 0.06); }
+.my-cat-analytics-prow-media {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.05);
+}
+.my-cat-analytics-prow-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.my-cat-analytics-prow-name {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-size: 13px;
+}
+.my-cat-analytics-prow-name > span:not(.my-cat-analytics-list-brand) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.my-cat-analytics-prow-stats {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.55);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.my-cat-analytics-prow-chevron {
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 16px;
+  text-align: center;
+}
+/* On narrow phones the inline stats line would crowd the chevron —
+   drop it under the name instead. */
+@media (max-width: 420px) {
+  .my-cat-analytics-prow {
+    grid-template-columns: 40px 1fr 14px;
+  }
+  .my-cat-analytics-prow-stats {
+    grid-column: 2 / 3;
+    grid-row: 2;
+    white-space: normal;
+  }
 }

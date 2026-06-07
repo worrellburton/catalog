@@ -201,8 +201,14 @@
 .look-video-share:hover { background: rgba(0, 0, 0, 0.65); }
 .look-video-share.is-flashed { background: #16a34a; border-color: #16a34a; }
 
+/* Desktop parity with mobile: Share lives ON the video (top-right) and
+   Save lives bottom-right (see .look-video-actions). The info-panel
+   topbar's duplicate buttons are hidden on desktop (rule by .look-info-topbar).
+   The close button stays mobile-only — desktop uses the corner back chevron. */
+.look-video-share { display: inline-flex; }
+
 .look-video-actions {
-  display: none;
+  display: flex;
   position: absolute;
   right: 16px;
   bottom: 16px;
@@ -363,6 +369,22 @@
   justify-content: flex-end;
   padding: 20px 24px 12px;
   flex-shrink: 0;
+}
+
+/* Desktop: Save + Share now live on the video (parity with mobile), so the
+   topbar's duplicate buttons are hidden. The bar itself stays as top spacing
+   above the tabs. Scoped to ≥769px; on mobile the whole topbar is hidden. */
+@media (min-width: 769px) {
+  .look-info-topbar .look-bookmark-btn,
+  .look-info-topbar .look-comment-btn {
+    display: none;
+  }
+  /* Proper breathing room on the right info column — content sat flush to
+     the right edge. Pad the column so every block (tabs, products, about,
+     comments) gets symmetric left/right inset on top of its own padding. */
+  .look-info-col {
+    padding-inline: 12px;
+  }
 }
 
 /* Mobile-only back button inside info panel */
