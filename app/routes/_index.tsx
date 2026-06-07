@@ -815,7 +815,13 @@ export default function Home() {
     const productThumb = (product as Product & { thumbnail_url?: string }).thumbnail_url;
     if (productVideoUrl) {
       setSelectedCreative({
-        id: (product as Product & { creative_id?: string }).creative_id || '',
+        // Stable, non-empty id so the hero's TrailVideoHost slot keys correctly.
+        // An empty id ('') left the pooled <video> unkeyed — on desktop (large
+        // pool) it attached a posterless black element over the poster image
+        // (product-from-look opened to a black hero); mobile's tight pool
+        // evicted it so the poster showed. Mirror ProductPage's own fallback id.
+        id: (product as Product & { creative_id?: string }).creative_id
+          || `product:${product.brand}-${product.name}`,
         product_id: (product as Product & { id?: string }).id || '',
         look_id: null,
         title: product.name,
