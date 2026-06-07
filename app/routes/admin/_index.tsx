@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import { Link } from '@remix-run/react';
 import { looks, creators } from '~/data/looks';
 import { supabase } from '~/utils/supabase';
@@ -214,52 +214,57 @@ export default function AdminHome() {
   };
 
   // ── Sticky sections (recent activity, top searches, weekly chart) ──
-  useEffect(() => {
-    async function fetchSticky() {
-      if (!supabase) return;
-      const { data: recentLogs } = await supabase
-        .from('search_logs')
-        .select('*')
-        .order('created_at', { ascending: false })
-        .limit(6);
-      setRecentActivity(recentLogs ?? []);
+  // Extracted into a stable callback so both the initial load AND the
+  // live-refresh poll below can re-run it.
+  const loadSticky = useCallback(async () => {
+    if (!supabase) return;
+    const { data: recentLogs } = await supabase
+      .from('search_logs')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(6);
+    setRecentActivity(recentLogs ?? []);
 
-      const { data: allLogs } = await supabase
-        .from('search_logs')
-        .select('*')
-        .order('created_at', { ascending: false });
-      setAllSearchLogs(allLogs ?? []);
+    const { data: allLogs } = await supabase
+      .from('search_logs')
+      .select('*')
+      .order('created_at', { ascending: false });
+    setAllSearchLogs(allLogs ?? []);
 
-      const weekStart = new Date();
-      weekStart.setDate(weekStart.getDate() - 6);
-      weekStart.setHours(0, 0, 0, 0);
-      const { data: weekLogs } = await supabase
-        .from('search_logs')
-        .select('created_at')
-        .gte('created_at', weekStart.toISOString());
+    const weekStart = new Date();
+    weekStart.setDate(weekStart.getDate() - 6);
+    weekStart.setHours(0, 0, 0, 0);
+    const { data: weekLogs } = await supabase
+      .from('search_logs')
+      .select('created_at')
+      .gte('created_at', weekStart.toISOString());
 
-      const last7 = getLast7Days();
-      const dayCounts: DayCount[] = last7.map(({ day, label }) => {
-        const count = (weekLogs ?? []).filter(
-          (log) => log.created_at.split('T')[0] === day
-        ).length;
-        return { day, label, count };
-      });
-      setWeeklyData(dayCounts);
-    }
-    fetchSticky();
+    const last7 = getLast7Days();
+    const dayCounts: DayCount[] = last7.map(({ day, label }) => {
+      const count = (weekLogs ?? []).filter(
+        (log) => log.created_at.split('T')[0] === day
+      ).length;
+      return { day, label, count };
+    });
+    setWeeklyData(dayCounts);
   }, []);
+  useEffect(() => { void loadSticky(); }, [loadSticky]);
 
   // ── Window-scoped aggregates ──────────────────────────────────
   // Recomputes whenever the (audience, range) pair changes. Each
   // metric is its own query; counts run as head-only for speed.
   // Audience filters by profiles.is_admin via an IN-list of ids
   // resolved up front.
-  useEffect(() => {
-    let cancelled = false;
-    (async () => {
+  // Window-scoped aggregate loader. `silent` skips the loading flash so the
+  // live-refresh poll updates the numbers in place instead of blinking them
+  // to "…". A monotonic request id guards against a slow earlier run (or
+  // poll) overwriting a newer one.
+  const statsReqRef = useRef(0);
+  const loadStats = useCallback(async (silent = false) => {
+    const myReq = ++statsReqRef.current;
+    {
       if (!supabase) return;
-      setStatsLoading(true);
+      if (!silent) setStatsLoading(true);
       const now = Date.now();
       const startISO = new Date(now - RANGE_WINDOWS_MS[range]).toISOString();
 
@@ -403,7 +408,7 @@ export default function AdminHome() {
         })(),
       ]);
 
-      if (cancelled) return;
+      if (myReq !== statsReqRef.current) return;
 
       const impressions = impRes.count ?? 0;
       const clicks = clickRes.count ?? 0;
@@ -426,10 +431,32 @@ export default function AdminHome() {
         searches: searchesRes.count ?? 0,
         aiGenerations: gensRes.count ?? 0,
       });
-      setStatsLoading(false);
-    })();
-    return () => { cancelled = true; };
+      if (myReq === statsReqRef.current) setStatsLoading(false);
+    }
   }, [range, audience]);
+  // Initial load + re-run whenever the (audience, range) scope changes.
+  useEffect(() => { void loadStats(false); }, [loadStats]);
+
+  // ── Live refresh ──────────────────────────────────────────────
+  // While the dashboard is open and the tab is visible, silently re-pull
+  // the aggregates + sticky sections every 10s so the numbers move in real
+  // time. Paused when the tab is hidden; an immediate refresh fires when it
+  // becomes visible again so a backgrounded tab catches up instantly.
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    const REFRESH_MS = 10_000;
+    let intervalId = 0;
+    const refresh = () => { void loadStats(true); void loadSticky(); };
+    const start = () => { if (!intervalId) intervalId = window.setInterval(refresh, REFRESH_MS); };
+    const stop = () => { if (intervalId) { window.clearInterval(intervalId); intervalId = 0; } };
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') { refresh(); start(); }
+      else stop();
+    };
+    if (document.visibilityState === 'visible') start();
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => { stop(); document.removeEventListener('visibilitychange', onVisibility); };
+  }, [loadStats, loadSticky]);
 
   // Top searches: group by query, sort by count
   const topSearches = useMemo(() => {
