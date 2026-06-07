@@ -22,6 +22,7 @@ import { director } from '~/services/video-playback-director';
 import { useUserAffinity } from '~/hooks/useUserAffinity';
 import { rankCreativesByAffinity } from '~/services/user-affinity';
 import { recordRecentSearch } from '~/services/recent-searches';
+import { getPersonalizedProductOrder } from '~/services/personalized-feed';
 
 interface BookmarksInterface {
   isLookBookmarked: (id: number) => boolean;
@@ -160,6 +161,22 @@ function ContinuousFeed({
   // Per-shopper category lean (clicks + searches). Drives the soft affinity
   // re-rank applied to the default home / "you might also like" feed below.
   const affinity = useUserAffinity();
+
+  // ── Automatic Editor — daily personalized product order ──────────────
+  // An ordered list of product ids the personalize-feed edge function ranked
+  // for this shopper today. null = personalization off / holdout / guest /
+  // error (the default global feed_rank order is left untouched). Fetched
+  // once on mount and re-fetched when the signed-in user changes, behind the
+  // service's own dial gate + per-day localStorage cache. Only ever applied
+  // to the default home feed's product lane below.
+  const [personalizedOrder, setPersonalizedOrder] = useState<string[] | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    getPersonalizedProductOrder().then(ids => {
+      if (!cancelled) setPersonalizedOrder(ids);
+    });
+    return () => { cancelled = true; };
+  }, [user?.id]);
 
   // ── Committed query - the feed only updates when nl-search resolves ─────
   // While the user is typing (or nl-search is in flight), committedQuery stays
@@ -834,7 +851,23 @@ function ContinuousFeed({
     // enough signal; preserves variety rather than collapsing to one category.
     if (tagMatch.length === 0) {
       const unseen = partitionUnseen(semanticallyOrderedCreatives, seenKeys, c => c.product_id ? `product:${c.product_id}` : null);
-      return rankCreativesByAffinity(unseen, affinity);
+      const ranked = rankCreativesByAffinity(unseen, affinity);
+      // Automatic Editor: on the default home feed only, float the products
+      // in this shopper's personalized order to the front (in that order),
+      // then keep the rest in their existing order. null (dial off / holdout /
+      // guest) leaves the global order untouched.
+      if (personalizedOrder && personalizedOrder.length > 0) {
+        const priority = new Map(personalizedOrder.map((id, idx) => [id, idx]));
+        const front: ProductAd[] = [];
+        const rest: ProductAd[] = [];
+        for (const c of ranked) {
+          if (c.product_id && priority.has(c.product_id)) front.push(c);
+          else rest.push(c);
+        }
+        front.sort((a, b) => (priority.get(a.product_id!) ?? 0) - (priority.get(b.product_id!) ?? 0));
+        return [...front, ...rest];
+      }
+      return ranked;
     }
 
     // Tier-1 found typed products - return those exclusively.
@@ -850,7 +883,7 @@ function ContinuousFeed({
       out.push(c);
     }
     return out;
-  }, [brandMatchedCreatives, tagMatchedCreatives, semanticallyOrderedCreatives, committedQuery, seenKeys, affinity]);
+  }, [brandMatchedCreatives, tagMatchedCreatives, semanticallyOrderedCreatives, committedQuery, seenKeys, affinity, personalizedOrder]);
 
   // Log search queries through the batch endpoint. Debounced 1.5 s and
   // prefix-deduped so mid-typing keystrokes don't each enqueue an entry;
