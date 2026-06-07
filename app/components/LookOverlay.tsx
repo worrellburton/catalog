@@ -217,7 +217,13 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
     if (url && w.__feedTapPosters) delete w.__feedTapPosters[trailId];
     return url || '';
   })();
-  const heroPoster = tapHandoffPoster || look.thumbnail_url || look.cover || '';
+  // Final fallback to a product packshot mirrors the feed card's poster chain
+  // (CreativeCardV2 rawPosterUrl): ~60% of looks have no thumbnail_url, and a
+  // cover-less look would otherwise open to a black hero even though the card
+  // that launched it was already painting a product image. Carrying the same
+  // image over guarantees the hero never opens to black.
+  const heroProductStill = look.products?.find(p => !!p.image)?.image || '';
+  const heroPoster = tapHandoffPoster || look.thumbnail_url || look.cover || heroProductStill || '';
 
   // Take ownership of the same shared <video> element the originating
   // LookCard was playing. appendChild moves the DOM node - currentTime,

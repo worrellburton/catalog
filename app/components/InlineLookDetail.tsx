@@ -41,7 +41,10 @@ export default function InlineLookDetail({ look, onOpenCreator, onOpenBrowser, o
 
   const trailId = lookTrailId(look.id);
   const videoUrl = normalizeLookVideoUrl(look.video, basePath);
-  const poster = look.thumbnail_url || look.cover || '';
+  // Fall back to a product packshot (same chain as the feed card) so a
+  // thumbnail-less, cover-less look never paints a black video slot while
+  // the clip buffers — it carries over the image already shown on the card.
+  const poster = look.thumbnail_url || look.cover || look.products?.find(p => !!p.image)?.image || '';
   const inViewport = useInViewport(containerRef);
   const setVideoSlot = useTrailVideo(
     inViewport ? trailId : undefined,
