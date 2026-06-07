@@ -348,11 +348,11 @@ export default function ShoppingForHero({ onRevealFeed }: ShoppingForHeroProps) 
                   A fresh, fully-loaded lineup waiting for you every morning.
                 </li>
               </ul>
+              {/* Countdown pinned to the bottom of the card. */}
               <div className="sfh-feed-info-countdown" aria-label="Time until your next feed">
                 <span className="sfh-feed-info-countdown-label">New feed drops in</span>
                 <span className="sfh-feed-info-countdown-time">{dropCountdown}</span>
               </div>
-              <p className="sfh-feed-info-foot">✨ A whole new lineup, hand-picked for you.</p>
             </div>
           </div>
         </div>

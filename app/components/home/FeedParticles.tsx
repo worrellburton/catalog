@@ -29,8 +29,9 @@ export default function FeedParticles({ className }: { className?: string }) {
     const ro = new ResizeObserver(resize);
     ro.observe(parent);
 
-    const COLORS = ['168,130,255', '99,102,241', '245,200,120', '236,72,153', '255,255,255'];
-    const N = 48;
+    // Grayscale only — subtle silver dust, no rainbow glow (kept minimal).
+    const COLORS = ['255,255,255', '200,200,205', '160,162,168'];
+    const N = 26;
     const parts = Array.from({ length: N }, () => ({
       x: Math.random() * w,
       y: Math.random() * h,
