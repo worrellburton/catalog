@@ -1282,14 +1282,23 @@ export default function GeneratePage() {
         const rowCenter = rowRect.left + rowRect.width / 2;
         const delta = cardCenter - rowCenter;
         if (Math.abs(delta) >= 4) row.scrollBy({ left: delta, behavior: 'smooth' });
-        // Also bring the card to the vertical middle of the screen by
-        // scrolling ONLY the page container (never scrollIntoView, which
-        // would center every ancestor and yank the whole layout). Target
-        // ~46% of the viewport so the dock at the bottom doesn't cover it.
-        const page = card.closest('.gen-page') as HTMLElement | null;
-        if (page) {
-          const vDelta = (cardRect.top + cardRect.height / 2) - window.innerHeight * 0.46;
-          if (Math.abs(vDelta) > 10) page.scrollBy({ top: vDelta, behavior: 'smooth' });
+        // Also bring the card to the vertical middle of the screen. Target
+        // ~46% of the viewport so the bottom dock doesn't cover it. Scroll the
+        // ACTUAL scroll container: .gen-page only scrolls on some viewports —
+        // on others the window scrolls — so walk to the nearest scrollable
+        // ancestor and fall back to the window. (Was scrolling .gen-page
+        // unconditionally, which no-ops when the window is the real scroller,
+        // so the card never moved to the middle.)
+        const vDelta = (cardRect.top + cardRect.height / 2) - window.innerHeight * 0.46;
+        if (Math.abs(vDelta) > 10) {
+          let scroller: HTMLElement | null = row.parentElement;
+          while (scroller) {
+            const oy = getComputedStyle(scroller).overflowY;
+            if ((oy === 'auto' || oy === 'scroll') && scroller.scrollHeight > scroller.clientHeight + 1) break;
+            scroller = scroller.parentElement;
+          }
+          if (scroller) scroller.scrollBy({ top: vDelta, behavior: 'smooth' });
+          else window.scrollBy({ top: vDelta, behavior: 'smooth' });
         }
       });
     }
