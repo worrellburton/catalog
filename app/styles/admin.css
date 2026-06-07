@@ -5484,6 +5484,7 @@ html.admin-on-dark-canvas .admin-topbar,
 .opex-in-pct { display: inline-flex; align-items: center; gap: 4px; color: #94a3b8; }
 .opex-monthly { font-weight: 700; color: #0f172a; font-variant-numeric: tabular-nums; white-space: nowrap; }
 .admin-dark .opex-monthly { color: #f4f4f5; }
+.opex-thru { font-size: 12px; color: #94a3b8; white-space: nowrap; }
 
 /* Spreadsheet view — every line × every month. */
 .opex-sheet-wrap { overflow-x: auto; }

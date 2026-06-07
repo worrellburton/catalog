@@ -52,7 +52,7 @@ export default function UnifiedModelChart({ revenue, acquisition, cash, showReve
   const PAD_L = 72, PAD_R = 72, PAD_T = 24, PAD_B = 44;
   const innerW = W - PAD_L - PAD_R;
   const innerH = H - PAD_T - PAD_B;
-  const TIP_W = 248, TIP_H = 248;
+  const TIP_W = 248, TIP_H = 268;
 
   // Left axis ($) is shared by revenue + cash; right axis (count) by MAU + sales.
   const leftMax = niceCeiling(Math.max(
@@ -182,6 +182,7 @@ export default function UnifiedModelChart({ revenue, acquisition, cash, showReve
           const rows: { label: string; value: string; delta: string; positive: boolean; tone: 'rev' | 'acq' | 'eng' | 'cash' }[] = [];
           if (showRevenue) rows.push({ label: 'Revenue', value: fmtCurrency(revenue[i].revenue), delta: `${rev.text} MoM`, positive: rev.positive, tone: 'rev' });
           if (showCash) rows.push({ label: 'Cash', value: fmtCurrency(cash[i].cash), delta: `${cash[i].net >= 0 ? '+' : ''}${fmtCurrency(cash[i].net, { compact: true })}`, positive: cash[i].net >= 0, tone: 'cash' });
+          rows.push({ label: 'OpEx', value: fmtCurrency(cash[i].opex, { compact: true }), delta: `mktg ${fmtCurrency(cash[i].marketing, { compact: true })}`, positive: false, tone: 'cash' });
           if (showEngagement) rows.push({ label: 'Sales', value: fmtNumber(revenue[i].sales), delta: 'orders', positive: true, tone: 'eng' });
           if (showAcquisition) {
             rows.push({ label: 'MAU', value: fmtNumber(acquisition[i].cumulativeUsers), delta: `${mau.text} MoM`, positive: mau.positive, tone: 'acq' });

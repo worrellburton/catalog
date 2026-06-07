@@ -1,4 +1,4 @@
-import { useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { Link } from '@remix-run/react';
 import { MONTHS, monthLabel, fmtCurrency, niceCeiling } from '~/services/projections';
 import {
@@ -20,6 +20,29 @@ import ModelTabs from '~/components/model/ModelTabs';
 
 const MONTH_OPTS = Array.from({ length: MONTHS }, (_, i) => ({ value: i, label: monthLabel(i) }));
 const active = (m: number, s: number, e: number) => m >= s && m <= e;
+
+// Accounting-formatted dollar input: shows thousands separators at rest
+// (e.g. 100,000), shows the raw number while editing, and parses digits.
+function AcctInput({ value, onChange, className }: { value: number; onChange: (n: number) => void; className?: string }) {
+  const [local, setLocal] = useState(() => value.toLocaleString('en-US'));
+  const [focused, setFocused] = useState(false);
+  useEffect(() => { if (!focused) setLocal(value.toLocaleString('en-US')); }, [value, focused]);
+  return (
+    <input
+      className={className}
+      type="text"
+      inputMode="numeric"
+      value={local}
+      onFocus={() => { setFocused(true); setLocal(value ? String(value) : ''); }}
+      onBlur={() => { setFocused(false); setLocal(value.toLocaleString('en-US')); }}
+      onChange={(e) => {
+        setLocal(e.target.value);
+        const n = Number(e.target.value.replace(/[^0-9.]/g, ''));
+        if (!Number.isNaN(n)) onChange(n);
+      }}
+    />
+  );
+}
 
 function OpexChart({ items, payroll }: { items: OpexItem[]; payroll: PayrollItem[] }) {
   const byCat = useMemo(() => buildCombinedByCategory(items, payroll), [items, payroll]);
@@ -203,21 +226,30 @@ export default function AdminModelOpex() {
                   </td>
                   <td><input className="opex-in opex-in-sm" type="number" min={0} step={1} value={p.count} onChange={e => updateP(p.id, { count: Number(e.target.value) || 0 })} /></td>
                   <td>
-                    <select className="opex-in" value={p.basis} onChange={e => updateP(p.id, { basis: e.target.value as 'annual' | 'monthly' })}>
+                    <select className="opex-in" value={p.basis} onChange={e => {
+                      const basis = e.target.value as 'annual' | 'monthly';
+                      // Annual roles run through the whole horizon; monthly
+                      // (e.g. contractors) keep a defined end.
+                      updateP(p.id, basis === 'annual' ? { basis, endMonth: MONTHS - 1 } : { basis });
+                    }}>
                       <option value="annual">Annual</option>
                       <option value="monthly">Monthly</option>
                     </select>
                   </td>
-                  <td><input className="opex-in opex-in-num" type="number" min={0} step={1000} value={p.comp} onChange={e => updateP(p.id, { comp: Number(e.target.value) || 0 })} /></td>
+                  <td><AcctInput className="opex-in opex-in-num" value={p.comp} onChange={n => updateP(p.id, { comp: n })} /></td>
                   <td>
                     <select className="opex-in" value={p.startMonth} onChange={e => updateP(p.id, { startMonth: Number(e.target.value) })}>
                       {MONTH_OPTS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
                     </select>
                   </td>
                   <td>
-                    <select className="opex-in" value={p.endMonth} onChange={e => updateP(p.id, { endMonth: Number(e.target.value) })}>
-                      {MONTH_OPTS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-                    </select>
+                    {p.basis === 'monthly' ? (
+                      <select className="opex-in" value={p.endMonth} onChange={e => updateP(p.id, { endMonth: Number(e.target.value) })}>
+                        {MONTH_OPTS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                      </select>
+                    ) : (
+                      <span className="opex-thru">through {monthLabel(MONTHS - 1)}</span>
+                    )}
                   </td>
                   <td className="opex-monthly">{fmtCurrency(payrollMonthly(p), { compact: true })}</td>
                   <td><button className="opex-del" onClick={() => removeP(p.id)} aria-label={`Remove ${p.role}`}>×</button></td>
@@ -253,7 +285,7 @@ export default function AdminModelOpex() {
                       {OPEX_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
                     </select>
                   </td>
-                  <td><input className="opex-in opex-in-num" type="number" min={0} step={500} value={it.amount} onChange={e => update(it.id, { amount: Number(e.target.value) || 0 })} /></td>
+                  <td><AcctInput className="opex-in opex-in-num" value={it.amount} onChange={n => update(it.id, { amount: n })} /></td>
                   <td>
                     <select className="opex-in" value={it.startMonth} onChange={e => update(it.id, { startMonth: Number(e.target.value) })}>
                       {MONTH_OPTS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
