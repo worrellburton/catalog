@@ -32,6 +32,7 @@ import UnifiedModelChart from '~/components/model/UnifiedModelChart';
 import ModelHeadline from '~/components/model/ModelHeadline';
 import ModelMetrics from '~/components/model/ModelMetrics';
 import ModelTabs from '~/components/model/ModelTabs';
+import RateAssumptionsModal from '~/components/model/RateAssumptionsModal';
 import FunnelTable from '~/components/model/FunnelTable';
 
 const COLORS = { acquisition: '#6366f1', engagement: '#f59e0b', revenue: '#10b981', costs: '#0f172a', payout: '#ec4899' };
@@ -140,6 +141,29 @@ export default function AdminModel() {
     const per = cash.map(c => c.opex + c.creatorPayout);
     return per.length ? per.reduce((a, b) => a + b, 0) / per.length : 0;
   }, [cash]);
+
+  // "Rate my assumptions" — compact model snapshot sent to Claude + Gemini.
+  const [showRate, setShowRate] = useState(false);
+  const ratePayload = useMemo(() => ({
+    business: 'Consumer fashion shopping app earning affiliate commission',
+    horizonMonths: MONTHS,
+    scenario: ui.scenario,
+    acquisition: {
+      cpa: eacq.cpa, organicGrowthPctPerMonth: eacq.organicGrowth, totalAdSpend: eacq.budget,
+      budgetSplitEarly: eacq.budgetDistEarly, budgetSplitLate: eacq.budgetDistLate,
+      newUserRetentionM1: eacq.newUserRetention, monthlyActiveChurn: eacq.mauChurn,
+    },
+    engagement: { sessionsPerUserPerMonth: erev.sessionsPerUserPerMonth, sessionTimeMinutes: erev.sessionTimeMinutes, impressionsPerSession: erev.avgImpressionsPerSession },
+    revenue: { productConversion: erev.productConversion, avgOrderValue: erev.avgCostPerSale, affiliateCommission: erev.avgAffiliateCommission },
+    costs: { grossMargin: eecon.grossMargin, monthlyOpex: opexAvg, cashRaised: eecon.startingCash },
+    creatorPayout,
+    results: {
+      exitArr: Math.round(metrics.exitArr), total16moRevenue: Math.round(revSummary.total), gmvTotal: Math.round(metrics.gmvTotal),
+      ltv: Math.round(metrics.ltv), ltvCac: Number(metrics.ltvCac.toFixed(1)), cacPaybackMonths: Number(metrics.paybackMonths.toFixed(2)),
+      blendedCac: Number(acqSummary.blendedCac.toFixed(2)), avgMau: Math.round(acqSummary.avgMau),
+      runwayMonths: metrics.runwayMonths, avgMonthlyBurn: Math.round(metrics.avgBurn),
+    },
+  }), [eacq, erev, eecon, creatorPayout, metrics, revSummary, acqSummary, opexAvg, ui.scenario]);
 
   const setRevField = (k: keyof Assumptions, v: number) => setRev(prev => ({ ...prev, [k]: v }));
   const setAcqField = (k: keyof GtmAssumptions, v: number) => setAcq(prev => ({ ...prev, [k]: v }));
@@ -284,7 +308,8 @@ export default function AdminModel() {
 
       <ModelTabs active="model" />
 
-      <ModelHeadline scenario={ui.scenario} onScenario={setScenario} onExportCsv={exportCsv} onPrint={() => window.print()} />
+      <ModelHeadline scenario={ui.scenario} onScenario={setScenario} onExportCsv={exportCsv} onPrint={() => window.print()} onRate={() => setShowRate(true)} />
+      <RateAssumptionsModal open={showRate} onClose={() => setShowRate(false)} payload={ratePayload} />
 
       {readOnly && (
         <div className="model-locked-banner">

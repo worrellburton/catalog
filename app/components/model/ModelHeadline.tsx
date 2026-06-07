@@ -33,11 +33,13 @@ export default function ModelHeadline({
   onScenario,
   onExportCsv,
   onPrint,
+  onRate,
 }: {
   scenario: ScenarioId;
   onScenario: (id: ScenarioId) => void;
   onExportCsv: () => void;
   onPrint: () => void;
+  onRate: () => void;
 }) {
   return (
     <div className="model-headline">
@@ -60,6 +62,12 @@ export default function ModelHeadline({
           </div>
         </div>
         <div className="model-toolbar-right">
+          <button className="model-rate-btn" onClick={onRate}>
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M12 3l1.9 4.9L18.8 9.8l-4.9 1.9L12 16.6l-1.9-4.9L5.2 9.8l4.9-1.9z" /><path d="M19 14v3M20.5 15.5h-3" />
+            </svg>
+            Rate my assumptions
+          </button>
           <button className="admin-btn admin-btn-secondary" onClick={onExportCsv}>Export CSV</button>
           <button className="admin-btn admin-btn-secondary" onClick={onPrint}>Print / PDF</button>
         </div>

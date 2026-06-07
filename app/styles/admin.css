@@ -5332,6 +5332,85 @@ html.admin-on-dark-canvas .admin-topbar,
 .opex-summary-row { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 @media (max-width: 900px) { .opex-summary-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
+/* "Rate my assumptions" button + modal. */
+.model-rate-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border: 0;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #fff;
+  cursor: pointer;
+  background: linear-gradient(135deg, #6366f1, #a855f7);
+  box-shadow: 0 4px 14px rgba(124, 92, 255, 0.35);
+}
+.model-rate-btn:hover { filter: brightness(1.07); box-shadow: 0 6px 20px rgba(124, 92, 255, 0.45); }
+
+.rate-overlay {
+  position: fixed; inset: 0; z-index: 1400;
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+  background: rgba(2, 6, 23, 0.62);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+}
+.rate-modal {
+  width: min(920px, 100%);
+  max-height: 88vh;
+  display: flex; flex-direction: column;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 30px 80px rgba(2, 6, 23, 0.5);
+  overflow: hidden;
+}
+.admin-dark .rate-modal { background: #18181b; }
+.rate-modal-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid #eef2f7;
+}
+.admin-dark .rate-modal-head { border-bottom-color: #27272a; }
+.rate-modal-title { margin: 0; font-size: 18px; font-weight: 800; letter-spacing: -0.01em; color: #0f172a; }
+.admin-dark .rate-modal-title { color: #f4f4f5; }
+.rate-modal-sub { margin: 3px 0 0; font-size: 12.5px; color: #64748b; }
+.rate-modal-actions { display: flex; align-items: center; gap: 8px; }
+.rate-close { width: 30px; height: 30px; border: 0; background: none; font-size: 22px; line-height: 1; color: #94a3b8; cursor: pointer; border-radius: 8px; }
+.rate-close:hover { background: #f1f5f9; color: #0f172a; }
+.admin-dark .rate-close:hover { background: #27272a; color: #fff; }
+
+.rate-panels {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 0;
+  overflow-y: auto;
+}
+@media (max-width: 760px) { .rate-panels { grid-template-columns: 1fr; } }
+.rate-panel { padding: 16px 20px; border-right: 1px solid #eef2f7; }
+.rate-panel:last-child { border-right: 0; }
+@media (max-width: 760px) { .rate-panel { border-right: 0; border-top: 1px solid #eef2f7; } }
+.admin-dark .rate-panel { border-color: #27272a; }
+.rate-panel-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.rate-panel-dot { width: 9px; height: 9px; border-radius: 50%; }
+.rate-panel-title { font-size: 13px; font-weight: 700; color: #0f172a; }
+.admin-dark .rate-panel-title { color: #f4f4f5; }
+.rate-panel-model { font-size: 10px; color: #94a3b8; background: #f1f5f9; padding: 1px 6px; border-radius: 6px; }
+.admin-dark .rate-panel-model { background: #27272a; }
+.rate-panel-body { font-size: 13px; line-height: 1.55; color: #334155; }
+.admin-dark .rate-panel-body { color: #d4d4d8; }
+.rate-p { margin: 0 0 8px; }
+.rate-h { margin: 12px 0 6px; font-size: 12.5px; font-weight: 800; color: #0f172a; }
+.admin-dark .rate-h { color: #f4f4f5; }
+.rate-ul { margin: 0 0 8px; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+.rate-ul li { line-height: 1.45; }
+.rate-loading { display: flex; align-items: center; gap: 8px; color: #64748b; font-size: 12.5px; padding: 8px 0; }
+.rate-spinner { width: 14px; height: 14px; border: 2px solid #cbd5e1; border-top-color: #6366f1; border-radius: 50%; animation: rate-spin 0.7s linear infinite; }
+@keyframes rate-spin { to { transform: rotate(360deg); } }
+.rate-error { color: #b91c1c; font-size: 12.5px; background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.25); border-radius: 8px; padding: 8px 10px; }
+.rate-error--top { margin: 12px 20px 0; }
+.rate-disclaimer { margin: 0; padding: 10px 20px 16px; font-size: 11px; color: #94a3b8; border-top: 1px solid #eef2f7; }
+.admin-dark .rate-disclaimer { border-top-color: #27272a; }
+
 /* Model ↔ OpEx page switcher under the title. */
 .model-pageswitch { display: inline-flex; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; margin: 0 0 16px; }
 .model-pageswitch a { padding: 6px 18px; font-size: 12.5px; font-weight: 600; color: #475569; text-decoration: none; border-right: 1px solid #e5e7eb; }
