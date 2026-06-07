@@ -1,23 +1,18 @@
 // Generates (and caches) a UNIQUE description for a single look. Gemini is
 // shown the look's poster frame (the still that the consumer feed paints) plus
 // the list of products featured in the look, and writes 1-2 grounded sentences
-// about that specific outfit. The result is cached in look_descriptions keyed
-// by look_id so we only call the model once per look.
+// about that specific outfit. Cached in look_descriptions keyed by look_id.
 //
-// Why per-look + image-grounded: every look used to fall back to a single
-// creator-level "about" blurb, so unrelated looks under the same creator all
-// read identically and often referenced brands that weren't even in the look.
-// Feeding Gemini the actual frame + the actual products fixes both.
+// Callable two ways:
+//   1. With { lookId, title, imageUrl, products } from the client (on view).
+//   2. With just { lookId } from the looks_creative DB trigger — the function
+//      then self-fetches title, poster frame, and products server-side, so a
+//      unique description is generated automatically every time a look is made.
 //
-// Secrets used:
-//   GOOGLE_API_KEY  — Gemini (GEMINI_API_KEY also accepted). Without it we
-//                     fall back to a deterministic product-based heuristic.
-//   SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY — cache read/write.
+// Secrets: GOOGLE_API_KEY (or GEMINI_API_KEY); SUPABASE_URL / SERVICE_ROLE_KEY.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-// Fire-and-forget usage log to ai_usage_logs. Inlined (rather than importing
-// ../_shared/ai-usage.ts) so the function bundles standalone. Never throws.
 interface AiUsageLog {
   platform: string;
   operation: string;
@@ -59,7 +54,6 @@ const CORS_HEADERS = {
   'Access-Control-Max-Age': '86400',
 };
 
-// Looks are largely static once published, so regenerate rarely.
 const FRESH_DAYS = 180;
 const MODEL = 'gemini-2.5-flash';
 const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
@@ -80,8 +74,6 @@ interface ProductInput {
   price?: string | null;
 }
 
-// Chunked base64 so a large frame can't blow the call stack (btoa on a long
-// binary string does on some inputs).
 function bytesToBase64(bytes: Uint8Array): string {
   let bin = '';
   const CHUNK = 0x8000;
@@ -102,13 +94,11 @@ function productLines(products: ProductInput[]): string {
     .join('\n');
 }
 
-// Deterministic, no-model fallback. Still unique per look because it's built
-// from that look's specific products.
 function heuristicDescription(title: string, products: ProductInput[]): string {
   const brands = [...new Set(products.map((p) => (p.brand || '').trim()).filter(Boolean))];
   const types = [...new Set(products.map((p) => (p.type || '').trim().toLowerCase()).filter(Boolean))];
   if (brands.length === 0 && types.length === 0) {
-    return title ? `${title} — a curated look you can shop end to end.` : 'A curated look you can shop end to end.';
+    return title ? `${title} — a look you can shop end to end.` : 'A look you can shop end to end.';
   }
   const piece = types.length ? types.slice(0, 3).join(', ') : 'pieces';
   const by = brands.length ? ` from ${brands.slice(0, 3).join(', ')}` : '';
@@ -202,14 +192,14 @@ Deno.serve(async (req: Request) => {
 
     const body = req.method === 'POST' ? await req.json().catch(() => ({})) : {};
     const lookId = String(body.lookId || '').trim();
-    const title = String(body.title || '').trim();
-    const imageUrl = String(body.imageUrl || '').trim();
-    const products: ProductInput[] = Array.isArray(body.products) ? body.products.slice(0, 12) : [];
+    let title = String(body.title || '').trim();
+    let imageUrl = String(body.imageUrl || '').trim();
+    let products: ProductInput[] = Array.isArray(body.products) ? body.products.slice(0, 12) : [];
     const force = body.force === true;
 
     if (!lookId) return jsonRes({ success: false, error: 'missing lookId' }, 400);
 
-    // Serve a fresh cached description without hitting the model.
+    // Cache fast-path — return a fresh cached description without any work.
     if (!force) {
       const { data: cached } = await db
         .from('look_descriptions')
@@ -220,6 +210,47 @@ Deno.serve(async (req: Request) => {
         const ageDays = (Date.now() - Date.parse(cached.generated_at)) / 86_400_000;
         if (ageDays < FRESH_DAYS) {
           return jsonRes({ success: true, description: cached.description, source: 'cache' });
+        }
+      }
+    }
+
+    // Self-fetch path: a DB trigger (and any caller) can invoke with just a
+    // lookId; we resolve the title, poster frame, and products server-side.
+    // This is what makes per-look descriptions fully automatic — the
+    // looks_creative trigger fires the moment a look's poster is set, with no
+    // client involvement. Prefer the look's own poster frame as the image
+    // Gemini analyzes; fall back to a product image.
+    if (!title || !imageUrl || products.length === 0) {
+      const { data: lookRow } = await db
+        .from('looks')
+        .select('title')
+        .eq('id', lookId)
+        .maybeSingle();
+      if (lookRow && !title) title = String(lookRow.title || '').trim();
+
+      if (!imageUrl) {
+        const { data: creative } = await db
+          .from('looks_creative')
+          .select('thumbnail_url')
+          .eq('look_id', lookId)
+          .eq('is_primary', true)
+          .maybeSingle();
+        if (creative?.thumbnail_url) imageUrl = String(creative.thumbnail_url);
+      }
+
+      if (products.length === 0) {
+        const { data: lps } = await db
+          .from('look_products')
+          .select('products ( brand, name, type, price, image_url, primary_image_url )')
+          .eq('look_id', lookId)
+          .limit(12);
+        const rows = (lps || [])
+          .map((r: { products: (ProductInput & { image_url?: string | null; primary_image_url?: string | null }) | null }) => r.products)
+          .filter((p): p is ProductInput & { image_url?: string | null; primary_image_url?: string | null } => !!p);
+        products = rows.map((p) => ({ brand: p.brand, name: p.name, type: p.type, price: p.price }));
+        if (!imageUrl) {
+          const firstImg = rows.find((p) => p.primary_image_url || p.image_url);
+          if (firstImg) imageUrl = String(firstImg.primary_image_url || firstImg.image_url);
         }
       }
     }

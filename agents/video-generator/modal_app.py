@@ -68,6 +68,7 @@ generator_image = (
     # frame grab; primary_poster wraps upload + DB write).
     .add_local_file("asset_encoder.py", "/root/asset_encoder.py")
     .add_local_file("primary_poster.py", "/root/primary_poster.py")
+    .add_local_file("look_poster.py", "/root/look_poster.py")
 )
 
 # ─── App ───────────────────────────────────────────────────────────────
@@ -199,6 +200,61 @@ def generate_primary_poster_webhook(body: dict):
 
     generate_primary_poster_job.spawn(product_id)
     return {"status": "queued", "product_id": product_id}
+
+
+# ─── Look poster: extract a look creative's first frame (mirrors product) ───
+
+@app.function(
+    image=generator_image,
+    secrets=secrets,
+    timeout=300,
+    retries=1,
+    max_containers=5,
+)
+def generate_look_poster_job(creative_id: str, look_id: str = None, video_url: str = None):
+    """Extract a look creative's first frame (native 3:4) and write
+    looks_creative.thumbnail_url. Cheap (one ffmpeg frame grab). Setting the
+    thumbnail also fires the per-look description trigger."""
+    import os
+    import sys
+    sys.path.insert(0, "/root")
+    from supabase import create_client
+    from look_poster import generate_look_poster
+
+    supabase = create_client(
+        os.environ["SUPABASE_URL"],
+        os.environ["SUPABASE_SERVICE_ROLE_KEY"],
+    )
+    poster_url = generate_look_poster(
+        supabase, os.environ["SUPABASE_URL"], creative_id, look_id, video_url
+    )
+    print(f"[look-poster {creative_id}] {poster_url}")
+    return {"creative_id": creative_id, "poster_url": poster_url}
+
+
+@app.function(image=generator_image, secrets=secrets)
+@modal.fastapi_endpoint(method="POST", label="generate-look-poster")
+def generate_look_poster_webhook(body: dict):
+    """
+    POST /generate-look-poster
+
+    Called by the looks_creative DB trigger (trg_looks_creative_generate_poster)
+    whenever a primary creative gets a video but no poster yet. Supabase sends
+    the full new row as body["record"].
+    """
+    record = body.get("record", {})
+    creative_id = record.get("id")
+    if not creative_id:
+        return {"error": "Missing creative id"}, 400
+    if not record.get("video_url"):
+        return {"status": "skipped", "reason": "no video_url"}
+    if record.get("thumbnail_url"):
+        return {"status": "skipped", "reason": "poster already set"}
+
+    generate_look_poster_job.spawn(
+        creative_id, record.get("look_id"), record.get("video_url")
+    )
+    return {"status": "queued", "creative_id": creative_id}
 
 
 # ─── Watermark a user_generation for the public share flow ────────────
