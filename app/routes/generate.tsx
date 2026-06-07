@@ -1609,11 +1609,13 @@ export default function GeneratePage() {
         )}
         {step !== 'products' && step !== 'photos' && (
           <>
-            <h1>{isGeneratingView ? 'Generating' : 'Generate'}</h1>
+            <h1>{isGeneratingView ? 'Generating' : step === 'review' ? 'Review' : 'Generate'}</h1>
             <p className="gen-sub">
               {isGeneratingView
                 ? 'Hang tight — we’re composing your look.'
-                : "Upload a face, pick up to five products, and we'll compose the look."}
+                : step === 'review'
+                  ? 'Give it a once-over, then build your look.'
+                  : "Upload a face, pick up to five products, and we'll compose the look."}
             </p>
           </>
         )}
@@ -1980,8 +1982,9 @@ export default function GeneratePage() {
         )}
 
         {step === 'review' && (
-          <section className="gen-step">
-            <h2>Review</h2>
+          <section className="gen-step gen-step-review">
+            {/* The page header already reads "Review" on this step, so the
+                duplicate <h2> was removed. */}
             {/* The face + chosen products float as circles here, then settle
                 into the 3D ring on the build screen. */}
             {orbitImages.length > 0 && (
