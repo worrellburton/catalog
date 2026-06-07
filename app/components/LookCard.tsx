@@ -280,17 +280,6 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
     >
       <div className="card-inner">
         {!loaded && <div className="card-shimmer" />}
-        {/* Blurred same-image backdrop — fills the 3:4 frame behind a
-            CONTAINED poster/video so 9:16 looks show whole + centered (no
-            squish, no head/feet crop) and the gaps "blend in the same frame"
-            instead of black bars. Only shown where CSS opts in (.creator-grid). */}
-        {(stillImageUrl || posterUrl) && (
-          <div
-            className="card-poster-backdrop"
-            aria-hidden="true"
-            style={{ backgroundImage: `url(${stillImageUrl || posterUrl})` }}
-          />
-        )}
         {/* TrailVideoHost slot — shared <video> hands off to LookOverlay's
             hero on tap via DOM appendChild. No layout morph; the card's
             own video frames stay alive while the overlay opacity-fades in.

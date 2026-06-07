@@ -651,30 +651,10 @@
   aspect-ratio: 3 / 4;
 }
 
-/* Creator catalog: show the WHOLE 9:16 look centered in the 3:4 tile (no
-   squish, no head/feet crop), with a blurred copy of the same image filling
-   the side gaps so it blends in the frame instead of black bars. */
+/* The look poster/video FILLS the 3:4 tile (cover), matching the main feed.
+   (The .card-poster-backdrop blurred-fill experiment was reverted — looks
+   should fill the container, not letterbox.) */
 .card-poster-backdrop { display: none; }
-.creator-grid .look-card .card-poster-backdrop {
-  display: block;
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  background-size: cover;
-  background-position: center;
-  filter: blur(22px) brightness(0.5);
-  transform: scale(1.18);
-}
-.creator-grid .look-card .card-video-slot {
-  background-size: contain !important;
-  background-repeat: no-repeat;
-  background-position: center;
-  background-color: transparent !important;
-  z-index: 1;
-}
-.creator-grid .look-card .card-video-slot video {
-  object-fit: contain !important;
-}
 
 /* ── Initial-letter avatar fallback ────────────────────────────────── */
 .creator-hero-avatar--initial {
