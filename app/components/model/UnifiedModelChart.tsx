@@ -19,12 +19,14 @@ interface ChartProps {
   showAcquisition: boolean;
   showEngagement: boolean;
   showCash: boolean;
+  showPayout: boolean;
 }
 
 const REVENUE = '#10b981'; // green — revenue ($, left axis)
 const CASH = '#0f172a';    // near-black — cash balance ($, left axis); distinct from revenue green
 const ACQ = '#6366f1';     // indigo — MAU (count, right axis)
 const ENGAGE = '#f59e0b';  // amber — sales (count, right axis)
+const PAYOUT = '#ec4899';  // rose — creator payout ($, left axis)
 
 function smoothLine(points: { x: number; y: number }[]): string {
   if (points.length === 0) return '';
@@ -45,20 +47,21 @@ function pctChange(curr: number, prev: number | undefined): { text: string; posi
   return { text: `${sign}${(pct * 100).toFixed(pct >= 1 ? 0 : 1)}%`, positive: pct >= 0 };
 }
 
-export default function UnifiedModelChart({ revenue, acquisition, cash, showRevenue, showAcquisition, showEngagement, showCash }: ChartProps) {
+export default function UnifiedModelChart({ revenue, acquisition, cash, showRevenue, showAcquisition, showEngagement, showCash, showPayout }: ChartProps) {
   const [hoverIdx, setHoverIdx] = useState<number | null>(null);
 
   const W = 1200, H = 520;
   const PAD_L = 72, PAD_R = 72, PAD_T = 24, PAD_B = 44;
   const innerW = W - PAD_L - PAD_R;
   const innerH = H - PAD_T - PAD_B;
-  const TIP_W = 248, TIP_H = 268;
+  const TIP_W = 248, TIP_H = 286;
 
-  // Left axis ($) is shared by revenue + cash; right axis (count) by MAU + sales.
+  // Left axis ($) is shared by revenue + cash + payout; right axis (count) by MAU + sales.
   const leftMax = niceCeiling(Math.max(
     1,
     showRevenue ? Math.max(...revenue.map(s => s.revenue)) : 0,
     showCash ? Math.max(...cash.map(c => c.cash)) : 0,
+    showPayout ? Math.max(...cash.map(c => c.creatorPayout)) : 0,
   ));
   const countMax = niceCeiling(Math.max(
     1,
@@ -74,6 +77,11 @@ export default function UnifiedModelChart({ revenue, acquisition, cash, showReve
   const revKey = revenue.map(s => `${Math.round(s.revenue)}/${Math.round(s.sales)}`).join('|');
   const acqKey = acquisition.map(s => Math.round(s.cumulativeUsers)).join('|');
   const cashKey = cash.map(c => Math.round(c.cash)).join('|');
+  const payoutKey = cash.map(c => Math.round(c.creatorPayout)).join('|');
+
+  const payoutLine = useMemo(() => smoothLine(cash.map((c, i) => ({ x: xFor(i), y: yLeft(c.creatorPayout) }))),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [payoutKey, leftMax]);
 
   const revLine = useMemo(() => smoothLine(revenue.map((s, i) => ({ x: xFor(i), y: yLeft(s.revenue) }))),
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -94,7 +102,7 @@ export default function UnifiedModelChart({ revenue, acquisition, cash, showReve
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [revKey, countMax]);
 
-  const anyLeft = showRevenue || showCash;
+  const anyLeft = showRevenue || showCash || showPayout;
   const anyCount = showAcquisition || showEngagement;
   const nothingOn = !anyLeft && !anyCount;
 
@@ -103,6 +111,7 @@ export default function UnifiedModelChart({ revenue, acquisition, cash, showReve
       <div className="gtm-legend">
         {showRevenue && <span className="gtm-legend-item"><i style={{ background: REVENUE }} /> Revenue</span>}
         {showCash && <span className="gtm-legend-item"><i style={{ background: CASH }} /> Cash</span>}
+        {showPayout && <span className="gtm-legend-item"><i style={{ background: PAYOUT }} /> Payout</span>}
         {showEngagement && <span className="gtm-legend-item"><i style={{ background: ENGAGE }} /> Sales</span>}
         {showAcquisition && <span className="gtm-legend-item"><i style={{ background: ACQ }} /> MAU</span>}
       </div>
@@ -142,6 +151,7 @@ export default function UnifiedModelChart({ revenue, acquisition, cash, showReve
         {showRevenue && <path d={revArea} fill="url(#model-rev-grad)" />}
         {showRevenue && <path d={revLine} fill="none" stroke={REVENUE} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />}
         {showCash && <path d={cashLine} fill="none" stroke={CASH} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" strokeDasharray="6 4" />}
+        {showPayout && <path d={payoutLine} fill="none" stroke={PAYOUT} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />}
         {showEngagement && <path d={engLine} fill="none" stroke={ENGAGE} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />}
         {showAcquisition && <path d={acqLine} fill="none" stroke={ACQ} strokeWidth="2.5" strokeLinejoin="round" strokeLinecap="round" />}
 
@@ -152,6 +162,7 @@ export default function UnifiedModelChart({ revenue, acquisition, cash, showReve
             <g key={`pt-${i}`}>
               {showRevenue && <circle cx={x} cy={yLeft(s.revenue)} r={isHover ? 6 : 3.5} fill="#fff" stroke={REVENUE} strokeWidth={isHover ? 3 : 2} style={{ pointerEvents: 'none' }} />}
               {showCash && <circle cx={x} cy={yLeft(cash[i].cash)} r={isHover ? 6 : 3.5} fill="#fff" stroke={CASH} strokeWidth={isHover ? 3 : 2} style={{ pointerEvents: 'none' }} />}
+              {showPayout && <circle cx={x} cy={yLeft(cash[i].creatorPayout)} r={isHover ? 6 : 3.5} fill="#fff" stroke={PAYOUT} strokeWidth={isHover ? 3 : 2} style={{ pointerEvents: 'none' }} />}
               {showEngagement && <circle cx={x} cy={yCount(s.sales)} r={isHover ? 6 : 3.5} fill="#fff" stroke={ENGAGE} strokeWidth={isHover ? 3 : 2} style={{ pointerEvents: 'none' }} />}
               {showAcquisition && <circle cx={x} cy={yCount(acquisition[i].cumulativeUsers)} r={isHover ? 6 : 3.5} fill="#fff" stroke={ACQ} strokeWidth={isHover ? 3 : 2} style={{ pointerEvents: 'none' }} />}
               <rect
@@ -173,6 +184,7 @@ export default function UnifiedModelChart({ revenue, acquisition, cash, showReve
           const x = xFor(i);
           const anchorY = showRevenue ? yLeft(revenue[i].revenue)
             : showCash ? yLeft(cash[i].cash)
+            : showPayout ? yLeft(cash[i].creatorPayout)
             : showAcquisition ? yCount(acquisition[i].cumulativeUsers)
             : yCount(revenue[i].sales);
           const tipX = Math.min(W - PAD_R - TIP_W, Math.max(PAD_L, x - TIP_W / 2));
@@ -182,7 +194,9 @@ export default function UnifiedModelChart({ revenue, acquisition, cash, showReve
           const rows: { label: string; value: string; delta: string; positive: boolean; tone: 'rev' | 'acq' | 'eng' | 'cash' }[] = [];
           if (showRevenue) rows.push({ label: 'Revenue', value: fmtCurrency(revenue[i].revenue), delta: `${rev.text} MoM`, positive: rev.positive, tone: 'rev' });
           if (showCash) rows.push({ label: 'Cash', value: fmtCurrency(cash[i].cash), delta: `${cash[i].net >= 0 ? '+' : ''}${fmtCurrency(cash[i].net, { compact: true })}`, positive: cash[i].net >= 0, tone: 'cash' });
-          rows.push({ label: 'OpEx', value: fmtCurrency(cash[i].opex, { compact: true }), delta: `mktg ${fmtCurrency(cash[i].marketing, { compact: true })}`, positive: false, tone: 'cash' });
+          if (showPayout) rows.push({ label: 'Creator payout', value: fmtCurrency(cash[i].creatorPayout, { compact: true }), delta: revenue[i].revenue > 0 ? `${Math.round((cash[i].creatorPayout / revenue[i].revenue) * 100)}% of rev` : '—', positive: true, tone: 'eng' });
+          // OpEx includes creator payout (payroll + expenses + payout).
+          rows.push({ label: 'OpEx', value: fmtCurrency(cash[i].opex + cash[i].creatorPayout, { compact: true }), delta: `mktg ${fmtCurrency(cash[i].marketing, { compact: true })}`, positive: false, tone: 'cash' });
           if (showEngagement) rows.push({ label: 'Sales', value: fmtNumber(revenue[i].sales), delta: 'orders', positive: true, tone: 'eng' });
           if (showAcquisition) {
             rows.push({ label: 'MAU', value: fmtNumber(acquisition[i].cumulativeUsers), delta: `${mau.text} MoM`, positive: mau.positive, tone: 'acq' });

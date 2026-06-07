@@ -2098,6 +2098,38 @@ html.admin-on-dark-canvas .admin-topbar,
   color: #aaa;
   flex-shrink: 0;
 }
+.admin-activity-item--link {
+  text-decoration: none;
+  color: inherit;
+  border-radius: 8px;
+  padding: 6px;
+  margin: 0 -6px;
+  transition: background 120ms ease;
+}
+.admin-activity-item--link:hover { background: #f1f5f9; }
+.admin-dark .admin-activity-item--link:hover { background: #1f1f22; }
+.admin-activity-item--link strong { font-weight: 600; color: #0f172a; }
+.admin-dark .admin-activity-item--link strong { color: #f4f4f5; }
+
+/* Initials avatar in activity rows. */
+.admin-activity-avatar {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+}
+
+/* Recent-activity card header with a "Live ledger" link. */
+.admin-home-card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.admin-home-card-link { font-size: 12px; font-weight: 600; color: #6366f1; text-decoration: none; white-space: nowrap; }
+.admin-home-card-link:hover { text-decoration: underline; }
 .admin-detail-empty {
   font-size: 12px;
   color: #aaa;
@@ -5498,6 +5530,28 @@ html.admin-on-dark-canvas .admin-topbar,
 .opex-section-head h3 { margin: 0; }
 .opex-section-action { margin-left: auto; }
 
+/* Creator-payout mode toggle. */
+.creator-modes { display: inline-flex; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; margin: 4px 0 12px; }
+.creator-modes button {
+  padding: 7px 16px; border: 0; background: #fff; cursor: pointer;
+  font-family: inherit; font-size: 12.5px; font-weight: 600; color: #475569;
+  border-right: 1px solid #e5e7eb;
+}
+.creator-modes button:last-child { border-right: 0; }
+.creator-modes button:hover { background: #f1f5f9; }
+.creator-modes button.is-active { background: #f59e0b; color: #fff; }
+.admin-dark .creator-modes { border-color: #3f3f46; }
+.admin-dark .creator-modes button { background: #18181b; color: #d4d4d8; border-right-color: #3f3f46; }
+.admin-dark .creator-modes button.is-active { background: #f59e0b; color: #18181b; }
+
+/* Creator payout: input + small inline stats on one row. */
+.creator-row { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.creator-input { flex: 0 0 200px; margin: 0; }
+.creator-stats { display: flex; flex-wrap: wrap; gap: 16px; font-size: 12px; color: #64748b; }
+.creator-stats strong { color: #0f172a; font-weight: 700; font-variant-numeric: tabular-nums; }
+.admin-dark .creator-stats { color: #a1a1aa; }
+.admin-dark .creator-stats strong { color: #f4f4f5; }
+
 /* Compact "+" add button. */
 .opex-add-btn {
   width: 28px; height: 28px; border: 1px solid #e5e7eb; border-radius: 7px;
@@ -5820,6 +5874,31 @@ tr:hover .admin-stats-col { background: rgba(99, 102, 241, 0.10); }
   box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
   transform: translateY(-1px);
 }
+
+/* Gold cards — key model assumptions. Glowing amber border + tint. */
+.admin-home-stat-card--gold {
+  border-color: #f59e0b;
+  background: linear-gradient(180deg, rgba(245, 158, 11, 0.10), rgba(245, 158, 11, 0.02));
+  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.4), 0 0 18px rgba(245, 158, 11, 0.25);
+  animation: gold-pulse 2.8s ease-in-out infinite;
+}
+.admin-home-stat-card--gold .admin-home-stat-icon { color: #b45309; }
+.admin-home-stat-card--gold .admin-home-stat-value { color: #92400e; }
+.admin-home-stat-card--gold .admin-home-stat-sub { color: #b45309; font-weight: 600; }
+.admin-home-stat-card--gold:hover {
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.6), 0 6px 22px rgba(245, 158, 11, 0.35);
+}
+@keyframes gold-pulse {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.4), 0 0 14px rgba(245, 158, 11, 0.20); }
+  50% { box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.55), 0 0 22px rgba(245, 158, 11, 0.38); }
+}
+.admin-dark .admin-home-stat-card--gold {
+  background: linear-gradient(180deg, rgba(245, 158, 11, 0.16), rgba(245, 158, 11, 0.04));
+}
+.admin-dark .admin-home-stat-card--gold .admin-home-stat-icon,
+.admin-dark .admin-home-stat-card--gold .admin-home-stat-value { color: #fbbf24; }
+.admin-dark .admin-home-stat-card--gold .admin-home-stat-sub { color: #fcd34d; }
 
 /* ─────────────────────────────────────────────────────────────
    Metric detail page — headline number + 30-bar time-series chart.

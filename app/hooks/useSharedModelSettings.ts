@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '~/utils/supabase';
 import { type Assumptions, DEFAULTS, STORAGE_KEY, readStored } from '~/services/projections';
 import { type GtmAssumptions, GTM_DEFAULTS, GTM_STORAGE_KEY, readGtmStored } from '~/services/go-to-market';
@@ -86,6 +86,16 @@ export function useSharedModelSettings(): SharedModelSettings {
     return () => { cancelled = true; if (supabase) supabase.removeChannel(channel); };
   }, []);
 
+  const pendingRef = useRef<string | null>(null);
+  const flush = useCallback(() => {
+    if (!supabase) return;
+    const value = pendingRef.current;
+    if (!value || value === lastSyncedRef.current) return;
+    lastSyncedRef.current = value;
+    pendingRef.current = null;
+    void supabase.from('app_settings').upsert({ key: MODEL_KEY, value, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+  }, []);
+
   // Cache locally always; push to the shared row (debounced) once hydrated.
   useEffect(() => {
     try { window.localStorage.setItem(STORAGE_KEY, JSON.stringify(rev)); } catch { /* quota */ }
@@ -95,15 +105,17 @@ export function useSharedModelSettings(): SharedModelSettings {
     if (!hydratedRef.current || !supabase) return;
     const value = serialize(rev, acq, econ);
     if (value === lastSyncedRef.current) return;
-
-    const t = setTimeout(() => {
-      lastSyncedRef.current = value;
-      void supabase!
-        .from('app_settings')
-        .upsert({ key: MODEL_KEY, value, updated_at: new Date().toISOString() }, { onConflict: 'key' });
-    }, 400);
+    pendingRef.current = value;
+    const t = setTimeout(flush, 400);
     return () => clearTimeout(t);
-  }, [rev, acq, econ]);
+  }, [rev, acq, econ, flush]);
+
+  // Never drop a pending write when navigating away or closing the tab.
+  useEffect(() => {
+    const onHide = () => flush();
+    window.addEventListener('pagehide', onHide);
+    return () => { window.removeEventListener('pagehide', onHide); flush(); };
+  }, [flush]);
 
   return { rev, acq, econ, setRev, setAcq, setEcon, live };
 }
