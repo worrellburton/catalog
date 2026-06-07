@@ -12,18 +12,19 @@
   inset: 0;
   z-index: 200;
   background: #0a0a0a;
-  opacity: 0;
-  /* Start parked just below the screen so OPEN slides up into place —
-     the mirror of the swipe-down dismiss. Without this the overlay only
-     cross-faded and taps felt like an instant cut with no motion. */
-  transform: translateY(8%);
-  transition: opacity 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+  /* Opens INSTANTLY — no enter fade or slide ("just go to the look, no
+     loading"). Only the swipe-down dismiss animates (transform →
+     translateY(100%) via --out / the live drag). */
+  opacity: 1;
+  transform: translateY(0);
   overflow: hidden;
 }
 
+/* --in is still toggled on mount because other rules key off it (e.g.
+   the .look-info-col transform reset on mobile); it no longer drives any
+   enter motion. */
 .look-overlay--in {
   opacity: 1;
-  transform: translateY(0);
 }
 
 .look-overlay--out {
@@ -39,14 +40,14 @@
    transform, letting the snap-back happen via a single ~180ms
    transition restored when .is-dragging is dropped. */
 .look-overlay {
-  /* transform eased to match the comments sheet's leave so swipe-down dismiss
-     glides off the screen the same way. */
-  transition: opacity 0.28s cubic-bezier(0.32, 0.72, 0, 1),
-              transform 0.36s cubic-bezier(0.4, 0, 0.7, 0.2);
-  will-change: opacity, transform;
+  /* Only transform is transitioned — the swipe-down dismiss glides off the
+     screen with the comments-sheet ease. Enter has no transition (instant). */
+  transition: transform 0.36s cubic-bezier(0.4, 0, 0.7, 0.2);
+  will-change: transform;
 }
+/* While the finger is down the panel must track 1:1 — no smoothing. */
 .look-overlay.is-dragging {
-  transition: opacity 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+  transition: none;
 }
 
 /* ── Left: media column (42%) ── */

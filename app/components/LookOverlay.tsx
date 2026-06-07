@@ -527,13 +527,11 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
     return () => director.popScope(scope);
   }, [look.id]);
 
-  // Trigger enter animation after first paint. Double rAF so the browser
-  // paints the parked (translateY) base state once before flipping to
-  // --in — a single frame sometimes skips the slide-up entirely.
+  // Mark mounted on first paint so --in-keyed rules apply (e.g. the mobile
+  // .look-info-col transform reset). The overlay opens instantly — there's
+  // no enter animation; only the swipe-down dismiss animates.
   useEffect(() => {
-    const raf = requestAnimationFrame(() =>
-      requestAnimationFrame(() => setMounted(true)),
-    );
+    const raf = requestAnimationFrame(() => setMounted(true));
     return () => cancelAnimationFrame(raf);
   }, []);
 

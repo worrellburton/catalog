@@ -78,20 +78,17 @@
   pointer-events: none;
 }
 
-/* Mobile: bottom-sheet behavior. Slides up from below on open, drag
-   down at the top of the scroll to dismiss (handled in JS). Rounded
-   top corners + a small grab handle sell the affordance. */
+/* Mobile: bottom-sheet behavior. Opens INSTANTLY (no slide-up — "just go
+   to the product, no loading"); drag down at the top of the scroll to
+   dismiss (handled in JS). Rounded top corners sell the sheet affordance. */
 @media (max-width: 959px) {
   .product-page-overlay {
     opacity: 1;
-    transform: translateY(100%);
-    /* Matches the comments sheet's leave ease so swipe-down dismiss glides off
-       the screen the same way. */
+    /* Visible immediately on open. Only the swipe-down dismiss animates,
+       with the comments-sheet leave ease. */
+    transform: translateY(0);
     transition: transform 360ms cubic-bezier(0.4, 0, 0.7, 0.2);
     will-change: transform;
-  }
-  .product-page-overlay--in {
-    transform: translateY(0);
   }
   .product-page-overlay--out {
     transform: translateY(100%);

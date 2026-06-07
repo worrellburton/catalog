@@ -854,12 +854,9 @@ export default function ProductPage({
   );
 
   useEffect(() => {
-    // Double rAF: let the browser paint the parked (translateY(100%))
-    // base state once before flipping to --in, otherwise the open
-    // transition is skipped and the page appears with no slide-up.
-    const raf = requestAnimationFrame(() =>
-      requestAnimationFrame(() => setMounted(true)),
-    );
+    // Mark mounted on first paint so --in-keyed rules apply. The page opens
+    // instantly (no slide-up); only the swipe-down dismiss animates.
+    const raf = requestAnimationFrame(() => setMounted(true));
     return () => cancelAnimationFrame(raf);
   }, []);
 

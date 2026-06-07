@@ -288,9 +288,6 @@ export default function ShoppingForHero({ onRevealFeed }: ShoppingForHeroProps) 
           (tap to reveal the feed), a one-line tagline with a ? that opens
           the full explanation, and a bobbing chevron. */}
       <div className="sfh-scroll-hint">
-        {/* Desktop keeps the subtle scroll-mouse; mobile shows no icon —
-            just the label + chevron (the down-finger glyph read as clutter). */}
-        <span className="sfh-mouse" aria-hidden="true"><span className="sfh-mouse-dot" /></span>
         <button type="button" className="sfh-scroll-cta" onClick={onRevealFeed} aria-label="Open your daily feed">
           Your daily feed
         </button>

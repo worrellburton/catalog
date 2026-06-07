@@ -25,7 +25,7 @@ import { createLook, addProductToLook } from '~/services/manage-looks';
 import { setGenerationPublished, regenerateUserGeneration } from '~/services/user-generations';
 import { promoteGenerationToLook, unpublishLook } from '~/services/promote-generation';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
-import { inferProductType, auditAllProductTypes } from '~/services/product-types';
+import { inferProductTypeAndSubtype, auditAllProductTypes } from '~/services/product-types';
 import { inferProductGenderFromName, auditAllProductGenders } from '~/services/genders';
 import { addProductUrl, triggerScrape, triggerScrapeFlush } from '~/services/scrape-product';
 import { isLikelyProductUrl } from '~/utils/productUrl';
@@ -905,7 +905,8 @@ function AddProductsModal({ onClose, onIngested, showToast, onPending }: AddProd
       // to a direct merchant PDP and scrapes any missing product data.
       scrape_status: 'pending',
       scraped_at: null,
-      type: inferProductType(p.name, p.brand),
+      type: inferProductTypeAndSubtype(p.name, p.brand)?.type ?? null,
+      subtype: inferProductTypeAndSubtype(p.name, p.brand)?.subtype ?? null,
       gender: inferProductGenderFromName(p.name),
       source: 'google_shopping',
     }));
@@ -3742,7 +3743,7 @@ export default function AdminData() {
                 }
               }}
               disabled={auditingTypes}
-              title="Walk every product and infer a type from its name where missing"
+              title="Walk every product and infer its type + subtype from its name (e.g. Shoes → Sandals)"
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
                 <path d="M9 11l3 3 8-8" /><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />

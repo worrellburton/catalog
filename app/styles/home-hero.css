@@ -415,30 +415,6 @@
   0%, 100% { transform: translateY(0); opacity: 0.6; }
   50%      { transform: translateY(5px); opacity: 1; }
 }
-/* Animated mouse outline with a dot that travels down. */
-.sfh-mouse {
-  order: 1;
-  position: relative;
-  width: 22px; height: 34px;
-  border: 1.5px solid rgba(255, 255, 255, 0.4);
-  border-radius: 12px;
-}
-.sfh-mouse-dot {
-  position: absolute;
-  top: 6px; left: 50%;
-  width: 3px; height: 6px;
-  margin-left: -1.5px;
-  border-radius: 2px;
-  background: #fff;
-  animation: sfh-mouse-dot 1.7s ease-in-out infinite;
-}
-@keyframes sfh-mouse-dot {
-  0%   { opacity: 0; transform: translateY(0); }
-  25%  { opacity: 1; }
-  75%  { opacity: 1; transform: translateY(12px); }
-  100% { opacity: 0; transform: translateY(14px); }
-}
-
 /* ── Search ceremony ─────────────────────────────────────────────────── */
 .search-ceremony {
   position: fixed;
@@ -749,12 +725,6 @@
        clearance below is bumped to match so the tags still sit above it. */
     bottom: calc(max(env(safe-area-inset-bottom, 0px), var(--ios-bottom-chrome, 0px)) + 18px);
   }
-}
-
-/* Mobile shows no scroll glyph at all — just the "Scroll to see most
-   popular" label + chevron. The desktop scroll-mouse is hidden here. */
-@media (max-width: 768px) {
-  .sfh-mouse { display: none; }
 }
 
 /* ── Mobile: following / followers profile icons at the TOP of the hero,
