@@ -3,7 +3,6 @@ import {
   type Assumptions,
   DEFAULTS,
   MONTHS,
-  fmtCurrency,
   fmtNumber,
   fmtPercent,
   summarize,
@@ -30,6 +29,7 @@ import AssumptionCard, { type FieldDef } from '~/components/model/AssumptionCard
 import ModelRow from '~/components/model/ModelRow';
 import UnifiedModelChart from '~/components/model/UnifiedModelChart';
 import ModelHeadline from '~/components/model/ModelHeadline';
+import ModelMetrics from '~/components/model/ModelMetrics';
 import SensitivityChart from '~/components/model/SensitivityChart';
 import RetentionSparkline from '~/components/model/RetentionSparkline';
 import FunnelTable from '~/components/model/FunnelTable';
@@ -115,7 +115,6 @@ export default function AdminModel() {
   const metrics = useMemo(() => investorMetrics(rev, acq, revenue, acquisition, acqSummary, econ, cash), [rev, acq, revenue, acquisition, acqSummary, econ, cash]);
   const sens = useMemo(() => sensitivity(rev, acq), [rev, acq]);
   const retention = useMemo(() => cohortRetention(acq.churn), [acq.churn]);
-  const lastAcq = acquisition[acquisition.length - 1];
   const totalSales = useMemo(() => revenue.reduce((a, s) => a + s.sales, 0), [revenue]);
 
   const setRevField = (k: keyof Assumptions, v: number) => setRev(prev => ({ ...prev, [k]: v }));
@@ -255,7 +254,7 @@ export default function AdminModel() {
         <p className="admin-page-subtitle">Acquisition → MAU, Engagement → sales, Revenue → $, Costs → runway. Numbers are shared with every admin in real time. Toggle any line, drag to reorder.</p>
       </div>
 
-      <ModelHeadline m={metrics} onScenario={applyScenario} onExportCsv={exportCsv} onPrint={() => window.print()} />
+      <ModelHeadline onScenario={applyScenario} onExportCsv={exportCsv} onPrint={() => window.print()} />
 
       <div className="model-layout">
         <div className="model-left">
@@ -265,51 +264,8 @@ export default function AdminModel() {
         </div>
 
         <div className="model-right">
-          {/* Dials sit at the top of the chart so the headline results read
-              right above the curve they come from. */}
-          <div className="proj-summary model-dials">
-            {ui.show.revenue && (
-              <>
-                <div className="proj-summary-card">
-                  <span className="proj-summary-label">16-month revenue</span>
-                  <span className="proj-summary-value">{fmtCurrency(revSummary.total)}</span>
-                </div>
-                <div className="proj-summary-card">
-                  <span className="proj-summary-label">Take rate</span>
-                  <span className="proj-summary-value">{fmtPercent(metrics.takeRate, 0)}</span>
-                  <span className="proj-summary-sub">GMV {fmtCurrency(metrics.gmvTotal, { compact: true })}</span>
-                </div>
-              </>
-            )}
-            {ui.show.engagement && (
-              <div className="proj-summary-card gtm-dial-engage">
-                <span className="proj-summary-label">Total sales</span>
-                <span className="proj-summary-value">{fmtNumber(totalSales)}</span>
-                <span className="proj-summary-sub">orders over {MONTHS} months</span>
-              </div>
-            )}
-            {ui.show.acquisition && (
-              <>
-                <div className="proj-summary-card gtm-dial-organic">
-                  <span className="proj-summary-label">Avg MAU</span>
-                  <span className="proj-summary-value">{fmtNumber(acqSummary.avgMau)}</span>
-                  <span className="proj-summary-sub">month {MONTHS}: {fmtNumber(lastAcq?.cumulativeUsers ?? 0)} · DAU {fmtNumber(acqSummary.avgDau)}</span>
-                </div>
-                <div className="proj-summary-card gtm-dial-paid">
-                  <span className="proj-summary-label">Blended CAC</span>
-                  <span className="proj-summary-value">{fmtCurrency(acqSummary.blendedCac)}</span>
-                  <span className="proj-summary-sub">{fmtPercent(acqSummary.organicShare, 0)} organic · vs {fmtCurrency(acq.cpa)} CPA</span>
-                </div>
-              </>
-            )}
-            {ui.show.costs && (
-              <div className="proj-summary-card gtm-dial-cash">
-                <span className="proj-summary-label">Cash at month {MONTHS}</span>
-                <span className="proj-summary-value">{fmtCurrency(metrics.cashEnd)}</span>
-                <span className="proj-summary-sub">{metrics.breakevenMonth == null ? 'not yet break-even' : `break-even m${metrics.breakevenMonth + 1}`}</span>
-              </div>
-            )}
-          </div>
+          {/* All the headline facts in one minimal card, above the curve. */}
+          <ModelMetrics metrics={metrics} revSummary={revSummary} acqSummary={acqSummary} totalSales={totalSales} />
 
           <UnifiedModelChart
             revenue={revenue}
