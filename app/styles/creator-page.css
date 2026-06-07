@@ -589,10 +589,10 @@
    Dim and small by default so it stays out of the way. */
 .cat-view-dial {
   position: fixed;
-  right: 6px;
+  right: 8px;
   top: 50%;
   transform: translateY(-50%);
-  z-index: 60;
+  z-index: 120;
   /* Mobile only — desktop keeps its 3-column default and shows no dial.
      Flipped to flex inside the max-width:768px block below. */
   display: none;
@@ -600,11 +600,12 @@
   gap: 9px;
   padding: 9px 7px;
   border-radius: 999px;
-  background: rgba(20, 20, 22, 0.34);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
-  opacity: 0.32;
+  background: rgba(20, 20, 22, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  opacity: 0.6;
   transition: opacity 0.2s ease;
   cursor: pointer;
   user-select: none;
