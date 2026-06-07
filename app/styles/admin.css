@@ -5493,6 +5493,20 @@ html.admin-on-dark-canvas .admin-topbar,
 .opex-section-head h3 { margin: 0; }
 .opex-section-action { margin-left: auto; }
 
+/* Creator-payout mode toggle. */
+.creator-modes { display: inline-flex; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; margin: 4px 0 12px; }
+.creator-modes button {
+  padding: 7px 16px; border: 0; background: #fff; cursor: pointer;
+  font-family: inherit; font-size: 12.5px; font-weight: 600; color: #475569;
+  border-right: 1px solid #e5e7eb;
+}
+.creator-modes button:last-child { border-right: 0; }
+.creator-modes button:hover { background: #f1f5f9; }
+.creator-modes button.is-active { background: #f59e0b; color: #fff; }
+.admin-dark .creator-modes { border-color: #3f3f46; }
+.admin-dark .creator-modes button { background: #18181b; color: #d4d4d8; border-right-color: #3f3f46; }
+.admin-dark .creator-modes button.is-active { background: #f59e0b; color: #18181b; }
+
 /* Compact "+" add button. */
 .opex-add-btn {
   width: 28px; height: 28px; border: 1px solid #e5e7eb; border-radius: 7px;

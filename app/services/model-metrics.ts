@@ -52,15 +52,29 @@ export interface CashMonth {
   grossProfit: number;
   marketing: number;
   opex: number;
+  /** Revenue redistributed to creators this month. */
+  creatorPayout: number;
   net: number;
   cash: number;
 }
+
+// Creator payout: a continuous redistribution of revenue to creators,
+// either a fixed % of revenue or sized to hold a target operating margin.
+export interface CreatorPayout {
+  mode: 'percent' | 'margin';
+  /** Share of revenue paid out (percent mode), 0..1. */
+  percent: number;
+  /** Operating margin to preserve (margin mode), 0..1. */
+  targetMargin: number;
+}
+export const CREATOR_PAYOUT_DEFAULTS: CreatorPayout = { mode: 'percent', percent: 0.5, targetMargin: 0.2 };
 
 export function buildCashflow(
   revenue: MonthBreakdown[],
   acquisition: GtmMonth[],
   econ: EconAssumptions,
   opexByMonth?: number[],
+  payout?: CreatorPayout,
 ): CashMonth[] {
   const out: CashMonth[] = [];
   let cash = econ.startingCash;
@@ -69,9 +83,18 @@ export function buildCashflow(
     const grossProfit = rev * econ.grossMargin;
     const marketing = acquisition[i]?.spend ?? 0;
     const opex = opexByMonth ? (opexByMonth[i] ?? econ.monthlyOpex) : econ.monthlyOpex;
-    const net = grossProfit - marketing - opex;
+    const preNet = grossProfit - marketing - opex;
+    // Creator payout: a % of revenue, or whatever surplus is above the
+    // target operating margin (never negative).
+    let creatorPayout = 0;
+    if (payout) {
+      creatorPayout = payout.mode === 'margin'
+        ? Math.max(0, preNet - payout.targetMargin * rev)
+        : Math.max(0, payout.percent * rev);
+    }
+    const net = preNet - creatorPayout;
     cash += net;
-    out.push({ monthIndex: i, revenue: rev, grossProfit, marketing, opex, net, cash });
+    out.push({ monthIndex: i, revenue: rev, grossProfit, marketing, opex, creatorPayout, net, cash });
   }
   return out;
 }

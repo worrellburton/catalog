@@ -12,6 +12,73 @@ export interface SharedList<T> {
   live: boolean;
 }
 
+export interface SharedValue<T> {
+  value: T;
+  setValue: React.Dispatch<React.SetStateAction<T>>;
+  live: boolean;
+}
+
+// Single shared object (vs. a list). Same realtime/echo-guard logic.
+export function useSharedValue<T extends object>(sharedKey: string, storageKey: string, fallback: () => T): SharedValue<T> {
+  const [value, setValue] = useState<T>(() => {
+    if (typeof window === 'undefined') return fallback();
+    try {
+      const raw = window.localStorage.getItem(storageKey);
+      if (raw) return { ...fallback(), ...JSON.parse(raw) };
+    } catch { /* fall through */ }
+    return fallback();
+  });
+  const [live, setLive] = useState(false);
+  const hydratedRef = useRef(false);
+  const lastSyncedRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (!supabase) { hydratedRef.current = true; return; }
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase!.from('app_settings').select('value').eq('key', sharedKey).maybeSingle();
+      if (cancelled) return;
+      if (data?.value) {
+        try {
+          const merged = { ...fallback(), ...JSON.parse(data.value) };
+          lastSyncedRef.current = JSON.stringify(merged);
+          setValue(merged);
+        } catch { /* keep local */ }
+      }
+      hydratedRef.current = true;
+    })();
+    const channel = supabase
+      .channel(`app-settings-${sharedKey}`)
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings', filter: `key=eq.${sharedKey}` }, (payload: { new?: { value?: string } }) => {
+        const v = payload.new?.value;
+        if (!v) return;
+        try {
+          const merged = { ...fallback(), ...JSON.parse(v) };
+          const s = JSON.stringify(merged);
+          if (s === lastSyncedRef.current) return;
+          lastSyncedRef.current = s;
+          setValue(merged);
+        } catch { /* ignore */ }
+      })
+      .subscribe((status) => { if (status === 'SUBSCRIBED') setLive(true); });
+    return () => { cancelled = true; if (supabase) supabase.removeChannel(channel); };
+  }, [sharedKey]);
+
+  useEffect(() => {
+    try { window.localStorage.setItem(storageKey, JSON.stringify(value)); } catch { /* quota */ }
+    if (!hydratedRef.current || !supabase) return;
+    const s = JSON.stringify(value);
+    if (s === lastSyncedRef.current) return;
+    const t = setTimeout(() => {
+      lastSyncedRef.current = s;
+      void supabase!.from('app_settings').upsert({ key: sharedKey, value: s, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+    }, 400);
+    return () => clearTimeout(t);
+  }, [value, sharedKey, storageKey]);
+
+  return { value, setValue, live };
+}
+
 export function useSharedList<T>(sharedKey: string, storageKey: string, fallback: () => T[]): SharedList<T> {
   const [items, setItems] = useState<T[]>(() => {
     if (typeof window === 'undefined') return fallback();

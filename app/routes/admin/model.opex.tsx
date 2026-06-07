@@ -1,6 +1,9 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from '@remix-run/react';
-import { MONTHS, monthLabel, fmtCurrency, niceCeiling } from '~/services/projections';
+import { MONTHS, monthLabel, fmtCurrency, fmtPercent, niceCeiling } from '~/services/projections';
+import { buildModel } from '~/services/model';
+import { buildCashflow } from '~/services/model-metrics';
+import { useSharedModelSettings } from '~/hooks/useSharedModelSettings';
 import {
   type EmploymentType,
   type OpexCategory,
@@ -17,16 +20,20 @@ import {
   payrollMonthly,
   uid,
 } from '~/services/opex';
-import { useSharedOpex, useSharedPayroll } from '~/hooks/useSharedOpex';
+import { useSharedOpex, useSharedPayroll, useSharedCreatorPayout } from '~/hooks/useSharedOpex';
 import ModelTabs from '~/components/model/ModelTabs';
 import DragCard from '~/components/model/DragCard';
+import AssumptionCard, { type FieldDef } from '~/components/model/AssumptionCard';
+
+const PAYOUT_PCT_FIELD: FieldDef = { key: 'percent', label: 'Payout (% of revenue)', hint: 'Share of revenue paid to creators', format: 'percent', step: 0.01, min: 0, max: 1 };
+const TARGET_MARGIN_FIELD: FieldDef = { key: 'targetMargin', label: 'Target operating margin', hint: 'Hold this margin; pay the surplus to creators', format: 'percent', step: 0.01, min: 0, max: 1 };
 
 const MONTH_OPTS = Array.from({ length: MONTHS }, (_, i) => ({ value: i, label: monthLabel(i) }));
 const active = (m: number, s: number, e: number) => m >= s && m <= e;
 
-type OpexSection = 'payroll' | 'expenses' | 'chart' | 'sheet';
-const DEFAULT_SECTIONS: OpexSection[] = ['payroll', 'expenses', 'chart', 'sheet'];
-const SECTIONS_KEY = 'catalog:opex:sections:v1';
+type OpexSection = 'payroll' | 'creators' | 'expenses' | 'chart' | 'sheet';
+const DEFAULT_SECTIONS: OpexSection[] = ['payroll', 'creators', 'expenses', 'chart', 'sheet'];
+const SECTIONS_KEY = 'catalog:opex:sections:v2';
 
 function readSections(): OpexSection[] {
   if (typeof window === 'undefined') return DEFAULT_SECTIONS;
@@ -176,11 +183,25 @@ export default function AdminModelOpex() {
   const { items, setItems, live } = useSharedOpex();
   const { items: payroll, setItems: setPayroll } = useSharedPayroll();
 
+  const { value: payout, setValue: setPayout } = useSharedCreatorPayout();
+  const { rev, acq, econ } = useSharedModelSettings();
+
   const schedule = useMemo(() => buildCombinedSchedule(items, payroll), [items, payroll]);
   const avg = opexAverage(schedule);
   const total = opexTotal(schedule);
   const headcount = payroll.reduce((a, p) => a + (p.count || 0), 0);
   const monthEnd = schedule[schedule.length - 1] ?? 0;
+
+  // Creator payout impact — needs revenue, so we rebuild the model here.
+  const built = useMemo(() => buildModel(rev, acq, true), [rev, acq]);
+  const payoutCash = useMemo(() => buildCashflow(built.revenue, built.acquisition, econ, schedule, payout), [built, econ, schedule, payout]);
+  const payoutTotal = useMemo(() => payoutCash.reduce((a, c) => a + c.creatorPayout, 0), [payoutCash]);
+  const revTotal = useMemo(() => built.revenue.reduce((a, m) => a + m.revenue, 0), [built]);
+  const avgOpMargin = useMemo(() => {
+    let s = 0, n = 0;
+    for (let i = 0; i < payoutCash.length; i++) { const r = built.revenue[i].revenue; if (r > 0) { s += payoutCash[i].net / r; n++; } }
+    return n ? s / n : 0;
+  }, [payoutCash, built]);
 
   // OpEx expense lines
   const update = (id: string, patch: Partial<OpexItem>) => setItems(prev => prev.map(it => (it.id === id ? { ...it, ...patch } : it)));
@@ -343,6 +364,40 @@ export default function AdminModelOpex() {
                 )}
               </tbody>
             </table>
+          </div>
+        </DragCard>
+      );
+    }
+    if (key === 'creators') {
+      return (
+        <DragCard key="creators" {...dnd('creators')} title="Payout to creators">
+          <p className="model-link-note">A continuous share of revenue redistributed to creators. Pay a fixed % of revenue, or hold a target operating margin and pay out the surplus.</p>
+          <div className="creator-modes">
+            <button className={payout.mode === 'percent' ? 'is-active' : ''} onClick={() => setPayout(p => ({ ...p, mode: 'percent' }))}>% of revenue</button>
+            <button className={payout.mode === 'margin' ? 'is-active' : ''} onClick={() => setPayout(p => ({ ...p, mode: 'margin', targetMargin: p.targetMargin || 0.2 }))}>
+              Keep operating margin at {fmtPercent(payout.targetMargin || 0.2, 0)}
+            </button>
+          </div>
+          <div className="proj-cards model-cards">
+            {payout.mode === 'percent'
+              ? <AssumptionCard field={PAYOUT_PCT_FIELD} value={payout.percent} onChange={n => setPayout(p => ({ ...p, percent: n }))} />
+              : <AssumptionCard field={TARGET_MARGIN_FIELD} value={payout.targetMargin} onChange={n => setPayout(p => ({ ...p, targetMargin: n }))} />}
+          </div>
+          <div className="proj-summary model-dials">
+            <div className="proj-summary-card gtm-dial-engage">
+              <span className="proj-summary-label">Avg payout / mo</span>
+              <span className="proj-summary-value">{fmtCurrency(payoutTotal / MONTHS)}</span>
+              <span className="proj-summary-sub">{fmtPercent(revTotal > 0 ? payoutTotal / revTotal : 0, 0)} of revenue</span>
+            </div>
+            <div className="proj-summary-card">
+              <span className="proj-summary-label">16-mo to creators</span>
+              <span className="proj-summary-value">{fmtCurrency(payoutTotal, { compact: true })}</span>
+            </div>
+            <div className="proj-summary-card">
+              <span className="proj-summary-label">Resulting op margin</span>
+              <span className="proj-summary-value">{fmtPercent(avgOpMargin, 0)}</span>
+              <span className="proj-summary-sub">after payout</span>
+            </div>
           </div>
         </DragCard>
       );

@@ -25,7 +25,7 @@ import {
   toCsv,
 } from '~/services/model-metrics';
 import { useSharedModelSettings } from '~/hooks/useSharedModelSettings';
-import { useSharedOpex, useSharedPayroll } from '~/hooks/useSharedOpex';
+import { useSharedOpex, useSharedPayroll, useSharedCreatorPayout } from '~/hooks/useSharedOpex';
 import { buildCombinedSchedule, opexAverage } from '~/services/opex';
 import { Link } from '@remix-run/react';
 import AssumptionCard, { type FieldDef } from '~/components/model/AssumptionCard';
@@ -116,6 +116,7 @@ export default function AdminModel() {
   const { rev, acq, econ, setRev, setAcq, setEcon, live } = useSharedModelSettings();
   const { items: opexItems } = useSharedOpex();
   const { items: payrollItems } = useSharedPayroll();
+  const { value: creatorPayout } = useSharedCreatorPayout();
   const [ui, setUi] = useState<ModelUi>(() => readUi());
 
   // OpEx can be driven by the detailed builder (payroll + expenses); when
@@ -136,7 +137,7 @@ export default function AdminModel() {
   const { revenue, acquisition } = useMemo(() => buildModel(erev, eacq, true), [erev, eacq]);
   const revSummary = useMemo(() => summarize(revenue), [revenue]);
   const acqSummary = useMemo(() => summarizeGtm(acquisition, eacq), [acquisition, eacq]);
-  const cash = useMemo(() => buildCashflow(revenue, acquisition, eecon, hasOpex ? opexSchedule : undefined), [revenue, acquisition, eecon, hasOpex, opexSchedule]);
+  const cash = useMemo(() => buildCashflow(revenue, acquisition, eecon, hasOpex ? opexSchedule : undefined, creatorPayout), [revenue, acquisition, eecon, hasOpex, opexSchedule, creatorPayout]);
   const metrics = useMemo(() => investorMetrics(erev, eacq, revenue, acquisition, acqSummary, eecon, cash), [erev, eacq, revenue, acquisition, acqSummary, eecon, cash]);
   const sens = useMemo(() => sensitivity(erev, eacq), [erev, eacq]);
   const retention = useMemo(() => cohortRetention(eacq.newUserRetention, eacq.mauChurn), [eacq.newUserRetention, eacq.mauChurn]);
