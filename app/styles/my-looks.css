@@ -2296,9 +2296,8 @@ html[data-shell="catalog-app"] .my-looks-overlay {
 .my-cat-tile-media {
   position: relative;
   width: 100%;
-  /* Looks are 9:16 — match the tile so the poster/video fills it instead of
-     being cover-cropped (the "zoomed way in" crop on uploaded looks). */
-  aspect-ratio: 9 / 16;
+  /* Match the main feed cards (3:4, cover). */
+  aspect-ratio: 3 / 4;
   border-radius: 12px;
   overflow: hidden;
   background: #1a1a1a;
