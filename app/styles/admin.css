@@ -5328,6 +5328,10 @@ html.admin-on-dark-canvas .admin-topbar,
 .admin-dark .model-live { color: #a1a1aa; background: #27272a; border-color: #3f3f46; }
 .admin-dark .model-live.is-live { color: #34d399; background: rgba(16, 185, 129, 0.12); border-color: rgba(16, 185, 129, 0.35); }
 
+/* OpEx summary — all four cards on one row (stacks to 2-up when narrow). */
+.opex-summary-row { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 900px) { .opex-summary-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
 /* Model ↔ OpEx page switcher under the title. */
 .model-pageswitch { display: inline-flex; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; margin: 0 0 16px; }
 .model-pageswitch a { padding: 6px 18px; font-size: 12.5px; font-weight: 600; color: #475569; text-decoration: none; border-right: 1px solid #e5e7eb; }

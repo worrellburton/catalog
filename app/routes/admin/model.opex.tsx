@@ -442,7 +442,7 @@ export default function AdminModelOpex() {
 
       <ModelTabs active="opex" />
 
-      <div className="proj-summary model-dials">
+      <div className="proj-summary model-dials opex-summary-row">
         <div className="proj-summary-card">
           <span className="proj-summary-label">Avg monthly OpEx</span>
           <span className="proj-summary-value">{fmtCurrency(avg)}</span>
