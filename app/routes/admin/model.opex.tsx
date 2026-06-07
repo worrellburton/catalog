@@ -378,25 +378,16 @@ export default function AdminModelOpex() {
               Keep operating margin at {fmtPercent(payout.targetMargin || 0.2, 0)}
             </button>
           </div>
-          <div className="proj-cards model-cards">
-            {payout.mode === 'percent'
-              ? <AssumptionCard field={PAYOUT_PCT_FIELD} value={payout.percent} onChange={n => setPayout(p => ({ ...p, percent: n }))} />
-              : <AssumptionCard field={TARGET_MARGIN_FIELD} value={payout.targetMargin} onChange={n => setPayout(p => ({ ...p, targetMargin: n }))} />}
-          </div>
-          <div className="proj-summary model-dials">
-            <div className="proj-summary-card gtm-dial-engage">
-              <span className="proj-summary-label">Avg payout / mo</span>
-              <span className="proj-summary-value">{fmtCurrency(payoutTotal / MONTHS)}</span>
-              <span className="proj-summary-sub">{fmtPercent(revTotal > 0 ? payoutTotal / revTotal : 0, 0)} of revenue</span>
+          <div className="creator-row">
+            <div className="proj-cards model-cards creator-input">
+              {payout.mode === 'percent'
+                ? <AssumptionCard field={PAYOUT_PCT_FIELD} value={payout.percent} onChange={n => setPayout(p => ({ ...p, percent: n }))} />
+                : <AssumptionCard field={TARGET_MARGIN_FIELD} value={payout.targetMargin} onChange={n => setPayout(p => ({ ...p, targetMargin: n }))} />}
             </div>
-            <div className="proj-summary-card">
-              <span className="proj-summary-label">16-mo to creators</span>
-              <span className="proj-summary-value">{fmtCurrency(payoutTotal, { compact: true })}</span>
-            </div>
-            <div className="proj-summary-card">
-              <span className="proj-summary-label">Resulting op margin</span>
-              <span className="proj-summary-value">{fmtPercent(avgOpMargin, 0)}</span>
-              <span className="proj-summary-sub">after payout</span>
+            <div className="creator-stats">
+              <span><strong>{fmtCurrency(payoutTotal / MONTHS)}</strong> avg / mo · {fmtPercent(revTotal > 0 ? payoutTotal / revTotal : 0, 0)} of rev</span>
+              <span><strong>{fmtCurrency(payoutTotal, { compact: true })}</strong> 16-mo to creators</span>
+              <span><strong>{fmtPercent(avgOpMargin, 0)}</strong> op margin after payout</span>
             </div>
           </div>
         </DragCard>

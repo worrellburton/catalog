@@ -3,7 +3,6 @@ import { Link } from '@remix-run/react';
 import { looks, creators } from '~/data/looks';
 import { supabase } from '~/utils/supabase';
 import { boostAd } from '~/services/product-creative';
-import { useSharedModelSettings } from '~/hooks/useSharedModelSettings';
 import { fmtCurrency } from '~/services/projections';
 
 interface SearchLog {
@@ -78,6 +77,14 @@ function formatNumber(n: number | null): string {
   return n.toLocaleString();
 }
 
+// Initials for the activity-row avatar (e.g. "Robert Burton" → "RB").
+function initials(name: string): string {
+  const parts = name.trim().replace(/^@/, '').split(/[\s._-]+/).filter(Boolean);
+  if (parts.length === 0) return '?';
+  if (parts.length === 1) return parts[0].slice(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
 /** Build the URL for a metric's detail page, preserving the current
  *  audience + range so the detail view opens with the same scope. */
 function metricLink(id: string, audience: Audience, range: RangeId): string {
@@ -118,6 +125,10 @@ interface HomeStats {
   newSignups: number | null;
   searches: number | null;
   aiGenerations: number | null;
+  /** Qualified sessions (≥2 events) in the window. */
+  sessionsCount: number | null;
+  /** Average active-catalog product price. */
+  avgProductCost: number | null;
 }
 
 // Anything longer than this between two consecutive events in a
@@ -143,6 +154,8 @@ const EMPTY_STATS: HomeStats = {
   newSignups: null,
   searches: null,
   aiGenerations: null,
+  sessionsCount: null,
+  avgProductCost: null,
 };
 
 export default function AdminHome() {
@@ -153,8 +166,6 @@ export default function AdminHome() {
   // ── Aggregated stats for the active (audience, range) ─────────
   const [stats, setStats] = useState<HomeStats>(EMPTY_STATS);
   const [statsLoading, setStatsLoading] = useState(true);
-  // Key model assumptions surfaced as gold cards; click to forecast them.
-  const { rev: model } = useSharedModelSettings();
 
   // ── Sections that don't depend on the toggles ─────────────────
   const [recentActivity, setRecentActivity] = useState<SearchLog[]>([]);
@@ -308,6 +319,7 @@ export default function AdminHome() {
         searchesRes,
         gensRes,
         sessionRes,
+        productCostRes,
       ] = await Promise.all([
         // Active users — distinct user_id in window.
         (async () => {
@@ -383,7 +395,7 @@ export default function AdminHome() {
             arr.push(t);
             bySession.set(r.session_id, arr);
           });
-          if (bySession.size === 0) return { sessionMs: 0, idleMs: 0, activeMs: 0 };
+          if (bySession.size === 0) return { sessionMs: 0, idleMs: 0, activeMs: 0, count: 0 };
           let totalSession = 0;
           let totalIdle = 0;
           let n = 0;
@@ -401,14 +413,22 @@ export default function AdminHome() {
             totalIdle += idleMs;
             n++;
           }
-          if (n === 0) return { sessionMs: 0, idleMs: 0, activeMs: 0 };
+          if (n === 0) return { sessionMs: 0, idleMs: 0, activeMs: 0, count: 0 };
           const avgSession = Math.round(totalSession / n);
           const avgIdle = Math.round(totalIdle / n);
           return {
             sessionMs: avgSession,
             idleMs: avgIdle,
             activeMs: Math.max(0, avgSession - avgIdle),
+            count: n,
           };
+        })(),
+        // Average product price across the active catalog — the real
+        // "avg cost per product". Averaged client-side over a generous cap.
+        (async () => {
+          const { data } = await supabase!.from('products').select('price').eq('is_active', true).not('price', 'is', null).limit(10_000);
+          const prices = (data || []).map((r: { price: number | null }) => Number(r.price)).filter(p => Number.isFinite(p) && p > 0);
+          return prices.length ? prices.reduce((a, b) => a + b, 0) / prices.length : 0;
         })(),
       ]);
 
@@ -434,6 +454,8 @@ export default function AdminHome() {
         newSignups: signupsRes.count ?? 0,
         searches: searchesRes.count ?? 0,
         aiGenerations: gensRes.count ?? 0,
+        sessionsCount: sessionRes.count ?? 0,
+        avgProductCost: productCostRes ?? 0,
       });
       if (myReq === statsReqRef.current) setStatsLoading(false);
     }
@@ -630,39 +652,39 @@ export default function AdminHome() {
           loading={statsLoading}
           to={metricLink('ai-generations', audience, range)}
         />
-        {/* Gold cards = key model assumptions. Click → /admin/model to
-            forecast. Values come from the shared model, not live analytics. */}
+        {/* Gold cards = the real, measured numbers behind the key model
+            inputs (not assumptions). Computed from live analytics. */}
         <StatCard
           icon={<EyeIcon />}
           label="Impressions / session"
-          value={String(model.avgImpressionsPerSession)}
-          sub="assumption · forecast"
+          value={stats.sessionsCount && stats.impressions != null ? (stats.impressions / Math.max(1, stats.sessionsCount)).toFixed(1) : '—'}
+          loading={statsLoading}
           gold
-          to="/admin/model"
+          to={metricLink('impressions', audience, range)}
         />
         <StatCard
           icon={<ClockIcon />}
           label="Avg active session"
-          value={`${model.sessionTimeMinutes} min`}
-          sub="assumption · forecast"
+          value={stats.avgActiveMs != null ? formatDuration(stats.avgActiveMs) : '—'}
+          loading={statsLoading}
           gold
-          to="/admin/model"
+          to={metricLink('avg-active', audience, range)}
         />
         <StatCard
           icon={<UserIcon />}
-          label="Sessions / user / mo"
-          value={String(model.sessionsPerUserPerMonth)}
-          sub="assumption · forecast"
+          label="Sessions / user"
+          value={stats.sessionsCount != null && stats.activeUsers ? (stats.sessionsCount / Math.max(1, stats.activeUsers)).toFixed(1) : '—'}
+          sub={`per ${range === 'daily' ? 'day' : range === 'monthly' ? 'month' : 'year'}`}
+          loading={statsLoading}
           gold
-          to="/admin/model"
+          to={metricLink('active-users', audience, range)}
         />
         <StatCard
           icon={<PackageIcon />}
           label="Avg cost per product"
-          value={fmtCurrency(model.avgCostPerSale)}
-          sub="assumption · forecast"
+          value={stats.avgProductCost ? fmtCurrency(stats.avgProductCost) : '—'}
+          loading={statsLoading}
           gold
-          to="/admin/model"
         />
         <StatCard
           icon={<TrendIcon />}
@@ -730,30 +752,34 @@ export default function AdminHome() {
 
       <div className="admin-home-grid">
         <div className="admin-home-card">
-          <h3 className="admin-home-card-title">
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
-            Recent Activity
-          </h3>
+          <div className="admin-home-card-head">
+            <h3 className="admin-home-card-title">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+              Recent Activity
+            </h3>
+            <Link to="/admin/activities" className="admin-home-card-link">Live ledger →</Link>
+          </div>
           <div className="admin-activity-list">
             {recentActivity.length === 0 ? (
               <div className="admin-activity-empty">No activity yet</div>
             ) : (
-              recentActivity.map((log) => (
-                <div key={log.id} className="admin-activity-item">
-                  <div className="admin-activity-icon-circle">
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg>
-                  </div>
-                  <div className="admin-activity-content">
-                    <span>
-                      {log.user_handle ? log.user_handle : 'Anonymous'}{' '}
-                      searched &ldquo;{log.query}&rdquo;
-                    </span>
-                    <span className="admin-activity-time">
-                      {timeAgo(log.created_at)}
-                    </span>
-                  </div>
-                </div>
-              ))
+              recentActivity.map((log) => {
+                const name = log.user_handle || 'Anonymous';
+                return (
+                  <Link key={log.id} to="/admin/activities" className="admin-activity-item admin-activity-item--link">
+                    <span className="admin-activity-avatar">{initials(name)}</span>
+                    <div className="admin-activity-content">
+                      <span>
+                        <strong>{name}</strong>{' '}
+                        searched &ldquo;{log.query}&rdquo;
+                      </span>
+                      <span className="admin-activity-time">
+                        {timeAgo(log.created_at)}
+                      </span>
+                    </div>
+                  </Link>
+                );
+              })
             )}
           </div>
         </div>

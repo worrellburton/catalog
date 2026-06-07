@@ -2098,6 +2098,38 @@ html.admin-on-dark-canvas .admin-topbar,
   color: #aaa;
   flex-shrink: 0;
 }
+.admin-activity-item--link {
+  text-decoration: none;
+  color: inherit;
+  border-radius: 8px;
+  padding: 6px;
+  margin: 0 -6px;
+  transition: background 120ms ease;
+}
+.admin-activity-item--link:hover { background: #f1f5f9; }
+.admin-dark .admin-activity-item--link:hover { background: #1f1f22; }
+.admin-activity-item--link strong { font-weight: 600; color: #0f172a; }
+.admin-dark .admin-activity-item--link strong { color: #f4f4f5; }
+
+/* Initials avatar in activity rows. */
+.admin-activity-avatar {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+}
+
+/* Recent-activity card header with a "Live ledger" link. */
+.admin-home-card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.admin-home-card-link { font-size: 12px; font-weight: 600; color: #6366f1; text-decoration: none; white-space: nowrap; }
+.admin-home-card-link:hover { text-decoration: underline; }
 .admin-detail-empty {
   font-size: 12px;
   color: #aaa;
@@ -5511,6 +5543,14 @@ html.admin-on-dark-canvas .admin-topbar,
 .admin-dark .creator-modes { border-color: #3f3f46; }
 .admin-dark .creator-modes button { background: #18181b; color: #d4d4d8; border-right-color: #3f3f46; }
 .admin-dark .creator-modes button.is-active { background: #f59e0b; color: #18181b; }
+
+/* Creator payout: input + small inline stats on one row. */
+.creator-row { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.creator-input { flex: 0 0 200px; margin: 0; }
+.creator-stats { display: flex; flex-wrap: wrap; gap: 16px; font-size: 12px; color: #64748b; }
+.creator-stats strong { color: #0f172a; font-weight: 700; font-variant-numeric: tabular-nums; }
+.admin-dark .creator-stats { color: #a1a1aa; }
+.admin-dark .creator-stats strong { color: #f4f4f5; }
 
 /* Compact "+" add button. */
 .opex-add-btn {

@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '~/utils/supabase';
 
 // Generic shared, real-time array stored as one app_settings row. Powers
@@ -64,17 +64,32 @@ export function useSharedValue<T extends object>(sharedKey: string, storageKey: 
     return () => { cancelled = true; if (supabase) supabase.removeChannel(channel); };
   }, [sharedKey]);
 
+  const pendingRef = useRef<string | null>(null);
+  const flush = useCallback(() => {
+    if (!supabase) return;
+    const s = pendingRef.current;
+    if (!s || s === lastSyncedRef.current) return;
+    lastSyncedRef.current = s;
+    pendingRef.current = null;
+    void supabase.from('app_settings').upsert({ key: sharedKey, value: s, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+  }, [sharedKey]);
+
   useEffect(() => {
     try { window.localStorage.setItem(storageKey, JSON.stringify(value)); } catch { /* quota */ }
     if (!hydratedRef.current || !supabase) return;
     const s = JSON.stringify(value);
     if (s === lastSyncedRef.current) return;
-    const t = setTimeout(() => {
-      lastSyncedRef.current = s;
-      void supabase!.from('app_settings').upsert({ key: sharedKey, value: s, updated_at: new Date().toISOString() }, { onConflict: 'key' });
-    }, 400);
+    pendingRef.current = s;
+    const t = setTimeout(flush, 400);
     return () => clearTimeout(t);
-  }, [value, sharedKey, storageKey]);
+  }, [value, storageKey, flush]);
+
+  // Never drop a pending write when navigating away or closing the tab.
+  useEffect(() => {
+    const onHide = () => flush();
+    window.addEventListener('pagehide', onHide);
+    return () => { window.removeEventListener('pagehide', onHide); flush(); };
+  }, [flush]);
 
   return { value, setValue, live };
 }
@@ -140,19 +155,32 @@ export function useSharedList<T>(sharedKey: string, storageKey: string, fallback
     return () => { cancelled = true; if (supabase) supabase.removeChannel(channel); };
   }, [sharedKey]);
 
+  const pendingRef = useRef<string | null>(null);
+  const flush = useCallback(() => {
+    if (!supabase) return;
+    const value = pendingRef.current;
+    if (!value || value === lastSyncedRef.current) return;
+    lastSyncedRef.current = value;
+    pendingRef.current = null;
+    void supabase.from('app_settings').upsert({ key: sharedKey, value, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+  }, [sharedKey]);
+
   useEffect(() => {
     try { window.localStorage.setItem(storageKey, JSON.stringify(items)); } catch { /* quota */ }
     if (!hydratedRef.current || !supabase) return;
     const value = JSON.stringify(items);
     if (value === lastSyncedRef.current) return;
-    const t = setTimeout(() => {
-      lastSyncedRef.current = value;
-      void supabase!
-        .from('app_settings')
-        .upsert({ key: sharedKey, value, updated_at: new Date().toISOString() }, { onConflict: 'key' });
-    }, 400);
+    pendingRef.current = value;
+    const t = setTimeout(flush, 400);
     return () => clearTimeout(t);
-  }, [items, sharedKey, storageKey]);
+  }, [items, storageKey, flush]);
+
+  // Never drop a pending write when navigating away or closing the tab.
+  useEffect(() => {
+    const onHide = () => flush();
+    window.addEventListener('pagehide', onHide);
+    return () => { window.removeEventListener('pagehide', onHide); flush(); };
+  }, [flush]);
 
   return { items, setItems, live };
 }
