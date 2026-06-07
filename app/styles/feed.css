@@ -748,3 +748,39 @@
   left: 10px;
   z-index: 4;
 }
+
+/* Creator tag on feed look cards: a small avatar (with follow badge) inline
+   with the creator's username, sized to match the product name. Both the
+   avatar and the name are clickable and open the creator's catalog. */
+.look-card .card-creator-tag {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  right: 10px;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+.look-card .card-creator-tag .creator-avatar-follow { flex-shrink: 0; }
+.card-creator-tag-name {
+  min-width: 0;
+  max-width: 100%;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  font-family: inherit;
+  /* Same size/weight as .promo-product-name so the username reads in-line. */
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  text-align: left;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.6);
+  transition: color 0.18s ease;
+}
+.card-creator-tag-name:hover { color: rgba(255, 255, 255, 0.82); }

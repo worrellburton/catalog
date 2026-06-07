@@ -556,10 +556,11 @@ export default CreativeCardV2;
 // pinned to the left edge so it lines up with the product name
 // below it (not baseline-centered to the cap height of the SVG).
 /**
- * Creator identity on feed look cards — just the profile picture with a
- * +/− follow badge (no name), via the shared CreatorAvatarFollow so every
- * feed reads the same. avatarOpensCreator=false: tapping the avatar falls
- * through to open the look; only the badge follows.
+ * Creator identity on feed look cards — a small profile picture (with the
+ * +/− follow badge) sitting inline next to the creator's username, sized to
+ * match the product name. The avatar AND the username are each their own
+ * clickable tag: both open the creator's catalog. The follow badge on the
+ * avatar keeps its own follow/unfollow behavior.
  */
 function CreatorChip({
   look,
@@ -572,16 +573,29 @@ function CreatorChip({
   creatorName: string;
   onOpenCreator?: (name: string) => void;
 }) {
+  // stopPropagation on the row so a tap on the avatar/name opens the creator
+  // catalog instead of falling through to open the look underneath.
   return (
-    <CreatorAvatarFollow
-      handle={look.creator}
-      avatarUrl={creatorAvatar}
-      displayName={creatorName}
-      size={28}
-      onOpenCreator={onOpenCreator}
-      avatarOpensCreator={false}
-      className="card-creator-avatar-pos"
-    />
+    <div className="card-creator-tag" onClick={(e) => e.stopPropagation()}>
+      <CreatorAvatarFollow
+        handle={look.creator}
+        avatarUrl={creatorAvatar}
+        displayName={creatorName}
+        size={20}
+        onOpenCreator={onOpenCreator}
+        avatarOpensCreator
+      />
+      {creatorName && (
+        <button
+          type="button"
+          className="card-creator-tag-name"
+          onClick={(e) => { e.stopPropagation(); onOpenCreator?.(look.creator); }}
+          aria-label={`Open ${creatorName}'s catalog`}
+        >
+          {creatorName}
+        </button>
+      )}
+    </div>
   );
 }
 
