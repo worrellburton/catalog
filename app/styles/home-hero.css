@@ -320,6 +320,95 @@
   color: rgba(255, 255, 255, 0.72);
 }
 .sfh-feed-info-body:last-child { margin-bottom: 0; }
+
+/* ── Magical "Your daily feed" popup ─────────────────────────────── */
+.sfh-feed-info-card--magic {
+  overflow: hidden;
+  background:
+    radial-gradient(120% 80% at 50% -10%, rgba(168, 130, 255, 0.22), transparent 60%),
+    linear-gradient(180deg, rgba(26, 22, 40, 0.98), rgba(14, 14, 18, 0.98));
+  border-color: rgba(168, 130, 255, 0.35);
+  box-shadow:
+    0 24px 70px rgba(0, 0, 0, 0.6),
+    0 0 0 1px rgba(168, 130, 255, 0.15),
+    0 0 60px rgba(168, 130, 255, 0.25);
+  animation: sfh-feed-info-in 180ms ease, sfh-magic-glow 4.5s ease-in-out infinite;
+}
+@keyframes sfh-magic-glow {
+  0%, 100% { box-shadow: 0 24px 70px rgba(0,0,0,0.6), 0 0 0 1px rgba(168,130,255,0.15), 0 0 44px rgba(168,130,255,0.20); }
+  50%      { box-shadow: 0 24px 70px rgba(0,0,0,0.6), 0 0 0 1px rgba(168,130,255,0.28), 0 0 72px rgba(168,130,255,0.36); }
+}
+.sfh-feed-info-particles {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+  opacity: 0.9;
+}
+.sfh-feed-info-content { position: relative; z-index: 1; }
+
+/* Glowing sparkle badge. */
+.sfh-feed-info-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 52px;
+  height: 52px;
+  margin-bottom: 14px;
+  border-radius: 16px;
+  color: #fff;
+  background: linear-gradient(135deg, #a882ff, #6366f1);
+  box-shadow: 0 8px 24px rgba(168, 130, 255, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.35);
+  animation: sfh-badge-float 3.4s ease-in-out infinite;
+}
+@keyframes sfh-badge-float {
+  0%, 100% { transform: translateY(0) rotate(-3deg); }
+  50%      { transform: translateY(-4px) rotate(3deg); }
+}
+.sfh-feed-info-card--magic .sfh-feed-info-title {
+  font-size: 21px;
+  background: linear-gradient(90deg, #fff, #d9c8ff);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+
+/* Benefit points with glowing icon chips. */
+.sfh-feed-info-points {
+  list-style: none;
+  margin: 16px 0 14px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.sfh-feed-info-points li {
+  display: flex;
+  align-items: flex-start;
+  gap: 11px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.86);
+}
+.sfh-feed-info-ic {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 9px;
+  color: #c9b6ff;
+  background: rgba(168, 130, 255, 0.16);
+  box-shadow: inset 0 0 0 1px rgba(168, 130, 255, 0.3), 0 0 14px rgba(168, 130, 255, 0.25);
+}
+.sfh-feed-info-foot {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 600;
+  color: #d9c8ff;
+}
 @keyframes sfh-bob {
   0%, 100% { transform: translateY(0); opacity: 0.6; }
   50%      { transform: translateY(5px); opacity: 1; }

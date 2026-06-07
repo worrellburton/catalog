@@ -4,6 +4,7 @@
 // catalog feed lives directly below; scrolling reveals the best sellers.
 
 import { useEffect, useRef, useMemo, useState } from 'react';
+import FeedParticles from './FeedParticles';
 
 // Headline rotation. First HEADLINE_BASELINE_VISITS the user sees the
 // canonical "What are you shopping for?". After that, we pick from
@@ -287,15 +288,43 @@ export default function ShoppingForHero({ onRevealFeed }: ShoppingForHeroProps) 
       {/* "How your daily feed works" popup. */}
       {showFeedInfo && (
         <div className="sfh-feed-info" role="dialog" aria-modal="true" aria-label="How your daily feed works" onClick={() => setShowFeedInfo(false)}>
-          <div className="sfh-feed-info-card" onClick={e => e.stopPropagation()}>
-            <button type="button" className="sfh-feed-info-close" onClick={() => setShowFeedInfo(false)} aria-label="Close">×</button>
-            <h3 className="sfh-feed-info-title">Your daily feed</h3>
-            <p className="sfh-feed-info-body">
-              Every day you get a brand-new feed, hand-tuned to your taste. The more you
-              tap, save, and shop, the sharper it gets, like a personal stylist who never
-              sleeps (and never judges your 2&nbsp;a.m. browsing).
-            </p>
-            <p className="sfh-feed-info-body">Come back tomorrow for a whole new lineup.</p>
+          <div className="sfh-feed-info-card sfh-feed-info-card--magic" onClick={e => e.stopPropagation()}>
+            <FeedParticles className="sfh-feed-info-particles" />
+            <div className="sfh-feed-info-content">
+              <button type="button" className="sfh-feed-info-close" onClick={() => setShowFeedInfo(false)} aria-label="Close">×</button>
+              <div className="sfh-feed-info-badge" aria-hidden="true">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M12 3l1.9 4.9L18.8 9.8l-4.9 1.9L12 16.6l-1.9-4.9L5.2 9.8l4.9-1.9z" />
+                  <path d="M19 3v3M20.5 4.5h-3M5 17v2M6 18H4" />
+                </svg>
+              </div>
+              <h3 className="sfh-feed-info-title">Your daily feed</h3>
+              <p className="sfh-feed-info-body">
+                A brand-new lineup, hand-tuned to you, every single day. The more you tap,
+                save, and shop, the sharper it gets.
+              </p>
+              <ul className="sfh-feed-info-points">
+                <li>
+                  <span className="sfh-feed-info-ic">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4L8.12 15.88M14.47 14.48L20 20M8.12 8.12L12 12"/></svg>
+                  </span>
+                  A personal stylist who never sleeps — and never judges your 2&nbsp;a.m. browsing.
+                </li>
+                <li>
+                  <span className="sfh-feed-info-ic">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
+                  </span>
+                  Gets smarter with every tap, save, and shop.
+                </li>
+                <li>
+                  <span className="sfh-feed-info-ic">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg>
+                  </span>
+                  A fresh, fully-loaded lineup waiting for you every morning.
+                </li>
+              </ul>
+              <p className="sfh-feed-info-foot">✨ Come back tomorrow for a whole new lineup.</p>
+            </div>
           </div>
         </div>
       )}
