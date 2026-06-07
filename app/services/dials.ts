@@ -389,6 +389,7 @@ export const AUTO_EDITOR_FREQUENCY_KEY    = 'auto_editor_frequency';
 export const AUTO_EDITOR_HOLDOUT_PCT_KEY  = 'auto_editor_holdout_pct';
 export const AUTO_EDITOR_RECENCY_DAYS_KEY = 'auto_editor_recency_days';
 export const AUTO_EDITOR_MIN_SIGNAL_KEY   = 'auto_editor_min_signal';
+export const AUTO_EDITOR_REFRESH_HOUR_KEY = 'auto_editor_refresh_hour';
 
 export type AutoEditorFrequency = 'daily' | 'every_signin';
 
@@ -398,6 +399,7 @@ export interface AutoEditorConfig {
   holdoutPct: number;  // 0..100 — % of eligible shoppers held on the global feed
   recencyDays: number; // 1..365 — history lookback for signals
   minSignal: number;   // 0..1000 — min user_events before personalizing
+  refreshHour: number; // 0..23 — UTC hour the daily feed rolls over to a new day
 }
 
 export const DEFAULT_AUTO_EDITOR_CONFIG: AutoEditorConfig = {
@@ -406,6 +408,7 @@ export const DEFAULT_AUTO_EDITOR_CONFIG: AutoEditorConfig = {
   holdoutPct: 10,
   recencyDays: 30,
   minSignal: 3,
+  refreshHour: 0,
 };
 
 function parseIntClamped(raw: string | null | undefined, fallback: number, min: number, max: number): number {
@@ -421,7 +424,7 @@ export async function getAutoEditorConfig(): Promise<AutoEditorConfig> {
   if (!supabase) return { ...DEFAULT_AUTO_EDITOR_CONFIG };
   const keys = [
     AUTO_EDITOR_ENABLED_KEY, AUTO_EDITOR_FREQUENCY_KEY, AUTO_EDITOR_HOLDOUT_PCT_KEY,
-    AUTO_EDITOR_RECENCY_DAYS_KEY, AUTO_EDITOR_MIN_SIGNAL_KEY,
+    AUTO_EDITOR_RECENCY_DAYS_KEY, AUTO_EDITOR_MIN_SIGNAL_KEY, AUTO_EDITOR_REFRESH_HOUR_KEY,
   ];
   const { data, error } = await supabase.from('app_settings').select('key, value').in('key', keys);
   if (error) {
@@ -436,6 +439,7 @@ export async function getAutoEditorConfig(): Promise<AutoEditorConfig> {
     holdoutPct: parseIntClamped(byKey.get(AUTO_EDITOR_HOLDOUT_PCT_KEY), DEFAULT_AUTO_EDITOR_CONFIG.holdoutPct, 0, 100),
     recencyDays: parseIntClamped(byKey.get(AUTO_EDITOR_RECENCY_DAYS_KEY), DEFAULT_AUTO_EDITOR_CONFIG.recencyDays, 1, 365),
     minSignal: parseIntClamped(byKey.get(AUTO_EDITOR_MIN_SIGNAL_KEY), DEFAULT_AUTO_EDITOR_CONFIG.minSignal, 0, 1000),
+    refreshHour: parseIntClamped(byKey.get(AUTO_EDITOR_REFRESH_HOUR_KEY), DEFAULT_AUTO_EDITOR_CONFIG.refreshHour, 0, 23),
   };
 }
 
@@ -450,6 +454,7 @@ export async function setAutoEditorConfig(partial: Partial<AutoEditorConfig>): P
   if (partial.holdoutPct !== undefined)  rows.push({ key: AUTO_EDITOR_HOLDOUT_PCT_KEY, value: String(Math.max(0, Math.min(100, Math.round(partial.holdoutPct)))) });
   if (partial.recencyDays !== undefined) rows.push({ key: AUTO_EDITOR_RECENCY_DAYS_KEY, value: String(Math.max(1, Math.min(365, Math.round(partial.recencyDays)))) });
   if (partial.minSignal !== undefined)   rows.push({ key: AUTO_EDITOR_MIN_SIGNAL_KEY, value: String(Math.max(0, Math.min(1000, Math.round(partial.minSignal)))) });
+  if (partial.refreshHour !== undefined) rows.push({ key: AUTO_EDITOR_REFRESH_HOUR_KEY, value: String(Math.max(0, Math.min(23, Math.round(partial.refreshHour)))) });
   if (rows.length === 0) return;
   const { error } = await supabase.from('app_settings').upsert(rows, { onConflict: 'key' });
   if (error) throw error;

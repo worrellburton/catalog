@@ -54,8 +54,12 @@ function holdoutBucket(userId: string): number {
   return Math.abs(h) % 100;
 }
 
-function todayUTC(): string {
-  return new Date().toISOString().slice(0, 10); // YYYY-MM-DD
+// The "editor day" — the feed rolls over to a new day at refreshHour:00 UTC
+// (admin-configurable). Shifting now back by refreshHour hours and taking the
+// UTC date means before that hour we stay on yesterday's feed, after it a new
+// one is computed. refreshHour=0 ⇒ midnight-UTC rollover (the default).
+function editorDay(refreshHour: number): string {
+  return new Date(Date.now() - refreshHour * 3_600_000).toISOString().slice(0, 10); // YYYY-MM-DD
 }
 
 interface ProductRow {
@@ -92,16 +96,17 @@ Deno.serve(async (req: Request) => {
     const { data: settingRows } = await supabase
       .from('app_settings')
       .select('key, value')
-      .in('key', ['auto_editor_enabled', 'auto_editor_holdout_pct', 'auto_editor_recency_days', 'auto_editor_min_signal']);
+      .in('key', ['auto_editor_enabled', 'auto_editor_holdout_pct', 'auto_editor_recency_days', 'auto_editor_min_signal', 'auto_editor_refresh_hour']);
     const cfg = new Map((settingRows ?? []).map((r: { key: string; value: string | null }) => [r.key, r.value ?? '']));
     const enabled = (cfg.get('auto_editor_enabled') || 'false').trim().toLowerCase() === 'true';
     const holdoutPct = clampInt(cfg.get('auto_editor_holdout_pct'), 10, 0, 100);
     const recencyDays = clampInt(cfg.get('auto_editor_recency_days'), 30, 1, 365);
     const minSignal = clampInt(cfg.get('auto_editor_min_signal'), 3, 0, 1000);
+    const refreshHour = clampInt(cfg.get('auto_editor_refresh_hour'), 0, 0, 23);
 
     if (!enabled) return jsonRes({ success: true, enabled: false, variant: 'disabled' });
 
-    const feedDate = todayUTC();
+    const feedDate = editorDay(refreshHour);
 
     // ── Idempotency: today's feed already computed? ──────────────────────
     const { data: existing } = await supabase
