@@ -5486,6 +5486,28 @@ html.admin-on-dark-canvas .admin-topbar,
 .admin-dark .opex-monthly { color: #f4f4f5; }
 .opex-thru { font-size: 12px; color: #94a3b8; white-space: nowrap; }
 
+/* Draggable OpEx sections. */
+.opex-section.is-dragging { opacity: 0.5; }
+.opex-section.is-drag-over { box-shadow: 0 0 0 2px #6366f1; }
+.opex-section-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.opex-section-head h3 { margin: 0; }
+.opex-section-action { margin-left: auto; }
+
+/* Compact "+" add button. */
+.opex-add-btn {
+  width: 28px; height: 28px; border: 1px solid #e5e7eb; border-radius: 7px;
+  background: #fff; color: #475569; font-size: 18px; line-height: 1; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.opex-add-btn:hover { background: #f1f5f9; color: #0f172a; }
+.admin-dark .opex-add-btn { background: #18181b; border-color: #3f3f46; color: #d4d4d8; }
+.admin-dark .opex-add-btn:hover { background: #27272a; }
+
+/* Row drag handle + drop target. */
+.opex-grip-cell { width: 22px; padding-right: 0 !important; }
+.opex-grip-cell .model-row-grip { width: 16px; height: 24px; }
+.opex-row-over td { border-top: 2px solid #6366f1; }
+
 /* Spreadsheet view — every line × every month. */
 .opex-sheet-wrap { overflow-x: auto; }
 .opex-sheet { border-collapse: collapse; font-size: 11.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }

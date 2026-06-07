@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from '@remix-run/react';
 import { MONTHS, monthLabel, fmtCurrency, niceCeiling } from '~/services/projections';
 import {
@@ -8,8 +8,10 @@ import {
   type PayrollItem,
   OPEX_CATEGORIES,
   OPEX_CATEGORY_COLORS,
+  CONTINUOUS_END,
   buildCombinedByCategory,
   buildCombinedSchedule,
+  isContinuous,
   opexAverage,
   opexTotal,
   payrollMonthly,
@@ -17,9 +19,35 @@ import {
 } from '~/services/opex';
 import { useSharedOpex, useSharedPayroll } from '~/hooks/useSharedOpex';
 import ModelTabs from '~/components/model/ModelTabs';
+import DragCard from '~/components/model/DragCard';
 
 const MONTH_OPTS = Array.from({ length: MONTHS }, (_, i) => ({ value: i, label: monthLabel(i) }));
 const active = (m: number, s: number, e: number) => m >= s && m <= e;
+
+type OpexSection = 'payroll' | 'expenses' | 'chart' | 'sheet';
+const DEFAULT_SECTIONS: OpexSection[] = ['payroll', 'expenses', 'chart', 'sheet'];
+const SECTIONS_KEY = 'catalog:opex:sections:v1';
+
+function readSections(): OpexSection[] {
+  if (typeof window === 'undefined') return DEFAULT_SECTIONS;
+  try {
+    const raw = window.localStorage.getItem(SECTIONS_KEY);
+    const parsed = raw ? JSON.parse(raw) : null;
+    const order = (Array.isArray(parsed) ? parsed : DEFAULT_SECTIONS).filter((k: OpexSection) => DEFAULT_SECTIONS.includes(k));
+    for (const k of DEFAULT_SECTIONS) if (!order.includes(k)) order.push(k);
+    return order;
+  } catch { return DEFAULT_SECTIONS; }
+}
+
+// "End" select that includes a Continuous (no-end) option.
+function EndSelect({ value, onChange }: { value: number; onChange: (n: number) => void }) {
+  return (
+    <select className="opex-in" value={isContinuous(value) ? CONTINUOUS_END : value} onChange={e => onChange(Number(e.target.value))}>
+      <option value={CONTINUOUS_END}>Continuous</option>
+      {MONTH_OPTS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+    </select>
+  );
+}
 
 // Accounting-formatted dollar input: shows thousands separators at rest
 // (e.g. 100,000), shows the raw number while editing, and parses digits.
@@ -157,12 +185,181 @@ export default function AdminModelOpex() {
   // OpEx expense lines
   const update = (id: string, patch: Partial<OpexItem>) => setItems(prev => prev.map(it => (it.id === id ? { ...it, ...patch } : it)));
   const remove = (id: string) => setItems(prev => prev.filter(it => it.id !== id));
-  const add = () => setItems(prev => [...prev, { id: uid(), name: 'New line', category: 'other', amount: 5000, startMonth: 0, endMonth: MONTHS - 1, growth: 0 }]);
+  const add = () => setItems(prev => [...prev, { id: uid(), name: 'New line', category: 'other', amount: 5000, startMonth: 0, endMonth: CONTINUOUS_END, growth: 0 }]);
 
   // Payroll lines
   const updateP = (id: string, patch: Partial<PayrollItem>) => setPayroll(prev => prev.map(p => (p.id === id ? { ...p, ...patch } : p)));
   const removeP = (id: string) => setPayroll(prev => prev.filter(p => p.id !== id));
-  const addP = () => setPayroll(prev => [...prev, { id: uid(), role: 'New role', type: 'employee', count: 1, basis: 'annual', comp: 120000, startMonth: 0, endMonth: MONTHS - 1 }]);
+  const addP = () => setPayroll(prev => [...prev, { id: uid(), role: 'New role', type: 'employee', count: 1, basis: 'annual', comp: 120000, startMonth: 0, endMonth: CONTINUOUS_END }]);
+
+  // Drag-to-reorder the page sections (persisted per browser).
+  const [sections, setSections] = useState<OpexSection[]>(() => readSections());
+  useEffect(() => { try { window.localStorage.setItem(SECTIONS_KEY, JSON.stringify(sections)); } catch { /* quota */ } }, [sections]);
+  const dragKey = useRef<OpexSection | null>(null);
+  const [overKey, setOverKey] = useState<OpexSection | null>(null);
+  const dnd = (key: OpexSection) => ({
+    onDragStart: () => { dragKey.current = key; },
+    onDragEnter: () => { if (dragKey.current && dragKey.current !== key) setOverKey(key); },
+    onDragEnd: () => { dragKey.current = null; setOverKey(null); },
+    onDrop: () => {
+      const from = dragKey.current;
+      dragKey.current = null; setOverKey(null);
+      if (!from || from === key) return;
+      setSections(prev => {
+        const next = [...prev];
+        next.splice(next.indexOf(from), 1);
+        next.splice(next.indexOf(key), 0, from);
+        return next;
+      });
+    },
+    isDragging: dragKey.current === key,
+    isDragOver: overKey === key,
+  });
+
+  // Drag-to-reorder rows within a table (order persists via the shared list).
+  const dragRow = useRef<{ list: 'payroll' | 'expenses'; id: string } | null>(null);
+  const [overRow, setOverRow] = useState<string | null>(null);
+  const moveById = <T extends { id: string }>(arr: T[], fromId: string, toId: string): T[] => {
+    const fi = arr.findIndex(x => x.id === fromId);
+    const ti = arr.findIndex(x => x.id === toId);
+    if (fi < 0 || ti < 0 || fi === ti) return arr;
+    const next = [...arr];
+    const [moved] = next.splice(fi, 1);
+    next.splice(ti, 0, moved);
+    return next;
+  };
+  const rowDnd = (list: 'payroll' | 'expenses', id: string) => ({
+    className: overRow === id ? 'opex-row-over' : undefined,
+    onDragOver: (e: React.DragEvent) => { if (dragRow.current?.list === list) e.preventDefault(); },
+    onDragEnter: () => { if (dragRow.current?.list === list && dragRow.current.id !== id) setOverRow(id); },
+    onDrop: (e: React.DragEvent) => {
+      e.preventDefault();
+      const d = dragRow.current;
+      dragRow.current = null; setOverRow(null);
+      if (!d || d.list !== list || d.id === id) return;
+      if (list === 'payroll') setPayroll(prev => moveById(prev, d.id, id));
+      else setItems(prev => moveById(prev, d.id, id));
+    },
+  });
+  const Grip = ({ list, id }: { list: 'payroll' | 'expenses'; id: string }) => (
+    <td className="opex-grip-cell">
+      <span
+        className="model-row-grip"
+        draggable
+        onDragStart={(e) => { e.dataTransfer.effectAllowed = 'move'; dragRow.current = { list, id }; }}
+        onDragEnd={() => { dragRow.current = null; setOverRow(null); }}
+        title="Drag to reorder"
+      >
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="currentColor"><circle cx="9" cy="6" r="1.6" /><circle cx="15" cy="6" r="1.6" /><circle cx="9" cy="12" r="1.6" /><circle cx="15" cy="12" r="1.6" /><circle cx="9" cy="18" r="1.6" /><circle cx="15" cy="18" r="1.6" /></svg>
+      </span>
+    </td>
+  );
+
+  const renderSection = (key: OpexSection) => {
+    if (key === 'payroll') {
+      return (
+        <DragCard key="payroll" {...dnd('payroll')} title="Payroll" action={<button className="opex-add-btn" onClick={addP} title="Add employee" aria-label="Add employee">+</button>}>
+          <div className="opex-table-wrap">
+            <table className="opex-table">
+              <thead>
+                <tr><th></th><th>Role</th><th>Type</th><th>#</th><th>Comp basis</th><th>Comp / person</th><th>Start</th><th>End</th><th>Monthly</th><th></th></tr>
+              </thead>
+              <tbody>
+                {payroll.map(p => (
+                  <tr key={p.id} {...rowDnd('payroll', p.id)}>
+                    <Grip list="payroll" id={p.id} />
+                    <td><input className="opex-in opex-in-name" value={p.role} onChange={e => updateP(p.id, { role: e.target.value })} /></td>
+                    <td>
+                      <select className="opex-in" value={p.type} onChange={e => updateP(p.id, { type: e.target.value as EmploymentType })}>
+                        <option value="employee">Employee</option>
+                        <option value="contractor">Contractor</option>
+                      </select>
+                    </td>
+                    <td><input className="opex-in opex-in-sm" type="number" min={0} step={1} value={p.count} onChange={e => updateP(p.id, { count: Number(e.target.value) || 0 })} /></td>
+                    <td>
+                      <select className="opex-in" value={p.basis} onChange={e => {
+                        const basis = e.target.value as 'annual' | 'monthly';
+                        updateP(p.id, basis === 'annual' ? { basis, endMonth: CONTINUOUS_END } : { basis });
+                      }}>
+                        <option value="annual">Annual</option>
+                        <option value="monthly">Monthly</option>
+                      </select>
+                    </td>
+                    <td><AcctInput className="opex-in opex-in-num" value={p.comp} onChange={n => updateP(p.id, { comp: n })} /></td>
+                    <td>
+                      <select className="opex-in" value={p.startMonth} onChange={e => updateP(p.id, { startMonth: Number(e.target.value) })}>
+                        {MONTH_OPTS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                      </select>
+                    </td>
+                    <td>
+                      {p.basis === 'monthly'
+                        ? <EndSelect value={p.endMonth} onChange={n => updateP(p.id, { endMonth: n })} />
+                        : <span className="opex-thru">Continuous</span>}
+                    </td>
+                    <td className="opex-monthly">{fmtCurrency(payrollMonthly(p), { compact: true })}</td>
+                    <td><button className="opex-del" onClick={() => removeP(p.id)} aria-label={`Remove ${p.role}`}>×</button></td>
+                  </tr>
+                ))}
+                {payroll.length === 0 && (
+                  <tr><td colSpan={10} className="opex-empty">No employees yet — add your team and choose annual or monthly comp.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </DragCard>
+      );
+    }
+    if (key === 'expenses') {
+      return (
+        <DragCard key="expenses" {...dnd('expenses')} title="Other expenses" action={<button className="opex-add-btn" onClick={add} title="Add line" aria-label="Add line">+</button>}>
+          <div className="opex-table-wrap">
+            <table className="opex-table">
+              <thead>
+                <tr><th></th><th>Name</th><th>Category</th><th>Monthly $</th><th>Start</th><th>End</th><th>Ramp / mo</th><th></th></tr>
+              </thead>
+              <tbody>
+                {items.map(it => (
+                  <tr key={it.id} {...rowDnd('expenses', it.id)}>
+                    <Grip list="expenses" id={it.id} />
+                    <td><input className="opex-in opex-in-name" value={it.name} onChange={e => update(it.id, { name: e.target.value })} /></td>
+                    <td>
+                      <select className="opex-in" value={it.category} onChange={e => update(it.id, { category: e.target.value as OpexCategory })}>
+                        {OPEX_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
+                      </select>
+                    </td>
+                    <td><AcctInput className="opex-in opex-in-num" value={it.amount} onChange={n => update(it.id, { amount: n })} /></td>
+                    <td>
+                      <select className="opex-in" value={it.startMonth} onChange={e => update(it.id, { startMonth: Number(e.target.value) })}>
+                        {MONTH_OPTS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                      </select>
+                    </td>
+                    <td><EndSelect value={it.endMonth} onChange={n => update(it.id, { endMonth: n })} /></td>
+                    <td><span className="opex-in-pct"><input className="opex-in opex-in-sm" type="number" step={1} value={Math.round(it.growth * 100)} onChange={e => update(it.id, { growth: (Number(e.target.value) || 0) / 100 })} />%</span></td>
+                    <td><button className="opex-del" onClick={() => remove(it.id)} aria-label={`Remove ${it.name}`}>×</button></td>
+                  </tr>
+                ))}
+                {items.length === 0 && (
+                  <tr><td colSpan={8} className="opex-empty">No expense lines yet.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </DragCard>
+      );
+    }
+    if (key === 'chart') {
+      return (
+        <DragCard key="chart" {...dnd('chart')} title="OpEx by month">
+          <OpexChart items={items} payroll={payroll} />
+        </DragCard>
+      );
+    }
+    return (
+      <DragCard key="sheet" {...dnd('sheet')} title="Spreadsheet">
+        <OpexSheet items={items} payroll={payroll} />
+      </DragCard>
+    );
+  };
 
   return (
     <div className="admin-page opex-page">
@@ -201,122 +398,7 @@ export default function AdminModelOpex() {
         </div>
       </div>
 
-      {/* Payroll — people first, above other OpEx. */}
-      <section className="model-card opex-table-card">
-        <div className="model-card-head">
-          <h3>Payroll</h3>
-          <button className="admin-btn admin-btn-secondary" onClick={addP}>+ Add employee</button>
-        </div>
-        <div className="opex-table-wrap">
-          <table className="opex-table">
-            <thead>
-              <tr>
-                <th>Role</th><th>Type</th><th>#</th><th>Comp basis</th><th>Comp / person</th><th>Start</th><th>End</th><th>Monthly</th><th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {payroll.map(p => (
-                <tr key={p.id}>
-                  <td><input className="opex-in opex-in-name" value={p.role} onChange={e => updateP(p.id, { role: e.target.value })} /></td>
-                  <td>
-                    <select className="opex-in" value={p.type} onChange={e => updateP(p.id, { type: e.target.value as EmploymentType })}>
-                      <option value="employee">Employee</option>
-                      <option value="contractor">Contractor</option>
-                    </select>
-                  </td>
-                  <td><input className="opex-in opex-in-sm" type="number" min={0} step={1} value={p.count} onChange={e => updateP(p.id, { count: Number(e.target.value) || 0 })} /></td>
-                  <td>
-                    <select className="opex-in" value={p.basis} onChange={e => {
-                      const basis = e.target.value as 'annual' | 'monthly';
-                      // Annual roles run through the whole horizon; monthly
-                      // (e.g. contractors) keep a defined end.
-                      updateP(p.id, basis === 'annual' ? { basis, endMonth: MONTHS - 1 } : { basis });
-                    }}>
-                      <option value="annual">Annual</option>
-                      <option value="monthly">Monthly</option>
-                    </select>
-                  </td>
-                  <td><AcctInput className="opex-in opex-in-num" value={p.comp} onChange={n => updateP(p.id, { comp: n })} /></td>
-                  <td>
-                    <select className="opex-in" value={p.startMonth} onChange={e => updateP(p.id, { startMonth: Number(e.target.value) })}>
-                      {MONTH_OPTS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-                    </select>
-                  </td>
-                  <td>
-                    {p.basis === 'monthly' ? (
-                      <select className="opex-in" value={p.endMonth} onChange={e => updateP(p.id, { endMonth: Number(e.target.value) })}>
-                        {MONTH_OPTS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-                      </select>
-                    ) : (
-                      <span className="opex-thru">through {monthLabel(MONTHS - 1)}</span>
-                    )}
-                  </td>
-                  <td className="opex-monthly">{fmtCurrency(payrollMonthly(p), { compact: true })}</td>
-                  <td><button className="opex-del" onClick={() => removeP(p.id)} aria-label={`Remove ${p.role}`}>×</button></td>
-                </tr>
-              ))}
-              {payroll.length === 0 && (
-                <tr><td colSpan={9} className="opex-empty">No employees yet — add your team and choose annual or monthly comp.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      {/* Other OpEx expense lines. */}
-      <section className="model-card opex-table-card">
-        <div className="model-card-head">
-          <h3>Other expenses</h3>
-          <button className="admin-btn admin-btn-secondary" onClick={add}>+ Add line</button>
-        </div>
-        <div className="opex-table-wrap">
-          <table className="opex-table">
-            <thead>
-              <tr>
-                <th>Name</th><th>Category</th><th>Monthly $</th><th>Start</th><th>End</th><th>Ramp / mo</th><th></th>
-              </tr>
-            </thead>
-            <tbody>
-              {items.map(it => (
-                <tr key={it.id}>
-                  <td><input className="opex-in opex-in-name" value={it.name} onChange={e => update(it.id, { name: e.target.value })} /></td>
-                  <td>
-                    <select className="opex-in" value={it.category} onChange={e => update(it.id, { category: e.target.value as OpexCategory })}>
-                      {OPEX_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
-                    </select>
-                  </td>
-                  <td><AcctInput className="opex-in opex-in-num" value={it.amount} onChange={n => update(it.id, { amount: n })} /></td>
-                  <td>
-                    <select className="opex-in" value={it.startMonth} onChange={e => update(it.id, { startMonth: Number(e.target.value) })}>
-                      {MONTH_OPTS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-                    </select>
-                  </td>
-                  <td>
-                    <select className="opex-in" value={it.endMonth} onChange={e => update(it.id, { endMonth: Number(e.target.value) })}>
-                      {MONTH_OPTS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
-                    </select>
-                  </td>
-                  <td><span className="opex-in-pct"><input className="opex-in opex-in-sm" type="number" step={1} value={Math.round(it.growth * 100)} onChange={e => update(it.id, { growth: (Number(e.target.value) || 0) / 100 })} />%</span></td>
-                  <td><button className="opex-del" onClick={() => remove(it.id)} aria-label={`Remove ${it.name}`}>×</button></td>
-                </tr>
-              ))}
-              {items.length === 0 && (
-                <tr><td colSpan={7} className="opex-empty">No expense lines yet.</td></tr>
-              )}
-            </tbody>
-          </table>
-        </div>
-      </section>
-
-      <section className="model-card">
-        <h3>OpEx by month</h3>
-        <OpexChart items={items} payroll={payroll} />
-      </section>
-
-      <section className="model-card">
-        <h3>Spreadsheet</h3>
-        <OpexSheet items={items} payroll={payroll} />
-      </section>
+      {sections.map(renderSection)}
     </div>
   );
 }

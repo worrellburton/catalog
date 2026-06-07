@@ -40,16 +40,21 @@ export interface OpexItem {
 
 export const OPEX_STORAGE_KEY = 'catalog:opex:v1';
 
+// Sentinel endMonth meaning "no end / runs as long as the horizon". Past
+// the last index; the schedule builders clamp it to MONTHS-1.
+export const CONTINUOUS_END = MONTHS;
+export const isContinuous = (endMonth: number) => endMonth >= MONTHS;
+
 export function uid(): string {
   return Math.random().toString(36).slice(2, 10);
 }
 
 export function defaultOpexItems(): OpexItem[] {
   return [
-    { id: uid(), name: 'Founders',       category: 'payroll',  amount: 24000, startMonth: 0, endMonth: MONTHS - 1, growth: 0 },
-    { id: uid(), name: 'Engineering',    category: 'payroll',  amount: 20000, startMonth: 0, endMonth: MONTHS - 1, growth: 0.04 },
-    { id: uid(), name: 'Software & SaaS', category: 'software', amount: 6000,  startMonth: 0, endMonth: MONTHS - 1, growth: 0.02 },
-    { id: uid(), name: 'Office & ops',   category: 'office',   amount: 5000,  startMonth: 0, endMonth: MONTHS - 1, growth: 0.01 },
+    { id: uid(), name: 'Founders',       category: 'payroll',  amount: 24000, startMonth: 0, endMonth: CONTINUOUS_END, growth: 0 },
+    { id: uid(), name: 'Engineering',    category: 'payroll',  amount: 20000, startMonth: 0, endMonth: CONTINUOUS_END, growth: 0.04 },
+    { id: uid(), name: 'Software & SaaS', category: 'software', amount: 6000,  startMonth: 0, endMonth: CONTINUOUS_END, growth: 0.02 },
+    { id: uid(), name: 'Office & ops',   category: 'office',   amount: 5000,  startMonth: 0, endMonth: CONTINUOUS_END, growth: 0.01 },
   ];
 }
 
