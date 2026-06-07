@@ -269,7 +269,7 @@ export default function ShoppingForHero({ onRevealFeed }: ShoppingForHeroProps) 
           Your daily feed
         </button>
         <span className="sfh-scroll-sub">
-          A fresh feed, tuned to you — every day.
+          A fresh feed, tuned to you, every day.
           <button
             type="button"
             className="sfh-scroll-info"
@@ -292,7 +292,7 @@ export default function ShoppingForHero({ onRevealFeed }: ShoppingForHeroProps) 
             <h3 className="sfh-feed-info-title">Your daily feed</h3>
             <p className="sfh-feed-info-body">
               Every day you get a brand-new feed, hand-tuned to your taste. The more you
-              tap, save, and shop, the sharper it gets — like a personal stylist who never
+              tap, save, and shop, the sharper it gets, like a personal stylist who never
               sleeps (and never judges your 2&nbsp;a.m. browsing).
             </p>
             <p className="sfh-feed-info-body">Come back tomorrow for a whole new lineup.</p>
