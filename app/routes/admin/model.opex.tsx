@@ -79,14 +79,18 @@ function AcctInput({ value, onChange, className }: { value: number; onChange: (n
   );
 }
 
-function OpexChart({ items, payroll }: { items: OpexItem[]; payroll: PayrollItem[] }) {
+const PAYOUT_COLOR = '#ec4899'; // creator payout — part of OpEx
+
+function OpexChart({ items, payroll, payout }: { items: OpexItem[]; payroll: PayrollItem[]; payout: number[] }) {
   const byCat = useMemo(() => buildCombinedByCategory(items, payroll), [items, payroll]);
-  const schedule = useMemo(() => buildCombinedSchedule(items, payroll), [items, payroll]);
+  const base = useMemo(() => buildCombinedSchedule(items, payroll), [items, payroll]);
+  const total = base.map((v, i) => v + (payout[i] || 0));
+  const hasPayout = payout.some(v => v > 0);
   const W = 1100, H = 240, PADL = 60, PADR = 12, PADT = 12, PADB = 28;
   const innerW = W - PADL - PADR, innerH = H - PADT - PADB;
   const colW = innerW / MONTHS;
   const barW = colW * 0.62;
-  const max = niceCeiling(Math.max(1, ...schedule));
+  const max = niceCeiling(Math.max(1, ...total));
   const y = (v: number) => PADT + innerH - (innerH * v) / max;
   const cats = OPEX_CATEGORIES.map(c => c.id);
 
@@ -102,7 +106,7 @@ function OpexChart({ items, payroll }: { items: OpexItem[]; payroll: PayrollItem
             </g>
           );
         })}
-        {schedule.map((_, i) => {
+        {total.map((_, i) => {
           const x = PADL + colW * i + (colW - barW) / 2;
           let acc = 0;
           return (
@@ -115,7 +119,14 @@ function OpexChart({ items, payroll }: { items: OpexItem[]; payroll: PayrollItem
                 acc += v;
                 return <rect key={cat} x={x} y={yTop} width={barW} height={Math.max(0, h)} fill={OPEX_CATEGORY_COLORS[cat as OpexCategory]} />;
               })}
-              <title>{`${monthLabel(i)}: ${fmtCurrency(schedule[i])}`}</title>
+              {payout[i] > 0 && (() => {
+                const v = payout[i];
+                const yTop = y(acc + v);
+                const h = y(acc) - y(acc + v);
+                acc += v;
+                return <rect x={x} y={yTop} width={barW} height={Math.max(0, h)} fill={PAYOUT_COLOR} />;
+              })()}
+              <title>{`${monthLabel(i)}: ${fmtCurrency(total[i])}`}</title>
               <text x={x + barW / 2} y={H - PADB + 16} textAnchor="middle" fontSize="9" fill="#94a3b8">{monthLabel(i).split(' ')[0]}</text>
             </g>
           );
@@ -125,13 +136,14 @@ function OpexChart({ items, payroll }: { items: OpexItem[]; payroll: PayrollItem
         {OPEX_CATEGORIES.map(c => (
           <span key={c.id} className="opex-legend-item"><i style={{ background: OPEX_CATEGORY_COLORS[c.id] }} />{c.label}</span>
         ))}
+        {hasPayout && <span className="opex-legend-item"><i style={{ background: PAYOUT_COLOR }} />Creator payout</span>}
       </div>
     </div>
   );
 }
 
 // Classic spreadsheet: every line × every month, with row + column totals.
-function OpexSheet({ items, payroll }: { items: OpexItem[]; payroll: PayrollItem[] }) {
+function OpexSheet({ items, payroll, payout }: { items: OpexItem[]; payroll: PayrollItem[]; payout: number[] }) {
   const rows: { name: string; cells: number[] }[] = [];
   for (const p of payroll) {
     const monthly = payrollMonthly(p);
@@ -139,6 +151,9 @@ function OpexSheet({ items, payroll }: { items: OpexItem[]; payroll: PayrollItem
   }
   for (const it of items) {
     rows.push({ name: it.name, cells: MONTH_OPTS.map((_, m) => (active(m, it.startMonth, it.endMonth) ? it.amount * Math.pow(1 + it.growth, m - it.startMonth) : 0)) });
+  }
+  if (payout.some(v => v > 0)) {
+    rows.push({ name: 'Creator payout', cells: MONTH_OPTS.map((_, m) => payout[m] || 0) });
   }
   const totals = MONTH_OPTS.map((_, m) => rows.reduce((a, r) => a + r.cells[m], 0));
   const grand = totals.reduce((a, b) => a + b, 0);
@@ -187,15 +202,19 @@ export default function AdminModelOpex() {
   const { rev, acq, econ } = useSharedModelSettings();
 
   const schedule = useMemo(() => buildCombinedSchedule(items, payroll), [items, payroll]);
-  const avg = opexAverage(schedule);
-  const total = opexTotal(schedule);
   const headcount = payroll.reduce((a, p) => a + (p.count || 0), 0);
-  const monthEnd = schedule[schedule.length - 1] ?? 0;
 
   // Creator payout impact — needs revenue, so we rebuild the model here.
   const built = useMemo(() => buildModel(rev, acq, true), [rev, acq]);
   const payoutCash = useMemo(() => buildCashflow(built.revenue, built.acquisition, econ, schedule, payout), [built, econ, schedule, payout]);
+  const payoutByMonth = useMemo(() => payoutCash.map(c => c.creatorPayout), [payoutCash]);
   const payoutTotal = useMemo(() => payoutCash.reduce((a, c) => a + c.creatorPayout, 0), [payoutCash]);
+
+  // Creator payout is part of OpEx — totals/avg include it.
+  const opexWithPayout = useMemo(() => schedule.map((v, i) => v + (payoutByMonth[i] || 0)), [schedule, payoutByMonth]);
+  const avg = opexAverage(opexWithPayout);
+  const total = opexTotal(opexWithPayout);
+  const monthEnd = opexWithPayout[opexWithPayout.length - 1] ?? 0;
   const revTotal = useMemo(() => built.revenue.reduce((a, m) => a + m.revenue, 0), [built]);
   const avgOpMargin = useMemo(() => {
     let s = 0, n = 0;
@@ -396,13 +415,13 @@ export default function AdminModelOpex() {
     if (key === 'chart') {
       return (
         <DragCard key="chart" {...dnd('chart')} title="OpEx by month">
-          <OpexChart items={items} payroll={payroll} />
+          <OpexChart items={items} payroll={payroll} payout={payoutByMonth} />
         </DragCard>
       );
     }
     return (
       <DragCard key="sheet" {...dnd('sheet')} title="Spreadsheet">
-        <OpexSheet items={items} payroll={payroll} />
+        <OpexSheet items={items} payroll={payroll} payout={payoutByMonth} />
       </DragCard>
     );
   };

@@ -24,7 +24,7 @@ import {
 } from '~/services/model-metrics';
 import { useSharedModelSettings } from '~/hooks/useSharedModelSettings';
 import { useSharedOpex, useSharedPayroll, useSharedCreatorPayout } from '~/hooks/useSharedOpex';
-import { buildCombinedSchedule, opexAverage } from '~/services/opex';
+import { buildCombinedSchedule } from '~/services/opex';
 import { Link } from '@remix-run/react';
 import AssumptionCard, { type FieldDef } from '~/components/model/AssumptionCard';
 import ModelRow from '~/components/model/ModelRow';
@@ -120,7 +120,6 @@ export default function AdminModel() {
   // Monthly OpEx field shows the (read-only) average.
   const opexSchedule = useMemo(() => buildCombinedSchedule(opexItems, payrollItems), [opexItems, payrollItems]);
   const hasOpex = (opexItems.length > 0 || payrollItems.length > 0) && opexSchedule.some(v => v > 0);
-  const opexAvg = useMemo(() => opexAverage(opexSchedule), [opexSchedule]);
 
   useEffect(() => { try { window.localStorage.setItem(UI_KEY, JSON.stringify(ui)); } catch { /* quota */ } }, [ui]);
 
@@ -136,6 +135,11 @@ export default function AdminModel() {
   const cash = useMemo(() => buildCashflow(revenue, acquisition, eecon, hasOpex ? opexSchedule : undefined, creatorPayout), [revenue, acquisition, eecon, hasOpex, opexSchedule, creatorPayout]);
   const metrics = useMemo(() => investorMetrics(erev, eacq, revenue, acquisition, acqSummary, eecon, cash), [erev, eacq, revenue, acquisition, acqSummary, eecon, cash]);
   const totalSales = useMemo(() => revenue.reduce((a, s) => a + s.sales, 0), [revenue]);
+  // Creator payout is part of OpEx, so the displayed monthly average includes it.
+  const opexAvg = useMemo(() => {
+    const per = cash.map(c => c.opex + c.creatorPayout);
+    return per.length ? per.reduce((a, b) => a + b, 0) / per.length : 0;
+  }, [cash]);
 
   const setRevField = (k: keyof Assumptions, v: number) => setRev(prev => ({ ...prev, [k]: v }));
   const setAcqField = (k: keyof GtmAssumptions, v: number) => setAcq(prev => ({ ...prev, [k]: v }));
@@ -233,7 +237,7 @@ export default function AdminModel() {
           <div className="proj-cards model-cards">
             {COSTS_FIELDS.map(f => {
               if (f.key === 'monthlyOpex' && hasOpex) {
-                return <AssumptionCard key={f.key} field={{ ...f, hint: 'Avg from OpEx builder (per-month drives the model)' }} value={opexAvg} readOnly onChange={() => {}} />;
+                return <AssumptionCard key={f.key} field={{ ...f, hint: 'Avg incl. creator payout · per-month drives the model' }} value={opexAvg} readOnly onChange={() => {}} />;
               }
               return <AssumptionCard key={f.key} field={f} value={eecon[f.key as keyof EconAssumptions]} readOnly={readOnly} onChange={(n) => setEconField(f.key as keyof EconAssumptions, n)} />;
             })}
