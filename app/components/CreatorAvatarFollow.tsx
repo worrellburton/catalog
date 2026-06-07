@@ -96,7 +96,10 @@ export default function CreatorAvatarFollow({
   // Show the badge only once the shared cache has resolved (avoids a
   // +/− flicker on first paint) and never for placeholder handles.
   const showBadge = !isPlaceholder && following !== null;
-  const badgeSize = Math.max(18, Math.round(size * 0.46));
+  // Badge scales with the avatar; the floor used to be 18px, which on the
+  // 20px feed avatar blanketed the whole profile picture. Keep it a small
+  // corner accent so the face stays visible.
+  const badgeSize = Math.max(11, Math.round(size * 0.46));
   const initial = (displayName || handle || '?').charAt(0).toUpperCase();
 
   const toggle = async (e: React.MouseEvent) => {
