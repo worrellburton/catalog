@@ -18,10 +18,8 @@ import {
   type ScenarioId,
   ECON_DEFAULTS,
   buildCashflow,
-  cohortRetention,
   deriveScenario,
   investorMetrics,
-  sensitivity,
   toCsv,
 } from '~/services/model-metrics';
 import { useSharedModelSettings } from '~/hooks/useSharedModelSettings';
@@ -34,11 +32,9 @@ import UnifiedModelChart from '~/components/model/UnifiedModelChart';
 import ModelHeadline from '~/components/model/ModelHeadline';
 import ModelMetrics from '~/components/model/ModelMetrics';
 import ModelTabs from '~/components/model/ModelTabs';
-import SensitivityChart from '~/components/model/SensitivityChart';
-import RetentionSparkline from '~/components/model/RetentionSparkline';
 import FunnelTable from '~/components/model/FunnelTable';
 
-const COLORS = { acquisition: '#6366f1', engagement: '#f59e0b', revenue: '#10b981', costs: '#0f172a' };
+const COLORS = { acquisition: '#6366f1', engagement: '#f59e0b', revenue: '#10b981', costs: '#0f172a', payout: '#ec4899' };
 const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
 
 const ACQ_FIELDS: FieldDef[] = [
@@ -72,8 +68,8 @@ const COSTS_FIELDS: FieldDef[] = [
   { key: 'startingCash', label: 'Cash raised',   hint: 'Cash on hand at month 0',    format: 'currency', step: 100000, min: 0 },
 ];
 
-type RowKey = 'acquisition' | 'engagement' | 'revenue' | 'costs';
-const DEFAULT_ORDER: RowKey[] = ['acquisition', 'engagement', 'revenue', 'costs'];
+type RowKey = 'acquisition' | 'engagement' | 'revenue' | 'costs' | 'payout';
+const DEFAULT_ORDER: RowKey[] = ['acquisition', 'engagement', 'revenue', 'costs', 'payout'];
 
 interface ModelUi {
   order: RowKey[];
@@ -82,11 +78,11 @@ interface ModelUi {
   showFunnel: boolean;
   scenario: ScenarioId;
 }
-const UI_KEY = 'catalog:model:ui:v4';
+const UI_KEY = 'catalog:model:ui:v5';
 const UI_DEFAULTS: ModelUi = {
   order: DEFAULT_ORDER,
-  show: { acquisition: true, engagement: true, revenue: true, costs: false },
-  open: { acquisition: true, engagement: false, revenue: false, costs: false },
+  show: { acquisition: true, engagement: true, revenue: true, costs: false, payout: false },
+  open: { acquisition: true, engagement: false, revenue: false, costs: false, payout: false },
   showFunnel: false,
   scenario: 'base',
 };
@@ -139,8 +135,6 @@ export default function AdminModel() {
   const acqSummary = useMemo(() => summarizeGtm(acquisition, eacq), [acquisition, eacq]);
   const cash = useMemo(() => buildCashflow(revenue, acquisition, eecon, hasOpex ? opexSchedule : undefined, creatorPayout), [revenue, acquisition, eecon, hasOpex, opexSchedule, creatorPayout]);
   const metrics = useMemo(() => investorMetrics(erev, eacq, revenue, acquisition, acqSummary, eecon, cash), [erev, eacq, revenue, acquisition, acqSummary, eecon, cash]);
-  const sens = useMemo(() => sensitivity(erev, eacq), [erev, eacq]);
-  const retention = useMemo(() => cohortRetention(eacq.newUserRetention, eacq.mauChurn), [eacq.newUserRetention, eacq.mauChurn]);
   const totalSales = useMemo(() => revenue.reduce((a, s) => a + s.sales, 0), [revenue]);
 
   const setRevField = (k: keyof Assumptions, v: number) => setRev(prev => ({ ...prev, [k]: v }));
@@ -247,6 +241,18 @@ export default function AdminModel() {
         </ModelRow>
       );
     }
+    if (key === 'payout') {
+      return (
+        <ModelRow {...common} title="Creator payout" subtitle="% of revenue → creators">
+          <p className="model-link-note">
+            {creatorPayout.mode === 'percent'
+              ? <>Paying <strong style={{ color: COLORS.payout }}>{fmtPercent(creatorPayout.percent, 0)}</strong> of revenue to creators.</>
+              : <>Holding a <strong style={{ color: COLORS.payout }}>{fmtPercent(creatorPayout.targetMargin, 0)}</strong> operating margin; surplus paid to creators.</>}
+            {' '}The checkbox plots the payout line. Configure it in the <Link to="/admin/model/opex" className="opex-link">OpEx builder →</Link>
+          </p>
+        </ModelRow>
+      );
+    }
     return (
       <ModelRow {...common} title="Revenue" subtitle="Conversion × AOV × commission → revenue" onReset={readOnly ? undefined : resetRevenue}>
         <p className="model-link-note">Monetises <strong style={{ color: COLORS.engagement }}>Engagement</strong>'s sales — {fmtNumber(totalSales)} orders over {MONTHS} months.</p>
@@ -304,23 +310,13 @@ export default function AdminModel() {
             showAcquisition={ui.show.acquisition}
             showEngagement={ui.show.engagement}
             showCash={ui.show.costs}
+            showPayout={ui.show.payout}
           />
         </div>
       </div>
 
-      {/* Investor analysis: sensitivity + cohort retention, plus the full funnel. */}
+      {/* Full monthly funnel. */}
       <div className="model-analysis">
-        <div className="model-analysis-grid">
-          <section className="model-card">
-            <h3>Sensitivity — exit ARR swing at ±20%</h3>
-            <SensitivityChart rows={sens} />
-          </section>
-          <section className="model-card">
-            <h3>Cohort retention — {fmtPercent(eacq.newUserRetention, 0)} M1, {fmtPercent(eacq.mauChurn, 0)}/mo after</h3>
-            <RetentionSparkline data={retention} />
-            <p className="model-card-note">Of a cohort acquired in month 1, the share still active each month after.</p>
-          </section>
-        </div>
         <section className="model-card">
           <div className="model-card-head">
             <h3>Monthly funnel</h3>
