@@ -2487,8 +2487,8 @@ html[data-shell="catalog-app"] .gen-page {
 .gen-review-circles {
   position: relative;
   width: 100%;
-  height: 230px;
-  margin: 6px 0 18px;
+  height: 168px;
+  margin: 4px 0 14px;
   perspective: 900px;
   perspective-origin: 50% 45%;
 }
@@ -2498,7 +2498,7 @@ html[data-shell="catalog-app"] .gen-page {
   top: 50%;
   transform: translate(-50%, -50%)
              rotate(calc(var(--i) * (360deg / var(--n))))
-             translate(88px)
+             translate(66px)
              rotate(calc(-1 * var(--i) * (360deg / var(--n))));
 }
 .gen-review-circle-bob {
@@ -2510,18 +2510,18 @@ html[data-shell="catalog-app"] .gen-page {
 /* Dramatic 3D drift — the photos + products move around in space over the
    particle field. */
 @keyframes gen-rc-float {
-  0%, 100% { transform: translateZ(0) translateY(-7px) rotateY(0deg); }
-  33%      { transform: translateZ(46px) translateY(8px) rotateY(-12deg); }
-  66%      { transform: translateZ(22px) translateY(-5px) rotateY(10deg); }
+  0%, 100% { transform: translateZ(0) translateY(-5px) rotateY(0deg); }
+  33%      { transform: translateZ(28px) translateY(6px) rotateY(-9deg); }
+  66%      { transform: translateZ(14px) translateY(-4px) rotateY(8deg); }
 }
 .gen-review-circle img {
   display: block;
-  width: 66px;
-  height: 66px;
+  width: 52px;
+  height: 52px;
   border-radius: 50%;
   object-fit: cover;
-  border: 2px solid rgba(255, 255, 255, 0.28);
-  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.55);
+  border: 2px solid rgba(255, 255, 255, 0.26);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.5);
   background: #111;
 }
 @media (prefers-reduced-motion: reduce) {
