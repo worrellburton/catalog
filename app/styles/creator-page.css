@@ -593,7 +593,9 @@
   top: 50%;
   transform: translateY(-50%);
   z-index: 60;
-  display: flex;
+  /* Mobile only — desktop keeps its 3-column default and shows no dial.
+     Flipped to flex inside the max-width:768px block below. */
+  display: none;
   flex-direction: column;
   gap: 9px;
   padding: 9px 7px;
@@ -636,10 +638,16 @@
   background: #fff;
   border-radius: 1px;
 }
+/* Show the dial on mobile only. */
+@media (max-width: 768px) {
+  .cat-view-dial { display: flex; }
+}
 
 .creator-grid .look-card {
   width: 100%;
-  aspect-ratio: 3 / 4;
+  /* Look videos are 9:16 — match the card to the clip's real aspect so the
+     poster fills it with no crop (was 3/4, which trimmed head/feet). */
+  aspect-ratio: 9 / 16;
 }
 
 /* ── Initial-letter avatar fallback ────────────────────────────────── */

@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
+import { useMemo, useState, useEffect, useCallback, useRef, type ReactNode, type CSSProperties } from 'react';
 import { looks as seedLooks, creators as seedCreators, Look, Product } from '~/data/looks';
 import { useEscapeKey } from '~/hooks/useEscapeKey';
 import { supabase } from '~/utils/supabase';
@@ -866,7 +866,7 @@ export default function CreatorPage({
             <p>This curator hasn&rsquo;t published any looks. Check back soon.</p>
           </div>
         ) : (
-          <div className="creator-grid" style={{ gridTemplateColumns: `repeat(${gridCols}, 1fr)` }}>
+          <div className="creator-grid" style={{ ['--cat-cols']: gridCols } as CSSProperties}>
             {creatorLooks.map(look => (
               <LookCard
                 key={look.id}
@@ -899,7 +899,7 @@ export default function CreatorPage({
             <p>Saved products will appear here once {displayName.split(' ')[0]} adds them to a look.</p>
           </div>
         ) : (
-          <div className="creator-grid" style={{ gridTemplateColumns: `repeat(${gridCols}, 1fr)` }}>
+          <div className="creator-grid" style={{ ['--cat-cols']: gridCols } as CSSProperties}>
             {filteredProducts.map((p, i) => (
               <div
                 key={`${p.brand}-${p.name}-${i}`}
