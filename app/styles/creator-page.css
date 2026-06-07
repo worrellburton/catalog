@@ -99,6 +99,27 @@
   letter-spacing: -0.02em;
 }
 
+/* Identity-loading skeletons — shown for the beat before the real name /
+   avatar / follow state resolve, so the header never flashes the raw handle
+   or a wrong FOLLOW button (see CreatorPage identityLoading). */
+.creator-hero-avatar--skeleton {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.08);
+  animation: creator-hero-skeleton 1.3s ease-in-out infinite;
+}
+.creator-hero-name-skeleton {
+  display: inline-block;
+  width: clamp(160px, 42vw, 240px);
+  height: clamp(30px, 5vw, 44px);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  animation: creator-hero-skeleton 1.3s ease-in-out infinite;
+}
+@keyframes creator-hero-skeleton {
+  0%, 100% { opacity: 0.5; }
+  50%      { opacity: 0.9; }
+}
+
 .creator-follow-btn {
   padding: 10px 32px;
   font-size: 13px;

@@ -375,6 +375,14 @@ export default function CreatorPage({
   const avatarUrl = (userId || isHandleBranch)
     ? (profile?.avatar_url || seedCreatorData?.avatar || '')
     : (seedCreatorData?.avatar || '');
+  // While the live identity is still resolving (handle / user branch, profile
+  // not back yet) we DON'T know the real name, avatar, or whether this is the
+  // viewer's own catalog. Rendering the fallbacks then meant a jarring flicker:
+  // the raw handle ("robert-burton") as the name, a monogram avatar, and a
+  // FOLLOW button — all of which then snapped to the real name / photo / "My
+  // information". Show a clean skeleton for that beat instead so the page
+  // resolves straight to the real catalog with no wrong-state flash.
+  const identityLoading = (!!userId || isHandleBranch) && loading && !profile;
   // Pull seen-look set for the signed-in shopper so the catalog
   // applies the unseen-first / shuffle-seen ordering rule defined in
   // services/looks.ts. Anonymous shoppers fall through with an empty
@@ -597,14 +605,20 @@ export default function CreatorPage({
               </svg>
             </span>
           </div>
+        ) : identityLoading ? (
+          <div className="creator-hero-avatar creator-hero-avatar--skeleton" aria-hidden="true" />
         ) : avatarUrl ? (
           <img className="creator-hero-avatar" src={avatarUrl} alt={displayName} referrerPolicy="no-referrer" />
         ) : (
           <div className="creator-hero-avatar creator-hero-avatar--initial">{initial}</div>
         )}
         <span className="creator-hero-curated">Curated by</span>
-        <h1 className="creator-hero-name">{displayName}</h1>
-        {currentUser?.id && creatorUserId === currentUser.id ? (
+        <h1 className="creator-hero-name">
+          {identityLoading
+            ? <span className="creator-hero-name-skeleton" aria-hidden="true" />
+            : displayName}
+        </h1>
+        {identityLoading ? null : currentUser?.id && creatorUserId === currentUser.id ? (
           /* Self-view: this is YOUR creator page (matched by resolved owner
               id so it also catches the handle-route, not just user:<uuid>).
               You can't follow yourself, so the Follow slot becomes "My
