@@ -33,6 +33,7 @@ import ModelRow from '~/components/model/ModelRow';
 import UnifiedModelChart from '~/components/model/UnifiedModelChart';
 import ModelHeadline from '~/components/model/ModelHeadline';
 import ModelMetrics from '~/components/model/ModelMetrics';
+import ModelTabs from '~/components/model/ModelTabs';
 import SensitivityChart from '~/components/model/SensitivityChart';
 import RetentionSparkline from '~/components/model/RetentionSparkline';
 import FunnelTable from '~/components/model/FunnelTable';
@@ -57,10 +58,10 @@ const ENGAGEMENT_FIELDS: FieldDef[] = [
   { key: 'sessionsPerUserPerMonth',  label: 'Sessions / user / mo',  hint: 'Avg sessions per MAU per month', format: 'number',  step: 0.5,   min: 0, benchmark: '6–12' },
   { key: 'sessionTimeMinutes',       label: 'Session time (min)',    hint: 'Average session length',         format: 'number',  step: 0.5,   min: 0, benchmark: '3–6 min' },
   { key: 'avgImpressionsPerSession', label: 'Impressions / session', hint: 'Product views per session',      format: 'integer', step: 1,     min: 0, benchmark: '10–40' },
-  { key: 'productConversion',        label: 'Product conversion',    hint: 'Sale per impression',            format: 'percent', step: 0.001, min: 0, max: 0.5, benchmark: '1–2% marketplace' },
 ];
 
 const REVENUE_FIELDS: FieldDef[] = [
+  { key: 'productConversion',      label: 'Product conversion',       hint: 'Sale per impression', format: 'percent',  step: 0.001, min: 0, max: 0.5, benchmark: '1–2% marketplace' },
   { key: 'avgCostPerSale',         label: 'Avg cost per sale',        hint: 'Average order value', format: 'currency', step: 5,     min: 0, benchmark: '$40–$120 AOV' },
   { key: 'avgAffiliateCommission', label: 'Avg affiliate commission', hint: 'Take rate per sale',  format: 'percent',  step: 0.005, min: 0, max: 0.5, benchmark: '8–15%' },
 ];
@@ -153,10 +154,10 @@ export default function AdminModel() {
   const setShow = (k: RowKey, v: boolean) => setUi(p => ({ ...p, show: { ...p.show, [k]: v } }));
   const toggleOpen = (k: RowKey) => setUi(p => ({ ...p, open: { ...p.open, [k]: !p.open[k] } }));
   const resetEngagement = () => {
-    setRev(p => ({ ...p, sessionsPerUserPerMonth: DEFAULTS.sessionsPerUserPerMonth, sessionTimeMinutes: DEFAULTS.sessionTimeMinutes, avgImpressionsPerSession: DEFAULTS.avgImpressionsPerSession, productConversion: DEFAULTS.productConversion }));
+    setRev(p => ({ ...p, sessionsPerUserPerMonth: DEFAULTS.sessionsPerUserPerMonth, sessionTimeMinutes: DEFAULTS.sessionTimeMinutes, avgImpressionsPerSession: DEFAULTS.avgImpressionsPerSession }));
     setAcq(p => ({ ...p, newUserRetention: GTM_DEFAULTS.newUserRetention, mauChurn: GTM_DEFAULTS.mauChurn }));
   };
-  const resetRevenue = () => setRev(p => ({ ...p, avgCostPerSale: DEFAULTS.avgCostPerSale, avgAffiliateCommission: DEFAULTS.avgAffiliateCommission }));
+  const resetRevenue = () => setRev(p => ({ ...p, productConversion: DEFAULTS.productConversion, avgCostPerSale: DEFAULTS.avgCostPerSale, avgAffiliateCommission: DEFAULTS.avgAffiliateCommission }));
 
   const setScenario = (id: ScenarioId) => setUi(p => ({ ...p, scenario: id }));
   const exportCsv = () => {
@@ -214,7 +215,7 @@ export default function AdminModel() {
     }
     if (key === 'engagement') {
       return (
-        <ModelRow {...common} title="Engagement" subtitle="Retention × sessions × conversion → sales" onReset={readOnly ? undefined : resetEngagement}>
+        <ModelRow {...common} title="Engagement" subtitle="Retention × sessions → impressions" onReset={readOnly ? undefined : resetEngagement}>
           <p className="model-link-note">Retention &amp; churn shape <strong style={{ color: COLORS.acquisition }}>Acquisition</strong>'s MAU; the rest turns it into <strong style={{ color: COLORS.revenue }}>Revenue</strong>'s sales.</p>
           <div className="proj-cards model-cards">
             <AssumptionCard key="newUserRetention" field={RETENTION_FIELD} value={eacq.newUserRetention} readOnly={readOnly} onChange={(n) => setAcqField('newUserRetention', clamp01(n))} />
@@ -245,7 +246,7 @@ export default function AdminModel() {
       );
     }
     return (
-      <ModelRow {...common} title="Revenue" subtitle="AOV × commission → revenue" onReset={readOnly ? undefined : resetRevenue}>
+      <ModelRow {...common} title="Revenue" subtitle="Conversion × AOV × commission → revenue" onReset={readOnly ? undefined : resetRevenue}>
         <p className="model-link-note">Monetises <strong style={{ color: COLORS.engagement }}>Engagement</strong>'s sales — {fmtNumber(totalSales)} orders over {MONTHS} months.</p>
         <div className="proj-cards model-cards">
           {REVENUE_FIELDS.map(f => (
@@ -268,6 +269,8 @@ export default function AdminModel() {
         </h1>
         <p className="admin-page-subtitle">Acquisition → MAU, Engagement → sales, Revenue → $, Costs → runway. Numbers are shared with every admin in real time. Toggle any line, drag to reorder.</p>
       </div>
+
+      <ModelTabs active="model" />
 
       <ModelHeadline scenario={ui.scenario} onScenario={setScenario} onExportCsv={exportCsv} onPrint={() => window.print()} />
 

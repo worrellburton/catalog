@@ -196,12 +196,12 @@ interface Factors {
 const SCENARIO_FACTORS: Record<'bear' | 'bull', Factors> = {
   bear: {
     rev: { productConversion: 0.6, avgCostPerSale: 0.85, avgAffiliateCommission: 0.85, sessionsPerUserPerMonth: 0.85, avgImpressionsPerSession: 0.85 },
-    acq: { cpa: 1.6, organicGrowth: 0.5, budget: 0.7, newUserRetention: 0.6, mauChurn: 1.8 },
+    acq: { cpa: 1.6, organicGrowth: 0.5, newUserRetention: 0.6, mauChurn: 1.8 },
     econ: { grossMargin: 0.92, monthlyOpex: 1.3, startingCash: 0.8 },
   },
   bull: {
     rev: { productConversion: 1.6, avgCostPerSale: 1.2, avgAffiliateCommission: 1.2, sessionsPerUserPerMonth: 1.15, avgImpressionsPerSession: 1.15 },
-    acq: { cpa: 0.6, organicGrowth: 1.5, budget: 1.4, newUserRetention: 1.3, mauChurn: 0.5 },
+    acq: { cpa: 0.6, organicGrowth: 1.5, newUserRetention: 1.3, mauChurn: 0.5 },
     econ: { grossMargin: 1.05, monthlyOpex: 0.9, startingCash: 1.3 },
   },
 };

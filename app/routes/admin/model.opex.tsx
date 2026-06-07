@@ -13,6 +13,7 @@ import {
   uid,
 } from '~/services/opex';
 import { useSharedOpex } from '~/hooks/useSharedOpex';
+import ModelTabs from '~/components/model/ModelTabs';
 
 const MONTH_OPTS = Array.from({ length: MONTHS }, (_, i) => ({ value: i, label: monthLabel(i) }));
 
@@ -96,6 +97,8 @@ export default function AdminModelOpex() {
           The average feeds <Link to="/admin/model" className="opex-link">the Model</Link>’s Monthly OpEx.
         </p>
       </div>
+
+      <ModelTabs active="opex" />
 
       <div className="proj-summary model-dials">
         <div className="proj-summary-card">

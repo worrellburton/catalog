@@ -5291,6 +5291,17 @@ html.admin-on-dark-canvas .admin-topbar,
 .admin-dark .model-live { color: #a1a1aa; background: #27272a; border-color: #3f3f46; }
 .admin-dark .model-live.is-live { color: #34d399; background: rgba(16, 185, 129, 0.12); border-color: rgba(16, 185, 129, 0.35); }
 
+/* Model ↔ OpEx page switcher under the title. */
+.model-pageswitch { display: inline-flex; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; margin: 0 0 16px; }
+.model-pageswitch a { padding: 6px 18px; font-size: 12.5px; font-weight: 600; color: #475569; text-decoration: none; border-right: 1px solid #e5e7eb; }
+.model-pageswitch a:last-child { border-right: 0; }
+.model-pageswitch a:hover { background: #f1f5f9; }
+.model-pageswitch a.is-active { background: #0f172a; color: #fff; }
+.admin-dark .model-pageswitch { border-color: #3f3f46; }
+.admin-dark .model-pageswitch a { color: #d4d4d8; border-right-color: #3f3f46; }
+.admin-dark .model-pageswitch a:hover { background: #27272a; }
+.admin-dark .model-pageswitch a.is-active { background: #f4f4f5; color: #18181b; }
+
 /* Headline strip: scenario presets + export + investor metric chips. */
 .model-headline { margin: 8px 0 16px; }
 /* Centered scenario switcher: left spacer | centered group | export. */
