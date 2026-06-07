@@ -1190,6 +1190,13 @@ export default function Home() {
     }
     setShowMyLooks(true);
   }, []);
+  // Cold load / refresh at /my-looks: open the My Catalog overlay so the
+  // deep link doesn't render a blank feed behind the URL.
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.location.pathname.startsWith('/my-looks')) {
+      setShowMyLooks(true);
+    }
+  }, []);
   // Cross-component "open MyCatalog" hook. CreatorPage's self-view
   // Edit button fires `catalog:open-my-catalog` instead of taking a
   // prop callback through every render path — same pattern as

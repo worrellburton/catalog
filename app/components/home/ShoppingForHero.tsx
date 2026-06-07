@@ -5,6 +5,7 @@
 
 import { useEffect, useRef, useMemo, useState } from 'react';
 import FeedParticles from './FeedParticles';
+import { getAutoEditorConfig } from '~/services/dials';
 
 // Headline rotation. First HEADLINE_BASELINE_VISITS the user sees the
 // canonical "What are you shopping for?". After that, we pick from
@@ -161,6 +162,30 @@ export default function ShoppingForHero({ onRevealFeed }: ShoppingForHeroProps) 
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [showFeedInfo]);
+
+  // Countdown to the next daily-feed drop (the configured UTC refresh hour).
+  const [refreshHour, setRefreshHour] = useState(0);
+  const [nowTick, setNowTick] = useState(() => Date.now());
+  useEffect(() => {
+    let alive = true;
+    getAutoEditorConfig().then(c => { if (alive) setRefreshHour(c.refreshHour); }).catch(() => {});
+    return () => { alive = false; };
+  }, []);
+  useEffect(() => {
+    if (!showFeedInfo) return;
+    const t = setInterval(() => setNowTick(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, [showFeedInfo]);
+  const dropCountdown = (() => {
+    const now = new Date(nowTick);
+    const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), refreshHour, 0, 0, 0));
+    if (next.getTime() <= now.getTime()) next.setUTCDate(next.getUTCDate() + 1);
+    let s = Math.max(0, Math.floor((next.getTime() - now.getTime()) / 1000));
+    const hh = Math.floor(s / 3600); s -= hh * 3600;
+    const mm = Math.floor(s / 60); s -= mm * 60;
+    const p = (n: number) => String(n).padStart(2, '0');
+    return `${p(hh)}:${p(mm)}:${p(s)}`;
+  })();
   // Pick a headline for this visit. The first HEADLINE_BASELINE_VISITS the
   // user lands here they see the canonical "What are you shopping for?";
   // beyond that, we rotate through FUN_HEADLINES picked via the visit
@@ -323,7 +348,11 @@ export default function ShoppingForHero({ onRevealFeed }: ShoppingForHeroProps) 
                   A fresh, fully-loaded lineup waiting for you every morning.
                 </li>
               </ul>
-              <p className="sfh-feed-info-foot">✨ Come back tomorrow for a whole new lineup.</p>
+              <div className="sfh-feed-info-countdown" aria-label="Time until your next feed">
+                <span className="sfh-feed-info-countdown-label">New feed drops in</span>
+                <span className="sfh-feed-info-countdown-time">{dropCountdown}</span>
+              </div>
+              <p className="sfh-feed-info-foot">✨ A whole new lineup, hand-picked for you.</p>
             </div>
           </div>
         </div>
