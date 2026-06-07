@@ -33,6 +33,7 @@ import {
   markFeedMilestone,
   prefetchVideoBytes,
 } from '~/services/video-loading';
+import { lookPoster } from '~/services/media-resolver';
 import { director } from '~/services/video-playback-director';
 import { useAuth } from '~/hooks/useAuth';
 import { useDirectorSlot } from '~/hooks/useDirectorSlot';
@@ -110,22 +111,11 @@ const CreativeCardV2 = memo(function CreativeCardV2({
   // FULL-RES asset in storage (the polished primary image, the look
   // thumbnail, etc.) so server-side consumers — Seedance i2v, sharing,
   // export — get the highest fidelity available.
-  const rawPosterUrl = isLook
-    ? (look!.thumbnail_url
-        || look!.cover
-        // Fallback so a look card is NEVER posterless. ~60% of feed looks have
-        // no thumbnail_url, which left the card with no <img> behind the pooled
-        // <video>. The instant the director released that video (opening a
-        // look/product) or re-acquired it (returning to the feed), the card
-        // painted pure BLACK instead of a still — the "looks go black, then
-        // the video appears" bug. A product packshot covers the gap until the
-        // clip's own frame is ready. (stillImageUrl already uses this image.)
-        || look!.products?.find(p => !!p.image)?.image
-        || '')
-    : pickPosterUrl(creative!);
-  const rawStillImageUrl = isLook
-    ? (look!.products?.find(p => !!p.image)?.image || rawPosterUrl || '')
-    : pickStillImageUrl(creative!);
+  // Canonical poster chains (services/media-resolver) — the look chain lives in
+  // ONE place now, so the card, overlay hero, and inline detail can't drift
+  // (that drift was the "looks go black, then the video appears" bug).
+  const rawPosterUrl = isLook ? lookPoster(look!) : pickPosterUrl(creative!);
+  const rawStillImageUrl = isLook ? lookPoster(look!) : pickStillImageUrl(creative!);
 
   // Compressed render variants for ON-SCREEN display. Routed through
   // Supabase's storage image-transform endpoint so the feed ships

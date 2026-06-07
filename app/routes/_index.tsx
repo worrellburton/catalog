@@ -30,6 +30,7 @@ import { toCatalogName, getRandomCatalogName } from '~/utils/catalogName';
 import { prefetchSimilarProducts, prefetchCreativesByBrand, prefetchHomeFeed, type ProductAd } from '~/services/product-creative';
 import { getGraphPairs, type GraphPair } from '~/services/graph-pairs';
 import { getLooks, getLookByUuid } from '~/services/looks';
+import { creativeStill, creativePoster } from '~/services/media-resolver';
 import { prefetchDials } from '~/services/dials';
 import { prefetchHiddenContent } from '~/hooks/useHiddenLooks';
 import { prefetchBrandLogos } from '~/hooks/useBrandLogoLookup';
@@ -953,28 +954,19 @@ export default function Home() {
     );
 
     // Carry over the EXACT image the feed card already painted so the
-    // product-page hero never opens to black. The card shows
-    // pickStillImageUrl(creative) / pickPosterUrl(creative), whose fallback
-    // chain reaches primary_video_poster_url, images[0] and the creative
-    // thumbnail — fields the old mapping (primary_image_url || image_url only)
-    // dropped, leaving image-only products (plants, candles, etc.) with an
-    // empty hero still. Mirror that chain here so the loaded image hands off.
-    const cardImage =
-      creative.product.primary_video_poster_url
-      || creative.product.primary_image_url
-      || creative.product.image_url
-      || (creative.product.images && creative.product.images[0])
-      || creative.thumbnail_url
-      || undefined;
+    // product-page hero never opens to black. The canonical creative chains
+    // (services/media-resolver) are the same ones the card paints, so the
+    // loaded image always hands off — image-only products (plants, candles)
+    // included.
     const mapped: Product & { id?: string } = {
       id: creative.product.id || undefined,
       name: creative.product.name || 'Shop Now',
       brand: creative.product.brand || '',
       price: creative.product.price || '',
       url: creative.product.url || '',
-      image: cardImage,
+      image: creativeStill(creative) || undefined,
       // Secondary poster slot the hero falls back to (heroStill chain).
-      thumbnail_url: creative.thumbnail_url || creative.product.primary_video_poster_url || undefined,
+      thumbnail_url: creativePoster(creative) || undefined,
     };
     pushRecent(mapped);
     pauseAllVideos();

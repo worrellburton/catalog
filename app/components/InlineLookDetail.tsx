@@ -6,6 +6,7 @@ import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
 import FollowIconButton from './FollowIconButton';
 import { sortByGarmentRole } from '~/utils/garmentOrder';
 import ProductMiniMedia from './ProductMiniMedia';
+import { lookPoster } from '~/services/media-resolver';
 
 interface BookmarksInterface {
   isLookBookmarked: (id: number) => boolean;
@@ -41,10 +42,9 @@ export default function InlineLookDetail({ look, onOpenCreator, onOpenBrowser, o
 
   const trailId = lookTrailId(look.id);
   const videoUrl = normalizeLookVideoUrl(look.video, basePath);
-  // Fall back to a product packshot (same chain as the feed card) so a
-  // thumbnail-less, cover-less look never paints a black video slot while
-  // the clip buffers — it carries over the image already shown on the card.
-  const poster = look.thumbnail_url || look.cover || look.products?.find(p => !!p.image)?.image || '';
+  // Canonical look poster (services/media-resolver) — same chain as the feed
+  // card + overlay hero, so a thumbnail-less look never paints a black slot.
+  const poster = lookPoster(look);
   const inViewport = useInViewport(containerRef);
   const setVideoSlot = useTrailVideo(
     inViewport ? trailId : undefined,

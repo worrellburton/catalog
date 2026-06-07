@@ -38,6 +38,7 @@ import {
   isMobileViewport,
   markFeedMilestone,
 } from '~/services/video-loading';
+import { lookPoster, productPoster } from '~/services/media-resolver';
 
 interface ProductPageCreative {
   /** The product_creative.id - used to resolve the shared <video> element
@@ -319,7 +320,7 @@ function LookTile({
   });
   const videoUrl = normalizeLookVideoUrl(rawVideo, basePath);
   const fullResVideoUrl = normalizeLookVideoUrl(look.video, basePath);
-  const tilePoster = look.thumbnail_url || look.cover || '';
+  const tilePoster = lookPoster(look);
 
   // Attach the shared TrailVideoHost <video> element immediately on mount —
   // do NOT gate on inViewport. The TrailVideoHost pool is empty on a fresh
@@ -982,10 +983,10 @@ export default function ProductPage({
       ? { id: `product:${product.brand}-${product.name}`, videoUrl: product.video_url, thumbnailUrl: product.image ?? product.thumbnail_url ?? null }
       : undefined);
 
-  // Poster source of last resort. Products opened from a look can carry a
-  // primary-video poster in thumbnail_url while `image` is empty — without
-  // this the hero painted as a black void.
-  const heroStill = product.image || product.thumbnail_url || '';
+  // Poster source of last resort (canonical productPoster chain). Products
+  // opened from a look can carry a primary-video poster in thumbnail_url while
+  // `image` is empty — without this the hero painted as a black void.
+  const heroStill = productPoster(product);
 
   const heroClassName = `pd-hero${effectiveCreative ? ' pd-hero--video' : heroStill ? ' pd-hero--image' : ' pd-hero--empty'}`;
 

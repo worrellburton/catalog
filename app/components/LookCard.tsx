@@ -10,6 +10,7 @@ import { toggleFollowShared } from '~/hooks/useFollowState';
 import CreatorAvatarFollow from './CreatorAvatarFollow';
 import { useFollowState } from '~/hooks/useFollowState';
 import { trackImpression } from '~/services/session-tracker';
+import { lookPoster } from '~/services/media-resolver';
 import { useVideoStillRatio } from '~/hooks/useVideoStillRatio';
 import { shouldBeVideo } from '~/utils/videoStillSplit';
 import {
@@ -59,7 +60,7 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
   // Poster-first: if the look has a poster image, treat the card as
   // "loaded" immediately so we never flash a shimmer over a perfectly
   // good still image while the MP4 streams in.
-  const posterReady = !!(look.thumbnail_url || look.cover);
+  const posterReady = !!lookPoster(look);
   const [loaded, setLoaded] = useState(() => previewOnly || posterReady);
   // Active band — close enough to need a live video element.
   const inActiveBand = useInViewport(cardRef, rootMargin);
@@ -147,7 +148,7 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
   // Look thumbnail (server-extracted) → look cover image → empty.
   // Used as the <video poster=> so the card paints a real image while
   // the MP4 streams. Empty string disables the attribute.
-  const posterUrl = look.thumbnail_url || look.cover || '';
+  const posterUrl = lookPoster(look);
   // When the Dial pushes this card into still mode, prefer the first
   // product's retail image over the look's own thumbnail — the
   // product photo is the merchandising shot and reads better as a

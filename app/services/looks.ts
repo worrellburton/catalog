@@ -1,6 +1,7 @@
 import { supabase } from '~/utils/supabase';
 import { registerLookTrim } from '~/utils/lookTrim';
 import { withTransform } from '~/utils/supabase-image';
+import { lookPoster } from '~/services/media-resolver';
 import type { Look, Product, Creator } from '~/data/looks';
 import { looks as staticLooks, creators as staticCreators, searchSuggestions as staticSuggestions } from '~/data/looks';
 
@@ -654,7 +655,7 @@ function warmAboveTheFoldLookAssets(rows: Look[]): void {
   // Posters: first ~6 looks. Mirror CreativeCardV2's look-poster fallback
   // (thumbnail → cover → first product image) so the warmed URL matches.
   for (const row of rows.slice(0, 6)) {
-    const rawPoster = row.thumbnail_url || row.cover || row.products?.find(p => !!p.image)?.image;
+    const rawPoster = lookPoster(row);
     if (!rawPoster) continue;
     const poster = withTransform(rawPoster, { width: 540, quality: 72, resize: 'contain' }) || rawPoster;
     if (warmedLookAssets.has(poster)) continue;

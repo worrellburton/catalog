@@ -14,6 +14,7 @@ import type { ProductAd } from '~/services/product-creative';
 import type { Look } from '~/data/looks';
 import { withTransform } from './supabase-image';
 import { pickPosterUrl } from '~/services/video-loading';
+import { lookPoster } from '~/services/media-resolver';
 
 const POSTERS_TO_WARM = 16;
 // Warm the first ~2 viewports of cards. At ~6 cards per mobile viewport
@@ -119,7 +120,7 @@ export function primeLookAssets(rows: Look[]): void {
     // image; warming only thumbnail/cover left those cold, so they painted
     // black for the download window when scrolled into view or on overlay
     // return. Warming the product-image fallback makes them a cache hit.
-    const rawPoster = row.thumbnail_url || row.cover || row.products?.find(p => !!p.image)?.image;
+    const rawPoster = lookPoster(row);
     if (!rawPoster) continue;
     const poster = withTransform(rawPoster, POSTER_TRANSFORM) || rawPoster;
     if (warmedPosters.has(poster)) continue;
