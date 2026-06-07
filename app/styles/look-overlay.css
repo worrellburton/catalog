@@ -540,13 +540,12 @@
 }
 
 .product-card-thumb {
-  /* Bumped from 52×52 → 72×72 so the poster image carries enough detail
-     to read at a glance. The previous box was small enough that the
-     'contain' framing showed mostly letterbox, and 'cover' at that size
-     showed a tight detail crop. 72px with cover lands in the readable
-     middle and matches what shoppers expect from a product card. */
-  width: 72px;
-  height: 72px;
+  /* 3:4 portrait — product/look posters are shot 3:4, so a 1:1 thumb cropped
+     them. Keep the native 3:4 aspect and let the row card grow taller to fit
+     (the flex row sizes to the tallest child) so the poster shows in full, not
+     a tight square crop. */
+  width: 78px;
+  height: 104px;
   border-radius: 12px;
   overflow: hidden;
   flex-shrink: 0;
@@ -1390,16 +1389,12 @@ body:has(.look-overlay.look-overlay--in) {
 .product-thumb-img {
   width: 100%;
   height: 100%;
-  /* `cover` so the poster image fills the box edge-to-edge — the
-     thumb reads as a polished product card instead of a letterboxed
-     icon. We bumped the box up to 72×72 above so the crop has enough
-     room to show the product clearly without showing only fabric.
-     object-position: center 30% biases the visible window toward the
-     top of the poster, where the product silhouette typically lives
-     (a flat-lay shoe centered in the source crops mid-shoe; pulling
-     up shows the whole shoe). */
+  /* The thumb box is now 3:4 (matches the poster's native aspect), so
+     `cover` fills it edge-to-edge with no crop for a 3:4 poster — the
+     image shows at its native framing instead of being squeezed into a
+     square. center keeps any off-aspect source balanced. */
   object-fit: cover;
-  object-position: center 30%;
+  object-position: center;
 }
 
 .product-thumb-placeholder {
