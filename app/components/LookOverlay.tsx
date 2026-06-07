@@ -86,14 +86,6 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   const overlayRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const moreScrollRef = useRef<HTMLDivElement>(null);
-  /** The whole info column on mobile — needs its scrollTop checked when a
-   *  swipe-down begins, so we only intercept the gesture as a dismiss
-   *  when the column is already at the top. */
-  const infoColRef = useRef<HTMLDivElement>(null);
-  /** True when the touch sequence currently in flight is being treated
-   *  as a dismiss-pull (we'll translate the panel) instead of normal
-   *  vertical scroll (we leave it alone). */
-  const dragActiveRef = useRef(false);
   // Tracked separately so the nested feed re-binds its IntersectionObserver
   // root once the scroller mounts (refs alone don't trigger re-renders).
   const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
@@ -126,8 +118,6 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
       scroller.removeEventListener('scroll', onScroll);
     };
   }, [scrollEl]);
-  const [touchStartY, setTouchStartY] = useState(0);
-  const [translateY, setTranslateY] = useState(0);
   const [isAnimatingOut, setIsAnimatingOut] = useState(false);
   const [lookBookmarked, setLookBookmarked] = useState(bookmarks.isLookBookmarked(look.id));
 
@@ -633,41 +623,9 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
     };
   }, [handleClose]);
 
-  // Swipe-down to dismiss (mobile handle area)
-  const handleTouchStart = useCallback((e: React.TouchEvent) => {
-    setTouchStartY(e.touches[0].clientY);
-  }, []);
-
-  const handleTouchMove = useCallback((e: React.TouchEvent) => {
-    const dy = e.touches[0].clientY - touchStartY;
-    if (dy > 0) setTranslateY(dy);
-  }, [touchStartY]);
-
-  const handleTouchEnd = useCallback(() => {
-    dragActiveRef.current = false;
-    if (translateY > 100) {
-      handleClose();
-    } else {
-      setTranslateY(0);
-    }
-  }, [translateY, handleClose]);
-
-  // Column-scoped swipe-down: only arms when the info column is already
-  // scrolled to its top, so a normal vertical scroll inside content
-  // never gets hijacked into a dismiss-pull. Mirrors how ProductPage
-  // handles its own pull-to-close.
-  const handleColumnTouchStart = useCallback((e: React.TouchEvent) => {
-    const atTop = (infoColRef.current?.scrollTop ?? 0) <= 0;
-    dragActiveRef.current = atTop;
-    if (atTop) setTouchStartY(e.touches[0].clientY);
-  }, []);
-  const handleColumnTouchMove = useCallback((e: React.TouchEvent) => {
-    if (!dragActiveRef.current) return;
-    const dy = e.touches[0].clientY - touchStartY;
-    // Upward swipe → cede control back to native scroll.
-    if (dy <= 0) { dragActiveRef.current = false; setTranslateY(0); return; }
-    setTranslateY(dy);
-  }, [touchStartY]);
+  // Dismiss-by-drag is handled solely by the whole-overlay gesture (the effect
+  // above), which arms ONLY when the scroll container is at the very top
+  // (scroller.scrollTop === 0) — so scrolling content never dismisses the look.
 
   const handleToggleLookBookmark = () => {
     const wasBookmarked = lookBookmarked;
@@ -704,10 +662,6 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
       onOpenLook(feedLook);
     }
   }, [onOpenLook]);
-
-  const panelStyle: React.CSSProperties = translateY > 0
-    ? { transform: `translateY(${translateY}px)`, transition: 'none' }
-    : {};
 
   return (
     <div
@@ -850,21 +804,11 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
               scrolled to the top — otherwise a normal downward scroll
               would drag the panel instead of scrolling content. */}
           <div
-            ref={infoColRef}
             className="look-info-col"
-            style={panelStyle}
-            onTouchStart={handleColumnTouchStart}
-            onTouchMove={handleColumnTouchMove}
-            onTouchEnd={handleTouchEnd}
           >
             {/* Mobile-only: drag handle (visual affordance for the
                 gesture the whole column accepts at scroll-top). */}
-            <div
-              className="look-drag-strip"
-              onTouchStart={handleTouchStart}
-              onTouchMove={handleTouchMove}
-              onTouchEnd={handleTouchEnd}
-            >
+            <div className="look-drag-strip">
               <span className="look-drag-pill" />
             </div>
 
