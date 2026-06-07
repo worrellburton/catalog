@@ -7055,6 +7055,27 @@ function AutoEditorModal({
             </select>
           </div>
 
+          {/* When the daily feed rolls over — the UTC hour a shopper's first
+              visit gets a freshly re-ranked feed. Only meaningful for Daily. */}
+          {config.frequency === 'daily' && (
+            <div>
+              <label style={fieldLabel}>Refresh time (UTC)</label>
+              <input
+                type="time"
+                step={3600}
+                value={`${String(config.refreshHour).padStart(2, '0')}:00`}
+                onChange={e => {
+                  const hh = parseInt((e.target.value || '00:00').split(':')[0], 10);
+                  save({ refreshHour: Number.isFinite(hh) ? hh : 0 });
+                }}
+                style={numInput}
+              />
+              <div style={{ marginTop: 6, fontSize: 12, color: '#94a3b8' }}>
+                A new feed rolls over at {String(config.refreshHour).padStart(2, '0')}:00 UTC each day.
+              </div>
+            </div>
+          )}
+
           <div>
             <label style={fieldLabel}>Holdout % (kept on the global feed)</label>
             <input
