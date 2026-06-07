@@ -15,6 +15,9 @@ import { withTransform } from '~/utils/supabase-image';
 import { supabase } from '~/utils/supabase';
 import { lookSlug } from '~/utils/slug';
 import AutoplayVideo from '~/components/AutoplayVideo';
+import { stableLookId } from '~/services/looks';
+import { lookTrailId } from '~/utils/trailIds';
+import { captureVideoFrame } from '~/services/video-loading';
 
 interface MyLooksProps {
   onClose: () => void;
@@ -984,7 +987,26 @@ export default function MyLooks({ onClose }: MyLooksProps) {
                   </span>
                 </div>
               </div>
-              <button className="my-cat-tray-action" onClick={() => { const l = trayLook; setTrayLook(null); navigate(`/?look=${l.id}`); }}>
+              <button className="my-cat-tray-action" onClick={() => {
+                const l = trayLook;
+                setTrayLook(null);
+                if (!l) return;
+                // Hand the look's CURRENTLY-PLAYING tile frame to the overlay so
+                // it opens on the live look frame (not a product-image poster)
+                // and the video — already buffered locally from the tile —
+                // resumes immediately. Keyed to the same trail id the overlay
+                // uses (stableLookId, since these DB looks have no legacy_id).
+                try {
+                  const vid = document.querySelector(`[data-look-id="${l.id}"] video`) as HTMLVideoElement | null;
+                  const frame = captureVideoFrame(vid);
+                  if (frame && typeof window !== 'undefined') {
+                    const w = window as Window & { __feedTapPosters?: Record<string, string> };
+                    w.__feedTapPosters = w.__feedTapPosters || {};
+                    w.__feedTapPosters[lookTrailId(stableLookId(l.id))] = frame;
+                  }
+                } catch { /* best-effort handoff */ }
+                navigate(`/?look=${l.id}`);
+              }}>
                 <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" /></svg>
                 <span>View</span>
               </button>

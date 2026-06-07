@@ -77,8 +77,8 @@
   }
 
   .creator-grid .look-card {
-    /* Match the 9:16 look video aspect (was 3/4 → cropped head/feet). */
-    aspect-ratio: 9/16;
+    /* Match the main feed (3/4). */
+    aspect-ratio: 3/4;
   }
 
   .creator-products-grid {

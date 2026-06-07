@@ -645,9 +645,9 @@
 
 .creator-grid .look-card {
   width: 100%;
-  /* Look videos are 9:16 — match the card to the clip's real aspect so the
-     poster fills it with no crop (was 3/4, which trimmed head/feet). */
-  aspect-ratio: 9 / 16;
+  /* Match the main feed (grid-view.css .look-card = 3/4) so creator catalogs
+     and the feed frame looks identically. */
+  aspect-ratio: 3 / 4;
 }
 
 /* ── Initial-letter avatar fallback ────────────────────────────────── */

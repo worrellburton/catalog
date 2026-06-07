@@ -88,7 +88,7 @@ interface SupabaseLook {
 // keeps these clear of the positive ids carried by legacy seed looks; the
 // magnitude stays modest so downstream id arithmetic (e.g. the `id * 1000`
 // dedup in similar-look fill) stays well inside Number.MAX_SAFE_INTEGER.
-function stableLookId(uuid: string): number {
+export function stableLookId(uuid: string): number {
   let h = 0;
   for (let i = 0; i < uuid.length; i++) {
     h = (Math.imul(h, 31) + uuid.charCodeAt(i)) | 0;
