@@ -869,7 +869,7 @@ export default function ProductPage({
 
   const handleClose = useCallback(() => {
     setIsAnimatingOut(true);
-    setTimeout(onClose, 320);
+    setTimeout(onClose, 360);
   }, [onClose]);
 
   // Mobile drag-to-dismiss. Listens on the scroller; only engages while
@@ -916,9 +916,16 @@ export default function ProductPage({
       const dt = performance.now() - dragRef.current.startTime;
       const velocity = dt > 0 ? dy / dt : 0; // px/ms
       overlay.classList.remove('is-dragging');
-      overlay.style.transform = '';
       dragRef.current.active = false;
-      if (dy > 96 || velocity > 0.6) handleClose();
+      if (dy > 96 || velocity > 0.6) {
+        // Continue smoothly off-screen from the current drag position (the
+        // .product-page-overlay transition eases it the rest of the way) —
+        // no snap-back-then-down. Matches how the comments sheet leaves.
+        overlay.style.transform = 'translateY(100%)';
+        handleClose();
+      } else {
+        overlay.style.transform = ''; // didn't pass threshold → settle back
+      }
     };
 
     scroller.addEventListener('touchstart', onStart, { passive: true });

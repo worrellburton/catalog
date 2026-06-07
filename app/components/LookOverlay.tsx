@@ -555,7 +555,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
 
   const handleClose = useCallback(() => {
     setIsAnimatingOut(true);
-    setTimeout(onClose, 320);
+    setTimeout(onClose, 360);
   }, [onClose]);
 
   // Mobile drag-to-dismiss on the WHOLE overlay (not just the info
@@ -604,12 +604,19 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
       const dt = performance.now() - drag.startTime;
       const velocity = dt > 0 ? dy / dt : 0;
       overlay.classList.remove('is-dragging');
-      overlay.style.transform = '';
       drag.active = false;
       // Require a deliberate downward pull from the top — a casual / quick
       // scroll gesture shouldn't dismiss the look. (Was dy>96 || velocity>0.6,
       // which closed on the first small flick.)
-      if (dy > 150 && velocity > 0.25) handleClose();
+      if (dy > 150 && velocity > 0.25) {
+        // Continue smoothly off the bottom from the current drag position
+        // (the overlay's transform transition eases the rest) — matches the
+        // comments sheet leave; no snap-back-then-down.
+        overlay.style.transform = 'translateY(100%)';
+        handleClose();
+      } else {
+        overlay.style.transform = ''; // settle back
+      }
     };
     scroller.addEventListener('touchstart', onStart, { passive: true });
     scroller.addEventListener('touchmove', onMove, { passive: true });
