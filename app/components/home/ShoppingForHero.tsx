@@ -250,13 +250,20 @@ export default function ShoppingForHero({ onRevealFeed }: ShoppingForHeroProps) 
         </h1>
       </div>
 
-      {/* Scroll-to-best-sellers affordance: an animated mouse with a
-          dot that travels down, plus a bobbing chevron + label. */}
-      <button type="button" className="sfh-scroll-hint" onClick={onRevealFeed} aria-label="Scroll to see most popular">
+      {/* Scroll-to-your-daily-feed affordance: an animated mouse with a
+          dot that travels down, plus a bobbing chevron + label. The copy
+          educates the shopper that the feed is personalized and refreshes
+          daily — the more they use Catalog, the more it's tuned to them. */}
+      <button type="button" className="sfh-scroll-hint" onClick={onRevealFeed} aria-label="Open your daily feed">
         {/* Desktop keeps the subtle scroll-mouse; mobile shows no icon —
             just the label + chevron (the down-finger glyph read as clutter). */}
         <span className="sfh-mouse" aria-hidden="true"><span className="sfh-mouse-dot" /></span>
-        <span className="sfh-scroll-label">Scroll to see most popular</span>
+        <span className="sfh-scroll-label">Your daily feed</span>
+        <span className="sfh-scroll-sub">
+          A fresh one every single day, hand-tuned to your taste. The more you tap,
+          save, and shop, the more it becomes <em>yours</em> — like a personal stylist
+          who never sleeps (and never judges your 2&nbsp;a.m. browsing).
+        </span>
         <svg className="sfh-scroll-chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
           <polyline points="6 9 12 15 18 9" />
         </svg>
