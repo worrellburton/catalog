@@ -60,6 +60,7 @@ export function buildCashflow(
   revenue: MonthBreakdown[],
   acquisition: GtmMonth[],
   econ: EconAssumptions,
+  opexByMonth?: number[],
 ): CashMonth[] {
   const out: CashMonth[] = [];
   let cash = econ.startingCash;
@@ -67,7 +68,7 @@ export function buildCashflow(
     const rev = revenue[i].revenue;
     const grossProfit = rev * econ.grossMargin;
     const marketing = acquisition[i]?.spend ?? 0;
-    const opex = econ.monthlyOpex;
+    const opex = opexByMonth ? (opexByMonth[i] ?? econ.monthlyOpex) : econ.monthlyOpex;
     const net = grossProfit - marketing - opex;
     cash += net;
     out.push({ monthIndex: i, revenue: rev, grossProfit, marketing, opex, net, cash });

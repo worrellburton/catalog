@@ -5438,6 +5438,46 @@ html.admin-on-dark-canvas .admin-topbar,
 .admin-dark .funnel-table th, .admin-dark .funnel-table td { border-bottom-color: #27272a; }
 .admin-dark .funnel-table tbody tr:hover { background: #1f1f22; }
 
+/* ── Monthly OpEx builder page ─────────────────────────────────────── */
+.opex-page .model-dials { margin: 0 0 16px; }
+.opex-page .model-card { margin-bottom: 16px; }
+.opex-link { color: #6366f1; font-weight: 600; text-decoration: none; }
+.opex-link:hover { text-decoration: underline; }
+
+.opex-chart-svg { width: 100%; height: auto; display: block; }
+.opex-legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 8px; }
+.opex-legend-item { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: #64748b; }
+.opex-legend-item i { width: 10px; height: 10px; border-radius: 3px; }
+.admin-dark .opex-legend-item { color: #a1a1aa; }
+
+.opex-table-wrap { overflow-x: auto; }
+.opex-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.opex-table th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8; font-weight: 600; padding: 4px 8px; }
+.opex-table td { padding: 4px 8px; border-top: 1px solid #f1f5f9; }
+.admin-dark .opex-table td { border-top-color: #27272a; }
+.opex-in {
+  width: 100%;
+  font-family: inherit;
+  font-size: 12.5px;
+  padding: 6px 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 7px;
+  background: #fff;
+  color: #0f172a;
+  outline: none;
+}
+.opex-in:focus { border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15); }
+.opex-in-name { min-width: 130px; }
+.opex-in-num { width: 92px; text-align: right; }
+.opex-in-pct { display: inline-flex; align-items: center; gap: 4px; color: #94a3b8; }
+.admin-dark .opex-in { background: #18181b; border-color: #3f3f46; color: #f4f4f5; }
+.opex-del {
+  width: 26px; height: 26px; border: 0; border-radius: 6px; background: none;
+  color: #cbd5e1; font-size: 18px; line-height: 1; cursor: pointer;
+}
+.opex-del:hover { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
+.opex-empty { text-align: center; color: #94a3b8; padding: 20px; font-size: 12.5px; }
+
 /* Dark mode */
 .admin-dark .model-row { background: #18181b; border-color: #27272a; }
 .admin-dark .model-row-title-btn { color: #f4f4f5; }

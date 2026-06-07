@@ -25,6 +25,9 @@ import {
   toCsv,
 } from '~/services/model-metrics';
 import { useSharedModelSettings } from '~/hooks/useSharedModelSettings';
+import { useSharedOpex } from '~/hooks/useSharedOpex';
+import { buildOpexSchedule, opexAverage } from '~/services/opex';
+import { Link } from '@remix-run/react';
 import AssumptionCard, { type FieldDef } from '~/components/model/AssumptionCard';
 import ModelRow from '~/components/model/ModelRow';
 import UnifiedModelChart from '~/components/model/UnifiedModelChart';
@@ -107,7 +110,15 @@ export default function AdminModel() {
   // across every admin session). UI prefs (order, open/closed, which lines
   // show) stay per-browser.
   const { rev, acq, econ, setRev, setAcq, setEcon, live } = useSharedModelSettings();
+  const { items: opexItems } = useSharedOpex();
   const [ui, setUi] = useState<ModelUi>(() => readUi());
+
+  // OpEx can be driven by the detailed builder; when it has line items the
+  // model runs on its per-month schedule and the Monthly OpEx field shows
+  // the (read-only) average.
+  const opexSchedule = useMemo(() => buildOpexSchedule(opexItems), [opexItems]);
+  const hasOpex = opexItems.length > 0 && opexSchedule.some(v => v > 0);
+  const opexAvg = useMemo(() => opexAverage(opexSchedule), [opexSchedule]);
 
   useEffect(() => { try { window.localStorage.setItem(UI_KEY, JSON.stringify(ui)); } catch { /* quota */ } }, [ui]);
 
@@ -120,7 +131,7 @@ export default function AdminModel() {
   const { revenue, acquisition } = useMemo(() => buildModel(erev, eacq, true), [erev, eacq]);
   const revSummary = useMemo(() => summarize(revenue), [revenue]);
   const acqSummary = useMemo(() => summarizeGtm(acquisition, eacq), [acquisition, eacq]);
-  const cash = useMemo(() => buildCashflow(revenue, acquisition, eecon), [revenue, acquisition, eecon]);
+  const cash = useMemo(() => buildCashflow(revenue, acquisition, eecon, hasOpex ? opexSchedule : undefined), [revenue, acquisition, eecon, hasOpex, opexSchedule]);
   const metrics = useMemo(() => investorMetrics(erev, eacq, revenue, acquisition, acqSummary, eecon, cash), [erev, eacq, revenue, acquisition, acqSummary, eecon, cash]);
   const sens = useMemo(() => sensitivity(erev, eacq), [erev, eacq]);
   const retention = useMemo(() => cohortRetention(eacq.churn), [eacq.churn]);
@@ -214,11 +225,17 @@ export default function AdminModel() {
     if (key === 'costs') {
       return (
         <ModelRow {...common} title="Costs & cash" subtitle="Margin, OpEx, runway → cash line" onReset={readOnly ? undefined : () => setEcon(ECON_DEFAULTS)}>
-          <p className="model-link-note">Burn = marketing + OpEx − gross profit. The checkbox plots the <strong style={{ color: COLORS.costs }}>cash</strong> balance.</p>
+          <p className="model-link-note">
+            Burn = marketing + OpEx − gross profit. The checkbox plots the <strong style={{ color: COLORS.costs }}>cash</strong> balance.
+            {' '}Build OpEx from headcount &amp; expenses in the <Link to="/admin/model/opex" className="opex-link">OpEx builder →</Link>
+          </p>
           <div className="proj-cards model-cards">
-            {COSTS_FIELDS.map(f => (
-              <AssumptionCard key={f.key} field={f} value={eecon[f.key as keyof EconAssumptions]} readOnly={readOnly} onChange={(n) => setEconField(f.key as keyof EconAssumptions, n)} />
-            ))}
+            {COSTS_FIELDS.map(f => {
+              if (f.key === 'monthlyOpex' && hasOpex) {
+                return <AssumptionCard key={f.key} field={{ ...f, hint: 'Avg from OpEx builder (per-month drives the model)' }} value={opexAvg} readOnly onChange={() => {}} />;
+              }
+              return <AssumptionCard key={f.key} field={f} value={eecon[f.key as keyof EconAssumptions]} readOnly={readOnly} onChange={(n) => setEconField(f.key as keyof EconAssumptions, n)} />;
+            })}
           </div>
         </ModelRow>
       );
