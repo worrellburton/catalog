@@ -28,7 +28,17 @@ interface UseAppViewResult {
 //   - firstVisit: branded SplashScreen on a user's first ever visit
 //   - authSplash: the gate-side fade while supabase auth is resolving
 export function useAppView({ user, authLoading }: UseAppViewArgs): UseAppViewResult {
-  const [view, setView] = useState<AppView>('locked');
+  // A ?look=<uuid> deep-link (e.g. tapping a look in Activity) should land
+  // straight on the look — not replay the cold-boot 'locked' → splash beat.
+  // Start in 'app' so the auth-splash never covers the feed while the deep-link
+  // handler resolves the look. (firstVisit already skips the brand splash for
+  // ?look=; this skips the auth-splash too.)
+  const [view, setView] = useState<AppView>(() => {
+    try {
+      if (typeof window !== 'undefined' && /[?&]look=/.test(window.location.search)) return 'app';
+    } catch { /* ignore */ }
+    return 'locked';
+  });
 
   // "Warm" = this tab already booted the app once this session. Set the
   // moment we first reach 'app' (below). On a warm remount — e.g. the
