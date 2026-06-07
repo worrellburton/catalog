@@ -4079,6 +4079,11 @@ export default function AdminData() {
               {lookTable.sortedData.map(row => {
                 const look = looks.find(l => l.id === row.id)!;
                 const isExpanded = expandedId === row.id;
+                // Look creative shown in the expanded panel: the video and
+                // its poster frame (first frame). Poster-first load mirrors
+                // the app — LazyThumb paints the still, then the video.
+                const lookVideoSrc = look.video ? (/^https?:\/\//i.test(look.video) ? look.video : `${basePath}/${look.video}`) : '';
+                const lookPoster = (look as { thumbnail_url?: string | null }).thumbnail_url || null;
                 return (
                   <Fragment key={row.id}>
                     <tr
@@ -4233,6 +4238,26 @@ export default function AdminData() {
                     <tr className={`admin-look-expanded-row ${isExpanded ? 'open' : ''}`}>
                       <td colSpan={10} style={{ padding: 0 }}>
                         <div className="admin-expand-animate">
+                          <div className="admin-look-expand-grid">
+                          <div className="admin-look-creative-col">
+                            <h3 className="admin-products-title">Look creative</h3>
+                            <div className="admin-look-creative-tiles">
+                              <figure className="admin-look-creative-fig">
+                                <div className="admin-look-creative-media">
+                                  {lookVideoSrc ? <LazyThumb url={lookVideoSrc} thumbnail={lookPoster} /> : <div className="admin-look-creative-empty" />}
+                                </div>
+                                <figcaption>Video</figcaption>
+                              </figure>
+                              <figure className="admin-look-creative-fig">
+                                <div className="admin-look-creative-media">
+                                  {lookPoster
+                                    ? <img src={lookPoster} alt="Poster frame" />
+                                    : (lookVideoSrc ? <video src={lookVideoSrc} muted playsInline preload="metadata" /> : <div className="admin-look-creative-empty" />)}
+                                </div>
+                                <figcaption>Poster frame</figcaption>
+                              </figure>
+                            </div>
+                          </div>
                           <div className="admin-look-products">
                             <h3 className="admin-products-title">Products</h3>
                             <table className="admin-table admin-products-table">
@@ -4333,6 +4358,7 @@ export default function AdminData() {
                                 })}
                               </tbody>
                             </table>
+                          </div>
                           </div>
                         </div>
                       </td>
