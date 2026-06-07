@@ -497,6 +497,21 @@ export default function GeneratePage() {
     return out;
   }, [productResults, categoryQueries, categoryBrandFilters]);
 
+  // Unified product field — one floating cloud of ALL products with a single
+  // search + category chips (replaces the per-category rows).
+  const [cloudQuery, setCloudQuery] = useState('');
+  const [cloudCat, setCloudCat] = useState<string | null>(null);
+  // Flat, filtered product list for the unified floating field.
+  const cloudProducts = useMemo(() => {
+    const q = cloudQuery.trim().toLowerCase();
+    const grp = cloudCat ? CATEGORY_GROUPS.find(g => g.label === cloudCat) : null;
+    return productResults.filter(p => {
+      if (grp && !productInCategory(p, grp)) return false;
+      if (!q) return true;
+      return (p.name || '').toLowerCase().includes(q) || (p.brand || '').toLowerCase().includes(q);
+    });
+  }, [productResults, cloudQuery, cloudCat]);
+
   // Top brands available within each category (pre-filter). We pull
   // them from the unfiltered productResults so flipping a chip doesn't
   // change which chips are visible.
@@ -1282,14 +1297,17 @@ export default function GeneratePage() {
     if (!wasPicked && typeof document !== 'undefined') {
       requestAnimationFrame(() => {
         const card = document.querySelector(`[data-gen-card-id="${p.id}"]`) as HTMLElement | null;
-        const row = card?.closest('.gen-cat-row-scroll') as HTMLElement | null;
-        if (!card || !row) return;
+        if (!card) return;
+        // Horizontal centering only applies to the legacy per-category rows;
+        // the unified cloud is a grid (no horizontal scroller).
+        const row = card.closest('.gen-cat-row-scroll') as HTMLElement | null;
+        if (row) {
+          const cardRect0 = card.getBoundingClientRect();
+          const rowRect = row.getBoundingClientRect();
+          const delta = (cardRect0.left + cardRect0.width / 2) - (rowRect.left + rowRect.width / 2);
+          if (Math.abs(delta) >= 4) row.scrollBy({ left: delta, behavior: 'smooth' });
+        }
         const cardRect = card.getBoundingClientRect();
-        const rowRect = row.getBoundingClientRect();
-        const cardCenter = cardRect.left + cardRect.width / 2;
-        const rowCenter = rowRect.left + rowRect.width / 2;
-        const delta = cardCenter - rowCenter;
-        if (Math.abs(delta) >= 4) row.scrollBy({ left: delta, behavior: 'smooth' });
         // Also bring the card to the vertical middle of the screen. Target
         // ~46% of the viewport so the bottom dock doesn't cover it. Scroll the
         // ACTUAL scroll container: .gen-page only scrolls on some viewports —
@@ -1299,7 +1317,7 @@ export default function GeneratePage() {
         // so the card never moved to the middle.)
         const vDelta = (cardRect.top + cardRect.height / 2) - window.innerHeight * 0.46;
         if (Math.abs(vDelta) > 10) {
-          let scroller: HTMLElement | null = row.parentElement;
+          let scroller: HTMLElement | null = (row || card).parentElement;
           while (scroller) {
             const oy = getComputedStyle(scroller).overflowY;
             if ((oy === 'auto' || oy === 'scroll') && scroller.scrollHeight > scroller.clientHeight + 1) break;
@@ -1893,85 +1911,58 @@ export default function GeneratePage() {
             {productsLoading && productResults.length === 0 ? (
               <div className="gen-empty">Loading products…</div>
             ) : (
-              PICKER_GROUPS.map(group => {
-                const rowProducts = productsByCategory[group.label] || [];
-                const rowQuery = categoryQueries[group.label] || '';
-                const rowBrands = brandsByCategory[group.label] || [];
-                const activeBrand = categoryBrandFilters[group.label] || null;
-                // "All" opens expanded; category rows default collapsed.
-                // A typed query force-expands any row.
-                const expanded = (expandedCats[group.label] ?? true) || !!rowQuery;
-                return (
-                  <div key={group.label} className={`gen-cat-row${expanded ? ' is-expanded' : ''}`}>
-                    <div className="gen-cat-row-head">
+              <>
+                {/* Unified field: one search + category chips over a single
+                    floating cloud of all products. */}
+                <div className="gen-cloud-controls">
+                  <input
+                    type="search"
+                    className="gen-cloud-search"
+                    placeholder="Search products…"
+                    value={cloudQuery}
+                    onChange={e => setCloudQuery(e.target.value)}
+                    aria-label="Search products"
+                  />
+                  <div className="gen-cloud-chips" role="tablist" aria-label="Filter by category">
+                    <button type="button" role="tab" aria-selected={!cloudCat} className={`gen-cloud-chip${!cloudCat ? ' is-active' : ''}`} onClick={() => setCloudCat(null)}>All</button>
+                    {CATEGORY_GROUPS.map(g => (
                       <button
+                        key={g.label}
                         type="button"
-                        className="gen-cat-row-toggle"
-                        onClick={() => toggleCat(group.label)}
-                        aria-expanded={expanded}
-                      >
-                        <svg className={`gen-cat-row-chevron${expanded ? ' is-open' : ''}`} width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-                        <span className="gen-cat-row-label">{group.label}</span>
-                        {rowProducts.length > 0 && <span className="gen-cat-row-count">{rowProducts.length}</span>}
-                      </button>
-                      <input
-                        type="search"
-                        className="gen-cat-row-search"
-                        placeholder={`Search ${group.label.toLowerCase()}…`}
-                        value={rowQuery}
-                        onChange={e => setCategoryQuery(group.label, e.target.value)}
-                        aria-label={`Search ${group.label}`}
-                      />
-                    </div>
-                    {/* Brand chips — top 4 brands present in this
-                        category. Tap one to filter the row to that
-                        brand; tap the active chip to clear it. */}
-                    {expanded && rowBrands.length > 0 && (
-                      <div className="gen-cat-row-brands" role="tablist" aria-label={`Filter ${group.label} by brand`}>
-                        {rowBrands.map(b => (
-                          <button
-                            key={b}
-                            type="button"
-                            role="tab"
-                            aria-selected={activeBrand === b}
-                            className={`gen-cat-row-brand${activeBrand === b ? ' is-active' : ''}`}
-                            onClick={() => setCategoryBrand(group.label, activeBrand === b ? null : b)}
-                          >{b}</button>
-                        ))}
-                      </div>
-                    )}
-                    {expanded && (
-                    <div className="gen-cat-row-scroll" key={`${group.label}-${activeBrand || 'all'}-${rowQuery}`}>
-                      {rowProducts.length === 0 ? (
-                        <div className="gen-cat-row-empty">
-                          {rowQuery ? `No ${group.label.toLowerCase()} match "${rowQuery}"` : `No ${group.label.toLowerCase()} yet`}
-                        </div>
-                      ) : (
-                        rowProducts.map(p => {
-                          const isPicked = picked.some(x => x.id === p.id);
-                          return (
-                            <button
-                              key={p.id}
-                              type="button"
-                              className={`gen-cat-card${isPicked ? ' is-picked' : ''}`}
-                              data-gen-card-id={p.id}
-                              onClick={() => togglePick(p)}
-                              /* No disabled state - a tap on a 6th card
-                                 surfaces the limit toast instead of
-                                 silently doing nothing. */
-                            >
-                              {p.image_url && <img src={p.image_url} alt="" loading="lazy" />}
-                              <span className="gen-cat-card-name">{p.name || 'Product'}</span>
-                              <span className="gen-cat-card-brand">{p.brand}</span>
-                            </button>
-                          );
-                        })
-                      )}
-                    </div>
-                    )}
+                        role="tab"
+                        aria-selected={cloudCat === g.label}
+                        className={`gen-cloud-chip${cloudCat === g.label ? ' is-active' : ''}`}
+                        onClick={() => setCloudCat(c => (c === g.label ? null : g.label))}
+                      >{g.label}</button>
+                    ))}
                   </div>
-                );
-              })
+                </div>
+                <div className="gen-cloud">
+                  {cloudProducts.length === 0 ? (
+                    <div className="gen-cat-row-empty">
+                      {cloudQuery ? `No products match "${cloudQuery}"` : 'No products yet'}
+                    </div>
+                  ) : (
+                    cloudProducts.map((p, i) => {
+                      const isPicked = picked.some(x => x.id === p.id);
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          className={`gen-cloud-card${isPicked ? ' is-picked' : ''}`}
+                          data-gen-card-id={p.id}
+                          style={{ ['--i']: i % 14 } as React.CSSProperties}
+                          onClick={() => togglePick(p)}
+                        >
+                          {p.image_url && <img src={p.image_url} alt="" loading="lazy" />}
+                          <span className="gen-cloud-card-name">{p.name || 'Product'}</span>
+                          <span className="gen-cloud-card-brand">{p.brand}</span>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+              </>
             )}
           </section>
         )}
