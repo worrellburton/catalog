@@ -317,12 +317,6 @@ export default function ShoppingForHero({ onRevealFeed }: ShoppingForHeroProps) 
             <FeedParticles className="sfh-feed-info-particles" />
             <div className="sfh-feed-info-content">
               <button type="button" className="sfh-feed-info-close" onClick={() => setShowFeedInfo(false)} aria-label="Close">×</button>
-              <div className="sfh-feed-info-badge" aria-hidden="true">
-                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M12 3l1.9 4.9L18.8 9.8l-4.9 1.9L12 16.6l-1.9-4.9L5.2 9.8l4.9-1.9z" />
-                  <path d="M19 3v3M20.5 4.5h-3M5 17v2M6 18H4" />
-                </svg>
-              </div>
               <h3 className="sfh-feed-info-title">Your daily feed</h3>
               <p className="sfh-feed-info-body">
                 A brand-new lineup, hand-tuned to you, every single day. The more you tap,
