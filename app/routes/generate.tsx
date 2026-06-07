@@ -518,6 +518,14 @@ export default function GeneratePage() {
     return out;
   }, [productResults]);
   const [picked, setPicked] = useState<PickedProduct[]>([]);
+  // Build transition: when leaving the pick step, the picked products fly
+  // forward into the next screen (the "build order"). null = idle.
+  const [launching, setLaunching] = useState(false);
+  const launchToNext = useCallback(() => {
+    if (picked.length === 0) { goNext('products', setStep); return; }
+    setLaunching(true);
+    window.setTimeout(() => { setLaunching(false); goNext('products', setStep); }, 720);
+  }, [picked.length]);
 
   // Pre-pick a product when the user lands here from a Product page's
   // "Try it on" button (?product_url=…). One-shot — once we hydrate we
@@ -1548,6 +1556,21 @@ export default function GeneratePage() {
           <ParticleBackground />
         </div>
       )}
+      {/* Build transition: the picked products fly forward into the next screen. */}
+      {launching && (
+        <div className="gen-launch-overlay" aria-hidden="true">
+          {picked.map((p, i) => (
+            <div
+              key={p.id}
+              className="gen-launch-card"
+              style={{
+                ['--i']: i,
+                backgroundImage: p.image_url ? `url(${p.image_url})` : undefined,
+              } as React.CSSProperties}
+            />
+          ))}
+        </div>
+      )}
       {confirmHostModal}
       {impersonate && (
         <div
@@ -2473,7 +2496,11 @@ export default function GeneratePage() {
                 {submitting ? 'Starting…' : 'Build'}
               </button>
             ) : (
-              <button className="gen-btn-primary" disabled={!canAdvance} onClick={() => goNext(step, setStep)}>
+              <button
+                className="gen-btn-primary"
+                disabled={!canAdvance}
+                onClick={() => (step === 'products' ? launchToNext() : goNext(step, setStep))}
+              >
                 Next
               </button>
             )}

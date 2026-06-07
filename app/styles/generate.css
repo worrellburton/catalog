@@ -33,6 +33,39 @@
   letter-spacing: -0.005em;
 }
 
+/* Build transition — picked products fly forward into the next screen. */
+.gen-launch-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  perspective: 1100px;
+}
+.gen-launch-card {
+  width: clamp(88px, 26vw, 130px);
+  aspect-ratio: 3 / 4;
+  border-radius: 16px;
+  background-size: cover;
+  background-position: center;
+  background-color: #1a1a1a;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
+  transform-style: preserve-3d;
+  animation: gen-launch-fly 0.72s cubic-bezier(0.5, 0, 0.2, 1) forwards;
+  animation-delay: calc(var(--i) * 70ms);
+}
+@keyframes gen-launch-fly {
+  0%   { transform: translateY(70px) scale(0.7); opacity: 0; }
+  28%  { transform: translateY(0) scale(1); opacity: 1; }
+  100% { transform: translateZ(560px) translateY(-90px) scale(1.65) rotateX(16deg); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gen-launch-card { animation-duration: 0.3s; }
+}
+
 /* Pick-products particle field — fixed behind the whole picker; content sits
    above it via z-index. */
 .gen-products-particles {
