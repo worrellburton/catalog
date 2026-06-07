@@ -4142,24 +4142,30 @@ export default function AdminData() {
                               return pg && pg !== 'unisex' && pg !== lookFlavor;
                             });
                             if (!mismatched) return null;
+                            const productGender = (allProducts.find(ap => `${ap.brand}-${ap.name}` === `${mismatched.brand}-${mismatched.name}`)?.gender) || 'untagged';
                             return (
-                              <span
-                                title={`Look is "${look.gender}" but "${mismatched.name}" is ${(allProducts.find(ap => `${ap.brand}-${ap.name}` === `${mismatched.brand}-${mismatched.name}`)?.gender) || 'untagged'} — review and re-tag or re-publish`}
-                                style={{
-                                  display: 'inline-flex', alignItems: 'center', gap: 3,
-                                  marginLeft: 6, padding: '1px 7px', borderRadius: 999,
-                                  background: '#fef3c7', color: '#92400e',
-                                  fontSize: 10, fontWeight: 600, letterSpacing: 0.2,
-                                  border: '1px solid #fde68a', cursor: 'help',
-                                }}
-                              >
-                                <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                                  <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
-                                  <line x1="12" y1="9" x2="12" y2="13" />
-                                  <line x1="12" y1="17" x2="12.01" y2="17" />
-                                </svg>
-                                Mismatch
-                              </span>
+                              <details className="admin-mismatch" onClick={(e) => e.stopPropagation()}>
+                                <summary
+                                  className="admin-mismatch-summary"
+                                  style={{
+                                    display: 'inline-flex', alignItems: 'center', gap: 3,
+                                    marginLeft: 6, padding: '1px 7px', borderRadius: 999,
+                                    background: '#fef3c7', color: '#92400e',
+                                    fontSize: 10, fontWeight: 600, letterSpacing: 0.2,
+                                    border: '1px solid #fde68a', cursor: 'pointer',
+                                  }}
+                                >
+                                  <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                                    <path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+                                    <line x1="12" y1="9" x2="12" y2="13" />
+                                    <line x1="12" y1="17" x2="12.01" y2="17" />
+                                  </svg>
+                                  Mismatch
+                                </summary>
+                                <div className="admin-mismatch-why">
+                                  <strong>Gender mismatch.</strong> This look is tagged <strong>“{look.gender}”</strong>, but its product <strong>“{mismatched.name}”</strong> is tagged <strong>{productGender}</strong>. The feed filters looks by gender, so a {productGender} product inside a {look.gender} look can surface to the wrong audience and read as a bad recommendation. Fix by re-tagging the product’s gender or re-publishing the look with the correct gender.
+                                </div>
+                              </details>
                             );
                           })()}
                         </div>

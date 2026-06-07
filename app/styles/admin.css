@@ -5343,6 +5343,32 @@ html.admin-on-dark-canvas .admin-topbar,
 .opex-summary-row { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 @media (max-width: 900px) { .opex-summary-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 
+/* Mismatch flag — click the badge to reveal why it's flagged. */
+.admin-mismatch { position: relative; display: inline-block; }
+.admin-mismatch-summary { list-style: none; }
+.admin-mismatch-summary::-webkit-details-marker { display: none; }
+.admin-mismatch-why {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 6px;
+  z-index: 40;
+  width: 280px;
+  padding: 11px 13px;
+  background: #fff;
+  border: 1px solid #fde68a;
+  border-radius: 10px;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18);
+  font-size: 11.5px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.5;
+  color: #475569;
+  white-space: normal;
+}
+.admin-mismatch-why strong { color: #0f172a; font-weight: 700; }
+.admin-dark .admin-mismatch-why { background: #1f1f22; border-color: #57430f; color: #d4d4d8; }
+.admin-dark .admin-mismatch-why strong { color: #f4f4f5; }
+
 /* "Rate my assumptions" button + modal. */
 .model-rate-btn {
   display: inline-flex;
