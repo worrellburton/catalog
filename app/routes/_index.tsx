@@ -888,6 +888,33 @@ export default function Home() {
           setSimilarCreatives(rows);
         })
         .catch(() => { /* leave rail empty rather than throw */ });
+      // Products opened from a look/search/recents can arrive WITHOUT the
+      // live primary video inline (the look's cached product data may
+      // predate the render). Fetch it and patch selectedProduct so the
+      // desktop hero plays the primary video instead of a static poster —
+      // ProductPage synthesizes a video hero from product.video_url.
+      if (!productVideoUrl && supabase) {
+        void supabase
+          .from('products')
+          .select('primary_video_url, primary_video_poster_url, primary_image_url, image_url')
+          .eq('id', productId)
+          .maybeSingle()
+          .then(({ data }) => {
+            const vurl = (data?.primary_video_url as string | null) || null;
+            if (!vurl) return;
+            const poster = (data?.primary_video_poster_url
+              || data?.primary_image_url
+              || data?.image_url
+              || product.image
+              || (product as Product & { thumbnail_url?: string }).thumbnail_url
+              || null) as string | null;
+            setSelectedProduct(prev =>
+              prev && prev.url === product.url && prev.name === product.name
+                ? { ...prev, video_url: vurl, thumbnail_url: poster ?? prev.thumbnail_url }
+                : prev,
+            );
+          });
+      }
     }).catch(() => {});
 
     if (product.brand) {

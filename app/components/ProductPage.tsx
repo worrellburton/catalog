@@ -979,10 +979,15 @@ export default function ProductPage({
   // a hero creative from it so the hero plays the primary video instead.
   const effectiveCreative: ProductPageCreative | undefined = creative
     ?? (product.video_url
-      ? { id: `product:${product.brand}-${product.name}`, videoUrl: product.video_url, thumbnailUrl: product.image ?? null }
+      ? { id: `product:${product.brand}-${product.name}`, videoUrl: product.video_url, thumbnailUrl: product.image ?? product.thumbnail_url ?? null }
       : undefined);
 
-  const heroClassName = `pd-hero${effectiveCreative ? ' pd-hero--video' : product.image ? ' pd-hero--image' : ' pd-hero--empty'}`;
+  // Poster source of last resort. Products opened from a look can carry a
+  // primary-video poster in thumbnail_url while `image` is empty — without
+  // this the hero painted as a black void.
+  const heroStill = product.image || product.thumbnail_url || '';
+
+  const heroClassName = `pd-hero${effectiveCreative ? ' pd-hero--video' : heroStill ? ' pd-hero--image' : ' pd-hero--empty'}`;
 
   // Tap-handoff poster: when CreativeCard navigates here, it stashes a
   // canvas snapshot of the playing card frame on window.__feedTapPosters.
@@ -1004,7 +1009,7 @@ export default function ProductPage({
   // product.image (which itself is primary_image_url → image_url →
   // first photo) so the hero never paints as a black void while waiting
   // for the trail-video host to attach.
-  const heroPoster = tapHandoffPoster || effectiveCreative?.thumbnailUrl || product.image || '';
+  const heroPoster = tapHandoffPoster || effectiveCreative?.thumbnailUrl || heroStill;
 
   // Take ownership of the shared <video> element keyed by creative.id. The
   // TrailVideoHost moves the running DOM node from the card slot into this
@@ -1173,9 +1178,9 @@ export default function ProductPage({
                   style={{ position: 'relative', zIndex: 1 }}
                 />
               </>
-            ) : product.image ? (
+            ) : heroStill ? (
               <img
-                src={product.image.replace('w=200&h=200', 'w=1200&h=1600')}
+                src={heroStill.replace('w=200&h=200', 'w=1200&h=1600')}
                 alt={product.name}
                 className="pd-hero-media"
               />
