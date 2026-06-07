@@ -123,16 +123,21 @@
   transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
 .gen-cloud-chip.is-active { background: #fff; color: #0f172a; border-color: #fff; }
+/* Brand chips sit under the type chips — slightly smaller / secondary. */
+.gen-cloud-chips--brands { padding-top: 0; }
+.gen-cloud-chip--brand {
+  font-size: 12px;
+  padding: 5px 11px;
+  color: rgba(255, 255, 255, 0.6);
+}
+.gen-cloud-chip--brand.is-active { background: rgba(255, 255, 255, 0.92); color: #0f172a; }
 
 .gen-cloud {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
-  gap: 18px;
-  padding: 18px 4px 28px;
-  /* Flows with the page so the user can scroll through ALL products (not
-     constrained to one viewport). */
-  perspective: 1000px;
-  perspective-origin: 50% 38%;
+  gap: 14px;
+  padding: 16px 4px 28px;
+  /* Flows with the page so the user can scroll through ALL products. */
 }
 .gen-cloud-card {
   position: relative;
@@ -141,25 +146,17 @@
   overflow: hidden;
   background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(8px);
-  -webkit-backdrop-filter: blur(8px);
   cursor: pointer;
   padding: 0;
   font-family: inherit;
   text-align: left;
-  transform-style: preserve-3d;
-  animation: gen-cloud-float 7s ease-in-out infinite;
-  animation-delay: calc(var(--i, 0) * -0.5s);
-  transition: border-color 0.18s ease, box-shadow 0.18s ease;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
 }
-/* Dramatic 3D drift — products move around in space. */
-@keyframes gen-cloud-float {
-  0%, 100% { transform: translateZ(0) translateY(0) rotateX(0deg) rotateY(0deg); }
-  25%      { transform: translateZ(42px) translateY(-12px) rotateY(-7deg) rotateX(3deg); }
-  50%      { transform: translateZ(22px) translateY(5px) rotateY(5deg) rotateX(-2deg); }
-  75%      { transform: translateZ(54px) translateY(-7px) rotateY(7deg) rotateX(2deg); }
-}
-.gen-cloud-card img {
+.gen-cloud-card:active { transform: scale(0.97); }
+/* Poster image + product video both fill the card (cover) — no distortion. */
+.gen-cloud-card img,
+.gen-cloud-media,
+.gen-cloud-card video {
   position: absolute;
   inset: 0;
   width: 100%;

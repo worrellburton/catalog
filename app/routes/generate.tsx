@@ -2,6 +2,7 @@ import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from '@remix-run/react';
 import CatalogLogo from '~/components/CatalogLogo';
 import ParticleBackground from '~/components/ParticleBackground';
+import AutoplayVideo from '~/components/AutoplayVideo';
 import { particleControls } from '~/services/particles';
 import { supabase } from '~/utils/supabase';
 import { useAuth } from '~/hooks/useAuth';
@@ -153,6 +154,10 @@ interface PickedProduct {
   price: string | null;
   image_url: string | null;
   role_tag: string | null;
+  // Optional richer media for the unified field cards (poster + product video).
+  primary_image_url?: string | null;
+  primary_video_url?: string | null;
+  primary_video_poster_url?: string | null;
 }
 
 const ROLE_TAGS = ['Hat', 'Top', 'Jacket', 'Dress', 'Pants', 'Shoes', 'Bag', 'Jewelry', 'Sunglasses', 'Accessory'];
@@ -501,16 +506,31 @@ export default function GeneratePage() {
   // search + category chips (replaces the per-category rows).
   const [cloudQuery, setCloudQuery] = useState('');
   const [cloudCat, setCloudCat] = useState<string | null>(null);
-  // Flat, filtered product list for the unified floating field.
+  const [cloudBrand, setCloudBrand] = useState<string | null>(null);
+  // Products in the active category (before brand/query filters) — drives both
+  // the brand chips and the final list.
+  const cloudInCat = useMemo(() => {
+    const grp = cloudCat ? CATEGORY_GROUPS.find(g => g.label === cloudCat) : null;
+    return grp ? productResults.filter(p => productInCategory(p, grp)) : productResults;
+  }, [productResults, cloudCat]);
+  // Top brands within the active category, for the brand chip row under types.
+  const cloudBrands = useMemo(() => {
+    const tally = new Map<string, number>();
+    for (const p of cloudInCat) {
+      const b = (p.brand || '').trim();
+      if (b) tally.set(b, (tally.get(b) || 0) + 1);
+    }
+    return [...tally.entries()].sort((a, b) => b[1] - a[1]).map(e => e[0]).slice(0, 12);
+  }, [cloudInCat]);
+  // Final, filtered product list for the unified field.
   const cloudProducts = useMemo(() => {
     const q = cloudQuery.trim().toLowerCase();
-    const grp = cloudCat ? CATEGORY_GROUPS.find(g => g.label === cloudCat) : null;
-    return productResults.filter(p => {
-      if (grp && !productInCategory(p, grp)) return false;
+    return cloudInCat.filter(p => {
+      if (cloudBrand && (p.brand || '').toLowerCase() !== cloudBrand.toLowerCase()) return false;
       if (!q) return true;
       return (p.name || '').toLowerCase().includes(q) || (p.brand || '').toLowerCase().includes(q);
     });
-  }, [productResults, cloudQuery, cloudCat]);
+  }, [cloudInCat, cloudQuery, cloudBrand]);
 
   // Top brands available within each category (pre-filter). We pull
   // them from the unfiltered productResults so flipping a chip doesn't
@@ -857,7 +877,7 @@ export default function GeneratePage() {
       // generation pipeline needs a visual reference per product.
       let query = supabase!
         .from('products')
-        .select('id, name, brand, price, image_url')
+        .select('id, name, brand, price, image_url, primary_image_url, primary_video_url, primary_video_poster_url')
         .not('image_url', 'is', null)
         .order('created_at', { ascending: false })
         .limit(1000);
@@ -1923,7 +1943,7 @@ export default function GeneratePage() {
                     aria-label="Search products"
                   />
                   <div className="gen-cloud-chips" role="tablist" aria-label="Filter by category">
-                    <button type="button" role="tab" aria-selected={!cloudCat} className={`gen-cloud-chip${!cloudCat ? ' is-active' : ''}`} onClick={() => setCloudCat(null)}>All</button>
+                    <button type="button" role="tab" aria-selected={!cloudCat} className={`gen-cloud-chip${!cloudCat ? ' is-active' : ''}`} onClick={() => { setCloudCat(null); setCloudBrand(null); }}>All</button>
                     {CATEGORY_GROUPS.map(g => (
                       <button
                         key={g.label}
@@ -1931,10 +1951,25 @@ export default function GeneratePage() {
                         role="tab"
                         aria-selected={cloudCat === g.label}
                         className={`gen-cloud-chip${cloudCat === g.label ? ' is-active' : ''}`}
-                        onClick={() => setCloudCat(c => (c === g.label ? null : g.label))}
+                        onClick={() => { setCloudCat(c => (c === g.label ? null : g.label)); setCloudBrand(null); }}
                       >{g.label}</button>
                     ))}
                   </div>
+                  {/* Brands under the types — filter the field to one brand. */}
+                  {cloudBrands.length > 0 && (
+                    <div className="gen-cloud-chips gen-cloud-chips--brands" role="tablist" aria-label="Filter by brand">
+                      {cloudBrands.map(b => (
+                        <button
+                          key={b}
+                          type="button"
+                          role="tab"
+                          aria-selected={cloudBrand === b}
+                          className={`gen-cloud-chip gen-cloud-chip--brand${cloudBrand === b ? ' is-active' : ''}`}
+                          onClick={() => setCloudBrand(c => (c === b ? null : b))}
+                        >{b}</button>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div className="gen-cloud">
                   {cloudProducts.length === 0 ? (
@@ -1942,18 +1977,22 @@ export default function GeneratePage() {
                       {cloudQuery ? `No products match "${cloudQuery}"` : 'No products yet'}
                     </div>
                   ) : (
-                    cloudProducts.map((p, i) => {
+                    cloudProducts.map(p => {
                       const isPicked = picked.some(x => x.id === p.id);
+                      const poster = p.primary_video_poster_url || p.primary_image_url || p.image_url;
                       return (
                         <button
                           key={p.id}
                           type="button"
                           className={`gen-cloud-card${isPicked ? ' is-picked' : ''}`}
                           data-gen-card-id={p.id}
-                          style={{ ['--i']: i % 14 } as React.CSSProperties}
                           onClick={() => togglePick(p)}
                         >
-                          {p.image_url && <img src={p.image_url} alt="" loading="lazy" />}
+                          {p.primary_video_url ? (
+                            <AutoplayVideo className="gen-cloud-media" src={p.primary_video_url} poster={poster || undefined} />
+                          ) : poster ? (
+                            <img className="gen-cloud-media" src={poster} alt="" loading="lazy" decoding="async" />
+                          ) : null}
                           <span className="gen-cloud-card-name">{p.name || 'Product'}</span>
                           <span className="gen-cloud-card-brand">{p.brand}</span>
                         </button>
