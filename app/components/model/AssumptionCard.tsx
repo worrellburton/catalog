@@ -42,10 +42,12 @@ export default function AssumptionCard({
   field,
   value,
   onChange,
+  readOnly = false,
 }: {
   field: FieldDef;
   value: number;
   onChange: (next: number) => void;
+  readOnly?: boolean;
 }) {
   const [local, setLocal] = useState<string>(() => formatForInput(value, field.format));
   // Keep local state in sync if external value changes (e.g. reset to defaults).
@@ -54,7 +56,7 @@ export default function AssumptionCard({
   }, [value, field.format]);
 
   return (
-    <label className="proj-card">
+    <label className={`proj-card${readOnly ? ' proj-card--ro' : ''}`}>
       <span className="proj-card-label">{field.label}</span>
       <span className="proj-card-input-wrap">
         {field.format === 'currency' && <span className="proj-card-prefix">$</span>}
@@ -65,6 +67,8 @@ export default function AssumptionCard({
           inputMode={field.format === 'currency' ? 'numeric' : undefined}
           className="proj-card-input"
           value={local}
+          readOnly={readOnly}
+          disabled={readOnly}
           step={field.format === 'currency' ? undefined : field.step}
           min={field.format === 'currency' ? undefined : field.min}
           max={field.format === 'currency' ? undefined : field.max}

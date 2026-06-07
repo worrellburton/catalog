@@ -19,8 +19,8 @@ import {
   ECON_DEFAULTS,
   buildCashflow,
   cohortRetention,
+  deriveScenario,
   investorMetrics,
-  scenarioValues,
   sensitivity,
   toCsv,
 } from '~/services/model-metrics';
@@ -34,7 +34,7 @@ import SensitivityChart from '~/components/model/SensitivityChart';
 import RetentionSparkline from '~/components/model/RetentionSparkline';
 import FunnelTable from '~/components/model/FunnelTable';
 
-const COLORS = { acquisition: '#6366f1', engagement: '#f59e0b', revenue: '#10b981', costs: '#14b8a6' };
+const COLORS = { acquisition: '#6366f1', engagement: '#f59e0b', revenue: '#10b981', costs: '#0f172a' };
 const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
 
 const ACQ_FIELDS: FieldDef[] = [
@@ -73,13 +73,15 @@ interface ModelUi {
   show: Record<RowKey, boolean>;
   open: Record<RowKey, boolean>;
   showFunnel: boolean;
+  scenario: ScenarioId;
 }
-const UI_KEY = 'catalog:model:ui:v3';
+const UI_KEY = 'catalog:model:ui:v4';
 const UI_DEFAULTS: ModelUi = {
   order: DEFAULT_ORDER,
   show: { acquisition: true, engagement: true, revenue: true, costs: false },
   open: { acquisition: true, engagement: false, revenue: false, costs: false },
   showFunnel: false,
+  scenario: 'base',
 };
 
 function readUi(): ModelUi {
@@ -95,6 +97,7 @@ function readUi(): ModelUi {
       show: { ...UI_DEFAULTS.show, ...(p.show || {}) },
       open: { ...UI_DEFAULTS.open, ...(p.open || {}) },
       showFunnel: !!p.showFunnel,
+      scenario: (p.scenario === 'bear' || p.scenario === 'bull') ? p.scenario : 'base',
     };
   } catch { return UI_DEFAULTS; }
 }
@@ -108,13 +111,19 @@ export default function AdminModel() {
 
   useEffect(() => { try { window.localStorage.setItem(UI_KEY, JSON.stringify(ui)); } catch { /* quota */ } }, [ui]);
 
-  const { revenue, acquisition } = useMemo(() => buildModel(rev, acq, true), [rev, acq]);
+  // Base is the editable source of truth; Bear/Bull are derived from it
+  // and locked. `eff` is whatever scenario is currently being viewed.
+  const readOnly = ui.scenario !== 'base';
+  const eff = useMemo(() => deriveScenario({ rev, acq, econ }, ui.scenario), [rev, acq, econ, ui.scenario]);
+  const { rev: erev, acq: eacq, econ: eecon } = eff;
+
+  const { revenue, acquisition } = useMemo(() => buildModel(erev, eacq, true), [erev, eacq]);
   const revSummary = useMemo(() => summarize(revenue), [revenue]);
-  const acqSummary = useMemo(() => summarizeGtm(acquisition, acq), [acquisition, acq]);
-  const cash = useMemo(() => buildCashflow(revenue, acquisition, econ), [revenue, acquisition, econ]);
-  const metrics = useMemo(() => investorMetrics(rev, acq, revenue, acquisition, acqSummary, econ, cash), [rev, acq, revenue, acquisition, acqSummary, econ, cash]);
-  const sens = useMemo(() => sensitivity(rev, acq), [rev, acq]);
-  const retention = useMemo(() => cohortRetention(acq.churn), [acq.churn]);
+  const acqSummary = useMemo(() => summarizeGtm(acquisition, eacq), [acquisition, eacq]);
+  const cash = useMemo(() => buildCashflow(revenue, acquisition, eecon), [revenue, acquisition, eecon]);
+  const metrics = useMemo(() => investorMetrics(erev, eacq, revenue, acquisition, acqSummary, eecon, cash), [erev, eacq, revenue, acquisition, acqSummary, eecon, cash]);
+  const sens = useMemo(() => sensitivity(erev, eacq), [erev, eacq]);
+  const retention = useMemo(() => cohortRetention(eacq.churn), [eacq.churn]);
   const totalSales = useMemo(() => revenue.reduce((a, s) => a + s.sales, 0), [revenue]);
 
   const setRevField = (k: keyof Assumptions, v: number) => setRev(prev => ({ ...prev, [k]: v }));
@@ -135,10 +144,7 @@ export default function AdminModel() {
   };
   const resetRevenue = () => setRev(p => ({ ...p, avgCostPerSale: DEFAULTS.avgCostPerSale, avgAffiliateCommission: DEFAULTS.avgAffiliateCommission }));
 
-  const applyScenario = (id: ScenarioId) => {
-    const v = scenarioValues(id);
-    setRev(v.rev); setAcq(v.acq); setEcon(v.econ);
-  };
+  const setScenario = (id: ScenarioId) => setUi(p => ({ ...p, scenario: id }));
   const exportCsv = () => {
     const csv = toCsv(revenue, acquisition, cash);
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
@@ -183,13 +189,10 @@ export default function AdminModel() {
 
     if (key === 'acquisition') {
       return (
-        <ModelRow {...common} title="Acquisition" subtitle="Paid + organic → MAU">
-          <div className="model-row-actions">
-            <button className="admin-btn admin-btn-secondary" onClick={() => setAcq(GTM_DEFAULTS)}>Reset acquisition</button>
-          </div>
+        <ModelRow {...common} title="Acquisition" subtitle="Paid + organic → MAU" onReset={readOnly ? undefined : () => setAcq(GTM_DEFAULTS)}>
           <div className="proj-cards model-cards">
             {ACQ_FIELDS.map(f => (
-              <AssumptionCard key={f.key} field={f} value={acq[f.key as keyof GtmAssumptions]} onChange={(n) => onAcqChange(f.key as keyof GtmAssumptions, n)} />
+              <AssumptionCard key={f.key} field={f} value={eacq[f.key as keyof GtmAssumptions]} readOnly={readOnly} onChange={(n) => onAcqChange(f.key as keyof GtmAssumptions, n)} />
             ))}
           </div>
         </ModelRow>
@@ -197,15 +200,12 @@ export default function AdminModel() {
     }
     if (key === 'engagement') {
       return (
-        <ModelRow {...common} title="Engagement" subtitle="Retention × sessions × conversion → sales">
-          <div className="model-row-actions">
-            <button className="admin-btn admin-btn-secondary" onClick={resetEngagement}>Reset engagement</button>
-          </div>
+        <ModelRow {...common} title="Engagement" subtitle="Retention × sessions × conversion → sales" onReset={readOnly ? undefined : resetEngagement}>
           <p className="model-link-note">Churn trims <strong style={{ color: COLORS.acquisition }}>Acquisition</strong>'s MAU; the rest turns it into <strong style={{ color: COLORS.revenue }}>Revenue</strong>'s sales.</p>
           <div className="proj-cards model-cards">
-            <AssumptionCard key="churn" field={CHURN_FIELD} value={acq.churn} onChange={(n) => setAcqField('churn', clamp01(n))} />
+            <AssumptionCard key="churn" field={CHURN_FIELD} value={eacq.churn} readOnly={readOnly} onChange={(n) => setAcqField('churn', clamp01(n))} />
             {ENGAGEMENT_FIELDS.map(f => (
-              <AssumptionCard key={f.key} field={f} value={rev[f.key as keyof Assumptions]} onChange={(n) => setRevField(f.key as keyof Assumptions, n)} />
+              <AssumptionCard key={f.key} field={f} value={erev[f.key as keyof Assumptions]} readOnly={readOnly} onChange={(n) => setRevField(f.key as keyof Assumptions, n)} />
             ))}
           </div>
         </ModelRow>
@@ -213,28 +213,22 @@ export default function AdminModel() {
     }
     if (key === 'costs') {
       return (
-        <ModelRow {...common} title="Costs & cash" subtitle="Margin, OpEx, runway → cash line">
-          <div className="model-row-actions">
-            <button className="admin-btn admin-btn-secondary" onClick={() => setEcon(ECON_DEFAULTS)}>Reset costs</button>
-          </div>
+        <ModelRow {...common} title="Costs & cash" subtitle="Margin, OpEx, runway → cash line" onReset={readOnly ? undefined : () => setEcon(ECON_DEFAULTS)}>
           <p className="model-link-note">Burn = marketing + OpEx − gross profit. The checkbox plots the <strong style={{ color: COLORS.costs }}>cash</strong> balance.</p>
           <div className="proj-cards model-cards">
             {COSTS_FIELDS.map(f => (
-              <AssumptionCard key={f.key} field={f} value={econ[f.key as keyof EconAssumptions]} onChange={(n) => setEconField(f.key as keyof EconAssumptions, n)} />
+              <AssumptionCard key={f.key} field={f} value={eecon[f.key as keyof EconAssumptions]} readOnly={readOnly} onChange={(n) => setEconField(f.key as keyof EconAssumptions, n)} />
             ))}
           </div>
         </ModelRow>
       );
     }
     return (
-      <ModelRow {...common} title="Revenue" subtitle="AOV × commission → revenue">
-        <div className="model-row-actions">
-          <button className="admin-btn admin-btn-secondary" onClick={resetRevenue}>Reset revenue</button>
-        </div>
+      <ModelRow {...common} title="Revenue" subtitle="AOV × commission → revenue" onReset={readOnly ? undefined : resetRevenue}>
         <p className="model-link-note">Monetises <strong style={{ color: COLORS.engagement }}>Engagement</strong>'s sales — {fmtNumber(totalSales)} orders over {MONTHS} months.</p>
         <div className="proj-cards model-cards">
           {REVENUE_FIELDS.map(f => (
-            <AssumptionCard key={f.key} field={f} value={rev[f.key as keyof Assumptions]} onChange={(n) => setRevField(f.key as keyof Assumptions, n)} />
+            <AssumptionCard key={f.key} field={f} value={erev[f.key as keyof Assumptions]} readOnly={readOnly} onChange={(n) => setRevField(f.key as keyof Assumptions, n)} />
           ))}
         </div>
       </ModelRow>
@@ -254,7 +248,16 @@ export default function AdminModel() {
         <p className="admin-page-subtitle">Acquisition → MAU, Engagement → sales, Revenue → $, Costs → runway. Numbers are shared with every admin in real time. Toggle any line, drag to reorder.</p>
       </div>
 
-      <ModelHeadline onScenario={applyScenario} onExportCsv={exportCsv} onPrint={() => window.print()} />
+      <ModelHeadline scenario={ui.scenario} onScenario={setScenario} onExportCsv={exportCsv} onPrint={() => window.print()} />
+
+      {readOnly && (
+        <div className="model-locked-banner">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
+          </svg>
+          <span>Viewing the <strong>{ui.scenario === 'bear' ? 'Bear' : 'Bull'}</strong> case — derived from your Base. Switch to <strong>Base</strong> to edit the assumptions.</span>
+        </div>
+      )}
 
       <div className="model-layout">
         <div className="model-left">
@@ -265,7 +268,7 @@ export default function AdminModel() {
 
         <div className="model-right">
           {/* All the headline facts in one minimal card, above the curve. */}
-          <ModelMetrics metrics={metrics} revSummary={revSummary} acqSummary={acqSummary} totalSales={totalSales} />
+          <ModelMetrics metrics={metrics} revSummary={revSummary} acqSummary={acqSummary} totalSales={totalSales} rev={erev} acq={eacq} econ={eecon} />
 
           <UnifiedModelChart
             revenue={revenue}

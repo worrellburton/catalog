@@ -13,6 +13,7 @@ export default function ModelRow({
   onCheckedChange,
   open,
   onToggle,
+  onReset,
   children,
   onDragStart,
   onDragEnter,
@@ -28,6 +29,7 @@ export default function ModelRow({
   onCheckedChange: (next: boolean) => void;
   open: boolean;
   onToggle: () => void;
+  onReset?: () => void;
   children: ReactNode;
   onDragStart?: () => void;
   onDragEnter?: () => void;
@@ -74,6 +76,27 @@ export default function ModelRow({
         >
           <span className="model-row-title">{title}</span>
           <span className="model-row-sub">{subtitle}</span>
+        </button>
+        {onReset && (
+          <button
+            type="button"
+            className="model-row-reset"
+            onClick={onReset}
+            title={`Reset ${title}`}
+            aria-label={`Reset ${title}`}
+          >
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <polyline points="1 4 1 10 7 10" />
+              <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10" />
+            </svg>
+          </button>
+        )}
+        <button
+          type="button"
+          className="model-row-chevron-btn"
+          onClick={onToggle}
+          aria-label={open ? 'Collapse' : 'Expand'}
+        >
           <svg
             className="model-row-chevron"
             width="16" height="16" viewBox="0 0 24 24" fill="none"

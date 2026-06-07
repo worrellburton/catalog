@@ -7,6 +7,7 @@ import {
   monthLabel,
   fmtCurrency,
   fmtNumber,
+  fmtPercent,
   niceCeiling,
 } from '~/services/projections';
 
@@ -21,7 +22,7 @@ interface ChartProps {
 }
 
 const REVENUE = '#10b981'; // green — revenue ($, left axis)
-const CASH = '#14b8a6';    // teal — cash balance ($, left axis)
+const CASH = '#0f172a';    // near-black — cash balance ($, left axis); distinct from revenue green
 const ACQ = '#6366f1';     // indigo — MAU (count, right axis)
 const ENGAGE = '#f59e0b';  // amber — sales (count, right axis)
 
@@ -51,7 +52,7 @@ export default function UnifiedModelChart({ revenue, acquisition, cash, showReve
   const PAD_L = 72, PAD_R = 72, PAD_T = 24, PAD_B = 44;
   const innerW = W - PAD_L - PAD_R;
   const innerH = H - PAD_T - PAD_B;
-  const TIP_W = 248, TIP_H = 212;
+  const TIP_W = 248, TIP_H = 248;
 
   // Left axis ($) is shared by revenue + cash; right axis (count) by MAU + sales.
   const leftMax = niceCeiling(Math.max(
@@ -187,6 +188,9 @@ export default function UnifiedModelChart({ revenue, acquisition, cash, showReve
             rows.push({ label: 'DAU', value: fmtNumber(acquisition[i].dau), delta: 'daily', positive: true, tone: 'acq' });
             rows.push({ label: 'New users', value: fmtNumber(acquisition[i].newUsers), delta: `spend ${fmtCurrency(acquisition[i].spend, { compact: true })}`, positive: true, tone: 'acq' });
           }
+          // Operating margin = operating income (net) ÷ revenue, featured
+          // as the headline at the bottom of the tooltip.
+          const opMargin = revenue[i].revenue > 0 ? cash[i].net / revenue[i].revenue : 0;
           return (
             <g>
               <line x1={x} y1={PAD_T} x2={x} y2={PAD_T + innerH} stroke="#94a3b8" strokeDasharray="2 3" style={{ pointerEvents: 'none' }} />
@@ -203,6 +207,10 @@ export default function UnifiedModelChart({ revenue, acquisition, cash, showReve
                         <span className={`proj-tooltip-row-delta ${r.tone === 'acq' ? 'gtm-paid' : r.tone === 'eng' ? 'gtm-eng' : r.tone === 'cash' ? (r.positive ? 'positive' : 'negative') : r.positive ? 'positive' : 'negative'}`}>{r.delta}</span>
                       </div>
                     ))}
+                  </div>
+                  <div className="proj-tooltip-feature">
+                    <span className="proj-tooltip-feature-label">Operating margin</span>
+                    <span className={`proj-tooltip-feature-value ${opMargin >= 0 ? 'positive' : 'negative'}`}>{fmtPercent(opMargin, 0)}</span>
                   </div>
                 </div>
               </foreignObject>
