@@ -1,4 +1,4 @@
-import { useMemo, useState, useEffect, useCallback, type ReactNode } from 'react';
+import { useMemo, useState, useEffect, useCallback, useRef, type ReactNode } from 'react';
 import { looks as seedLooks, creators as seedCreators, Look, Product } from '~/data/looks';
 import { useEscapeKey } from '~/hooks/useEscapeKey';
 import { supabase } from '~/utils/supabase';
@@ -61,6 +61,64 @@ export default function CreatorPage({
   const [activeTab, setActiveTab] = useState<Tab>('looks');
   const { user: currentUser } = useAuth();
   useEscapeKey(onClose);
+
+  // Grid-density dial — a minimal wheel pinned to the right edge that cycles the
+  // catalog grid between 1, 2 (default), and 3 columns. Scroll/drag on it to
+  // change; tap cycles. Persisted so the choice sticks across catalogs.
+  const GRID_COLS = [1, 2, 3] as const;
+  const [colsIndex, setColsIndex] = useState<number>(() => {
+    try {
+      const v = Number(window.localStorage.getItem('catalog:creator-grid-cols'));
+      const i = GRID_COLS.indexOf(v as 1 | 2 | 3);
+      return i >= 0 ? i : 1; // default = 2 columns
+    } catch { return 1; }
+  });
+  const gridCols = GRID_COLS[colsIndex];
+  useEffect(() => {
+    try { window.localStorage.setItem('catalog:creator-grid-cols', String(gridCols)); } catch { /* quota */ }
+  }, [gridCols]);
+  const dialRef = useRef<HTMLDivElement | null>(null);
+  const dialDraggedRef = useRef(false);
+  const cycleCols = useCallback(() => {
+    if (dialDraggedRef.current) { dialDraggedRef.current = false; return; }
+    setColsIndex(i => (i + 1) % GRID_COLS.length);
+  }, []);
+  // Wheel + vertical-drag stepping. Attached non-passive so we can keep the
+  // gesture on the dial from scrolling the page behind it.
+  useEffect(() => {
+    const el = dialRef.current;
+    if (!el) return;
+    const clamp = (i: number) => Math.min(GRID_COLS.length - 1, Math.max(0, i));
+    let accum = 0;
+    let touchY: number | null = null;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      accum += e.deltaY;
+      if (Math.abs(accum) > 22) { setColsIndex(i => clamp(i + (accum > 0 ? 1 : -1))); accum = 0; }
+    };
+    const onTouchStart = (e: TouchEvent) => { touchY = e.touches[0].clientY; dialDraggedRef.current = false; };
+    const onTouchMove = (e: TouchEvent) => {
+      if (touchY == null) return;
+      e.preventDefault();
+      const dy = e.touches[0].clientY - touchY;
+      if (Math.abs(dy) > 24) {
+        setColsIndex(i => clamp(i + (dy > 0 ? 1 : -1)));
+        touchY = e.touches[0].clientY;
+        dialDraggedRef.current = true;
+      }
+    };
+    const onTouchEnd = () => { touchY = null; };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
+    el.addEventListener('touchend', onTouchEnd, { passive: true });
+    return () => {
+      el.removeEventListener('wheel', onWheel);
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchmove', onTouchMove);
+      el.removeEventListener('touchend', onTouchEnd);
+    };
+  }, []);
 
   // ── Two render paths share this component ──────────────────────────────
   // 1. Static seed creators (creatorName like "@lilywittman") - data
@@ -808,7 +866,7 @@ export default function CreatorPage({
             <p>This curator hasn&rsquo;t published any looks. Check back soon.</p>
           </div>
         ) : (
-          <div className="creator-grid">
+          <div className="creator-grid" style={{ gridTemplateColumns: `repeat(${gridCols}, 1fr)` }}>
             {creatorLooks.map(look => (
               <LookCard
                 key={look.id}
@@ -841,7 +899,7 @@ export default function CreatorPage({
             <p>Saved products will appear here once {displayName.split(' ')[0]} adds them to a look.</p>
           </div>
         ) : (
-          <div className="creator-grid">
+          <div className="creator-grid" style={{ gridTemplateColumns: `repeat(${gridCols}, 1fr)` }}>
             {filteredProducts.map((p, i) => (
               <div
                 key={`${p.brand}-${p.name}-${i}`}
@@ -865,6 +923,32 @@ export default function CreatorPage({
         )
       )}
     </div>
+
+    {/* Grid-density dial — minimal wheel on the right edge. Scroll/drag to
+        change column count, tap to cycle. Kept dim + out of the way. Only on
+        the grid tabs (Saved renders its own screen). */}
+    {activeTab !== 'saved' && (
+    <div
+      ref={dialRef}
+      className="cat-view-dial"
+      role="group"
+      aria-label="Grid columns"
+      onClick={cycleCols}
+    >
+      {GRID_COLS.map((c, i) => (
+        <span
+          key={c}
+          className={`cat-view-dial-dot${i === colsIndex ? ' is-active' : ''}`}
+          aria-label={`${c} column${c > 1 ? 's' : ''}`}
+          aria-current={i === colsIndex}
+        >
+          <span className="cat-view-dial-bars">
+            {Array.from({ length: c }).map((_, b) => <i key={b} />)}
+          </span>
+        </span>
+      ))}
+    </div>
+    )}
 
     {/* Followers / following list sheet. Tap a row to open that user's
         catalog (in-app, via the open-creator event). */}

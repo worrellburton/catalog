@@ -583,6 +583,60 @@
   gap: 12px;
 }
 
+/* ── Grid-density dial ──────────────────────────────────────────────────
+   Minimal scroll wheel pinned to the right edge of the catalog. Each segment
+   previews a column count (1 / 2 / 3 vertical bars); the active one lights up.
+   Dim and small by default so it stays out of the way. */
+.cat-view-dial {
+  position: fixed;
+  right: 6px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  padding: 9px 7px;
+  border-radius: 999px;
+  background: rgba(20, 20, 22, 0.34);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  opacity: 0.32;
+  transition: opacity 0.2s ease;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+.cat-view-dial:hover,
+.cat-view-dial:active { opacity: 0.9; }
+
+.cat-view-dial-dot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 12px;
+  opacity: 0.38;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.cat-view-dial-dot.is-active {
+  opacity: 1;
+  transform: scale(1.08);
+}
+.cat-view-dial-bars {
+  display: flex;
+  gap: 2px;
+  width: 14px;
+  height: 11px;
+}
+.cat-view-dial-bars i {
+  flex: 1;
+  background: #fff;
+  border-radius: 1px;
+}
+
 .creator-grid .look-card {
   width: 100%;
   aspect-ratio: 3 / 4;
