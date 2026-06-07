@@ -3,7 +3,7 @@
 // app's bottom bar (with filters) — the hero has no pill of its own. The
 // catalog feed lives directly below; scrolling reveals the best sellers.
 
-import { useEffect, useRef, useMemo } from 'react';
+import { useEffect, useRef, useMemo, useState } from 'react';
 
 // Headline rotation. First HEADLINE_BASELINE_VISITS the user sees the
 // canonical "What are you shopping for?". After that, we pick from
@@ -152,6 +152,14 @@ interface ShoppingForHeroProps {
 }
 
 export default function ShoppingForHero({ onRevealFeed }: ShoppingForHeroProps) {
+  // "How your daily feed works" popup — opened from the ? next to the cue.
+  const [showFeedInfo, setShowFeedInfo] = useState(false);
+  useEffect(() => {
+    if (!showFeedInfo) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setShowFeedInfo(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [showFeedInfo]);
   // Pick a headline for this visit. The first HEADLINE_BASELINE_VISITS the
   // user lands here they see the canonical "What are you shopping for?";
   // beyond that, we rotate through FUN_HEADLINES picked via the visit
@@ -250,24 +258,47 @@ export default function ShoppingForHero({ onRevealFeed }: ShoppingForHeroProps) 
         </h1>
       </div>
 
-      {/* Scroll-to-your-daily-feed affordance: an animated mouse with a
-          dot that travels down, plus a bobbing chevron + label. The copy
-          educates the shopper that the feed is personalized and refreshes
-          daily — the more they use Catalog, the more it's tuned to them. */}
-      <button type="button" className="sfh-scroll-hint" onClick={onRevealFeed} aria-label="Open your daily feed">
+      {/* Scroll-to-your-daily-feed affordance: an animated mouse + label
+          (tap to reveal the feed), a one-line tagline with a ? that opens
+          the full explanation, and a bobbing chevron. */}
+      <div className="sfh-scroll-hint">
         {/* Desktop keeps the subtle scroll-mouse; mobile shows no icon —
             just the label + chevron (the down-finger glyph read as clutter). */}
         <span className="sfh-mouse" aria-hidden="true"><span className="sfh-mouse-dot" /></span>
-        <span className="sfh-scroll-label">Your daily feed</span>
+        <button type="button" className="sfh-scroll-cta" onClick={onRevealFeed} aria-label="Open your daily feed">
+          Your daily feed
+        </button>
         <span className="sfh-scroll-sub">
-          A fresh one every single day, hand-tuned to your taste. The more you tap,
-          save, and shop, the more it becomes <em>yours</em> — like a personal stylist
-          who never sleeps (and never judges your 2&nbsp;a.m. browsing).
+          A fresh feed, tuned to you — every day.
+          <button
+            type="button"
+            className="sfh-scroll-info"
+            onClick={() => setShowFeedInfo(true)}
+            aria-label="How your daily feed works"
+          >?</button>
         </span>
-        <svg className="sfh-scroll-chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <polyline points="6 9 12 15 18 9" />
-        </svg>
-      </button>
+        <button type="button" className="sfh-scroll-chev-btn" onClick={onRevealFeed} aria-label="Scroll to your feed">
+          <svg className="sfh-scroll-chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </button>
+      </div>
+
+      {/* "How your daily feed works" popup. */}
+      {showFeedInfo && (
+        <div className="sfh-feed-info" role="dialog" aria-modal="true" aria-label="How your daily feed works" onClick={() => setShowFeedInfo(false)}>
+          <div className="sfh-feed-info-card" onClick={e => e.stopPropagation()}>
+            <button type="button" className="sfh-feed-info-close" onClick={() => setShowFeedInfo(false)} aria-label="Close">×</button>
+            <h3 className="sfh-feed-info-title">Your daily feed</h3>
+            <p className="sfh-feed-info-body">
+              Every day you get a brand-new feed, hand-tuned to your taste. The more you
+              tap, save, and shop, the sharper it gets — like a personal stylist who never
+              sleeps (and never judges your 2&nbsp;a.m. browsing).
+            </p>
+            <p className="sfh-feed-info-body">Come back tomorrow for a whole new lineup.</p>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
