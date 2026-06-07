@@ -385,10 +385,12 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
 });
 
 /**
- * Creator identity on a look card — now just the profile picture with a
- * +/− follow badge (no name), via the shared CreatorAvatarFollow. The
- * outer .card-creator-row wrapper is kept only for tile positioning and
- * the touch-passthrough guard that keys off `.closest('.card-creator-row')`.
+ * Creator identity on a look card — avatar (+ follow badge) AND the creator
+ * name in the lower-left, identical to the main feed's CreativeCardV2 chip, so
+ * every look card reads the same wherever it appears (feed, creator catalog,
+ * "more like this" on the look/product pages). Uses the same .card-creator-tag
+ * markup + CSS as the feed; stopPropagation keeps a tap on the chip from
+ * opening the look underneath.
  */
 function LookCardCreatorChip({
   look,
@@ -402,21 +404,28 @@ function LookCardCreatorChip({
   const avatar = look.creatorAvatar || creatorData?.avatar || '';
   const name = creatorData?.displayName
     || look.creatorDisplayName
-    || (look.creator?.startsWith('user:') ? 'User' : look.creator || '');
-  // No .card-creator-row wrapper and avatarOpensCreator=false: tapping the
-  // avatar falls through to the card (opens the look) instead of jumping to
-  // the creator's profile. Only the +/− badge acts on the creator. onOpenCreator
-  // is still threaded so the follow toggle + (future) navigations stay wired.
+    || (look.creator?.startsWith('user:') ? '' : look.creator || '');
   return (
-    <CreatorAvatarFollow
-      handle={look.creator}
-      avatarUrl={avatar}
-      displayName={name}
-      size={23}
-      onOpenCreator={onOpenCreator}
-      avatarOpensCreator={false}
-      className="card-creator-avatar-pos"
-    />
+    <div className="card-creator-tag" onClick={(e) => e.stopPropagation()}>
+      <CreatorAvatarFollow
+        handle={look.creator}
+        avatarUrl={avatar}
+        displayName={name}
+        size={20}
+        onOpenCreator={onOpenCreator}
+        avatarOpensCreator
+      />
+      {name && (
+        <button
+          type="button"
+          className="card-creator-tag-name"
+          onClick={(e) => { e.stopPropagation(); onOpenCreator(look.creator); }}
+          aria-label={`Open ${name}'s catalog`}
+        >
+          {name}
+        </button>
+      )}
+    </div>
   );
 }
 

@@ -328,7 +328,7 @@ export default function CreatorPage({
         .select(`
           id, legacy_id, title, gender, creator_handle, user_id,
           looks_creative!inner ( video_url, thumbnail_url, is_primary ),
-          look_products ( products ( id, name, brand, price, image_url, primary_image_url, url, images ) )
+          look_products ( products ( id, name, brand, price, image_url, primary_image_url, primary_video_url, primary_video_poster_url, url, images ) )
         `)
         .eq('creator_handle', creatorName)
         .eq('status', 'live')
@@ -342,7 +342,7 @@ export default function CreatorPage({
         id: string; legacy_id: number | null; title: string;
         gender: string | null; creator_handle: string; user_id: string | null;
         looks_creative: { video_url: string | null; thumbnail_url: string | null; is_primary: boolean }[];
-        look_products: { products: { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null; primary_image_url: string | null; url: string | null; images: string[] | null } | null }[] | null;
+        look_products: { products: { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null; primary_image_url: string | null; primary_video_url: string | null; primary_video_poster_url: string | null; url: string | null; images: string[] | null } | null }[] | null;
       };
       const rows = (lookRows as LookPayload[] | null) || [];
 
@@ -356,7 +356,11 @@ export default function CreatorPage({
             name: p.name || 'Untitled',
             price: p.price || '',
             url: p.url || '',
-            image: p.image_url || (p.images && p.images[0]) || undefined,
+            image: p.primary_image_url || p.image_url || (p.images && p.images[0]) || undefined,
+            // Carry the product's primary video + its poster so the look's
+            // product rows play the primary video (poster-first), same as feed.
+            video_url: p.primary_video_url || undefined,
+            thumbnail_url: p.primary_video_poster_url || p.primary_image_url || p.image_url || undefined,
           }));
         return {
           id: r.legacy_id ?? -(i + 1),
