@@ -314,6 +314,30 @@ export default function CommentsPage({ targetType, slug, onClose, onOpenCreator,
     if (dy > 110 || dy < 6) requestClose(); // big drag OR a tap → dismiss
   };
 
+  // Swipe-down-to-dismiss on the whole sheet (not just the handle). Arms only
+  // when the comment list is scrolled to its top and the touch didn't start on
+  // the composer input — so scrolling the thread or typing never dismisses.
+  const commentsListRef = useRef<HTMLDivElement>(null);
+  const onSheetTouchStart = (e: React.TouchEvent) => {
+    const t = e.target as HTMLElement;
+    if (t.closest('textarea, input, .comments-drawer-handle-btn')) return;
+    if ((commentsListRef.current?.scrollTop ?? 0) > 0) return;
+    dragRef.current = { startY: e.touches[0].clientY, active: true, dy: 0 };
+  };
+  const onSheetTouchMove = (e: React.TouchEvent) => {
+    if (!dragRef.current.active) return;
+    const dy = Math.max(0, e.touches[0].clientY - dragRef.current.startY);
+    dragRef.current.dy = dy;
+    setDragOffset(dy);
+  };
+  const onSheetTouchEnd = () => {
+    if (!dragRef.current.active) return;
+    dragRef.current.active = false;
+    const dy = dragRef.current.dy;
+    setDragOffset(0);
+    if (dy > 100) requestClose();
+  };
+
   return (
     <>
     {/* Dim scrim behind the sheet — tap to dismiss (TikTok-style). */}
@@ -321,6 +345,10 @@ export default function CommentsPage({ targetType, slug, onClose, onOpenCreator,
     <div
       className={`comments-page comments-page--drawer${closing ? ' is-closing' : ''}`}
       style={dragOffset ? { transform: `translateY(${dragOffset}px)`, transition: 'none' } : undefined}
+      onTouchStart={onSheetTouchStart}
+      onTouchMove={onSheetTouchMove}
+      onTouchEnd={onSheetTouchEnd}
+      onTouchCancel={onSheetTouchEnd}
     >
       <button
         type="button"
@@ -426,7 +454,7 @@ export default function CommentsPage({ targetType, slug, onClose, onOpenCreator,
           Comments {comments.length > 0 && <span className="comments-count">{comments.length}</span>}
         </h2>
 
-        <div className="comments-list">
+        <div className="comments-list" ref={commentsListRef}>
           {loading ? (
             <div className="comments-empty">Loading…</div>
           ) : comments.length === 0 ? (

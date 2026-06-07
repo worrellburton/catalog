@@ -210,9 +210,9 @@ export default function ShoppingForHero({ onRevealFeed }: ShoppingForHeroProps) 
       const el = sparkRef.current;
       if (!el) return;
       const ratio = Math.min(1, Math.max(0, window.scrollY / (window.innerHeight * 0.8)));
-      // Boost factor 0 → 1.5: at rest the spark spins slowly; on full scroll
-      // it spins ~2.5× faster. Kept gentle — a hard scroll-spin felt frantic.
-      el.style.setProperty('--sfh-spark-boost', String(ratio * 1.5));
+      // Boost factor 0 → 0.5: keep the scroll-reactive spin, but gentle — the
+      // old 1.5 (~2.5× faster) felt too frantic.
+      el.style.setProperty('--sfh-spark-boost', String(ratio * 0.5));
     };
     const onScroll = () => {
       cancelAnimationFrame(raf);
