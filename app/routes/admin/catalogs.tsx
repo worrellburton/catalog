@@ -24,6 +24,12 @@ import {
   type Catalog as CatalogService,
   type CatalogSearchCounts,
 } from '~/services/catalogs';
+import {
+  getAutoEditorConfig,
+  setAutoEditorConfig,
+  DEFAULT_AUTO_EDITOR_CONFIG,
+  type AutoEditorConfig,
+} from '~/services/dials';
 
 type CatalogGenderUI = 'all' | 'women' | 'men' | 'unisex';
 
@@ -620,6 +626,7 @@ export default function AdminCatalogs() {
     return () => { cancelled = true; };
   }, []);
   const [showAdd, setShowAdd] = useState(false);
+  const [showAutoEditor, setShowAutoEditor] = useState(false);
   const [newName, setNewName] = useState('');
   const [toast, setToast] = useState<string | null>(null);
   const [products, setProducts] = useState<ProductRow[]>([]);
@@ -2006,6 +2013,17 @@ export default function AdminCatalogs() {
             </svg>
             Export CSV
           </button>
+          <button
+            className="admin-btn admin-btn-secondary"
+            onClick={() => setShowAutoEditor(true)}
+            title="Configure the Automatic Editor — the daily personalized feed"
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
+              <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
+              <circle cx="12" cy="12" r="4" />
+            </svg>
+            Automatic Editor
+          </button>
           <button className="admin-btn admin-btn-primary" onClick={() => setShowAdd(true)}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
               <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
@@ -2426,6 +2444,12 @@ export default function AdminCatalogs() {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Automatic Editor modal — master toggle + tuning for the daily
+          personalized feed (app_settings via setAutoEditorConfig). */}
+      {showAutoEditor && (
+        <AutoEditorModal onClose={() => setShowAutoEditor(false)} showToast={showToast} />
       )}
 
       {/* Add Products modal - pick from existing library */}
@@ -6921,6 +6945,160 @@ function GenderDropdown({ value, onChange }: { value: CatalogGenderUI; onChange:
       <option value="men">♂ Male</option>
       <option value="unisex">⚥ Unisex</option>
     </select>
+  );
+}
+
+// ── Automatic Editor modal (self-contained) ─────────────────────────
+// Master on/off + tuning for the daily personalized feed. Reads the
+// current config on open via getAutoEditorConfig() and writes each
+// change back through setAutoEditorConfig() (one app_settings upsert per
+// changed field). Numeric tuning is gated behind the master toggle being
+// on so admins don't fiddle dials that have no effect.
+function AutoEditorModal({
+  onClose,
+  showToast,
+}: {
+  onClose: () => void;
+  showToast: (msg: string) => void;
+}) {
+  const [config, setConfig] = useState<AutoEditorConfig>(DEFAULT_AUTO_EDITOR_CONFIG);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+
+  // Load current values on open.
+  useEffect(() => {
+    let cancelled = false;
+    getAutoEditorConfig()
+      .then(c => { if (!cancelled) setConfig(c); })
+      .finally(() => { if (!cancelled) setLoading(false); });
+    return () => { cancelled = true; };
+  }, []);
+
+  // Persist a partial change immediately (optimistic local update) so the
+  // toggle/select feel instant, then surface a small saved confirmation.
+  const save = useCallback(async (partial: Partial<AutoEditorConfig>) => {
+    setConfig(prev => ({ ...prev, ...partial }));
+    setSaving(true);
+    try {
+      await setAutoEditorConfig(partial);
+      showToast('Automatic Editor settings saved');
+    } catch (err) {
+      showToast(`Save failed: ${err instanceof Error ? err.message : String(err)}`);
+      // Re-pull the authoritative state so the UI doesn't drift on failure.
+      getAutoEditorConfig().then(setConfig).catch(() => {});
+    } finally {
+      setSaving(false);
+    }
+  }, [showToast]);
+
+  const fieldLabel: React.CSSProperties = {
+    fontSize: 11, fontWeight: 600, color: '#475569',
+    textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6, display: 'block',
+  };
+  const numInput: React.CSSProperties = {
+    width: '100%', padding: '8px 10px', borderRadius: 6,
+    border: '1px solid #ddd', fontSize: 13,
+  };
+
+  return (
+    <div className="admin-modal-overlay" onClick={onClose}>
+      <div
+        className="admin-modal"
+        style={{ width: 480, maxWidth: '92vw', padding: 24 }}
+        onClick={e => e.stopPropagation()}
+      >
+        <h2 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 600 }}>Automatic Editor</h2>
+        <p style={{ margin: '0 0 18px', fontSize: 13, color: '#888' }}>
+          When on, each signed-in shopper gets a feed re-ranked to their taste
+          once per day. Off keeps everyone on the global feed order.
+        </p>
+
+        {/* Master on/off toggle. */}
+        <label
+          style={{
+            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+            gap: 12, padding: '12px 14px', borderRadius: 8, border: '1px solid #e2e8f0',
+            background: config.enabled ? '#ecfdf5' : '#f8fafc', cursor: loading ? 'default' : 'pointer',
+            marginBottom: 18,
+          }}
+        >
+          <span style={{ fontSize: 13, fontWeight: 600, color: '#111' }}>
+            Automatic Editor — personalized daily feed
+          </span>
+          <input
+            type="checkbox"
+            checked={config.enabled}
+            disabled={loading || saving}
+            onChange={e => save({ enabled: e.target.checked })}
+            style={{ width: 18, height: 18, cursor: 'pointer' }}
+          />
+        </label>
+
+        {/* Tuning — only meaningful while the master flag is on. */}
+        <fieldset
+          disabled={!config.enabled || loading || saving}
+          style={{
+            border: 'none', padding: 0, margin: 0,
+            opacity: config.enabled ? 1 : 0.5,
+            display: 'flex', flexDirection: 'column', gap: 16,
+          }}
+        >
+          <div>
+            <label style={fieldLabel}>Frequency</label>
+            <select
+              value={config.frequency}
+              onChange={e => save({ frequency: e.target.value as AutoEditorConfig['frequency'] })}
+              style={{ ...numInput, cursor: 'pointer', appearance: 'none' }}
+            >
+              <option value="daily">Daily</option>
+              <option value="every_signin">Every sign-in</option>
+            </select>
+          </div>
+
+          <div>
+            <label style={fieldLabel}>Holdout % (kept on the global feed)</label>
+            <input
+              type="number"
+              min={0}
+              max={100}
+              value={config.holdoutPct}
+              onChange={e => save({ holdoutPct: Number(e.target.value) })}
+              style={numInput}
+            />
+          </div>
+
+          <div>
+            <label style={fieldLabel}>History window (days)</label>
+            <input
+              type="number"
+              min={1}
+              max={365}
+              value={config.recencyDays}
+              onChange={e => save({ recencyDays: Number(e.target.value) })}
+              style={numInput}
+            />
+          </div>
+
+          <div>
+            <label style={fieldLabel}>Min signal (events before personalizing)</label>
+            <input
+              type="number"
+              min={0}
+              max={1000}
+              value={config.minSignal}
+              onChange={e => save({ minSignal: Number(e.target.value) })}
+              style={numInput}
+            />
+          </div>
+        </fieldset>
+
+        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 20 }}>
+          <button className="admin-btn admin-btn-secondary" onClick={onClose}>
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
   );
 }
 
