@@ -30,7 +30,7 @@ interface CreativeRow {
  * — any failure (RLS, decode, CORS) is swallowed so it never disrupts the
  * page. Returns the number of posters successfully generated.
  */
-export async function backfillMissingLookPosters(max = 40): Promise<number> {
+export async function backfillMissingLookPosters(max = 250): Promise<number> {
   if (started || typeof window === 'undefined' || !supabase) return 0;
   started = true;
 
@@ -43,17 +43,29 @@ export async function backfillMissingLookPosters(max = 40): Promise<number> {
     .limit(max);
   if (error || !data || data.length === 0) return 0;
 
+  const rows = (data as CreativeRow[]).filter(r => !!r.video_url);
   let done = 0;
-  // Sequential: each call mounts an off-screen <video> and decodes a frame,
-  // so we never run more than one at a time.
-  for (const row of data as CreativeRow[]) {
-    if (!row.video_url) continue;
-    try {
-      const url = await generateAndStorePoster(row.look_id, row.id, row.video_url);
-      if (url) done++;
-    } catch {
-      /* best-effort — skip and continue */
+  let next = 0;
+
+  // Bounded concurrency: each task mounts an off-screen <video> and decodes a
+  // frame (~1-2s). Fully sequential meant 30+ looks took a minute and admins
+  // navigated away before it finished, so most looks kept showing a product
+  // packshot fallback instead of their own first frame. A small pool drains
+  // the whole queue in seconds without flooding the network/decoder.
+  const POOL = 4;
+  const worker = async () => {
+    for (;;) {
+      const i = next++;
+      if (i >= rows.length) return;
+      const row = rows[i];
+      try {
+        const url = await generateAndStorePoster(row.look_id, row.id, row.video_url!);
+        if (url) done++;
+      } catch {
+        /* best-effort — skip and continue */
+      }
     }
-  }
+  };
+  await Promise.all(Array.from({ length: Math.min(POOL, rows.length) }, worker));
   return done;
 }
