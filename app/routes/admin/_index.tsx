@@ -3,6 +3,8 @@ import { Link } from '@remix-run/react';
 import { looks, creators } from '~/data/looks';
 import { supabase } from '~/utils/supabase';
 import { boostAd } from '~/services/product-creative';
+import { useSharedModelSettings } from '~/hooks/useSharedModelSettings';
+import { fmtCurrency } from '~/services/projections';
 
 interface SearchLog {
   id: string;
@@ -151,6 +153,8 @@ export default function AdminHome() {
   // ── Aggregated stats for the active (audience, range) ─────────
   const [stats, setStats] = useState<HomeStats>(EMPTY_STATS);
   const [statsLoading, setStatsLoading] = useState(true);
+  // Key model assumptions surfaced as gold cards; click to forecast them.
+  const { rev: model } = useSharedModelSettings();
 
   // ── Sections that don't depend on the toggles ─────────────────
   const [recentActivity, setRecentActivity] = useState<SearchLog[]>([]);
@@ -626,6 +630,40 @@ export default function AdminHome() {
           loading={statsLoading}
           to={metricLink('ai-generations', audience, range)}
         />
+        {/* Gold cards = key model assumptions. Click → /admin/model to
+            forecast. Values come from the shared model, not live analytics. */}
+        <StatCard
+          icon={<EyeIcon />}
+          label="Impressions / session"
+          value={String(model.avgImpressionsPerSession)}
+          sub="assumption · forecast"
+          gold
+          to="/admin/model"
+        />
+        <StatCard
+          icon={<ClockIcon />}
+          label="Avg active session"
+          value={`${model.sessionTimeMinutes} min`}
+          sub="assumption · forecast"
+          gold
+          to="/admin/model"
+        />
+        <StatCard
+          icon={<UserIcon />}
+          label="Sessions / user / mo"
+          value={String(model.sessionsPerUserPerMonth)}
+          sub="assumption · forecast"
+          gold
+          to="/admin/model"
+        />
+        <StatCard
+          icon={<PackageIcon />}
+          label="Avg cost per product"
+          value={fmtCurrency(model.avgCostPerSale)}
+          sub="assumption · forecast"
+          gold
+          to="/admin/model"
+        />
         <StatCard
           icon={<TrendIcon />}
           label="Catalog totals"
@@ -789,7 +827,7 @@ export default function AdminHome() {
 }
 
 // ── Tiny presentational helpers ─────────────────────────────────
-function StatCard({ icon, label, value, sub, loading, to }: {
+function StatCard({ icon, label, value, sub, loading, to, gold }: {
   icon: React.ReactNode;
   label: string;
   value: string;
@@ -799,7 +837,10 @@ function StatCard({ icon, label, value, sub, loading, to }: {
    *  /admin/metrics/<id>. Preserves the audience + range query string
    *  so the detail view opens with the same filters. */
   to?: string;
+  /** Gold + glowing — flags a key model assumption. */
+  gold?: boolean;
 }) {
+  const cls = gold ? ' admin-home-stat-card--gold' : '';
   const body = (
     <>
       <div className="admin-home-stat-icon">{icon}</div>
@@ -818,11 +859,11 @@ function StatCard({ icon, label, value, sub, loading, to }: {
     return (
       <Link
         to={to}
-        className="admin-home-stat-card admin-home-stat-card--link"
+        className={`admin-home-stat-card admin-home-stat-card--link${cls}`}
       >{body}</Link>
     );
   }
-  return <div className="admin-home-stat-card">{body}</div>;
+  return <div className={`admin-home-stat-card${cls}`}>{body}</div>;
 }
 
 function UserIcon() { return <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/></svg>; }

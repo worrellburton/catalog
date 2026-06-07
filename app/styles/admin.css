@@ -5835,6 +5835,31 @@ tr:hover .admin-stats-col { background: rgba(99, 102, 241, 0.10); }
   transform: translateY(-1px);
 }
 
+/* Gold cards — key model assumptions. Glowing amber border + tint. */
+.admin-home-stat-card--gold {
+  border-color: #f59e0b;
+  background: linear-gradient(180deg, rgba(245, 158, 11, 0.10), rgba(245, 158, 11, 0.02));
+  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.4), 0 0 18px rgba(245, 158, 11, 0.25);
+  animation: gold-pulse 2.8s ease-in-out infinite;
+}
+.admin-home-stat-card--gold .admin-home-stat-icon { color: #b45309; }
+.admin-home-stat-card--gold .admin-home-stat-value { color: #92400e; }
+.admin-home-stat-card--gold .admin-home-stat-sub { color: #b45309; font-weight: 600; }
+.admin-home-stat-card--gold:hover {
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.6), 0 6px 22px rgba(245, 158, 11, 0.35);
+}
+@keyframes gold-pulse {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.4), 0 0 14px rgba(245, 158, 11, 0.20); }
+  50% { box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.55), 0 0 22px rgba(245, 158, 11, 0.38); }
+}
+.admin-dark .admin-home-stat-card--gold {
+  background: linear-gradient(180deg, rgba(245, 158, 11, 0.16), rgba(245, 158, 11, 0.04));
+}
+.admin-dark .admin-home-stat-card--gold .admin-home-stat-icon,
+.admin-dark .admin-home-stat-card--gold .admin-home-stat-value { color: #fbbf24; }
+.admin-dark .admin-home-stat-card--gold .admin-home-stat-sub { color: #fcd34d; }
+
 /* ─────────────────────────────────────────────────────────────
    Metric detail page — headline number + 30-bar time-series chart.
    ───────────────────────────────────────────────────────────── */
