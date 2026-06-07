@@ -1097,7 +1097,7 @@ html[data-shell="catalog-app"] .gen-page {
 }
 
 /* "Direct your own video" — free-text prompt under the style swiper. */
-.gen-direct { margin-top: 20px; }
+.gen-direct { margin-top: 14px; }
 .gen-direct-title { font-size: 16px; font-weight: 700; margin: 0 0 4px; }
 .gen-direct-sub {
   font-size: 13px;
@@ -1116,7 +1116,7 @@ html[data-shell="catalog-app"] .gen-page {
   line-height: 1.4;
   padding: 12px 14px;
   resize: vertical;
-  min-height: 80px;
+  min-height: 60px;
 }
 .gen-direct-input:focus { outline: none; border-color: rgba(255, 255, 255, 0.42); }
 .gen-direct-input::placeholder { color: rgba(255, 255, 255, 0.35); }
