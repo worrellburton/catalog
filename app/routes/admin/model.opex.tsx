@@ -2,24 +2,28 @@ import { useMemo } from 'react';
 import { Link } from '@remix-run/react';
 import { MONTHS, monthLabel, fmtCurrency, niceCeiling } from '~/services/projections';
 import {
+  type EmploymentType,
   type OpexCategory,
   type OpexItem,
+  type PayrollItem,
   OPEX_CATEGORIES,
   OPEX_CATEGORY_COLORS,
-  buildOpexByCategory,
-  buildOpexSchedule,
+  buildCombinedByCategory,
+  buildCombinedSchedule,
   opexAverage,
   opexTotal,
+  payrollMonthly,
   uid,
 } from '~/services/opex';
-import { useSharedOpex } from '~/hooks/useSharedOpex';
+import { useSharedOpex, useSharedPayroll } from '~/hooks/useSharedOpex';
 import ModelTabs from '~/components/model/ModelTabs';
 
 const MONTH_OPTS = Array.from({ length: MONTHS }, (_, i) => ({ value: i, label: monthLabel(i) }));
+const active = (m: number, s: number, e: number) => m >= s && m <= e;
 
-function OpexChart({ items }: { items: OpexItem[] }) {
-  const byCat = useMemo(() => buildOpexByCategory(items), [items]);
-  const schedule = useMemo(() => buildOpexSchedule(items), [items]);
+function OpexChart({ items, payroll }: { items: OpexItem[]; payroll: PayrollItem[] }) {
+  const byCat = useMemo(() => buildCombinedByCategory(items, payroll), [items, payroll]);
+  const schedule = useMemo(() => buildCombinedSchedule(items, payroll), [items, payroll]);
   const W = 1100, H = 240, PADL = 60, PADR = 12, PADT = 12, PADB = 28;
   const innerW = W - PADL - PADR, innerH = H - PADT - PADB;
   const colW = innerW / MONTHS;
@@ -68,20 +72,74 @@ function OpexChart({ items }: { items: OpexItem[] }) {
   );
 }
 
+// Classic spreadsheet: every line × every month, with row + column totals.
+function OpexSheet({ items, payroll }: { items: OpexItem[]; payroll: PayrollItem[] }) {
+  const rows: { name: string; cells: number[] }[] = [];
+  for (const p of payroll) {
+    const monthly = payrollMonthly(p);
+    rows.push({ name: `${p.role}${p.count > 1 ? ` ×${p.count}` : ''}`, cells: MONTH_OPTS.map((_, m) => (active(m, p.startMonth, p.endMonth) ? monthly : 0)) });
+  }
+  for (const it of items) {
+    rows.push({ name: it.name, cells: MONTH_OPTS.map((_, m) => (active(m, it.startMonth, it.endMonth) ? it.amount * Math.pow(1 + it.growth, m - it.startMonth) : 0)) });
+  }
+  const totals = MONTH_OPTS.map((_, m) => rows.reduce((a, r) => a + r.cells[m], 0));
+  const grand = totals.reduce((a, b) => a + b, 0);
+
+  return (
+    <div className="opex-sheet-wrap">
+      <table className="opex-sheet">
+        <thead>
+          <tr>
+            <th className="opex-sheet-name">Line</th>
+            {MONTH_OPTS.map(m => <th key={m.value}>{m.label}</th>)}
+            <th className="opex-sheet-total">Total</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((r, ri) => (
+            <tr key={ri}>
+              <td className="opex-sheet-name">{r.name}</td>
+              {r.cells.map((v, m) => <td key={m}>{v > 0 ? fmtCurrency(v, { compact: true }) : <span className="opex-sheet-zero">–</span>}</td>)}
+              <td className="opex-sheet-total">{fmtCurrency(r.cells.reduce((a, b) => a + b, 0), { compact: true })}</td>
+            </tr>
+          ))}
+          {rows.length === 0 && (
+            <tr><td className="opex-empty" colSpan={MONTHS + 2}>Add payroll or expense lines to populate the sheet.</td></tr>
+          )}
+        </tbody>
+        {rows.length > 0 && (
+          <tfoot>
+            <tr>
+              <td className="opex-sheet-name">Total OpEx</td>
+              {totals.map((v, m) => <td key={m}>{fmtCurrency(v, { compact: true })}</td>)}
+              <td className="opex-sheet-total">{fmtCurrency(grand, { compact: true })}</td>
+            </tr>
+          </tfoot>
+        )}
+      </table>
+    </div>
+  );
+}
+
 export default function AdminModelOpex() {
   const { items, setItems, live } = useSharedOpex();
+  const { items: payroll, setItems: setPayroll } = useSharedPayroll();
 
-  const schedule = useMemo(() => buildOpexSchedule(items), [items]);
+  const schedule = useMemo(() => buildCombinedSchedule(items, payroll), [items, payroll]);
   const avg = opexAverage(schedule);
   const total = opexTotal(schedule);
-  const headcount = items.filter(i => i.category === 'payroll').length;
+  const headcount = payroll.reduce((a, p) => a + (p.count || 0), 0);
   const monthEnd = schedule[schedule.length - 1] ?? 0;
 
-  const update = (id: string, patch: Partial<OpexItem>) =>
-    setItems(prev => prev.map(it => (it.id === id ? { ...it, ...patch } : it)));
+  // OpEx expense lines
+  const update = (id: string, patch: Partial<OpexItem>) => setItems(prev => prev.map(it => (it.id === id ? { ...it, ...patch } : it)));
   const remove = (id: string) => setItems(prev => prev.filter(it => it.id !== id));
-  const add = () =>
-    setItems(prev => [...prev, { id: uid(), name: 'New line', category: 'other', amount: 5000, startMonth: 0, endMonth: MONTHS - 1, growth: 0 }]);
+  const add = () => setItems(prev => [...prev, { id: uid(), name: 'New line', category: 'other', amount: 5000, startMonth: 0, endMonth: MONTHS - 1, growth: 0 }]);
+
+  // Payroll lines
+  const updateP = (id: string, patch: Partial<PayrollItem>) => setPayroll(prev => prev.map(p => (p.id === id ? { ...p, ...patch } : p)));
+  const removeP = (id: string) => setPayroll(prev => prev.filter(p => p.id !== id));
+  const addP = () => setPayroll(prev => [...prev, { id: uid(), role: 'New role', type: 'employee', count: 1, basis: 'annual', comp: 120000, startMonth: 0, endMonth: MONTHS - 1 }]);
 
   return (
     <div className="admin-page opex-page">
@@ -93,8 +151,7 @@ export default function AdminModelOpex() {
           </span>
         </h1>
         <p className="admin-page-subtitle">
-          Build OpEx from employees + expenses across {MONTHS} months — each line can ramp up or down.
-          The average feeds <Link to="/admin/model" className="opex-link">the Model</Link>’s Monthly OpEx.
+          Build OpEx from payroll + expenses across {MONTHS} months. The average feeds <Link to="/admin/model" className="opex-link">the Model</Link>’s Monthly OpEx.
         </p>
       </div>
 
@@ -114,21 +171,70 @@ export default function AdminModelOpex() {
           <span className="proj-summary-label">Month {MONTHS} OpEx</span>
           <span className="proj-summary-value">{fmtCurrency(monthEnd)}</span>
         </div>
-        <div className="proj-summary-card">
-          <span className="proj-summary-label">Headcount lines</span>
+        <div className="proj-summary-card gtm-dial-paid">
+          <span className="proj-summary-label">Headcount</span>
           <span className="proj-summary-value">{headcount}</span>
-          <span className="proj-summary-sub">payroll items</span>
+          <span className="proj-summary-sub">{payroll.length} role{payroll.length === 1 ? '' : 's'}</span>
         </div>
       </div>
 
-      <section className="model-card">
-        <h3>OpEx by month</h3>
-        <OpexChart items={items} />
-      </section>
-
+      {/* Payroll — people first, above other OpEx. */}
       <section className="model-card opex-table-card">
         <div className="model-card-head">
-          <h3>Line items</h3>
+          <h3>Payroll</h3>
+          <button className="admin-btn admin-btn-secondary" onClick={addP}>+ Add employee</button>
+        </div>
+        <div className="opex-table-wrap">
+          <table className="opex-table">
+            <thead>
+              <tr>
+                <th>Role</th><th>Type</th><th>#</th><th>Comp basis</th><th>Comp / person</th><th>Start</th><th>End</th><th>Monthly</th><th></th>
+              </tr>
+            </thead>
+            <tbody>
+              {payroll.map(p => (
+                <tr key={p.id}>
+                  <td><input className="opex-in opex-in-name" value={p.role} onChange={e => updateP(p.id, { role: e.target.value })} /></td>
+                  <td>
+                    <select className="opex-in" value={p.type} onChange={e => updateP(p.id, { type: e.target.value as EmploymentType })}>
+                      <option value="employee">Employee</option>
+                      <option value="contractor">Contractor</option>
+                    </select>
+                  </td>
+                  <td><input className="opex-in opex-in-sm" type="number" min={0} step={1} value={p.count} onChange={e => updateP(p.id, { count: Number(e.target.value) || 0 })} /></td>
+                  <td>
+                    <select className="opex-in" value={p.basis} onChange={e => updateP(p.id, { basis: e.target.value as 'annual' | 'monthly' })}>
+                      <option value="annual">Annual</option>
+                      <option value="monthly">Monthly</option>
+                    </select>
+                  </td>
+                  <td><input className="opex-in opex-in-num" type="number" min={0} step={1000} value={p.comp} onChange={e => updateP(p.id, { comp: Number(e.target.value) || 0 })} /></td>
+                  <td>
+                    <select className="opex-in" value={p.startMonth} onChange={e => updateP(p.id, { startMonth: Number(e.target.value) })}>
+                      {MONTH_OPTS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                    </select>
+                  </td>
+                  <td>
+                    <select className="opex-in" value={p.endMonth} onChange={e => updateP(p.id, { endMonth: Number(e.target.value) })}>
+                      {MONTH_OPTS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
+                    </select>
+                  </td>
+                  <td className="opex-monthly">{fmtCurrency(payrollMonthly(p), { compact: true })}</td>
+                  <td><button className="opex-del" onClick={() => removeP(p.id)} aria-label={`Remove ${p.role}`}>×</button></td>
+                </tr>
+              ))}
+              {payroll.length === 0 && (
+                <tr><td colSpan={9} className="opex-empty">No employees yet — add your team and choose annual or monthly comp.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </section>
+
+      {/* Other OpEx expense lines. */}
+      <section className="model-card opex-table-card">
+        <div className="model-card-head">
+          <h3>Other expenses</h3>
           <button className="admin-btn admin-btn-secondary" onClick={add}>+ Add line</button>
         </div>
         <div className="opex-table-wrap">
@@ -158,20 +264,26 @@ export default function AdminModelOpex() {
                       {MONTH_OPTS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
                     </select>
                   </td>
-                  <td>
-                    <span className="opex-in-pct">
-                      <input className="opex-in opex-in-num" type="number" step={1} value={Math.round(it.growth * 100)} onChange={e => update(it.id, { growth: (Number(e.target.value) || 0) / 100 })} />%
-                    </span>
-                  </td>
+                  <td><span className="opex-in-pct"><input className="opex-in opex-in-sm" type="number" step={1} value={Math.round(it.growth * 100)} onChange={e => update(it.id, { growth: (Number(e.target.value) || 0) / 100 })} />%</span></td>
                   <td><button className="opex-del" onClick={() => remove(it.id)} aria-label={`Remove ${it.name}`}>×</button></td>
                 </tr>
               ))}
               {items.length === 0 && (
-                <tr><td colSpan={7} className="opex-empty">No line items yet — add employees and expenses to build your OpEx.</td></tr>
+                <tr><td colSpan={7} className="opex-empty">No expense lines yet.</td></tr>
               )}
             </tbody>
           </table>
         </div>
+      </section>
+
+      <section className="model-card">
+        <h3>OpEx by month</h3>
+        <OpexChart items={items} payroll={payroll} />
+      </section>
+
+      <section className="model-card">
+        <h3>Spreadsheet</h3>
+        <OpexSheet items={items} payroll={payroll} />
       </section>
     </div>
   );

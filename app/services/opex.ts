@@ -87,3 +87,67 @@ export function opexAverage(schedule: number[]): number {
 export function opexTotal(schedule: number[]): number {
   return schedule.reduce((a, b) => a + b, 0);
 }
+
+// ── Payroll ─────────────────────────────────────────────────────
+// People as their own line items: headcount × comp (annual or monthly),
+// active over a span. Rolls into the 'payroll' OpEx category.
+
+export type EmploymentType = 'employee' | 'contractor';
+
+export interface PayrollItem {
+  id: string;
+  role: string;
+  type: EmploymentType;
+  /** Number of people in this role. */
+  count: number;
+  /** Whether `comp` is an annual or a monthly figure (per person). */
+  basis: 'annual' | 'monthly';
+  /** Compensation per person, in the chosen basis. */
+  comp: number;
+  startMonth: number;
+  endMonth: number;
+}
+
+export const PAYROLL_STORAGE_KEY = 'catalog:payroll:v1';
+
+// Start empty so it never double-counts payroll already entered as OpEx
+// line items — admins add their team here, then drop those OpEx lines.
+export function defaultPayrollItems(): PayrollItem[] {
+  return [];
+}
+
+/** Monthly cost of one person in this role. */
+export function payrollMonthlyPerPerson(p: PayrollItem): number {
+  return p.basis === 'annual' ? p.comp / 12 : p.comp;
+}
+
+/** Monthly cost of the whole role (all people). */
+export function payrollMonthly(p: PayrollItem): number {
+  return payrollMonthlyPerPerson(p) * (p.count || 0);
+}
+
+export function buildPayrollSchedule(items: PayrollItem[]): number[] {
+  const out = new Array(MONTHS).fill(0);
+  for (const p of items) {
+    const s = Math.max(0, Math.min(MONTHS - 1, Math.round(p.startMonth)));
+    const e = Math.max(s, Math.min(MONTHS - 1, Math.round(p.endMonth)));
+    const monthly = payrollMonthly(p);
+    for (let m = s; m <= e; m++) out[m] += monthly;
+  }
+  return out;
+}
+
+/** Combined per-month OpEx: expense line items + payroll. */
+export function buildCombinedSchedule(items: OpexItem[], payroll: PayrollItem[]): number[] {
+  const a = buildOpexSchedule(items);
+  const b = buildPayrollSchedule(payroll);
+  return a.map((v, i) => v + b[i]);
+}
+
+/** Combined per-month totals by category (payroll folded into 'payroll'). */
+export function buildCombinedByCategory(items: OpexItem[], payroll: PayrollItem[]): Record<OpexCategory, number[]> {
+  const byCat = buildOpexByCategory(items);
+  const pay = buildPayrollSchedule(payroll);
+  for (let m = 0; m < MONTHS; m++) byCat.payroll[m] += pay[m];
+  return byCat;
+}

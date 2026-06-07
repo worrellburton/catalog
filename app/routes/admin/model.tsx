@@ -25,8 +25,8 @@ import {
   toCsv,
 } from '~/services/model-metrics';
 import { useSharedModelSettings } from '~/hooks/useSharedModelSettings';
-import { useSharedOpex } from '~/hooks/useSharedOpex';
-import { buildOpexSchedule, opexAverage } from '~/services/opex';
+import { useSharedOpex, useSharedPayroll } from '~/hooks/useSharedOpex';
+import { buildCombinedSchedule, opexAverage } from '~/services/opex';
 import { Link } from '@remix-run/react';
 import AssumptionCard, { type FieldDef } from '~/components/model/AssumptionCard';
 import ModelRow from '~/components/model/ModelRow';
@@ -115,13 +115,14 @@ export default function AdminModel() {
   // show) stay per-browser.
   const { rev, acq, econ, setRev, setAcq, setEcon, live } = useSharedModelSettings();
   const { items: opexItems } = useSharedOpex();
+  const { items: payrollItems } = useSharedPayroll();
   const [ui, setUi] = useState<ModelUi>(() => readUi());
 
-  // OpEx can be driven by the detailed builder; when it has line items the
-  // model runs on its per-month schedule and the Monthly OpEx field shows
-  // the (read-only) average.
-  const opexSchedule = useMemo(() => buildOpexSchedule(opexItems), [opexItems]);
-  const hasOpex = opexItems.length > 0 && opexSchedule.some(v => v > 0);
+  // OpEx can be driven by the detailed builder (payroll + expenses); when
+  // it has line items the model runs on its per-month schedule and the
+  // Monthly OpEx field shows the (read-only) average.
+  const opexSchedule = useMemo(() => buildCombinedSchedule(opexItems, payrollItems), [opexItems, payrollItems]);
+  const hasOpex = (opexItems.length > 0 || payrollItems.length > 0) && opexSchedule.some(v => v > 0);
   const opexAvg = useMemo(() => opexAverage(opexSchedule), [opexSchedule]);
 
   useEffect(() => { try { window.localStorage.setItem(UI_KEY, JSON.stringify(ui)); } catch { /* quota */ } }, [ui]);

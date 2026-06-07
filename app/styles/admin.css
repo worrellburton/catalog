@@ -5480,7 +5480,28 @@ html.admin-on-dark-canvas .admin-topbar,
 .opex-in:focus { border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15); }
 .opex-in-name { min-width: 130px; }
 .opex-in-num { width: 92px; text-align: right; }
+.opex-in-sm { width: 60px; text-align: right; }
 .opex-in-pct { display: inline-flex; align-items: center; gap: 4px; color: #94a3b8; }
+.opex-monthly { font-weight: 700; color: #0f172a; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.admin-dark .opex-monthly { color: #f4f4f5; }
+
+/* Spreadsheet view — every line × every month. */
+.opex-sheet-wrap { overflow-x: auto; }
+.opex-sheet { border-collapse: collapse; font-size: 11.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.opex-sheet th, .opex-sheet td { padding: 5px 8px; text-align: right; border-bottom: 1px solid #f1f5f9; }
+.opex-sheet th { font-size: 10px; text-transform: uppercase; letter-spacing: 0.03em; color: #94a3b8; font-weight: 600; }
+.opex-sheet .opex-sheet-name { text-align: left; position: sticky; left: 0; background: #fff; font-weight: 600; color: #0f172a; min-width: 150px; }
+.opex-sheet thead .opex-sheet-name { color: #94a3b8; }
+.opex-sheet .opex-sheet-total { font-weight: 700; color: #0f172a; border-left: 1px solid #e5e7eb; }
+.opex-sheet-zero { color: #cbd5e1; }
+.opex-sheet tfoot td { border-top: 2px solid #e5e7eb; border-bottom: 0; font-weight: 800; color: #0f172a; }
+.opex-sheet tfoot .opex-sheet-name { background: #fff; }
+.admin-dark .opex-sheet th, .admin-dark .opex-sheet td { border-bottom-color: #27272a; }
+.admin-dark .opex-sheet .opex-sheet-name { background: #18181b; color: #f4f4f5; }
+.admin-dark .opex-sheet .opex-sheet-total { color: #f4f4f5; border-left-color: #3f3f46; }
+.admin-dark .opex-sheet tfoot td { color: #f4f4f5; border-top-color: #3f3f46; }
+.admin-dark .opex-sheet tfoot .opex-sheet-name { background: #18181b; }
+.admin-dark .opex-sheet-zero { color: #52525b; }
 .admin-dark .opex-in { background: #18181b; border-color: #3f3f46; color: #f4f4f5; }
 .opex-del {
   width: 26px; height: 26px; border: 0; border-radius: 6px; background: none;
