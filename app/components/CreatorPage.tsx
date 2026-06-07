@@ -79,6 +79,41 @@ export default function CreatorPage({
   }, [gridCols]);
   const dialRef = useRef<HTMLDivElement | null>(null);
   const dialDraggedRef = useRef(false);
+  // Auto-hide the dial on scroll-down, reveal on scroll-up (matches the rest
+  // of the catalog chrome). The creator page (position:fixed; overflow:auto) is
+  // the scroll container.
+  const pageScrollRef = useRef<HTMLDivElement | null>(null);
+  const [dialHidden, setDialHidden] = useState(false);
+  useEffect(() => {
+    const el = pageScrollRef.current;
+    if (!el) return;
+    let last = el.scrollTop;
+    let raf = 0;
+    const onScroll = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const y = el.scrollTop;
+        if (y < 40) { setDialHidden(false); last = y; return; }
+        if (y - last > 8) { setDialHidden(true); last = y; }
+        else if (last - y > 8) { setDialHidden(false); last = y; }
+      });
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => { cancelAnimationFrame(raf); el.removeEventListener('scroll', onScroll); };
+  }, [activeTab]);
+
+  // Backfill any look (in this catalog) still missing its own poster frame, so
+  // a posterless look stops falling back to a product image. Admin-gated (write
+  // access), fired idle. Re-runnable, so it retries looks that failed elsewhere.
+  useEffect(() => {
+    if (currentUser?.role !== 'admin' && currentUser?.role !== 'super_admin') return;
+    const run = () => import('~/services/poster-backfill')
+      .then(({ backfillMissingLookPosters }) => backfillMissingLookPosters())
+      .catch(() => {});
+    const w = window as unknown as { requestIdleCallback?: (cb: () => void) => number; cancelIdleCallback?: (h: number) => void };
+    const id = w.requestIdleCallback ? w.requestIdleCallback(run) : window.setTimeout(run, 3000);
+    return () => { if (w.requestIdleCallback && w.cancelIdleCallback) w.cancelIdleCallback(id); else window.clearTimeout(id); };
+  }, [currentUser?.role]);
   const cycleCols = useCallback(() => {
     if (dialDraggedRef.current) { dialDraggedRef.current = false; return; }
     setColsIndex(i => (i + 1) % GRID_COLS.length);
@@ -651,6 +686,7 @@ export default function CreatorPage({
   return (
     <div>
     <div
+      ref={pageScrollRef}
       className="creator-page"
       style={appearance.hue != null ? { background: `hsl(${appearance.hue}, 28%, 6%)` } : undefined}
     >
@@ -934,7 +970,7 @@ export default function CreatorPage({
     {activeTab !== 'saved' && (
     <div
       ref={dialRef}
-      className="cat-view-dial"
+      className={`cat-view-dial${dialHidden ? ' cat-view-dial--hidden' : ''}`}
       role="group"
       aria-label="Grid columns"
       onClick={cycleCols}

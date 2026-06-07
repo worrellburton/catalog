@@ -16,7 +16,11 @@
 import { supabase } from '~/utils/supabase';
 import { generateAndStorePoster } from '~/utils/video-poster';
 
-let started = false;
+// Concurrency guard only — NOT a permanent once-per-session lock. Re-runnable
+// so it can fire from multiple surfaces (home feed + creator catalog) and
+// retry looks whose extraction failed last time. The query already filters to
+// still-missing posters, so resolved looks are never reprocessed.
+let running = false;
 
 interface CreativeRow {
   id: string;
@@ -31,9 +35,9 @@ interface CreativeRow {
  * page. Returns the number of posters successfully generated.
  */
 export async function backfillMissingLookPosters(max = 250): Promise<number> {
-  if (started || typeof window === 'undefined' || !supabase) return 0;
-  started = true;
-
+  if (running || typeof window === 'undefined' || !supabase) return 0;
+  running = true;
+  try {
   const { data, error } = await supabase
     .from('looks_creative')
     .select('id, look_id, video_url')
@@ -68,4 +72,7 @@ export async function backfillMissingLookPosters(max = 250): Promise<number> {
   };
   await Promise.all(Array.from({ length: Math.min(POOL, rows.length) }, worker));
   return done;
+  } finally {
+    running = false;
+  }
 }

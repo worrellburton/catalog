@@ -608,11 +608,18 @@
   -webkit-backdrop-filter: blur(8px);
   box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
   opacity: 0.6;
-  transition: opacity 0.2s ease;
+  transition: opacity 0.25s ease, transform 0.3s ease;
   cursor: pointer;
   user-select: none;
   -webkit-user-select: none;
   touch-action: none;
+}
+/* Auto-hide on scroll-down: slide off the right edge (keeps the vertical
+   centering transform). Comes back on scroll-up. */
+.cat-view-dial--hidden {
+  transform: translateY(-50%) translateX(150%);
+  opacity: 0;
+  pointer-events: none;
 }
 .cat-view-dial:hover,
 .cat-view-dial:active { opacity: 0.9; }
