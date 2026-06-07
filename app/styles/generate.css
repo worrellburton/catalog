@@ -129,11 +129,8 @@
   grid-template-columns: repeat(auto-fill, minmax(104px, 1fr));
   gap: 18px;
   padding: 18px 4px 28px;
-  /* Contained so the picker composes to one viewport (search + chips + cloud
-     + dock all visible); the cloud scrolls internally to reveal more. */
-  max-height: calc(100dvh - 320px);
-  overflow-y: auto;
-  -webkit-overflow-scrolling: touch;
+  /* Flows with the page so the user can scroll through ALL products (not
+     constrained to one viewport). */
   perspective: 1000px;
   perspective-origin: 50% 38%;
 }
