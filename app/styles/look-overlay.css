@@ -280,8 +280,12 @@
   align-items: center;
   justify-content: center;
   gap: 8px;
-  width: 100%;
-  margin: 4px 0 12px;
+  /* Match the 24px horizontal inset of the product cards / description
+     above it so the button lines up with the rest of the column instead
+     of spanning edge-to-edge. width:auto + symmetric margins lets the
+     block-level flex button fill the container minus the insets. */
+  width: auto;
+  margin: 4px 24px 24px;
   padding: 13px 16px;
   /* Pill shape to match the product page's standard comments button. */
   border-radius: 999px;
@@ -938,6 +942,11 @@ body:has(.look-overlay.look-overlay--in) {
 
   .look-products-list {
     padding: 4px 16px 24px;
+  }
+
+  /* Match the comments button inset to the 16px mobile column padding. */
+  .look-comments-labeled {
+    margin: 4px 16px 20px;
   }
 
   .look-feed-content {

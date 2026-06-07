@@ -57,8 +57,11 @@
   max-width: 100%;
 }
 /* Notch — a small pointer on the top edge, near the right, aimed up at the
-   header activity button (where you tap to see all this). */
-.activity-toast::after {
+   header activity button (where you tap to see all this). ONLY the topmost
+   toast carries it: when several stack, a notch on every row poked up into
+   the toast above it (and collided with the header). :first-child is the
+   oldest/top toast — the one nearest the activity button. */
+.activity-toast:first-child::after {
   content: '';
   position: absolute;
   top: -6px;
