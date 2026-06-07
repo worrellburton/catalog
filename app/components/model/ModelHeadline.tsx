@@ -1,51 +1,68 @@
-import type { InvestorMetrics, ScenarioId } from '~/services/model-metrics';
-import { fmtCurrency } from '~/services/projections';
+import type { ReactElement } from 'react';
+import type { ScenarioId } from '~/services/model-metrics';
 
-// The deck strip: one-click scenario presets, export, and the metrics an
-// investor asks for first — exit ARR, LTV:CAC, payback, runway, burn, GMV.
+// Trend icons: Bear = down, Base = flat, Bull = up.
+const ICONS: Record<ScenarioId, ReactElement> = {
+  bear: (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="23 18 13.5 8.5 8.5 13.5 1 6" /><polyline points="17 18 23 18 23 12" />
+    </svg>
+  ),
+  base: (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <line x1="4" y1="12" x2="20" y2="12" />
+    </svg>
+  ),
+  bull: (
+    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+      <polyline points="23 6 13.5 15.5 8.5 10.5 1 18" /><polyline points="17 6 23 6 23 12" />
+    </svg>
+  ),
+};
+
+const ORDER: { id: ScenarioId; label: string }[] = [
+  { id: 'bear', label: 'Bear' },
+  { id: 'base', label: 'Base' },
+  { id: 'bull', label: 'Bull' },
+];
+
+// Toolbar above the model: scenario switcher (centered) + export. Only
+// Base is editable; Bear/Bull are derived views.
 export default function ModelHeadline({
-  m,
+  scenario,
   onScenario,
   onExportCsv,
   onPrint,
 }: {
-  m: InvestorMetrics;
+  scenario: ScenarioId;
   onScenario: (id: ScenarioId) => void;
   onExportCsv: () => void;
   onPrint: () => void;
 }) {
-  const chip = (label: string, value: string, sub?: string, tone?: 'good' | 'warn') => (
-    <div className={`model-chip${tone ? ` model-chip-${tone}` : ''}`}>
-      <span className="model-chip-label">{label}</span>
-      <span className="model-chip-value">{value}</span>
-      {sub && <span className="model-chip-sub">{sub}</span>}
-    </div>
-  );
-
-  const runwayTone: 'good' | 'warn' = m.runwayMonths == null ? 'good' : 'warn';
-  const ltvTone: 'good' | 'warn' = m.ltvCac >= 3 ? 'good' : 'warn';
-
   return (
     <div className="model-headline">
       <div className="model-toolbar">
-        <span className="model-toolbar-label">Scenario</span>
-        <div className="model-scenarios">
-          <button type="button" onClick={() => onScenario('bear')}>Bear</button>
-          <button type="button" onClick={() => onScenario('base')}>Base</button>
-          <button type="button" onClick={() => onScenario('bull')}>Bull</button>
+        <div className="model-toolbar-left" />
+        <div className="model-scenarios-group">
+          <span className="model-toolbar-label">Scenario</span>
+          <div className="model-scenarios">
+            {ORDER.map(({ id, label }) => (
+              <button
+                key={id}
+                type="button"
+                className={scenario === id ? 'is-active' : ''}
+                onClick={() => onScenario(id)}
+              >
+                {ICONS[id]}
+                <span>{label}</span>
+              </button>
+            ))}
+          </div>
         </div>
-        <span className="model-toolbar-spacer" />
-        <button className="admin-btn admin-btn-secondary" onClick={onExportCsv}>Export CSV</button>
-        <button className="admin-btn admin-btn-secondary" onClick={onPrint}>Print / PDF</button>
-      </div>
-      <div className="model-chips">
-        {chip('Exit ARR', fmtCurrency(m.exitArr))}
-        {chip('LTV : CAC', `${m.ltvCac.toFixed(1)}×`, m.ltvCac >= 3 ? 'healthy (≥3×)' : 'below 3×', ltvTone)}
-        {chip('LTV', fmtCurrency(m.ltv))}
-        {chip('CAC payback', `${m.paybackMonths.toFixed(1)} mo`)}
-        {chip('Runway', m.runwayMonths == null ? '16+ mo' : `${m.runwayMonths} mo`, m.runwayMonths == null ? 'survives horizon' : 'cash-out', runwayTone)}
-        {chip('Avg burn', `${fmtCurrency(m.avgBurn, { compact: true })}/mo`)}
-        {chip('GMV (16mo)', fmtCurrency(m.gmvTotal))}
+        <div className="model-toolbar-right">
+          <button className="admin-btn admin-btn-secondary" onClick={onExportCsv}>Export CSV</button>
+          <button className="admin-btn admin-btn-secondary" onClick={onPrint}>Print / PDF</button>
+        </div>
       </div>
     </div>
   );

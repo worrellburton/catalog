@@ -60,6 +60,7 @@ export function buildCashflow(
   revenue: MonthBreakdown[],
   acquisition: GtmMonth[],
   econ: EconAssumptions,
+  opexByMonth?: number[],
 ): CashMonth[] {
   const out: CashMonth[] = [];
   let cash = econ.startingCash;
@@ -67,7 +68,7 @@ export function buildCashflow(
     const rev = revenue[i].revenue;
     const grossProfit = rev * econ.grossMargin;
     const marketing = acquisition[i]?.spend ?? 0;
-    const opex = econ.monthlyOpex;
+    const opex = opexByMonth ? (opexByMonth[i] ?? econ.monthlyOpex) : econ.monthlyOpex;
     const net = grossProfit - marketing - opex;
     cash += net;
     out.push({ monthIndex: i, revenue: rev, grossProfit, marketing, opex, net, cash });
@@ -112,7 +113,7 @@ export function investorMetrics(
   }
   const avgArpu = cnt ? arpuSum / cnt : 0;
 
-  const lifetime = acq.churn > 0 ? Math.min(LIFETIME_CAP_MONTHS, 1 / acq.churn) : LIFETIME_CAP_MONTHS;
+  const lifetime = acq.mauChurn > 0 ? Math.min(LIFETIME_CAP_MONTHS, 1 / acq.mauChurn) : LIFETIME_CAP_MONTHS;
   const contribPerUser = avgArpu * econ.grossMargin;
   const ltv = contribPerUser * lifetime;
   const ltvCac = acqSummary.blendedCac > 0 ? ltv / acqSummary.blendedCac : 0;
@@ -150,13 +151,13 @@ export function sensitivity(rev: Assumptions, acq: GtmAssumptions, delta = 0.2):
   const scale = (factor: number) => ({
     cpa:        () => ({ rev, acq: { ...acq, cpa: acq.cpa * factor } }),
     conversion: () => ({ rev: { ...rev, productConversion: rev.productConversion * factor }, acq }),
-    churn:      () => ({ rev, acq: { ...acq, churn: Math.min(1, acq.churn * factor) } }),
+    churn:      () => ({ rev, acq: { ...acq, mauChurn: Math.min(1, acq.mauChurn * factor) } }),
     organic:    () => ({ rev, acq: { ...acq, organicGrowth: acq.organicGrowth * factor } }),
     aov:        () => ({ rev: { ...rev, avgCostPerSale: rev.avgCostPerSale * factor }, acq }),
     spend:      () => ({ rev, acq: { ...acq, budget: acq.budget * factor } }),
   });
   const labels: Record<string, string> = {
-    cpa: 'CPA', conversion: 'Conversion', churn: 'Churn',
+    cpa: 'CPA', conversion: 'Conversion', churn: 'MAU churn',
     organic: 'Organic growth', aov: 'Avg order value', spend: 'Ad spend',
   };
   return Object.keys(labels).map(key => {
@@ -169,42 +170,64 @@ export function sensitivity(rev: Assumptions, acq: GtmAssumptions, delta = 0.2):
 }
 
 // ── Cohort retention curve ──────────────────────────────────────
-export function cohortRetention(churn: number, months = MONTHS): number[] {
-  const c = Math.min(1, Math.max(0, churn));
-  return Array.from({ length: months }, (_, m) => Math.pow(1 - c, m));
+// Month 0 is the acquisition month (100% active). Only newUserRetention
+// survive into month 1, after which the cohort decays at the established
+// mauChurn rate.
+export function cohortRetention(newUserRetention: number, mauChurn: number, months = MONTHS): number[] {
+  const r = Math.min(1, Math.max(0, newUserRetention));
+  const c = Math.min(1, Math.max(0, mauChurn));
+  return Array.from({ length: months }, (_, m) => (m === 0 ? 1 : r * Math.pow(1 - c, m - 1)));
 }
 
-// ── Scenario presets (Bear / Base / Bull) ───────────────────────
+// ── Scenarios (Base is the source of truth; Bear/Bull derive from it) ─
+// Only the Base case is editable. Bear and Bull are computed by applying
+// directional multipliers to whatever Base the user entered — so they
+// always stay relative to the real plan and can't drift on their own.
 export type ScenarioId = 'bear' | 'base' | 'bull';
-
-interface ScenarioPreset {
-  rev: Partial<Assumptions>;
-  acq: Partial<GtmAssumptions>;
-  econ: Partial<EconAssumptions>;
-}
-
-const SCENARIO_PRESETS: Record<ScenarioId, ScenarioPreset> = {
-  bear: {
-    rev: { productConversion: 0.006, avgCostPerSale: 60, avgAffiliateCommission: 0.08 },
-    acq: { cpa: 22, organicGrowth: 0.08, churn: 0.12, budget: 150_000 },
-    econ: { grossMargin: 0.78, monthlyOpex: 80_000, startingCash: 1_200_000 },
-  },
-  base: { rev: {}, acq: {}, econ: {} },
-  bull: {
-    rev: { productConversion: 0.02, avgCostPerSale: 110, avgAffiliateCommission: 0.12 },
-    acq: { cpa: 7, organicGrowth: 0.28, churn: 0.03, budget: 400_000 },
-    econ: { grossMargin: 0.9, monthlyOpex: 55_000, startingCash: 2_000_000 },
-  },
-};
 
 export interface ScenarioValues { rev: Assumptions; acq: GtmAssumptions; econ: EconAssumptions; }
 
-export function scenarioValues(id: ScenarioId): ScenarioValues {
-  const p = SCENARIO_PRESETS[id];
+interface Factors {
+  rev: Partial<Record<keyof Assumptions, number>>;
+  acq: Partial<Record<keyof GtmAssumptions, number>>;
+  econ: Partial<Record<keyof EconAssumptions, number>>;
+}
+
+const SCENARIO_FACTORS: Record<'bear' | 'bull', Factors> = {
+  bear: {
+    rev: { productConversion: 0.6, avgCostPerSale: 0.85, avgAffiliateCommission: 0.85, sessionsPerUserPerMonth: 0.85, avgImpressionsPerSession: 0.85 },
+    acq: { cpa: 1.6, organicGrowth: 0.5, newUserRetention: 0.6, mauChurn: 1.8 },
+    econ: { grossMargin: 0.92, monthlyOpex: 1.3, startingCash: 0.8 },
+  },
+  bull: {
+    rev: { productConversion: 1.6, avgCostPerSale: 1.2, avgAffiliateCommission: 1.2, sessionsPerUserPerMonth: 1.15, avgImpressionsPerSession: 1.15 },
+    acq: { cpa: 0.6, organicGrowth: 1.5, newUserRetention: 1.3, mauChurn: 0.5 },
+    econ: { grossMargin: 1.05, monthlyOpex: 0.9, startingCash: 1.3 },
+  },
+};
+
+// Fields that are rates and must stay within [0, 1] after scaling.
+const RATE_KEYS = new Set(['productConversion', 'avgAffiliateCommission', 'organicGrowth', 'newUserRetention', 'mauChurn', 'grossMargin', 'budgetDistEarly', 'budgetDistLate']);
+
+function scaleSet<T extends object>(base: T, factors: Partial<Record<keyof T, number>>): T {
+  const out = { ...base } as Record<string, number>;
+  for (const k of Object.keys(out)) {
+    const f = (factors as Record<string, number | undefined>)[k];
+    if (f === undefined) continue;
+    let v = out[k] * f;
+    if (RATE_KEYS.has(k)) v = Math.min(1, Math.max(0, v));
+    out[k] = v;
+  }
+  return out as T;
+}
+
+export function deriveScenario(base: ScenarioValues, id: ScenarioId): ScenarioValues {
+  if (id === 'base') return base;
+  const f = SCENARIO_FACTORS[id];
   return {
-    rev: { ...DEFAULTS, ...p.rev },
-    acq: { ...GTM_DEFAULTS, ...p.acq },
-    econ: { ...ECON_DEFAULTS, ...p.econ },
+    rev: scaleSet(base.rev, f.rev),
+    acq: scaleSet(base.acq, f.acq),
+    econ: scaleSet(base.econ, f.econ),
   };
 }
 

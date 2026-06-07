@@ -42,19 +42,24 @@ export default function AssumptionCard({
   field,
   value,
   onChange,
+  readOnly = false,
 }: {
   field: FieldDef;
   value: number;
   onChange: (next: number) => void;
+  readOnly?: boolean;
 }) {
   const [local, setLocal] = useState<string>(() => formatForInput(value, field.format));
-  // Keep local state in sync if external value changes (e.g. reset to defaults).
+  const [focused, setFocused] = useState(false);
+  // Sync the display to the external value ONLY while the user isn't
+  // editing — otherwise reformatting on every keystroke clobbers what
+  // they're typing (e.g. "10" snapping to "1.00" mid-entry).
   useEffect(() => {
-    setLocal(formatForInput(value, field.format));
-  }, [value, field.format]);
+    if (!focused) setLocal(formatForInput(value, field.format));
+  }, [value, field.format, focused]);
 
   return (
-    <label className="proj-card">
+    <label className={`proj-card${readOnly ? ' proj-card--ro' : ''}`}>
       <span className="proj-card-label">{field.label}</span>
       <span className="proj-card-input-wrap">
         {field.format === 'currency' && <span className="proj-card-prefix">$</span>}
@@ -65,15 +70,18 @@ export default function AssumptionCard({
           inputMode={field.format === 'currency' ? 'numeric' : undefined}
           className="proj-card-input"
           value={local}
+          readOnly={readOnly}
+          disabled={readOnly}
           step={field.format === 'currency' ? undefined : field.step}
           min={field.format === 'currency' ? undefined : field.min}
           max={field.format === 'currency' ? undefined : field.max}
+          onFocus={() => setFocused(true)}
           onChange={(e) => {
             setLocal(e.target.value);
             const n = parseInputToNumber(e.target.value, field.format);
             if (n !== null) onChange(n);
           }}
-          onBlur={() => setLocal(formatForInput(value, field.format))}
+          onBlur={() => { setFocused(false); setLocal(formatForInput(value, field.format)); }}
         />
         {field.format === 'percent' && <span className="proj-card-suffix">%</span>}
       </span>

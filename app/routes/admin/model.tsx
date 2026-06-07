@@ -3,7 +3,6 @@ import {
   type Assumptions,
   DEFAULTS,
   MONTHS,
-  fmtCurrency,
   fmtNumber,
   fmtPercent,
   summarize,
@@ -20,21 +19,26 @@ import {
   ECON_DEFAULTS,
   buildCashflow,
   cohortRetention,
+  deriveScenario,
   investorMetrics,
-  scenarioValues,
   sensitivity,
   toCsv,
 } from '~/services/model-metrics';
 import { useSharedModelSettings } from '~/hooks/useSharedModelSettings';
+import { useSharedOpex, useSharedPayroll } from '~/hooks/useSharedOpex';
+import { buildCombinedSchedule, opexAverage } from '~/services/opex';
+import { Link } from '@remix-run/react';
 import AssumptionCard, { type FieldDef } from '~/components/model/AssumptionCard';
 import ModelRow from '~/components/model/ModelRow';
 import UnifiedModelChart from '~/components/model/UnifiedModelChart';
 import ModelHeadline from '~/components/model/ModelHeadline';
+import ModelMetrics from '~/components/model/ModelMetrics';
+import ModelTabs from '~/components/model/ModelTabs';
 import SensitivityChart from '~/components/model/SensitivityChart';
 import RetentionSparkline from '~/components/model/RetentionSparkline';
 import FunnelTable from '~/components/model/FunnelTable';
 
-const COLORS = { acquisition: '#6366f1', engagement: '#f59e0b', revenue: '#10b981', costs: '#14b8a6' };
+const COLORS = { acquisition: '#6366f1', engagement: '#f59e0b', revenue: '#10b981', costs: '#0f172a' };
 const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
 
 const ACQ_FIELDS: FieldDef[] = [
@@ -45,16 +49,19 @@ const ACQ_FIELDS: FieldDef[] = [
   { key: 'budgetDistLate',  label: 'Budget split (late)',         hint: 'Share of spend at the tail · totals 100%', format: 'percent', step: 0.01, min: 0, max: 1 },
 ];
 
-const CHURN_FIELD: FieldDef = { key: 'churn', label: 'Monthly churn', hint: "Active users who don't return / mo", format: 'percent', step: 0.01, min: 0, max: 1, benchmark: '3–8%/mo consumer' };
+// New users churn far harder than the established base, so retention is
+// split into two inputs surfaced in the Engagement card.
+const RETENTION_FIELD: FieldDef = { key: 'newUserRetention', label: 'New-user retention', hint: 'New users who return next month', format: 'percent', step: 0.01, min: 0, max: 1, benchmark: '25–45% M1' };
+const MAU_CHURN_FIELD: FieldDef = { key: 'mauChurn', label: 'Monthly active churn', hint: 'Retained base lost / mo', format: 'percent', step: 0.01, min: 0, max: 1, benchmark: '3–6%/mo' };
 
 const ENGAGEMENT_FIELDS: FieldDef[] = [
   { key: 'sessionsPerUserPerMonth',  label: 'Sessions / user / mo',  hint: 'Avg sessions per MAU per month', format: 'number',  step: 0.5,   min: 0, benchmark: '6–12' },
   { key: 'sessionTimeMinutes',       label: 'Session time (min)',    hint: 'Average session length',         format: 'number',  step: 0.5,   min: 0, benchmark: '3–6 min' },
   { key: 'avgImpressionsPerSession', label: 'Impressions / session', hint: 'Product views per session',      format: 'integer', step: 1,     min: 0, benchmark: '10–40' },
-  { key: 'productConversion',        label: 'Product conversion',    hint: 'Sale per impression',            format: 'percent', step: 0.001, min: 0, max: 0.5, benchmark: '1–2% marketplace' },
 ];
 
 const REVENUE_FIELDS: FieldDef[] = [
+  { key: 'productConversion',      label: 'Product conversion',       hint: 'Sale per impression', format: 'percent',  step: 0.001, min: 0, max: 0.5, benchmark: '1–2% marketplace' },
   { key: 'avgCostPerSale',         label: 'Avg cost per sale',        hint: 'Average order value', format: 'currency', step: 5,     min: 0, benchmark: '$40–$120 AOV' },
   { key: 'avgAffiliateCommission', label: 'Avg affiliate commission', hint: 'Take rate per sale',  format: 'percent',  step: 0.005, min: 0, max: 0.5, benchmark: '8–15%' },
 ];
@@ -73,13 +80,15 @@ interface ModelUi {
   show: Record<RowKey, boolean>;
   open: Record<RowKey, boolean>;
   showFunnel: boolean;
+  scenario: ScenarioId;
 }
-const UI_KEY = 'catalog:model:ui:v3';
+const UI_KEY = 'catalog:model:ui:v4';
 const UI_DEFAULTS: ModelUi = {
   order: DEFAULT_ORDER,
   show: { acquisition: true, engagement: true, revenue: true, costs: false },
   open: { acquisition: true, engagement: false, revenue: false, costs: false },
   showFunnel: false,
+  scenario: 'base',
 };
 
 function readUi(): ModelUi {
@@ -95,6 +104,7 @@ function readUi(): ModelUi {
       show: { ...UI_DEFAULTS.show, ...(p.show || {}) },
       open: { ...UI_DEFAULTS.open, ...(p.open || {}) },
       showFunnel: !!p.showFunnel,
+      scenario: (p.scenario === 'bear' || p.scenario === 'bull') ? p.scenario : 'base',
     };
   } catch { return UI_DEFAULTS; }
 }
@@ -104,18 +114,32 @@ export default function AdminModel() {
   // across every admin session). UI prefs (order, open/closed, which lines
   // show) stay per-browser.
   const { rev, acq, econ, setRev, setAcq, setEcon, live } = useSharedModelSettings();
+  const { items: opexItems } = useSharedOpex();
+  const { items: payrollItems } = useSharedPayroll();
   const [ui, setUi] = useState<ModelUi>(() => readUi());
+
+  // OpEx can be driven by the detailed builder (payroll + expenses); when
+  // it has line items the model runs on its per-month schedule and the
+  // Monthly OpEx field shows the (read-only) average.
+  const opexSchedule = useMemo(() => buildCombinedSchedule(opexItems, payrollItems), [opexItems, payrollItems]);
+  const hasOpex = (opexItems.length > 0 || payrollItems.length > 0) && opexSchedule.some(v => v > 0);
+  const opexAvg = useMemo(() => opexAverage(opexSchedule), [opexSchedule]);
 
   useEffect(() => { try { window.localStorage.setItem(UI_KEY, JSON.stringify(ui)); } catch { /* quota */ } }, [ui]);
 
-  const { revenue, acquisition } = useMemo(() => buildModel(rev, acq, true), [rev, acq]);
+  // Base is the editable source of truth; Bear/Bull are derived from it
+  // and locked. `eff` is whatever scenario is currently being viewed.
+  const readOnly = ui.scenario !== 'base';
+  const eff = useMemo(() => deriveScenario({ rev, acq, econ }, ui.scenario), [rev, acq, econ, ui.scenario]);
+  const { rev: erev, acq: eacq, econ: eecon } = eff;
+
+  const { revenue, acquisition } = useMemo(() => buildModel(erev, eacq, true), [erev, eacq]);
   const revSummary = useMemo(() => summarize(revenue), [revenue]);
-  const acqSummary = useMemo(() => summarizeGtm(acquisition, acq), [acquisition, acq]);
-  const cash = useMemo(() => buildCashflow(revenue, acquisition, econ), [revenue, acquisition, econ]);
-  const metrics = useMemo(() => investorMetrics(rev, acq, revenue, acquisition, acqSummary, econ, cash), [rev, acq, revenue, acquisition, acqSummary, econ, cash]);
-  const sens = useMemo(() => sensitivity(rev, acq), [rev, acq]);
-  const retention = useMemo(() => cohortRetention(acq.churn), [acq.churn]);
-  const lastAcq = acquisition[acquisition.length - 1];
+  const acqSummary = useMemo(() => summarizeGtm(acquisition, eacq), [acquisition, eacq]);
+  const cash = useMemo(() => buildCashflow(revenue, acquisition, eecon, hasOpex ? opexSchedule : undefined), [revenue, acquisition, eecon, hasOpex, opexSchedule]);
+  const metrics = useMemo(() => investorMetrics(erev, eacq, revenue, acquisition, acqSummary, eecon, cash), [erev, eacq, revenue, acquisition, acqSummary, eecon, cash]);
+  const sens = useMemo(() => sensitivity(erev, eacq), [erev, eacq]);
+  const retention = useMemo(() => cohortRetention(eacq.newUserRetention, eacq.mauChurn), [eacq.newUserRetention, eacq.mauChurn]);
   const totalSales = useMemo(() => revenue.reduce((a, s) => a + s.sales, 0), [revenue]);
 
   const setRevField = (k: keyof Assumptions, v: number) => setRev(prev => ({ ...prev, [k]: v }));
@@ -131,15 +155,12 @@ export default function AdminModel() {
   const setShow = (k: RowKey, v: boolean) => setUi(p => ({ ...p, show: { ...p.show, [k]: v } }));
   const toggleOpen = (k: RowKey) => setUi(p => ({ ...p, open: { ...p.open, [k]: !p.open[k] } }));
   const resetEngagement = () => {
-    setRev(p => ({ ...p, sessionsPerUserPerMonth: DEFAULTS.sessionsPerUserPerMonth, sessionTimeMinutes: DEFAULTS.sessionTimeMinutes, avgImpressionsPerSession: DEFAULTS.avgImpressionsPerSession, productConversion: DEFAULTS.productConversion }));
-    setAcq(p => ({ ...p, churn: GTM_DEFAULTS.churn }));
+    setRev(p => ({ ...p, sessionsPerUserPerMonth: DEFAULTS.sessionsPerUserPerMonth, sessionTimeMinutes: DEFAULTS.sessionTimeMinutes, avgImpressionsPerSession: DEFAULTS.avgImpressionsPerSession }));
+    setAcq(p => ({ ...p, newUserRetention: GTM_DEFAULTS.newUserRetention, mauChurn: GTM_DEFAULTS.mauChurn }));
   };
-  const resetRevenue = () => setRev(p => ({ ...p, avgCostPerSale: DEFAULTS.avgCostPerSale, avgAffiliateCommission: DEFAULTS.avgAffiliateCommission }));
+  const resetRevenue = () => setRev(p => ({ ...p, productConversion: DEFAULTS.productConversion, avgCostPerSale: DEFAULTS.avgCostPerSale, avgAffiliateCommission: DEFAULTS.avgAffiliateCommission }));
 
-  const applyScenario = (id: ScenarioId) => {
-    const v = scenarioValues(id);
-    setRev(v.rev); setAcq(v.acq); setEcon(v.econ);
-  };
+  const setScenario = (id: ScenarioId) => setUi(p => ({ ...p, scenario: id }));
   const exportCsv = () => {
     const csv = toCsv(revenue, acquisition, cash);
     const blob = new Blob([csv], { type: 'text/csv;charset=utf-8' });
@@ -184,13 +205,10 @@ export default function AdminModel() {
 
     if (key === 'acquisition') {
       return (
-        <ModelRow {...common} title="Acquisition" subtitle="Paid + organic → MAU">
-          <div className="model-row-actions">
-            <button className="admin-btn admin-btn-secondary" onClick={() => setAcq(GTM_DEFAULTS)}>Reset acquisition</button>
-          </div>
+        <ModelRow {...common} title="Acquisition" subtitle="Paid + organic → MAU" onReset={readOnly ? undefined : () => setAcq(GTM_DEFAULTS)}>
           <div className="proj-cards model-cards">
             {ACQ_FIELDS.map(f => (
-              <AssumptionCard key={f.key} field={f} value={acq[f.key as keyof GtmAssumptions]} onChange={(n) => onAcqChange(f.key as keyof GtmAssumptions, n)} />
+              <AssumptionCard key={f.key} field={f} value={eacq[f.key as keyof GtmAssumptions]} readOnly={readOnly} onChange={(n) => onAcqChange(f.key as keyof GtmAssumptions, n)} />
             ))}
           </div>
         </ModelRow>
@@ -198,15 +216,13 @@ export default function AdminModel() {
     }
     if (key === 'engagement') {
       return (
-        <ModelRow {...common} title="Engagement" subtitle="Retention × sessions × conversion → sales">
-          <div className="model-row-actions">
-            <button className="admin-btn admin-btn-secondary" onClick={resetEngagement}>Reset engagement</button>
-          </div>
-          <p className="model-link-note">Churn trims <strong style={{ color: COLORS.acquisition }}>Acquisition</strong>'s MAU; the rest turns it into <strong style={{ color: COLORS.revenue }}>Revenue</strong>'s sales.</p>
+        <ModelRow {...common} title="Engagement" subtitle="Retention × sessions → impressions" onReset={readOnly ? undefined : resetEngagement}>
+          <p className="model-link-note">Retention &amp; churn shape <strong style={{ color: COLORS.acquisition }}>Acquisition</strong>'s MAU; the rest turns it into <strong style={{ color: COLORS.revenue }}>Revenue</strong>'s sales.</p>
           <div className="proj-cards model-cards">
-            <AssumptionCard key="churn" field={CHURN_FIELD} value={acq.churn} onChange={(n) => setAcqField('churn', clamp01(n))} />
+            <AssumptionCard key="newUserRetention" field={RETENTION_FIELD} value={eacq.newUserRetention} readOnly={readOnly} onChange={(n) => setAcqField('newUserRetention', clamp01(n))} />
+            <AssumptionCard key="mauChurn" field={MAU_CHURN_FIELD} value={eacq.mauChurn} readOnly={readOnly} onChange={(n) => setAcqField('mauChurn', clamp01(n))} />
             {ENGAGEMENT_FIELDS.map(f => (
-              <AssumptionCard key={f.key} field={f} value={rev[f.key as keyof Assumptions]} onChange={(n) => setRevField(f.key as keyof Assumptions, n)} />
+              <AssumptionCard key={f.key} field={f} value={erev[f.key as keyof Assumptions]} readOnly={readOnly} onChange={(n) => setRevField(f.key as keyof Assumptions, n)} />
             ))}
           </div>
         </ModelRow>
@@ -214,28 +230,28 @@ export default function AdminModel() {
     }
     if (key === 'costs') {
       return (
-        <ModelRow {...common} title="Costs & cash" subtitle="Margin, OpEx, runway → cash line">
-          <div className="model-row-actions">
-            <button className="admin-btn admin-btn-secondary" onClick={() => setEcon(ECON_DEFAULTS)}>Reset costs</button>
-          </div>
-          <p className="model-link-note">Burn = marketing + OpEx − gross profit. The checkbox plots the <strong style={{ color: COLORS.costs }}>cash</strong> balance.</p>
+        <ModelRow {...common} title="Costs & cash" subtitle="Margin, OpEx, runway → cash line" onReset={readOnly ? undefined : () => setEcon(ECON_DEFAULTS)}>
+          <p className="model-link-note">
+            Burn = marketing + OpEx − gross profit. The checkbox plots the <strong style={{ color: COLORS.costs }}>cash</strong> balance.
+            {' '}Build OpEx from headcount &amp; expenses in the <Link to="/admin/model/opex" className="opex-link">OpEx builder →</Link>
+          </p>
           <div className="proj-cards model-cards">
-            {COSTS_FIELDS.map(f => (
-              <AssumptionCard key={f.key} field={f} value={econ[f.key as keyof EconAssumptions]} onChange={(n) => setEconField(f.key as keyof EconAssumptions, n)} />
-            ))}
+            {COSTS_FIELDS.map(f => {
+              if (f.key === 'monthlyOpex' && hasOpex) {
+                return <AssumptionCard key={f.key} field={{ ...f, hint: 'Avg from OpEx builder (per-month drives the model)' }} value={opexAvg} readOnly onChange={() => {}} />;
+              }
+              return <AssumptionCard key={f.key} field={f} value={eecon[f.key as keyof EconAssumptions]} readOnly={readOnly} onChange={(n) => setEconField(f.key as keyof EconAssumptions, n)} />;
+            })}
           </div>
         </ModelRow>
       );
     }
     return (
-      <ModelRow {...common} title="Revenue" subtitle="AOV × commission → revenue">
-        <div className="model-row-actions">
-          <button className="admin-btn admin-btn-secondary" onClick={resetRevenue}>Reset revenue</button>
-        </div>
+      <ModelRow {...common} title="Revenue" subtitle="Conversion × AOV × commission → revenue" onReset={readOnly ? undefined : resetRevenue}>
         <p className="model-link-note">Monetises <strong style={{ color: COLORS.engagement }}>Engagement</strong>'s sales — {fmtNumber(totalSales)} orders over {MONTHS} months.</p>
         <div className="proj-cards model-cards">
           {REVENUE_FIELDS.map(f => (
-            <AssumptionCard key={f.key} field={f} value={rev[f.key as keyof Assumptions]} onChange={(n) => setRevField(f.key as keyof Assumptions, n)} />
+            <AssumptionCard key={f.key} field={f} value={erev[f.key as keyof Assumptions]} readOnly={readOnly} onChange={(n) => setRevField(f.key as keyof Assumptions, n)} />
           ))}
         </div>
       </ModelRow>
@@ -255,7 +271,18 @@ export default function AdminModel() {
         <p className="admin-page-subtitle">Acquisition → MAU, Engagement → sales, Revenue → $, Costs → runway. Numbers are shared with every admin in real time. Toggle any line, drag to reorder.</p>
       </div>
 
-      <ModelHeadline m={metrics} onScenario={applyScenario} onExportCsv={exportCsv} onPrint={() => window.print()} />
+      <ModelTabs active="model" />
+
+      <ModelHeadline scenario={ui.scenario} onScenario={setScenario} onExportCsv={exportCsv} onPrint={() => window.print()} />
+
+      {readOnly && (
+        <div className="model-locked-banner">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <rect x="3" y="11" width="18" height="11" rx="2" /><path d="M7 11V7a5 5 0 0 1 10 0v4" />
+          </svg>
+          <span>Viewing the <strong>{ui.scenario === 'bear' ? 'Bear' : 'Bull'}</strong> case — derived from your Base. Switch to <strong>Base</strong> to edit the assumptions.</span>
+        </div>
+      )}
 
       <div className="model-layout">
         <div className="model-left">
@@ -265,51 +292,8 @@ export default function AdminModel() {
         </div>
 
         <div className="model-right">
-          {/* Dials sit at the top of the chart so the headline results read
-              right above the curve they come from. */}
-          <div className="proj-summary model-dials">
-            {ui.show.revenue && (
-              <>
-                <div className="proj-summary-card">
-                  <span className="proj-summary-label">16-month revenue</span>
-                  <span className="proj-summary-value">{fmtCurrency(revSummary.total)}</span>
-                </div>
-                <div className="proj-summary-card">
-                  <span className="proj-summary-label">Take rate</span>
-                  <span className="proj-summary-value">{fmtPercent(metrics.takeRate, 0)}</span>
-                  <span className="proj-summary-sub">GMV {fmtCurrency(metrics.gmvTotal, { compact: true })}</span>
-                </div>
-              </>
-            )}
-            {ui.show.engagement && (
-              <div className="proj-summary-card gtm-dial-engage">
-                <span className="proj-summary-label">Total sales</span>
-                <span className="proj-summary-value">{fmtNumber(totalSales)}</span>
-                <span className="proj-summary-sub">orders over {MONTHS} months</span>
-              </div>
-            )}
-            {ui.show.acquisition && (
-              <>
-                <div className="proj-summary-card gtm-dial-organic">
-                  <span className="proj-summary-label">Avg MAU</span>
-                  <span className="proj-summary-value">{fmtNumber(acqSummary.avgMau)}</span>
-                  <span className="proj-summary-sub">month {MONTHS}: {fmtNumber(lastAcq?.cumulativeUsers ?? 0)} · DAU {fmtNumber(acqSummary.avgDau)}</span>
-                </div>
-                <div className="proj-summary-card gtm-dial-paid">
-                  <span className="proj-summary-label">Blended CAC</span>
-                  <span className="proj-summary-value">{fmtCurrency(acqSummary.blendedCac)}</span>
-                  <span className="proj-summary-sub">{fmtPercent(acqSummary.organicShare, 0)} organic · vs {fmtCurrency(acq.cpa)} CPA</span>
-                </div>
-              </>
-            )}
-            {ui.show.costs && (
-              <div className="proj-summary-card gtm-dial-cash">
-                <span className="proj-summary-label">Cash at month {MONTHS}</span>
-                <span className="proj-summary-value">{fmtCurrency(metrics.cashEnd)}</span>
-                <span className="proj-summary-sub">{metrics.breakevenMonth == null ? 'not yet break-even' : `break-even m${metrics.breakevenMonth + 1}`}</span>
-              </div>
-            )}
-          </div>
+          {/* All the headline facts in one minimal card, above the curve. */}
+          <ModelMetrics metrics={metrics} revSummary={revSummary} acqSummary={acqSummary} totalSales={totalSales} rev={erev} acq={eacq} econ={eecon} />
 
           <UnifiedModelChart
             revenue={revenue}
@@ -331,7 +315,7 @@ export default function AdminModel() {
             <SensitivityChart rows={sens} />
           </section>
           <section className="model-card">
-            <h3>Cohort retention at {fmtPercent(acq.churn, 0)} churn</h3>
+            <h3>Cohort retention — {fmtPercent(eacq.newUserRetention, 0)} M1, {fmtPercent(eacq.mauChurn, 0)}/mo after</h3>
             <RetentionSparkline data={retention} />
             <p className="model-card-note">Of a cohort acquired in month 1, the share still active each month after.</p>
           </section>

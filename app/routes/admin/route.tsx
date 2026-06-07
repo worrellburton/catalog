@@ -103,6 +103,8 @@ const allSearchItems: SearchItem[] = [
   { label: 'Model', type: 'Page', to: '/admin/model' },
   { label: 'Projections', type: 'Page', to: '/admin/model' },
   { label: 'Go to Market', type: 'Page', to: '/admin/model?tab=gtm' },
+  { label: 'Monthly OpEx', type: 'Page', to: '/admin/model/opex' },
+  { label: 'OpEx', type: 'Page', to: '/admin/model/opex' },
   { label: 'Pitch', type: 'Page', to: '/admin/fundraising?section=pitch' },
   { label: '30 min pitch', type: 'Page', to: '/admin/fundraising?section=pitch&pitch=30' },
   { label: '60 min pitch', type: 'Page', to: '/admin/fundraising?section=pitch&pitch=60' },
