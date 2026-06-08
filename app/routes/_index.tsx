@@ -793,6 +793,9 @@ export default function Home() {
 
   const handleOpenProduct = useCallback(async (product: Product) => {
     pushRecent(product);
+    // Close the saved overlay if it's open so the product page isn't hidden
+    // behind it (the look path already does this via handleBookmarksOpenLook).
+    setShowBookmarks(false);
     // Pause every currently-playing <video> before the nav lands so
     // we don't briefly have two heroes + a rail of cards all decoding
     // at once. The TrailVideoHost pool resumes whichever video the
@@ -945,6 +948,8 @@ export default function Home() {
   const lastOpenAtRef = useRef(0);
   const handleOpenCreative = useCallback(async (creative: ProductAd) => {
     if (!creative.product) return;
+    // Close the saved overlay if open so the product page isn't hidden behind it.
+    setShowBookmarks(false);
     // Debounce: while the morph is still in flight (~360ms), ignore extra
     // taps. Without this, a user double-tapping a card double-fires
     // setSelectedCreative which races the layoutId animation and produces a
