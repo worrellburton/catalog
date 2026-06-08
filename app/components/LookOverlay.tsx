@@ -653,6 +653,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
       name: look.title || look.creator || 'this look',
       imageUrl: lookPoster(look),
       saved: !wasBookmarked,
+      kind: 'look',
     });
     // Sync to Supabase and update the displayed count
     if (look.uuid) {

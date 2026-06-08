@@ -23,6 +23,7 @@ interface SavedToast {
   name: string;
   imageUrl: string | null;
   saved: boolean;
+  isLook?: boolean;
 }
 
 type Toast = FollowToast | SavedToast;
@@ -53,7 +54,7 @@ export default function FollowToastHost() {
 
     const onSaved = (e: Event) => {
       const detail = (e as CustomEvent).detail as
-        | { name?: string; imageUrl?: string | null; saved?: boolean }
+        | { name?: string; imageUrl?: string | null; saved?: boolean; kind?: 'look' | 'product' }
         | undefined;
       if (!detail) return;
       show({
@@ -62,6 +63,7 @@ export default function FollowToastHost() {
         name: detail.name || 'this item',
         imageUrl: detail.imageUrl ?? null,
         saved: detail.saved !== false,
+        isLook: detail.kind === 'look',
       });
     };
 
@@ -85,9 +87,15 @@ export default function FollowToastHost() {
           <span className="follow-toast-thumb follow-toast-thumb--blank" aria-hidden="true">♥</span>
         )}
         <span className="follow-toast-text">
-          {toast.saved ? 'Added ' : 'Removed '}
-          <strong>{toast.name}</strong>
-          {toast.saved ? ' to your saved' : ' from your saved'}
+          {toast.isLook ? (
+            toast.saved ? 'Saved this look' : 'Removed this look'
+          ) : (
+            <>
+              {toast.saved ? 'Added ' : 'Removed '}
+              <strong>{toast.name}</strong>
+              {toast.saved ? ' to your saved' : ' from your saved'}
+            </>
+          )}
         </span>
       </div>
     );

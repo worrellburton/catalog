@@ -7,6 +7,9 @@ export interface SavedToastDetail {
   imageUrl?: string | null;
   /** true = just saved, false = just removed. */
   saved: boolean;
+  /** 'look' renders the simple "Saved this look" copy (with the look's poster
+   *  as the thumbnail); products keep the "Added <name> to your saved" copy. */
+  kind?: 'look' | 'product';
 }
 
 export function emitSavedToast(detail: SavedToastDetail): void {

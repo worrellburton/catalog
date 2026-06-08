@@ -61,6 +61,7 @@ export default function InlineLookDetail({ look, onOpenCreator, onOpenBrowser, o
       name: look.title || look.creator || 'this look',
       imageUrl: lookPoster(look),
       saved: !wasBookmarked,
+      kind: 'look',
     });
   }, [bookmarks, look]);
 
