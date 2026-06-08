@@ -47,6 +47,10 @@ interface LookCardProps {
    *  overlay feed sections (similar looks, YMAL) where multiple simultaneous
    *  video decoders cause CPU/fan spikes. Card is still tappable. */
   previewOnly?: boolean;
+  /** Prefer the look's own poster frame (thumbnail/cover) over a product
+   *  packshot for the still tile. Used on the creator catalog so look tiles
+   *  read as looks. */
+  preferLookPoster?: boolean;
 }
 
 // Render band — cards within this margin keep their poster painted but
@@ -54,7 +58,7 @@ interface LookCardProps {
 // before the user can scroll one back into view.
 const RENDER_MARGIN = '200% 0%';
 
-const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenLook, onOpenCreator, onCreateCatalog, hideCreator = false, rootMargin = '50% 0%', previewOnly = false }: LookCardProps) {
+const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenLook, onOpenCreator, onCreateCatalog, hideCreator = false, rootMargin = '50% 0%', previewOnly = false, preferLookPoster = false }: LookCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const slotRef = useRef<HTMLDivElement | null>(null);
   // Poster-first: if the look has a poster image, treat the card as
@@ -159,7 +163,13 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
   // static tile. Falls back through the poster chain if no product
   // images are attached.
   const firstProductImage = look.products?.find(p => !!p.image)?.image || '';
-  const stillImageUrl = firstProductImage || posterUrl;
+  // preferLookPoster (creator catalog) shows the LOOK's own poster frame so a
+  // look tile reads as the look — not a product packshot. The default feed
+  // behaviour keeps the merchandising product photo for dial-driven stills.
+  const lookOwnPoster = look.thumbnail_url || look.cover || '';
+  const stillImageUrl = preferLookPoster
+    ? (lookOwnPoster || firstProductImage || posterUrl)
+    : (firstProductImage || posterUrl);
 
   // Defer slot population to the *active* viewport band. Outside that
   // band the video is detached and returned to the TrailVideoHost pool —

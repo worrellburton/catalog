@@ -916,6 +916,7 @@ export default function CreatorPage({
                 onOpenCreator={() => {}}
                 onCreateCatalog={onCreateCatalog}
                 hideCreator
+                preferLookPoster
               />
             ))}
           </div>
