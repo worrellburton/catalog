@@ -6,7 +6,7 @@ import { supabase } from '~/utils/supabase';
 import { getShopperGender } from '~/services/product-creative';
 import { useAuth } from '~/hooks/useAuth';
 import { highResAvatarUrl } from '~/utils/avatarSrc';
-import { getLooks, fetchSeenLookIds } from '~/services/looks';
+import { getLooks, fetchSeenLookIds, subscribeToLooksChange } from '~/services/looks';
 
 interface FollowingRailProps {
   onOpenCreator: (handle: string) => void;
@@ -158,6 +158,13 @@ function FollowingRail({ onOpenCreator, mode = 'both', onCreateFollowingCatalog:
   const prevFollowerHandlesRef = useRef<Set<string> | null>(null);
 
   useEffect(() => subscribeFollowingChanges(() => setRefreshKey(k => k + 1)), []);
+
+  // Live updates when a followed creator posts. The looks realtime channel
+  // (looks-live-sync in services/looks) busts the cache and fires this on
+  // every INSERT/UPDATE — re-running the following load (re-sorts so the
+  // newest poster bumps to the front) and the unseen-count effect (so the
+  // new look's badge appears) without a manual refresh.
+  useEffect(() => subscribeToLooksChange(() => setRefreshKey(k => k + 1)), []);
 
   // Live online presence — drives the glowing green ring on avatars.
   // Hysteresis: a handle "going offline" is held for ONLINE_GRACE_MS
