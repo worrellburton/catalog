@@ -455,6 +455,11 @@ export async function getLookByUuid(uuid: string): Promise<Look | null> {
     video: primary.video_url || '',
     thumbnail_url: primary.thumbnail_url || undefined,
     mobile_video_url: primary.mobile_video_url || undefined,
+    // Same as getLooks() — without this the deep-link fallback path (looks not
+    // in the cached live set) drops the HLS ladder and forces progressive MP4
+    // even when a manifest exists. Mapping it lets the overlay prefer HLS just
+    // like the feed does.
+    hls_url: primary.hls_url || undefined,
     trimStart: primary.trim_start ?? undefined,
     trimEnd: primary.trim_end ?? undefined,
     gender: (row.gender as 'men' | 'women') || 'women',
