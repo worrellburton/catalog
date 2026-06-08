@@ -5,18 +5,27 @@
 //
 // The ordering contract (priority, highest first):
 //   1. Brand fast-path  — exact brand intent, dedup by id AND product_id.
-//   2. Active search     — the semantic ranker (search_products: color /
-//                          subcategory / relevance aware) is the SOLE
-//                          authority; its order is returned VERBATIM.
+//   2. Active search     — the semantic ranker (search_products: in-category,
+//                          color / subcategory / relevance aware) is the SOLE
+//                          authority; its order is returned VERBATIM. The
+//                          tier-1 catalog_tags match (tagMatch) is INSTANT-PAINT
+//                          ONLY — it renders for the ~100ms before the edge
+//                          function resolves, then V8 replaces it.
 //   3. Home feed         — query-agnostic personalization (seen-partition →
 //                          affinity lean → Automatic Editor order).
-//   4. Tier-1 tag match  — typed-category creatives, dedup by id.
 //
-// Rule (2) is load-bearing: personalization (rule 3) must NEVER reorder an
-// explicit search. It floats globally-popular products to the front
-// regardless of the query, which silently overrode the server ranking — e.g.
-// "black shoes" surfaced white sneakers because they out-rank in the
-// personalized order. See feed-compose.test.ts for the regression guard.
+// Two rules are load-bearing:
+//   * ONE ranker for every search. Single-word category queries ("shoes")
+//     used to be served by the color-blind client tier-1 path while
+//     multi-word ones ("black shoes") went to V8 — two brains, divergent
+//     ranking. Now every >=3-char query is authoritative on V8; tier-1 is
+//     just the loading placeholder. V8's category route hard-filters to the
+//     category (no dense-neighbour drift) and unions type OR taxonomy so it
+//     has BETTER recall than tier-1's type-only synonym list.
+//   * Personalization (rule 3) must NEVER reorder an explicit search. It
+//     floats globally-popular products to the front regardless of the query,
+//     which silently overrode the server ranking — e.g. "black shoes"
+//     surfaced white sneakers. See feed-compose.test.ts for the guards.
 
 import type { ProductAd } from '~/services/product-creative';
 import type { UserAffinity } from '~/services/user-affinity';
@@ -70,32 +79,29 @@ export function composeRenderedCreatives(a: ComposeRenderedArgs): ProductAd[] {
     return out;
   }
 
-  // 2. Active explicit search → semantic ranker order, VERBATIM. Personalization
+  // 2. Active explicit search → the V8 semantic ranker is the SOLE authority,
+  //    returned VERBATIM. tier-1 (tagMatch) is instant-paint only: it renders
+  //    until the edge function resolves, then V8 replaces it. Personalization
   //    is query-agnostic and must not reorder a deliberate search.
-  if (q.length >= 3 && a.tagMatch.length === 0) {
-    return a.semanticOrdered;
+  if (q.length >= 3) {
+    return a.semanticOrdered.length > 0 ? a.semanticOrdered : dedupById(a.tagMatch);
   }
 
-  // 3. Home feed (no typed/tag match) → personalize: hide already-seen products,
-  //    softly lean toward favoured categories, then float the Automatic Editor's
-  //    per-shopper order to the front (rest keep their existing order).
-  if (a.tagMatch.length === 0) {
-    const unseen = partitionUnseen(a.semanticOrdered, a.seenKeys, c => (c.product_id ? `product:${c.product_id}` : null));
-    const ranked = rankCreativesByAffinity(unseen, a.affinity);
-    if (a.personalizedOrder && a.personalizedOrder.length > 0) {
-      const priority = new Map(a.personalizedOrder.map((id, idx) => [id, idx]));
-      const front: ProductAd[] = [];
-      const rest: ProductAd[] = [];
-      for (const c of ranked) {
-        if (c.product_id && priority.has(c.product_id)) front.push(c);
-        else rest.push(c);
-      }
-      front.sort((x, y) => (priority.get(x.product_id!) ?? 0) - (priority.get(y.product_id!) ?? 0));
-      return [...front, ...rest];
+  // 3. Home feed → personalize: hide already-seen products, softly lean toward
+  //    favoured categories, then float the Automatic Editor's per-shopper order
+  //    to the front (rest keep their existing order).
+  const unseen = partitionUnseen(a.semanticOrdered, a.seenKeys, c => (c.product_id ? `product:${c.product_id}` : null));
+  const ranked = rankCreativesByAffinity(unseen, a.affinity);
+  if (a.personalizedOrder && a.personalizedOrder.length > 0) {
+    const priority = new Map(a.personalizedOrder.map((id, idx) => [id, idx]));
+    const front: ProductAd[] = [];
+    const rest: ProductAd[] = [];
+    for (const c of ranked) {
+      if (c.product_id && priority.has(c.product_id)) front.push(c);
+      else rest.push(c);
     }
-    return ranked;
+    front.sort((x, y) => (priority.get(x.product_id!) ?? 0) - (priority.get(y.product_id!) ?? 0));
+    return [...front, ...rest];
   }
-
-  // 4. Tier-1 typed match → those exclusively.
-  return dedupById(a.tagMatch);
+  return ranked;
 }

@@ -49,8 +49,14 @@ const APPAREL = [
  *   wantSomeName : at least one result name should match (discovery / recall)
  */
 const QUERIES = [
+  // ---- single-word category queries: now V8-authoritative (one ranker) ----
+  { q: 'shoes',          intent: 'category', allowedTypes: FOOTWEAR, note: 'all footwear; in-category' },
+  { q: 'dresses',        intent: 'category', allowedTypes: ['Dress'], note: 'dresses only' },
+  { q: 'sneakers',       intent: 'category', allowedTypes: FOOTWEAR, note: 'sneakers/footwear only' },
+
   // ---- category queries: must stay in-category ----
   { q: 'white shoes',    intent: 'category', allowedTypes: FOOTWEAR, forbid: [/\btee\b|t-shirt|dress|jacket|sweater/i], note: 'white footwear; NO tee/shirt' },
+  { q: 'black shoes',    intent: 'category', allowedTypes: FOOTWEAR, wantTopColors: /black|onyx|jet/i, note: 'black footwear; black ranks first' },
   { q: 'white sneakers', intent: 'category', allowedTypes: FOOTWEAR, wantSomeName: [/air force|samba|superstar|achilles|replica/i], note: 'white sneakers' },
   { q: 'black jacket',   intent: 'category', allowedTypes: ['Jacket'], note: 'jackets only' },
   { q: 'summer dress',   intent: 'category', allowedTypes: ['Dress'], note: 'dresses only' },
@@ -109,6 +115,13 @@ function assess(spec, results) {
   if (spec.wantTop) {
     if (!results.length) hard.push(`wantTop ${spec.wantTop} but no results`);
     else if (!spec.wantTop.test(names[0])) hard.push(`top result "${names[0]}" does not match ${spec.wantTop}`);
+  }
+  if (spec.wantTopColors) {
+    // Color-purity gate: result #1's name must name the requested color family.
+    // Guards the V8 category route's color_tier ranking (e.g. "black shoes"
+    // must lead with a black item, not a globally-popular white one).
+    if (!results.length) hard.push(`wantTopColors ${spec.wantTopColors} but no results`);
+    else if (!spec.wantTopColors.test(names[0])) hard.push(`top result "${names[0]}" is not ${spec.wantTopColors}`);
   }
   if (spec.wantSomeName) {
     for (const re of spec.wantSomeName) {

@@ -91,11 +91,23 @@ describe('composeRenderedCreatives', () => {
     expect(ids(out)).toEqual(['c1', 'c3']);
   });
 
-  it('tier-1 tag match returns those exclusively, deduped by id', () => {
+  // Unification: a single-word category query ("shoes") used to be served by
+  // the color-blind tier-1 path. Now the V8 semantic ranker is authoritative
+  // for it too — tier-1 is only the loading placeholder.
+  it('single-word category query: V8 semantic wins over tier-1 once loaded', () => {
     const out = composeRenderedCreatives(baseArgs({
       committedQuery: 'shoes',
-      tagMatch: [ad('t1', 'p-1'), ad('t1', 'p-1'), ad('t2', 'p-2')],
-      semanticOrdered: [ad('s1', 'p-9')],
+      tagMatch: [ad('t1', 'p-1'), ad('t2', 'p-2')],          // tier-1 instant-paint
+      semanticOrdered: [ad('s1', 'p-9'), ad('s2', 'p-8')],   // V8 result
+    }));
+    expect(ids(out)).toEqual(['s1', 's2']);
+  });
+
+  it('tier-1 tag match renders as instant-paint while semantic is still loading', () => {
+    const out = composeRenderedCreatives(baseArgs({
+      committedQuery: 'shoes',
+      tagMatch: [ad('t1', 'p-1'), ad('t1', 'p-1'), ad('t2', 'p-2')], // dedup by id
+      semanticOrdered: [],                                            // not arrived yet
     }));
     expect(ids(out)).toEqual(['t1', 't2']);
   });
