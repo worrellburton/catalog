@@ -68,6 +68,8 @@ generator_image = (
     # frame grab; primary_poster wraps upload + DB write).
     .add_local_file("asset_encoder.py", "/root/asset_encoder.py")
     .add_local_file("primary_poster.py", "/root/primary_poster.py")
+    # HLS ladder backfill (encode_hls_ladder_from_url + upload + hls_url write).
+    .add_local_file("backfill_creative_assets.py", "/root/backfill_creative_assets.py")
 )
 
 # ─── App ───────────────────────────────────────────────────────────────
@@ -343,4 +345,54 @@ def generate_pending():
             pass
     else:
         print("No missing primary-video posters.")
+
+
+# ─── HLS adaptive-bitrate ladder backfill ─────────────────────────────
+# Encodes a 480/720/1080 HLS ladder per clip, uploads the tree to
+# <base>/hls/, and fills hls_url (products: primary_hls_url). Runs here
+# because the image already has ffmpeg + the service-role secret. The
+# client (TrailVideoHost) prefers hls_url and falls back to MP4 when null,
+# so a partial backfill is safe — only filled rows switch to adaptive.
+
+@app.function(
+    image=generator_image,
+    secrets=secrets,
+    timeout=86_400,   # full-catalog ladders can take a while; 24h ceiling
+    retries=0,
+)
+def hls_backfill_job(
+    table: str = "looks_creative",
+    limit: int | None = None,
+    concurrency: int = 2,
+    dry_run: bool = False,
+):
+    """Run the HLS ladder backfill for one table. Re-runnable: only touches
+    rows where hls_url (products: primary_hls_url) is still null."""
+    import sys
+    sys.path.insert(0, "/root")
+    from backfill_creative_assets import run_hls
+
+    rc = run_hls(table, limit, dry_run, concurrency)
+    return {"table": table, "rc": rc}
+
+
+@app.local_entrypoint()
+def hls_backfill(
+    table: str = "looks_creative",
+    limit: int = 0,
+    concurrency: int = 2,
+    dry_run: bool = False,
+):
+    """One-shot HLS ladder backfill on Modal.
+
+        # smoke-test a single look end-to-end:
+        modal run modal_app.py::hls_backfill --table looks_creative --limit 1
+        # then the rest, and the product surfaces:
+        modal run modal_app.py::hls_backfill --table looks_creative
+        modal run modal_app.py::hls_backfill --table products
+        modal run modal_app.py::hls_backfill --table product_creative
+
+    limit=0 → all eligible rows."""
+    res = hls_backfill_job.remote(table, (limit or None), concurrency, dry_run)
+    print(res)
 
