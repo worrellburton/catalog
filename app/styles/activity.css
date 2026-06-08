@@ -55,9 +55,23 @@
   font-family: inherit;
   text-align: left;
   position: relative;
-  animation: activity-toast-in-centered 360ms cubic-bezier(0.34, 1.56, 0.64, 1);
+  animation: activity-fade-in 260ms ease both;
   transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease;
   max-width: 100%;
+}
+/* Fade out on dismiss — the row keeps a brief `--leaving` window before it's
+   removed from the stack so it eases away instead of vanishing. */
+.activity-toast--leaving {
+  animation: activity-fade-out 300ms ease forwards;
+  pointer-events: none;
+}
+@keyframes activity-fade-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes activity-fade-out {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(-8px); }
 }
 /* Notch — a small pointer on the top edge, near the right, aimed up at the
    header activity button (where you tap to see all this). ONLY the topmost
@@ -68,7 +82,10 @@
   content: '';
   position: absolute;
   top: -6px;
-  right: 30px;
+  /* Sits under the analytics icon — the stack's right edge is anchored to
+     the .header-activity-pill (see ActivityRealtimeToasts), so this points
+     the notch up at that icon. */
+  right: 16px;
   width: 13px;
   height: 13px;
   background: rgba(15, 23, 42, 0.94);

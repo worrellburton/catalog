@@ -42,12 +42,29 @@ interface ActivityToast {
   fallbackInitial?: string;
   /** Summary-toast number (animated count-up). Undefined for per-event. */
   count?: number;
+  /** True during the exit window so the row plays its fade-out before removal. */
+  leaving?: boolean;
 }
 
 const MAX_VISIBLE = 4;
 const TOAST_LIFESPAN_MS = 6000;
 const SUMMARY_TOAST_LIFESPAN_MS = 9000;
 const LAST_SEEN_KEY = 'activity:last-seen-at';
+// Exit-animation window: a toast is marked `leaving` this long before it's
+// dropped from the stack, so the CSS fade-out can play out.
+const EXIT_MS = 300;
+
+// Two-phase removal: mark `leaving` near the end (triggers the fade-out), then
+// drop the row once the animation has played. Replaces the old hard filter so
+// every toast eases out instead of vanishing.
+function scheduleDismiss(
+  setToasts: React.Dispatch<React.SetStateAction<ActivityToast[]>>,
+  id: string,
+  lifespanMs: number,
+) {
+  window.setTimeout(() => setToasts(prev => prev.map(t => (t.id === id ? { ...t, leaving: true } : t))), Math.max(0, lifespanMs - EXIT_MS));
+  window.setTimeout(() => setToasts(prev => prev.filter(t => t.id !== id)), lifespanMs);
+}
 
 // SVG icon per kind. Rendered inside the toast's accent disc.
 function KindIcon({ kind }: { kind: ActivityKind }) {
@@ -89,9 +106,7 @@ function pushSummary(
     const merged: ActivityToast[] = [...prev, { id, kind, count }];
     return merged.length > MAX_VISIBLE ? merged.slice(-MAX_VISIBLE) : merged;
   });
-  window.setTimeout(() => {
-    setToasts(prev => prev.filter(t => t.id !== id));
-  }, SUMMARY_TOAST_LIFESPAN_MS);
+  scheduleDismiss(setToasts, id, SUMMARY_TOAST_LIFESPAN_MS);
 }
 
 export default function ActivityRealtimeToasts() {
@@ -149,9 +164,7 @@ export default function ActivityRealtimeToasts() {
       const merged = [...prev, { id, kind, message }];
       return merged.length > MAX_VISIBLE ? merged.slice(-MAX_VISIBLE) : merged;
     });
-    window.setTimeout(() => {
-      setToasts(prev => prev.filter(t => t.id !== id));
-    }, lifespanMs);
+    scheduleDismiss(setToasts, id, lifespanMs);
   }, []);
 
   const pushRef = useRef(pushToast);
@@ -376,9 +389,7 @@ export default function ActivityRealtimeToasts() {
                 }];
                 return merged.length > MAX_VISIBLE ? merged.slice(-MAX_VISIBLE) : merged;
               });
-              window.setTimeout(() => {
-                setToasts(prev => prev.filter(t => t.id !== id));
-              }, TOAST_LIFESPAN_MS);
+              scheduleDismiss(setToasts, id, TOAST_LIFESPAN_MS);
               // Resolve actor (+ look details for look taps) and upgrade the
               // toast in place once they land.
               void Promise.all([
@@ -429,9 +440,7 @@ export default function ActivityRealtimeToasts() {
                 }];
                 return merged.length > MAX_VISIBLE ? merged.slice(-MAX_VISIBLE) : merged;
               });
-              window.setTimeout(() => {
-                setToasts(prev => prev.filter(t => t.id !== id));
-              }, TOAST_LIFESPAN_MS);
+              scheduleDismiss(setToasts, id, TOAST_LIFESPAN_MS);
               if (row.follower_id) {
                 void resolveActorInfo(row.follower_id).then(info => {
                   setToasts(prev => prev.map(t =>
@@ -461,6 +470,24 @@ export default function ActivityRealtimeToasts() {
     };
   }, [user, loading, postPaint]);
 
+  // Anchor the stack under the analytics icon (.header-activity-pill) so the
+  // toast + notch read as coming FROM it. Measured live so it survives layout
+  // shifts / resize; falls back to the CSS default (top-right) if not found.
+  const [anchor, setAnchor] = useState<{ top: number; right: number } | null>(null);
+  useEffect(() => {
+    if (toasts.length === 0) return;
+    const measure = () => {
+      const el = (document.querySelector('.header-activity-pill')
+        || document.querySelector('.header-wallet-pill')) as HTMLElement | null;
+      const r = el?.getBoundingClientRect();
+      if (!r || r.width === 0) { setAnchor(null); return; }
+      setAnchor({ top: Math.round(r.bottom + 10), right: Math.max(8, Math.round(window.innerWidth - r.right)) });
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [toasts.length]);
+
   const navigate = useNavigate();
   const openInsights = useCallback(() => {
     // Deep-linkable URL — _index detects /earnings and opens the wallet
@@ -476,7 +503,12 @@ export default function ActivityRealtimeToasts() {
   if (!splashDone) return null;
   if (toasts.length === 0) return null;
   return (
-    <div className="activity-toasts" role="status" aria-live="polite">
+    <div
+      className="activity-toasts"
+      role="status"
+      aria-live="polite"
+      style={anchor ? { top: anchor.top, right: anchor.right } : undefined}
+    >
       {toasts.map(t => <ActivityToastRow key={t.id} toast={t} onClick={openInsights} />)}
     </div>
   );
@@ -492,7 +524,7 @@ function ActivityToastRow({ toast, onClick }: { toast: ActivityToast; onClick: (
     <button
       type="button"
       onClick={onClick}
-      className={`activity-toast activity-toast--${toast.kind}${isSummary ? ' activity-toast--summary' : ' activity-toast--rich'}`}
+      className={`activity-toast activity-toast--${toast.kind}${isSummary ? ' activity-toast--summary' : ' activity-toast--rich'}${toast.leaving ? ' activity-toast--leaving' : ''}`}
       aria-label="Open insights"
     >
       <span className="activity-toast-icon-disc" aria-hidden>
