@@ -547,6 +547,58 @@ export default function AdminHome() {
         </div>
       </div>
 
+      {/* Key assumptions — the real, live-measured numbers behind the model's
+          key inputs, grouped + clickable at the top so they're easy to find.
+          The header jumps to the Model to compare measured vs assumed; each
+          card opens its analytics detail. */}
+      <div className="admin-home-card" style={{ marginBottom: 16, border: '1px solid #fde68a', background: '#fffbeb' }}>
+        <div style={{ display: 'flex', alignItems: 'baseline', justifyContent: 'space-between', gap: 12, marginBottom: 12 }}>
+          <h3 className="admin-home-card-title" style={{ color: '#b45309', margin: 0 }}>
+            Key assumptions
+            <span style={{ fontSize: 11, fontWeight: 500, color: '#92400e', marginLeft: 8 }}>
+              live-measured inputs behind the model
+            </span>
+          </h3>
+          <Link to="/admin/model" style={{ fontSize: 12, fontWeight: 600, color: '#b45309', textDecoration: 'none', whiteSpace: 'nowrap' }}>
+            Compare in Model →
+          </Link>
+        </div>
+        <div className="admin-home-stats">
+          <StatCard
+            icon={<EyeIcon />}
+            label="Impressions / session"
+            value={stats.sessionsCount && stats.impressions != null ? (stats.impressions / Math.max(1, stats.sessionsCount)).toFixed(1) : '—'}
+            loading={statsLoading}
+            gold
+            to={metricLink('impressions', audience, range)}
+          />
+          <StatCard
+            icon={<ClockIcon />}
+            label="Avg active session"
+            value={stats.avgActiveMs != null ? formatDuration(stats.avgActiveMs) : '—'}
+            loading={statsLoading}
+            gold
+            to={metricLink('avg-active', audience, range)}
+          />
+          <StatCard
+            icon={<UserIcon />}
+            label="Sessions / user"
+            value={stats.sessionsCount != null && stats.activeUsers ? (stats.sessionsCount / Math.max(1, stats.activeUsers)).toFixed(1) : '—'}
+            sub={`per ${range === 'daily' ? 'day' : range === 'monthly' ? 'month' : 'year'}`}
+            loading={statsLoading}
+            gold
+            to={metricLink('active-users', audience, range)}
+          />
+          <StatCard
+            icon={<PackageIcon />}
+            label="Avg cost per product"
+            value={stats.avgProductCost ? fmtCurrency(stats.avgProductCost) : '—'}
+            loading={statsLoading}
+            gold
+          />
+        </div>
+      </div>
+
       {/* Window-scoped stats grid. Mobile collapses to 2 columns,
           desktop is 4. Each card shows label + big number + a small
           secondary metric where useful. */}
@@ -652,40 +704,9 @@ export default function AdminHome() {
           loading={statsLoading}
           to={metricLink('ai-generations', audience, range)}
         />
-        {/* Gold cards = the real, measured numbers behind the key model
-            inputs (not assumptions). Computed from live analytics. */}
-        <StatCard
-          icon={<EyeIcon />}
-          label="Impressions / session"
-          value={stats.sessionsCount && stats.impressions != null ? (stats.impressions / Math.max(1, stats.sessionsCount)).toFixed(1) : '—'}
-          loading={statsLoading}
-          gold
-          to={metricLink('impressions', audience, range)}
-        />
-        <StatCard
-          icon={<ClockIcon />}
-          label="Avg active session"
-          value={stats.avgActiveMs != null ? formatDuration(stats.avgActiveMs) : '—'}
-          loading={statsLoading}
-          gold
-          to={metricLink('avg-active', audience, range)}
-        />
-        <StatCard
-          icon={<UserIcon />}
-          label="Sessions / user"
-          value={stats.sessionsCount != null && stats.activeUsers ? (stats.sessionsCount / Math.max(1, stats.activeUsers)).toFixed(1) : '—'}
-          sub={`per ${range === 'daily' ? 'day' : range === 'monthly' ? 'month' : 'year'}`}
-          loading={statsLoading}
-          gold
-          to={metricLink('active-users', audience, range)}
-        />
-        <StatCard
-          icon={<PackageIcon />}
-          label="Avg cost per product"
-          value={stats.avgProductCost ? fmtCurrency(stats.avgProductCost) : '—'}
-          loading={statsLoading}
-          gold
-        />
+        {/* The gold key-assumption cards (impressions/session, sessions/user,
+            avg active session, avg cost per product) moved to the "Key
+            assumptions" card at the top of the page. */}
         <StatCard
           icon={<TrendIcon />}
           label="Catalog totals"
