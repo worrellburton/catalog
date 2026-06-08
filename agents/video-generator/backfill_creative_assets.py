@@ -35,7 +35,12 @@ from typing import Iterable
 # Allow running directly from /agents/video-generator without a package install.
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
-from asset_encoder import encode_assets_from_url, cleanup  # noqa: E402
+from asset_encoder import (  # noqa: E402
+    encode_assets_from_url,
+    cleanup,
+    encode_hls_ladder_from_url,
+    cleanup_hls,
+)
 from primary_poster import generate_primary_poster, poster_storage_key  # noqa: E402
 
 try:
@@ -53,13 +58,11 @@ POSTER_SUFFIX = ".poster.jpg"
 MOBILE_SUFFIX = ".mobile.mp4"
 
 
-def storage_paths_for(video_url: str, storage_path: str | None, row_id: str | None = None) -> tuple[str, str]:
-    """Derive the poster + mobile storage keys from the source video.
+def base_key_for(video_url: str, storage_path: str | None, row_id: str | None = None) -> str:
+    """Derive the bucket-relative base key (no extension) for a source video.
 
-    Prefers the explicit `storage_path` column when present; falls back
-    to deriving from the public URL (the bucket prefix in the URL is
-    stable). For external URLs (e.g. fal.media CDN), uses the row ID
-    as the storage key prefix. Returns (poster_key, mobile_key)."""
+    Prefers the explicit `storage_path` column; falls back to the key embedded
+    in the public URL, then to a row-id-derived path for external CDNs."""
     if storage_path:
         base = storage_path
     else:
@@ -72,15 +75,188 @@ def storage_paths_for(video_url: str, storage_path: str | None, row_id: str | No
             base = f"looks/{row_id}/creative"
         else:
             raise ValueError(f"Cannot derive storage path from URL: {video_url}")
-    # Strip the `.mp4` so we don't end up with `foo.mp4.poster.jpg` -
-    # cleaner: `foo.poster.jpg` and `foo.mobile.mp4`.
+    # Strip `.mp4` so derivatives read `foo.poster.jpg` / `foo/hls/...`.
     if base.endswith(".mp4"):
         base = base[:-4]
+    return base
+
+
+def storage_paths_for(video_url: str, storage_path: str | None, row_id: str | None = None) -> tuple[str, str]:
+    """Poster + mobile storage keys derived from the source video.
+    Returns (poster_key, mobile_key)."""
+    base = base_key_for(video_url, storage_path, row_id)
     return f"{base}{POSTER_SUFFIX}", f"{base}{MOBILE_SUFFIX}"
 
 
 def public_url_for(supabase_url: str, key: str) -> str:
     return f"{supabase_url}/storage/v1/object/public/{BUCKET}/{key}"
+
+
+# ── HLS ladder backfill ──────────────────────────────────────────────────────
+# Encodes an adaptive 480p/720p/1080p ladder per clip and uploads the whole
+# tree (master + variant playlists + segments) under `<base>/hls/`, then points
+# the row's hls_url (products: primary_hls_url) at the master playlist.
+
+_HLS_CONTENT_TYPES = {
+    ".m3u8": "application/vnd.apple.mpegurl",
+    ".ts": "video/mp2t",
+    ".m4s": "video/iso.segment",
+    ".mp4": "video/mp4",
+}
+# Segments are content-stable → cache hard. Playlists get a short TTL so a
+# re-encode can propagate (they're tiny, so the repeated fetch is cheap).
+_HLS_SEGMENT_CACHE = "public, max-age=31536000, immutable"
+_HLS_PLAYLIST_CACHE = "public, max-age=300"
+
+
+def upload_hls_tree(supabase, out_dir: str, key_prefix: str) -> int:
+    """Uploads every file under `out_dir` to `{key_prefix}/<relpath>`,
+    preserving the directory structure so the manifest's RELATIVE references
+    (master → v0/playlist.m3u8 → seg_000.ts) resolve against the uploaded
+    URLs. Returns the number of files uploaded."""
+    count = 0
+    for root, _dirs, files in os.walk(out_dir):
+        for name in files:
+            local = os.path.join(root, name)
+            rel = os.path.relpath(local, out_dir).replace(os.sep, "/")
+            key = f"{key_prefix}/{rel}"
+            ext = os.path.splitext(name)[1].lower()
+            ctype = _HLS_CONTENT_TYPES.get(ext, "application/octet-stream")
+            cache = _HLS_PLAYLIST_CACHE if ext == ".m3u8" else _HLS_SEGMENT_CACHE
+            with open(local, "rb") as f:
+                supabase.storage.from_(BUCKET).upload(
+                    key,
+                    f.read(),
+                    {"content-type": ctype, "upsert": "true", "cache-control": cache},
+                )
+            count += 1
+    return count
+
+
+def process_hls_row(
+    supabase,
+    supabase_url: str,
+    table: str,
+    row_id: str,
+    video_url: str,
+    storage_path: str | None,
+    dry_run: bool,
+) -> tuple[str, bool, str]:
+    """Encode + upload an HLS ladder for one creative row, then write hls_url."""
+    prefix = f"{base_key_for(video_url, storage_path, row_id)}/hls"
+    if dry_run:
+        return row_id, True, f"DRY-RUN hls={prefix}/master.m3u8"
+    try:
+        h = encode_hls_ladder_from_url(video_url)
+    except Exception as e:
+        return row_id, False, f"encode failed: {e}"
+    try:
+        n = upload_hls_tree(supabase, h.out_dir, prefix)
+        master_url = public_url_for(supabase_url, f"{prefix}/{h.master_name}")
+        supabase.table(table).update({"hls_url": master_url}).eq("id", row_id).execute()
+        return row_id, True, f"hls {n} files -> {master_url}"
+    except Exception as e:
+        return row_id, False, f"upload failed: {e}"
+    finally:
+        cleanup_hls(h)
+
+
+def process_hls_product(
+    supabase,
+    supabase_url: str,
+    product_id: str,
+    primary_video_url: str,
+    dry_run: bool,
+) -> tuple[str, bool, str]:
+    """HLS ladder for a product's primary video → products.primary_hls_url."""
+    prefix = f"{base_key_for(primary_video_url, None, product_id)}/hls"
+    if dry_run:
+        return product_id, True, f"DRY-RUN hls={prefix}/master.m3u8"
+    try:
+        h = encode_hls_ladder_from_url(primary_video_url)
+    except Exception as e:
+        return product_id, False, f"encode failed: {e}"
+    try:
+        n = upload_hls_tree(supabase, h.out_dir, prefix)
+        master_url = public_url_for(supabase_url, f"{prefix}/{h.master_name}")
+        supabase.table("products").update({"primary_hls_url": master_url}).eq("id", product_id).execute()
+        return product_id, True, f"hls {n} files -> {master_url}"
+    except Exception as e:
+        return product_id, False, f"upload failed: {e}"
+    finally:
+        cleanup_hls(h)
+
+
+def fetch_hls_rows(supabase, table: str, limit: int | None) -> list[dict]:
+    """Creative rows with a source video but no HLS ladder yet."""
+    q = (
+        supabase.table(table)
+        .select("id, video_url, storage_path, hls_url")
+        .not_.is_("video_url", "null")
+        .is_("hls_url", "null")
+    )
+    if table == "product_creative":
+        q = q.eq("status", "live")
+    if limit:
+        q = q.limit(limit)
+    return q.execute().data or []
+
+
+def fetch_hls_product_rows(supabase, limit: int | None) -> list[dict]:
+    """Products with a primary video but no HLS ladder yet."""
+    q = (
+        supabase.table("products")
+        .select("id, primary_video_url")
+        .not_.is_("primary_video_url", "null")
+        .is_("primary_hls_url", "null")
+    )
+    if limit:
+        q = q.limit(limit)
+    return q.execute().data or []
+
+
+def run_hls(table: str, limit: int | None, dry_run: bool, concurrency: int) -> int:
+    supabase_url = os.environ.get("SUPABASE_URL")
+    service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
+    if not supabase_url or not service_key:
+        print("SUPABASE_URL + SUPABASE_SERVICE_ROLE_KEY required in env", file=sys.stderr)
+        return 2
+    supabase = create_client(supabase_url, service_key)
+
+    is_products = table == "products"
+    rows = fetch_hls_product_rows(supabase, limit) if is_products else fetch_hls_rows(supabase, table, limit)
+    if not rows:
+        print(f"[{table}/hls] nothing to backfill")
+        return 0
+    print(f"[{table}/hls] {len(rows)} rows to process")
+
+    ok_count = fail_count = 0
+    started = time.time()
+
+    def work(r: dict) -> tuple[str, bool, str]:
+        if is_products:
+            return process_hls_product(supabase, supabase_url, r["id"], r["primary_video_url"], dry_run)
+        return process_hls_row(
+            supabase, supabase_url, table, r["id"], r["video_url"], r.get("storage_path"), dry_run,
+        )
+
+    if concurrency <= 1:
+        for r in rows:
+            rid, ok, msg = work(r)
+            print(f"  {rid} {'OK' if ok else 'FAIL'}  {msg}")
+            ok_count += 1 if ok else 0
+            fail_count += 0 if ok else 1
+    else:
+        with ThreadPoolExecutor(max_workers=concurrency) as pool:
+            for f in as_completed([pool.submit(work, r) for r in rows]):
+                rid, ok, msg = f.result()
+                print(f"  {rid} {'OK' if ok else 'FAIL'}  {msg}")
+                ok_count += 1 if ok else 0
+                fail_count += 0 if ok else 1
+
+    dur = time.time() - started
+    print(f"[{table}/hls] done: {ok_count} ok, {fail_count} fail in {dur:.1f}s")
+    return 0 if fail_count == 0 else 1
 
 
 def process_row(
@@ -309,6 +485,10 @@ def main(argv: Iterable[str] | None = None) -> int:
     p.add_argument("--dry-run", action="store_true")
     p.add_argument("--concurrency", type=int, default=2,
                    help="Parallel encodes. Each worker uses ~1 ffmpeg invocation + a few hundred MB of memory.")
+    p.add_argument("--hls", action="store_true",
+                   help="Encode HLS adaptive ladders (480/720/1080) into <base>/hls/ and "
+                        "fill hls_url (products: primary_hls_url) instead of poster/mobile assets. "
+                        "Heavier per row (3 renditions); consider a lower --concurrency.")
     args = p.parse_args(argv)
 
     # `products` follows a different path: it derives the poster from
@@ -317,7 +497,12 @@ def main(argv: Iterable[str] | None = None) -> int:
     tables = ["product_creative", "generated_videos", "looks_creative", "products"] if args.table in ("both", "all") else [args.table]
     rc = 0
     for t in tables:
-        if t == "products":
+        if args.hls:
+            # generated_videos has no hls_url column; skip it in HLS mode.
+            if t == "generated_videos":
+                continue
+            rc |= run_hls(t, args.limit, args.dry_run, args.concurrency)
+        elif t == "products":
             rc |= run_products(args.limit, args.dry_run, args.concurrency)
         else:
             rc |= run(t, args.limit, args.dry_run, args.concurrency)

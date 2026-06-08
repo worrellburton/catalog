@@ -177,3 +177,119 @@ def cleanup(assets: EncodedAssets) -> None:
         shutil.rmtree(assets.workdir, ignore_errors=True)
     except Exception:
         pass
+
+
+# ── HLS adaptive-bitrate ladder ──────────────────────────────────────────────
+# The mobile/full MP4 split forces one fixed quality per surface: the feed and
+# the full-screen hero play the SAME file, so we either ship 480p (soft on a
+# phone hero) or full-res (slow first frame + wasteful on a tile). HLS removes
+# the tradeoff — one manifest, three renditions; the player starts low for an
+# instant first frame and ramps up to a high rung at full-screen size, with no
+# src swap on the card→hero handoff. This is how TikTok/IG feel instant AND crisp.
+
+
+@dataclass
+class EncodedHls:
+    """Output of encode_hls_ladder_from_url. `out_dir` holds the full HLS tree
+    (master.m3u8 + v0/v1/v2 variant playlists + .ts segments); `master_name`
+    is the master playlist filename within it. The caller uploads the whole
+    tree preserving relative paths, then points hls_url at the master."""
+    out_dir: str
+    master_name: str
+    workdir: str
+
+
+# Rendition ladder: (height-cap label, scale width, video bitrate, maxrate, bufsize).
+# Portrait 3:4 clips scale by WIDTH; height is derived with -2 (even). 480/720/1080
+# wide covers phone tile → phone hero → desktop/large hero. Bitrates are tuned for
+# clean motion (model walk, hair, camera arc) without bloating segment size.
+_HLS_LADDER = [
+    ("480", 480, "1400k", "1600k", "2100k"),
+    ("720", 720, "3000k", "3300k", "4500k"),
+    ("1080", 1080, "5500k", "6000k", "8000k"),
+]
+
+
+def encode_hls_ladder_from_url(
+    video_url: str,
+    workdir: Optional[str] = None,
+) -> EncodedHls:
+    """Downloads the source MP4 and transcodes an HLS VOD ladder
+    (480p/720p/1080p, H.264, MPEG-TS segments) with a master playlist.
+
+    Audio is dropped (-an) — the consumer feed plays muted. Segments are 2s
+    with a matching 2s GOP (-g 48 at 24fps, fixed cadence) so every rendition
+    has aligned switch points, which is what lets hls.js step quality up/down
+    mid-playback without a stall.
+
+    Raises CalledProcessError on ffmpeg failure / HTTPError on a bad fetch.
+    Caller removes `result.workdir` once the tree is uploaded."""
+    if shutil.which("ffmpeg") is None:
+        raise RuntimeError(
+            "ffmpeg not found on PATH. Install it (apt-get install ffmpeg) "
+            "or run this inside the Modal image which already has it."
+        )
+
+    workdir = workdir or tempfile.mkdtemp(prefix="hls-ladder-")
+    src_path = os.path.join(workdir, "source.mp4")
+    out_dir = os.path.join(workdir, "hls")
+    os.makedirs(out_dir, exist_ok=True)
+    for i in range(len(_HLS_LADDER)):
+        os.makedirs(os.path.join(out_dir, f"v{i}"), exist_ok=True)
+
+    with urllib.request.urlopen(video_url) as resp, open(src_path, "wb") as f:
+        shutil.copyfileobj(resp, f)
+
+    # Build the split + per-rendition scale filtergraph and the matching
+    # -map / bitrate args. var_stream_map groups each video output into its
+    # own variant stream (no audio groups — we strip audio).
+    n = len(_HLS_LADDER)
+    splits = "".join(f"[v{i}]" for i in range(n))
+    chain = [f"[0:v]split={n}{splits}"]
+    for i, (_, w, *_rest) in enumerate(_HLS_LADDER):
+        chain.append(f"[v{i}]scale=w={w}:h=-2[v{i}out]")
+    filter_complex = "; ".join(chain)
+
+    # Input is absolute; all OUTPUT paths are relative and ffmpeg runs with
+    # cwd=out_dir. This is the reliable way to get -master_pl_name to land in
+    # out_dir (out_dir/master.m3u8) referencing v0/playlist.m3u8 etc. — passing
+    # absolute output patterns makes the master's location version-dependent.
+    cmd = [
+        "ffmpeg", "-y", "-loglevel", "error",
+        "-i", src_path,
+        "-filter_complex", filter_complex,
+    ]
+    for i, (_, _w, brate, maxrate, bufsize) in enumerate(_HLS_LADDER):
+        cmd += [
+            "-map", f"[v{i}out]",
+            f"-c:v:{i}", "libx264",
+            f"-b:v:{i}", brate,
+            f"-maxrate:v:{i}", maxrate,
+            f"-bufsize:v:{i}", bufsize,
+        ]
+    cmd += [
+        "-preset", "veryfast",
+        "-r", "24",
+        "-g", "48", "-keyint_min", "48", "-sc_threshold", "0",
+        "-profile:v", "high", "-pix_fmt", "yuv420p",
+        "-an",
+        "-f", "hls",
+        "-hls_time", "2",
+        "-hls_playlist_type", "vod",
+        "-hls_flags", "independent_segments",
+        "-hls_segment_filename", os.path.join("v%v", "seg_%03d.ts"),
+        "-master_pl_name", "master.m3u8",
+        "-var_stream_map", " ".join(f"v:{i}" for i in range(n)),
+        os.path.join("v%v", "playlist.m3u8"),
+    ]
+    subprocess.run(cmd, check=True, cwd=out_dir)
+
+    return EncodedHls(out_dir=out_dir, master_name="master.m3u8", workdir=workdir)
+
+
+def cleanup_hls(assets: EncodedHls) -> None:
+    """Removes the temp workdir created by encode_hls_ladder_from_url."""
+    try:
+        shutil.rmtree(assets.workdir, ignore_errors=True)
+    except Exception:
+        pass
