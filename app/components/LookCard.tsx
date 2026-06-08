@@ -144,7 +144,11 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
   // by LookOverlay so TrailVideoHost's PoolEntry doesn't re-swap src on
   // handoff (which would force a re-buffer + first-frame black).
   const wantMobile = isMobileViewport() || isSlowConnection();
-  const videoUrl = wantMobile && look.mobile_video_url ? look.mobile_video_url : fullVideoUrl;
+  // HLS manifest (adaptive ladder) wins when present — one source for the tile
+  // AND the overlay hero, so TrailVideoHost's handoff reuses the same element
+  // and full-screen ramps to a high rung. LookOverlay picks the SAME url. When
+  // absent, fall back to the progressive mobile/full split (unchanged).
+  const videoUrl = look.hls_url || (wantMobile && look.mobile_video_url ? look.mobile_video_url : fullVideoUrl);
   // Look thumbnail (server-extracted) → look cover image → empty.
   // Used as the <video poster=> so the card paints a real image while
   // the MP4 streams. Empty string disables the attribute.
@@ -232,10 +236,12 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
   // For the overlay: when serving a down-sized mobile variant on this card,
   // also warm the full-res URL so tapping in opens the overlay instantly.
   useEffect(() => {
-    if (!inRenderBand || previewOnly || videoUrl === fullVideoUrl) return;
+    // HLS sources stream segments on demand via hls.js — no full-file byte
+    // prewarm needed (or wanted; it'd burn bytes on an MP4 we won't play).
+    if (!inRenderBand || previewOnly || look.hls_url || videoUrl === fullVideoUrl) return;
     const t = window.setTimeout(() => prefetchVideoBytes(fullVideoUrl), 500);
     return () => window.clearTimeout(t);
-  }, [inRenderBand, previewOnly, videoUrl, fullVideoUrl]);
+  }, [inRenderBand, previewOnly, videoUrl, fullVideoUrl, look.hls_url]);
 
   return (
     <div

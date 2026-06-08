@@ -58,6 +58,31 @@ export function pickVideoUrl(creative: {
   return creative.video_url ?? creative.mobile_video_url ?? null;
 }
 
+/** Picks the playback source, preferring an HLS manifest when one exists.
+ *
+ *  HLS is a single adaptive source used by EVERY surface (grid tile, detail
+ *  hero): the player starts on a low rung for an instant first frame and
+ *  ramps up to a high rung as bandwidth + element size allow — no src swap,
+ *  no black flash. Because the tile and the hero point at the SAME manifest,
+ *  TrailVideoHost's card→hero handoff stays seamless AND full-screen
+ *  auto-upgrades to crisp. When no manifest is present we fall straight
+ *  through to pickVideoUrl()'s progressive-MP4 logic (mobile/full split),
+ *  so behaviour is unchanged until clips are backfilled with an `hls_url`.
+ *
+ *  Product preference mirrors pickVideoUrl: a product's own HLS ladder
+ *  (primary_hls_url) wins for product cards. */
+export function pickPlaybackSource(creative: {
+  hls_url?: string | null;
+  video_url?: string | null;
+  mobile_video_url?: string | null;
+  product?: { primary_hls_url?: string | null; primary_video_url?: string | null } | null;
+}): string | null {
+  const productHls = creative.product?.primary_hls_url;
+  if (productHls) return productHls;
+  if (creative.hls_url) return creative.hls_url;
+  return pickVideoUrl(creative);
+}
+
 /** Picks the best poster image. Order:
  *    1. Vision-picked + polished primary product image (clean packshot)
  *    2. Creative thumbnail (a frame extracted at upload time)

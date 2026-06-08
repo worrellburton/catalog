@@ -59,6 +59,7 @@ interface SupabaseLook {
     video_url: string | null;
     thumbnail_url: string | null;
     mobile_video_url: string | null;
+    hls_url: string | null;
     is_primary: boolean;
     trim_start: number | null;
     trim_end: number | null;
@@ -135,6 +136,7 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
         video_url,
         thumbnail_url,
         mobile_video_url,
+        hls_url,
         is_primary,
         trim_start,
         trim_end
@@ -317,6 +319,7 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
       video: primary.video_url || '',
       thumbnail_url: primary.thumbnail_url || undefined,
       mobile_video_url: primary.mobile_video_url || undefined,
+      hls_url: primary.hls_url || undefined,
       trimStart: primary.trim_start ?? undefined,
       trimEnd: primary.trim_end ?? undefined,
       gender: (row.gender as 'men' | 'women') || 'women',
@@ -401,7 +404,7 @@ export async function getLookByUuid(uuid: string): Promise<Look | null> {
     .from('looks')
     .select(`
       id, legacy_id, title, gender, creator_handle, user_id, description, color, status, feed_rank,
-      looks_creative ( video_url, thumbnail_url, mobile_video_url, is_primary, trim_start, trim_end ),
+      looks_creative ( video_url, thumbnail_url, mobile_video_url, hls_url, is_primary, trim_start, trim_end ),
       look_products ( sort_order, products ( name, brand, price, url, image_url, primary_image_url, primary_video_url, primary_video_poster_url, type, subtype ) )
     `)
     .eq('id', uuid)

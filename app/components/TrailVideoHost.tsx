@@ -38,6 +38,7 @@ import {
   type ReactNode,
 } from 'react';
 import { getLookTrim } from '~/utils/lookTrim';
+import { setVideoSource, detachSource } from '~/utils/hlsAttach';
 
 // Pool cap. Mobile pays the real cost: 64 live <video> elements is
 // fine on a desktop GPU but on iOS Safari each one holds GPU surfaces
@@ -181,7 +182,7 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
   const unloadEntry = useCallback((entry: PoolEntry) => {
     const offscreen = poolRef.current;
     if (!offscreen || entry.el.parentElement !== offscreen) return;
-    try { entry.el.pause(); entry.el.removeAttribute('src'); entry.el.load(); } catch {}
+    try { entry.el.pause(); detachSource(entry.el); } catch {}
     entry.unloaded = true;
     entry.idleTimer = undefined;
   }, []);
@@ -207,7 +208,7 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
     for (const [id, entry] of candidates) {
       if (pool.size <= POOL_MAX) break;
       cancelIdleUnload(entry);
-      try { entry.el.pause(); entry.el.removeAttribute('src'); entry.el.load(); } catch {}
+      try { entry.el.pause(); detachSource(entry.el); } catch {}
       entry.el.remove();
       pool.delete(id);
     }
@@ -240,14 +241,14 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
     if (entry && entry.src !== src) {
       // Same id, new source - replace. Rare (worker re-render of a creative).
       try { entry.el.pause(); } catch {}
-      entry.el.src = src;
+      setVideoSource(entry.el, src);
       entry.src = src;
       entry.unloaded = false;
     } else if (entry && entry.unloaded) {
       // Idle-unload stripped src while parked. Restore it before the
       // element goes back on screen. currentTime is lost (reloads from
       // zero), which is fine for something the user hasn't seen in 20 s.
-      entry.el.src = entry.src;
+      setVideoSource(entry.el, entry.src);
       entry.unloaded = false;
     }
 
@@ -294,9 +295,9 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
       // until the user scrolls past. Capped at 600 ms so a broken
       // poster URL never blocks playback.
       if (poster) {
-        void preloadPoster(poster).then(() => { el.src = src; });
+        void preloadPoster(poster).then(() => { setVideoSource(el, src); });
       } else {
-        el.src = src;
+        setVideoSource(el, src);
       }
       el.setAttribute('data-trail-id', id);
       el.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
@@ -414,7 +415,7 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
     if (existing) {
       cancelIdleUnload(existing);
       if (existing.unloaded) {
-        existing.el.src = existing.src;
+        setVideoSource(existing.el, existing.src);
         existing.unloaded = false;
       }
       existing.lastUsed = ++tickRef.current;
@@ -442,7 +443,7 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
       : 'auto';
     el.crossOrigin = 'anonymous';
     if (poster) el.setAttribute('poster', poster);
-    el.src = src;
+    setVideoSource(el, src);
     el.setAttribute('data-trail-id', id);
     el.style.cssText = 'width:1px;height:1px;display:block;';
     offscreen.appendChild(el);
@@ -457,7 +458,7 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
     // If there is already a different element for this id, evict it cleanly.
     const existing = pool.get(id);
     if (existing && existing.el !== el) {
-      try { existing.el.pause(); existing.el.removeAttribute('src'); existing.el.load(); } catch {}
+      try { existing.el.pause(); detachSource(existing.el); } catch {}
       existing.el.remove();
       pool.delete(id);
     }

@@ -97,6 +97,12 @@ export interface Look {
    *  Renderer picks this on narrow viewports / slow connections, same
    *  contract as ProductAd.mobile_video_url. */
   mobile_video_url?: string;
+  /** HLS master playlist (adaptive-bitrate ladder: 480p/720p/1080p). When
+   *  present every surface plays THIS one source — the player starts low for
+   *  an instant first frame and ramps to a high rung at full-screen size, so
+   *  the detail hero is crisp without a re-buffer. Falls back to
+   *  video / mobile_video_url when absent. */
+  hls_url?: string;
   /** Trimmer in/out window (seconds). When set, look video players loop
    *  [trimStart, trimEnd] instead of the whole clip. */
   trimStart?: number;
