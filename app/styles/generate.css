@@ -275,17 +275,56 @@
   overflow: hidden;
   padding-bottom: calc(24px + env(safe-area-inset-bottom));
 }
-/* Style view — locked to a single viewport like Review so the screen
-   can't drift up and down. The style grid + "direct your own video"
-   field sit above the fixed dock; the body stays short enough to fit. */
+/* Style view — locked to a single viewport (like Review) so the screen
+   can't drift up and down. Everything — the style row and the "direct your
+   own video" field — fits between the header and the fixed dock with no
+   vertical scroll. The page is a flex column: the head sits at the top, the
+   style row keeps its natural height, and the direct field grows to fill
+   whatever's left above the dock. */
 .gen-page--style {
-  /* No longer height-locked: the "direct your own video" textarea grows to own
-     the bottom half of the screen and the page scrolls clear of the fixed dock
-     (generous bottom padding so the field never tucks under it). */
-  padding-bottom: calc(176px + env(safe-area-inset-bottom));
+  height: 100dvh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  /* Reserve room for the fixed dock at the bottom so the direct field never
+     tucks under it. */
+  padding-bottom: calc(120px + env(safe-area-inset-bottom));
 }
-/* Direct-video field owns roughly the bottom half on the style step. */
-.gen-page--style .gen-direct-input { min-height: 40vh; }
+/* Compact head so Style sits high on the screen — drop the "Generate"
+   sub-line and tighten the spacing/border that pushed the body down. */
+.gen-page--style .gen-head {
+  flex: 0 0 auto;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+}
+.gen-page--style .gen-head h1 { font-size: clamp(24px, 4vw, 34px); margin: 0; }
+.gen-page--style .gen-head .gen-sub { display: none; }
+/* Main + step fill the remaining height and pass the flex context down so the
+   direct field can stretch to the dock. */
+.gen-page--style .gen-main,
+.gen-page--style .gen-step {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.gen-page--style .gen-step { padding: 0; }
+.gen-page--style .gen-step > h2 { margin: 0 0 10px; flex: 0 0 auto; }
+/* Style row keeps its natural (one-row) height. */
+.gen-page--style .gen-styleswiper { flex: 0 0 auto; }
+/* Direct-video field owns the rest of the viewport above the dock. */
+.gen-page--style .gen-direct {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  margin-top: 14px;
+}
+.gen-page--style .gen-direct-input {
+  flex: 1 1 auto;
+  min-height: 0;
+  resize: none;
+}
 
 .gen-page--generating .gen-main {
   flex: 1 1 auto;
@@ -1107,9 +1146,10 @@ html[data-shell="catalog-app"] .gen-page {
 .gen-styleswiper {
   display: grid;
   grid-auto-flow: column;
-  /* One row — swipe horizontally through the presets. */
+  /* One row — swipe horizontally through the presets. Show ~3.3 cards so the
+     next one peeks at the right edge, signalling the row scrolls sideways. */
   grid-template-rows: auto;
-  grid-auto-columns: calc((100% - 16px) / 3);
+  grid-auto-columns: calc((100% - 26px) / 3.3);
   gap: 8px;
   overflow-x: auto;
   overflow-y: hidden;
