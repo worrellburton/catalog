@@ -54,11 +54,11 @@ const QUERIES = [
   { q: 'dresses',        intent: 'category', allowedTypes: ['Dress'], note: 'dresses only' },
   { q: 'sneakers',       intent: 'category', allowedTypes: FOOTWEAR, note: 'sneakers/footwear only' },
 
-  // ---- category queries: must stay in-category ----
-  { q: 'white shoes',    intent: 'category', allowedTypes: FOOTWEAR, forbid: [/\btee\b|t-shirt|dress|jacket|sweater/i], note: 'white footwear; NO tee/shirt' },
-  { q: 'black shoes',    intent: 'category', allowedTypes: FOOTWEAR, wantTopColors: /black|onyx|jet/i, note: 'black footwear; black ranks first' },
+  // ---- color queries: STRICT color filter — every result must be the color ----
+  { q: 'white shoes',    intent: 'category', allowedTypes: FOOTWEAR, allColors: /white|off.?white|cream|ivory|sail|ecru|bone|chalk/i, forbid: [/\btee\b|t-shirt|dress|jacket|sweater/i], note: 'white footwear only' },
+  { q: 'black shoes',    intent: 'category', allowedTypes: FOOTWEAR, allColors: /black|onyx|jet/i, note: 'black footwear only — no whites' },
+  { q: 'black pants',    intent: 'category', allowedTypes: ['Pants'], allColors: /black|onyx|jet/i, note: 'black bottoms only' },
   { q: 'white sneakers', intent: 'category', allowedTypes: FOOTWEAR, wantSomeName: [/air force|samba|superstar|achilles|replica/i], note: 'white sneakers' },
-  { q: 'black jacket',   intent: 'category', allowedTypes: ['Jacket'], note: 'jackets only' },
   { q: 'summer dress',   intent: 'category', allowedTypes: ['Dress'], note: 'dresses only' },
   { q: 'blue jeans',     intent: 'category', allowedTypes: ['Pants', 'Shorts'], wantTop: /jean|denim/i, note: 'jeans rank above shorts' },
   { q: 'leather boots',  intent: 'category', allowedTypes: FOOTWEAR, note: 'footwear; boots first if any' },
@@ -118,10 +118,15 @@ function assess(spec, results) {
   }
   if (spec.wantTopColors) {
     // Color-purity gate: result #1's name must name the requested color family.
-    // Guards the V8 category route's color_tier ranking (e.g. "black shoes"
-    // must lead with a black item, not a globally-popular white one).
     if (!results.length) hard.push(`wantTopColors ${spec.wantTopColors} but no results`);
     else if (!spec.wantTopColors.test(names[0])) hard.push(`top result "${names[0]}" is not ${spec.wantTopColors}`);
+  }
+  if (spec.allColors) {
+    // STRICT color filter gate: EVERY result must name the requested color
+    // family. Guards the category route's hard color filter — a single
+    // off-color item (e.g. a white sneaker under "black shoes") is a failure.
+    const offColor = names.filter(n => !spec.allColors.test(n));
+    if (offColor.length) hard.push(`off-color results for ${spec.allColors}: ${offColor.join('; ')}`);
   }
   if (spec.wantSomeName) {
     for (const re of spec.wantSomeName) {
