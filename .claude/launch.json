@@ -4,7 +4,7 @@
     {
       "name": "catalog-webapp",
       "runtimeExecutable": "/Users/samirmaikap/.nvm/versions/node/v22.19.0/bin/node",
-      "runtimeArgs": ["node_modules/@remix-run/dev/dist/cli.js", "vite:dev", "--port", "5180", "--strictPort"],
+      "runtimeArgs": ["node_modules/@remix-run/dev/dist/cli.js", "vite:dev", "--port", "5180", "--strictPort", "--host"],
       "port": 5180,
       "autoPort": false
     }
