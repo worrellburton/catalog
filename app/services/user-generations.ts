@@ -924,6 +924,33 @@ export interface GenerationDetail {
 }
 
 /**
+ * Batch-fetch the product images for a set of generations in a single query,
+ * keyed by generation id and ordered by the slot order. Used by the "Your
+ * looks" rail on the Activity page so each tile can show the products that
+ * went into the look as little circles instead of a text label.
+ */
+export async function getGenerationProductImages(
+  genIds: string[],
+): Promise<Record<string, string[]>> {
+  const out: Record<string, string[]> = {};
+  if (!supabase || genIds.length === 0) return out;
+  const { data } = await supabase
+    .from('user_generation_products')
+    .select('generation_id, sort_order, products(image_url)')
+    .in('generation_id', genIds)
+    .order('sort_order');
+  for (const row of (data || []) as unknown as Array<{
+    generation_id: string;
+    products: { image_url: string | null } | null;
+  }>) {
+    const url = row.products?.image_url;
+    if (!url) continue;
+    (out[row.generation_id] ||= []).push(url);
+  }
+  return out;
+}
+
+/**
  * Hydrate a single generation with its linked uploads and picked products,
  * so the Generate page can pre-fill the wizard for "edit & regenerate".
  */

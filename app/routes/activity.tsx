@@ -37,7 +37,7 @@ import {
   type CommentMedia,
 } from '~/services/activity';
 import type { CommentTargetType } from '~/services/comments';
-import { listUserGenerations, isGenerationInFlight, getLookUuidForGeneration, type UserGeneration } from '~/services/user-generations';
+import { listUserGenerations, isGenerationInFlight, getLookUuidForGeneration, getGenerationProductImages, type UserGeneration } from '~/services/user-generations';
 import CountUp from '~/components/CountUp';
 import SiteParticleHost from '~/components/SiteParticleHost';
 import ConsumerAvatar from '~/components/ConsumerAvatar';
@@ -541,8 +541,19 @@ function StatTile({
 // rows render a left-to-right progress sweep + "Rendering"; finished rows
 // autoplay the clip; failed rows read as such.
 function YourLooksRail({ generations }: { generations: UserGeneration[] | null }) {
-  if (!generations || generations.length === 0) return null;
-  const recent = generations.slice(0, 10);
+  const recent = useMemo(() => (generations || []).slice(0, 10), [generations]);
+  const recentKey = useMemo(() => recent.map(g => g.id).join(','), [recent]);
+  // The products that went into each look — shown as little circles on the
+  // tile instead of a text label.
+  const [productImgs, setProductImgs] = useState<Record<string, string[]>>({});
+  useEffect(() => {
+    const ids = recentKey ? recentKey.split(',') : [];
+    if (ids.length === 0) return;
+    let cancelled = false;
+    getGenerationProductImages(ids).then(m => { if (!cancelled) setProductImgs(m); });
+    return () => { cancelled = true; };
+  }, [recentKey]);
+  if (recent.length === 0) return null;
   const renderingCount = recent.filter(isGenerationInFlight).length;
   return (
     <section className="ap-section">
@@ -553,18 +564,41 @@ function YourLooksRail({ generations }: { generations: UserGeneration[] | null }
         </span>
       </div>
       <div className="ap-gens-rail">
-        {recent.map(g => <GenTile key={g.id} gen={g} />)}
+        {recent.map(g => <GenTile key={g.id} gen={g} productImgs={productImgs[g.id] || []} />)}
       </div>
     </section>
   );
 }
 
-function GenTile({ gen }: { gen: UserGeneration }) {
+// Row of little circular product thumbnails — the products that went into a
+// look. Caps at four and shows a "+N" chip for the rest, so the foot stays
+// compact. Falls back to its caller's text label when there are no products.
+function GenProductCircles({ images }: { images: string[] }) {
+  const shown = images.slice(0, 4);
+  const extra = images.length - shown.length;
+  return (
+    <span className="ap-gen-circles" aria-label={`${images.length} products`}>
+      {shown.map((src, i) => (
+        <span className="ap-gen-circle" key={i} style={{ zIndex: shown.length - i }}>
+          <img src={withTransform(src, { width: 64, height: 64, resize: 'cover' })} alt="" loading="lazy" />
+        </span>
+      ))}
+      {extra > 0 && <span className="ap-gen-circle ap-gen-circle--more">+{extra}</span>}
+    </span>
+  );
+}
+
+function GenTile({ gen, productImgs }: { gen: UserGeneration; productImgs: string[] }) {
   const navigate = useNavigate();
   const [loaded, setLoaded] = useState(false);
   const inFlight = isGenerationInFlight(gen);
   const failed = gen.status === 'failed' || (!inFlight && gen.status !== 'done');
   const label = gen.display_name || gen.style || 'New look';
+  // Product circles stand in for the name on the foot; fall back to the text
+  // label only when we have no products to show.
+  const foot = productImgs.length > 0
+    ? <GenProductCircles images={productImgs} />
+    : <span className="ap-gen-name">{label}</span>;
 
   // Tapping a finished render opens its look screen. The completed
   // generation auto-landed as a look (source_generation_id); resolve that
@@ -586,7 +620,7 @@ function GenTile({ gen }: { gen: UserGeneration }) {
       >
         <div className="ap-gen-shimmer" />
         <div className="ap-gen-foot">
-          <span className="ap-gen-name">{label}</span>
+          {foot}
           <span className="ap-gen-status">Rendering…</span>
           <span className="ap-gen-bar"><span className="ap-gen-bar-fill" /></span>
         </div>
@@ -597,7 +631,7 @@ function GenTile({ gen }: { gen: UserGeneration }) {
     return (
       <div className="ap-gen ap-gen--failed" title={`${label} — failed`}>
         <div className="ap-gen-foot">
-          <span className="ap-gen-name">{label}</span>
+          {foot}
           <span className="ap-gen-status">Failed</span>
         </div>
       </div>
@@ -613,7 +647,7 @@ function GenTile({ gen }: { gen: UserGeneration }) {
         </>
       ) : <div className="ap-gen-media ap-gen-media--blank" />}
       <div className="ap-gen-foot">
-        <span className="ap-gen-name">{label}</span>
+        {foot}
       </div>
     </button>
   );

@@ -382,6 +382,31 @@ button.ap-gen--rendering:active { transform: scale(0.97); }
   white-space: nowrap;
   text-transform: capitalize;
 }
+/* Product circles standing in for the look name — the products that went
+   into the look, overlapping slightly like a stacked avatar group. */
+.ap-gen-circles { display: inline-flex; align-items: center; }
+.ap-gen-circle {
+  position: relative;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #1a1a1a;
+  border: 1.5px solid rgba(0, 0, 0, 0.85);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
+  flex: 0 0 auto;
+}
+.ap-gen-circle:not(:first-child) { margin-left: -7px; }
+.ap-gen-circle img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.ap-gen-circle--more {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-weight: 700;
+  color: #fff;
+  background: #333;
+}
 .ap-gen-status { font-size: 10px; font-weight: 600; color: #ffd2a8; }
 .ap-gen--failed .ap-gen-status { color: #ffb4b1; }
 .ap-gen-bar {
