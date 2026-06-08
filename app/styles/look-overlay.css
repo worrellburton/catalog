@@ -13,27 +13,25 @@
   z-index: 200;
   background: #0a0a0a;
   opacity: 1;
-  /* Start just below the viewport; the --in class (toggled on first paint
-     via rAF) slides it up into place. */
-  transform: translateY(100%);
+  /* No slide-up/down page transition — the look opens and closes instantly
+     (only the comments sheet keeps its glide). The drag-to-dismiss handler
+     still sets an inline transform 1:1 while the finger is down. */
+  transform: none;
   overflow: hidden;
-  /* Enter glide — decelerating ease, like the comments sheet coming up. */
-  transition: transform 0.42s cubic-bezier(0.22, 1, 0.36, 1);
   will-change: transform;
 }
 
-/* Settled / open. */
+/* Settled / open — no-op now that there's no enter slide. */
 .look-overlay--in {
   opacity: 1;
-  transform: translateY(0);
+  transform: none;
 }
 
-/* Swipe-down / close dismiss — accelerating ease off the bottom, same as
-   the comments sheet leave. Declared AFTER the base rule so this transition
-   wins (equal specificity) when --out is applied. */
+/* Close — hide instantly (no slide-down). The overlay still unmounts after
+   the JS close timeout; pointer-events off so the feed is usable at once. */
 .look-overlay--out {
-  transform: translateY(100%);
-  transition: transform 0.36s cubic-bezier(0.4, 0, 0.7, 0.2);
+  opacity: 0;
+  transition: none;
   pointer-events: none;
 }
 
