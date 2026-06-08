@@ -227,6 +227,24 @@ function FeedSection({
         }
         return sorted;
       }
+      // Search results carry a RELEVANCE order (search_products V8 ranks the
+      // products, search_looks the looks). Never shuffle it — shuffling was
+      // the dominant reason a ranked query like "black shoes" rendered with
+      // white sneakers on top. Preserve each lane's order and weave looks
+      // into the product stream so products (the primary search signal) keep
+      // their exact ranking and looks still surface.
+      if (searchMode) {
+        const lookEntries = entries.filter((e): e is Extract<DeckEntry, { type: 'look' }> => e.type === 'look');
+        const creativeEntries = entries.filter((e): e is Extract<DeckEntry, { type: 'creative' }> => e.type === 'creative');
+        const woven: DeckEntry[] = [];
+        const WEAVE = 4; // products per woven-in look
+        let li = 0, ci = 0;
+        while (li < lookEntries.length || ci < creativeEntries.length) {
+          for (let k = 0; k < WEAVE && ci < creativeEntries.length; k++) woven.push(creativeEntries[ci++]);
+          if (li < lookEntries.length) woven.push(lookEntries[li++]);
+        }
+        return woven;
+      }
       return seededShuffle<DeckEntry>(entries, cycleSeed);
     };
 
