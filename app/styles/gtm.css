@@ -135,32 +135,52 @@
 .gtm-pillar {
   background: #fff;
   border: 1px solid #eef0f4;
-  border-top: 3px solid var(--accent, #6366f1);
+  border-top: 4px solid var(--accent, #6366f1);
   border-radius: 16px;
-  padding: 18px 16px 16px;
+  padding: 0 0 16px;
+  overflow: hidden;
   box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
 }
-.gtm-pillar-head { margin-bottom: 14px; }
-.gtm-pillar-titlerow { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
-.gtm-pillar-weight { font-size: 16px; font-weight: 800; letter-spacing: -0.02em; color: var(--accent, #6366f1); flex: none; }
+/* The pillar header is now a filled accent band so each pillar reads as a
+   labelled top-level card that its sub-items visibly sit inside. */
+.gtm-pillar-head {
+  margin: 0 0 14px;
+  padding: 14px 16px 13px;
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--accent, #6366f1) 15%, #fff),
+      color-mix(in srgb, var(--accent, #6366f1) 7%, #fff));
+  border-bottom: 1px solid color-mix(in srgb, var(--accent, #6366f1) 20%, #eef0f4);
+}
+.gtm-pillar-titlerow { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.gtm-pillar-weight {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #fff;
+  background: var(--accent, #6366f1);
+  border-radius: 999px;
+  padding: 3px 10px;
+  flex: none;
+}
 .gtm-pillar-name {
-  margin: 0 0 4px;
-  font-size: 18px;
-  font-weight: 700;
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
   letter-spacing: -0.01em;
   color: var(--gtm-ink);
 }
 .gtm-pillar-name::before {
   content: '';
   display: inline-block;
-  width: 8px; height: 8px;
+  width: 9px; height: 9px;
   border-radius: 50%;
   background: var(--accent, #6366f1);
   margin-right: 8px;
   vertical-align: middle;
 }
 .gtm-pillar-note {
-  margin: 0;
+  margin: 8px 0 0;
   font-size: 12.5px;
   line-height: 1.5;
   color: var(--gtm-muted);
@@ -168,7 +188,7 @@
 
 /* ── Tier 2: groups — connected to the pillar by a left spine + ticks so
    it reads as a branching diagram (parent points to each child). ───────── */
-.gtm-groups { display: flex; flex-direction: column; gap: 10px; position: relative; padding-left: 16px; }
+.gtm-groups { display: flex; flex-direction: column; gap: 10px; position: relative; margin: 0 16px; padding-left: 16px; }
 .gtm-groups::before {
   content: '';
   position: absolute;
@@ -290,44 +310,96 @@
   .gtm-tip { transition: opacity 0.16s ease; }
 }
 
-/* Each pillar connects up toward the Marketing stem. */
 .gtm-pillar { position: relative; }
-.gtm-pillar::before {
-  content: '';
+
+/* ── Flywheel — a deck of full-viewport slides that snap one at a time ─── */
+.gtm-flywheel {
+  /* Break out of the .admin-page 24px/28px gutter so the slides read as
+     true full-page panels. The slides snap on the main page scroll — see
+     html.gtm-snap below — rather than trapping scroll in a nested viewport. */
+  margin: 48px -28px 0;
+  border-top: 1px solid #eef0f4;
+}
+/* Toggled on <html> only while the GTM page is mounted so the snapping is
+   scoped to this page and never leaks to other admin screens. proximity (not
+   mandatory) lets the tree above scroll freely; the flywheel slides below are
+   the only snap points. */
+html.gtm-snap { scroll-snap-type: y proximity; scroll-behavior: smooth; }
+
+.gtm-fly-slide {
+  position: relative;
+  min-height: 100dvh;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 64px 32px;
+  overflow: hidden;
+  /* Soft accent wash so flipping between slides feels like changing decks. */
+  background:
+    radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--accent, #6366f1) 12%, #fff), #fff 70%);
+}
+.gtm-fly-slide + .gtm-fly-slide { border-top: 1px solid #f1f2f6; }
+
+/* Giant faded step number behind the copy. */
+.gtm-fly-watermark {
   position: absolute;
-  top: -12px; left: 50%;
-  width: 2px; height: 12px;
-  background: #e3e6ec;
-  transform: translateX(-50%);
+  right: clamp(12px, 6vw, 96px);
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: clamp(220px, 40vw, 460px);
+  font-weight: 800;
+  line-height: 0.8;
+  letter-spacing: -0.04em;
+  color: color-mix(in srgb, var(--accent, #6366f1) 9%, transparent);
+  pointer-events: none;
+  user-select: none;
 }
 
-/* ── Flywheel — scroll-revealed plan to put the map in motion ─────────── */
-.gtm-flywheel { position: relative; max-width: 720px; margin: 60px auto 0; padding-left: 42px; }
-.gtm-fly-rail {
-  position: absolute; left: 15px; top: 14px; bottom: 14px; width: 2px;
-  background: linear-gradient(#6366f1, #10b981, #f59e0b);
-  border-radius: 2px; opacity: 0.35;
-}
-.gtm-fly-slide {
-  position: relative; margin-bottom: 22px;
-  opacity: 0; transform: translateY(18px);
+.gtm-fly-inner {
+  position: relative;
+  z-index: 1;
+  max-width: 700px;
+  width: 100%;
+  /* Reveal each slide's copy as it scrolls into view. */
+  opacity: 0;
+  transform: translateY(20px);
   transition: opacity 0.6s ease, transform 0.6s ease;
 }
-.gtm-fly-slide.is-in { opacity: 1; transform: translateY(0); }
-.gtm-fly-node {
-  position: absolute; left: -34px; top: 0;
-  width: 30px; height: 30px; border-radius: 50%;
-  background: #111; color: #fff; font-weight: 800; font-size: 13px;
-  display: flex; align-items: center; justify-content: center;
-  box-shadow: 0 0 0 4px #fafafa;
+.gtm-fly-slide.is-in .gtm-fly-inner { opacity: 1; transform: translateY(0); }
+
+.gtm-fly-index {
+  display: block;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--accent, #6366f1);
+  margin-bottom: 14px;
 }
-.gtm-fly-card {
-  background: #fff; border: 1px solid #eef0f4; border-radius: 14px;
-  padding: 16px 18px; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
+.gtm-fly-index-total { color: #cbd5e1; }
+.gtm-fly-tag {
+  display: inline-block;
+  font-size: 12px; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--accent, #6366f1);
+  margin-bottom: 10px;
 }
-.gtm-fly-tag { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6366f1; }
-.gtm-fly-title { margin: 4px 0 6px; font-size: 20px; font-weight: 700; letter-spacing: -0.02em; color: #0f172a; }
-.gtm-fly-body { margin: 0; font-size: 13.5px; line-height: 1.55; color: #475569; }
+.gtm-fly-title {
+  margin: 0 0 16px;
+  font-size: clamp(34px, 6vw, 60px);
+  font-weight: 800;
+  letter-spacing: -0.03em;
+  line-height: 1.02;
+  color: #0f172a;
+}
+.gtm-fly-body {
+  margin: 0;
+  font-size: clamp(15px, 2.1vw, 21px);
+  line-height: 1.55;
+  color: #475569;
+  max-width: 600px;
+}
 @media (prefers-reduced-motion: reduce) {
-  .gtm-fly-slide { opacity: 1; transform: none; transition: none; }
+  html.gtm-snap { scroll-behavior: auto; }
+  .gtm-fly-inner { opacity: 1; transform: none; transition: none; }
 }

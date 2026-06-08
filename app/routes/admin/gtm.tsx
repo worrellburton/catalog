@@ -87,11 +87,11 @@ const PILLARS: Pillar[] = [
   },
 ];
 
-const FLYWHEEL: { tag: string; title: string; body: string }[] = [
-  { tag: 'The goal', title: 'Start the flywheel.', body: 'Stand up a marketing engine that compounds — so growth stops depending on any one person.' },
-  { tag: 'Step 1 · Hire', title: 'Bring on the team.', body: 'Three BD / marketing consultants, month-to-month for three months. Some may convert to full-time — the point is to start delegating the system now; it can’t run on one person.' },
-  { tag: 'Step 2 · Be diligent', title: 'Log every contact.', body: 'Every outreach goes in the CRM. People are measured on contact attempts per week — an intentional, serious, sustained push.' },
-  { tag: 'Step 3 · Learn & repeat', title: 'Double down on what works.', body: 'Lean into what’s working, step away from what isn’t, and repeat. The loop tightens every cycle.' },
+const FLYWHEEL: { tag: string; title: string; body: string; accent: string }[] = [
+  { tag: 'The goal', title: 'Start the flywheel.', body: 'Stand up a marketing engine that compounds — so growth stops depending on any one person.', accent: '#6366f1' },
+  { tag: 'Step 1 · Hire', title: 'Bring on the team.', body: 'Three BD / marketing consultants, month-to-month for three months. Some may convert to full-time — the point is to start delegating the system now; it can’t run on one person.', accent: '#8b5cf6' },
+  { tag: 'Step 2 · Be diligent', title: 'Log every contact.', body: 'Every outreach goes in the CRM. People are measured on contact attempts per week — an intentional, serious, sustained push.', accent: '#10b981' },
+  { tag: 'Step 3 · Learn & repeat', title: 'Double down on what works.', body: 'Lean into what’s working, step away from what isn’t, and repeat. The loop tightens every cycle.', accent: '#f59e0b' },
 ];
 
 function Leaves({ leaves }: { leaves: Leaf[] }) {
@@ -122,6 +122,14 @@ export default function AdminGtm() {
     }, { threshold: 0.35 });
     slides.forEach(s => io.observe(s));
     return () => io.disconnect();
+  }, []);
+
+  // Enable full-page scroll snapping on the flywheel slides — scoped to this
+  // page by toggling a class on <html>, removed on unmount so it never
+  // affects the other admin screens.
+  useEffect(() => {
+    document.documentElement.classList.add('gtm-snap');
+    return () => document.documentElement.classList.remove('gtm-snap');
   }, []);
 
   return (
@@ -189,18 +197,25 @@ export default function AdminGtm() {
         </div>
       </div>
 
-      {/* Flywheel — scroll-revealed plan to put the map in motion. */}
+      {/* Flywheel — the plan to put the map in motion, as a deck of
+          full-viewport slides that snap one at a time. */}
       <div className="gtm-flywheel" ref={flywheelRef}>
-        <div className="gtm-fly-rail" aria-hidden="true" />
         {FLYWHEEL.map((s, i) => (
-          <div key={s.tag} className="gtm-fly-slide">
-            <span className="gtm-fly-node" aria-hidden="true">{i + 1}</span>
-            <div className="gtm-fly-card">
+          <section
+            key={s.tag}
+            className="gtm-fly-slide"
+            style={{ ['--accent' as string]: s.accent }}
+          >
+            <span className="gtm-fly-watermark" aria-hidden="true">{i + 1}</span>
+            <div className="gtm-fly-inner">
+              <span className="gtm-fly-index" aria-hidden="true">
+                {String(i + 1).padStart(2, '0')} <span className="gtm-fly-index-total">/ {String(FLYWHEEL.length).padStart(2, '0')}</span>
+              </span>
               <span className="gtm-fly-tag">{s.tag}</span>
               <h3 className="gtm-fly-title">{s.title}</h3>
               <p className="gtm-fly-body">{s.body}</p>
             </div>
-          </div>
+          </section>
         ))}
       </div>
     </div>
