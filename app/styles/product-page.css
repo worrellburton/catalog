@@ -54,51 +54,54 @@
   transform-origin: 50% 30%;
 }
 
-/* Product detail page - full-height scroller with a video/image hero
-   followed by a feed of similar products.
-   The hero box itself morphs from its grid card via Framer Motion's
-   layoutId, so the overlay's own entrance is a quick opacity fade instead
-   of a slide - that way the user reads "the card grew" rather than "a new
-   page came in", which is much more subtle. */
+/* Product detail page — full-height scroller with a video/image hero
+   followed by a feed of similar products. Behaves like a bottom sheet:
+   slides UP from the bottom on open and back DOWN on close, at ALL widths,
+   matching the look overlay and the comments sheet. (Was a desktop-only
+   opacity fade designed around the old Framer Motion card-morph, which has
+   since been removed — leaving products with no perceptible open/close.)
+   The shared <video> hero is appendChild'd INTO a slot inside this
+   container (TrailVideoHost), so the whole container sliding keeps the
+   video riding along with it — no desync. */
 .product-page-overlay {
   position: fixed;
   inset: 0;
   z-index: 250;
   background: #0a0a0a;
-  opacity: 0;
-  transition: opacity 0.28s cubic-bezier(0.32, 0.72, 0, 1);
-}
-
-.product-page-overlay--in {
   opacity: 1;
+  /* Start just below the viewport; the --in class (toggled on first paint
+     via rAF) slides it up into place. */
+  transform: translateY(100%);
+  /* Enter glide — decelerating ease, like the comments sheet coming up. */
+  transition: transform 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
 }
 
+/* Settled / open. */
+.product-page-overlay--in {
+  transform: translateY(0);
+}
+
+/* Swipe-down / close dismiss — accelerating ease off the bottom, same as
+   the comments sheet leave. Declared AFTER the base rule so this transition
+   wins (equal specificity) when --out is applied. */
 .product-page-overlay--out {
-  opacity: 0;
+  transform: translateY(100%);
+  transition: transform 0.36s cubic-bezier(0.4, 0, 0.7, 0.2);
   pointer-events: none;
 }
 
-/* Mobile: bottom-sheet behavior. Opens INSTANTLY (no slide-up — "just go
-   to the product, no loading"); drag down at the top of the scroll to
-   dismiss (handled in JS). Rounded top corners sell the sheet affordance. */
+/* While the finger is down the panel must track 1:1 — no smoothing (the
+   mobile drag handler sets an inline transform each frame; on release it
+   either fires handleClose (--out) or clears the inline transform so the
+   panel eases back to translateY(0)). */
+.product-page-overlay.is-dragging {
+  transition: none;
+}
+
+/* Mobile: rounded top corners + a grab handle sell the sheet affordance.
+   The slide itself is global (above). */
 @media (max-width: 959px) {
-  .product-page-overlay {
-    opacity: 1;
-    /* Visible immediately on open. Only the swipe-down dismiss animates,
-       with the comments-sheet leave ease. */
-    transform: translateY(0);
-    transition: transform 360ms cubic-bezier(0.4, 0, 0.7, 0.2);
-    will-change: transform;
-  }
-  .product-page-overlay--out {
-    transform: translateY(100%);
-    pointer-events: none;
-  }
-  /* While the user's finger is on screen, suppress the transition so
-     the panel tracks 1:1 with the drag. JS toggles this class. */
-  .product-page-overlay.is-dragging {
-    transition: none;
-  }
   .product-page {
     border-top-left-radius: 16px;
     border-top-right-radius: 16px;

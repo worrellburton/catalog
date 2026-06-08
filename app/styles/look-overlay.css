@@ -2,50 +2,45 @@
    LOOK OVERLAY - fullscreen 60/40 split
    ═══════════════════════════════════════════ */
 
-/* Full-screen container.
-   Entrance was a translateY slide; we now lean on the TrailMorph layoutId
-   to do the focal motion (the hero box morphs from the originating
-   LookCard) and the overlay itself just opacity-fades in over 280ms - same
-   timing as ProductPage so the two surfaces feel like one app. */
+/* Full-screen container — behaves like a bottom sheet.
+   The shared <video> hero is appendChild'd INTO a slot inside this
+   container (TrailVideoHost), so sliding the whole container keeps the
+   video riding along with it — no desync. Opens by sliding UP from the
+   bottom and closes by sliding back DOWN, matching the comments sheet. */
 .look-overlay {
   position: fixed;
   inset: 0;
   z-index: 200;
   background: #0a0a0a;
-  /* Opens INSTANTLY — no enter fade or slide ("just go to the look, no
-     loading"). Only the swipe-down dismiss animates (transform →
-     translateY(100%) via --out / the live drag). */
   opacity: 1;
-  transform: translateY(0);
+  /* Start just below the viewport; the --in class (toggled on first paint
+     via rAF) slides it up into place. */
+  transform: translateY(100%);
   overflow: hidden;
+  /* Enter glide — decelerating ease, like the comments sheet coming up. */
+  transition: transform 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
 }
 
-/* --in is still toggled on mount because other rules key off it (e.g.
-   the .look-info-col transform reset on mobile); it no longer drives any
-   enter motion. */
+/* Settled / open. */
 .look-overlay--in {
   opacity: 1;
+  transform: translateY(0);
 }
 
+/* Swipe-down / close dismiss — accelerating ease off the bottom, same as
+   the comments sheet leave. Declared AFTER the base rule so this transition
+   wins (equal specificity) when --out is applied. */
 .look-overlay--out {
-  /* Slide off the bottom (like the comments sheet) instead of just fading. */
   transform: translateY(100%);
+  transition: transform 0.36s cubic-bezier(0.4, 0, 0.7, 0.2);
   pointer-events: none;
 }
 
-/* While the user is mid-drag we want every frame of the touchmove
-   translate to land instantly — no transition smoothing in the way.
-   When the drag ends we either fire handleClose (which sets
-   .look-overlay--out and the opacity fade lands) or we clear the
-   transform, letting the snap-back happen via a single ~180ms
-   transition restored when .is-dragging is dropped. */
-.look-overlay {
-  /* Only transform is transitioned — the swipe-down dismiss glides off the
-     screen with the comments-sheet ease. Enter has no transition (instant). */
-  transition: transform 0.36s cubic-bezier(0.4, 0, 0.7, 0.2);
-  will-change: transform;
-}
-/* While the finger is down the panel must track 1:1 — no smoothing. */
+/* While the finger is down the panel must track 1:1 — no smoothing. The
+   drag handler sets an inline transform each frame; on release it either
+   fires handleClose (--out slides the rest of the way off) or clears the
+   inline transform so the panel eases back to translateY(0). */
 .look-overlay.is-dragging {
   transition: none;
 }
