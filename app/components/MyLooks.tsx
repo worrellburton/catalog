@@ -8,9 +8,10 @@ import type { ManagedLook, LookStatus } from '~/services/manage-looks';
 import { getMyLooks, deleteLook, reorderLooks, setLookLive } from '~/services/manage-looks';
 import {
   getMyCatalogProducts, reorderMyCatalogProducts,
-  setCatalogProductActive, getMyCollections, createCollection, addProductToCollection,
-  type CatalogProduct, type CreatorCollection,
+  setCatalogProductActive,
+  type CatalogProduct,
 } from '~/services/catalog-products';
+import { useSavedLayout } from '~/services/saved-layout';
 import { ensureGenerationsInCatalog } from '~/services/promote-generation';
 import { listUserGenerations, isGenerationInFlight, type UserGeneration } from '~/services/user-generations';
 import ParticleBackground from './ParticleBackground';
@@ -68,8 +69,15 @@ export default function MyLooks({ onClose }: MyLooksProps) {
   const [productMenu, setProductMenu] = useState<CatalogProduct | null>(null);
   // When set, the collection picker is open for this product id.
   const [collectionPickerFor, setCollectionPickerFor] = useState<string | null>(null);
-  const [collections, setCollections] = useState<CreatorCollection[]>([]);
   const [newCollectionName, setNewCollectionName] = useState('');
+  // Collections live in the shared saved-layout store (localStorage + cloud
+  // sync) — the SAME collections authored on the Saved screen and shown on the
+  // public creator catalog. Adding from the product menu auto-persists + syncs.
+  const catalogProductKeys = useMemo(
+    () => catalogProducts.map(p => `${p.brand || ''}::${p.name}`),
+    [catalogProducts],
+  );
+  const savedLayout = useSavedLayout([], catalogProductKeys);
   // Counts for the hero stat line + tab badges — fetched independently of the
   // active filter so removing the "All" tab didn't break the totals.
   const [counts, setCounts] = useState({ all: 0, live: 0, archived: 0 });
@@ -456,42 +464,37 @@ export default function MyLooks({ onClose }: MyLooksProps) {
     }
   }, [catalogProducts, showToastMsg]);
 
-  const openCollectionPicker = useCallback(async (productId: string) => {
+  // The product key for whichever product's collection picker is open.
+  const pickerProductKey = useMemo(() => {
+    const p = catalogProducts.find(x => x.id === collectionPickerFor);
+    return p ? `${p.brand || ''}::${p.name}` : null;
+  }, [collectionPickerFor, catalogProducts]);
+
+  const openCollectionPicker = useCallback((productId: string) => {
     setCollectionPickerFor(productId);
     setProductMenu(null);
-    try { setCollections(await getMyCollections()); } catch { /* keep prior */ }
   }, []);
 
-  const handleAddToCollection = useCallback(async (collectionId: string) => {
-    const productId = collectionPickerFor;
-    if (!productId) return;
+  const handleAddToCollection = useCallback((collectionId: string) => {
+    if (!pickerProductKey) { setCollectionPickerFor(null); return; }
+    // toggleInCollection auto-persists to localStorage + syncs to the cloud
+    // (creator_collections.product_keys), so it appears on the public catalog.
+    if (!savedLayout.isInCollection(collectionId, { productKey: pickerProductKey })) {
+      savedLayout.toggleInCollection(collectionId, { productKey: pickerProductKey });
+    }
     setCollectionPickerFor(null);
-    try {
-      await addProductToCollection(collectionId, productId);
-      showToastMsg('Added to collection');
-    } catch {
-      showToastMsg('Could not add to collection');
-    }
-  }, [collectionPickerFor, showToastMsg]);
+    showToastMsg('Added to collection');
+  }, [pickerProductKey, savedLayout, showToastMsg]);
 
-  const handleCreateAndAdd = useCallback(async () => {
-    const productId = collectionPickerFor;
+  const handleCreateAndAdd = useCallback(() => {
     const name = newCollectionName.trim();
-    if (!productId || !name) return;
-    try {
-      const col = await createCollection(name);
-      if (col) {
-        await addProductToCollection(col.id, productId);
-        setNewCollectionName('');
-        setCollectionPickerFor(null);
-        showToastMsg(`Added to ${col.name}`);
-      } else {
-        showToastMsg('Could not create collection');
-      }
-    } catch {
-      showToastMsg('Could not create collection');
-    }
-  }, [collectionPickerFor, newCollectionName, showToastMsg]);
+    if (!pickerProductKey || !name) return;
+    const id = savedLayout.createCollection(name);
+    savedLayout.toggleInCollection(id, { productKey: pickerProductKey });
+    setNewCollectionName('');
+    setCollectionPickerFor(null);
+    showToastMsg(`Added to ${name}`);
+  }, [pickerProductKey, newCollectionName, savedLayout, showToastMsg]);
 
   // ── Hero metadata ─────────────────────────────────────────────────
   const displayName = user?.displayName || user?.email?.split('@')[0] || 'My Catalog';
@@ -1273,9 +1276,9 @@ export default function MyLooks({ onClose }: MyLooksProps) {
         <div className="my-cat-sheet-scrim" onClick={() => setCollectionPickerFor(null)} role="dialog" aria-modal="true">
           <div className="my-cat-sheet" onClick={(e) => e.stopPropagation()}>
             <div className="my-cat-sheet-head"><span className="my-cat-sheet-name">Add to collection</span></div>
-            {collections.map(c => (
+            {savedLayout.collections.map(c => (
               <button key={c.id} className="my-cat-sheet-item" onClick={() => handleAddToCollection(c.id)}>
-                {c.name} <span className="my-cat-sheet-count">{c.productCount}</span>
+                {c.name} <span className="my-cat-sheet-count">{c.productKeys.length}</span>
               </button>
             ))}
             <div className="my-cat-sheet-new">
