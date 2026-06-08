@@ -758,7 +758,15 @@
     transform: none !important;
     display: block !important;
     padding: 0;
-    transition: opacity 0.35s ease, transform 0.35s ease;
+    transition: opacity 0.35s ease, transform 0.35s ease, top 0.3s ease;
+  }
+  /* While a look is rendering, the "Adding…" pill sits just below the header
+     (header > .pending-look-pill, top:100% + 8px). Drop the creator stories
+     row below it with matching ~8px breathing room so the two stack cleanly
+     instead of overlapping. When the pill clears, `top` animates the row back
+     up to its resting position. */
+  body.has-pending-look .app-root.home-hero:not(.hero-scrolled) .follow-rail-wrap--center {
+    top: calc(50px + env(safe-area-inset-top) + 50px) !important;
   }
   /* Lay each group out horizontally (overlapping avatars in a row). */
   .app-root.home-hero:not(.hero-scrolled) .follow-rail-wrap--center .follow-rail-stack {

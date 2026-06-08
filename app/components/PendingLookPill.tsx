@@ -89,6 +89,15 @@ export default function PendingLookPill({ onOpen }: { onOpen: () => void }) {
   }, [pending?.id]);
 
   const showing = !!pending && atTop;
+  // Flag the app while the pill is on screen so the mobile creator stories
+  // row can drop below it (with equal spacing) instead of overlapping —
+  // and slide back up when the pill goes away. CSS keys off this class.
+  useEffect(() => {
+    const cls = 'has-pending-look';
+    if (showing) document.body.classList.add(cls);
+    else document.body.classList.remove(cls);
+    return () => document.body.classList.remove(cls);
+  }, [showing]);
   // Rotate the quip every ~2.8s while the pill is actually on screen.
   useEffect(() => {
     if (!showing) return;
