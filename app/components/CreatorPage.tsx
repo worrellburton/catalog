@@ -6,7 +6,7 @@ import { useAuth } from '~/hooks/useAuth';
 import { AvatarUpload } from './AvatarCropModal';
 import LookCard from './LookCard';
 import { toggleFollow, isFollowing as fetchIsFollowing, getFollowerCount, getFollowingCount, getFollowers, getFollowing, type FollowUser } from '~/services/follows';
-import { subscribeToLooksChange, fetchSeenLookIds, reorderBySeen } from '~/services/looks';
+import { subscribeToLooksChange, fetchSeenLookIds, reorderBySeen, stableLookId } from '~/services/looks';
 import ParticleBackground from './ParticleBackground';
 import { getCreatorAppearance, getCreatorAppearanceById, type CatalogAppearance, DEFAULT_CATALOG_APPEARANCE } from '~/services/catalog-theme';
 import { getCreatorProductOrder, getCreatorHiddenProductIds } from '~/services/catalog-products';
@@ -398,7 +398,11 @@ export default function CreatorPage({
             thumbnail_url: p.primary_video_poster_url || p.primary_image_url || p.image_url || undefined,
           }));
         return {
-          id: r.legacy_id ?? -(i + 1),
+          // Use the SAME stable id scheme as getLooks() (legacy_id, else a
+          // deterministic hash of the uuid) so a look saved/seen from a
+          // creator catalog matches the same look in the feed — the old
+          // -(i+1) scheme reshuffled per fetch and silently broke bookmarks.
+          id: r.legacy_id ?? stableLookId(r.id),
           // The real look uuid — without this the LookCard impression fires
           // with target_uuid=null, so viewing a creator's catalog never marks
           // their looks "seen" and the following-rail unseen badge never clears.
