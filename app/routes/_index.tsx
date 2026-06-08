@@ -288,6 +288,16 @@ export default function Home() {
   // slides up offscreen, bottom search bar slides down — full-screen feed.
   // Scrolling up brings them back; stopping preserves the current state.
   const [chromeHidden, setChromeHidden] = useState(false);
+  // Opening a look/product overlay locks the body with position:fixed, which
+  // snaps document scroll to 0 (and fires a synthetic scroll); closing
+  // restores the scroll (another synthetic scroll). Both scroll-trackers
+  // below would read those programmatic jumps as a real "scrolled to top →
+  // scrolled back down" and animate the search bar up to the hero
+  // (mid-screen) position and back — that round-trip IS the lag the shopper
+  // sees on open/close. This ref freezes both trackers for the whole time an
+  // overlay is open and through the close-restore (cleared a frame later), so
+  // the bar's position never moves across the round-trip.
+  const overlayScrollLockRef = useRef(false);
 
   // Referral capture: stash any ?ref=<handle> from the landing URL ASAP
   // (before OAuth can strip it), then redeem it once the user is signed in
@@ -351,6 +361,10 @@ export default function Home() {
     }
     let raf = 0;
     const onScroll = () => {
+      // Ignore the body-lock's programmatic scroll jumps while a look/product
+      // overlay is open — they aren't real scrolls and must not reposition the
+      // hero bar (the open→middle→down animation that read as lag).
+      if (overlayScrollLockRef.current) return;
       if (raf) return;
       raf = requestAnimationFrame(() => {
         raf = 0;
@@ -373,14 +387,19 @@ export default function Home() {
 
   // Scroll-direction tracker: once past the hero, hide chrome on scroll
   // down and show it on scroll up. Small dead-zone so micro-jitter doesn't
-  // flicker the chrome. Reset to visible on every overlay open (so the
-  // chrome is there when you close back to the feed).
+  // flicker the chrome. The search bar's hidden/shown state is preserved
+  // across an overlay open→close (the body-lock's synthetic scrolls are
+  // ignored via overlayScrollLockRef), so the bar only returns on a genuine
+  // scroll-up or at the hero top — never just because a look/product closed.
   useEffect(() => {
     if (!heroScrolled) { setChromeHidden(false); return; }
     let lastY = window.scrollY;
     const THRESHOLD = 8; // px of continuous direction before reacting
     let accum = 0;
     const onScroll = () => {
+      // Frozen while an overlay is open — see overlayScrollLockRef. Leaving
+      // lastY untouched keeps the delta continuous when scrolling resumes.
+      if (overlayScrollLockRef.current) return;
       const y = window.scrollY;
       const dy = y - lastY;
       lastY = y;
@@ -1525,6 +1544,16 @@ export default function Home() {
     if (!overlayOpen) return;
     if (typeof window === 'undefined') return;
     const scrollY = window.scrollY;
+    // Freeze the chrome/hero scroll-trackers for the whole overlay lifecycle so
+    // the position:fixed jump (and the close-time restore) can't reposition the
+    // search bar. Set BEFORE locking the body so the open-time synthetic scroll
+    // is already ignored.
+    overlayScrollLockRef.current = true;
+    // When the overlay is opened from deep in the feed, retire the search bar to
+    // its hidden state so closing returns to a clean full-screen feed — the bar
+    // comes back only on a genuine scroll-up (or at the hero top), which is the
+    // intended "hidden until you scroll up" behaviour.
+    if (scrollY > window.innerHeight * 0.6) setChromeHidden(true);
     const { body, documentElement: html } = document;
     const prev = {
       bodyPosition: body.style.position,
@@ -1545,6 +1574,10 @@ export default function Home() {
       body.style.overflow = prev.bodyOverflow;
       html.style.overflow = prev.htmlOverflow;
       window.scrollTo(0, scrollY);
+      // Keep the trackers frozen through the restore scroll above (it fires
+      // asynchronously), then release a frame later so the next genuine scroll
+      // is read normally.
+      requestAnimationFrame(() => { overlayScrollLockRef.current = false; });
     };
   }, [overlayOpen]);
 
