@@ -292,9 +292,13 @@ function FollowingRail({ onOpenCreator, mode = 'both', onCreateFollowingCatalog:
           if (primary?.thumbnail_url) lastThumbByHandle.set(l.creator_handle, primary.thumbnail_url);
         }
       }
+      // Fetch the profile for EVERY user-backed handle (not just those whose
+      // creators row lacks an avatar). A real-user creator often has a stale
+      // signup-time avatar on their creators row (e.g. an old Google photo)
+      // while their profile carries the fresh one they uploaded — so we need
+      // the profile to prefer it below, mirroring CreatorPage's mergedAvatar.
       const profileNeeded = Array.from(new Set(
         handles
-          .filter(h => !creatorByHandle.get(h)?.avatar_url)
           .map(h => userIdByHandle.get(h))
           .filter((u): u is string => !!u),
       ));
@@ -314,7 +318,10 @@ function FollowingRail({ onOpenCreator, mode = 'both', onCreateFollowingCatalog:
         return {
           handle: h,
           displayName: cr?.display_name || prof?.full_name || null,
-          avatarUrl: cr?.avatar_url || prof?.avatar_url || null,
+          // Profile avatar wins (user-controlled + fresh), then the creators
+          // row — same order as the creator catalog page so the rail shows
+          // the exact same picture the profile does.
+          avatarUrl: prof?.avatar_url || cr?.avatar_url || null,
           ts: lastPostByHandle.get(h) ?? 0,
           lastThumb: lastThumbByHandle.get(h) ?? null,
         };
