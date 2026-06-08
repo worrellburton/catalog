@@ -252,10 +252,11 @@ export async function getMyFollowingDetailed(): Promise<FollowingDetail[]> {
     followerCountByHandle.set(f.followee_handle, (followerCountByHandle.get(f.followee_handle) ?? 0) + 1);
   }
 
-  // Profiles fallback for handles whose creators row lacks an avatar/name.
+  // Fetch the profile for every user-backed handle so the profile avatar can
+  // win below (a real-user creator's creators row often holds a stale
+  // signup-time avatar while the fresh one lives on their profile).
   const profileNeeded = Array.from(new Set(
     handles
-      .filter(h => !creatorByHandle.get(h)?.avatar_url || !creatorByHandle.get(h)?.display_name)
       .map(h => userIdByHandle.get(h))
       .filter((u): u is string => !!u),
   ));
@@ -275,7 +276,9 @@ export async function getMyFollowingDetailed(): Promise<FollowingDetail[]> {
     return {
       handle: h,
       displayName: cr?.display_name || prof?.full_name || null,
-      avatarUrl: cr?.avatar_url || prof?.avatar_url || null,
+      // Profile avatar wins (fresh, user-controlled), then the creators row —
+      // matches the creator catalog + following rail.
+      avatarUrl: prof?.avatar_url || cr?.avatar_url || null,
       followedAt: followedAtByHandle.get(h) ?? Date.now(),
       looksCount: looksCountByHandle.get(h) ?? 0,
       followerCount: followerCountByHandle.get(h) ?? 0,
