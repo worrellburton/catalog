@@ -522,6 +522,12 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   // Reuses the home/feed ContinuousFeed component (gender-aware, autoplay,
   // infinite scroll). ymalGenderFilter is already declared above (before feedSections).
 
+  // Director scope key for this overlay — shared by the suspend effect below
+  // and handleClose (which flags it exiting so the feed re-warms during the
+  // close slide). Matches the slotPrefix on the nested "You might also like"
+  // feed (`look:<id>`).
+  const directorScope = `look:${look.id}`;
+
   // While this overlay is open, suspend the home feed's video playback in
   // the director. The feed stays mounted+blurred behind us; without this it
   // keeps decoding dozens of clips under the blur layer, forcing the
@@ -529,10 +535,9 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   // slotPrefix on our nested "You might also like" feed (`look:<id>`), so
   // that feed still plays while the background is paused.
   useEffect(() => {
-    const scope = `look:${look.id}`;
-    director.pushScope(scope);
-    return () => director.popScope(scope);
-  }, [look.id]);
+    director.pushScope(directorScope);
+    return () => director.popScope(directorScope);
+  }, [directorScope]);
 
   // Mark mounted on first paint so --in-keyed rules apply (e.g. the mobile
   // .look-info-col transform reset). The overlay opens instantly — there's
@@ -565,9 +570,14 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   useEscapeKey(() => handleClose());
 
   const handleClose = useCallback(() => {
+    // Flag the scope exiting NOW (gesture start), not on unmount 360 ms later:
+    // the background feed re-acquires + decodes its videos under cover of the
+    // slide-out so it's already playing when the overlay clears — no dead feed
+    // on back. The pushScope effect's cleanup still pops the scope on unmount.
+    director.beginScopeExit(directorScope);
     setIsAnimatingOut(true);
     setTimeout(onClose, 360);
-  }, [onClose]);
+  }, [onClose, directorScope]);
 
   // Mobile drag-to-dismiss on the WHOLE overlay (not just the info
   // column). The existing onTouchStart/Move/End handlers below only

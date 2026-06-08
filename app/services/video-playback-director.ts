@@ -130,6 +130,11 @@ class VideoPlaybackDirector {
   // stops decoding frames under the blur layer (which would otherwise force
   // the compositor to re-rasterize the blur every frame and tank the FPS).
   private scopeStack: string[] = [];
+  // Scopes whose overlay is mid-close (sliding out). beginScopeExit() adds a
+  // prefix here; activeScope() then treats it as transparent so the background
+  // feed re-warms during the exit animation rather than waiting for unmount.
+  // Cleared when the scope is finally popped (or re-pushed).
+  private exitingScopes = new Set<string>();
   // [debug HUD] opt-in via localStorage 'pd-hud'='1'. Records assign→first-
   // frame reveal latency (the felt "poster hold") so it can be measured on a
   // real foreground device — a backgrounded preview tab throttles decode and
@@ -407,6 +412,9 @@ class VideoPlaybackDirector {
    */
   pushScope(prefix: string): void {
     if (!prefix) return;
+    // A fresh push is active, not exiting — clear any stale exit flag so a
+    // rapid close→reopen of the same scope re-gates the background feed.
+    this.exitingScopes.delete(prefix);
     this.scopeStack.push(prefix);
     this.scheduleRank();
   }
@@ -416,12 +424,39 @@ class VideoPlaybackDirector {
     if (!prefix) return;
     const idx = this.scopeStack.lastIndexOf(prefix);
     if (idx !== -1) this.scopeStack.splice(idx, 1);
+    // Once the prefix is fully gone from the stack, drop its exit flag too.
+    if (!this.scopeStack.includes(prefix)) this.exitingScopes.delete(prefix);
     this.scheduleRank();
   }
 
-  /** Active scope = the topmost overlay prefix, or null when none is open. */
+  /**
+   * Signal that an overlay scope has begun its close animation. Unlike
+   * popScope this does NOT touch the stack — the overlay's effect cleanup
+   * still pops exactly once on unmount, so the push/pop balance (and nested-
+   * overlay correctness) is preserved. It only marks the scope transparent to
+   * activeScope() so the background feed starts re-acquiring + decoding its
+   * <video>s DURING the ~360 ms slide-out instead of after unmount. By the
+   * time the overlay clears, the feed underneath is already live — no frozen
+   * "dead" feed for a beat on back. Idempotent; safe to call repeatedly.
+   */
+  beginScopeExit(prefix: string): void {
+    if (!prefix) return;
+    if (!this.scopeStack.includes(prefix)) return; // not an open scope
+    if (this.exitingScopes.has(prefix)) return;    // already exiting
+    this.exitingScopes.add(prefix);
+    this.scheduleRank();
+  }
+
+  /** Active scope = the topmost overlay prefix that isn't mid-close, or null
+   *  when none is open (or every open scope is animating out). A scope flagged
+   *  by beginScopeExit is skipped so the background feed re-warms during the
+   *  close animation. */
   private activeScope(): string | null {
-    return this.scopeStack.length ? this.scopeStack[this.scopeStack.length - 1] : null;
+    for (let i = this.scopeStack.length - 1; i >= 0; i--) {
+      const prefix = this.scopeStack[i];
+      if (!this.exitingScopes.has(prefix)) return prefix;
+    }
+    return null;
   }
 
   /** A card is eligible to play only if it belongs to the active scope. */

@@ -510,16 +510,20 @@ export default function ProductPage({
   const [showMoreInfo, setShowMoreInfo] = useState(false);
   useEffect(() => { setShowMoreInfo(false); }, [product.name, product.brand]);
 
+  // Director scope key for this overlay — shared by the suspend effect below
+  // and handleClose (which flags it exiting so the feed re-warms during the
+  // close slide). Matches the nested "You might also like" feed's slotPrefix.
+  const directorScope = `product:${product.brand}:${product.name}`;
+
   // Suspend the home feed's director-driven playback while this page is open.
   // The feed stays mounted+blurred behind us; left running it decodes dozens
   // of clips under the blur layer and tanks the FPS. Scope matches the
   // slotPrefix on our nested "You might also like" feed so that feed keeps
   // playing while the background is paused.
   useEffect(() => {
-    const scope = `product:${product.brand}:${product.name}`;
-    director.pushScope(scope);
-    return () => director.popScope(scope);
-  }, [product.brand, product.name]);
+    director.pushScope(directorScope);
+    return () => director.popScope(directorScope);
+  }, [directorScope]);
 
   // Also pause every TrailVideoHost element except this product's hero.
   // director.pushScope handles director-managed cards, but LookCard-style
@@ -876,9 +880,13 @@ export default function ProductPage({
   }, [navKey]);
 
   const handleClose = useCallback(() => {
+    // Flag the scope exiting at gesture start (not on unmount 360 ms later) so
+    // the background feed re-warms under cover of the slide-out and is already
+    // playing when this page clears. The suspend effect still pops on unmount.
+    director.beginScopeExit(directorScope);
     setIsAnimatingOut(true);
     setTimeout(onClose, 360);
-  }, [onClose]);
+  }, [onClose, directorScope]);
 
   // Mobile drag-to-dismiss. Listens on the scroller; only engages while
   // scrollTop is at the top so users can scroll content normally without
