@@ -374,6 +374,14 @@ html[data-shell="catalog-app"] .gen-page {
 }
 
 .gen-main {
+  /* width:100% is load-bearing. .gen-page is a flex COLUMN, and an
+     `auto` cross-axis margin (margin: 0 auto) disables the default
+     align-items:stretch — so without an explicit width .gen-main
+     shrink-wraps to its content and the product grid collapses to a
+     narrow, off-centre strip (3 columns at ~66px instead of filling
+     the row). width:100% restores full width; max-width + auto margins
+     still centre it on desktop. */
+  width: 100%;
   max-width: 1280px;
   margin: 0 auto;
 }
