@@ -1362,6 +1362,22 @@
 .pd-look-tile-meta:hover {
   background: rgba(0, 0, 0, 0.75);
 }
+/* Keep the look-tile creator avatar + name WHITE, like the home feed —
+   not the gold "following" accent. The shared CreatorAvatarFollow turns the
+   ring (and badge) gold via .is-following; on the product page the creators
+   are usually ones you follow, so without this override every chip read
+   yellow. These selectors out-specify the feed.css .is-following rules. */
+.pd-look-tile-meta .creator-avatar-follow.is-following .creator-avatar-follow__img {
+  border-color: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+}
+.pd-look-tile-meta .creator-avatar-follow__badge.is-following {
+  background: #fff;
+  color: #1a1205;
+}
+.pd-look-tile-meta .card-creator-tag-name {
+  color: #fff;
+}
 .pd-look-tile-avatar {
   width: 28px;
   height: 28px;
