@@ -646,6 +646,15 @@ export default function Home() {
     setSelectedCreative(null);
     setSelectedLook(null);
     setBrandFilter(null);
+    // Clear any active search so that backing out of the creator catalog
+    // lands on the clean main feed — not the search-filtered state the user
+    // was typing in when they tapped the creator (which read as the search
+    // re-initiating). Also closes the search sheet in BottomBar.
+    setSearchQuery('');
+    setCatalogName('all');
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('catalog:close-search'));
+    }
     setCreatorFilter(creatorName);
   }, []);
 
@@ -1737,7 +1746,6 @@ export default function Home() {
             searchLoading={searchLoading}
             mySizeOnly={mySizeOnly}
             onMySizeChange={setMySizeOnly}
-            onOpenHotItem={handleOpenCreative}
           />
 
           {/* Magical loading screen between a hero search and its results. */}
