@@ -27,6 +27,7 @@ import {
 } from '~/services/product-creative';
 import {
   pickVideoUrl,
+  pickPlaybackSource,
   pickPosterUrl,
   pickStillImageUrl,
   captureVideoFrame,
@@ -34,6 +35,7 @@ import {
   prefetchVideoBytes,
 } from '~/services/video-loading';
 import { lookPoster } from '~/services/media-resolver';
+import { isHlsUrl } from '~/utils/hlsAttach';
 import { director } from '~/services/video-playback-director';
 import { useAuth } from '~/hooks/useAuth';
 import { useDirectorSlot } from '~/hooks/useDirectorSlot';
@@ -100,12 +102,17 @@ const CreativeCardV2 = memo(function CreativeCardV2({
   // dial split is deterministic on the item key (string)
   const dialKey = itemKey;
 
+  // Prefer the HLS manifest (adaptive ladder) when present so the feed tile
+  // and the detail hero share ONE source — the director hands the live element
+  // to TrailVideoHost on tap with no src swap. Falls back to the progressive
+  // mobile/full MP4 split when there's no ladder yet.
   const playableUrl = isLook
-    ? pickVideoUrl({
+    ? pickPlaybackSource({
+        hls_url: look!.hls_url ?? null,
         video_url: normalizeLookVideoUrl(look!.video, basePath),
         mobile_video_url: look!.mobile_video_url ?? null,
       })
-    : pickVideoUrl(creative!);
+    : pickPlaybackSource(creative!);
 
   // Raw poster / still URLs from the data layer. These point at the
   // FULL-RES asset in storage (the polished primary image, the look
@@ -212,7 +219,9 @@ const CreativeCardV2 = memo(function CreativeCardV2({
   // additionally caps concurrency and bails on fast scroll.
   const inPrewarmBand = useInViewport(prewarmNodeRef, '120% 0%');
   useEffect(() => {
-    if (inPrewarmBand && activeVideoUrl) {
+    // HLS streams its own segments via hls.js — byte-prewarming the manifest
+    // does nothing useful, so skip it for adaptive sources.
+    if (inPrewarmBand && activeVideoUrl && !isHlsUrl(activeVideoUrl)) {
       prefetchVideoBytes(activeVideoUrl);
     }
   }, [inPrewarmBand, activeVideoUrl]);

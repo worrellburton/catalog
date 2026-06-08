@@ -55,6 +55,16 @@ export function isHlsUrl(url: string | null | undefined): boolean {
   return !!url && /\.m3u8(\?.*)?$/i.test(url);
 }
 
+/** The logical source URL an element is currently serving. For MP4 this is
+ *  just `el.src`; for HLS, hls.js replaces `el.src` with an MSE blob, so we
+ *  return the tracked manifest URL instead. Callers that key pool reuse off
+ *  "what clip is this element playing" (the feed director) MUST use this
+ *  rather than reading `el.src` directly. Empty string when nothing is set
+ *  or the element has been detached. */
+export function getVideoSource(el: HTMLVideoElement): string {
+  return desiredByEl.get(el) || el.src || '';
+}
+
 /** True when the browser can play HLS natively (Safari, iOS WebView — i.e.
  *  the Flutter shell on iOS). Those never need hls.js. */
 function canPlayNativeHls(el: HTMLVideoElement): boolean {

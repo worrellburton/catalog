@@ -12,6 +12,7 @@
 // modal open/close and tab visibility changes.
 
 import { getPrefetchCount } from './video-loading';
+import { setVideoSource, getVideoSource } from '~/utils/hlsAttach';
 
 // ── Constants ──────────────────────────────────────────────────────────
 //
@@ -583,7 +584,7 @@ class VideoPlaybackDirector {
       // grow up to poolMax(); if at cap, evict the most-distant currently-
       // assigned card that is farther than this one.
       let slot =
-        this.pool.find(p => p.assignedTo === null && p.el.src === entry.videoUrl) ||
+        this.pool.find(p => p.assignedTo === null && getVideoSource(p.el) === entry.videoUrl) ||
         this.pool.find(p => p.assignedTo === null);
       if (!slot && this.pool.length < max) {
         slot = { el: this.createVideoEl(), assignedTo: null };
@@ -616,14 +617,15 @@ class VideoPlaybackDirector {
       // 2, above the card's poster <img> (z-index 1). It MUST stay transparent
       // until it actually has a frame to paint, or it flashes black over the
       // poster — revealVideoWhenReady enforces that for both branches below.
-      if (slot.el.src !== entry.videoUrl) {
+      if (getVideoSource(slot.el) !== entry.videoUrl) {
         // New clip: point the element at the src and start buffering. The
         // poster (the clip's FRAME 0) covers the gap until the first decoded
-        // frame reveals the video.
-        slot.el.src = entry.videoUrl;
+        // frame reveals the video. setVideoSource routes HLS manifests
+        // through hls.js (and progressive MP4 straight to el.src), so it
+        // also kicks off buffering — no explicit load() needed (and calling
+        // load() on an hls.js-managed element would reset its MSE pipeline).
         slot.el.preload = 'auto';
-        // Explicitly call load() so the browser starts buffering immediately.
-        try { slot.el.load(); } catch { /* ignore */ }
+        setVideoSource(slot.el, entry.videoUrl);
         this.revealVideoWhenReady(slot.el, entry.videoUrl);
       } else {
         // Same src (pool reuse). The element still points at the right clip,
@@ -679,7 +681,9 @@ class VideoPlaybackDirector {
    * stale once-listener from a prior assignment revealing a recycled element.
    */
   private revealVideoWhenReady(el: HTMLVideoElement, targetUrl: string): void {
-    const matches = () => el.currentSrc === targetUrl || el.src === targetUrl;
+    // Compare the LOGICAL source (manifest URL for HLS) — under hls.js
+    // el.src / el.currentSrc are MSE blobs that never equal targetUrl.
+    const matches = () => getVideoSource(el) === targetUrl;
     // HAVE_CURRENT_DATA (2): the current frame is decoded and paintable.
     if (el.readyState >= 2 && matches()) {
       el.style.opacity = '1';
