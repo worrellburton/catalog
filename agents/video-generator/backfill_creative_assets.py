@@ -483,8 +483,11 @@ def main(argv: Iterable[str] | None = None) -> int:
     p.add_argument("--table", choices=["product_creative", "generated_videos", "looks_creative", "products", "all", "both"], default="all")
     p.add_argument("--limit", type=int, default=None)
     p.add_argument("--dry-run", action="store_true")
-    p.add_argument("--concurrency", type=int, default=2,
-                   help="Parallel encodes. Each worker uses ~1 ffmpeg invocation + a few hundred MB of memory.")
+    p.add_argument("--concurrency", type=int, default=1,
+                   help="Parallel encodes. Each worker uses ~1 ffmpeg invocation + a few hundred MB of memory. "
+                        "Defaults to 1: parallel uploads share one Supabase storage connection that the "
+                        "server drops under load ('Server disconnected'), failing most rows. Raise only if "
+                        "you've confirmed the storage endpoint tolerates it.")
     p.add_argument("--hls", action="store_true",
                    help="Encode HLS adaptive ladders (480/720/1080) into <base>/hls/ and "
                         "fill hls_url (products: primary_hls_url) instead of poster/mobile assets. "

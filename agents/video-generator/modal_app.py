@@ -363,7 +363,7 @@ def generate_pending():
 def hls_backfill_job(
     table: str = "looks_creative",
     limit: int | None = None,
-    concurrency: int = 2,
+    concurrency: int = 1,
     dry_run: bool = False,
 ):
     """Run the HLS ladder backfill for one table. Re-runnable: only touches
@@ -380,7 +380,7 @@ def hls_backfill_job(
 def hls_backfill(
     table: str = "looks_creative",
     limit: int = 0,
-    concurrency: int = 2,
+    concurrency: int = 1,
     dry_run: bool = False,
 ):
     """One-shot HLS ladder backfill on Modal.
