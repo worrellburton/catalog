@@ -399,6 +399,10 @@ export default function CreatorPage({
           }));
         return {
           id: r.legacy_id ?? -(i + 1),
+          // The real look uuid — without this the LookCard impression fires
+          // with target_uuid=null, so viewing a creator's catalog never marks
+          // their looks "seen" and the following-rail unseen badge never clears.
+          uuid: r.id,
           title: r.title,
           creator: creatorName,
           gender: (r.gender as 'men' | 'women') || 'unisex',

@@ -215,7 +215,16 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
     if (!key || impressionsLogged.has(key)) return;
     impressionsLogged.add(key);
     trackImpression({ type: 'look', id: key, uuid: look.uuid, context: look.title?.slice(0, 200) });
-  }, [inViewport, look.id, look.title]);
+    // Tell the following rail this look is now seen so its unseen badge
+    // decrements live (the rail's catalog:look-seen listener no-ops when the
+    // uuid isn't one of its counted unseen looks). Without this the badge
+    // only cleared on a full refetch.
+    if (look.uuid) {
+      try {
+        window.dispatchEvent(new CustomEvent('catalog:look-seen', { detail: { uuid: look.uuid, creator: look.creator } }));
+      } catch { /* no-op */ }
+    }
+  }, [inViewport, look.id, look.uuid, look.creator, look.title]);
 
   // Mark loaded once the host video has frames. If we already have a
   // poster, `loaded` was true from the start — this just keeps things in
