@@ -144,7 +144,8 @@
      share the row evenly, so the grid can NEVER outgrow its container
      and bleed off the right edge. No horizontal padding here — the
      page-level gutter already insets both sides symmetrically. */
-  grid-template-columns: repeat(3, minmax(0, 1fr));
+  /* Column count is driven by the grid-density dial (--gen-cols, default 3). */
+  grid-template-columns: repeat(var(--gen-cols, 3), minmax(0, 1fr));
   gap: 10px;
   padding: 16px 0 28px;
   width: 100%;
@@ -156,6 +157,39 @@
     gap: 14px;
   }
 }
+
+/* ── Grid-density dial — same wheel as the creator catalog. Cycles the
+   picker between 2/3/4 columns. Mobile-only (the desktop grid auto-fills). */
+.gen-grid-dial {
+  position: fixed;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 60;
+  display: none;
+  flex-direction: column;
+  gap: 9px;
+  padding: 9px 7px;
+  border-radius: 999px;
+  background: rgba(20, 20, 22, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  opacity: 0.6;
+  transition: opacity 0.25s ease, transform 0.3s ease;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+.gen-grid-dial--hidden { transform: translateY(-50%) translateX(150%); opacity: 0; pointer-events: none; }
+.gen-grid-dial:hover, .gen-grid-dial:active { opacity: 0.9; }
+.gen-grid-dial-dot { display: flex; align-items: center; justify-content: center; width: 16px; height: 12px; opacity: 0.38; transition: opacity 0.15s ease, transform 0.15s ease; }
+.gen-grid-dial-dot.is-active { opacity: 1; transform: scale(1.08); }
+.gen-grid-dial-bars { display: flex; gap: 2px; width: 14px; height: 11px; }
+.gen-grid-dial-bars i { flex: 1; background: #fff; border-radius: 1px; }
+@media (max-width: 700px) { .gen-grid-dial { display: flex; } }
 .gen-cloud-card {
   position: relative;
   aspect-ratio: 3 / 4;

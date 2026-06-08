@@ -507,6 +507,75 @@ export default function GeneratePage() {
   const [cloudQuery, setCloudQuery] = useState('');
   const [cloudCat, setCloudCat] = useState<string | null>(null);
   const [cloudBrand, setCloudBrand] = useState<string | null>(null);
+
+  // Grid-density dial for the product picker — mirrors the creator catalog's
+  // wheel: cycles the grid between 2 / 3 / 4 columns on mobile. Scroll/drag to
+  // change, tap to cycle; persisted across sessions. Default = 3 columns.
+  const PICK_COLS = [2, 3, 4] as const;
+  const [pickColsIndex, setPickColsIndex] = useState<number>(() => {
+    try {
+      const v = Number(window.localStorage.getItem('catalog:gen-grid-cols'));
+      const i = PICK_COLS.indexOf(v as 2 | 3 | 4);
+      return i >= 0 ? i : 1;
+    } catch { return 1; }
+  });
+  const pickCols = PICK_COLS[pickColsIndex];
+  useEffect(() => {
+    try { window.localStorage.setItem('catalog:gen-grid-cols', String(pickCols)); } catch { /* quota */ }
+  }, [pickCols]);
+  const pickDialRef = useRef<HTMLDivElement | null>(null);
+  const pickDialDraggedRef = useRef(false);
+  const [pickDialHidden, setPickDialHidden] = useState(false);
+  const cyclePickCols = useCallback(() => {
+    if (pickDialDraggedRef.current) { pickDialDraggedRef.current = false; return; }
+    setPickColsIndex(i => (i + 1) % PICK_COLS.length);
+  }, []);
+  // Auto-hide on scroll-down / reveal on scroll-up — .gen-page is the scroller.
+  useEffect(() => {
+    if (step !== 'products') return;
+    const el = document.querySelector('.gen-page') as HTMLElement | null;
+    if (!el) return;
+    let last = el.scrollTop;
+    let raf = 0;
+    const onScroll = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const y = el.scrollTop;
+        if (y < 40) { setPickDialHidden(false); last = y; return; }
+        if (y - last > 8) { setPickDialHidden(true); last = y; }
+        else if (last - y > 8) { setPickDialHidden(false); last = y; }
+      });
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => { cancelAnimationFrame(raf); el.removeEventListener('scroll', onScroll); };
+  }, [step]);
+  // Wheel + vertical-drag stepping (non-passive so the dial doesn't scroll the page).
+  useEffect(() => {
+    const el = pickDialRef.current;
+    if (!el) return;
+    const clamp = (i: number) => Math.min(PICK_COLS.length - 1, Math.max(0, i));
+    let accum = 0;
+    let touchY: number | null = null;
+    const onWheel = (e: WheelEvent) => { e.preventDefault(); accum += e.deltaY; if (Math.abs(accum) > 22) { setPickColsIndex(i => clamp(i + (accum > 0 ? 1 : -1))); accum = 0; } };
+    const onTouchStart = (e: TouchEvent) => { touchY = e.touches[0].clientY; pickDialDraggedRef.current = false; };
+    const onTouchMove = (e: TouchEvent) => {
+      if (touchY == null) return;
+      e.preventDefault();
+      const dy = e.touches[0].clientY - touchY;
+      if (Math.abs(dy) > 24) { setPickColsIndex(i => clamp(i + (dy > 0 ? 1 : -1))); touchY = e.touches[0].clientY; pickDialDraggedRef.current = true; }
+    };
+    const onTouchEnd = () => { touchY = null; };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
+    el.addEventListener('touchend', onTouchEnd, { passive: true });
+    return () => {
+      el.removeEventListener('wheel', onWheel);
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchmove', onTouchMove);
+      el.removeEventListener('touchend', onTouchEnd);
+    };
+  }, [step]);
   // Products in the active category (before brand/query filters) — drives both
   // the brand chips and the final list.
   const cloudInCat = useMemo(() => {
@@ -1993,7 +2062,7 @@ export default function GeneratePage() {
                     </div>
                   )}
                 </div>
-                <div className="gen-cloud">
+                <div className="gen-cloud" style={{ ['--gen-cols']: pickCols } as React.CSSProperties}>
                   {cloudProducts.length === 0 ? (
                     <div className="gen-cat-row-empty">
                       {cloudQuery ? `No products match "${cloudQuery}"` : 'No products yet'}
@@ -2021,6 +2090,29 @@ export default function GeneratePage() {
                       );
                     })
                   )}
+                </div>
+                {/* Grid-density dial — same wheel as the creator catalog.
+                    Scroll/drag to change columns (2/3/4), tap to cycle.
+                    Mobile-only; auto-hides on scroll-down. */}
+                <div
+                  ref={pickDialRef}
+                  className={`gen-grid-dial${pickDialHidden ? ' gen-grid-dial--hidden' : ''}`}
+                  role="group"
+                  aria-label="Grid columns"
+                  onClick={cyclePickCols}
+                >
+                  {PICK_COLS.map((c, i) => (
+                    <span
+                      key={c}
+                      className={`gen-grid-dial-dot${i === pickColsIndex ? ' is-active' : ''}`}
+                      aria-label={`${c} columns`}
+                      aria-current={i === pickColsIndex}
+                    >
+                      <span className="gen-grid-dial-bars">
+                        {Array.from({ length: c }).map((_, b) => <i key={b} />)}
+                      </span>
+                    </span>
+                  ))}
                 </div>
               </>
             )}
