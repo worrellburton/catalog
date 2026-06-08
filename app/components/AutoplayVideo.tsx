@@ -44,6 +44,18 @@ export default function AutoplayVideo({ rootMargin = '50% 0%', ...rest }: Props)
       playsInline
       loop
       preload="metadata"
+      // Match every other <video> in the app (LookCard / TrailVideoHost /
+      // product media all set this). Two reasons it matters here:
+      //   1. captureVideoFrame() draws this element to a canvas for the
+      //      tap→overlay poster handoff; without CORS the canvas taints and
+      //      the snapshot silently fails (falls back to a product image).
+      //   2. The detail overlay re-requests the SAME url WITH crossOrigin;
+      //      if the tile loaded it WITHOUT, the two cache modes collide on
+      //      WebKit and the overlay video errors out. Loading both in the
+      //      same (cors) mode keeps playback unbroken across the handoff.
+      // Safe because every video host we serve (fal.media, Supabase storage)
+      // returns `Access-Control-Allow-Origin: *`.
+      crossOrigin="anonymous"
       {...rest}
     />
   );
