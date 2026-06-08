@@ -427,52 +427,6 @@
   animation: sc-in 0.32s ease both;
 }
 @keyframes sc-in { from { opacity: 0; } to { opacity: 1; } }
-
-/* ── Corner mode — chatbot-style in-place thinking widget ──────────────
-   The ceremony runs as a compact glass card pinned lower-left, OVER the
-   live page + particle field (transparent backdrop), instead of taking
-   over a full page. On completion it slides UP and out (.is-exiting) as
-   the feed reveals from the top. */
-.search-ceremony.is-corner {
-  inset: 0;
-  background: transparent;
-  display: flex;
-  align-items: flex-end;
-  justify-content: flex-start;
-  padding: 0 0 calc(112px + env(safe-area-inset-bottom)) 16px;
-  pointer-events: none;        /* taps fall through to the page */
-  animation: none;
-}
-.search-ceremony.is-corner .pw-particles { display: none; }
-.search-ceremony.is-corner .sc-stage {
-  pointer-events: auto;
-  width: min(340px, 86vw);
-  gap: 12px;
-  padding: 16px 18px;
-  border-radius: 18px;
-  background: rgba(16, 16, 20, 0.72);
-  backdrop-filter: blur(18px) saturate(160%);
-  -webkit-backdrop-filter: blur(18px) saturate(160%);
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-  animation: sc-corner-in 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
-  transition: transform 0.48s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.48s ease;
-}
-@keyframes sc-corner-in {
-  from { opacity: 0; transform: translateY(20px) scale(0.96); }
-  to   { opacity: 1; transform: translateY(0) scale(1); }
-}
-/* Animate up toward the top + fade as it hands off to the revealing feed. */
-.search-ceremony.is-corner.is-exiting .sc-stage {
-  animation: none;
-  transform: translateY(-64vh) scale(0.9);
-  opacity: 0;
-}
-@media (prefers-reduced-motion: reduce) {
-  .search-ceremony.is-corner .sc-stage { animation: none; transition: opacity 0.3s ease; }
-  .search-ceremony.is-corner.is-exiting .sc-stage { transform: none; }
-}
-
 .sc-stage {
   position: relative;
   z-index: 1;
@@ -623,19 +577,15 @@
    + barely-there scale makes the arrival feel like it's "resolving" rather
    than just sliding. */
 .home-results-reveal {
-  animation: home-reveal 0.9s cubic-bezier(0.16, 1, 0.3, 1) both;
+  animation: home-reveal 0.85s cubic-bezier(0.16, 1, 0.3, 1) both;
   transform-origin: center top;
-  will-change: clip-path, transform, opacity;
+  will-change: transform, opacity;
 }
-/* Reveal the feed from the TOP downward (clip-path wipes open top→bottom)
-   as the ceremony widget slides up and out — so the results fill in from
-   the top to the bottom rather than rising up from below. */
 @keyframes home-reveal {
   0% {
     opacity: 0;
-    transform: translateY(-24px);
-    clip-path: inset(0 0 100% 0);
-    filter: blur(5px);
+    transform: translateY(72px) scale(0.98);
+    filter: blur(6px);
   }
   55% {
     opacity: 1;
@@ -643,8 +593,7 @@
   }
   100% {
     opacity: 1;
-    transform: translateY(0);
-    clip-path: inset(0 0 0 0);
+    transform: translateY(0) scale(1);
     filter: blur(0);
   }
 }
