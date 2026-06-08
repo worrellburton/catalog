@@ -288,6 +288,13 @@ export default function Home() {
   // slides up offscreen, bottom search bar slides down — full-screen feed.
   // Scrolling up brings them back; stopping preserves the current state.
   const [chromeHidden, setChromeHidden] = useState(false);
+  // The overlay body-lock (see below) jumps document scroll to 0 on open and
+  // restores it on close. Both fire synthetic scroll events that would
+  // otherwise flip chrome visibility. These refs let the scroll-direction
+  // tracker ignore those programmatic jumps so the bar's hidden/shown state
+  // survives an open→close round-trip untouched.
+  const overlayOpenRef = useRef(false);
+  const suppressScrollRef = useRef(false);
 
   // Referral capture: stash any ?ref=<handle> from the landing URL ASAP
   // (before OAuth can strip it), then redeem it once the user is signed in
@@ -373,14 +380,23 @@ export default function Home() {
 
   // Scroll-direction tracker: once past the hero, hide chrome on scroll
   // down and show it on scroll up. Small dead-zone so micro-jitter doesn't
-  // flicker the chrome. Reset to visible on every overlay open (so the
-  // chrome is there when you close back to the feed).
+  // flicker the chrome. The bar's visibility is preserved across an overlay
+  // open/close — programmatic scroll jumps from the body-lock are ignored
+  // (see overlayOpenRef / suppressScrollRef), so the bar only reappears on a
+  // genuine scroll-up or at the top, never just because you closed a look.
   useEffect(() => {
     if (!heroScrolled) { setChromeHidden(false); return; }
     let lastY = window.scrollY;
     const THRESHOLD = 8; // px of continuous direction before reacting
     let accum = 0;
     const onScroll = () => {
+      // Overlay is open, or this is the body-lock's restore jump on close:
+      // re-baseline and bail so the synthetic delta never moves the chrome.
+      if (overlayOpenRef.current || suppressScrollRef.current) {
+        suppressScrollRef.current = false;
+        lastY = window.scrollY;
+        return;
+      }
       const y = window.scrollY;
       const dy = y - lastY;
       lastY = y;
@@ -1510,6 +1526,10 @@ export default function Home() {
   // that signals "what you tapped is now the focus" without feeling theatrical.
   const overlayOpen = !!selectedProduct || !!selectedLook;
 
+  // Mirror overlay state into a ref the scroll-direction tracker reads, so it
+  // can ignore the body-lock's open-time scroll-to-0 jump.
+  useEffect(() => { overlayOpenRef.current = overlayOpen; }, [overlayOpen]);
+
   // Lock the underlying feed while a product/look overlay is open so
   // swipe-down-to-dismiss only moves the overlay, not the page beneath.
   // iOS Safari needs position:fixed + saved scrollY (not just overflow:
@@ -1539,6 +1559,10 @@ export default function Home() {
       body.style.width = prev.bodyWidth;
       body.style.overflow = prev.bodyOverflow;
       html.style.overflow = prev.htmlOverflow;
+      // The restore jump below fires a synthetic scroll event after overlayOpen
+      // has already flipped false; flag it so the tracker skips that one delta
+      // and the bar stays exactly as hidden/shown as it was before the open.
+      suppressScrollRef.current = true;
       window.scrollTo(0, scrollY);
     };
   }, [overlayOpen]);
