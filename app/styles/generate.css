@@ -279,12 +279,13 @@
    can't drift up and down. The style grid + "direct your own video"
    field sit above the fixed dock; the body stays short enough to fit. */
 .gen-page--style {
-  height: 100vh;
-  height: 100dvh;
-  min-height: 0;
-  overflow: hidden;
-  padding-bottom: calc(24px + env(safe-area-inset-bottom));
+  /* No longer height-locked: the "direct your own video" textarea grows to own
+     the bottom half of the screen and the page scrolls clear of the fixed dock
+     (generous bottom padding so the field never tucks under it). */
+  padding-bottom: calc(176px + env(safe-area-inset-bottom));
 }
+/* Direct-video field owns roughly the bottom half on the style step. */
+.gen-page--style .gen-direct-input { min-height: 40vh; }
 
 .gen-page--generating .gen-main {
   flex: 1 1 auto;
@@ -335,10 +336,10 @@ html[data-shell="catalog-app"] .gen-page {
 .gen-head {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 4px;
+  gap: 6px;
   margin: 0 auto 28px;
   max-width: 1280px;
-  padding: 8px 0 20px;
+  padding: 16px 0 20px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 .gen-back {
@@ -348,9 +349,11 @@ html[data-shell="catalog-app"] .gen-page {
   font-size: 13px;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   cursor: pointer;
-  padding: 6px 0;
+  /* A touch more room so the back affordance isn't jammed against the top/edge. */
+  padding: 10px 4px;
+  margin-left: -4px;
   width: max-content;
   letter-spacing: 0;
 }
@@ -1104,7 +1107,8 @@ html[data-shell="catalog-app"] .gen-page {
 .gen-styleswiper {
   display: grid;
   grid-auto-flow: column;
-  grid-template-rows: auto auto;
+  /* One row — swipe horizontally through the presets. */
+  grid-template-rows: auto;
   grid-auto-columns: calc((100% - 16px) / 3);
   gap: 8px;
   overflow-x: auto;
