@@ -1540,6 +1540,11 @@ export default function Home() {
     if (!overlayOpen) return;
     if (typeof window === 'undefined') return;
     const scrollY = window.scrollY;
+    // Hide the search bar / header for the duration of the overlay and keep
+    // them hidden after it closes — the bar should only return on a genuine
+    // scroll-up (or at the top), never just because a look/product closed.
+    // Skip when we're already up near the top, where the bar stays available.
+    if (scrollY > window.innerHeight * 0.6) setChromeHidden(true);
     const { body, documentElement: html } = document;
     const prev = {
       bodyPosition: body.style.position,
