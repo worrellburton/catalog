@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { supabase } from '~/utils/supabase';
+import { supabase, upsertAppSettingKeepalive } from '~/utils/supabase';
 
 // Generic shared, real-time array stored as one app_settings row. Powers
 // the OpEx line items and payroll lists (same pattern as the model doc):
@@ -35,17 +35,19 @@ export function useSharedValue<T extends object>(sharedKey: string, storageKey: 
   useEffect(() => {
     if (!supabase) { hydratedRef.current = true; return; }
     let cancelled = false;
+    // Enable writes even if the read errors/hangs (else the save gate blocks
+    // every server write — the "edits don't persist" root cause).
+    const hydrateGuard = setTimeout(() => { hydratedRef.current = true; }, 2500);
     (async () => {
-      const { data } = await supabase!.from('app_settings').select('value').eq('key', sharedKey).maybeSingle();
-      if (cancelled) return;
-      if (data?.value) {
-        try {
+      try {
+        const { data } = await supabase!.from('app_settings').select('value').eq('key', sharedKey).maybeSingle();
+        if (!cancelled && data?.value) {
           const merged = { ...fallback(), ...JSON.parse(data.value) };
           lastSyncedRef.current = JSON.stringify(merged);
           setValue(merged);
-        } catch { /* keep local */ }
-      }
-      hydratedRef.current = true;
+        }
+      } catch { /* keep local */ }
+      if (!cancelled) hydratedRef.current = true;
     })();
     const channel = supabase
       .channel(`app-settings-${sharedKey}`)
@@ -61,17 +63,16 @@ export function useSharedValue<T extends object>(sharedKey: string, storageKey: 
         } catch { /* ignore */ }
       })
       .subscribe((status) => { if (status === 'SUBSCRIBED') setLive(true); });
-    return () => { cancelled = true; if (supabase) supabase.removeChannel(channel); };
+    return () => { cancelled = true; clearTimeout(hydrateGuard); if (supabase) supabase.removeChannel(channel); };
   }, [sharedKey]);
 
   const pendingRef = useRef<string | null>(null);
   const flush = useCallback(() => {
-    if (!supabase) return;
     const s = pendingRef.current;
     if (!s || s === lastSyncedRef.current) return;
     lastSyncedRef.current = s;
     pendingRef.current = null;
-    void supabase.from('app_settings').upsert({ key: sharedKey, value: s, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+    upsertAppSettingKeepalive(sharedKey, s);
   }, [sharedKey]);
 
   useEffect(() => {
@@ -113,24 +114,24 @@ export function useSharedList<T>(sharedKey: string, storageKey: string, fallback
   useEffect(() => {
     if (!supabase) { hydratedRef.current = true; return; }
     let cancelled = false;
+    const hydrateGuard = setTimeout(() => { hydratedRef.current = true; }, 2500);
 
     (async () => {
-      const { data } = await supabase!
-        .from('app_settings')
-        .select('value')
-        .eq('key', sharedKey)
-        .maybeSingle();
-      if (cancelled) return;
-      if (data?.value) {
-        try {
+      try {
+        const { data } = await supabase!
+          .from('app_settings')
+          .select('value')
+          .eq('key', sharedKey)
+          .maybeSingle();
+        if (!cancelled && data?.value) {
           const parsed = JSON.parse(data.value);
           if (Array.isArray(parsed)) {
             lastSyncedRef.current = data.value;
             setItems(parsed as T[]);
           }
-        } catch { /* keep local */ }
-      }
-      hydratedRef.current = true;
+        }
+      } catch { /* keep local — never block writes on a failed read */ }
+      if (!cancelled) hydratedRef.current = true;
     })();
 
     const channel = supabase
@@ -152,17 +153,16 @@ export function useSharedList<T>(sharedKey: string, storageKey: string, fallback
       )
       .subscribe((status) => { if (status === 'SUBSCRIBED') setLive(true); });
 
-    return () => { cancelled = true; if (supabase) supabase.removeChannel(channel); };
+    return () => { cancelled = true; clearTimeout(hydrateGuard); if (supabase) supabase.removeChannel(channel); };
   }, [sharedKey]);
 
   const pendingRef = useRef<string | null>(null);
   const flush = useCallback(() => {
-    if (!supabase) return;
     const value = pendingRef.current;
     if (!value || value === lastSyncedRef.current) return;
     lastSyncedRef.current = value;
     pendingRef.current = null;
-    void supabase.from('app_settings').upsert({ key: sharedKey, value, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+    upsertAppSettingKeepalive(sharedKey, value);
   }, [sharedKey]);
 
   useEffect(() => {

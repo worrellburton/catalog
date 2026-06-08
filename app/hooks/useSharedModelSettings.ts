@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { supabase } from '~/utils/supabase';
+import { supabase, upsertAppSettingKeepalive } from '~/utils/supabase';
 import { type Assumptions, DEFAULTS, STORAGE_KEY, readStored } from '~/services/projections';
 import { type GtmAssumptions, GTM_DEFAULTS, GTM_STORAGE_KEY, readGtmStored } from '~/services/go-to-market';
 import { type EconAssumptions, ECON_DEFAULTS, ECON_STORAGE_KEY, readEconStored } from '~/services/model-metrics';
@@ -43,24 +43,29 @@ export function useSharedModelSettings(): SharedModelSettings {
     if (!supabase) { hydratedRef.current = true; return; }
     let cancelled = false;
 
+    // Safety net: enable writes even if the read below errors or hangs.
+    // Without this, a failed/slow hydrate left hydratedRef false forever and
+    // the save effect's gate (`if (!hydratedRef.current) return`) silently
+    // blocked EVERY server write — the root cause of "edits don't persist".
+    const hydrateGuard = setTimeout(() => { hydratedRef.current = true; }, 2500);
+
     (async () => {
-      const { data } = await supabase!
-        .from('app_settings')
-        .select('value')
-        .eq('key', MODEL_KEY)
-        .maybeSingle();
-      if (cancelled) return;
-      if (data?.value) {
-        try {
+      try {
+        const { data } = await supabase!
+          .from('app_settings')
+          .select('value')
+          .eq('key', MODEL_KEY)
+          .maybeSingle();
+        if (!cancelled && data?.value) {
           const p = JSON.parse(data.value);
           const r = { ...DEFAULTS, ...p.rev };
           const a = { ...GTM_DEFAULTS, ...p.acq };
           const e = { ...ECON_DEFAULTS, ...p.econ };
           lastSyncedRef.current = serialize(r, a, e);
           setRev(r); setAcq(a); setEcon(e);
-        } catch { /* keep local */ }
-      }
-      hydratedRef.current = true;
+        }
+      } catch { /* keep local cache — never block writes on a failed read */ }
+      if (!cancelled) hydratedRef.current = true;
     })();
 
     const channel = supabase
@@ -83,17 +88,17 @@ export function useSharedModelSettings(): SharedModelSettings {
       )
       .subscribe((status) => { if (status === 'SUBSCRIBED') setLive(true); });
 
-    return () => { cancelled = true; if (supabase) supabase.removeChannel(channel); };
+    return () => { cancelled = true; clearTimeout(hydrateGuard); if (supabase) supabase.removeChannel(channel); };
   }, []);
 
   const pendingRef = useRef<string | null>(null);
   const flush = useCallback(() => {
-    if (!supabase) return;
     const value = pendingRef.current;
     if (!value || value === lastSyncedRef.current) return;
     lastSyncedRef.current = value;
     pendingRef.current = null;
-    void supabase.from('app_settings').upsert({ key: MODEL_KEY, value, updated_at: new Date().toISOString() }, { onConflict: 'key' });
+    // keepalive upsert so a flush triggered by pagehide/refresh still lands.
+    upsertAppSettingKeepalive(MODEL_KEY, value);
   }, []);
 
   // Cache locally always; push to the shared row (debounced) once hydrated.
