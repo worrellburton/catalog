@@ -10,7 +10,7 @@
 //                        calls onDone and the results hydrate in.
 // A hard MAX_DURATION guarantees we never hang if `ready` never arrives.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import ParticleBackground from '~/components/ParticleBackground';
 // Speed is dialed up while the ceremony is on screen so the field reads
 // as "searching the world", then restored on cleanup. The ceremony's own
@@ -31,10 +31,9 @@ interface SearchCeremonyProps {
   ready: boolean;
   /** Fired once the narration has played out AND ready is true. */
   onDone: () => void;
-  /** 'full' = legacy full-screen overlay; 'corner' = compact chatbot-style
-   *  widget pinned lower-left that runs in-place over the live page and, on
-   *  completion, animates UP and out as the feed reveals from the top. */
-  placement?: 'full' | 'corner';
+  /** Result product images to float in the particle field behind the stage
+   *  (the searched products drifting in space). Populated once results land. */
+  floatingImages?: string[];
 }
 
 const MIN_DURATION_MS = 2400;
@@ -121,24 +120,8 @@ function buildSteps(query: string, kind: 'search' | 'brand'): string[] {
   ];
 }
 
-export default function SearchCeremony({ query, kind = 'search', ready, onDone, placement = 'full' }: SearchCeremonyProps) {
+export default function SearchCeremony({ query, kind = 'search', ready, onDone, floatingImages = [] }: SearchCeremonyProps) {
   const steps = useRef(buildSteps(query, kind)).current;
-  // Exit phase: in corner mode we play an upward slide-out before unmounting
-  // (so the widget "animates to the top" while the feed reveals beneath).
-  const [exiting, setExiting] = useState(false);
-  const onDoneRef = useRef(onDone);
-  onDoneRef.current = onDone;
-  const finishedRef = useRef(false);
-  const finish = useCallback(() => {
-    if (finishedRef.current) return;
-    finishedRef.current = true;
-    if (placement === 'corner') {
-      setExiting(true);
-      window.setTimeout(() => onDoneRef.current(), 480);
-    } else {
-      onDoneRef.current();
-    }
-  }, [placement]);
   // How many steps are currently visible (they stream in over time).
   const [revealed, setRevealed] = useState(1);
   const [progress, setProgress] = useState(6);
@@ -193,16 +176,16 @@ export default function SearchCeremony({ query, kind = 'search', ready, onDone, 
     if (!ready || !allRevealed) return;
     const elapsed = Date.now() - startedAt.current;
     const wait = Math.max(0, MIN_DURATION_MS - elapsed) + SETTLE_MS;
-    const t = window.setTimeout(finish, wait);
+    const t = window.setTimeout(onDone, wait);
     return () => window.clearTimeout(t);
-  }, [ready, allRevealed, finish]);
+  }, [ready, allRevealed, onDone]);
 
   // Hard safety: always reveal results within MAX_DURATION even if `ready`
   // never flips (e.g. a cached/instant query whose loading flag never trips).
   useEffect(() => {
-    const t = window.setTimeout(finish, MAX_DURATION_MS);
+    const t = window.setTimeout(onDone, MAX_DURATION_MS);
     return () => window.clearTimeout(t);
-  }, [finish]);
+  }, [onDone]);
 
   // Speed the singleton particle field up while the ceremony is on screen
   // (reads as "searching the world"). The canvas keeps running; only its
@@ -216,14 +199,43 @@ export default function SearchCeremony({ query, kind = 'search', ready, onDone, 
   const activeIndex = revealed - 1;
 
   return (
-    <div
-      className={`search-ceremony${placement === 'corner' ? ' is-corner' : ''}${exiting ? ' is-exiting' : ''}${reduced ? ' is-reduced' : ''}`}
-      role="status"
-      aria-live="polite"
-    >
-      {/* Full-screen mode draws its own particle layer above the opaque scrim;
-          corner mode is transparent and rides the page's live particle field. */}
-      {placement !== 'corner' && <ParticleBackground />}
+    <div className={`search-ceremony${reduced ? ' is-reduced' : ''}`} role="status" aria-live="polite">
+      {/* Ceremony-local particle layer above the opaque scrim. */}
+      <ParticleBackground />
+
+      {/* The searched products, drifting in the particle space behind the
+          stage. Each tile floats on its own gentle loop; they fade in once
+          results land. Capped + positioned on a scattered ring so they read
+          as floating in 3D space, not a grid. */}
+      {floatingImages.length > 0 && (
+        <div className="sc-floaters" aria-hidden="true">
+          {floatingImages.slice(0, 8).map((src, i) => {
+            const n = Math.min(floatingImages.length, 8);
+            const angle = (i / n) * Math.PI * 2 + (i % 2 ? 0.5 : 0);
+            // Scatter on an ellipse, biased to the edges so the center stays
+            // clear for the narration card.
+            const rx = 30 + (i % 3) * 7;          // % from center, horizontal
+            const ry = 26 + ((i + 1) % 3) * 8;    // % from center, vertical
+            const left = 50 + Math.cos(angle) * rx;
+            const top = 50 + Math.sin(angle) * ry;
+            return (
+              <span
+                key={`${src}-${i}`}
+                className="sc-floater"
+                style={{
+                  left: `${left}%`,
+                  top: `${top}%`,
+                  ['--d' as string]: `${(i % 5) * 0.6}s`,
+                  ['--dur' as string]: `${7 + (i % 4)}s`,
+                  ['--fade' as string]: `${0.12 * i}s`,
+                } as React.CSSProperties}
+              >
+                <img src={src} alt="" loading="lazy" decoding="async" />
+              </span>
+            );
+          })}
+        </div>
+      )}
       <div className="sc-stage">
         {/* 1 — Query echo: the committed query, pinned at the top. */}
         {query && (

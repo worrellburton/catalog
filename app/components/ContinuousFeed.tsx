@@ -46,6 +46,9 @@ interface ContinuousFeedProps {
   bookmarks: BookmarksInterface;
   /** Called with true when nl-search is in-flight, false when resolved. */
   onSearchLoadingChange?: (loading: boolean) => void;
+  /** Called when a search resolves, with the first few result product images
+   *  (so the search ceremony can float them in the particle field behind it). */
+  onResultsReady?: (images: string[]) => void;
   /** Incremented on each Enter/submit to bypass debounce and fire immediately. */
   searchTrigger?: number;
   /** When set, the feed only surfaces looks whose creator handle is
@@ -147,6 +150,7 @@ function ContinuousFeed({
   onCreateCatalog,
   bookmarks,
   onSearchLoadingChange,
+  onResultsReady,
   searchTrigger = 0,
   followedHandles,
   mySizeOnly = false,
@@ -426,6 +430,26 @@ function ContinuousFeed({
     }
     return matched;
   }, [semantic.looks, filteredLooks]);
+
+  // Surface the first few result product images once a search resolves, so the
+  // search ceremony can float them in the particle field behind it.
+  useEffect(() => {
+    if (!onResultsReady || semantic.loading) return;
+    const imgs: string[] = [];
+    for (const c of semantic.creatives) {
+      const u = c.product_image_url || c.thumbnail_url;
+      if (u) imgs.push(u);
+      if (imgs.length >= 8) break;
+    }
+    if (imgs.length < 8) {
+      for (const l of searchMatchedLooks) {
+        const u = l.thumbnail_url || (l.products && l.products[0]?.image) || '';
+        if (u) imgs.push(u);
+        if (imgs.length >= 8) break;
+      }
+    }
+    if (imgs.length) onResultsReady(imgs);
+  }, [semantic.creatives, semantic.loading, searchMatchedLooks, onResultsReady]);
 
   // When a semantic search returned look hits, use those (relevance-ranked).
   // Otherwise fall back to the locally-filtered looks (for short queries

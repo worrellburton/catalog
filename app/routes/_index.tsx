@@ -283,6 +283,9 @@ export default function Home() {
   const [heroMode, setHeroMode] = useState(() => !inShell);
   const [heroScrolled, setHeroScrolled] = useState(false);
   const [ceremony, setCeremony] = useState<{ active: boolean; query: string; kind: 'search' | 'brand' }>({ active: false, query: '', kind: 'search' });
+  // Result product images surfaced by ContinuousFeed once a search resolves —
+  // floated in the particle field behind the search ceremony.
+  const [ceremonyImages, setCeremonyImages] = useState<string[]>([]);
   const [revealResults, setRevealResults] = useState(false);
   // Chrome auto-hide on scroll-down once you're past the hero. Header
   // slides up offscreen, bottom search bar slides down — full-screen feed.
@@ -425,6 +428,7 @@ export default function Home() {
     if (searchTrigger === prevTriggerRef.current) return;
     prevTriggerRef.current = searchTrigger;
     if (heroMode && searchQuery.trim() && !ceremony.active) {
+      setCeremonyImages([]);
       setCeremony({ active: true, query: searchQuery, kind: 'search' });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -717,6 +721,7 @@ export default function Home() {
     bumpSearchTrigger();
     lockGenderOverride();
     setHeroMode(true);
+    setCeremonyImages([]);
     setCeremony({ active: true, query: brandName, kind: 'brand' });
   }, [bumpSearchTrigger, lockGenderOverride]);
 
@@ -1710,7 +1715,7 @@ export default function Home() {
           {/* New home entry: the ask hero sits above the feed; scrolling
               down reveals the catalog. Hidden once a search resolves into
               results (heroMode flips off). */}
-          {heroMode && (
+          {heroMode && !ceremony.active && (
             <ShoppingForHero onRevealFeed={handleRevealFeed} />
           )}
 
@@ -1729,6 +1734,7 @@ export default function Home() {
             onCreateCatalog={handleCreateCatalog}
             bookmarks={bookmarks}
             onSearchLoadingChange={handleSearchLoadingChange}
+            onResultsReady={setCeremonyImages}
             searchTrigger={searchTrigger}
             followedHandles={followingCatalog}
             mySizeOnly={mySizeOnly}
@@ -1750,7 +1756,7 @@ export default function Home() {
 
           {/* Magical loading screen between a hero search and its results. */}
           {ceremony.active && (
-            <SearchCeremony query={ceremony.query} kind={ceremony.kind} ready={!searchLoading} onDone={handleCeremonyDone} placement="corner" />
+            <SearchCeremony query={ceremony.query} kind={ceremony.kind} ready={!searchLoading} onDone={handleCeremonyDone} floatingImages={ceremonyImages} />
           )}
 
           <button className="remix-btn-fixed" onClick={handleRemix} onContextMenu={handleRemixReset} title="Click to remix · Right-click to reset layout" aria-label="Remix">
