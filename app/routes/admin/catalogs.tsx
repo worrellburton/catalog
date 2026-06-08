@@ -11,6 +11,7 @@ import {
 } from '~/services/product-research';
 import { getFeedSearchResults, getFeedSearchDiagnostics } from '~/services/feed-search';
 import SimilarDebugModal, { buildFeedSearchReport, type SimilarDebugReport } from '~/components/SimilarDebugModal';
+import DailyFeedPreview from '~/components/admin/DailyFeedPreview';
 import { useAuth } from '~/hooks/useAuth';
 import type { ProductAd } from '~/services/product-creative';
 import { getShopperGender, setShopperGender, subscribeToShopperGender } from '~/services/product-creative';
@@ -627,6 +628,7 @@ export default function AdminCatalogs() {
   }, []);
   const [showAdd, setShowAdd] = useState(false);
   const [showAutoEditor, setShowAutoEditor] = useState(false);
+  const [showFeedPreview, setShowFeedPreview] = useState(false);
   const [newName, setNewName] = useState('');
   const [toast, setToast] = useState<string | null>(null);
   const [products, setProducts] = useState<ProductRow[]>([]);
@@ -2162,6 +2164,17 @@ export default function AdminCatalogs() {
                               </svg>
                               Automatic Editor
                             </button>
+                            <button
+                              className="admin-btn admin-btn-secondary"
+                              onClick={() => setShowFeedPreview(true)}
+                              title="Preview a shopper's live daily feed (by username) or a cohort baseline"
+                              style={{ marginLeft: 6, padding: '2px 8px', fontSize: 11, display: 'inline-flex', alignItems: 'center' }}
+                            >
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 4 }}>
+                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" />
+                              </svg>
+                              Preview feed
+                            </button>
                           </div>
                           <span style={{ fontSize: 10, color: '#92400e', fontWeight: 400 }}>
                             This is what users see first — a personalized daily feed, unique per shopper.
@@ -2458,6 +2471,7 @@ export default function AdminCatalogs() {
       {showAutoEditor && (
         <AutoEditorModal onClose={() => setShowAutoEditor(false)} showToast={showToast} />
       )}
+      <DailyFeedPreview open={showFeedPreview} onClose={() => setShowFeedPreview(false)} />
 
       {/* Add Products modal - pick from existing library */}
       {addProductsCatalog && (
