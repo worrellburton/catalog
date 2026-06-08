@@ -1657,7 +1657,7 @@ export default function GeneratePage() {
     <div className={`gen-page${isGeneratingView ? ' gen-page--generating' : ''}${step === 'review' ? ' gen-page--review' : ''}${step === 'style' ? ' gen-page--style' : ''}`}>
       {/* Pick + Review: a live WebGL particle field sits behind the screen so
           products/photos read as floating in 3D space over it. */}
-      {(step === 'products' || step === 'review') && (
+      {(step === 'products' || step === 'review' || step === 'photos') && (
         <div className="gen-products-particles" aria-hidden="true">
           <ParticleBackground />
         </div>

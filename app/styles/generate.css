@@ -3136,59 +3136,116 @@ html[data-shell="catalog-app"] .gen-page {
    container at the top of the screen. The form caps at ~1/3 of the
    viewport so the "Your looks" grid below can dominate the page. */
 
+/* "About you" step — a floating glass panel over the particle field. The
+   pictures read as floating circular orbs that bob in 3D space, the stats sit
+   as floaty glass pills, and a single Continue CTA anchors the bottom. Tuned
+   to feel premium / AI-composed (depth shadows, glow rings, subtle motion)
+   and uniform with the products/review screens that share the particle bg. */
 .gen-step-photos {
-  /* The photos step lays out as a header form on top + Your Looks grid
-     below. No centered text alignment - the form is left-aligned so the
-     row of slots reads naturally. */
-  text-align: left;
+  text-align: center;
   padding-top: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .gen-photos-form {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding-bottom: 12px;
-  margin-bottom: 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  gap: 22px;
+  width: 100%;
+  max-width: 560px;
+  margin: 8px auto 0;
+  padding: 28px 26px 30px;
+  border-radius: 28px;
+  /* Floating glass card lifted off the particle field. */
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02));
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  box-shadow:
+    0 30px 80px rgba(0, 0, 0, 0.5),
+    0 2px 0 rgba(255, 255, 255, 0.06) inset,
+    0 0 60px rgba(140, 120, 255, 0.08);
+  animation: gen-photos-rise 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes gen-photos-rise {
+  from { opacity: 0; transform: translateY(16px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-/* Higher specificity (.gen-step h2.gen-photos-title) so this beats the
-   global .gen-step h2 rule that sets clamp(28px, 3.4vw, 44px). Without
-   the override below the title rendered as the page-headline 40px+
-   even though we wanted a compact section header. */
+/* Gentle floating bob, shared by the orbs + stat pills (staggered per item). */
+@keyframes gen-float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-7px); }
+}
+
+/* "You" title — elegant gradient wordmark, centered above the stats. */
 .gen-step h2.gen-photos-title {
-  font-size: 17px;
+  font-size: clamp(28px, 6vw, 40px);
   font-weight: 700;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.03em;
   margin: 0;
-  line-height: 1.2;
+  line-height: 1;
+  background: linear-gradient(180deg, #ffffff 0%, rgba(255, 255, 255, 0.62) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
-/* "You" header row: title on the left, stats chips + Edit on the right.
-   Stays aligned with the rest of the photos form so the chips read as
-   part of the You group rather than free-floating chrome. */
+/* Title + stats stack, centered. */
 .gen-photos-title-row {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  flex-wrap: wrap;
-  margin-bottom: 8px;
-}
-.gen-photos-stats { margin-left: 0; }
-
-.gen-step-photos .gen-slots {
-  /* Compact slot strip: 3 squares in a row, smaller than the original
-     grid. Aspect ratio stays 3:4 so the slot still reads as portrait. */
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+  gap: 14px;
   margin-bottom: 0;
 }
+.gen-photos-stats {
+  margin-left: 0;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+/* Floaty glass stat pills — each bobs on its own gentle offset. */
+.gen-photos-stats .style-context-chip {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+  animation: gen-float 5.5s ease-in-out infinite;
+}
+.gen-photos-stats .style-context-chip:nth-child(2) { animation-delay: -1.8s; }
+.gen-photos-stats .style-context-chip:nth-child(3) { animation-delay: -3.4s; }
 
+/* Pictures as floating circular orbs. */
+.gen-step-photos .gen-slots {
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 0;
+}
 .gen-step-photos .gen-slot {
-  aspect-ratio: 3 / 4;
-  border-radius: 12px;
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow:
+    0 18px 40px rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(255, 255, 255, 0.06) inset;
+  animation: gen-float 6s ease-in-out infinite;
+}
+.gen-step-photos .gen-slot:nth-child(2) { animation-delay: -2s; }
+.gen-step-photos .gen-slot:nth-child(3) { animation-delay: -4s; }
+/* Round the inner empty button + glow ring so the orb reads as one piece. */
+.gen-step-photos .gen-slot-empty { border-radius: 50%; }
+.gen-step-photos .gen-slot.is-filled {
+  border: 0;
+  box-shadow:
+    0 18px 40px rgba(0, 0, 0, 0.5),
+    0 0 0 2px rgba(255, 255, 255, 0.9),
+    0 0 26px rgba(168, 150, 255, 0.45);
+}
+@media (prefers-reduced-motion: reduce) {
+  .gen-photos-form,
+  .gen-step-photos .gen-slot,
+  .gen-photos-stats .style-context-chip { animation: none; }
 }
 
 .gen-photos-meta {
@@ -3286,20 +3343,14 @@ html[data-shell="catalog-app"] .gen-page {
 }
 
 @media (max-width: 768px) {
-  /* Cap the input form so the looks grid takes the bottom 2/3. The
-     content inside is allowed to scroll if the user has all three slots
-     filled + selects open simultaneously, but in practice it fits. */
+  /* The floaty glass card owns the screen now (the old "Your looks" grid
+     that needed the bottom 2/3 was removed) — let it size to its content
+     and centre in the viewport instead of capping + scrolling. */
   .gen-photos-form {
-    max-height: 36vh;
-    overflow-y: auto;
-    overflow-x: hidden;
-    scrollbar-width: none;
+    padding: 24px 20px 26px;
+    gap: 20px;
   }
-  .gen-photos-form::-webkit-scrollbar { display: none; }
-
-  .gen-step h2.gen-photos-title {
-    font-size: 15px;
-  }
+  .gen-step-photos .gen-slots { gap: 12px; }
 }
 
 /* Become a creator CTA - sits above the "Your looks" grid on the
