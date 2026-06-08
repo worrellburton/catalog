@@ -2454,6 +2454,9 @@ export default function GeneratePage() {
                     type="button"
                     className="gen-btn-secondary gen-btn-keep-discovering"
                     onClick={() => {
+                      // Skip the cold-open splash — the shopper is mid-session
+                      // bailing back to the feed, not booting the app fresh.
+                      try { sessionStorage.setItem('catalog:cold-open-done', '1'); } catch { /* ignore */ }
                       navigate('/#app');
                       // Land at the very top of the feed, not wherever it was
                       // last scrolled — otherwise the home opens mid-page.
