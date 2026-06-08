@@ -20,7 +20,7 @@ import { getSeenKeys, partitionUnseen, type SeenKey } from '~/services/seen-feed
 import { useSearch } from '~/hooks/useSearch';
 import { director } from '~/services/video-playback-director';
 import { useUserAffinity } from '~/hooks/useUserAffinity';
-import { rankCreativesByAffinity } from '~/services/user-affinity';
+import { composeRenderedCreatives } from '~/services/feed-compose';
 import { recordRecentSearch } from '~/services/recent-searches';
 import { getPersonalizedProductOrder } from '~/services/personalized-feed';
 
@@ -831,59 +831,19 @@ function ContinuousFeed({
   // following, deduped by id and product_id.
   const renderedCreatives = useMemo<ProductAd[]>(() => {
     const q = committedQuery.trim().toLowerCase();
+    // Ref-gated resolution: a stored match only counts when it belongs to the
+    // current committed query. composeRenderedCreatives owns the ordering.
     const brandMatch = q && brandQueryRef.current === q ? brandMatchedCreatives : [];
-    if (brandMatch.length > 0) {
-      const seen = new Set<string>();
-      const seenProducts = new Set<string>();
-      const out: ProductAd[] = [];
-      for (const c of brandMatch) {
-        if (seen.has(c.id)) continue;
-        if (c.product_id && seenProducts.has(c.product_id)) continue;
-        seen.add(c.id);
-        if (c.product_id) seenProducts.add(c.product_id);
-        out.push(c);
-      }
-      return out;
-    }
     const tagMatch = q && tagQueryRef.current === q ? tagMatchedCreatives : [];
-    // Default home feed (no typed/tag match) → hide already-seen products,
-    // then softly lean the order toward the shopper's favoured categories
-    // (e.g. taps a lot of shoes → shoes surface earlier). No-ops until there's
-    // enough signal; preserves variety rather than collapsing to one category.
-    if (tagMatch.length === 0) {
-      const unseen = partitionUnseen(semanticallyOrderedCreatives, seenKeys, c => c.product_id ? `product:${c.product_id}` : null);
-      const ranked = rankCreativesByAffinity(unseen, affinity);
-      // Automatic Editor: on the default home feed only, float the products
-      // in this shopper's personalized order to the front (in that order),
-      // then keep the rest in their existing order. null (dial off / holdout /
-      // guest) leaves the global order untouched.
-      if (personalizedOrder && personalizedOrder.length > 0) {
-        const priority = new Map(personalizedOrder.map((id, idx) => [id, idx]));
-        const front: ProductAd[] = [];
-        const rest: ProductAd[] = [];
-        for (const c of ranked) {
-          if (c.product_id && priority.has(c.product_id)) front.push(c);
-          else rest.push(c);
-        }
-        front.sort((a, b) => (priority.get(a.product_id!) ?? 0) - (priority.get(b.product_id!) ?? 0));
-        return [...front, ...rest];
-      }
-      return ranked;
-    }
-
-    // Tier-1 found typed products - return those exclusively.
-    // Appending semanticallyOrderedCreatives would inject off-type semantic
-    // drift (e.g. "shoes" dense-neighbours skirts/dresses) after the correct
-    // results land. When the user gave us a typed query and tier-1 matched it,
-    // we can satisfy their intent with exactly those results.
-    const seen = new Set<string>();
-    const out: ProductAd[] = [];
-    for (const c of tagMatch) {
-      if (seen.has(c.id)) continue;
-      seen.add(c.id);
-      out.push(c);
-    }
-    return out;
+    return composeRenderedCreatives({
+      committedQuery,
+      brandMatch,
+      tagMatch,
+      semanticOrdered: semanticallyOrderedCreatives,
+      seenKeys,
+      affinity,
+      personalizedOrder,
+    });
   }, [brandMatchedCreatives, tagMatchedCreatives, semanticallyOrderedCreatives, committedQuery, seenKeys, affinity, personalizedOrder]);
 
   // Log search queries through the batch endpoint. Debounced 1.5 s and
