@@ -561,6 +561,7 @@ function YourLooksRail({ generations }: { generations: UserGeneration[] | null }
 
 function GenTile({ gen }: { gen: UserGeneration }) {
   const navigate = useNavigate();
+  const [loaded, setLoaded] = useState(false);
   const inFlight = isGenerationInFlight(gen);
   const failed = gen.status === 'failed' || (!inFlight && gen.status !== 'done');
   const label = gen.display_name || gen.style || 'New look';
@@ -604,9 +605,13 @@ function GenTile({ gen }: { gen: UserGeneration }) {
   }
   return (
     <button type="button" className="ap-gen ap-gen--done" title={label} onClick={openLook} aria-label={`Open ${label}`}>
-      {gen.video_url
-        ? <video className="ap-gen-media" src={gen.video_url} muted loop autoPlay playsInline preload="metadata" />
-        : <div className="ap-gen-media ap-gen-media--blank" />}
+      {gen.video_url ? (
+        <>
+          <video className="ap-gen-media" src={gen.video_url} muted loop autoPlay playsInline preload="metadata" onLoadedData={() => setLoaded(true)} />
+          {/* Loading shimmer until the first frame paints — no black flash. */}
+          {!loaded && <div className="ap-gen-load" aria-hidden="true" />}
+        </>
+      ) : <div className="ap-gen-media ap-gen-media--blank" />}
       <div className="ap-gen-foot">
         <span className="ap-gen-name">{label}</span>
       </div>

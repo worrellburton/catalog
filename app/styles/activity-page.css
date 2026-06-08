@@ -353,6 +353,17 @@ button.ap-gen--rendering:active { transform: scale(0.97); }
   animation: ap-gen-shimmer 1.4s linear infinite;
 }
 @keyframes ap-gen-shimmer { to { background-position: -200% 0; } }
+/* Loading overlay on a finished tile — a dark base + shimmer that covers the
+   video until its first frame paints (hides on onLoadedData). */
+.ap-gen-load {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background-color: #17171a;
+  background-image: linear-gradient(100deg, transparent 20%, rgba(255,255,255,0.08) 50%, transparent 80%);
+  background-size: 200% 100%;
+  animation: ap-gen-shimmer 1.4s linear infinite;
+}
 .ap-gen-foot {
   position: relative;
   z-index: 1;
@@ -393,7 +404,7 @@ button.ap-gen--rendering:active { transform: scale(0.97); }
   100% { transform: translateX(360%); }
 }
 @media (prefers-reduced-motion: reduce) {
-  .ap-gen-shimmer, .ap-gen-bar-fill { animation: none; }
+  .ap-gen-shimmer, .ap-gen-bar-fill, .ap-gen-load { animation: none; }
   .ap-gen-bar-fill { width: 100%; }
 }
 
