@@ -14,6 +14,15 @@ export interface CatalogProduct {
   url: string | null;
   type: string | null;
   subtype: string | null;
+  /** False when the creator has marked the product inactive (hidden from
+   *  their public catalog via creator_hidden_products). */
+  isActive: boolean;
+}
+
+export interface CreatorCollection {
+  id: string;
+  name: string;
+  productCount: number;
 }
 
 interface LookProductJoin {
@@ -64,18 +73,23 @@ export async function getMyCatalogProducts(): Promise<CatalogProduct[]> {
       url: p.url,
       type: p.type,
       subtype: p.subtype,
+      isActive: true,
     });
   }
   if (byId.size === 0) return [];
 
-  // 4. The creator's saved order.
-  const { data: order } = await supabase
-    .from('creator_product_order')
-    .select('product_id, sort_order')
-    .eq('user_id', uid);
+  // 4. The creator's saved order + which products they've marked inactive.
+  const [{ data: order }, { data: hidden }] = await Promise.all([
+    supabase.from('creator_product_order').select('product_id, sort_order').eq('user_id', uid),
+    supabase.from('creator_hidden_products').select('product_id').eq('user_id', uid),
+  ]);
   const orderMap = new Map<string, number>();
   for (const o of (order as { product_id: string; sort_order: number }[] | null) || []) {
     orderMap.set(o.product_id, o.sort_order);
+  }
+  for (const h of (hidden as { product_id: string }[] | null) || []) {
+    const row = byId.get(h.product_id);
+    if (row) row.isActive = false;
   }
 
   // 5. Ordered rows lead (by sort_order); unordered fall in behind, A→Z.
@@ -120,4 +134,85 @@ export async function reorderMyCatalogProducts(orderedIds: string[]): Promise<vo
     updated_at: new Date().toISOString(),
   }));
   await supabase.from('creator_product_order').upsert(rows, { onConflict: 'user_id,product_id' });
+}
+
+/** Mark a product active (shown) or inactive (hidden from the catalog) for
+ *  the signed-in creator. Inactive = a row in creator_hidden_products. */
+export async function setCatalogProductActive(productId: string, active: boolean): Promise<void> {
+  if (!supabase) return;
+  const { data: auth } = await supabase.auth.getUser();
+  const uid = auth?.user?.id;
+  if (!uid) return;
+  if (active) {
+    await supabase.from('creator_hidden_products').delete().eq('user_id', uid).eq('product_id', productId);
+  } else {
+    await supabase.from('creator_hidden_products').upsert({ user_id: uid, product_id: productId }, { onConflict: 'user_id,product_id' });
+  }
+}
+
+/** Product ids a creator has marked inactive — read by their PUBLIC catalog
+ *  so hidden products don't show to visitors either. */
+export async function getCreatorHiddenProductIds(userId: string): Promise<Set<string>> {
+  const set = new Set<string>();
+  if (!supabase || !userId) return set;
+  const { data } = await supabase
+    .from('creator_hidden_products')
+    .select('product_id')
+    .eq('user_id', userId);
+  for (const r of (data as { product_id: string }[] | null) || []) set.add(r.product_id);
+  return set;
+}
+
+/** The signed-in creator's collections, with a product count each. */
+export async function getMyCollections(): Promise<CreatorCollection[]> {
+  if (!supabase) return [];
+  const { data: auth } = await supabase.auth.getUser();
+  const uid = auth?.user?.id;
+  if (!uid) return [];
+  const { data: cols } = await supabase
+    .from('creator_collections')
+    .select('id, name')
+    .eq('user_id', uid)
+    .order('sort_order', { ascending: true })
+    .order('created_at', { ascending: true });
+  const rows = (cols as { id: string; name: string }[] | null) || [];
+  if (rows.length === 0) return [];
+  const { data: members } = await supabase
+    .from('creator_collection_products')
+    .select('collection_id')
+    .in('collection_id', rows.map(r => r.id));
+  const counts = new Map<string, number>();
+  for (const m of (members as { collection_id: string }[] | null) || []) {
+    counts.set(m.collection_id, (counts.get(m.collection_id) || 0) + 1);
+  }
+  return rows.map(r => ({ id: r.id, name: r.name, productCount: counts.get(r.id) || 0 }));
+}
+
+/** Create a new collection; returns its row (or null on failure). */
+export async function createCollection(name: string): Promise<CreatorCollection | null> {
+  if (!supabase) return null;
+  const trimmed = name.trim();
+  if (!trimmed) return null;
+  const { data: auth } = await supabase.auth.getUser();
+  const uid = auth?.user?.id;
+  if (!uid) return null;
+  const { data, error } = await supabase
+    .from('creator_collections')
+    .insert({ user_id: uid, name: trimmed.slice(0, 80) })
+    .select('id, name')
+    .single();
+  if (error || !data) return null;
+  return { id: data.id as string, name: data.name as string, productCount: 0 };
+}
+
+/** Add a product to a collection (idempotent). Appends at the end. */
+export async function addProductToCollection(collectionId: string, productId: string): Promise<void> {
+  if (!supabase) return;
+  const { count } = await supabase
+    .from('creator_collection_products')
+    .select('product_id', { count: 'exact', head: true })
+    .eq('collection_id', collectionId);
+  await supabase
+    .from('creator_collection_products')
+    .upsert({ collection_id: collectionId, product_id: productId, sort_order: count ?? 0 }, { onConflict: 'collection_id,product_id' });
 }

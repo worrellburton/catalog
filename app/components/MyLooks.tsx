@@ -6,7 +6,11 @@ import { useAuth } from '~/hooks/useAuth';
 import { downloadLookVideo, type DownloadVariant } from '~/utils/downloadLookVideo';
 import type { ManagedLook, LookStatus } from '~/services/manage-looks';
 import { getMyLooks, deleteLook, reorderLooks, setLookLive } from '~/services/manage-looks';
-import { getMyCatalogProducts, reorderMyCatalogProducts, type CatalogProduct } from '~/services/catalog-products';
+import {
+  getMyCatalogProducts, reorderMyCatalogProducts,
+  setCatalogProductActive, getMyCollections, createCollection, addProductToCollection,
+  type CatalogProduct, type CreatorCollection,
+} from '~/services/catalog-products';
 import { ensureGenerationsInCatalog } from '~/services/promote-generation';
 import { listUserGenerations, isGenerationInFlight, type UserGeneration } from '~/services/user-generations';
 import ParticleBackground from './ParticleBackground';
@@ -60,6 +64,12 @@ export default function MyLooks({ onClose }: MyLooksProps) {
   // "Products" tab — every product across the creator's looks, drag-orderable.
   const [catalogProducts, setCatalogProducts] = useState<CatalogProduct[]>([]);
   const [productsLoading, setProductsLoading] = useState(false);
+  // Per-product action sheet (active/inactive, move to top, add to collection).
+  const [productMenu, setProductMenu] = useState<CatalogProduct | null>(null);
+  // When set, the collection picker is open for this product id.
+  const [collectionPickerFor, setCollectionPickerFor] = useState<string | null>(null);
+  const [collections, setCollections] = useState<CreatorCollection[]>([]);
+  const [newCollectionName, setNewCollectionName] = useState('');
   // Counts for the hero stat line + tab badges — fetched independently of the
   // active filter so removing the "All" tab didn't break the totals.
   const [counts, setCounts] = useState({ all: 0, live: 0, archived: 0 });
@@ -419,6 +429,70 @@ export default function MyLooks({ onClose }: MyLooksProps) {
     }
   }, [showToastMsg]);
 
+  // ── Product action-sheet handlers (active/inactive, move to top, collection)
+  const handleToggleProductActive = useCallback(async (p: CatalogProduct) => {
+    const nextActive = !p.isActive;
+    setCatalogProducts(prev => prev.map(x => x.id === p.id ? { ...x, isActive: nextActive } : x));
+    setProductMenu(null);
+    try {
+      await setCatalogProductActive(p.id, nextActive);
+      showToastMsg(nextActive ? 'Product is active' : 'Product set to inactive');
+    } catch {
+      // Roll back on failure.
+      setCatalogProducts(prev => prev.map(x => x.id === p.id ? { ...x, isActive: p.isActive } : x));
+      showToastMsg('Could not update product');
+    }
+  }, [showToastMsg]);
+
+  const handleMoveProductToTop = useCallback(async (p: CatalogProduct) => {
+    setProductMenu(null);
+    const reordered = [p, ...catalogProducts.filter(x => x.id !== p.id)];
+    setCatalogProducts(reordered);
+    try {
+      await reorderMyCatalogProducts(reordered.map(x => x.id));
+      showToastMsg('Moved to top');
+    } catch {
+      showToastMsg('Could not save order');
+    }
+  }, [catalogProducts, showToastMsg]);
+
+  const openCollectionPicker = useCallback(async (productId: string) => {
+    setCollectionPickerFor(productId);
+    setProductMenu(null);
+    try { setCollections(await getMyCollections()); } catch { /* keep prior */ }
+  }, []);
+
+  const handleAddToCollection = useCallback(async (collectionId: string) => {
+    const productId = collectionPickerFor;
+    if (!productId) return;
+    setCollectionPickerFor(null);
+    try {
+      await addProductToCollection(collectionId, productId);
+      showToastMsg('Added to collection');
+    } catch {
+      showToastMsg('Could not add to collection');
+    }
+  }, [collectionPickerFor, showToastMsg]);
+
+  const handleCreateAndAdd = useCallback(async () => {
+    const productId = collectionPickerFor;
+    const name = newCollectionName.trim();
+    if (!productId || !name) return;
+    try {
+      const col = await createCollection(name);
+      if (col) {
+        await addProductToCollection(col.id, productId);
+        setNewCollectionName('');
+        setCollectionPickerFor(null);
+        showToastMsg(`Added to ${col.name}`);
+      } else {
+        showToastMsg('Could not create collection');
+      }
+    } catch {
+      showToastMsg('Could not create collection');
+    }
+  }, [collectionPickerFor, newCollectionName, showToastMsg]);
+
   // ── Hero metadata ─────────────────────────────────────────────────
   const displayName = user?.displayName || user?.email?.split('@')[0] || 'My Catalog';
   const avatarUrl = user?.avatarUrl;
@@ -765,12 +839,16 @@ export default function MyLooks({ onClose }: MyLooksProps) {
               <div
                 key={p.id}
                 data-product-id={p.id}
-                className={`look-card creator-product-feed my-cat-product-feed${dragProductId === p.id ? ' is-dragging' : ''}`}
+                className={`look-card creator-product-feed my-cat-product-feed${dragProductId === p.id ? ' is-dragging' : ''}${p.isActive ? '' : ' is-inactive'}`}
+                onClick={() => setProductMenu(p)}
+                role="button"
+                tabIndex={0}
               >
                 {p.image_url
                   ? <img className="cpf-media" src={p.image_url} alt={p.name} loading="lazy" decoding="async" />
                   : <div className="cpf-media cpf-media--blank" />}
                 <div className="cpf-gradient" />
+                {!p.isActive && <span className="cpf-inactive-badge">Inactive</span>}
                 <button
                   type="button"
                   className="my-cat-product-grip my-cat-product-grip--feed"
@@ -780,8 +858,18 @@ export default function MyLooks({ onClose }: MyLooksProps) {
                   onPointerMove={handleProductGripMove}
                   onPointerUp={handleProductGripUp}
                   onPointerCancel={handleProductGripUp}
+                  onClick={(e) => e.stopPropagation()}
                 >
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round"><circle cx="9" cy="5" r="1"/><circle cx="9" cy="12" r="1"/><circle cx="9" cy="19" r="1"/><circle cx="15" cy="5" r="1"/><circle cx="15" cy="12" r="1"/><circle cx="15" cy="19" r="1"/></svg>
+                </button>
+                <button
+                  type="button"
+                  className="my-cat-product-menu-btn"
+                  aria-label="Product options"
+                  title="Options"
+                  onClick={(e) => { e.stopPropagation(); setProductMenu(p); }}
+                >
+                  <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><circle cx="12" cy="5" r="1.6"/><circle cx="12" cy="12" r="1.6"/><circle cx="12" cy="19" r="1.6"/></svg>
                 </button>
                 <div className="cpf-info">
                   {p.brand && <span className="cpf-brand">{p.brand}</span>}
@@ -1154,6 +1242,57 @@ export default function MyLooks({ onClose }: MyLooksProps) {
       )}
 
       {toast && <div className="my-cat-toast" role="status">{toast}</div>}
+
+      {/* Per-product action sheet — mirrors the look options. */}
+      {productMenu && (
+        <div className="my-cat-sheet-scrim" onClick={() => setProductMenu(null)} role="dialog" aria-modal="true">
+          <div className="my-cat-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="my-cat-sheet-head">
+              {productMenu.image_url && <img className="my-cat-sheet-thumb" src={productMenu.image_url} alt="" />}
+              <div className="my-cat-sheet-titles">
+                {productMenu.brand && <span className="my-cat-sheet-brand">{productMenu.brand}</span>}
+                <span className="my-cat-sheet-name">{productMenu.name}</span>
+              </div>
+            </div>
+            <button className="my-cat-sheet-item" onClick={() => handleToggleProductActive(productMenu)}>
+              {productMenu.isActive ? 'Set inactive' : 'Set active'}
+            </button>
+            <button className="my-cat-sheet-item" onClick={() => handleMoveProductToTop(productMenu)}>
+              Move to top
+            </button>
+            <button className="my-cat-sheet-item" onClick={() => openCollectionPicker(productMenu.id)}>
+              Add to collection
+            </button>
+            <button className="my-cat-sheet-cancel" onClick={() => setProductMenu(null)}>Cancel</button>
+          </div>
+        </div>
+      )}
+
+      {/* Collection picker — choose an existing collection or create one. */}
+      {collectionPickerFor && (
+        <div className="my-cat-sheet-scrim" onClick={() => setCollectionPickerFor(null)} role="dialog" aria-modal="true">
+          <div className="my-cat-sheet" onClick={(e) => e.stopPropagation()}>
+            <div className="my-cat-sheet-head"><span className="my-cat-sheet-name">Add to collection</span></div>
+            {collections.map(c => (
+              <button key={c.id} className="my-cat-sheet-item" onClick={() => handleAddToCollection(c.id)}>
+                {c.name} <span className="my-cat-sheet-count">{c.productCount}</span>
+              </button>
+            ))}
+            <div className="my-cat-sheet-new">
+              <input
+                type="text"
+                value={newCollectionName}
+                onChange={(e) => setNewCollectionName(e.target.value)}
+                placeholder="New collection name"
+                onKeyDown={(e) => { if (e.key === 'Enter') handleCreateAndAdd(); }}
+                maxLength={80}
+              />
+              <button onClick={handleCreateAndAdd} disabled={!newCollectionName.trim()}>Create</button>
+            </div>
+            <button className="my-cat-sheet-cancel" onClick={() => setCollectionPickerFor(null)}>Cancel</button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

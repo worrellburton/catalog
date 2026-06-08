@@ -9,7 +9,7 @@ import { toggleFollow, isFollowing as fetchIsFollowing, getFollowerCount, getFol
 import { subscribeToLooksChange, fetchSeenLookIds, reorderBySeen } from '~/services/looks';
 import ParticleBackground from './ParticleBackground';
 import { getCreatorAppearance, getCreatorAppearanceById, type CatalogAppearance, DEFAULT_CATALOG_APPEARANCE } from '~/services/catalog-theme';
-import { getCreatorProductOrder } from '~/services/catalog-products';
+import { getCreatorProductOrder, getCreatorHiddenProductIds } from '~/services/catalog-products';
 import { getCreatorCollections, type CreatorCollection } from '~/services/creator-collections';
 // (Removed getShopperGender / subscribeToShopperGender import — the creator
 // catalog page no longer filters by shopper gender; see creatorLooks below.)
@@ -413,16 +413,23 @@ export default function CreatorPage({
           color: '#222',
         };
       });
+      const ownerId = rows.find(r => !!r.user_id)?.user_id || null;
+      // Products the creator marked inactive are hidden from their public
+      // catalog (mirrors the look Live/Inactive split).
+      const hiddenProductIds = ownerId ? await getCreatorHiddenProductIds(ownerId) : new Set<string>();
+      if (cancelled) return;
       if (!cancelled) {
         setUserLooks(mappedLooks);
         // Capture the creator's user id so the Shop tab can apply their
         // saved product order.
-        setOwnerUserId(rows.find(r => !!r.user_id)?.user_id || null);
-        // Aggregate products across all looks for the Shop tab.
+        setOwnerUserId(ownerId);
+        // Aggregate products across all looks for the Shop tab, skipping any
+        // the creator has set inactive.
         const seen = new Set<string>();
         const ordered: Product[] = [];
         for (const l of mappedLooks) {
           for (const p of l.products) {
+            if (p.id && hiddenProductIds.has(p.id)) continue;
             const key = `${p.brand}::${p.name}`;
             if (seen.has(key)) continue;
             seen.add(key);
@@ -437,8 +444,7 @@ export default function CreatorPage({
       // (by handle) in parallel — whichever has a non-null avatar
       // wins. Some real creators have a creators-table row with an
       // avatar but their auth profile's avatar_url is null, and
-      // vice versa.
-      const ownerId = rows.find(r => r.user_id)?.user_id;
+      // vice versa. (ownerId computed above for the inactive-product filter.)
       const [profRes, creatorRes] = await Promise.all([
         ownerId
           ? supabase!.from('profiles').select('id, full_name, avatar_url, email, gender, instagram_handle, tiktok_handle').eq('id', ownerId).maybeSingle()
