@@ -33,6 +33,7 @@ import {
   captureVideoFrame,
   markFeedMilestone,
   prefetchVideoBytes,
+  prefetchHlsHead,
 } from '~/services/video-loading';
 import { lookPoster } from '~/services/media-resolver';
 import { isHlsUrl } from '~/utils/hlsAttach';
@@ -219,9 +220,13 @@ const CreativeCardV2 = memo(function CreativeCardV2({
   // additionally caps concurrency and bails on fast scroll.
   const inPrewarmBand = useInViewport(prewarmNodeRef, '120% 0%');
   useEffect(() => {
-    // HLS streams its own segments via hls.js — byte-prewarming the manifest
-    // does nothing useful, so skip it for adaptive sources.
-    if (inPrewarmBand && activeVideoUrl && !isHlsUrl(activeVideoUrl)) {
+    if (!inPrewarmBand || !activeVideoUrl) return;
+    if (isHlsUrl(activeVideoUrl)) {
+      // HLS streams its own segments via hls.js. Warm the manifest + the
+      // lowest rung's init + first segments ahead of the play band so the
+      // attach is a cache hit and the first frame paints without a load.
+      prefetchHlsHead(activeVideoUrl);
+    } else {
       prefetchVideoBytes(activeVideoUrl);
     }
   }, [inPrewarmBand, activeVideoUrl]);

@@ -15,6 +15,7 @@ import { useVideoStillRatio } from '~/hooks/useVideoStillRatio';
 import { shouldBeVideo } from '~/utils/videoStillSplit';
 import {
   prefetchVideoBytes,
+  prefetchHlsHead,
   captureVideoFrame,
   isMobileViewport,
   isSlowConnection,
@@ -252,6 +253,14 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
     const t = window.setTimeout(() => prefetchVideoBytes(fullVideoUrl), 500);
     return () => window.clearTimeout(t);
   }, [inRenderBand, previewOnly, videoUrl, fullVideoUrl, look.hls_url]);
+
+  // HLS playback source: warm the manifest + lowest-rung init/first segments
+  // ahead of the play band so hls.js attaches to a cache hit and the first
+  // frame paints without a visible load as the card scrolls up.
+  useEffect(() => {
+    if (!inRenderBand || previewOnly || !allowVideoForThisCard) return;
+    if (look.hls_url) prefetchHlsHead(look.hls_url);
+  }, [inRenderBand, previewOnly, allowVideoForThisCard, look.hls_url]);
 
   return (
     <div

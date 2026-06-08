@@ -246,6 +246,148 @@ export function getPrefetchCount(): number {
   return preloadedHighResUrls.size;
 }
 
+// ── HLS head-warm: pre-buffer upcoming adaptive clips ─────────────────
+// prefetchVideoBytes only helps progressive MP4 — for HLS (.m3u8) the
+// player streams its OWN segments on demand via hls.js, so a full-file
+// GET warms nothing reusable. To make an upcoming HLS card play without a
+// visible load, we warm what hls.js will request FIRST: the manifest, the
+// lowest-bitrate variant's media playlist, its init segment (fMP4), and
+// the first 1-2 media segments — all into the HTTP cache. hls.js then
+// attaches to a cache hit and the first frame paints near-instantly.
+//
+// We deliberately warm the LOWEST rung (matches hls.js startLevel:-1,
+// which starts low for a fast first frame and ramps up via ABR), so the
+// bytes spent ahead are minimal. Same gating as prefetchVideoBytes
+// (saveData / 2g-3g skip) plus its own small concurrency + LIFO backlog so
+// a fast flick can't open a flood of segment fetches.
+
+const warmedHlsManifests = new Set<string>();
+const MAX_HLS_WARM_CONCURRENCY = 3;
+const MAX_PENDING_HLS_WARM = 8;
+let hlsWarmInFlight = 0;
+const hlsWarmQueue: string[] = [];
+
+function isHlsManifest(url: string): boolean {
+  return /\.m3u8(\?|#|$)/i.test(url);
+}
+
+function pumpHlsWarmQueue(): void {
+  while (hlsWarmInFlight < MAX_HLS_WARM_CONCURRENCY && hlsWarmQueue.length > 0) {
+    // LIFO: newest (nearest to where the user is heading) first, same
+    // rationale as the MP4 prewarm queue.
+    const next = hlsWarmQueue.pop()!;
+    void runHlsWarm(next);
+  }
+}
+
+/** Warm the head of an upcoming HLS clip so hls.js gets cache hits when it
+ *  attaches. No-op for non-HLS URLs, on save-data/slow connections, or for
+ *  a manifest already warmed this page-load. */
+export function prefetchHlsHead(manifestUrl: string | null | undefined): void {
+  if (!manifestUrl || !isHlsManifest(manifestUrl)) return;
+  if (warmedHlsManifests.has(manifestUrl)) return;
+  if (!canBackgroundPreload()) return;
+  warmedHlsManifests.add(manifestUrl);
+  hlsWarmQueue.push(manifestUrl);
+  // Drop the oldest pending manifests (farthest from the user now) on
+  // overflow, un-marking them so they can re-queue if scrolled back to.
+  while (hlsWarmQueue.length > MAX_PENDING_HLS_WARM) {
+    const stale = hlsWarmQueue.shift()!;
+    warmedHlsManifests.delete(stale);
+  }
+  pumpHlsWarmQueue();
+}
+
+async function fetchManifestText(url: string): Promise<string | null> {
+  try {
+    const r = await fetch(url, { method: 'GET', priority: 'low' as RequestPriority } as RequestInit & { priority: RequestPriority });
+    if (!r.ok) return null;
+    return await r.text();
+  } catch {
+    return null;
+  }
+}
+
+/** Full low-priority GET, body drained to EOF so the browser commits a
+ *  complete, reusable cache entry (mirrors startPrefetch's contract). */
+async function warmSegmentBytes(url: string): Promise<void> {
+  try {
+    const r = await fetch(url, { method: 'GET', priority: 'low' as RequestPriority } as RequestInit & { priority: RequestPriority });
+    const reader = r.body?.getReader();
+    if (!reader) return;
+    try {
+      for (;;) { const { done } = await reader.read(); if (done) break; }
+    } finally {
+      await reader.cancel().catch(() => {});
+    }
+  } catch {
+    /* aborted / offline — nothing to do */
+  }
+}
+
+/** From a master playlist, pick the lowest-BANDWIDTH variant URI (matches
+ *  hls.js's low start level). Returns null if it isn't a master playlist. */
+function pickLowestVariant(masterText: string): string | null {
+  const lines = masterText.split(/\r?\n/);
+  let bestUri: string | null = null;
+  let bestBw = Infinity;
+  for (let i = 0; i < lines.length; i++) {
+    if (!lines[i].trim().startsWith('#EXT-X-STREAM-INF')) continue;
+    const m = lines[i].match(/BANDWIDTH=(\d+)/i);
+    const bw = m ? parseInt(m[1], 10) : 0;
+    let j = i + 1;
+    while (j < lines.length && lines[j].trim() === '') j++;
+    const uri = lines[j]?.trim();
+    if (uri && !uri.startsWith('#') && bw < bestBw) { bestBw = bw; bestUri = uri; }
+  }
+  return bestUri;
+}
+
+/** From a media playlist, return the init segment URI (fMP4 #EXT-X-MAP) and
+ *  the first `max` media-segment URIs. */
+function parseFirstSegments(mediaText: string, max: number): { initUri: string | null; segUris: string[] } {
+  const segUris: string[] = [];
+  let initUri: string | null = null;
+  for (const raw of mediaText.split(/\r?\n/)) {
+    const line = raw.trim();
+    if (!line) continue;
+    if (line.startsWith('#EXT-X-MAP:')) {
+      const m = line.match(/URI="([^"]+)"/);
+      if (m) initUri = m[1];
+      continue;
+    }
+    if (line.startsWith('#')) continue;
+    segUris.push(line);
+    if (segUris.length >= max) break;
+  }
+  return { initUri, segUris };
+}
+
+async function runHlsWarm(manifestUrl: string): Promise<void> {
+  hlsWarmInFlight++;
+  try {
+    const masterText = await fetchManifestText(manifestUrl);
+    if (!masterText) return;
+    let mediaUrl = manifestUrl;
+    let mediaText = masterText;
+    // Master playlist → resolve the lowest-bitrate media playlist first.
+    if (masterText.includes('#EXT-X-STREAM-INF')) {
+      const variant = pickLowestVariant(masterText);
+      if (!variant) return;
+      mediaUrl = new URL(variant, manifestUrl).href;
+      const t = await fetchManifestText(mediaUrl);
+      if (!t) return;
+      mediaText = t;
+    }
+    const { initUri, segUris } = parseFirstSegments(mediaText, 2);
+    if (initUri) await warmSegmentBytes(new URL(initUri, mediaUrl).href);
+    for (const s of segUris) await warmSegmentBytes(new URL(s, mediaUrl).href);
+  } finally {
+    hlsWarmInFlight--;
+    pumpHlsWarmQueue();
+  }
+}
+
 /** Cancels any pending high-res preload. Use on route change so the
  *  outgoing feed doesn't keep burning bytes after the user has moved
  *  on. */
