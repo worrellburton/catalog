@@ -306,8 +306,40 @@ export default function AdminModel() {
     );
   };
 
+  // Print → PDF as a single LANDSCAPE page: scale the whole model view to fit
+  // one landscape Letter page (usable area at 96 CSS px/in less 0.3in margins),
+  // force @page landscape, and isolate the model root from the rest of the admin
+  // chrome. Self-contained — the injected <style> is removed on afterprint.
+  const printModel = () => {
+    const el = document.getElementById('model-print-area');
+    let scale = 1;
+    let widthPx = 0;
+    if (el) {
+      const PAGE_W = (11 - 0.6) * 96;   // landscape Letter usable width  (~998px)
+      const PAGE_H = (8.5 - 0.6) * 96;  // landscape Letter usable height (~758px)
+      const rect = el.getBoundingClientRect();
+      widthPx = Math.ceil(rect.width);
+      scale = Math.min(PAGE_W / rect.width, PAGE_H / el.scrollHeight, 1);
+    }
+    const style = document.createElement('style');
+    style.textContent = `@media print {
+      @page { size: landscape; margin: 0.3in; }
+      body * { visibility: hidden !important; }
+      #model-print-area, #model-print-area * { visibility: visible !important; }
+      #model-print-area {
+        position: absolute !important; left: 0 !important; top: 0 !important;
+        ${widthPx ? `width: ${widthPx}px !important; max-width: none !important;` : ''}
+        transform: scale(${scale}); transform-origin: top left;
+      }
+    }`;
+    document.head.appendChild(style);
+    const cleanup = () => { style.remove(); window.removeEventListener('afterprint', cleanup); };
+    window.addEventListener('afterprint', cleanup);
+    window.print();
+  };
+
   return (
-    <div className="admin-page model-page">
+    <div className="admin-page model-page" id="model-print-area">
       <div className="admin-page-header">
         <h1>
           Model
@@ -321,7 +353,7 @@ export default function AdminModel() {
 
       <ModelTabs active="model" />
 
-      <ModelHeadline scenario={ui.scenario} onScenario={setScenario} onExportCsv={exportCsv} onPrint={() => window.print()} onRate={() => setShowRate(true)} />
+      <ModelHeadline scenario={ui.scenario} onScenario={setScenario} onExportCsv={exportCsv} onPrint={printModel} onRate={() => setShowRate(true)} />
       <RateAssumptionsModal open={showRate} onClose={() => setShowRate(false)} payload={ratePayload} />
 
       {readOnly && (
