@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import '~/styles/gtm.css';
 
 // GTM — the marketing function as a connected, top-down DIAGRAM:
@@ -87,11 +87,12 @@ const PILLARS: Pillar[] = [
   },
 ];
 
-const FLYWHEEL: { tag: string; title: string; body: string; accent: string }[] = [
-  { tag: 'The goal', title: 'Start the flywheel.', body: 'Stand up a marketing engine that compounds — so growth stops depending on any one person.', accent: '#6366f1' },
-  { tag: 'Step 1 · Hire', title: 'Bring on the team.', body: 'Three BD / marketing consultants, month-to-month for three months. Some may convert to full-time — the point is to start delegating the system now; it can’t run on one person.', accent: '#8b5cf6' },
-  { tag: 'Step 2 · Be diligent', title: 'Log every contact.', body: 'Every outreach goes in the CRM. People are measured on contact attempts per week — an intentional, serious, sustained push.', accent: '#10b981' },
-  { tag: 'Step 3 · Learn & repeat', title: 'Double down on what works.', body: 'Lean into what’s working, step away from what isn’t, and repeat. The loop tightens every cycle.', accent: '#f59e0b' },
+const FLYWHEEL: { kicker: string; title: string; body: string; accent: string }[] = [
+  { kicker: 'The goal', title: 'Turn the flywheel on.', body: 'Create a marketing engine that compounds on its own.', accent: '#6366f1' },
+  { kicker: 'Step 1', title: 'Hire.', body: 'Three BD / marketing consultants, month-to-month for three months. Some may convert to full-time — the point is to start delegating the system now; it can’t run on one person.', accent: '#8b5cf6' },
+  { kicker: 'Step 2 · Strategy', title: 'Market through creators.', body: 'The three consultants specialize in creator relations — starting small and scaling. Creators are our primary advertising channel: we partner with them to post, build catalogs, and share on their socials, and pay them on every signup plus ongoing engagement.', accent: '#ec4899' },
+  { kicker: 'Step 3', title: 'Deploy budget effectively.', body: 'Run a disciplined, mission-driven team — log every contact in the CRM, hold each other to weekly targets, and move as one synergistic unit with real purpose: putting every marketing dollar to work as effectively as possible.', accent: '#10b981' },
+  { kicker: 'Step 4', title: 'Learn & repeat.', body: 'Continuous improvement on strategy, campaign management, and creator management — lean into what’s working, cut what isn’t, and tighten the loop every cycle. The goal: drive CPA as low as possible.', accent: '#f59e0b' },
 ];
 
 function Leaves({ leaves }: { leaves: Leaf[] }) {
@@ -111,14 +112,26 @@ export default function AdminGtm() {
   let order = 0;
   const delay = () => ({ animationDelay: `${order++ * 45}ms` } as React.CSSProperties);
 
-  // Scroll-reveal the flywheel slides one at a time.
+  // Branded background videos served from /public (same clips the decks use).
+  const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
+
+  // True whenever a flywheel slide is on screen — fades the branded video
+  // backdrop in only while the deck section is in view (clean tree above).
+  const [flyActive, setFlyActive] = useState(false);
+
+  // Scroll-reveal the flywheel slides one at a time + drive the backdrop.
   const flywheelRef = useRef<HTMLDivElement | null>(null);
   useEffect(() => {
     const root = flywheelRef.current;
     if (!root) return;
     const slides = Array.from(root.querySelectorAll('.gtm-fly-slide'));
+    const onScreen = new Set<Element>();
     const io = new IntersectionObserver((entries) => {
-      entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('is-in'); });
+      entries.forEach(e => {
+        if (e.isIntersecting) { e.target.classList.add('is-in'); onScreen.add(e.target); }
+        else onScreen.delete(e.target);
+      });
+      setFlyActive(onScreen.size > 0);
     }, { threshold: 0.35 });
     slides.forEach(s => io.observe(s));
     return () => io.disconnect();
@@ -198,11 +211,29 @@ export default function AdminGtm() {
       </div>
 
       {/* Flywheel — the plan to put the map in motion, as a deck of
-          full-viewport slides that snap one at a time. */}
-      <div className="gtm-flywheel" ref={flywheelRef}>
+          full-viewport slides that snap one at a time. Catalog-branded:
+          a drifting grid of look videos sits behind a white scrim (the same
+          backdrop the investor decks use, inverted to light). */}
+      <div className={`gtm-flywheel${flyActive ? ' is-active' : ''}`} ref={flywheelRef}>
+        <div className="gtm-fly-bg" aria-hidden="true">
+          <div className="gtm-fly-bg-grid">
+            {Array.from({ length: 16 }).map((_, i) => (
+              <video
+                key={i}
+                src={`${basePath}/${i % 2 === 0 ? 'girl2.mp4' : 'guy.mp4'}`}
+                muted
+                loop
+                playsInline
+                autoPlay
+                className="gtm-fly-bg-video"
+              />
+            ))}
+          </div>
+          <div className="gtm-fly-bg-overlay" />
+        </div>
         {FLYWHEEL.map((s, i) => (
           <section
-            key={s.tag}
+            key={s.kicker}
             className="gtm-fly-slide"
             style={{ ['--accent' as string]: s.accent }}
           >
@@ -211,7 +242,7 @@ export default function AdminGtm() {
               <span className="gtm-fly-index" aria-hidden="true">
                 {String(i + 1).padStart(2, '0')} <span className="gtm-fly-index-total">/ {String(FLYWHEEL.length).padStart(2, '0')}</span>
               </span>
-              <span className="gtm-fly-tag">{s.tag}</span>
+              <span className="gtm-fly-tag">{s.kicker}</span>
               <h3 className="gtm-fly-title">{s.title}</h3>
               <p className="gtm-fly-body">{s.body}</p>
             </div>
