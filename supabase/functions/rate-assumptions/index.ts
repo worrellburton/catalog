@@ -23,7 +23,9 @@ function jsonRes(data: unknown, status = 200) {
   });
 }
 
-const SYSTEM = `You are a sharp, skeptical seed-stage investor and financial analyst reviewing a consumer-marketplace startup's 16-month financial model. The business is a fashion shopping PLATFORM — both a website and an iOS/Android app — that earns affiliate commission (not an app-only product; treat reach, SEO/web traffic and cross-device usage as part of the story).
+const SYSTEM = `You are a sharp, skeptical seed-stage investor and financial analyst reviewing a consumer startup's 16-month financial model.
+
+The business is ONE shopping app — a single platform spanning web + iOS/Android with ONE unified user base across them (not separate products, not a web-vs-app split). Think Amazon / Pinterest / TikTok: a broad consumer SHOPPING destination, NOT a niche fashion app. It earns affiliate commission on the sales it drives, so treat reach, SEO/web traffic, virality and cross-device usage as part of the story.
 
 Review the assumptions and the results. For each KEY assumption, say in one line whether it is realistic, optimistic, or conservative, and give a realistic benchmark range. Then flag any internal inconsistencies or numbers that would make an investor skeptical (e.g. CAC payback under a month, LTV:CAC far above ~5x, conversion or retention that's too rosy, organic growth that compounds implausibly). Finish with "Top 3 changes" — the specific edits that would most improve credibility, with concrete numbers.
 
@@ -98,6 +100,10 @@ Deno.serve(async (req: Request) => {
   ]);
 
   return jsonRes({
+    // Surfaced to the modal's "What goes into the models" panel so the exact
+    // system + user prompt (identical for Claude and Gemini) is inspectable.
+    system: SYSTEM,
+    prompt: buildPrompt(model),
     claude: claudeR.status === 'fulfilled'
       ? { text: claudeR.value, model: 'claude-opus-4-8' }
       : { error: claudeR.reason instanceof Error ? claudeR.reason.message : String(claudeR.reason) },

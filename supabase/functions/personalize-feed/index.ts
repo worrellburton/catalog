@@ -90,7 +90,24 @@ Deno.serve(async (req: Request) => {
     if (!token) return jsonRes({ success: false, error: 'missing auth' }, 401);
     const { data: { user }, error: userErr } = await supabase.auth.getUser(token);
     if (userErr || !user) return jsonRes({ success: false, error: 'invalid auth' }, 401);
-    const userId = user.id;
+    let userId = user.id;
+
+    // ── Admin preview: compute ANY user's live daily feed ────────────────
+    // When an admin passes { target_user_id }, rank for THAT user instead of
+    // the caller. Gated on profiles.is_admin so a regular shopper can't read
+    // another shopper's feed. `preview` mode never persists — it must not
+    // overwrite the target's real daily row.
+    let preview = false;
+    try {
+      const body = await req.json();
+      const targetUserId = typeof body?.target_user_id === 'string' ? body.target_user_id.trim() : '';
+      if (targetUserId && targetUserId !== userId) {
+        const { data: prof } = await supabase.from('profiles').select('is_admin').eq('id', userId).maybeSingle();
+        if (!prof?.is_admin) return jsonRes({ success: false, error: 'admin only' }, 403);
+        userId = targetUserId;
+        preview = true;
+      }
+    } catch { /* no JSON body — normal per-caller path */ }
 
     // ── Config dials ─────────────────────────────────────────────────────
     const { data: settingRows } = await supabase
@@ -121,7 +138,7 @@ Deno.serve(async (req: Request) => {
 
     // ── Holdout: keep a deterministic slice on the global feed ───────────
     if (holdoutBucket(userId) < holdoutPct) {
-      return await persistAndReturn(supabase, userId, feedDate, [], 'holdout', null, null);
+      return await persistAndReturn(supabase, userId, feedDate, [], 'holdout', null, null, preview);
     }
 
     // ── Signals: the shopper's recent engagement ────────────────────────
@@ -137,7 +154,7 @@ Deno.serve(async (req: Request) => {
 
     if (events.length < minSignal) {
       // Cold start — not enough to personalize; serve the global feed.
-      return await persistAndReturn(supabase, userId, feedDate, [], 'fallback', null, null);
+      return await persistAndReturn(supabase, userId, feedDate, [], 'fallback', null, null, preview);
     }
 
     // Per-product engagement weight + the seen set (any impression).
@@ -179,7 +196,7 @@ Deno.serve(async (req: Request) => {
       .limit(CANDIDATE_POOL);
     const candidates = (candidateRows ?? []) as ProductRow[];
     if (candidates.length === 0) {
-      return await persistAndReturn(supabase, userId, feedDate, [], 'fallback', null, null);
+      return await persistAndReturn(supabase, userId, feedDate, [], 'fallback', null, null, preview);
     }
 
     // Deterministic taste score: brand + type affinity, fresh items favored.
@@ -234,7 +251,7 @@ Deno.serve(async (req: Request) => {
       }
     }
 
-    return await persistAndReturn(supabase, userId, feedDate, finalOrder, 'personalized', model, reason);
+    return await persistAndReturn(supabase, userId, feedDate, finalOrder, 'personalized', model, reason, preview);
   } catch (err) {
     return jsonRes({ success: false, error: err instanceof Error ? err.message : String(err) }, 500);
   }
@@ -281,18 +298,22 @@ async function persistAndReturn(
   variant: 'personalized' | 'fallback' | 'holdout',
   model: string | null,
   reason: Record<string, unknown> | null,
+  preview = false,
 ) {
   const ranked: RankedItem[] = order.map(id => ({ type: 'product', id }));
-  await supabase.from('personalized_feeds').upsert({
-    user_id: userId,
-    feed_date: feedDate,
-    ranked_items: ranked,
-    variant,
-    model,
-    reason,
-    computed_at: new Date().toISOString(),
-  }, { onConflict: 'user_id,feed_date' });
-  return jsonRes({ success: true, enabled: true, cached: false, variant, model, ranked_items: ranked });
+  // Preview (admin viewing another user) must not write the target's row.
+  if (!preview) {
+    await supabase.from('personalized_feeds').upsert({
+      user_id: userId,
+      feed_date: feedDate,
+      ranked_items: ranked,
+      variant,
+      model,
+      reason,
+      computed_at: new Date().toISOString(),
+    }, { onConflict: 'user_id,feed_date' });
+  }
+  return jsonRes({ success: true, enabled: true, cached: false, preview, variant, model, ranked_items: ranked });
 }
 
 interface ClaudeResponse {

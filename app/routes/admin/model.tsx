@@ -40,7 +40,7 @@ const clamp01 = (n: number) => Math.min(1, Math.max(0, n));
 
 const ACQ_FIELDS: FieldDef[] = [
   { key: 'budget',          label: 'Total advertising spend',     hint: 'Total ad spend across 16 months',    format: 'currency', step: 5000, min: 0 },
-  { key: 'cpa',             label: 'CPA',                         hint: 'Cost per paid acquisition',          format: 'currency', step: 1,    min: 0, benchmark: '$5–$30 consumer' },
+  { key: 'cpa',             label: 'CPA',                         hint: 'Cost per acquired user',             format: 'currency', step: 1,    min: 0, benchmark: '$5–$30 consumer' },
   { key: 'organicGrowth',   label: 'Organic growth',              hint: 'Word-of-mouth adds, % of base / mo', format: 'percent',  step: 0.01, min: 0, max: 1, benchmark: '10–30%/mo early' },
   { key: 'budgetDistEarly', label: 'Budget split (early)',        hint: 'Share of spend up front · totals 100%', format: 'percent', step: 0.01, min: 0, max: 1 },
   { key: 'budgetDistLate',  label: 'Budget split (late)',         hint: 'Share of spend at the tail · totals 100%', format: 'percent', step: 0.01, min: 0, max: 1 },
@@ -145,7 +145,7 @@ export default function AdminModel() {
   // "Rate my assumptions" — compact model snapshot sent to Claude + Gemini.
   const [showRate, setShowRate] = useState(false);
   const ratePayload = useMemo(() => ({
-    business: 'Consumer fashion shopping platform (web + iOS/Android app) earning affiliate commission',
+    business: 'One consumer shopping app — a single platform across web + iOS/Android with one unified user base — earning affiliate commission on the sales it drives. A broad shopping destination (think Amazon / Pinterest / TikTok), not a fashion-only app.',
     horizonMonths: MONTHS,
     scenario: ui.scenario,
     acquisition: {
@@ -266,18 +266,31 @@ export default function AdminModel() {
               return <AssumptionCard key={f.key} field={f} value={eecon[f.key as keyof EconAssumptions]} readOnly={readOnly} onChange={(n) => setEconField(f.key as keyof EconAssumptions, n)} />;
             })}
           </div>
-        </ModelRow>
-      );
-    }
-    if (key === 'payout') {
-      return (
-        <ModelRow {...common} title="Creator payout" subtitle="% of revenue → creators">
-          <p className="model-link-note">
-            {creatorPayout.mode === 'percent'
-              ? <>Paying <strong style={{ color: COLORS.payout }}>{fmtPercent(creatorPayout.percent, 0)}</strong> of revenue to creators.</>
-              : <>Holding a <strong style={{ color: COLORS.payout }}>{fmtPercent(creatorPayout.targetMargin, 0)}</strong> operating margin; surplus paid to creators.</>}
-            {' '}The checkbox plots the payout line. Configure it in the <Link to="/admin/model/opex" className="opex-link">OpEx builder →</Link>
-          </p>
+          {/* Creator payout folded in as a sub-toggle of Costs & cash — it's
+              part of OpEx/cash, not a standalone driver. Plots the payout line. */}
+          <label
+            style={{
+              display: 'flex', alignItems: 'flex-start', gap: 8, marginTop: 12,
+              paddingTop: 10, borderTop: '1px solid #f0f0f0', fontSize: 12.5,
+              color: '#475569', cursor: 'pointer', lineHeight: 1.45,
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={ui.show.payout}
+              onChange={(e) => setShow('payout', e.target.checked)}
+              style={{ accentColor: COLORS.payout, marginTop: 2 }}
+            />
+            <span>
+              <strong style={{ color: COLORS.payout }}>Creator payout</strong>
+              {' — '}
+              {creatorPayout.mode === 'percent'
+                ? <>{fmtPercent(creatorPayout.percent, 0)} of revenue to creators</>
+                : <>hold a {fmtPercent(creatorPayout.targetMargin, 0)} operating margin; surplus to creators</>}
+              {'. Plot the payout line · '}
+              <Link to="/admin/model/opex" className="opex-link">configure →</Link>
+            </span>
+          </label>
         </ModelRow>
       );
     }
@@ -323,7 +336,9 @@ export default function AdminModel() {
       <div className="model-layout">
         <div className="model-left">
           <div className="model-rows">
-            {ui.order.map(renderRow)}
+            {/* Creator payout is rendered as a sub-toggle inside Costs & cash,
+                so it's filtered out of the top-level rows here. */}
+            {ui.order.filter(k => k !== 'payout').map(renderRow)}
           </div>
         </div>
 
