@@ -446,6 +446,42 @@
   pointer-events: none;
 }
 
+/* Searched products drifting in the particle space behind the stage. */
+.sc-floaters {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.sc-floater {
+  position: absolute;
+  width: clamp(64px, 13vw, 116px);
+  aspect-ratio: 3 / 4;
+  transform: translate(-50%, -50%);
+  border-radius: 12px;
+  overflow: hidden;
+  opacity: 0;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  /* Fade in (staggered) then float forever on a gentle bob. */
+  animation:
+    sc-floater-in 0.9s ease both var(--fade, 0s),
+    sc-floater-drift var(--dur, 8s) ease-in-out infinite var(--d, 0s);
+}
+.sc-floater img { width: 100%; height: 100%; object-fit: cover; display: block; }
+@keyframes sc-floater-in {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.7); }
+  to   { opacity: 0.5; transform: translate(-50%, -50%) scale(1); }
+}
+@keyframes sc-floater-drift {
+  0%, 100% { translate: 0 0; }
+  50%      { translate: 0 -14px; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sc-floater { animation: sc-floater-in 0.6s ease both; opacity: 0.45; }
+}
+
 /* 1 — Query echo: the committed query, pinned at the top of the flow. */
 .sc-echo {
   display: flex;

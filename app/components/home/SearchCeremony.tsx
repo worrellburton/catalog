@@ -31,6 +31,9 @@ interface SearchCeremonyProps {
   ready: boolean;
   /** Fired once the narration has played out AND ready is true. */
   onDone: () => void;
+  /** Result product images to float in the particle field behind the stage
+   *  (the searched products drifting in space). Populated once results land. */
+  floatingImages?: string[];
 }
 
 const MIN_DURATION_MS = 2400;
@@ -117,7 +120,7 @@ function buildSteps(query: string, kind: 'search' | 'brand'): string[] {
   ];
 }
 
-export default function SearchCeremony({ query, kind = 'search', ready, onDone }: SearchCeremonyProps) {
+export default function SearchCeremony({ query, kind = 'search', ready, onDone, floatingImages = [] }: SearchCeremonyProps) {
   const steps = useRef(buildSteps(query, kind)).current;
   // How many steps are currently visible (they stream in over time).
   const [revealed, setRevealed] = useState(1);
@@ -199,6 +202,40 @@ export default function SearchCeremony({ query, kind = 'search', ready, onDone }
     <div className={`search-ceremony${reduced ? ' is-reduced' : ''}`} role="status" aria-live="polite">
       {/* Ceremony-local particle layer above the opaque scrim. */}
       <ParticleBackground />
+
+      {/* The searched products, drifting in the particle space behind the
+          stage. Each tile floats on its own gentle loop; they fade in once
+          results land. Capped + positioned on a scattered ring so they read
+          as floating in 3D space, not a grid. */}
+      {floatingImages.length > 0 && (
+        <div className="sc-floaters" aria-hidden="true">
+          {floatingImages.slice(0, 8).map((src, i) => {
+            const n = Math.min(floatingImages.length, 8);
+            const angle = (i / n) * Math.PI * 2 + (i % 2 ? 0.5 : 0);
+            // Scatter on an ellipse, biased to the edges so the center stays
+            // clear for the narration card.
+            const rx = 30 + (i % 3) * 7;          // % from center, horizontal
+            const ry = 26 + ((i + 1) % 3) * 8;    // % from center, vertical
+            const left = 50 + Math.cos(angle) * rx;
+            const top = 50 + Math.sin(angle) * ry;
+            return (
+              <span
+                key={`${src}-${i}`}
+                className="sc-floater"
+                style={{
+                  left: `${left}%`,
+                  top: `${top}%`,
+                  ['--d' as string]: `${(i % 5) * 0.6}s`,
+                  ['--dur' as string]: `${7 + (i % 4)}s`,
+                  ['--fade' as string]: `${0.12 * i}s`,
+                } as React.CSSProperties}
+              >
+                <img src={src} alt="" loading="lazy" decoding="async" />
+              </span>
+            );
+          })}
+        </div>
+      )}
       <div className="sc-stage">
         {/* 1 — Query echo: the committed query, pinned at the top. */}
         {query && (
