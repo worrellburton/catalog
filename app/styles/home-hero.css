@@ -758,7 +758,10 @@
     transform: none !important;
     display: block !important;
     padding: 0;
-    transition: opacity 0.35s ease, transform 0.35s ease, top 0.3s ease;
+    /* Longer, gentle ease so the creator row fades in elegantly (rather than
+       a quick pop) when you scroll back to the top. Opacity-only — it fades
+       in place, never slides up. */
+    transition: opacity 0.9s cubic-bezier(0.22, 1, 0.36, 1), top 0.3s ease;
   }
   /* While a look is rendering, the "Adding…" pill sits just below the header
      (header > .pending-look-pill, top:100% + 8px). Drop the creator stories
@@ -1108,13 +1111,11 @@
        avatar) isn't clipped by overflow-y:hidden. */
     padding: 9px 16px 3px;
     box-sizing: border-box;
-    /* Quick fade-in. The wipe / arc / per-story bloom variants all came
-       and went; the user landed on "just fade in quickly". 450ms
-       opacity-only transition, no transform. At-rest CSS = end state +
-       `forwards` fill, so a missed animation can't leave the rail
+    /* Slow, elegant opacity-only fade-in (no transform/slide). At-rest CSS =
+       end state + `forwards` fill, so a missed animation can't leave the rail
        invisible. */
     opacity: 1;
-    animation: follow-stories-fade-in 450ms ease-out forwards;
+    animation: follow-stories-fade-in 900ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
   }
   .follow-stories-rail::-webkit-scrollbar { display: none; }
 }
