@@ -10,9 +10,11 @@
 }
 
 /* ── Cascade fade-in ─────────────────────────────────────────────────── */
+/* Opacity-only — no transform, so a node mid-reveal can never visually
+   overlap the node above it (that was the header/group overlap bug). */
 @keyframes gtm-fade {
-  from { opacity: 0; transform: translateY(14px); }
-  to   { opacity: 1; transform: translateY(0); }
+  from { opacity: 0; }
+  to   { opacity: 1; }
 }
 .gtm-fade {
   opacity: 0;                         /* hidden until its delay elapses */
@@ -164,8 +166,24 @@
   color: var(--gtm-muted);
 }
 
-/* ── Tier 2: groups ──────────────────────────────────────────────────── */
-.gtm-groups { display: flex; flex-direction: column; gap: 10px; }
+/* ── Tier 2: groups — connected to the pillar by a left spine + ticks so
+   it reads as a branching diagram (parent points to each child). ───────── */
+.gtm-groups { display: flex; flex-direction: column; gap: 10px; position: relative; padding-left: 16px; }
+.gtm-groups::before {
+  content: '';
+  position: absolute;
+  left: 4px; top: 10px; bottom: 10px;
+  width: 2px;
+  background: color-mix(in srgb, var(--accent, #6366f1) 28%, #e8eaf0);
+  border-radius: 1px;
+}
+.gtm-group::before {
+  content: '';
+  position: absolute;
+  left: -12px; top: 17px;
+  width: 12px; height: 2px;
+  background: color-mix(in srgb, var(--accent, #6366f1) 28%, #e8eaf0);
+}
 .gtm-group {
   position: relative;
   border: 1px solid #eef0f4;
@@ -270,4 +288,46 @@
   .gtm-fade { animation: none; opacity: 1; transform: none; }
   .gtm-group:hover, .gtm-leaf:hover { transform: none; }
   .gtm-tip { transition: opacity 0.16s ease; }
+}
+
+/* Each pillar connects up toward the Marketing stem. */
+.gtm-pillar { position: relative; }
+.gtm-pillar::before {
+  content: '';
+  position: absolute;
+  top: -12px; left: 50%;
+  width: 2px; height: 12px;
+  background: #e3e6ec;
+  transform: translateX(-50%);
+}
+
+/* ── Flywheel — scroll-revealed plan to put the map in motion ─────────── */
+.gtm-flywheel { position: relative; max-width: 720px; margin: 60px auto 0; padding-left: 42px; }
+.gtm-fly-rail {
+  position: absolute; left: 15px; top: 14px; bottom: 14px; width: 2px;
+  background: linear-gradient(#6366f1, #10b981, #f59e0b);
+  border-radius: 2px; opacity: 0.35;
+}
+.gtm-fly-slide {
+  position: relative; margin-bottom: 22px;
+  opacity: 0; transform: translateY(18px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+.gtm-fly-slide.is-in { opacity: 1; transform: translateY(0); }
+.gtm-fly-node {
+  position: absolute; left: -34px; top: 0;
+  width: 30px; height: 30px; border-radius: 50%;
+  background: #111; color: #fff; font-weight: 800; font-size: 13px;
+  display: flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 0 4px #fafafa;
+}
+.gtm-fly-card {
+  background: #fff; border: 1px solid #eef0f4; border-radius: 14px;
+  padding: 16px 18px; box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
+}
+.gtm-fly-tag { font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #6366f1; }
+.gtm-fly-title { margin: 4px 0 6px; font-size: 20px; font-weight: 700; letter-spacing: -0.02em; color: #0f172a; }
+.gtm-fly-body { margin: 0; font-size: 13.5px; line-height: 1.55; color: #475569; }
+@media (prefers-reduced-motion: reduce) {
+  .gtm-fly-slide { opacity: 1; transform: none; transition: none; }
 }

@@ -1,12 +1,12 @@
+import { useEffect, useRef } from 'react';
 import '~/styles/gtm.css';
 
-// GTM — the complete marketing function as ONE animated, top-down tree:
-//   Marketing → pillars (Digital / BizDev / Strategy & Branding) → groups → leaves.
-// Two structural layers on top of the tree:
-//   • Budget % weights per pillar (sum to 100) — a split bar + per-pillar %.
-//   • Funnel-stage tag per group + a legend, so coverage by stage is visible.
-// Everything fades up in cascade order; hover any node for the "why".
-// Nodes flagged `added` are filled-in pieces, marked "suggested".
+// GTM — the marketing function as a connected, top-down DIAGRAM:
+//   Marketing → pillars → groups → leaves, joined by connector spines so each
+//   node visibly points to its children. Budget % split + a funnel-stage tag
+//   sit on top. Below the diagram, a scroll-revealed "flywheel" lays out the
+//   plan to put it in motion. Reveal is opacity-only (no transform) so nodes
+//   can never overlap mid-animation.
 
 type StageId = 'awareness' | 'acquisition' | 'activation' | 'retention' | 'referral';
 interface Stage { id: StageId; label: string; color: string }
@@ -25,91 +25,73 @@ interface Pillar { name: string; accent: string; weight: number; note: string; g
 
 const PILLARS: Pillar[] = [
   {
-    name: 'Digital Marketing',
-    accent: '#6366f1',
-    weight: 60,
-    note: 'The performance + organic engine — drives installs, sessions, and the ~$5 CPA.',
+    name: 'Digital Marketing', accent: '#6366f1', weight: 60,
+    note: 'The performance + organic engine — installs, sessions, and the ~$5 CPA.',
     groups: [
-      {
-        name: 'SEO', stage: 'awareness',
-        note: 'Web reach so discovery happens off-app too — every look & product page indexed.',
-        leaves: [
-          { name: 'Content', note: 'Editorial + programmatic pages that rank and feed the funnel.', added: true },
-          { name: 'Technical SEO', note: 'Crawlable SPA, sitemaps, fast Core Web Vitals.', added: true },
-        ],
-      },
-      {
-        name: 'Campaigns', stage: 'retention',
-        note: 'Owned lifecycle messaging — the cheapest retention lever we have.',
-        leaves: [
-          { name: 'Email', note: 'Daily-feed drops, lifecycle flows, win-back.' },
-          { name: 'Text', note: 'SMS for high-intent drops & re-engagement.' },
-          { name: 'Push', note: 'App notifications the moment a new daily feed drops.', added: true },
-        ],
-      },
-      {
-        name: 'Social', stage: 'awareness',
-        note: 'Organic shoppable video, native to each platform.',
-        leaves: [
-          { name: 'Instagram', note: 'Reels — shoppable looks in-feed.' },
-          { name: 'TikTok', note: 'Creator-led organic reach.' },
-          { name: 'LinkedIn', note: 'Founder narrative + brand/creator recruiting.' },
-          { name: 'Pinterest', note: 'Pure shopping/discovery intent — high relevance for us.', added: true },
-          { name: 'YouTube', note: 'Shorts + long-form shoppable video.', added: true },
-        ],
-      },
-      {
-        name: 'Paid Ads', stage: 'acquisition',
-        note: 'Performance acquisition at ~$5 CPA — early-heavy spend, then taper to organic.',
-        leaves: [
-          { name: 'Google', note: 'Search + Shopping + YouTube performance.' },
-          { name: 'TikTok', note: 'Performance video.' },
-          { name: 'Meta', note: 'Instagram / Facebook performance + retargeting.' },
-          { name: 'Apple Search Ads', note: 'High-intent app installs.', added: true },
-        ],
-      },
-      { name: 'ASO', stage: 'acquisition', note: 'App Store Optimization — rank + convert installs on iOS & Android.', added: true },
-      { name: 'Affiliate & referral', stage: 'referral', note: 'The ~20%/mo word-of-mouth + referral loop that compounds CAC down.', added: true },
-      { name: 'Web / CRO', stage: 'activation', note: 'Landing pages, onboarding & conversion-rate optimization — turn traffic into installs.', added: true },
-      { name: 'Influencer marketing', stage: 'awareness', note: 'Paid influencer campaigns — distinct from organic Social and from creator recruiting in BizDev.', added: true },
+      { name: 'SEO', stage: 'awareness', note: 'Discovery off-app too — every look & product page indexed.', leaves: [
+        { name: 'Content', note: 'Editorial + programmatic pages that rank.', added: true },
+        { name: 'Technical SEO', note: 'Crawlable SPA, sitemaps, Core Web Vitals.', added: true },
+      ]},
+      { name: 'Campaigns', stage: 'retention', note: 'Owned lifecycle — the cheapest retention lever.', leaves: [
+        { name: 'Email', note: 'Daily-feed drops, lifecycle, win-back.' },
+        { name: 'Text', note: 'SMS for high-intent drops & re-engagement.' },
+        { name: 'Push', note: 'Notify when a new daily feed drops.', added: true },
+      ]},
+      { name: 'Social', stage: 'awareness', note: 'Organic shoppable video, native to each platform.', leaves: [
+        { name: 'Instagram', note: 'Reels — shoppable looks.' },
+        { name: 'TikTok', note: 'Creator-led organic reach.' },
+        { name: 'LinkedIn', note: 'Founder + brand/creator recruiting.' },
+        { name: 'Pinterest', note: 'Shopping/discovery intent.', added: true },
+        { name: 'YouTube', note: 'Shorts + long-form shoppable.', added: true },
+      ]},
+      { name: 'Paid Ads', stage: 'acquisition', note: 'Performance at ~$5 CPA — early-heavy, then taper.', leaves: [
+        { name: 'Google', note: 'Search + Shopping + YouTube.' },
+        { name: 'TikTok', note: 'Performance video.' },
+        { name: 'Meta', note: 'IG/FB performance + retargeting.' },
+        { name: 'Apple Search Ads', note: 'High-intent installs.', added: true },
+      ]},
+      { name: 'ASO', stage: 'acquisition', note: 'Rank + convert installs on iOS & Android.', added: true },
+      { name: 'Affiliate & referral', stage: 'referral', note: 'The ~20%/mo word-of-mouth loop.', added: true },
+      { name: 'Web / CRO', stage: 'activation', note: 'Landing, onboarding & conversion-rate optimization.', added: true },
+      { name: 'Influencer marketing', stage: 'awareness', note: 'Paid campaigns — distinct from organic Social.', added: true },
     ],
   },
   {
-    name: 'Business Development',
-    accent: '#10b981',
-    weight: 25,
-    note: 'Supply + distribution — the brands, creators & platforms that make the feed worth opening.',
+    name: 'Business Development', accent: '#10b981', weight: 25,
+    note: 'Supply + distribution — brands, creators & platforms that fill the feed.',
     groups: [
-      { name: 'Creator', stage: 'awareness', note: 'Recruit & onboard creators to publish shoppable looks at scale.' },
-      { name: 'Brand', stage: 'acquisition', note: 'Merchant / affiliate partnerships — supply + higher commission rates.' },
-      { name: 'Affiliate networks', stage: 'acquisition', note: 'Shopify, Impact, etc. — breadth of shoppable inventory fast.', added: true },
-      { name: 'Platform & distribution', stage: 'awareness', note: 'App-store features, integrations, embeds, co-marketing.', added: true },
-      { name: 'PR & media', stage: 'awareness', note: 'Launch + milestone press; the founder & company narrative.', added: true },
+      { name: 'Creator', stage: 'awareness', note: 'Recruit & onboard creators to publish looks at scale.' },
+      { name: 'Brand', stage: 'acquisition', note: 'Merchant / affiliate partnerships — supply + commission.' },
+      { name: 'Affiliate networks', stage: 'acquisition', note: 'Shopify, Impact, etc. — breadth fast.', added: true },
+      { name: 'Platform & distribution', stage: 'awareness', note: 'App-store features, integrations, embeds.', added: true },
+      { name: 'PR & media', stage: 'awareness', note: 'Launch + milestone press; the narrative.', added: true },
     ],
   },
   {
-    name: 'Strategy & Branding',
-    accent: '#f59e0b',
-    weight: 15,
-    note: 'Why this is THE shopping app — positioning, brand, and the measurement that ties it together.',
+    name: 'Strategy & Branding', accent: '#f59e0b', weight: 15,
+    note: 'Why this is THE shopping app — positioning, brand & measurement.',
     groups: [
-      { name: 'Positioning', stage: 'awareness', note: 'One shopping app, web+app, one user base — Amazon/Pinterest/TikTok, not fashion.' },
-      { name: 'Brand identity', stage: 'awareness', note: 'Look, voice, and the Catalog wordmark system.' },
-      { name: 'Messaging', stage: 'awareness', note: 'The single narrative carried across every channel.' },
-      { name: 'Market & ICP research', stage: 'awareness', note: 'Who we serve, what they shop, where they already are.', added: true },
-      { name: 'Community', stage: 'retention', note: 'Creators + power shoppers as an owned, compounding audience.', added: true },
-      {
-        name: 'Measurement', stage: 'activation', note: 'Tie every channel back to the model so spend is accountable.', added: true,
-        leaves: [
-          { name: 'Attribution / MMP', note: 'AppsFlyer / Adjust + pixels — without it, no channel CPA is trustworthy.', added: true },
-          { name: 'KPIs per channel', note: 'CPA · LTV:CPA · payback targets, tracked per channel.', added: true },
-        ],
-      },
-      { name: 'Pricing & monetization', stage: 'acquisition', note: 'Commission tiers and what we charge brands — the other half of unit economics.', added: true },
-      { name: 'Competitive intelligence', stage: 'awareness', note: 'Track Amazon / Pinterest / TikTok Shop + emerging shopping apps.', added: true },
-      { name: 'Creative production', stage: 'awareness', note: 'The engine that makes the shoppable-video assets every channel needs.', added: true },
+      { name: 'Positioning', stage: 'awareness', note: 'One shopping app, web+app, one user base — not fashion.' },
+      { name: 'Brand identity', stage: 'awareness', note: 'Look, voice, the Catalog wordmark system.' },
+      { name: 'Messaging', stage: 'awareness', note: 'One narrative across every channel.' },
+      { name: 'Market & ICP research', stage: 'awareness', note: 'Who we serve and what they shop.', added: true },
+      { name: 'Community', stage: 'retention', note: 'Creators + power shoppers as an owned audience.', added: true },
+      { name: 'Measurement', stage: 'activation', note: 'Tie every channel back to the model.', added: true, leaves: [
+        { name: 'Attribution / MMP', note: 'AppsFlyer / Adjust + pixels.', added: true },
+        { name: 'KPIs per channel', note: 'CPA · LTV:CPA · payback.', added: true },
+      ]},
+      { name: 'Pricing & monetization', stage: 'acquisition', note: 'Commission tiers — the other half of unit economics.', added: true },
+      { name: 'Competitive intelligence', stage: 'awareness', note: 'Track Amazon / Pinterest / TikTok Shop.', added: true },
+      { name: 'Creative production', stage: 'awareness', note: 'The engine that makes the shoppable-video assets.', added: true },
     ],
   },
+];
+
+const FLYWHEEL: { tag: string; title: string; body: string }[] = [
+  { tag: 'The goal', title: 'Start the flywheel.', body: 'Stand up a marketing engine that compounds — so growth stops depending on any one person.' },
+  { tag: 'Step 1 · Hire', title: 'Bring on the team.', body: 'Three BD / marketing consultants, month-to-month for three months. Some may convert to full-time — the point is to start delegating the system now; it can’t run on one person.' },
+  { tag: 'Step 2 · Be diligent', title: 'Log every contact.', body: 'Every outreach goes in the CRM. People are measured on contact attempts per week — an intentional, serious, sustained push.' },
+  { tag: 'Step 3 · Learn & repeat', title: 'Double down on what works.', body: 'Lean into what’s working, step away from what isn’t, and repeat. The loop tightens every cycle.' },
 ];
 
 function Leaves({ leaves }: { leaves: Leaf[] }) {
@@ -126,25 +108,37 @@ function Leaves({ leaves }: { leaves: Leaf[] }) {
 }
 
 export default function AdminGtm() {
-  // Running index → cascading fade-in order (hero first, then down the tree).
   let order = 0;
-  const delay = () => ({ animationDelay: `${order++ * 55}ms` } as React.CSSProperties);
+  const delay = () => ({ animationDelay: `${order++ * 45}ms` } as React.CSSProperties);
+
+  // Scroll-reveal the flywheel slides one at a time.
+  const flywheelRef = useRef<HTMLDivElement | null>(null);
+  useEffect(() => {
+    const root = flywheelRef.current;
+    if (!root) return;
+    const slides = Array.from(root.querySelectorAll('.gtm-fly-slide'));
+    const io = new IntersectionObserver((entries) => {
+      entries.forEach(e => { if (e.isIntersecting) e.target.classList.add('is-in'); });
+    }, { threshold: 0.35 });
+    slides.forEach(s => io.observe(s));
+    return () => io.disconnect();
+  }, []);
 
   return (
     <div className="admin-page gtm-page">
       <div className="admin-page-header">
         <h1>GTM</h1>
-        <p className="admin-page-subtitle">The complete marketing function, top-down. Budget split + funnel coverage on top of the tree. Hover anything for the why.</p>
+        <p className="admin-page-subtitle">The marketing function as a connected diagram — and the plan to put it in motion. Hover any node for the why.</p>
       </div>
 
       <div className="gtm-tree">
+        {/* Tier 0 */}
         <section className="gtm-root gtm-fade" style={delay()}>
           <span className="gtm-root-kicker">Go-to-market · 100%</span>
           <h2 className="gtm-root-title">Marketing</h2>
           <p className="gtm-root-note">Everything that brings shoppers in and keeps them coming back — split into three pillars.</p>
         </section>
 
-        {/* Budget split (sums to 100%) + funnel-stage legend. */}
         <div className="gtm-meta gtm-fade" style={delay()}>
           <div className="gtm-split" role="img" aria-label="Marketing budget split across the three pillars">
             {PILLARS.map(p => (
@@ -157,22 +151,17 @@ export default function AdminGtm() {
           <div className="gtm-legend">
             <span className="gtm-legend-label">Funnel coverage</span>
             {STAGES.map(s => (
-              <span key={s.id} className="gtm-legend-item">
-                <span className="gtm-dot" style={{ background: s.color }} />{s.label}
-              </span>
+              <span key={s.id} className="gtm-legend-item"><span className="gtm-dot" style={{ background: s.color }} />{s.label}</span>
             ))}
           </div>
         </div>
 
         <div className="gtm-stem gtm-fade" style={delay()} aria-hidden="true" />
 
+        {/* Tier 1 → 3: pillars, each a connected branch (spine + ticks). */}
         <div className="gtm-pillars">
           {PILLARS.map(p => (
-            <section
-              key={p.name}
-              className="gtm-pillar gtm-fade"
-              style={{ ...delay(), ['--accent' as string]: p.accent }}
-            >
+            <section key={p.name} className="gtm-pillar gtm-fade" style={{ ...delay(), ['--accent' as string]: p.accent }}>
               <header className="gtm-pillar-head">
                 <div className="gtm-pillar-titlerow">
                   <h3 className="gtm-pillar-name">{p.name}</h3>
@@ -198,6 +187,21 @@ export default function AdminGtm() {
             </section>
           ))}
         </div>
+      </div>
+
+      {/* Flywheel — scroll-revealed plan to put the map in motion. */}
+      <div className="gtm-flywheel" ref={flywheelRef}>
+        <div className="gtm-fly-rail" aria-hidden="true" />
+        {FLYWHEEL.map((s, i) => (
+          <div key={s.tag} className="gtm-fly-slide">
+            <span className="gtm-fly-node" aria-hidden="true">{i + 1}</span>
+            <div className="gtm-fly-card">
+              <span className="gtm-fly-tag">{s.tag}</span>
+              <h3 className="gtm-fly-title">{s.title}</h3>
+              <p className="gtm-fly-body">{s.body}</p>
+            </div>
+          </div>
+        ))}
       </div>
     </div>
   );
