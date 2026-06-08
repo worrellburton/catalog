@@ -781,12 +781,13 @@
     margin-left: 0 !important;
   }
   /* Once scrolled into the feed (or off the hero entirely), the rail goes
-     away on mobile — "when you scroll, let's not have that anymore". */
+     away on mobile — "when you scroll, let's not have that anymore". Hide
+     with opacity ONLY (no translate) so scrolling back up fades the row in
+     where it sits instead of sliding it up into place. */
   .app-root.home-hero.hero-scrolled .follow-rail-wrap--center,
   .app-root:not(.home-hero) .follow-rail-wrap--center {
     opacity: 0 !important;
     pointer-events: none !important;
-    transform: translateY(-12px) !important;
   }
 
   /* Center the spark + headline in the band BETWEEN the stories rail (top
