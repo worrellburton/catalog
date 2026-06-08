@@ -370,6 +370,10 @@ export default function CreatorPage({
         .eq('enabled', true)
         .is('archived_at', null)
         .eq('looks_creative.is_primary', true)
+        // Honor the creator's curated order (sort_order, set when they
+        // drag-reorder in My Catalog) so every visitor sees the catalog in
+        // the exact order the creator arranged; created_at breaks ties.
+        .order('sort_order', { ascending: true })
         .order('created_at', { ascending: false });
       if (cancelled) return;
 
@@ -520,8 +524,14 @@ export default function CreatorPage({
   }, [userId, creatorName]);
   const rawCreatorLooksUnordered = (userId || isHandleBranch) ? userLooks : seedCreatorLooks;
   const rawCreatorLooks = useMemo(
-    () => reorderBySeen(rawCreatorLooksUnordered, seenLookIds),
-    [rawCreatorLooksUnordered, seenLookIds],
+    // Real creators (handle / user branch) keep their curated sort_order
+    // exactly as arranged — no unseen-first reshuffle — so every visitor
+    // sees the catalog in the creator's chosen order. Only the static seed
+    // creators get the seen-aware reorder.
+    () => (userId || isHandleBranch)
+      ? rawCreatorLooksUnordered
+      : reorderBySeen(rawCreatorLooksUnordered, seenLookIds),
+    [rawCreatorLooksUnordered, seenLookIds, userId, isHandleBranch],
   );
 
   // No gender filter on this page. The home feed filters by shopper
