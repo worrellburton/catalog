@@ -403,19 +403,6 @@ export default function SavedScreen({
         )}
         <h1 className="saved-title">Saved</h1>
       </div>
-      <button
-        className={`saved-save-btn${layout.dirty ? ' is-dirty' : ''}`}
-        onClick={layout.save}
-        disabled={!layout.dirty}
-        aria-label="Save your layout"
-      >
-        {layout.dirty ? 'Save layout' : (
-          <>
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-            Saved
-          </>
-        )}
-      </button>
     </div>
   );
 

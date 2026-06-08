@@ -6,9 +6,12 @@
 
 .activity-toasts {
   position: fixed;
-  /* Anchored to the top-right, just under the header, so the toast reads as a
-     speech bubble coming FROM the activity button (the notch points up at it). */
-  top: 58px;
+  /* Anchored to the top-right, BELOW the header button row (wallet pill,
+     activity/bookmark badges, avatar) so the toast tucks under the buttons
+     instead of colliding with them. Can't just lower z-index — the header
+     carries its gradient background at z-index 100, which would occlude the
+     toast — so we clear the buttons by position instead. */
+  top: 76px;
   right: 8px;
   left: auto;
   margin-inline: 0;
@@ -160,7 +163,9 @@
   animation: activity-toast-count-pop 380ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
 }
 .activity-toast-summary-label {
-  font-size: 11px;
+  /* Matched to the earnings/wallet pill (12px) so the whole toast reads at
+     the same scale as the header currency chip. */
+  font-size: 12px;
   font-weight: 600;
   color: rgba(248, 250, 252, 0.72);
   text-transform: lowercase;
