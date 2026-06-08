@@ -31,6 +31,7 @@ import { prefetchSimilarProducts, prefetchCreativesByBrand, prefetchHomeFeed, ty
 import { getGraphPairs, type GraphPair } from '~/services/graph-pairs';
 import { getLooks, getLookByUuid } from '~/services/looks';
 import { creativeStill, creativePoster, productPoster } from '~/services/media-resolver';
+import { pickVideoUrl, pickPlaybackSource } from '~/services/video-loading';
 import { emitSavedToast } from '~/utils/savedToast';
 import { prefetchDials } from '~/services/dials';
 import { prefetchHiddenContent } from '~/hooks/useHiddenLooks';
@@ -1880,10 +1881,20 @@ export default function Home() {
                 onCreateCatalog={handleCreateCatalog}
                 onOpenComments={openComments}
                 creative={
-                  selectedCreative?.video_url
+                  selectedCreative && pickPlaybackSource(selectedCreative)
                     ? {
                         id: selectedCreative.id,
-                        videoUrl: selectedCreative.video_url,
+                        // Must resolve to the SAME source CreativeCardV2
+                        // donated on tap (pickPlaybackSource → pickVideoUrl:
+                        // product.primary_video_url, then the mobile variant on
+                        // a mobile viewport, then full video_url). Passing the
+                        // raw video_url here made the detail hero request a
+                        // different src than the donated element carried, so
+                        // TrailVideoHost.attach() reset the src and RELOADED a
+                        // perfectly-good playing element — the multi-second
+                        // black hero on mobile. hlsUrl below still wins when an
+                        // HLS ladder exists (matches pickPlaybackSource order).
+                        videoUrl: pickVideoUrl(selectedCreative) || selectedCreative.video_url || '',
                         // Prefer the product's HLS ladder, then the creative's,
                         // so the hero plays one adaptive source and ramps to a
                         // crisp rung full-screen. Null → falls back to MP4.
