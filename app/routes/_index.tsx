@@ -1710,7 +1710,7 @@ export default function Home() {
           {/* New home entry: the ask hero sits above the feed; scrolling
               down reveals the catalog. Hidden once a search resolves into
               results (heroMode flips off). */}
-          {heroMode && !ceremony.active && (
+          {heroMode && (
             <ShoppingForHero onRevealFeed={handleRevealFeed} />
           )}
 
@@ -1750,7 +1750,7 @@ export default function Home() {
 
           {/* Magical loading screen between a hero search and its results. */}
           {ceremony.active && (
-            <SearchCeremony query={ceremony.query} kind={ceremony.kind} ready={!searchLoading} onDone={handleCeremonyDone} />
+            <SearchCeremony query={ceremony.query} kind={ceremony.kind} ready={!searchLoading} onDone={handleCeremonyDone} placement="corner" />
           )}
 
           <button className="remix-btn-fixed" onClick={handleRemix} onContextMenu={handleRemixReset} title="Click to remix · Right-click to reset layout" aria-label="Remix">
