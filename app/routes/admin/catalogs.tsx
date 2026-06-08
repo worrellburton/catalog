@@ -2013,17 +2013,9 @@ export default function AdminCatalogs() {
             </svg>
             Export CSV
           </button>
-          <button
-            className="admin-btn admin-btn-secondary"
-            onClick={() => setShowAutoEditor(true)}
-            title="Configure the Automatic Editor — the daily personalized feed"
-          >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
-              <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
-              <circle cx="12" cy="12" r="4" />
-            </svg>
-            Automatic Editor
-          </button>
+          {/* Automatic Editor button moved onto the landing-screen (daily feed)
+              row — it only governs that personalized feed, so it shouldn't sit
+              in the global catalogs toolbar. */}
           <button className="admin-btn admin-btn-primary" onClick={() => setShowAdd(true)}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
               <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
@@ -2154,10 +2146,25 @@ export default function AdminCatalogs() {
                             >
                               ★ LANDING SCREEN
                             </span>
-                            <Link to="/admin/catalogs/home" style={{ color: '#111', textDecoration: 'none' }}>{homeCatalog.name}</Link>
+                            <Link to="/admin/catalogs/home" style={{ color: '#111', textDecoration: 'none' }}>Your daily feed</Link>
+                            {/* Automatic Editor lives HERE, on the landing-screen
+                                catalog only — it curates THIS daily personalized
+                                feed, not the static curated catalogs below. */}
+                            <button
+                              className="admin-btn admin-btn-secondary"
+                              onClick={() => setShowAutoEditor(true)}
+                              title="Configure the Automatic Editor — this daily personalized feed"
+                              style={{ marginLeft: 6, padding: '2px 8px', fontSize: 11, display: 'inline-flex', alignItems: 'center' }}
+                            >
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 4 }}>
+                                <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
+                                <circle cx="12" cy="12" r="4" />
+                              </svg>
+                              Automatic Editor
+                            </button>
                           </div>
                           <span style={{ fontSize: 10, color: '#92400e', fontWeight: 400 }}>
-                            This is what users see first.
+                            This is what users see first — a personalized daily feed, unique per shopper.
                           </span>
                         </div>
                       </div>
