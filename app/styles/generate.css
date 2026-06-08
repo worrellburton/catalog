@@ -3131,6 +3131,11 @@ html[data-shell="catalog-app"] .gen-page {
   gap: 8px;
 }
 
+/* Solo dock (photos step) — a single full-width Continue inside the same
+   glass toolbar as the other steps. */
+.gen-dock--solo .gen-dock-actions { flex: 1 1 auto; width: 100%; }
+.gen-dock--solo .gen-btn-primary { flex: 1 1 auto; padding: 13px 18px; font-size: 15px; }
+
 /* ===== Photos step compact layout =====
    Reference photos + height + age are bundled in a single .gen-photos-form
    container at the top of the screen. The form caps at ~1/3 of the
@@ -3300,48 +3305,6 @@ html[data-shell="catalog-app"] .gen-page {
   color: #fff;
 }
 
-/* Create look CTA - pinned to the bottom of the viewport on the
-   photos step. Mirrors the gen-dock anchor pattern so the user
-   always has a one-tap path to the next step regardless of how
-   far they've scrolled into "Your looks". */
-/* "Make a new look" CTA - sits inline above the Your Looks grid so
-   it reads as "and here's how you start a new one" rather than
-   floating over the page chrome. Was a fixed-bottom dock previously
-   but that obscured the grid the user was trying to scroll. */
-.gen-photos-cta-bar {
-  position: relative;
-  margin: 16px auto 12px;
-  width: min(720px, calc(100vw - 24px));
-  display: flex;
-  justify-content: stretch;
-}
-
-.gen-photos-cta-bar .gen-create-btn {
-  pointer-events: auto;
-  flex: 1 1 auto;
-  margin: 0;
-  padding: 14px 28px;
-  font-size: 15px;
-  font-weight: 600;
-  border-radius: 999px;
-  /* Liquid-glass match to the gen-dock so the bottom of every step
-     reads as the same control surface. */
-  background: #fff;
-  color: #0a0a0a;
-  border: 0;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
-  transition: opacity 0.18s ease, transform 0.18s ease;
-}
-
-.gen-photos-cta-bar .gen-create-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.gen-photos-cta-bar .gen-create-btn:not(:disabled):active {
-  transform: scale(0.985);
-}
-
 @media (max-width: 768px) {
   /* The floaty glass card owns the screen now (the old "Your looks" grid
      that needed the bottom 2/3 was removed) — let it size to its content
@@ -3351,64 +3314,6 @@ html[data-shell="catalog-app"] .gen-page {
     gap: 20px;
   }
   .gen-step-photos .gen-slots { gap: 12px; }
-}
-
-/* Become a creator CTA - sits above the "Your looks" grid on the
-   photos step. Pill-shaped row that reads as a navigation entry
-   point, not a primary action. Subtle treatment so it doesn't
-   compete with the Create look button above. */
-.gen-creator-cta {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  margin: 18px 0 14px;
-  padding: 14px 18px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.03);
-  color: rgba(255, 255, 255, 0.92);
-  font-family: inherit;
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: -0.005em;
-  cursor: pointer;
-  text-align: left;
-  transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease;
-}
-
-.gen-creator-cta:hover {
-  border-color: rgba(255, 255, 255, 0.18);
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.gen-creator-cta:active {
-  transform: scale(0.99);
-}
-
-.gen-creator-cta-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.85);
-  flex-shrink: 0;
-}
-
-.gen-creator-cta-label {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.gen-creator-cta-chevron {
-  font-size: 22px;
-  line-height: 1;
-  color: rgba(255, 255, 255, 0.4);
-  flex-shrink: 0;
-  margin-right: -2px;
 }
 
 /* Limit warning toast - surfaces when the user taps a 6th product

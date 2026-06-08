@@ -64,3 +64,33 @@ export const AGE_OPTIONS: readonly string[] = [
 ];
 
 export type GenderOption = 'male' | 'female' | 'unknown';
+
+/**
+ * Advanced ("expert") body-proportion + aesthetic inputs. Optional — they
+ * sit behind the Advanced-mode toggle in the stats editor and refine the
+ * generated model's silhouette and styling. Stored as the label verbatim so
+ * the Seedance prompt can read them directly. An empty string means "unset".
+ */
+export const PROPORTION_OPTIONS: readonly string[] = [
+  '',
+  'Short',
+  'Average',
+  'Long',
+];
+
+/** Common aesthetic tags the shopper can attach to their profile. Persisted
+ *  as a comma-joined string; woven into the prompt as a style direction. */
+export const FASHION_STYLE_OPTIONS: readonly string[] = [
+  'Streetwear',
+  'Minimal',
+  'Classic',
+  'Athleisure',
+  'Vintage',
+  'Bohemian',
+  'Preppy',
+  'Edgy',
+  'Formal',
+  'Casual',
+  'Y2K',
+  'Old money',
+];

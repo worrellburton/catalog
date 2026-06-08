@@ -740,6 +740,12 @@ export default function GeneratePage() {
   const [weightKg, setWeightKg] = useState<number | null>(null);
   const [weightLabel, setWeightLabel] = useState<string | null>(null);
   const [ageLabel, setAgeLabel] = useState<string>('mid 20s');
+  // Advanced-mode body proportions + aesthetic (edited via the stats modal's
+  // Advanced section). Held here so they prefill the modal and feed the
+  // generation prompt; the modal itself persists them to the profile.
+  const [armLengthLabel, setArmLengthLabel] = useState<string | null>(null);
+  const [legLengthLabel, setLegLengthLabel] = useState<string | null>(null);
+  const [fashionStyles, setFashionStyles] = useState<string | null>(null);
   // Stats editor visibility (shared StatsEditorModal). The chips
   // render next to the "You" title so the user can adjust height /
   // age / gender without leaving the wizard.
@@ -783,6 +789,9 @@ export default function GeneratePage() {
       if (saved.weightKg != null) setWeightKg(saved.weightKg);
       if (saved.weightLabel) setWeightLabel(saved.weightLabel);
       if (saved.ageLabel)    setAgeLabel(saved.ageLabel);
+      setArmLengthLabel(saved.armLengthLabel);
+      setLegLengthLabel(saved.legLengthLabel);
+      setFashionStyles(saved.fashionStyles);
       heightAgeHydrated.current = true;
     });
     getUserCustomStyle(effectiveUserId).then(s => { if (!cancelled && s) setCustomStyle(s); });
@@ -1574,6 +1583,9 @@ export default function GeneratePage() {
       style,
       occasion: occasionHint || undefined,
       customStyle: customStyle || undefined,
+      armLengthLabel: armLengthLabel || undefined,
+      legLengthLabel: legLengthLabel || undefined,
+      fashionStyles: fashionStyles || undefined,
       durationSeconds: clipSeconds,
       productLines: picked.map(p => ({
         role_tag: p.role_tag,
@@ -1819,6 +1831,9 @@ export default function GeneratePage() {
                     profiles row. */}
                 <div className="style-context-meta gen-photos-stats">
                   {heightLabel && <span className="style-context-chip">{heightLabel}</span>}
+                  {weightLabel && (
+                    <span className="style-context-chip">{weightLabel.replace(/\s*\(.*\)\s*/, '')}</span>
+                  )}
                   {ageLabel && <span className="style-context-chip">{ageLabel}</span>}
                   {userGender !== 'unknown' && (
                     <span className="style-context-chip">{userGender}</span>
@@ -1958,36 +1973,9 @@ export default function GeneratePage() {
 
             </div>
 
-            {/* "Make a new look" is the single primary CTA on the
-                photos step. Two states:
-                  - canAdvance (user uploaded photos + picked style) →
-                    call goNext to actually kick off generation. This
-                    folds in the work the previous "Create look" sticky
-                    button used to do, so there's only one button to
-                    click instead of two competing CTAs.
-                  - otherwise → scroll to the top of the page so the
-                    user lands on the upload slots and can start the
-                    flow. The button is never disabled because there's
-                    always a useful action to take.
-                Sits in the dock-style sticky bar at the bottom of the
-                viewport so it's always reachable, even with many
-                "Your looks" cards below. */}
-            <div className="gen-photos-cta-bar">
-              <button
-                type="button"
-                className="gen-creator-cta gen-creator-cta--primary"
-                onClick={() => {
-                  if (canAdvance) goNext(step, setStep);
-                  else window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-              >
-                <span className="gen-creator-cta-icon" aria-hidden="true">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                </span>
-                <span className="gen-creator-cta-label">Make a new look</span>
-                <span className="gen-creator-cta-chevron" aria-hidden="true">›</span>
-              </button>
-            </div>
+            {/* Continue CTA lives in the fixed bottom dock (rendered below,
+                outside the form) so it matches the toolbar on the Products /
+                Style / Review screens. */}
             {/* "Your looks" grid removed from this page — generated looks now
                 live in My Catalog (as Inactive) instead. */}
           </section>
@@ -2668,10 +2656,30 @@ export default function GeneratePage() {
         </>
       )}
 
+      {/* Photos-step dock — same liquid-glass toolbar as the next screens,
+          but a single full-width Continue. canAdvance gates it forward;
+          otherwise it scrolls the user back up to the upload slots. */}
+      {step === 'photos' && (
+        <aside className="gen-dock gen-dock--solo is-revealed" aria-label="Step controls">
+          <div className="gen-dock-actions">
+            <button
+              type="button"
+              className="gen-btn-primary"
+              onClick={() => {
+                if (canAdvance) goNext(step, setStep);
+                else window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+            >
+              Continue
+            </button>
+          </div>
+        </aside>
+      )}
+
       {editingStats && effectiveUserId && (
         <StatsEditorModal
           userId={effectiveUserId}
-          initial={{ heightCm, heightLabel, weightKg, weightLabel, ageLabel, gender: userGender }}
+          initial={{ heightCm, heightLabel, weightKg, weightLabel, ageLabel, gender: userGender, armLengthLabel, legLengthLabel, fashionStyles }}
           onClose={() => setEditingStats(false)}
           onSaved={(next) => {
             if (next.heightCm != null) setHeightCm(next.heightCm);
@@ -2680,6 +2688,9 @@ export default function GeneratePage() {
             if (next.weightLabel) setWeightLabel(next.weightLabel);
             if (next.ageLabel) setAgeLabel(next.ageLabel);
             setUserGender(next.gender);
+            setArmLengthLabel(next.armLengthLabel ?? null);
+            setLegLengthLabel(next.legLengthLabel ?? null);
+            setFashionStyles(next.fashionStyles ?? null);
             setEditingStats(false);
           }}
         />

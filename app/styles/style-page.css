@@ -659,6 +659,74 @@
 .style-stats-gender-opt input {
   display: none;
 }
+
+/* Advanced-mode disclosure — a quiet full-width toggle that reveals the
+   proportion + aesthetic inputs. Chevron rotates when open. */
+.style-stats-advanced-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 12px 14px;
+  margin-top: 2px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.style-stats-advanced-toggle:hover { background: rgba(255, 255, 255, 0.06); }
+.style-stats-advanced-toggle svg { transition: transform 0.2s ease; }
+.style-stats-advanced-toggle.is-open svg { transform: rotate(180deg); }
+.style-stats-advanced-toggle.is-open {
+  border-color: rgba(240, 192, 96, 0.45);
+  color: #ffd980;
+}
+
+.style-stats-advanced {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  animation: style-stats-advanced-in 0.22s ease;
+}
+@keyframes style-stats-advanced-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.style-stats-row {
+  display: flex;
+  gap: 12px;
+}
+.style-stats-row .style-stats-field { flex: 1 1 0; min-width: 0; }
+
+/* Fashion-style tags — multi-select chips. */
+.style-stats-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.style-stats-tag {
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.style-stats-tag:hover { background: rgba(255, 255, 255, 0.08); }
+.style-stats-tag.is-selected {
+  border-color: rgba(240, 192, 96, 0.7);
+  background: rgba(240, 192, 96, 0.12);
+  color: #ffd980;
+}
+
 .style-stats-actions {
   display: flex;
   justify-content: flex-end;

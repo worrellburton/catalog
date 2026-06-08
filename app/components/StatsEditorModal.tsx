@@ -8,7 +8,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { updateUserHeightAge, updateUserFullName } from '~/services/profiles';
 import { updateUserGender, type UserGender } from '~/services/genders';
-import { HEIGHT_OPTIONS, WEIGHT_OPTIONS, AGE_OPTIONS } from '~/constants/stats';
+import { HEIGHT_OPTIONS, WEIGHT_OPTIONS, AGE_OPTIONS, PROPORTION_OPTIONS, FASHION_STYLE_OPTIONS } from '~/constants/stats';
 
 export interface StatsBits {
   heightCm: number | null;
@@ -21,6 +21,17 @@ export interface StatsBits {
    *  consumer-facing /style + /generate surfaces don't surface the
    *  name field; the admin AI persona editor does. */
   fullName?: string | null;
+  /** Advanced-mode body proportions + aesthetic. Optional so callers that
+   *  don't load them (e.g. /style) still satisfy the type; the modal
+   *  defaults them to unset. `fashionStyles` is a comma-joined tag list. */
+  armLengthLabel?: string | null;
+  legLengthLabel?: string | null;
+  fashionStyles?: string | null;
+}
+
+/** Split / join the comma-stored fashion-styles string into a tag set. */
+function parseStyles(raw: string | null | undefined): string[] {
+  return (raw || '').split(',').map(s => s.trim()).filter(Boolean);
 }
 
 interface Props {
@@ -73,8 +84,20 @@ export default function StatsEditorModal({ userId, initial, onClose, onSaved, ed
   const [ageLabel, setAgeLabel] = useState<string>(initial.ageLabel ?? 'mid 20s');
   const [gender, setGender] = useState<UserGender>(initial.gender);
   const [fullName, setFullName] = useState<string>(initial.fullName ?? '');
+  // Advanced ("expert") inputs — body proportions + aesthetic tags. Hidden
+  // behind the Advanced-mode toggle; auto-expanded when the profile already
+  // has any of them set so the user sees their saved values.
+  const [armLengthLabel, setArmLengthLabel] = useState<string>(initial.armLengthLabel ?? '');
+  const [legLengthLabel, setLegLengthLabel] = useState<string>(initial.legLengthLabel ?? '');
+  const [fashionStyles, setFashionStyles] = useState<string[]>(parseStyles(initial.fashionStyles));
+  const [advanced, setAdvanced] = useState<boolean>(
+    !!(initial.armLengthLabel || initial.legLengthLabel || parseStyles(initial.fashionStyles).length),
+  );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  const toggleStyle = (s: string) =>
+    setFashionStyles(prev => (prev.includes(s) ? prev.filter(x => x !== s) : [...prev, s]));
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
@@ -85,8 +108,12 @@ export default function StatsEditorModal({ userId, initial, onClose, onSaved, ed
   async function handleSave() {
     setSaving(true);
     setError(null);
+    const fashionStylesStr = fashionStyles.join(', ');
     const promises: Promise<{ error?: string | null }>[] = [
-      updateUserHeightAge(userId, { heightCm, heightLabel, weightKg, weightLabel, ageLabel }),
+      updateUserHeightAge(userId, {
+        heightCm, heightLabel, weightKg, weightLabel, ageLabel,
+        armLengthLabel, legLengthLabel, fashionStyles: fashionStylesStr,
+      }),
       updateUserGender(userId, gender),
     ];
     if (editName) {
@@ -103,6 +130,9 @@ export default function StatsEditorModal({ userId, initial, onClose, onSaved, ed
       weightLabel,
       ageLabel,
       gender,
+      armLengthLabel: armLengthLabel || null,
+      legLengthLabel: legLengthLabel || null,
+      fashionStyles: fashionStylesStr || null,
       ...(editName ? { fullName: fullName.trim() } : {}),
     });
   }
@@ -205,6 +235,70 @@ export default function StatsEditorModal({ userId, initial, onClose, onSaved, ed
             ))}
           </div>
         </fieldset>
+
+        {/* Advanced mode — proportions + aesthetic. Collapsed by default so
+            the basics stay front-and-centre; the toggle reveals the extra
+            inputs that further refine the generated model. */}
+        <button
+          type="button"
+          className={`style-stats-advanced-toggle${advanced ? ' is-open' : ''}`}
+          onClick={() => setAdvanced(a => !a)}
+          aria-expanded={advanced}
+        >
+          <span>Advanced mode</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <polyline points="6 9 12 15 18 9" />
+          </svg>
+        </button>
+
+        {advanced && (
+          <div className="style-stats-advanced">
+            <div className="style-stats-row">
+              <label className="style-stats-field">
+                <span className="style-stats-label">Arm length</span>
+                <select
+                  value={armLengthLabel}
+                  onChange={e => setArmLengthLabel(e.target.value)}
+                  disabled={saving}
+                >
+                  {PROPORTION_OPTIONS.map(p => (
+                    <option key={p || 'default'} value={p}>{p || 'Default'}</option>
+                  ))}
+                </select>
+              </label>
+              <label className="style-stats-field">
+                <span className="style-stats-label">Leg length</span>
+                <select
+                  value={legLengthLabel}
+                  onChange={e => setLegLengthLabel(e.target.value)}
+                  disabled={saving}
+                >
+                  {PROPORTION_OPTIONS.map(p => (
+                    <option key={p || 'default'} value={p}>{p || 'Default'}</option>
+                  ))}
+                </select>
+              </label>
+            </div>
+
+            <fieldset className="style-stats-field">
+              <span className="style-stats-label">Fashion styles</span>
+              <div className="style-stats-tags">
+                {FASHION_STYLE_OPTIONS.map(s => (
+                  <button
+                    key={s}
+                    type="button"
+                    className={`style-stats-tag${fashionStyles.includes(s) ? ' is-selected' : ''}`}
+                    onClick={() => toggleStyle(s)}
+                    disabled={saving}
+                    aria-pressed={fashionStyles.includes(s)}
+                  >
+                    {s}
+                  </button>
+                ))}
+              </div>
+            </fieldset>
+          </div>
+        )}
 
         {error && <div className="style-error">{error}</div>}
 

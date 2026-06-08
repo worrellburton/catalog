@@ -1039,6 +1039,14 @@ export function buildGenerationPrompt(opts: {
    *  area the picked products don't cover (e.g. a plain bra vs. a bare
    *  torso) so the model wears ONLY the products + tasteful basics. */
   gender?: 'male' | 'female' | 'unknown' | null;
+  /** Advanced-mode proportions ("Short"/"Average"/"Long"). Appended to the
+   *  build description so Seedance shapes the silhouette; blank/omitted
+   *  drops the clause. */
+  armLengthLabel?: string | null;
+  legLengthLabel?: string | null;
+  /** Comma-joined aesthetic tags from Advanced mode, woven in as extra
+   *  style direction alongside the custom-style prompt. */
+  fashionStyles?: string | null;
 }): string {
   const stylePreset = STYLE_PRESETS.find(s => s.value === opts.style);
   // Strip brand + product names from the prompt - Bytedance/Seedance's
@@ -1055,9 +1063,18 @@ export function buildGenerationPrompt(opts: {
   // Weight is appended INSIDE the height clause so Seedance reads the
   // build as one unit ("5'10" tall, ~160 lb"). Falsy/blank weight drops
   // the clause entirely so the model isn't fed a phantom number.
-  const buildClause = opts.weightLabel
+  // Advanced proportions append onto the build description ("...with long
+  // arms and short legs"). Only non-"Average", non-blank values are voiced —
+  // "Average" is the model's default so naming it adds noise.
+  const proportionBits: string[] = [];
+  const arm = (opts.armLengthLabel || '').trim();
+  const leg = (opts.legLengthLabel || '').trim();
+  if (arm && arm.toLowerCase() !== 'average') proportionBits.push(`${arm.toLowerCase()} arms`);
+  if (leg && leg.toLowerCase() !== 'average') proportionBits.push(`${leg.toLowerCase()} legs`);
+  const proportionSuffix = proportionBits.length ? ` with ${proportionBits.join(' and ')}` : '';
+  const buildClause = (opts.weightLabel
     ? `${opts.heightLabel} tall, around ${opts.weightLabel}`
-    : `${opts.heightLabel} tall`;
+    : `${opts.heightLabel} tall`) + proportionSuffix;
   // Picked-zone framing: only show body regions where the shopper
   // actually picked an item. Stops Seedance from inventing pants /
   // shoes / accessories that were never selected.
@@ -1076,8 +1093,15 @@ export function buildGenerationPrompt(opts: {
   // Personal style direction from the Style page, woven in alongside the
   // occasion so the user's saved aesthetic shapes the render on every
   // preset. Trimmed/blank drops the clause.
-  const customStyleClause = opts.customStyle && opts.customStyle.trim()
-    ? ` Style direction: ${opts.customStyle.trim()}.`
+  // Custom style direction + advanced aesthetic tags both feed the same
+  // "Style direction" clause so the user's saved look shapes the render.
+  const styleDirectionBits: string[] = [];
+  if (opts.customStyle && opts.customStyle.trim()) styleDirectionBits.push(opts.customStyle.trim());
+  if (opts.fashionStyles && opts.fashionStyles.trim()) {
+    styleDirectionBits.push(`${opts.fashionStyles.trim()} aesthetic`);
+  }
+  const customStyleClause = styleDirectionBits.length
+    ? ` Style direction: ${styleDirectionBits.join('; ')}.`
     : '';
 
   if (opts.style === 'commercial') {

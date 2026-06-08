@@ -119,6 +119,10 @@ export async function updateUserHeightAge(
     heightCm?: number | null; heightLabel?: string | null;
     ageLabel?: string | null;
     weightKg?: number | null; weightLabel?: string | null;
+    /** Advanced-mode body proportions + aesthetic, persisted verbatim. */
+    armLengthLabel?: string | null;
+    legLengthLabel?: string | null;
+    fashionStyles?: string | null;
   },
 ): Promise<{ error?: string }> {
   if (!supabase) return { error: 'Supabase not configured' };
@@ -128,6 +132,9 @@ export async function updateUserHeightAge(
   if (patch.ageLabel !== undefined)    update.age_label    = patch.ageLabel;
   if (patch.weightKg !== undefined)    update.weight_kg    = patch.weightKg;
   if (patch.weightLabel !== undefined) update.weight_label = patch.weightLabel;
+  if (patch.armLengthLabel !== undefined) update.arm_length_label = patch.armLengthLabel || null;
+  if (patch.legLengthLabel !== undefined) update.leg_length_label = patch.legLengthLabel || null;
+  if (patch.fashionStyles !== undefined)  update.fashion_styles   = patch.fashionStyles || null;
   if (Object.keys(update).length === 0) return {};
   const { error } = await supabase
     .from('profiles')
@@ -199,11 +206,18 @@ export async function getUserHeightAge(
   heightCm: number | null; heightLabel: string | null;
   ageLabel: string | null;
   weightKg: number | null; weightLabel: string | null;
+  armLengthLabel: string | null; legLengthLabel: string | null;
+  fashionStyles: string | null;
 }> {
-  if (!supabase) return { heightCm: null, heightLabel: null, ageLabel: null, weightKg: null, weightLabel: null };
+  const empty = {
+    heightCm: null, heightLabel: null, ageLabel: null,
+    weightKg: null, weightLabel: null,
+    armLengthLabel: null, legLengthLabel: null, fashionStyles: null,
+  };
+  if (!supabase) return empty;
   const { data } = await supabase
     .from('profiles')
-    .select('height_cm, height_label, age_label, weight_kg, weight_label')
+    .select('height_cm, height_label, age_label, weight_kg, weight_label, arm_length_label, leg_length_label, fashion_styles')
     .eq('id', userId)
     .maybeSingle();
   return {
@@ -212,6 +226,9 @@ export async function getUserHeightAge(
     ageLabel:    (data?.age_label    as string | null) ?? null,
     weightKg:    (data?.weight_kg    as number | null) ?? null,
     weightLabel: (data?.weight_label as string | null) ?? null,
+    armLengthLabel: (data?.arm_length_label as string | null) ?? null,
+    legLengthLabel: (data?.leg_length_label as string | null) ?? null,
+    fashionStyles:  (data?.fashion_styles   as string | null) ?? null,
   };
 }
 
