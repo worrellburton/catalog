@@ -123,6 +123,11 @@ export interface ProductAd {
    *  user browses (see prefetchHighResForFeed) so tapping into a
    *  detail view is a cache hit. */
   mobile_video_url: string | null;
+  /** HLS master playlist (adaptive 480/720/1080 ladder). When present the
+   *  renderer plays THIS one source on every surface — the player ramps to a
+   *  high rung at full-screen size with no src swap. Falls back to
+   *  video_url / mobile_video_url when null. */
+  hls_url: string | null;
   storage_path: string | null;
   thumbnail_url: string | null;
   affiliate_url: string | null;
@@ -144,7 +149,7 @@ export interface ProductAd {
   completed_at: string | null;
   updated_at: string | null;
   // joined
-  product?: { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null; primary_image_url?: string | null; primary_video_url?: string | null; primary_video_poster_url?: string | null; images?: string[] | null; url: string | null; type?: string | null; catalog_tags?: string[] | null; gender?: string | null; is_elite?: boolean };
+  product?: { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null; primary_image_url?: string | null; primary_video_url?: string | null; primary_hls_url?: string | null; primary_video_poster_url?: string | null; images?: string[] | null; url: string | null; type?: string | null; catalog_tags?: string[] | null; gender?: string | null; is_elite?: boolean };
 }
 
 export interface CreateAdRequest {
@@ -155,14 +160,14 @@ export interface CreateAdRequest {
 
 const AD_SELECT = `
   *,
-  product:products(id, name, brand, price, image_url, primary_image_url, primary_video_url, primary_video_poster_url, images, url, type, catalog_tags, is_active, is_elite, gender)
+  product:products(id, name, brand, price, image_url, primary_image_url, primary_video_url, primary_hls_url, primary_video_poster_url, images, url, type, catalog_tags, is_active, is_elite, gender)
 `;
 
 // Columns for a product-direct tile fetch. Mirrors the getHomeFeed select so
 // catalog / brand / similar surfaces all render from the SAME visibility
 // contract: one product = one tile, sourced from products.primary_video_url.
 const PRODUCT_TILE_SELECT =
-  'id, name, brand, price, image_url, primary_image_url, primary_video_url, primary_video_poster_url, primary_video_generated_at, images, url, type, gender, is_elite, created_at';
+  'id, name, brand, price, image_url, primary_image_url, primary_video_url, primary_hls_url, primary_video_poster_url, primary_video_generated_at, images, url, type, gender, is_elite, created_at';
 
 interface ProductTileRow {
   id: string;
@@ -172,6 +177,7 @@ interface ProductTileRow {
   image_url: string | null;
   primary_image_url: string | null;
   primary_video_url: string | null;
+  primary_hls_url?: string | null;
   primary_video_poster_url: string | null;
   images: string[] | null;
   url: string | null;
@@ -195,6 +201,7 @@ function productTileToAd(p: ProductTileRow, style: string): ProductAd {
     description:      null,
     video_url:        p.primary_video_url,
     mobile_video_url: null,
+    hls_url:          p.primary_hls_url ?? null,
     storage_path:     null,
     thumbnail_url:    p.primary_video_poster_url ?? p.primary_image_url,
     affiliate_url:    null,
@@ -223,6 +230,7 @@ function productTileToAd(p: ProductTileRow, style: string): ProductAd {
       image_url:                p.image_url,
       primary_image_url:        p.primary_image_url,
       primary_video_url:        p.primary_video_url,
+      primary_hls_url:          p.primary_hls_url,
       primary_video_poster_url: p.primary_video_poster_url,
       images:                   p.images,
       url:                      p.url,
@@ -279,7 +287,7 @@ export async function getHomeFeed(opts: { ignoreGender?: boolean } = {}): Promis
   // content lands on top of the grid.
   const { data, error } = await supabase
     .from('products')
-    .select('id, name, brand, price, image_url, primary_image_url, primary_video_url, primary_video_poster_url, primary_video_generated_at, url, type, catalog_tags, is_active, is_elite, gender, created_at, feed_rank')
+    .select('id, name, brand, price, image_url, primary_image_url, primary_video_url, primary_hls_url, primary_video_poster_url, primary_video_generated_at, url, type, catalog_tags, is_active, is_elite, gender, created_at, feed_rank')
     .eq('is_active', true)
     .not('primary_video_url', 'is', null)
     // Admin-chosen catalog order (Recommend Order / saved order) leads;
@@ -301,6 +309,7 @@ export async function getHomeFeed(opts: { ignoreGender?: boolean } = {}): Promis
     name: string | null; brand: string | null; price: string | null;
     image_url: string | null; primary_image_url: string | null;
     primary_video_url: string | null;
+    primary_hls_url: string | null;
     primary_video_poster_url: string | null;
     primary_video_generated_at: string | null;
     url: string | null;
@@ -323,6 +332,7 @@ export async function getHomeFeed(opts: { ignoreGender?: boolean } = {}): Promis
     description:       null,
     video_url:         p.primary_video_url,
     mobile_video_url:  null,
+    hls_url:           p.primary_hls_url ?? null,
     storage_path:      null,
     thumbnail_url:     p.primary_video_poster_url ?? p.primary_image_url,
     affiliate_url:     null,
@@ -352,6 +362,7 @@ export async function getHomeFeed(opts: { ignoreGender?: boolean } = {}): Promis
       image_url:         p.image_url,
       primary_image_url: p.primary_image_url,
       primary_video_url: p.primary_video_url,
+      primary_hls_url:   p.primary_hls_url,
       primary_video_poster_url: p.primary_video_poster_url,
       // Derived from the primary image instead of selecting the full images[]
       // array — the only consumer is images[0] as a poster fallback

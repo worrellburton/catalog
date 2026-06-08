@@ -169,7 +169,7 @@ export default function SavedScreen({
     if (p.video_url && onOpenCreative) {
       onOpenCreative({
         id: p.creative_id || '', product_id: (p as Product & { id?: string }).id || '', look_id: null,
-        title: p.name, description: null, video_url: p.video_url, mobile_video_url: null, storage_path: null,
+        title: p.name, description: null, video_url: p.video_url, mobile_video_url: null, hls_url: p.primary_hls_url || null, storage_path: null,
         thumbnail_url: p.thumbnail_url || null, affiliate_url: null, prompt: null, prompt_extra: null,
         style: '', model: null, status: 'live', duration_seconds: null, aspect_ratio: null, resolution: null,
         cost_usd: null, impressions: 0, clicks: 0, error: null, enabled: true, created_at: '', completed_at: null, updated_at: null,

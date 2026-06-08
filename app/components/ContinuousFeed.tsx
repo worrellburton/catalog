@@ -739,6 +739,7 @@ function ContinuousFeed({
       title:            null,
       description:      null,
       video_url:        c.video_url,
+      hls_url:          null,
       storage_path:     null,
       thumbnail_url:    c.thumbnail_url,
       affiliate_url:    c.affiliate_url,

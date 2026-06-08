@@ -46,6 +46,10 @@ interface ProductPageCreative {
    *  from TrailVideoHost so the morph reuses the card's playing instance. */
   id?: string;
   videoUrl: string;
+  /** HLS master playlist (adaptive ladder). When set the hero plays this one
+   *  source and ramps to a high rung at full-screen size; falls back to
+   *  videoUrl (MP4) when absent. */
+  hlsUrl?: string | null;
   thumbnailUrl?: string | null;
 }
 
@@ -1007,7 +1011,7 @@ export default function ProductPage({
   // a hero creative from it so the hero plays the primary video instead.
   const effectiveCreative: ProductPageCreative | undefined = creative
     ?? (product.video_url
-      ? { id: `product:${product.brand}-${product.name}`, videoUrl: product.video_url, thumbnailUrl: product.image ?? product.thumbnail_url ?? null }
+      ? { id: `product:${product.brand}-${product.name}`, videoUrl: product.video_url, hlsUrl: product.primary_hls_url ?? null, thumbnailUrl: product.image ?? product.thumbnail_url ?? null }
       : undefined);
 
   // Poster source of last resort (canonical productPoster chain). Products
@@ -1046,9 +1050,11 @@ export default function ProductPage({
   // the <video> element painting a real image even on the (rare) cold
   // path where the pool element was evicted between card unmount and
   // hero attach.
+  // Prefer the HLS manifest so the full-screen hero ramps to a crisp rung;
+  // fall back to the progressive MP4 when no ladder exists for this clip.
   const setHeroSlot = useTrailVideo(
     effectiveCreative?.id,
-    effectiveCreative?.videoUrl,
+    effectiveCreative?.hlsUrl || effectiveCreative?.videoUrl,
     heroPoster || undefined,
   );
 
@@ -1057,8 +1063,10 @@ export default function ProductPage({
   // by URL so a second call here is free when the card already warmed
   // the cache.
   useEffect(() => {
+    // HLS streams its own segments via hls.js — skip the full-file byte prewarm.
+    if (effectiveCreative?.hlsUrl) return;
     if (creative?.videoUrl) prefetchVideoBytes(creative.videoUrl);
-  }, [creative?.id, creative?.videoUrl]);
+  }, [creative?.id, creative?.videoUrl, effectiveCreative?.hlsUrl]);
 
   // Prewarm "Featured in Looks" poster images. Each look that's
   // about to render a tile gets its poster jpeg pulled into the

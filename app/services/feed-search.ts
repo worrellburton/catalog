@@ -28,6 +28,7 @@ function semanticToProductAd(c: SemanticCreative): ProductAd {
     description:      null,
     video_url:        c.video_url,
     mobile_video_url: null,
+    hls_url:          null,
     storage_path:     null,
     thumbnail_url:    c.thumbnail_url,
     affiliate_url:    c.affiliate_url,

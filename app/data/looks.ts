@@ -40,6 +40,9 @@ export interface Product {
     season: string[];
   } | null;
   video_url?: string;
+  /** HLS master playlist for the product's primary video (adaptive ladder).
+   *  Preferred over video_url when present; falls back to MP4 otherwise. */
+  primary_hls_url?: string;
   thumbnail_url?: string;
   creative_id?: string;
   /** Broad category (Shoes / Top / Pants / etc.). Sourced from

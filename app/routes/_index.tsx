@@ -829,6 +829,7 @@ export default function Home() {
         description: null,
         video_url: productVideoUrl,
         mobile_video_url: null,
+        hls_url: product.primary_hls_url || null,
         storage_path: null,
         thumbnail_url: productThumb || product.image || null,
         affiliate_url: null,
@@ -1883,6 +1884,13 @@ export default function Home() {
                     ? {
                         id: selectedCreative.id,
                         videoUrl: selectedCreative.video_url,
+                        // Prefer the product's HLS ladder, then the creative's,
+                        // so the hero plays one adaptive source and ramps to a
+                        // crisp rung full-screen. Null → falls back to MP4.
+                        hlsUrl:
+                          selectedCreative.product?.primary_hls_url
+                          || selectedCreative.hls_url
+                          || null,
                         // Prefer the polished primary image so the hero
                         // poster matches the catalog tile exactly — same
                         // first frame the video animates from. Falls back

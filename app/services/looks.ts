@@ -74,6 +74,7 @@ interface SupabaseLook {
       image_url: string;
       primary_image_url: string | null;
       primary_video_url: string | null;
+      primary_hls_url: string | null;
       primary_video_poster_url: string | null;
       type: string | null;
       subtype: string | null;
@@ -151,6 +152,7 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
           image_url,
           primary_image_url,
           primary_video_url,
+          primary_hls_url,
           primary_video_poster_url,
           type,
           subtype
@@ -363,6 +365,7 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
           price: lp.products?.price || '',
           url: lp.products?.url || '',
           image: lp.products?.primary_image_url || lp.products?.image_url,
+          primary_hls_url: lp.products?.primary_hls_url || undefined,
           // Surfacing the product's own polished video on the look-overlay
           // product list. LookOverlay renders ProductMiniMedia which starts
           // with the poster (image) and swaps to the muted+looping video
@@ -405,7 +408,7 @@ export async function getLookByUuid(uuid: string): Promise<Look | null> {
     .select(`
       id, legacy_id, title, gender, creator_handle, user_id, description, color, status, feed_rank,
       looks_creative ( video_url, thumbnail_url, mobile_video_url, hls_url, is_primary, trim_start, trim_end ),
-      look_products ( sort_order, products ( name, brand, price, url, image_url, primary_image_url, primary_video_url, primary_video_poster_url, type, subtype ) )
+      look_products ( sort_order, products ( name, brand, price, url, image_url, primary_image_url, primary_video_url, primary_hls_url, primary_video_poster_url, type, subtype ) )
     `)
     .eq('id', uuid)
     .limit(1)
