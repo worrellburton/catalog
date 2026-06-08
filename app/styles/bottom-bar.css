@@ -56,13 +56,27 @@
   backdrop-filter: blur(28px) saturate(1.5);
   -webkit-backdrop-filter: blur(28px) saturate(1.5);
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   box-shadow:
     0 12px 36px rgba(0, 0, 0, 0.36),
-    inset 0 1px 0 rgba(255, 255, 255, 0.12),
+    0 0 26px rgba(255, 255, 255, 0.10),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
     inset 0 -1px 0 rgba(0, 0, 0, 0.18);
   overflow: hidden;
-  transition: all 0.3s ease;
+  transition: box-shadow 0.3s ease, border-color 0.3s ease, background 0.3s ease;
+}
+/* Loud, glassy, glowing — the glow intensifies while the user is in the bar. */
+.bottom-bar:focus-within {
+  border-color: rgba(255, 255, 255, 0.34);
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.4),
+    0 0 40px rgba(255, 255, 255, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.18);
+}
+/* The query text glows as you type (placeholder hidden = field has content). */
+.bottom-search-input:not(:placeholder-shown) {
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.55);
 }
 
 .bottom-bar-inner {
