@@ -329,7 +329,10 @@ export default function AdminModel() {
       #model-print-area {
         position: absolute !important; left: 0 !important; top: 0 !important;
         ${widthPx ? `width: ${widthPx}px !important; max-width: none !important;` : ''}
-        transform: scale(${scale}); transform-origin: top left;
+        /* zoom (not transform) so the layout actually reflows smaller and the
+           browser paginates it as ONE page — a transform is paint-only and
+           Chrome still breaks pages by the pre-scale height. */
+        zoom: ${scale};
       }
     }`;
     document.head.appendChild(style);
