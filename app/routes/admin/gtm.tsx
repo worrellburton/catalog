@@ -58,6 +58,8 @@ const PILLARS: Pillar[] = [
       },
       { name: 'ASO', note: 'App Store Optimization — rank + convert installs on iOS & Android.', added: true },
       { name: 'Affiliate & referral', note: 'The ~20%/mo word-of-mouth + referral loop that compounds CAC down.', added: true },
+      { name: 'Web / CRO', note: 'Landing pages, onboarding & conversion-rate optimization — turn traffic into installs.', added: true },
+      { name: 'Influencer marketing', note: 'Paid influencer campaigns — distinct from organic Social and from creator recruiting in BizDev.', added: true },
     ],
   },
   {
@@ -82,7 +84,18 @@ const PILLARS: Pillar[] = [
       { name: 'Messaging', note: 'The single narrative carried across every channel.' },
       { name: 'Market & ICP research', note: 'Who we serve, what they shop, where they already are.', added: true },
       { name: 'Community', note: 'Creators + power shoppers as an owned, compounding audience.', added: true },
-      { name: 'Measurement', note: 'CPA · LTV:CPA · payback — tie every channel back to the model.', added: true },
+      {
+        name: 'Measurement',
+        note: 'Tie every channel back to the model so spend is accountable.',
+        added: true,
+        leaves: [
+          { name: 'Attribution / MMP', note: 'AppsFlyer / Adjust + pixels — without it, no channel CPA is trustworthy.', added: true },
+          { name: 'KPIs per channel', note: 'CPA · LTV:CPA · payback targets, tracked per channel.', added: true },
+        ],
+      },
+      { name: 'Pricing & monetization', note: 'Commission tiers and what we charge brands — the other half of unit economics.', added: true },
+      { name: 'Competitive intelligence', note: 'Track Amazon / Pinterest / TikTok Shop + emerging shopping apps.', added: true },
+      { name: 'Creative production', note: 'The engine that makes the shoppable-video assets every channel needs.', added: true },
     ],
   },
 ];
