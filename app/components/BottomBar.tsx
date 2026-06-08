@@ -43,6 +43,15 @@ interface BottomBarProps {
   onOpenHotItem?: (ad: ProductAd) => void;
 }
 
+/** A type-ahead match: a plain search term, or a creator (carries the
+ *  handle + avatar so the row shows their picture and taps into their
+ *  catalog instead of running a search). */
+interface SearchSuggestion {
+  text: string;
+  handle?: string;
+  avatar?: string;
+}
+
 function BottomBar({
   activeFilter, onFilterChange, searchQuery, onSearchChange, onSelectSuggestion, onOpenCreators, catalogName, searchLoading = false, mySizeOnly = false, onMySizeChange, onOpenHotItem,
 }: BottomBarProps) {
@@ -56,7 +65,7 @@ function BottomBar({
   const [localSearch, setLocalSearch] = useState(searchQuery);
   const [activeFilters, setActiveFilters] = useState<ActiveFilters>(getEmptyFilters());
   // Type-ahead suggestion pool (catalog/search suggestions), loaded once.
-  const [allSuggestions, setAllSuggestions] = useState<string[]>([]);
+  const [allSuggestions, setAllSuggestions] = useState<SearchSuggestion[]>([]);
   // Featured creators surfaced in the mobile search recommendations — a
   // horizontal avatar rail above the catalog pills. Tapping one jumps
   // straight into that creator's catalog.
@@ -317,14 +326,18 @@ function BottomBar({
       .then(([sugg, creators, looks]) => {
         if (cancelled) return;
         const creatorList = Object.values(creators);
-        const creatorNames = creatorList
-          .map(c => c.displayName || c.name || '')
-          .filter(Boolean);
-        // Dedupe against the curated list (case-insensitive).
+        // Dedupe against the curated list (case-insensitive). Creator
+        // entries carry their handle + avatar so the suggestion row shows
+        // their profile picture and routes straight to their catalog.
         const seen = new Set(sugg.map(s => s.toLowerCase()));
-        const merged = [...sugg];
-        for (const n of creatorNames) {
-          if (!seen.has(n.toLowerCase())) { merged.push(n); seen.add(n.toLowerCase()); }
+        const merged: SearchSuggestion[] = sugg.map(s => ({ text: s }));
+        for (const [handle, c] of Object.entries(creators)) {
+          const name = c.displayName || c.name || handle;
+          const sl = name.toLowerCase();
+          if (name && !seen.has(sl)) {
+            merged.push({ text: name, handle, avatar: c.avatar || undefined });
+            seen.add(sl);
+          }
         }
         setAllSuggestions(merged);
         // Post counts per creator handle — only creators with 4+ live looks
@@ -355,10 +368,10 @@ function BottomBar({
     const q = localSearch.trim().toLowerCase();
     if (!q) return [];
     const seen = new Set<string>();
-    const starts: string[] = [];
-    const contains: string[] = [];
+    const starts: SearchSuggestion[] = [];
+    const contains: SearchSuggestion[] = [];
     for (const s of allSuggestions) {
-      const sl = s.toLowerCase();
+      const sl = s.text.toLowerCase();
       if (sl === q || seen.has(sl)) continue;
       if (sl.startsWith(q)) { starts.push(s); seen.add(sl); }
       else if (sl.includes(q)) { contains.push(s); seen.add(sl); }
@@ -518,12 +531,33 @@ function BottomBar({
                 <span className="bb-autocomplete-text">Make a catalog for “{localSearch.trim()}”</span>
               </button>
               {suggestionMatches.map(s => (
-                <button key={s} className="bb-autocomplete-item" onClick={() => pickCatalog(s)}>
-                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                    <circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
-                  </svg>
-                  <span className="bb-autocomplete-text">{s}</span>
-                </button>
+                s.handle ? (
+                  // Creator match — show their profile picture and tap
+                  // straight into their catalog (via pickCreator) rather
+                  // than running a text search.
+                  <button
+                    key={`c:${s.handle}`}
+                    className="bb-autocomplete-item bb-autocomplete-item--creator"
+                    onClick={() => pickCreator(s.handle!)}
+                  >
+                    {s.avatar ? (
+                      <img className="bb-autocomplete-avatar" src={s.avatar} alt="" />
+                    ) : (
+                      <span className="bb-autocomplete-avatar bb-autocomplete-avatar--fallback" aria-hidden="true">
+                        {s.text.charAt(0).toUpperCase()}
+                      </span>
+                    )}
+                    <span className="bb-autocomplete-text">{s.text}</span>
+                    <span className="bb-autocomplete-kind">Creator</span>
+                  </button>
+                ) : (
+                  <button key={`t:${s.text}`} className="bb-autocomplete-item" onClick={() => pickCatalog(s.text)}>
+                    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+                    </svg>
+                    <span className="bb-autocomplete-text">{s.text}</span>
+                  </button>
+                )
               ))}
             </div>
           ) : (
