@@ -877,12 +877,18 @@ body:has(.look-overlay.look-overlay--in) {
     max-height: 100%;
     aspect-ratio: auto;
     border-radius: 0;
+    /* Black backdrop lives on the wrapper (below the z-index:0 instant
+       poster), NOT on the video slot. Putting it on .look-media-video
+       (z-index:1) painted black OVER the Phase-9 poster until the
+       <video> moved in and decoded frame 0 - the multi-second black
+       hero flash on mobile. The wrapper backdrop only shows if the
+       poster itself is missing. */
+    background: #000;
   }
   .look-media-video {
     object-fit: cover;
     width: 100%;
     height: 100%;
-    background: #000;
   }
   .look-info-col {
     flex: 1 1 auto;
