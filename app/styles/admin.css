@@ -5461,6 +5461,15 @@ html.admin-on-dark-canvas .admin-topbar,
   box-shadow: 0 4px 14px rgba(124, 92, 255, 0.35);
 }
 .model-rate-btn:hover { filter: brightness(1.07); box-shadow: 0 6px 20px rgba(124, 92, 255, 0.45); }
+/* Icon-only variant — just the AI spark in a gradient circle. */
+.model-rate-btn--icon {
+  gap: 0;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 50%;
+  justify-content: center;
+}
 
 .rate-overlay {
   position: fixed; inset: 0; z-index: 1400;
