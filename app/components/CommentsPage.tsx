@@ -4,6 +4,7 @@ import { supabase } from '~/utils/supabase';
 import { useAuth } from '~/hooks/useAuth';
 import { extractIdPrefix, extractLookId, nextHexPrefix } from '~/utils/slug';
 import { looks as seedLooks } from '~/data/looks';
+import { lookPoster } from '~/services/media-resolver';
 import {
   listComments,
   addComment,
@@ -118,29 +119,56 @@ async function resolveLook(slug: string): Promise<ResolvedTarget | null> {
       return {
         title: look.title || 'Look',
         subtitle: look.creatorDisplayName || look.creator || '',
-        image: look.thumbnail_url || look.creatorAvatar || null,
+        // Canonical poster fallback (thumbnail → cover → first product image)
+        // so the comments header matches the feed card, then creator avatar.
+        image: lookPoster(look) || look.creatorAvatar || null,
         video: look.video || null,
         href: `/l/${slug}`,
       };
     }
   }
   if (!supabase) return null;
+  // The look slug carries the `looks.id` UUID prefix (see lookSlug → uuid:
+  // row.id in services/looks.ts), so resolve against the `looks` table —
+  // NOT `looks_creative`, whose `uuid` is a different identifier. Join the
+  // primary creative for video/poster and the look's products so the poster
+  // can fall back to the first product image, mirroring `lookPoster`
+  // (thumbnail → cover → first product image) used everywhere else.
   const prefix = extractIdPrefix(slug);
   if (!prefix) return null;
   const next = nextHexPrefix(prefix);
   let q = supabase
-    .from('looks_creative')
-    .select('uuid, title, creator, thumbnail_url, video_url')
-    .gte('uuid', `${prefix}-0000-0000-0000-000000000000`);
-  if (next) q = q.lt('uuid', `${next}-0000-0000-0000-000000000000`);
+    .from('looks')
+    .select(`
+      id,
+      title,
+      creator_handle,
+      looks_creative ( video_url, thumbnail_url, is_primary ),
+      look_products ( sort_order, products ( image_url, primary_image_url, primary_video_poster_url ) )
+    `)
+    .gte('id', `${prefix}-0000-0000-0000-000000000000`);
+  if (next) q = q.lt('id', `${next}-0000-0000-0000-000000000000`);
   const { data } = await q.limit(1);
-  const row = data?.[0];
+  const row = data?.[0] as {
+    title: string | null;
+    creator_handle: string | null;
+    looks_creative?: Array<{ video_url: string | null; thumbnail_url: string | null; is_primary: boolean | null }>;
+    look_products?: Array<{ sort_order: number | null; products?: { image_url: string | null; primary_image_url: string | null; primary_video_poster_url: string | null } | null }>;
+  } | undefined;
   if (!row) return null;
+  const creative = row.looks_creative?.find(c => c.is_primary) || row.looks_creative?.[0] || null;
+  const firstProduct = [...(row.look_products || [])]
+    .sort((a, b) => (a.sort_order ?? 0) - (b.sort_order ?? 0))[0]?.products || null;
+  const poster = creative?.thumbnail_url
+    || firstProduct?.primary_video_poster_url
+    || firstProduct?.primary_image_url
+    || firstProduct?.image_url
+    || null;
   return {
     title: (row.title as string) || 'Look',
-    subtitle: (row.creator as string) || '',
-    image: (row.thumbnail_url as string) || null,
-    video: (row.video_url as string) || null,
+    subtitle: (row.creator_handle as string) || '',
+    image: poster,
+    video: creative?.video_url || null,
     href: `/l/${slug}`,
   };
 }
