@@ -115,9 +115,8 @@
   color: #fff;
   line-height: 1.1;
 }
-.gtm-split-pct { font-size: 15px; font-weight: 800; letter-spacing: -0.02em; }
 .gtm-split-name {
-  font-size: 10px; font-weight: 600; opacity: 0.92;
+  font-size: 13px; font-weight: 700; letter-spacing: -0.01em; opacity: 0.96;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
 }
 .gtm-legend {
