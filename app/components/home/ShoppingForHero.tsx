@@ -4,7 +4,7 @@
 // catalog feed lives directly below; scrolling reveals the best sellers.
 
 import { useEffect, useRef, useMemo, useState } from 'react';
-import FeedParticles from './FeedParticles';
+import CatalogLogo from '~/components/CatalogLogo';
 import { getAutoEditorConfig } from '~/services/dials';
 
 // Headline rotation. First HEADLINE_BASELINE_VISITS the user sees the
@@ -311,35 +311,24 @@ export default function ShoppingForHero({ onRevealFeed }: ShoppingForHeroProps) 
       {showFeedInfo && (
         <div className="sfh-feed-info" role="dialog" aria-modal="true" aria-label="How your daily feed works" onClick={() => setShowFeedInfo(false)}>
           <div className="sfh-feed-info-card sfh-feed-info-card--magic" onClick={e => e.stopPropagation()}>
-            <FeedParticles className="sfh-feed-info-particles" />
             <div className="sfh-feed-info-content">
-              <button type="button" className="sfh-feed-info-close" onClick={() => setShowFeedInfo(false)} aria-label="Close">×</button>
+              <button type="button" className="sfh-feed-info-close" onClick={() => setShowFeedInfo(false)} aria-label="Close">
+                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
+                </svg>
+              </button>
+              <CatalogLogo className="sfh-feed-info-logo" />
               <h3 className="sfh-feed-info-title">Your daily feed</h3>
               <p className="sfh-feed-info-body">
                 A brand-new lineup, hand-tuned to you, every single day. The more you tap,
                 save, and shop, the sharper it gets.
               </p>
               <ul className="sfh-feed-info-points">
-                <li>
-                  <span className="sfh-feed-info-ic">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="6" cy="6" r="3"/><circle cx="6" cy="18" r="3"/><path d="M20 4L8.12 15.88M14.47 14.48L20 20M8.12 8.12L12 12"/></svg>
-                  </span>
-                  A personal stylist who never sleeps — and never judges your 2&nbsp;a.m. browsing.
-                </li>
-                <li>
-                  <span className="sfh-feed-info-ic">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/></svg>
-                  </span>
-                  Gets smarter with every tap, save, and shop.
-                </li>
-                <li>
-                  <span className="sfh-feed-info-ic">
-                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.2 4.2l1.4 1.4M18.4 18.4l1.4 1.4M1 12h2M21 12h2M4.2 19.8l1.4-1.4M18.4 5.6l1.4-1.4"/></svg>
-                  </span>
-                  A fresh, fully-loaded lineup waiting for you every morning.
-                </li>
+                <li>A personal stylist who never sleeps, and never judges your 2&nbsp;a.m. browsing.</li>
+                <li>Gets smarter with every tap, save, and shop.</li>
+                <li>A fresh, fully-loaded lineup waiting for you every morning.</li>
               </ul>
-              {/* Countdown pinned to the bottom of the card. */}
+              {/* Countdown hero — the big animated centerpiece. */}
               <div className="sfh-feed-info-countdown" aria-label="Time until your next feed">
                 <span className="sfh-feed-info-countdown-label">New feed drops in</span>
                 <span className="sfh-feed-info-countdown-time">{dropCountdown}</span>
