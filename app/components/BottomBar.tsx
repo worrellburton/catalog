@@ -1,7 +1,9 @@
 
 import { useState, useRef, useMemo, useCallback, useEffect, memo } from 'react';
 import PopularCatalogPills from './PopularCatalogPills';
+import BottomBarProductTray from './BottomBarProductTray';
 import ParticleBackground from './ParticleBackground';
+import type { ProductAd } from '~/services/product-creative';
 import CatalogLogo from './CatalogLogo';
 import { useAuth } from '~/hooks/useAuth';
 import { useShopperBody } from '~/hooks/useShopperBody';
@@ -37,6 +39,9 @@ interface BottomBarProps {
   searchLoading?: boolean;
   mySizeOnly?: boolean;
   onMySizeChange?: (v: boolean) => void;
+  /** Open a product creative — fills the top of the search sheet with a
+   *  shoppable product grid when the keyboard is down. */
+  onOpenCreative?: (ad: ProductAd) => void;
 }
 
 /** A type-ahead match: a plain search term, or a creator (carries the
@@ -49,7 +54,7 @@ interface SearchSuggestion {
 }
 
 function BottomBar({
-  activeFilter, onFilterChange, searchQuery, onSearchChange, onSelectSuggestion, onOpenCreators, catalogName, searchLoading = false, mySizeOnly = false, onMySizeChange,
+  activeFilter, onFilterChange, searchQuery, onSearchChange, onSelectSuggestion, onOpenCreators, catalogName, searchLoading = false, mySizeOnly = false, onMySizeChange, onOpenCreative,
 }: BottomBarProps) {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
@@ -534,18 +539,25 @@ function BottomBar({
               // keyboard — that desync hid the pills behind the keyboard.
               style={kbInset > 0 ? { paddingBottom: kbInset + 78 } : undefined}
             >
-              {isAdmin && (
-                <button
-                  className="bb-pills-showall"
-                  onClick={() => pickCatalog('')}
-                  title="Admin-only: show every available look and product without a catalog filter"
-                >
-                  Show all
-                </button>
+              {/* Keyboard down → fill the empty top space with a shoppable
+                  product grid (hidden while the keyboard is up — no room). */}
+              {kbInset === 0 && onOpenCreative && (
+                <BottomBarProductTray onOpen={onOpenCreative} />
               )}
-              {/* Straight to the catalog tags — no hot-item / featured-creators
-                  intermediate (it flashed in before the tags loaded). */}
-              <PopularCatalogPills onPick={pickCatalog} onFollowingCatalog={pickFollowing} />
+              {/* Catalog tags pinned to the bottom (just above the bar) via
+                  .bb-pills-bottom's margin-top:auto. */}
+              <div className="bb-pills-bottom">
+                {isAdmin && (
+                  <button
+                    className="bb-pills-showall"
+                    onClick={() => pickCatalog('')}
+                    title="Admin-only: show every available look and product without a catalog filter"
+                  >
+                    Show all
+                  </button>
+                )}
+                <PopularCatalogPills onPick={pickCatalog} onFollowingCatalog={pickFollowing} />
+              </div>
             </div>
           )}
         </div>
