@@ -1923,6 +1923,17 @@ export default function AdminData() {
   const [brandUrlBusy, setBrandUrlBusy] = useState(false);
   const [brandUrlError, setBrandUrlError] = useState<string | null>(null);
   const [brandBatchProgress, setBrandBatchProgress] = useState<{ done: number; total: number; failed: number } | null>(null);
+  // Auto Creative — when on, each brand-URL product runs the creative
+  // pipeline (pick primary photo → polish → video) right after its scrape
+  // resolves. Persisted so the toggle sticks between sessions.
+  const [autoCreative, setAutoCreative] = useState<boolean>(() => {
+    if (typeof window === 'undefined') return false;
+    try { return window.localStorage.getItem('catalog:auto-creative') === '1'; } catch { return false; }
+  });
+  const toggleAutoCreative = (v: boolean) => {
+    setAutoCreative(v);
+    try { window.localStorage.setItem('catalog:auto-creative', v ? '1' : '0'); } catch { /* quota */ }
+  };
 
   // "Add via Claude + Gemini" modal state. The user types a natural-
   // language prompt; we run it through both models in parallel via the
@@ -3358,6 +3369,53 @@ export default function AdminData() {
       setAutoRunning(false);
     }
   }, [autoRunning, polishPrimaryImage, generatePrimaryVideo, showToast]);
+
+  // ── Auto Creative ───────────────────────────────────────────────────
+  // Runs the creative pipeline for a single just-added product once its
+  // scrape resolves images: pick primary photo → polish → generate video.
+  // Fire-and-forget per product (each waits on its own scrape) so a batch
+  // add doesn't block. Used by the "Add via Brand Website" Auto Creative
+  // toggle.
+  const runCreativeForProduct = useCallback(async (productId: string) => {
+    if (!supabase || !productId) return;
+    // Wait for the Modal scraper to populate images (up to 2 min).
+    type ScrapedRow = { image_url: string | null; images: string[] | null; name: string | null; brand: string | null };
+    const deadline = Date.now() + 120_000;
+    let scraped: ScrapedRow | null = null;
+    while (Date.now() < deadline) {
+      const { data } = await supabase
+        .from('products')
+        .select('image_url, images, name, brand, scrape_status')
+        .eq('id', productId)
+        .single();
+      const row = data as (ScrapedRow & { scrape_status: string | null }) | null;
+      if (row) {
+        const hasImg = !!row.image_url || (Array.isArray(row.images) && row.images.length > 0);
+        if (row.scrape_status === 'done' || row.scrape_status === 'failed' || hasImg) {
+          scraped = { image_url: row.image_url, images: row.images, name: row.name, brand: row.brand };
+          break;
+        }
+      }
+      await new Promise(r => setTimeout(r, 4000));
+    }
+    if (!scraped) return;
+    const imgs: string[] = [];
+    if (Array.isArray(scraped.images)) {
+      for (const u of scraped.images) if (typeof u === 'string' && u) imgs.push(u);
+    }
+    if (scraped.image_url && !imgs.includes(scraped.image_url)) imgs.push(scraped.image_url);
+    if (imgs.length === 0) return;
+    try {
+      const { data: pick, error: pickErr } = await supabase.functions.invoke('pick-primary-image', {
+        body: { product_id: productId, name: scraped.name || '', brand: scraped.brand || '', image_urls: imgs },
+      });
+      if (pickErr || !pick?.success) return;
+      await polishPrimaryImage(productId);
+      await generatePrimaryVideo(productId);
+    } catch (err) {
+      console.warn('[runCreativeForProduct] failed:', err);
+    }
+  }, [polishPrimaryImage, generatePrimaryVideo]);
 
   const regeneratePoster = useCallback(async (productId: string) => {
     if (!productId) return;
@@ -8710,6 +8768,44 @@ export default function AdminData() {
                 }
                 return null;
               })()}
+              {/* Auto Creative toggle — pick → polish → video right after
+                  each product's scrape resolves. */}
+              <label
+                style={{
+                  display: 'flex', alignItems: 'center', gap: 10, cursor: 'pointer',
+                  padding: '10px 12px', marginBottom: 12, borderRadius: 8,
+                  border: `1px solid ${autoCreative ? '#c7d2fe' : '#e5e7eb'}`,
+                  background: autoCreative ? '#eef2ff' : '#fafafa',
+                  userSelect: 'none',
+                }}
+              >
+                <span
+                  role="switch"
+                  aria-checked={autoCreative}
+                  onClick={() => !brandUrlBusy && toggleAutoCreative(!autoCreative)}
+                  style={{
+                    position: 'relative', flexShrink: 0, width: 38, height: 22, borderRadius: 999,
+                    background: autoCreative ? '#4f46e5' : '#cbd5e1', transition: 'background 160ms ease',
+                  }}
+                >
+                  <span style={{
+                    position: 'absolute', top: 2, left: autoCreative ? 18 : 2, width: 18, height: 18,
+                    borderRadius: '50%', background: '#fff', transition: 'left 160ms ease',
+                    boxShadow: '0 1px 3px rgba(0,0,0,0.2)',
+                  }} />
+                </span>
+                <span style={{ minWidth: 0 }}>
+                  <span style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 13, fontWeight: 600, color: '#1e1b4b' }}>
+                    <svg width="13" height="13" viewBox="0 0 100 100" fill="#4f46e5" aria-hidden="true">
+                      <path d="M50 4 C54 30 70 46 96 50 C70 54 54 70 50 96 C46 70 30 54 4 50 C30 46 46 30 50 4 Z" />
+                    </svg>
+                    Auto Creative
+                  </span>
+                  <span style={{ display: 'block', fontSize: 11, color: '#6b7280', marginTop: 2 }}>
+                    After each product is ingested, automatically pick the primary photo, polish it, then generate the video.
+                  </span>
+                </span>
+              </label>
               {brandUrlError && (
                 <div style={{ fontSize: 12, color: '#dc2626', marginBottom: 16 }}>{brandUrlError}</div>
               )}
@@ -8762,7 +8858,10 @@ export default function AdminData() {
                     for (let i = 0; i < urls.length; i++) {
                       const url = urls[i];
                       try {
-                        await addProductUrl(url);
+                        const row = await addProductUrl(url);
+                        // Auto Creative: kick the pick → polish → video
+                        // pipeline for this product once its scrape lands.
+                        if (autoCreative && row?.id) void runCreativeForProduct(row.id);
                       } catch (err) {
                         failed += 1;
                         if (firstErrors.length < 3) {
