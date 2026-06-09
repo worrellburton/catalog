@@ -13,7 +13,7 @@ import SiteParticleHost from '~/components/SiteParticleHost';
 import ParticleBackground from '~/components/ParticleBackground';
 import BottomBar from '~/components/BottomBar';
 import GuestSignupGate, { type GuestGateVariant } from '~/components/GuestSignupGate';
-import { isGuest, hasUsedFreeLook, markFreeLookUsed, setGuestIntent, takeGuestIntent } from '~/services/guest';
+import { isGuest, hasUsedFreeLook, markFreeLookUsed, setGuestIntent, takeGuestIntent, getNudgeCount, bumpNudgeCount } from '~/services/guest';
 import { TrailVideoHost } from '~/components/TrailVideoHost';
 import { TrailRoot } from '~/components/TrailMotion';
 import CatalogLogo from '~/components/CatalogLogo';
@@ -1641,6 +1641,28 @@ export default function Home() {
   // that signals "what you tapped is now the focus" without feeling theatrical.
   const overlayOpen = !!selectedProduct || !!selectedLook;
 
+  // Guest scroll nudge — once a guest has scrolled a few screens of feed,
+  // dissolve in the soft "register for your daily feed" popup. Cadence
+  // (services/guest): show once at ~3 screens, re-nudge once deeper at ~8,
+  // then rest for the session. Never fires while a look/product/creator
+  // overlay is open (the nudge belongs to the feed) or once a gate is up.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (!isGuest(user) || view !== 'app') return;
+    if (overlayOpen || creatorFilter || brandFilter || guestGate) return;
+    const onScroll = () => {
+      const shown = getNudgeCount();
+      if (shown >= 2) { window.removeEventListener('scroll', onScroll); return; }
+      const screensDeep = shown === 0 ? 3 : 8;
+      if (window.scrollY > window.innerHeight * screensDeep) {
+        bumpNudgeCount();
+        setGuestGate({ variant: 'feed' });
+      }
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [user, view, overlayOpen, creatorFilter, brandFilter, guestGate]);
+
   // Lock the underlying feed while a product/look overlay is open so
   // swipe-down-to-dismiss only moves the overlay, not the page beneath.
   // iOS Safari needs position:fixed + saved scrollY (not just overflow:
@@ -1796,6 +1818,7 @@ export default function Home() {
                 onOpenCreator={handleOpenCreator}
                 activeFilter={activeFilter}
                 onChangeCatalogGender={handleGenderFilterChange}
+                onGuestSignup={() => setGuestGate({ variant: 'feed' })}
               />
             </div>
           </header>
