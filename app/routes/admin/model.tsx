@@ -32,6 +32,7 @@ import UnifiedModelChart from '~/components/model/UnifiedModelChart';
 import ModelHeadline from '~/components/model/ModelHeadline';
 import ModelMetrics from '~/components/model/ModelMetrics';
 import ModelTabs from '~/components/model/ModelTabs';
+import { openBusinessPlan } from '~/utils/business-plan';
 import RateAssumptionsModal from '~/components/model/RateAssumptionsModal';
 import FunnelTable from '~/components/model/FunnelTable';
 
@@ -192,6 +193,51 @@ export default function AdminModel() {
     a.href = url; a.download = 'catalog-model.csv';
     document.body.appendChild(a); a.click(); a.remove();
     URL.revokeObjectURL(url);
+  };
+
+  // Full Catalog-branded business plan (target customer → product → market →
+  // GTM → unit economics → financials WITH assumptions), built from the live
+  // model snapshot. Opens in a new tab to read / Save as PDF.
+  const downloadBusinessPlan = () => {
+    openBusinessPlan({
+      generatedAt: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
+      scenario: ui.scenario,
+      horizonMonths: MONTHS,
+      acquisition: {
+        cpa: eacq.cpa,
+        organicGrowth: eacq.organicGrowth,
+        budget: eacq.budget,
+        budgetSplitEarly: eacq.budgetDistEarly,
+        budgetSplitLate: eacq.budgetDistLate,
+        newUserRetention: eacq.newUserRetention,
+        monthlyActiveChurn: eacq.mauChurn,
+      },
+      engagement: {
+        sessionsPerUserPerMonth: erev.sessionsPerUserPerMonth,
+        sessionTimeMinutes: erev.sessionTimeMinutes,
+        impressionsPerSession: erev.avgImpressionsPerSession,
+      },
+      revenue: {
+        productConversion: erev.productConversion,
+        avgOrderValue: erev.avgCostPerSale,
+        affiliateCommission: erev.avgAffiliateCommission,
+      },
+      costs: { grossMargin: eecon.grossMargin, monthlyOpex: opexAvg, cashRaised: eecon.startingCash },
+      creatorPayout: creatorPayout.percent,
+      results: {
+        exitArr: metrics.exitArr,
+        total16moRevenue: revSummary.total,
+        gmvTotal: metrics.gmvTotal,
+        totalSales,
+        ltv: metrics.ltv,
+        ltvCac: metrics.ltvCac,
+        cacPaybackMonths: metrics.paybackMonths,
+        blendedCac: acqSummary.blendedCac,
+        avgMau: acqSummary.avgMau,
+        runwayMonths: metrics.runwayMonths,
+        avgBurn: metrics.avgBurn,
+      },
+    });
   };
 
   // Drag-to-reorder.
@@ -356,7 +402,7 @@ export default function AdminModel() {
 
       <ModelTabs active="model" />
 
-      <ModelHeadline scenario={ui.scenario} onScenario={setScenario} onExportCsv={exportCsv} onPrint={printModel} onRate={() => setShowRate(true)} />
+      <ModelHeadline scenario={ui.scenario} onScenario={setScenario} onExportCsv={exportCsv} onPrint={printModel} onBusinessPlan={downloadBusinessPlan} onRate={() => setShowRate(true)} />
       <RateAssumptionsModal open={showRate} onClose={() => setShowRate(false)} payload={ratePayload} />
 
       {readOnly && (
