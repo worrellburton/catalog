@@ -466,6 +466,22 @@
   object-fit: cover;
 }
 
+/* Any <video> inside a look-card MUST fill the tile (absolute, inset:0),
+   matching the inline styles the director and the declarative <video> both
+   set. Without this as the CSS default, a pooled element handed back into a
+   card carrying only TrailVideoHost's cssText (width/height/object-fit, but
+   NO position) lands in normal flow inside the flex-centered .card-inner and
+   shrinks to its intrinsic size — the "tiny thumbnail video floating inside
+   the tile" bug seen on the creator catalog grid after returning from a look
+   overlay. Pinning position here makes every video fill regardless of which
+   path placed it. z-index:2 keeps it above the poster <img> (z-index:1) and
+   below the bottom gradient (z-index:3). */
+.look-card video {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+}
+
 /* Stagger shimmer animation across cards */
 .look-card:nth-child(4n+1) .card-shimmer { animation-delay: 0s, 0s; }
 .look-card:nth-child(4n+2) .card-shimmer { animation-delay: 0.3s, 0.4s; }
