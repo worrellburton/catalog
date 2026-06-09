@@ -5,6 +5,8 @@
 // the founder asked: target customer first, then the product / market / GTM,
 // then the financials WITH their assumptions.
 
+import { CATALOG_LOGO_PATH, CATALOG_LOGO_VIEWBOX } from '~/constants/brand-logo';
+
 export interface BusinessPlanData {
   generatedAt: string;
   scenario: string;
@@ -74,17 +76,17 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
   // Assumption rows: label, value, the benchmark/why.
   const assumptions: Array<[string, string, string]> = [
     ['Total advertising spend', usd(a.budget), `over ${d.horizonMonths} months`],
-    ['Blended CPA (paid)', usd(a.cpa), 'cost per acquired user · $5–30 consumer benchmark'],
-    ['Organic / word-of-mouth growth', `${pct(a.organicGrowth)} / mo`, 'referral adds as a % of the base · 10–30%/mo early'],
+    ['Blended CPA (paid)', usd(a.cpa), 'cost per acquired user · $5-30 consumer benchmark'],
+    ['Organic / word-of-mouth growth', `${pct(a.organicGrowth)} / mo`, 'referral adds as a % of the base · 10-30%/mo early'],
     ['Budget split (early / late)', `${pct(a.budgetSplitEarly)} / ${pct(a.budgetSplitLate)}`, 'share of spend front-loaded vs. tail'],
-    ['New-user retention (M1)', pct(a.newUserRetention), 'returns next month · 25–45% M1 benchmark'],
-    ['Monthly active churn', pct(a.monthlyActiveChurn), 'retained base lost / mo · 3–6%/mo'],
-    ['Sessions / user / mo', num(e.sessionsPerUserPerMonth), 'engagement depth · 6–12 benchmark'],
-    ['Session length', `${num(e.sessionTimeMinutes)} min`, 'avg time per session · 3–6 min'],
-    ['Impressions / session', num(e.impressionsPerSession), 'product views per session · 10–40'],
-    ['Product conversion', pct(rev.productConversion, 2), 'sale per impression · 1–2% marketplace'],
-    ['Average order value', usd(rev.avgOrderValue), 'AOV · $40–120'],
-    ['Affiliate commission', pct(rev.affiliateCommission), 'take rate per sale · 8–15%'],
+    ['New-user retention (M1)', pct(a.newUserRetention), 'returns next month · 25-45% M1 benchmark'],
+    ['Monthly active churn', pct(a.monthlyActiveChurn), 'retained base lost / mo · 3-6%/mo'],
+    ['Sessions / user / mo', num(e.sessionsPerUserPerMonth), 'engagement depth · 6-12 benchmark'],
+    ['Session length', `${num(e.sessionTimeMinutes)} min`, 'avg time per session · 3-6 min'],
+    ['Impressions / session', num(e.impressionsPerSession), 'product views per session · 10-40'],
+    ['Product conversion', pct(rev.productConversion, 2), 'sale per impression · 1-2% marketplace'],
+    ['Average order value', usd(rev.avgOrderValue), 'AOV · $40-120'],
+    ['Affiliate commission', pct(rev.affiliateCommission), 'take rate per sale · 8-15%'],
     ['Creator payout', pct(d.creatorPayout), 'share of revenue paid back to creators'],
     ['Gross margin', pct(c.grossMargin), ''],
     ['Monthly OpEx (avg)', usd(c.monthlyOpex), 'payroll + expenses + creator payout'],
@@ -125,7 +127,7 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>Catalog — Business Plan</title>
+<title>Catalog Business Plan</title>
 <style>
   :root { --ink:#0f172a; --muted:#64748b; --line:#e7e9ef; --indigo:#6366f1; --green:#10b981; --paper:#ffffff; }
   * { box-sizing: border-box; }
@@ -138,14 +140,19 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
   .toolbar button { font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
     border: 1px solid var(--line); background: #fff; color: var(--ink); border-radius: 8px; padding: 8px 14px; }
   .toolbar button.primary { background: var(--indigo); color: #fff; border-color: var(--indigo); }
-  @media print { .toolbar { display: none; } body { background: #fff; } .page { padding: 0; max-width: none; } }
+  @media print { .toolbar { display: none; } body { background: #fff; }
+    .page { padding: 0; max-width: none; }
+    .cover-page { min-height: 100vh; page-break-after: always; -webkit-print-color-adjust: exact; print-color-adjust: exact; } }
 
-  /* Cover */
-  .cover { padding-bottom: 28px; border-bottom: 1px solid var(--line); margin-bottom: 36px; }
-  .wordmark { display: inline-flex; align-items: center; gap: 10px; font-size: 30px; font-weight: 800;
-    letter-spacing: -0.03em; }
-  .wordmark .spark { width: 24px; height: 24px; color: var(--indigo); }
-  .doc-title { margin: 26px 0 6px; font-size: 44px; font-weight: 800; letter-spacing: -0.035em; line-height: 1.05; }
+  /* Cover — its own full black page, white wordmark (the real logo), no spark. */
+  .cover-page { background: #000; color: #fff; min-height: 100vh;
+    display: flex; flex-direction: column; justify-content: center; align-items: flex-start; padding: 72px 64px; }
+  .cover-logo { width: clamp(200px, 30vw, 300px); height: auto; display: block; margin-bottom: 44px; }
+  .cover-page .doc-title { margin: 0 0 10px; color: #fff; }
+  .cover-page .doc-sub { color: rgba(255,255,255,0.72); }
+  .cover-page .doc-meta { color: rgba(255,255,255,0.5); }
+  .cover-page .doc-meta b { color: #fff; }
+  .doc-title { font-size: 44px; font-weight: 800; letter-spacing: -0.035em; line-height: 1.05; }
   .doc-sub { margin: 0; color: var(--muted); font-size: 15px; }
   .doc-meta { margin-top: 14px; font-size: 12px; color: var(--muted); letter-spacing: 0.02em; }
   .doc-meta b { color: var(--ink); text-transform: capitalize; }
@@ -186,39 +193,35 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
   <div class="toolbar">
     <button class="primary" onclick="window.print()">Save as PDF</button>
   </div>
+  <div class="cover-page">
+    <svg class="cover-logo" viewBox="${CATALOG_LOGO_VIEWBOX}" role="img" aria-label="Catalog"><path fill="#ffffff" d="${CATALOG_LOGO_PATH}" /></svg>
+    <h1 class="doc-title">Business Plan</h1>
+    <p class="doc-sub">The shopping app for everything: one platform, web plus iOS and Android, one user base.</p>
+    <div class="doc-meta">Generated ${esc(d.generatedAt)} · Financial scenario: <b>${esc(d.scenario)}</b> · ${d.horizonMonths}-month horizon</div>
+  </div>
   <div class="page">
-    <div class="cover">
-      <span class="wordmark">
-        <svg class="spark" viewBox="0 0 100 100" fill="currentColor" aria-hidden="true"><path d="M50 4 C54 30 70 46 96 50 C70 54 54 70 50 96 C46 70 30 54 4 50 C30 46 46 30 50 4 Z"/></svg>
-        catalog
-      </span>
-      <h1 class="doc-title">Business Plan</h1>
-      <p class="doc-sub">The shopping app for everything — one platform, web + iOS/Android, one user base.</p>
-      <div class="doc-meta">Generated ${esc(d.generatedAt)} · Financial scenario: <b>${esc(d.scenario)}</b> · ${d.horizonMonths}-month horizon</div>
-    </div>
-
     <section>
       <p class="kicker">Executive summary</p>
       <h2>A single shopping destination that earns on every sale it drives.</h2>
-      <p>Catalog is one consumer shopping app — a single platform across web and iOS/Android with one unified user base — that turns short, shoppable video into a visual storefront for everything people buy. We don't hold inventory; we earn affiliate commission on the sales we drive, so the model scales with attention rather than logistics. This plan projects <b>${usd(r.total16moRevenue)}</b> in commission revenue over ${d.horizonMonths} months on <b>${usd(r.gmvTotal, true)}</b> of GMV, exiting at <b>${usd(r.exitArr)}</b> ARR with an LTV:CAC of <b>${r.ltvCac.toFixed(1)}×</b> and ${r.cacPaybackMonths.toFixed(1)}-month CAC payback.</p>
+      <p>Catalog is one consumer shopping app, a single platform across web and iOS/Android with one unified user base, that turns short, shoppable video into a visual storefront for everything people buy. We don't hold inventory; we earn affiliate commission on the sales we drive, so the model scales with attention rather than logistics. This plan projects <b>${usd(r.total16moRevenue)}</b> in commission revenue over ${d.horizonMonths} months on <b>${usd(r.gmvTotal, true)}</b> of GMV, exiting at <b>${usd(r.exitArr)}</b> ARR with an LTV:CAC of <b>${r.ltvCac.toFixed(1)}×</b> and ${r.cacPaybackMonths.toFixed(1)}-month CAC payback.</p>
     </section>
 
     <section>
       <p class="kicker">01 · Target customer</p>
       <h2>The shopper who lives in their feed.</h2>
-      <p>Our core customer is the everyday consumer who already discovers products by scrolling — the same person who screenshots outfits, saves links, and asks friends "where's that from?" They are mobile-first, visually driven, and shop across categories: apparel, beauty, home, and lifestyle. They don't want a search box and ten blue links; they want a feed that already knows their taste and a frictionless path from "I want that" to checkout.</p>
+      <p>Our core customer is the everyday consumer who already discovers products by scrolling, the same person who screenshots outfits, saves links, and asks friends "where's that from?" They are mobile-first, visually driven, and shop across categories: apparel, beauty, home, and lifestyle. They don't want a search box and ten blue links; they want a feed that already knows their taste and a frictionless path from "I want that" to checkout.</p>
       <ul>
         <li><b>Who:</b> mainstream online shoppers (think the audience of Amazon, Pinterest, and TikTok Shop), not a fashion-only niche.</li>
-        <li><b>Behavior:</b> discovery-led, impulse-friendly, returns daily — ${num(e.sessionsPerUserPerMonth)} sessions/user/mo at ~${num(e.sessionTimeMinutes)} min each.</li>
+        <li><b>Behavior:</b> discovery-led, impulse-friendly, returns daily: ${num(e.sessionsPerUserPerMonth)} sessions/user/mo at ~${num(e.sessionTimeMinutes)} min each.</li>
         <li><b>Pain:</b> taste is scattered across screenshots and tabs; existing shopping apps are either a search utility or a single brand's store.</li>
-        <li><b>Why us:</b> one feed, every brand, tuned to the individual — a personal storefront that gets sharper with every tap, save, and shop.</li>
+        <li><b>Why us:</b> one feed, every brand, tuned to the individual; a personal storefront that gets sharper with every tap, save, and shop.</li>
       </ul>
     </section>
 
     <section>
       <p class="kicker">02 · Product</p>
       <h2>Shoppable video, indexed by AI.</h2>
-      <p>Every look is a short video paired with its products. We encode each one into a vector database — composition, color, garment, and mood become coordinates a model can reason about — so the feed can surface visually similar products in ~12ms. Creators publish looks; brands' catalogs sync automatically; AI generates and polishes the creative. A shopper taps a look, sees the exact products, and checks out through the merchant, with the sale attributed back to us.</p>
+      <p>Every look is a short video paired with its products. We encode each one into a vector database, where composition, color, garment, and mood become coordinates a model can reason about, so the feed can surface visually similar products in ~12ms. Creators publish looks; brands' catalogs sync automatically; AI generates and polishes the creative. A shopper taps a look, sees the exact products, and checks out through the merchant, with the sale attributed back to us.</p>
     </section>
 
     <section>
@@ -230,11 +233,11 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
     <section>
       <p class="kicker">04 · Go-to-market</p>
       <h2>A marketing engine that compounds.</h2>
-      <p>Marketing is run as a system by a small, disciplined team — not a single person doing everything — built on creators as the primary channel. Budget is allocated across three pillars:</p>
+      <p>Marketing is run as a system by a small, disciplined team (not a single person doing everything), built on creators as the primary channel. Budget is allocated across three pillars:</p>
       <div class="pillars">
-        <div class="pillar"><span class="w">60%</span><h4>Digital Marketing</h4><p>The performance + organic engine — SEO, paid, social, lifecycle, ASO. Drives installs and sessions at a ~${usd(a.cpa)} blended CPA.</p></div>
-        <div class="pillar"><span class="w">25%</span><h4>Business Development</h4><p>Supply + distribution — creators, brands, and affiliate networks that fill the feed and the catalog.</p></div>
-        <div class="pillar"><span class="w">15%</span><h4>Strategy &amp; Branding</h4><p>Positioning, brand, and measurement — why this is THE shopping app, tied back to the model.</p></div>
+        <div class="pillar"><span class="w">60%</span><h4>Digital Marketing</h4><p>The performance and organic engine: SEO, paid, social, lifecycle, ASO. Drives installs and sessions at a ~${usd(a.cpa)} blended CPA.</p></div>
+        <div class="pillar"><span class="w">25%</span><h4>Business Development</h4><p>Supply and distribution: creators, brands, and affiliate networks that fill the feed and the catalog.</p></div>
+        <div class="pillar"><span class="w">15%</span><h4>Strategy &amp; Branding</h4><p>Positioning, brand, and measurement: why this is THE shopping app, tied back to the model.</p></div>
       </div>
       <p style="margin-top:14px">The plan: hire a few BD/marketing operators, market through creators (we pay them on signups and ongoing engagement), deploy budget against weekly targets logged in a CRM, then learn and repeat every cycle to drive CPA down.</p>
     </section>
@@ -242,7 +245,7 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
     <section>
       <p class="kicker">05 · Business model &amp; unit economics</p>
       <h2>We earn a take rate on the sales we drive.</h2>
-      <p>Revenue = impressions × product conversion × average order value × affiliate commission. Each acquired user is worth <b>${usd(r.ltv)}</b> in lifetime value against a blended CAC of <b>${usd(r.blendedCac)}</b> — an LTV:CAC of <b>${r.ltvCac.toFixed(1)}×</b> that pays back in <b>${r.cacPaybackMonths.toFixed(1)} months</b>. Word-of-mouth adds ${pct(a.organicGrowth)} of the base per month, so blended CAC falls as the organic loop strengthens.</p>
+      <p>Revenue = impressions × product conversion × average order value × affiliate commission. Each acquired user is worth <b>${usd(r.ltv)}</b> in lifetime value against a blended CAC of <b>${usd(r.blendedCac)}</b>, an LTV:CAC of <b>${r.ltvCac.toFixed(1)}×</b> that pays back in <b>${r.cacPaybackMonths.toFixed(1)} months</b>. Word-of-mouth adds ${pct(a.organicGrowth)} of the base per month, so blended CAC falls as the organic loop strengthens.</p>
     </section>
 
     <section>
