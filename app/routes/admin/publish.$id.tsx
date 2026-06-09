@@ -3,6 +3,7 @@ import { Link, useNavigate, useParams } from '@remix-run/react';
 import { supabase } from '~/utils/supabase';
 import { invalidateLooksCache } from '~/services/looks';
 import { promoteGenerationToLook } from '~/services/promote-generation';
+import { regenerateUserGeneration } from '~/services/user-generations';
 import { sortByGarmentRole } from '~/utils/garmentOrder';
 
 /* /admin/publish/:id - promote a user-generated look into the curated
@@ -61,6 +62,50 @@ export default function AdminPublishScreen() {
   const [gender, setGender] = useState<'men' | 'women' | 'unisex'>('unisex');
   const [publishing, setPublishing] = useState(false);
   const [published, setPublished] = useState<{ id: string } | null>(null);
+  const [redoing, setRedoing] = useState(false);
+
+  // Redo — reset the generation to pending + re-invoke generate-look so a
+  // stuck/failed run (e.g. a fal queue submission that never completed) gets
+  // another pass. A short poll then reflects the new status in place.
+  const handleRedo = async () => {
+    if (!id || redoing) return;
+    setRedoing(true);
+    setError(null);
+    const { error: redoErr } = await regenerateUserGeneration(id);
+    if (redoErr) {
+      setError(`Redo failed: ${redoErr}`);
+      setRedoing(false);
+      return;
+    }
+    // Reflect the reset locally so the pipeline shows it re-running.
+    setDraft(d => d ? { ...d, status: 'pending', videoUrl: null, falRequestId: null, completedAt: null, error: null } : d);
+    // Poll the row for up to ~3 min so a completed redo surfaces without a
+    // manual refresh, then stop (the worker may still be running — the admin
+    // can reload later).
+    let polls = 0;
+    const poll = window.setInterval(async () => {
+      polls += 1;
+      if (!supabase || polls > 36) { window.clearInterval(poll); setRedoing(false); return; }
+      const { data } = await supabase
+        .from('user_generations')
+        .select('status, video_url, fal_request_id, completed_at, error')
+        .eq('id', id)
+        .maybeSingle();
+      if (!data) return;
+      setDraft(d => d ? {
+        ...d,
+        status: data.status,
+        videoUrl: data.video_url,
+        falRequestId: data.fal_request_id,
+        completedAt: data.completed_at,
+        error: data.error,
+      } : d);
+      if (data.status === 'done' || data.status === 'failed') {
+        window.clearInterval(poll);
+        setRedoing(false);
+      }
+    }, 5000);
+  };
 
   useEffect(() => {
     if (!id) return;
@@ -398,7 +443,7 @@ export default function AdminPublishScreen() {
           received. Replaces a hidden "drill into /admin/data and
           expand the row" flow so the reviewer can see prompt + face
           photos + model tier without leaving this page. */}
-      <GenerationPipelinePanel draft={draft} />
+      <GenerationPipelinePanel draft={draft} onRedo={handleRedo} redoing={redoing} />
     </div>
   );
 }
@@ -409,7 +454,7 @@ export default function AdminPublishScreen() {
 // admin/data) because it's the publish-review surface where the admin
 // makes the keep / reject decision and needs the most context.
 
-function GenerationPipelinePanel({ draft }: { draft: PublishDraft }) {
+function GenerationPipelinePanel({ draft, onRedo, redoing }: { draft: PublishDraft; onRedo: () => void; redoing: boolean }) {
   const modelLabel = draft.model
     ? draft.model === 'pro' ? 'Pro (Seedance Pro)' : 'Fast (Seedance Lite)'
     : '—';
@@ -475,9 +520,26 @@ function GenerationPipelinePanel({ draft }: { draft: PublishDraft }) {
     <div className="admin-model-panel" style={{ marginTop: 32 }}>
       <div className="admin-model-panel-head">
         <h3 className="admin-products-title" style={{ margin: 0 }}>Generation pipeline</h3>
-        <span className="admin-model-panel-meta">
-          gen <code>{draft.generationId.slice(0, 8)}…</code> · created {new Date(draft.createdAt).toLocaleString()}
-        </span>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          <span className="admin-model-panel-meta">
+            gen <code>{draft.generationId.slice(0, 8)}…</code> · created {new Date(draft.createdAt).toLocaleString()}
+          </span>
+          {/* Redo — reset + re-run the generation. Useful when the model call
+              is stuck (fal queue submission that never completed). */}
+          <button
+            type="button"
+            className="admin-btn admin-btn-secondary"
+            onClick={onRedo}
+            disabled={redoing}
+            title="Reset this generation and re-run the model call"
+            style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <polyline points="23 4 23 10 17 10" /><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10" />
+            </svg>
+            {redoing ? 'Redoing…' : 'Redo'}
+          </button>
+        </div>
       </div>
 
       <div className="admin-model-flow">
