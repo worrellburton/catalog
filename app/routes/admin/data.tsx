@@ -3306,7 +3306,10 @@ export default function AdminData() {
               scraped_at: null,
               type: inferred?.type ?? null,
               subtype: inferred?.subtype ?? null,
-              gender: p.gender ?? inferProductGenderFromName(p.name),
+              // The products table only allows male/female/unisex/null
+              // (products_gender_check). The SerpAPI value is men/women/unisex,
+              // so infer from the name like the manual Add Products path does.
+              gender: inferProductGenderFromName(p.name),
               source: AUTO_SOURCE,
             })
             .select('id')
