@@ -143,7 +143,10 @@ export default function TypeAnywhere() {
   const onAdmin = location.pathname.startsWith('/admin');
   // Suppress on /generate too - that flow owns its own input layer.
   const onGenerate = location.pathname.startsWith('/generate');
-  const hidden = onAdmin || onGenerate;
+  // Suppress on /activity - the insights page is a reading surface, not a
+  // search surface; the floating search bar just clutters it.
+  const onActivity = location.pathname.startsWith('/activity');
+  const hidden = onAdmin || onGenerate || onActivity;
 
   const submit = useCallback((q: string) => {
     const trimmed = q.trim();
