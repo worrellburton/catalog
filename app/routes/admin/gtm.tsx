@@ -88,11 +88,12 @@ const PILLARS: Pillar[] = [
 ];
 
 const FLYWHEEL: { kicker: string; title: string; body: string; accent: string }[] = [
-  { kicker: 'The goal', title: 'Turn the flywheel on.', body: 'Create a marketing engine that compounds on its own.', accent: '#6366f1' },
-  { kicker: 'Step 1', title: 'Hire.', body: 'Three BD / marketing consultants, month-to-month for three months. Some may convert to full-time - the point is to start delegating the system now; it can’t run on one person.', accent: '#8b5cf6' },
-  { kicker: 'Step 2 · Strategy', title: 'Market through creators.', body: 'The three consultants specialize in creator relations - starting small and scaling. Creators are our primary advertising channel: we partner with them to post, build catalogs, and share on their socials, and pay them on every signup plus ongoing engagement.', accent: '#ec4899' },
-  { kicker: 'Step 3', title: 'Deploy budget effectively.', body: 'Run a disciplined, mission-driven team that logs every contact in the CRM, holds each other to weekly targets, and moves as one synergistic unit with real purpose: putting every marketing dollar to work as effectively as possible, laser-focused on driving the CPA down.', accent: '#10b981' },
-  { kicker: 'Step 4', title: 'Learn & repeat.', body: 'Continuous improvement on strategy, campaign management, and creator management - lean into what’s working, cut what isn’t, and tighten the loop every cycle. The goal: drive CPA as low as possible.', accent: '#f59e0b' },
+  // Page 0 — the goal, now combined with the "market through creators"
+  // strategy so the flywheel's purpose and its core channel read as one.
+  { kicker: 'The goal', title: 'Turn the flywheel on.', body: 'Create a marketing engine that compounds on its own, built on marketing through creators. Creators are our primary advertising channel: we partner with them to post, build catalogs, and share on their socials, and pay them on every signup plus ongoing engagement.', accent: '#6366f1' },
+  { kicker: 'Step 1', title: 'Hire.', body: 'Three BD / marketing consultants, month-to-month for three months, who specialize in creator relations and start small then scale. Some may convert to full-time - the point is to start delegating the system now; it can’t run on one person.', accent: '#8b5cf6' },
+  { kicker: 'Step 2', title: 'Deploy budget effectively.', body: 'Run a disciplined, mission-driven team that logs every contact in the CRM, holds each other to weekly targets, and moves as one synergistic unit with real purpose: putting every marketing dollar to work as effectively as possible, laser-focused on driving the CPA down.', accent: '#10b981' },
+  { kicker: 'Step 3', title: 'Learn & repeat.', body: 'Continuous improvement on strategy, campaign management, and creator management - lean into what’s working, cut what isn’t, and tighten the loop every cycle. The goal: drive CPA as low as possible.', accent: '#f59e0b' },
 ];
 
 function Leaves({ leaves }: { leaves: Leaf[] }) {
