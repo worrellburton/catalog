@@ -5,6 +5,7 @@ import { supabase } from '~/utils/supabase';
 import { useAuth } from '~/hooks/useAuth';
 import { AvatarUpload } from './AvatarCropModal';
 import LookCard from './LookCard';
+import CreatorProductTile from './CreatorProductTile';
 import { toggleFollow, isFollowing as fetchIsFollowing, getFollowerCount, getFollowingCount, getFollowers, getFollowing, type FollowUser } from '~/services/follows';
 import { subscribeToLooksChange, fetchSeenLookIds, reorderBySeen, stableLookId } from '~/services/looks';
 import ParticleBackground from './ParticleBackground';
@@ -276,14 +277,14 @@ export default function CreatorPage({
       if (genIds.length > 0) {
         const { data: pickRows } = await supabase!
           .from('user_generation_products')
-          .select('generation_id, product_id, products(id, name, brand, price, image_url, primary_image_url, images, url)')
+          .select('generation_id, product_id, products(id, name, brand, price, image_url, primary_image_url, primary_video_url, primary_video_poster_url, images, url)')
           .in('generation_id', genIds);
         if (cancelled) return;
         const productById = new Map<string, Product>();
         const productsByGen = new Map<string, Set<string>>();
         for (const row of (pickRows || []) as unknown as Array<{
           generation_id: string; product_id: string;
-          products: { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null; primary_image_url: string | null; images: string[] | null; url: string | null } | null;
+          products: { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null; primary_image_url: string | null; primary_video_url: string | null; primary_video_poster_url: string | null; images: string[] | null; url: string | null } | null;
         }>) {
           const p = row.products;
           if (!p) continue;
@@ -295,6 +296,10 @@ export default function CreatorPage({
               price: p.price || '',
               url: p.url || '',
               image: p.primary_image_url || p.image_url || (p.images && p.images[0]) || undefined,
+              // Carry the product's primary video + frame-0 poster so the Shop
+              // tab tile plays it (poster-first), same as the public catalog.
+              video_url: p.primary_video_url || undefined,
+              thumbnail_url: p.primary_video_poster_url || p.primary_image_url || p.image_url || undefined,
             });
           }
           const set = productsByGen.get(row.generation_id) || new Set<string>();
@@ -362,7 +367,7 @@ export default function CreatorPage({
         .from('looks')
         .select(`
           id, legacy_id, title, gender, creator_handle, user_id,
-          looks_creative!inner ( video_url, thumbnail_url, is_primary ),
+          looks_creative!inner ( video_url, hls_url, thumbnail_url, is_primary ),
           look_products ( products ( id, name, brand, price, image_url, primary_image_url, primary_video_url, primary_video_poster_url, url, images ) )
         `)
         .eq('creator_handle', creatorName)
@@ -380,7 +385,7 @@ export default function CreatorPage({
       type LookPayload = {
         id: string; legacy_id: number | null; title: string;
         gender: string | null; creator_handle: string; user_id: string | null;
-        looks_creative: { video_url: string | null; thumbnail_url: string | null; is_primary: boolean }[];
+        looks_creative: { video_url: string | null; hls_url: string | null; thumbnail_url: string | null; is_primary: boolean }[];
         look_products: { products: { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null; primary_image_url: string | null; primary_video_url: string | null; primary_video_poster_url: string | null; url: string | null; images: string[] | null } | null }[] | null;
       };
       const rows = (lookRows as LookPayload[] | null) || [];
@@ -416,6 +421,9 @@ export default function CreatorPage({
           gender: (r.gender as 'men' | 'women') || 'unisex',
           description: '',
           video: r.looks_creative[0]?.video_url || '',
+          // Carry the 1s HLS ladder so LookCard plays it (small first segment →
+          // fast prebuffer) instead of cold-loading the full MP4 — the lag fix.
+          hls_url: r.looks_creative[0]?.hls_url || undefined,
           thumbnail_url: r.looks_creative[0]?.thumbnail_url || undefined,
           products,
           color: '#222',
@@ -966,23 +974,11 @@ export default function CreatorPage({
         ) : (
           <div className="creator-grid" style={{ ['--cat-cols']: gridCols } as CSSProperties}>
             {filteredProducts.map((p, i) => (
-              <div
+              <CreatorProductTile
                 key={`${p.brand}-${p.name}-${i}`}
-                className="look-card creator-product-feed"
+                product={p}
                 onClick={() => handleProductClick(p)}
-              >
-                {p.image ? (
-                  <img className="cpf-media" src={p.image} alt={p.name} loading="lazy" decoding="async" />
-                ) : (
-                  <div className="cpf-media cpf-media--blank" />
-                )}
-                <div className="cpf-gradient" />
-                <div className="cpf-info">
-                  {p.brand && <span className="cpf-brand">{p.brand}</span>}
-                  <span className="cpf-name">{p.name}</span>
-                  {p.price && <span className="cpf-price">{p.price}</span>}
-                </div>
-              </div>
+              />
             ))}
           </div>
         )
