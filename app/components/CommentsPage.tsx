@@ -2,6 +2,7 @@ import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from '@remix-run/react';
 import { supabase } from '~/utils/supabase';
 import { useAuth } from '~/hooks/useAuth';
+import { requireSignup } from '~/services/guest';
 import { extractIdPrefix, extractLookId, nextHexPrefix } from '~/utils/slug';
 import { looks as seedLooks } from '~/data/looks';
 import { lookPoster } from '~/services/media-resolver';
@@ -237,7 +238,7 @@ export default function CommentsPage({ targetType, slug, onClose, onOpenCreator,
   }, [commentIdsKey, slug, user?.id]);
 
   const handleFire = async (commentId: string) => {
-    if (!user) { setError('Sign in to react.'); return; }
+    if (!user) { requireSignup(); return; }
     // Optimistic toggle.
     const prev = reactions[commentId] || { count: 0, mine: false };
     const optimistic: ReactionState = prev.mine
@@ -267,7 +268,7 @@ export default function CommentsPage({ targetType, slug, onClose, onOpenCreator,
   );
 
   const handlePost = async () => {
-    if (!user) { setError('Sign in to comment.'); return; }
+    if (!user) { requireSignup(); return; }
     const body = draft.trim();
     if (!body) return;
     setPosting(true);
@@ -584,7 +585,7 @@ export default function CommentsPage({ targetType, slug, onClose, onOpenCreator,
           </div>
         ) : (
           <div className="comments-composer comments-composer--signin">
-            <button className="comments-send comments-send--signin" onClick={() => navigate('/')}>Sign in to comment</button>
+            <button className="comments-send comments-send--signin" onClick={() => requireSignup()}>Sign in to comment</button>
           </div>
         )}
         {error && <div className="comments-error">{error}</div>}
