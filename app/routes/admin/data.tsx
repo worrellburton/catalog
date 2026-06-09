@@ -33,7 +33,7 @@ import { supabase } from '~/utils/supabase';
 import { VIDEO_MODELS, DEFAULT_VIDEO_MODEL } from '~/constants/video-models';
 import { useAdminSearch } from '~/hooks/useAdminSearch';
 import { createBatchAds, promoteQueuedAds } from '~/services/product-creative';
-import { researchProducts, type ResearchedProduct, type ProductGender } from '~/services/product-research';
+import { researchProducts, brainstormCatalogProducts, type ResearchedProduct, type ProductGender } from '~/services/product-research';
 import AmazonLookupModal from '~/components/AmazonLookupModal';
 import PromptSettingsModal from '~/components/admin/PromptSettingsModal';
 import { startGenerationJob } from '~/services/generation-queue';
@@ -156,12 +156,11 @@ const AUTO_SOURCE = 'auto_ai';
 
 // The ordered steps each auto-added product walks through. Drives the
 // live progress UI so the admin always sees "what step it's in".
-type AutoStep = 'queued' | 'add' | 'scrape' | 'pick' | 'polish' | 'video' | 'done' | 'failed';
-const AUTO_STEP_ORDER: AutoStep[] = ['add', 'scrape', 'pick', 'polish', 'video', 'done'];
+type AutoStep = 'queued' | 'add' | 'pick' | 'polish' | 'video' | 'done' | 'failed';
+const AUTO_STEP_ORDER: AutoStep[] = ['add', 'pick', 'polish', 'video', 'done'];
 const AUTO_STEP_LABELS: Record<AutoStep, string> = {
   queued: 'Waiting…',
   add: 'Adding product',
-  scrape: 'Scraping details',
   pick: 'Picking primary photo',
   polish: 'Polishing photo',
   video: 'Generating video',
@@ -1991,7 +1990,7 @@ export default function AdminData() {
   // real list (by URL match) or 90 seconds elapse — whichever first.
   // `allProducts` is declared further down; we read it via a ref so
   // this effect can run regardless of declaration order and not TDZ.
-  const allProductsRef = useRef<{ url: string }[]>([]);
+  const allProductsRef = useRef<{ url: string; brand?: string | null; name?: string | null }[]>([]);
   useEffect(() => {
     if (pendingProducts.length === 0) return;
     const interval = window.setInterval(() => {
@@ -3189,11 +3188,15 @@ export default function AdminData() {
   }, [showToast, crawledProducts]);
 
   // ── Automatic Add Products orchestrator ────────────────────────────
-  // Discovers `count` catalog-worthy products with Claude + Gemini, then
-  // walks each one through add → scrape → pick photo → polish → video,
-  // patching autoJobs so the live progress list shows the current step.
-  // Polish + video kick off and track async (the existing webhook/poll
-  // path finishes them), so a Modal cold start never stalls the batch.
+  // Discovery uses the fast, reliable path: Claude curates catalog-worthy
+  // product queries (catalog-brainstorm) and live Google Shopping search
+  // (product-search / SerpAPI) resolves real buyable products WITH images
+  // in sub-second — the old dual-model web-search call blew past the 150s
+  // edge-function ceiling and 504'd. Each product is then added → primary
+  // photo picked → polished → video, with the live progress list showing
+  // the current step. Polish + video kick off and track async (the
+  // existing webhook/poll path finishes them) so a Modal cold start never
+  // stalls the batch.
   const runAutoAdd = useCallback(async (count: number) => {
     if (!supabase || autoRunning) return;
     setAutoRunning(true);
@@ -3204,73 +3207,29 @@ export default function AdminData() {
     const patch = (key: string, p: Partial<AutoJob>) =>
       setAutoJobs(prev => prev.map(j => (j.key === key ? { ...j, ...p } : j)));
 
-    // Poll the product row until the scraper has populated images (or it
-    // gives up). The realtime products subscription keeps the table row
-    // fresh in parallel; this just gates the next pipeline step.
-    const waitForScrape = async (productId: string) => {
-      const deadline = Date.now() + 90_000;
-      while (Date.now() < deadline) {
-        const { data } = await supabase!
-          .from('products')
-          .select('image_url, images, name, brand, scrape_status')
-          .eq('id', productId)
-          .single();
-        if (data) {
-          const hasImg = !!data.image_url || (Array.isArray(data.images) && data.images.length > 0);
-          if (data.scrape_status === 'done' || data.scrape_status === 'failed' || hasImg) {
-            return data as { image_url: string | null; images: string[] | null; name: string | null; brand: string | null };
-          }
-        }
-        await new Promise(r => setTimeout(r, 3000));
-      }
-      const { data } = await supabase!
-        .from('products')
-        .select('image_url, images, name, brand')
-        .eq('id', productId)
-        .single();
-      return (data as { image_url: string | null; images: string[] | null; name: string | null; brand: string | null } | null) ?? null;
-    };
-
     try {
-      // 1) DISCOVER — Claude Opus + Gemini Pro search the web in parallel.
-      const prompt = `You are curating products for a premium, visually-driven shoppable catalog (a fashion + lifestyle lookbook). Find ${count + 4} DISTINCT, currently popular, high-converting products that online shoppers love right now and that look great in a catalog — strong brands, clean product photography, broad appeal. Mix apparel, footwear, accessories, beauty, home, and lifestyle. Return direct product-page URLs, one per line.`;
-      const urls: string[] = [];
+      // 1) DISCOVER — Claude brainstorms high-intent queries, Google
+      //    Shopping resolves real products. Seed is randomized so repeat
+      //    runs surface different products.
+      const SEEDS = [
+        'the most popular, high-converting products shoppers are buying right now — trending sneakers, designer bags, beauty hero products, and everyday essentials',
+        'best-selling viral fashion and lifestyle products people love this season',
+        'top trending apparel, footwear, accessories, and beauty hero products from strong brands',
+        'must-have wardrobe staples and statement pieces shoppers keep coming back to',
+      ];
+      const seed = SEEDS[Math.floor(Math.random() * SEEDS.length)];
+      let discovered: ResearchedProduct[] = [];
       try {
-        const { data: { session } } = await supabase.auth.getSession();
-        const baseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-        const apikey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY || '';
-        const res = await fetch(`${baseUrl}/functions/v1/ai-find-urls`, {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
-            apikey,
-          },
-          body: JSON.stringify({ prompt }),
+        const { products, error: discErr } = await brainstormCatalogProducts(seed, {
+          count: Math.max(count + 2, 6),
         });
-        const json = await res.json();
-        if (!res.ok) throw new Error(json.error || `Discovery failed (${res.status})`);
-        const claudeUrls: string[] = json?.claude?.urls || [];
-        const geminiUrls: string[] = json?.gemini?.urls || [];
-        // Interleave so the batch draws from BOTH models, then dedupe
-        // against itself and the products we already have.
-        const merged: string[] = [];
-        const max = Math.max(claudeUrls.length, geminiUrls.length);
-        for (let i = 0; i < max; i++) {
-          if (claudeUrls[i]) merged.push(claudeUrls[i]);
-          if (geminiUrls[i]) merged.push(geminiUrls[i]);
+        if ((!products || products.length === 0)) {
+          setAutoError(discErr
+            ? `Discovery failed: ${discErr}`
+            : 'No products found — check that the Google Shopping (SERPAPI) key is configured, then try again.');
+          return;
         }
-        const existing = new Set(
-          allProductsRef.current.map(p => (p.url || '').trim()).filter(Boolean),
-        );
-        const seen = new Set<string>();
-        for (const u of merged) {
-          const t = (u || '').trim();
-          if (!t || seen.has(t) || existing.has(t)) continue;
-          seen.add(t);
-          urls.push(t);
-          if (urls.length >= count) break;
-        }
+        discovered = products;
       } catch (err) {
         setAutoError(`Discovery failed: ${err instanceof Error ? err.message : String(err)}`);
         return;
@@ -3278,59 +3237,91 @@ export default function AdminData() {
         setAutoDiscovering(false);
       }
 
-      if (urls.length === 0) {
-        setAutoError('Claude + Gemini did not return any usable product URLs. Try again.');
+      // Dedupe against the existing catalog + soft brand-diversity cap so a
+      // single run doesn't return five of the same brand.
+      const existingKeys = new Set(
+        allProductsRef.current.map(p => `${(p.brand || '').toLowerCase()}|${(p.name || '').toLowerCase()}`),
+      );
+      const brandCount = new Map<string, number>();
+      const chosen: ResearchedProduct[] = [];
+      for (const p of discovered) {
+        if (!p.image_url) continue;
+        const key = `${(p.brand || '').toLowerCase()}|${(p.name || '').toLowerCase()}`;
+        if (existingKeys.has(key)) continue;
+        const b = (p.brand || '').toLowerCase();
+        if ((brandCount.get(b) || 0) >= 2) continue;
+        brandCount.set(b, (brandCount.get(b) || 0) + 1);
+        chosen.push(p);
+        if (chosen.length >= count) break;
+      }
+      if (chosen.length === 0) {
+        setAutoError('Everything discovered is already in your catalog — try again for a fresh batch.');
         return;
       }
 
-      const jobs: AutoJob[] = urls.map((u, i) => ({
+      const jobs: AutoJob[] = chosen.map((p, i) => ({
         key: `auto-${Date.now()}-${i}`,
-        url: u,
-        label: autoHostLabel(u),
+        url: p.url || '',
+        label: [p.brand, p.name].filter(Boolean).join(' · ') || p.name || 'Product',
         step: 'queued',
       }));
       setAutoJobs(jobs);
 
       let succeeded = 0;
-      for (const job of jobs) {
+      for (let i = 0; i < jobs.length; i++) {
+        const job = jobs[i];
+        const p = chosen[i];
         try {
-          // 2) ADD — insert the URL tagged source=auto_ai. Realtime pushes
-          //    the row into the table.
+          // 2) ADD — insert the resolved product (images already in hand)
+          //    tagged source=auto_ai. Realtime pushes the row into the table.
           patch(job.key, { step: 'add' });
-          const row = await addProductUrl(job.url, AUTO_SOURCE);
-          patch(job.key, { productId: row.id, step: 'scrape' });
-
-          // 3) SCRAPE — wait for the Modal scraper to resolve images.
-          const scraped = await waitForScrape(row.id);
-          const imgs: string[] = [];
-          if (Array.isArray(scraped?.images)) {
-            for (const u of scraped!.images!) if (typeof u === 'string' && u) imgs.push(u);
-          }
-          if (scraped?.image_url && !imgs.includes(scraped.image_url)) imgs.push(scraped.image_url);
-          if (imgs.length === 0) {
-            patch(job.key, { step: 'failed', error: 'No product images found' });
+          const imgs = (p.image_urls && p.image_urls.length ? p.image_urls : [p.image_url]).filter(Boolean);
+          const inferred = inferProductTypeAndSubtype(p.name, p.brand);
+          const { data: inserted, error: insErr } = await supabase
+            .from('products')
+            .insert({
+              name: p.name,
+              brand: p.brand,
+              price: p.price,
+              url: p.url || null,
+              image_url: p.image_url,
+              images: imgs,
+              scrape_status: 'pending',
+              scraped_at: null,
+              type: inferred?.type ?? null,
+              subtype: inferred?.subtype ?? null,
+              gender: p.gender ?? inferProductGenderFromName(p.name),
+              source: AUTO_SOURCE,
+            })
+            .select('id')
+            .single();
+          if (insErr || !inserted?.id) {
+            patch(job.key, { step: 'failed', error: insErr?.message || 'Insert failed' });
             continue;
           }
-          patch(job.key, { label: scraped?.name || job.label });
+          const productId = inserted.id as string;
+          patch(job.key, { productId });
+          // Kick a background scrape so size/fabric enrich later (non-blocking).
+          if (p.url) void triggerScrape(productId, p.url);
 
-          // 4) PICK PRIMARY PHOTO — Claude vision picks the cleanest solo shot.
+          // 3) PICK PRIMARY PHOTO — Claude vision picks the cleanest solo shot.
           patch(job.key, { step: 'pick' });
           const { data: pickData, error: pickErr } = await supabase.functions.invoke('pick-primary-image', {
-            body: { product_id: row.id, name: scraped?.name || '', brand: scraped?.brand || '', image_urls: imgs },
+            body: { product_id: productId, name: p.name || '', brand: p.brand || '', image_urls: imgs },
           });
           if (pickErr || !pickData?.success) {
             patch(job.key, { step: 'failed', error: 'Could not pick a primary photo' });
             continue;
           }
 
-          // 5) POLISH — reframe to a uniform 3:4 packshot (awaited; ~seconds).
+          // 4) POLISH — reframe to a uniform 3:4 packshot (awaited; ~seconds).
           patch(job.key, { step: 'polish' });
-          await polishPrimaryImage(row.id);
+          await polishPrimaryImage(productId);
 
-          // 6) VIDEO — kick off generation. Returns in <2s with status
+          // 5) VIDEO — kick off generation. Returns in <2s with status
           //    pending; the fal webhook + pending poll finish it async.
           patch(job.key, { step: 'video' });
-          await generatePrimaryVideo(row.id);
+          await generatePrimaryVideo(productId);
 
           patch(job.key, { step: 'done' });
           succeeded += 1;
