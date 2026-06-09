@@ -1252,8 +1252,16 @@ html[data-shell="catalog-app"] .gen-page {
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: clamp(18px, 4.5vh, 44px);
+  /* `safe center` centers when everything fits, but falls back to start
+     alignment when it overflows so the top isn't clipped out of the
+     scrollable area. */
+  justify-content: safe center;
+  gap: clamp(12px, 3vh, 28px);
+  /* Safety: if the faces + (wrapped) products + controls are taller than
+     the space above the fixed dock on a short viewport, scroll WITHIN the
+     stage instead of spilling down into / overlapping the dock. */
+  overflow-y: auto;
+  overscroll-behavior: contain;
 }
 
 /* Reference faces — overlapping chain joined by a thin thread so they
@@ -1306,7 +1314,9 @@ html[data-shell="catalog-app"] .gen-page {
 }
 .gen-rv-product {
   position: relative;
-  width: clamp(84px, 26vw, 120px);
+  /* Slightly smaller so a 4th product (which wraps to a second row) plus
+     the faces and controls still clear the bottom dock without overlap. */
+  width: clamp(70px, 21vw, 104px);
   aspect-ratio: 3 / 4;
   border-radius: 16px;
   overflow: hidden;
