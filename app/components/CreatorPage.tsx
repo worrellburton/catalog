@@ -4,8 +4,10 @@ import { useEscapeKey } from '~/hooks/useEscapeKey';
 import { supabase } from '~/utils/supabase';
 import { useAuth } from '~/hooks/useAuth';
 import { AvatarUpload } from './AvatarCropModal';
-import LookCard from './LookCard';
+import CreativeCardV2 from './CreativeCardV2';
 import CreatorProductTile from './CreatorProductTile';
+import { primeLookAssets } from '~/utils/trailPrefetch';
+import { director } from '~/services/video-playback-director';
 import { toggleFollow, isFollowing as fetchIsFollowing, getFollowerCount, getFollowingCount, getFollowers, getFollowing, type FollowUser } from '~/services/follows';
 import { subscribeToLooksChange, fetchSeenLookIds, reorderBySeen, stableLookId } from '~/services/looks';
 import ParticleBackground from './ParticleBackground';
@@ -61,7 +63,26 @@ export default function CreatorPage({
 }: CreatorPageProps) {
   const [activeTab, setActiveTab] = useState<Tab>('looks');
   const { user: currentUser } = useAuth();
-  useEscapeKey(onClose);
+
+  // Director scope for this catalog. Each look tile below registers a slotId
+  // prefixed with this, so while the catalog is open the VideoPlaybackDirector
+  // plays/prebuffers ONLY the catalog's tiles and pauses the home feed mounted
+  // behind us (same pattern as LookOverlay/ProductPage). Without it both grids
+  // would compete for the bounded video pool.
+  const directorScope = `creator:${creatorName}`;
+  useEffect(() => {
+    director.pushScope(directorScope);
+    return () => director.popScope(directorScope);
+  }, [directorScope]);
+
+  // On close, flag the scope exiting so the home feed re-acquires + decodes its
+  // <video>s DURING the back transition instead of after unmount — no dead-feed
+  // beat. The push/pop balance is preserved (the effect cleanup still pops once).
+  const handleClose = useCallback(() => {
+    director.beginScopeExit(directorScope);
+    onClose();
+  }, [directorScope, onClose]);
+  useEscapeKey(handleClose);
 
   // Grid-density dial — a minimal wheel pinned to the right edge that cycles the
   // catalog grid between 1, 2 (default), and 3 columns. Scroll/drag on it to
@@ -555,6 +576,16 @@ export default function CreatorPage({
     return rawCreatorLooks.filter(l => !!l.video);
   }, [rawCreatorLooks]);
 
+  // Warm the above-the-fold batch the same way the feed does: decode the first
+  // ~16 posters into cache and head-warm the first ~18 HLS ladders the instant
+  // the look set resolves — before the cards mount — so the first screen paints
+  // its posters flicker-free and plays without the cold-start manifest fetch.
+  // Idempotent + network-gated inside primeLookAssets; covers every load branch
+  // (handle, generated, seed) since creatorLooks is the final rendered list.
+  useEffect(() => {
+    if (creatorLooks.length) primeLookAssets(creatorLooks);
+  }, [creatorLooks]);
+
   // Brand-grouped product list - powers the Shop tab chips.
   const allProducts = useMemo(() => {
     if (userId || isHandleBranch) return applyCreatorOrder(userProducts, productOrderMap);
@@ -727,7 +758,7 @@ export default function CreatorPage({
       {appearance.particles && (
         <div className="creator-page-particles" aria-hidden="true"><ParticleBackground /></div>
       )}
-      <button className="creator-back creator-back--icon" onClick={onClose} aria-label="Back">
+      <button className="creator-back creator-back--icon" onClick={handleClose} aria-label="Back">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
       </button>
 
@@ -939,16 +970,16 @@ export default function CreatorPage({
           </div>
         ) : (
           <div className="creator-grid" style={{ ['--cat-cols']: gridCols } as CSSProperties}>
-            {creatorLooks.map(look => (
-              <LookCard
+            {creatorLooks.map((look, i) => (
+              <CreativeCardV2
                 key={look.id}
+                slotId={`${directorScope}:look-${look.id}`}
                 look={look}
                 className="look-card"
                 onOpenLook={onOpenLook}
                 onOpenCreator={() => {}}
-                onCreateCatalog={onCreateCatalog}
                 hideCreator
-                preferLookPoster
+                priority={i < 6}
               />
             ))}
           </div>
@@ -976,6 +1007,7 @@ export default function CreatorPage({
             {filteredProducts.map((p, i) => (
               <CreatorProductTile
                 key={`${p.brand}-${p.name}-${i}`}
+                slotId={`${directorScope}:product-${p.brand}-${p.name}-${i}`}
                 product={p}
                 onClick={() => handleProductClick(p)}
               />

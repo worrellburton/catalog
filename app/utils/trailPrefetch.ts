@@ -13,7 +13,7 @@
 import type { ProductAd } from '~/services/product-creative';
 import type { Look } from '~/data/looks';
 import { withTransform } from './supabase-image';
-import { pickPosterUrl } from '~/services/video-loading';
+import { pickPosterUrl, prefetchHlsHead } from '~/services/video-loading';
 import { lookPoster } from '~/services/media-resolver';
 
 const POSTERS_TO_WARM = 16;
@@ -131,6 +131,15 @@ export function primeLookAssets(rows: Look[]): void {
 
   if (!networkLooksHealthy()) return;
   for (const row of rows.slice(0, VIDEOS_TO_WARM)) {
+    // HLS-aware: when a look ships the adaptive ladder (hls_url), that's the
+    // source LookCard/CreativeCardV2 actually play — warm its head (manifest +
+    // lowest-rung init + first segments) so hls.js attaches to a cache hit. A
+    // full-file <link rel=preload as=video> on the MP4 here would download bytes
+    // the player never reads AND steal bandwidth from the HLS segment fetch.
+    if (row.hls_url) {
+      prefetchHlsHead(row.hls_url);
+      continue;
+    }
     const url = row.mobile_video_url || row.video;
     if (!url || warmedVideos.has(url)) continue;
     warmedVideos.add(url);

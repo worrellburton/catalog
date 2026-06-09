@@ -77,6 +77,10 @@ interface CreativeCardV2Props {
   priority?: boolean;
   /** Override the director slot ID (use when the same item appears multiple times). */
   slotId?: string;
+  /** Look-mode: hide the creator avatar+name chip. Used by the Creator
+   *  catalog page where the creator identity is already in the page header,
+   *  so per-tile attribution is redundant noise (mirrors LookCard.hideCreator). */
+  hideCreator?: boolean;
 }
 
 const CreativeCardV2 = memo(function CreativeCardV2({
@@ -91,6 +95,7 @@ const CreativeCardV2 = memo(function CreativeCardV2({
   onDeleteLook,
   priority = false,
   slotId,
+  hideCreator = false,
 }: CreativeCardV2Props) {
   const isLook = !!look && !creative;
 
@@ -483,7 +488,7 @@ const CreativeCardV2 = memo(function CreativeCardV2({
           </button>
         )}
 
-        {isLook && look ? (
+        {isLook && look && !hideCreator ? (
           <CreatorChip
             look={look}
             creatorAvatar={creatorAvatar}

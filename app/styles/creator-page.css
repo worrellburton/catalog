@@ -499,6 +499,9 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+  /* Poster sits at z-index 1; the director appends its pooled <video> at
+     z-index 2 directly over it (see CreatorProductTile / video-playback-director). */
+  z-index: 1;
 }
 .cpf-media--blank {
   background: linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02));
@@ -508,6 +511,9 @@
   inset: 0;
   background: linear-gradient(to top, rgba(0,0,0,0.78) 0%, rgba(0,0,0,0.28) 36%, transparent 62%);
   pointer-events: none;
+  /* Above the director's pooled <video> (z-index 2) so the bottom fade and the
+     brand/name/price labels are never hidden behind the playing clip. */
+  z-index: 3;
 }
 .cpf-info {
   position: absolute;
@@ -518,7 +524,7 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
-  z-index: 1;
+  z-index: 4;
 }
 .cpf-brand {
   font-size: 10.5px;
