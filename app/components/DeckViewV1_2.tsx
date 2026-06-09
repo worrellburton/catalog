@@ -343,7 +343,10 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
   // nearest neighbours being other current pants we have in catalog. Makes
   // the "visual taste, indexed" claim concrete with shipping product art
   // instead of tinted clones of a single clip.
-  const techPantsHero = 'https://vtarjrnqvcqbhoclvcur.supabase.co/storage/v1/object/public/scraped-products/polished/d0f110c6-26bd-4ffa-b5cb-b23a7731b3cb-1780080771152.png';
+  // Full-length flat-lay (same Classic Cotton Linen Twill family as the
+  // neighbours, which render the whole pant) so the query reads as a full
+  // pant, not the cropped waistband the prior poplin-trouser shot showed.
+  const techPantsHero = 'https://vtarjrnqvcqbhoclvcur.supabase.co/storage/v1/object/public/scraped-products/polished/18ae0efd-7f35-4584-affb-c9022da5d319-1780875978365.png';
   const techPantsNeighbors = [
     'https://vtarjrnqvcqbhoclvcur.supabase.co/storage/v1/object/public/scraped-products/polished/d431b779-2283-40d5-a22a-080b2c5dfecf-1781022219846.png',
     'https://vtarjrnqvcqbhoclvcur.supabase.co/storage/v1/object/public/scraped-products/polished/be3084bb-d7be-43fa-b2e3-98c2eb016803-1781022219839.png',
