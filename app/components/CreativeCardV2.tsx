@@ -103,17 +103,20 @@ const CreativeCardV2 = memo(function CreativeCardV2({
   // dial split is deterministic on the item key (string)
   const dialKey = itemKey;
 
-  // Prefer the HLS manifest (adaptive ladder) when present so the feed tile
-  // and the detail hero share ONE source — the director hands the live element
-  // to TrailVideoHost on tap with no src swap. Falls back to the progressive
-  // mobile/full MP4 split when there's no ladder yet.
+  // Feed TILES play progressive MP4, not HLS. A tile only ever needs the 480p
+  // rung, and MP4 decodes from the FIRST bytes in a single request (no
+  // manifest→playlist→segment chain), so the first frame is instant — and its
+  // byte-warm works on iOS native too, where the HLS cache-warm can't. The
+  // full-screen hero (ProductPage / LookOverlay) plays the SAME MP4, so the
+  // director's tap→hero element handoff stays seamless (no src swap, no black).
+  // HLS stays encoded + available for a future seamless hero upgrade; every
+  // clip carries an MP4 (verified hls_only=0), so nothing loses its tile video.
   const playableUrl = isLook
-    ? pickPlaybackSource({
-        hls_url: look!.hls_url ?? null,
+    ? pickVideoUrl({
         video_url: normalizeLookVideoUrl(look!.video, basePath),
         mobile_video_url: look!.mobile_video_url ?? null,
       })
-    : pickPlaybackSource(creative!);
+    : pickVideoUrl(creative!);
 
   // Raw poster / still URLs from the data layer. These point at the
   // FULL-RES asset in storage (the polished primary image, the look

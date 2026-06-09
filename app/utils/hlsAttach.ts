@@ -72,18 +72,6 @@ function preferHlsJsOverNative(): boolean {
   }
 }
 
-/** Phase 1: pre-load the hls.js chunk during idle so the FIRST HLS card of a
- *  session doesn't stall on the dynamic import before it can even attach.
- *  No-op on native-HLS browsers (they never download hls.js) and on save-data.
- *  Safe to call repeatedly — loadHls() memoizes the import. */
-export function prefetchHlsModule(): void {
-  if (typeof navigator !== 'undefined') {
-    const c = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
-    if (c?.saveData) return;
-  }
-  if (browserSupportsNativeHls() && !preferHlsJsOverNative()) return;
-  void loadHls().catch(() => { /* will retry lazily on the first real attach */ });
-}
 
 // One hls.js instance per element, tracked off to the side so callers
 // (TrailVideoHost pool entries) don't have to thread it through their own

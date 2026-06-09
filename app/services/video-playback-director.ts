@@ -16,7 +16,6 @@ import {
   setVideoSource,
   getVideoSource,
   browserSupportsNativeHls,
-  prefetchHlsModule,
 } from '~/utils/hlsAttach';
 
 // ── Constants ──────────────────────────────────────────────────────────
@@ -241,15 +240,6 @@ class VideoPlaybackDirector {
     const initialPool = Math.min(8, poolMax());
     for (let i = 0; i < initialPool; i++) {
       this.pool.push({ el: this.createVideoEl(), assignedTo: null });
-    }
-
-    // Phase 1: warm the hls.js chunk during idle so the first HLS attach in
-    // this session isn't gated on the dynamic import. No-op on native-HLS
-    // browsers (Safari/iOS never load hls.js) and on save-data.
-    {
-      const w = window as Window & { requestIdleCallback?: (cb: () => void) => void };
-      if (typeof w.requestIdleCallback === 'function') w.requestIdleCallback(() => prefetchHlsModule());
-      else window.setTimeout(() => prefetchHlsModule(), 1200);
     }
 
     // Track scroll velocity so we can skip play() during fast flicks.

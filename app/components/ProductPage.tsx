@@ -1058,11 +1058,14 @@ export default function ProductPage({
   // the <video> element painting a real image even on the (rare) cold
   // path where the pool element was evicted between card unmount and
   // hero attach.
-  // Prefer the HLS manifest so the full-screen hero ramps to a crisp rung;
-  // fall back to the progressive MP4 when no ladder exists for this clip.
+  // Play the progressive MP4 — the SAME source the feed tile donates — so the
+  // director's tap→hero element handoff is seamless (no src reset, no black
+  // hero, the bug noted where a mismatched src reloaded a playing element).
+  // MP4 also gives an instant first frame; the HLS ladder is left for a future
+  // seamless full-screen upgrade. Falls back to HLS only if there's no MP4.
   const setHeroSlot = useTrailVideo(
     effectiveCreative?.id,
-    effectiveCreative?.hlsUrl || effectiveCreative?.videoUrl,
+    effectiveCreative?.videoUrl || effectiveCreative?.hlsUrl || undefined,
     heroPoster || undefined,
   );
 
@@ -1071,10 +1074,12 @@ export default function ProductPage({
   // by URL so a second call here is free when the card already warmed
   // the cache.
   useEffect(() => {
-    // HLS streams its own segments via hls.js — skip the full-file byte prewarm.
-    if (effectiveCreative?.hlsUrl) return;
+    // The hero plays MP4 now (see setHeroSlot), so byte-warm it — a cold hero
+    // open (no donated element) is then instant too. Skip only when there's no
+    // MP4 and we're on the HLS fallback (hls.js streams its own segments).
+    if (!effectiveCreative?.videoUrl && effectiveCreative?.hlsUrl) return;
     if (creative?.videoUrl) prefetchVideoBytes(creative.videoUrl);
-  }, [creative?.id, creative?.videoUrl, effectiveCreative?.hlsUrl]);
+  }, [creative?.id, creative?.videoUrl, effectiveCreative?.videoUrl, effectiveCreative?.hlsUrl]);
 
   // Prewarm "Featured in Looks" poster images. Each look that's
   // about to render a tile gets its poster jpeg pulled into the

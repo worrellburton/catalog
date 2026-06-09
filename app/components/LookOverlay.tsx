@@ -195,11 +195,11 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   // the trail-host detects "same id, new src" and re-buffers from scratch
   // (audible/visible reload).
   const wantMobile = isMobileViewport() || isSlowConnection();
-  // HLS manifest wins when present — the SAME source LookCard plays, so the
-  // pooled <video> hands off into the hero with no src swap, and ABR ramps to
-  // a high rung now that the element fills the screen. Progressive mobile/full
-  // split is the fallback when there's no manifest yet.
-  const heroVideoUrl = look.hls_url || (wantMobile && look.mobile_video_url ? look.mobile_video_url : fullVideoUrl);
+  // Play the progressive MP4 — the SAME source the look tile donates — so the
+  // pooled <video> hands off into the hero with no src swap and no black gap.
+  // (Mobile variant on a phone, full clip otherwise.) HLS is left encoded for
+  // a future seamless full-screen upgrade; falls back to it only if no MP4.
+  const heroVideoUrl = (wantMobile && look.mobile_video_url ? look.mobile_video_url : fullVideoUrl) || look.hls_url;
 
   // Tap-handoff poster: LookCard captured the playing frame via
   // captureVideoFrame() and stashed a JPEG data URL on
@@ -233,12 +233,12 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   // the render band). Idempotent by URL so calling twice is free when
   // the cache is already warm.
   useEffect(() => {
-    // HLS streams its own segments via hls.js — skip the full-file byte
-    // prewarm (it would fetch an MP4 the hero won't play).
-    if (look.hls_url) return;
-    if (heroVideoUrl) prefetchVideoBytes(heroVideoUrl);
+    // The hero plays MP4 now (see heroVideoUrl) — byte-warm it so a cold open
+    // is instant. Only the HLS-fallback case (no MP4 at all) skips the prewarm.
+    if (!heroVideoUrl || /\.m3u8(\?|#|$)/i.test(heroVideoUrl)) return;
+    prefetchVideoBytes(heroVideoUrl);
     if (fullVideoUrl && fullVideoUrl !== heroVideoUrl) prefetchVideoBytes(fullVideoUrl);
-  }, [heroVideoUrl, fullVideoUrl, look.hls_url]);
+  }, [heroVideoUrl, fullVideoUrl]);
 
   // Pause background feed cards while the overlay is open so they don't
   // compete for bandwidth with the hero video. Resume on unmount.

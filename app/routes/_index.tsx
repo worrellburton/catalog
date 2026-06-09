@@ -1940,19 +1940,20 @@ export default function Home() {
                     ? {
                         id: selectedCreative.id,
                         // Must resolve to the SAME source CreativeCardV2
-                        // donated on tap (pickPlaybackSource → pickVideoUrl:
-                        // product.primary_video_url, then the mobile variant on
-                        // a mobile viewport, then full video_url). Passing the
-                        // raw video_url here made the detail hero request a
-                        // different src than the donated element carried, so
-                        // TrailVideoHost.attach() reset the src and RELOADED a
-                        // perfectly-good playing element — the multi-second
-                        // black hero on mobile. hlsUrl below still wins when an
-                        // HLS ladder exists (matches pickPlaybackSource order).
+                        // donated on tap — the tile now plays progressive MP4
+                        // (pickVideoUrl: product.primary_video_url, then the
+                        // mobile variant on a mobile viewport, then full
+                        // video_url), and ProductPage's hero prefers videoUrl
+                        // too, so the donated element hands off with no src
+                        // reset (the "reloaded a playing element → multi-second
+                        // black hero" bug). MP4 is instant on every platform
+                        // incl. iOS; HLS is retained below for a future
+                        // seamless full-screen upgrade but the hero ignores it
+                        // for now (it would reset the donated element).
                         videoUrl: pickVideoUrl(selectedCreative) || selectedCreative.video_url || '',
-                        // Prefer the product's HLS ladder, then the creative's,
-                        // so the hero plays one adaptive source and ramps to a
-                        // crisp rung full-screen. Null → falls back to MP4.
+                        // Retained for a future seamless hero upgrade; the hero
+                        // currently prefers videoUrl so the tap handoff stays
+                        // seamless. Product ladder first, then the creative's.
                         hlsUrl:
                           selectedCreative.product?.primary_hls_url
                           || selectedCreative.hls_url
