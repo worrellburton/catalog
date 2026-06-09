@@ -1,0 +1,129 @@
+/* Guest signup scrim — dissolves in over a look teaser, a creator catalog,
+   or the feed (scroll nudge). Sits above every overlay so the gate is the
+   foreground moment. Centered with margin-auto + % widths per the
+   CLAUDE.md fixed-overlay centering rule (no translateX / 100vw). */
+
+.guest-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 4000; /* above look/product overlays + header */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  /* Dark glass that lets the teaser/feed bleed through, then settles. */
+  background: rgba(8, 8, 10, 0.82);
+  backdrop-filter: blur(18px) saturate(1.1);
+  -webkit-backdrop-filter: blur(18px) saturate(1.1);
+  /* Dissolve-in: the look plays for ~1s underneath, then this fades over it. */
+  animation: guest-gate-dissolve 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes guest-gate-dissolve {
+  from { opacity: 0; backdrop-filter: blur(0) saturate(1); }
+  to   { opacity: 1; }
+}
+
+.guest-gate-close {
+  position: absolute;
+  top: max(env(safe-area-inset-top, 0px), 16px);
+  right: 16px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.85);
+  cursor: pointer;
+  transition: background 0.16s ease;
+}
+.guest-gate-close:hover { background: rgba(255, 255, 255, 0.18); }
+
+.guest-gate-particles {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.5;
+}
+.guest-gate-particles .pw-particles { position: absolute; inset: 0; width: 100%; height: 100%; }
+
+.guest-gate-content {
+  position: relative;
+  z-index: 1;
+  width: min(420px, calc(100% - 48px));
+  margin-inline: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 14px;
+  animation: guest-gate-rise 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.08s both;
+}
+@keyframes guest-gate-rise {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.guest-gate-logo { height: 30px; width: auto; color: #fff; margin-bottom: 4px; }
+.guest-gate-logo svg { height: 30px; width: auto; display: block; }
+
+.guest-gate-title {
+  margin: 0;
+  font-size: 23px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #fff;
+  line-height: 1.2;
+}
+.guest-gate-sub {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.62);
+  max-width: 340px;
+}
+
+.guest-gate-google {
+  margin-top: 8px;
+  width: 100%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 13px 18px;
+  border-radius: 999px;
+  border: none;
+  background: #fff;
+  color: #1a1a1a;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.16s ease, box-shadow 0.16s ease, opacity 0.16s ease;
+  box-shadow: 0 8px 28px rgba(0, 0, 0, 0.35);
+}
+.guest-gate-google:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 12px 34px rgba(0, 0, 0, 0.45); }
+.guest-gate-google:active:not(:disabled) { transform: translateY(0); }
+.guest-gate-google:disabled { opacity: 0.7; cursor: default; }
+
+.guest-gate-error {
+  margin: 0;
+  font-size: 12.5px;
+  color: #fca5a5;
+}
+
+.guest-gate-continue {
+  margin-top: 2px;
+  padding: 8px 16px;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: color 0.16s ease;
+}
+.guest-gate-continue:hover:not(:disabled) { color: rgba(255, 255, 255, 0.85); }
+.guest-gate-continue:disabled { opacity: 0.5; cursor: default; }

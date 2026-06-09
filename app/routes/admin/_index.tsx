@@ -104,7 +104,10 @@ function formatDuration(ms: number): string {
 // ── Per-window aggregate shape ───────────────────────────────────
 // Everything in this struct is scoped to the (audience, range) pair.
 interface HomeStats {
+  /** Registered active users — distinct signed-in user_id in the window. */
   activeUsers: number | null;
+  /** Unregistered (guest) active devices in the window — from guest_sessions. */
+  guestActiveUsers: number | null;
   avgSessionMs: number | null;
   /** Average wall-clock time WITHIN a session where no events
    *  fired beyond the IDLE_THRESHOLD_MS gap. Sums every
@@ -141,6 +144,7 @@ const IDLE_THRESHOLD_MS = 30_000;
 
 const EMPTY_STATS: HomeStats = {
   activeUsers: null,
+  guestActiveUsers: null,
   avgSessionMs: null,
   avgIdleMs: null,
   avgActiveMs: null,
@@ -320,6 +324,7 @@ export default function AdminHome() {
         gensRes,
         sessionRes,
         productCostRes,
+        guestActiveRes,
       ] = await Promise.all([
         // Active users — distinct user_id in window.
         (async () => {
@@ -430,6 +435,15 @@ export default function AdminHome() {
           const prices = (data || []).map((r: { price: number | null }) => Number(r.price)).filter(p => Number.isFinite(p) && p > 0);
           return prices.length ? prices.reduce((a, b) => a + b, 0) / prices.length : 0;
         })(),
+        // Unregistered (guest) actives — distinct guest devices in the
+        // window. Only meaningful when guests are in scope; the Admins-only
+        // audience has no guests, so skip the round trip and report 0.
+        (async () => {
+          if (audience === 'admins') return 0;
+          const { data, error } = await supabase!.rpc('guest_active_count', { p_since: startISO });
+          if (error) { console.warn('guest_active_count failed:', error.message); return 0; }
+          return (data as number) ?? 0;
+        })(),
       ]);
 
       if (myReq !== statsReqRef.current) return;
@@ -441,6 +455,7 @@ export default function AdminHome() {
 
       setStats({
         activeUsers: activeRes,
+        guestActiveUsers: guestActiveRes,
         avgSessionMs: sessionRes.sessionMs,
         avgIdleMs: sessionRes.idleMs,
         avgActiveMs: sessionRes.activeMs,
@@ -608,13 +623,43 @@ export default function AdminHome() {
             was just looking at. metricLink keeps the URL params in
             sync without sprinkling them at every callsite. */}
         {(() => null)()}
-        <StatCard
-          icon={<UserIcon />}
-          label={activeLabel[range]}
-          value={formatNumber(stats.activeUsers)}
-          loading={statsLoading}
-          to={metricLink('active-users', audience, range)}
-        />
+        {/* Active users, split registered vs unregistered (guest). Total
+            leads; the two breakdown cards sit right beside it so the split
+            reads as one cluster. Guests come from the guest_sessions
+            heartbeat; registered from distinct signed-in user_id. */}
+        {(() => {
+          const reg = stats.activeUsers;
+          const guest = stats.guestActiveUsers;
+          const haveAny = reg != null || guest != null;
+          const total = (reg ?? 0) + (guest ?? 0);
+          const guestPct = total > 0 ? Math.round(((guest ?? 0) / total) * 100) : 0;
+          return (
+            <>
+              <StatCard
+                icon={<UserIcon />}
+                label={activeLabel[range]}
+                value={formatNumber(haveAny ? total : null)}
+                sub={haveAny ? `${formatNumber(reg)} registered · ${formatNumber(guest)} guest` : undefined}
+                loading={statsLoading}
+                to={metricLink('active-users', audience, range)}
+              />
+              <StatCard
+                icon={<UserIcon />}
+                label="Registered active"
+                value={formatNumber(reg)}
+                loading={statsLoading}
+                to={metricLink('active-users', audience, range)}
+              />
+              <StatCard
+                icon={<UserIcon />}
+                label="Guest active"
+                value={formatNumber(guest)}
+                sub={haveAny ? `${guestPct}% of actives` : undefined}
+                loading={statsLoading}
+              />
+            </>
+          );
+        })()}
         <StatCard
           icon={<ClockIcon />}
           label="Avg session"

@@ -28,14 +28,20 @@ export interface OpexItem {
   id: string;
   name: string;
   category: OpexCategory;
-  /** Monthly cost in dollars in the item's first active month. */
+  /** Monthly cost in dollars in the item's first active month. Ignored when
+   *  the item is MAU-variable (perMau > 0) — kept as the fixed fallback. */
   amount: number;
   /** First active month, 0-based inclusive. */
   startMonth: number;
   /** Last active month, 0-based inclusive (MONTHS-1 = runs to the end). */
   endMonth: number;
-  /** Month-over-month change while active (decimal; negative ramps down). */
+  /** Month-over-month change while active (decimal; negative ramps down).
+   *  Ignored when the item is MAU-variable. */
   growth: number;
+  /** When > 0, this line is VARIABLE: its monthly cost = perMau × that
+   *  month's MAU (so servers / AI tokens scale with the user base) instead
+   *  of the fixed amount/growth. $ per MAU per month. */
+  perMau?: number;
 }
 
 export const OPEX_STORAGE_KEY = 'catalog:opex:v1';
@@ -55,32 +61,41 @@ export function defaultOpexItems(): OpexItem[] {
     { id: uid(), name: 'Engineering',    category: 'payroll',  amount: 20000, startMonth: 0, endMonth: CONTINUOUS_END, growth: 0.04 },
     { id: uid(), name: 'Software & SaaS', category: 'software', amount: 6000,  startMonth: 0, endMonth: CONTINUOUS_END, growth: 0.02 },
     { id: uid(), name: 'Office & ops',   category: 'office',   amount: 5000,  startMonth: 0, endMonth: CONTINUOUS_END, growth: 0.01 },
+    // Variable infra — scale with the user base (see perMau). Servers cover
+    // hosting + DB + CDN egress; AI tokens cover generation + embeddings +
+    // Claude reasoning. amount is just the fixed fallback if perMau is cleared.
+    { id: uid(), name: 'Servers & infrastructure', category: 'software', amount: 1500, startMonth: 0, endMonth: CONTINUOUS_END, growth: 0, perMau: 0.06 },
+    { id: uid(), name: 'AI tokens & generation',   category: 'software', amount: 2500, startMonth: 0, endMonth: CONTINUOUS_END, growth: 0, perMau: 0.10 },
   ];
 }
 
-/** Per-month total OpEx across all line items, length MONTHS. */
-export function buildOpexSchedule(items: OpexItem[]): number[] {
+/** Cost of one OpEx line in month `m` (0-based). MAU-variable lines
+ *  (perMau > 0) cost perMau × that month's MAU; everything else is the
+ *  fixed amount compounded by growth. Returns 0 when the line is inactive. */
+export function opexItemMonthly(it: OpexItem, m: number, mau?: number[]): number {
+  const s = Math.max(0, Math.min(MONTHS - 1, Math.round(it.startMonth)));
+  const e = Math.max(s, Math.min(MONTHS - 1, Math.round(it.endMonth)));
+  if (m < s || m > e) return 0;
+  if (it.perMau && it.perMau > 0) return it.perMau * (mau?.[m] ?? 0);
+  return it.amount * Math.pow(1 + it.growth, m - s);
+}
+
+/** Per-month total OpEx across all line items, length MONTHS. Pass the MAU
+ *  series so MAU-variable lines (perMau) cost perMau × MAU each month. */
+export function buildOpexSchedule(items: OpexItem[], mau?: number[]): number[] {
   const out = new Array(MONTHS).fill(0);
   for (const it of items) {
-    const s = Math.max(0, Math.min(MONTHS - 1, Math.round(it.startMonth)));
-    const e = Math.max(s, Math.min(MONTHS - 1, Math.round(it.endMonth)));
-    for (let m = s; m <= e; m++) {
-      out[m] += it.amount * Math.pow(1 + it.growth, m - s);
-    }
+    for (let m = 0; m < MONTHS; m++) out[m] += opexItemMonthly(it, m, mau);
   }
   return out;
 }
 
 /** Per-month totals split by category, for a stacked view. */
-export function buildOpexByCategory(items: OpexItem[]): Record<OpexCategory, number[]> {
+export function buildOpexByCategory(items: OpexItem[], mau?: number[]): Record<OpexCategory, number[]> {
   const out = {} as Record<OpexCategory, number[]>;
   for (const c of OPEX_CATEGORIES) out[c.id] = new Array(MONTHS).fill(0);
   for (const it of items) {
-    const s = Math.max(0, Math.min(MONTHS - 1, Math.round(it.startMonth)));
-    const e = Math.max(s, Math.min(MONTHS - 1, Math.round(it.endMonth)));
-    for (let m = s; m <= e; m++) {
-      out[it.category][m] += it.amount * Math.pow(1 + it.growth, m - s);
-    }
+    for (let m = 0; m < MONTHS; m++) out[it.category][m] += opexItemMonthly(it, m, mau);
   }
   return out;
 }
@@ -142,16 +157,17 @@ export function buildPayrollSchedule(items: PayrollItem[]): number[] {
   return out;
 }
 
-/** Combined per-month OpEx: expense line items + payroll. */
-export function buildCombinedSchedule(items: OpexItem[], payroll: PayrollItem[]): number[] {
-  const a = buildOpexSchedule(items);
+/** Combined per-month OpEx: expense line items + payroll. Pass the MAU
+ *  series so MAU-variable expense lines scale with the user base. */
+export function buildCombinedSchedule(items: OpexItem[], payroll: PayrollItem[], mau?: number[]): number[] {
+  const a = buildOpexSchedule(items, mau);
   const b = buildPayrollSchedule(payroll);
   return a.map((v, i) => v + b[i]);
 }
 
 /** Combined per-month totals by category (payroll folded into 'payroll'). */
-export function buildCombinedByCategory(items: OpexItem[], payroll: PayrollItem[]): Record<OpexCategory, number[]> {
-  const byCat = buildOpexByCategory(items);
+export function buildCombinedByCategory(items: OpexItem[], payroll: PayrollItem[], mau?: number[]): Record<OpexCategory, number[]> {
+  const byCat = buildOpexByCategory(items, mau);
   const pay = buildPayrollSchedule(payroll);
   for (let m = 0; m < MONTHS; m++) byCat.payroll[m] += pay[m];
   return byCat;

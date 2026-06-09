@@ -138,6 +138,7 @@ export function prefetchDials(): Promise<void> {
       SHOW_BRAND_LOGOS_KEY,
       COMMENTS_ENABLED_KEY,
       AUTO_EDITOR_ENABLED_KEY,
+      WAITLIST_MODE_KEY,
     ];
     const { data, error } = await supabase
       .from('app_settings').select('key, value').in('key', keys);
@@ -258,6 +259,49 @@ export function subscribeCommentsEnabled(onChange: (value: boolean) => void): ()
       (payload) => {
         const next = (payload.new as { value?: string } | null)?.value;
         onChange(parseBool(next ?? null, DEFAULT_COMMENTS_ENABLED));
+      },
+    )
+    .subscribe();
+  return () => { void supabase!.removeChannel(channel); };
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Waitlist mode — the launch master switch.
+//   ON  (default) → the app behaves the way it always did: sign-in-only,
+//                   guests bounce to the marketing landing, new accounts
+//                   land on the waitlist until approved.
+//   OFF           → the open flow: guests browse the feed + products,
+//                   looks/creator catalogs gate behind signup, signing up
+//                   grants access immediately.
+// Default ON so promoting to production changes nothing until an admin
+// deliberately flips it OFF to open the app.
+// ────────────────────────────────────────────────────────────────────
+
+export const WAITLIST_MODE_KEY = 'waitlist_mode';
+export const DEFAULT_WAITLIST_MODE = true;
+
+export async function getWaitlistMode(): Promise<boolean> {
+  return parseBool(await readDial(WAITLIST_MODE_KEY), DEFAULT_WAITLIST_MODE);
+}
+
+export async function setWaitlistMode(value: boolean): Promise<void> {
+  if (!supabase) throw new Error('Supabase not configured');
+  const { error } = await supabase
+    .from('app_settings')
+    .upsert({ key: WAITLIST_MODE_KEY, value: String(value) }, { onConflict: 'key' });
+  if (error) throw error;
+}
+
+export function subscribeWaitlistMode(onChange: (value: boolean) => void): () => void {
+  if (!supabase) return () => {};
+  const channel = supabase
+    .channel(`dials:${WAITLIST_MODE_KEY}`)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'app_settings', filter: `key=eq.${WAITLIST_MODE_KEY}` },
+      (payload) => {
+        const next = (payload.new as { value?: string } | null)?.value;
+        onChange(parseBool(next ?? null, DEFAULT_WAITLIST_MODE));
       },
     )
     .subscribe();

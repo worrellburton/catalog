@@ -24,6 +24,10 @@ import {
   setCommentsEnabled,
   subscribeCommentsEnabled,
   DEFAULT_COMMENTS_ENABLED,
+  getWaitlistMode,
+  setWaitlistMode,
+  subscribeWaitlistMode,
+  DEFAULT_WAITLIST_MODE,
 } from '~/services/dials';
 import { backfillBrandLogos, type BackfillResult } from '~/services/brandLogos';
 import { shouldBeVideo } from '~/utils/videoStillSplit';
@@ -221,6 +225,41 @@ export default function AdminDials() {
         setCommentsSaving(false);
         window.setTimeout(() => {
           if (inflightComments.current === next) inflightComments.current = null;
+        }, 1500);
+      });
+  };
+
+  // ── Waitlist mode (launch master switch) ────────────────────────────
+  // ON  → old flow (sign-in-only, guests → landing, new accounts → waitlist).
+  // OFF → open flow (guests browse; looks/creators gate behind signup).
+  const [waitlistMode, setWaitlistModeState] = useState<boolean>(DEFAULT_WAITLIST_MODE);
+  const [waitlistLoaded, setWaitlistLoaded] = useState(false);
+  const [waitlistSaving, setWaitlistSaving] = useState(false);
+  const inflightWaitlist = useRef<boolean | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    getWaitlistMode().then(v => {
+      if (cancelled) return;
+      setWaitlistModeState(v);
+      setWaitlistLoaded(true);
+    });
+    const unsub = subscribeWaitlistMode(v => {
+      if (cancelled) return;
+      if (inflightWaitlist.current === v) return;
+      setWaitlistModeState(v);
+    });
+    return () => { cancelled = true; unsub(); };
+  }, []);
+  const onToggleWaitlist = (next: boolean) => {
+    setWaitlistModeState(next);
+    inflightWaitlist.current = next;
+    setWaitlistSaving(true);
+    setWaitlistMode(next)
+      .catch(err => { setError(err.message || 'Save failed'); })
+      .finally(() => {
+        setWaitlistSaving(false);
+        window.setTimeout(() => {
+          if (inflightWaitlist.current === next) inflightWaitlist.current = null;
         }, 1500);
       });
   };
@@ -636,6 +675,62 @@ export default function AdminDials() {
             )}
           </div>
         </div>
+        <div className="admin-detail-card" style={{ border: '1px solid #fde68a', background: '#fffbeb' }}>
+          <h3>Waitlist mode <span style={{ fontSize: 11, fontWeight: 500, color: '#92400e', marginLeft: 6 }}>launch switch</span></h3>
+          <p style={{ fontSize: 13, color: '#888', margin: '4px 0 16px' }}>
+            <strong>On</strong> keeps the app the way it was: sign-in-only,
+            signed-out visitors land on the marketing page, and new accounts
+            wait on the waitlist until approved. <strong>Off</strong> opens
+            the app: guests browse the feed and products, looks and creator
+            catalogs gate behind signup, and signing up grants access right
+            away. Applies to every visitor in real time. To preview a flow on
+            just this device without changing the global setting, open the
+            site with <code>?flow=open</code> or <code>?flow=waitlist</code>
+            {' '}(clear with <code>?flow=clear</code>).
+          </p>
+          {!waitlistLoaded ? (
+            <div className="admin-empty" style={{ marginTop: 0 }}>Loading…</div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#111' }}>
+                  {waitlistMode ? 'On — waitlist' : 'Off — app open'}
+                </span>
+                <span style={{ fontSize: 11, color: '#999' }}>
+                  {waitlistMode
+                    ? 'Sign-in-only; new accounts hit the waitlist.'
+                    : 'Guests browse; looks/creators gate behind signup.'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 11, color: '#999' }}>
+                  {waitlistSaving ? 'Saving…' : 'Saved'}
+                </span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={waitlistMode}
+                  onClick={() => onToggleWaitlist(!waitlistMode)}
+                  style={{
+                    position: 'relative', width: 44, height: 24, borderRadius: 999,
+                    border: 'none', background: waitlistMode ? '#16a34a' : '#cbd5e1',
+                    cursor: 'pointer', transition: 'background 160ms ease', padding: 0,
+                  }}
+                >
+                  <span
+                    style={{
+                      position: 'absolute', top: 3, left: waitlistMode ? 23 : 3,
+                      width: 18, height: 18, borderRadius: '50%',
+                      background: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.25)',
+                      transition: 'left 160ms ease',
+                    }}
+                  />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
         <div className="admin-detail-card">
           <h3>Comments on products & looks</h3>
           <p style={{ fontSize: 13, color: '#888', margin: '4px 0 16px' }}>

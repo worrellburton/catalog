@@ -1,20 +1,29 @@
 import { useEffect } from 'react';
 import { useAuth } from '~/hooks/useAuth';
 import { startSessionTracker } from '~/services/session-tracker';
+import { startGuestTracker, stopGuestTracker } from '~/services/guest-tracker';
 
 /**
- * Mounts the session tracker for the authenticated user. Lives at
- * the root so every page (feed, generate, style, admin, etc.)
- * shares the same session row and contributes to active/idle time.
+ * Mounts the activity tracker at the app root so every page (feed,
+ * generate, style, admin, etc.) contributes to the active-user numbers.
  *
- * Renders nothing — this is purely a side-effect host.
+ * - Signed in → the full session tracker (active/idle time, events).
+ * - Signed out (guest) → a lightweight guest heartbeat so admin DAU can
+ *   split registered vs unregistered actives.
+ *
+ * Renders nothing — purely a side-effect host.
  */
 export default function SessionTrackerHost() {
-  const { user } = useAuth();
+  const { user, loading } = useAuth();
   useEffect(() => {
-    if (!user?.id) return;
-    const tracker = startSessionTracker(user.id);
-    return () => tracker.stop();
-  }, [user?.id]);
+    if (loading) return;
+    if (user?.id) {
+      stopGuestTracker();
+      const tracker = startSessionTracker(user.id);
+      return () => tracker.stop();
+    }
+    // Guest visitor — ping the unregistered-actives heartbeat instead.
+    startGuestTracker();
+  }, [user?.id, loading]);
   return null;
 }

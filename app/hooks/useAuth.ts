@@ -99,6 +99,14 @@ export function refreshAuthUser(): void {
   });
 }
 
+/** Synchronous read of the current auth user (or null). For non-React
+ *  callers — services/hooks that need a quick "is there a session" check
+ *  without spinning up an async getUser() round-trip (e.g. gating a guest
+ *  action). Returns the singleton store's latest snapshot. */
+export function getAuthUser(): AuthUser | null {
+  return state.user;
+}
+
 export function useAuth() {
   const snap = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);
   const logout = useCallback(async () => {

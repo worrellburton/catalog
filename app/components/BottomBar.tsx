@@ -522,7 +522,18 @@ function BottomBar({
               ))}
             </div>
           ) : (
-            <div className="bb-pills" onMouseDown={(e) => e.preventDefault()}>
+            <div
+              className="bb-pills"
+              onMouseDown={(e) => e.preventDefault()}
+              // The pill cloud is absolute (bottom:0), so the parent
+              // .search-suggestions inline keyboard padding never reaches it.
+              // Reserve clearance HERE off the same JS-measured keyboard inset
+              // the search bar pins to (kbInset), overriding the CSS
+              // var(--suggestions-bar-clear) which leans on --ios-bottom-chrome
+              // and can stay 0 on devices where only visualViewport sees the
+              // keyboard — that desync hid the pills behind the keyboard.
+              style={kbInset > 0 ? { paddingBottom: kbInset + 78 } : undefined}
+            >
               {isAdmin && (
                 <button
                   className="bb-pills-showall"

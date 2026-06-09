@@ -1,5 +1,7 @@
 import { useEffect, useState } from 'react';
 import { isFollowing as fetchIsFollowing, toggleFollow as serviceToggleFollow } from '~/services/follows';
+import { getAuthUser } from '~/hooks/useAuth';
+import { isGuest, requireSignup } from '~/services/guest';
 
 /**
  * Shared cache for "is the signed-in shopper following <handle>".
@@ -99,6 +101,12 @@ export function useFollowState(handle: string | null | undefined): FollowState {
 export async function toggleFollowShared(handle: string): Promise<boolean> {
   const key = normalize(handle);
   if (!key) return false;
+  // Following is a signed-in feature — a guest tap raises the signup gate
+  // instead of silently no-opping. Return the current (unchanged) state.
+  if (isGuest(getAuthUser())) {
+    requireSignup();
+    return cache.get(key) ?? false;
+  }
   // Optimistic flip in the shared cache so every subscriber updates
   // immediately, then write to the DB.
   const prev = cache.get(key) ?? false;

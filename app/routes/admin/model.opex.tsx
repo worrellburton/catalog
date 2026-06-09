@@ -14,6 +14,7 @@ import {
   CONTINUOUS_END,
   buildCombinedByCategory,
   buildCombinedSchedule,
+  opexItemMonthly,
   isContinuous,
   opexAverage,
   opexTotal,
@@ -81,9 +82,9 @@ function AcctInput({ value, onChange, className }: { value: number; onChange: (n
 
 const PAYOUT_COLOR = '#ec4899'; // creator payout — part of OpEx
 
-function OpexChart({ items, payroll, payout }: { items: OpexItem[]; payroll: PayrollItem[]; payout: number[] }) {
-  const byCat = useMemo(() => buildCombinedByCategory(items, payroll), [items, payroll]);
-  const base = useMemo(() => buildCombinedSchedule(items, payroll), [items, payroll]);
+function OpexChart({ items, payroll, payout, mau }: { items: OpexItem[]; payroll: PayrollItem[]; payout: number[]; mau: number[] }) {
+  const byCat = useMemo(() => buildCombinedByCategory(items, payroll, mau), [items, payroll, mau]);
+  const base = useMemo(() => buildCombinedSchedule(items, payroll, mau), [items, payroll, mau]);
   const total = base.map((v, i) => v + (payout[i] || 0));
   const hasPayout = payout.some(v => v > 0);
   const W = 1100, H = 240, PADL = 60, PADR = 12, PADT = 12, PADB = 28;
@@ -143,14 +144,14 @@ function OpexChart({ items, payroll, payout }: { items: OpexItem[]; payroll: Pay
 }
 
 // Classic spreadsheet: every line × every month, with row + column totals.
-function OpexSheet({ items, payroll, payout }: { items: OpexItem[]; payroll: PayrollItem[]; payout: number[] }) {
+function OpexSheet({ items, payroll, payout, mau }: { items: OpexItem[]; payroll: PayrollItem[]; payout: number[]; mau: number[] }) {
   const rows: { name: string; cells: number[] }[] = [];
   for (const p of payroll) {
     const monthly = payrollMonthly(p);
     rows.push({ name: `${p.role}${p.count > 1 ? ` ×${p.count}` : ''}`, cells: MONTH_OPTS.map((_, m) => (active(m, p.startMonth, p.endMonth) ? monthly : 0)) });
   }
   for (const it of items) {
-    rows.push({ name: it.name, cells: MONTH_OPTS.map((_, m) => (active(m, it.startMonth, it.endMonth) ? it.amount * Math.pow(1 + it.growth, m - it.startMonth) : 0)) });
+    rows.push({ name: it.name, cells: MONTH_OPTS.map((_, m) => opexItemMonthly(it, m, mau)) });
   }
   if (payout.some(v => v > 0)) {
     rows.push({ name: 'Creator payout', cells: MONTH_OPTS.map((_, m) => payout[m] || 0) });
@@ -201,11 +202,13 @@ export default function AdminModelOpex() {
   const { value: payout, setValue: setPayout } = useSharedCreatorPayout();
   const { rev, acq, econ } = useSharedModelSettings();
 
-  const schedule = useMemo(() => buildCombinedSchedule(items, payroll), [items, payroll]);
-  const headcount = payroll.reduce((a, p) => a + (p.count || 0), 0);
-
-  // Creator payout impact — needs revenue, so we rebuild the model here.
+  // Rebuild the model so we have the MAU series (MAU-variable OpEx lines like
+  // servers / AI tokens scale with it) and revenue (for the payout impact).
   const built = useMemo(() => buildModel(rev, acq, true), [rev, acq]);
+  const mau = useMemo(() => built.acquisition.map(a => a.cumulativeUsers), [built]);
+
+  const schedule = useMemo(() => buildCombinedSchedule(items, payroll, mau), [items, payroll, mau]);
+  const headcount = payroll.reduce((a, p) => a + (p.count || 0), 0);
   const payoutCash = useMemo(() => buildCashflow(built.revenue, built.acquisition, econ, schedule, payout), [built, econ, schedule, payout]);
   const payoutByMonth = useMemo(() => payoutCash.map(c => c.creatorPayout), [payoutCash]);
   const payoutTotal = useMemo(() => payoutCash.reduce((a, c) => a + c.creatorPayout, 0), [payoutCash]);
@@ -355,7 +358,7 @@ export default function AdminModelOpex() {
           <div className="opex-table-wrap">
             <table className="opex-table">
               <thead>
-                <tr><th></th><th>Name</th><th>Category</th><th>Monthly $</th><th>Start</th><th>End</th><th>Ramp / mo</th><th></th></tr>
+                <tr><th></th><th>Name</th><th>Category</th><th>Monthly $</th><th title="Per MAU per month — when above 0 the line is VARIABLE and scales with the user base (overrides Monthly $ / Ramp)">$ / MAU</th><th>Start</th><th>End</th><th>Ramp / mo</th><th></th></tr>
               </thead>
               <tbody>
                 {items.map(it => (
@@ -369,6 +372,16 @@ export default function AdminModelOpex() {
                     </td>
                     <td><AcctInput className="opex-in opex-in-num" value={it.amount} onChange={n => update(it.id, { amount: n })} /></td>
                     <td>
+                      <span className="opex-in-pct" title="Dollars per MAU per month. Above 0 = variable (cost = this × monthly active users).">
+                        $<input
+                          className="opex-in opex-in-sm"
+                          type="number" min={0} step={0.01}
+                          value={it.perMau ?? 0}
+                          onChange={e => update(it.id, { perMau: Number(e.target.value) || 0 })}
+                        />
+                      </span>
+                    </td>
+                    <td>
                       <select className="opex-in" value={it.startMonth} onChange={e => update(it.id, { startMonth: Number(e.target.value) })}>
                         {MONTH_OPTS.map(m => <option key={m.value} value={m.value}>{m.label}</option>)}
                       </select>
@@ -379,7 +392,7 @@ export default function AdminModelOpex() {
                   </tr>
                 ))}
                 {items.length === 0 && (
-                  <tr><td colSpan={8} className="opex-empty">No expense lines yet.</td></tr>
+                  <tr><td colSpan={9} className="opex-empty">No expense lines yet.</td></tr>
                 )}
               </tbody>
             </table>
@@ -415,13 +428,13 @@ export default function AdminModelOpex() {
     if (key === 'chart') {
       return (
         <DragCard key="chart" {...dnd('chart')} title="OpEx by month">
-          <OpexChart items={items} payroll={payroll} payout={payoutByMonth} />
+          <OpexChart items={items} payroll={payroll} payout={payoutByMonth} mau={mau} />
         </DragCard>
       );
     }
     return (
       <DragCard key="sheet" {...dnd('sheet')} title="Spreadsheet">
-        <OpexSheet items={items} payroll={payroll} payout={payoutByMonth} />
+        <OpexSheet items={items} payroll={payroll} payout={payoutByMonth} mau={mau} />
       </DragCard>
     );
   };

@@ -44,6 +44,9 @@ interface UserMenuProps {
   // reflects the admin's own setting.
   activeFilter?: 'all' | 'men' | 'women';
   onChangeCatalogGender?: (next: 'all' | 'men' | 'women') => void;
+  /** Guests have no account menu — tapping the avatar surfaces the signup
+   *  gate instead. When set AND there's no user, the trigger calls this. */
+  onGuestSignup?: () => void;
 }
 
 const STRIP_LIMIT = 8;
@@ -78,6 +81,7 @@ function UserMenu({
   onOpenCreator,
   activeFilter,
   onChangeCatalogGender,
+  onGuestSignup,
 }: UserMenuProps) {
   const [open, setOpen] = useState(false);
   // Mobile-only: opens a full-screen Account page instead of the popout.
@@ -104,6 +108,8 @@ function UserMenu({
   // the classic popout on desktop. Capture the avatar's center at click
   // time so the page can reveal outward from that exact point.
   const handleTriggerClick = useCallback(() => {
+    // Guests have no account — the avatar is a "Sign up / Log in" entry point.
+    if (!user && onGuestSignup) { onGuestSignup(); return; }
     if (typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches) {
       const rect = triggerRef.current?.getBoundingClientRect();
       if (rect) setPageOrigin({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
@@ -112,7 +118,7 @@ function UserMenu({
     } else {
       setOpen(o => !o);
     }
-  }, []);
+  }, [user, onGuestSignup]);
 
   // External open via the global swipe-left gesture (SwipeMenuGesture
   // mounted at app root). Treat it as a tap on the trigger but reveal
@@ -122,6 +128,7 @@ function UserMenu({
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const onOpen = () => {
+      if (!user && onGuestSignup) { onGuestSignup(); return; }
       const rect = triggerRef.current?.getBoundingClientRect();
       if (rect) setPageOrigin({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
       else setPageOrigin({ x: window.innerWidth - 30, y: 50 });
@@ -130,7 +137,7 @@ function UserMenu({
     };
     window.addEventListener('catalog:open-account-menu', onOpen);
     return () => window.removeEventListener('catalog:open-account-menu', onOpen);
-  }, []);
+  }, [user, onGuestSignup]);
 
   // Close the page, but let the close animation play first (reverse of
   // the reveal) before unmounting.

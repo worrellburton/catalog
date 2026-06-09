@@ -12,7 +12,8 @@ import ContinuousFeed from '~/components/ContinuousFeed';
 import SiteParticleHost from '~/components/SiteParticleHost';
 import ParticleBackground from '~/components/ParticleBackground';
 import BottomBar from '~/components/BottomBar';
-import LookSignInGate from '~/components/LookSignInGate';
+import GuestSignupGate, { type GuestGateVariant } from '~/components/GuestSignupGate';
+import { isGuest, hasUsedFreeLook, markFreeLookUsed, setGuestIntent, takeGuestIntent, getNudgeCount, bumpNudgeCount, REQUIRE_SIGNUP_EVENT } from '~/services/guest';
 import { TrailVideoHost } from '~/components/TrailVideoHost';
 import { TrailRoot } from '~/components/TrailMotion';
 import CatalogLogo from '~/components/CatalogLogo';
@@ -24,6 +25,7 @@ import { useAuth } from '~/hooks/useAuth';
 import { useOverlayRouter } from '~/hooks/useOverlayRouter';
 import { useShellBridge } from '~/hooks/useShellBridge';
 import { useAppView } from '~/hooks/useAppView';
+import { useWaitlistMode, applyFlowOverrideFromUrl } from '~/hooks/useWaitlistMode';
 import { useSearchUrlSync } from '~/hooks/useSearchUrlSync';
 import { useShopperGender } from '~/hooks/useShopperGender';
 import { toCatalogName, getRandomCatalogName } from '~/utils/catalogName';
@@ -163,6 +165,11 @@ export default function Home() {
   const bookmarks = useBookmarks();
   const { recentProducts, pushRecent } = useRecentProducts();
   const { user, loading: authLoading, logout } = useAuth();
+  // Launch master switch (dials page). true = old waitlist/sign-in-only
+  // flow; false = open flow with the guest gates. Consume any ?flow=
+  // preview override once before the first read.
+  useState(() => { applyFlowOverrideFromUrl(); return null; });
+  const { waitlistMode, loading: waitlistLoading } = useWaitlistMode();
 
   // Top-level view state machine (locked / splash / landing / app /
   // waitlisted) + the two splash overlays (first-visit branded splash
@@ -175,7 +182,7 @@ export default function Home() {
     setShowSplash,
     authSplashMounted,
     authSplashLeaving,
-  } = useAppView({ user, authLoading });
+  } = useAppView({ user, authLoading, waitlistMode, waitlistLoading });
 
   // Cinematic cold-open splash. Plays once per fresh app boot (cold
   // open), gated by the /admin/splash config. Distinct from the
@@ -223,6 +230,21 @@ export default function Home() {
   // a session resolves (the auto-route effect then takes them in).
   const [showSignIn, setShowSignIn] = useState(false);
   useEffect(() => { if (user) setShowSignIn(false); }, [user]);
+  // Guest freemium gate. The signup scrim that dissolves over a look teaser
+  // ('look'), a creator catalog ('creator'), or the feed scroll nudge
+  // ('feed'). null = no gate showing. Cleared the moment a session resolves.
+  const [guestGate, setGuestGate] = useState<{ variant: GuestGateVariant } | null>(null);
+  const lookTeaseTimer = useRef<number | null>(null);
+  useEffect(() => { if (user) setGuestGate(null); }, [user]);
+  useEffect(() => () => { if (lookTeaseTimer.current) window.clearTimeout(lookTeaseTimer.current); }, []);
+  // Feature chokepoints (follow, …) raise the gate via this event when a
+  // guest attempts a signed-in action.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onRequire = () => setGuestGate(g => g ?? { variant: 'feed' });
+    window.addEventListener(REQUIRE_SIGNUP_EVENT, onRequire);
+    return () => window.removeEventListener(REQUIRE_SIGNUP_EVENT, onRequire);
+  }, []);
   // Comment thread overlay target. Opening pushes /comments/<type>/<slug>
   // via history.pushState (NOT a route nav) so the product/look overlay
   // underneath stays mounted; backing out just clears this.
@@ -600,7 +622,7 @@ export default function Home() {
     }, 2000);
   }, [user]);
 
-  const handleOpenLook = useCallback((look: Look) => {
+  const handleOpenLook = useCallback((look: Look, opts?: { bypassGate?: boolean }) => {
     // Trail navigation - when the user opens a look from inside a
     // ProductPage (or any other product overlay), close the product
     // surface so LookOverlay takes its place cleanly. Without this,
@@ -618,10 +640,32 @@ export default function Home() {
     // Fire-and-forget click telemetry for /admin/analytics. No-op for
     // unauthenticated visitors (session tracker isn't running).
     trackClick({ type: 'look', id: String(look.id ?? ''), uuid: look.uuid, context: look.title?.slice(0, 200) });
+
+    // Guest gate. Products are open; looks are a "feature". A shared /l/
+    // link (bypassGate) always plays fully so sharing still works. The
+    // first in-app look a guest opens plays free (a real taste); every one
+    // after that plays for ~1s then dissolves into the signup scrim.
+    if (lookTeaseTimer.current) { window.clearTimeout(lookTeaseTimer.current); lookTeaseTimer.current = null; }
     setSelectedLook(look);
-  }, []);
+    if (!waitlistMode && isGuest(user) && !opts?.bypassGate) {
+      if (hasUsedFreeLook()) {
+        // Stash the look so we can drop them right back into it post-signup.
+        if (look.uuid) setGuestIntent({ kind: 'look', uuid: look.uuid });
+        lookTeaseTimer.current = window.setTimeout(() => {
+          setGuestGate({ variant: 'look' });
+          lookTeaseTimer.current = null;
+        }, 1000);
+      } else {
+        markFreeLookUsed();
+      }
+    }
+  }, [user, waitlistMode]);
 
   const handleCloseLook = useCallback(() => {
+    // Drop any pending look-teaser timer + the signup scrim so closing the
+    // look returns the guest cleanly to the feed.
+    if (lookTeaseTimer.current) { window.clearTimeout(lookTeaseTimer.current); lookTeaseTimer.current = null; }
+    setGuestGate(null);
     // Same back-button parity as handleProductClose: prefer
     // history.back() so the pushed /l/<slug> entry pops cleanly. The
     // popstate listener at the bottom of this file then clears
@@ -642,7 +686,17 @@ export default function Home() {
     setSelectedLook(null);
   }, []);
 
-  const handleOpenCreator = useCallback((creatorName: string) => {
+  const handleOpenCreator = useCallback((creatorName: string, opts?: { bypassGate?: boolean }) => {
+    // Guest gate. Creator catalogs are a "feature" — a guest tapping into
+    // one gets the signup scrim ("see creator catalogs") instead of the
+    // catalog. Shared /c/ links (bypassGate) still open. The viewer's OWN
+    // catalog (user:<id>) is never gated. Stash the handle so signup drops
+    // them straight into it.
+    if (!waitlistMode && isGuest(user) && !opts?.bypassGate && !creatorName.startsWith('user:')) {
+      setGuestIntent({ kind: 'creator', handle: creatorName });
+      setGuestGate({ variant: 'creator' });
+      return;
+    }
     // Close every higher-stacked overlay so the creator catalog comes to
     // the foreground. Without nulling selectedProduct/selectedCreative,
     // a tap on a creator pill inside ProductPage's "You might also like"
@@ -663,7 +717,7 @@ export default function Home() {
       window.dispatchEvent(new Event('catalog:close-search'));
     }
     setCreatorFilter(creatorName);
-  }, []);
+  }, [user, waitlistMode]);
 
   // The global TypeAnywhere search bar dispatches this when a creator
   // autocomplete row is tapped — open that creator's catalog in-app
@@ -1235,7 +1289,8 @@ export default function Home() {
         const look = all.find(l => l.uuid === lookUuid) ?? await getLookByUuid(lookUuid);
         if (!cancelled && look) {
           setView('app');
-          handleOpenLook(look);
+          // ?look= is a deep link (Activity "Your looks", shared) — play fully.
+          handleOpenLook(look, { bypassGate: true });
         }
       } catch { /* ignore — look may have been removed */ }
     })();
@@ -1245,6 +1300,35 @@ export default function Home() {
     window.history.replaceState({}, '', url);
     return () => { cancelled = true; };
   }, [location.search, handleOpenLook]);
+
+  // Replay guest intent after signup. When a guest hits the look/creator
+  // gate we stash what they were reaching for; once a session resolves
+  // (including after the Google OAuth redirect round-trip, where this fires
+  // on the fresh boot's null→user transition) we drop them straight into
+  // it — the single biggest conversion lift.
+  const prevUserRef = useRef(user);
+  useEffect(() => {
+    const wasGuest = !prevUserRef.current;
+    prevUserRef.current = user;
+    if (!user || !wasGuest) return;
+    const intent = takeGuestIntent();
+    if (!intent) return;
+    setGuestGate(null);
+    setView('app');
+    let cancelled = false;
+    (async () => {
+      if (intent.kind === 'creator') {
+        handleOpenCreator(intent.handle, { bypassGate: true });
+        return;
+      }
+      try {
+        const all = await getLooks();
+        const look = all.find(l => l.uuid === intent.uuid) ?? await getLookByUuid(intent.uuid);
+        if (!cancelled && look) handleOpenLook(look, { bypassGate: true });
+      } catch { /* look removed — land on the feed */ }
+    })();
+    return () => { cancelled = true; };
+  }, [user, handleOpenLook, handleOpenCreator, setView]);
 
   const toggleTheme = useCallback(() => {
     setIsLightMode(prev => !prev);
@@ -1511,6 +1595,12 @@ export default function Home() {
   // URL ↔ overlay state binding: push /p/<slug>, /l/<slug>, /b/<slug>
   // when an overlay opens, and consume the slug on fresh load. See
   // useOverlayRouter for the full sync contract.
+  // Deep-link opens (a shared /l/ or /c/ URL, or browser back/forward to
+  // one) bypass the guest gate so shared links always play — only in-app
+  // taps gate. The overlay router only calls these when reconciling the
+  // URL to state, never for an in-app tap (which sets state first).
+  const handleOpenLookDeepLink = useCallback((look: Look) => handleOpenLook(look, { bypassGate: true }), [handleOpenLook]);
+  const handleOpenCreatorDeepLink = useCallback((handle: string) => handleOpenCreator(handle, { bypassGate: true }), [handleOpenCreator]);
   useOverlayRouter({
     selectedProduct,
     selectedLook,
@@ -1518,9 +1608,9 @@ export default function Home() {
     creatorFilter,
     onOpenProduct: handleOpenProduct,
     onOpenCreative: handleOpenCreative,
-    onOpenLook: handleOpenLook,
+    onOpenLook: handleOpenLookDeepLink,
     onOpenBrand: handleOpenBrand,
-    onOpenCreator: handleOpenCreator,
+    onOpenCreator: handleOpenCreatorDeepLink,
   });
 
   const handleBookmarksOpenLook = useCallback((look: Look) => {
@@ -1564,6 +1654,28 @@ export default function Home() {
   // (header + grid) recedes a hair (scale 0.985, 4px blur). Subtle parallax
   // that signals "what you tapped is now the focus" without feeling theatrical.
   const overlayOpen = !!selectedProduct || !!selectedLook;
+
+  // Guest scroll nudge — once a guest has scrolled a few screens of feed,
+  // dissolve in the soft "register for your daily feed" popup. Cadence
+  // (services/guest): show once at ~3 screens, re-nudge once deeper at ~8,
+  // then rest for the session. Never fires while a look/product/creator
+  // overlay is open (the nudge belongs to the feed) or once a gate is up.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (waitlistMode || !isGuest(user) || view !== 'app') return;
+    if (overlayOpen || creatorFilter || brandFilter || guestGate) return;
+    const onScroll = () => {
+      const shown = getNudgeCount();
+      if (shown >= 2) { window.removeEventListener('scroll', onScroll); return; }
+      const screensDeep = shown === 0 ? 3 : 8;
+      if (window.scrollY > window.innerHeight * screensDeep) {
+        bumpNudgeCount();
+        setGuestGate({ variant: 'feed' });
+      }
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [user, view, overlayOpen, creatorFilter, brandFilter, guestGate, waitlistMode]);
 
   // Lock the underlying feed while a product/look overlay is open so
   // swipe-down-to-dismiss only moves the overlay, not the page beneath.
@@ -1720,6 +1832,7 @@ export default function Home() {
                 onOpenCreator={handleOpenCreator}
                 activeFilter={activeFilter}
                 onChangeCatalogGender={handleGenderFilterChange}
+                onGuestSignup={!waitlistMode ? () => setGuestGate({ variant: 'feed' }) : undefined}
               />
             </div>
           </header>
@@ -1800,10 +1913,16 @@ export default function Home() {
             </Suspense>
           )}
 
-          {/* Signed-out visitors see the look (behind) then a Sign-In gate —
-              only registered users get full access (shop / save / follow). */}
-          {selectedLook && !authLoading && !user && (
-            <LookSignInGate onClose={handleCloseLook} />
+          {/* Guest freemium gate — dissolves over a look teaser ('look'),
+              a creator catalog ('creator'), or the feed scroll nudge
+              ('feed'). Looks gate after the first free one; creator
+              catalogs always gate; products stay open. */}
+          {guestGate && !waitlistMode && !authLoading && !user && (
+            <GuestSignupGate
+              variant={guestGate.variant}
+              onClose={guestGate.variant === 'look' ? handleCloseLook : () => setGuestGate(null)}
+              onContinueGuest={guestGate.variant === 'feed' ? () => setGuestGate(null) : undefined}
+            />
           )}
 
           {creatorFilter && (
