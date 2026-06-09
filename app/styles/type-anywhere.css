@@ -13,6 +13,37 @@
   padding: 0 24px;
 }
 
+/* Dark gradient scrim behind the focused search bar so the catalog pills
+   and autocomplete stay legible over a bright feed. Sits below the bar
+   (z-index 70) but above the feed; never intercepts clicks. */
+.ai-bar-scrim {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 72vh;
+  z-index: 69;
+  pointer-events: none;
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.82) 0%,
+    rgba(0, 0, 0, 0.6) 26%,
+    rgba(0, 0, 0, 0.32) 52%,
+    rgba(0, 0, 0, 0.08) 78%,
+    transparent 100%
+  );
+  opacity: 0;
+  animation: ai-bar-scrim-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+@keyframes ai-bar-scrim-in { to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .ai-bar-scrim { animation: none; opacity: 1; }
+}
+/* Mobile uses the BottomBar pill, not this layer — no scrim there. */
+@media (max-width: 768px) {
+  .ai-bar-scrim { display: none; }
+}
+
 /* Floating hint that sits above the AI bar on first run.
    Disappears on the first keystroke (or once the user has dismissed
    it on this device — see TypeAnywhere.tsx). Wrap is column so the

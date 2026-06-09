@@ -224,6 +224,10 @@ export default function TypeAnywhere() {
 
   return (
     <>
+      {/* Dark gradient scrim that rises from the bottom while the bar is
+          focused, so the catalog pills / autocomplete read against a bright
+          feed instead of disappearing into it. Sits behind the bar + pills. */}
+      {focused && <div className="ai-bar-scrim" aria-hidden="true" />}
       <div className="ai-bar-wrap" role="search" aria-label="Search catalog">
         {/* Popular-catalog cloud — springs up above the bar when it's
             focused with an empty query, and gives way the moment the
