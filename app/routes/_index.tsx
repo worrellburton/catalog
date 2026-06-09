@@ -427,7 +427,10 @@ export default function Home() {
   useEffect(() => {
     if (searchTrigger === prevTriggerRef.current) return;
     prevTriggerRef.current = searchTrigger;
-    if (heroMode && searchQuery.trim() && !ceremony.active) {
+    // Play the ceremony on EVERY committed search (Enter / suggestion tap /
+    // brand) — whether from the hero or the bottom search bar in the feed.
+    // Live typing doesn't bump the trigger, so it never fires mid-type.
+    if (searchQuery.trim() && !ceremony.active) {
       setCeremonyImages([]);
       setCeremony({ active: true, query: searchQuery, kind: 'search' });
     }
