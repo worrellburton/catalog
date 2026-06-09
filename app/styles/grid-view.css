@@ -464,6 +464,7 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center;
 }
 
 /* Any <video> inside a look-card MUST fill the tile (absolute, inset:0),
@@ -480,6 +481,17 @@
   position: absolute;
   inset: 0;
   z-index: 2;
+  /* Lock the video's framing to EXACTLY match the poster <img> above
+     (cover / center). Previously this deferred width/height/object-fit to
+     whatever inline cssText the director or TrailVideoHost set, so a path
+     that handed the element a different object-fit/position made the video
+     display at a different crop than the poster — the poster "loads
+     displayed incorrectly" then snaps when the video reveals. !important so
+     a stale inline cssText can't reintroduce the mismatch. */
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  object-position: center !important;
 }
 
 /* Stagger shimmer animation across cards */
