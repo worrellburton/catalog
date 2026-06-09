@@ -172,7 +172,7 @@ header > .pending-look-pill {
 .pending-look-pill {
   display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 10px;
   /* Matches the global follow-toast format (.follow-toast) so the app's
      transient notifications share one visual language: dark glass, hairline
      border, soft drop shadow, light text. */
@@ -186,7 +186,9 @@ header > .pending-look-pill {
   backdrop-filter: blur(14px);
   -webkit-backdrop-filter: blur(14px);
   color: #f4f4f5;
-  font-size: 13px;
+  /* Match the follow-toast scale (14px text, 10px gap, 34px leading visual)
+     so both in-app notifications are the same size. */
+  font-size: 14px;
   font-weight: 500;
   letter-spacing: 0.005em;
   cursor: pointer;
@@ -202,8 +204,10 @@ header > .pending-look-pill {
   border-color: rgba(255, 255, 255, 0.2);
 }
 .pending-look-pill-spinner {
-  width: 12px;
-  height: 12px;
+  /* Sized to the follow-toast avatar (34px) so the pill matches its height
+     when no orbit imagery is available. */
+  width: 34px;
+  height: 34px;
   border-radius: 50%;
   border: 2px solid rgba(255, 255, 255, 0.25);
   border-top-color: #fff;
@@ -232,10 +236,12 @@ header > .pending-look-pill {
    the full "Vision composes…" ring, shrunk to header size. */
 .pending-look-pill-orbit {
   position: relative;
-  width: 24px;
-  height: 24px;
+  /* 34px to match the follow-toast avatar so both notifications are the
+     same height. */
+  width: 34px;
+  height: 34px;
   flex-shrink: 0;
-  perspective: 200px;
+  perspective: 260px;
 }
 .pending-look-pill-orbit-ring {
   position: absolute;
@@ -247,10 +253,10 @@ header > .pending-look-pill {
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 18px;
-  height: 18px;
-  margin: -9px 0 0 -9px;
-  transform: rotateY(calc(var(--i) * (360deg / var(--n)))) translateZ(15px);
+  width: 26px;
+  height: 26px;
+  margin: -13px 0 0 -13px;
+  transform: rotateY(calc(var(--i) * (360deg / var(--n)))) translateZ(21px);
 }
 .pending-look-pill-orbit-item img {
   width: 100%;
