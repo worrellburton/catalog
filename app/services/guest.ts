@@ -50,6 +50,16 @@ export function takeGuestIntent(): GuestIntent | null {
   } catch { return null; }
 }
 
+// ── Gate bridge ─────────────────────────────────────────────────────────
+// Non-React feature chokepoints (follow, like, …) can't show the signup
+// scrim themselves. They call requireSignup() to ask the app shell to
+// raise the gate; _index listens for this event and shows it.
+export const REQUIRE_SIGNUP_EVENT = 'catalog:require-signup';
+export function requireSignup(): void {
+  if (typeof window === 'undefined') return;
+  try { window.dispatchEvent(new CustomEvent(REQUIRE_SIGNUP_EVENT)); } catch { /* */ }
+}
+
 // ── Scroll-nudge cadence ────────────────────────────────────────────────
 export function getNudgeCount(): number {
   try { return Number(sessionStorage.getItem(NUDGE_KEY) || '0') || 0; } catch { return 0; }

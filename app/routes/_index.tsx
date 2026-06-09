@@ -13,7 +13,7 @@ import SiteParticleHost from '~/components/SiteParticleHost';
 import ParticleBackground from '~/components/ParticleBackground';
 import BottomBar from '~/components/BottomBar';
 import GuestSignupGate, { type GuestGateVariant } from '~/components/GuestSignupGate';
-import { isGuest, hasUsedFreeLook, markFreeLookUsed, setGuestIntent, takeGuestIntent, getNudgeCount, bumpNudgeCount } from '~/services/guest';
+import { isGuest, hasUsedFreeLook, markFreeLookUsed, setGuestIntent, takeGuestIntent, getNudgeCount, bumpNudgeCount, REQUIRE_SIGNUP_EVENT } from '~/services/guest';
 import { TrailVideoHost } from '~/components/TrailVideoHost';
 import { TrailRoot } from '~/components/TrailMotion';
 import CatalogLogo from '~/components/CatalogLogo';
@@ -231,6 +231,14 @@ export default function Home() {
   const lookTeaseTimer = useRef<number | null>(null);
   useEffect(() => { if (user) setGuestGate(null); }, [user]);
   useEffect(() => () => { if (lookTeaseTimer.current) window.clearTimeout(lookTeaseTimer.current); }, []);
+  // Feature chokepoints (follow, …) raise the gate via this event when a
+  // guest attempts a signed-in action.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onRequire = () => setGuestGate(g => g ?? { variant: 'feed' });
+    window.addEventListener(REQUIRE_SIGNUP_EVENT, onRequire);
+    return () => window.removeEventListener(REQUIRE_SIGNUP_EVENT, onRequire);
+  }, []);
   // Comment thread overlay target. Opening pushes /comments/<type>/<slug>
   // via history.pushState (NOT a route nav) so the product/look overlay
   // underneath stays mounted; backing out just clears this.
