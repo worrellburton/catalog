@@ -54,7 +54,7 @@ export default function UnifiedModelChart({ revenue, acquisition, cash, showReve
   const PAD_L = 72, PAD_R = 72, PAD_T = 24, PAD_B = 44;
   const innerW = W - PAD_L - PAD_R;
   const innerH = H - PAD_T - PAD_B;
-  const TIP_W = 248, TIP_H = 286;
+  const TIP_W = 248, TIP_H = 312;
 
   // Left axis ($) is shared by revenue + cash + payout; right axis (count) by MAU + sales.
   const leftMax = niceCeiling(Math.max(
@@ -187,8 +187,14 @@ export default function UnifiedModelChart({ revenue, acquisition, cash, showReve
             : showPayout ? yLeft(cash[i].creatorPayout)
             : showAcquisition ? yCount(acquisition[i].cumulativeUsers)
             : yCount(revenue[i].sales);
-          const tipX = Math.min(W - PAD_R - TIP_W, Math.max(PAD_L, x - TIP_W / 2));
-          const tipY = Math.max(PAD_T, anchorY - TIP_H - 14);
+          // Anchor the tooltip to the RIGHT of the cursor so it doesn't sit
+          // on top of the point/line you're reading. If there isn't room on
+          // the right (near the chart's right edge), flip it to the left.
+          const TIP_GAP = 16;
+          const tipX = x + TIP_GAP + TIP_W <= W - PAD_R
+            ? x + TIP_GAP
+            : Math.max(PAD_L, x - TIP_GAP - TIP_W);
+          const tipY = Math.max(PAD_T, Math.min(anchorY - TIP_H / 2, PAD_T + innerH - TIP_H));
           const rev = pctChange(revenue[i].revenue, i >= 1 ? revenue[i - 1].revenue : undefined);
           const mau = pctChange(acquisition[i].cumulativeUsers, i >= 1 ? acquisition[i - 1].cumulativeUsers : undefined);
           // Grouped into ideas: money (revenue/cash/payout/opex) vs. demand
@@ -199,7 +205,10 @@ export default function UnifiedModelChart({ revenue, acquisition, cash, showReve
           if (showPayout) rows.push({ label: 'Payout', value: fmtCurrency(cash[i].creatorPayout, { compact: true }), delta: revenue[i].revenue > 0 ? `${Math.round((cash[i].creatorPayout / revenue[i].revenue) * 100)}% of rev` : '—', positive: true, tone: 'eng', group: 'money' });
           // OpEx includes creator payout (payroll + expenses + payout).
           rows.push({ label: 'OpEx', value: fmtCurrency(cash[i].opex + cash[i].creatorPayout, { compact: true }), delta: `mktg ${fmtCurrency(cash[i].marketing, { compact: true })}`, positive: false, tone: 'cash', group: 'money' });
-          if (showEngagement) rows.push({ label: 'Sales', value: fmtNumber(revenue[i].sales), delta: 'orders', positive: true, tone: 'eng', group: 'demand' });
+          if (showEngagement) {
+            rows.push({ label: 'Impressions', value: fmtNumber(revenue[i].impressions), delta: 'product views', positive: true, tone: 'eng', group: 'demand' });
+            rows.push({ label: 'Sales', value: fmtNumber(revenue[i].sales), delta: 'orders', positive: true, tone: 'eng', group: 'demand' });
+          }
           if (showAcquisition) {
             rows.push({ label: 'MAU', value: fmtNumber(acquisition[i].cumulativeUsers), delta: `${mau.text} MoM`, positive: mau.positive, tone: 'acq', group: 'demand' });
             rows.push({ label: 'DAU', value: fmtNumber(acquisition[i].dau), delta: 'daily', positive: true, tone: 'acq', group: 'demand' });

@@ -57,6 +57,7 @@ interface SupabaseLook {
   color: string | null;
   status: string | null;
   feed_rank: number | null;
+  created_at: string | null;
   looks_creative: {
     video_url: string | null;
     thumbnail_url: string | null;
@@ -135,6 +136,7 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
       color,
       status,
       feed_rank,
+      created_at,
       looks_creative!inner (
         video_url,
         thumbnail_url,
@@ -319,6 +321,7 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
       id: row.legacy_id ?? stableLookId(row.id),
       uuid: row.id,
       feed_rank: row.feed_rank,
+      created_at: row.created_at ?? undefined,
       title: row.title,
       video: primary.video_url || '',
       thumbnail_url: primary.thumbnail_url || undefined,

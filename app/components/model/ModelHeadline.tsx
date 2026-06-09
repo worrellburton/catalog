@@ -62,11 +62,10 @@ export default function ModelHeadline({
           </div>
         </div>
         <div className="model-toolbar-right">
-          <button className="model-rate-btn" onClick={onRate}>
-            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M12 3l1.9 4.9L18.8 9.8l-4.9 1.9L12 16.6l-1.9-4.9L5.2 9.8l4.9-1.9z" /><path d="M19 14v3M20.5 15.5h-3" />
+          <button className="model-rate-btn model-rate-btn--icon" onClick={onRate} aria-label="Rate my assumptions" title="Rate my assumptions">
+            <svg width="16" height="16" viewBox="0 0 100 100" fill="currentColor" aria-hidden="true">
+              <path d="M50 4 C54 30 70 46 96 50 C70 54 54 70 50 96 C46 70 30 54 4 50 C30 46 46 30 50 4 Z" />
             </svg>
-            Rate my assumptions
           </button>
           <button className="admin-btn admin-btn-secondary" onClick={onExportCsv}>Export CSV</button>
           <button className="admin-btn admin-btn-secondary" onClick={onPrint}>Print / PDF</button>
