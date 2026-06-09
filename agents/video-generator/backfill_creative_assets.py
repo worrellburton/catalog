@@ -108,6 +108,16 @@ _HLS_CONTENT_TYPES = {
 _HLS_SEGMENT_CACHE = "public, max-age=31536000, immutable"
 _HLS_PLAYLIST_CACHE = "public, max-age=300"
 
+# Versioned output directory for the HLS tree. Segments are uploaded with an
+# `immutable` 1-year cache, so re-encoding a clip (e.g. the 2s→1s segment
+# change) MUST land on new URLs — overwriting `seg_000.ts` in place would serve
+# stale 2s bytes to any client that cached it, against a playlist that now
+# expects 1s segments. Bump this suffix whenever the encoder output changes;
+# old `…/hls/…` files stay valid for in-flight sessions until their row's
+# hls_url is repointed by a (forced) re-backfill. New rows pick up the latest
+# automatically.
+_HLS_DIR = "hls-v2"
+
 
 def upload_hls_tree(supabase, out_dir: str, key_prefix: str) -> int:
     """Uploads every file under `out_dir` to `{key_prefix}/<relpath>`,
@@ -143,7 +153,7 @@ def process_hls_row(
     dry_run: bool,
 ) -> tuple[str, bool, str]:
     """Encode + upload an HLS ladder for one creative row, then write hls_url."""
-    prefix = f"{base_key_for(video_url, storage_path, row_id)}/hls"
+    prefix = f"{base_key_for(video_url, storage_path, row_id)}/{_HLS_DIR}"
     if dry_run:
         return row_id, True, f"DRY-RUN hls={prefix}/master.m3u8"
     try:
@@ -169,7 +179,7 @@ def process_hls_product(
     dry_run: bool,
 ) -> tuple[str, bool, str]:
     """HLS ladder for a product's primary video → products.primary_hls_url."""
-    prefix = f"{base_key_for(primary_video_url, None, product_id)}/hls"
+    prefix = f"{base_key_for(primary_video_url, None, product_id)}/{_HLS_DIR}"
     if dry_run:
         return product_id, True, f"DRY-RUN hls={prefix}/master.m3u8"
     try:
