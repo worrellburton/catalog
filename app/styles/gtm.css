@@ -404,7 +404,11 @@
 /* Snap each flywheel slide firmly into view. `mandatory` (not proximity)
    makes the deck click into place reliably; scroll-padding-top clears the
    sticky admin topbar (53px) so a slide snaps flush below it, not under it. */
-html.gtm-snap { scroll-snap-type: y mandatory; scroll-behavior: smooth; scroll-padding-top: 56px; }
+/* `proximity`, NOT `mandatory`: mandatory trapped the scroll on the
+   flywheel slides so you couldn't scroll back up to the chart/tree at the
+   top of the page. Proximity still snaps the slides when you're near one
+   but leaves the tree above freely scrollable. */
+html.gtm-snap { scroll-snap-type: y proximity; scroll-behavior: smooth; scroll-padding-top: 56px; }
 
 .gtm-fly-slide {
   position: relative;

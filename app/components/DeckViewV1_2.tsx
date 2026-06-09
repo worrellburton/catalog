@@ -332,16 +332,28 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
   const [activeFlywheelStep, setActiveFlywheelStep] = useState<number | null>(null);
   const [bgRevealed, setBgRevealed] = useState(false);
-  // techActiveSeed indexes into techVideos below. 1 = guy.mp4 (the
-  // grey polo creative) so the vector-similarity demo opens on the
-  // menswear seed; its 5 hue-rotated neighbors below the seed read as
-  // "like-kinded product creatives" pulled by the index.
+  // techActiveSeed only keys the stage/ray entry animation now (the
+  // vector-similarity demo renders real pants product art, below).
   const [techActiveSeed] = useState<number | null>(1);
   // Exit transition for the Demo slide CTA. Set to true on click; the
   // overlay fades in + the slide scales down for ~700ms, then we
   // navigate to catalog.shop.
   const [demoExiting, setDemoExiting] = useState(false);
-  const techVideos = ['girl2.mp4', 'guy.mp4', 'Untitled.mp4', 'girl.mp4', 'qm1navb8bjo8fjlgjs5x.mp4'];
+  // Vector-similarity demo: a real James Perse pant as the query, with the
+  // nearest neighbours being other current pants we have in catalog. Makes
+  // the "visual taste, indexed" claim concrete with shipping product art
+  // instead of tinted clones of a single clip.
+  // Full-length flat-lay (same Classic Cotton Linen Twill family as the
+  // neighbours, which render the whole pant) so the query reads as a full
+  // pant, not the cropped waistband the prior poplin-trouser shot showed.
+  const techPantsHero = 'https://vtarjrnqvcqbhoclvcur.supabase.co/storage/v1/object/public/scraped-products/polished/18ae0efd-7f35-4584-affb-c9022da5d319-1780875978365.png';
+  const techPantsNeighbors = [
+    'https://vtarjrnqvcqbhoclvcur.supabase.co/storage/v1/object/public/scraped-products/polished/d431b779-2283-40d5-a22a-080b2c5dfecf-1781022219846.png',
+    'https://vtarjrnqvcqbhoclvcur.supabase.co/storage/v1/object/public/scraped-products/polished/be3084bb-d7be-43fa-b2e3-98c2eb016803-1781022219839.png',
+    'https://vtarjrnqvcqbhoclvcur.supabase.co/storage/v1/object/public/scraped-products/polished/85e2c0c2-66ee-4565-8237-229191343fd1-1780080655769.png',
+    'https://vtarjrnqvcqbhoclvcur.supabase.co/storage/v1/object/public/scraped-products/polished/a3883e01-2b00-4aaa-b531-b77623128c30-1781022227546.png',
+    'https://vtarjrnqvcqbhoclvcur.supabase.co/storage/v1/object/public/scraped-products/polished/afa96fda-f523-4ce0-8802-8bca1b74489a-1780080791368.png',
+  ];
   // Deck v1.2 differentiator: the background grid mirrors the consumer
   // home feed - every product with the Home toggle on in /admin/content.
   // Empty until the fetch lands; the dark overlay keeps the cover slide
@@ -905,7 +917,7 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
         <div className="deck-v9-tech-right">
           <div className="deck-v1-tech-stage" key={`tech-${techActiveSeed}`}>
             <div className="deck-v1-tech-seed">
-              <video src={`${basePath}/${techVideos[techActiveSeed ?? 0]}`} autoPlay loop muted playsInline />
+              <img src={techPantsHero} alt="James Perse pant — query item" loading="lazy" decoding="async" />
             </div>
             <svg className="deck-v1-tech-rays" viewBox="0 0 600 260" preserveAspectRatio="none" aria-hidden="true">
               {[0, 1, 2, 3, 4].map((n) => {
@@ -921,33 +933,21 @@ const DeckViewV1_2: React.FC<DeckViewV1_2Props> = ({
               })}
             </svg>
             <div className="deck-v1-tech-neighbors">
-              {[0, 1, 2, 3, 4].map((n) => {
-                const src = techVideos[techActiveSeed ?? 0];
-                const tints = [
-                  'hue-rotate(15deg) saturate(1.1)',
-                  'hue-rotate(-20deg) saturate(0.95)',
-                  'hue-rotate(35deg) saturate(1.05)',
-                  'hue-rotate(-45deg) saturate(0.9)',
-                  'hue-rotate(60deg) saturate(1.15)',
-                ];
-                return (
-                  <div
-                    key={`neighbor-${techActiveSeed}-${n}`}
-                    className="deck-v1-tech-neighbor"
-                    style={{ '--n-i': n } as React.CSSProperties}
-                  >
-                    <video
-                      src={`${basePath}/${src}`}
-                      autoPlay
-                      loop
-                      muted
-                      playsInline
-                      style={{ filter: tints[n] }}
-                    />
-                    <span className="deck-v1-tech-neighbor-tag">0.9{9 - n}</span>
-                  </div>
-                );
-              })}
+              {[0, 1, 2, 3, 4].map((n) => (
+                <div
+                  key={`neighbor-${n}`}
+                  className="deck-v1-tech-neighbor"
+                  style={{ '--n-i': n } as React.CSSProperties}
+                >
+                  <img
+                    src={techPantsNeighbors[n]}
+                    alt="Similar pant in catalog"
+                    loading="lazy"
+                    decoding="async"
+                  />
+                  <span className="deck-v1-tech-neighbor-tag">0.9{9 - n}</span>
+                </div>
+              ))}
             </div>
           </div>
           <div className="deck-v9-tech-meta">
