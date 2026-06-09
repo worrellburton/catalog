@@ -30,8 +30,6 @@ import {
 import { useAuth } from '~/hooks/useAuth';
 import { useShopperBody } from '~/hooks/useShopperBody';
 import { usePageSections, isSectionEnabled, getSectionLimit } from '~/hooks/usePageSections';
-import { useUserAffinity } from '~/hooks/useUserAffinity';
-import { useDynamicSectionTitle } from '~/hooks/useDynamicSectionTitle';
 import SizeMatchBadge, { SizeMatchSummary } from './SizeMatchBadge';
 import { getLookSimilarityThreshold, DEFAULT_LOOK_SIMILARITY } from '~/services/dials';
 import SimilarDebugModal, { type SimilarDebugReport } from './SimilarDebugModal';
@@ -255,11 +253,6 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   // seed look is tagged 'unisex' (e.g. because a product says "Unisex T-Shirt").
   const ymalGenderFilter = useActiveGenderFilter();
 
-  // Dynamic, joke-y heading for the personalized "you might also like" feed.
-  // Re-rolls per look open and leans on the shopper's category affinity.
-  const ymalAffinity = useUserAffinity();
-  const ymalTitle = useDynamicSectionTitle(ymalAffinity, look.id);
-
   // Admin dial: minimum fraction of seed products a candidate look must share.
   // 0 = any 1 match (default/current). Loaded once on overlay open.
   const [lookSimilarityThreshold, setLookSimilarityThresholdState] = useState(DEFAULT_LOOK_SIMILARITY);
@@ -269,14 +262,13 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
 
   // Feed sections below the hero:
   //   1. "More like this" — shared product types + compatible gender
-  //   2. "Popular" — fallback (8 looks) when section 1 is empty
-  //   3. "More from <creator>" — other looks by the same creator
+  //   2. "More from <creator>" — other looks by the same creator
   // Each section is capped at 8; padding with cycled duplicates fills short lists.
   const feedSections = useMemo(() => {
     // Filter out the legacy static-seed creators (@lilywittman /
     // @garrett) — they have placeholder gradient thumbnails with no
     // real videos, so they read as "looks that don't exist" in the
-    // Popular / More-from sections. Live looks only.
+    // More-from / similar sections. Live looks only.
     const SEED_CREATORS = new Set(['@lilywittman', '@garrett']);
     const source = (allLooks || allLooksData)
       .filter(l => l.id !== look.id)
@@ -314,10 +306,6 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
         })
       : [];
 
-    const popular: Look[] = looksLikeThis.length === 0
-      ? source
-      : [];
-
     // Two looks count as "from the same creator" only when both the
     // creator key AND the display name match. A single uploader can
     // publish looks under multiple synthetic personas (e.g. all share
@@ -340,12 +328,10 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
     });
 
     const a = dedupe(looksLikeThis);
-    const b = dedupe(popular);
     const c = dedupe(moreFromCreator);
 
     return {
       looksLikeThis:   fillLooks(a, 8),
-      popular:         fillLooks(b, 8),
       moreFromCreator: fillLooks(c, 8),
     };
   }, [look.id, look.creator, look.products, look.gender, allLooks, ymalGenderFilter, lookSimilarityThreshold]);
@@ -1063,24 +1049,6 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
           </div>
         )}
 
-        {similarEnabled && feedSections.popular.length > 0 && (
-          <div className="look-feed-section">
-            <h3 className="look-feed-heading">Popular</h3>
-            <div className="look-feed-grid">
-              {feedSections.popular.slice(0, similarLimit).map(fl => (
-                <LookCard
-                  key={`popular-${fl.id}`}
-                  look={fl}
-                  className="look-card"
-                  onOpenLook={handleFeedLookClick}
-                  onOpenCreator={onOpenCreator}
-                  onCreateCatalog={onCreateCatalog}
-                />
-              ))}
-            </div>
-          </div>
-        )}
-
         {/* "More from this creator" — same 2-column grid as the sections
             above, placed AFTER "More like this" / "Popular" so the look's
             own products and similar looks come first. Skips the seed look
@@ -1107,7 +1075,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
         )}
 
         <div className="look-feed-section">
-          <h3 className="look-feed-heading">{ymalTitle}</h3>
+          <h3 className="look-feed-heading">Popular</h3>
           <ContinuousFeed
             nested
             slotPrefix={`look:${look.id}`}

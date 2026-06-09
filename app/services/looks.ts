@@ -12,12 +12,14 @@ const USE_SUPABASE = true;
 // ============================================
 // localStorage SWR cache (mirrors product-creative pattern)
 // ============================================
-const LOOKS_LS_KEY = 'catalog:looks-cache:v1';
+const LOOKS_LS_KEY = 'catalog:looks-cache:v2'; // v2: HLS ladders repointed to hls-v2 (1s segments)
 const LOOKS_LS_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 function readLooksFromStorage(): Look[] | null {
   if (typeof window === 'undefined') return null;
   try {
+    // Evict the pre-1s-HLS cache so look cards refetch the hls-v2 URLs.
+    window.localStorage.removeItem('catalog:looks-cache:v1');
     const raw = window.localStorage.getItem(LOOKS_LS_KEY);
     if (!raw) return null;
     const parsed = JSON.parse(raw) as { savedAt: number; rows: Look[] };

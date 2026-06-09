@@ -437,7 +437,7 @@ const HOME_FEED_TTL_MS = 60_000;
 // posters were stale — taken from an older, more-zoomed clip). Cached v9
 // rows still hold the stale -v3 thumbnail_url and keep rendering the
 // zoomed poster, so evict them.
-const HOME_FEED_LS_KEY = 'catalog:home-feed-cache:v10';
+const HOME_FEED_LS_KEY = 'catalog:home-feed-cache:v11'; // v11: HLS ladders repointed to hls-v2 (1s segments)
 const HOME_FEED_LS_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 // Seed the in-memory promise from localStorage on import so the feed
@@ -562,6 +562,7 @@ export function invalidateHomeFeed(): void {
         'catalog:home-feed-cache:v4',     // v4 (type-required gate)
         'catalog:home-feed-cache:v5',     // v5 (no per-product dedup)
         'catalog:home-feed-cache:v6',     // v6 (pre-look-injection)
+        'catalog:home-feed-cache:v10',    // v10 (pre-1s-HLS repoint)
         HOME_FEED_LS_KEY,                 // current
       ];
       for (const base of legacyBases) {

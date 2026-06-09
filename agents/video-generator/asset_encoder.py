@@ -217,10 +217,13 @@ def encode_hls_ladder_from_url(
     """Downloads the source MP4 and transcodes an HLS VOD ladder
     (480p/720p/1080p, H.264, MPEG-TS segments) with a master playlist.
 
-    Audio is dropped (-an) — the consumer feed plays muted. Segments are 2s
-    with a matching 2s GOP (-g 48 at 24fps, fixed cadence) so every rendition
-    has aligned switch points, which is what lets hls.js step quality up/down
-    mid-playback without a stall.
+    Audio is dropped (-an) — the consumer feed plays muted. Segments are 1s
+    with a matching 1s GOP (-g 24 at 24fps, fixed cadence) so every rendition
+    has aligned switch points (lets hls.js step quality up/down mid-playback
+    without a stall) AND the very first segment is small — the player can fetch
+    + decode the opening frame in roughly half the bytes of a 2s segment, which
+    shortens the cold-start "poster hold" on a cache miss. Short clips gain a
+    couple of extra segment requests; negligible for ~3-6 s feed loops.
 
     Raises CalledProcessError on ffmpeg failure / HTTPError on a bad fetch.
     Caller removes `result.workdir` once the tree is uploaded."""
@@ -270,11 +273,11 @@ def encode_hls_ladder_from_url(
     cmd += [
         "-preset", "veryfast",
         "-r", "24",
-        "-g", "48", "-keyint_min", "48", "-sc_threshold", "0",
+        "-g", "24", "-keyint_min", "24", "-sc_threshold", "0",
         "-profile:v", "high", "-pix_fmt", "yuv420p",
         "-an",
         "-f", "hls",
-        "-hls_time", "2",
+        "-hls_time", "1",
         "-hls_playlist_type", "vod",
         "-hls_flags", "independent_segments",
         "-hls_segment_filename", os.path.join("v%v", "seg_%03d.ts"),

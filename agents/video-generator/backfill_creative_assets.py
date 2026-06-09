@@ -108,6 +108,16 @@ _HLS_CONTENT_TYPES = {
 _HLS_SEGMENT_CACHE = "public, max-age=31536000, immutable"
 _HLS_PLAYLIST_CACHE = "public, max-age=300"
 
+# Versioned output directory for the HLS tree. Segments are uploaded with an
+# `immutable` 1-year cache, so re-encoding a clip (e.g. the 2s→1s segment
+# change) MUST land on new URLs — overwriting `seg_000.ts` in place would serve
+# stale 2s bytes to any client that cached it, against a playlist that now
+# expects 1s segments. Bump this suffix whenever the encoder output changes;
+# old `…/hls/…` files stay valid for in-flight sessions until their row's
+# hls_url is repointed by a (forced) re-backfill. New rows pick up the latest
+# automatically.
+_HLS_DIR = "hls-v2"
+
 
 def upload_hls_tree(supabase, out_dir: str, key_prefix: str) -> int:
     """Uploads every file under `out_dir` to `{key_prefix}/<relpath>`,
@@ -143,7 +153,7 @@ def process_hls_row(
     dry_run: bool,
 ) -> tuple[str, bool, str]:
     """Encode + upload an HLS ladder for one creative row, then write hls_url."""
-    prefix = f"{base_key_for(video_url, storage_path, row_id)}/hls"
+    prefix = f"{base_key_for(video_url, storage_path, row_id)}/{_HLS_DIR}"
     if dry_run:
         return row_id, True, f"DRY-RUN hls={prefix}/master.m3u8"
     try:
@@ -169,7 +179,7 @@ def process_hls_product(
     dry_run: bool,
 ) -> tuple[str, bool, str]:
     """HLS ladder for a product's primary video → products.primary_hls_url."""
-    prefix = f"{base_key_for(primary_video_url, None, product_id)}/hls"
+    prefix = f"{base_key_for(primary_video_url, None, product_id)}/{_HLS_DIR}"
     if dry_run:
         return product_id, True, f"DRY-RUN hls={prefix}/master.m3u8"
     try:
@@ -187,35 +197,53 @@ def process_hls_product(
         cleanup_hls(h)
 
 
-def fetch_hls_rows(supabase, table: str, limit: int | None) -> list[dict]:
-    """Creative rows with a source video but no HLS ladder yet."""
+def fetch_hls_rows(
+    supabase, table: str, limit: int | None, statuses: list[str] | None = None,
+    reencode: bool = False,
+) -> list[dict]:
+    """Creative rows with a source video. By default only those MISSING an HLS
+    ladder (hls_url IS NULL); pass reencode=True to RE-process rows that already
+    have one — e.g. to regenerate with new encoder settings into a new output
+    dir (paired with a bumped dir so new URLs don't collide with the immutable-
+    cached old segments). Re-encoding does NOT null hls_url first, so the feed
+    keeps serving the old ladder until each row is repointed.
+
+    product_creative is gated by status (default: live-only, so we don't
+    waste compute on draft/paused rows). Pass `statuses` to widen the net
+    — e.g. ["live", "done", "paused"] to backfill non-live creatives."""
     q = (
         supabase.table(table)
         .select("id, video_url, storage_path, hls_url")
         .not_.is_("video_url", "null")
-        .is_("hls_url", "null")
     )
+    if not reencode:
+        q = q.is_("hls_url", "null")
     if table == "product_creative":
-        q = q.eq("status", "live")
+        q = q.in_("status", statuses or ["live"])
     if limit:
         q = q.limit(limit)
     return q.execute().data or []
 
 
-def fetch_hls_product_rows(supabase, limit: int | None) -> list[dict]:
-    """Products with a primary video but no HLS ladder yet."""
+def fetch_hls_product_rows(supabase, limit: int | None, reencode: bool = False) -> list[dict]:
+    """Products with a primary video. By default only those MISSING a ladder
+    (primary_hls_url IS NULL); reencode=True re-processes ones that have it."""
     q = (
         supabase.table("products")
         .select("id, primary_video_url")
         .not_.is_("primary_video_url", "null")
-        .is_("primary_hls_url", "null")
     )
+    if not reencode:
+        q = q.is_("primary_hls_url", "null")
     if limit:
         q = q.limit(limit)
     return q.execute().data or []
 
 
-def run_hls(table: str, limit: int | None, dry_run: bool, concurrency: int) -> int:
+def run_hls(
+    table: str, limit: int | None, dry_run: bool, concurrency: int,
+    statuses: list[str] | None = None, reencode: bool = False,
+) -> int:
     supabase_url = os.environ.get("SUPABASE_URL")
     service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
     if not supabase_url or not service_key:
@@ -224,7 +252,7 @@ def run_hls(table: str, limit: int | None, dry_run: bool, concurrency: int) -> i
     supabase = create_client(supabase_url, service_key)
 
     is_products = table == "products"
-    rows = fetch_hls_product_rows(supabase, limit) if is_products else fetch_hls_rows(supabase, table, limit)
+    rows = fetch_hls_product_rows(supabase, limit, reencode) if is_products else fetch_hls_rows(supabase, table, limit, statuses, reencode)
     if not rows:
         print(f"[{table}/hls] nothing to backfill")
         return 0
@@ -492,7 +520,18 @@ def main(argv: Iterable[str] | None = None) -> int:
                    help="Encode HLS adaptive ladders (480/720/1080) into <base>/hls/ and "
                         "fill hls_url (products: primary_hls_url) instead of poster/mobile assets. "
                         "Heavier per row (3 renditions); consider a lower --concurrency.")
+    p.add_argument("--statuses", default=None,
+                   help="Comma-separated product_creative statuses to include in HLS backfill "
+                        "(default: live). e.g. 'live,done,paused' to cover non-live creatives.")
+    p.add_argument("--reencode", action="store_true",
+                   help="Re-encode rows that ALREADY have an HLS ladder (hls_url / "
+                        "primary_hls_url set), not just missing ones. Use after an encoder "
+                        "change (e.g. 1s segments); pair with a bumped output dir so new "
+                        "URLs don't collide with immutable-cached old segments. Does not "
+                        "null hls_url first, so the feed keeps playing until each row is "
+                        "repointed.")
     args = p.parse_args(argv)
+    statuses = [s.strip() for s in args.statuses.split(",") if s.strip()] if args.statuses else None
 
     # `products` follows a different path: it derives the poster from
     # primary_video_url and writes products.primary_video_poster_url (no
@@ -504,7 +543,7 @@ def main(argv: Iterable[str] | None = None) -> int:
             # generated_videos has no hls_url column; skip it in HLS mode.
             if t == "generated_videos":
                 continue
-            rc |= run_hls(t, args.limit, args.dry_run, args.concurrency)
+            rc |= run_hls(t, args.limit, args.dry_run, args.concurrency, statuses, args.reencode)
         elif t == "products":
             rc |= run_products(args.limit, args.dry_run, args.concurrency)
         else:
