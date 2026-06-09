@@ -19,6 +19,8 @@ import { getProductCatalogs, type ProductCatalog } from '~/services/catalogs';
 import { isFitRelevant, deriveFitLabel, buildSuggestionChipGroups } from '~/utils/productTaxonomy';
 import { type GraphPair } from '~/services/graph-pairs';
 import { useAuth } from '~/hooks/useAuth';
+import { ConfirmModal } from '~/components/ConfirmModal';
+import { hideProductKey } from '~/hooks/useHiddenLooks';
 import { useShopperBody } from '~/hooks/useShopperBody';
 import { usePageSections, isSectionEnabled, getSectionLimit, isSectionInfinite } from '~/hooks/usePageSections';
 import { useUserAffinity } from '~/hooks/useUserAffinity';
@@ -687,6 +689,42 @@ export default function ProductPage({
   // (gender gate, relative band, sparse widen, per-candidate distances) only
   // when a super admin opens it — the live rail never pays for it.
   const isSuperAdmin = user?.role === 'super_admin';
+
+  // Secret super-admin gesture: press-and-hold the hero media to delete the
+  // product (soft-hide it from the feed + every look). A 650ms hold, cancelled
+  // by any real drag/scroll, so a normal tap-to-play is untouched. Invisible
+  // to everyone else.
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const [deleting, setDeleting] = useState(false);
+  const pressTimer = useRef<number | null>(null);
+  const pressStart = useRef<{ x: number; y: number } | null>(null);
+  const clearPress = useCallback(() => {
+    if (pressTimer.current) { window.clearTimeout(pressTimer.current); pressTimer.current = null; }
+    pressStart.current = null;
+  }, []);
+  const onHeroPressStart = useCallback((e: React.PointerEvent) => {
+    if (!isSuperAdmin) return;
+    pressStart.current = { x: e.clientX, y: e.clientY };
+    pressTimer.current = window.setTimeout(() => {
+      clearPress();
+      try { navigator.vibrate?.(30); } catch { /* no haptics */ }
+      setDeleteOpen(true);
+    }, 650);
+  }, [isSuperAdmin, clearPress]);
+  const onHeroPressMove = useCallback((e: React.PointerEvent) => {
+    if (!pressStart.current) return;
+    const dx = e.clientX - pressStart.current.x;
+    const dy = e.clientY - pressStart.current.y;
+    if (dx * dx + dy * dy > 100) clearPress(); // moved >10px → it's a drag, not a hold
+  }, [clearPress]);
+  const confirmDeleteProduct = useCallback(async () => {
+    setDeleting(true);
+    try { await hideProductKey(product.brand, product.name); } catch { /* localStorage hide applied */ }
+    setDeleting(false);
+    setDeleteOpen(false);
+    onClose();
+  }, [product.brand, product.name, onClose]);
+
   const [simDebug, setSimDebug] = useState<{ open: boolean; loading: boolean; report: SimilarDebugReport | null }>(
     { open: false, loading: false, report: null },
   );
@@ -1184,7 +1222,14 @@ export default function ProductPage({
 
         {heroEnabled && (
         <div className="pd-split">
-          <section className={heroClassName}>
+          <section
+            className={heroClassName}
+            onPointerDown={onHeroPressStart}
+            onPointerUp={clearPress}
+            onPointerLeave={clearPress}
+            onPointerCancel={clearPress}
+            onPointerMove={onHeroPressMove}
+          >
             {effectiveCreative ? (
               <>
                 {/* Phase 9 instant poster: paints synchronously on mount
@@ -1636,6 +1681,18 @@ export default function ProductPage({
           report={simDebug.report}
           loading={simDebug.loading}
           onClose={() => setSimDebug({ open: false, loading: false, report: null })}
+        />
+      )}
+      {isSuperAdmin && (
+        <ConfirmModal
+          open={deleteOpen}
+          title="Delete this product?"
+          body={<>Removes <strong>{product.brand} — {product.name}</strong> from the feed and from every look. Super-admin only.</>}
+          confirmLabel="Delete"
+          destructive
+          busy={deleting}
+          onConfirm={confirmDeleteProduct}
+          onCancel={() => setDeleteOpen(false)}
         />
       )}
     </div>

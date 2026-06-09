@@ -141,6 +141,29 @@ function writeLocalLookIds(set: Set<number>) {
   try { window.localStorage.setItem('admin:hiddenLookIds', JSON.stringify([...set])); } catch { /* quota */ }
 }
 
+function writeLocalProductKeys(set: Set<string>) {
+  try { window.localStorage.setItem('admin:hiddenProductKeys', JSON.stringify([...set])); } catch { /* quota */ }
+}
+
+/**
+ * Soft-hide a product from the consumer feed (and from every look). Keyed by
+ * `${brand}-${name}` to match useHiddenProductKeys / the admin_hidden_products
+ * table. Optimistically writes localStorage + notifies subscribers so the feed
+ * drops it immediately, then best-effort persists to Supabase. Used by the
+ * super-admin long-press delete on the product page.
+ */
+export async function hideProductKey(brand: string, name: string): Promise<void> {
+  if (!brand || !name) return;
+  const current = readLocalProductKeys();
+  current.add(`${brand}-${name}`);
+  writeLocalProductKeys(current);
+  notify(productListeners);
+  if (supabase) {
+    // Ignore "table missing" errors — localStorage already made it stick.
+    await supabase.from('admin_hidden_products').upsert({ brand, name }, { onConflict: 'brand,name' });
+  }
+}
+
 function readLocalLookUuids(): Set<string> {
   try {
     const raw = typeof window !== 'undefined'
@@ -266,6 +289,18 @@ export function useHiddenProductKeys(): Set<string> {
       return new Set();
     }
   });
+
+  // Refresh from localStorage whenever hideProductKey() fires so a delete
+  // propagates to the feed immediately (merges, never drops DB-fetched keys).
+  useEffect(() => {
+    const listener = () => setHidden(prev => {
+      const merged = new Set(prev);
+      readLocalProductKeys().forEach(k => merged.add(k));
+      return merged;
+    });
+    productListeners.add(listener);
+    return () => { productListeners.delete(listener); };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;
