@@ -203,8 +203,13 @@ export default function SearchCeremony({ query, kind = 'search', ready, onDone, 
 
   return (
     <div className={`search-ceremony${reduced ? ' is-reduced' : ''}`} role="status" aria-live="polite">
-      {/* Ceremony-local particle layer above the opaque scrim. */}
-      <ParticleBackground />
+      {/* Ceremony-local particle layer above the opaque scrim. Passes an
+          explicit `speed` so it mounts as a ONE-OFF field (always renders,
+          ignores particleControls.paused) — the site singleton underneath is
+          paused while the feed covers it, and without an explicit speed this
+          layer would inherit that paused state and blank out. 3.5 matches the
+          "searching the world" speed the ceremony sets on the singleton. */}
+      <ParticleBackground speed={3.5} />
 
       {/* The searched products, drifting in the particle space behind the
           stage. Each tile floats on its own gentle loop; they fade in once
