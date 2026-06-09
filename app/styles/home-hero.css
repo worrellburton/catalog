@@ -482,7 +482,7 @@
 }
 .sc-floater {
   position: absolute;
-  width: clamp(64px, 13vw, 116px);
+  width: clamp(58px, 12vw, 104px);
   aspect-ratio: 3 / 4;
   transform: translate(-50%, -50%);
   border-radius: 12px;
@@ -503,8 +503,10 @@
   to   { opacity: 0.85; transform: translate(-50%, -50%) scale(1); }
 }
 @keyframes sc-floater-drift {
-  0%, 100% { translate: 0 0; }
-  50%      { translate: 0 -14px; }
+  0%   { translate: 0 0; rotate: 0deg; }
+  33%  { translate: var(--dx, 6px) -12px; rotate: var(--rot, 2deg); }
+  66%  { translate: calc(var(--dx, 6px) * -0.5) -20px; rotate: calc(var(--rot, 2deg) * -1); }
+  100% { translate: 0 0; rotate: 0deg; }
 }
 @media (prefers-reduced-motion: reduce) {
   .sc-floater { animation: sc-floater-in 360ms ease both; }
