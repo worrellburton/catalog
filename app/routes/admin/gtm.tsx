@@ -29,31 +29,29 @@ const PILLARS: Pillar[] = [
     note: 'The performance + organic engine - installs, sessions, and the ~$5 CPA.',
     groups: [
       { name: 'SEO', stage: 'awareness', note: 'Discovery off-app too - every look & product page indexed.', leaves: [
-        { name: 'Content', note: 'Editorial + programmatic pages that rank.', added: true },
-        { name: 'Technical SEO', note: 'Crawlable SPA, sitemaps, Core Web Vitals.', added: true },
+        { name: 'Content', note: 'Editorial + programmatic pages that rank.' },
+        { name: 'Technical SEO', note: 'Crawlable SPA, sitemaps, Core Web Vitals.' },
       ]},
       { name: 'Campaigns', stage: 'retention', note: 'Owned lifecycle - the cheapest retention lever.', leaves: [
         { name: 'Email', note: 'Daily-feed drops, lifecycle, win-back.' },
         { name: 'Text', note: 'SMS for high-intent drops & re-engagement.' },
-        { name: 'Push', note: 'Notify when a new daily feed drops.', added: true },
+        { name: 'Push', note: 'Notify when a new daily feed drops.' },
       ]},
       { name: 'Social', stage: 'awareness', note: 'Organic shoppable video, native to each platform.', leaves: [
         { name: 'Instagram', note: 'Reels - shoppable looks.' },
         { name: 'TikTok', note: 'Creator-led organic reach.' },
         { name: 'LinkedIn', note: 'Founder + brand/creator recruiting.' },
-        { name: 'Pinterest', note: 'Shopping/discovery intent.', added: true },
-        { name: 'YouTube', note: 'Shorts + long-form shoppable.', added: true },
+        { name: 'Pinterest', note: 'Shopping/discovery intent.' },
+        { name: 'YouTube', note: 'Shorts + long-form shoppable.' },
       ]},
       { name: 'Paid Ads', stage: 'acquisition', note: 'Performance at ~$5 CPA - early-heavy, then taper.', leaves: [
         { name: 'Google', note: 'Search + Shopping + YouTube.' },
         { name: 'TikTok', note: 'Performance video.' },
         { name: 'Meta', note: 'IG/FB performance + retargeting.' },
-        { name: 'Apple Search Ads', note: 'High-intent installs.', added: true },
+        { name: 'Apple Search Ads', note: 'High-intent installs.' },
       ]},
-      { name: 'ASO', stage: 'acquisition', note: 'Rank + convert installs on iOS & Android.', added: true },
-      { name: 'Affiliate & referral', stage: 'referral', note: 'The ~20%/mo word-of-mouth loop.', added: true },
-      { name: 'Web / CRO', stage: 'activation', note: 'Landing, onboarding & conversion-rate optimization.', added: true },
-      { name: 'Influencer marketing', stage: 'awareness', note: 'Paid campaigns - distinct from organic Social.', added: true },
+      { name: 'ASO', stage: 'acquisition', note: 'Rank + convert installs on iOS & Android.' },
+      { name: 'Web / CRO', stage: 'activation', note: 'Landing, onboarding & conversion-rate optimization.' },
     ],
   },
   {
@@ -62,9 +60,8 @@ const PILLARS: Pillar[] = [
     groups: [
       { name: 'Creator', stage: 'awareness', note: 'Recruit & onboard creators to publish looks at scale.' },
       { name: 'Brand', stage: 'acquisition', note: 'Merchant / affiliate partnerships - supply + commission.' },
-      { name: 'Affiliate networks', stage: 'acquisition', note: 'Shopify, Impact, etc. - breadth fast.', added: true },
-      { name: 'Platform & distribution', stage: 'awareness', note: 'App-store features, integrations, embeds.', added: true },
-      { name: 'PR & media', stage: 'awareness', note: 'Launch + milestone press; the narrative.', added: true },
+      { name: 'Affiliate networks', stage: 'acquisition', note: 'Shopify, Impact, etc. - breadth fast.' },
+      { name: 'PR & media', stage: 'awareness', note: 'Launch + milestone press; the narrative.' },
     ],
   },
   {
@@ -74,26 +71,58 @@ const PILLARS: Pillar[] = [
       { name: 'Positioning', stage: 'awareness', note: 'One shopping app, web+app, one user base - not fashion.' },
       { name: 'Brand identity', stage: 'awareness', note: 'Look, voice, the Catalog wordmark system.' },
       { name: 'Messaging', stage: 'awareness', note: 'One narrative across every channel.' },
-      { name: 'Market & ICP research', stage: 'awareness', note: 'Who we serve and what they shop.', added: true },
-      { name: 'Community', stage: 'retention', note: 'Creators + power shoppers as an owned audience.', added: true },
-      { name: 'Measurement', stage: 'activation', note: 'Tie every channel back to the model.', added: true, leaves: [
-        { name: 'Attribution / MMP', note: 'AppsFlyer / Adjust + pixels.', added: true },
-        { name: 'KPIs per channel', note: 'CPA · LTV:CPA · payback.', added: true },
+      { name: 'Market & ICP research', stage: 'awareness', note: 'Who we serve and what they shop.' },
+      { name: 'Community', stage: 'retention', note: 'Creators + power shoppers as an owned audience.' },
+      { name: 'Measurement', stage: 'activation', note: 'Tie every channel back to the model.', leaves: [
+        { name: 'Attribution / MMP', note: 'AppsFlyer / Adjust + pixels.' },
+        { name: 'KPIs per channel', note: 'CPA · LTV:CPA · payback.' },
       ]},
-      { name: 'Pricing & monetization', stage: 'acquisition', note: 'Commission tiers - the other half of unit economics.', added: true },
-      { name: 'Competitive intelligence', stage: 'awareness', note: 'Track Amazon / Pinterest / TikTok Shop.', added: true },
-      { name: 'Creative production', stage: 'awareness', note: 'The engine that makes the shoppable-video assets.', added: true },
+      { name: 'Pricing & monetization', stage: 'acquisition', note: 'Commission tiers - the other half of unit economics.' },
+      { name: 'Competitive intelligence', stage: 'awareness', note: 'Track Amazon / Pinterest / TikTok Shop.' },
+      { name: 'Creative production', stage: 'awareness', note: 'The engine that makes the shoppable-video assets.' },
     ],
   },
 ];
 
-const FLYWHEEL: { kicker: string; title: string; body: string; accent: string }[] = [
-  // Page 0 — the goal, now combined with the "market through creators"
-  // strategy so the flywheel's purpose and its core channel read as one.
-  { kicker: 'The goal', title: 'Turn the flywheel on.', body: 'Create a marketing engine that compounds on its own, built on marketing through creators. Creators are our primary advertising channel: we partner with them to post, build catalogs, and share on their socials, and pay them on every signup plus ongoing engagement.', accent: '#6366f1' },
-  { kicker: 'Step 1', title: 'Hire.', body: 'Three BD / marketing consultants, month-to-month for three months, who specialize in creator relations and start small then scale. Some may convert to full-time - the point is to start delegating the system now; it can’t run on one person.', accent: '#8b5cf6' },
-  { kicker: 'Step 2', title: 'Deploy budget effectively.', body: 'Run a disciplined, mission-driven team that logs every contact in the CRM, holds each other to weekly targets, and moves as one synergistic unit with real purpose: putting every marketing dollar to work as effectively as possible, laser-focused on driving the CPA down.', accent: '#10b981' },
-  { kicker: 'Step 3', title: 'Learn & repeat.', body: 'Continuous improvement on strategy, campaign management, and creator management - lean into what’s working, cut what isn’t, and tighten the loop every cycle. The goal: drive CPA as low as possible.', accent: '#f59e0b' },
+const FLYWHEEL: { kicker: string; title: string; bullets: string[]; accent: string }[] = [
+  // Page 0 — the goal, combined with the "market through creators" strategy
+  // so the flywheel's purpose and its core channel read as one.
+  {
+    kicker: 'The goal', title: 'Turn the flywheel on.', accent: '#6366f1',
+    bullets: [
+      'A marketing engine that compounds on its own',
+      'Built on marketing through creators, our primary advertising channel',
+      'Partner with creators to post, build catalogs, and share on their socials',
+      'Pay creators on every signup plus ongoing engagement',
+    ],
+  },
+  {
+    kicker: 'Step 1', title: 'Hire.', accent: '#8b5cf6',
+    bullets: [
+      'Three BD and marketing consultants, month-to-month for three months',
+      'Specialized in creator relations; start small, then scale',
+      'Some may convert to full-time',
+      'Start delegating the system now; it can’t run on one person',
+    ],
+  },
+  {
+    kicker: 'Step 2', title: 'Deploy budget effectively.', accent: '#10b981',
+    bullets: [
+      'A disciplined, mission-driven team',
+      'On a mission to deploy the budget as effectively as possible',
+      'Log every contact in the CRM; hold each other to weekly targets',
+      'Laser-focused on driving the CPA down',
+    ],
+  },
+  {
+    kicker: 'Step 3', title: 'Kaizen.', accent: '#f59e0b',
+    bullets: [
+      'Continuous improvement: learn and repeat, every cycle',
+      'Lean into what’s working, cut what isn’t',
+      'Tighten strategy, campaigns, and creator management',
+      'Drive CPA as low as possible',
+    ],
+  },
 ];
 
 function Leaves({ leaves }: { leaves: Leaf[] }) {
@@ -325,7 +354,9 @@ export default function AdminGtm() {
               </span>
               <span className="gtm-fly-tag">{s.kicker}</span>
               <h3 className="gtm-fly-title">{s.title}</h3>
-              <p className="gtm-fly-body">{s.body}</p>
+              <ul className="gtm-fly-bullets">
+                {s.bullets.map((b, bi) => <li key={bi}>{b}</li>)}
+              </ul>
             </div>
           </section>
         ))}

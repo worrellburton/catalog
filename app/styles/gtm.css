@@ -368,7 +368,9 @@
   grid-template-columns: repeat(4, 1fr);
   grid-auto-rows: 33vh;
   gap: 4px;
-  opacity: 0.12;
+  /* More present so the look/product feed actually reads behind the white
+     scrim (it was a barely-there 0.12 texture before). */
+  opacity: 0.32;
   animation: insightScroll 45s linear infinite;
 }
 .gtm-fly-bg-video {
@@ -380,12 +382,14 @@
 .gtm-fly-bg-overlay {
   position: absolute;
   inset: 0;
+  /* WHITE scrim over the product feed (not black) — lighter than before so
+     the feed reads through while the copy stays legible. */
   background:
     linear-gradient(to right,
-      rgba(250, 250, 252, 0.94) 0%,
-      rgba(250, 250, 252, 0.86) 40%,
-      rgba(250, 250, 252, 0.74) 100%),
-    radial-gradient(ellipse at center, rgba(250, 250, 252, 0.45) 0%, rgba(250, 250, 252, 0.85) 80%);
+      rgba(252, 252, 254, 0.80) 0%,
+      rgba(252, 252, 254, 0.72) 40%,
+      rgba(252, 252, 254, 0.62) 100%),
+    radial-gradient(ellipse at center, rgba(252, 252, 254, 0.30) 0%, rgba(252, 252, 254, 0.74) 80%);
 }
 @media (max-width: 768px) {
   .gtm-fly-bg-grid { grid-template-columns: repeat(3, 1fr); }
@@ -397,7 +401,10 @@
    scoped to this page and never leaks to other admin screens. proximity (not
    mandatory) lets the tree above scroll freely; the flywheel slides below are
    the only snap points. */
-html.gtm-snap { scroll-snap-type: y proximity; scroll-behavior: smooth; }
+/* Snap each flywheel slide firmly into view. `mandatory` (not proximity)
+   makes the deck click into place reliably; scroll-padding-top clears the
+   sticky admin topbar (53px) so a slide snaps flush below it, not under it. */
+html.gtm-snap { scroll-snap-type: y mandatory; scroll-behavior: smooth; scroll-padding-top: 56px; }
 
 .gtm-fly-slide {
   position: relative;
@@ -434,7 +441,7 @@ html.gtm-snap { scroll-snap-type: y proximity; scroll-behavior: smooth; }
 .gtm-fly-inner {
   position: relative;
   z-index: 1;
-  max-width: 700px;
+  max-width: 760px;
   width: 100%;
   /* Reveal each slide's copy as it scrolls into view. */
   opacity: 0;
@@ -459,19 +466,41 @@ html.gtm-snap { scroll-snap-type: y proximity; scroll-behavior: smooth; }
   margin-bottom: 10px;
 }
 .gtm-fly-title {
-  margin: 0 0 18px;
-  font-size: clamp(44px, 7.5vw, 84px);
+  margin: 0 0 22px;
+  /* Smaller max so the headline (e.g. "Turn the flywheel on.") sits on one
+     row at desktop width instead of wrapping. */
+  font-size: clamp(38px, 5vw, 58px);
   font-weight: 800;
   letter-spacing: -0.035em;
-  line-height: 1.0;
+  line-height: 1.04;
   color: #0f172a;
 }
-.gtm-fly-body {
+/* Slide copy as bullet points (replaces the paragraph body). */
+.gtm-fly-bullets {
   margin: 0;
-  font-size: clamp(15px, 2.1vw, 21px);
-  line-height: 1.55;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  max-width: 620px;
+}
+.gtm-fly-bullets li {
+  position: relative;
+  padding-left: 26px;
+  font-size: clamp(15px, 2vw, 20px);
+  line-height: 1.45;
   color: #475569;
-  max-width: 600px;
+}
+.gtm-fly-bullets li::before {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 0.5em;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--accent, #6366f1);
 }
 @media (prefers-reduced-motion: reduce) {
   html.gtm-snap { scroll-behavior: auto; }
