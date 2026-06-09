@@ -366,16 +366,18 @@ def hls_backfill_job(
     concurrency: int = 1,
     dry_run: bool = False,
     statuses: list[str] | None = None,
+    reencode: bool = False,
 ):
-    """Run the HLS ladder backfill for one table. Re-runnable: only touches
-    rows where hls_url (products: primary_hls_url) is still null.
+    """Run the HLS ladder backfill for one table. Re-runnable: by default only
+    touches rows where hls_url (products: primary_hls_url) is still null.
 
-    `statuses` gates product_creative (default: live-only)."""
+    `statuses` gates product_creative (default: live-only). `reencode=True`
+    also re-processes rows that ALREADY have a ladder (for an encoder change)."""
     import sys
     sys.path.insert(0, "/root")
     from backfill_creative_assets import run_hls
 
-    rc = run_hls(table, limit, dry_run, concurrency, statuses)
+    rc = run_hls(table, limit, dry_run, concurrency, statuses, reencode)
     return {"table": table, "rc": rc}
 
 
@@ -386,6 +388,7 @@ def hls_backfill(
     concurrency: int = 1,
     dry_run: bool = False,
     statuses: str = "live",
+    reencode: bool = False,
 ):
     """One-shot HLS ladder backfill on Modal.
 
@@ -397,9 +400,12 @@ def hls_backfill(
         modal run modal_app.py::hls_backfill --table product_creative
         # include non-live product_creative (done/paused) creatives:
         modal run modal_app.py::hls_backfill --table product_creative --statuses live,done,paused
+        # RE-ENCODE existing ladders after an encoder change (e.g. 1s segments):
+        modal run modal_app.py::hls_backfill --table product_creative --statuses live,done,paused --reencode
 
-    limit=0 → all eligible rows. `statuses` only gates product_creative."""
+    limit=0 → all eligible rows. `statuses` only gates product_creative;
+    `reencode` re-processes rows that already have a ladder."""
     status_list = [s.strip() for s in statuses.split(",") if s.strip()] or None
-    res = hls_backfill_job.remote(table, (limit or None), concurrency, dry_run, status_list)
+    res = hls_backfill_job.remote(table, (limit or None), concurrency, dry_run, status_list, reencode)
     print(res)
 
