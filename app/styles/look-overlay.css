@@ -1037,6 +1037,9 @@ body:has(.look-overlay.look-overlay--in) {
   aspect-ratio: 3 / 4;
   border-radius: 6px;
   background: #111;
+  /* Prevent auto-row stretch from collapsing the card to its zero-height
+     absolute content (which defeats the aspect-ratio). */
+  align-self: start;
 }
 
 /* GUARD — every poster/video inside the creator grid must FILL its 3:4

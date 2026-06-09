@@ -110,6 +110,9 @@
   aspect-ratio: 9 / 16;
   border-radius: 14px;
   overflow: hidden;
+  /* Prevent auto-row stretch from collapsing the card to its zero-height
+     absolute content (which defeats the aspect-ratio). */
+  align-self: start;
 }
 
 /* Loading skeleton - soft pulsing tiles matching the grid cells. */
