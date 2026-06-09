@@ -258,12 +258,16 @@ export default function AdminGtm() {
           <div className="gtm-pillars">
           {PILLARS.map((p, i) => (
             <section key={p.name} ref={el => { pillarRefs.current[i] = el; }} className="gtm-pillar gtm-fade" style={{ ...delay(), ['--accent' as string]: p.accent }}>
-              <header className="gtm-pillar-head">
+              {/* Plain div, NOT <header> — a global `header { position: fixed }`
+                  rule in header.css (the consumer app title bar) hijacks any
+                  <header> tag and pinned this pillar head full-width at the top
+                  of the page. */}
+              <div className="gtm-pillar-head">
                 <div className="gtm-pillar-titlerow">
                   <h3 className="gtm-pillar-name">{p.name}</h3>
                 </div>
                 <p className="gtm-pillar-note">{p.note}</p>
-              </header>
+              </div>
               <div className="gtm-groups">
                 {p.groups.map(g => (
                   <div key={g.name} className={`gtm-group gtm-fade${g.added ? ' is-added' : ''}`} style={delay()}>
