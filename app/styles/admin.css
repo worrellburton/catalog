@@ -744,6 +744,17 @@ html.admin-on-dark-canvas .admin-topbar,
   animation: admin-spin 0.8s linear infinite;
 }
 
+/* Automatic Add Products pipeline — per-step progress spinner. */
+.auto-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid rgba(79, 70, 229, 0.25);
+  border-top-color: #4f46e5;
+  animation: admin-spin 0.8s linear infinite;
+}
+
 .admin-clickable-row:hover td {
   background: #f0f0f0 !important;
 }

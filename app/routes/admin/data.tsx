@@ -146,7 +146,43 @@ const SOURCE_LABELS: Record<string, string> = {
   google_shopping: 'Google Shopping',
   amazon: 'Amazon',
   brand_url: 'Brand URL',
+  auto_ai: 'Automatic',
 };
+
+// ── Automatic Add Products pipeline ───────────────────────────────────
+// Marks products discovered & added by the autonomous Claude + Gemini
+// pipeline (the "Automatic" filter tab). Stored in products.source.
+const AUTO_SOURCE = 'auto_ai';
+
+// The ordered steps each auto-added product walks through. Drives the
+// live progress UI so the admin always sees "what step it's in".
+type AutoStep = 'queued' | 'add' | 'scrape' | 'pick' | 'polish' | 'video' | 'done' | 'failed';
+const AUTO_STEP_ORDER: AutoStep[] = ['add', 'scrape', 'pick', 'polish', 'video', 'done'];
+const AUTO_STEP_LABELS: Record<AutoStep, string> = {
+  queued: 'Waiting…',
+  add: 'Adding product',
+  scrape: 'Scraping details',
+  pick: 'Picking primary photo',
+  polish: 'Polishing photo',
+  video: 'Generating video',
+  done: 'Done',
+  failed: 'Failed',
+};
+interface AutoJob {
+  /** Stable client id for the row (url-derived; products get a real id later). */
+  key: string;
+  url: string;
+  label: string;
+  step: AutoStep;
+  productId?: string;
+  error?: string;
+}
+
+/** Friendly label for an auto-add job before the product is scraped —
+ *  the merchant hostname reads better than a raw URL in the progress list. */
+function autoHostLabel(u: string): string {
+  try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return u.slice(0, 40); }
+}
 
 // Compact, unambiguous date format that's friendly to scan.
 // Recent dates use a relative phrase ("3h ago", "Yesterday", "Mon");
@@ -1238,7 +1274,7 @@ export default function AdminData() {
       return p;
     }, { replace: false });
   }, [setSearchParams]);
-  const [productFilter, setProductFilter] = useState<'all' | 'no-creative' | 'active' | 'inactive' | 'untagged' | 'soft-deleted'>('all');
+  const [productFilter, setProductFilter] = useState<'all' | 'no-creative' | 'active' | 'inactive' | 'untagged' | 'soft-deleted' | 'automatic'>('all');
 
   // Date-added filter for the Products table. 'all' lets every row
   // through. 'week' / 'month' use rolling-window cutoffs (created_at
@@ -1835,6 +1871,25 @@ export default function AdminData() {
 
   // Add Products research modal
   const [showAddProducts, setShowAddProducts] = useState(false);
+
+  // ── Automatic Add Products pipeline ─────────────────────────────────
+  // The "Automatic" tab's autonomous flow: Claude + Gemini discover
+  // high-converting catalog products → add → pick photo → polish → video.
+  // autoJobs drives the live per-product progress list.
+  const [autoCountOpen, setAutoCountOpen] = useState(false);
+  const [autoRunning, setAutoRunning] = useState(false);
+  const [autoDiscovering, setAutoDiscovering] = useState(false);
+  const [autoError, setAutoError] = useState<string | null>(null);
+  const [autoJobs, setAutoJobs] = useState<AutoJob[]>([]);
+  const autoCountRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!autoCountOpen) return;
+    const handler = (e: MouseEvent) => {
+      if (autoCountRef.current && !autoCountRef.current.contains(e.target as Node)) setAutoCountOpen(false);
+    };
+    document.addEventListener('mousedown', handler);
+    return () => document.removeEventListener('mousedown', handler);
+  }, [autoCountOpen]);
 
   // Add Products dropdown - opens a menu with three sources (Google
   // Shopping → existing research modal, Amazon → Rainforest lookup,
@@ -2835,6 +2890,8 @@ export default function AdminData() {
       if (productFilter === 'active' && (p as any).is_active === false) return false;
       if (productFilter === 'inactive' && (p as any).is_active !== false) return false;
       if (productFilter === 'untagged' && p.gender != null) return false;
+      // Automatic view: only products added by the autonomous pipeline.
+      if (productFilter === 'automatic' && (p as { source?: string | null }).source !== AUTO_SOURCE) return false;
       // Hide soft-deleted from every other view.
       if (deletedProductKeys.has(key)) return false;
       if (brandFilter && (p.brand || '').toLowerCase() !== brandFilter.toLowerCase()) return false;
@@ -3130,6 +3187,167 @@ export default function AdminData() {
       }
     }
   }, [showToast, crawledProducts]);
+
+  // ── Automatic Add Products orchestrator ────────────────────────────
+  // Discovers `count` catalog-worthy products with Claude + Gemini, then
+  // walks each one through add → scrape → pick photo → polish → video,
+  // patching autoJobs so the live progress list shows the current step.
+  // Polish + video kick off and track async (the existing webhook/poll
+  // path finishes them), so a Modal cold start never stalls the batch.
+  const runAutoAdd = useCallback(async (count: number) => {
+    if (!supabase || autoRunning) return;
+    setAutoRunning(true);
+    setAutoError(null);
+    setAutoJobs([]);
+    setAutoDiscovering(true);
+
+    const patch = (key: string, p: Partial<AutoJob>) =>
+      setAutoJobs(prev => prev.map(j => (j.key === key ? { ...j, ...p } : j)));
+
+    // Poll the product row until the scraper has populated images (or it
+    // gives up). The realtime products subscription keeps the table row
+    // fresh in parallel; this just gates the next pipeline step.
+    const waitForScrape = async (productId: string) => {
+      const deadline = Date.now() + 90_000;
+      while (Date.now() < deadline) {
+        const { data } = await supabase!
+          .from('products')
+          .select('image_url, images, name, brand, scrape_status')
+          .eq('id', productId)
+          .single();
+        if (data) {
+          const hasImg = !!data.image_url || (Array.isArray(data.images) && data.images.length > 0);
+          if (data.scrape_status === 'done' || data.scrape_status === 'failed' || hasImg) {
+            return data as { image_url: string | null; images: string[] | null; name: string | null; brand: string | null };
+          }
+        }
+        await new Promise(r => setTimeout(r, 3000));
+      }
+      const { data } = await supabase!
+        .from('products')
+        .select('image_url, images, name, brand')
+        .eq('id', productId)
+        .single();
+      return (data as { image_url: string | null; images: string[] | null; name: string | null; brand: string | null } | null) ?? null;
+    };
+
+    try {
+      // 1) DISCOVER — Claude Opus + Gemini Pro search the web in parallel.
+      const prompt = `You are curating products for a premium, visually-driven shoppable catalog (a fashion + lifestyle lookbook). Find ${count + 4} DISTINCT, currently popular, high-converting products that online shoppers love right now and that look great in a catalog — strong brands, clean product photography, broad appeal. Mix apparel, footwear, accessories, beauty, home, and lifestyle. Return direct product-page URLs, one per line.`;
+      const urls: string[] = [];
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const baseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+        const apikey = import.meta.env.VITE_SUPABASE_PUBLISHABLE_DEFAULT_KEY || '';
+        const res = await fetch(`${baseUrl}/functions/v1/ai-find-urls`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(session?.access_token ? { Authorization: `Bearer ${session.access_token}` } : {}),
+            apikey,
+          },
+          body: JSON.stringify({ prompt }),
+        });
+        const json = await res.json();
+        if (!res.ok) throw new Error(json.error || `Discovery failed (${res.status})`);
+        const claudeUrls: string[] = json?.claude?.urls || [];
+        const geminiUrls: string[] = json?.gemini?.urls || [];
+        // Interleave so the batch draws from BOTH models, then dedupe
+        // against itself and the products we already have.
+        const merged: string[] = [];
+        const max = Math.max(claudeUrls.length, geminiUrls.length);
+        for (let i = 0; i < max; i++) {
+          if (claudeUrls[i]) merged.push(claudeUrls[i]);
+          if (geminiUrls[i]) merged.push(geminiUrls[i]);
+        }
+        const existing = new Set(
+          allProductsRef.current.map(p => (p.url || '').trim()).filter(Boolean),
+        );
+        const seen = new Set<string>();
+        for (const u of merged) {
+          const t = (u || '').trim();
+          if (!t || seen.has(t) || existing.has(t)) continue;
+          seen.add(t);
+          urls.push(t);
+          if (urls.length >= count) break;
+        }
+      } catch (err) {
+        setAutoError(`Discovery failed: ${err instanceof Error ? err.message : String(err)}`);
+        return;
+      } finally {
+        setAutoDiscovering(false);
+      }
+
+      if (urls.length === 0) {
+        setAutoError('Claude + Gemini did not return any usable product URLs. Try again.');
+        return;
+      }
+
+      const jobs: AutoJob[] = urls.map((u, i) => ({
+        key: `auto-${Date.now()}-${i}`,
+        url: u,
+        label: autoHostLabel(u),
+        step: 'queued',
+      }));
+      setAutoJobs(jobs);
+
+      let succeeded = 0;
+      for (const job of jobs) {
+        try {
+          // 2) ADD — insert the URL tagged source=auto_ai. Realtime pushes
+          //    the row into the table.
+          patch(job.key, { step: 'add' });
+          const row = await addProductUrl(job.url, AUTO_SOURCE);
+          patch(job.key, { productId: row.id, step: 'scrape' });
+
+          // 3) SCRAPE — wait for the Modal scraper to resolve images.
+          const scraped = await waitForScrape(row.id);
+          const imgs: string[] = [];
+          if (Array.isArray(scraped?.images)) {
+            for (const u of scraped!.images!) if (typeof u === 'string' && u) imgs.push(u);
+          }
+          if (scraped?.image_url && !imgs.includes(scraped.image_url)) imgs.push(scraped.image_url);
+          if (imgs.length === 0) {
+            patch(job.key, { step: 'failed', error: 'No product images found' });
+            continue;
+          }
+          patch(job.key, { label: scraped?.name || job.label });
+
+          // 4) PICK PRIMARY PHOTO — Claude vision picks the cleanest solo shot.
+          patch(job.key, { step: 'pick' });
+          const { data: pickData, error: pickErr } = await supabase.functions.invoke('pick-primary-image', {
+            body: { product_id: row.id, name: scraped?.name || '', brand: scraped?.brand || '', image_urls: imgs },
+          });
+          if (pickErr || !pickData?.success) {
+            patch(job.key, { step: 'failed', error: 'Could not pick a primary photo' });
+            continue;
+          }
+
+          // 5) POLISH — reframe to a uniform 3:4 packshot (awaited; ~seconds).
+          patch(job.key, { step: 'polish' });
+          await polishPrimaryImage(row.id);
+
+          // 6) VIDEO — kick off generation. Returns in <2s with status
+          //    pending; the fal webhook + pending poll finish it async.
+          patch(job.key, { step: 'video' });
+          await generatePrimaryVideo(row.id);
+
+          patch(job.key, { step: 'done' });
+          succeeded += 1;
+        } catch (err) {
+          patch(job.key, { step: 'failed', error: err instanceof Error ? err.message : String(err) });
+        }
+      }
+      showToast(
+        succeeded === jobs.length
+          ? `Added ${succeeded} product${succeeded === 1 ? '' : 's'} automatically`
+          : `Added ${succeeded}/${jobs.length} — see the progress list for what failed`,
+      );
+    } finally {
+      setAutoDiscovering(false);
+      setAutoRunning(false);
+    }
+  }, [autoRunning, polishPrimaryImage, generatePrimaryVideo, showToast]);
 
   const regeneratePoster = useCallback(async (productId: string) => {
     if (!productId) return;
@@ -4990,6 +5208,41 @@ export default function AdminData() {
                 </div>
               )}
             </div>
+            {/* Automatic — products discovered & added by the autonomous
+                Claude + Gemini pipeline. AI accent (indigo + sparkle) so it
+                reads as the auto bucket, not another plain category. */}
+            <button
+              className={`admin-tab ${productFilter === 'automatic' ? 'active' : ''}`}
+              onClick={() => setProductFilter('automatic')}
+              title="Products added automatically by the Claude + Gemini pipeline"
+              style={{
+                marginLeft: 8,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                background: productFilter === 'automatic' ? '#4f46e5' : '#eef2ff',
+                color: productFilter === 'automatic' ? '#fff' : '#4338ca',
+                border: `1px solid ${productFilter === 'automatic' ? '#4338ca' : '#c7d2fe'}`,
+                fontWeight: 600,
+              }}
+            >
+              <svg width="13" height="13" viewBox="0 0 100 100" fill="currentColor" aria-hidden="true">
+                <path d="M50 4 C54 30 70 46 96 50 C70 54 54 70 50 96 C46 70 30 54 4 50 C30 46 46 30 50 4 Z" />
+              </svg>
+              Automatic
+              <span
+                className="admin-tab-badge"
+                style={{
+                  background: productFilter === 'automatic' ? 'rgba(255,255,255,0.22)' : '#c7d2fe',
+                  color: productFilter === 'automatic' ? '#fff' : '#3730a3',
+                }}
+              >
+                {allProducts.filter(p =>
+                  (p as { source?: string | null }).source === AUTO_SOURCE
+                  && !deletedProductKeys.has(`${p.brand}-${p.name}`)
+                ).length}
+              </span>
+            </button>
             {/* Soft delete — far-right destructive bucket, styled red
                 so it never reads as a normal filter category. */}
             <button
@@ -5016,6 +5269,174 @@ export default function AdminData() {
               </span>
             </button>
           </div>
+        {/* Automatic view — Add Products (count picker) + live pipeline
+            progress. Only shown on the Automatic tab. */}
+        {productFilter === 'automatic' && (
+          <div
+            style={{
+              marginBottom: 16,
+              padding: 16,
+              borderRadius: 12,
+              border: '1px solid #e0e7ff',
+              background: 'linear-gradient(180deg, #f5f7ff 0%, #ffffff 100%)',
+            }}
+          >
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+              <div style={{ minWidth: 0 }}>
+                <div style={{ display: 'inline-flex', alignItems: 'center', gap: 7, fontSize: 14, fontWeight: 700, color: '#1e1b4b' }}>
+                  <svg width="15" height="15" viewBox="0 0 100 100" fill="#4f46e5" aria-hidden="true">
+                    <path d="M50 4 C54 30 70 46 96 50 C70 54 54 70 50 96 C46 70 30 54 4 50 C30 46 46 30 50 4 Z" />
+                  </svg>
+                  Automatic products
+                </div>
+                <p style={{ margin: '4px 0 0', fontSize: 12, color: '#6b7280', maxWidth: 560 }}>
+                  Claude + Gemini search the web for high-converting, catalog-worthy products, then add each one, pick &amp; polish the primary photo, and generate the primary video — fully automatic.
+                </p>
+              </div>
+              <div ref={autoCountRef} style={{ position: 'relative', flexShrink: 0 }}>
+                <button
+                  className="admin-btn admin-btn-primary"
+                  disabled={autoRunning}
+                  onClick={() => setAutoCountOpen(o => !o)}
+                  style={{ background: '#4f46e5', borderColor: '#4338ca' }}
+                >
+                  {autoRunning ? (
+                    autoDiscovering ? 'Discovering…' : 'Adding…'
+                  ) : (
+                    <>
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 6 }}>
+                        <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
+                      </svg>
+                      Add Products
+                    </>
+                  )}
+                </button>
+                {autoCountOpen && !autoRunning && (
+                  <div
+                    role="menu"
+                    style={{
+                      position: 'absolute',
+                      top: 'calc(100% + 6px)',
+                      right: 0,
+                      background: '#fff',
+                      border: '1px solid #e5e7eb',
+                      borderRadius: 12,
+                      boxShadow: '0 18px 50px rgba(0,0,0,0.18)',
+                      padding: 12,
+                      zIndex: 50,
+                      minWidth: 220,
+                    }}
+                  >
+                    <div style={{ fontSize: 11, fontWeight: 600, letterSpacing: '0.06em', textTransform: 'uppercase', color: '#6b7280', marginBottom: 8 }}>
+                      How many to add?
+                    </div>
+                    <div style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 6 }}>
+                      {[1, 2, 3, 4, 5, 10].map(n => (
+                        <button
+                          key={n}
+                          type="button"
+                          onClick={() => { setAutoCountOpen(false); void runAutoAdd(n); }}
+                          style={{
+                            padding: '10px 0',
+                            fontSize: 15,
+                            fontWeight: 700,
+                            color: '#4338ca',
+                            background: '#eef2ff',
+                            border: '1px solid #c7d2fe',
+                            borderRadius: 8,
+                            cursor: 'pointer',
+                          }}
+                          onMouseEnter={(e) => { e.currentTarget.style.background = '#e0e7ff'; }}
+                          onMouseLeave={(e) => { e.currentTarget.style.background = '#eef2ff'; }}
+                        >
+                          {n}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {autoError && (
+              <div style={{ marginTop: 12, padding: '8px 12px', borderRadius: 8, background: '#fef2f2', border: '1px solid #fecaca', color: '#b91c1c', fontSize: 12 }}>
+                {autoError}
+              </div>
+            )}
+
+            {(autoDiscovering || autoJobs.length > 0) && (
+              <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
+                {autoDiscovering && (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#4338ca', fontWeight: 600 }}>
+                    <span className="auto-spinner" aria-hidden="true" />
+                    Claude + Gemini are searching the web for products…
+                  </div>
+                )}
+                {autoJobs.map(job => {
+                  const failed = job.step === 'failed';
+                  const done = job.step === 'done';
+                  const stepIdx = AUTO_STEP_ORDER.indexOf(job.step);
+                  return (
+                    <div
+                      key={job.key}
+                      style={{
+                        display: 'flex',
+                        alignItems: 'center',
+                        gap: 10,
+                        padding: '8px 12px',
+                        borderRadius: 8,
+                        background: '#fff',
+                        border: '1px solid #eef2ff',
+                      }}
+                    >
+                      <span
+                        aria-hidden="true"
+                        style={{
+                          width: 18, height: 18, flexShrink: 0,
+                          display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                        }}
+                      >
+                        {done ? (
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#16a34a" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                        ) : failed ? (
+                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#dc2626" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" /></svg>
+                        ) : (
+                          <span className="auto-spinner" />
+                        )}
+                      </span>
+                      <span style={{ flex: 1, minWidth: 0, fontSize: 13, color: '#111827', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                        {job.label}
+                      </span>
+                      {/* Step pills — show which stage this product is in. */}
+                      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 4, flexShrink: 0 }}>
+                        {AUTO_STEP_ORDER.slice(0, 5).map((s, i) => {
+                          const reached = !failed && (done || i <= stepIdx);
+                          const active = !failed && !done && i === stepIdx;
+                          return (
+                            <span
+                              key={s}
+                              title={AUTO_STEP_LABELS[s]}
+                              style={{
+                                width: active ? 16 : 8,
+                                height: 8,
+                                borderRadius: 999,
+                                background: reached ? '#4f46e5' : '#e5e7eb',
+                                transition: 'width 160ms ease, background 160ms ease',
+                              }}
+                            />
+                          );
+                        })}
+                      </span>
+                      <span style={{ flexShrink: 0, fontSize: 12, fontWeight: 600, minWidth: 132, textAlign: 'right', color: failed ? '#dc2626' : done ? '#16a34a' : '#4338ca' }}>
+                        {failed ? (job.error || 'Failed') : AUTO_STEP_LABELS[job.step]}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
         {selectedProductKeys.size > 0 && (
           <div className="admin-bulk-bar" style={{
             position: 'fixed',
