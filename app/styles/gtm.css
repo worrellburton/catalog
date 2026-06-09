@@ -68,18 +68,38 @@
   color: var(--gtm-muted);
 }
 
-/* ── Budget split (100%) + funnel legend ─────────────────────────────── */
-.gtm-meta {
+/* ── Funnel legend (sits under the root) ─────────────────────────────── */
+.gtm-legend {
+  margin-top: 16px;
+}
+
+/* ── Chart: budget bar → elbow connectors → pillar columns ───────────── */
+/* The split bar and the pillars live in ONE wrapper so they share a single
+   horizontal coordinate space — that's what lets each 60/25/15 segment
+   connect by an elbow to the (equal-thirds) pillar column it funds. */
+.gtm-chart {
+  position: relative;
   width: 100%;
-  max-width: 760px;
-  margin-top: 18px;
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
+}
+/* Connector SVG overlays the whole chart, behind the cards (which carry
+   their own white fill). The lines are only visible in the empty gap
+   between the split bar and the pillar columns. */
+.gtm-connectors {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: visible;
+}
+/* Vertical room for the elbows to turn through. */
+.gtm-connector-gap {
+  height: 52px;
 }
 .gtm-split {
+  position: relative;
+  z-index: 1;
   display: flex;
-  height: 44px;
+  height: 48px;
   border-radius: 12px;
   overflow: hidden;
   border: 1px solid #eef0f4;
@@ -123,6 +143,8 @@
 
 /* ── Tier 1: pillars ─────────────────────────────────────────────────── */
 .gtm-pillars {
+  position: relative;
+  z-index: 1;                 /* above the connector SVG */
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: 18px;
@@ -130,6 +152,10 @@
 }
 @media (max-width: 880px) {
   .gtm-pillars { grid-template-columns: 1fr; }
+  /* Stacked single column — the segment→column elbows no longer map
+     1:1, so drop the connector layer and tighten the gap. */
+  .gtm-connectors { display: none; }
+  .gtm-connector-gap { height: 22px; }
 }
 
 .gtm-pillar {

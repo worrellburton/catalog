@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import '~/styles/gtm.css';
 
 // GTM — the marketing function as a connected, top-down DIAGRAM:
@@ -145,6 +145,55 @@ export default function AdminGtm() {
     return () => document.documentElement.classList.remove('gtm-snap');
   }, []);
 
+  // ── Elbow connectors: budget segment → its pillar column ────────────
+  // The 60/25/15 split segments and the equal-thirds pillar columns have
+  // different centers, so a measured SVG draws an elbow (down · across ·
+  // down) from each segment to the pillar it funds. Recomputed on resize
+  // and once the fade-in settles so the lines always track the real
+  // rendered layout.
+  const chartRef = useRef<HTMLDivElement | null>(null);
+  const segRefs = useRef<(HTMLDivElement | null)[]>([]);
+  const pillarRefs = useRef<(HTMLElement | null)[]>([]);
+  const [connectors, setConnectors] = useState<{ d: string; accent: string }[]>([]);
+  const [chartSize, setChartSize] = useState({ w: 0, h: 0 });
+  useLayoutEffect(() => {
+    const compute = () => {
+      const chart = chartRef.current;
+      if (!chart) return;
+      const cr = chart.getBoundingClientRect();
+      const next: { d: string; accent: string }[] = [];
+      for (let i = 0; i < PILLARS.length; i++) {
+        const seg = segRefs.current[i];
+        const pil = pillarRefs.current[i];
+        if (!seg || !pil) continue;
+        const sr = seg.getBoundingClientRect();
+        const pr = pil.getBoundingClientRect();
+        const x1 = sr.left + sr.width / 2 - cr.left;
+        const y1 = sr.bottom - cr.top;
+        const x2 = pr.left + pr.width / 2 - cr.left;
+        const y2 = pr.top - cr.top;
+        const midY = (y1 + y2) / 2;
+        // Rounded elbows: vertical down, quarter-arc into the horizontal
+        // run, then quarter-arc back to vertical down into the pillar.
+        const r = Math.min(10, Math.abs(x2 - x1) / 2, (y2 - y1) / 2);
+        const dir = x2 > x1 ? 1 : -1;
+        const d = r > 1
+          ? `M ${x1} ${y1} V ${midY - r} Q ${x1} ${midY} ${x1 + dir * r} ${midY} H ${x2 - dir * r} Q ${x2} ${midY} ${x2} ${midY + r} V ${y2}`
+          : `M ${x1} ${y1} V ${midY} H ${x2} V ${y2}`;
+        next.push({ d, accent: PILLARS[i].accent });
+      }
+      setConnectors(next);
+      setChartSize({ w: cr.width, h: cr.height });
+    };
+    compute();
+    window.addEventListener('resize', compute);
+    // Recompute once the cascade fade-in has settled (positions are stable
+    // by then — opacity-only animation doesn't move anything, but fonts /
+    // images loading can nudge heights).
+    const t = window.setTimeout(compute, 750);
+    return () => { window.removeEventListener('resize', compute); window.clearTimeout(t); };
+  }, []);
+
   return (
     <div className="admin-page gtm-page">
       <div className="admin-page-header">
@@ -160,29 +209,56 @@ export default function AdminGtm() {
           <p className="gtm-root-note">Everything that brings shoppers in and keeps them coming back — split into three pillars.</p>
         </section>
 
-        <div className="gtm-meta gtm-fade" style={delay()}>
-          <div className="gtm-split" role="img" aria-label="Marketing budget split across the three pillars">
-            {PILLARS.map(p => (
-              <div key={p.name} className="gtm-split-seg" style={{ flexGrow: p.weight, background: p.accent }}>
+        {/* Funnel legend sits under the root; the budget split moves into
+            the chart below so it shares the pillars' coordinate space. */}
+        <div className="gtm-legend gtm-fade" style={delay()}>
+          <span className="gtm-legend-label">Funnel coverage</span>
+          {STAGES.map(s => (
+            <span key={s.id} className="gtm-legend-item"><span className="gtm-dot" style={{ background: s.color }} />{s.label}</span>
+          ))}
+        </div>
+
+        <div className="gtm-stem gtm-fade" style={delay()} aria-hidden="true" />
+
+        {/* Chart: full-width budget bar → elbow connectors → pillar columns.
+            The split bar and the pillars share this wrapper's coordinate
+            space so each 60/25/15 segment connects to the pillar it funds. */}
+        <div className="gtm-chart" ref={chartRef}>
+          {chartSize.w > 0 && (
+            <svg
+              className="gtm-connectors"
+              width={chartSize.w}
+              height={chartSize.h}
+              viewBox={`0 0 ${chartSize.w} ${chartSize.h}`}
+              aria-hidden="true"
+            >
+              {connectors.map((c, i) => (
+                <path key={i} d={c.d} fill="none" stroke={c.accent} strokeWidth={2} strokeOpacity={0.6} strokeLinecap="round" strokeLinejoin="round" />
+              ))}
+            </svg>
+          )}
+
+          <div className="gtm-split gtm-fade" style={delay()} role="img" aria-label="Marketing budget split across the three pillars">
+            {PILLARS.map((p, i) => (
+              <div
+                key={p.name}
+                ref={el => { segRefs.current[i] = el; }}
+                className="gtm-split-seg"
+                style={{ flexGrow: p.weight, background: p.accent }}
+              >
                 <span className="gtm-split-pct">{p.weight}%</span>
                 <span className="gtm-split-name">{p.name}</span>
               </div>
             ))}
           </div>
-          <div className="gtm-legend">
-            <span className="gtm-legend-label">Funnel coverage</span>
-            {STAGES.map(s => (
-              <span key={s.id} className="gtm-legend-item"><span className="gtm-dot" style={{ background: s.color }} />{s.label}</span>
-            ))}
-          </div>
-        </div>
 
-        <div className="gtm-stem gtm-fade" style={delay()} aria-hidden="true" />
+          {/* Elbow room — the connector SVG draws through this gap. */}
+          <div className="gtm-connector-gap" aria-hidden="true" />
 
-        {/* Tier 1 → 3: pillars, each a connected branch (spine + ticks). */}
-        <div className="gtm-pillars">
-          {PILLARS.map(p => (
-            <section key={p.name} className="gtm-pillar gtm-fade" style={{ ...delay(), ['--accent' as string]: p.accent }}>
+          {/* Tier 1 → 3: pillars, each a connected branch (spine + ticks). */}
+          <div className="gtm-pillars">
+          {PILLARS.map((p, i) => (
+            <section key={p.name} ref={el => { pillarRefs.current[i] = el; }} className="gtm-pillar gtm-fade" style={{ ...delay(), ['--accent' as string]: p.accent }}>
               <header className="gtm-pillar-head">
                 <div className="gtm-pillar-titlerow">
                   <h3 className="gtm-pillar-name">{p.name}</h3>
@@ -207,6 +283,7 @@ export default function AdminGtm() {
               </div>
             </section>
           ))}
+          </div>
         </div>
       </div>
 
