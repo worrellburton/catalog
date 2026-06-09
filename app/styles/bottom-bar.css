@@ -1112,12 +1112,93 @@ body:has(.bottom-bar.search-open) {
   z-index: 1;
   display: flex;
   flex-direction: column;
-  justify-content: flex-end;
+  /* NOT justify-content:flex-end — that clips the TOP when the cloud is
+     taller than the box (keyboard up = little room), hiding the "Jump into
+     a catalog" label + first row under the wordmark. Instead the first
+     child carries margin-top:auto, which pushes the cloud to the bottom
+     (just above the bar) when there's room and collapses to 0 when there
+     isn't, so overflow spills off the BOTTOM (scrollable) and the top is
+     never cut. */
+  justify-content: flex-start;
   align-items: center;
   gap: 12px;
   padding: 10px 18px var(--suggestions-bar-clear);
   overflow-y: auto;
   pointer-events: none;
+}
+/* Bottom-anchor the catalog tags without flex-end's top-clipping (see
+   above): margin-top:auto pushes the tag group to the bottom when there's
+   room and collapses to 0 when there isn't, so overflow spills off the
+   bottom and the top is never cut. The product tray (when present) sits
+   above it and fills the top space. */
+.bb-pills-bottom {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin-top: auto;
+}
+
+/* Shoppable product grid that fills the top of the search sheet when the
+   keyboard is down. Fades in elegantly so it reads as "here's something to
+   shop" rather than popping. */
+.bb-tray {
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: bb-tray-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes bb-tray-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.bb-tray-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+  padding-left: 2px;
+}
+.bb-tray-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.bb-tray-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  -webkit-tap-highlight-color: transparent;
+}
+.bb-tray-thumb {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #1b1f29;
+  display: block;
+}
+.bb-tray-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.bb-tray-tile:active .bb-tray-thumb { transform: scale(0.97); transition: transform 0.12s ease; }
+.bb-tray-brand {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-left: 2px;
 }
 
 /* Catalog wordmark pinned to the top of the mobile search overlay. Sits

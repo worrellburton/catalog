@@ -12,6 +12,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import ParticleBackground from '~/components/ParticleBackground';
+import { getHomeFeed } from '~/services/product-creative';
 // Speed is dialed up while the ceremony is on screen so the field reads
 // as "searching the world", then restored on cleanup. The ceremony's own
 // ParticleBackground sits ABOVE its opaque scrim so the field is visible
@@ -38,6 +39,8 @@ interface SearchCeremonyProps {
 
 const MIN_DURATION_MS = 2400;
 const MAX_DURATION_MS = 7000;
+/** How many product tiles can float behind the stage at most. */
+const FLOATER_SLOTS = 8;
 /** How fast the thinking steps stream in, one after another. */
 const STEP_INTERVAL_MS = 600;
 /** Beat to hold on the all-checks state before revealing results. */
@@ -134,6 +137,45 @@ export default function SearchCeremony({ query, kind = 'search', ready, onDone, 
   // streamed in; until then the last-revealed step spins as the "active" one.
   const finalDone = ready && allRevealed;
 
+  // Products "forming" in the background, revealed progressively as each
+  // phase completes — more tiles the closer the ceremony gets to done, so it
+  // reads as "it's almost there, products are coming together". Prefer the
+  // real result images (floatingImages) as they land; meanwhile pull a pool
+  // from the home feed so something still forms during the loading beat. The
+  // pool only ever GROWS (deduped, capped) and tiles are keyed by src, so
+  // already-floating ones never jump when new ones fade in beside them.
+  const [pool, setPool] = useState<string[]>(() => floatingImages.slice(0, FLOATER_SLOTS));
+  const mergeImages = (incoming: string[]) => setPool(prev => {
+    const seen = new Set(prev);
+    const next = [...prev];
+    for (const s of incoming) {
+      if (next.length >= FLOATER_SLOTS) break;
+      if (s && !seen.has(s)) { next.push(s); seen.add(s); }
+    }
+    return next.length === prev.length ? prev : next;
+  });
+  // Result images claim their slots first as they arrive.
+  useEffect(() => { if (floatingImages.length) mergeImages(floatingImages); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [floatingImages]);
+  // Background pool so products form even before the real results land.
+  useEffect(() => {
+    let cancelled = false;
+    getHomeFeed({ ignoreGender: false })
+      .then(list => {
+        if (cancelled) return;
+        mergeImages(list.map(a =>
+          a.product?.primary_image_url || a.product?.image_url || a.thumbnail_url || (a.product?.images && a.product.images[0]) || '',
+        ).filter(Boolean));
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // Visible tile count ramps with each completed phase (a couple per phase),
+  // so the field fills in as the narration progresses.
+  const phaseRatio = steps.length > 0 ? revealed / steps.length : 1;
+  const visibleFloaters = Math.min(pool.length, Math.ceil(phaseRatio * FLOATER_SLOTS));
+
   // Stream the steps in, one at a time.
   useEffect(() => {
     if (revealed >= steps.length) return;
@@ -215,10 +257,12 @@ export default function SearchCeremony({ query, kind = 'search', ready, onDone, 
           stage. Each tile floats on its own gentle loop; they fade in once
           results land. Capped + positioned on a scattered ring so they read
           as floating in 3D space, not a grid. */}
-      {finalDone && floatingImages.length > 0 && (
+      {visibleFloaters > 0 && (
         <div className="sc-floaters" aria-hidden="true">
-          {floatingImages.slice(0, 8).map((src, i) => {
-            const n = Math.min(floatingImages.length, 8);
+          {pool.slice(0, visibleFloaters).map((src, i) => {
+            // Fixed slot layout (always FLOATER_SLOTS positions) so a tile's
+            // spot is stable as more fade in beside it — no reshuffling.
+            const n = FLOATER_SLOTS;
             const angle = (i / n) * Math.PI * 2 + (i % 2 ? 0.5 : 0);
             // Scatter on an ellipse, biased to the edges so the center stays
             // clear for the narration card.
@@ -228,16 +272,16 @@ export default function SearchCeremony({ query, kind = 'search', ready, onDone, 
             const top = 50 + Math.sin(angle) * ry;
             return (
               <span
-                key={`${src}-${i}`}
+                key={src}
                 className="sc-floater"
                 style={{
                   left: `${left}%`,
                   top: `${top}%`,
                   ['--d' as string]: `${(i % 5) * 0.6}s`,
                   ['--dur' as string]: `${7 + (i % 4)}s`,
-                  // Quick, elegant cascade: a small 45ms-per-tile stagger
-                  // (was 120ms) so the set fades in noticeably faster.
-                  ['--fade' as string]: `${0.045 * i}s`,
+                  // Each tile fades in on mount as it joins the field; no
+                  // batch stagger needed since they arrive phase by phase.
+                  ['--fade' as string]: '0s',
                 } as React.CSSProperties}
               >
                 <img src={src} alt="" loading="lazy" decoding="async" />
