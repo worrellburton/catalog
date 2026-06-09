@@ -532,6 +532,8 @@ interface LookRow {
   creatorIsAi: boolean;
   video: string;
   products: number;
+  /** DB looks.created_at — drives the Created At column + sort. */
+  created_at: string | null;
 }
 
 type Tab = 'looks' | 'products' | 'musics' | 'places';
@@ -2444,6 +2446,7 @@ export default function AdminData() {
         video: look.video,
         thumbnail: look.thumbnail_url || null,
         products: look.products.length,
+        created_at: look.created_at ?? null,
       };
     });
     // looks + creators must be in deps - without them the memoized
@@ -2882,7 +2885,9 @@ export default function AdminData() {
     }
   }, []);
 
-  const lookTable = useSortableTable(lookRows);
+  const lookTable = useSortableTable(lookRows, {
+    defaultSort: { key: 'created_at', direction: 'desc' },
+  });
 
   // Keep the ref in sync each render so the pending-row pruner sees
   // the latest product URL set without re-running the interval.
@@ -4353,12 +4358,12 @@ export default function AdminData() {
                 <th style={{ width: 32 }}></th>
                 <th>Creative</th>
                 <SortableTh label="Creator" sortKey="creatorDisplay" currentSort={lookTable.sort} onSort={lookTable.handleSort} />
-                <th>Created At</th>
+                <SortableTh label="Created At" sortKey="created_at" currentSort={lookTable.sort} onSort={lookTable.handleSort} />
                 <th>Platform</th>
                 <th>Featured</th>
                 <th>Weight</th>
                 <th>Splash</th>
-                <th>Products</th>
+                <SortableTh label="Products" sortKey="products" currentSort={lookTable.sort} onSort={lookTable.handleSort} />
                 <th>Actions</th>
               </tr>
             </thead>
@@ -4414,7 +4419,15 @@ export default function AdminData() {
                           ) : (
                             <div className="admin-look-creator-avatar" style={{ background: '#e5e7eb' }} />
                           )}
-                          <span>{row.creatorDisplay}</span>
+                          {/* Creator name links to that creator's admin page. */}
+                          <button
+                            type="button"
+                            className="admin-link-btn"
+                            onClick={(e) => { e.stopPropagation(); navigate(`/admin/creators/${encodeURIComponent(row.creator)}`); }}
+                            title={`Open ${row.creatorDisplay}'s admin page`}
+                          >
+                            {row.creatorDisplay}
+                          </button>
                           {/* Gender-mismatch flag: lights up when the look's
                               gender disagrees with any of its products'
                               genders (e.g. look tagged 'women' but a
@@ -4462,7 +4475,7 @@ export default function AdminData() {
                           })()}
                         </div>
                       </td>
-                      <td className="admin-cell-muted">Feb 17, 2026, 12:16 PM</td>
+                      <td className="admin-cell-muted">{formatDateAdded(row.created_at)}</td>
                       <td><AdminToggle on={getToggles(row.id).platform} onChange={v => setToggle(row.id, 'platform', v)} /></td>
                       <td><AdminToggle on={getToggles(row.id).featured} onChange={v => setToggle(row.id, 'featured', v)} /></td>
                       <td><span className="admin-weight-input">5</span></td>
