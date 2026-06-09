@@ -365,14 +365,17 @@ def hls_backfill_job(
     limit: int | None = None,
     concurrency: int = 1,
     dry_run: bool = False,
+    statuses: list[str] | None = None,
 ):
     """Run the HLS ladder backfill for one table. Re-runnable: only touches
-    rows where hls_url (products: primary_hls_url) is still null."""
+    rows where hls_url (products: primary_hls_url) is still null.
+
+    `statuses` gates product_creative (default: live-only)."""
     import sys
     sys.path.insert(0, "/root")
     from backfill_creative_assets import run_hls
 
-    rc = run_hls(table, limit, dry_run, concurrency)
+    rc = run_hls(table, limit, dry_run, concurrency, statuses)
     return {"table": table, "rc": rc}
 
 
@@ -382,6 +385,7 @@ def hls_backfill(
     limit: int = 0,
     concurrency: int = 1,
     dry_run: bool = False,
+    statuses: str = "live",
 ):
     """One-shot HLS ladder backfill on Modal.
 
@@ -391,8 +395,11 @@ def hls_backfill(
         modal run modal_app.py::hls_backfill --table looks_creative
         modal run modal_app.py::hls_backfill --table products
         modal run modal_app.py::hls_backfill --table product_creative
+        # include non-live product_creative (done/paused) creatives:
+        modal run modal_app.py::hls_backfill --table product_creative --statuses live,done,paused
 
-    limit=0 → all eligible rows."""
-    res = hls_backfill_job.remote(table, (limit or None), concurrency, dry_run)
+    limit=0 → all eligible rows. `statuses` only gates product_creative."""
+    status_list = [s.strip() for s in statuses.split(",") if s.strip()] or None
+    res = hls_backfill_job.remote(table, (limit or None), concurrency, dry_run, status_list)
     print(res)
 

@@ -187,8 +187,14 @@ def process_hls_product(
         cleanup_hls(h)
 
 
-def fetch_hls_rows(supabase, table: str, limit: int | None) -> list[dict]:
-    """Creative rows with a source video but no HLS ladder yet."""
+def fetch_hls_rows(
+    supabase, table: str, limit: int | None, statuses: list[str] | None = None
+) -> list[dict]:
+    """Creative rows with a source video but no HLS ladder yet.
+
+    product_creative is gated by status (default: live-only, so we don't
+    waste compute on draft/paused rows). Pass `statuses` to widen the net
+    — e.g. ["live", "done", "paused"] to backfill non-live creatives."""
     q = (
         supabase.table(table)
         .select("id, video_url, storage_path, hls_url")
@@ -196,7 +202,7 @@ def fetch_hls_rows(supabase, table: str, limit: int | None) -> list[dict]:
         .is_("hls_url", "null")
     )
     if table == "product_creative":
-        q = q.eq("status", "live")
+        q = q.in_("status", statuses or ["live"])
     if limit:
         q = q.limit(limit)
     return q.execute().data or []
@@ -215,7 +221,10 @@ def fetch_hls_product_rows(supabase, limit: int | None) -> list[dict]:
     return q.execute().data or []
 
 
-def run_hls(table: str, limit: int | None, dry_run: bool, concurrency: int) -> int:
+def run_hls(
+    table: str, limit: int | None, dry_run: bool, concurrency: int,
+    statuses: list[str] | None = None,
+) -> int:
     supabase_url = os.environ.get("SUPABASE_URL")
     service_key = os.environ.get("SUPABASE_SERVICE_ROLE_KEY")
     if not supabase_url or not service_key:
@@ -224,7 +233,7 @@ def run_hls(table: str, limit: int | None, dry_run: bool, concurrency: int) -> i
     supabase = create_client(supabase_url, service_key)
 
     is_products = table == "products"
-    rows = fetch_hls_product_rows(supabase, limit) if is_products else fetch_hls_rows(supabase, table, limit)
+    rows = fetch_hls_product_rows(supabase, limit) if is_products else fetch_hls_rows(supabase, table, limit, statuses)
     if not rows:
         print(f"[{table}/hls] nothing to backfill")
         return 0
@@ -492,7 +501,11 @@ def main(argv: Iterable[str] | None = None) -> int:
                    help="Encode HLS adaptive ladders (480/720/1080) into <base>/hls/ and "
                         "fill hls_url (products: primary_hls_url) instead of poster/mobile assets. "
                         "Heavier per row (3 renditions); consider a lower --concurrency.")
+    p.add_argument("--statuses", default=None,
+                   help="Comma-separated product_creative statuses to include in HLS backfill "
+                        "(default: live). e.g. 'live,done,paused' to cover non-live creatives.")
     args = p.parse_args(argv)
+    statuses = [s.strip() for s in args.statuses.split(",") if s.strip()] if args.statuses else None
 
     # `products` follows a different path: it derives the poster from
     # primary_video_url and writes products.primary_video_poster_url (no
@@ -504,7 +517,7 @@ def main(argv: Iterable[str] | None = None) -> int:
             # generated_videos has no hls_url column; skip it in HLS mode.
             if t == "generated_videos":
                 continue
-            rc |= run_hls(t, args.limit, args.dry_run, args.concurrency)
+            rc |= run_hls(t, args.limit, args.dry_run, args.concurrency, statuses)
         elif t == "products":
             rc |= run_products(args.limit, args.dry_run, args.concurrency)
         else:
