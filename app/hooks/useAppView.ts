@@ -1,5 +1,6 @@
 import { useEffect, useState, type Dispatch, type SetStateAction } from 'react';
 import { prefetchHomeFeed } from '~/services/product-creative';
+import { getWaitlistStatus } from '~/services/waitlist';
 import type { useAuth } from '~/hooks/useAuth';
 
 export type AppView = 'locked' | 'splash' | 'landing' | 'app' | 'waitlisted';
@@ -9,6 +10,12 @@ type AuthUser = ReturnType<typeof useAuth>['user'];
 interface UseAppViewArgs {
   user: AuthUser;
   authLoading: boolean;
+  /** Launch master switch. true = old waitlist/sign-in-only flow;
+   *  false = open flow (guests in the feed). */
+  waitlistMode: boolean;
+  /** True while the waitlist_mode dial is still resolving — routing for
+   *  signed-out visitors waits on it so we don't flash the wrong flow. */
+  waitlistLoading: boolean;
 }
 
 interface UseAppViewResult {
@@ -26,7 +33,7 @@ interface UseAppViewResult {
 // plus the two splash overlays that wrap it:
 //   - firstVisit: branded SplashScreen on a user's first ever visit
 //   - authSplash: the gate-side fade while supabase auth is resolving
-export function useAppView({ user, authLoading }: UseAppViewArgs): UseAppViewResult {
+export function useAppView({ user, authLoading, waitlistMode, waitlistLoading }: UseAppViewArgs): UseAppViewResult {
   // A ?look=<uuid> deep-link (e.g. tapping a look in Activity) should land
   // straight on the look — not replay the cold-boot 'locked' → splash beat.
   // Start in 'app' so the auth-splash never covers the feed while the deep-link
@@ -194,27 +201,36 @@ export function useAppView({ user, authLoading }: UseAppViewArgs): UseAppViewRes
     }
   }, [showAuthSplash, authSplashMounted]);
 
-  // Post-splash entry for signed-OUT visitors: the app is now OPEN to
-  // guests — once auth resolves with no session and the brand beat has
-  // elapsed, drop them straight into the feed (products are browsable;
-  // looks and creator catalogs gate behind signup, handled in _index).
-  // Deep links (/p, /l, /b → view 'app') and #landing/#app hashes have
-  // already moved `view` off 'locked', so this only fires for a plain
-  // cold open at "/".
+  // Post-splash entry for signed-OUT visitors. Governed by the launch
+  // switch: OPEN flow drops them straight into the feed (products
+  // browsable; looks/creators gate in _index); WAITLIST flow hands them to
+  // the marketing landing (sign-in-only). Waits on waitlistLoading so we
+  // never flash the wrong flow. Deep links / hashes have already moved
+  // `view` off 'locked', so this only fires for a plain cold open at "/".
   useEffect(() => {
-    if (authLoading) return;
+    if (authLoading || waitlistLoading) return;
     if (user) return;
     if (!beatDone) return;
     if (view !== 'locked') return;
-    setView('app');
-  }, [authLoading, user, beatDone, view]);
+    setView(waitlistMode ? 'landing' : 'app');
+  }, [authLoading, waitlistLoading, user, beatDone, view, waitlistMode]);
 
-  // Auto-route on sign-in: the app is open, so every signed-in user enters
-  // the app directly — the waitlist gate is retired (signing up grants the
-  // features immediately). WaitlistScreen stays in the codebase but is no
-  // longer the default destination.
+  // Access gate (WAITLIST flow only): the app is sign-in-only, so a
+  // signed-out visitor who lands on 'app' (deep link, #app hash, stale
+  // restored view) is bounced back to the public landing. In OPEN flow
+  // guests belong in the app, so this is a no-op.
   useEffect(() => {
-    if (authLoading) return;
+    if (authLoading || waitlistLoading) return;
+    if (user) return;
+    if (waitlistMode && view === 'app') setView('landing');
+  }, [authLoading, waitlistLoading, user, view, waitlistMode]);
+
+  // Auto-route on sign-in. OPEN flow: every signed-in user enters the app
+  // directly (signing up grants access immediately). WAITLIST flow:
+  // approved users + admins enter the app, everyone else goes to the
+  // waitlist screen until approved.
+  useEffect(() => {
+    if (authLoading || waitlistLoading) return;
     if (!user) return;
     if (view !== 'locked') return;
     // Clean OAuth artifacts from URL once sign-in is confirmed
@@ -224,8 +240,28 @@ export function useAppView({ user, authLoading }: UseAppViewArgs): UseAppViewRes
     ) {
       window.history.replaceState(null, '', window.location.pathname);
     }
-    setView('app');
-  }, [user, authLoading, view]);
+    if (!waitlistMode) { setView('app'); return; }
+
+    let cancelled = false;
+    (async () => {
+      if (user.role === 'admin') {
+        if (!cancelled) setView('app');
+        return;
+      }
+      // On a lookup failure, default to the waitlist view: same destination
+      // an unapproved user lands on, with a Retry affordance — beats a
+      // stuck splash if the RLS/network call throws.
+      let status: Awaited<ReturnType<typeof getWaitlistStatus>> = null;
+      try {
+        status = await getWaitlistStatus(user.id);
+      } catch (err) {
+        console.warn('[auto-route] waitlist lookup failed', err);
+      }
+      if (cancelled) return;
+      setView(status?.approved ? 'app' : 'waitlisted');
+    })();
+    return () => { cancelled = true; };
+  }, [user, authLoading, waitlistLoading, view, waitlistMode]);
 
   // Read hash on mount for deep linking
   useEffect(() => {
