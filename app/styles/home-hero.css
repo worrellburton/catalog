@@ -1244,7 +1244,12 @@
        above), the trio rises 18vh (32vh → 50vh) so the panel has room
        without colliding with the feed peek; .sfh matches with -18vh. */
     bottom: 40vh;
-    transition: bottom 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+    /* MUST re-list transform here: this rule overrides the base
+       .ai-bar-wrap transition, and without transform the chrome auto-hide
+       slide-back would snap instead of animate. */
+    transition:
+      bottom 0.32s cubic-bezier(0.32, 0.72, 0, 1),
+      transform 0.4s cubic-bezier(0.32, 0.72, 0, 1);
   }
   body:has(.app-root.home-hero) .ai-bar-wrap:focus-within {
     bottom: 52vh;
@@ -1386,7 +1391,10 @@ html:has(.user-menu-page) .bottom-bar {
   pointer-events: none;
 }
 body:has(.app-root.chrome-hidden) .ai-bar-wrap {
-  transform: translateY(140%);
+  /* Fully clear the viewport. translateY(140%) left a sliver peeking on
+     desktop because the bar sits 24px (+safe-area) above the bottom edge,
+     so 140% of its own height wasn't enough — add that offset back. */
+  transform: translateY(calc(100% + max(env(safe-area-inset-bottom), 24px) + 24px));
   pointer-events: none;
 }
 
