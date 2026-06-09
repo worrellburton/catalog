@@ -994,6 +994,20 @@ export default function Home() {
     if (now - lastOpenAtRef.current < 240) return;
     lastOpenAtRef.current = now;
 
+    // Product→product (a product page is already open, e.g. tapping a
+    // "More like this" tile): drop the PREVIOUS product's rails immediately
+    // so the new page never flashes the old one before its data loads. The
+    // in-page tiles don't rely on the feed's layoutId morph, and the hero
+    // paints the tapped creative's poster instantly — so the swap is clean
+    // and instant. On a fresh feed→product open the ref is null, so we skip
+    // this and keep the feed card's morph untouched.
+    if (selectedProductRef.current) {
+      setSimilarCreatives(null);
+      setBrandCreatives(null);
+      setGraphPairs(null);
+      setSelectedSimilar(null);
+    }
+
     // Fire impressions for the primary product + every other product in the
     // associated look (if any). Fire-and-forget — don't await so navigation
     // is never blocked by the look_products query.
