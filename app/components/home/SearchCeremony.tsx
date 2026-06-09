@@ -37,14 +37,11 @@ interface SearchCeremonyProps {
 }
 
 const MIN_DURATION_MS = 2400;
-const MAX_DURATION_MS = 11000;
+const MAX_DURATION_MS = 7000;
 /** How fast the thinking steps stream in, one after another. */
 const STEP_INTERVAL_MS = 600;
 /** Beat to hold on the all-checks state before revealing results. */
 const SETTLE_MS = 420;
-/** Once loaded, the searched products fade in over this long (ease-in-out);
- *  the ceremony holds for the fade so the reveal reads as a deliberate show. */
-const FLOAT_REVEAL_MS = 5000;
 
 // Agentic progress narration — concrete steps streamed one by one with a
 // spinner→check. The first always echoes the query; the middle three are
@@ -178,13 +175,13 @@ export default function SearchCeremony({ query, kind = 'search', ready, onDone, 
   useEffect(() => {
     if (!ready || !allRevealed) return;
     const elapsed = Date.now() - startedAt.current;
-    // When we have products to reveal, hold for the full fade-in so they
-    // float in completely before the ceremony hands off to the feed.
-    const tail = floatingImages.length > 0 ? FLOAT_REVEAL_MS : SETTLE_MS;
-    const wait = Math.max(0, MIN_DURATION_MS - elapsed) + tail;
+    // Original length — no extra hold for the product reveal. The products
+    // only show if they've already loaded by now (see finalDone gate below);
+    // we never wait on them, so the ceremony stays short.
+    const wait = Math.max(0, MIN_DURATION_MS - elapsed) + SETTLE_MS;
     const t = window.setTimeout(onDone, wait);
     return () => window.clearTimeout(t);
-  }, [ready, allRevealed, onDone, floatingImages.length]);
+  }, [ready, allRevealed, onDone]);
 
   // Hard safety: always reveal results within MAX_DURATION even if `ready`
   // never flips (e.g. a cached/instant query whose loading flag never trips).
