@@ -51,6 +51,11 @@ const ACQ_FIELDS: FieldDef[] = [
 // split into two inputs surfaced in the Engagement card.
 const RETENTION_FIELD: FieldDef = { key: 'newUserRetention', label: 'New-user retention', hint: 'New users who return next month', format: 'percent', step: 0.01, min: 0, max: 1, benchmark: '25–45% M1' };
 const MAU_CHURN_FIELD: FieldDef = { key: 'mauChurn', label: 'Monthly active churn', hint: 'Retained base lost / mo', format: 'percent', step: 0.01, min: 0, max: 1, benchmark: '3–6%/mo' };
+// Stickiness lever: DAU = MAU × this. Editable; DAU is then derived and shown
+// (avg MAU / avg DAU) as read-only results beside it.
+const DAU_MAU_FIELD: FieldDef = { key: 'dauMauRatio', label: 'DAU / MAU', hint: 'Daily-active stickiness (DAU = MAU × this)', format: 'percent', step: 0.01, min: 0, max: 1, benchmark: '15–25% discovery' };
+const AVG_MAU_FIELD: FieldDef = { key: 'avgMau', label: 'Avg MAU', hint: 'Monthly actives, horizon avg (from the funnel)', format: 'integer', step: 1, min: 0 };
+const AVG_DAU_FIELD: FieldDef = { key: 'avgDau', label: 'Avg DAU', hint: 'Daily actives, horizon avg (= avg MAU × DAU/MAU)', format: 'integer', step: 1, min: 0 };
 
 const ENGAGEMENT_FIELDS: FieldDef[] = [
   { key: 'sessionsPerUserPerMonth',  label: 'Sessions / user / mo',  hint: 'Avg sessions per MAU per month', format: 'number',  step: 0.5,   min: 0, benchmark: '6–12' },
@@ -158,14 +163,14 @@ export default function AdminModel() {
       budgetSplitEarly: eacq.budgetDistEarly, budgetSplitLate: eacq.budgetDistLate,
       newUserRetentionM1: eacq.newUserRetention, monthlyActiveChurn: eacq.mauChurn,
     },
-    engagement: { sessionsPerUserPerMonth: erev.sessionsPerUserPerMonth, sessionTimeMinutes: erev.sessionTimeMinutes, impressionsPerSession: erev.avgImpressionsPerSession },
+    engagement: { sessionsPerUserPerMonth: erev.sessionsPerUserPerMonth, sessionTimeMinutes: erev.sessionTimeMinutes, impressionsPerSession: erev.avgImpressionsPerSession, dauMauStickiness: eacq.dauMauRatio },
     revenue: { productConversion: erev.productConversion, avgOrderValue: erev.avgCostPerSale, affiliateCommission: erev.avgAffiliateCommission },
     costs: { grossMargin: eecon.grossMargin, monthlyOpex: opexAvg, cashRaised: eecon.startingCash },
     creatorPayout,
     results: {
       exitArr: Math.round(metrics.exitArr), total16moRevenue: Math.round(revSummary.total), gmvTotal: Math.round(metrics.gmvTotal),
       ltv: Math.round(metrics.ltv), ltvCac: Number(metrics.ltvCac.toFixed(1)), cacPaybackMonths: Number(metrics.paybackMonths.toFixed(2)),
-      blendedCac: Number(acqSummary.blendedCac.toFixed(2)), avgMau: Math.round(acqSummary.avgMau),
+      blendedCac: Number(acqSummary.blendedCac.toFixed(2)), avgMau: Math.round(acqSummary.avgMau), avgDau: Math.round(acqSummary.avgDau),
       runwayMonths: metrics.runwayMonths, avgMonthlyBurn: Math.round(metrics.avgBurn),
     },
   }), [eacq, erev, eecon, creatorPayout, metrics, revSummary, acqSummary, opexAvg, ui.scenario]);
@@ -184,7 +189,7 @@ export default function AdminModel() {
   const toggleOpen = (k: RowKey) => setUi(p => ({ ...p, open: { ...p.open, [k]: !p.open[k] } }));
   const resetEngagement = () => {
     setRev(p => ({ ...p, sessionsPerUserPerMonth: DEFAULTS.sessionsPerUserPerMonth, sessionTimeMinutes: DEFAULTS.sessionTimeMinutes, avgImpressionsPerSession: DEFAULTS.avgImpressionsPerSession }));
-    setAcq(p => ({ ...p, newUserRetention: GTM_DEFAULTS.newUserRetention, mauChurn: GTM_DEFAULTS.mauChurn }));
+    setAcq(p => ({ ...p, newUserRetention: GTM_DEFAULTS.newUserRetention, mauChurn: GTM_DEFAULTS.mauChurn, dauMauRatio: GTM_DEFAULTS.dauMauRatio }));
   };
   const resetRevenue = () => setRev(p => ({ ...p, productConversion: DEFAULTS.productConversion, avgCostPerSale: DEFAULTS.avgCostPerSale, avgAffiliateCommission: DEFAULTS.avgAffiliateCommission }));
 
@@ -294,6 +299,9 @@ export default function AdminModel() {
           <div className="proj-cards model-cards">
             <AssumptionCard key="newUserRetention" field={RETENTION_FIELD} value={eacq.newUserRetention} readOnly={readOnly} onChange={(n) => setAcqField('newUserRetention', clamp01(n))} />
             <AssumptionCard key="mauChurn" field={MAU_CHURN_FIELD} value={eacq.mauChurn} readOnly={readOnly} onChange={(n) => setAcqField('mauChurn', clamp01(n))} />
+            <AssumptionCard key="dauMauRatio" field={DAU_MAU_FIELD} value={eacq.dauMauRatio ?? GTM_DEFAULTS.dauMauRatio} readOnly={readOnly} onChange={(n) => setAcqField('dauMauRatio', clamp01(n))} />
+            <AssumptionCard key="avgMau" field={AVG_MAU_FIELD} value={acqSummary.avgMau} readOnly onChange={() => {}} />
+            <AssumptionCard key="avgDau" field={AVG_DAU_FIELD} value={acqSummary.avgDau} readOnly onChange={() => {}} />
             {ENGAGEMENT_FIELDS.map(f => (
               <AssumptionCard key={f.key} field={f} value={erev[f.key as keyof Assumptions]} readOnly={readOnly} onChange={(n) => setRevField(f.key as keyof Assumptions, n)} />
             ))}

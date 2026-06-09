@@ -27,10 +27,13 @@ export interface GtmAssumptions {
   newUserRetention: number;
   /** Monthly churn of the established (already-retained) active base. */
   mauChurn: number;
+  /** Stickiness: share of the monthly active base that's active on an
+      average day (DAU = MAU × this). An editable lever; defaults to
+      DAU_MAU_RATIO. */
+  dauMauRatio: number;
 }
 
-// DAU/MAU is a fixed modelling assumption, not a user lever — DAU is
-// surfaced as a result (averages on the dials + the graph tooltip).
+// Default DAU/MAU stickiness, used when no stored lever exists.
 // 18% is a realistic stickiness for a shopping/discovery app (vs. 0.4,
 // which was social-network territory and made MAU look only ~2.5x DAU);
 // at 0.18 the monthly base reads as ~5.5x the daily actives, which is
@@ -45,6 +48,7 @@ export const GTM_DEFAULTS: GtmAssumptions = {
   budgetDistLate: 0.8,
   newUserRetention: 0.35,
   mauChurn: 0.04,
+  dauMauRatio: DAU_MAU_RATIO,
 };
 
 // v4: churn split into new-user retention + established-base churn for a
@@ -113,6 +117,7 @@ export function buildGtmSeries(a: GtmAssumptions): GtmMonth[] {
   const cpa = a.cpa > 0 ? a.cpa : 1;
   const mauChurn = Math.min(1, Math.max(0, a.mauChurn));
   const newRet = Math.min(1, Math.max(0, a.newUserRetention));
+  const dauRatio = Math.min(1, Math.max(0, a.dauMauRatio ?? DAU_MAU_RATIO));
 
   for (let i = 0; i < MONTHS; i++) {
     const spend = a.budget * weights[i];
@@ -137,7 +142,7 @@ export function buildGtmSeries(a: GtmAssumptions): GtmMonth[] {
       newUsers,
       churned,
       cumulativeUsers: activeMAU,
-      dau: activeMAU * DAU_MAU_RATIO,
+      dau: activeMAU * dauRatio,
       blendedCacToDate: everAcquired > 0 ? cumulativeSpend / everAcquired : 0,
     });
   }
