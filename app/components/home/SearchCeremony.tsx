@@ -159,7 +159,9 @@ export default function SearchCeremony({ query, kind = 'search', ready, onDone, 
   // Background pool so products form even before the real results land.
   useEffect(() => {
     let cancelled = false;
-    getHomeFeed({ ignoreGender: false })
+    // ignoreGender so the ambient pool is as large as possible — these are
+    // decorative "products forming" tiles, not a gendered feed.
+    getHomeFeed({ ignoreGender: true })
       .then(list => {
         if (cancelled) return;
         mergeImages(list.map(a =>
@@ -284,7 +286,7 @@ export default function SearchCeremony({ query, kind = 'search', ready, onDone, 
                   ['--fade' as string]: '0s',
                 } as React.CSSProperties}
               >
-                <img src={src} alt="" loading="lazy" decoding="async" />
+                <img src={src} alt="" loading="eager" decoding="async" />
               </span>
             );
           })}
