@@ -1,6 +1,5 @@
 import { useEffect, useState, type Dispatch, type SetStateAction } from 'react';
 import { prefetchHomeFeed } from '~/services/product-creative';
-import { getWaitlistStatus } from '~/services/waitlist';
 import type { useAuth } from '~/hooks/useAuth';
 
 export type AppView = 'locked' | 'splash' | 'landing' | 'app' | 'waitlisted';
@@ -195,10 +194,10 @@ export function useAppView({ user, authLoading }: UseAppViewArgs): UseAppViewRes
     }
   }, [showAuthSplash, authSplashMounted]);
 
-  // Post-splash entry for signed-OUT visitors: once auth has resolved (no
-  // session) and the brand beat has elapsed, hand the splash off to the
-  // landing page rather than the password gate. The auth splash fades out
-  // elegantly over the freshly-mounted landing (see .auth-splash.leaving).
+  // Post-splash entry for signed-OUT visitors: the app is now OPEN to
+  // guests — once auth resolves with no session and the brand beat has
+  // elapsed, drop them straight into the feed (products are browsable;
+  // looks and creator catalogs gate behind signup, handled in _index).
   // Deep links (/p, /l, /b → view 'app') and #landing/#app hashes have
   // already moved `view` off 'locked', so this only fires for a plain
   // cold open at "/".
@@ -207,21 +206,13 @@ export function useAppView({ user, authLoading }: UseAppViewArgs): UseAppViewRes
     if (user) return;
     if (!beatDone) return;
     if (view !== 'locked') return;
-    setView('landing');
+    setView('app');
   }, [authLoading, user, beatDone, view]);
 
-  // Access gate: the app (feed, account, profile) is sign-in-only. If we
-  // ever end up on 'app' without a session — a deep link, an #app hash, a
-  // stale restored view — bounce back to the public landing, which gates
-  // entry behind sign-in. Signed-in users are unaffected.
-  useEffect(() => {
-    if (authLoading) return;
-    if (user) return;
-    if (view === 'app') setView('landing');
-  }, [authLoading, user, view]);
-
-  // Auto-route on sign-in: approved users enter the app, everyone else
-  // goes to the waitlist.
+  // Auto-route on sign-in: the app is open, so every signed-in user enters
+  // the app directly — the waitlist gate is retired (signing up grants the
+  // features immediately). WaitlistScreen stays in the codebase but is no
+  // longer the default destination.
   useEffect(() => {
     if (authLoading) return;
     if (!user) return;
@@ -233,28 +224,7 @@ export function useAppView({ user, authLoading }: UseAppViewArgs): UseAppViewRes
     ) {
       window.history.replaceState(null, '', window.location.pathname);
     }
-
-    let cancelled = false;
-    (async () => {
-      if (user.role === 'admin') {
-        if (!cancelled) setView('app');
-        return;
-      }
-      // Wrap the waitlist lookup so a transient network failure (or RLS
-      // regression) can't leave the user pinned on 'locked' forever - that
-      // path renders an auth splash with no escape. On throw, default to
-      // the waitlist view: it's the same destination an unapproved user
-      // lands on, has a Retry affordance, and beats a stuck splash.
-      let status: Awaited<ReturnType<typeof getWaitlistStatus>> = null;
-      try {
-        status = await getWaitlistStatus(user.id);
-      } catch (err) {
-        console.warn('[auto-route] waitlist lookup failed', err);
-      }
-      if (cancelled) return;
-      setView(status?.approved ? 'app' : 'waitlisted');
-    })();
-    return () => { cancelled = true; };
+    setView('app');
   }, [user, authLoading, view]);
 
   // Read hash on mount for deep linking
