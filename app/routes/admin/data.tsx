@@ -1880,6 +1880,14 @@ export default function AdminData() {
   const [autoDiscovering, setAutoDiscovering] = useState(false);
   const [autoError, setAutoError] = useState<string | null>(null);
   const [autoJobs, setAutoJobs] = useState<AutoJob[]>([]);
+  // Live detail for the discovery phase (brainstorm → Google Shopping),
+  // driven by brainstormCatalogProducts' onProgress callback.
+  const [autoDiscovery, setAutoDiscovery] = useState<{
+    phase: 'brainstorming' | 'searching' | 'done';
+    queries: string[];
+    completed: number;
+    found: number;
+  } | null>(null);
   const autoCountRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!autoCountOpen) return;
@@ -3203,6 +3211,7 @@ export default function AdminData() {
     setAutoError(null);
     setAutoJobs([]);
     setAutoDiscovering(true);
+    setAutoDiscovery({ phase: 'brainstorming', queries: [], completed: 0, found: 0 });
 
     const patch = (key: string, p: Partial<AutoJob>) =>
       setAutoJobs(prev => prev.map(j => (j.key === key ? { ...j, ...p } : j)));
@@ -3222,6 +3231,12 @@ export default function AdminData() {
       try {
         const { products, error: discErr } = await brainstormCatalogProducts(seed, {
           count: Math.max(count + 2, 6),
+          onProgress: (pr) => setAutoDiscovery({
+            phase: pr.phase,
+            queries: pr.queries ?? [],
+            completed: pr.completedQueries ?? 0,
+            found: pr.products?.length ?? 0,
+          }),
         });
         if ((!products || products.length === 0)) {
           setAutoError(discErr
@@ -3235,6 +3250,7 @@ export default function AdminData() {
         return;
       } finally {
         setAutoDiscovering(false);
+        setAutoDiscovery(null);
       }
 
       // Dedupe against the existing catalog + soft brand-diversity cap so a
@@ -5281,7 +5297,7 @@ export default function AdminData() {
                   Automatic products
                 </div>
                 <p style={{ margin: '4px 0 0', fontSize: 12, color: '#6b7280', maxWidth: 560 }}>
-                  Claude + Gemini search the web for high-converting, catalog-worthy products, then add each one, pick &amp; polish the primary photo, and generate the primary video — fully automatic.
+                  Claude curates high-converting, catalog-worthy products and live Google Shopping finds them, then each one is added, its primary photo picked &amp; polished by Claude + Gemini, and its primary video generated — fully automatic.
                 </p>
               </div>
               <div ref={autoCountRef} style={{ position: 'relative', flexShrink: 0 }}>
@@ -5358,9 +5374,39 @@ export default function AdminData() {
             {(autoDiscovering || autoJobs.length > 0) && (
               <div style={{ marginTop: 14, display: 'flex', flexDirection: 'column', gap: 8 }}>
                 {autoDiscovering && (
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#4338ca', fontWeight: 600 }}>
-                    <span className="auto-spinner" aria-hidden="true" />
-                    Claude + Gemini are searching the web for products…
+                  <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+                    <div style={{ display: 'flex', alignItems: 'center', gap: 8, fontSize: 13, color: '#4338ca', fontWeight: 600 }}>
+                      <span className="auto-spinner" aria-hidden="true" />
+                      {autoDiscovery?.phase === 'searching'
+                        ? <>Searching Google Shopping · {autoDiscovery.completed}/{autoDiscovery.queries.length || '…'} queries · {autoDiscovery.found} product{autoDiscovery.found === 1 ? '' : 's'} found</>
+                        : 'Claude is curating high-converting product queries…'}
+                    </div>
+                    {/* The queries Claude generated, lit up as each one is searched. */}
+                    {autoDiscovery && autoDiscovery.queries.length > 0 && (
+                      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, paddingLeft: 22 }}>
+                        {autoDiscovery.queries.map((q, i) => {
+                          const searched = i < autoDiscovery.completed;
+                          return (
+                            <span
+                              key={`${q}-${i}`}
+                              style={{
+                                display: 'inline-flex', alignItems: 'center', gap: 5,
+                                fontSize: 11, fontWeight: 600,
+                                padding: '3px 9px', borderRadius: 999,
+                                background: searched ? '#eef2ff' : '#f8fafc',
+                                color: searched ? '#4338ca' : '#94a3b8',
+                                border: `1px solid ${searched ? '#c7d2fe' : '#e5e7eb'}`,
+                              }}
+                            >
+                              {searched && (
+                                <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
+                              )}
+                              {q}
+                            </span>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 )}
                 {autoJobs.map(job => {
