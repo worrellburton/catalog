@@ -5002,7 +5002,8 @@ body:has(.deck-view.active) .gen-queue-host {
   position: relative;
   z-index: 3;
 }
-.deck-view-v1 .deck-v1-tech-seed video {
+.deck-view-v1 .deck-v1-tech-seed video,
+.deck-view-v1 .deck-v1-tech-seed img {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -5043,7 +5044,8 @@ body:has(.deck-view.active) .gen-queue-host {
   border: 1px solid rgba(245, 197, 66, 0.35);
   position: relative;
 }
-.deck-view-v1 .deck-v1-tech-neighbor video {
+.deck-view-v1 .deck-v1-tech-neighbor video,
+.deck-view-v1 .deck-v1-tech-neighbor img {
   width: 100%;
   height: 100%;
   object-fit: cover;
