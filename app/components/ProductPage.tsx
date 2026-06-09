@@ -583,12 +583,10 @@ export default function ProductPage({
   const productSections = usePageSections('product');
   const heroEnabled     = isSectionEnabled(productSections, 'hero');
   const similarEnabled  = isSectionEnabled(productSections, 'similar');
-  const popularEnabled  = isSectionEnabled(productSections, 'popular');
   const ymalEnabled     = isSectionEnabled(productSections, 'you-might-also-like');
   // Per-section caps. Default 8 keeps the historic bounded-grid feel
   // until an admin tunes them in /admin/pages.
   const similarLimit  = getSectionLimit(productSections, 'similar', 8);
-  const popularLimit  = getSectionLimit(productSections, 'popular', 8);
   const ymalLimit     = getSectionLimit(productSections, 'you-might-also-like', 16);
   // YMAL defaults to infinite (seeded in the migration); the toggle
   // lets an admin flip it back to a bounded grid using popularFallback.
@@ -729,17 +727,6 @@ export default function ProductPage({
     });
     setSimDebug({ open: true, loading: false, report });
   }, [affinity, ymalTitle, recentProducts.length]);
-
-  // "Popular" — shown only when moreLikeThis is empty.
-  // Filtered to the same product type so we never show unrelated items.
-  // "Popular" rail — shown only when "More like this" has no results.
-  // No type filter: the whole point is to surface something when similarity
-  // returns nothing, so we show the full popular feed (cross-brand, gender-
-  // scoped as usual via pickFrom).
-  const popularItems = useMemo((): ProductAd[] => {
-    if (moreLikeThis.length > 0) return [];
-    return pickFrom(popularFallback);
-  }, [moreLikeThis, popularFallback, pickFrom]);
 
   // Active gender filter mirrors the global shopper-gender singleton so
   // the nested ContinuousFeed's gender scoping matches the home feed.
@@ -1560,22 +1547,6 @@ export default function ProductPage({
           </section>
         )}
 
-        {popularEnabled && popularItems.length > 0 && (
-          <section className="pd-similar-feed">
-            <h2 className="pd-feed-title">Popular</h2>
-            <div className="pd-similar-grid">
-              {fillToExact(popularItems, popularLimit).map((c, i) => (
-                <CreativeCard
-                  key={`pop-${c.id}-${i}`}
-                  creative={c}
-                  className="look-card"
-                  onOpenProduct={onOpenCreative}
-                />
-              ))}
-            </div>
-          </section>
-        )}
-
         {lookCreatives && lookCreatives.length > 0 && (
           <section className="pd-look-feed">
             <h2 className="pd-feed-title">Featured in Looks</h2>
@@ -1600,7 +1571,7 @@ export default function ProductPage({
           ymalInfinite ? (
             <section className="pd-similar-feed">
               <h2 className="pd-feed-title">
-                {ymalTitle}
+                Popular
                 {isSuperAdmin && (
                   <button
                     type="button"
@@ -1633,7 +1604,7 @@ export default function ProductPage({
           ) : (popularFallback && popularFallback.length > 0) ? (
             <section className="pd-similar-feed">
               <h2 className="pd-feed-title">
-                {ymalTitle}
+                Popular
                 {isSuperAdmin && (
                   <button
                     type="button"
