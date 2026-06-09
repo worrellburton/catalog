@@ -1431,6 +1431,12 @@ body:has(.look-overlay.look-overlay--in) {
   object-fit: cover;
   object-position: center;
 }
+/* The poster <img> and the swap-in <video> MUST share framing or the
+   crossfade jumps. Mirror .product-thumb-img exactly. */
+.product-thumb-video {
+  object-fit: cover;
+  object-position: center;
+}
 
 .product-thumb-placeholder {
   width: 100%;
