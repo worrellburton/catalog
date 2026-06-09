@@ -40,6 +40,51 @@ function loadHls(): Promise<typeof import('hls.js')> {
   return (hlsModPromise ??= import('hls.js'));
 }
 
+// ── Phase 1/4: native-HLS detection + hls.js preferences ──────────────
+// Cached: does THIS browser play HLS natively (Safari, iOS WebView — i.e. the
+// Flutter shell on iOS)? Those never need hls.js. Mirrors the per-element
+// canPlayNativeHls() below but element-free, so warmers/the director can branch
+// on it without holding a <video>.
+let _nativeHlsSupport: boolean | null = null;
+export function browserSupportsNativeHls(): boolean {
+  if (_nativeHlsSupport !== null) return _nativeHlsSupport;
+  if (typeof document === 'undefined') return false;
+  try {
+    _nativeHlsSupport =
+      document.createElement('video').canPlayType('application/vnd.apple.mpegurl') !== '';
+  } catch {
+    _nativeHlsSupport = false;
+  }
+  return _nativeHlsSupport;
+}
+
+// Phase 4 (opt-in, default OFF): route HLS through hls.js even where native HLS
+// is available, using Managed Media Source on iOS 17.1+. Native HLS stays the
+// default — it needs no library download and is battery-friendly — so this
+// CANNOT regress the native path unless explicitly switched on. Enable for
+// testing with localStorage 'hls-prefer-mse'='1'.
+function preferHlsJsOverNative(): boolean {
+  if (typeof localStorage === 'undefined') return false;
+  try {
+    return localStorage.getItem('hls-prefer-mse') === '1';
+  } catch {
+    return false;
+  }
+}
+
+/** Phase 1: pre-load the hls.js chunk during idle so the FIRST HLS card of a
+ *  session doesn't stall on the dynamic import before it can even attach.
+ *  No-op on native-HLS browsers (they never download hls.js) and on save-data.
+ *  Safe to call repeatedly — loadHls() memoizes the import. */
+export function prefetchHlsModule(): void {
+  if (typeof navigator !== 'undefined') {
+    const c = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
+    if (c?.saveData) return;
+  }
+  if (browserSupportsNativeHls() && !preferHlsJsOverNative()) return;
+  void loadHls().catch(() => { /* will retry lazily on the first real attach */ });
+}
+
 // One hls.js instance per element, tracked off to the side so callers
 // (TrailVideoHost pool entries) don't have to thread it through their own
 // bookkeeping. WeakMap so a GC'd element takes its instance with it.
@@ -100,7 +145,7 @@ export function setVideoSource(el: HTMLVideoElement, url: string): void {
   desiredByEl.set(el, url);
 
   if (isHlsUrl(url)) {
-    if (canPlayNativeHls(el)) {
+    if (canPlayNativeHls(el) && !preferHlsJsOverNative()) {
       // Native HLS — tear down any prior hls.js instance, then set src.
       destroyHls(el);
       if (el.src !== url) el.src = url;

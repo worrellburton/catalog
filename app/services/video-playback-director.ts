@@ -11,8 +11,13 @@
 // play() independently) and gives us a clean recovery path after
 // modal open/close and tab visibility changes.
 
-import { getPrefetchCount } from './video-loading';
-import { setVideoSource, getVideoSource } from '~/utils/hlsAttach';
+import { getPrefetchCount, isSlowConnection } from './video-loading';
+import {
+  setVideoSource,
+  getVideoSource,
+  browserSupportsNativeHls,
+  prefetchHlsModule,
+} from '~/utils/hlsAttach';
 
 // ── Constants ──────────────────────────────────────────────────────────
 //
@@ -75,6 +80,30 @@ const MAX_RETRIES = 2;
  *  viewport-relative so it survives resize. */
 const NEAR_BAND_ROOT_MARGIN = '200% 0%';
 
+// ── Pre-attach (prebuffer) tuning ────────────────────────────────────────
+// We buffer the first segment(s) of the NEAREST upcoming clips into spare pool
+// elements while they're still AHEAD of the play band. When such a card crosses
+// into the play band, rank()'s existing acquire prefers a free slot whose src
+// already matches (see "Prefer a free slot that ALREADY holds this card's clip"
+// below) and adopts the pre-buffered element — its first frame is already
+// decoded, so it reveals instantly instead of cold-loading the HLS chain
+// (manifest → media playlist → init → segment). This is what lets HLS feel as
+// instant as the old progressive MP4 without giving up adaptive quality.
+//
+// Bounded hard so it can't reopen the historical CPU/memory cliffs:
+//   • only a few elements (PREARM_MAX), only cards inside the prearm band,
+//   • never grows past poolMax, never evicts a PLAYING card,
+//   • skipped on fast flicks and save-data,
+//   • PREARM_ENABLED=false fully disables it (instant fall back to cold attach).
+const PREARM_ENABLED = true;
+const PREARM_MAX_DESKTOP = 3;
+const PREARM_MAX_MOBILE = 1;
+// Lookahead band for prebuffering. MUST sit between the play and release bands
+// (play < prearm < release < near-band) so prearmed cards are still tracked by
+// rank() and are never past the point where they'd be released.
+const PREARM_MARGIN_VH_DESKTOP = 1.1;
+const PREARM_MARGIN_VH_MOBILE = 0.95;
+
 function isMobileViewport(): boolean {
   return typeof window !== 'undefined' && window.innerWidth <= 600;
 }
@@ -88,6 +117,13 @@ function releaseMarginPx(): number {
 }
 function poolMax(): number {
   return isMobileViewport() ? POOL_MAX_MOBILE : POOL_MAX_DESKTOP;
+}
+function prearmMarginPx(): number {
+  if (typeof window === 'undefined') return 0;
+  return window.innerHeight * (isMobileViewport() ? PREARM_MARGIN_VH_MOBILE : PREARM_MARGIN_VH_DESKTOP);
+}
+function prearmMax(): number {
+  return isMobileViewport() ? PREARM_MAX_MOBILE : PREARM_MAX_DESKTOP;
 }
 
 // ── Types ──────────────────────────────────────────────────────────────
@@ -160,11 +196,15 @@ class VideoPlaybackDirector {
     if (this.initialized || typeof document === 'undefined') return;
     this.initialized = true;
 
-    // Off-screen parking area for unassigned pool elements.
+    // Off-screen parking area for unassigned pool elements. opacity:0 (NOT
+    // visibility:hidden) because prebufferSlot() loads upcoming clips into
+    // parked elements: iOS/Safari suppresses media loading for a
+    // visibility:hidden <video>, but an opacity:0, zero-size one still buffers.
+    // Matches TrailVideoHost's off-screen pool, which parks the same way.
     this.parkingDiv = document.createElement('div');
     this.parkingDiv.style.cssText =
       'position:fixed;top:-9999px;left:-9999px;width:1px;height:1px;' +
-      'visibility:hidden;pointer-events:none;overflow:hidden';
+      'opacity:0;pointer-events:none;overflow:hidden';
     this.parkingDiv.setAttribute('aria-hidden', 'true');
     document.body.appendChild(this.parkingDiv);
 
@@ -201,6 +241,15 @@ class VideoPlaybackDirector {
     const initialPool = Math.min(8, poolMax());
     for (let i = 0; i < initialPool; i++) {
       this.pool.push({ el: this.createVideoEl(), assignedTo: null });
+    }
+
+    // Phase 1: warm the hls.js chunk during idle so the first HLS attach in
+    // this session isn't gated on the dynamic import. No-op on native-HLS
+    // browsers (Safari/iOS never load hls.js) and on save-data.
+    {
+      const w = window as Window & { requestIdleCallback?: (cb: () => void) => void };
+      if (typeof w.requestIdleCallback === 'function') w.requestIdleCallback(() => prefetchHlsModule());
+      else window.setTimeout(() => prefetchHlsModule(), 1200);
     }
 
     // Track scroll velocity so we can skip play() during fast flicks.
@@ -556,6 +605,7 @@ class VideoPlaybackDirector {
 
     const playMargin = playMarginPx();
     const releaseMargin = releaseMarginPx();
+    const prearmMargin = prearmMarginPx();
     const max = poolMax();
 
     // Snapshot every card with its current distance. We classify into
@@ -648,6 +698,12 @@ class VideoPlaybackDirector {
         slot = victim.slot;
       }
 
+      // A prebuffered slot was parked with autoplay disabled (prebufferSlot);
+      // restore it so an adopted element behaves like any freshly-acquired one.
+      // playEl drives playback either way — this just keeps pool elements
+      // uniform and lets the muted-autoplay heuristic re-evaluate on adopt.
+      slot.el.autoplay = true;
+
       // (Re-)configure the element. A recycled pooled <video> sits at z-index
       // 2, above the card's poster <img> (z-index 1). It MUST stay transparent
       // until it actually has a frame to paint, or it flashes black over the
@@ -702,6 +758,46 @@ class VideoPlaybackDirector {
       entry.slotEl.appendChild(slot.el);
       this.playEl(id, entry);
     }
+
+    // 3. Pre-attach: prebuffer the nearest UPCOMING clips (just outside the
+    //    play band) into spare pool elements so promotion is an instant adopt
+    //    instead of a cold HLS chain. Best-effort + hard-bounded (see PREARM
+    //    docs): never evicts a playing card, never exceeds poolMax, skipped on
+    //    fast flicks / save-data / when disabled.
+    if (PREARM_ENABLED && !this.isScrollFast && !isSlowConnection() && this.assignedIds.size < max) {
+      const useNativeHls = browserSupportsNativeHls();
+      // The nearest N upcoming cards we want kept warm. Slicing to prearmMax
+      // FIRST bounds the ACTIVE prebuffer set to ~N regardless of how many rank
+      // passes run: already-warm targets are skipped, only the missing ones are
+      // armed. (Arming "N new per pass" instead would let prebuffered slots
+      // accumulate to fill every spare slot — fine on desktop, jank on mobile.)
+      const targets = ranked
+        .filter(r =>
+          r.distance > playMargin &&
+          r.distance <= prearmMargin &&
+          this.inActiveScope(r.id) &&
+          !r.entry.videoEl)
+        .sort((a, b) => a.distance - b.distance)
+        .slice(0, prearmMax());
+      for (const { entry } of targets) {
+        const url = entry.videoUrl;
+        if (!url) continue;
+        // Already buffered into a free slot? Leave it.
+        if (this.pool.some(p => p.assignedTo === null && getVideoSource(p.el) === url)) continue;
+        // Prefer an EMPTY free slot (don't clobber another prearm); else grow up
+        // to the cap; else reuse any free slot (recycles a stale prebuffer).
+        // NEVER evict a playing card.
+        let slot: PoolSlot | undefined =
+          this.pool.find(p => p.assignedTo === null && !getVideoSource(p.el));
+        if (!slot && this.pool.length < max) {
+          slot = { el: this.createVideoEl(), assignedTo: null };
+          this.pool.push(slot);
+        }
+        if (!slot) slot = this.pool.find(p => p.assignedTo === null);
+        if (!slot) break; // no headroom — leave the rest to cold-attach
+        this.prebufferSlot(slot, entry, useNativeHls);
+      }
+    }
   }
 
   /**
@@ -737,6 +833,49 @@ class VideoPlaybackDirector {
     };
     el.addEventListener('loadeddata', () => reveal('loadeddata'), { once: true });
     el.addEventListener('playing', () => reveal('playing'), { once: true });
+  }
+
+  /**
+   * Point a FREE pool slot at an upcoming clip and start buffering it WITHOUT
+   * playing it or moving it on-screen. The slot stays free (assignedTo=null)
+   * so rank()'s acquire can adopt it via same-src match — by then its first
+   * frame is decoded, so the reveal is instant.
+   *
+   * hls.js (non-native) fetches segments on attachMedia regardless of play(),
+   * so the element reaches a first frame on its own. Native HLS (iOS/Safari)
+   * ignores preload for an off-screen element, so we kick the pipeline with a
+   * muted play() and immediately pause + rewind to frame 0 once data lands —
+   * the only way to prime AVFoundation's media cache (a fetch() can't, which is
+   * exactly why the HTTP-cache warm never helped iOS).
+   */
+  private prebufferSlot(slot: PoolSlot, entry: CardEntry, useNativeHls: boolean): void {
+    const el = slot.el;
+    el.preload = 'auto';
+    // Don't autoplay off-screen; the play path calls play() and restores
+    // autoplay on adopt. Staying paused avoids currentTime drift so the adopted
+    // clip still starts at frame 0 (matches the poster — no zoom pop).
+    el.autoplay = false;
+    if (entry.posterUrl && el.getAttribute('poster') !== entry.posterUrl) {
+      el.setAttribute('poster', entry.posterUrl);
+    }
+    if (getVideoSource(el) !== entry.videoUrl) {
+      setVideoSource(el, entry.videoUrl);
+    }
+    if (useNativeHls) {
+      const target = entry.videoUrl;
+      const onData = () => {
+        // Bail if the slot got claimed for real playback meanwhile, or was
+        // re-pointed at another clip.
+        if (slot.assignedTo !== null) return;
+        if (getVideoSource(el) !== target) return;
+        try { el.pause(); } catch { /* ignore */ }
+        try { if (el.currentTime > 0) el.currentTime = 0; } catch { /* ignore */ }
+      };
+      el.addEventListener('loadeddata', onData, { once: true });
+      // Muted, off-screen kick — silent; rejected pre-gesture, in which case the
+      // card just cold-attaches on promotion as before (no regression).
+      void el.play().catch(() => { /* gesture-gated; nothing to do */ });
+    }
   }
 
   private playEl(cardId: string, entry: CardEntry): void {
