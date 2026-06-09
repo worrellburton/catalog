@@ -27,7 +27,6 @@ import {
 } from '~/services/product-creative';
 import {
   pickVideoUrl,
-  pickPlaybackSource,
   pickPosterUrl,
   pickStillImageUrl,
   captureVideoFrame,
