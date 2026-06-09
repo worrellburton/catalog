@@ -117,12 +117,6 @@ export default function AdminModel() {
   const { value: creatorPayout } = useSharedCreatorPayout();
   const [ui, setUi] = useState<ModelUi>(() => readUi());
 
-  // OpEx can be driven by the detailed builder (payroll + expenses); when
-  // it has line items the model runs on its per-month schedule and the
-  // Monthly OpEx field shows the (read-only) average.
-  const opexSchedule = useMemo(() => buildCombinedSchedule(opexItems, payrollItems), [opexItems, payrollItems]);
-  const hasOpex = (opexItems.length > 0 || payrollItems.length > 0) && opexSchedule.some(v => v > 0);
-
   useEffect(() => { try { window.localStorage.setItem(UI_KEY, JSON.stringify(ui)); } catch { /* quota */ } }, [ui]);
 
   // Base is the editable source of truth; Bear/Bull are derived from it
@@ -134,6 +128,16 @@ export default function AdminModel() {
   const { revenue, acquisition } = useMemo(() => buildModel(erev, eacq, true), [erev, eacq]);
   const revSummary = useMemo(() => summarize(revenue), [revenue]);
   const acqSummary = useMemo(() => summarizeGtm(acquisition, eacq), [acquisition, eacq]);
+
+  // OpEx is driven by the detailed builder (payroll + expenses). MAU-variable
+  // lines (servers, AI tokens) cost perMau × that month's MAU, so the schedule
+  // takes the acquisition MAU series. The model's "Monthly OpEx" field shows
+  // the (read-only) average of this schedule.
+  const opexSchedule = useMemo(
+    () => buildCombinedSchedule(opexItems, payrollItems, acquisition.map(a => a.cumulativeUsers)),
+    [opexItems, payrollItems, acquisition],
+  );
+  const hasOpex = (opexItems.length > 0 || payrollItems.length > 0) && opexSchedule.some(v => v > 0);
   const cash = useMemo(() => buildCashflow(revenue, acquisition, eecon, hasOpex ? opexSchedule : undefined, creatorPayout), [revenue, acquisition, eecon, hasOpex, opexSchedule, creatorPayout]);
   const metrics = useMemo(() => investorMetrics(erev, eacq, revenue, acquisition, acqSummary, eecon, cash), [erev, eacq, revenue, acquisition, acqSummary, eecon, cash]);
   const totalSales = useMemo(() => revenue.reduce((a, s) => a + s.sales, 0), [revenue]);
