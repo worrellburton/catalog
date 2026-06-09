@@ -1,4 +1,5 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { getLooks } from '~/services/looks';
 import '~/styles/gtm.css';
 
 // GTM - the marketing function as a connected, top-down DIAGRAM:
@@ -102,7 +103,7 @@ const FLYWHEEL: { kicker: string; title: string; bullets: string[]; accent: stri
       'Three BD and marketing consultants, month-to-month for three months',
       'Specialized in creator relations; start small, then scale',
       'Some may convert to full-time',
-      'Start delegating the system now; it can’t run on one person',
+      'Marketing is a system run by people, not people as the system, and it needs to start being built',
     ],
   },
   {
@@ -115,9 +116,9 @@ const FLYWHEEL: { kicker: string; title: string; bullets: string[]; accent: stri
     ],
   },
   {
-    kicker: 'Step 3', title: 'Kaizen.', accent: '#f59e0b',
+    kicker: 'Step 3', title: 'Learn and repeat.', accent: '#f59e0b',
     bullets: [
-      'Continuous improvement: learn and repeat, every cycle',
+      'Continuous improvement, every cycle',
       'Lean into what’s working, cut what isn’t',
       'Tighten strategy, campaigns, and creator management',
       'Drive CPA as low as possible',
@@ -148,6 +149,22 @@ export default function AdminGtm() {
   // True whenever a flywheel slide is on screen - fades the branded video
   // backdrop in only while the deck section is in view (clean tree above).
   const [flyActive, setFlyActive] = useState(false);
+
+  // Real look videos from the live feed for the flywheel backdrop (was two
+  // static /public clips — the "old looks"). Mobile variant preferred so the
+  // 16-tile grid stays light. Falls back to the static clips until loaded.
+  const [bgVideos, setBgVideos] = useState<string[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    getLooks().then(looks => {
+      if (cancelled) return;
+      const vids = looks
+        .map(l => l.mobile_video_url || l.video)
+        .filter((v): v is string => !!v && /^https?:\/\//i.test(v));
+      if (vids.length) setBgVideos(vids.slice(0, 16));
+    }).catch(() => { /* keep the static fallback */ });
+    return () => { cancelled = true; };
+  }, []);
 
   // Scroll-reveal the flywheel slides one at a time + drive the backdrop.
   const flywheelRef = useRef<HTMLDivElement | null>(null);
@@ -326,17 +343,23 @@ export default function AdminGtm() {
       <div className={`gtm-flywheel${flyActive ? ' is-active' : ''}`} ref={flywheelRef}>
         <div className="gtm-fly-bg" aria-hidden="true">
           <div className="gtm-fly-bg-grid">
-            {Array.from({ length: 16 }).map((_, i) => (
-              <video
-                key={i}
-                src={`${basePath}/${i % 2 === 0 ? 'girl2.mp4' : 'guy.mp4'}`}
-                muted
-                loop
-                playsInline
-                autoPlay
-                className="gtm-fly-bg-video"
-              />
-            ))}
+            {Array.from({ length: 16 }).map((_, i) => {
+              const src = bgVideos.length
+                ? bgVideos[i % bgVideos.length]
+                : `${basePath}/${i % 2 === 0 ? 'girl2.mp4' : 'guy.mp4'}`;
+              return (
+                <video
+                  key={`${i}-${src}`}
+                  src={src}
+                  muted
+                  loop
+                  playsInline
+                  autoPlay
+                  preload="metadata"
+                  className="gtm-fly-bg-video"
+                />
+              );
+            })}
           </div>
           <div className="gtm-fly-bg-overlay" />
         </div>
