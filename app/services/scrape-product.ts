@@ -273,13 +273,13 @@ export async function reconcileStuckScrapes(staleAfterMinutes = 20): Promise<num
  * Insert a new product URL row with scrape_status='pending' and immediately
  * trigger the scraper (don't rely solely on the Supabase INSERT webhook).
  */
-export async function addProductUrl(url: string): Promise<ProductRow> {
+export async function addProductUrl(url: string, source = 'brand_url'): Promise<ProductRow> {
   if (!supabase) throw new Error('Supabase not configured');
   const reason = nonProductUrlReason(url);
   if (reason) throw new Error(`Refusing to add: ${reason}. Paste a direct product page URL.`);
   const { data, error } = await supabase
     .from('products')
-    .insert({ url, scrape_status: 'pending', source: 'brand_url' })
+    .insert({ url, scrape_status: 'pending', source })
     .select('id, name, brand, price, url, image_url, images, scrape_status, scraped_at, scrape_error, created_at')
     .single();
   if (error) throw new Error(error.message);

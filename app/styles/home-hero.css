@@ -284,29 +284,33 @@
 @keyframes sfh-feed-info-in { from { opacity: 0; } to { opacity: 1; } }
 .sfh-feed-info-card {
   position: relative;
-  width: min(420px, 100%);
+  width: min(480px, 100%);
   background: rgba(20, 20, 22, 0.96);
   border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 18px;
-  padding: 26px 24px 24px;
+  border-radius: 22px;
+  padding: 30px 28px 30px;
   box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55);
   color: #f4f4f5;
   text-align: left;
 }
+/* Close — a clean glass circle in the corner (was a bare ×). */
 .sfh-feed-info-close {
   position: absolute;
-  top: 12px;
+  top: 14px;
   right: 14px;
-  width: 28px;
-  height: 28px;
-  border: none;
-  background: none;
-  color: rgba(255, 255, 255, 0.55);
-  font-size: 22px;
-  line-height: 1;
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.07);
+  color: rgba(255, 255, 255, 0.65);
   cursor: pointer;
+  transition: background 150ms ease, color 150ms ease, transform 150ms ease;
 }
-.sfh-feed-info-close:hover { color: #fff; }
+.sfh-feed-info-close:hover { color: #fff; background: rgba(255, 255, 255, 0.14); transform: scale(1.06); }
 .sfh-feed-info-title {
   margin: 0 0 10px;
   font-size: 18px;
@@ -321,24 +325,32 @@
 }
 .sfh-feed-info-body:last-child { margin-bottom: 0; }
 
-/* ── "Your daily feed" popup — minimal grayscale ─────────────────── */
+/* ── "Your daily feed" popup — frosted glass with a soft glow ─────── */
 .sfh-feed-info-card--magic {
   overflow: hidden;
   background:
-    radial-gradient(120% 80% at 50% -10%, rgba(255, 255, 255, 0.06), transparent 60%),
-    linear-gradient(180deg, rgba(24, 24, 26, 0.98), rgba(14, 14, 16, 0.98));
-  border-color: rgba(255, 255, 255, 0.14);
-  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6);
-}
-.sfh-feed-info-particles {
-  position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
-  pointer-events: none;
-  opacity: 0.4;
+    radial-gradient(120% 80% at 50% -10%, rgba(124, 108, 255, 0.16), transparent 62%),
+    linear-gradient(180deg, rgba(30, 30, 36, 0.66), rgba(14, 14, 20, 0.66));
+  -webkit-backdrop-filter: blur(30px) saturate(1.4);
+  backdrop-filter: blur(30px) saturate(1.4);
+  border-color: rgba(255, 255, 255, 0.18);
+  /* Drop shadow + ambient glow + inner top highlight (the "glass" read). */
+  box-shadow:
+    0 30px 90px rgba(0, 0, 0, 0.6),
+    0 0 90px rgba(124, 108, 255, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
 }
 .sfh-feed-info-content { position: relative; z-index: 1; }
+
+/* Catalog wordmark at the top of the popup. */
+.sfh-feed-info-logo {
+  display: block;
+  height: 22px;
+  width: auto;
+  margin: 0 0 16px;
+  color: #fafafa;
+  opacity: 0.96;
+}
 
 /* Sparkle badge — neutral white/gray, no float animation. */
 .sfh-feed-info-badge {
@@ -358,58 +370,72 @@
   color: #fafafa;
 }
 
-/* Benefit points with minimal grayscale icon chips. */
+/* Benefit points — plain text with a subtle accent dot (icons removed). */
 .sfh-feed-info-points {
   list-style: none;
-  margin: 16px 0 14px;
+  margin: 14px 0 4px;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 12px;
+  gap: 9px;
 }
 .sfh-feed-info-points li {
-  display: flex;
-  align-items: flex-start;
-  gap: 11px;
+  position: relative;
+  padding-left: 16px;
   font-size: 13px;
   line-height: 1.45;
-  color: rgba(255, 255, 255, 0.78);
+  color: rgba(255, 255, 255, 0.74);
 }
-.sfh-feed-info-ic {
-  flex-shrink: 0;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 30px;
-  height: 30px;
-  border-radius: 9px;
-  color: rgba(255, 255, 255, 0.7);
-  background: rgba(255, 255, 255, 0.06);
-  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.12);
+.sfh-feed-info-points li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.5em;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(167, 139, 250, 0.9);
 }
-/* Countdown to the next feed drop — pinned to the bottom of the card,
-   minimal grayscale, sits below a hairline divider. */
+
+/* Countdown HERO — the big animated centerpiece. Label sits right above
+   the oversized, glowing, gently-pulsing timer. */
 .sfh-feed-info-countdown {
   display: flex;
+  flex-direction: column;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  margin: 18px 0 0;
-  padding: 14px 4px 0;
+  text-align: center;
+  gap: 8px;
+  margin: 22px 0 4px;
+  padding: 22px 4px 6px;
   border-top: 1px solid rgba(255, 255, 255, 0.1);
 }
 .sfh-feed-info-countdown-label {
   font-size: 12px;
-  font-weight: 600;
-  letter-spacing: 0.02em;
-  color: rgba(255, 255, 255, 0.55);
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
 }
 .sfh-feed-info-countdown-time {
-  font-size: 22px;
+  font-size: clamp(46px, 13vw, 72px);
   font-weight: 800;
-  letter-spacing: 0.02em;
+  letter-spacing: -0.01em;
+  line-height: 1;
   font-variant-numeric: tabular-nums;
-  color: #fafafa;
+  color: #fff;
+  background: linear-gradient(180deg, #ffffff 0%, #c4b5fd 130%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 0 36px rgba(167, 139, 250, 0.5);
+  animation: sfh-countdown-pulse 2.4s ease-in-out infinite;
+}
+@keyframes sfh-countdown-pulse {
+  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 0 rgba(167, 139, 250, 0)); }
+  50%      { transform: scale(1.025); filter: drop-shadow(0 0 18px rgba(167, 139, 250, 0.35)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sfh-feed-info-countdown-time { animation: none; }
 }
 @keyframes sfh-bob {
   0%, 100% { transform: translateY(0); opacity: 0.6; }
@@ -464,10 +490,11 @@
   opacity: 0;
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  /* Fade in slowly (ease-in-out over 5s) once results have loaded, then float
-     forever on a gentle bob. */
+  /* Fade in quickly but elegantly once results land (snappy 360ms with a
+     soft ease + a small per-tile stagger from --fade for a quick cascade),
+     then float forever on a gentle bob. */
   animation:
-    sc-floater-in 600ms cubic-bezier(0.22, 1, 0.36, 1) both,
+    sc-floater-in 360ms cubic-bezier(0.22, 1, 0.36, 1) var(--fade, 0s) both,
     sc-floater-drift var(--dur, 8s) ease-in-out infinite var(--d, 0s);
 }
 .sc-floater img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -480,7 +507,7 @@
   50%      { translate: 0 -14px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .sc-floater { animation: sc-floater-in 600ms ease both; }
+  .sc-floater { animation: sc-floater-in 360ms ease both; }
 }
 
 /* 1 — Query echo: the committed query, pinned at the top of the flow. */
@@ -1217,20 +1244,35 @@
        above), the trio rises 18vh (32vh → 50vh) so the panel has room
        without colliding with the feed peek; .sfh matches with -18vh. */
     bottom: 40vh;
-    transition: bottom 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+    /* MUST re-list transform here: this rule overrides the base
+       .ai-bar-wrap transition, and without transform the chrome auto-hide
+       slide-back would snap instead of animate. */
+    transition:
+      bottom 0.32s cubic-bezier(0.32, 0.72, 0, 1),
+      transform 0.4s cubic-bezier(0.32, 0.72, 0, 1);
   }
   body:has(.app-root.home-hero) .ai-bar-wrap:focus-within {
     bottom: 52vh;
   }
-  body:has(.app-root.home-hero) .sfh:has(~ * .ai-bar-wrap:focus-within),
-  body:has(.app-root.home-hero .ai-bar-wrap:focus-within) .sfh {
-    /* Slide the spark+headline up when the bar is focused so the trio
-       (spark + headline + bar) rises as one group and clears the
-       suggestions panel that stacks above the bar. Matches the bar's own
-       18vh rise (32vh → 50vh) so they move together rather than drifting
-       apart — this is what fixed the headline overlapping the prompt
-       chips. */
-    transform: translateY(-18vh);
+  /* The desktop bar (.ai-bar-wrap) is a SIBLING of .app-root under <body>,
+     NOT a descendant — so this MUST be reached from the shared <body>
+     ancestor with :has(), the same way the .sfh-scroll-hint rule below
+     does. The earlier `.app-root.home-hero .ai-bar-wrap:focus-within`
+     forms could never match (the bar isn't inside .app-root), so the
+     headline never lifted and collided with the rising bar + pills. */
+  body:has(.ai-bar-wrap:focus-within) .app-root.home-hero .sfh-stage {
+    /* Slide ONLY the spark+headline up (not the whole .sfh section) when
+       the bar is focused, so the trio (spark + headline + bar) rises as
+       one group and clears the catalog-pills panel. Targeting .sfh-stage
+       rather than .sfh leaves the section's full-viewport gradient
+       background in place — translating the whole .sfh dragged its
+       background up too and exposed a bare band below it.
+
+       The lift MUST equal the bar's own focus rise (40vh → 52vh = 12vh
+       here) so the headline-to-bar gap is identical focused vs. resting.
+       The two shorter-viewport breakpoints below raise the bar more
+       (16vh / 18vh), so they re-match the lift there. */
+    transform: translateY(-12vh);
     transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1);
   }
   body:has(.app-root.home-hero.hero-scrolled) .ai-bar-wrap {
@@ -1349,7 +1391,10 @@ html:has(.user-menu-page) .bottom-bar {
   pointer-events: none;
 }
 body:has(.app-root.chrome-hidden) .ai-bar-wrap {
-  transform: translateY(140%);
+  /* Fully clear the viewport. translateY(140%) left a sliver peeking on
+     desktop because the bar sits 24px (+safe-area) above the bottom edge,
+     so 140% of its own height wasn't enough — add that offset back. */
+  transform: translateY(calc(100% + max(env(safe-area-inset-bottom), 24px) + 24px));
   pointer-events: none;
 }
 
@@ -1447,8 +1492,17 @@ body:has(.app-root.chrome-hidden) .ai-bar-wrap {
 @media (min-width: 769px) and (max-height: 880px) {
   body:has(.app-root.home-hero) .ai-bar-wrap { bottom: 32vh; }
   body:has(.app-root.home-hero) .ai-bar-wrap:focus-within { bottom: 48vh; }
+  /* Bar rises 16vh here (32vh → 48vh) — match the headline lift so the
+     gap stays constant focused vs. resting. */
+  body:has(.ai-bar-wrap:focus-within) .app-root.home-hero .sfh-stage {
+    transform: translateY(-16vh);
+  }
 }
 @media (min-width: 769px) and (max-height: 720px) {
   body:has(.app-root.home-hero) .ai-bar-wrap { bottom: 24vh; }
   body:has(.app-root.home-hero) .ai-bar-wrap:focus-within { bottom: 42vh; }
+  /* Bar rises 18vh here (24vh → 42vh) — match the headline lift. */
+  body:has(.ai-bar-wrap:focus-within) .app-root.home-hero .sfh-stage {
+    transform: translateY(-18vh);
+  }
 }

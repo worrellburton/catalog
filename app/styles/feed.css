@@ -710,11 +710,12 @@
   color: #e5e5e5;
   background: linear-gradient(135deg, #3f3f46, #27272a);
 }
-/* Lit ring once following — gold, to distinguish followed creators from
-   the plain white ring on creators you don't follow yet. */
+/* Followed creators keep the same standard white ring as everyone else —
+   the +/− badge is the follow affordance, so the avatar ring stays neutral
+   (no gold) and reads consistently across every surface. */
 .creator-avatar-follow.is-following .creator-avatar-follow__img {
-  border-color: #fbbf24;
-  box-shadow: 0 0 0 2px rgba(251, 191, 36, 0.4), 0 1px 4px rgba(0, 0, 0, 0.45);
+  border-color: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
 }
 .creator-avatar-follow__badge {
   position: absolute;

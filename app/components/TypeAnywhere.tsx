@@ -143,7 +143,10 @@ export default function TypeAnywhere() {
   const onAdmin = location.pathname.startsWith('/admin');
   // Suppress on /generate too - that flow owns its own input layer.
   const onGenerate = location.pathname.startsWith('/generate');
-  const hidden = onAdmin || onGenerate;
+  // Suppress on /activity - the insights page is a reading surface, not a
+  // search surface; the floating search bar just clutters it.
+  const onActivity = location.pathname.startsWith('/activity');
+  const hidden = onAdmin || onGenerate || onActivity;
 
   const submit = useCallback((q: string) => {
     const trimmed = q.trim();
@@ -221,6 +224,10 @@ export default function TypeAnywhere() {
 
   return (
     <>
+      {/* Dark gradient scrim that rises from the bottom while the bar is
+          focused, so the catalog pills / autocomplete read against a bright
+          feed instead of disappearing into it. Sits behind the bar + pills. */}
+      {focused && <div className="ai-bar-scrim" aria-hidden="true" />}
       <div className="ai-bar-wrap" role="search" aria-label="Search catalog">
         {/* Popular-catalog cloud — springs up above the bar when it's
             focused with an empty query, and gives way the moment the

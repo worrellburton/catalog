@@ -31,7 +31,11 @@ export interface GtmAssumptions {
 
 // DAU/MAU is a fixed modelling assumption, not a user lever — DAU is
 // surfaced as a result (averages on the dials + the graph tooltip).
-export const DAU_MAU_RATIO = 0.4;
+// 18% is a realistic stickiness for a shopping/discovery app (vs. 0.4,
+// which was social-network territory and made MAU look only ~2.5x DAU);
+// at 0.18 the monthly base reads as ~5.5x the daily actives, which is
+// the believable "MAU is way bigger than DAU" story.
+export const DAU_MAU_RATIO = 0.18;
 
 export const GTM_DEFAULTS: GtmAssumptions = {
   cpa: 12,
