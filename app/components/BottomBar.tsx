@@ -369,9 +369,14 @@ function BottomBar({
     if (onSelectSuggestion) onSelectSuggestion(query);
     else emitSearch(query.toLowerCase());
     setSearchOpen(false);
+    // Drop the keyboard so it doesn't cover the search ceremony on mobile.
+    // The pills/autocomplete preventDefault on mousedown to keep focus
+    // through the tap, so we must blur explicitly after the pick.
+    searchInputRef.current?.blur();
   }, [onSelectSuggestion, emitSearch]);
   const pickFollowing = useCallback((handles: string[]) => {
     setSearchOpen(false);
+    searchInputRef.current?.blur();
     window.setTimeout(() => {
       window.dispatchEvent(new CustomEvent('catalog:following-catalog', { detail: { handles } }));
     }, 60);
@@ -399,6 +404,7 @@ function BottomBar({
         emitSearch(query.toLowerCase());
       }
       setSearchOpen(false);
+      searchInputRef.current?.blur();
       btn.classList.remove('tapped');
     }, 600);
   }, [emitSearch, onSelectSuggestion]);
@@ -422,6 +428,7 @@ function BottomBar({
       else onSearchChange(query);
     }
     closeFilters();
+    searchInputRef.current?.blur();
   }, [activeFilters, onFilterChange, onSelectSuggestion, onSearchChange, closeFilters]);
 
   const handleBackdropClick = useCallback(() => {

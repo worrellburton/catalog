@@ -10,12 +10,12 @@
 //      The poster stays in the DOM so the box is never empty if the
 //      video stalls.
 //
-// Framing uses object-fit: contain instead of cover so the entire
-// product (sweater silhouette, pant leg, full shoe) is visible inside
-// the 52×52 thumb — the previous cover crop showed a tight detail
-// shot that read as a square of fabric. The CSS is co-located so the
-// component is drop-in for any future surface that wants the same
-// poster-then-video pattern at this size.
+// Framing: poster AND video both use object-fit: cover / center (the
+// thumb box is 3:4, matching the poster's native aspect, so cover fills
+// it edge-to-edge with no crop). The two layers MUST share the same
+// framing — a cover poster crossfading to a contain video jumped/glitched
+// on the swap. The CSS is co-located so the component is drop-in for any
+// future surface that wants the same poster-then-video pattern.
 
 import { useEffect, useRef, useState } from 'react';
 import { withTransform } from '~/utils/supabase-image';
@@ -100,7 +100,11 @@ export default function ProductMiniMedia({ posterSrc, videoSrc, alt = '', fallba
             inset: 0,
             width: '100%',
             height: '100%',
-            objectFit: 'contain',
+            // object-fit is intentionally NOT set inline: it's driven by the
+            // surface CSS so the video shares the SAME framing as the poster
+            // <img> in that surface (cover in the LookOverlay list, contain in
+            // the inline feed detail). An inline value would diverge from the
+            // poster and make the crossfade jump.
             opacity: videoReady ? 1 : 0,
             transition: 'opacity 240ms ease',
           }}

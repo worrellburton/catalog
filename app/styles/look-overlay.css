@@ -1037,6 +1037,9 @@ body:has(.look-overlay.look-overlay--in) {
   aspect-ratio: 3 / 4;
   border-radius: 6px;
   background: #111;
+  /* Prevent auto-row stretch from collapsing the card to its zero-height
+     absolute content (which defeats the aspect-ratio). */
+  align-self: start;
 }
 
 /* GUARD — every poster/video inside the creator grid must FILL its 3:4
@@ -1425,6 +1428,12 @@ body:has(.look-overlay.look-overlay--in) {
      `cover` fills it edge-to-edge with no crop for a 3:4 poster — the
      image shows at its native framing instead of being squeezed into a
      square. center keeps any off-aspect source balanced. */
+  object-fit: cover;
+  object-position: center;
+}
+/* The poster <img> and the swap-in <video> MUST share framing or the
+   crossfade jumps. Mirror .product-thumb-img exactly. */
+.product-thumb-video {
   object-fit: cover;
   object-position: center;
 }

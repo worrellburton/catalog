@@ -498,6 +498,7 @@
      the card collapses to a thin sliver after returning from a product
      page — the "shrunk poster" bug. */
   aspect-ratio: 3 / 4;
+  align-self: start;
 }
 .cpf-media {
   position: absolute;
@@ -670,6 +671,10 @@
   /* Match the main feed (grid-view.css .look-card = 3/4) so creator catalogs
      and the feed frame looks identically. */
   aspect-ratio: 3 / 4;
+  /* Don't let an auto-row grid stretch the (all-absolute-child) card to its
+     zero-height content and defeat the ratio — keeps the tile from
+     collapsing / shrinking the poster. */
+  align-self: start;
 }
 
 /* The look poster/video FILLS the 3:4 tile (cover), matching the main feed.

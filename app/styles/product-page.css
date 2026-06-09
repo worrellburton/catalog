@@ -1266,6 +1266,18 @@
   gap: 2px;
   background: #111;
 }
+
+/* GUARD — every tile in the product-page rails (.look-card / CreativeCard,
+   whose children are all position:absolute) must keep a 3:4 shape. In an
+   auto-row grid, the default align-self:stretch resolves the item to its
+   zero-height content and DEFEATS .look-card's own aspect-ratio, which
+   collapsed the card and shrank the poster inside it. Pin the ratio and
+   stop the stretch so the tile holds shape regardless of image load state. */
+.pd-similar-grid > *,
+.pd-look-grid > * {
+  aspect-ratio: 3 / 4;
+  align-self: start;
+}
 @media (min-width: 768px) {
   .pd-look-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
