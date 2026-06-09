@@ -490,10 +490,11 @@
   opacity: 0;
   box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  /* Fade in slowly (ease-in-out over 5s) once results have loaded, then float
-     forever on a gentle bob. */
+  /* Fade in quickly but elegantly once results land (snappy 360ms with a
+     soft ease + a small per-tile stagger from --fade for a quick cascade),
+     then float forever on a gentle bob. */
   animation:
-    sc-floater-in 600ms cubic-bezier(0.22, 1, 0.36, 1) both,
+    sc-floater-in 360ms cubic-bezier(0.22, 1, 0.36, 1) var(--fade, 0s) both,
     sc-floater-drift var(--dur, 8s) ease-in-out infinite var(--d, 0s);
 }
 .sc-floater img { width: 100%; height: 100%; object-fit: cover; display: block; }
@@ -506,7 +507,7 @@
   50%      { translate: 0 -14px; }
 }
 @media (prefers-reduced-motion: reduce) {
-  .sc-floater { animation: sc-floater-in 600ms ease both; }
+  .sc-floater { animation: sc-floater-in 360ms ease both; }
 }
 
 /* 1 — Query echo: the committed query, pinned at the top of the flow. */

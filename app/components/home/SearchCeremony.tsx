@@ -235,7 +235,9 @@ export default function SearchCeremony({ query, kind = 'search', ready, onDone, 
                   top: `${top}%`,
                   ['--d' as string]: `${(i % 5) * 0.6}s`,
                   ['--dur' as string]: `${7 + (i % 4)}s`,
-                  ['--fade' as string]: `${0.12 * i}s`,
+                  // Quick, elegant cascade: a small 45ms-per-tile stagger
+                  // (was 120ms) so the set fades in noticeably faster.
+                  ['--fade' as string]: `${0.045 * i}s`,
                 } as React.CSSProperties}
               >
                 <img src={src} alt="" loading="lazy" decoding="async" />
