@@ -32,12 +32,16 @@ export interface BrainNode {
 
 export interface BrainProduct { id: string; name: string; image: string | null; }
 
+export type BrainViewMode = 'types' | 'products' | 'all';
+
 interface Props {
   nodes: BrainNode[];        // excludes the synthetic root
   /** Per-node orbiting thumbnails (already capped) + the true total. */
   satellites: Map<string, { items: BrainProduct[]; total: number }>;
   selection: Set<string>;
-  showProducts: boolean;
+  /** types = structure only · products = thumbnails dominate, nodes dim
+   *  to anchors · all = both at full strength. */
+  viewMode: BrainViewMode;
   onSelect: (ids: Set<string>) => void;
   onReparent: (nodeIds: string[], targetId: string) => void;
   onRename: (nodeId: string, name: string) => void;
@@ -49,6 +53,9 @@ interface Props {
    *  the re-parent target for the whole selection instead of a selection. */
   pickMode?: boolean;
   onPickTarget?: (targetId: string) => void;
+  /** Hover-drill: zoom INTO a node — the page opens its product drill view
+   *  anchored at the node's canvas position. */
+  onDrill: (nodeId: string, x: number, y: number) => void;
 }
 
 const ROOT_ID = '__root__';
@@ -97,6 +104,15 @@ export default function TypeBrainGraph(p: Props) {
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
   const [prodDrag, setProdDrag] = useState<{ id: string; x: number; y: number; x0: number; y0: number } | null>(null);
+  // Hovered node — surfaces the drill affordance. Small leave-delay so the
+  // pointer can travel from the circle to the drill button without flicker.
+  const [hovered, setHovered] = useState<string | null>(null);
+  const hoverTimer = useRef(0);
+  const hoverEnter = (id: string) => { window.clearTimeout(hoverTimer.current); setHovered(id); };
+  const hoverLeave = () => {
+    window.clearTimeout(hoverTimer.current);
+    hoverTimer.current = window.setTimeout(() => setHovered(null), 160);
+  };
 
   const toLocal = (ev: { clientX: number; clientY: number }) => {
     const r = wrapRef.current?.getBoundingClientRect();
@@ -216,6 +232,8 @@ export default function TypeBrainGraph(p: Props) {
     setDropTarget(null);
   };
 
+  const productsOnly = p.viewMode === 'products';
+  const showSatellites = p.viewMode !== 'types';
   const rootPos = positions.get(ROOT_ID) ?? { x: size.w / 2, y: size.h / 2 };
   const singleSel = p.selection.size === 1 ? byId.get([...p.selection][0]) : null;
   const singleSelPos = singleSel ? positions.get(singleSel.id) : null;
@@ -266,11 +284,14 @@ export default function TypeBrainGraph(p: Props) {
               className={`tb-node${selected ? ' is-selected' : ''}${isDrop ? ' is-drop' : ''}${n.locked ? ' is-locked' : ''}`}
               onPointerDown={ev => onNodeDown(n.id, ev)}
               onDoubleClick={() => { if (!n.locked) setEditing(n.id); }}
+              onPointerEnter={() => hoverEnter(n.id)}
+              onPointerLeave={hoverLeave}
             >
-              <circle cx={pos.x} cy={pos.y} r={r}
-                fill={n.color} fillOpacity={n.depth === 1 ? 0.22 : 0.16}
-                stroke={n.color} strokeWidth={selected || isDrop ? 2.5 : 1.4} />
-              {n.icon && (() => {
+              <circle cx={pos.x} cy={pos.y} r={productsOnly ? Math.max(7, r * 0.4) : r}
+                fill={n.color} fillOpacity={productsOnly ? 0.1 : n.depth === 1 ? 0.22 : 0.16}
+                stroke={n.color} strokeOpacity={productsOnly ? 0.4 : 1}
+                strokeWidth={selected || isDrop ? 2.5 : 1.4} />
+              {n.icon && !productsOnly && (() => {
                 const s = r * 1.15; // icon box inside the circle
                 return (
                   <path
@@ -281,7 +302,7 @@ export default function TypeBrainGraph(p: Props) {
                   />
                 );
               })()}
-              <text x={pos.x} y={pos.y + r + 14} fill={n.color}>{n.name}</text>
+              {!productsOnly && <text x={pos.x} y={pos.y + r + 14} fill={n.color}>{n.name}</text>}
             </g>
           );
         })}
@@ -295,7 +316,7 @@ export default function TypeBrainGraph(p: Props) {
 
       {/* HTML overlay: product satellites, rename input, add-child button */}
       <div className="tb-overlay" onPointerMove={onProdMove} onPointerUp={onProdUp}>
-        {p.showProducts && p.nodes.map(n => {
+        {showSatellites && p.nodes.map(n => {
           const sat = p.satellites.get(n.id);
           const pos = positions.get(n.id);
           if (!sat || !pos || sat.items.length === 0) return null;
@@ -350,6 +371,28 @@ export default function TypeBrainGraph(p: Props) {
               }}
               onBlur={() => setEditing(null)}
             />
+          );
+        })()}
+
+        {hovered && !editing && !p.pickMode && (() => {
+          const n = byId.get(hovered);
+          const pos = positions.get(hovered);
+          if (!n || !pos) return null;
+          const r = nodeRadius(n);
+          return (
+            <button
+              className="tb-drill"
+              style={{ left: pos.x - r - 16, top: pos.y }}
+              title={`Drill into ${n.name} — see every product inside`}
+              onPointerEnter={() => hoverEnter(n.id)}
+              onPointerLeave={hoverLeave}
+              onClick={() => p.onDrill(n.id, pos.x, pos.y)}
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+                <circle cx="11" cy="11" r="7" />
+                <path d="M21 21l-4.3-4.3M8 11h6M11 8v6" />
+              </svg>
+            </button>
           );
         })()}
 

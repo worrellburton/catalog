@@ -569,3 +569,157 @@ html.gov-void .tb-wrap {
   right: 16px;
   z-index: 6;
 }
+
+/* ── View mode segmented control (types / products / all) ── */
+.gov-seg {
+  display: inline-flex;
+  padding: 3px;
+  gap: 2px;
+  border: 1px solid #27272a;
+  border-radius: 999px;
+  background: #121214;
+}
+.gov-seg button {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: capitalize;
+  color: #a1a1aa;
+  background: transparent;
+  border: none;
+  border-radius: 999px;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: background 140ms, color 140ms;
+}
+.gov-seg button:hover { color: #fff; }
+.gov-seg button.is-active { background: #27272a; color: #fff; }
+
+/* ── Hover drill affordance ── */
+.tb-drill {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid #3f3f46;
+  background: #18181b;
+  color: #e4e4e7;
+  cursor: zoom-in;
+  transition: border-color 120ms, color 120ms;
+  animation: tb-sat-in 160ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.tb-drill:hover { border-color: #818cf8; color: #fff; }
+
+/* ── Drill view: the screen zooms INTO the node ──
+   --ox/--oy anchor both the panel reveal and the conceptual zoom at the
+   node's canvas position, so opening feels like diving into that circle. */
+.gov-drill {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  display: flex;
+  flex-direction: column;
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at var(--ox) var(--oy), rgba(99, 102, 241, 0.12), transparent 55%),
+    rgba(5, 5, 7, 0.97);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transform-origin: var(--ox) var(--oy);
+  animation: gov-drill-in 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  overflow: hidden;
+}
+@keyframes gov-drill-in {
+  from { transform: scale(0.05); opacity: 0; border-radius: 50%; }
+  60%  { opacity: 1; }
+  to   { transform: scale(1); opacity: 1; border-radius: 16px; }
+}
+.gov-drill-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  flex-shrink: 0;
+}
+.gov-drill-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.gov-drill-title h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  text-transform: capitalize;
+}
+.gov-drill-title > span:last-child { font-size: 12px; color: #a1a1aa; }
+.gov-drill-dot { width: 12px; height: 12px; border-radius: 50%; }
+.gov-drill-path {
+  margin-left: auto;
+  font-size: 11px;
+  color: #71717a;
+  letter-spacing: 0.04em;
+}
+.gov-drill-empty { padding: 32px 24px; font-size: 13px; color: #a1a1aa; }
+.gov-drill-grid {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 14px;
+  padding: 18px 20px 24px;
+}
+.gov-drill-card {
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  background: #121214;
+  border: 1px solid #1f1f23;
+  border-radius: 12px;
+  padding: 0 0 10px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 140ms, transform 140ms;
+  animation: gov-drill-card-in 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.gov-drill-card:hover { border-color: #6366f1; transform: translateY(-2px); }
+@keyframes gov-drill-card-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.gov-drill-media {
+  aspect-ratio: 3 / 4;
+  background: #1c1c1f;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 8px;
+}
+.gov-drill-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.gov-drill-media span { font-size: 18px; font-weight: 800; color: #52525b; text-transform: uppercase; }
+.gov-drill-card em {
+  display: block;
+  padding: 0 10px;
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #818cf8;
+}
+.gov-drill-card strong {
+  display: block;
+  padding: 1px 10px 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #e4e4e7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}

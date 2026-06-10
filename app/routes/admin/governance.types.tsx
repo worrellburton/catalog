@@ -15,7 +15,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ParticleBackground from '~/components/ParticleBackground';
-import TypeBrainGraph, { type BrainNode, type BrainProduct } from '~/components/admin/TypeBrainGraph';
+import TypeBrainGraph, { type BrainNode, type BrainProduct, type BrainViewMode } from '~/components/admin/TypeBrainGraph';
 import {
   createTypeNode,
   executeGovernanceOps,
@@ -82,7 +82,10 @@ export default function AdminGovernanceTypes() {
   const [tree, setTree] = useState<TypeNode[]>([]);
   const [products, setProducts] = useState<GovernanceProduct[]>([]);
   const [selection, setSelection] = useState<Set<string>>(new Set());
-  const [showProducts, setShowProducts] = useState(false);
+  const [viewMode, setViewMode] = useState<BrainViewMode>('types');
+  // Drill-down: zoom INTO a node and list every product attached to it.
+  // ox/oy anchor the zoom animation at the node's canvas position.
+  const [drill, setDrill] = useState<{ nodeId: string; ox: number; oy: number } | null>(null);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [logOpen, setLogOpen] = useState(false);
   const [toast, setToast] = useState<{ label: string; key: number } | null>(null);
@@ -186,25 +189,27 @@ export default function AdminGovernanceTypes() {
       locked: false,
       icon: n.iconPath,
     }));
-    if (showProducts && unassigned.length) {
+    if (viewMode !== 'types' && unassigned.length) {
       nodes.push({
         id: UNASSIGNED_ID, name: 'unassigned', parentId: null, depth: 1,
         color: '#f59e0b', count: unassigned.length, locked: true, icon: null,
       });
     }
     return nodes;
-  }, [tree, depths, genders, attach, showProducts, unassigned.length]);
+  }, [tree, depths, genders, attach, viewMode, unassigned.length]);
 
   const satellites = useMemo(() => {
+    // Products mode is about the products — give each node a bigger orbit.
+    const cap = viewMode === 'products' ? 10 : SAT_CAP;
     const m = new Map<string, { items: BrainProduct[]; total: number }>();
     for (const [nodeId, list] of attach) {
-      m.set(nodeId, { items: list.slice(0, SAT_CAP), total: list.length });
+      m.set(nodeId, { items: list.slice(0, cap), total: list.length });
     }
     if (unassigned.length) {
-      m.set(UNASSIGNED_ID, { items: unassigned.slice(0, SAT_CAP), total: unassigned.length });
+      m.set(UNASSIGNED_ID, { items: unassigned.slice(0, cap), total: unassigned.length });
     }
     return m;
-  }, [attach, unassigned]);
+  }, [attach, unassigned, viewMode]);
 
   const subtreeIds = useCallback((rootId: string): Set<string> => {
     const ids = new Set<string>([rootId]);
@@ -420,13 +425,17 @@ export default function AdminGovernanceTypes() {
     window.open(`/p/${productSlug(prod)}`, '_blank', 'noopener');
   };
 
-  // Escape disarms a pending "Move to…".
+  // Escape closes the drill view, else disarms a pending "Move to…".
   useEffect(() => {
-    if (!pickMode) return;
-    const onKey = (ev: KeyboardEvent) => { if (ev.key === 'Escape') setPickMode(false); };
+    if (!pickMode && !drill) return;
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key !== 'Escape') return;
+      if (drill) setDrill(null);
+      else setPickMode(false);
+    };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [pickMode]);
+  }, [pickMode, drill]);
 
   const canUndo = history.some(h => !h.undone);
   const editableSelection = [...selection].filter(id => id !== UNASSIGNED_ID);
@@ -449,21 +458,24 @@ export default function AdminGovernanceTypes() {
           <button type="button" className="gov-ghost" onClick={() => setLogOpen(v => !v)}>
             History{history.length ? ` (${history.length})` : ''}
           </button>
-          <button
-            type="button"
-            className={`gov-toggle${showProducts ? ' is-on' : ''}`}
-            onClick={() => setShowProducts(v => !v)}
-          >
-            <span className="gov-toggle-dot" />
-            Products {showProducts ? 'on' : 'off'}
-          </button>
+          <div className="gov-seg" role="group" aria-label="View mode">
+            {(['types', 'products', 'all'] as const).map(m => (
+              <button
+                key={m}
+                type="button"
+                className={viewMode === m ? 'is-active' : ''}
+                onClick={() => setViewMode(m)}
+              >{m}</button>
+            ))}
+          </div>
         </div>
         <TypeBrainGraph
           nodes={brainNodes}
           satellites={satellites}
           selection={selection}
-          showProducts={showProducts}
+          viewMode={viewMode}
           onSelect={(ids) => { setPickMode(false); setSelection(ids); }}
+          onDrill={(nodeId, ox, oy) => setDrill({ nodeId, ox, oy })}
           pickMode={pickMode}
           onPickTarget={(targetId) => {
             setPickMode(false);
@@ -477,7 +489,57 @@ export default function AdminGovernanceTypes() {
           onOpenProduct={handleOpenProduct}
         />
 
-        {editableSelection.length > 0 && (
+        {drill && (() => {
+          const node = tree.find(n => n.id === drill.nodeId);
+          const prods = drill.nodeId === UNASSIGNED_ID ? unassigned : (attach.get(drill.nodeId) ?? []);
+          const name = node?.name ?? (drill.nodeId === UNASSIGNED_ID ? 'unassigned' : '?');
+          const color = drill.nodeId === UNASSIGNED_ID
+            ? '#f59e0b'
+            : GENDER_COLORS[genders.get(drill.nodeId) ?? ''] ?? NEUTRAL;
+          return (
+            <div
+              className="gov-drill"
+              style={{ ['--ox' as string]: `${drill.ox}px`, ['--oy' as string]: `${drill.oy}px` }}
+            >
+              <div className="gov-drill-head">
+                <button type="button" className="gov-ghost" onClick={() => setDrill(null)}>
+                  ← Back to the brain
+                </button>
+                <div className="gov-drill-title">
+                  <span className="gov-drill-dot" style={{ background: color }} />
+                  <h2>{name}</h2>
+                  <span>{prods.length} product{prods.length === 1 ? '' : 's'}</span>
+                </div>
+                {node && <span className="gov-drill-path">{paths.get(node.id)}</span>}
+              </div>
+              {prods.length === 0 ? (
+                <p className="gov-drill-empty">No products attached to this type yet.</p>
+              ) : (
+                <div className="gov-drill-grid">
+                  {prods.map(prod => (
+                    <button
+                      key={prod.id}
+                      type="button"
+                      className="gov-drill-card"
+                      title={`${prod.name} — open product page`}
+                      onClick={() => handleOpenProduct(prod.id)}
+                    >
+                      <div className="gov-drill-media">
+                        {prod.image
+                          ? <img src={prod.image} alt="" loading="lazy" decoding="async" />
+                          : <span>{prod.name.slice(0, 2)}</span>}
+                      </div>
+                      {prod.brand && <em>{prod.brand}</em>}
+                      <strong>{prod.name}</strong>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        {editableSelection.length > 0 && !drill && (
           <div className="gov-genderbar">
             <span>{editableSelection.length} selected</span>
             <button type="button" className={`gov-moveto${pickMode ? ' is-armed' : ''}`}
