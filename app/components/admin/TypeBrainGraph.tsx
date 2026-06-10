@@ -5,13 +5,15 @@
 // Interactions:
 //   drag empty canvas   → marquee multi-select
 //   click / shift-click → select / extend selection
-//   drag node(s)        → move; release over another node stages a re-parent
-//   double-click        → inline rename (staged)
-//   ⌫ / Delete          → stage delete of selection
-//   product satellites  → drag onto a node to (re)assign those products
+//   drag node(s)        → move; release over another node re-parents (live)
+//   double-click        → inline rename
+//   ⌫ / Delete          → delete selection
+//   product satellites  → always-on thumbnails orbiting their type when the
+//                         products toggle is on; click opens the product,
+//                         drag onto another node re-types it
 //
-// All mutations are STAGED via callbacks — nothing writes until the page's
-// Apply bar commits.
+// Mutations fire through callbacks immediately — the page owns the undo
+// stack and session log.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { useForceSim, type SimLink, type SimNodeInput } from '~/hooks/useForceSim';
@@ -30,21 +32,22 @@ export interface BrainProduct { id: string; name: string; image: string | null; 
 
 interface Props {
   nodes: BrainNode[];        // excludes the synthetic root
+  /** Per-node orbiting thumbnails (already capped) + the true total. */
+  satellites: Map<string, { items: BrainProduct[]; total: number }>;
   selection: Set<string>;
   showProducts: boolean;
-  fannedNodeId: string | null;
-  fannedProducts: BrainProduct[];
   onSelect: (ids: Set<string>) => void;
   onReparent: (nodeIds: string[], targetId: string) => void;
   onRename: (nodeId: string, name: string) => void;
   onDelete: (nodeIds: string[]) => void;
   onAddChild: (parentId: string) => void;
-  onFan: (nodeId: string | null) => void;
   onAssignProducts: (productIds: string[], nodeId: string) => void;
+  onOpenProduct: (productId: string) => void;
 }
 
 const ROOT_ID = '__root__';
-const FAN_MAX = 18;
+/** Below this much pointer travel a satellite gesture counts as a click. */
+const CLICK_SLOP = 5;
 
 export default function TypeBrainGraph(p: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
@@ -79,8 +82,6 @@ export default function TypeBrainGraph(p: Props) {
     return (id: string) => { const s = new Set<string>(); collect(id, s); return s; };
   }, [p.nodes]);
 
-  // ── Drag / marquee state (refs — no re-render per pointermove except
-  //    through the sim's own position updates) ──
   const gesture = useRef<
     | { kind: 'node'; ids: string[]; grabId: string; moved: boolean }
     | { kind: 'marquee'; x0: number; y0: number }
@@ -89,7 +90,7 @@ export default function TypeBrainGraph(p: Props) {
   const [marquee, setMarquee] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [editing, setEditing] = useState<string | null>(null);
-  const [prodDrag, setProdDrag] = useState<{ id: string; x: number; y: number } | null>(null);
+  const [prodDrag, setProdDrag] = useState<{ id: string; x: number; y: number; x0: number; y0: number } | null>(null);
 
   const toLocal = (ev: { clientX: number; clientY: number }) => {
     const r = wrapRef.current?.getBoundingClientRect();
@@ -150,9 +151,6 @@ export default function TypeBrainGraph(p: Props) {
       if (g.moved && dropTarget) {
         const movable = g.ids.filter(id => !byId.get(id)?.locked);
         if (movable.length) p.onReparent(movable, dropTarget);
-      } else if (!g.moved) {
-        // Plain click: fan products open/closed when the toggle is on.
-        if (p.showProducts) p.onFan(p.fannedNodeId === g.grabId ? null : g.grabId);
       }
       setDropTarget(null);
     } else if (marquee) {
@@ -173,7 +171,7 @@ export default function TypeBrainGraph(p: Props) {
     }
   };
 
-  // Delete / Backspace stages deletion of the selection (lanes excluded).
+  // Delete / Backspace removes the selection (lanes excluded).
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => {
       if (editing || !(ev.key === 'Delete' || ev.key === 'Backspace')) return;
@@ -186,28 +184,32 @@ export default function TypeBrainGraph(p: Props) {
     return () => window.removeEventListener('keydown', onKey);
   }, [p.selection, editing, byId, p]);
 
-  // Product satellite drag → assign to the node it's dropped on.
+  // Satellite gestures: a still release is a click (open product); a real
+  // drag re-types the product on whatever node it lands on.
   const onProdDown = (pid: string, ev: React.PointerEvent) => {
     ev.stopPropagation();
     (ev.target as Element).setPointerCapture?.(ev.pointerId);
     const { x, y } = toLocal(ev);
-    setProdDrag({ id: pid, x, y });
+    setProdDrag({ id: pid, x, y, x0: x, y0: y });
   };
   const onProdMove = (ev: React.PointerEvent) => {
     if (!prodDrag) return;
     const { x, y } = toLocal(ev);
     setProdDrag({ ...prodDrag, x, y });
-    setDropTarget(hitNode(x, y, new Set()));
+    if (Math.hypot(x - prodDrag.x0, y - prodDrag.y0) > CLICK_SLOP) {
+      setDropTarget(hitNode(x, y, new Set()));
+    }
   };
   const onProdUp = () => {
-    if (prodDrag && dropTarget) p.onAssignProducts([prodDrag.id], dropTarget);
+    if (!prodDrag) return;
+    const travelled = Math.hypot(prodDrag.x - prodDrag.x0, prodDrag.y - prodDrag.y0);
+    if (travelled <= CLICK_SLOP) p.onOpenProduct(prodDrag.id);
+    else if (dropTarget) p.onAssignProducts([prodDrag.id], dropTarget);
     setProdDrag(null);
     setDropTarget(null);
   };
 
   const rootPos = positions.get(ROOT_ID) ?? { x: size.w / 2, y: size.h / 2 };
-  const fannedPos = p.fannedNodeId ? positions.get(p.fannedNodeId) : null;
-  const fanned = p.fannedProducts.slice(0, FAN_MAX);
   const singleSel = p.selection.size === 1 ? byId.get([...p.selection][0]) : null;
   const singleSelPos = singleSel ? positions.get(singleSel.id) : null;
 
@@ -256,12 +258,6 @@ export default function TypeBrainGraph(p: Props) {
                 fill={n.color} fillOpacity={n.depth === 1 ? 0.22 : 0.16}
                 stroke={n.color} strokeWidth={selected || isDrop ? 2.5 : 1.4} />
               <text x={pos.x} y={pos.y + r + 14} fill={n.color}>{n.name}</text>
-              {p.showProducts && n.count > 0 && (
-                <g className="tb-badge">
-                  <circle cx={pos.x + r * 0.85} cy={pos.y - r * 0.85} r={10} />
-                  <text x={pos.x + r * 0.85} y={pos.y - r * 0.85 + 3.5}>{n.count}</text>
-                </g>
-              )}
             </g>
           );
         })}
@@ -275,31 +271,39 @@ export default function TypeBrainGraph(p: Props) {
 
       {/* HTML overlay: product satellites, rename input, add-child button */}
       <div className="tb-overlay" onPointerMove={onProdMove} onPointerUp={onProdUp}>
-        {p.showProducts && fannedPos && fanned.map((prod, i) => {
-          const angle = (i / Math.max(fanned.length, 1)) * Math.PI * 2 - Math.PI / 2;
-          const rad = 64 + (fanned.length > 10 ? 18 : 0);
-          const dragging = prodDrag?.id === prod.id;
-          const x = dragging ? prodDrag.x : fannedPos.x + Math.cos(angle) * rad;
-          const y = dragging ? prodDrag.y : fannedPos.y + Math.sin(angle) * rad;
-          return (
-            <button
-              key={prod.id}
-              className={`tb-sat${dragging ? ' is-dragging' : ''}`}
-              style={{ left: x, top: y }}
-              title={`${prod.name} — drag onto a type to reassign`}
-              onPointerDown={ev => onProdDown(prod.id, ev)}
-            >
-              {prod.image
-                ? <img src={prod.image} alt="" loading="lazy" decoding="async" />
-                : <span>{prod.name.slice(0, 2)}</span>}
-            </button>
-          );
+        {p.showProducts && p.nodes.map(n => {
+          const sat = p.satellites.get(n.id);
+          const pos = positions.get(n.id);
+          if (!sat || !pos || sat.items.length === 0) return null;
+          const r = nodeRadius(n);
+          const overflow = sat.total - sat.items.length;
+          return sat.items.map((prod, i) => {
+            // Even orbit starting at 12 o'clock; overflow chip takes the
+            // 6 o'clock spot below the label.
+            const angle = (i / sat.items.length) * Math.PI * 2 - Math.PI / 2;
+            const dragging = prodDrag?.id === prod.id;
+            const x = dragging ? prodDrag.x : pos.x + Math.cos(angle) * (r + 28);
+            const y = dragging ? prodDrag.y : pos.y + Math.sin(angle) * (r + 28);
+            return (
+              <button
+                key={prod.id}
+                className={`tb-sat${dragging ? ' is-dragging' : ''}`}
+                style={{ left: x, top: y }}
+                title={`${prod.name} — click to open, drag onto a type to reassign`}
+                onPointerDown={ev => onProdDown(prod.id, ev)}
+              >
+                {prod.image
+                  ? <img src={prod.image} alt="" loading="lazy" decoding="async" />
+                  : <span>{prod.name.slice(0, 2)}</span>}
+              </button>
+            );
+          }).concat(overflow > 0 ? [
+            <div key={`more-${n.id}`} className="tb-sat-more"
+              style={{ left: pos.x, top: pos.y + r + 30 }}>
+              +{overflow}
+            </div>,
+          ] : []);
         })}
-        {p.showProducts && fannedPos && p.fannedProducts.length > FAN_MAX && (
-          <div className="tb-sat-more" style={{ left: fannedPos.x, top: fannedPos.y + 96 }}>
-            +{p.fannedProducts.length - FAN_MAX} more
-          </div>
-        )}
 
         {editing && (() => {
           const n = byId.get(editing);

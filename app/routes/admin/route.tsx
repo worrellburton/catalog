@@ -76,8 +76,9 @@ const allSearchItems: SearchItem[] = [
   { label: 'Content', type: 'Page', to: '/admin/data' },
   { label: 'Catalogs', type: 'Page', to: '/admin/catalogs' },
   { label: 'Governance', type: 'Page', to: '/admin/governance' },
+  { label: 'Types', type: 'Page', to: '/admin/governance/types' },
   // Working name during build-out — keep resolving in admin search.
-  { label: 'Type Brain', type: 'Page', to: '/admin/governance' },
+  { label: 'Type Brain', type: 'Page', to: '/admin/governance/types' },
   { label: 'Brands', type: 'Page', to: '/admin/brands' },
   { label: 'Search', type: 'Page', to: '/admin/search' },
   { label: 'Advertisements', type: 'Page', to: '/admin/advertisements' },

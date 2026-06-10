@@ -1,15 +1,16 @@
-// Data layer for /admin/governance — the editable product-type tree
-// ("type brain") and its staged cascades into the products table.
+// Data layer for /admin/governance/types — the editable product-type tree
+// ("type brain") and its live cascades into the products table.
 //
 // Contract with the DB (migration 20260610010000):
 //   product_types(id, name, parent_id, sort, color, …) — parent_id null is
 //   the first ring under the implicit "catalog" root node.
 //
-// Products attach to tree leaves by NAME match: both sides are lowercased
-// and de-pluralized (dresses/Dress → dress), so the tree can use plural
-// display names while products.type keeps whatever casing it has. Renames
-// cascade the node's name into products.type verbatim for every matched
-// product; moving a node across gender lanes cascades products.gender.
+// Edits are INSTANT (founder's call: real-time governance), so every
+// gesture compiles to a list of low-level ops plus a precomputed INVERSE
+// list built from snapshots — executing the inverse is undo. Products
+// attach to tree leaves by name match (lowercased, de-pluralized), so the
+// tree can use plural display names while products.type keeps whatever
+// casing it has.
 
 import { supabase } from '~/utils/supabase';
 
@@ -24,18 +25,18 @@ export interface TypeNode {
 export interface GovernanceProduct {
   id: string;
   name: string;
+  brand: string | null;
   type: string | null;
   gender: string | null;
   image: string | null;
 }
 
-export type GovernanceChange =
-  | { kind: 'rename'; nodeId: string; from: string; to: string; productIds: string[] }
-  | { kind: 'move'; nodeId: string; toParentId: string | null;
-      /** Set when the move crosses gender lanes — cascades products.gender. */
-      genderTo?: string; productIds: string[] }
-  | { kind: 'delete'; nodeId: string; productIds: string[] }
-  | { kind: 'assign'; nodeId: string; typeName: string; genderTo?: string; productIds: string[] };
+/** Low-level mutations. A gesture is a list of these; its undo is another. */
+export type GovernanceOp =
+  | { op: 'node-update'; id: string; patch: { name?: string; parent_id?: string | null } }
+  | { op: 'node-insert'; rows: { id: string; name: string; parent_id: string | null; sort: number; color: string | null }[] }
+  | { op: 'node-delete'; id: string }
+  | { op: 'products-update'; groups: { ids: string[]; patch: { type?: string | null; gender?: string | null } }[] };
 
 /** Lower-case + de-pluralize so 'dresses' ≡ 'Dress', 'phone cases' ≡
  *  'Phone Case'. Both sides of every match run through this. */
@@ -62,20 +63,63 @@ export async function fetchGovernanceProducts(): Promise<GovernanceProduct[]> {
   if (!supabase) return [];
   const { data, error } = await supabase
     .from('products')
-    .select('id, name, type, gender, primary_image_url, image_url')
+    .select('id, name, brand, type, gender, primary_image_url, image_url')
     .eq('is_active', true)
     .limit(2000);
   if (error || !data) return [];
-  return (data as { id: string; name: string; type: string | null; gender: string | null;
-    primary_image_url: string | null; image_url: string | null }[])
+  return (data as { id: string; name: string; brand: string | null; type: string | null;
+    gender: string | null; primary_image_url: string | null; image_url: string | null }[])
     .map(r => ({
-      id: r.id, name: r.name, type: r.type, gender: r.gender,
+      id: r.id, name: r.name, brand: r.brand, type: r.type, gender: r.gender,
       image: r.primary_image_url || r.image_url,
     }));
 }
 
-/** Creates are live (no product impact, and the new node is immediately a
- *  drop target); everything destructive stages behind Apply. */
+/** Executes a gesture's ops in order. Node writes precede product
+ *  cascades within a gesture (the callers order them that way), so a
+ *  mid-flight failure can't leave products pointing at type names the
+ *  tree never adopted. Returns the first error message, if any. */
+export async function executeGovernanceOps(ops: GovernanceOp[]): Promise<string | null> {
+  if (!supabase) return 'No database connection';
+  const sb = supabase;
+  const touch = { updated_at: new Date().toISOString() };
+  for (const o of ops) {
+    if (o.op === 'node-update') {
+      const { error } = await sb.from('product_types').update({ ...o.patch, ...touch }).eq('id', o.id);
+      if (error) return error.message;
+    } else if (o.op === 'node-insert') {
+      const { error } = await sb.from('product_types').insert(o.rows);
+      if (error) return error.message;
+    } else if (o.op === 'node-delete') {
+      // Children cascade in the DB; matched products keep their type text
+      // and surface in the unassigned cluster.
+      const { error } = await sb.from('product_types').delete().eq('id', o.id);
+      if (error) return error.message;
+    } else {
+      for (const g of o.groups) {
+        if (!g.ids.length) continue;
+        const { error } = await sb.from('products').update(g.patch).in('id', g.ids);
+        if (error) return error.message;
+      }
+    }
+  }
+  return null;
+}
+
+/** Group products by current literal value so an undo restores each
+ *  product's EXACT prior type/gender (they vary in casing and history). */
+export function snapshotGroups(
+  products: GovernanceProduct[],
+  field: 'type' | 'gender',
+): { ids: string[]; patch: { type?: string | null; gender?: string | null } }[] {
+  const byValue = new Map<string | null, string[]>();
+  for (const p of products) {
+    const v = p[field];
+    byValue.set(v, [...(byValue.get(v) ?? []), p.id]);
+  }
+  return [...byValue.entries()].map(([v, ids]) => ({ ids, patch: { [field]: v } }));
+}
+
 export async function createTypeNode(name: string, parentId: string | null): Promise<TypeNode | null> {
   if (!supabase) return null;
   const { data, error } = await supabase
@@ -86,45 +130,4 @@ export async function createTypeNode(name: string, parentId: string | null): Pro
   if (error || !data) return null;
   const r = data as { id: string; name: string; parent_id: string | null; sort: number; color: string | null };
   return { id: r.id, name: r.name, parentId: r.parent_id, sort: r.sort, color: r.color };
-}
-
-/** Executes the staged change set in order. Tree writes first, then the
- *  product cascades, so a mid-flight failure leaves products untouched for
- *  the failed change onward. Returns the first error message, if any. */
-export async function applyGovernanceChanges(changes: GovernanceChange[]): Promise<string | null> {
-  if (!supabase) return 'No database connection';
-  const sb = supabase;
-  const touch = { updated_at: new Date().toISOString() };
-  for (const ch of changes) {
-    if (ch.kind === 'rename') {
-      const { error } = await sb.from('product_types')
-        .update({ name: ch.to, ...touch }).eq('id', ch.nodeId);
-      if (error) return error.message;
-      if (ch.productIds.length) {
-        const { error: pe } = await sb.from('products')
-          .update({ type: ch.to }).in('id', ch.productIds);
-        if (pe) return pe.message;
-      }
-    } else if (ch.kind === 'move') {
-      const { error } = await sb.from('product_types')
-        .update({ parent_id: ch.toParentId, ...touch }).eq('id', ch.nodeId);
-      if (error) return error.message;
-      if (ch.genderTo && ch.productIds.length) {
-        const { error: pe } = await sb.from('products')
-          .update({ gender: ch.genderTo }).in('id', ch.productIds);
-        if (pe) return pe.message;
-      }
-    } else if (ch.kind === 'delete') {
-      // Children cascade in the DB; matched products keep their type text
-      // and surface in the unassigned cluster.
-      const { error } = await sb.from('product_types').delete().eq('id', ch.nodeId);
-      if (error) return error.message;
-    } else {
-      const patch: Record<string, string> = { type: ch.typeName };
-      if (ch.genderTo) patch.gender = ch.genderTo;
-      const { error } = await sb.from('products').update(patch).in('id', ch.productIds);
-      if (error) return error.message;
-    }
-  }
-  return null;
 }
