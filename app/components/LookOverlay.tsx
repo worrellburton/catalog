@@ -33,6 +33,7 @@ import { usePageSections, isSectionEnabled, getSectionLimit } from '~/hooks/useP
 import SizeMatchBadge, { SizeMatchSummary } from './SizeMatchBadge';
 import { getLookSimilarityThreshold, DEFAULT_LOOK_SIMILARITY } from '~/services/dials';
 import SimilarDebugModal, { type SimilarDebugReport } from './SimilarDebugModal';
+import '~/styles/product-page.css';
 
 /**
  * Pads `arr` to exactly `count` items by cycling duplicates (with synthetic

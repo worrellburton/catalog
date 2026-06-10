@@ -13,6 +13,7 @@ import {
 } from '~/services/look-shares';
 import { getGeneration } from '~/services/user-generations';
 import type { UserGeneration } from '~/services/user-generations';
+import '~/styles/share-page.css';
 
 export default function SharePage() {
   const params = useParams<{ slug: string }>();

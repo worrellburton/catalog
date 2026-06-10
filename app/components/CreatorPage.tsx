@@ -14,6 +14,11 @@ import ParticleBackground from './ParticleBackground';
 import { getCreatorAppearance, getCreatorAppearanceById, type CatalogAppearance, DEFAULT_CATALOG_APPEARANCE } from '~/services/catalog-theme';
 import { getCreatorProductOrder, getCreatorHiddenProductIds } from '~/services/catalog-products';
 import { getCreatorCollections, type CreatorCollection } from '~/services/creator-collections';
+import '~/styles/my-looks.css';
+import '~/styles/creator-page.css';
+import '~/styles/product-page.css';
+import '~/styles/comments.css';
+import '~/styles/profile-page.css';
 // (Removed getShopperGender / subscribeToShopperGender import — the creator
 // catalog page no longer filters by shopper gender; see creatorLooks below.)
 

@@ -23,6 +23,8 @@ import AutoplayVideo from '~/components/AutoplayVideo';
 import { stableLookId } from '~/services/looks';
 import { lookTrailId } from '~/utils/trailIds';
 import { captureVideoFrame } from '~/services/video-loading';
+import '~/styles/my-looks.css';
+import '~/styles/creator-page.css';
 
 interface MyLooksProps {
   onClose: () => void;

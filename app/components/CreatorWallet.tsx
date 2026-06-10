@@ -9,6 +9,7 @@ import { type EngagementSummary, getEngagementSummary } from '~/services/creator
 import { supabase } from '~/utils/supabase';
 import DotsSignupModal from './DotsSignupModal';
 import WalletBackground from './WalletBackground';
+import '~/styles/my-looks.css';
 
 interface PayoutProfile {
   id: string;
