@@ -45,6 +45,8 @@ interface Props {
   viewMode: BrainViewMode;
   onSelect: (ids: Set<string>) => void;
   onReparent: (nodeIds: string[], targetId: string) => void;
+  /** Click a node's LABEL to rename it inline. */
+  onRename: (nodeId: string, name: string) => void;
   onDelete: (nodeIds: string[]) => void;
   onAddChild: (parentId: string) => void;
   onAssignProducts: (productIds: string[], nodeId: string) => void;
@@ -59,6 +61,8 @@ interface Props {
   /** Ring dials (admin sliders): guide-ring opacity 0..1, distance ×0.5..2. */
   ringOpacity: number;
   ringScale: number;
+  /** Increment to run the tidy radial layout (the Organize button). */
+  organizeSignal: number;
 }
 
 const ROOT_ID = '__root__';
@@ -126,7 +130,17 @@ export default function TypeBrainGraph(p: Props) {
   const simLinks = useMemo<SimLink[]>(() => p.nodes.map(n => ({
     source: n.parentId ?? ROOT_ID, target: n.id,
   })), [p.nodes]);
-  const { positions, dragTo, release, ringRadii } = useForceSim(simNodes, simLinks, size.w, size.h, p.ringScale);
+  const { positions, dragTo, release, ringRadii, organize } = useForceSim(simNodes, simLinks, size.w, size.h, p.ringScale);
+  // Organize button lives in the page header — it pokes this counter.
+  const organizeRan = useRef(0);
+  useEffect(() => {
+    if (p.organizeSignal > 0 && p.organizeSignal !== organizeRan.current) {
+      organizeRan.current = p.organizeSignal;
+      organize();
+    }
+    // organize is re-created per render but only reads live refs.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [p.organizeSignal]);
 
   const byId = useMemo(() => new Map(p.nodes.map(n => [n.id, n])), [p.nodes]);
   const descendants = useMemo(() => {
@@ -151,6 +165,8 @@ export default function TypeBrainGraph(p: Props) {
   const [marquee, setMarquee] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [prodDrag, setProdDrag] = useState<{ id: string; x: number; y: number; x0: number; y0: number } | null>(null);
+  // Inline rename, opened by clicking a node's label.
+  const [editing, setEditing] = useState<string | null>(null);
   // Hovered node — surfaces the drill affordance. Small leave-delay so the
   // pointer can travel from the circle to the drill button without flicker.
   const [hovered, setHovered] = useState<string | null>(null);
@@ -369,7 +385,14 @@ export default function TypeBrainGraph(p: Props) {
                   />
                 );
               })()}
-              {!productsOnly && <text x={pos.x} y={pos.y + r + 14} fill={n.color}>{n.name}</text>}
+              {!productsOnly && (
+                <text
+                  className="tb-label"
+                  x={pos.x} y={pos.y + r + 14} fill={n.color}
+                  onPointerDown={ev => ev.stopPropagation()}
+                  onClick={ev => { ev.stopPropagation(); if (!n.locked) setEditing(n.id); }}
+                >{n.name}</text>
+              )}
             </g>
           );
         })}
@@ -442,6 +465,31 @@ export default function TypeBrainGraph(p: Props) {
                 <path d="M21 21l-4.3-4.3M8 11h6M11 8v6" />
               </svg>
             </button>
+          );
+        })()}
+
+        {editing && (() => {
+          const n = byId.get(editing);
+          const pos = positions.get(editing);
+          if (!n || !pos) return null;
+          return (
+            <input
+              key={editing}
+              className="tb-rename"
+              style={{ left: pos.x, top: pos.y + nodeRadius(n) + 14 }}
+              defaultValue={n.name}
+              autoFocus
+              onFocus={ev => ev.currentTarget.select()}
+              onPointerDown={ev => ev.stopPropagation()}
+              onKeyDown={ev => {
+                if (ev.key === 'Enter') {
+                  const v = ev.currentTarget.value.trim();
+                  if (v && v !== n.name) p.onRename(n.id, v);
+                  setEditing(null);
+                } else if (ev.key === 'Escape') setEditing(null);
+              }}
+              onBlur={() => setEditing(null)}
+            />
           );
         })()}
 

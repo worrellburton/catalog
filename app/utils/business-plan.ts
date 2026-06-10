@@ -9,14 +9,16 @@
 //   - Revenue is told as a three-phase roadmap: affiliate first (what the
 //     projections are built on), then advertising, then direct brand
 //     partnerships. Later phases are explicitly NOT in the numbers.
-//   - Monochrome, black-and-white palette only — the Catalog brand.
+//   - Editorial magazine design: warm paper, serif display type, a
+//     single catalog-red accent, page folios. Cover collage is full color.
 //   - Cover: the live product feed as a dimmed collage, the wordmark
 //     centered with no other text, "The AI for shopping" at the bottom.
 //   - Page order: cover · magazine sheet (centered exec summary, market,
-//     customer) · revenue phases + key assumptions · go-to-market flywheel
-//     (creators + AI-driven content) · LTV breakdown (assumption-flagged,
-//     with creator-cohort LTV) · appendix (base-plan graph + CAC and
-//     conversion sensitivity — the two numbers every decision is held to).
+//     customer) · revenue phases + key assumptions · go-to-market ("this is
+//     just the beginning" + steps, AI content as the strategic marketing
+//     experiment at the bottom) · an "Appendix" divider page · LTV breakdown
+//     (assumption-flagged, with creator-cohort LTV) · CAC and conversion
+//     sensitivity — the two numbers every decision is held to.
 
 import { CATALOG_LOGO_PATH, CATALOG_LOGO_VIEWBOX } from '~/constants/brand-logo';
 import { buildModel } from '~/services/model';
@@ -84,7 +86,14 @@ const usd = (n: number, compact = false): string => {
 const usd2 = (n: number): string => `$${n.toFixed(2)}`;
 const num = (n: number): string => Math.round(n).toLocaleString('en-US');
 const pct = (frac: number, dp = 0): string => `${(frac * 100).toFixed(dp)}%`;
+/** Percent with up to two decimals, trailing zeros trimmed (0.2%, 0.15%). */
+const pctTrim = (frac: number): string => `${(frac * 100).toFixed(2).replace(/\.?0+$/, '')}%`;
 const esc = (s: string): string => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+// Pure ink palette (founder's call: no color accents in the document).
+// Kept as TS consts so the SVG charts and the stylesheet stay in lockstep.
+const ACCENT = '#141210';
+const ACCENT_SOFT = 'rgba(20, 18, 16, 0.06)';
 
 // ── SVG charts (monochrome, print-safe) ─────────────────────────────
 
@@ -97,10 +106,10 @@ interface ChartSeries {
 }
 
 /** Multi-line month chart. Y axis is dollars/mo, X is months 1..N. */
-function lineChart(series: ChartSeries[], opts: { width?: number; height?: number; area?: boolean } = {}): string {
+function lineChart(series: ChartSeries[], opts: { width?: number; height?: number; area?: boolean; axisLabel?: string } = {}): string {
   const W = opts.width ?? 720;
   const H = opts.height ?? 200;
-  const pad = { l: 46, r: 150, t: 10, b: 20 };
+  const pad = { l: 46, r: 150, t: opts.axisLabel ? 26 : 10, b: 20 };
   const n = series[0]?.values.length ?? 0;
   if (!n) return '';
   const yMax = niceCeiling(Math.max(...series.flatMap(s => s.values), 1));
@@ -130,18 +139,21 @@ function lineChart(series: ChartSeries[], opts: { width?: number; height?: numbe
 
   const lines = series.map((s, i) => {
     const pts = s.values.map((v, j) => `${x(j).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
-    const stroke = s.variant ? '#9a9a9a' : '#0a0a0a';
+    const stroke = s.variant ? '#9a9a9a' : ACCENT;
     const dash = s.variant ? ' stroke-dasharray="4 3"' : '';
     const areaPath = opts.area && !s.variant
-      ? `<polygon points="${pts} ${x(n - 1).toFixed(1)},${y(0).toFixed(1)} ${x(0).toFixed(1)},${y(0).toFixed(1)}" fill="rgba(10,10,10,0.06)"/>`
+      ? `<polygon points="${pts} ${x(n - 1).toFixed(1)},${y(0).toFixed(1)} ${x(0).toFixed(1)},${y(0).toFixed(1)}" fill="${ACCENT_SOFT}"/>`
       : '';
     const ly = (labelY.get(i) ?? y(s.values[n - 1])) + 3;
     return `${areaPath}
-      <polyline points="${pts}" fill="none" stroke="${stroke}" stroke-width="${s.variant ? 1.4 : 2}"${dash}/>
+      <polyline points="${pts}" fill="none" stroke="${stroke}" stroke-width="${s.variant ? 1.4 : 2.2}"${dash}/>
       <text x="${W - pad.r + 8}" y="${ly.toFixed(1)}" class="chart-label${s.variant ? ' is-variant' : ''}">${esc(s.label)}</text>`;
   }).join('');
 
-  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img">${grid.join('')}${lines}</svg>`;
+  const axis = opts.axisLabel
+    ? `<text x="${pad.l}" y="11" class="chart-axis">${esc(opts.axisLabel.toUpperCase())}</text>`
+    : '';
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img">${axis}${grid.join('')}${lines}</svg>`;
 }
 
 /** Small bar chart for illustrative creator-cohort LTVs, with a dashed
@@ -157,7 +169,7 @@ function cohortBarChart(bars: Array<[string, number]>, reference: number): strin
   const rects = bars.map(([label, v], i) => {
     const bx = pad.l + i * bw + bw * 0.18;
     const by = y(v);
-    return `<rect x="${bx.toFixed(1)}" y="${by.toFixed(1)}" width="${(bw * 0.64).toFixed(1)}" height="${(H - pad.b - by).toFixed(1)}" fill="#0a0a0a"/>
+    return `<rect x="${bx.toFixed(1)}" y="${by.toFixed(1)}" width="${(bw * 0.64).toFixed(1)}" height="${(H - pad.b - by).toFixed(1)}" fill="#1c1916"/>
       <text x="${(pad.l + i * bw + bw / 2).toFixed(1)}" y="${(by - 5).toFixed(1)}" text-anchor="middle" class="chart-label">${esc(usd(v))}</text>
       <text x="${(pad.l + i * bw + bw / 2).toFixed(1)}" y="${H - 8}" text-anchor="middle" class="chart-tick">${esc(label)}</text>`;
   }).join('');
@@ -166,7 +178,7 @@ function cohortBarChart(bars: Array<[string, number]>, reference: number): strin
   return `<svg class="chart chart-bars" viewBox="0 0 ${W} ${H}" role="img">
     ${rects}
     <line x1="${pad.l}" y1="${ry}" x2="${W - pad.r}" y2="${ry}" stroke="#9a9a9a" stroke-width="1.2" stroke-dasharray="4 3"/>
-    <text x="${W - pad.r}" y="${Number(ry) - 4}" text-anchor="end" class="chart-label is-variant">blended LTV assumption</text>
+    <text x="${pad.l + 2}" y="${Number(ry) - 5}" text-anchor="start" class="chart-label is-variant">blended LTV assumption</text>
   </svg>`;
 }
 
@@ -186,35 +198,56 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
   const contribPerUser = arpu * c.grossMargin;
   const lifetimeMonths = a.monthlyActiveChurn > 0 ? Math.min(60, 1 / a.monthlyActiveChurn) : 60;
 
-  // ── Appendix series: base plan + CAC / conversion nudged ±20% ─────────
+  // ── Appendix series: base plan + CAC / conversion moved one real step ──
+  // Concrete dollar/point values on the lines (founder's call), not ±%:
+  // CPA one dollar each way, conversion one tenth of a point each way.
   const { rev: mRev, acq: mAcq } = d.model;
   const revSeries = (rv: Assumptions, aq: GtmAssumptions) => buildModel(rv, aq, true).revenue.map(m => m.revenue);
   const arrOf = (vals: number[]) => usd((vals[vals.length - 1] ?? 0) * 12, true);
+  const cpaLoVal = Math.max(0.5, mAcq.cpa - 1);
+  const cpaHiVal = mAcq.cpa + 1;
+  const convLoVal = Math.max(0.0005, mRev.productConversion - 0.001);
+  const convHiVal = mRev.productConversion + 0.001;
   const base = revSeries(mRev, mAcq);
-  const cpaLo = revSeries(mRev, { ...mAcq, cpa: mAcq.cpa * 0.8 });
-  const cpaHi = revSeries(mRev, { ...mAcq, cpa: mAcq.cpa * 1.2 });
-  const convLo = revSeries({ ...mRev, productConversion: mRev.productConversion * 0.8 }, mAcq);
-  const convHi = revSeries({ ...mRev, productConversion: mRev.productConversion * 1.2 }, mAcq);
+  const cpaLo = revSeries(mRev, { ...mAcq, cpa: cpaLoVal });
+  const cpaHi = revSeries(mRev, { ...mAcq, cpa: cpaHiVal });
+  const convLo = revSeries({ ...mRev, productConversion: convLoVal }, mAcq);
+  const convHi = revSeries({ ...mRev, productConversion: convHiVal }, mAcq);
 
-  const baseChart = lineChart(
-    [{ values: base, label: `Base · ${arrOf(base)} ARR` }],
-    { area: true },
-  );
   const cacChart = lineChart([
-    { values: cpaLo, label: `CPA −20% · ${arrOf(cpaLo)} ARR`, variant: true },
-    { values: base, label: `Base ${usd(mAcq.cpa)} · ${arrOf(base)} ARR` },
-    { values: cpaHi, label: `CPA +20% · ${arrOf(cpaHi)} ARR`, variant: true },
-  ], { height: 180 });
+    { values: cpaLo, label: `CPA ${usd(cpaLoVal)} · ${arrOf(cpaLo)} ARR`, variant: true },
+    { values: base, label: `CPA ${usd(mAcq.cpa)} (base) · ${arrOf(base)} ARR` },
+    { values: cpaHi, label: `CPA ${usd(cpaHiVal)} · ${arrOf(cpaHi)} ARR`, variant: true },
+  ], { height: 148, axisLabel: 'Monthly commission revenue' });
   const convChart = lineChart([
-    { values: convHi, label: `Conv +20% · ${arrOf(convHi)} ARR`, variant: true },
-    { values: base, label: `Base ${pct(rev.productConversion, 2)} · ${arrOf(base)} ARR` },
-    { values: convLo, label: `Conv −20% · ${arrOf(convLo)} ARR`, variant: true },
-  ], { height: 180 });
+    { values: convHi, label: `Conv ${pctTrim(convHiVal)} · ${arrOf(convHi)} ARR`, variant: true },
+    { values: base, label: `Conv ${pctTrim(mRev.productConversion)} (base) · ${arrOf(base)} ARR` },
+    { values: convLo, label: `Conv ${pctTrim(convLoVal)} · ${arrOf(convLo)} ARR`, variant: true },
+  ], { height: 148, axisLabel: 'Monthly commission revenue' });
 
-  // Cover collage: cycle whatever feed posters loaded into a 4×5 wall.
+  // Cover collage: pack the page with as many product tiles as the feed
+  // can fill — grid density scales with how many images came back, and
+  // the wall cycles if there are fewer images than cells so the page is
+  // always fully covered.
   const feed = d.feedImages ?? [];
+  const [coverCols, coverRows] = feed.length >= 96 ? [8, 12]
+    : feed.length >= 60 ? [6, 10]
+    : feed.length >= 40 ? [5, 8]
+    : feed.length >= 24 ? [4, 6]
+    : [4, 5];
   const coverTiles = feed.length
-    ? Array.from({ length: 20 }, (_, i) => `<img src="${esc(feed[i % feed.length])}" alt="" loading="eager" />`).join('')
+    ? Array.from({ length: coverCols * coverRows }, (_, i) => `<img src="${esc(feed[i % feed.length])}" alt="" loading="eager" />`).join('')
+    : '';
+  const coverGridStyle = `grid-template-columns: repeat(${coverCols}, minmax(0, 1fr)); grid-template-rows: repeat(${coverRows}, minmax(0, 1fr));`;
+
+  // Editorial photo strip at the foot of the magazine sheet — a different
+  // slice of the feed than the cover's top rows, so the pages don't repeat.
+  const stripImages = feed.length >= 28 ? feed.slice(20, 28) : feed.slice(0, 8);
+  const photoStrip = stripImages.length
+    ? `<div class="photo-strip">
+        <div class="photo-strip-row">${stripImages.map(u => `<img src="${esc(u)}" alt="" loading="eager" />`).join('')}</div>
+        <p class="photo-strip-caption">From the live product feed.</p>
+      </div>`
     : '';
 
   // Assumption rows kept to the load-bearing ten so the table fits the
@@ -259,15 +292,17 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
 
   // GTM flywheel — condensed from the /admin/gtm flywheel deck.
   const gtmSteps: Array<[string, string, string]> = [
-    ['Step 1', 'Hire.', 'Three BD and marketing consultants, month-to-month for three months, specialised in creator relations. Start small and scale what converts — marketing is a system run by people, and it needs to start being built.'],
-    ['Step 2', 'Deploy budget effectively.', 'A disciplined, mission-driven team deploying the budget as effectively as possible: every contact logged in the CRM, weekly targets held to, laser-focused on driving CPA down.'],
-    ['Step 3', 'Learn and repeat.', 'Continuous improvement every cycle — lean into what is working, cut what is not, tighten strategy, campaigns, and creator management. Drive CPA as low as it will go.'],
+    ['1', 'Hire.', 'Three BD and marketing consultants, month-to-month for three months, specialised in creator relations. Start small and scale what converts. Marketing is a system run by people, and it needs to start being built.'],
+    ['2', 'Deploy budget effectively.', 'A disciplined, mission-driven team deploying the budget as effectively as possible: every contact logged in the CRM, weekly targets held to, laser-focused on driving CPA down.'],
+    ['3', 'Learn and repeat.', 'Continuous improvement every cycle: lean into what is working, cut what is not, tighten strategy, campaigns, and creator management. Drive CPA as low as it will go.'],
   ];
-  const gtmCard = ([stage, title, body]: [string, string, string]) => `
-    <div class="phase">
-      <div class="phase-stage">${esc(stage)}</div>
-      <h4>${esc(title)}</h4>
-      <p>${esc(body)}</p>
+  const gtmStepRow = ([no, title, body]: [string, string, string]) => `
+    <div class="step">
+      <span class="step-no">${esc(no)}</span>
+      <div>
+        <h4>${esc(title)}</h4>
+        <p>${esc(body)}</p>
+      </div>
     </div>`;
 
   // Creator-cohort LTV chart: illustrative cohorts around the blended
@@ -284,146 +319,195 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Catalog Business Plan</title>
 <style>
-  :root { --ink:#0a0a0a; --muted:#6b6b6b; --line:#e4e4e4; --paper:#ffffff; }
+  :root { --ink:#141210; --muted:#7a746c; --line:#e7e2da; --paper:#fffdf8; --accent:${ACCENT}; }
   * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; background: #f4f4f4; color: var(--ink);
+  html, body { margin: 0; padding: 0; background: #efece6; color: var(--ink);
     font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif;
-    line-height: 1.55; -webkit-font-smoothing: antialiased; }
-  .page { max-width: 860px; margin: 0 auto; padding: 48px 64px 56px; background: var(--paper); }
+    font-size: 13px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
+  .serif, h2, h3, .display, .pullquote, .step-no, .stat-value, .feature-item h4 {
+    font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, 'Times New Roman', serif; }
+  .page { position: relative; max-width: 860px; margin: 18px auto; padding: 44px 64px 56px;
+    background: var(--paper); box-shadow: 0 2px 24px rgba(20,18,16,0.07); }
   .toolbar { position: sticky; top: 0; z-index: 2; display: flex; justify-content: flex-end; gap: 8px;
-    padding: 12px 16px; background: rgba(244,244,244,0.9); backdrop-filter: blur(8px); }
+    padding: 12px 16px; background: rgba(239,236,230,0.92); backdrop-filter: blur(8px); }
   .toolbar button { font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
     border: 1px solid var(--line); background: #fff; color: var(--ink); border-radius: 8px; padding: 8px 14px; }
   .toolbar button.primary { background: var(--ink); color: #fff; border-color: var(--ink); }
 
-  /* Print: cover + one sheet per .page. Type tightens a step so each sheet
-     fits one page; sections never split across pages. */
+  /* Print: cover + one sheet per .page; nothing splits across pages. */
   @media print {
     .toolbar { display: none; }
-    body { background: #fff; font-size: 11px; line-height: 1.45;
+    body { background: #fff; font-size: 9px; line-height: 1.5;
       -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .page { padding: 0; max-width: none; page-break-before: always; }
+    .page { padding: 26px 34px; max-width: none; margin: 0; box-shadow: none;
+      page-break-before: always; background: var(--paper); }
     .cover-page { min-height: 100vh; page-break-after: always; }
-    section { page-break-inside: avoid; margin-bottom: 16px; }
+    section { page-break-inside: avoid; break-inside: avoid; margin-bottom: 18px; }
+    .statband, .phases, .lens-grid, .lens, .feature-band, .chart, .flow, .steps,
+    .features, .photo-strip, table.ltv-chain { page-break-inside: avoid; break-inside: avoid; }
+    .photo-strip { margin-top: 20px; }
+    .solutions { page-break-inside: avoid; break-inside: avoid; margin-top: 20px; }
+    .solution p { font-size: 9.5px; }
+    .folio { margin-bottom: 18px; }
+    .divider { min-height: 82vh; }
     .kicker { margin-bottom: 3px; }
-    h2 { font-size: 17px; margin-bottom: 6px; }
-    .display { font-size: 24px; }
+    h2 { font-size: 15px; margin-bottom: 6px; }
+    .display { font-size: 21px; }
     p { margin-bottom: 7px; }
-    table.assumptions { font-size: 10.5px; }
-    table.assumptions td { padding: 4px 8px; }
+    table.assumptions { font-size: 9px; }
+    table.assumptions td { padding: 5px 8px; }
     table.ltv-chain td { padding: 4px 8px; }
-    .phases { gap: 8px; }
-    .phase { padding: 9px 11px; }
-    .phase h4 { font-size: 12px; }
-    .phase p { font-size: 10.5px; line-height: 1.4; }
-    .statband { padding: 10px 0; }
+    .phase { padding: 11px 13px; }
+    .phase h4 { font-size: 11px; }
+    .phase p { font-size: 9px; line-height: 1.45; }
+    .step { padding: 10px 0; }
+    .step p { font-size: 9.5px; }
+    .statband { padding: 12px 0; }
     .footer { margin-top: 14px; padding-top: 8px; }
   }
 
-  /* ── Cover: the product feed, dimmed, behind the centered wordmark. ── */
+  /* ── Cover: the product feed, full color, behind the wordmark. ── */
   .cover-page { position: relative; overflow: hidden; background: #000; color: #fff; min-height: 100vh;
     display: flex; align-items: center; justify-content: center;
     -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  .cover-feed { position: absolute; inset: 0; display: grid;
-    grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(5, 1fr); }
-  .cover-feed img { width: 100%; height: 100%; object-fit: cover; display: block;
-    filter: grayscale(1); opacity: 0.9; }
+  /* Grid columns/rows arrive inline — density scales with image count. */
+  .cover-feed { position: absolute; inset: 0; display: grid; }
+  .cover-feed img { width: 100%; height: 100%; min-width: 0; min-height: 0; object-fit: cover; display: block; }
   .cover-scrim { position: absolute; inset: 0;
-    background: linear-gradient(rgba(0,0,0,0.62), rgba(0,0,0,0.82)); }
-  .cover-logo { position: relative; z-index: 1; width: clamp(240px, 38vw, 400px); height: auto; display: block; }
+    background: linear-gradient(rgba(0,0,0,0.38), rgba(0,0,0,0.60)); }
+  .cover-logo { position: relative; z-index: 1; width: clamp(240px, 38vw, 400px); height: auto; display: block;
+    filter: drop-shadow(0 4px 28px rgba(0,0,0,0.55)); }
   .cover-tagline { position: absolute; z-index: 1; bottom: 52px; left: 0; right: 0; margin-inline: auto;
-    width: fit-content; font-size: 17px; font-weight: 500; letter-spacing: 0.01em; color: rgba(255,255,255,0.92); }
+    width: fit-content; font-size: 16px; font-weight: 500; letter-spacing: 0.22em; text-transform: uppercase;
+    color: rgba(255,255,255,0.95); text-shadow: 0 2px 14px rgba(0,0,0,0.6); }
 
-  section { margin: 0 0 26px; }
-  .kicker { font-size: 11px; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase;
-    color: var(--ink); margin: 0 0 6px; }
-  .kicker::after { content: ''; display: block; width: 32px; border-top: 2px solid var(--ink); margin-top: 5px; }
-  h2 { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; margin: 0 0 10px; }
-  h3 { font-size: 14px; font-weight: 700; margin: 14px 0 4px; }
-  p { margin: 0 0 10px; color: #303030; }
-  .display { font-family: Georgia, 'Times New Roman', serif; font-weight: 700; font-size: 32px;
-    line-height: 1.15; letter-spacing: -0.01em; }
+  /* ── Page furniture: running head + page number, like a magazine folio. ── */
+  .folio { display: flex; align-items: baseline; gap: 14px; font-size: 9.5px; font-weight: 700;
+    letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted);
+    border-bottom: 1.5px solid var(--ink); padding-bottom: 9px; margin-bottom: 30px; }
+  .folio-brand { color: var(--accent); }
+  .folio-no { margin-left: auto; color: var(--ink); font-variant-numeric: tabular-nums; }
+
+  section { margin: 0 0 30px; }
+  .kicker { font-size: 9.5px; font-weight: 800; letter-spacing: 0.2em; text-transform: uppercase;
+    color: var(--accent); margin: 0 0 7px; }
+  .kicker::after { content: ''; display: block; width: 34px; border-top: 2px solid var(--accent); margin-top: 6px; }
+  h2 { font-size: 20px; font-weight: 700; letter-spacing: -0.012em; line-height: 1.18; margin: 0 0 8px; }
+  h3 { font-size: 13px; font-weight: 700; margin: 12px 0 4px; }
+  p { margin: 0 0 10px; color: #3a352f; line-height: 1.62; }
+  .standfirst { font-size: 14px; line-height: 1.55; color: #57514a; max-width: 62ch; }
+  .display { font-weight: 700; font-size: 28px; line-height: 1.14; letter-spacing: -0.015em; }
 
   /* ── Magazine sheet ── */
-  .exec { text-align: center; }
+  .exec { text-align: center; margin-bottom: 40px; }
+  .mag-row { margin-bottom: 14px; }
   .exec .kicker::after { margin-inline: auto; }
-  .exec p { max-width: 56ch; margin-inline: auto; }
-  .statband { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
-    border-top: 1px solid var(--ink); border-bottom: 1px solid var(--ink);
-    padding: 14px 0; margin: 18px 0 6px; }
-  .stat-value { font-size: 22px; font-weight: 800; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
-  .stat-label { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-top: 2px; }
-  .mag-row { display: grid; grid-template-columns: 5fr 7fr; gap: 28px; align-items: start; margin-top: 8px; }
+  .exec p { max-width: 58ch; margin-inline: auto; }
+  .statband { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px;
+    border-top: 3px solid var(--ink); border-bottom: 1px solid var(--ink);
+    padding: 16px 0 14px; margin: 20px 0 6px; }
+  .stat-value { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+  .stat-label { font-size: 9px; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase; color: var(--muted); margin-top: 3px; }
+  .mag-row { display: grid; grid-template-columns: 5fr 7fr; gap: 30px; align-items: start; margin-top: 8px; }
   .mag-row.flip { grid-template-columns: 7fr 5fr; }
-  .pullquote { font-family: Georgia, 'Times New Roman', serif; font-size: 24px; line-height: 1.3;
-    font-weight: 700; border-left: 3px solid var(--ink); padding-left: 16px; margin: 4px 0; }
-  .dropcap::first-letter { font-family: Georgia, 'Times New Roman', serif; font-size: 46px; font-weight: 700;
-    float: left; line-height: 0.85; padding: 4px 8px 0 0; }
-  .sidestats { display: grid; gap: 12px; border-left: 1px solid var(--line); padding-left: 16px; }
-  .sidestats .stat-value { font-size: 20px; }
+  .pullquote { font-size: 21px; line-height: 1.25; font-weight: 700; letter-spacing: -0.01em;
+    border-left: 3px solid var(--ink); padding-left: 18px; margin: 4px 0; }
+  .mag-row .dropcap { text-align: justify; hyphens: auto; -webkit-hyphens: auto; }
+  .mag-row > :last-child:not(.features) { border-left: 1px solid var(--line); padding-left: 28px; }
+  .dropcap::first-letter { font-family: 'Iowan Old Style', Palatino, Georgia, serif; font-size: 36px; font-weight: 700;
+    float: left; line-height: 0.82; padding: 4px 8px 0 0; color: var(--ink); }
+  .features { display: grid; gap: 14px; border-left: 1.5px solid var(--ink); padding-left: 18px; }
+  .solutions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 26px; margin-top: 30px; }
+  .solution { border-top: 2px solid var(--ink); padding-top: 9px; }
+  .solution span { display: block; font-size: 9px; font-weight: 800; letter-spacing: 0.16em;
+    text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+  .solution p { margin: 0; font-size: 11px; line-height: 1.55; color: #3a352f; }
+  .photo-strip { margin-top: 30px; border-top: 2px solid var(--ink); padding-top: 12px; }
+  .photo-strip-row { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 7px; }
+  .photo-strip-row img { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; display: block; min-width: 0; }
+  .photo-strip-caption { margin: 8px 0 0; font-size: 9px; font-weight: 700; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--muted); }
+  .feature-item h4 { margin: 0 0 3px; font-size: 13.5px; font-weight: 700; letter-spacing: -0.01em; }
+  .feature-item p { margin: 0; font-size: 10.5px; line-height: 1.55; color: var(--muted); }
 
-  table.assumptions { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 4px; }
-  table.assumptions th { text-align: left; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
+  table.assumptions { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 4px; }
+  table.assumptions th { text-align: left; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase;
     color: var(--muted); padding: 5px 10px; border-bottom: 2px solid var(--ink); }
-  table.assumptions td { padding: 6px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  table.assumptions td { padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
   .a-label { font-weight: 600; color: var(--ink); width: 36%; }
   .a-value { font-weight: 700; width: 22%; font-variant-numeric: tabular-nums; }
   .a-why { color: var(--muted); }
 
-  /* Phase / step cards — shared by the revenue roadmap and the GTM steps. */
-  .phases { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 6px 0 10px; }
-  .phase { border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
-  .phase.now { border-color: var(--ink); }
-  .phase-stage { font-size: 10px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink); }
-  .phase-stage .tag { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px;
-    background: var(--ink); color: #fff; font-size: 9px; letter-spacing: 0.06em; vertical-align: 1px; }
-  .phase h4 { margin: 5px 0 5px; font-size: 14px; letter-spacing: -0.01em; }
-  .phase p { margin: 0; font-size: 12px; color: var(--muted); line-height: 1.5; }
-  .phase-note { font-size: 11.5px; color: var(--muted); font-style: italic; }
+  /* Revenue roadmap cards. */
+  .phases { display: grid; grid-template-columns: repeat(3, 1fr); gap: 26px; margin: 12px 0 14px; }
+  .phase { border-top: 2px solid var(--ink); padding: 11px 0 0; }
+  .phase.now { border-top: 5px solid var(--ink); }
+  .phase-stage { font-size: 9px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
+  .phase-stage .tag { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px;
+    background: var(--ink); color: #fff; font-size: 8.5px; letter-spacing: 0.06em; vertical-align: 1px; }
+  .phase h4 { margin: 5px 0 4px; font-size: 12.5px; letter-spacing: -0.01em; }
+  .phase p { margin: 0; font-size: 10.5px; color: var(--muted); line-height: 1.55; }
+  .phase-note { font-size: 10px; color: var(--muted); font-style: italic; }
 
-  /* GTM: the AI-driven content banner. */
-  .ai-banner { background: var(--ink); color: #fff; border-radius: 12px; padding: 16px 18px; margin: 12px 0;
+  /* GTM: AI banner + vertical numbered steps. */
+  .ai-banner { background: var(--ink); color: #fff; border-radius: 14px; padding: 17px 20px; margin: 14px 0;
     -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .ai-banner .kicker { color: #fff; }
   .ai-banner .kicker::after { border-color: #fff; }
-  .ai-banner p { color: rgba(255,255,255,0.88); margin: 0; font-size: 13px; }
+  .ai-banner p { color: rgba(255,255,255,0.9); margin: 0; font-size: 11px; }
+  .steps { margin-top: 10px; }
+  .step { display: grid; grid-template-columns: 70px 1fr; gap: 20px; align-items: start; padding: 16px 0; }
+  .step + .step { border-top: 1px solid var(--line); }
+  .step-no { font-size: 38px; line-height: 0.85; font-weight: 700; color: var(--ink); }
+  .step h4 { margin: 0 0 4px; font-size: 13px; letter-spacing: -0.01em; }
+  .step p { margin: 0; font-size: 11px; color: #45403a; max-width: 64ch; }
 
   /* LTV chain. */
-  table.ltv-chain { width: 100%; border-collapse: collapse; font-size: 12.5px; margin: 6px 0 10px; }
-  table.ltv-chain td { padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  table.ltv-chain { width: 100%; border-collapse: collapse; font-size: 11px; margin: 6px 0 10px; }
+  table.ltv-chain td { padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
   .l-op { width: 22px; font-weight: 800; color: var(--muted); }
   .l-label { font-weight: 600; }
   .l-value { font-weight: 700; width: 18%; font-variant-numeric: tabular-nums; }
   .l-run { color: var(--muted); width: 36%; text-align: right; font-variant-numeric: tabular-nums; }
   table.ltv-chain tr:last-child td { border-bottom: 2px solid var(--ink); }
-  table.ltv-chain tr:last-child .l-run { color: var(--ink); font-weight: 800; }
-  .footnote { font-size: 11px; color: var(--muted); font-style: italic; }
-  .ltv-vs { display: flex; gap: 24px; align-items: baseline; margin: 8px 0 4px; }
-  .ltv-vs b { font-size: 18px; }
+  table.ltv-chain tr:last-child .l-run { color: var(--ink); font-weight: 800; font-size: 12px; }
+  .footnote { font-size: 9.5px; color: var(--muted); font-style: italic; }
+  .endmark { display: inline-block; width: 7px; height: 7px; background: var(--ink); margin-left: 6px; vertical-align: baseline; }
+  .ltv-vs { display: flex; gap: 22px; align-items: baseline; margin: 10px 0 4px; }
+  .ltv-vs b { font-size: 15px; font-family: 'Iowan Old Style', Palatino, Georgia, serif; }
+  .ltv-vs .vs-arrow { color: var(--ink); font-weight: 800; }
 
   /* Creator attribution flow. */
-  .flow { display: flex; align-items: stretch; gap: 8px; margin: 10px 0; }
-  .flow-step { flex: 1; border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px; font-size: 11.5px; color: #303030; }
-  .flow-step b { display: block; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; }
+  .flow { display: flex; align-items: stretch; gap: 8px; margin: 12px 0; }
+  .flow-step { flex: 1; border-top: 1.5px solid var(--ink); padding: 8px 0 0;
+    font-size: 10px; color: #45403a; }
+  .flow-step b { display: block; font-size: 10.5px; letter-spacing: 0.07em; text-transform: uppercase; margin-bottom: 2px; }
   .flow-arrow { align-self: center; font-weight: 800; color: var(--muted); }
-  .cohort-grid { display: grid; grid-template-columns: 7fr 5fr; gap: 20px; align-items: center; }
+  .cohort-grid { display: grid; grid-template-columns: 7fr 5fr; gap: 22px; align-items: center; }
 
   /* Charts. */
   .chart { width: 100%; height: auto; display: block; margin: 6px 0 4px; }
   .chart-tick { font-size: 9px; fill: var(--muted); font-family: inherit; }
+  .chart-axis { font-size: 8.5px; font-weight: 700; letter-spacing: 0.14em; fill: var(--muted); font-family: inherit; }
   .chart-label { font-size: 9.5px; font-weight: 700; fill: var(--ink); font-family: inherit; }
   .chart-label.is-variant { font-weight: 500; fill: var(--muted); }
-  .chart-caption { font-size: 11px; color: var(--muted); margin: 0 0 12px; }
-  .lens-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
-  .lens { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
-  .lens h4 { margin: 0 0 4px; font-size: 13.5px; }
-  .lens p { margin: 0; font-size: 12px; color: var(--muted); }
-  .feature-band { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 8px 0 14px; }
-  .feature { border: 1px solid var(--ink); border-radius: 12px; padding: 12px 14px; }
-  .feature .stat-value { font-size: 24px; }
+  .chart-caption { font-size: 9.5px; color: var(--muted); margin: 0 0 12px; }
+  .lens-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; margin-top: 14px; }
+  .lens { border-top: 2px solid var(--ink); padding: 10px 0 0; }
+  .lens h4 { margin: 0 0 4px; font-size: 11.5px; }
+  .lens h4::before { content: ''; display: inline-block; width: 7px; height: 7px; background: var(--ink);
+    border-radius: 2px; margin-right: 7px; vertical-align: 1px; }
+  .lens p { margin: 0; font-size: 10.5px; color: var(--muted); }
+  .feature-band { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 8px 0 14px; }
+  .feature { border-top: 3px solid var(--ink); padding: 10px 0 0; }
+  .feature .stat-value { font-size: 22px; }
 
-  .footer { margin-top: 28px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 11px; color: var(--muted); }
-  .disclaimer { font-size: 11px; color: var(--muted); font-style: italic; }
+  .divider { min-height: 70vh; display: flex; align-items: center; justify-content: center; text-align: center; }
+  .divider .display { font-size: 40px; letter-spacing: 0.01em; }
+  .divider .display::before { content: ''; display: block; width: 40px; border-top: 2.5px solid var(--ink); margin: 0 auto 20px; }
+  .footer { margin-top: 24px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 9.5px; color: var(--muted); }
+  .footer b { color: var(--ink); }
+  .disclaimer { font-size: 9.5px; color: var(--muted); font-style: italic; }
 </style>
 </head>
 <body>
@@ -433,7 +517,7 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
 
   <!-- Cover — the product feed behind the wordmark. No other copy. -->
   <div class="cover-page">
-    ${coverTiles ? `<div class="cover-feed">${coverTiles}</div>` : ''}
+    ${coverTiles ? `<div class="cover-feed" style="${coverGridStyle}">${coverTiles}</div>` : ''}
     <div class="cover-scrim"></div>
     <svg class="cover-logo" viewBox="${CATALOG_LOGO_VIEWBOX}" role="img" aria-label="Catalog"><path fill="#ffffff" d="${CATALOG_LOGO_PATH}" /></svg>
     <p class="cover-tagline">The AI for shopping</p>
@@ -441,42 +525,62 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
 
   <!-- Sheet 1 — magazine: centered summary, market, customer. -->
   <div class="page">
+    <div class="folio"><span class="folio-brand">Catalog</span><span>Business Plan</span><span class="folio-no">02 / 07</span></div>
     <section class="exec">
       <p class="kicker">Executive summary</p>
       <h2 class="display">The shopping destination where discovery converts.</h2>
-      <p>Catalog is your daily feed for everything you shop — one consumer app across web, iOS, and Android with a single user base, turning short, shoppable video into a personal storefront. Shoppers scroll a feed tuned to their taste, tap a look, see the exact products in it, and check out with the merchant. We hold no inventory, so the business scales with attention rather than logistics.</p>
-      <p>Revenue starts with affiliate commission on every sale we drive — the model these projections are built on. Advertising and direct brand partnerships follow on the same rails, and are upside on top of every figure in this plan.</p>
-      <div class="statband">
-        <div><div class="stat-value">${usd(r.total16moRevenue)}</div><div class="stat-label">${d.horizonMonths}-mo commission revenue</div></div>
-        <div><div class="stat-value">${usd(r.gmvTotal, true)}</div><div class="stat-label">GMV · ${num(r.totalSales)} orders</div></div>
-        <div><div class="stat-value">${usd(r.exitArr)}</div><div class="stat-label">Run-rate ARR at month ${d.horizonMonths}</div></div>
-        <div><div class="stat-value">${r.ltvCac.toFixed(1)}×</div><div class="stat-label">LTV : CAC</div></div>
-      </div>
+      <p>Catalog is your daily feed for everything you shop: one consumer app across web, iOS, and Android with a single user base, turning short, shoppable video into a personal storefront. Shoppers scroll a feed tuned to their taste, tap a look, see the exact products in it, and check out with the merchant. We hold no inventory, so the business scales with attention rather than logistics.</p>
+      <p>Revenue starts with affiliate commission on every sale we drive. That is the model these projections are built on. Advertising and direct brand partnerships follow on the same rails, and are upside on top of every figure in this plan.</p>
     </section>
 
     <section>
       <p class="kicker">01 · Market &amp; opportunity</p>
       <div class="mag-row">
-        <div class="pullquote">Commerce is shifting from search to feed.</div>
-        <p class="dropcap">Social platforms proved that shoppable video converts, but they bury it inside content people came to see for other reasons — entertainment first, shopping as an interruption. Catalog is the destination built for it: a shopping-first daily feed across every brand, with attribution and unit economics designed in from day one. We monetize the purchase intent that social platforms create but don't own.</p>
+        <div class="pullquote">Human taste, indexed by AI.</div>
+        <p class="dropcap">Social platforms proved that shoppable video converts, but they bury it inside content people came to see for other reasons: entertainment first, shopping as an interruption. Catalog is the destination built for it: a shopping-first daily feed across every brand, with attribution and unit economics designed in from day one. We monetize the purchase intent that social platforms create but don't own.</p>
       </div>
     </section>
 
     <section>
       <p class="kicker">02 · Target customer</p>
       <div class="mag-row flip">
-        <p class="dropcap">Our core customer is the everyday consumer who already discovers products by scrolling — the person who screenshots outfits, saves links, and asks "where's that from?" They are mobile-first, visually driven, and shop across categories: apparel, beauty, home, lifestyle. Think the audience of Amazon, Pinterest, and TikTok Shop, not a fashion-only niche. Their taste is scattered across screenshots and tabs; we give them one feed, every brand, tuned to the individual — a personal storefront that gets sharper with every tap, save, and shop.</p>
-        <div class="sidestats">
-          <div><div class="stat-value">${num(e.sessionsPerUserPerMonth)}×</div><div class="stat-label">Sessions / month</div></div>
-          <div><div class="stat-value">~${num(e.sessionTimeMinutes)} min</div><div class="stat-label">Per session</div></div>
-          <div><div class="stat-value">Every brand</div><div class="stat-label">One feed, one taste profile</div></div>
+        <p class="dropcap">Our core customer is the everyday consumer who already discovers products by scrolling: the person who screenshots outfits, saves links, and asks "where's that from?" They are mobile-first, visually driven, and shop across categories: apparel, beauty, home, lifestyle. Think the audience of Amazon, Pinterest, and TikTok Shop, not a fashion-only niche. Their taste is scattered across screenshots and tabs; we give them one feed, every brand, tuned to the individual. A personal storefront that gets sharper with every tap, save, and shop.</p>
+        <div class="features">
+          <div class="feature-item">
+            <h4>Your daily feed</h4>
+            <p>A feed that learns your taste. Every scroll, save, and shop tunes tomorrow's looks to you, across every brand at once.</p>
+          </div>
+          <div class="feature-item">
+            <h4>Shop through creators</h4>
+            <p>Creators publish shoppable looks with every product tagged in place. See it styled on a person, tap it, own it.</p>
+          </div>
+          <div class="feature-item">
+            <h4>Create a catalog for anything</h4>
+            <p>Type any idea and AI assembles a shoppable catalog around it: products, looks, and try-ons for exactly that.</p>
+          </div>
         </div>
       </div>
     </section>
+    <div class="solutions">
+      <div class="solution">
+        <span>For shoppers</span>
+        <p>The most elegant way to discover products: one feed, every brand, already tuned to your taste.</p>
+      </div>
+      <div class="solution">
+        <span>For creators</span>
+        <p>The easiest way to earn on retail content: publish a look, every product tagged, paid on the sales it drives.</p>
+      </div>
+      <div class="solution">
+        <span>For brands</span>
+        <p>Full transparency on the numbers: attribution to the order, analytics per look, per creator, per product.</p>
+      </div>
+    </div>
+    ${photoStrip}
   </div>
 
   <!-- Sheet 2 — revenue phases + the key assumptions, one page. -->
   <div class="page">
+    <div class="folio"><span class="folio-brand">Catalog</span><span>Business Plan</span><span class="folio-no">03 / 07</span></div>
     <section>
       <p class="kicker">03 · Revenue model</p>
       <h2>Three revenue lines, unlocked in sequence.</h2>
@@ -484,12 +588,12 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
         <div class="phase now">
           <div class="phase-stage">Phase 1 <span class="tag">Now</span></div>
           <h4>Affiliate commission</h4>
-          <p>We earn ${pct(rev.affiliateCommission)} on every sale we drive, via affiliate networks and merchants' own programs. No inventory, revenue from the first order — and every conversion builds the attribution dataset the next phases are sold on.</p>
+          <p>We earn ${pct(rev.affiliateCommission)} on every sale we drive, via affiliate networks and merchants' own programs. No inventory, revenue from the first order, and every conversion builds the attribution dataset the next phases are sold on.</p>
         </div>
         <div class="phase">
           <div class="phase-stage">Phase 2</div>
           <h4>Advertising</h4>
-          <p>Sponsored looks and promoted placements, native to the feed. Because we attribute to the order, brands buy measurable ROAS instead of impressions — performance budgets at margins above affiliate take rates.</p>
+          <p>Sponsored looks and promoted placements, native to the feed. Because we attribute to the order, brands buy measurable ROAS instead of impressions: performance budgets at margins above affiliate take rates.</p>
         </div>
         <div class="phase">
           <div class="phase-stage">Phase 3</div>
@@ -497,7 +601,13 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
           <p>Negotiated take rates above affiliate baselines, exclusive drops, co-created creator campaigns, and managed storefronts on the partner platform we've already built. The deepest margins and the strongest moat.</p>
         </div>
       </div>
-      <p class="phase-note">The financials in this plan are built on Phase 1 economics only — advertising and direct-partnership revenue are upside on top of every figure in this document.</p>
+      <p class="phase-note">The financials in this plan are built on Phase 1 economics only. Advertising and direct-partnership revenue are upside on top of every figure in this document.</p>
+      <div class="statband">
+        <div><div class="stat-value">${usd(r.total16moRevenue)}</div><div class="stat-label">${d.horizonMonths}-mo commission revenue</div></div>
+        <div><div class="stat-value">${usd(r.gmvTotal, true)}</div><div class="stat-label">GMV · ${num(r.totalSales)} orders</div></div>
+        <div><div class="stat-value">${usd(r.exitArr)}</div><div class="stat-label">Run-rate ARR at month ${d.horizonMonths}</div></div>
+        <div><div class="stat-value">${r.ltvCac.toFixed(1)}×</div><div class="stat-label">LTV : CAC</div></div>
+      </div>
     </section>
 
     <section>
@@ -515,26 +625,36 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
 
   <!-- Sheet 3 — go-to-market: creators + AI-driven content, three steps. -->
   <div class="page">
+    <div class="folio"><span class="folio-brand">Catalog</span><span>Business Plan</span><span class="folio-no">04 / 07</span></div>
     <section>
       <p class="kicker">05 · Go-to-market</p>
-      <h2>Turn the flywheel on.</h2>
-      <p>Marketing runs through creators — our primary advertising channel. Creators post their link, build catalogs, and share them with their audience; they are paid on every signup they bring and on that audience's ongoing engagement. Word-of-mouth adds ${pct(a.organicGrowth)} of the base each month on top of paid acquisition at a ~${usd(a.cpa)} blended CPA.</p>
-      <div class="ai-banner">
-        <p class="kicker">AI-driven content</p>
-        <p>A big part of this motion is AI-generated content: users try products on with AI, build catalogs of what they love, and post them. The people we acquire also make the content that acquires the next wave — creation compounds while production cost doesn't.</p>
+      <h2>This is just the beginning.</h2>
+      <p class="standfirst">Everything in this plan runs on the simplest version of the machine: marketing through creators, our primary advertising channel. Creators post their link, build catalogs, and share them with their audience; they are paid on every signup they bring and on that audience's ongoing engagement. Word-of-mouth adds ${pct(a.organicGrowth)} of the base each month on top of paid acquisition at a ~${usd(a.cpa)} blended CPA.</p>
+      <div class="steps">
+        ${gtmSteps.map(gtmStepRow).join('')}
       </div>
-      <div class="phases">
-        ${gtmSteps.map(gtmCard).join('')}
+      <div class="ai-banner">
+        <p class="kicker">Strategic marketing experiment</p>
+        <p>Running alongside the core motion: AI-driven content. Users try products on with AI, build catalogs of what they love, and post them. The people we acquire also make the content that acquires the next wave: creation compounds while production cost doesn't.</p>
       </div>
     </section>
   </div>
 
-  <!-- Sheet 4 — LTV: assumption-flagged breakdown + creator cohorts. -->
+  <!-- Sheet 4 — appendix divider: just the word, centered. -->
   <div class="page">
+    <div class="folio"><span class="folio-brand">Catalog</span><span>Business Plan</span><span class="folio-no">05 / 07</span></div>
+    <div class="divider">
+      <h2 class="display">Appendix</h2>
+    </div>
+  </div>
+
+  <!-- Sheet 5 — LTV: assumption-flagged breakdown + creator cohorts. -->
+  <div class="page">
+    <div class="folio"><span class="folio-brand">Catalog</span><span>Business Plan</span><span class="folio-no">06 / 07</span></div>
     <section>
-      <p class="kicker">06 · Lifetime value*</p>
-      <h2>What a user is worth — and how we'll know.</h2>
-      <p>LTV is the contribution a user generates over their expected lifetime: monthly revenue per user, kept margin applied, multiplied by how long the average user stays active. Step by step:</p>
+      <p class="kicker">Appendix A · Lifetime value*</p>
+      <h2>What a user is worth, and how we'll know.</h2>
+      <p class="standfirst">LTV is the contribution a user generates over their expected lifetime: monthly revenue per user, kept margin applied, multiplied by how long the average user stays active. Step by step:</p>
       <table class="ltv-chain">
         <tbody>
           ${ltvSteps.map(ltvRow).join('')}
@@ -544,15 +664,16 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
         <span><b>${usd(r.ltv)}</b> LTV*</span>
         <span>vs</span>
         <span><b>${usd2(r.blendedCac)}</b> blended CAC</span>
-        <span>→ <b>${r.ltvCac.toFixed(1)}×</b> LTV:CAC, paid back in <b>${r.cacPaybackMonths.toFixed(1)} months</b></span>
+        <span class="vs-arrow">→</span>
+        <span><b>${r.ltvCac.toFixed(1)}×</b> LTV:CAC, paid back in <b>${r.cacPaybackMonths.toFixed(1)} months</b></span>
       </div>
-      <p class="footnote">* These are assumptions. Pre-product, LTV can't be measured — only assumed: every input above comes from the assumption table, not observed behaviour. The attribution layer exists to replace each of these assumptions with a measurement, starting from the first order.</p>
+      <p class="footnote">* These are assumptions. Pre-product, LTV can't be measured, only assumed: every input above comes from the assumption table, not observed behaviour. The attribution layer exists to replace each of these assumptions with a measurement, starting from the first order.</p>
     </section>
 
     <section>
-      <p class="kicker">Creator cohorts</p>
+      <p class="kicker">Appendix A · Creator cohorts</p>
       <h2>LTV we can measure, per creator.</h2>
-      <p>Every creator shares a personal link. When their audience signs up through it, those users are tagged as that creator's cohort — and every order they ever place is attributed back to it. From day one the platform computes the lifetime value of each creator's audience automatically: which creators to double down on, and exactly what a signup from them is worth.</p>
+      <p class="standfirst">Every creator shares a personal link. When their audience signs up through it, those users are tagged as that creator's cohort, and every order they ever place is attributed back to it. From day one the platform computes the lifetime value of each creator's audience automatically: which creators to double down on, and exactly what a signup from them is worth.</p>
       <div class="flow">
         <div class="flow-step"><b>Creator posts link</b>Catalogs shared to their socials</div>
         <div class="flow-arrow">→</div>
@@ -564,31 +685,36 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
       </div>
       <div class="cohort-grid">
         <div>${cohortChart}</div>
-        <p class="chart-caption">Illustrative — cohorts will price differently. A creator whose audience converts at 1.5× the blended assumption earns more per signup; one below it gets coached or cut. Creator payouts follow measured cohort LTV, not follower counts.</p>
+        <p class="chart-caption">Illustrative: cohorts will price differently. A creator whose audience converts at 1.5× the blended assumption earns more per signup; one below it gets coached or cut. Creator payouts follow measured cohort LTV, not follower counts.</p>
       </div>
     </section>
   </div>
 
   <!-- Sheet 5 — appendix: the two numbers every decision is held against. -->
   <div class="page">
+    <div class="folio"><span class="folio-brand">Catalog</span><span>Business Plan</span><span class="folio-no">07 / 07</span></div>
     <section>
-      <p class="kicker">Appendix · Sensitivity</p>
+      <p class="kicker">Appendix B · Sensitivity</p>
       <h2>The two numbers that run the company.</h2>
-      <p>The model's load-bearing inputs are <b>blended CAC</b> (what a user costs) and <b>product conversion</b> (what a feed impression is worth). Below: the base plan, then each nudged ±20% with everything else held constant.</p>
+      <p class="standfirst">The model's load-bearing inputs are <b>blended CAC</b> (what a user costs) and <b>product conversion</b> (what a feed impression is worth). Below: the base plan, then CPA at ${usd(cpaLoVal)} and ${usd(cpaHiVal)} against the ${usd(mAcq.cpa)} base, and conversion at ${pctTrim(convLoVal)} and ${pctTrim(convHiVal)} against ${pctTrim(mRev.productConversion)}, with everything else held constant. The ${d.horizonMonths}-month base case earns ${usd(r.total16moRevenue)} of commission on ${usd(r.gmvTotal, true)} GMV.</p>
       <div class="feature-band">
         <div class="feature"><div class="stat-value">${usd2(r.blendedCac)}</div><div class="stat-label">Blended CAC at base · paid CPA ${usd(a.cpa)}</div></div>
         <div class="feature"><div class="stat-value">${pct(rev.productConversion, 2)}</div><div class="stat-label">Product conversion at base · sale per impression</div></div>
       </div>
 
-      <h3>Base plan — monthly commission revenue</h3>
-      ${baseChart}
-      <p class="chart-caption">${d.horizonMonths}-month base case: ${usd(r.total16moRevenue)} total commission on ${usd(r.gmvTotal, true)} GMV.</p>
+    </section>
 
-      <h3>CAC sensitivity — paid CPA ±20%</h3>
+    <section>
+      <h3>CAC sensitivity: CPA ${usd(cpaLoVal)} / ${usd(mAcq.cpa)} / ${usd(cpaHiVal)}</h3>
       ${cacChart}
-      <h3>Conversion sensitivity — product conversion ±20%</h3>
-      ${convChart}
+    </section>
 
+    <section>
+      <h3>Conversion sensitivity: ${pctTrim(convLoVal)} / ${pctTrim(mRev.productConversion)} / ${pctTrim(convHiVal)}</h3>
+      ${convChart}
+    </section>
+
+    <section>
       <div class="lens-grid">
         <div class="lens">
           <h4>CAC is the marketing lens.</h4>
@@ -596,14 +722,14 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
         </div>
         <div class="lens">
           <h4>Conversion is the product lens.</h4>
-          <p>Feed relevance, AI try-on, and checkout friction all express themselves in one number — sales per impression — measured automatically on every session. Every product decision is judged by its effect on it.</p>
+          <p>Feed relevance, AI try-on, and checkout friction all express themselves in one number, sales per impression, measured automatically on every session. Every product decision is judged by its effect on it.</p>
         </div>
       </div>
-      <p style="margin-top:10px">These two numbers are the leverage that turns the flywheel: better conversion raises LTV, which buys more acquisition at the same ratio; cheaper acquisition compounds the base, which sharpens the data, which raises conversion. Both are measured automatically by the attribution layer — and every decision the company makes is held against its effect on one of the two.</p>
+      <p style="margin-top:10px">These two numbers are the leverage that turns the flywheel: better conversion raises LTV, which buys more acquisition at the same ratio; cheaper acquisition compounds the base, which sharpens the data, which raises conversion. Both are measured automatically by the attribution layer, and every decision the company makes is held against its effect on one of the two.<span class="endmark" aria-hidden="true"></span></p>
     </section>
 
     <div class="footer">
-      Catalog · Confidential business plan · Generated ${esc(d.generatedAt)} · ${esc(d.scenario)} scenario, ${d.horizonMonths}-month horizon. Projections are illustrative and depend on the stated assumptions.
+      <b>Catalog</b> · Confidential business plan · Generated ${esc(d.generatedAt)} · ${esc(d.scenario)} scenario, ${d.horizonMonths}-month horizon. Projections are illustrative and depend on the stated assumptions.
     </div>
   </div>
 </body>
@@ -612,22 +738,24 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
 
 // ── Cover collage feed ───────────────────────────────────────────────
 
-/** Pull a wall of product-feed posters for the cover. Best-effort: any
-    failure (offline, RLS, empty table) falls back to the plain black cover. */
-async function fetchFeedImages(count = 20): Promise<string[]> {
+/** Pull the whole catalog's product images for the cover wall — every
+    active product, poster → primary → raw image fallback. Best-effort:
+    any failure (offline, RLS, empty table) falls back to the plain black
+    cover. Capped at 120 tiles so the document stays light. */
+async function fetchFeedImages(count = 120): Promise<string[]> {
   try {
     const { data, error } = await supabase
       .from('products')
       .select('primary_video_poster_url, primary_image_url, image_url')
-      .not('primary_video_poster_url', 'is', null)
-      .limit(count * 2);
+      .eq('is_active', true)
+      .limit(500);
     if (error || !data) return [];
     const urls = data
       .map(p => p.primary_video_poster_url || p.primary_image_url || p.image_url)
       .filter((u): u is string => typeof u === 'string' && /^https?:\/\//i.test(u));
     return [...new Set(urls)]
       .slice(0, count)
-      .map(u => withTransform(u, { width: 480, quality: 70 }) ?? u);
+      .map(u => withTransform(u, { width: 320, quality: 60 }) ?? u);
   } catch {
     return [];
   }

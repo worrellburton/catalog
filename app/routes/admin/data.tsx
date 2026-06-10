@@ -1,6 +1,7 @@
 import { useState, Fragment, useMemo, useCallback, useEffect, useRef, useId } from 'react';
 import ParticleBackground from '~/components/ParticleBackground';
 import ManualProductModal from '~/components/admin/ManualProductModal';
+import GovernanceTypeCell from '~/components/admin/GovernanceTypeCell';
 import {
   spotifySearch,
   listMusics,
@@ -6399,20 +6400,19 @@ export default function AdminData() {
                       <span style={{ color: '#94a3b8' }}>—</span>
                     )}
                   </td>
-                  <td style={{ textAlign: 'left', fontSize: 12 }}>
-                    {p.type ? (
-                      <span style={{
-                        display: 'inline-block',
-                        padding: '2px 8px',
-                        borderRadius: 999,
-                        background: '#f1f5f9',
-                        color: '#334155',
-                        fontWeight: 500,
-                        fontSize: 11,
-                      }}>{p.type}</span>
-                    ) : (
-                      <span style={{ color: '#cbd5e1' }}> - </span>
-                    )}
+                  <td style={{ textAlign: 'left', fontSize: 12 }} onClick={e => e.stopPropagation()}>
+                    {/* Governed type cell — the live connection to
+                        /admin/governance/types. Assigning writes the same
+                        type/gender/type_path cascade the brain writes. */}
+                    <GovernanceTypeCell
+                      productId={p.id ?? ''}
+                      type={p.type ?? null}
+                      showToast={showToast}
+                      onAssigned={(patch) => {
+                        setCrawledProducts(prev => prev.map(r =>
+                          r.id === p.id ? { ...r, type: patch.type, gender: patch.gender } : r));
+                      }}
+                    />
                   </td>
                   {/* Subtype: a finer-grained classifier under type.
                       Shoes → Sneakers/Sandals/Boots/Heels/Loafers/Flats.
