@@ -253,16 +253,16 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
   // Assumption rows kept to the load-bearing ten so the table fits the
   // one-page budget: label, value, the benchmark/why.
   const assumptions: Array<[string, string, string]> = [
-    ['Total advertising spend', usd(a.budget), `over ${d.horizonMonths} months`],
-    ['Blended CPA (paid)', usd(a.cpa), '$5-30 consumer benchmark'],
-    ['Organic growth', `${pct(a.organicGrowth)} / mo`, 'referral adds · 10-30%/mo early'],
-    ['New-user retention (M1)', pct(a.newUserRetention), '25-45% M1 benchmark'],
-    ['Monthly active churn', pct(a.monthlyActiveChurn), '3-6%/mo'],
-    ['Sessions / user / mo', num(e.sessionsPerUserPerMonth), '6-12 benchmark'],
-    ['Product conversion', pct(rev.productConversion, 2), '1-2% marketplace'],
-    ['Average order value', usd(rev.avgOrderValue), '$40-120'],
-    ['Affiliate commission', pct(rev.affiliateCommission), '8-15% take rate'],
-    ['Monthly OpEx (avg)', usd(c.monthlyOpex), `incl. ${pct(d.creatorPayout)} creator payout`],
+    ['Total advertising spend', usd(a.budget), `All paid marketing across the ${d.horizonMonths} months.`],
+    ['Blended CPA (paid)', usd(a.cpa), 'What one new user costs us in ad spend.'],
+    ['Organic growth', `${pct(a.organicGrowth)} / mo`, 'Users who join from word of mouth each month, as a share of the existing base.'],
+    ['New-user retention (M1)', pct(a.newUserRetention), 'Share of new users still active in their first full month (M1 = month one after signup).'],
+    ['Monthly active churn', pct(a.monthlyActiveChurn), 'Share of the active base we lose each month.'],
+    ['Sessions / user / mo', num(e.sessionsPerUserPerMonth), 'How often the average user opens Catalog in a month.'],
+    ['Product conversion', pct(rev.productConversion, 2), 'Share of product impressions that turn into a purchase.'],
+    ['Average order value', usd(rev.avgOrderValue), 'What a typical order is worth.'],
+    ['Affiliate commission', pct(rev.affiliateCommission), 'Our cut of every sale we send to a merchant.'],
+    ['Monthly OpEx (avg)', usd(c.monthlyOpex), `Average monthly operating cost, including the ${pct(d.creatorPayout)} creator payout.`],
   ];
 
   const assumptionRow = ([label, value, why]: [string, string, string]) => `
@@ -368,17 +368,17 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
 
   /* ── Cover: the product feed, full color, behind the wordmark. ── */
   .cover-page { position: relative; overflow: hidden; background: #000; color: #fff; min-height: 100vh;
-    display: flex; align-items: center; justify-content: center;
+    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 26px;
     -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   /* Grid columns/rows arrive inline — density scales with image count. */
   .cover-feed { position: absolute; inset: 0; display: grid; }
-  .cover-feed img { width: 100%; height: 100%; min-width: 0; min-height: 0; object-fit: cover; display: block; }
+  .cover-feed img { width: 100%; height: 100%; min-width: 0; min-height: 0; object-fit: contain; background: #fff; display: block; }
   .cover-scrim { position: absolute; inset: 0;
-    background: linear-gradient(rgba(0,0,0,0.38), rgba(0,0,0,0.60)); }
+    background: linear-gradient(rgba(0,0,0,0.66), rgba(0,0,0,0.80)); }
   .cover-logo { position: relative; z-index: 1; width: clamp(240px, 38vw, 400px); height: auto; display: block;
     filter: drop-shadow(0 4px 28px rgba(0,0,0,0.55)); }
-  .cover-tagline { position: absolute; z-index: 1; bottom: 52px; left: 0; right: 0; margin-inline: auto;
-    width: fit-content; font-size: 16px; font-weight: 500; letter-spacing: 0.22em; text-transform: uppercase;
+  .cover-tagline { position: relative; z-index: 1; margin: 0;
+    font-size: 15px; font-weight: 500; letter-spacing: 0.24em; text-transform: uppercase;
     color: rgba(255,255,255,0.95); text-shadow: 0 2px 14px rgba(0,0,0,0.6); }
 
   /* ── Page furniture: running head + page number, like a magazine folio. ── */
@@ -424,7 +424,7 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
   .solution p { margin: 0; font-size: 11px; line-height: 1.55; color: #3a352f; }
   .photo-strip { margin-top: 30px; border-top: 2px solid var(--ink); padding-top: 12px; }
   .photo-strip-row { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 7px; }
-  .photo-strip-row img { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; display: block; min-width: 0; }
+  .photo-strip-row img { width: 100%; aspect-ratio: 3 / 4; object-fit: contain; background: #fff; display: block; min-width: 0; }
   .photo-strip-caption { margin: 8px 0 0; font-size: 9px; font-weight: 700; letter-spacing: 0.14em;
     text-transform: uppercase; color: var(--muted); }
   .feature-item h4 { margin: 0 0 3px; font-size: 13.5px; font-weight: 700; letter-spacing: -0.01em; }
@@ -614,7 +614,7 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
       <p class="kicker">04 · Key assumptions</p>
       <h2>The ten numbers the plan runs on (${esc(d.scenario)} case, ${d.horizonMonths} months).</h2>
       <table class="assumptions">
-        <thead><tr><th>Assumption</th><th>Value</th><th>Why / benchmark</th></tr></thead>
+        <thead><tr><th>Assumption</th><th>Value</th><th>Detail</th></tr></thead>
         <tbody>
           ${assumptions.map(assumptionRow).join('')}
         </tbody>
