@@ -230,25 +230,16 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
   // the wall cycles if there are fewer images than cells so the page is
   // always fully covered.
   const feed = d.feedImages ?? [];
-  const [coverCols, coverRows] = feed.length >= 96 ? [8, 12]
-    : feed.length >= 60 ? [6, 10]
-    : feed.length >= 40 ? [5, 8]
-    : feed.length >= 24 ? [4, 6]
+  const [coverCols, coverRows] = feed.length >= 100 ? [10, 10]
+    : feed.length >= 81 ? [9, 9]
+    : feed.length >= 64 ? [8, 8]
+    : feed.length >= 36 ? [6, 6]
     : [4, 5];
   const coverTiles = feed.length
     ? Array.from({ length: coverCols * coverRows }, (_, i) => `<img src="${esc(feed[i % feed.length])}" alt="" loading="eager" />`).join('')
     : '';
   const coverGridStyle = `grid-template-columns: repeat(${coverCols}, minmax(0, 1fr)); grid-template-rows: repeat(${coverRows}, minmax(0, 1fr));`;
 
-  // Editorial photo strip at the foot of the magazine sheet — a different
-  // slice of the feed than the cover's top rows, so the pages don't repeat.
-  const stripImages = feed.length >= 28 ? feed.slice(20, 28) : feed.slice(0, 8);
-  const photoStrip = stripImages.length
-    ? `<div class="photo-strip">
-        <div class="photo-strip-row">${stripImages.map(u => `<img src="${esc(u)}" alt="" loading="eager" />`).join('')}</div>
-        <p class="photo-strip-caption">From the live product feed.</p>
-      </div>`
-    : '';
 
   // Assumption rows kept to the load-bearing ten so the table fits the
   // one-page budget: label, value, the benchmark/why.
@@ -344,8 +335,7 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
     .cover-page { min-height: 100vh; page-break-after: always; }
     section { page-break-inside: avoid; break-inside: avoid; margin-bottom: 18px; }
     .statband, .phases, .lens-grid, .lens, .feature-band, .chart, .flow, .steps,
-    .features, .photo-strip, table.ltv-chain { page-break-inside: avoid; break-inside: avoid; }
-    .photo-strip { margin-top: 20px; }
+    .features, table.ltv-chain { page-break-inside: avoid; break-inside: avoid; }
     .solutions { page-break-inside: avoid; break-inside: avoid; margin-top: 20px; }
     .solution p { font-size: 9.5px; }
     .folio { margin-bottom: 18px; }
@@ -370,9 +360,12 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
   .cover-page { position: relative; overflow: hidden; background: #000; color: #fff; min-height: 100vh;
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 26px;
     -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  /* Grid columns/rows arrive inline — density scales with image count. */
-  .cover-feed { position: absolute; inset: 0; display: grid; }
-  .cover-feed img { width: 100%; height: 100%; min-width: 0; min-height: 0; object-fit: contain; background: #fff; display: block; }
+  /* Grid columns/rows arrive inline — density scales with image count.
+     Uniform white cards with a dark gutter: products stay uncropped
+     inside identical tiles, so the wall reads even and together. */
+  .cover-feed { position: absolute; inset: 0; display: grid; gap: 6px; padding: 6px; background: #000; }
+  .cover-feed img { width: 100%; height: 100%; min-width: 0; min-height: 0;
+    object-fit: contain; background: #fff; padding: 5px; box-sizing: border-box; display: block; }
   .cover-scrim { position: absolute; inset: 0;
     background: linear-gradient(rgba(0,0,0,0.66), rgba(0,0,0,0.80)); }
   .cover-logo { position: relative; z-index: 1; width: clamp(240px, 38vw, 400px); height: auto; display: block;
@@ -382,10 +375,10 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
     color: rgba(255,255,255,0.95); text-shadow: 0 2px 14px rgba(0,0,0,0.6); }
 
   /* ── Page furniture: running head + page number, like a magazine folio. ── */
-  .folio { display: flex; align-items: baseline; gap: 14px; font-size: 9.5px; font-weight: 700;
+  .folio { display: flex; align-items: center; gap: 14px; font-size: 9.5px; font-weight: 700;
     letter-spacing: 0.2em; text-transform: uppercase; color: var(--muted);
     border-bottom: 1.5px solid var(--ink); padding-bottom: 9px; margin-bottom: 30px; }
-  .folio-brand { color: var(--accent); }
+  .folio-logo { height: 14px; width: auto; display: block; }
   .folio-no { margin-left: auto; color: var(--ink); font-variant-numeric: tabular-nums; }
 
   section { margin: 0 0 30px; }
@@ -422,11 +415,6 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
   .solution span { display: block; font-size: 9px; font-weight: 800; letter-spacing: 0.16em;
     text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
   .solution p { margin: 0; font-size: 11px; line-height: 1.55; color: #3a352f; }
-  .photo-strip { margin-top: 30px; border-top: 2px solid var(--ink); padding-top: 12px; }
-  .photo-strip-row { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 7px; }
-  .photo-strip-row img { width: 100%; aspect-ratio: 3 / 4; object-fit: contain; background: #fff; display: block; min-width: 0; }
-  .photo-strip-caption { margin: 8px 0 0; font-size: 9px; font-weight: 700; letter-spacing: 0.14em;
-    text-transform: uppercase; color: var(--muted); }
   .feature-item h4 { margin: 0 0 3px; font-size: 13.5px; font-weight: 700; letter-spacing: -0.01em; }
   .feature-item p { margin: 0; font-size: 10.5px; line-height: 1.55; color: var(--muted); }
 
@@ -525,7 +513,7 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
 
   <!-- Sheet 1 — magazine: centered summary, market, customer. -->
   <div class="page">
-    <div class="folio"><span class="folio-brand">Catalog</span><span>Business Plan</span><span class="folio-no">02 / 07</span></div>
+    <div class="folio"><svg class="folio-logo" viewBox="${CATALOG_LOGO_VIEWBOX}" role="img" aria-label="Catalog"><path fill="#141210" d="${CATALOG_LOGO_PATH}" /></svg><span>Business Plan</span><span class="folio-no">02</span></div>
     <section class="exec">
       <p class="kicker">Executive summary</p>
       <h2 class="display">The shopping destination where discovery converts.</h2>
@@ -575,12 +563,11 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
         <p>Full transparency on the numbers: attribution to the order, analytics per look, per creator, per product.</p>
       </div>
     </div>
-    ${photoStrip}
   </div>
 
   <!-- Sheet 2 — revenue phases + the key assumptions, one page. -->
   <div class="page">
-    <div class="folio"><span class="folio-brand">Catalog</span><span>Business Plan</span><span class="folio-no">03 / 07</span></div>
+    <div class="folio"><svg class="folio-logo" viewBox="${CATALOG_LOGO_VIEWBOX}" role="img" aria-label="Catalog"><path fill="#141210" d="${CATALOG_LOGO_PATH}" /></svg><span>Business Plan</span><span class="folio-no">03</span></div>
     <section>
       <p class="kicker">03 · Revenue model</p>
       <h2>Three revenue lines, unlocked in sequence.</h2>
@@ -625,7 +612,7 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
 
   <!-- Sheet 3 — go-to-market: creators + AI-driven content, three steps. -->
   <div class="page">
-    <div class="folio"><span class="folio-brand">Catalog</span><span>Business Plan</span><span class="folio-no">04 / 07</span></div>
+    <div class="folio"><svg class="folio-logo" viewBox="${CATALOG_LOGO_VIEWBOX}" role="img" aria-label="Catalog"><path fill="#141210" d="${CATALOG_LOGO_PATH}" /></svg><span>Business Plan</span><span class="folio-no">04</span></div>
     <section>
       <p class="kicker">05 · Go-to-market</p>
       <h2>This is just the beginning.</h2>
@@ -642,7 +629,7 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
 
   <!-- Sheet 4 — appendix divider: just the word, centered. -->
   <div class="page">
-    <div class="folio"><span class="folio-brand">Catalog</span><span>Business Plan</span><span class="folio-no">05 / 07</span></div>
+    <div class="folio"><svg class="folio-logo" viewBox="${CATALOG_LOGO_VIEWBOX}" role="img" aria-label="Catalog"><path fill="#141210" d="${CATALOG_LOGO_PATH}" /></svg><span>Business Plan</span></div>
     <div class="divider">
       <h2 class="display">Appendix</h2>
     </div>
@@ -650,7 +637,7 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
 
   <!-- Sheet 5 — LTV: assumption-flagged breakdown + creator cohorts. -->
   <div class="page">
-    <div class="folio"><span class="folio-brand">Catalog</span><span>Business Plan</span><span class="folio-no">06 / 07</span></div>
+    <div class="folio"><svg class="folio-logo" viewBox="${CATALOG_LOGO_VIEWBOX}" role="img" aria-label="Catalog"><path fill="#141210" d="${CATALOG_LOGO_PATH}" /></svg><span>Business Plan</span><span class="folio-no">06</span></div>
     <section>
       <p class="kicker">Appendix A · Lifetime value*</p>
       <h2>What a user is worth, and how we'll know.</h2>
@@ -692,7 +679,7 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
 
   <!-- Sheet 5 — appendix: the two numbers every decision is held against. -->
   <div class="page">
-    <div class="folio"><span class="folio-brand">Catalog</span><span>Business Plan</span><span class="folio-no">07 / 07</span></div>
+    <div class="folio"><svg class="folio-logo" viewBox="${CATALOG_LOGO_VIEWBOX}" role="img" aria-label="Catalog"><path fill="#141210" d="${CATALOG_LOGO_PATH}" /></svg><span>Business Plan</span><span class="folio-no">07</span></div>
     <section>
       <p class="kicker">Appendix B · Sensitivity</p>
       <h2>The two numbers that run the company.</h2>
