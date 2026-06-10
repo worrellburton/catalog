@@ -49,8 +49,6 @@
   box-shadow:
     0 14px 30px rgba(0, 0, 0, 0.4),
     0 0 0 1px rgba(255, 255, 255, 0.04);
-  backdrop-filter: blur(12px) saturate(1.25);
-  -webkit-backdrop-filter: blur(12px) saturate(1.25);
   cursor: pointer;
   font-family: inherit;
   text-align: left;

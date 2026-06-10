@@ -2431,7 +2431,6 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   background: rgba(17, 17, 17, 0.92);
   padding: 4px;
   border-radius: 999px;
-  backdrop-filter: blur(4px);
   /* Hidden until the tile is hovered (desktop). Fades + lifts in. */
   opacity: 0;
   transform: translateY(-4px);

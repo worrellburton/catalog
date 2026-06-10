@@ -736,8 +736,6 @@
     border: 1px solid rgba(255, 255, 255, 0.12);
     color: #fff;
     cursor: pointer;
-    backdrop-filter: blur(8px);
-    -webkit-backdrop-filter: blur(8px);
     transition: background 160ms ease, opacity 160ms ease;
     padding: 0;
   }

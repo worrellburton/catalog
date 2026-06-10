@@ -183,8 +183,6 @@ header > .pending-look-pill {
   border: 1px solid rgba(74, 222, 128, 0.55);
   background: rgba(16, 20, 17, 0.95);
   box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 22px rgba(74, 222, 128, 0.28);
-  backdrop-filter: blur(14px);
-  -webkit-backdrop-filter: blur(14px);
   color: #f4f4f5;
   /* Match the follow-toast scale (14px text, 10px gap, 34px leading visual)
      so both in-app notifications are the same size. */
@@ -521,7 +519,6 @@ header > .pending-look-pill {
   left: 0;
   min-width: 240px;
   background: rgba(20, 20, 20, 0.95);
-  backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
   padding: 6px;
