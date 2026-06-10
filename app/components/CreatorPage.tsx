@@ -5,7 +5,7 @@ import { supabase } from '~/utils/supabase';
 import { useAuth } from '~/hooks/useAuth';
 import { AvatarUpload } from './AvatarCropModal';
 import CreativeCardV2 from './CreativeCardV2';
-import CreatorProductTile from './CreatorProductTile';
+import type { ProductAd } from '~/services/product-creative';
 import { primeLookAssets } from '~/utils/trailPrefetch';
 import { director } from '~/services/video-playback-director';
 import { toggleFollow, isFollowing as fetchIsFollowing, getFollowerCount, getFollowingCount, getFollowers, getFollowing, type FollowUser } from '~/services/follows';
@@ -14,6 +14,7 @@ import ParticleBackground from './ParticleBackground';
 import { getCreatorAppearance, getCreatorAppearanceById, type CatalogAppearance, DEFAULT_CATALOG_APPEARANCE } from '~/services/catalog-theme';
 import { getCreatorProductOrder, getCreatorHiddenProductIds } from '~/services/catalog-products';
 import { getCreatorCollections, type CreatorCollection } from '~/services/creator-collections';
+import { startCreatorScrollDebug } from '~/utils/creator-scroll-debug';
 import '~/styles/my-looks.css';
 import '~/styles/creator-page.css';
 import '~/styles/product-page.css';
@@ -127,6 +128,16 @@ export default function CreatorPage({
     };
     el.addEventListener('scroll', onScroll, { passive: true });
     return () => { cancelAnimationFrame(raf); el.removeEventListener('scroll', onScroll); };
+  }, [activeTab]);
+
+  // Flag-gated diagnostic for the iOS held-scroll "thumbnail in the corner"
+  // artifact. No-op unless localStorage['catalog:scrolldbg']==='1' (see
+  // utils/creator-scroll-debug), so it's safe to ship; lets us read what the
+  // tile media actually does mid-gesture on a real device.
+  useEffect(() => {
+    const el = pageScrollRef.current;
+    if (!el) return;
+    return startCreatorScrollDebug(el);
   }, [activeTab]);
 
   // Backfill any look (in this catalog) still missing its own poster frame, so
@@ -303,14 +314,14 @@ export default function CreatorPage({
       if (genIds.length > 0) {
         const { data: pickRows } = await supabase!
           .from('user_generation_products')
-          .select('generation_id, product_id, products(id, name, brand, price, image_url, primary_image_url, primary_video_url, primary_video_poster_url, images, url)')
+          .select('generation_id, product_id, products(id, name, brand, price, image_url, primary_image_url, primary_video_url, primary_hls_url, primary_video_poster_url, images, url)')
           .in('generation_id', genIds);
         if (cancelled) return;
         const productById = new Map<string, Product>();
         const productsByGen = new Map<string, Set<string>>();
         for (const row of (pickRows || []) as unknown as Array<{
           generation_id: string; product_id: string;
-          products: { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null; primary_image_url: string | null; primary_video_url: string | null; primary_video_poster_url: string | null; images: string[] | null; url: string | null } | null;
+          products: { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null; primary_image_url: string | null; primary_video_url: string | null; primary_hls_url: string | null; primary_video_poster_url: string | null; images: string[] | null; url: string | null } | null;
         }>) {
           const p = row.products;
           if (!p) continue;
@@ -324,7 +335,10 @@ export default function CreatorPage({
               image: p.primary_image_url || p.image_url || (p.images && p.images[0]) || undefined,
               // Carry the product's primary video + frame-0 poster so the Shop
               // tab tile plays it (poster-first), same as the public catalog.
+              // primary_hls_url lets CreativeCardV2 play the HLS ladder (instant
+              // first frame) over the progressive MP4 when one exists — feed parity.
               video_url: p.primary_video_url || undefined,
+              primary_hls_url: p.primary_hls_url || undefined,
               thumbnail_url: p.primary_video_poster_url || p.primary_image_url || p.image_url || undefined,
             });
           }
@@ -394,7 +408,7 @@ export default function CreatorPage({
         .select(`
           id, legacy_id, title, gender, creator_handle, user_id,
           looks_creative!inner ( video_url, hls_url, thumbnail_url, is_primary ),
-          look_products ( products ( id, name, brand, price, image_url, primary_image_url, primary_video_url, primary_video_poster_url, url, images ) )
+          look_products ( products ( id, name, brand, price, image_url, primary_image_url, primary_video_url, primary_hls_url, primary_video_poster_url, url, images ) )
         `)
         .eq('creator_handle', creatorName)
         .eq('status', 'live')
@@ -412,7 +426,7 @@ export default function CreatorPage({
         id: string; legacy_id: number | null; title: string;
         gender: string | null; creator_handle: string; user_id: string | null;
         looks_creative: { video_url: string | null; hls_url: string | null; thumbnail_url: string | null; is_primary: boolean }[];
-        look_products: { products: { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null; primary_image_url: string | null; primary_video_url: string | null; primary_video_poster_url: string | null; url: string | null; images: string[] | null } | null }[] | null;
+        look_products: { products: { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null; primary_image_url: string | null; primary_video_url: string | null; primary_hls_url: string | null; primary_video_poster_url: string | null; url: string | null; images: string[] | null } | null }[] | null;
       };
       const rows = (lookRows as LookPayload[] | null) || [];
 
@@ -429,7 +443,9 @@ export default function CreatorPage({
             image: p.primary_image_url || p.image_url || (p.images && p.images[0]) || undefined,
             // Carry the product's primary video + its poster so the look's
             // product rows play the primary video (poster-first), same as feed.
+            // primary_hls_url lets the Shop tab play the HLS ladder when present.
             video_url: p.primary_video_url || undefined,
+            primary_hls_url: p.primary_hls_url || undefined,
             thumbnail_url: p.primary_video_poster_url || p.primary_image_url || p.image_url || undefined,
           }));
         return {
@@ -754,15 +770,19 @@ export default function CreatorPage({
   return (
     <div>
     <div
-      ref={pageScrollRef}
       className="creator-page"
       style={appearance.hue != null ? { background: `hsl(${appearance.hue}, 28%, 6%)` } : undefined}
     >
       {/* Creator-chosen appearance: particle field behind content + the hue
-          tint on the page background above. */}
+          tint on the page background above. Sits in the promoted fixed shell
+          (not the scroller) so it pins to the viewport. */}
       {appearance.particles && (
         <div className="creator-page-particles" aria-hidden="true"><ParticleBackground /></div>
       )}
+      {/* Inner scroller (mirrors the product detail overlay's .product-page).
+          The fixed .creator-page shell is layer-promoted; the actual scroll
+          happens here. */}
+      <div ref={pageScrollRef} className="creator-page-scroll">
       <button className="creator-back creator-back--icon" onClick={handleClose} aria-label="Back">
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
       </button>
@@ -1010,16 +1030,19 @@ export default function CreatorPage({
         ) : (
           <div className="creator-grid" style={{ ['--cat-cols']: gridCols } as CSSProperties}>
             {filteredProducts.map((p, i) => (
-              <CreatorProductTile
+              <CreativeCardV2
                 key={`${p.brand}-${p.name}-${i}`}
                 slotId={`${directorScope}:product-${p.brand}-${p.name}-${i}`}
-                product={p}
-                onClick={() => handleProductClick(p)}
+                creative={creatorProductToAd(p)}
+                className="look-card"
+                onOpenProduct={() => handleProductClick(p)}
+                priority={i < 6}
               />
             ))}
           </div>
         )
       )}
+      </div>{/* .creator-page-scroll */}
     </div>
 
     {/* Grid-density dial — minimal wheel on the right edge. Scroll/drag to
@@ -1108,6 +1131,64 @@ export default function CreatorPage({
 }
 
 // ── helpers ────────────────────────────────────────────────────────────
+
+// Map a creator-catalog Product into the ProductAd shape CreativeCardV2
+// renders in creative mode — so the Shop tab uses the SAME director-driven,
+// HLS-first playback pipeline as the feed and the Looks tab (instead of the
+// old CreatorProductTile, which cold-loaded a progressive MP4 per tile).
+//
+// The `id` mirrors handleOpenProduct's trail-id convention
+// (`creative_id` ?? `product:<brand>-<name>`): CreativeCardV2 donates its
+// playing <video> to TrailVideoHost keyed by `id`, and ProductPage's hero
+// reads the trail by the same key — so tapping a Shop tile hands the live,
+// already-decoded frame straight to the detail hero (no re-buffer, no flash).
+function creatorProductToAd(p: Product): ProductAd {
+  const productId = p.id || '';
+  const poster = p.thumbnail_url || p.image || null;
+  return {
+    id: p.creative_id || `product:${p.brand}-${p.name}`,
+    product_id: productId,
+    look_id: null,
+    title: p.name,
+    description: null,
+    video_url: p.video_url ?? null,
+    mobile_video_url: null,
+    hls_url: p.primary_hls_url ?? null,
+    storage_path: null,
+    thumbnail_url: poster,
+    affiliate_url: null,
+    prompt: null,
+    prompt_extra: null,
+    style: '',
+    model: null,
+    status: 'live',
+    duration_seconds: null,
+    aspect_ratio: '3:4',
+    resolution: null,
+    cost_usd: null,
+    impressions: 0,
+    clicks: 0,
+    error: null,
+    enabled: true,
+    created_at: '',
+    completed_at: null,
+    updated_at: null,
+    product: {
+      id: productId,
+      name: p.name,
+      brand: p.brand,
+      price: p.price,
+      image_url: p.image ?? null,
+      primary_image_url: p.image ?? null,
+      primary_video_url: p.video_url ?? null,
+      primary_hls_url: p.primary_hls_url ?? null,
+      primary_video_poster_url: p.thumbnail_url ?? null,
+      images: null,
+      url: p.url ?? null,
+    },
+  };
+}
+
 function hashUuid(s: string): number {
   let h = 0;
   for (let i = 0; i < s.length; i++) h = ((h << 5) - h + s.charCodeAt(i)) | 0;
