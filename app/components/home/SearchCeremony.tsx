@@ -12,7 +12,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import ParticleBackground from '~/components/ParticleBackground';
-import { getHomeFeed } from '~/services/product-creative';
+import { getHomeFeed, getProductImagesForQuery } from '~/services/product-creative';
 // Speed is dialed up while the ceremony is on screen so the field reads
 // as "searching the world", then restored on cleanup. The ceremony's own
 // ParticleBackground sits ABOVE its opaque scrim so the field is visible
@@ -41,6 +41,18 @@ const MIN_DURATION_MS = 2400;
 const MAX_DURATION_MS = 7000;
 /** How many product tiles can float behind the stage at most. */
 const FLOATER_SLOTS = 8;
+
+// Hand-placed scatter for the floating tiles — TOP and BOTTOM bands only,
+// kept clear of the centered thinking card (which lives in the y 30-72%
+// middle), and spaced so tiles don't overlap each other. Interleaved
+// top/bottom so the progressive reveal scatters evenly instead of filling
+// one band first. {x, y} are viewport percentages of the tile's center.
+const FLOATER_SLOTS_POS: { x: number; y: number }[] = [
+  { x: 18, y: 11 }, { x: 16, y: 84 },
+  { x: 41, y: 6 },  { x: 45, y: 92 },
+  { x: 63, y: 13 }, { x: 60, y: 82 },
+  { x: 85, y: 8 },  { x: 86, y: 88 },
+];
 /** How fast the thinking steps stream in, one after another. */
 const STEP_INTERVAL_MS = 600;
 /** Beat to hold on the all-checks state before revealing results. */
@@ -154,24 +166,31 @@ export default function SearchCeremony({ query, kind = 'search', ready, onDone, 
     }
     return next.length === prev.length ? prev : next;
   });
-  // Result images claim their slots first as they arrive.
+  // The real semantic results claim slots as they land (best match).
   useEffect(() => { if (floatingImages.length) mergeImages(floatingImages); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [floatingImages]);
-  // Background pool so products form even before the real results land.
+  // Precursor: products RELATED to the query, fetched fast so the field hints
+  // at what's coming ("jeans" → denim, "shoes" → sneakers). If the query
+  // matched little, top up with the home feed so the field never looks empty.
   useEffect(() => {
     let cancelled = false;
-    // ignoreGender so the ambient pool is as large as possible — these are
-    // decorative "products forming" tiles, not a gendered feed.
-    getHomeFeed({ ignoreGender: true })
-      .then(list => {
-        if (cancelled) return;
-        mergeImages(list.map(a =>
-          a.product?.primary_image_url || a.product?.image_url || a.thumbnail_url || (a.product?.images && a.product.images[0]) || '',
-        ).filter(Boolean));
-      })
-      .catch(() => {});
+    (async () => {
+      let imgs: string[] = [];
+      try { imgs = await getProductImagesForQuery(query, FLOATER_SLOTS * 2); } catch { /* */ }
+      if (cancelled) return;
+      if (imgs.length < 4) {
+        try {
+          const feed = await getHomeFeed({ ignoreGender: true });
+          if (cancelled) return;
+          imgs = [...imgs, ...feed.map(a =>
+            a.product?.primary_image_url || a.product?.image_url || a.thumbnail_url || '',
+          ).filter(Boolean)];
+        } catch { /* keep the query matches we have */ }
+      }
+      mergeImages(imgs);
+    })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [query]);
 
   // Visible tile count ramps with each completed phase (a couple per phase),
   // so the field fills in as the narration progresses.
@@ -262,27 +281,24 @@ export default function SearchCeremony({ query, kind = 'search', ready, onDone, 
       {visibleFloaters > 0 && (
         <div className="sc-floaters" aria-hidden="true">
           {pool.slice(0, visibleFloaters).map((src, i) => {
-            // Fixed slot layout (always FLOATER_SLOTS positions) so a tile's
-            // spot is stable as more fade in beside it — no reshuffling.
-            const n = FLOATER_SLOTS;
-            const angle = (i / n) * Math.PI * 2 + (i % 2 ? 0.5 : 0);
-            // Scatter on an ellipse, biased to the edges so the center stays
-            // clear for the narration card.
-            const rx = 30 + (i % 3) * 7;          // % from center, horizontal
-            const ry = 26 + ((i + 1) % 3) * 8;    // % from center, vertical
-            const left = 50 + Math.cos(angle) * rx;
-            const top = 50 + Math.sin(angle) * ry;
+            // Fixed, non-overlapping slot (stable as more fade in beside it).
+            const slot = FLOATER_SLOTS_POS[i % FLOATER_SLOTS_POS.length];
+            // Per-tile drift params so each floats on its own path — gentle
+            // 2D bob + a touch of rotation = "floating in space".
+            const dx = (i % 2 ? 1 : -1) * (5 + (i % 3) * 3); // px, alternating
+            const rot = (i % 2 ? -1 : 1) * (1.5 + (i % 3));  // deg
             return (
               <span
                 key={src}
                 className="sc-floater"
                 style={{
-                  left: `${left}%`,
-                  top: `${top}%`,
-                  ['--d' as string]: `${(i % 5) * 0.6}s`,
-                  ['--dur' as string]: `${7 + (i % 4)}s`,
-                  // Each tile fades in on mount as it joins the field; no
-                  // batch stagger needed since they arrive phase by phase.
+                  left: `${slot.x}%`,
+                  top: `${slot.y}%`,
+                  ['--dx' as string]: `${dx}px`,
+                  ['--rot' as string]: `${rot}deg`,
+                  ['--d' as string]: `${(i % 4) * 0.5}s`,
+                  ['--dur' as string]: `${7 + (i % 5)}s`,
+                  // Each tile fades in on mount as it joins the field.
                   ['--fade' as string]: '0s',
                 } as React.CSSProperties}
               >

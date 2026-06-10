@@ -690,28 +690,31 @@ export default function ProductPage({
   // when a super admin opens it — the live rail never pays for it.
   const isSuperAdmin = user?.role === 'super_admin';
 
-  // Secret super-admin gesture: press-and-hold the hero media to delete the
+  // Secret super-admin gesture: press-and-hold the SAVE button to delete the
   // product (soft-hide it from the feed + every look). A 650ms hold, cancelled
-  // by any real drag/scroll, so a normal tap-to-play is untouched. Invisible
-  // to everyone else.
+  // by any real drag/scroll; longPressFired suppresses the save-toggle that
+  // would otherwise fire on release. Invisible to everyone else.
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
   const pressTimer = useRef<number | null>(null);
   const pressStart = useRef<{ x: number; y: number } | null>(null);
+  const longPressFired = useRef(false);
   const clearPress = useCallback(() => {
     if (pressTimer.current) { window.clearTimeout(pressTimer.current); pressTimer.current = null; }
     pressStart.current = null;
   }, []);
-  const onHeroPressStart = useCallback((e: React.PointerEvent) => {
+  const onSavePressStart = useCallback((e: React.PointerEvent) => {
     if (!isSuperAdmin) return;
+    longPressFired.current = false;
     pressStart.current = { x: e.clientX, y: e.clientY };
     pressTimer.current = window.setTimeout(() => {
       clearPress();
+      longPressFired.current = true;
       try { navigator.vibrate?.(30); } catch { /* no haptics */ }
       setDeleteOpen(true);
     }, 650);
   }, [isSuperAdmin, clearPress]);
-  const onHeroPressMove = useCallback((e: React.PointerEvent) => {
+  const onSavePressMove = useCallback((e: React.PointerEvent) => {
     if (!pressStart.current) return;
     const dx = e.clientX - pressStart.current.x;
     const dy = e.clientY - pressStart.current.y;
@@ -986,6 +989,9 @@ export default function ProductPage({
   const isSaved = bookmarks.isProductBookmarked(product);
 
   const handleToggleSave = useCallback(() => {
+    // A super-admin long-press on this button just opened the delete confirm —
+    // swallow the click so it doesn't also toggle a save on release.
+    if (longPressFired.current) { longPressFired.current = false; return; }
     const wasSaved = bookmarks.isProductBookmarked(product);
     const productToSave = creative
       ? { ...product, video_url: creative.videoUrl, thumbnail_url: creative.thumbnailUrl ?? undefined, creative_id: creative.id }
@@ -1222,14 +1228,7 @@ export default function ProductPage({
 
         {heroEnabled && (
         <div className="pd-split">
-          <section
-            className={heroClassName}
-            onPointerDown={onHeroPressStart}
-            onPointerUp={clearPress}
-            onPointerLeave={clearPress}
-            onPointerCancel={clearPress}
-            onPointerMove={onHeroPressMove}
-          >
+          <section className={heroClassName}>
             {effectiveCreative ? (
               <>
                 {/* Phase 9 instant poster: paints synchronously on mount
@@ -1285,6 +1284,11 @@ export default function ProductPage({
               type="button"
               className={`pd-save-floating ${isSaved ? 'is-saved' : ''}`}
               onClick={handleToggleSave}
+              onPointerDown={onSavePressStart}
+              onPointerUp={clearPress}
+              onPointerLeave={clearPress}
+              onPointerCancel={clearPress}
+              onPointerMove={onSavePressMove}
               aria-label={isSaved ? 'Remove from bookmarks' : 'Save product'}
               aria-pressed={isSaved}
             >

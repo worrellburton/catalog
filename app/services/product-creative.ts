@@ -268,6 +268,43 @@ export async function getProductAdsByStatus(status: string): Promise<ProductAd[]
   return (data || []) as ProductAd[];
 }
 
+/**
+ * Fast, fuzzy product-image lookup for the search ceremony's "products
+ * forming" preview. NOT the real search — just a cheap one-shot match
+ * (name / type / brand ILIKE + catalog_tags overlap) so related products
+ * float in immediately as a precursor while the real semantic search
+ * resolves. Returns de-duped image URLs. Never throws.
+ */
+export async function getProductImagesForQuery(query: string, limit = 16): Promise<string[]> {
+  if (!supabase) return [];
+  // Sanitize to alphanumerics + spaces so the value is safe to drop into a
+  // PostgREST or() filter (which has its own delimiter grammar).
+  const safe = query.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
+  if (!safe) return [];
+  // Match the whole phrase plus each token and a de-pluralized variant
+  // (so "shoes" also hits "shoe", "jeans" → "jean") across name + type.
+  const variants = new Set<string>([safe]);
+  for (const t of safe.split(' ')) {
+    if (t.length < 2) continue;
+    variants.add(t);
+    if (t.endsWith('s') && t.length > 3) variants.add(t.slice(0, -1));
+  }
+  const orParts: string[] = [];
+  for (const v of variants) orParts.push(`name.ilike.*${v}*`, `type.ilike.*${v}*`);
+  orParts.push(`brand.ilike.*${safe}*`);
+  const { data, error } = await supabase
+    .from('products')
+    .select('primary_image_url, image_url')
+    .eq('is_active', true)
+    .or(orParts.join(','))
+    .limit(limit);
+  if (error || !data) return [];
+  const imgs = (data as { primary_image_url: string | null; image_url: string | null }[])
+    .map(r => r.primary_image_url || r.image_url || '')
+    .filter(Boolean);
+  return [...new Set(imgs)];
+}
+
 export async function getHomeFeed(opts: { ignoreGender?: boolean } = {}): Promise<ProductAd[]> {
   if (!supabase) return [];
   // Visibility contract (product tiles):
