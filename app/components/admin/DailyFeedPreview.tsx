@@ -7,12 +7,22 @@
 // to their real daily row. Cohort modes render the global active product feed
 // (what a cold-start shopper sees), gender-filtered.
 
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { supabase } from '~/utils/supabase';
 
 type Mode = 'user' | 'all' | 'men' | 'women';
 
 interface PreviewProduct { id: string; name: string; brand: string; image: string }
+
+/** Why the feed ranked the way it did — surfaced from personalize-feed so
+ *  an admin can see which signals and rules shaped this user's feed. */
+interface FeedReason {
+  topBrands?: string[];
+  topTypes?: string[];
+  engaged?: number;
+  seen?: number;
+  rules?: string[];
+}
 
 // Strip characters that would break a PostgREST .or() filter string (an admin
 // types free text here). Keeps the ilike match safe + predictable.
@@ -35,6 +45,27 @@ export default function DailyFeedPreview({ open, onClose }: { open: boolean; onC
   const [who, setWho] = useState<string | null>(null);
   const [variant, setVariant] = useState<string | null>(null);
   const [products, setProducts] = useState<PreviewProduct[]>([]);
+  const [reason, setReason] = useState<FeedReason | null>(null);
+  // Live typeahead: suggestions appear as the admin types a user.
+  const [suggestions, setSuggestions] = useState<{ id: string; label: string; sub: string }[]>([]);
+  const pickedUser = useRef<{ id: string; label: string } | null>(null);
+  const searchTimer = useRef(0);
+
+  useEffect(() => {
+    if (mode !== 'user') { setSuggestions([]); return; }
+    const term = sanitizeTerm(username);
+    if (!term || term === pickedUser.current?.label) { setSuggestions([]); return; }
+    window.clearTimeout(searchTimer.current);
+    searchTimer.current = window.setTimeout(async () => {
+      if (!supabase) return;
+      const { data } = await supabase
+        .from('profiles').select('id, full_name, email')
+        .or(`full_name.ilike.%${term}%,email.ilike.%${term}%`).limit(6);
+      setSuggestions(((data ?? []) as { id: string; full_name: string | null; email: string | null }[])
+        .map(r => ({ id: r.id, label: r.full_name || r.email || r.id.slice(0, 8), sub: r.email || '' })));
+    }, 220);
+    return () => window.clearTimeout(searchTimer.current);
+  }, [username, mode]);
 
   if (!open) return null;
 
@@ -79,16 +110,19 @@ export default function DailyFeedPreview({ open, onClose }: { open: boolean; onC
 
   const run = async () => {
     if (!supabase) { setErr('Supabase not configured.'); return; }
-    setLoading(true); setErr(null); setProducts([]); setWho(null); setVariant(null);
+    setLoading(true); setErr(null); setProducts([]); setWho(null); setVariant(null); setReason(null); setSuggestions([]);
     try {
       if (mode === 'user') {
-        const u = await resolveUser(username);
+        const u = pickedUser.current?.label === username.trim()
+          ? pickedUser.current
+          : await resolveUser(username);
         if (!u) { setErr(`No user found matching “${username}”.`); setLoading(false); return; }
         setWho(u.label);
         const { data, error } = await supabase.functions.invoke('personalize-feed', { body: { target_user_id: u.id } });
         if (error) throw error;
-        const resp = data as { enabled?: boolean; variant?: string; ranked_items?: { id: string }[] };
+        const resp = data as { enabled?: boolean; variant?: string; reason?: FeedReason | null; ranked_items?: { id: string }[] };
         setVariant(resp.enabled === false ? 'auto-editor disabled' : (resp.variant ?? null));
+        setReason(resp.reason ?? null);
         const ids = (resp.ranked_items ?? []).map(r => r.id);
         // personalized/cold-start with no ranked ids → fall back to the global feed.
         setProducts(ids.length ? await productsByIds(ids) : await cohort('all'));
@@ -136,13 +170,41 @@ export default function DailyFeedPreview({ open, onClose }: { open: boolean; onC
 
           <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 14 }}>
             {mode === 'user' && (
-              <input
-                value={username}
-                onChange={e => setUsername(e.target.value)}
-                onKeyDown={e => { if (e.key === 'Enter') run(); }}
-                placeholder="Username, name, or email…"
-                style={{ flex: 1, padding: '9px 12px', borderRadius: 8, border: '1px solid #ddd', fontSize: 13, fontFamily: 'inherit' }}
-              />
+              <div style={{ flex: 1, position: 'relative' }}>
+                <input
+                  value={username}
+                  onChange={e => { pickedUser.current = null; setUsername(e.target.value); }}
+                  onKeyDown={e => { if (e.key === 'Enter') { setSuggestions([]); run(); } }}
+                  placeholder="Type a user — name or email…"
+                  style={{ width: '100%', boxSizing: 'border-box', padding: '9px 12px', borderRadius: 8, border: '1px solid #ddd', fontSize: 13, fontFamily: 'inherit' }}
+                />
+                {suggestions.length > 0 && (
+                  <div style={{
+                    position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 5, marginTop: 4,
+                    background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10,
+                    boxShadow: '0 12px 32px rgba(0,0,0,0.14)', overflow: 'hidden',
+                  }}>
+                    {suggestions.map(s => (
+                      <button
+                        key={s.id}
+                        onClick={() => {
+                          pickedUser.current = { id: s.id, label: s.label };
+                          setUsername(s.label);
+                          setSuggestions([]);
+                        }}
+                        style={{
+                          display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px',
+                          background: '#fff', border: 'none', borderBottom: '1px solid #f4f4f5',
+                          fontSize: 13, cursor: 'pointer',
+                        }}
+                      >
+                        <span style={{ fontWeight: 600, color: '#111' }}>{s.label}</span>
+                        {s.sub && s.sub !== s.label && <span style={{ marginLeft: 8, fontSize: 11.5, color: '#999' }}>{s.sub}</span>}
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
             )}
             <button
               className="admin-btn admin-btn-primary"
@@ -159,6 +221,22 @@ export default function DailyFeedPreview({ open, onClose }: { open: boolean; onC
               Showing <strong style={{ color: '#111' }}>{who}</strong>
               {variant && <span style={{ marginLeft: 6, padding: '2px 8px', borderRadius: 999, background: '#eef2ff', color: '#4338ca', fontSize: 11, fontWeight: 600 }}>{variant}</span>}
               <span style={{ marginLeft: 6, color: '#999' }}>· {products.length} items</span>
+              {reason && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 8 }}>
+                  {(reason.topBrands ?? []).slice(0, 4).map(b => (
+                    <span key={`b-${b}`} style={{ padding: '2px 8px', borderRadius: 999, background: '#fef3c7', color: '#92400e', fontSize: 10.5, fontWeight: 600 }}>♥ {b}</span>
+                  ))}
+                  {(reason.topTypes ?? []).slice(0, 4).map(ty => (
+                    <span key={`t-${ty}`} style={{ padding: '2px 8px', borderRadius: 999, background: '#dcfce7', color: '#166534', fontSize: 10.5, fontWeight: 600 }}>{ty}</span>
+                  ))}
+                  {(reason.rules ?? []).map(r => (
+                    <span key={`r-${r}`} style={{ padding: '2px 8px', borderRadius: 999, background: '#f1f5f9', color: '#475569', fontSize: 10.5, fontWeight: 600 }}>rule: {r}</span>
+                  ))}
+                  {typeof reason.engaged === 'number' && (
+                    <span style={{ padding: '2px 8px', borderRadius: 999, background: '#f1f5f9', color: '#475569', fontSize: 10.5, fontWeight: 600 }}>{reason.engaged} engaged · {reason.seen ?? 0} seen</span>
+                  )}
+                </div>
+              )}
             </div>
           )}
 

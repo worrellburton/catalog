@@ -519,3 +519,86 @@ export function subscribeAutoEditorEnabled(onChange: (enabled: boolean) => void)
     .subscribe();
   return () => { void supabase!.removeChannel(channel); };
 }
+
+// ── Daily feed rules ──────────────────────────────────────────────────
+// Ten tunable rules for the personalized daily feed, edited from the
+// Automatic Editor modal on /admin/catalogs and consumed by the
+// personalize-feed edge function (server-side rules) and the home feed
+// composer (savedBrands — the only client-side rule, since bookmarks
+// live in localStorage). Stored as ONE app_settings row (JSON) under
+// FEED_RULES_KEY so the edge function reads the whole rulebook in a
+// single key.
+
+export const FEED_RULES_KEY = 'feed_rules';
+
+export interface FeedRule { enabled: boolean; weight: number }
+
+export interface FeedRules {
+  /** Boost products with the highest clickout conversion (products.conversion_score). */
+  convertingBoost: FeedRule;
+  /** Resurface specific products this user clicked before. */
+  clickedProducts: FeedRule;
+  /** Lean toward brands this user engages with (clicks/clickouts). */
+  engagedBrands: FeedRule;
+  /** Lean toward product categories this user engages with. */
+  engagedTypes: FeedRule;
+  /** Boost brands from the user's saved items (client-side; bookmarks). */
+  savedBrands: FeedRule;
+  /** Push the newest arrivals up the feed. */
+  freshnessBoost: FeedRule;
+  /** Down-rank items the user has already seen (weight = penalty strength). */
+  seenDecay: FeedRule;
+  /** Max items per brand in the top 20 (weight = the cap, 1–5). */
+  diversityGuard: FeedRule;
+  /** Only show products matching the user's gender (+ unisex). */
+  genderStrict: FeedRule;
+  /** Boost what's trending platform-wide this week (clickout velocity). */
+  trendingBoost: FeedRule;
+}
+
+/** Defaults mirror today's live behavior — engaged brands/types and the
+ *  seen penalty are what personalize-feed already does; everything else
+ *  starts OFF so flipping a dial is always an explicit founder decision. */
+export const DEFAULT_FEED_RULES: FeedRules = {
+  convertingBoost: { enabled: false, weight: 5 },
+  clickedProducts: { enabled: false, weight: 3 },
+  engagedBrands:   { enabled: true,  weight: 5 },
+  engagedTypes:    { enabled: true,  weight: 5 },
+  savedBrands:     { enabled: false, weight: 4 },
+  freshnessBoost:  { enabled: false, weight: 3 },
+  seenDecay:       { enabled: true,  weight: 5 },
+  diversityGuard:  { enabled: false, weight: 3 },
+  genderStrict:    { enabled: false, weight: 0 },
+  trendingBoost:   { enabled: false, weight: 4 },
+};
+
+function sanitizeFeedRules(raw: unknown): FeedRules {
+  const out: FeedRules = JSON.parse(JSON.stringify(DEFAULT_FEED_RULES));
+  if (!raw || typeof raw !== 'object') return out;
+  for (const key of Object.keys(out) as (keyof FeedRules)[]) {
+    const r = (raw as Record<string, unknown>)[key];
+    if (r && typeof r === 'object') {
+      const rule = r as { enabled?: unknown; weight?: unknown };
+      if (typeof rule.enabled === 'boolean') out[key].enabled = rule.enabled;
+      const w = Number(rule.weight);
+      if (Number.isFinite(w)) out[key].weight = Math.max(0, Math.min(10, w));
+    }
+  }
+  return out;
+}
+
+export async function getFeedRules(): Promise<FeedRules> {
+  if (!supabase) return sanitizeFeedRules(null);
+  const { data, error } = await supabase
+    .from('app_settings').select('value').eq('key', FEED_RULES_KEY).maybeSingle();
+  if (error || !data?.value) return sanitizeFeedRules(null);
+  try { return sanitizeFeedRules(JSON.parse(data.value)); } catch { return sanitizeFeedRules(null); }
+}
+
+export async function setFeedRules(rules: FeedRules): Promise<void> {
+  if (!supabase) throw new Error('Supabase not configured');
+  const { error } = await supabase
+    .from('app_settings')
+    .upsert({ key: FEED_RULES_KEY, value: JSON.stringify(sanitizeFeedRules(rules)) }, { onConflict: 'key' });
+  if (error) throw error;
+}

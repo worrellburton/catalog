@@ -20,6 +20,7 @@ import { getSeenKeys, partitionUnseen, type SeenKey } from '~/services/seen-feed
 import { useSearch } from '~/hooks/useSearch';
 import { director } from '~/services/video-playback-director';
 import { useUserAffinity } from '~/hooks/useUserAffinity';
+import { getFeedRules } from '~/services/dials';
 import { composeRenderedCreatives } from '~/services/feed-compose';
 import { recordRecentSearch } from '~/services/recent-searches';
 import { getPersonalizedProductOrder } from '~/services/personalized-feed';
@@ -174,6 +175,27 @@ function ContinuousFeed({
   // service's own dial gate + per-day localStorage cache. Only ever applied
   // to the default home feed's product lane below.
   const [personalizedOrder, setPersonalizedOrder] = useState<string[] | null>(null);
+
+  // "Boost brands they saved" feed rule (admin rulebook in app_settings).
+  // Bookmarks are on-device, so this is the one rule applied client-side:
+  // read the rule once per mount, snapshot the saved brands, and hand the
+  // pair to the composer. Null when the rule is off or nothing is saved.
+  const [savedBrandBoost, setSavedBrandBoost] = useState<{ brands: Set<string>; weight: number } | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    void getFeedRules().then(rules => {
+      if (cancelled || !rules.savedBrands.enabled) return;
+      try {
+        const raw = localStorage.getItem('catalog_bookmarked_products');
+        const saved = raw ? (JSON.parse(raw) as { brand?: string | null }[]) : [];
+        const brands = new Set(saved.map(p => (p.brand || '').toLowerCase()).filter(Boolean));
+        if (brands.size > 0) {
+          setSavedBrandBoost({ brands, weight: Math.min(8, Math.max(1, Math.round(rules.savedBrands.weight))) });
+        }
+      } catch { /* unreadable bookmarks — rule silently off */ }
+    });
+    return () => { cancelled = true; };
+  }, []);
   useEffect(() => {
     let cancelled = false;
     getPersonalizedProductOrder().then(ids => {
@@ -867,8 +889,9 @@ function ContinuousFeed({
       seenKeys,
       affinity,
       personalizedOrder,
+      savedBrandBoost,
     });
-  }, [brandMatchedCreatives, tagMatchedCreatives, semanticallyOrderedCreatives, committedQuery, seenKeys, affinity, personalizedOrder]);
+  }, [brandMatchedCreatives, tagMatchedCreatives, semanticallyOrderedCreatives, committedQuery, seenKeys, affinity, personalizedOrder, savedBrandBoost]);
 
   // Log search queries through the batch endpoint. Debounced 1.5 s and
   // prefix-deduped so mid-typing keystrokes don't each enqueue an entry;

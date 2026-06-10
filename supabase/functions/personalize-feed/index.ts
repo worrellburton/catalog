@@ -15,6 +15,9 @@
 //   auto_editor_holdout_pct   0..100
 //   auto_editor_recency_days  history lookback window
 //   auto_editor_min_signal    min user_events before personalizing
+//   feed_rules                JSON rulebook (services/dials.ts FeedRules) —
+//                             ten founder-tunable ranking rules, all signals
+//                             normalized 0..1 then scaled by weight 0..10
 //
 // Optional secret (falls back to the deterministic order when absent):
 //   ANTHROPIC_API_KEY
@@ -27,7 +30,6 @@ const CLAUDE_TOP_N = 60;      // top deterministic candidates sent to Claude
 const EVENT_LOOKBACK_CAP = 5000;
 
 const EVENT_WEIGHT: Record<string, number> = { clickout: 5, click: 3, impression: 1 };
-const SEEN_PENALTY = 2.5;     // down-rank already-seen items so the feed feels fresh
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -71,6 +73,75 @@ interface ProductRow {
   gender: string | null;
   feed_rank: number | null;
   is_elite: boolean | null;
+  conversion_score: number | null;
+  primary_video_generated_at: string | null;
+}
+
+interface FeedRule { enabled: boolean; weight: number }
+type FeedRules = Record<
+  'convertingBoost' | 'clickedProducts' | 'engagedBrands' | 'engagedTypes' | 'savedBrands'
+  | 'freshnessBoost' | 'seenDecay' | 'diversityGuard' | 'genderStrict' | 'trendingBoost',
+  FeedRule
+>;
+
+// Mirrors DEFAULT_FEED_RULES in app/services/dials.ts — defaults reproduce
+// the pre-rules behavior (brand/type affinity + seen penalty only).
+const DEFAULT_RULES: FeedRules = {
+  convertingBoost: { enabled: false, weight: 5 },
+  clickedProducts: { enabled: false, weight: 3 },
+  engagedBrands:   { enabled: true,  weight: 5 },
+  engagedTypes:    { enabled: true,  weight: 5 },
+  savedBrands:     { enabled: false, weight: 4 },  // client-side rule — ignored here
+  freshnessBoost:  { enabled: false, weight: 3 },
+  seenDecay:       { enabled: true,  weight: 5 },
+  diversityGuard:  { enabled: false, weight: 3 },
+  genderStrict:    { enabled: false, weight: 0 },
+  trendingBoost:   { enabled: false, weight: 4 },
+};
+
+function parseRules(raw: string | undefined): FeedRules {
+  const out: FeedRules = JSON.parse(JSON.stringify(DEFAULT_RULES));
+  if (!raw) return out;
+  try {
+    const parsed = JSON.parse(raw) as Record<string, { enabled?: unknown; weight?: unknown }>;
+    for (const key of Object.keys(out) as (keyof FeedRules)[]) {
+      const r = parsed[key];
+      if (r && typeof r === 'object') {
+        if (typeof r.enabled === 'boolean') out[key].enabled = r.enabled;
+        const w = Number(r.weight);
+        if (Number.isFinite(w)) out[key].weight = Math.max(0, Math.min(10, w));
+      }
+    }
+  } catch { /* malformed rulebook — defaults */ }
+  return out;
+}
+
+function normMap(m: Map<string, number>): Map<string, number> {
+  let max = 0;
+  for (const v of m.values()) max = Math.max(max, v);
+  if (max <= 0) return new Map();
+  return new Map([...m.entries()].map(([k, v]) => [k, v / max]));
+}
+
+/** Cap how many items one brand can hold in the top 20 — excess demotes
+ *  to just past the window, preserving relative order. */
+function applyDiversityGuard(order: string[], brandById: Map<string, string | null>, cap: number): string[] {
+  const top: string[] = [];
+  const demoted: string[] = [];
+  const perBrand = new Map<string, number>();
+  for (const id of order) {
+    if (top.length < 20) {
+      const brand = brandById.get(id) || '';
+      const n = brand ? (perBrand.get(brand) ?? 0) : 0;
+      if (brand && n >= cap) { demoted.push(id); continue; }
+      if (brand) perBrand.set(brand, n + 1);
+      top.push(id);
+    } else {
+      top.push(id);
+    }
+  }
+  // Demoted items re-enter right after the top window.
+  return [...top.slice(0, 20), ...demoted, ...top.slice(20)];
 }
 
 interface RankedItem { type: 'product'; id: string }
@@ -113,13 +184,14 @@ Deno.serve(async (req: Request) => {
     const { data: settingRows } = await supabase
       .from('app_settings')
       .select('key, value')
-      .in('key', ['auto_editor_enabled', 'auto_editor_holdout_pct', 'auto_editor_recency_days', 'auto_editor_min_signal', 'auto_editor_refresh_hour']);
+      .in('key', ['auto_editor_enabled', 'auto_editor_holdout_pct', 'auto_editor_recency_days', 'auto_editor_min_signal', 'auto_editor_refresh_hour', 'feed_rules']);
     const cfg = new Map((settingRows ?? []).map((r: { key: string; value: string | null }) => [r.key, r.value ?? '']));
     const enabled = (cfg.get('auto_editor_enabled') || 'false').trim().toLowerCase() === 'true';
     const holdoutPct = clampInt(cfg.get('auto_editor_holdout_pct'), 10, 0, 100);
     const recencyDays = clampInt(cfg.get('auto_editor_recency_days'), 30, 1, 365);
     const minSignal = clampInt(cfg.get('auto_editor_min_signal'), 3, 0, 1000);
     const refreshHour = clampInt(cfg.get('auto_editor_refresh_hour'), 0, 0, 23);
+    const rules = parseRules(cfg.get('feed_rules'));
 
     if (!enabled) return jsonRes({ success: true, enabled: false, variant: 'disabled' });
 
@@ -187,24 +259,62 @@ Deno.serve(async (req: Request) => {
     // ── Candidate pool: the global active product feed ──────────────────
     const { data: candidateRows } = await supabase
       .from('products')
-      .select('id, name, brand, type, price, gender, feed_rank, is_elite')
+      .select('id, name, brand, type, price, gender, feed_rank, is_elite, conversion_score, primary_video_generated_at')
       .eq('is_active', true)
       .not('primary_video_url', 'is', null)
       .order('feed_rank', { ascending: true, nullsFirst: false })
       .order('is_elite', { ascending: false, nullsFirst: false })
       .order('primary_video_generated_at', { ascending: false, nullsFirst: false })
       .limit(CANDIDATE_POOL);
-    const candidates = (candidateRows ?? []) as ProductRow[];
+    let candidates = (candidateRows ?? []) as ProductRow[];
+
+    // Rule: strict gender match — drop products for the other gender
+    // (unisex and untyped always pass; unknown shopper gender disables).
+    if (rules.genderStrict.enabled) {
+      const { data: prof } = await supabase.from('profiles').select('gender').eq('id', userId).maybeSingle();
+      const g = String(prof?.gender ?? '').toLowerCase();
+      const want = g.startsWith('m') ? 'men' : g.startsWith('f') || g.startsWith('w') ? 'women' : '';
+      if (want) {
+        candidates = candidates.filter(c => {
+          const pg = String(c.gender ?? '').toLowerCase();
+          return !pg || pg === 'unisex' || pg === want || pg === want.slice(0, -2) + 'le'; // men/male, women/female
+        });
+      }
+    }
     if (candidates.length === 0) {
       return await persistAndReturn(supabase, userId, feedDate, [], 'fallback', null, null, preview);
     }
 
-    // Deterministic taste score: brand + type affinity, fresh items favored.
+    // Rule: trending this week — platform-wide engagement velocity.
+    const trendNorm = new Map<string, number>();
+    if (rules.trendingBoost.enabled) {
+      const { data: trendRows } = await supabase.rpc('trending_product_scores', { days: 7, lim: 200 });
+      const raw = new Map<string, number>(
+        ((trendRows ?? []) as Array<{ product_id: string; score: number }>).map(r => [r.product_id, Number(r.score) || 0]));
+      for (const [k, v] of normMap(raw)) trendNorm.set(k, v);
+    }
+
+    // Deterministic taste score — every signal normalized 0..1, scaled by
+    // its rule weight (0..10). Disabled rules contribute nothing.
+    const brandNorm = normMap(brandWeight);
+    const typeNorm = normMap(typeWeight);
+    const engageNorm = normMap(engagementWeight);
+    const maxConv = Math.max(...candidates.map(c => c.conversion_score ?? 0), 0.0001);
+    const newestMs = Math.max(...candidates.map(c => c.primary_video_generated_at ? Date.parse(c.primary_video_generated_at) : 0), 1);
+    const oldestMs = Math.min(...candidates.map(c => c.primary_video_generated_at ? Date.parse(c.primary_video_generated_at) : newestMs));
+    const freshSpan = Math.max(newestMs - oldestMs, 1);
+
     const scored = candidates.map((c, idx) => {
       let score = 0;
-      if (c.brand && brandWeight.has(c.brand)) score += brandWeight.get(c.brand)!;
-      if (c.type && typeWeight.has(c.type)) score += typeWeight.get(c.type)!;
-      if (seen.has(c.id)) score -= SEEN_PENALTY;
+      if (rules.engagedBrands.enabled && c.brand) score += rules.engagedBrands.weight * (brandNorm.get(c.brand) ?? 0);
+      if (rules.engagedTypes.enabled && c.type) score += rules.engagedTypes.weight * (typeNorm.get(c.type) ?? 0);
+      if (rules.clickedProducts.enabled) score += rules.clickedProducts.weight * (engageNorm.get(c.id) ?? 0);
+      if (rules.convertingBoost.enabled) score += rules.convertingBoost.weight * ((c.conversion_score ?? 0) / maxConv);
+      if (rules.freshnessBoost.enabled && c.primary_video_generated_at) {
+        score += rules.freshnessBoost.weight * ((Date.parse(c.primary_video_generated_at) - oldestMs) / freshSpan);
+      }
+      if (rules.trendingBoost.enabled) score += rules.trendingBoost.weight * (trendNorm.get(c.id) ?? 0);
+      if (rules.seenDecay.enabled && seen.has(c.id)) score -= rules.seenDecay.weight / 2; // weight 5 ≈ legacy SEEN_PENALTY 2.5
       // Small global-rank tiebreaker so equal-affinity items keep editorial order.
       score += (CANDIDATE_POOL - idx) * 0.001;
       return { c, score };
@@ -216,11 +326,14 @@ Deno.serve(async (req: Request) => {
     const apiKey = Deno.env.get('ANTHROPIC_API_KEY') || '';
     let finalOrder = deterministicOrder;
     let model = 'deterministic';
+    const appliedRules = (Object.keys(rules) as (keyof FeedRules)[])
+      .filter(k => rules[k].enabled && k !== 'savedBrands');
     let reason: Record<string, unknown> | null = {
       topBrands: topKeys(brandWeight, 5),
       topTypes: topKeys(typeWeight, 5),
       engaged: engagedIds.length,
       seen: seen.size,
+      rules: appliedRules,
     };
 
     if (apiKey) {
@@ -249,6 +362,13 @@ Deno.serve(async (req: Request) => {
         void logUsage(supabase, { operation: 'personalize-feed', model: MODEL, status: 'error', error_message: msg.slice(0, 500) });
         // Fall through with the deterministic order.
       }
+    }
+
+    // Rule: brand diversity guard — cap one brand's share of the top 20.
+    if (rules.diversityGuard.enabled) {
+      const cap = Math.max(1, Math.min(5, Math.round(rules.diversityGuard.weight)));
+      const brandById = new Map(candidates.map(c => [c.id, c.brand]));
+      finalOrder = applyDiversityGuard(finalOrder, brandById, cap);
     }
 
     return await persistAndReturn(supabase, userId, feedDate, finalOrder, 'personalized', model, reason, preview);
@@ -313,7 +433,7 @@ async function persistAndReturn(
       computed_at: new Date().toISOString(),
     }, { onConflict: 'user_id,feed_date' });
   }
-  return jsonRes({ success: true, enabled: true, cached: false, preview, variant, model, ranked_items: ranked });
+  return jsonRes({ success: true, enabled: true, cached: false, preview, variant, model, reason, ranked_items: ranked });
 }
 
 interface ClaudeResponse {
