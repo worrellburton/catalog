@@ -140,6 +140,32 @@ export default function CreatorPage({
     return startCreatorScrollDebug(el);
   }, [activeTab]);
 
+  // iOS/WebKit held-scroll "thumbnail in the corner" fix. While the grid is
+  // actively scrolling, flag the scroller with `.is-scrolling` so CSS hides the
+  // director's pooled <video> layers (creator-page.css) — they get churned in
+  // and out of tiles mid-scroll and a freshly-attached, frame-less video paints
+  // at intrinsic thumbnail size for a frame before it composites. Posters stay
+  // visible; videos keep playing (dropped to opacity:0, not paused — the layer
+  // stays composited so they don't flash on reveal either) and come back the
+  // instant scrolling stops. Toggled via classList, NOT React state, so it
+  // never re-renders the grid during a scroll.
+  useEffect(() => {
+    const el = pageScrollRef.current;
+    if (!el) return;
+    let stopTimer = 0;
+    const onScroll = () => {
+      if (!el.classList.contains('is-scrolling')) el.classList.add('is-scrolling');
+      window.clearTimeout(stopTimer);
+      stopTimer = window.setTimeout(() => el.classList.remove('is-scrolling'), 140);
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.clearTimeout(stopTimer);
+      el.removeEventListener('scroll', onScroll);
+      el.classList.remove('is-scrolling');
+    };
+  }, [activeTab]);
+
   // Backfill any look (in this catalog) still missing its own poster frame, so
   // a posterless look stops falling back to a product image. Admin-gated (write
   // access), fired idle. Re-runnable, so it retries looks that failed elsewhere.
