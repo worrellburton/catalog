@@ -56,6 +56,9 @@ interface Props {
   /** Hover-drill: zoom INTO a node — the page opens its product drill view
    *  anchored at the node's canvas position. */
   onDrill: (nodeId: string, x: number, y: number) => void;
+  /** Ring dials (admin sliders): guide-ring opacity 0..1, distance ×0.5..2. */
+  ringOpacity: number;
+  ringScale: number;
 }
 
 const ROOT_ID = '__root__';
@@ -65,6 +68,27 @@ const CLICK_SLOP = 5;
 export default function TypeBrainGraph(p: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 1100, h: 720 });
+  // Zoom/pan view transform: screen = world * k + (tx, ty). Cmd/ctrl +
+  // wheel zooms about the pointer (ctrlKey also covers trackpad pinch).
+  const [view, setView] = useState({ k: 1, tx: 0, ty: 0 });
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const onWheel = (ev: WheelEvent) => {
+      if (!(ev.metaKey || ev.ctrlKey)) return;
+      ev.preventDefault(); // needs a non-passive listener — React's onWheel is passive
+      const rect = el.getBoundingClientRect();
+      const px = ev.clientX - rect.left;
+      const py = ev.clientY - rect.top;
+      setView(v => {
+        const k = Math.min(2.5, Math.max(0.35, v.k * Math.exp(-ev.deltaY * 0.0016)));
+        // Keep the world point under the cursor fixed while scaling.
+        return { k, tx: px - ((px - v.tx) / v.k) * k, ty: py - ((py - v.ty) / v.k) * k };
+      });
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, []);
   useEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
@@ -80,7 +104,7 @@ export default function TypeBrainGraph(p: Props) {
   const simLinks = useMemo<SimLink[]>(() => p.nodes.map(n => ({
     source: n.parentId ?? ROOT_ID, target: n.id,
   })), [p.nodes]);
-  const { positions, dragTo, release, ringRadii } = useForceSim(simNodes, simLinks, size.w, size.h);
+  const { positions, dragTo, release, ringRadii } = useForceSim(simNodes, simLinks, size.w, size.h, p.ringScale);
 
   const byId = useMemo(() => new Map(p.nodes.map(n => [n.id, n])), [p.nodes]);
   const descendants = useMemo(() => {
@@ -116,7 +140,10 @@ export default function TypeBrainGraph(p: Props) {
 
   const toLocal = (ev: { clientX: number; clientY: number }) => {
     const r = wrapRef.current?.getBoundingClientRect();
-    return { x: ev.clientX - (r?.left ?? 0), y: ev.clientY - (r?.top ?? 0) };
+    return {
+      x: ((ev.clientX - (r?.left ?? 0)) - view.tx) / view.k,
+      y: ((ev.clientY - (r?.top ?? 0)) - view.ty) / view.k,
+    };
   };
   const hitNode = (x: number, y: number, exclude: Set<string>): string | null => {
     let best: string | null = null;
@@ -248,9 +275,11 @@ export default function TypeBrainGraph(p: Props) {
         onPointerMove={onMove}
         onPointerUp={onUp}
       >
+        <g transform={`translate(${view.tx} ${view.ty}) scale(${view.k})`}>
         {/* Depth guide rings — layer N of the tree IS ring N */}
         {ringRadii.map((r, i) => (
           <circle key={`ring-${i}`} className="tb-ring"
+            style={{ strokeOpacity: p.ringOpacity }}
             cx={size.w / 2} cy={size.h / 2} r={r} />
         ))}
 
@@ -312,10 +341,16 @@ export default function TypeBrainGraph(p: Props) {
             x={Math.min(marquee.x0, marquee.x1)} y={Math.min(marquee.y0, marquee.y1)}
             width={Math.abs(marquee.x1 - marquee.x0)} height={Math.abs(marquee.y1 - marquee.y0)} />
         )}
+        </g>
       </svg>
 
       {/* HTML overlay: product satellites, rename input, add-child button */}
-      <div className="tb-overlay" onPointerMove={onProdMove} onPointerUp={onProdUp}>
+      <div
+        className="tb-overlay"
+        style={{ transform: `translate(${view.tx}px, ${view.ty}px) scale(${view.k})`, transformOrigin: '0 0' }}
+        onPointerMove={onProdMove}
+        onPointerUp={onProdUp}
+      >
         {showSatellites && p.nodes.map(n => {
           const sat = p.satellites.get(n.id);
           const pos = positions.get(n.id);
@@ -386,7 +421,7 @@ export default function TypeBrainGraph(p: Props) {
               title={`Drill into ${n.name} — see every product inside`}
               onPointerEnter={() => hoverEnter(n.id)}
               onPointerLeave={hoverLeave}
-              onClick={() => p.onDrill(n.id, pos.x, pos.y)}
+              onClick={() => p.onDrill(n.id, pos.x * view.k + view.tx, pos.y * view.k + view.ty)}
             >
               <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
                 <circle cx="11" cy="11" r="7" />

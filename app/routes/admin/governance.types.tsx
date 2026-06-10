@@ -91,6 +91,13 @@ export default function AdminGovernanceTypes() {
   const [toast, setToast] = useState<{ label: string; key: number } | null>(null);
   // "Move to…" armed: the next node click re-parents the whole selection.
   const [pickMode, setPickMode] = useState(false);
+  // Ring dials — view preferences, sticky per admin via localStorage.
+  const [ringOpacity, setRingOpacity] = useState(() =>
+    Number(typeof localStorage !== 'undefined' && localStorage.getItem('gov-ring-opacity')) || 0.15);
+  const [ringScale, setRingScale] = useState(() =>
+    Number(typeof localStorage !== 'undefined' && localStorage.getItem('gov-ring-scale')) || 1);
+  useEffect(() => { try { localStorage.setItem('gov-ring-opacity', String(ringOpacity)); } catch { /* private mode */ } }, [ringOpacity]);
+  useEffect(() => { try { localStorage.setItem('gov-ring-scale', String(ringScale)); } catch { /* private mode */ } }, [ringScale]);
   const toastTimer = useRef(0);
   // Sequential write queue — rapid gestures stay ordered.
   const queue = useRef<Promise<unknown>>(Promise.resolve());
@@ -476,6 +483,8 @@ export default function AdminGovernanceTypes() {
           viewMode={viewMode}
           onSelect={(ids) => { setPickMode(false); setSelection(ids); }}
           onDrill={(nodeId, ox, oy) => setDrill({ nodeId, ox, oy })}
+          ringOpacity={ringOpacity}
+          ringScale={ringScale}
           pickMode={pickMode}
           onPickTarget={(targetId) => {
             setPickMode(false);
@@ -557,6 +566,21 @@ export default function AdminGovernanceTypes() {
               onClick={() => handleSetGender(editableSelection, null)}>
               <i />inherit
             </button>
+          </div>
+        )}
+
+        {!drill && (
+          <div className="gov-ringdials">
+            <label>
+              <span>Ring opacity</span>
+              <input type="range" min={0} max={100} value={Math.round(ringOpacity * 100)}
+                onChange={e => setRingOpacity(Number(e.target.value) / 100)} />
+            </label>
+            <label>
+              <span>Ring distance</span>
+              <input type="range" min={50} max={200} value={Math.round(ringScale * 100)}
+                onChange={e => setRingScale(Number(e.target.value) / 100)} />
+            </label>
           </div>
         )}
 

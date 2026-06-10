@@ -515,7 +515,8 @@ html.gov-void .tb-wrap {
 /* ── Depth guide rings ── */
 .tb-ring {
   fill: none;
-  stroke: rgba(255, 255, 255, 0.055);
+  stroke: #ffffff;
+  /* stroke-opacity comes inline from the ring-opacity slider */
   stroke-width: 1;
   pointer-events: none;
 }
@@ -670,12 +671,17 @@ html.gov-void .tb-wrap {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  /* Rows, not columns: cards take only the space they need and wrap. */
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
   gap: 14px;
   padding: 18px 20px 24px;
 }
 .gov-drill-card {
+  width: 150px;
+  flex: 0 0 auto;
+  align-self: flex-start;
   font: inherit;
   text-align: left;
   color: inherit;
@@ -722,4 +728,36 @@ html.gov-void .tb-wrap {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+}
+
+/* ── Ring dials (opacity + distance sliders, bottom-left) ── */
+.gov-ringdials {
+  position: absolute;
+  left: 16px;
+  bottom: 12px;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  background: rgba(10, 10, 12, 0.72);
+}
+.gov-ringdials label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.gov-ringdials span {
+  width: 86px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #a1a1aa;
+}
+.gov-ringdials input[type='range'] {
+  width: 110px;
+  accent-color: #818cf8;
 }

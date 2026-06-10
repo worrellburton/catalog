@@ -33,10 +33,11 @@ const DAMPING = 0.82;
 const ALPHA_DECAY = 0.995;
 const MIN_ALPHA = 0.005;
 
-/** Ring spacing adapts to the canvas so the outermost ring stays inside. */
+/** Ring spacing adapts to the canvas. Wider than strictly fits is fine —
+ *  the graph zooms (cmd+wheel), so breathing room beats containment. */
 function ringGap(width: number, height: number, maxDepth: number): number {
-  const usable = Math.min(width, height) / 2 - 90;
-  return Math.max(72, Math.min(132, usable / Math.max(1, maxDepth)));
+  const usable = Math.min(width, height) / 2 - 70;
+  return Math.max(96, Math.min(176, usable / Math.max(1, maxDepth)));
 }
 
 export function useForceSim(
@@ -44,6 +45,8 @@ export function useForceSim(
   links: SimLink[],
   width: number,
   height: number,
+  /** Admin ring-distance dial — multiplies the auto-computed gap. */
+  gapScale = 1,
 ) {
   const bodiesRef = useRef<Map<string, Body>>(new Map());
   const alphaRef = useRef(1);
@@ -52,8 +55,10 @@ export function useForceSim(
   const frameRef = useRef(0);
 
   const maxDepth = useMemo(() => nodes.reduce((m, n) => Math.max(m, n.depth), 1), [nodes]);
-  const gap = ringGap(width, height, maxDepth);
+  const gap = Math.max(56, Math.min(320, ringGap(width, height, maxDepth) * gapScale));
   gapRef.current = gap;
+  // Reheat when the dial moves so nodes glide to the new rings.
+  useEffect(() => { alphaRef.current = Math.max(alphaRef.current, 0.5); }, [gap]);
   /** Guide-ring radii for depths 1..maxDepth, for drawing. */
   const ringRadii = useMemo(
     () => Array.from({ length: maxDepth }, (_, i) => (i + 1) * gap),
