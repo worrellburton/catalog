@@ -2,13 +2,38 @@
    Dark consumer theme by default (black gradient surface) so it reads
    as a continuation of the feed; light-mode overrides at the bottom
    restore the editorial white look. */
+/* Fixed SHELL — does NOT scroll. This mirrors the bug-free product detail
+   overlay (.product-page-overlay in product-page.css) EXACTLY, which is the
+   one other consumer surface that is a fixed overlay with an internal scroller
+   AND a grid of aspect-ratio media tiles — and has none of this page's
+   held-scroll "thumbnail in the corner" artifact. The decisive ingredient is
+   `will-change: transform`: it promotes the whole overlay to its own
+   compositing layer, so iOS composites the scrolling subtree as one stable
+   unit and the tiles' absolutely-positioned media never re-project a frame
+   late during a held drag. The product page gets this promotion incidentally
+   (its drag-to-dismiss sets an inline transform); the creator page has no
+   drag-to-dismiss, so it never got it — which is why it alone showed the bug. */
 .creator-page {
   position: fixed;
   inset: 0;
   background: linear-gradient(180deg, #1a1a1a 0%, #0a0a0a 58%, #050505 100%);
   color: #fff;
   z-index: 150;
+  overflow: hidden;
+  will-change: transform;
+}
+
+/* Inner SCROLLER — position:relative; 100%×100% (NOT position:absolute). This
+   mirrors .product-page (the product overlay's scroller) line-for-line. */
+.creator-page-scroll {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  height: 100%;
   overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  background: transparent;
   /* Background stays full-bleed; horizontal padding grows on wide
      viewports so the content column is capped at 1200px and centered.
      max() collapses to the base 28px gutter on mobile. */
@@ -677,10 +702,37 @@
   align-self: start;
 }
 
+/* iOS/WebKit held-scroll "thumbnail in the corner" fix.
+   The creator catalog scrolls an internal accelerated container (unlike the
+   document-scrolling feed) AND uses the director's bounded <video> pool, whose
+   elements get churned in/out of tiles as you scroll (a tile holds a fresh,
+   frame-less video ~40% of the time mid-scroll). In WebKit, such a freshly-
+   attached video paints its contents at intrinsic ("thumbnail") size for a
+   frame before it composites — flashing a small clip in the corner of the tile
+   during a held/fast scroll. The feed avoids it (synchronous document scroll);
+   the product page avoids it (stable per-tile <video>, no pool churn). Here we
+   simply don't PAINT the churning videos while the grid is in motion: the
+   `.is-scrolling` class is toggled on the scroller by CreatorPage during active
+   scroll, dropping the videos to opacity:0 so there's no half-attached layer to
+   flash. They keep playing/decoding, and crucially the layer stays COMPOSITED
+   (opacity:0, not visibility:hidden) — so when scrolling stops and they fade
+   back in they're already rasterized at the right size and don't flash on
+   reveal. Posters stay visible throughout. */
+.creator-page-scroll.is-scrolling .creator-grid .look-card video {
+  opacity: 0 !important;
+}
+
 /* The look poster/video FILLS the 3:4 tile (cover), matching the main feed.
    (The .card-poster-backdrop blurred-fill experiment was reverted — looks
    should fill the container, not letterbox.) */
 .card-poster-backdrop { display: none; }
+
+/* No per-tile GPU-layer promotion here. The whole overlay is promoted ONCE at
+   the shell (.creator-page { will-change: transform }), matching the bug-free
+   product detail overlay; promoting each tile/poster/video on top of that was a
+   prior failed attempt (HEAD never had it, and neither the feed nor the product
+   page promote their tiles). The shared `.look-card video { position:absolute;
+   inset:0; ... }` rule in grid-view.css already pins the media to fill. */
 
 /* ── Initial-letter avatar fallback ────────────────────────────────── */
 .creator-hero-avatar--initial {
@@ -853,8 +905,8 @@
    stays self-contained now that it ships with the CreatorPage chunk
    (load order vs the global responsive.css is no longer guaranteed). */
 @media (max-width: 768px) {
-  /* Creator page - mobile adjustments */
-  .creator-page {
+  /* Creator page - mobile adjustments (padding lives on the inner scroller) */
+  .creator-page-scroll {
     padding-top: 60px;
     padding-left: 16px;
     padding-right: 16px;

@@ -1,5 +1,6 @@
 import { useState, Fragment, useMemo, useCallback, useEffect, useRef, useId } from 'react';
 import ParticleBackground from '~/components/ParticleBackground';
+import ManualProductModal from '~/components/admin/ManualProductModal';
 import {
   spotifySearch,
   listMusics,
@@ -1904,6 +1905,8 @@ export default function AdminData() {
   // Shopping → existing research modal, Amazon → Rainforest lookup,
   // Brand Website → URL paste).
   const [addMenuOpen, setAddMenuOpen] = useState(false);
+  // "Add Manually": screenshot → Claude extraction → review → save.
+  const [showManualProduct, setShowManualProduct] = useState(false);
   const [showPromptSettings, setShowPromptSettings] = useState(false);
   const addMenuRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
@@ -4208,6 +4211,7 @@ export default function AdminData() {
                     { label: 'Add via Amazon Shopping', onClick: () => { setAddMenuOpen(false); setShowAmazonLookup(true); } },
                     { label: 'Add via Brand Website',   onClick: () => { setAddMenuOpen(false); setBrandUrlInput(''); setBrandUrlError(null); setShowBrandUrl(true); } },
                     { label: 'Add via Claude + Gemini', onClick: () => { setAddMenuOpen(false); setShowClaudeGemini(true); setClaudeGeminiPrompt(''); setClaudeGeminiResult(null); setClaudeGeminiError(null); } },
+                    { label: 'Add Manually (screenshot)', onClick: () => { setAddMenuOpen(false); setShowManualProduct(true); } },
                   ].map(item => (
                     <button
                       key={item.label}
@@ -8911,6 +8915,20 @@ export default function AdminData() {
             </div>
           </div>
         </div>
+      )}
+
+      {showManualProduct && (
+        <ManualProductModal
+          onClose={() => setShowManualProduct(false)}
+          showToast={showToast}
+          onIngested={(row) => {
+            const p = row as Record<string, unknown> & { id: string };
+            setCrawledProducts(prev => [
+              { ...(p as unknown as CrawledProduct), is_crawled: true },
+              ...prev.filter(r => r.id !== p.id),
+            ]);
+          }}
+        />
       )}
 
       {showAddProducts && (

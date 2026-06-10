@@ -30,6 +30,9 @@ import {
   setAutoEditorConfig,
   DEFAULT_AUTO_EDITOR_CONFIG,
   type AutoEditorConfig,
+  getFeedRules, setFeedRules,
+  DEFAULT_FEED_RULES,
+  type FeedRules,
 } from '~/services/dials';
 
 type CatalogGenderUI = 'all' | 'women' | 'men' | 'unisex';
@@ -181,6 +184,11 @@ export interface CatalogCreativePayload {
 
 const ALL_CATALOG_NAME = 'all';
 const HOME_CATALOG_NAME = 'home';
+// The signed-out landing screen — a second pinned LANDING SCREEN row.
+// Guests all see one shared feed, so this catalog is the place to stage
+// and inspect exactly that (universe view, like home).
+const GUEST_HOME_SLUG = 'guest-home';
+const GUEST_HOME_CATALOG_NAME = 'home for unregistered users';
 const ALL_ORDER_KEY = 'catalog_admin_all_order';
 
 type CatalogSection = 'looks' | 'creatives' | 'products';
@@ -193,13 +201,17 @@ function isHomeCatalog(name: string) {
   return name.trim().toLowerCase() === HOME_CATALOG_NAME;
 }
 
+function isGuestHomeCatalog(name: string) {
+  return name.trim().toLowerCase() === GUEST_HOME_CATALOG_NAME;
+}
+
 // "Universe" view: catalogs that should show every live look/product
 // rather than only the rows whose catalog_tags contain the catalog
 // name. Both `all` (admin meta-catalog) and `home` (consumer landing
 // feed) qualify — the consumer home feed is unfiltered, so admins
 // should see the same universe of candidates when triaging.
 export function isUniverseCatalog(name: string) {
-  return isAllCatalog(name) || isHomeCatalog(name);
+  return isAllCatalog(name) || isHomeCatalog(name) || isGuestHomeCatalog(name);
 }
 
 // Phase 1 RPC payload + derived per-item metrics. Keyed by either the
@@ -559,6 +571,8 @@ export async function loadCatalogCreativePayload(
 export default function AdminCatalogs() {
   const [custom, setCustom] = useState<Catalog[]>([]);
   const [homeCatalog, setHomeCatalog] = useState<CatalogService | null>(null);
+  // The signed-out landing screen row (slug guest-home) — pinned under home.
+  const [guestCatalog, setGuestCatalog] = useState<Catalog | null>(null);
   const [searchCounts, setSearchCounts] = useState<Map<string, CatalogSearchCounts>>(new Map());
   // Per-catalog impression counts keyed by lowercased name (matches
   // how the consumer feed fires the event — see ContinuousFeed's
@@ -662,7 +676,8 @@ export default function AdminCatalogs() {
       }[];
       // Home catalog goes into its own state slot; all others fill `custom`.
       const homeRow = rows.find(r => r.is_home);
-      const regularRows = rows.filter(r => !r.is_home);
+      const guestRow = rows.find(r => r.slug === GUEST_HOME_SLUG);
+      const regularRows = rows.filter(r => !r.is_home && r.slug !== GUEST_HOME_SLUG);
 
       setCustom(regularRows.map(r => ({
         id: r.id,
@@ -700,6 +715,22 @@ export default function AdminCatalogs() {
       } else {
         // Not yet seeded — try a dedicated fetch (needed if migration not applied yet).
         getHomeCatalog().then(h => setHomeCatalog(h));
+      }
+
+      if (guestRow) {
+        setGuestCatalog({
+          id: guestRow.id,
+          name: guestRow.name,
+          slug: guestRow.slug ?? GUEST_HOME_SLUG,
+          source: 'custom' as const,
+          createdAt: guestRow.created_at,
+          gender: (guestRow.gender ?? 'all') as CatalogGenderUI,
+          sortOrder: guestRow.sort_order,
+          isFeatured: guestRow.is_featured === true,
+          filterGender: guestRow.filter_gender,
+          filterAge: guestRow.filter_age,
+          boostTopConverting: guestRow.boost_top_converting,
+        });
       }
 
       // Batch-fetch search counts for every catalog name now visible.
@@ -2233,6 +2264,110 @@ export default function AdminCatalogs() {
                           onRecommendLooks={() => openRecommendLooks(homeAsLocal)}
                           onAfterBulkMutation={() => {
                             setCreativeByCatalog(prev => { const next = { ...prev }; delete next[homeCatalog.id]; return next; });
+                            loadLooks();
+                            loadProducts();
+                          }}
+                        />
+                      </td>
+                    </tr>
+                  )}
+                </React.Fragment>
+              );
+            })()}
+
+            {/* ── Pinned: the signed-out landing screen ────────────────── */}
+            {guestCatalog && (() => {
+              const isOpen = expanded.has(guestCatalog.id);
+              const creative = creativeByCatalog[guestCatalog.id];
+              const isLoadingCreative = creativeLoading.has(guestCatalog.id);
+              return (
+                <React.Fragment key={guestCatalog.id}>
+                  <tr
+                    data-catalog-row={guestCatalog.id}
+                    data-catalog-name={guestCatalog.name.toLowerCase()}
+                    style={{
+                      background: '#eef2ff',
+                      boxShadow: 'inset 3px 0 0 #6366f1',
+                    }}
+                  >
+                    <td style={{ textAlign: 'left', fontWeight: 600 }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                        <button
+                          onClick={() => toggleExpanded(guestCatalog)}
+                          aria-label={isOpen ? 'Collapse' : 'Expand'}
+                          style={{
+                            width: 20, height: 20, display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                            background: 'transparent', border: '1px solid #e5e7eb', borderRadius: 4,
+                            color: '#6b7280', cursor: 'pointer', padding: 0,
+                            transform: isOpen ? 'rotate(90deg)' : 'rotate(0deg)',
+                            transition: 'transform 0.12s ease',
+                          }}
+                        >
+                          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                            <polyline points="9 18 15 12 9 6" />
+                          </svg>
+                        </button>
+                        <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                          <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
+                            <span
+                              title="What signed-out visitors see — one shared landing feed"
+                              style={{
+                                padding: '2px 8px',
+                                borderRadius: 999,
+                                fontSize: 10,
+                                fontWeight: 700,
+                                background: '#6366f1',
+                                color: '#fff',
+                                letterSpacing: '0.4px',
+                              }}
+                            >
+                              ★ LANDING SCREEN · SIGNED OUT
+                            </span>
+                            <Link to={`/admin/catalogs/${GUEST_HOME_SLUG}`} style={{ color: '#111', textDecoration: 'none' }}>
+                              Home for unregistered users
+                            </Link>
+                          </div>
+                          <span style={{ fontSize: 10, color: '#4338ca', fontWeight: 400 }}>
+                            The landing home screen for users who aren&apos;t registered — one shared feed, no personalization.
+                          </span>
+                        </div>
+                      </div>
+                    </td>
+                    <td><span style={{ fontSize: 11, color: '#ccc' }}> - </span></td>
+                    <td><SearchCountPill counts={searchCounts.get(guestCatalog.name.toLowerCase())} /></td>
+                    <td>
+                      <GenderMixCell mix={catalogProductGenderMix.get(guestCatalog.name)} />
+                    </td>
+                    <td>
+                      <span style={{ padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 700, background: '#eff6ff', color: '#1d4ed8' }}>
+                        {creative?.products.length ?? products.length}
+                      </span>
+                    </td>
+                    <td>
+                      <span style={{ padding: '2px 8px', borderRadius: 999, fontSize: 11, fontWeight: 700, background: '#f0fdf4', color: '#15803d' }}>
+                        {creative?.looks.length ?? looks.length}
+                      </span>
+                    </td>
+                    <td style={{ fontSize: 12, color: '#888' }}> - </td>
+                  </tr>
+                  {isOpen && (
+                    <tr>
+                      <td colSpan={7} style={{ padding: 0, background: '#fafafa', borderTop: 'none' }}>
+                        <CatalogCreativeDropdown
+                          isAll={false}
+                          isUniverse={true}
+                          catalogName={guestCatalog.name}
+                          loading={isLoadingCreative}
+                          creative={creative}
+                          metricsLoading={metricsLoading}
+                          catalogNames={all.filter(x => x.name !== guestCatalog.name && !isAllCatalog(x.name)).map(x => x.name)}
+                          onReorder={(section, from, to) => reorderAllSection(guestCatalog.id, section, from, to)}
+                          onOpenAddLooks={looks.length === 0 ? undefined : () => openAddLooks(guestCatalog)}
+                          onOpenAddProducts={products.length === 0 ? undefined : () => openAdd(guestCatalog)}
+                          onRecommendProducts={() => openSuggest(guestCatalog)}
+                          onRecommendLooks={() => openRecommendLooks(guestCatalog)}
+                          onAfterBulkMutation={() => {
+                            setCreativeByCatalog(prev => { const next = { ...prev }; delete next[guestCatalog.id]; return next; });
                             loadLooks();
                             loadProducts();
                           }}
@@ -6983,17 +7118,30 @@ function AutoEditorModal({
   showToast: (msg: string) => void;
 }) {
   const [config, setConfig] = useState<AutoEditorConfig>(DEFAULT_AUTO_EDITOR_CONFIG);
+  const [rules, setRules] = useState<FeedRules>(DEFAULT_FEED_RULES);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
 
   // Load current values on open.
   useEffect(() => {
     let cancelled = false;
-    getAutoEditorConfig()
-      .then(c => { if (!cancelled) setConfig(c); })
+    Promise.all([getAutoEditorConfig(), getFeedRules()])
+      .then(([c, r]) => { if (!cancelled) { setConfig(c); setRules(r); } })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, []);
+
+  // Debounced rule persistence — sliders fire fast; write once settled.
+  const ruleSaveTimer = useRef(0);
+  const saveRules = useCallback((next: FeedRules) => {
+    setRules(next);
+    window.clearTimeout(ruleSaveTimer.current);
+    ruleSaveTimer.current = window.setTimeout(() => {
+      setFeedRules(next)
+        .then(() => showToast('Feed rules saved'))
+        .catch(err => showToast(`Save failed: ${err instanceof Error ? err.message : String(err)}`));
+    }, 450);
+  }, [showToast]);
 
   // Persist a partial change immediately (optimistic local update) so the
   // toggle/select feel instant, then surface a small saved confirmation.
@@ -7025,7 +7173,7 @@ function AutoEditorModal({
     <div className="admin-modal-overlay" onClick={onClose}>
       <div
         className="admin-modal"
-        style={{ width: 480, maxWidth: '92vw', padding: 24 }}
+        style={{ width: 560, maxWidth: '92vw', padding: 24, maxHeight: '86vh', overflowY: 'auto' }}
         onClick={e => e.stopPropagation()}
       >
         <h2 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 600 }}>Automatic Editor</h2>
@@ -7134,6 +7282,61 @@ function AutoEditorModal({
           </div>
         </fieldset>
 
+        {/* ── The daily feed rulebook ───────────────────────────────────
+            Ten founder-tunable ranking rules. Server rules run inside the
+            personalize-feed edge function; "saved brands" is client-side
+            (bookmarks live in localStorage). Weight scales a normalized
+            0..1 signal, so 10 ≈ can dominate the feed, 1 ≈ a nudge. */}
+        <div style={{ marginTop: 22, borderTop: '1px solid #eee', paddingTop: 16 }}>
+          <h3 style={{ margin: '0 0 2px', fontSize: 14, fontWeight: 700 }}>Daily feed rules</h3>
+          <p style={{ margin: '0 0 12px', fontSize: 12, color: '#888' }}>
+            The rulebook behind every shopper&apos;s daily feed. Each rule is a switch + a weight
+            (how hard it pulls). Defaults match today&apos;s behavior.
+          </p>
+          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+            {FEED_RULE_META.map(meta => {
+              const rule = rules[meta.key];
+              return (
+                <div
+                  key={meta.key}
+                  style={{
+                    display: 'flex', alignItems: 'center', gap: 12,
+                    padding: '10px 12px', borderRadius: 8, border: '1px solid #e2e8f0',
+                    background: rule.enabled ? '#f0fdf4' : '#fafafa',
+                  }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={rule.enabled}
+                    disabled={loading}
+                    onChange={e => saveRules({ ...rules, [meta.key]: { ...rule, enabled: e.target.checked } })}
+                    style={{ width: 16, height: 16, cursor: 'pointer', flexShrink: 0 }}
+                  />
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 12.5, fontWeight: 600, color: '#111' }}>{meta.label}</div>
+                    <div style={{ fontSize: 11, color: '#94a3b8' }}>{meta.hint}</div>
+                  </div>
+                  {meta.weight && (
+                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, opacity: rule.enabled ? 1 : 0.35 }}>
+                      <input
+                        type="range"
+                        min={meta.min ?? 0}
+                        max={meta.max ?? 10}
+                        step={1}
+                        value={rule.weight}
+                        disabled={loading || !rule.enabled}
+                        onChange={e => saveRules({ ...rules, [meta.key]: { ...rule, weight: Number(e.target.value) } })}
+                        style={{ width: 90 }}
+                      />
+                      <span style={{ fontSize: 11, fontWeight: 700, color: '#475569', width: 18, textAlign: 'right' }}>{rule.weight}</span>
+                    </label>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 20 }}>
           <button className="admin-btn admin-btn-secondary" onClick={onClose}>
             Done
@@ -7143,6 +7346,23 @@ function AutoEditorModal({
     </div>
   );
 }
+
+// The ten daily-feed rules, in founder-priority order. `weight: false`
+// renders switch-only (the rule is binary).
+const FEED_RULE_META: {
+  key: keyof FeedRules; label: string; hint: string; weight: boolean; min?: number; max?: number;
+}[] = [
+  { key: 'convertingBoost', label: 'Show the highest-converting products', hint: 'Boost products with the best clickout rate platform-wide', weight: true },
+  { key: 'clickedProducts', label: 'Resurface products they clicked before', hint: 'Their own click history pulls those exact items back up', weight: true },
+  { key: 'engagedBrands', label: 'Lean into brands they engage with', hint: 'Brands they click and buy from rank higher', weight: true },
+  { key: 'engagedTypes', label: 'Lean into categories they engage with', hint: 'Their most-tapped product types rank higher', weight: true },
+  { key: 'savedBrands', label: 'Boost brands they saved', hint: 'Brands from their saved items float up (applies on-device)', weight: true },
+  { key: 'freshnessBoost', label: 'Push the newest arrivals up', hint: 'Recently added products get a freshness lift', weight: true },
+  { key: 'seenDecay', label: 'Rest things they already saw', hint: 'Already-seen items sink so the feed feels new daily', weight: true },
+  { key: 'diversityGuard', label: 'Brand diversity guard', hint: 'Max items per brand in the top 20 (weight = the cap)', weight: true, min: 1, max: 5 },
+  { key: 'genderStrict', label: 'Strict gender matching', hint: 'Only their gender + unisex products appear', weight: false },
+  { key: 'trendingBoost', label: 'Show what is trending this week', hint: 'Platform-wide clickout velocity (last 7 days)', weight: true },
+];
 
 // ── Suggest Products modal (self-contained) ─────────────────────────
 // Claude brainstorms product ideas for the catalog vibe, searches Google

@@ -1,15 +1,21 @@
 // /admin/governance/types — the type brain. An Obsidian-style force graph
-// of the product-type taxonomy with catalog at the centre.
+// of the product-type taxonomy with catalog at the centre, floating on the
+// site's WebGL particle universe. This page blacks out the whole admin
+// chrome (html.gov-void) so it reads as its own world.
 //
-// Edits are LIVE (founder's call): every gesture writes to the tree and
-// cascades into products immediately — renames rewrite products.type,
-// cross-lane moves rewrite products.gender, satellite drags re-type single
-// products. Each gesture precomputes its inverse from snapshots, so Undo
-// (toast or the session log) restores exact prior values. Writes run
-// through a sequential queue so rapid gestures land in order.
+// Gender is an ATTRIBUTE rendered as node color (legend bottom-right), not
+// a tree node; nodes without their own gender inherit the nearest
+// ancestor's. Edits are LIVE: renames rewrite products.type, structure
+// changes rewrite products.type_path (the full materialized ancestry — a
+// product ten levels deep keeps every level there while type stays the
+// leaf), and gender changes cascade products.gender. Each gesture
+// precomputes its inverse from snapshots, so Undo restores exact prior
+// values. Writes run through a sequential queue so rapid gestures land in
+// order.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import TypeBrainGraph, { type BrainNode, type BrainProduct } from '~/components/admin/TypeBrainGraph';
+import ParticleBackground from '~/components/ParticleBackground';
+import TypeBrainGraph, { type BrainNode, type BrainProduct, type BrainViewMode } from '~/components/admin/TypeBrainGraph';
 import {
   createTypeNode,
   executeGovernanceOps,
@@ -19,6 +25,7 @@ import {
   snapshotGroups,
   type GovernanceOp,
   type GovernanceProduct,
+  type ProductGroup,
   type TypeNode,
 } from '~/services/type-governance';
 import { productSlug } from '~/utils/slug';
@@ -26,8 +33,12 @@ import '~/styles/governance.css';
 
 const UNASSIGNED_ID = '__unassigned__';
 const NEUTRAL = '#cbd5e1';
-const GENDER_LANES = new Set(['male', 'female', 'unisex']);
 const SAT_CAP = 6;
+const GENDER_COLORS: Record<string, string> = {
+  male: '#60a5fa',
+  female: '#f472b6',
+  unisex: '#34d399',
+};
 
 interface HistoryEntry {
   label: string;
@@ -36,17 +47,71 @@ interface HistoryEntry {
   at: number;
 }
 
+/** Full ancestry string per node, matching products.type_path format. */
+function computePaths(nodes: TypeNode[]): Map<string, string> {
+  const byId = new Map(nodes.map(n => [n.id, n]));
+  const memo = new Map<string, string>();
+  const path = (n: TypeNode): string => {
+    const cached = memo.get(n.id);
+    if (cached) return cached;
+    const parent = n.parentId ? byId.get(n.parentId) : null;
+    const v = parent ? `${path(parent)} / ${n.name}` : n.name;
+    memo.set(n.id, v);
+    return v;
+  };
+  nodes.forEach(path);
+  return memo;
+}
+
+/** Effective gender per node: its own, else the nearest ancestor's. */
+function computeGenders(nodes: TypeNode[]): Map<string, string | null> {
+  const byId = new Map(nodes.map(n => [n.id, n]));
+  const memo = new Map<string, string | null>();
+  const eff = (n: TypeNode): string | null => {
+    if (memo.has(n.id)) return memo.get(n.id) ?? null;
+    const parent = n.parentId ? byId.get(n.parentId) : null;
+    const v = n.gender ?? (parent ? eff(parent) : null);
+    memo.set(n.id, v);
+    return v;
+  };
+  nodes.forEach(eff);
+  return memo;
+}
+
 export default function AdminGovernanceTypes() {
   const [tree, setTree] = useState<TypeNode[]>([]);
   const [products, setProducts] = useState<GovernanceProduct[]>([]);
   const [selection, setSelection] = useState<Set<string>>(new Set());
-  const [showProducts, setShowProducts] = useState(false);
+  const [viewMode, setViewMode] = useState<BrainViewMode>('types');
+  // Drill-down: zoom INTO a node and list every product attached to it.
+  // ox/oy anchor the zoom animation at the node's canvas position.
+  const [drill, setDrill] = useState<{ nodeId: string; ox: number; oy: number } | null>(null);
+  // Multi-select inside the drill view → "Assign to type…" re-types them.
+  const [drillSel, setDrillSel] = useState<Set<string>>(new Set());
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [assignQuery, setAssignQuery] = useState('');
+  useEffect(() => { setDrillSel(new Set()); setAssignOpen(false); setAssignQuery(''); }, [drill?.nodeId]);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [logOpen, setLogOpen] = useState(false);
   const [toast, setToast] = useState<{ label: string; key: number } | null>(null);
+  // "Move to…" armed: the next node click re-parents the whole selection.
+  const [pickMode, setPickMode] = useState(false);
+  // Ring dials — view preferences, sticky per admin via localStorage.
+  const [ringOpacity, setRingOpacity] = useState(() =>
+    Number(typeof localStorage !== 'undefined' && localStorage.getItem('gov-ring-opacity')) || 0.15);
+  const [ringScale, setRingScale] = useState(() =>
+    Number(typeof localStorage !== 'undefined' && localStorage.getItem('gov-ring-scale')) || 1);
+  useEffect(() => { try { localStorage.setItem('gov-ring-opacity', String(ringOpacity)); } catch { /* private mode */ } }, [ringOpacity]);
+  useEffect(() => { try { localStorage.setItem('gov-ring-scale', String(ringScale)); } catch { /* private mode */ } }, [ringScale]);
   const toastTimer = useRef(0);
   // Sequential write queue — rapid gestures stay ordered.
   const queue = useRef<Promise<unknown>>(Promise.resolve());
+
+  // This page is its own world: black out the admin chrome while mounted.
+  useEffect(() => {
+    document.documentElement.classList.add('admin-on-dark-canvas', 'gov-void');
+    return () => document.documentElement.classList.remove('admin-on-dark-canvas', 'gov-void');
+  }, []);
 
   const reload = useCallback(async () => {
     const [t, p] = await Promise.all([fetchTypeTree(), fetchGovernanceProducts()]);
@@ -97,25 +162,21 @@ export default function AdminGovernanceTypes() {
   }, [reload, showToast]);
 
   // ── Derived structure ──
-  const meta = useMemo(() => {
+  const paths = useMemo(() => computePaths(tree), [tree]);
+  const genders = useMemo(() => computeGenders(tree), [tree]);
+  const depths = useMemo(() => {
     const byId = new Map(tree.map(n => [n.id, n]));
-    const out = new Map<string, { depth: number; lane: string | null; color: string }>();
-    const resolve = (n: TypeNode): { depth: number; lane: string | null; color: string } => {
-      const cached = out.get(n.id);
+    const memo = new Map<string, number>();
+    const depth = (n: TypeNode): number => {
+      const cached = memo.get(n.id);
       if (cached) return cached;
       const parent = n.parentId ? byId.get(n.parentId) : null;
-      const up = parent ? resolve(parent) : { depth: 0, lane: null as string | null, color: NEUTRAL };
-      const isLane = !!parent && up.depth === 1 && GENDER_LANES.has(n.name);
-      const m = {
-        depth: up.depth + 1,
-        lane: isLane ? n.name : up.lane,
-        color: n.color ?? (up.color !== NEUTRAL ? up.color : NEUTRAL),
-      };
-      out.set(n.id, m);
-      return m;
+      const v = parent ? depth(parent) + 1 : 1;
+      memo.set(n.id, v);
+      return v;
     };
-    tree.forEach(resolve);
-    return out;
+    tree.forEach(depth);
+    return memo;
   }, [tree]);
 
   const { attach, unassigned } = useMemo(() => {
@@ -132,33 +193,35 @@ export default function AdminGovernanceTypes() {
   }, [tree, products]);
 
   const brainNodes = useMemo<BrainNode[]>(() => {
-    const nodes = tree.map(n => {
-      const m = meta.get(n.id) ?? { depth: 1, lane: null, color: NEUTRAL };
-      return {
-        id: n.id, name: n.name, parentId: n.parentId, depth: m.depth,
-        color: m.color, count: attach.get(n.id)?.length ?? 0,
-        locked: m.depth === 2 && GENDER_LANES.has(n.name),
-      };
-    });
-    if (showProducts && unassigned.length) {
+    const nodes = tree.map(n => ({
+      id: n.id, name: n.name, parentId: n.parentId,
+      depth: depths.get(n.id) ?? 1,
+      color: GENDER_COLORS[genders.get(n.id) ?? ''] ?? NEUTRAL,
+      count: attach.get(n.id)?.length ?? 0,
+      locked: false,
+      icon: n.iconPath,
+    }));
+    if (viewMode !== 'types' && unassigned.length) {
       nodes.push({
         id: UNASSIGNED_ID, name: 'unassigned', parentId: null, depth: 1,
-        color: '#f59e0b', count: unassigned.length, locked: true,
+        color: '#f59e0b', count: unassigned.length, locked: true, icon: null,
       });
     }
     return nodes;
-  }, [tree, meta, attach, showProducts, unassigned.length]);
+  }, [tree, depths, genders, attach, viewMode, unassigned.length]);
 
   const satellites = useMemo(() => {
+    // Products mode is about the products — give each node a bigger orbit.
+    const cap = viewMode === 'products' ? 10 : SAT_CAP;
     const m = new Map<string, { items: BrainProduct[]; total: number }>();
     for (const [nodeId, list] of attach) {
-      m.set(nodeId, { items: list.slice(0, SAT_CAP), total: list.length });
+      m.set(nodeId, { items: list.slice(0, cap), total: list.length });
     }
     if (unassigned.length) {
-      m.set(UNASSIGNED_ID, { items: unassigned.slice(0, SAT_CAP), total: unassigned.length });
+      m.set(UNASSIGNED_ID, { items: unassigned.slice(0, cap), total: unassigned.length });
     }
     return m;
-  }, [attach, unassigned]);
+  }, [attach, unassigned, viewMode]);
 
   const subtreeIds = useCallback((rootId: string): Set<string> => {
     const ids = new Set<string>([rootId]);
@@ -172,71 +235,132 @@ export default function AdminGovernanceTypes() {
     return ids;
   }, [tree]);
 
+  /** Apply product-update groups to local state (column → TS key). */
+  const applyGroupsLocal = useCallback((groups: ProductGroup[]) => {
+    const patches = new Map<string, Partial<GovernanceProduct>>();
+    for (const g of groups) {
+      for (const id of g.ids) {
+        patches.set(id, {
+          ...patches.get(id),
+          ...(g.patch.type !== undefined ? { type: g.patch.type } : {}),
+          ...(g.patch.gender !== undefined ? { gender: g.patch.gender } : {}),
+          ...(g.patch.type_path !== undefined ? { typePath: g.patch.type_path } : {}),
+        });
+      }
+    }
+    if (patches.size) {
+      setProducts(prev => prev.map(p => patches.has(p.id) ? { ...p, ...patches.get(p.id) } : p));
+    }
+  }, []);
+
+  /** Diff current vs hypothetical tree: products whose type_path or
+   *  effective gender changes get cascading update groups + inverse
+   *  snapshots. This is what makes a multi-select reconnect rewrite the
+   *  whole ancestry chain on every affected product row. */
+  const buildTreeCascade = useCallback((nextTree: TypeNode[]) => {
+    const nextPaths = computePaths(nextTree);
+    const nextGenders = computeGenders(nextTree);
+    const groups: ProductGroup[] = [];
+    const pathAffected: GovernanceProduct[] = [];
+    const genderAffected: GovernanceProduct[] = [];
+    for (const n of nextTree) {
+      const prods = attach.get(n.id) ?? [];
+      if (!prods.length) continue;
+      const ids = prods.map(p => p.id);
+      if (nextPaths.get(n.id) !== paths.get(n.id)) {
+        groups.push({ ids, patch: { type_path: nextPaths.get(n.id) ?? null } });
+        pathAffected.push(...prods);
+      }
+      if (nextGenders.get(n.id) !== genders.get(n.id)) {
+        groups.push({ ids, patch: { gender: nextGenders.get(n.id) ?? null } });
+        genderAffected.push(...prods);
+      }
+    }
+    const inverse: GovernanceOp[] = [];
+    if (pathAffected.length) inverse.push({ op: 'products-update', groups: snapshotGroups(pathAffected, 'typePath') });
+    if (genderAffected.length) inverse.push({ op: 'products-update', groups: snapshotGroups(genderAffected, 'gender') });
+    return { groups, inverse, genderTouched: genderAffected.length };
+  }, [attach, paths, genders]);
+
   // ── Gestures ──
   const handleRename = (nodeId: string, to: string) => {
     const node = tree.find(n => n.id === nodeId);
     if (!node || node.name === to) return;
+    const nextTree = tree.map(n => n.id === nodeId ? { ...n, name: to } : n);
     const matched = attach.get(nodeId) ?? [];
-    const ids = matched.map(p => p.id);
+    const cascade = buildTreeCascade(nextTree);
+    const groups: ProductGroup[] = [
+      ...(matched.length ? [{ ids: matched.map(p => p.id), patch: { type: to } }] : []),
+      ...cascade.groups,
+    ];
     commit(
-      `Renamed ${node.name} → ${to} · ${ids.length} products`,
+      `Renamed ${node.name} → ${to} · ${matched.length} products`,
       [
         { op: 'node-update', id: nodeId, patch: { name: to } },
-        { op: 'products-update', groups: [{ ids, patch: { type: to } }] },
+        ...(groups.length ? [{ op: 'products-update' as const, groups }] : []),
       ],
       [
         { op: 'node-update', id: nodeId, patch: { name: node.name } },
-        { op: 'products-update', groups: snapshotGroups(matched, 'type') },
+        ...(matched.length ? [{ op: 'products-update' as const, groups: snapshotGroups(matched, 'type') }] : []),
+        ...cascade.inverse,
       ],
-      () => {
-        setTree(prev => prev.map(n => n.id === nodeId ? { ...n, name: to } : n));
-        const idSet = new Set(ids);
-        setProducts(prev => prev.map(p => idSet.has(p.id) ? { ...p, type: to } : p));
-      },
+      () => { setTree(nextTree); applyGroupsLocal(groups); },
     );
   };
 
   const handleReparent = (nodeIds: string[], targetId: string) => {
     if (targetId === UNASSIGNED_ID) return;
-    const targetLane = meta.get(targetId)?.lane ?? null;
-    const ops: GovernanceOp[] = [];
-    const inverse: GovernanceOp[] = [];
-    const moves: { nodeId: string; genderIds: Set<string> }[] = [];
-    const labels: string[] = [];
-    for (const nodeId of nodeIds) {
-      const node = tree.find(n => n.id === nodeId);
-      if (!node || nodeId === targetId || nodeId === UNASSIGNED_ID) continue;
-      if (subtreeIds(nodeId).has(targetId)) continue; // no cycles
-      if (node.parentId === targetId) continue;
-      const lane = meta.get(nodeId)?.lane ?? null;
-      const crossesLane = !!targetLane && targetLane !== lane;
-      const subProds = crossesLane
-        ? [...subtreeIds(nodeId)].flatMap(id => attach.get(id) ?? [])
-        : [];
-      ops.push({ op: 'node-update', id: nodeId, patch: { parent_id: targetId } });
-      inverse.unshift({ op: 'node-update', id: nodeId, patch: { parent_id: node.parentId } });
-      if (subProds.length && targetLane) {
-        ops.push({ op: 'products-update', groups: [{ ids: subProds.map(p => p.id), patch: { gender: targetLane } }] });
-        inverse.unshift({ op: 'products-update', groups: snapshotGroups(subProds, 'gender') });
-      }
-      moves.push({ nodeId, genderIds: new Set(subProds.map(p => p.id)) });
-      labels.push(`${node.name}${subProds.length ? ` (${subProds.length} products → ${targetLane})` : ''}`);
-    }
-    if (!moves.length) return;
+    const moved = nodeIds.filter(id => {
+      const node = tree.find(n => n.id === id);
+      if (!node || id === targetId || id === UNASSIGNED_ID) return false;
+      if (subtreeIds(id).has(targetId)) return false; // no cycles
+      return node.parentId !== targetId;
+    });
+    if (!moved.length) return;
+    const movedSet = new Set(moved);
+    const nextTree = tree.map(n => movedSet.has(n.id) ? { ...n, parentId: targetId } : n);
+    const cascade = buildTreeCascade(nextTree);
     const targetName = tree.find(n => n.id === targetId)?.name ?? '?';
+    const names = moved.map(id => tree.find(n => n.id === id)?.name ?? '?').join(', ');
+    const touched = cascade.groups.reduce((acc, g) => acc + g.ids.length, 0);
     commit(
-      `Moved ${labels.join(', ')} → ${targetName}`,
-      ops, inverse,
-      () => {
-        const moved = new Map(moves.map(m => [m.nodeId, m]));
-        setTree(prev => prev.map(n => moved.has(n.id) ? { ...n, parentId: targetId } : n));
-        if (targetLane) {
-          const allGenderIds = new Set(moves.flatMap(m => [...m.genderIds]));
-          if (allGenderIds.size) {
-            setProducts(prev => prev.map(p => allGenderIds.has(p.id) ? { ...p, gender: targetLane } : p));
-          }
-        }
-      },
+      `Moved ${names} → ${targetName}${touched ? ` · ${touched} product updates` : ''}`,
+      [
+        ...moved.map(id => ({ op: 'node-update' as const, id, patch: { parent_id: targetId } })),
+        ...(cascade.groups.length ? [{ op: 'products-update' as const, groups: cascade.groups }] : []),
+      ],
+      [
+        ...moved.map(id => ({
+          op: 'node-update' as const, id,
+          patch: { parent_id: tree.find(n => n.id === id)?.parentId ?? null },
+        })),
+        ...cascade.inverse,
+      ],
+      () => { setTree(nextTree); applyGroupsLocal(cascade.groups); },
+    );
+  };
+
+  const handleSetGender = (nodeIds: string[], gender: TypeNode['gender']) => {
+    const editable = nodeIds.filter(id => id !== UNASSIGNED_ID && tree.some(n => n.id === id));
+    if (!editable.length) return;
+    const idSet = new Set(editable);
+    const nextTree = tree.map(n => idSet.has(n.id) ? { ...n, gender } : n);
+    const cascade = buildTreeCascade(nextTree);
+    const names = editable.map(id => tree.find(n => n.id === id)?.name ?? '?').join(', ');
+    commit(
+      `${gender ? `Set ${names} → ${gender}` : `Cleared gender on ${names}`}${cascade.genderTouched ? ` · ${cascade.genderTouched} products` : ''}`,
+      [
+        ...editable.map(id => ({ op: 'node-update' as const, id, patch: { gender } })),
+        ...(cascade.groups.length ? [{ op: 'products-update' as const, groups: cascade.groups }] : []),
+      ],
+      [
+        ...editable.map(id => ({
+          op: 'node-update' as const, id,
+          patch: { gender: tree.find(n => n.id === id)?.gender ?? null },
+        })),
+        ...cascade.inverse,
+      ],
+      () => { setTree(nextTree); applyGroupsLocal(cascade.groups); },
     );
   };
 
@@ -245,7 +369,7 @@ export default function AdminGovernanceTypes() {
     const tops = nodeIds.filter(id =>
       !nodeIds.some(other => other !== id && subtreeIds(other).has(id)));
     const ops: GovernanceOp[] = [];
-    const rows: { id: string; name: string; parent_id: string | null; sort: number; color: string | null }[] = [];
+    const rows: { id: string; name: string; parent_id: string | null; sort: number; color: string | null; gender: TypeNode['gender'] }[] = [];
     const names: string[] = [];
     let orphaned = 0;
     for (const id of tops) {
@@ -254,7 +378,7 @@ export default function AdminGovernanceTypes() {
       // BFS order (parents first) so the undo re-insert satisfies the FK.
       const ordered = tree.filter(n => sub.has(n.id));
       rows.push(...ordered.map(n => ({
-        id: n.id, name: n.name, parent_id: n.parentId, sort: n.sort, color: n.color,
+        id: n.id, name: n.name, parent_id: n.parentId, sort: n.sort, color: n.color, gender: n.gender,
       })));
       orphaned += [...sub].reduce((acc, sid) => acc + (attach.get(sid)?.length ?? 0), 0);
       ops.push({ op: 'node-delete', id });
@@ -288,19 +412,22 @@ export default function AdminGovernanceTypes() {
     if (nodeId === UNASSIGNED_ID) return;
     const node = tree.find(n => n.id === nodeId);
     if (!node) return;
-    const lane = meta.get(nodeId)?.lane ?? undefined;
     const idSet = new Set(productIds);
     const matched = products.filter(p => idSet.has(p.id));
-    const patch: { type: string; gender?: string } = { type: node.name };
-    if (lane) patch.gender = lane;
-    const inverse: GovernanceOp[] = [{ op: 'products-update', groups: snapshotGroups(matched, 'type') }];
-    if (lane) inverse.push({ op: 'products-update', groups: snapshotGroups(matched, 'gender') });
+    const eff = genders.get(nodeId) ?? null;
+    const groups: ProductGroup[] = [{
+      ids: productIds,
+      patch: { type: node.name, gender: eff, type_path: paths.get(nodeId) ?? null },
+    }];
     commit(
       `Re-typed ${matched.length} product${matched.length === 1 ? '' : 's'} → ${node.name}`,
-      [{ op: 'products-update', groups: [{ ids: productIds, patch }] }],
-      inverse,
-      () => setProducts(prev => prev.map(p =>
-        idSet.has(p.id) ? { ...p, type: node.name, ...(lane ? { gender: lane } : {}) } : p)),
+      [{ op: 'products-update', groups }],
+      [
+        { op: 'products-update', groups: snapshotGroups(matched, 'type') },
+        { op: 'products-update', groups: snapshotGroups(matched, 'gender') },
+        { op: 'products-update', groups: snapshotGroups(matched, 'typePath') },
+      ],
+      () => applyGroupsLocal(groups),
     );
   };
 
@@ -310,61 +437,224 @@ export default function AdminGovernanceTypes() {
     window.open(`/p/${productSlug(prod)}`, '_blank', 'noopener');
   };
 
+  // Escape closes the drill view, else disarms a pending "Move to…".
+  useEffect(() => {
+    if (!pickMode && !drill) return;
+    const onKey = (ev: KeyboardEvent) => {
+      if (ev.key !== 'Escape') return;
+      if (drill) setDrill(null);
+      else setPickMode(false);
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [pickMode, drill]);
+
   const canUndo = history.some(h => !h.undone);
+  const editableSelection = [...selection].filter(id => id !== UNASSIGNED_ID);
 
   return (
-    <div className="gov-page">
-      {/* div, not <header> — the consumer header.css styles the header ELEMENT
-          globally (position:fixed), which would yank this out of flow. */}
-      <div className="gov-head">
-        <div>
-          <p className="gov-kicker">Governance</p>
-          <h1>Types — set up for more possibilities</h1>
-          <p className="gov-sub">
-            One editable structure for every product type. Drag to rearrange, double-click to
-            rename, marquee to select many. Changes are live — every edit cascades to its
-            products immediately, and Undo restores exact prior values.
-          </p>
-        </div>
-        <div className="gov-controls">
-          <div className="gov-controls-row">
-            <button type="button" className="gov-ghost" disabled={!canUndo} onClick={handleUndo}>
-              ↩ Undo
-            </button>
-            <button type="button" className="gov-ghost" onClick={() => setLogOpen(v => !v)}>
-              History{history.length ? ` (${history.length})` : ''}
-            </button>
-            <button
-              type="button"
-              className={`gov-toggle${showProducts ? ' is-on' : ''}`}
-              onClick={() => setShowProducts(v => !v)}
-            >
-              <span className="gov-toggle-dot" />
-              Products {showProducts ? 'on' : 'off'}
-            </button>
-          </div>
-          <div className="gov-legend">
-            <span style={{ ['--c' as string]: '#60a5fa' }}>male</span>
-            <span style={{ ['--c' as string]: '#f472b6' }}>female</span>
-            <span style={{ ['--c' as string]: '#34d399' }}>unisex</span>
-            <span style={{ ['--c' as string]: '#f59e0b' }}>unassigned</span>
-          </div>
-        </div>
+    <div className="gov-page gov-types">
+      {/* The particle universe — fixed behind everything; the blacked-out
+          admin chrome is translucent so the field reads as one world. */}
+      <div className="gov-universe" aria-hidden="true">
+        <ParticleBackground />
       </div>
 
-      <TypeBrainGraph
-        nodes={brainNodes}
-        satellites={satellites}
-        selection={selection}
-        showProducts={showProducts}
-        onSelect={setSelection}
-        onReparent={handleReparent}
-        onRename={handleRename}
-        onDelete={handleDelete}
-        onAddChild={(id) => { void handleAddChild(id); }}
-        onAssignProducts={handleAssign}
-        onOpenProduct={handleOpenProduct}
-      />
+      {/* No page heading (founder's call) — the brain IS the page; the
+          controls float inside the canvas instead. */}
+      <div className="gov-canvas">
+        <div className="gov-controls-row gov-canvas-controls">
+          <button type="button" className="gov-ghost" disabled={!canUndo} onClick={handleUndo}>
+            ↩ Undo
+          </button>
+          <button type="button" className="gov-ghost" onClick={() => setLogOpen(v => !v)}>
+            History{history.length ? ` (${history.length})` : ''}
+          </button>
+          <div className="gov-seg" role="group" aria-label="View mode">
+            {(['types', 'products', 'all'] as const).map(m => (
+              <button
+                key={m}
+                type="button"
+                className={viewMode === m ? 'is-active' : ''}
+                onClick={() => setViewMode(m)}
+              >{m}</button>
+            ))}
+          </div>
+        </div>
+        <TypeBrainGraph
+          nodes={brainNodes}
+          satellites={satellites}
+          selection={selection}
+          viewMode={viewMode}
+          onSelect={(ids) => { setPickMode(false); setSelection(ids); }}
+          onDrill={(nodeId, ox, oy) => setDrill({ nodeId, ox, oy })}
+          ringOpacity={ringOpacity}
+          ringScale={ringScale}
+          pickMode={pickMode}
+          onPickTarget={(targetId) => {
+            setPickMode(false);
+            handleReparent(editableSelection, targetId);
+          }}
+          onReparent={handleReparent}
+          onRename={handleRename}
+          onDelete={handleDelete}
+          onAddChild={(id) => { void handleAddChild(id); }}
+          onAssignProducts={handleAssign}
+          onOpenProduct={handleOpenProduct}
+        />
+
+        {drill && (() => {
+          const node = tree.find(n => n.id === drill.nodeId);
+          const prods = drill.nodeId === UNASSIGNED_ID ? unassigned : (attach.get(drill.nodeId) ?? []);
+          const name = node?.name ?? (drill.nodeId === UNASSIGNED_ID ? 'unassigned' : '?');
+          const color = drill.nodeId === UNASSIGNED_ID
+            ? '#f59e0b'
+            : GENDER_COLORS[genders.get(drill.nodeId) ?? ''] ?? NEUTRAL;
+          return (
+            <div
+              className="gov-drill"
+              style={{ ['--ox' as string]: `${drill.ox}px`, ['--oy' as string]: `${drill.oy}px` }}
+            >
+              <div className="gov-drill-head">
+                <button type="button" className="gov-ghost" onClick={() => setDrill(null)}>
+                  ← Back to the brain
+                </button>
+                <div className="gov-drill-title">
+                  <span className="gov-drill-dot" style={{ background: color }} />
+                  <h2>{name}</h2>
+                  <span>{prods.length} product{prods.length === 1 ? '' : 's'}</span>
+                </div>
+                {node && <span className="gov-drill-path">{paths.get(node.id)}</span>}
+              </div>
+              {drillSel.size > 0 && (
+                <div className="gov-drill-assign">
+                  <span>{drillSel.size} selected</span>
+                  <button type="button" className="gov-moveto" onClick={() => setAssignOpen(v => !v)}>
+                    Assign to type…
+                  </button>
+                  <button type="button" className="gov-ghost" onClick={() => { setDrillSel(new Set()); setAssignOpen(false); }}>
+                    Clear
+                  </button>
+                  {assignOpen && (
+                    <div className="gov-drill-picker">
+                      <input
+                        autoFocus
+                        placeholder="Find a type…"
+                        value={assignQuery}
+                        onChange={e => setAssignQuery(e.target.value)}
+                      />
+                      <div className="gov-drill-picker-list">
+                        {tree
+                          .filter(n => n.id !== drill.nodeId)
+                          .filter(n => !assignQuery.trim()
+                            || n.name.toLowerCase().includes(assignQuery.trim().toLowerCase())
+                            || (paths.get(n.id) ?? '').toLowerCase().includes(assignQuery.trim().toLowerCase()))
+                          .map(n => (
+                            <button
+                              key={n.id}
+                              type="button"
+                              onClick={() => {
+                                handleAssign([...drillSel], n.id);
+                                setDrillSel(new Set());
+                                setAssignOpen(false);
+                                setAssignQuery('');
+                              }}
+                            >
+                              <i style={{ background: GENDER_COLORS[genders.get(n.id) ?? ''] ?? NEUTRAL }} />
+                              <strong>{n.name}</strong>
+                              <span>{paths.get(n.id)}</span>
+                            </button>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
+              {prods.length === 0 ? (
+                <p className="gov-drill-empty">No products attached to this type yet.</p>
+              ) : (
+                <div className="gov-drill-grid">
+                  {prods.map(prod => {
+                    const isSel = drillSel.has(prod.id);
+                    return (
+                      <button
+                        key={prod.id}
+                        type="button"
+                        className={`gov-drill-card${isSel ? ' is-selected' : ''}`}
+                        title={`${prod.name} — click to select`}
+                        onClick={() => setDrillSel(prev => {
+                          const next = new Set(prev);
+                          if (next.has(prod.id)) next.delete(prod.id);
+                          else next.add(prod.id);
+                          return next;
+                        })}
+                      >
+                        <div className="gov-drill-media">
+                          {prod.image
+                            ? <img src={prod.image} alt="" loading="lazy" decoding="async" />
+                            : <span>{prod.name.slice(0, 2)}</span>}
+                          <i className="gov-drill-check" aria-hidden="true">✓</i>
+                          <span
+                            className="gov-drill-open"
+                            role="button"
+                            title="Open product page"
+                            onClick={ev => { ev.stopPropagation(); handleOpenProduct(prod.id); }}
+                          >↗</span>
+                        </div>
+                        {prod.brand && <em>{prod.brand}</em>}
+                        <strong>{prod.name}</strong>
+                      </button>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
+          );
+        })()}
+
+        {editableSelection.length > 0 && !drill && (
+          <div className="gov-genderbar">
+            <span>{editableSelection.length} selected</span>
+            <button type="button" className={`gov-moveto${pickMode ? ' is-armed' : ''}`}
+              onClick={() => setPickMode(v => !v)}>
+              {pickMode ? 'click a target node…' : 'Move to…'}
+            </button>
+            <em className="gov-bar-divider" aria-hidden="true" />
+            {(['male', 'female', 'unisex'] as const).map(g => (
+              <button key={g} type="button" style={{ ['--c' as string]: GENDER_COLORS[g] }}
+                onClick={() => handleSetGender(editableSelection, g)}>
+                <i />{g}
+              </button>
+            ))}
+            <button type="button" style={{ ['--c' as string]: NEUTRAL }}
+              onClick={() => handleSetGender(editableSelection, null)}>
+              <i />inherit
+            </button>
+          </div>
+        )}
+
+        {!drill && (
+          <div className="gov-ringdials">
+            <label>
+              <span>Ring opacity</span>
+              <input type="range" min={0} max={100} value={Math.round(ringOpacity * 100)}
+                onChange={e => setRingOpacity(Number(e.target.value) / 100)} />
+            </label>
+            <label>
+              <span>Ring distance</span>
+              <input type="range" min={50} max={200} value={Math.round(ringScale * 100)}
+                onChange={e => setRingScale(Number(e.target.value) / 100)} />
+            </label>
+          </div>
+        )}
+
+        <div className="gov-legend">
+          <span style={{ ['--c' as string]: GENDER_COLORS.male }}>male</span>
+          <span style={{ ['--c' as string]: GENDER_COLORS.female }}>female</span>
+          <span style={{ ['--c' as string]: GENDER_COLORS.unisex }}>unisex</span>
+          <span style={{ ['--c' as string]: '#f59e0b' }}>unassigned</span>
+        </div>
+      </div>
 
       {logOpen && (
         <div className="gov-log">

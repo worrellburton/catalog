@@ -47,6 +47,24 @@ export interface ComposeRenderedArgs {
   affinity: UserAffinity;
   /** Automatic Editor per-shopper product order (null = off / guest / holdout). */
   personalizedOrder: string[] | null;
+  /** "Boost brands they saved" feed rule (admin rulebook): brands from the
+   *  shopper's on-device bookmarks get a stable position lift on the home
+   *  feed. Null = rule off or nothing saved. Never touches searches. */
+  savedBrandBoost?: { brands: Set<string>; weight: number } | null;
+}
+
+/** Stable promotion: items whose brand is saved move up `weight` slots,
+ *  everything else keeps relative order (same algorithm family as
+ *  rankCreativesByAffinity, so the feed keeps its variety). */
+function promoteSavedBrands(items: ProductAd[], brands: Set<string>, weight: number): ProductAd[] {
+  if (brands.size === 0 || weight <= 0) return items;
+  return items
+    .map((c, idx) => ({
+      c,
+      pos: idx - (c.product?.brand && brands.has(c.product.brand.toLowerCase()) ? weight : 0),
+    }))
+    .sort((a, b) => a.pos - b.pos)
+    .map(x => x.c);
 }
 
 function dedupById(items: ProductAd[]): ProductAd[] {
@@ -91,7 +109,10 @@ export function composeRenderedCreatives(a: ComposeRenderedArgs): ProductAd[] {
   //    favoured categories, then float the Automatic Editor's per-shopper order
   //    to the front (rest keep their existing order).
   const unseen = partitionUnseen(a.semanticOrdered, a.seenKeys, c => (c.product_id ? `product:${c.product_id}` : null));
-  const ranked = rankCreativesByAffinity(unseen, a.affinity);
+  let ranked = rankCreativesByAffinity(unseen, a.affinity);
+  if (a.savedBrandBoost) {
+    ranked = promoteSavedBrands(ranked, a.savedBrandBoost.brands, a.savedBrandBoost.weight);
+  }
   if (a.personalizedOrder && a.personalizedOrder.length > 0) {
     const priority = new Map(a.personalizedOrder.map((id, idx) => [id, idx]));
     const front: ProductAd[] = [];

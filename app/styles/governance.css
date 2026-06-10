@@ -72,7 +72,20 @@
   background: #34d399;
   box-shadow: 0 0 8px rgba(52, 211, 153, 0.7);
 }
-.gov-legend { display: flex; gap: 12px; }
+.gov-legend {
+  position: absolute;
+  right: 16px;
+  bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  background: rgba(10, 10, 12, 0.72);
+  pointer-events: none;
+  z-index: 5;
+}
 .gov-legend span {
   display: inline-flex;
   align-items: center;
@@ -89,11 +102,17 @@
 }
 
 /* ── Graph canvas ── */
+.gov-canvas {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  margin: 0 26px 16px;
+}
 .tb-wrap {
   position: relative;
   flex: 1;
   min-height: 0;
-  margin: 0 26px 16px;
   border: 1px solid #1f1f23;
   border-radius: 16px;
   background:
@@ -393,4 +412,469 @@
   .gov-head { flex-direction: column; align-items: flex-start; }
   .gov-controls { align-items: flex-start; }
   .gov-log { right: 12px; left: 12px; width: auto; }
+}
+
+/* ── Gender picker (selection recolor) ── */
+.gov-genderbar {
+  position: absolute;
+  top: 14px;
+  left: 0;
+  right: 0;
+  margin-inline: auto;
+  width: fit-content;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px 6px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  background: rgba(10, 10, 12, 0.85);
+  z-index: 6;
+}
+.gov-genderbar > span {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #a1a1aa;
+  margin-right: 4px;
+}
+.gov-genderbar button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: #d4d4d8;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: border-color 120ms, color 120ms;
+}
+.gov-genderbar button:hover { border-color: var(--c); color: #fff; }
+.gov-genderbar button i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--c);
+}
+
+/* ── The particle universe + one-black-world chrome ──
+   gov-universe is a fixed full-viewport WebGL layer behind everything;
+   html.gov-void (set by the types page while mounted) blacks out the
+   admin chrome and makes it translucent so the field shows through. */
+/* The types page carries its own black floor so the world stays black in
+   any host context; the fixed universe child paints on top of it. */
+.gov-types { background: #000; }
+
+.gov-universe {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.9;
+}
+.gov-types > :not(.gov-universe) { position: relative; z-index: 1; }
+
+html.gov-void body,
+html.gov-void .admin-layout { background: #000; color: #e5e5e5; }
+html.gov-void .admin-main { background: transparent; }
+html.gov-void .admin-sidebar {
+  background: rgba(0, 0, 0, 0.62);
+  border-right-color: rgba(255, 255, 255, 0.07);
+}
+html.gov-void .admin-sidebar-header { border-bottom-color: rgba(255, 255, 255, 0.07); }
+html.gov-void .admin-badge { background: rgba(255, 255, 255, 0.08); color: rgba(255, 255, 255, 0.5); }
+html.gov-void .admin-nav-item { color: rgba(255, 255, 255, 0.5); }
+html.gov-void .admin-nav-item:hover { background: rgba(255, 255, 255, 0.06); color: #fff; }
+html.gov-void .admin-nav-item.active {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  border-left-color: #fff;
+}
+html.gov-void .admin-nav-search-input { color: #e5e5e5; }
+html.gov-void .admin-sidebar-footer { border-top-color: rgba(255, 255, 255, 0.06); }
+html.gov-void .admin-theme-btn,
+html.gov-void .admin-back-btn { color: rgba(255, 255, 255, 0.4); }
+html.gov-void .admin-topbar {
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border-bottom-color: rgba(255, 255, 255, 0.07);
+  color: rgba(255, 255, 255, 0.85);
+}
+html.gov-void .admin-search-wrap { background: rgba(255, 255, 255, 0.06); }
+html.gov-void .tb-wrap {
+  background: rgba(8, 8, 10, 0.35);
+  border-color: rgba(255, 255, 255, 0.08);
+}
+
+/* ── Depth guide rings ── */
+.tb-ring {
+  fill: none;
+  stroke: #ffffff;
+  /* stroke-opacity comes inline from the ring-opacity slider */
+  stroke-width: 1;
+  pointer-events: none;
+}
+
+/* ── "Move to…" batch reattach ── */
+.gov-bar-divider {
+  width: 1px;
+  height: 16px;
+  background: rgba(255, 255, 255, 0.12);
+  margin: 0 2px;
+}
+.gov-moveto {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  color: #818cf8;
+  background: rgba(129, 140, 248, 0.08);
+  border: 1px solid rgba(129, 140, 248, 0.35);
+  border-radius: 999px;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: border-color 120ms, background 120ms;
+}
+.gov-moveto:hover { border-color: #818cf8; }
+.gov-moveto.is-armed {
+  color: #0a0a0a;
+  background: #818cf8;
+  animation: gov-armed 1.1s ease-in-out infinite;
+}
+@keyframes gov-armed {
+  50% { box-shadow: 0 0 14px rgba(129, 140, 248, 0.55); }
+}
+.tb-wrap.is-picking { cursor: crosshair; }
+.tb-wrap.is-picking .tb-node { cursor: crosshair; }
+
+/* ── Type icons (drawn nightly by generate-type-icons) ── */
+.tb-icon {
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.9;
+  pointer-events: none;
+}
+
+/* ── Headerless types page: controls float in the canvas ── */
+.gov-types .gov-canvas { margin: 14px 26px 16px; }
+.gov-canvas-controls {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  z-index: 6;
+}
+
+/* ── View mode segmented control (types / products / all) ── */
+.gov-seg {
+  display: inline-flex;
+  padding: 3px;
+  gap: 2px;
+  border: 1px solid #27272a;
+  border-radius: 999px;
+  background: #121214;
+}
+.gov-seg button {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: capitalize;
+  color: #a1a1aa;
+  background: transparent;
+  border: none;
+  border-radius: 999px;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: background 140ms, color 140ms;
+}
+.gov-seg button:hover { color: #fff; }
+.gov-seg button.is-active { background: #27272a; color: #fff; }
+
+/* ── Hover drill affordance ── */
+.tb-drill {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 26px;
+  height: 26px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid #3f3f46;
+  background: #18181b;
+  color: #e4e4e7;
+  cursor: zoom-in;
+  transition: border-color 120ms, color 120ms;
+  animation: tb-sat-in 160ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.tb-drill:hover { border-color: #818cf8; color: #fff; }
+
+/* ── Drill view: the screen zooms INTO the node ──
+   --ox/--oy anchor both the panel reveal and the conceptual zoom at the
+   node's canvas position, so opening feels like diving into that circle. */
+.gov-drill {
+  position: absolute;
+  inset: 0;
+  z-index: 8;
+  display: flex;
+  flex-direction: column;
+  border-radius: 16px;
+  background:
+    radial-gradient(circle at var(--ox) var(--oy), rgba(99, 102, 241, 0.12), transparent 55%),
+    rgba(5, 5, 7, 0.97);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  transform-origin: var(--ox) var(--oy);
+  animation: gov-drill-in 380ms cubic-bezier(0.22, 1, 0.36, 1) both;
+  overflow: hidden;
+}
+@keyframes gov-drill-in {
+  from { transform: scale(0.05); opacity: 0; border-radius: 50%; }
+  60%  { opacity: 1; }
+  to   { transform: scale(1); opacity: 1; border-radius: 16px; }
+}
+.gov-drill-head {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 16px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  flex-shrink: 0;
+}
+.gov-drill-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.gov-drill-title h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  text-transform: capitalize;
+}
+.gov-drill-title > span:last-child { font-size: 12px; color: #a1a1aa; }
+.gov-drill-dot { width: 12px; height: 12px; border-radius: 50%; }
+.gov-drill-path {
+  margin-left: auto;
+  font-size: 11px;
+  color: #71717a;
+  letter-spacing: 0.04em;
+}
+.gov-drill-empty { padding: 32px 24px; font-size: 13px; color: #a1a1aa; }
+.gov-drill-grid {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  /* Rows, not columns: cards take only the space they need and wrap. */
+  display: flex;
+  flex-wrap: wrap;
+  align-content: flex-start;
+  gap: 14px;
+  padding: 18px 20px 24px;
+}
+.gov-drill-card {
+  width: 150px;
+  flex: 0 0 auto;
+  align-self: flex-start;
+  font: inherit;
+  text-align: left;
+  color: inherit;
+  background: #121214;
+  border: 1px solid #1f1f23;
+  border-radius: 12px;
+  padding: 0 0 10px;
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 140ms, transform 140ms;
+  animation: gov-drill-card-in 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.gov-drill-card:hover { border-color: #6366f1; transform: translateY(-2px); }
+@keyframes gov-drill-card-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.gov-drill-media {
+  aspect-ratio: 3 / 4;
+  background: #1c1c1f;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 8px;
+}
+.gov-drill-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.gov-drill-media span { font-size: 18px; font-weight: 800; color: #52525b; text-transform: uppercase; }
+.gov-drill-card em {
+  display: block;
+  padding: 0 10px;
+  font-style: normal;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #818cf8;
+}
+.gov-drill-card strong {
+  display: block;
+  padding: 1px 10px 0;
+  font-size: 12px;
+  font-weight: 600;
+  color: #e4e4e7;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Ring dials (opacity + distance sliders, bottom-left) ── */
+.gov-ringdials {
+  position: absolute;
+  left: 16px;
+  bottom: 12px;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  background: rgba(10, 10, 12, 0.72);
+}
+.gov-ringdials label {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.gov-ringdials span {
+  width: 86px;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #a1a1aa;
+}
+.gov-ringdials input[type='range'] {
+  width: 110px;
+  accent-color: #818cf8;
+}
+
+/* ── Drill view: select products → assign to a different type ── */
+.gov-drill-card { position: relative; }
+.gov-drill-card.is-selected {
+  border-color: #818cf8;
+  box-shadow: 0 0 0 1px #818cf8, 0 0 18px rgba(129, 140, 248, 0.25);
+}
+.gov-drill-media { position: relative; }
+.gov-drill-check {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 20px;
+  height: 20px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #818cf8;
+  color: #0a0a0a;
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 800;
+}
+.gov-drill-card.is-selected .gov-drill-check { display: inline-flex; }
+.gov-drill-open {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(10, 10, 12, 0.75);
+  color: #e4e4e7;
+  font-size: 12px;
+  opacity: 0;
+  transition: opacity 120ms;
+}
+.gov-drill-card:hover .gov-drill-open { opacity: 1; }
+.gov-drill-open:hover { background: #6366f1; color: #fff; }
+
+.gov-drill-assign {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  flex-shrink: 0;
+}
+.gov-drill-assign > span {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #a1a1aa;
+}
+.gov-drill-picker {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 20px;
+  z-index: 10;
+  width: 320px;
+  border: 1px solid #27272a;
+  border-radius: 12px;
+  background: rgba(17, 17, 19, 0.98);
+  padding: 10px;
+}
+.gov-drill-picker input {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  font-size: 13px;
+  color: #fff;
+  background: #18181b;
+  border: 1px solid #27272a;
+  border-radius: 8px;
+  padding: 8px 10px;
+  outline: none;
+  margin-bottom: 8px;
+}
+.gov-drill-picker input:focus { border-color: #818cf8; }
+.gov-drill-picker-list { max-height: 260px; overflow-y: auto; }
+.gov-drill-picker-list button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  font: inherit;
+  text-align: left;
+  color: #d4d4d8;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  padding: 7px 8px;
+  cursor: pointer;
+}
+.gov-drill-picker-list button:hover { background: rgba(129, 140, 248, 0.12); color: #fff; }
+.gov-drill-picker-list i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.gov-drill-picker-list strong { font-size: 13px; font-weight: 600; text-transform: capitalize; }
+.gov-drill-picker-list span {
+  margin-left: auto;
+  font-size: 10.5px;
+  color: #71717a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 150px;
 }
