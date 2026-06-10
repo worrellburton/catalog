@@ -41,6 +41,8 @@ const MIN_DURATION_MS = 2400;
 const MAX_DURATION_MS = 7000;
 /** How many product tiles can float behind the stage at most. */
 const FLOATER_SLOTS = 8;
+/** Beat the gather animation needs to play out before the reveal. */
+const GATHER_MS = 760;
 
 // Hand-placed scatter for the floating tiles — TOP and BOTTOM bands only,
 // kept clear of the centered thinking card (which lives in the y 30-72%
@@ -53,10 +55,48 @@ const FLOATER_SLOTS_POS: { x: number; y: number }[] = [
   { x: 63, y: 13 }, { x: 60, y: 82 },
   { x: 85, y: 8 },  { x: 86, y: 88 },
 ];
+// Per-slot depth: scale + drift amplitude + settled opacity. Bigger tiles
+// read as closer (drift LESS, slightly more opaque); smaller as farther
+// (drift more, dimmer) — together they fake a parallax volume with zero
+// per-frame JS. Indexed by slot, so a tile keeps its depth for its life.
+const FLOATER_DEPTH: { s: number; amp: number; o: number }[] = [
+  { s: 1.08, amp: 7,  o: 0.95 }, { s: 0.86, amp: 14, o: 0.78 },
+  { s: 0.94, amp: 11, o: 0.85 }, { s: 1.12, amp: 6,  o: 0.96 },
+  { s: 0.90, amp: 13, o: 0.80 }, { s: 1.02, amp: 9,  o: 0.92 },
+  { s: 0.88, amp: 12, o: 0.82 }, { s: 1.05, amp: 8,  o: 0.94 },
+];
+
+/** A product tile occupying one of the fixed floater slots. */
+type FloaterTier = 0 | 1 | 2;
+interface FloaterSlot {
+  src: string;
+  tier: FloaterTier;
+  /** Bumped on every in-place upgrade — keys the swap animation. */
+  rev: number;
+  /** The image being dissolved out during an upgrade. */
+  prevSrc?: string;
+}
+
+function seedSlots(initial: string[]): (FloaterSlot | null)[] {
+  const out: (FloaterSlot | null)[] = Array(FLOATER_SLOTS).fill(null);
+  initial.slice(0, FLOATER_SLOTS).forEach((src, i) => {
+    if (src) out[i] = { src, tier: 0, rev: 0 };
+  });
+  return out;
+}
+
+/** Deterministic per-query position jitter (±range) so the scatter looks
+ *  organic and differs between searches, but never shifts mid-ceremony. */
+function slotJitter(seed: string, i: number, range: number): number {
+  let h = (2166136261 ^ (i * 16777619)) >>> 0;
+  for (let c = 0; c < seed.length; c++) {
+    h ^= seed.charCodeAt(c);
+    h = Math.imul(h, 16777619);
+  }
+  return (((h >>> 0) % 1000) / 1000 - 0.5) * 2 * range;
+}
 /** How fast the thinking steps stream in, one after another. */
 const STEP_INTERVAL_MS = 600;
-/** Beat to hold on the all-checks state before revealing results. */
-const SETTLE_MS = 420;
 
 // Agentic progress narration — concrete steps streamed one by one with a
 // spinner→check. The first always echoes the query; the middle three are
@@ -150,43 +190,67 @@ export default function SearchCeremony({ query, kind = 'search', ready, onDone, 
   const finalDone = ready && allRevealed;
 
   // Products "forming" in the background, revealed progressively as each
-  // phase completes — more tiles the closer the ceremony gets to done, so it
-  // reads as "it's almost there, products are coming together". Prefer the
-  // real result images (floatingImages) as they land; meanwhile pull a pool
-  // from the home feed so something still forms during the loading beat. The
-  // pool only ever GROWS (deduped, capped) and tiles are keyed by src, so
-  // already-floating ones never jump when new ones fade in beside them.
-  const [pool, setPool] = useState<string[]>(() => floatingImages.slice(0, FLOATER_SLOTS));
-  const mergeImages = (incoming: string[]) => setPool(prev => {
-    const seen = new Set(prev);
-    const next = [...prev];
-    for (const s of incoming) {
-      if (next.length >= FLOATER_SLOTS) break;
-      if (s && !seen.has(s)) { next.push(s); seen.add(s); }
+  // phase completes. Three relevance tiers compete for the fixed slots:
+  //   tier 0 — REAL search results (floatingImages) as they land
+  //   tier 1 — query-related precursor (name/type/brand + catalog-tag match)
+  //   tier 2 — ambient home-feed filler (only if the query matched little)
+  // A better tier UPGRADES an occupied slot in place (the old image dissolves
+  // out, the new one resolves in, the tile's position/drift never move) — so
+  // by the reveal, the field is showing what the search actually found,
+  // instead of whatever happened to fill the slots first.
+  const [slots, setSlots] = useState<(FloaterSlot | null)[]>(
+    () => seedSlots(floatingImages),
+  );
+  const placeImages = (incoming: string[], tier: FloaterTier) => setSlots(prev => {
+    const used = new Set(prev.filter(Boolean).map(s => (s as FloaterSlot).src));
+    let next: (FloaterSlot | null)[] | null = null;
+    for (const src of incoming) {
+      if (!src || used.has(src)) continue;
+      const pool = next ?? prev;
+      // Empty slot first; otherwise upgrade the WORST strictly-lower-tier
+      // slot so real results displace fillers, never each other.
+      let idx = pool.findIndex(s => s === null);
+      if (idx === -1) {
+        let worstTier: FloaterTier = tier;
+        idx = -1;
+        pool.forEach((s, i) => {
+          if (s && s.tier > worstTier) { worstTier = s.tier; idx = i; }
+        });
+      }
+      if (idx === -1) continue; // field already at-or-above this tier
+      next = next ?? [...prev];
+      const old = next[idx];
+      next[idx] = { src, tier, rev: old ? old.rev + 1 : 0, prevSrc: old?.src };
+      used.add(src);
     }
-    return next.length === prev.length ? prev : next;
+    return next ?? prev;
   });
   // The real semantic results claim slots as they land (best match).
-  useEffect(() => { if (floatingImages.length) mergeImages(floatingImages); /* eslint-disable-next-line react-hooks/exhaustive-deps */ }, [floatingImages]);
+  useEffect(() => {
+    if (floatingImages.length) placeImages(floatingImages, 0);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [floatingImages]);
   // Precursor: products RELATED to the query, fetched fast so the field hints
-  // at what's coming ("jeans" → denim, "shoes" → sneakers). If the query
-  // matched little, top up with the home feed so the field never looks empty.
+  // at what's coming ("jeans" → denim, "shoes" → sneakers, "clean girl
+  // aesthetic" → that catalog's products). Only if the query matched little
+  // does the home feed top the field up — and those fillers stay marked as
+  // tier 2 so real results replace them the moment they arrive.
   useEffect(() => {
     let cancelled = false;
     (async () => {
-      let imgs: string[] = [];
-      try { imgs = await getProductImagesForQuery(query, FLOATER_SLOTS * 2); } catch { /* */ }
+      let related: string[] = [];
+      try { related = await getProductImagesForQuery(query, FLOATER_SLOTS * 2); } catch { /* */ }
       if (cancelled) return;
-      if (imgs.length < 4) {
+      if (related.length) placeImages(related, 1);
+      if (related.length < 4) {
         try {
           const feed = await getHomeFeed({ ignoreGender: true });
           if (cancelled) return;
-          imgs = [...imgs, ...feed.map(a =>
+          placeImages(feed.map(a =>
             a.product?.primary_image_url || a.product?.image_url || a.thumbnail_url || '',
-          ).filter(Boolean)];
+          ).filter(Boolean), 2);
         } catch { /* keep the query matches we have */ }
       }
-      mergeImages(imgs);
     })();
     return () => { cancelled = true; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -195,7 +259,7 @@ export default function SearchCeremony({ query, kind = 'search', ready, onDone, 
   // Visible tile count ramps with each completed phase (a couple per phase),
   // so the field fills in as the narration progresses.
   const phaseRatio = steps.length > 0 ? revealed / steps.length : 1;
-  const visibleFloaters = Math.min(pool.length, Math.ceil(phaseRatio * FLOATER_SLOTS));
+  const visibleFloaters = Math.ceil(phaseRatio * FLOATER_SLOTS);
 
   // Stream the steps in, one at a time.
   useEffect(() => {
@@ -238,10 +302,10 @@ export default function SearchCeremony({ query, kind = 'search', ready, onDone, 
   useEffect(() => {
     if (!ready || !allRevealed) return;
     const elapsed = Date.now() - startedAt.current;
-    // Original length — no extra hold for the product reveal. The products
-    // only show if they've already loaded by now (see finalDone gate below);
-    // we never wait on them, so the ceremony stays short.
-    const wait = Math.max(0, MIN_DURATION_MS - elapsed) + SETTLE_MS;
+    // The hold after the last check is exactly the gather beat — the floating
+    // products dive down toward where the results rise from, so the ceremony
+    // hands off INTO the reveal instead of just stopping before it.
+    const wait = Math.max(0, MIN_DURATION_MS - elapsed) + GATHER_MS;
     const t = window.setTimeout(onDone, wait);
     return () => window.clearTimeout(t);
   }, [ready, allRevealed, onDone]);
@@ -274,40 +338,61 @@ export default function SearchCeremony({ query, kind = 'search', ready, onDone, 
           "searching the world" speed the ceremony sets on the singleton. */}
       <ParticleBackground speed={3.5} />
 
-      {/* The searched products, drifting in the particle space behind the
-          stage. Each tile floats on its own gentle loop; they fade in once
-          results land. Capped + positioned on a scattered ring so they read
-          as floating in 3D space, not a grid. */}
-      {visibleFloaters > 0 && (
-        <div className="sc-floaters" aria-hidden="true">
-          {pool.slice(0, visibleFloaters).map((src, i) => {
-            // Fixed, non-overlapping slot (stable as more fade in beside it).
-            const slot = FLOATER_SLOTS_POS[i % FLOATER_SLOTS_POS.length];
-            // Per-tile drift params so each floats on its own path — gentle
-            // 2D bob + a touch of rotation = "floating in space".
-            const dx = (i % 2 ? 1 : -1) * (5 + (i % 3) * 3); // px, alternating
-            const rot = (i % 2 ? -1 : 1) * (1.5 + (i % 3));  // deg
-            return (
-              <span
-                key={src}
-                className="sc-floater"
-                style={{
-                  left: `${slot.x}%`,
-                  top: `${slot.y}%`,
-                  ['--dx' as string]: `${dx}px`,
-                  ['--rot' as string]: `${rot}deg`,
-                  ['--d' as string]: `${(i % 4) * 0.5}s`,
-                  ['--dur' as string]: `${7 + (i % 5)}s`,
-                  // Each tile fades in on mount as it joins the field.
-                  ['--fade' as string]: '0s',
-                } as React.CSSProperties}
-              >
-                <img src={src} alt="" loading="eager" decoding="async" />
-              </span>
-            );
-          })}
-        </div>
-      )}
+      {/* The searched products materialising in the particle space behind the
+          stage. Each tile is born at the stage's spark and flies out to its
+          slot (blur-to-sharp, scale-up), then floats on a per-depth parallax
+          drift. When a better-tier image claims the slot, the old one
+          dissolves out and the new one resolves in WITHOUT the tile moving.
+          On the final check, the whole field gathers and dives down toward
+          where the results rise from. */}
+      <div className={`sc-floaters${finalDone ? ' is-gather' : ''}`} aria-hidden="true">
+        {slots.map((f, i) => {
+          if (!f || i >= visibleFloaters) return null;
+          const base = FLOATER_SLOTS_POS[i];
+          const depth = FLOATER_DEPTH[i];
+          // Organic per-query scatter; stable for the ceremony's lifetime.
+          const x = base.x + slotJitter(query, i, 3);
+          const y = base.y + slotJitter(query, i * 7 + 3, 3.5);
+          return (
+            <span
+              key={`slot-${i}`}
+              className="sc-floater"
+              style={{
+                left: `${x.toFixed(1)}%`,
+                top: `${y.toFixed(1)}%`,
+                // Spawn vector: from the stage centre out to the slot.
+                ['--fx' as string]: `${(50 - x).toFixed(1)}vw`,
+                ['--fy' as string]: `${(48 - y).toFixed(1)}vh`,
+                // Gather vector: down past the fold, where results rise from.
+                ['--gx' as string]: `${((50 - x) * 0.6).toFixed(1)}vw`,
+                ['--gy' as string]: `${(112 - y).toFixed(1)}vh`,
+                ['--spin' as string]: `${slotJitter(query, i + 17, 16).toFixed(0)}deg`,
+                ['--s' as string]: `${depth.s}`,
+                ['--amp' as string]: `${depth.amp}px`,
+                ['--o' as string]: `${depth.o}`,
+                ['--delay' as string]: `${(i % 4) * 0.09}s`,
+                ['--gd' as string]: `${i * 0.035}s`,
+                ['--dur' as string]: `${8 + (i % 5)}s`,
+              } as React.CSSProperties}
+            >
+              {/* Dissolving previous image during an in-place upgrade. */}
+              {f.prevSrc && (
+                <img key={`out-${f.rev}`} className="sc-img-out" src={f.prevSrc} alt="" decoding="async" />
+              )}
+              <img
+                key={f.src}
+                className={f.rev > 0 ? 'sc-img-in' : undefined}
+                src={f.src}
+                alt=""
+                loading="eager"
+                decoding="async"
+              />
+              {/* One-shot ring flash when a real result claims the slot. */}
+              {f.rev > 0 && <span key={`flash-${f.rev}`} className="sc-floater-flash" />}
+            </span>
+          );
+        })}
+      </div>
       <div className="sc-stage">
         {/* 1 — Query echo: the committed query, pinned at the top. */}
         {query && (

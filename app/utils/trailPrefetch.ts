@@ -13,7 +13,9 @@
 import type { ProductAd } from '~/services/product-creative';
 import type { Look } from '~/data/looks';
 import { withTransform } from './supabase-image';
-import { pickPosterUrl, prefetchHlsHead } from '~/services/video-loading';
+import { pickPlaybackSource, pickPosterUrl, prefetchHlsHead } from '~/services/video-loading';
+import { videoPipelineMode, videoPrewarmEnabled } from '~/services/video-pipeline';
+import { isHlsUrl } from './hlsAttach';
 import { lookPoster } from '~/services/media-resolver';
 
 const POSTERS_TO_WARM = 16;
@@ -22,6 +24,13 @@ const POSTERS_TO_WARM = 16;
 // initial set before the in-page IntersectionObserver has time to trigger
 // the regular preload chain.
 const VIDEOS_TO_WARM = 18;
+// HLS heads route through prefetchHlsHead's small bounded queue (3 in-flight,
+// 8 pending — see video-loading.ts). Pushing all 18 synchronously would evict
+// the NEAREST below-fold cards before they warm, so cap the boot batch to what
+// fits the queue without eviction. Each card re-warms its own head when it
+// enters CreativeCardV2/LookCard's prewarm band anyway, so this is just the
+// head start. MP4 link-preloads are unbounded, so they keep the full 18.
+const HLS_HEADS_TO_WARM = 6;
 
 // Match CreativeCardV2's poster transform EXACTLY (same width/quality/resize
 // AND the pickPosterUrl source) so the warmed URL is a byte-for-byte cache hit
@@ -99,12 +108,19 @@ export function primeTrailAssets(rows: ProductAd[]): void {
     void decodeImage(poster);
   }
 
-  // Video warm: gated. The hero loop on the first card matters most for the
-  // "no black flash" feel, so prioritize the top three and stop.
-  if (!networkLooksHealthy()) return;
+  // Video warm: gated on network health AND the admin prewarm dial. Warm the
+  // SAME source the card will actually play (pickPlaybackSource is pipeline-
+  // aware): HLS manifests get a head-warm, progressive MP4s a preload link.
+  if (!networkLooksHealthy() || !videoPrewarmEnabled()) return;
+  let hlsHeads = 0;
   for (const row of rows.slice(0, VIDEOS_TO_WARM)) {
-    const url = row.video_url;
-    if (!url || warmedVideos.has(url)) continue;
+    const url = pickPlaybackSource(row);
+    if (!url) continue;
+    if (isHlsUrl(url)) {
+      if (hlsHeads < HLS_HEADS_TO_WARM) { prefetchHlsHead(url); hlsHeads++; }
+      continue;
+    }
+    if (warmedVideos.has(url)) continue;
     warmedVideos.add(url);
     injectPreload(url, 'video', 'video/mp4');
   }
@@ -129,15 +145,20 @@ export function primeLookAssets(rows: Look[]): void {
     void decodeImage(poster);
   }
 
-  if (!networkLooksHealthy()) return;
+  if (!networkLooksHealthy() || !videoPrewarmEnabled()) return;
+  let hlsHeads = 0;
   for (const row of rows.slice(0, VIDEOS_TO_WARM)) {
-    // HLS-aware: when a look ships the adaptive ladder (hls_url), that's the
-    // source LookCard/CreativeCardV2 actually play — warm its head (manifest +
-    // lowest-rung init + first segments) so hls.js attaches to a cache hit. A
-    // full-file <link rel=preload as=video> on the MP4 here would download bytes
-    // the player never reads AND steal bandwidth from the HLS segment fetch.
-    if (row.hls_url) {
-      prefetchHlsHead(row.hls_url);
+    // HLS-aware: when the pipeline dial is on 'hls' and a look ships the
+    // adaptive ladder (hls_url), that's the source LookCard/CreativeCardV2
+    // actually play — warm its head (manifest + lowest-rung init + first
+    // segments) so hls.js attaches to a cache hit. A full-file
+    // <link rel=preload as=video> on the MP4 here would download bytes the
+    // player never reads AND steal bandwidth from the HLS segment fetch.
+    // In 'mp4' mode fall through to the progressive warm below. Capped to
+    // HLS_HEADS_TO_WARM so the synchronous batch doesn't thrash the bounded
+    // head-warm queue and evict the nearest cards.
+    if (videoPipelineMode() === 'hls' && row.hls_url) {
+      if (hlsHeads < HLS_HEADS_TO_WARM) { prefetchHlsHead(row.hls_url); hlsHeads++; }
       continue;
     }
     const url = row.mobile_video_url || row.video;

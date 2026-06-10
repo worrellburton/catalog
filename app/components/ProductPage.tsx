@@ -40,6 +40,7 @@ import {
   isMobileViewport,
   markFeedMilestone,
 } from '~/services/video-loading';
+import { useVideoPipelineMode } from '~/hooks/useVideoPipeline';
 import { lookPoster, productPoster } from '~/services/media-resolver';
 import { emitSavedToast } from '~/utils/savedToast';
 import '~/styles/product-page.css';
@@ -1049,10 +1050,14 @@ export default function ProductPage({
   // handoff, so `creative` is undefined and the hero used to fall back to a
   // static image. When the product itself carries a primary video, synthesize
   // a hero creative from it so the hero plays the primary video instead.
+  // The pipeline dial gates every hlsUrl read below: in 'mp4' mode the hero
+  // plays the progressive videoUrl even when a caller passed an hlsUrl.
+  const pipelineMode = useVideoPipelineMode();
   const effectiveCreative: ProductPageCreative | undefined = creative
     ?? (product.video_url
-      ? { id: `product:${product.brand}-${product.name}`, videoUrl: product.video_url, hlsUrl: product.primary_hls_url ?? null, thumbnailUrl: product.image ?? product.thumbnail_url ?? null }
+      ? { id: `product:${product.brand}-${product.name}`, videoUrl: product.video_url, hlsUrl: pipelineMode === 'hls' ? (product.primary_hls_url ?? null) : null, thumbnailUrl: product.image ?? product.thumbnail_url ?? null }
       : undefined);
+  const heroHlsUrl = pipelineMode === 'hls' ? effectiveCreative?.hlsUrl : null;
 
   // Poster source of last resort (canonical productPoster chain). Products
   // opened from a look can carry a primary-video poster in thumbnail_url while
@@ -1090,11 +1095,12 @@ export default function ProductPage({
   // the <video> element painting a real image even on the (rare) cold
   // path where the pool element was evicted between card unmount and
   // hero attach.
-  // Prefer the HLS manifest so the full-screen hero ramps to a crisp rung;
-  // fall back to the progressive MP4 when no ladder exists for this clip.
+  // Prefer the HLS manifest (when the pipeline dial allows it) so the
+  // full-screen hero ramps to a crisp rung; fall back to the progressive MP4
+  // when no ladder exists for this clip or the pipeline is in 'mp4' mode.
   const setHeroSlot = useTrailVideo(
     effectiveCreative?.id,
-    effectiveCreative?.hlsUrl || effectiveCreative?.videoUrl,
+    heroHlsUrl || effectiveCreative?.videoUrl,
     heroPoster || undefined,
   );
 
@@ -1104,9 +1110,9 @@ export default function ProductPage({
   // the cache.
   useEffect(() => {
     // HLS streams its own segments via hls.js — skip the full-file byte prewarm.
-    if (effectiveCreative?.hlsUrl) return;
+    if (heroHlsUrl) return;
     if (creative?.videoUrl) prefetchVideoBytes(creative.videoUrl);
-  }, [creative?.id, creative?.videoUrl, effectiveCreative?.hlsUrl]);
+  }, [creative?.id, creative?.videoUrl, heroHlsUrl]);
 
   // Prewarm "Featured in Looks" poster images. Each look that's
   // about to render a tile gets its poster jpeg pulled into the

@@ -31,6 +31,7 @@ import {
 } from '~/services/dials';
 import { backfillBrandLogos, type BackfillResult } from '~/services/brandLogos';
 import { shouldBeVideo } from '~/utils/videoStillSplit';
+import VideoPipelineCard from '~/components/admin/VideoPipelineCard';
 
 /**
  * /admin/dials — global tuning knobs that affect the whole catalog
@@ -461,6 +462,8 @@ export default function AdminDials() {
             </>
           )}
         </div>
+
+        <VideoPipelineCard />
 
         <div className="admin-detail-card">
           <h3>Products: only show product image</h3>

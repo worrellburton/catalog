@@ -28,6 +28,7 @@
 // code, so callers behave exactly as before until an `hls_url` is populated.
 
 import type HlsType from 'hls.js';
+import { videoPipelineMode } from '~/services/video-pipeline';
 
 // Minimal surface of the hls.js instance we use — lets us avoid a value import
 // (which would pull hls.js into the main bundle).
@@ -74,9 +75,12 @@ function preferHlsJsOverNative(): boolean {
 
 /** Phase 1: pre-load the hls.js chunk during idle so the FIRST HLS card of a
  *  session doesn't stall on the dynamic import before it can even attach.
- *  No-op on native-HLS browsers (they never download hls.js) and on save-data.
+ *  No-op on native-HLS browsers (they never download hls.js), on save-data,
+ *  and in 'mp4' pipeline mode (no surface will request an HLS source; if a
+ *  stray manifest does reach setVideoSource it lazy-loads hls.js then).
  *  Safe to call repeatedly — loadHls() memoizes the import. */
 export function prefetchHlsModule(): void {
+  if (videoPipelineMode() === 'mp4') return;
   if (typeof navigator !== 'undefined') {
     const c = (navigator as Navigator & { connection?: { saveData?: boolean } }).connection;
     if (c?.saveData) return;
