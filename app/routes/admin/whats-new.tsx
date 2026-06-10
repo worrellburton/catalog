@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
+import { catalogAlert } from '~/components/CatalogDialog';
 
 // Editorial changelog. Pulls the latest commits to main from the public
 // GitHub API and renders them as release notes. Each entry shows a plain-
@@ -407,7 +408,7 @@ function buildAndPrintReport(commits: GitHubCommit[], range: ReportRange) {
   </body></html>`;
 
   const w = window.open('', '_blank');
-  if (!w) { alert('Pop-up blocked — allow pop-ups to download the report.'); return; }
+  if (!w) { void catalogAlert({ title: 'Pop-up blocked', message: 'Allow pop-ups to download the report.' }); return; }
   w.document.open();
   w.document.write(html);
   w.document.close();

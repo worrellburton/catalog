@@ -221,20 +221,18 @@
   padding: 3px 10px;
 }
 
-.tb-rename {
-  position: absolute;
-  transform: translate(-50%, -50%);
-  width: 150px;
+/* Inline rename inside the drill-view header (double-click the title). */
+.gov-drill-rename {
   font: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  text-align: center;
+  font-size: 20px;
+  font-weight: 700;
   color: #fff;
   background: #18181b;
   border: 1.5px solid #818cf8;
   border-radius: 8px;
-  padding: 6px 8px;
+  padding: 2px 10px;
   outline: none;
+  width: 240px;
 }
 
 .tb-add {
@@ -551,6 +549,13 @@ html.gov-void .tb-wrap {
 }
 .tb-wrap.is-picking { cursor: crosshair; }
 .tb-wrap.is-picking .tb-node { cursor: crosshair; }
+
+/* Held spacebar = hand-pan: grab cursor everywhere, and the HTML overlay
+   lets pointer events fall through to the canvas so a pan can start on
+   top of satellites/buttons too. */
+.tb-wrap.is-pan, .tb-wrap.is-pan .tb-node, .tb-wrap.is-pan .tb-svg { cursor: grab; }
+.tb-wrap.is-panning, .tb-wrap.is-panning .tb-node, .tb-wrap.is-panning .tb-svg { cursor: grabbing; }
+.tb-wrap.is-pan .tb-overlay > * { pointer-events: none; }
 
 /* ── Type icons (drawn nightly by generate-type-icons) ── */
 .tb-icon {
@@ -878,3 +883,159 @@ html.gov-void .tb-wrap {
   text-overflow: ellipsis;
   max-width: 150px;
 }
+
+/* ── Drill: "Add products" menu (Google / Amazon / brand / manual) ── */
+.gov-drill-add { position: relative; flex-shrink: 0; }
+.gov-drill-addmenu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 12;
+  min-width: 220px;
+  border: 1px solid #27272a;
+  border-radius: 12px;
+  background: rgba(17, 17, 19, 0.98);
+  padding: 4px;
+}
+.gov-drill-addmenu button {
+  display: block;
+  width: 100%;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  color: #d4d4d8;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+}
+.gov-drill-addmenu button:hover { background: rgba(129, 140, 248, 0.12); color: #fff; }
+
+/* ── Drill: collapsible subtype rows pinned at the bottom ── */
+.gov-drill-subs {
+  flex-shrink: 0;
+  max-height: 48%;
+  overflow-y: auto;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  padding: 10px 20px 18px;
+}
+.gov-drill-subs > h3 {
+  margin: 4px 0 8px;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #71717a;
+}
+.gov-drill-sub { border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
+.gov-drill-sub:last-child { border-bottom: none; }
+.gov-drill-sub-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  font: inherit;
+  text-align: left;
+  color: #e4e4e7;
+  background: transparent;
+  border: none;
+  padding: 10px 4px;
+  cursor: pointer;
+}
+.gov-drill-sub-head:hover strong { color: #fff; }
+.gov-drill-sub-head strong { font-size: 14px; font-weight: 700; text-transform: capitalize; }
+.gov-drill-sub-chevron { font-style: normal; font-size: 11px; color: #71717a; width: 12px; }
+.gov-drill-sub-count { margin-left: auto; font-size: 11.5px; color: #71717a; }
+.gov-drill-sub .gov-drill-grid { flex: none; overflow: visible; padding: 4px 4px 16px; }
+.gov-drill-sub .gov-drill-empty { padding: 4px 4px 14px; }
+
+/* ── Type audit report ── */
+.gov-audit {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: flex;
+  flex-direction: column;
+  background: rgba(5, 5, 7, 0.97);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  animation: gov-audit-in 220ms ease both;
+}
+@keyframes gov-audit-in { from { opacity: 0; } }
+.gov-audit-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 20px 26px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  flex-shrink: 0;
+}
+.gov-audit-head h2 { margin: 0 0 2px; font-size: 19px; font-weight: 800; color: #fff; }
+.gov-audit-head span { font-size: 12.5px; color: #a1a1aa; }
+.gov-audit-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 26px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  flex-shrink: 0;
+}
+.gov-audit-toolbar > span { font-size: 12px; color: #a1a1aa; }
+.gov-audit-list { flex: 1; min-height: 0; overflow-y: auto; padding: 8px 26px 16px; }
+.gov-audit-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 10px;
+  border-radius: 12px;
+  cursor: pointer;
+  opacity: 0.55;
+  transition: opacity 120ms, background 120ms;
+}
+.gov-audit-row.is-checked { opacity: 1; }
+.gov-audit-row:hover { background: rgba(255, 255, 255, 0.04); }
+.gov-audit-row input { accent-color: #818cf8; flex-shrink: 0; }
+.gov-audit-thumb {
+  width: 38px;
+  height: 50px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #18181b;
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.gov-audit-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.gov-audit-thumb i { font-style: normal; font-size: 11px; color: #71717a; text-transform: uppercase; }
+.gov-audit-prod { min-width: 0; flex: 1; display: flex; flex-direction: column; gap: 1px; }
+.gov-audit-prod em { font-style: normal; font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: #818cf8; }
+.gov-audit-prod strong { font-size: 13px; font-weight: 600; color: #fff; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.gov-audit-prod small { font-size: 11px; color: #71717a; }
+.gov-audit-change { display: flex; align-items: center; gap: 8px; flex-shrink: 0; font-size: 12.5px; }
+.gov-audit-change s { color: #71717a; text-decoration-color: rgba(255, 255, 255, 0.25); }
+.gov-audit-change i { font-style: normal; color: #52525b; }
+.gov-audit-change b { color: #a5b4fc; font-weight: 700; }
+.gov-audit-foot {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  padding: 14px 26px 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  flex-shrink: 0;
+}
+.gov-audit-apply {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  color: #0a0a0a;
+  background: #818cf8;
+  border: none;
+  border-radius: 999px;
+  padding: 8px 18px;
+  cursor: pointer;
+}
+.gov-audit-apply:disabled { opacity: 0.4; cursor: default; }
+.gov-audit-apply:not(:disabled):hover { background: #a5b4fc; }

@@ -1,4 +1,5 @@
 import { useRef, useEffect, useState, useCallback, memo } from 'react';
+import { catalogConfirm } from '~/components/CatalogDialog';
 import { trackAdImpression, trackAdClick, prefetchSimilarProducts, type ProductAd } from '~/services/product-creative';
 import {
   pickVideoUrl,
@@ -314,9 +315,9 @@ const CreativeCard = memo(function CreativeCard({ creative, className = 'look-ca
             type="button"
             className="creative-delete-btn"
             aria-label="Delete product"
-            onClick={(e) => {
+            onClick={async (e) => {
               e.stopPropagation();
-              if (confirm(`Delete product "${creative.product?.name || "this product"}" everywhere?`)) {
+              if (await catalogConfirm({ title: `Delete product "${creative.product?.name || "this product"}" everywhere?`, danger: true })) {
                 onDelete(creative.id);
               }
             }}
@@ -354,10 +355,10 @@ const CreativeCard = memo(function CreativeCard({ creative, className = 'look-ca
           <button
             type="button"
             className="trail-admin-menu-btn trail-admin-menu-btn--danger"
-            onClick={(e) => {
+            onClick={async (e) => {
               e.stopPropagation();
               setMenu(null);
-              if (onDelete && confirm(`Delete product "${creative.product?.name || "this product"}" everywhere?`)) {
+              if (onDelete && await catalogConfirm({ title: `Delete product "${creative.product?.name || "this product"}" everywhere?`, danger: true })) {
                 onDelete(creative.id);
               }
             }}

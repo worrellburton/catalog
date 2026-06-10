@@ -13,6 +13,7 @@
 // casing it has.
 
 import { supabase } from '~/utils/supabase';
+import { inferProductTypeAndSubtype } from '~/services/product-types';
 
 export interface TypeNode {
   id: string;
@@ -138,6 +139,115 @@ export function snapshotGroups(
     byValue.set(v, [...(byValue.get(v) ?? []), p.id]);
   }
   return [...byValue.entries()].map(([v, ids]) => ({ ids, patch: { [column]: v } }));
+}
+
+// ── Type audit ────────────────────────────────────────────────────────
+// Walks every product and asks "is there a better node in the tree for
+// this?". Two signals, best (deepest / most specific) match wins:
+//   1. a tree node's name appearing as a word in the product name
+//      ("Kate Jean - Tidal Blue" → jeans)
+//   2. the regex taxonomy's type/subtype (synonyms: "denim" → Jeans),
+//      mapped into the tree by normalized name.
+// A product already on the recommended node — or on a DEEPER node inside
+// the recommended branch — is left alone.
+
+export interface TypeAuditRecommendation {
+  productId: string;
+  name: string;
+  brand: string | null;
+  image: string | null;
+  fromType: string | null;
+  toNodeId: string;
+  toName: string;
+  toPath: string;
+  reason: string;
+}
+
+const escapeRx = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+
+export function auditProductTypes(
+  products: GovernanceProduct[],
+  tree: TypeNode[],
+): TypeAuditRecommendation[] {
+  const byId = new Map(tree.map(n => [n.id, n]));
+  const byNorm = new Map<string, TypeNode>();
+  for (const n of tree) byNorm.set(normalizeTypeName(n.name), n);
+
+  const depthMemo = new Map<string, number>();
+  const depth = (n: TypeNode): number => {
+    const cached = depthMemo.get(n.id);
+    if (cached !== undefined) return cached;
+    const parent = n.parentId ? byId.get(n.parentId) : null;
+    const v = parent ? depth(parent) + 1 : 1;
+    depthMemo.set(n.id, v);
+    return v;
+  };
+  const pathMemo = new Map<string, string>();
+  const path = (n: TypeNode): string => {
+    const cached = pathMemo.get(n.id);
+    if (cached) return cached;
+    const parent = n.parentId ? byId.get(n.parentId) : null;
+    const v = parent ? `${path(parent)} / ${n.name}` : n.name;
+    pathMemo.set(n.id, v);
+    return v;
+  };
+  const inBranch = (node: TypeNode, ancestor: TypeNode): boolean => {
+    let cur: TypeNode | undefined = node;
+    while (cur) {
+      if (cur.id === ancestor.id) return true;
+      cur = cur.parentId ? byId.get(cur.parentId) : undefined;
+    }
+    return false;
+  };
+
+  // Precompiled word-boundary matcher per node ("jean" also hits "jeans").
+  const matchers = tree
+    .map(n => {
+      const norm = normalizeTypeName(n.name);
+      return norm.length >= 3
+        ? { node: n, norm, rx: new RegExp(`\\b${escapeRx(norm)}(?:s|es)?\\b`, 'i') }
+        : null;
+    })
+    .filter((m): m is { node: TypeNode; norm: string; rx: RegExp } => m !== null);
+
+  const recs: TypeAuditRecommendation[] = [];
+  for (const p of products) {
+    const currentNode = p.type ? byNorm.get(normalizeTypeName(p.type)) ?? null : null;
+
+    let best: TypeNode | null = null;
+    let bestScore = -1;
+    let bestReason = '';
+    const consider = (node: TypeNode, reason: string) => {
+      const score = depth(node) * 100 + normalizeTypeName(node.name).length;
+      if (score > bestScore) { best = node; bestScore = score; bestReason = reason; }
+    };
+    for (const m of matchers) {
+      if (m.rx.test(p.name)) consider(m.node, `name contains “${m.node.name}”`);
+    }
+    const inferred = inferProductTypeAndSubtype(p.name, p.brand);
+    for (const cand of [inferred?.subtype, inferred?.type]) {
+      if (!cand) continue;
+      const node = byNorm.get(normalizeTypeName(cand));
+      if (node) consider(node, `taxonomy match: ${cand}`);
+    }
+
+    if (!best) continue;
+    const target: TypeNode = best;
+    if (currentNode && (currentNode.id === target.id || inBranch(currentNode, target))) continue;
+    recs.push({
+      productId: p.id,
+      name: p.name,
+      brand: p.brand,
+      image: p.image,
+      fromType: p.type,
+      toNodeId: target.id,
+      toName: target.name,
+      toPath: path(target),
+      reason: bestReason,
+    });
+  }
+  recs.sort((a, b) => (a.toPath + a.name).localeCompare(b.toPath + b.name));
+  return recs;
 }
 
 export async function createTypeNode(name: string, parentId: string | null): Promise<TypeNode | null> {

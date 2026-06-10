@@ -50,6 +50,9 @@ export function useForceSim(
 ) {
   const bodiesRef = useRef<Map<string, Body>>(new Map());
   const alphaRef = useRef(1);
+  // While a drag is live the sim is frozen: only the pinned node moves, so
+  // every other node holds still and overlap-drops land every time.
+  const draggingRef = useRef(false);
   const gapRef = useRef(110);
   const [positions, setPositions] = useState<Map<string, SimNodeState>>(new Map());
   const frameRef = useRef(0);
@@ -93,7 +96,7 @@ export function useForceSim(
     const tick = () => {
       const bodies = bodiesRef.current;
       const alpha = alphaRef.current;
-      if (alpha > MIN_ALPHA) {
+      if (alpha > MIN_ALPHA && !draggingRef.current) {
         const arr = [...bodies.values()];
         const ring = gapRef.current;
         // Many-body repulsion (spreads nodes along their rings).
@@ -123,9 +126,11 @@ export function useForceSim(
           if (!a.pinned) { a.vx += fx; a.vy += fy; }
           if (!b.pinned) { b.vx -= fx; b.vy -= fy; }
         }
-        // Integrate, then SNAP onto the depth ring (the ring is a hard
-        // constraint, not a suggestion), then clamp to the canvas.
-        const pad = 56;
+        // Integrate, then SNAP onto the depth ring. The ring is a hard
+        // constraint: the pull eases in for a smooth glide, then lands
+        // EXACTLY on the radius — never a rectangular clamp afterwards
+        // (the old canvas clamp shoved edge nodes off their ring; the
+        // canvas pans/zooms, so containment isn't the sim's job).
         for (const b of arr) {
           if (b.depth === 0) { b.x = cx; b.y = cy; b.vx = 0; b.vy = 0; continue; }
           if (b.pinned) continue;
@@ -134,11 +139,9 @@ export function useForceSim(
           const dx = b.x - cx, dy = b.y - cy;
           const d = Math.sqrt(dx * dx + dy * dy) || 1;
           const target = b.depth * ring;
-          const nd = d + (target - d) * RING_SNAP;
+          const nd = Math.abs(target - d) < 0.75 ? target : d + (target - d) * RING_SNAP;
           b.x = cx + (dx / d) * nd;
           b.y = cy + (dy / d) * nd;
-          b.x = Math.min(Math.max(b.x, pad), width - pad);
-          b.y = Math.min(Math.max(b.y, pad), height - pad);
         }
         alphaRef.current = alpha * ALPHA_DECAY;
         setPositions(new Map([...bodies.entries()].map(([id, b]) => [id, { x: b.x, y: b.y }])));
@@ -149,17 +152,20 @@ export function useForceSim(
     return () => cancelAnimationFrame(frameRef.current);
   }, [links, width, height]);
 
-  /** Drag API: pin under the pointer, release reheats so neighbours settle. */
+  /** Drag API: pin under the pointer and freeze everyone else — neighbours
+   *  hold position so the drop target can't drift away mid-gesture.
+   *  Release unfreezes + reheats so the graph settles back onto the rings. */
   const dragTo = (id: string, x: number, y: number) => {
     const b = bodiesRef.current.get(id);
     if (!b) return;
     b.pinned = true; b.x = x; b.y = y; b.vx = 0; b.vy = 0;
-    alphaRef.current = Math.max(alphaRef.current, 0.3);
+    draggingRef.current = true;
     setPositions(prev => new Map(prev).set(id, { x, y }));
   };
   const release = (id: string) => {
     const b = bodiesRef.current.get(id);
     if (b) b.pinned = false;
+    draggingRef.current = false;
     alphaRef.current = Math.max(alphaRef.current, 0.5);
   };
 

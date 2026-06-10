@@ -1,4 +1,5 @@
 import { useReducer, useEffect, useRef, useCallback, useMemo, useState, memo } from 'react';
+import { catalogAlert } from '~/components/CatalogDialog';
 import { looks as staticLooksFallback, type Look, type Product } from '~/data/looks';
 import { getLooks, getCachedLooks, subscribeToLooksChange, fetchSeenLookIds, reorderBySeen } from '~/services/looks';
 import { trackImpression } from '~/services/session-tracker';
@@ -1000,7 +1001,7 @@ function ContinuousFeed({
       const { error } = await deleteProductAd(id);
       if (error) {
         console.error('[ContinuousFeed] deleteProductAd failed:', error);
-        alert(`Could not delete creative: ${error}`);
+        void catalogAlert({ title: 'Could not delete creative', message: String(error) });
         getHomeFeed().then(setLiveCreatives).catch(() => {});
       }
       return;
@@ -1008,7 +1009,7 @@ function ContinuousFeed({
     const { error } = await deleteProduct(productId);
     if (error) {
       console.error('[ContinuousFeed] deleteProduct failed:', error);
-      alert(`Could not delete product: ${error}`);
+      void catalogAlert({ title: 'Could not delete product', message: String(error) });
       getHomeFeed().then(setLiveCreatives).catch(() => {});
     }
   }, [liveCreatives]);
@@ -1025,7 +1026,7 @@ function ContinuousFeed({
         await deleteLookService(look.uuid);
       } catch (err) {
         console.error('[ContinuousFeed] deleteLook failed:', err);
-        alert(`Could not delete look: ${err instanceof Error ? err.message : 'unknown'}`);
+        void catalogAlert({ title: 'Could not delete look', message: err instanceof Error ? err.message : 'unknown' });
         getLooks().then(setDbLooks).catch(() => {});
       }
       return;
