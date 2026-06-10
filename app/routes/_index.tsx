@@ -2078,6 +2078,13 @@ export default function Home() {
           {selectedProduct && (
             <Suspense fallback={null}>
               <ProductPage
+                // Remount per navigation (trail taps included): a reused
+                // instance kept painting the PREVIOUS product's hero for a
+                // beat before its effects swapped media. A fresh mount
+                // paints the tapped tile's own (already-cached) poster on
+                // the very first frame, so the user instantly sees the
+                // product they picked.
+                key={productNavCount}
                 product={selectedProduct}
                 onClose={handleProductClose}
                 onOpenLook={handleOpenLook}
