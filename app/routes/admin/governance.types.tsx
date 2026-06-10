@@ -18,6 +18,8 @@ import ParticleBackground from '~/components/ParticleBackground';
 import TypeBrainGraph, { type BrainNode, type BrainProduct, type BrainViewMode } from '~/components/admin/TypeBrainGraph';
 import {
   auditProductTypes,
+  computeEffectiveGenders,
+  computeTypePaths,
   createTypeNode,
   executeGovernanceOps,
   fetchGovernanceProducts,
@@ -51,36 +53,8 @@ interface HistoryEntry {
   at: number;
 }
 
-/** Full ancestry string per node, matching products.type_path format. */
-function computePaths(nodes: TypeNode[]): Map<string, string> {
-  const byId = new Map(nodes.map(n => [n.id, n]));
-  const memo = new Map<string, string>();
-  const path = (n: TypeNode): string => {
-    const cached = memo.get(n.id);
-    if (cached) return cached;
-    const parent = n.parentId ? byId.get(n.parentId) : null;
-    const v = parent ? `${path(parent)} / ${n.name}` : n.name;
-    memo.set(n.id, v);
-    return v;
-  };
-  nodes.forEach(path);
-  return memo;
-}
-
-/** Effective gender per node: its own, else the nearest ancestor's. */
-function computeGenders(nodes: TypeNode[]): Map<string, string | null> {
-  const byId = new Map(nodes.map(n => [n.id, n]));
-  const memo = new Map<string, string | null>();
-  const eff = (n: TypeNode): string | null => {
-    if (memo.has(n.id)) return memo.get(n.id) ?? null;
-    const parent = n.parentId ? byId.get(n.parentId) : null;
-    const v = n.gender ?? (parent ? eff(parent) : null);
-    memo.set(n.id, v);
-    return v;
-  };
-  nodes.forEach(eff);
-  return memo;
-}
+const computePaths = computeTypePaths;
+const computeGenders = computeEffectiveGenders;
 
 export default function AdminGovernanceTypes() {
   const [tree, setTree] = useState<TypeNode[]>([]);
