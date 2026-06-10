@@ -235,8 +235,12 @@ export default function Home() {
   // ('feed'). null = no gate showing. Cleared the moment a session resolves.
   const [guestGate, setGuestGate] = useState<{ variant: GuestGateVariant } | null>(null);
   const lookTeaseTimer = useRef<number | null>(null);
+  const creatorTeaseTimer = useRef<number | null>(null);
   useEffect(() => { if (user) setGuestGate(null); }, [user]);
-  useEffect(() => () => { if (lookTeaseTimer.current) window.clearTimeout(lookTeaseTimer.current); }, []);
+  useEffect(() => () => {
+    if (lookTeaseTimer.current) window.clearTimeout(lookTeaseTimer.current);
+    if (creatorTeaseTimer.current) window.clearTimeout(creatorTeaseTimer.current);
+  }, []);
   // Feature chokepoints (follow, …) raise the gate via this event when a
   // guest attempts a signed-in action.
   useEffect(() => {
@@ -687,16 +691,6 @@ export default function Home() {
   }, []);
 
   const handleOpenCreator = useCallback((creatorName: string, opts?: { bypassGate?: boolean }) => {
-    // Guest gate. Creator catalogs are a "feature" — a guest tapping into
-    // one gets the signup scrim ("see creator catalogs") instead of the
-    // catalog. Shared /c/ links (bypassGate) still open. The viewer's OWN
-    // catalog (user:<id>) is never gated. Stash the handle so signup drops
-    // them straight into it.
-    if (!waitlistMode && isGuest(user) && !opts?.bypassGate && !creatorName.startsWith('user:')) {
-      setGuestIntent({ kind: 'creator', handle: creatorName });
-      setGuestGate({ variant: 'creator' });
-      return;
-    }
     // Close every higher-stacked overlay so the creator catalog comes to
     // the foreground. Without nulling selectedProduct/selectedCreative,
     // a tap on a creator pill inside ProductPage's "You might also like"
@@ -717,6 +711,19 @@ export default function Home() {
       window.dispatchEvent(new Event('catalog:close-search'));
     }
     setCreatorFilter(creatorName);
+
+    // Guest gate. Creator catalogs are a "feature", but we OPEN the catalog
+    // first and let it show for a beat, THEN dissolve the signup scrim over
+    // it (with a back/X that returns to the feed) — a real taste, not a wall.
+    // Shared /c/ links (bypassGate) and the viewer's OWN catalog never gate.
+    if (creatorTeaseTimer.current) { window.clearTimeout(creatorTeaseTimer.current); creatorTeaseTimer.current = null; }
+    if (!waitlistMode && isGuest(user) && !opts?.bypassGate && !creatorName.startsWith('user:')) {
+      setGuestIntent({ kind: 'creator', handle: creatorName });
+      creatorTeaseTimer.current = window.setTimeout(() => {
+        setGuestGate({ variant: 'creator' });
+        creatorTeaseTimer.current = null;
+      }, 1100);
+    }
   }, [user, waitlistMode]);
 
   // The global TypeAnywhere search bar dispatches this when a creator
@@ -734,6 +741,10 @@ export default function Home() {
   }, [handleOpenCreator, setView]);
 
   const handleCloseCreator = useCallback(() => {
+    // Drop any pending creator-teaser timer + the signup scrim so closing the
+    // catalog (X / back) returns the guest cleanly to the feed.
+    if (creatorTeaseTimer.current) { window.clearTimeout(creatorTeaseTimer.current); creatorTeaseTimer.current = null; }
+    setGuestGate(null);
     // Prefer history.back() when we landed here via the /c/<slug>
     // push so the close X and the browser back button take the same
     // path. The popstate listener above clears creatorFilter when
@@ -1921,7 +1932,11 @@ export default function Home() {
           {guestGate && !waitlistMode && !authLoading && !user && (
             <GuestSignupGate
               variant={guestGate.variant}
-              onClose={guestGate.variant === 'look' ? handleCloseLook : () => setGuestGate(null)}
+              onClose={
+                guestGate.variant === 'look' ? handleCloseLook
+                : guestGate.variant === 'creator' ? handleCloseCreator
+                : () => setGuestGate(null)
+              }
               onContinueGuest={guestGate.variant === 'feed' ? () => setGuestGate(null) : undefined}
             />
           )}
