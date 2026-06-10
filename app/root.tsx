@@ -17,6 +17,7 @@ import SwipeMenuGesture from "~/components/SwipeMenuGesture";
 import PullDownActivityGesture from "~/components/PullDownActivityGesture";
 import CreatorLoginToastHost from "~/components/CreatorLoginToastHost";
 import FollowToastHost from "~/components/FollowToastHost";
+import { CatalogDialogProvider } from "~/components/CatalogDialog";
 import { initSentry, captureException } from "~/utils/sentry";
 
 // Dev-only data-stream waterfall probe. Installs window.__waterfall() and
@@ -301,7 +302,13 @@ export default function App() {
           silent. Renders nothing for anonymous visitors. */}
       <CreatorLoginToastHost />
       <FollowToastHost />
-      <Outlet />
+      {/* Catalog dialog system — the ONLY popup in the product. Provides
+          confirm/alert/prompt (glass, centered, brand spring) to every
+          surface, consumer and admin alike; native window.* dialogs are
+          banned codebase-wide. */}
+      <CatalogDialogProvider>
+        <Outlet />
+      </CatalogDialogProvider>
     </>
   );
 }

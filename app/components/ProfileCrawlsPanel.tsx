@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { catalogAlert, catalogConfirm } from '~/components/CatalogDialog';
 import {
   listCrawlJobs,
   createProfileCrawlJob,
@@ -153,7 +154,7 @@ export default function ProfileCrawlsPanel() {
       loadData();
     } catch (e) {
       console.error('Failed to create profile crawl:', e);
-      alert(`Failed: ${(e as Error).message}`);
+      void catalogAlert({ title: 'Crawl failed', message: (e as Error).message });
     }
   };
 
@@ -171,7 +172,7 @@ export default function ProfileCrawlsPanel() {
   };
 
   const handleDelete = async (job: CrawlJob) => {
-    if (!confirm(`Delete profile crawl for ${job.site_name || job.site_url}? This will also delete its discovered URLs.`)) return;
+    if (!(await catalogConfirm({ title: `Delete profile crawl for ${job.site_name || job.site_url}?`, message: 'This will also delete its discovered URLs.', danger: true }))) return;
     setBusyId(job.id);
     try {
       await deleteCrawlJob(job.id);

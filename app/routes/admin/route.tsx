@@ -6,7 +6,6 @@ import { isAdminRole } from '~/types/roles';
 import { supabase } from '~/utils/supabase';
 import { promoteQueuedAds } from '~/services/product-creative';
 import { getAdminNavOrder, saveAdminNavOrder } from '~/services/admin-nav-order';
-import { AdminConfirmProvider } from '~/components/AdminConfirm';
 
 // Admin styles only ship when an admin route is rendered. Previously
 // imported from the global root.tsx where every consumer page paid the
@@ -607,7 +606,6 @@ export default function AdminLayout() {
   }
 
   return (
-    <AdminConfirmProvider>
     <div className={`admin-layout ${isDark ? 'admin-dark' : 'admin-light'} ${sidebarOpen ? 'admin-sidebar-open' : ''}`}>
       <div
         className="admin-sidebar-backdrop"
@@ -794,7 +792,6 @@ export default function AdminLayout() {
         <Outlet />
       </main>
     </div>
-    </AdminConfirmProvider>
   );
 }
 

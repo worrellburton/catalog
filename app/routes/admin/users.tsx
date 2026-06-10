@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useMemo, useRef, Fragment, type ReactElement } from 'react';
+import { catalogConfirm } from '~/components/CatalogDialog';
 import ReactDOM from 'react-dom';
 import { useNavigate, useSearchParams } from '@remix-run/react';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
@@ -827,7 +828,7 @@ export default function AdminUsers() {
       const message = lookCount > 0
         ? `This will permanently delete ${label} and ${lookLabel} they’ve published. This can’t be undone.`
         : `This will permanently delete ${label}. This can’t be undone.`;
-      if (!confirm(`Delete ${label}?\n\n${message}`)) return;
+      if (!(await catalogConfirm({ title: `Delete ${label}?`, message, danger: true }))) return;
       // Filter the creator out everywhere they show up.
       setDeletedContentCreators(prev => {
         const next = new Set(prev);
@@ -866,7 +867,7 @@ export default function AdminUsers() {
     const message = dbLookCount > 0
       ? `This will permanently delete ${target.name} and ${dbLookCount === 1 ? '1 look' : `${dbLookCount} looks`} they’ve published. This can’t be undone.`
       : `This will permanently delete ${target.name}. This can’t be undone.`;
-    if (!confirm(`Delete ${target.name}?\n\n${message}`)) return;
+    if (!(await catalogConfirm({ title: `Delete ${target.name}?`, message, danger: true }))) return;
     const { error } = await deleteProfile(userId);
     if (error) {
       showToast(`Failed to delete: ${error}`, 'warning');

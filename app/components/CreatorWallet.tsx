@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { catalogConfirm } from '~/components/CatalogDialog';
 import {
   type WalletEntry,
   getWallet,
@@ -211,7 +212,7 @@ export default function CreatorWallet({ onProfileChange }: Props) {
   }
 
   async function handleDisconnect() {
-    if (!confirm('Disconnect your Dots payout account? You can reconnect later.')) return;
+    if (!(await catalogConfirm({ title: 'Disconnect your Dots payout account?', message: 'You can reconnect later.', confirmLabel: 'Disconnect' }))) return;
     setDisconnecting(true);
     try {
       await deleteDotsUser();
