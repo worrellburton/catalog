@@ -1,4 +1,5 @@
 import { Fragment, useState, useEffect, useCallback } from 'react';
+import { catalogConfirm } from '~/components/CatalogDialog';
 import {
   listCrawlJobs,
   createCrawlJob,
@@ -578,7 +579,7 @@ export default function SiteCrawlsPanel({ embedded = false }: SiteCrawlsPanelPro
   };
 
   const handleDelete = async (id: string) => {
-    if (!confirm('Delete this crawl job and all discovered URLs?')) return;
+    if (!(await catalogConfirm({ title: 'Delete this crawl job?', message: 'All discovered URLs will be deleted with it.', danger: true }))) return;
     setActionLoading(id);
     try {
       await deleteCrawlJob(id);

@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { catalogAlert, catalogConfirm } from '~/components/CatalogDialog';
 import { listProducts, retryProductScrape, addProductUrl, deleteProduct, reconcileStuckScrapes, deleteGoogleUrlProducts, triggerScrape, type ProductRow } from '~/services/scrape-product';
 import JobProgress from '~/components/JobProgress';
 import RerunAllStuckButton from '~/components/RerunAllStuckButton';
@@ -249,12 +250,12 @@ export default function ProductCrawlsPanel() {
   };
 
   const handleClearBadUrls = async () => {
-    if (!window.confirm('Delete all products with Google.com URLs? These cannot be scraped and will be permanently removed.')) return;
+    if (!(await catalogConfirm({ title: 'Delete all products with Google.com URLs?', message: 'These cannot be scraped and will be permanently removed.', danger: true }))) return;
     setClearingBadUrls(true);
     try {
       const deleted = await deleteGoogleUrlProducts();
       await loadData();
-      if (deleted > 0) alert(`Cleared ${deleted} unscrapeable Google URL row${deleted === 1 ? '' : 's'}.`);
+      if (deleted > 0) void catalogAlert({ title: `Cleared ${deleted} unscrapeable Google URL row${deleted === 1 ? '' : 's'}.` });
     } catch (e) {
       console.error('Failed to clear bad URLs:', e);
     } finally {
@@ -263,7 +264,7 @@ export default function ProductCrawlsPanel() {
   };
 
   const handleDelete = async (id: string) => {
-    if (!window.confirm('Delete this product and all associated ads? This cannot be undone.')) return;
+    if (!(await catalogConfirm({ title: 'Delete this product and all associated ads?', message: 'This cannot be undone.', danger: true }))) return;
     setDeleting(id);
     try {
       await deleteProduct(id);

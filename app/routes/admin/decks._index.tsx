@@ -1,4 +1,5 @@
 import { Link } from '@remix-run/react';
+import { catalogPrompt } from '~/components/CatalogDialog';
 import { useState } from 'react';
 
 interface DeckInfo {
@@ -35,12 +36,13 @@ function DeckCard({ d }: { d: DeckInfo }) {
   const copyPublicUrl = () => {
     if (!d.publicUrl) return;
     const done = () => { setCopied(true); window.setTimeout(() => setCopied(false), 1800); };
+    // Clipboard blocked (permissions / non-secure context) → show the link
+    // in a prompt dialog so it can still be selected and copied by hand.
+    const fallback = () => { void catalogPrompt({ title: 'Copy this public link', defaultValue: d.publicUrl, confirmLabel: 'Done' }); };
     if (navigator.clipboard?.writeText) {
-      navigator.clipboard.writeText(d.publicUrl).then(done).catch(() => {
-        window.prompt('Copy this public link:', d.publicUrl);
-      });
+      navigator.clipboard.writeText(d.publicUrl).then(done).catch(fallback);
     } else {
-      window.prompt('Copy this public link:', d.publicUrl);
+      fallback();
     }
   };
 

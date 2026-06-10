@@ -19,6 +19,7 @@
 // playback pipeline, pool, preload, and visibility handling).
 
 import { useRef, useEffect, useState, useCallback, memo } from 'react';
+import { catalogConfirm } from '~/components/CatalogDialog';
 import {
   trackAdImpression,
   trackAdClick,
@@ -453,9 +454,9 @@ const CreativeCardV2 = memo(function CreativeCardV2({
             type="button"
             className="creative-delete-btn"
             aria-label="Delete product"
-            onClick={(e) => {
+            onClick={async (e) => {
               e.stopPropagation();
-              if (confirm(`Delete product "${creative.product?.name || 'this product'}" everywhere?`)) {
+              if (await catalogConfirm({ title: `Delete product "${creative.product?.name || 'this product'}" everywhere?`, danger: true })) {
                 onDelete(creative.id);
               }
             }}
@@ -475,9 +476,9 @@ const CreativeCardV2 = memo(function CreativeCardV2({
             type="button"
             className="creative-delete-btn"
             aria-label="Delete look"
-            onClick={(e) => {
+            onClick={async (e) => {
               e.stopPropagation();
-              if (confirm(`Delete this look everywhere?`)) {
+              if (await catalogConfirm({ title: 'Delete this look everywhere?', danger: true })) {
                 onDeleteLook(look);
               }
             }}
@@ -532,7 +533,7 @@ const CreativeCardV2 = memo(function CreativeCardV2({
                 await hideLookId(look);
                 return;
               }
-              if (creative && onDelete && confirm(`Delete product "${creative.product?.name || 'this product'}" everywhere?`)) {
+              if (creative && onDelete && await catalogConfirm({ title: `Delete product "${creative.product?.name || 'this product'}" everywhere?`, danger: true })) {
                 onDelete(creative.id);
               }
             }}

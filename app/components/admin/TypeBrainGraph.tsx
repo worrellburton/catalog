@@ -4,9 +4,10 @@
 //
 // Interactions:
 //   drag empty canvas   → marquee multi-select
+//   hold space + drag   → pan the canvas
 //   click / shift-click → select / extend selection
 //   drag node(s)        → move; release over another node re-parents (live)
-//   double-click        → inline rename
+//   double-click        → zoom into the node (drill view; rename lives there)
 //   ⌫ / Delete          → delete selection
 //   product satellites  → always-on thumbnails orbiting their type when the
 //                         products toggle is on; click opens the product,
@@ -25,24 +26,39 @@ export interface BrainNode {
   depth: number;             // root = 0
   color: string;             // resolved lane color
   count: number;             // directly attached products
-  locked: boolean;           // gender lanes — no rename/move/delete
+  locked: boolean;           // synthetic nodes (unassigned) — no edits
+  /** 24x24 icon path data, drawn nightly by generate-type-icons. */
+  icon?: string | null;
 }
 
 export interface BrainProduct { id: string; name: string; image: string | null; }
+
+export type BrainViewMode = 'types' | 'products' | 'all';
 
 interface Props {
   nodes: BrainNode[];        // excludes the synthetic root
   /** Per-node orbiting thumbnails (already capped) + the true total. */
   satellites: Map<string, { items: BrainProduct[]; total: number }>;
   selection: Set<string>;
-  showProducts: boolean;
+  /** types = structure only · products = thumbnails dominate, nodes dim
+   *  to anchors · all = both at full strength. */
+  viewMode: BrainViewMode;
   onSelect: (ids: Set<string>) => void;
   onReparent: (nodeIds: string[], targetId: string) => void;
-  onRename: (nodeId: string, name: string) => void;
   onDelete: (nodeIds: string[]) => void;
   onAddChild: (parentId: string) => void;
   onAssignProducts: (productIds: string[], nodeId: string) => void;
   onOpenProduct: (productId: string) => void;
+  /** Armed by the selection bar's "Move to…": the next node click becomes
+   *  the re-parent target for the whole selection instead of a selection. */
+  pickMode?: boolean;
+  onPickTarget?: (targetId: string) => void;
+  /** Hover-drill: zoom INTO a node — the page opens its product drill view
+   *  anchored at the node's canvas position. */
+  onDrill: (nodeId: string, x: number, y: number) => void;
+  /** Ring dials (admin sliders): guide-ring opacity 0..1, distance ×0.5..2. */
+  ringOpacity: number;
+  ringScale: number;
 }
 
 const ROOT_ID = '__root__';
@@ -52,6 +68,49 @@ const CLICK_SLOP = 5;
 export default function TypeBrainGraph(p: Props) {
   const wrapRef = useRef<HTMLDivElement>(null);
   const [size, setSize] = useState({ w: 1100, h: 720 });
+  // Zoom/pan view transform: screen = world * k + (tx, ty). Cmd/ctrl +
+  // wheel zooms about the pointer (ctrlKey also covers trackpad pinch).
+  const [view, setView] = useState({ k: 1, tx: 0, ty: 0 });
+  // Held spacebar arms hand-pan: pointer drags move the view transform
+  // instead of selecting/dragging (standard design-tool behaviour).
+  const [spaceHeld, setSpaceHeld] = useState(false);
+  useEffect(() => {
+    const down = (ev: KeyboardEvent) => {
+      if (ev.code !== 'Space' || ev.repeat) return;
+      const t = ev.target as HTMLElement;
+      if (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable) return;
+      ev.preventDefault(); // keep the page from scrolling while panning
+      setSpaceHeld(true);
+    };
+    const up = (ev: KeyboardEvent) => { if (ev.code === 'Space') setSpaceHeld(false); };
+    const blur = () => setSpaceHeld(false);
+    window.addEventListener('keydown', down);
+    window.addEventListener('keyup', up);
+    window.addEventListener('blur', blur);
+    return () => {
+      window.removeEventListener('keydown', down);
+      window.removeEventListener('keyup', up);
+      window.removeEventListener('blur', blur);
+    };
+  }, []);
+  useEffect(() => {
+    const el = wrapRef.current;
+    if (!el) return;
+    const onWheel = (ev: WheelEvent) => {
+      if (!(ev.metaKey || ev.ctrlKey)) return;
+      ev.preventDefault(); // needs a non-passive listener — React's onWheel is passive
+      const rect = el.getBoundingClientRect();
+      const px = ev.clientX - rect.left;
+      const py = ev.clientY - rect.top;
+      setView(v => {
+        const k = Math.min(2.5, Math.max(0.35, v.k * Math.exp(-ev.deltaY * 0.0016)));
+        // Keep the world point under the cursor fixed while scaling.
+        return { k, tx: px - ((px - v.tx) / v.k) * k, ty: py - ((py - v.ty) / v.k) * k };
+      });
+    };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    return () => el.removeEventListener('wheel', onWheel);
+  }, []);
   useEffect(() => {
     const el = wrapRef.current;
     if (!el) return;
@@ -67,7 +126,7 @@ export default function TypeBrainGraph(p: Props) {
   const simLinks = useMemo<SimLink[]>(() => p.nodes.map(n => ({
     source: n.parentId ?? ROOT_ID, target: n.id,
   })), [p.nodes]);
-  const { positions, dragTo, release } = useForceSim(simNodes, simLinks, size.w, size.h);
+  const { positions, dragTo, release, ringRadii } = useForceSim(simNodes, simLinks, size.w, size.h, p.ringScale);
 
   const byId = useMemo(() => new Map(p.nodes.map(n => [n.id, n])), [p.nodes]);
   const descendants = useMemo(() => {
@@ -85,16 +144,29 @@ export default function TypeBrainGraph(p: Props) {
   const gesture = useRef<
     | { kind: 'node'; ids: string[]; grabId: string; moved: boolean }
     | { kind: 'marquee'; x0: number; y0: number }
+    | { kind: 'pan'; sx: number; sy: number; tx0: number; ty0: number }
     | null
   >(null);
+  const [panning, setPanning] = useState(false);
   const [marquee, setMarquee] = useState<{ x0: number; y0: number; x1: number; y1: number } | null>(null);
   const [dropTarget, setDropTarget] = useState<string | null>(null);
-  const [editing, setEditing] = useState<string | null>(null);
   const [prodDrag, setProdDrag] = useState<{ id: string; x: number; y: number; x0: number; y0: number } | null>(null);
+  // Hovered node — surfaces the drill affordance. Small leave-delay so the
+  // pointer can travel from the circle to the drill button without flicker.
+  const [hovered, setHovered] = useState<string | null>(null);
+  const hoverTimer = useRef(0);
+  const hoverEnter = (id: string) => { window.clearTimeout(hoverTimer.current); setHovered(id); };
+  const hoverLeave = () => {
+    window.clearTimeout(hoverTimer.current);
+    hoverTimer.current = window.setTimeout(() => setHovered(null), 160);
+  };
 
   const toLocal = (ev: { clientX: number; clientY: number }) => {
     const r = wrapRef.current?.getBoundingClientRect();
-    return { x: ev.clientX - (r?.left ?? 0), y: ev.clientY - (r?.top ?? 0) };
+    return {
+      x: ((ev.clientX - (r?.left ?? 0)) - view.tx) / view.k,
+      y: ((ev.clientY - (r?.top ?? 0)) - view.ty) / view.k,
+    };
   };
   const hitNode = (x: number, y: number, exclude: Set<string>): string | null => {
     let best: string | null = null;
@@ -110,7 +182,9 @@ export default function TypeBrainGraph(p: Props) {
   };
 
   const onNodeDown = (id: string, ev: React.PointerEvent) => {
+    if (spaceHeld) return; // let the event bubble to the canvas pan
     ev.stopPropagation();
+    if (p.pickMode && p.onPickTarget) { p.onPickTarget(id); return; }
     (ev.target as Element).setPointerCapture?.(ev.pointerId);
     const inSel = p.selection.has(id);
     const ids = inSel ? [...p.selection] : [id];
@@ -118,6 +192,12 @@ export default function TypeBrainGraph(p: Props) {
     gesture.current = { kind: 'node', ids, grabId: id, moved: false };
   };
   const onCanvasDown = (ev: React.PointerEvent) => {
+    if (spaceHeld) {
+      (ev.currentTarget as Element).setPointerCapture?.(ev.pointerId);
+      gesture.current = { kind: 'pan', sx: ev.clientX, sy: ev.clientY, tx0: view.tx, ty0: view.ty };
+      setPanning(true);
+      return;
+    }
     const { x, y } = toLocal(ev);
     gesture.current = { kind: 'marquee', x0: x, y0: y };
     setMarquee({ x0: x, y0: y, x1: x, y1: y });
@@ -125,6 +205,10 @@ export default function TypeBrainGraph(p: Props) {
   const onMove = (ev: React.PointerEvent) => {
     const g = gesture.current;
     if (!g) return;
+    if (g.kind === 'pan') {
+      setView(v => ({ ...v, tx: g.tx0 + (ev.clientX - g.sx), ty: g.ty0 + (ev.clientY - g.sy) }));
+      return;
+    }
     const { x, y } = toLocal(ev);
     if (g.kind === 'node') {
       g.moved = true;
@@ -146,6 +230,10 @@ export default function TypeBrainGraph(p: Props) {
     const g = gesture.current;
     gesture.current = null;
     if (!g) return;
+    if (g.kind === 'pan') {
+      setPanning(false);
+      return;
+    }
     if (g.kind === 'node') {
       for (const id of g.ids) release(id);
       if (g.moved && dropTarget) {
@@ -174,7 +262,7 @@ export default function TypeBrainGraph(p: Props) {
   // Delete / Backspace removes the selection (lanes excluded).
   useEffect(() => {
     const onKey = (ev: KeyboardEvent) => {
-      if (editing || !(ev.key === 'Delete' || ev.key === 'Backspace')) return;
+      if (!(ev.key === 'Delete' || ev.key === 'Backspace')) return;
       const target = ev.target as HTMLElement;
       if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA') return;
       const ids = [...p.selection].filter(id => !byId.get(id)?.locked);
@@ -182,7 +270,7 @@ export default function TypeBrainGraph(p: Props) {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [p.selection, editing, byId, p]);
+  }, [p.selection, byId, p]);
 
   // Satellite gestures: a still release is a click (open product); a real
   // drag re-types the product on whatever node it lands on.
@@ -209,12 +297,14 @@ export default function TypeBrainGraph(p: Props) {
     setDropTarget(null);
   };
 
+  const productsOnly = p.viewMode === 'products';
+  const showSatellites = p.viewMode !== 'types';
   const rootPos = positions.get(ROOT_ID) ?? { x: size.w / 2, y: size.h / 2 };
   const singleSel = p.selection.size === 1 ? byId.get([...p.selection][0]) : null;
   const singleSelPos = singleSel ? positions.get(singleSel.id) : null;
 
   return (
-    <div ref={wrapRef} className="tb-wrap">
+    <div ref={wrapRef} className={`tb-wrap${p.pickMode ? ' is-picking' : ''}${spaceHeld ? ' is-pan' : ''}${panning ? ' is-panning' : ''}`}>
       <svg
         className="tb-svg"
         width={size.w}
@@ -223,6 +313,14 @@ export default function TypeBrainGraph(p: Props) {
         onPointerMove={onMove}
         onPointerUp={onUp}
       >
+        <g transform={`translate(${view.tx} ${view.ty}) scale(${view.k})`}>
+        {/* Depth guide rings — layer N of the tree IS ring N */}
+        {ringRadii.map((r, i) => (
+          <circle key={`ring-${i}`} className="tb-ring"
+            style={{ strokeOpacity: p.ringOpacity }}
+            cx={size.w / 2} cy={size.h / 2} r={r} />
+        ))}
+
         {/* Edges */}
         {p.nodes.map(n => {
           const a = positions.get(n.parentId ?? ROOT_ID);
@@ -252,12 +350,26 @@ export default function TypeBrainGraph(p: Props) {
               key={n.id}
               className={`tb-node${selected ? ' is-selected' : ''}${isDrop ? ' is-drop' : ''}${n.locked ? ' is-locked' : ''}`}
               onPointerDown={ev => onNodeDown(n.id, ev)}
-              onDoubleClick={() => { if (!n.locked) setEditing(n.id); }}
+              onDoubleClick={() => p.onDrill(n.id, pos.x * view.k + view.tx, pos.y * view.k + view.ty)}
+              onPointerEnter={() => hoverEnter(n.id)}
+              onPointerLeave={hoverLeave}
             >
-              <circle cx={pos.x} cy={pos.y} r={r}
-                fill={n.color} fillOpacity={n.depth === 1 ? 0.22 : 0.16}
-                stroke={n.color} strokeWidth={selected || isDrop ? 2.5 : 1.4} />
-              <text x={pos.x} y={pos.y + r + 14} fill={n.color}>{n.name}</text>
+              <circle cx={pos.x} cy={pos.y} r={productsOnly ? Math.max(7, r * 0.4) : r}
+                fill={n.color} fillOpacity={productsOnly ? 0.1 : n.depth === 1 ? 0.22 : 0.16}
+                stroke={n.color} strokeOpacity={productsOnly ? 0.4 : 1}
+                strokeWidth={selected || isDrop ? 2.5 : 1.4} />
+              {n.icon && !productsOnly && (() => {
+                const s = r * 1.15; // icon box inside the circle
+                return (
+                  <path
+                    className="tb-icon"
+                    d={n.icon}
+                    stroke={n.color}
+                    transform={`translate(${pos.x - s / 2}, ${pos.y - s / 2}) scale(${s / 24})`}
+                  />
+                );
+              })()}
+              {!productsOnly && <text x={pos.x} y={pos.y + r + 14} fill={n.color}>{n.name}</text>}
             </g>
           );
         })}
@@ -267,11 +379,17 @@ export default function TypeBrainGraph(p: Props) {
             x={Math.min(marquee.x0, marquee.x1)} y={Math.min(marquee.y0, marquee.y1)}
             width={Math.abs(marquee.x1 - marquee.x0)} height={Math.abs(marquee.y1 - marquee.y0)} />
         )}
+        </g>
       </svg>
 
       {/* HTML overlay: product satellites, rename input, add-child button */}
-      <div className="tb-overlay" onPointerMove={onProdMove} onPointerUp={onProdUp}>
-        {p.showProducts && p.nodes.map(n => {
+      <div
+        className="tb-overlay"
+        style={{ transform: `translate(${view.tx}px, ${view.ty}px) scale(${view.k})`, transformOrigin: '0 0' }}
+        onPointerMove={onProdMove}
+        onPointerUp={onProdUp}
+      >
+        {showSatellites && p.nodes.map(n => {
           const sat = p.satellites.get(n.id);
           const pos = positions.get(n.id);
           if (!sat || !pos || sat.items.length === 0) return null;
@@ -305,31 +423,29 @@ export default function TypeBrainGraph(p: Props) {
           ] : []);
         })}
 
-        {editing && (() => {
-          const n = byId.get(editing);
-          const pos = positions.get(editing);
+        {hovered && !p.pickMode && (() => {
+          const n = byId.get(hovered);
+          const pos = positions.get(hovered);
           if (!n || !pos) return null;
+          const r = nodeRadius(n);
           return (
-            <input
-              key={editing}
-              className="tb-rename"
-              style={{ left: pos.x, top: pos.y }}
-              defaultValue={n.name}
-              autoFocus
-              onFocus={ev => ev.currentTarget.select()}
-              onKeyDown={ev => {
-                if (ev.key === 'Enter') {
-                  const v = ev.currentTarget.value.trim();
-                  if (v && v !== n.name) p.onRename(n.id, v);
-                  setEditing(null);
-                } else if (ev.key === 'Escape') setEditing(null);
-              }}
-              onBlur={() => setEditing(null)}
-            />
+            <button
+              className="tb-drill"
+              style={{ left: pos.x - r - 16, top: pos.y }}
+              title={`Drill into ${n.name} — see every product inside`}
+              onPointerEnter={() => hoverEnter(n.id)}
+              onPointerLeave={hoverLeave}
+              onClick={() => p.onDrill(n.id, pos.x * view.k + view.tx, pos.y * view.k + view.ty)}
+            >
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round">
+                <circle cx="11" cy="11" r="7" />
+                <path d="M21 21l-4.3-4.3M8 11h6M11 8v6" />
+              </svg>
+            </button>
           );
         })()}
 
-        {singleSel && singleSelPos && !editing && (
+        {singleSel && singleSelPos && (
           <button
             className="tb-add"
             style={{ left: singleSelPos.x + nodeRadius(singleSel) + 16, top: singleSelPos.y }}

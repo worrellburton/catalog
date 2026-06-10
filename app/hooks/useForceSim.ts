@@ -1,10 +1,11 @@
-// Minimal force-directed layout for the governance type brain — the same
-// physics family as Obsidian's graph view (link springs + many-body
-// repulsion + a radial ring constraint per tree depth), small enough to
-// own instead of pulling in d3-force. O(n²) repulsion is fine at the
-// taxonomy's scale (≤ a few hundred nodes).
+// Ring-locked force layout for the governance type brain. Each tree depth
+// lives on a concentric ring around the pinned catalog root (founder's
+// call: the structure should read as rings — layer N is exactly the Nth
+// ring). Repulsion + link springs only spread nodes ALONG their ring;
+// a positional snap keeps them on it. Small enough to own instead of
+// pulling in d3-force; O(n²) repulsion is fine at taxonomy scale.
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 
 export interface SimNodeInput {
   id: string;
@@ -25,24 +26,47 @@ interface Body extends SimNodeState {
   pinned: boolean;
 }
 
-const RING_GAP = 118;          // px between depth rings
 const REPULSION = 2600;        // many-body strength
-const SPRING = 0.055;          // link spring strength
-const RADIAL = 0.06;           // pull toward own depth ring
+const SPRING = 0.07;           // link spring (aligns children to parent's angle)
+const RING_SNAP = 0.22;        // positional pull onto own depth ring per tick
 const DAMPING = 0.82;
 const ALPHA_DECAY = 0.995;
 const MIN_ALPHA = 0.005;
+
+/** Ring spacing adapts to the canvas. Wider than strictly fits is fine —
+ *  the graph zooms (cmd+wheel), so breathing room beats containment. */
+function ringGap(width: number, height: number, maxDepth: number): number {
+  const usable = Math.min(width, height) / 2 - 70;
+  return Math.max(96, Math.min(176, usable / Math.max(1, maxDepth)));
+}
 
 export function useForceSim(
   nodes: SimNodeInput[],
   links: SimLink[],
   width: number,
   height: number,
+  /** Admin ring-distance dial — multiplies the auto-computed gap. */
+  gapScale = 1,
 ) {
   const bodiesRef = useRef<Map<string, Body>>(new Map());
   const alphaRef = useRef(1);
+  // While a drag is live the sim is frozen: only the pinned node moves, so
+  // every other node holds still and overlap-drops land every time.
+  const draggingRef = useRef(false);
+  const gapRef = useRef(110);
   const [positions, setPositions] = useState<Map<string, SimNodeState>>(new Map());
   const frameRef = useRef(0);
+
+  const maxDepth = useMemo(() => nodes.reduce((m, n) => Math.max(m, n.depth), 1), [nodes]);
+  const gap = Math.max(56, Math.min(320, ringGap(width, height, maxDepth) * gapScale));
+  gapRef.current = gap;
+  // Reheat when the dial moves so nodes glide to the new rings.
+  useEffect(() => { alphaRef.current = Math.max(alphaRef.current, 0.5); }, [gap]);
+  /** Guide-ring radii for depths 1..maxDepth, for drawing. */
+  const ringRadii = useMemo(
+    () => Array.from({ length: maxDepth }, (_, i) => (i + 1) * gap),
+    [maxDepth, gap],
+  );
 
   // Reconcile bodies with the node list: keep existing positions, seed new
   // nodes near their ring at a deterministic angle so layout is stable.
@@ -54,7 +78,7 @@ export function useForceSim(
       const existing = bodies.get(n.id);
       if (existing) { existing.depth = n.depth; existing.r = n.r; return; }
       const angle = (i * 2.399963) % (Math.PI * 2); // golden-angle spread
-      const radius = n.depth * RING_GAP || 0.01;
+      const radius = n.depth * gapRef.current || 0.01;
       bodies.set(n.id, {
         id: n.id, depth: n.depth, r: n.r,
         x: width / 2 + Math.cos(angle) * radius,
@@ -72,9 +96,10 @@ export function useForceSim(
     const tick = () => {
       const bodies = bodiesRef.current;
       const alpha = alphaRef.current;
-      if (alpha > MIN_ALPHA) {
+      if (alpha > MIN_ALPHA && !draggingRef.current) {
         const arr = [...bodies.values()];
-        // Many-body repulsion.
+        const ring = gapRef.current;
+        // Many-body repulsion (spreads nodes along their rings).
         for (let i = 0; i < arr.length; i++) {
           for (let j = i + 1; j < arr.length; j++) {
             const a = arr[i], b = arr[j];
@@ -89,31 +114,34 @@ export function useForceSim(
             if (!b.pinned) { b.vx += fx; b.vy += fy; }
           }
         }
-        // Link springs toward one ring-gap of separation.
+        // Link springs keep children near their parent's angle; the ring
+        // snap below cancels the radial part, so this acts tangentially.
         for (const l of links) {
           const a = bodies.get(l.source), b = bodies.get(l.target);
           if (!a || !b) continue;
           const dx = b.x - a.x, dy = b.y - a.y;
           const d = Math.sqrt(dx * dx + dy * dy) || 1;
-          const stretch = (d - RING_GAP) * SPRING * alpha;
+          const stretch = (d - ring) * SPRING * alpha;
           const fx = (dx / d) * stretch, fy = (dy / d) * stretch;
           if (!a.pinned) { a.vx += fx; a.vy += fy; }
           if (!b.pinned) { b.vx -= fx; b.vy -= fy; }
         }
-        // Radial ring constraint + integration, clamped to the canvas so
-        // dense branches can't push nodes (and their labels) off-screen.
-        const pad = 56;
+        // Integrate, then SNAP onto the depth ring. The ring is a hard
+        // constraint: the pull eases in for a smooth glide, then lands
+        // EXACTLY on the radius — never a rectangular clamp afterwards
+        // (the old canvas clamp shoved edge nodes off their ring; the
+        // canvas pans/zooms, so containment isn't the sim's job).
         for (const b of arr) {
+          if (b.depth === 0) { b.x = cx; b.y = cy; b.vx = 0; b.vy = 0; continue; }
           if (b.pinned) continue;
+          b.vx *= DAMPING; b.vy *= DAMPING;
+          b.x += b.vx; b.y += b.vy;
           const dx = b.x - cx, dy = b.y - cy;
           const d = Math.sqrt(dx * dx + dy * dy) || 1;
-          const target = b.depth * RING_GAP;
-          const pull = (target - d) * RADIAL * alpha;
-          b.vx += (dx / d) * pull;
-          b.vy += (dy / d) * pull;
-          b.vx *= DAMPING; b.vy *= DAMPING;
-          b.x = Math.min(Math.max(b.x + b.vx, pad), width - pad);
-          b.y = Math.min(Math.max(b.y + b.vy, pad), height - pad);
+          const target = b.depth * ring;
+          const nd = Math.abs(target - d) < 0.75 ? target : d + (target - d) * RING_SNAP;
+          b.x = cx + (dx / d) * nd;
+          b.y = cy + (dy / d) * nd;
         }
         alphaRef.current = alpha * ALPHA_DECAY;
         setPositions(new Map([...bodies.entries()].map(([id, b]) => [id, { x: b.x, y: b.y }])));
@@ -124,19 +152,22 @@ export function useForceSim(
     return () => cancelAnimationFrame(frameRef.current);
   }, [links, width, height]);
 
-  /** Drag API: pin under the pointer, release reheats so neighbours settle. */
+  /** Drag API: pin under the pointer and freeze everyone else — neighbours
+   *  hold position so the drop target can't drift away mid-gesture.
+   *  Release unfreezes + reheats so the graph settles back onto the rings. */
   const dragTo = (id: string, x: number, y: number) => {
     const b = bodiesRef.current.get(id);
     if (!b) return;
     b.pinned = true; b.x = x; b.y = y; b.vx = 0; b.vy = 0;
-    alphaRef.current = Math.max(alphaRef.current, 0.3);
+    draggingRef.current = true;
     setPositions(prev => new Map(prev).set(id, { x, y }));
   };
   const release = (id: string) => {
     const b = bodiesRef.current.get(id);
     if (b) b.pinned = false;
+    draggingRef.current = false;
     alphaRef.current = Math.max(alphaRef.current, 0.5);
   };
 
-  return { positions, dragTo, release };
+  return { positions, dragTo, release, ringRadii };
 }

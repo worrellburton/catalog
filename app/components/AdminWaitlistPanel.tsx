@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { catalogAlert, catalogConfirm } from '~/components/CatalogDialog';
 import {
   getWaitlist,
   approveWaitlistEntry,
@@ -41,19 +42,19 @@ export default function AdminWaitlistPanel({ showHeader = false }: AdminWaitlist
     const { error } = await approveWaitlistEntry(id);
     setBusyId(null);
     if (error) {
-      alert(`Failed to approve: ${error}`);
+      void catalogAlert({ title: 'Failed to approve', message: String(error) });
       return;
     }
     await load();
   };
 
   const handleRemove = async (id: string) => {
-    if (!confirm('Remove this person from the waitlist?')) return;
+    if (!(await catalogConfirm({ title: 'Remove this person from the waitlist?', danger: true, confirmLabel: 'Remove' }))) return;
     setBusyId(id);
     const { error } = await removeWaitlistEntry(id);
     setBusyId(null);
     if (error) {
-      alert(`Failed to remove: ${error}`);
+      void catalogAlert({ title: 'Failed to remove', message: String(error) });
       return;
     }
     await load();
