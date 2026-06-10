@@ -27,6 +27,7 @@ import {
   isMobileViewport,
   isSlowConnection,
 } from '~/services/video-loading';
+import { useVideoPipelineMode } from '~/hooks/useVideoPipeline';
 import { useAuth } from '~/hooks/useAuth';
 import { useShopperBody } from '~/hooks/useShopperBody';
 import { usePageSections, isSectionEnabled, getSectionLimit } from '~/hooks/usePageSections';
@@ -194,11 +195,15 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   // the trail-host detects "same id, new src" and re-buffers from scratch
   // (audible/visible reload).
   const wantMobile = isMobileViewport() || isSlowConnection();
-  // HLS manifest wins when present — the SAME source LookCard plays, so the
-  // pooled <video> hands off into the hero with no src swap, and ABR ramps to
-  // a high rung now that the element fills the screen. Progressive mobile/full
-  // split is the fallback when there's no manifest yet.
-  const heroVideoUrl = look.hls_url || (wantMobile && look.mobile_video_url ? look.mobile_video_url : fullVideoUrl);
+  // HLS manifest wins when the pipeline dial is on 'hls' and one exists — the
+  // SAME source LookCard plays, so the pooled <video> hands off into the hero
+  // with no src swap, and ABR ramps to a high rung now that the element fills
+  // the screen. Progressive mobile/full split is the fallback when there's no
+  // manifest yet, and the ONLY path in 'mp4' mode (must match LookCard's pick
+  // exactly or the handoff re-buffers).
+  const pipelineMode = useVideoPipelineMode();
+  const activeHlsUrl = pipelineMode === 'hls' ? look.hls_url : undefined;
+  const heroVideoUrl = activeHlsUrl || (wantMobile && look.mobile_video_url ? look.mobile_video_url : fullVideoUrl);
 
   // Tap-handoff poster: LookCard captured the playing frame via
   // captureVideoFrame() and stashed a JPEG data URL on
@@ -233,11 +238,12 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   // the cache is already warm.
   useEffect(() => {
     // HLS streams its own segments via hls.js — skip the full-file byte
-    // prewarm (it would fetch an MP4 the hero won't play).
-    if (look.hls_url) return;
+    // prewarm (it would fetch an MP4 the hero won't play). In 'mp4' pipeline
+    // mode activeHlsUrl is undefined, so the byte prewarm always runs.
+    if (activeHlsUrl) return;
     if (heroVideoUrl) prefetchVideoBytes(heroVideoUrl);
     if (fullVideoUrl && fullVideoUrl !== heroVideoUrl) prefetchVideoBytes(fullVideoUrl);
-  }, [heroVideoUrl, fullVideoUrl, look.hls_url]);
+  }, [heroVideoUrl, fullVideoUrl, activeHlsUrl]);
 
   // Pause background feed cards while the overlay is open so they don't
   // compete for bandwidth with the hero video. Resume on unmount.
