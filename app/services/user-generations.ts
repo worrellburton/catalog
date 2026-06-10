@@ -518,7 +518,7 @@ export async function uploadUserPhoto(
       mime_type: file.type || null,
       byte_size: file.size || null,
     })
-    .select('*')
+    .select('id, user_id, storage_path, public_url, mime_type, byte_size, width, height, created_at')
     .single();
 
   if (error) return { data: null, error: error.message };
@@ -529,7 +529,7 @@ export async function listUserUploads(userId: string): Promise<UserUpload[]> {
   if (!supabase) return [];
   const { data, error } = await supabase
     .from('user_uploads')
-    .select('*')
+    .select('id, user_id, storage_path, public_url, mime_type, byte_size, width, height, created_at')
     .eq('user_id', userId)
     .order('created_at', { ascending: false });
   if (error) {
@@ -842,7 +842,7 @@ export async function createGeneration(
       model: input.model,
       triggered_by_admin_id: input.triggeredByAdminId ?? null,
     })
-    .select('*')
+    .select('id, user_id, status, height_cm, height_label, age_label, weight_label, style, prompt, veo_model, video_url, storage_path, error, duration_seconds, model, crop_scale, crop_x, crop_y, created_at, completed_at, fal_request_id, display_name, error_code, error_raw, triggered_by_admin_id')
     .single();
 
   if (genErr || !gen) return { data: null, error: genErr?.message || 'Failed to create generation' };
@@ -888,7 +888,7 @@ export async function createGeneration(
 export async function getGeneration(id: string): Promise<UserGeneration | null> {
   if (!supabase) return null;
   const { data, error } = await supabase
-    .from('user_generations').select('*').eq('id', id).single();
+    .from('user_generations').select('id, user_id, status, height_cm, height_label, age_label, weight_label, style, prompt, veo_model, video_url, storage_path, error, duration_seconds, model, crop_scale, crop_x, crop_y, created_at, completed_at, fal_request_id, display_name, error_code, error_raw, triggered_by_admin_id').eq('id', id).single();
   if (error) return null;
   return data as UserGeneration;
 }
@@ -897,7 +897,7 @@ export async function listUserGenerations(userId: string): Promise<UserGeneratio
   if (!supabase) return [];
   const { data } = await supabase
     .from('user_generations')
-    .select('*')
+    .select('id, user_id, status, height_cm, height_label, age_label, weight_label, style, prompt, veo_model, video_url, storage_path, error, duration_seconds, model, crop_scale, crop_x, crop_y, created_at, completed_at, fal_request_id, display_name, error_code, error_raw, triggered_by_admin_id')
     .eq('user_id', userId)
     .order('created_at', { ascending: false });
   return (data || []) as UserGeneration[];
@@ -959,7 +959,7 @@ export async function getGenerationDetail(id: string): Promise<GenerationDetail>
   if (!supabase) return empty;
 
   const [genRes, uploadsRes, productsRes] = await Promise.all([
-    supabase.from('user_generations').select('*').eq('id', id).single(),
+    supabase.from('user_generations').select('id, user_id, status, height_cm, height_label, age_label, weight_label, style, prompt, veo_model, video_url, storage_path, error, duration_seconds, model, crop_scale, crop_x, crop_y, created_at, completed_at, fal_request_id, display_name, error_code, error_raw, triggered_by_admin_id').eq('id', id).single(),
     supabase
       .from('user_generation_uploads')
       .select('upload_id, sort_order, user_uploads(*)')

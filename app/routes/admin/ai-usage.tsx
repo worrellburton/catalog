@@ -33,8 +33,6 @@ interface AiUsageLog {
   units: number | null;
   estimated_cost_usd: number | null;
   status: string;
-  error_message: string | null;
-  metadata: Record<string, unknown> | null;
   created_at: string;
 }
 
@@ -264,7 +262,7 @@ export default function AdminAiUsage() {
     setLoading(true);
     const { data } = await supabase
       .from('ai_usage_logs')
-      .select('*')
+      .select('id, platform, operation, model, input_tokens, output_tokens, units, estimated_cost_usd, status, created_at')
       .order('created_at', { ascending: false })
       .limit(200);
     setLogs((data as AiUsageLog[]) ?? []);

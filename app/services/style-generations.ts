@@ -61,7 +61,7 @@ export async function createStyleGeneration(input: {
       reference_urls: input.referenceUrls,
       status: 'pending',
     })
-    .select('*')
+    .select('id')
     .single();
   if (insertErr || !row) return { data: null, error: insertErr?.message ?? 'Failed to create generation' };
 
@@ -77,7 +77,7 @@ export async function listStyleGenerations(userId: string): Promise<StyleGenerat
   if (!supabase) return [];
   const { data, error } = await supabase
     .from('style_generations')
-    .select('*')
+    .select('id, user_id, status, occasion, gender, name, height_label, age_label, resolved_prompt, reference_urls, error, created_at, completed_at')
     .eq('user_id', userId)
     .order('created_at', { ascending: false })
     .limit(20);
@@ -101,7 +101,7 @@ export async function listStyleGenerationsWithImages(
   if (parents.length === 0) return [];
   const { data: images } = await supabase
     .from('style_generation_images')
-    .select('*')
+    .select('id, generation_id, provider, sort_order, status, image_url, error, liked, created_at')
     .in('generation_id', parents.map(p => p.id))
     .order('sort_order');
   const byParent = new Map<string, StyleGenerationImage[]>();
@@ -165,8 +165,8 @@ export async function getStyleGenerationDetail(
 ): Promise<StyleGenerationResult | null> {
   if (!supabase) return null;
   const [{ data: gen }, { data: images }] = await Promise.all([
-    supabase.from('style_generations').select('*').eq('id', generationId).single(),
-    supabase.from('style_generation_images').select('*').eq('generation_id', generationId).order('sort_order'),
+    supabase.from('style_generations').select('id, user_id, status, occasion, gender, name, height_label, age_label, resolved_prompt, reference_urls, error, created_at, completed_at').eq('id', generationId).single(),
+    supabase.from('style_generation_images').select('id, generation_id, provider, sort_order, status, image_url, error, liked, created_at').eq('generation_id', generationId).order('sort_order'),
   ]);
   if (!gen) return null;
   return {

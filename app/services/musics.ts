@@ -63,7 +63,7 @@ export async function listMusics(): Promise<MusicTrack[]> {
   if (!supabase) return [];
   const { data, error } = await supabase
     .from('musics')
-    .select('*')
+    .select('id, spotify_track_id, name, artist, album, image_url, thumbnail_url, preview_url, external_url, duration_ms, explicit, popularity, added_by, created_at')
     .order('created_at', { ascending: false });
   if (error) throw new Error(error.message);
   return (data || []) as MusicTrack[];
@@ -92,7 +92,7 @@ export async function addMusicFromSpotify(hit: SpotifySearchHit): Promise<MusicT
       popularity:    hit.popularity,
       added_by:      uid,
     }, { onConflict: 'spotify_track_id' })
-    .select('*')
+    .select('id, spotify_track_id, name, artist, album, image_url, thumbnail_url, preview_url, external_url, duration_ms, explicit, popularity, added_by, created_at')
     .single();
   if (error) throw new Error(error.message);
   return data as MusicTrack;

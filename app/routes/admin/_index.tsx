@@ -239,14 +239,14 @@ export default function AdminHome() {
     if (!supabase) return;
     const { data: recentLogs } = await supabase
       .from('search_logs')
-      .select('*')
+      .select('id, query, user_handle, results_count, created_at')
       .order('created_at', { ascending: false })
       .limit(6);
     setRecentActivity(recentLogs ?? []);
 
     const { data: allLogs } = await supabase
       .from('search_logs')
-      .select('*')
+      .select('id, query, user_handle, results_count, created_at')
       .order('created_at', { ascending: false });
     setAllSearchLogs(allLogs ?? []);
 
