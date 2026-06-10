@@ -761,3 +761,120 @@ html.gov-void .tb-wrap {
   width: 110px;
   accent-color: #818cf8;
 }
+
+/* ── Drill view: select products → assign to a different type ── */
+.gov-drill-card { position: relative; }
+.gov-drill-card.is-selected {
+  border-color: #818cf8;
+  box-shadow: 0 0 0 1px #818cf8, 0 0 18px rgba(129, 140, 248, 0.25);
+}
+.gov-drill-media { position: relative; }
+.gov-drill-check {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 20px;
+  height: 20px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #818cf8;
+  color: #0a0a0a;
+  font-style: normal;
+  font-size: 12px;
+  font-weight: 800;
+}
+.gov-drill-card.is-selected .gov-drill-check { display: inline-flex; }
+.gov-drill-open {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(10, 10, 12, 0.75);
+  color: #e4e4e7;
+  font-size: 12px;
+  opacity: 0;
+  transition: opacity 120ms;
+}
+.gov-drill-card:hover .gov-drill-open { opacity: 1; }
+.gov-drill-open:hover { background: #6366f1; color: #fff; }
+
+.gov-drill-assign {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+  flex-shrink: 0;
+}
+.gov-drill-assign > span {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: #a1a1aa;
+}
+.gov-drill-picker {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 20px;
+  z-index: 10;
+  width: 320px;
+  border: 1px solid #27272a;
+  border-radius: 12px;
+  background: rgba(17, 17, 19, 0.98);
+  padding: 10px;
+}
+.gov-drill-picker input {
+  width: 100%;
+  box-sizing: border-box;
+  font: inherit;
+  font-size: 13px;
+  color: #fff;
+  background: #18181b;
+  border: 1px solid #27272a;
+  border-radius: 8px;
+  padding: 8px 10px;
+  outline: none;
+  margin-bottom: 8px;
+}
+.gov-drill-picker input:focus { border-color: #818cf8; }
+.gov-drill-picker-list { max-height: 260px; overflow-y: auto; }
+.gov-drill-picker-list button {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  font: inherit;
+  text-align: left;
+  color: #d4d4d8;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  padding: 7px 8px;
+  cursor: pointer;
+}
+.gov-drill-picker-list button:hover { background: rgba(129, 140, 248, 0.12); color: #fff; }
+.gov-drill-picker-list i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.gov-drill-picker-list strong { font-size: 13px; font-weight: 600; text-transform: capitalize; }
+.gov-drill-picker-list span {
+  margin-left: auto;
+  font-size: 10.5px;
+  color: #71717a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 150px;
+}

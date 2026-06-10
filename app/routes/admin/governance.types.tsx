@@ -86,6 +86,11 @@ export default function AdminGovernanceTypes() {
   // Drill-down: zoom INTO a node and list every product attached to it.
   // ox/oy anchor the zoom animation at the node's canvas position.
   const [drill, setDrill] = useState<{ nodeId: string; ox: number; oy: number } | null>(null);
+  // Multi-select inside the drill view → "Assign to type…" re-types them.
+  const [drillSel, setDrillSel] = useState<Set<string>>(new Set());
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [assignQuery, setAssignQuery] = useState('');
+  useEffect(() => { setDrillSel(new Set()); setAssignOpen(false); setAssignQuery(''); }, [drill?.nodeId]);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [logOpen, setLogOpen] = useState(false);
   const [toast, setToast] = useState<{ label: string; key: number } | null>(null);
@@ -521,27 +526,86 @@ export default function AdminGovernanceTypes() {
                 </div>
                 {node && <span className="gov-drill-path">{paths.get(node.id)}</span>}
               </div>
+              {drillSel.size > 0 && (
+                <div className="gov-drill-assign">
+                  <span>{drillSel.size} selected</span>
+                  <button type="button" className="gov-moveto" onClick={() => setAssignOpen(v => !v)}>
+                    Assign to type…
+                  </button>
+                  <button type="button" className="gov-ghost" onClick={() => { setDrillSel(new Set()); setAssignOpen(false); }}>
+                    Clear
+                  </button>
+                  {assignOpen && (
+                    <div className="gov-drill-picker">
+                      <input
+                        autoFocus
+                        placeholder="Find a type…"
+                        value={assignQuery}
+                        onChange={e => setAssignQuery(e.target.value)}
+                      />
+                      <div className="gov-drill-picker-list">
+                        {tree
+                          .filter(n => n.id !== drill.nodeId)
+                          .filter(n => !assignQuery.trim()
+                            || n.name.toLowerCase().includes(assignQuery.trim().toLowerCase())
+                            || (paths.get(n.id) ?? '').toLowerCase().includes(assignQuery.trim().toLowerCase()))
+                          .map(n => (
+                            <button
+                              key={n.id}
+                              type="button"
+                              onClick={() => {
+                                handleAssign([...drillSel], n.id);
+                                setDrillSel(new Set());
+                                setAssignOpen(false);
+                                setAssignQuery('');
+                              }}
+                            >
+                              <i style={{ background: GENDER_COLORS[genders.get(n.id) ?? ''] ?? NEUTRAL }} />
+                              <strong>{n.name}</strong>
+                              <span>{paths.get(n.id)}</span>
+                            </button>
+                          ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              )}
               {prods.length === 0 ? (
                 <p className="gov-drill-empty">No products attached to this type yet.</p>
               ) : (
                 <div className="gov-drill-grid">
-                  {prods.map(prod => (
-                    <button
-                      key={prod.id}
-                      type="button"
-                      className="gov-drill-card"
-                      title={`${prod.name} — open product page`}
-                      onClick={() => handleOpenProduct(prod.id)}
-                    >
-                      <div className="gov-drill-media">
-                        {prod.image
-                          ? <img src={prod.image} alt="" loading="lazy" decoding="async" />
-                          : <span>{prod.name.slice(0, 2)}</span>}
-                      </div>
-                      {prod.brand && <em>{prod.brand}</em>}
-                      <strong>{prod.name}</strong>
-                    </button>
-                  ))}
+                  {prods.map(prod => {
+                    const isSel = drillSel.has(prod.id);
+                    return (
+                      <button
+                        key={prod.id}
+                        type="button"
+                        className={`gov-drill-card${isSel ? ' is-selected' : ''}`}
+                        title={`${prod.name} — click to select`}
+                        onClick={() => setDrillSel(prev => {
+                          const next = new Set(prev);
+                          if (next.has(prod.id)) next.delete(prod.id);
+                          else next.add(prod.id);
+                          return next;
+                        })}
+                      >
+                        <div className="gov-drill-media">
+                          {prod.image
+                            ? <img src={prod.image} alt="" loading="lazy" decoding="async" />
+                            : <span>{prod.name.slice(0, 2)}</span>}
+                          <i className="gov-drill-check" aria-hidden="true">✓</i>
+                          <span
+                            className="gov-drill-open"
+                            role="button"
+                            title="Open product page"
+                            onClick={ev => { ev.stopPropagation(); handleOpenProduct(prod.id); }}
+                          >↗</span>
+                        </div>
+                        {prod.brand && <em>{prod.brand}</em>}
+                        <strong>{prod.name}</strong>
+                      </button>
+                    );
+                  })}
                 </div>
               )}
             </div>
