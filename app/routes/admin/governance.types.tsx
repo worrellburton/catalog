@@ -1,14 +1,20 @@
 // /admin/governance/types — the type brain. An Obsidian-style force graph
-// of the product-type taxonomy with catalog at the centre.
+// of the product-type taxonomy with catalog at the centre, floating on the
+// site's WebGL particle universe. This page blacks out the whole admin
+// chrome (html.gov-void) so it reads as its own world.
 //
-// Edits are LIVE (founder's call): every gesture writes to the tree and
-// cascades into products immediately — renames rewrite products.type,
-// cross-lane moves rewrite products.gender, satellite drags re-type single
-// products. Each gesture precomputes its inverse from snapshots, so Undo
-// (toast or the session log) restores exact prior values. Writes run
-// through a sequential queue so rapid gestures land in order.
+// Gender is an ATTRIBUTE rendered as node color (legend bottom-right), not
+// a tree node; nodes without their own gender inherit the nearest
+// ancestor's. Edits are LIVE: renames rewrite products.type, structure
+// changes rewrite products.type_path (the full materialized ancestry — a
+// product ten levels deep keeps every level there while type stays the
+// leaf), and gender changes cascade products.gender. Each gesture
+// precomputes its inverse from snapshots, so Undo restores exact prior
+// values. Writes run through a sequential queue so rapid gestures land in
+// order.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import ParticleBackground from '~/components/ParticleBackground';
 import TypeBrainGraph, { type BrainNode, type BrainProduct } from '~/components/admin/TypeBrainGraph';
 import {
   createTypeNode,
@@ -19,6 +25,7 @@ import {
   snapshotGroups,
   type GovernanceOp,
   type GovernanceProduct,
+  type ProductGroup,
   type TypeNode,
 } from '~/services/type-governance';
 import { productSlug } from '~/utils/slug';
@@ -26,14 +33,49 @@ import '~/styles/governance.css';
 
 const UNASSIGNED_ID = '__unassigned__';
 const NEUTRAL = '#cbd5e1';
-const GENDER_LANES = new Set(['male', 'female', 'unisex']);
 const SAT_CAP = 6;
+const GENDER_COLORS: Record<string, string> = {
+  male: '#60a5fa',
+  female: '#f472b6',
+  unisex: '#34d399',
+};
 
 interface HistoryEntry {
   label: string;
   inverse: GovernanceOp[];
   undone: boolean;
   at: number;
+}
+
+/** Full ancestry string per node, matching products.type_path format. */
+function computePaths(nodes: TypeNode[]): Map<string, string> {
+  const byId = new Map(nodes.map(n => [n.id, n]));
+  const memo = new Map<string, string>();
+  const path = (n: TypeNode): string => {
+    const cached = memo.get(n.id);
+    if (cached) return cached;
+    const parent = n.parentId ? byId.get(n.parentId) : null;
+    const v = parent ? `${path(parent)} / ${n.name}` : n.name;
+    memo.set(n.id, v);
+    return v;
+  };
+  nodes.forEach(path);
+  return memo;
+}
+
+/** Effective gender per node: its own, else the nearest ancestor's. */
+function computeGenders(nodes: TypeNode[]): Map<string, string | null> {
+  const byId = new Map(nodes.map(n => [n.id, n]));
+  const memo = new Map<string, string | null>();
+  const eff = (n: TypeNode): string | null => {
+    if (memo.has(n.id)) return memo.get(n.id) ?? null;
+    const parent = n.parentId ? byId.get(n.parentId) : null;
+    const v = n.gender ?? (parent ? eff(parent) : null);
+    memo.set(n.id, v);
+    return v;
+  };
+  nodes.forEach(eff);
+  return memo;
 }
 
 export default function AdminGovernanceTypes() {
@@ -47,6 +89,12 @@ export default function AdminGovernanceTypes() {
   const toastTimer = useRef(0);
   // Sequential write queue — rapid gestures stay ordered.
   const queue = useRef<Promise<unknown>>(Promise.resolve());
+
+  // This page is its own world: black out the admin chrome while mounted.
+  useEffect(() => {
+    document.documentElement.classList.add('admin-on-dark-canvas', 'gov-void');
+    return () => document.documentElement.classList.remove('admin-on-dark-canvas', 'gov-void');
+  }, []);
 
   const reload = useCallback(async () => {
     const [t, p] = await Promise.all([fetchTypeTree(), fetchGovernanceProducts()]);
@@ -97,25 +145,21 @@ export default function AdminGovernanceTypes() {
   }, [reload, showToast]);
 
   // ── Derived structure ──
-  const meta = useMemo(() => {
+  const paths = useMemo(() => computePaths(tree), [tree]);
+  const genders = useMemo(() => computeGenders(tree), [tree]);
+  const depths = useMemo(() => {
     const byId = new Map(tree.map(n => [n.id, n]));
-    const out = new Map<string, { depth: number; lane: string | null; color: string }>();
-    const resolve = (n: TypeNode): { depth: number; lane: string | null; color: string } => {
-      const cached = out.get(n.id);
+    const memo = new Map<string, number>();
+    const depth = (n: TypeNode): number => {
+      const cached = memo.get(n.id);
       if (cached) return cached;
       const parent = n.parentId ? byId.get(n.parentId) : null;
-      const up = parent ? resolve(parent) : { depth: 0, lane: null as string | null, color: NEUTRAL };
-      const isLane = !!parent && up.depth === 1 && GENDER_LANES.has(n.name);
-      const m = {
-        depth: up.depth + 1,
-        lane: isLane ? n.name : up.lane,
-        color: n.color ?? (up.color !== NEUTRAL ? up.color : NEUTRAL),
-      };
-      out.set(n.id, m);
-      return m;
+      const v = parent ? depth(parent) + 1 : 1;
+      memo.set(n.id, v);
+      return v;
     };
-    tree.forEach(resolve);
-    return out;
+    tree.forEach(depth);
+    return memo;
   }, [tree]);
 
   const { attach, unassigned } = useMemo(() => {
@@ -132,14 +176,13 @@ export default function AdminGovernanceTypes() {
   }, [tree, products]);
 
   const brainNodes = useMemo<BrainNode[]>(() => {
-    const nodes = tree.map(n => {
-      const m = meta.get(n.id) ?? { depth: 1, lane: null, color: NEUTRAL };
-      return {
-        id: n.id, name: n.name, parentId: n.parentId, depth: m.depth,
-        color: m.color, count: attach.get(n.id)?.length ?? 0,
-        locked: m.depth === 2 && GENDER_LANES.has(n.name),
-      };
-    });
+    const nodes = tree.map(n => ({
+      id: n.id, name: n.name, parentId: n.parentId,
+      depth: depths.get(n.id) ?? 1,
+      color: GENDER_COLORS[genders.get(n.id) ?? ''] ?? NEUTRAL,
+      count: attach.get(n.id)?.length ?? 0,
+      locked: false,
+    }));
     if (showProducts && unassigned.length) {
       nodes.push({
         id: UNASSIGNED_ID, name: 'unassigned', parentId: null, depth: 1,
@@ -147,7 +190,7 @@ export default function AdminGovernanceTypes() {
       });
     }
     return nodes;
-  }, [tree, meta, attach, showProducts, unassigned.length]);
+  }, [tree, depths, genders, attach, showProducts, unassigned.length]);
 
   const satellites = useMemo(() => {
     const m = new Map<string, { items: BrainProduct[]; total: number }>();
@@ -172,71 +215,132 @@ export default function AdminGovernanceTypes() {
     return ids;
   }, [tree]);
 
+  /** Apply product-update groups to local state (column → TS key). */
+  const applyGroupsLocal = useCallback((groups: ProductGroup[]) => {
+    const patches = new Map<string, Partial<GovernanceProduct>>();
+    for (const g of groups) {
+      for (const id of g.ids) {
+        patches.set(id, {
+          ...patches.get(id),
+          ...(g.patch.type !== undefined ? { type: g.patch.type } : {}),
+          ...(g.patch.gender !== undefined ? { gender: g.patch.gender } : {}),
+          ...(g.patch.type_path !== undefined ? { typePath: g.patch.type_path } : {}),
+        });
+      }
+    }
+    if (patches.size) {
+      setProducts(prev => prev.map(p => patches.has(p.id) ? { ...p, ...patches.get(p.id) } : p));
+    }
+  }, []);
+
+  /** Diff current vs hypothetical tree: products whose type_path or
+   *  effective gender changes get cascading update groups + inverse
+   *  snapshots. This is what makes a multi-select reconnect rewrite the
+   *  whole ancestry chain on every affected product row. */
+  const buildTreeCascade = useCallback((nextTree: TypeNode[]) => {
+    const nextPaths = computePaths(nextTree);
+    const nextGenders = computeGenders(nextTree);
+    const groups: ProductGroup[] = [];
+    const pathAffected: GovernanceProduct[] = [];
+    const genderAffected: GovernanceProduct[] = [];
+    for (const n of nextTree) {
+      const prods = attach.get(n.id) ?? [];
+      if (!prods.length) continue;
+      const ids = prods.map(p => p.id);
+      if (nextPaths.get(n.id) !== paths.get(n.id)) {
+        groups.push({ ids, patch: { type_path: nextPaths.get(n.id) ?? null } });
+        pathAffected.push(...prods);
+      }
+      if (nextGenders.get(n.id) !== genders.get(n.id)) {
+        groups.push({ ids, patch: { gender: nextGenders.get(n.id) ?? null } });
+        genderAffected.push(...prods);
+      }
+    }
+    const inverse: GovernanceOp[] = [];
+    if (pathAffected.length) inverse.push({ op: 'products-update', groups: snapshotGroups(pathAffected, 'typePath') });
+    if (genderAffected.length) inverse.push({ op: 'products-update', groups: snapshotGroups(genderAffected, 'gender') });
+    return { groups, inverse, genderTouched: genderAffected.length };
+  }, [attach, paths, genders]);
+
   // ── Gestures ──
   const handleRename = (nodeId: string, to: string) => {
     const node = tree.find(n => n.id === nodeId);
     if (!node || node.name === to) return;
+    const nextTree = tree.map(n => n.id === nodeId ? { ...n, name: to } : n);
     const matched = attach.get(nodeId) ?? [];
-    const ids = matched.map(p => p.id);
+    const cascade = buildTreeCascade(nextTree);
+    const groups: ProductGroup[] = [
+      ...(matched.length ? [{ ids: matched.map(p => p.id), patch: { type: to } }] : []),
+      ...cascade.groups,
+    ];
     commit(
-      `Renamed ${node.name} → ${to} · ${ids.length} products`,
+      `Renamed ${node.name} → ${to} · ${matched.length} products`,
       [
         { op: 'node-update', id: nodeId, patch: { name: to } },
-        { op: 'products-update', groups: [{ ids, patch: { type: to } }] },
+        ...(groups.length ? [{ op: 'products-update' as const, groups }] : []),
       ],
       [
         { op: 'node-update', id: nodeId, patch: { name: node.name } },
-        { op: 'products-update', groups: snapshotGroups(matched, 'type') },
+        ...(matched.length ? [{ op: 'products-update' as const, groups: snapshotGroups(matched, 'type') }] : []),
+        ...cascade.inverse,
       ],
-      () => {
-        setTree(prev => prev.map(n => n.id === nodeId ? { ...n, name: to } : n));
-        const idSet = new Set(ids);
-        setProducts(prev => prev.map(p => idSet.has(p.id) ? { ...p, type: to } : p));
-      },
+      () => { setTree(nextTree); applyGroupsLocal(groups); },
     );
   };
 
   const handleReparent = (nodeIds: string[], targetId: string) => {
     if (targetId === UNASSIGNED_ID) return;
-    const targetLane = meta.get(targetId)?.lane ?? null;
-    const ops: GovernanceOp[] = [];
-    const inverse: GovernanceOp[] = [];
-    const moves: { nodeId: string; genderIds: Set<string> }[] = [];
-    const labels: string[] = [];
-    for (const nodeId of nodeIds) {
-      const node = tree.find(n => n.id === nodeId);
-      if (!node || nodeId === targetId || nodeId === UNASSIGNED_ID) continue;
-      if (subtreeIds(nodeId).has(targetId)) continue; // no cycles
-      if (node.parentId === targetId) continue;
-      const lane = meta.get(nodeId)?.lane ?? null;
-      const crossesLane = !!targetLane && targetLane !== lane;
-      const subProds = crossesLane
-        ? [...subtreeIds(nodeId)].flatMap(id => attach.get(id) ?? [])
-        : [];
-      ops.push({ op: 'node-update', id: nodeId, patch: { parent_id: targetId } });
-      inverse.unshift({ op: 'node-update', id: nodeId, patch: { parent_id: node.parentId } });
-      if (subProds.length && targetLane) {
-        ops.push({ op: 'products-update', groups: [{ ids: subProds.map(p => p.id), patch: { gender: targetLane } }] });
-        inverse.unshift({ op: 'products-update', groups: snapshotGroups(subProds, 'gender') });
-      }
-      moves.push({ nodeId, genderIds: new Set(subProds.map(p => p.id)) });
-      labels.push(`${node.name}${subProds.length ? ` (${subProds.length} products → ${targetLane})` : ''}`);
-    }
-    if (!moves.length) return;
+    const moved = nodeIds.filter(id => {
+      const node = tree.find(n => n.id === id);
+      if (!node || id === targetId || id === UNASSIGNED_ID) return false;
+      if (subtreeIds(id).has(targetId)) return false; // no cycles
+      return node.parentId !== targetId;
+    });
+    if (!moved.length) return;
+    const movedSet = new Set(moved);
+    const nextTree = tree.map(n => movedSet.has(n.id) ? { ...n, parentId: targetId } : n);
+    const cascade = buildTreeCascade(nextTree);
     const targetName = tree.find(n => n.id === targetId)?.name ?? '?';
+    const names = moved.map(id => tree.find(n => n.id === id)?.name ?? '?').join(', ');
+    const touched = cascade.groups.reduce((acc, g) => acc + g.ids.length, 0);
     commit(
-      `Moved ${labels.join(', ')} → ${targetName}`,
-      ops, inverse,
-      () => {
-        const moved = new Map(moves.map(m => [m.nodeId, m]));
-        setTree(prev => prev.map(n => moved.has(n.id) ? { ...n, parentId: targetId } : n));
-        if (targetLane) {
-          const allGenderIds = new Set(moves.flatMap(m => [...m.genderIds]));
-          if (allGenderIds.size) {
-            setProducts(prev => prev.map(p => allGenderIds.has(p.id) ? { ...p, gender: targetLane } : p));
-          }
-        }
-      },
+      `Moved ${names} → ${targetName}${touched ? ` · ${touched} product updates` : ''}`,
+      [
+        ...moved.map(id => ({ op: 'node-update' as const, id, patch: { parent_id: targetId } })),
+        ...(cascade.groups.length ? [{ op: 'products-update' as const, groups: cascade.groups }] : []),
+      ],
+      [
+        ...moved.map(id => ({
+          op: 'node-update' as const, id,
+          patch: { parent_id: tree.find(n => n.id === id)?.parentId ?? null },
+        })),
+        ...cascade.inverse,
+      ],
+      () => { setTree(nextTree); applyGroupsLocal(cascade.groups); },
+    );
+  };
+
+  const handleSetGender = (nodeIds: string[], gender: TypeNode['gender']) => {
+    const editable = nodeIds.filter(id => id !== UNASSIGNED_ID && tree.some(n => n.id === id));
+    if (!editable.length) return;
+    const idSet = new Set(editable);
+    const nextTree = tree.map(n => idSet.has(n.id) ? { ...n, gender } : n);
+    const cascade = buildTreeCascade(nextTree);
+    const names = editable.map(id => tree.find(n => n.id === id)?.name ?? '?').join(', ');
+    commit(
+      `${gender ? `Set ${names} → ${gender}` : `Cleared gender on ${names}`}${cascade.genderTouched ? ` · ${cascade.genderTouched} products` : ''}`,
+      [
+        ...editable.map(id => ({ op: 'node-update' as const, id, patch: { gender } })),
+        ...(cascade.groups.length ? [{ op: 'products-update' as const, groups: cascade.groups }] : []),
+      ],
+      [
+        ...editable.map(id => ({
+          op: 'node-update' as const, id,
+          patch: { gender: tree.find(n => n.id === id)?.gender ?? null },
+        })),
+        ...cascade.inverse,
+      ],
+      () => { setTree(nextTree); applyGroupsLocal(cascade.groups); },
     );
   };
 
@@ -245,7 +349,7 @@ export default function AdminGovernanceTypes() {
     const tops = nodeIds.filter(id =>
       !nodeIds.some(other => other !== id && subtreeIds(other).has(id)));
     const ops: GovernanceOp[] = [];
-    const rows: { id: string; name: string; parent_id: string | null; sort: number; color: string | null }[] = [];
+    const rows: { id: string; name: string; parent_id: string | null; sort: number; color: string | null; gender: TypeNode['gender'] }[] = [];
     const names: string[] = [];
     let orphaned = 0;
     for (const id of tops) {
@@ -254,7 +358,7 @@ export default function AdminGovernanceTypes() {
       // BFS order (parents first) so the undo re-insert satisfies the FK.
       const ordered = tree.filter(n => sub.has(n.id));
       rows.push(...ordered.map(n => ({
-        id: n.id, name: n.name, parent_id: n.parentId, sort: n.sort, color: n.color,
+        id: n.id, name: n.name, parent_id: n.parentId, sort: n.sort, color: n.color, gender: n.gender,
       })));
       orphaned += [...sub].reduce((acc, sid) => acc + (attach.get(sid)?.length ?? 0), 0);
       ops.push({ op: 'node-delete', id });
@@ -288,19 +392,22 @@ export default function AdminGovernanceTypes() {
     if (nodeId === UNASSIGNED_ID) return;
     const node = tree.find(n => n.id === nodeId);
     if (!node) return;
-    const lane = meta.get(nodeId)?.lane ?? undefined;
     const idSet = new Set(productIds);
     const matched = products.filter(p => idSet.has(p.id));
-    const patch: { type: string; gender?: string } = { type: node.name };
-    if (lane) patch.gender = lane;
-    const inverse: GovernanceOp[] = [{ op: 'products-update', groups: snapshotGroups(matched, 'type') }];
-    if (lane) inverse.push({ op: 'products-update', groups: snapshotGroups(matched, 'gender') });
+    const eff = genders.get(nodeId) ?? null;
+    const groups: ProductGroup[] = [{
+      ids: productIds,
+      patch: { type: node.name, gender: eff, type_path: paths.get(nodeId) ?? null },
+    }];
     commit(
       `Re-typed ${matched.length} product${matched.length === 1 ? '' : 's'} → ${node.name}`,
-      [{ op: 'products-update', groups: [{ ids: productIds, patch }] }],
-      inverse,
-      () => setProducts(prev => prev.map(p =>
-        idSet.has(p.id) ? { ...p, type: node.name, ...(lane ? { gender: lane } : {}) } : p)),
+      [{ op: 'products-update', groups }],
+      [
+        { op: 'products-update', groups: snapshotGroups(matched, 'type') },
+        { op: 'products-update', groups: snapshotGroups(matched, 'gender') },
+        { op: 'products-update', groups: snapshotGroups(matched, 'typePath') },
+      ],
+      () => applyGroupsLocal(groups),
     );
   };
 
@@ -311,9 +418,16 @@ export default function AdminGovernanceTypes() {
   };
 
   const canUndo = history.some(h => !h.undone);
+  const editableSelection = [...selection].filter(id => id !== UNASSIGNED_ID);
 
   return (
-    <div className="gov-page">
+    <div className="gov-page gov-types">
+      {/* The particle universe — fixed behind everything; the blacked-out
+          admin chrome is translucent so the field reads as one world. */}
+      <div className="gov-universe" aria-hidden="true">
+        <ParticleBackground />
+      </div>
+
       {/* div, not <header> — the consumer header.css styles the header ELEMENT
           globally (position:fixed), which would yank this out of flow. */}
       <div className="gov-head">
@@ -322,8 +436,8 @@ export default function AdminGovernanceTypes() {
           <h1>Types — set up for more possibilities</h1>
           <p className="gov-sub">
             One editable structure for every product type. Drag to rearrange, double-click to
-            rename, marquee to select many. Changes are live — every edit cascades to its
-            products immediately, and Undo restores exact prior values.
+            rename, marquee to select many. Gender is a color, not a branch — recolor a
+            selection and its products follow. Changes are live; Undo restores exact values.
           </p>
         </div>
         <div className="gov-controls">
@@ -343,28 +457,47 @@ export default function AdminGovernanceTypes() {
               Products {showProducts ? 'on' : 'off'}
             </button>
           </div>
-          <div className="gov-legend">
-            <span style={{ ['--c' as string]: '#60a5fa' }}>male</span>
-            <span style={{ ['--c' as string]: '#f472b6' }}>female</span>
-            <span style={{ ['--c' as string]: '#34d399' }}>unisex</span>
-            <span style={{ ['--c' as string]: '#f59e0b' }}>unassigned</span>
-          </div>
         </div>
       </div>
 
-      <TypeBrainGraph
-        nodes={brainNodes}
-        satellites={satellites}
-        selection={selection}
-        showProducts={showProducts}
-        onSelect={setSelection}
-        onReparent={handleReparent}
-        onRename={handleRename}
-        onDelete={handleDelete}
-        onAddChild={(id) => { void handleAddChild(id); }}
-        onAssignProducts={handleAssign}
-        onOpenProduct={handleOpenProduct}
-      />
+      <div className="gov-canvas">
+        <TypeBrainGraph
+          nodes={brainNodes}
+          satellites={satellites}
+          selection={selection}
+          showProducts={showProducts}
+          onSelect={setSelection}
+          onReparent={handleReparent}
+          onRename={handleRename}
+          onDelete={handleDelete}
+          onAddChild={(id) => { void handleAddChild(id); }}
+          onAssignProducts={handleAssign}
+          onOpenProduct={handleOpenProduct}
+        />
+
+        {editableSelection.length > 0 && (
+          <div className="gov-genderbar">
+            <span>{editableSelection.length} selected</span>
+            {(['male', 'female', 'unisex'] as const).map(g => (
+              <button key={g} type="button" style={{ ['--c' as string]: GENDER_COLORS[g] }}
+                onClick={() => handleSetGender(editableSelection, g)}>
+                <i />{g}
+              </button>
+            ))}
+            <button type="button" style={{ ['--c' as string]: NEUTRAL }}
+              onClick={() => handleSetGender(editableSelection, null)}>
+              <i />inherit
+            </button>
+          </div>
+        )}
+
+        <div className="gov-legend">
+          <span style={{ ['--c' as string]: GENDER_COLORS.male }}>male</span>
+          <span style={{ ['--c' as string]: GENDER_COLORS.female }}>female</span>
+          <span style={{ ['--c' as string]: GENDER_COLORS.unisex }}>unisex</span>
+          <span style={{ ['--c' as string]: '#f59e0b' }}>unassigned</span>
+        </div>
+      </div>
 
       {logOpen && (
         <div className="gov-log">

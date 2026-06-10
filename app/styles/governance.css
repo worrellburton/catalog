@@ -72,7 +72,20 @@
   background: #34d399;
   box-shadow: 0 0 8px rgba(52, 211, 153, 0.7);
 }
-.gov-legend { display: flex; gap: 12px; }
+.gov-legend {
+  position: absolute;
+  right: 16px;
+  bottom: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding: 10px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  background: rgba(10, 10, 12, 0.72);
+  pointer-events: none;
+  z-index: 5;
+}
 .gov-legend span {
   display: inline-flex;
   align-items: center;
@@ -89,11 +102,17 @@
 }
 
 /* ── Graph canvas ── */
+.gov-canvas {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  margin: 0 26px 16px;
+}
 .tb-wrap {
   position: relative;
   flex: 1;
   min-height: 0;
-  margin: 0 26px 16px;
   border: 1px solid #1f1f23;
   border-radius: 16px;
   background:
@@ -393,4 +412,102 @@
   .gov-head { flex-direction: column; align-items: flex-start; }
   .gov-controls { align-items: flex-start; }
   .gov-log { right: 12px; left: 12px; width: auto; }
+}
+
+/* ── Gender picker (selection recolor) ── */
+.gov-genderbar {
+  position: absolute;
+  top: 14px;
+  left: 0;
+  right: 0;
+  margin-inline: auto;
+  width: fit-content;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 8px 6px 14px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 999px;
+  background: rgba(10, 10, 12, 0.85);
+  z-index: 6;
+}
+.gov-genderbar > span {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #a1a1aa;
+  margin-right: 4px;
+}
+.gov-genderbar button {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: #d4d4d8;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 999px;
+  padding: 5px 10px;
+  cursor: pointer;
+  transition: border-color 120ms, color 120ms;
+}
+.gov-genderbar button:hover { border-color: var(--c); color: #fff; }
+.gov-genderbar button i {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--c);
+}
+
+/* ── The particle universe + one-black-world chrome ──
+   gov-universe is a fixed full-viewport WebGL layer behind everything;
+   html.gov-void (set by the types page while mounted) blacks out the
+   admin chrome and makes it translucent so the field shows through. */
+/* The types page carries its own black floor so the world stays black in
+   any host context; the fixed universe child paints on top of it. */
+.gov-types { background: #000; }
+
+.gov-universe {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.9;
+}
+.gov-types > :not(.gov-universe) { position: relative; z-index: 1; }
+
+html.gov-void body,
+html.gov-void .admin-layout { background: #000; color: #e5e5e5; }
+html.gov-void .admin-main { background: transparent; }
+html.gov-void .admin-sidebar {
+  background: rgba(0, 0, 0, 0.62);
+  border-right-color: rgba(255, 255, 255, 0.07);
+}
+html.gov-void .admin-sidebar-header { border-bottom-color: rgba(255, 255, 255, 0.07); }
+html.gov-void .admin-badge { background: rgba(255, 255, 255, 0.08); color: rgba(255, 255, 255, 0.5); }
+html.gov-void .admin-nav-item { color: rgba(255, 255, 255, 0.5); }
+html.gov-void .admin-nav-item:hover { background: rgba(255, 255, 255, 0.06); color: #fff; }
+html.gov-void .admin-nav-item.active {
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  border-left-color: #fff;
+}
+html.gov-void .admin-nav-search-input { color: #e5e5e5; }
+html.gov-void .admin-sidebar-footer { border-top-color: rgba(255, 255, 255, 0.06); }
+html.gov-void .admin-theme-btn,
+html.gov-void .admin-back-btn { color: rgba(255, 255, 255, 0.4); }
+html.gov-void .admin-topbar {
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border-bottom-color: rgba(255, 255, 255, 0.07);
+  color: rgba(255, 255, 255, 0.85);
+}
+html.gov-void .admin-search-wrap { background: rgba(255, 255, 255, 0.06); }
+html.gov-void .tb-wrap {
+  background: rgba(8, 8, 10, 0.35);
+  border-color: rgba(255, 255, 255, 0.08);
 }
