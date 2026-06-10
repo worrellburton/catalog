@@ -90,7 +90,10 @@ export default function AdminGovernanceTypes() {
   const [drillSel, setDrillSel] = useState<Set<string>>(new Set());
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignQuery, setAssignQuery] = useState('');
-  useEffect(() => { setDrillSel(new Set()); setAssignOpen(false); setAssignQuery(''); }, [drill?.nodeId]);
+  // Double-click the drill title to rename the type (the canvas double-click
+  // is the zoom-in gesture now).
+  const [drillRenaming, setDrillRenaming] = useState(false);
+  useEffect(() => { setDrillSel(new Set()); setAssignOpen(false); setAssignQuery(''); setDrillRenaming(false); }, [drill?.nodeId]);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [logOpen, setLogOpen] = useState(false);
   const [toast, setToast] = useState<{ label: string; key: number } | null>(null);
@@ -496,7 +499,6 @@ export default function AdminGovernanceTypes() {
             handleReparent(editableSelection, targetId);
           }}
           onReparent={handleReparent}
-          onRename={handleRename}
           onDelete={handleDelete}
           onAddChild={(id) => { void handleAddChild(id); }}
           onAssignProducts={handleAssign}
@@ -521,7 +523,27 @@ export default function AdminGovernanceTypes() {
                 </button>
                 <div className="gov-drill-title">
                   <span className="gov-drill-dot" style={{ background: color }} />
-                  <h2>{name}</h2>
+                  {drillRenaming && node ? (
+                    <input
+                      className="gov-drill-rename"
+                      defaultValue={name}
+                      autoFocus
+                      onFocus={ev => ev.currentTarget.select()}
+                      onKeyDown={ev => {
+                        if (ev.key === 'Enter') {
+                          const v = ev.currentTarget.value.trim();
+                          if (v && v !== name) handleRename(node.id, v);
+                          setDrillRenaming(false);
+                        } else if (ev.key === 'Escape') setDrillRenaming(false);
+                      }}
+                      onBlur={() => setDrillRenaming(false)}
+                    />
+                  ) : (
+                    <h2
+                      title={node ? 'Double-click to rename' : undefined}
+                      onDoubleClick={() => { if (node) setDrillRenaming(true); }}
+                    >{name}</h2>
+                  )}
                   <span>{prods.length} product{prods.length === 1 ? '' : 's'}</span>
                 </div>
                 {node && <span className="gov-drill-path">{paths.get(node.id)}</span>}
