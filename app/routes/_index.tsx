@@ -36,6 +36,7 @@ import { creativeStill, creativePoster, productPoster } from '~/services/media-r
 import { pickVideoUrl, pickPlaybackSource } from '~/services/video-loading';
 import { emitSavedToast } from '~/utils/savedToast';
 import { prefetchDials } from '~/services/dials';
+import { hydrateVideoPipeline, videoPipelineMode } from '~/services/video-pipeline';
 import { prefetchHiddenContent } from '~/hooks/useHiddenLooks';
 import { prefetchBrandLogos } from '~/hooks/useBrandLogoLookup';
 import { primeTrailAssets } from '~/utils/trailPrefetch';
@@ -1153,8 +1154,11 @@ export default function Home() {
     // Fire the independent boot reads in parallel with the feed fetch so they
     // collapse into the first wave instead of serializing after the grid
     // renders: prefetchDials() batches all app_settings dials into one query,
-    // prefetchHiddenContent() warms the admin-hidden sets early.
+    // prefetchHiddenContent() warms the admin-hidden sets early, and
+    // hydrateVideoPipeline() refreshes the HLS/MP4 pipeline dial (it boots
+    // from a localStorage snapshot, so this read just confirms + goes live).
     void prefetchDials();
+    void hydrateVideoPipeline();
     prefetchHiddenContent();
     getLooks().then(rows => { if (!cancelled) setLiveLooks(rows); }).catch(() => {});
     return () => { cancelled = true; };
@@ -2101,11 +2105,14 @@ export default function Home() {
                         videoUrl: pickVideoUrl(selectedCreative) || selectedCreative.video_url || '',
                         // Prefer the product's HLS ladder, then the creative's,
                         // so the hero plays one adaptive source and ramps to a
-                        // crisp rung full-screen. Null → falls back to MP4.
+                        // crisp rung full-screen. Null → falls back to MP4 —
+                        // always null when the pipeline dial is on 'mp4'.
                         hlsUrl:
-                          selectedCreative.product?.primary_hls_url
-                          || selectedCreative.hls_url
-                          || null,
+                          videoPipelineMode() === 'hls'
+                            ? (selectedCreative.product?.primary_hls_url
+                              || selectedCreative.hls_url
+                              || null)
+                            : null,
                         // Prefer the polished primary image so the hero
                         // poster matches the catalog tile exactly — same
                         // first frame the video animates from. Falls back

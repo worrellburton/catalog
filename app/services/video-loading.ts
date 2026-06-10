@@ -11,6 +11,7 @@
 // everywhere instead of drifting across 6 components.
 
 import type { ProductAd } from './product-creative';
+import { getVideoPipelineConfig, videoPipelineMode, videoPrewarmEnabled } from './video-pipeline';
 
 // ── Phase 6: pick the right URL for this device ───────────────────────
 
@@ -70,13 +71,18 @@ export function pickVideoUrl(creative: {
  *  so behaviour is unchanged until clips are backfilled with an `hls_url`.
  *
  *  Product preference mirrors pickVideoUrl: a product's own HLS ladder
- *  (primary_hls_url) wins for product cards. */
+ *  (primary_hls_url) wins for product cards.
+ *
+ *  Pipeline dial (/admin/dials → video_pipeline_mode): in 'mp4' mode the
+ *  HLS columns are ignored entirely and every surface gets the legacy
+ *  progressive path — byte-identical to pre-HLS behaviour. */
 export function pickPlaybackSource(creative: {
   hls_url?: string | null;
   video_url?: string | null;
   mobile_video_url?: string | null;
   product?: { primary_hls_url?: string | null; primary_video_url?: string | null } | null;
 }): string | null {
+  if (videoPipelineMode() === 'mp4') return pickVideoUrl(creative);
   const productHls = creative.product?.primary_hls_url;
   if (productHls) return productHls;
   if (creative.hls_url) return creative.hls_url;
@@ -162,20 +168,25 @@ function canBackgroundPreload(): boolean {
  *  reused, so the subsequent <video> load — including a scroll-back
  *  re-entry — is a cache hit. Clips are small and the concurrency cap
  *  below bounds how many download at once. */
-// Concurrency cap: never have more than this many prewarm fetches in
-// flight at once, so a fast scroll past 20 cards can't open 20 sockets
-// that starve the clip the user is actually watching. Excess URLs queue
-// and start as earlier ones finish.
-const MAX_PREFETCH_CONCURRENCY = 4;
-// Backlog cap. After a fast flick the pending queue would otherwise fill
-// with cards the user has already blown PAST. Keeping it small means the
-// bytes we spend are always for cards near where the user currently is.
-const MAX_PENDING_PREFETCH = 10;
+// Concurrency cap: never have more than N prewarm fetches in flight at
+// once, so a fast scroll past 20 cards can't open 20 sockets that starve
+// the clip the user is actually watching. Excess URLs queue and start as
+// earlier ones finish. N and the backlog cap below are admin dials
+// (/admin/dials → Video delivery), read live from the pipeline config.
 let prefetchInFlight = 0;
 const prefetchQueue: string[] = [];
 
 function pumpPrefetchQueue(): void {
-  while (prefetchInFlight < MAX_PREFETCH_CONCURRENCY && prefetchQueue.length > 0) {
+  // Dial flipped off mid-drain (admin hit the master prewarm switch, or this
+  // is re-entered from a fetch's finally after the switch): drop the whole
+  // backlog instead of letting queued MP4s finish downloading. Un-mark them so
+  // a re-enable can re-queue when the cards are scrolled back into the band.
+  if (!videoPrewarmEnabled()) {
+    for (const u of prefetchQueue) preloadedHighResUrls.delete(u);
+    prefetchQueue.length = 0;
+    return;
+  }
+  while (prefetchInFlight < getVideoPipelineConfig().prewarmConcurrency && prefetchQueue.length > 0) {
     // LIFO: serve the MOST-recently requested URL first. Cards enter the
     // prewarm band in scroll order, so on a fast flick the clip the user
     // actually STOPS on is the last one pushed — popping newest-first lets it
@@ -190,6 +201,7 @@ function pumpPrefetchQueue(): void {
 
 export function prefetchVideoBytes(url: string | null | undefined): void {
   if (!url) return;
+  if (!videoPrewarmEnabled()) return;
   if (preloadedHighResUrls.has(url)) return;
   if (!canBackgroundPreload()) return;
   preloadedHighResUrls.add(url);
@@ -198,7 +210,7 @@ export function prefetchVideoBytes(url: string | null | undefined): void {
   // the user now is) when the backlog overflows, so we never burn bandwidth on
   // long-gone cards while the clip under the user's thumb waits. Un-mark them
   // so they can re-queue if scrolled back into view later.
-  while (prefetchQueue.length > MAX_PENDING_PREFETCH) {
+  while (prefetchQueue.length > getVideoPipelineConfig().prewarmQueueCap) {
     const stale = prefetchQueue.shift()!;
     preloadedHighResUrls.delete(stale);
   }
@@ -211,10 +223,12 @@ function startPrefetch(url: string): void {
   preloadAbortControllers.set(url, ctrl);
   // Full GET at lowest priority so we don't compete with the in-viewport
   // clip the user is watching. No Range header — a 206 isn't cache-reused,
-  // a 200 is (see prefetchVideoBytes doc above).
+  // a 200 is (see prefetchVideoBytes doc above). The cache mode is an admin
+  // dial: 'default' (normal), 'reload' (revalidate), 'no-store' (bypass).
   fetch(url, {
     method: 'GET',
     signal: ctrl.signal,
+    cache: getVideoPipelineConfig().cacheMode,
     priority: 'low' as RequestPriority,
   } as RequestInit & { priority: RequestPriority })
     .then(async r => {
@@ -272,6 +286,14 @@ function isHlsManifest(url: string): boolean {
 }
 
 function pumpHlsWarmQueue(): void {
+  // Dial flipped off, or the pipeline switched to 'mp4' mid-drain: drop the
+  // queued HLS heads so we don't keep warming manifests the player won't use
+  // in the new mode. Un-mark them so a flip back can re-queue.
+  if (!videoPrewarmEnabled() || videoPipelineMode() !== 'hls') {
+    for (const u of hlsWarmQueue) warmedHlsManifests.delete(u);
+    hlsWarmQueue.length = 0;
+    return;
+  }
   while (hlsWarmInFlight < MAX_HLS_WARM_CONCURRENCY && hlsWarmQueue.length > 0) {
     // LIFO: newest (nearest to where the user is heading) first, same
     // rationale as the MP4 prewarm queue.
@@ -281,10 +303,12 @@ function pumpHlsWarmQueue(): void {
 }
 
 /** Warm the head of an upcoming HLS clip so hls.js gets cache hits when it
- *  attaches. No-op for non-HLS URLs, on save-data/slow connections, or for
- *  a manifest already warmed this page-load. */
+ *  attaches. No-op for non-HLS URLs, on save-data/slow connections, for a
+ *  manifest already warmed this page-load, when the admin prewarm dial is
+ *  off, or when the pipeline is in 'mp4' mode (nothing will play HLS). */
 export function prefetchHlsHead(manifestUrl: string | null | undefined): void {
   if (!manifestUrl || !isHlsManifest(manifestUrl)) return;
+  if (!videoPrewarmEnabled() || videoPipelineMode() !== 'hls') return;
   if (warmedHlsManifests.has(manifestUrl)) return;
   if (!canBackgroundPreload()) return;
   warmedHlsManifests.add(manifestUrl);
@@ -300,7 +324,7 @@ export function prefetchHlsHead(manifestUrl: string | null | undefined): void {
 
 async function fetchManifestText(url: string): Promise<string | null> {
   try {
-    const r = await fetch(url, { method: 'GET', priority: 'low' as RequestPriority } as RequestInit & { priority: RequestPriority });
+    const r = await fetch(url, { method: 'GET', cache: getVideoPipelineConfig().cacheMode, priority: 'low' as RequestPriority } as RequestInit & { priority: RequestPriority });
     if (!r.ok) return null;
     return await r.text();
   } catch {
@@ -312,7 +336,7 @@ async function fetchManifestText(url: string): Promise<string | null> {
  *  complete, reusable cache entry (mirrors startPrefetch's contract). */
 async function warmSegmentBytes(url: string): Promise<void> {
   try {
-    const r = await fetch(url, { method: 'GET', priority: 'low' as RequestPriority } as RequestInit & { priority: RequestPriority });
+    const r = await fetch(url, { method: 'GET', cache: getVideoPipelineConfig().cacheMode, priority: 'low' as RequestPriority } as RequestInit & { priority: RequestPriority });
     const reader = r.body?.getReader();
     if (!reader) return;
     try {
@@ -344,7 +368,7 @@ function pickLowestVariant(masterText: string): string | null {
 }
 
 /** From a media playlist, return the init segment URI (fMP4 #EXT-X-MAP) and
- *  the first `max` media-segment URIs. */
+ *  the first `max` media-segment URIs (max 0 → init/manifest warm only). */
 function parseFirstSegments(mediaText: string, max: number): { initUri: string | null; segUris: string[] } {
   const segUris: string[] = [];
   let initUri: string | null = null;
@@ -357,8 +381,8 @@ function parseFirstSegments(mediaText: string, max: number): { initUri: string |
       continue;
     }
     if (line.startsWith('#')) continue;
-    segUris.push(line);
     if (segUris.length >= max) break;
+    segUris.push(line);
   }
   return { initUri, segUris };
 }
@@ -379,7 +403,7 @@ async function runHlsWarm(manifestUrl: string): Promise<void> {
       if (!t) return;
       mediaText = t;
     }
-    const { initUri, segUris } = parseFirstSegments(mediaText, 2);
+    const { initUri, segUris } = parseFirstSegments(mediaText, getVideoPipelineConfig().hlsWarmSegments);
     if (initUri) await warmSegmentBytes(new URL(initUri, mediaUrl).href);
     for (const s of segUris) await warmSegmentBytes(new URL(s, mediaUrl).href);
   } finally {

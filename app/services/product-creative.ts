@@ -270,13 +270,18 @@ export async function getProductAdsByStatus(status: string): Promise<ProductAd[]
 
 /**
  * Fast, fuzzy product-image lookup for the search ceremony's "products
- * forming" preview. NOT the real search — just a cheap one-shot match
- * (name / type / brand ILIKE + catalog_tags overlap) so related products
- * float in immediately as a precursor while the real semantic search
- * resolves. Returns de-duped image URLs. Never throws.
+ * forming" preview. NOT the real search — just a cheap one-shot match so
+ * related products float in immediately as a precursor while the real
+ * semantic search resolves. Two lanes, merged name-matches first:
+ *   1. name / type / brand ILIKE (object queries — "shoes" floats shoes)
+ *   2. catalog-tag containment via the catalogs registry (vibe queries —
+ *      "clean girl aesthetic" floats products tagged with that catalog,
+ *      where no product NAME would ever match the phrase)
+ * Returns de-duped image URLs. Never throws.
  */
 export async function getProductImagesForQuery(query: string, limit = 16): Promise<string[]> {
   if (!supabase) return [];
+  const sb = supabase;
   // Sanitize to alphanumerics + spaces so the value is safe to drop into a
   // PostgREST or() filter (which has its own delimiter grammar).
   const safe = query.toLowerCase().replace(/[^a-z0-9\s]/g, ' ').replace(/\s+/g, ' ').trim();
@@ -292,17 +297,53 @@ export async function getProductImagesForQuery(query: string, limit = 16): Promi
   const orParts: string[] = [];
   for (const v of variants) orParts.push(`name.ilike.*${v}*`, `type.ilike.*${v}*`);
   orParts.push(`brand.ilike.*${safe}*`);
-  const { data, error } = await supabase
+
+  type ImgRow = { primary_image_url: string | null; image_url: string | null };
+  const IMG_COLS = 'primary_image_url, image_url';
+
+  const nameLane = sb
     .from('products')
-    .select('primary_image_url, image_url')
+    .select(IMG_COLS)
     .eq('is_active', true)
     .or(orParts.join(','))
-    .limit(limit);
-  if (error || !data) return [];
-  const imgs = (data as { primary_image_url: string | null; image_url: string | null }[])
+    .limit(limit)
+    .then(({ data }) => (data ?? []) as ImgRow[], () => [] as ImgRow[]);
+
+  // Vibe lane: find the closest catalog rows by token, then products tagged
+  // with them. Tags are written as the catalog NAME by admin tooling and as
+  // the slug by some older paths, so containment checks both. Best catalog =
+  // most query tokens present in its name (client-side score; the or() match
+  // can't rank).
+  const tagLane = (async (): Promise<ImgRow[]> => {
+    const tokenOr = [...variants].map(v => `name.ilike.*${v}*`).join(',');
+    const { data: cats } = await sb
+      .from('catalogs')
+      .select('slug, name')
+      .or(tokenOr)
+      .limit(6);
+    if (!cats?.length) return [];
+    const tokens = safe.split(' ');
+    const best = [...(cats as { slug: string; name: string }[])]
+      .sort((a, b) =>
+        tokens.filter(t => b.name.includes(t)).length
+        - tokens.filter(t => a.name.includes(t)).length,
+      )[0];
+    const byTag = (tag: string) => sb
+      .from('products')
+      .select(IMG_COLS)
+      .eq('is_active', true)
+      .contains('catalog_tags', [tag])
+      .limit(limit)
+      .then(({ data }) => (data ?? []) as ImgRow[], () => [] as ImgRow[]);
+    const [byName, bySlug] = await Promise.all([byTag(best.name), byTag(best.slug)]);
+    return [...byName, ...bySlug];
+  })().catch(() => [] as ImgRow[]);
+
+  const [named, tagged] = await Promise.all([nameLane, tagLane]);
+  const imgs = [...named, ...tagged]
     .map(r => r.primary_image_url || r.image_url || '')
     .filter(Boolean);
-  return [...new Set(imgs)];
+  return [...new Set(imgs)].slice(0, limit);
 }
 
 export async function getHomeFeed(opts: { ignoreGender?: boolean } = {}): Promise<ProductAd[]> {

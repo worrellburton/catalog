@@ -12,6 +12,7 @@ import { useFollowState } from '~/hooks/useFollowState';
 import { trackImpression } from '~/services/session-tracker';
 import { lookPoster } from '~/services/media-resolver';
 import { useVideoStillRatio } from '~/hooks/useVideoStillRatio';
+import { useVideoPipelineMode } from '~/hooks/useVideoPipeline';
 import { shouldBeVideo } from '~/utils/videoStillSplit';
 import {
   prefetchVideoBytes,
@@ -149,11 +150,15 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
   // by LookOverlay so TrailVideoHost's PoolEntry doesn't re-swap src on
   // handoff (which would force a re-buffer + first-frame black).
   const wantMobile = isMobileViewport() || isSlowConnection();
-  // HLS manifest (adaptive ladder) wins when present — one source for the tile
-  // AND the overlay hero, so TrailVideoHost's handoff reuses the same element
-  // and full-screen ramps to a high rung. LookOverlay picks the SAME url. When
-  // absent, fall back to the progressive mobile/full split (unchanged).
-  const videoUrl = look.hls_url || (wantMobile && look.mobile_video_url ? look.mobile_video_url : fullVideoUrl);
+  // HLS manifest (adaptive ladder) wins when the global pipeline dial is on
+  // 'hls' and this look has one — one source for the tile AND the overlay
+  // hero, so TrailVideoHost's handoff reuses the same element and full-screen
+  // ramps to a high rung. LookOverlay picks the SAME url. In 'mp4' mode
+  // (/admin/dials → Video delivery) or when no manifest exists, fall back to
+  // the progressive mobile/full split (the legacy prewarm-and-cache path).
+  const pipelineMode = useVideoPipelineMode();
+  const activeHlsUrl = pipelineMode === 'hls' ? look.hls_url : undefined;
+  const videoUrl = activeHlsUrl || (wantMobile && look.mobile_video_url ? look.mobile_video_url : fullVideoUrl);
   // Look thumbnail (server-extracted) → look cover image → empty.
   // Used as the <video poster=> so the card paints a real image while
   // the MP4 streams. Empty string disables the attribute.
@@ -258,18 +263,20 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
   useEffect(() => {
     // HLS sources stream segments on demand via hls.js — no full-file byte
     // prewarm needed (or wanted; it'd burn bytes on an MP4 we won't play).
-    if (!inRenderBand || previewOnly || look.hls_url || videoUrl === fullVideoUrl) return;
+    // In 'mp4' pipeline mode activeHlsUrl is undefined, so the legacy
+    // full-res warm runs even for looks that carry a manifest.
+    if (!inRenderBand || previewOnly || activeHlsUrl || videoUrl === fullVideoUrl) return;
     const t = window.setTimeout(() => prefetchVideoBytes(fullVideoUrl), 500);
     return () => window.clearTimeout(t);
-  }, [inRenderBand, previewOnly, videoUrl, fullVideoUrl, look.hls_url]);
+  }, [inRenderBand, previewOnly, videoUrl, fullVideoUrl, activeHlsUrl]);
 
   // HLS playback source: warm the manifest + lowest-rung init/first segments
   // ahead of the play band so hls.js attaches to a cache hit and the first
   // frame paints without a visible load as the card scrolls up.
   useEffect(() => {
     if (!inRenderBand || previewOnly || !allowVideoForThisCard) return;
-    if (look.hls_url) prefetchHlsHead(look.hls_url);
-  }, [inRenderBand, previewOnly, allowVideoForThisCard, look.hls_url]);
+    if (activeHlsUrl) prefetchHlsHead(activeHlsUrl);
+  }, [inRenderBand, previewOnly, allowVideoForThisCard, activeHlsUrl]);
 
   return (
     <div

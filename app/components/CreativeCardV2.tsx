@@ -44,6 +44,7 @@ import { useTrailVideoManager } from '~/components/TrailVideoHost';
 import { withTransform } from '~/utils/supabase-image';
 import { useInViewport } from '~/hooks/useInViewport';
 import { useVideoStillRatio } from '~/hooks/useVideoStillRatio';
+import { useVideoPipelineMode } from '~/hooks/useVideoPipeline';
 import { useProductsImageOnly } from '~/hooks/useProductsImageOnly';
 import CreatorAvatarFollow from './CreatorAvatarFollow';
 import { useShowBrandLogos } from '~/hooks/useShowBrandLogos';
@@ -98,6 +99,9 @@ const CreativeCardV2 = memo(function CreativeCardV2({
   hideCreator = false,
 }: CreativeCardV2Props) {
   const isLook = !!look && !creative;
+  // Subscribe to the global pipeline dial: a flip (hls ⇄ mp4) re-renders the
+  // card so pickPlaybackSource below re-routes to the other delivery path.
+  useVideoPipelineMode();
 
   // ── Normalize inputs into the shape the playback pipeline expects ─────
   // For look mode we derive video/poster/still URLs from the Look fields

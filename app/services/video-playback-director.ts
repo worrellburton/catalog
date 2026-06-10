@@ -63,6 +63,17 @@ const RELEASE_MARGIN_VH_MOBILE = 1.25;
  *  These values cover a full screen + a lookahead row on realistic viewports. */
 const POOL_MAX_DESKTOP = 32;
 const POOL_MAX_MOBILE = 14;
+/** While a detail overlay is open, the background home feed is out of the
+ *  active scope and would normally have ALL its <video>s released — parked
+ *  off-screen (mobile drops their decoded surface) and freed for the overlay's
+ *  own nested feed to repurpose. Returning then cold re-buffers, so the feed
+ *  shows posters ("looks dead") for a beat — worst on HLS, whose re-attach
+ *  overruns the ~360ms close animation. Instead we keep this many of the
+ *  NEAREST background cards alive-but-PAUSED (element + decoded surface kept,
+ *  zero decode while covered) so returning is an instant paused→play resume.
+ *  Bounded well under poolMax so the overlay's nested feed still gets slots. */
+const KEEP_WARM_UNDER_OVERLAY_DESKTOP = 8;
+const KEEP_WARM_UNDER_OVERLAY_MOBILE = 4;
 /** px/s scroll speed above which we skip play() calls (poster only). */
 const SCROLL_VELOCITY_THRESHOLD = 2500;
 /** ms of scroll-quiet before we re-rank after a fast flick. */
@@ -297,7 +308,16 @@ class VideoPlaybackDirector {
     setInterval(() => {
       if (typeof document !== 'undefined' && document.hidden) return;
       for (const id of this.nearIds) {
-        if (this.cards.get(id)?.status !== 'playing') { this.scheduleRank(); break; }
+        // Only an IN-SCOPE near card that isn't playing warrants a retry rank.
+        // Out-of-scope cards behind an open overlay are intentionally not
+        // playing — released to 'idle' or held 'paused' by keep-warm — so they
+        // must NOT keep the heartbeat awake (that would defeat its idle-quiet).
+        // No overlay open ⇒ activeScope() is null ⇒ inActiveScope() is always
+        // true ⇒ behaviour is unchanged.
+        if (this.cards.get(id)?.status !== 'playing' && this.inActiveScope(id)) {
+          this.scheduleRank();
+          break;
+        }
       }
     }, 1500);
 
@@ -629,11 +649,39 @@ class VideoPlaybackDirector {
       ranked.push({ id, entry, distance: this.distanceToViewport(rect) });
     }
 
+    // While an overlay scope is active, keep the NEAREST few background cards
+    // alive-but-paused instead of releasing them, so returning to the feed is
+    // an instant paused→play resume (decoded surface retained) rather than a
+    // cold re-buffer that shows posters for a beat. Bounded by KEEP_WARM_* so
+    // the overlay's own nested feed still gets pool slots. The kept cards sit
+    // out of the active scope, so step 2 below never re-plays them while the
+    // overlay is up; the moment beginScopeExit/close clears the scope they
+    // fall into wantsPlay and resume from their retained frame.
+    const keepWarm = new Set<string>();
+    if (this.activeScope() !== null) {
+      const warmBudget = isMobileViewport() ? KEEP_WARM_UNDER_OVERLAY_MOBILE : KEEP_WARM_UNDER_OVERLAY_DESKTOP;
+      const warmCandidates = ranked
+        .filter(r => r.entry.videoEl && !this.inActiveScope(r.id) && r.distance <= playMargin)
+        .sort((a, b) => a.distance - b.distance)
+        .slice(0, warmBudget);
+      for (const { id } of warmCandidates) keepWarm.add(id);
+    }
+
     // 1. Release: anything past releaseMargin — OR outside the active overlay
-    //    scope (e.g. the home feed sitting blurred behind an open overlay) —
-    //    gives its slot back so it stops decoding.
+    //    scope (e.g. the home feed behind an open overlay) — gives its slot
+    //    back so it stops decoding. EXCEPT the keep-warm set, which we pause in
+    //    place (element + surface retained) for an instant resume on return.
     for (const { id, entry, distance } of ranked) {
-      if ((distance >= releaseMargin || !this.inActiveScope(id)) && entry.videoEl) {
+      if (!entry.videoEl) continue;
+      if (keepWarm.has(id)) {
+        if (!entry.videoEl.paused) {
+          try { entry.videoEl.pause(); } catch { /* ignore */ }
+          entry.status = 'paused';
+          this.emit(id, 'paused');
+        }
+        continue;
+      }
+      if (distance >= releaseMargin || !this.inActiveScope(id)) {
         this.releaseVideoEl(id, entry.videoEl);
         entry.videoEl = null;
         entry.status = 'idle';
@@ -665,11 +713,13 @@ class VideoPlaybackDirector {
       // Need a slot. Prefer a free slot that ALREADY holds this card's clip
       // — after a detail overlay released the feed, this lets a card reclaim
       // its own element (no src swap, no reload, no black flash, instant
-      // resume from where it paused). Fall back to any free slot; if none,
-      // grow up to poolMax(); if at cap, evict the most-distant currently-
-      // assigned card that is farther than this one.
+      // resume from where it paused). Then an EMPTY free slot — so an overlay's
+      // nested feed clobbers blank slots before the parked home-feed clips,
+      // leaving those reclaimable on return. Then any free slot; if none, grow
+      // up to poolMax(); if at cap, evict the most-distant assigned card.
       let slot =
         this.pool.find(p => p.assignedTo === null && getVideoSource(p.el) === entry.videoUrl) ||
+        this.pool.find(p => p.assignedTo === null && !getVideoSource(p.el)) ||
         this.pool.find(p => p.assignedTo === null);
       if (!slot && this.pool.length < max) {
         slot = { el: this.createVideoEl(), assignedTo: null };
