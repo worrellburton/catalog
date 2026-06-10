@@ -152,6 +152,57 @@ export function useForceSim(
     return () => cancelAnimationFrame(frameRef.current);
   }, [links, width, height]);
 
+  /** Organize: deterministic tidy radial layout. Every branch gets an
+   *  angular wedge (blend of equal-share and leaf-count share, so big
+   *  branches breathe but depth-1 nodes stay roughly evenly spaced);
+   *  leaves spread evenly inside their wedge, parents sit at their
+   *  wedge's midpoint. One click = even spacing + no branch overlap. */
+  const organize = () => {
+    const bodies = bodiesRef.current;
+    const kids = new Map<string, string[]>();
+    for (const l of links) kids.set(l.source, [...(kids.get(l.source) ?? []), l.target]);
+    const leafCount = (id: string): number => {
+      const c = kids.get(id) ?? [];
+      if (c.length === 0) return 1;
+      return c.reduce((acc, k) => acc + leafCount(k), 0);
+    };
+    const angleOf = (id: string): number => {
+      const b = bodies.get(id);
+      if (!b) return 0;
+      return Math.atan2(b.y - height / 2, b.x - width / 2);
+    };
+    const cx = width / 2;
+    const cy = height / 2;
+    const ring = gapRef.current;
+    const place = (id: string, a0: number, a1: number, depth: number) => {
+      const mid = (a0 + a1) / 2;
+      const b = bodies.get(id);
+      if (b && depth > 0) {
+        b.x = cx + Math.cos(mid) * depth * ring;
+        b.y = cy + Math.sin(mid) * depth * ring;
+        b.vx = 0; b.vy = 0;
+      }
+      // Children keep their current angular ORDER (least travel), then
+      // split the wedge: half equally, half by subtree size.
+      const c = [...(kids.get(id) ?? [])].sort((x, y) => angleOf(x) - angleOf(y));
+      if (c.length === 0) return;
+      const total = c.reduce((acc, k) => acc + leafCount(k), 0);
+      let cursor = a0;
+      for (const k of c) {
+        const span = (a1 - a0) * (0.5 / c.length + 0.5 * (leafCount(k) / total));
+        place(k, cursor, cursor + span, depth + 1);
+        cursor += span;
+      }
+    };
+    // Root owns the full circle, starting at 12 o'clock. '__root__' is the
+    // graph's synthetic centre id (TypeBrainGraph ROOT_ID).
+    place('__root__', -Math.PI / 2, Math.PI * 1.5, 0);
+    // Barely-warm alpha: nodes are already exactly placed — just enough
+    // life for satellites/edges to repaint without re-scrambling.
+    alphaRef.current = 0.02;
+    setPositions(new Map([...bodies.entries()].map(([id, b]) => [id, { x: b.x, y: b.y }])));
+  };
+
   /** Drag API: pin under the pointer and freeze everyone else — neighbours
    *  hold position so the drop target can't drift away mid-gesture.
    *  Release unfreezes + reheats so the graph settles back onto the rings. */
@@ -169,5 +220,5 @@ export function useForceSim(
     alphaRef.current = Math.max(alphaRef.current, 0.5);
   };
 
-  return { positions, dragTo, release, ringRadii };
+  return { positions, dragTo, release, ringRadii, organize };
 }
