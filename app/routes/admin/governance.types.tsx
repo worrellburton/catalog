@@ -439,39 +439,25 @@ export default function AdminGovernanceTypes() {
         <ParticleBackground />
       </div>
 
-      {/* div, not <header> — the consumer header.css styles the header ELEMENT
-          globally (position:fixed), which would yank this out of flow. */}
-      <div className="gov-head">
-        <div>
-          <p className="gov-kicker">Governance</p>
-          <h1>Types — set up for more possibilities</h1>
-          <p className="gov-sub">
-            One editable structure for every product type. Drag to rearrange, double-click to
-            rename, marquee to select many. Gender is a color, not a branch — recolor a
-            selection and its products follow. Changes are live; Undo restores exact values.
-          </p>
-        </div>
-        <div className="gov-controls">
-          <div className="gov-controls-row">
-            <button type="button" className="gov-ghost" disabled={!canUndo} onClick={handleUndo}>
-              ↩ Undo
-            </button>
-            <button type="button" className="gov-ghost" onClick={() => setLogOpen(v => !v)}>
-              History{history.length ? ` (${history.length})` : ''}
-            </button>
-            <button
-              type="button"
-              className={`gov-toggle${showProducts ? ' is-on' : ''}`}
-              onClick={() => setShowProducts(v => !v)}
-            >
-              <span className="gov-toggle-dot" />
-              Products {showProducts ? 'on' : 'off'}
-            </button>
-          </div>
-        </div>
-      </div>
-
+      {/* No page heading (founder's call) — the brain IS the page; the
+          controls float inside the canvas instead. */}
       <div className="gov-canvas">
+        <div className="gov-controls-row gov-canvas-controls">
+          <button type="button" className="gov-ghost" disabled={!canUndo} onClick={handleUndo}>
+            ↩ Undo
+          </button>
+          <button type="button" className="gov-ghost" onClick={() => setLogOpen(v => !v)}>
+            History{history.length ? ` (${history.length})` : ''}
+          </button>
+          <button
+            type="button"
+            className={`gov-toggle${showProducts ? ' is-on' : ''}`}
+            onClick={() => setShowProducts(v => !v)}
+          >
+            <span className="gov-toggle-dot" />
+            Products {showProducts ? 'on' : 'off'}
+          </button>
+        </div>
         <TypeBrainGraph
           nodes={brainNodes}
           satellites={satellites}

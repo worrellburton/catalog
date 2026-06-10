@@ -560,3 +560,12 @@ html.gov-void .tb-wrap {
   opacity: 0.9;
   pointer-events: none;
 }
+
+/* ── Headerless types page: controls float in the canvas ── */
+.gov-types .gov-canvas { margin: 14px 26px 16px; }
+.gov-canvas-controls {
+  position: absolute;
+  top: 14px;
+  right: 16px;
+  z-index: 6;
+}
