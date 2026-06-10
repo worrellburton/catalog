@@ -511,3 +511,52 @@ html.gov-void .tb-wrap {
   background: rgba(8, 8, 10, 0.35);
   border-color: rgba(255, 255, 255, 0.08);
 }
+
+/* ── Depth guide rings ── */
+.tb-ring {
+  fill: none;
+  stroke: rgba(255, 255, 255, 0.055);
+  stroke-width: 1;
+  pointer-events: none;
+}
+
+/* ── "Move to…" batch reattach ── */
+.gov-bar-divider {
+  width: 1px;
+  height: 16px;
+  background: rgba(255, 255, 255, 0.12);
+  margin: 0 2px;
+}
+.gov-moveto {
+  font: inherit;
+  font-size: 12px;
+  font-weight: 700;
+  color: #818cf8;
+  background: rgba(129, 140, 248, 0.08);
+  border: 1px solid rgba(129, 140, 248, 0.35);
+  border-radius: 999px;
+  padding: 5px 12px;
+  cursor: pointer;
+  transition: border-color 120ms, background 120ms;
+}
+.gov-moveto:hover { border-color: #818cf8; }
+.gov-moveto.is-armed {
+  color: #0a0a0a;
+  background: #818cf8;
+  animation: gov-armed 1.1s ease-in-out infinite;
+}
+@keyframes gov-armed {
+  50% { box-shadow: 0 0 14px rgba(129, 140, 248, 0.55); }
+}
+.tb-wrap.is-picking { cursor: crosshair; }
+.tb-wrap.is-picking .tb-node { cursor: crosshair; }
+
+/* ── Type icons (drawn nightly by generate-type-icons) ── */
+.tb-icon {
+  fill: none;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0.9;
+  pointer-events: none;
+}

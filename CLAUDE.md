@@ -1184,6 +1184,7 @@ of truth. Migration numbers are sequential (most recent: `019_…`).
 | `catalog-brainstorm` | Claude-generated catalog queries | `ANTHROPIC_API_KEY` |
 | `manage-looks` | Look CRUD (service-role, JWT-auth'd) | — |
 | `scrape-product` | URL → product scrape | — |
+| `generate-type-icons` | Draws/improves SVG line icons for `product_types` (pg_cron re-runs it daily at 10:00 UTC ≈ 6 a.m. ET, mode `improve`) | `ANTHROPIC_API_KEY` |
 
 Source lives under `supabase/functions/<name>/index.ts`. Prefer
 `mcp__supabase__deploy_edge_function` over the CLI.

@@ -23,6 +23,9 @@ export interface TypeNode {
   /** Gender is an ATTRIBUTE rendered as node color, not a tree node
    *  (founder's call). Null inherits the nearest ancestor's gender. */
   gender: 'male' | 'female' | 'unisex' | null;
+  /** 24x24 path data drawn by the generate-type-icons function (re-drawn
+   *  daily at 6 a.m. by pg_cron, each pass improving on the last). */
+  iconPath: string | null;
 }
 
 export interface GovernanceProduct {
@@ -65,12 +68,13 @@ export async function fetchTypeTree(): Promise<TypeNode[]> {
   if (!supabase) return [];
   const { data, error } = await supabase
     .from('product_types')
-    .select('id, name, parent_id, sort, color, gender')
+    .select('id, name, parent_id, sort, color, gender, icon_path')
     .order('sort', { ascending: true });
   if (error || !data) return [];
   return (data as { id: string; name: string; parent_id: string | null; sort: number; color: string | null;
-    gender: TypeNode['gender'] }[])
-    .map(r => ({ id: r.id, name: r.name, parentId: r.parent_id, sort: r.sort, color: r.color, gender: r.gender }));
+    gender: TypeNode['gender']; icon_path: string | null }[])
+    .map(r => ({ id: r.id, name: r.name, parentId: r.parent_id, sort: r.sort, color: r.color, gender: r.gender,
+      iconPath: r.icon_path }));
 }
 
 export async function fetchGovernanceProducts(): Promise<GovernanceProduct[]> {
@@ -141,10 +145,11 @@ export async function createTypeNode(name: string, parentId: string | null): Pro
   const { data, error } = await supabase
     .from('product_types')
     .insert({ name, parent_id: parentId, sort: 999 })
-    .select('id, name, parent_id, sort, color, gender')
+    .select('id, name, parent_id, sort, color, gender, icon_path')
     .single();
   if (error || !data) return null;
   const r = data as { id: string; name: string; parent_id: string | null; sort: number; color: string | null;
-    gender: TypeNode['gender'] };
-  return { id: r.id, name: r.name, parentId: r.parent_id, sort: r.sort, color: r.color, gender: r.gender };
+    gender: TypeNode['gender']; icon_path: string | null };
+  return { id: r.id, name: r.name, parentId: r.parent_id, sort: r.sort, color: r.color, gender: r.gender,
+    iconPath: r.icon_path };
 }

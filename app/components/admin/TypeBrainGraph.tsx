@@ -25,7 +25,9 @@ export interface BrainNode {
   depth: number;             // root = 0
   color: string;             // resolved lane color
   count: number;             // directly attached products
-  locked: boolean;           // gender lanes — no rename/move/delete
+  locked: boolean;           // synthetic nodes (unassigned) — no edits
+  /** 24x24 icon path data, drawn nightly by generate-type-icons. */
+  icon?: string | null;
 }
 
 export interface BrainProduct { id: string; name: string; image: string | null; }
@@ -43,6 +45,10 @@ interface Props {
   onAddChild: (parentId: string) => void;
   onAssignProducts: (productIds: string[], nodeId: string) => void;
   onOpenProduct: (productId: string) => void;
+  /** Armed by the selection bar's "Move to…": the next node click becomes
+   *  the re-parent target for the whole selection instead of a selection. */
+  pickMode?: boolean;
+  onPickTarget?: (targetId: string) => void;
 }
 
 const ROOT_ID = '__root__';
@@ -67,7 +73,7 @@ export default function TypeBrainGraph(p: Props) {
   const simLinks = useMemo<SimLink[]>(() => p.nodes.map(n => ({
     source: n.parentId ?? ROOT_ID, target: n.id,
   })), [p.nodes]);
-  const { positions, dragTo, release } = useForceSim(simNodes, simLinks, size.w, size.h);
+  const { positions, dragTo, release, ringRadii } = useForceSim(simNodes, simLinks, size.w, size.h);
 
   const byId = useMemo(() => new Map(p.nodes.map(n => [n.id, n])), [p.nodes]);
   const descendants = useMemo(() => {
@@ -111,6 +117,7 @@ export default function TypeBrainGraph(p: Props) {
 
   const onNodeDown = (id: string, ev: React.PointerEvent) => {
     ev.stopPropagation();
+    if (p.pickMode && p.onPickTarget) { p.onPickTarget(id); return; }
     (ev.target as Element).setPointerCapture?.(ev.pointerId);
     const inSel = p.selection.has(id);
     const ids = inSel ? [...p.selection] : [id];
@@ -214,7 +221,7 @@ export default function TypeBrainGraph(p: Props) {
   const singleSelPos = singleSel ? positions.get(singleSel.id) : null;
 
   return (
-    <div ref={wrapRef} className="tb-wrap">
+    <div ref={wrapRef} className={`tb-wrap${p.pickMode ? ' is-picking' : ''}`}>
       <svg
         className="tb-svg"
         width={size.w}
@@ -223,6 +230,12 @@ export default function TypeBrainGraph(p: Props) {
         onPointerMove={onMove}
         onPointerUp={onUp}
       >
+        {/* Depth guide rings — layer N of the tree IS ring N */}
+        {ringRadii.map((r, i) => (
+          <circle key={`ring-${i}`} className="tb-ring"
+            cx={size.w / 2} cy={size.h / 2} r={r} />
+        ))}
+
         {/* Edges */}
         {p.nodes.map(n => {
           const a = positions.get(n.parentId ?? ROOT_ID);
@@ -257,6 +270,17 @@ export default function TypeBrainGraph(p: Props) {
               <circle cx={pos.x} cy={pos.y} r={r}
                 fill={n.color} fillOpacity={n.depth === 1 ? 0.22 : 0.16}
                 stroke={n.color} strokeWidth={selected || isDrop ? 2.5 : 1.4} />
+              {n.icon && (() => {
+                const s = r * 1.15; // icon box inside the circle
+                return (
+                  <path
+                    className="tb-icon"
+                    d={n.icon}
+                    stroke={n.color}
+                    transform={`translate(${pos.x - s / 2}, ${pos.y - s / 2}) scale(${s / 24})`}
+                  />
+                );
+              })()}
               <text x={pos.x} y={pos.y + r + 14} fill={n.color}>{n.name}</text>
             </g>
           );

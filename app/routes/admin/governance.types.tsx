@@ -86,6 +86,8 @@ export default function AdminGovernanceTypes() {
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [logOpen, setLogOpen] = useState(false);
   const [toast, setToast] = useState<{ label: string; key: number } | null>(null);
+  // "Move to…" armed: the next node click re-parents the whole selection.
+  const [pickMode, setPickMode] = useState(false);
   const toastTimer = useRef(0);
   // Sequential write queue — rapid gestures stay ordered.
   const queue = useRef<Promise<unknown>>(Promise.resolve());
@@ -182,11 +184,12 @@ export default function AdminGovernanceTypes() {
       color: GENDER_COLORS[genders.get(n.id) ?? ''] ?? NEUTRAL,
       count: attach.get(n.id)?.length ?? 0,
       locked: false,
+      icon: n.iconPath,
     }));
     if (showProducts && unassigned.length) {
       nodes.push({
         id: UNASSIGNED_ID, name: 'unassigned', parentId: null, depth: 1,
-        color: '#f59e0b', count: unassigned.length, locked: true,
+        color: '#f59e0b', count: unassigned.length, locked: true, icon: null,
       });
     }
     return nodes;
@@ -417,6 +420,14 @@ export default function AdminGovernanceTypes() {
     window.open(`/p/${productSlug(prod)}`, '_blank', 'noopener');
   };
 
+  // Escape disarms a pending "Move to…".
+  useEffect(() => {
+    if (!pickMode) return;
+    const onKey = (ev: KeyboardEvent) => { if (ev.key === 'Escape') setPickMode(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [pickMode]);
+
   const canUndo = history.some(h => !h.undone);
   const editableSelection = [...selection].filter(id => id !== UNASSIGNED_ID);
 
@@ -466,7 +477,12 @@ export default function AdminGovernanceTypes() {
           satellites={satellites}
           selection={selection}
           showProducts={showProducts}
-          onSelect={setSelection}
+          onSelect={(ids) => { setPickMode(false); setSelection(ids); }}
+          pickMode={pickMode}
+          onPickTarget={(targetId) => {
+            setPickMode(false);
+            handleReparent(editableSelection, targetId);
+          }}
           onReparent={handleReparent}
           onRename={handleRename}
           onDelete={handleDelete}
@@ -478,6 +494,11 @@ export default function AdminGovernanceTypes() {
         {editableSelection.length > 0 && (
           <div className="gov-genderbar">
             <span>{editableSelection.length} selected</span>
+            <button type="button" className={`gov-moveto${pickMode ? ' is-armed' : ''}`}
+              onClick={() => setPickMode(v => !v)}>
+              {pickMode ? 'click a target node…' : 'Move to…'}
+            </button>
+            <em className="gov-bar-divider" aria-hidden="true" />
             {(['male', 'female', 'unisex'] as const).map(g => (
               <button key={g} type="button" style={{ ['--c' as string]: GENDER_COLORS[g] }}
                 onClick={() => handleSetGender(editableSelection, g)}>
