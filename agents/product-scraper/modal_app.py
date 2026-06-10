@@ -448,43 +448,216 @@ def update_brand_profile(brand: str, fit_intelligence: dict, supabase) -> None:
 
 
 # --- Alternate URL finder for bot-protected merchants --------------------
+#
+# When a merchant blocks the scrape we try to recover a scrapeable URL for the
+# SAME product on a different retailer. The hard part is identity: a loose
+# keyword search ("tencel frame rug t6948") happily returns a *different* rug,
+# and for private-label/DTC brands (West Elm, etc.) no true alternate exists at
+# all. So every candidate must clear a strict verification gate before we swap
+# the URL — cheap name-token overlap first, then an AI same-product check.
+# If nothing clears the bar we return None and the caller fails silently
+# (keeps the original URL, never substitutes a wrong product).
+
+# Tokens that carry no product-identity signal, ignored by the overlap filter.
+_GENERIC_TOKENS = {
+    "the", "a", "an", "and", "or", "for", "with", "in", "of", "by", "to",
+    "new", "set", "pack", "size", "color", "colour", "official", "store",
+    "shop", "buy", "sale", "online", "free", "shipping", "piece", "pcs",
+}
+
+# Bar for swapping in an alternate URL. A candidate must clear BOTH the cheap
+# name-overlap pre-filter and the AI same-product confidence check. The
+# confidence floor is deliberately high — a wrong-product substitution is far
+# worse than failing to find an alternate (false negatives are acceptable).
+_ALT_MIN_NAME_OVERLAP = 0.30
+_ALT_MIN_CONFIDENCE = 0.85
+_ALT_MAX_VERIFY = 4  # cap AI verification calls per search pass
 
 
-def _query_from_url_and_row(blocked_url: str, row: dict) -> str:
-    """Build the best search query for a blocked product.
+def _slug_identity(blocked_url: str) -> tuple[str, str]:
+    """Pull a human product name + SKU/model code from a product URL slug.
 
-    Priority: name+brand from the DB row (most precise), then URL slug.
-    The slug is the longest hyphen-delimited path segment with pure-numeric
-    segments discarded.
+    e.g. ".../products/tencel-frame-rug-t6948/" -> ("tencel frame rug t6948", "t6948")
+    Returns (name, sku); either may be "".
     """
     from urllib.parse import urlparse
-
-    name = (row.get("name") or "").strip()
-    brand = (row.get("brand") or "").strip()
-    if name:
-        return f"{brand} {name}".strip()[:120]
 
     try:
         path = urlparse(blocked_url).path
     except Exception:
-        return ""
+        return "", ""
     segs = []
     for seg in path.split("/"):
         clean = seg.replace("-", " ").replace("_", " ").strip()
         if clean and not clean.replace(" ", "").isdigit():
             segs.append(clean)
-    return max(segs, key=len)[:120] if segs else ""
+    if not segs:
+        return "", ""
+    slug = max(segs, key=len).strip()
+    # A SKU/model code is an alphanumeric token mixing letters and digits
+    # (e.g. "t6948", "ab12cd") — the kind retailers append to slugs.
+    sku = ""
+    for tok in slug.split():
+        if any(c.isdigit() for c in tok) and any(c.isalpha() for c in tok) and len(tok) >= 3:
+            sku = tok
+            break
+    return slug[:120], sku
+
+
+def _brand_from_domain(domain: str) -> str:
+    """Best-effort retailer name from a bare domain (westelm.com -> 'westelm')."""
+    if not domain:
+        return ""
+    return domain.split(".")[0].replace("-", " ").strip()
+
+
+def _expected_identity(blocked_url: str, row: dict, blocked_domain: str) -> dict:
+    """Ground-truth identity of the blocked product, used to verify alternates.
+
+    Prefers the DB row name+brand (filled by a prior scrape) and falls back to
+    the URL slug. The retailer/SKU are recorded only for the verifier — they are
+    deliberately kept OUT of the search query, since injecting the retailer name
+    ("westelm") just steers Google back to the blocked site.
+
+    `house_brand` flags a product whose KNOWN brand is the retailer's own label
+    (e.g. a "West Elm" item on westelm.com). Such DTC/private-label goods are
+    sold only by that retailer, so no other-domain alternate can be valid — the
+    finder short-circuits. Only set when the brand came from the DB row; the
+    domain-derived brand always equals the retailer and would false-trigger.
+    """
+    import re
+
+    row_name = (row.get("name") or "").strip()
+    row_brand = (row.get("brand") or "").strip()
+    slug_name, sku = _slug_identity(blocked_url)
+
+    def _norm(s: str) -> str:
+        return re.sub(r"[^a-z0-9]", "", (s or "").lower())
+
+    retailer_base = _norm(_brand_from_domain(blocked_domain))
+    brand_norm = _norm(row_brand)
+    # Exact match always counts; prefix match only when the shorter string is
+    # long enough to be distinctive (avoids "on"/"gap" coincidentally prefixing
+    # an unrelated retailer domain and skipping a legitimate alternate search).
+    _prefix_ok = (
+        min(len(brand_norm), len(retailer_base)) >= 5
+        and (brand_norm.startswith(retailer_base) or retailer_base.startswith(brand_norm))
+    )
+    house_brand = bool(brand_norm) and bool(retailer_base) and (
+        brand_norm == retailer_base or _prefix_ok
+    )
+
+    query = (f"{row_brand} {row_name}".strip() if row_name else slug_name)[:120]
+    return {
+        "name": row_name or slug_name,
+        "brand": row_brand or _brand_from_domain(blocked_domain),
+        "sku": sku,
+        "retailer": blocked_domain,
+        "house_brand": house_brand,
+        "query": query,
+    }
+
+
+def _name_tokens(text: str) -> set:
+    import re
+    toks = re.findall(r"[a-z0-9]+", (text or "").lower())
+    return {t for t in toks if t not in _GENERIC_TOKENS and len(t) > 1}
+
+
+def _name_overlap(expected_name: str, candidate_name: str) -> float:
+    """Cheap pre-filter: Jaccard overlap of distinctive name tokens (0..1)."""
+    a = _name_tokens(expected_name)
+    b = _name_tokens(candidate_name)
+    if not a or not b:
+        return 0.0
+    return len(a & b) / len(a | b)
+
+
+def _verify_same_product(expected: dict, candidate: dict) -> tuple[bool, float]:
+    """Ask Claude whether a search-result candidate is the SAME product.
+
+    Returns (is_match, confidence). Conservative by design: any API/parse
+    failure returns (False, 0.0) so we never substitute on uncertainty.
+    """
+    import os, re, json
+    import anthropic
+
+    prompt = f"""You verify whether two product listings are the EXACT same physical product: the SAME brand AND the SAME specific model/style/colorway. Sharing only a category (rug, fabric, shoe), a material (tencel, leather), or a fiber family is NOT a match.
+
+ORIGINAL product (the one we failed to scrape):
+- Retailer: {expected.get('retailer') or 'unknown'}
+- Brand: {expected.get('brand') or 'unknown'}
+- Name: {expected.get('name') or 'unknown'}
+- SKU/model: {expected.get('sku') or 'none'}
+
+CANDIDATE product (a listing on a DIFFERENT domain):
+- Source: {candidate.get('source') or 'unknown'}
+- Brand: {candidate.get('brand') or 'unknown'}
+- Name: {candidate.get('name') or 'unknown'}
+- Price: {candidate.get('price') or 'unknown'}
+
+Answer match=false unless ALL of these hold:
+1. Same brand AND same specific model/style. Different styles, finishes, colorways, or fiber compositions of the same brand are DIFFERENT products (e.g. Tencel Lyocell ≠ Tencel Rayon; "Frame Rug" ≠ "Boho Rug").
+2. The match does NOT rest on a shared material or broad category alone — two different "tencel" rugs are NOT a match.
+3. House-brand / private-label / DTC: if the original brand is the retailer's own label (the brand name matches the retailer or store, e.g. a "West Elm" item sold on westelm.com), it is sold ONLY by that retailer. Any candidate on a different domain is a third-party reseller or look-alike, NOT a valid alternate — answer false.
+4. A SKU/model code that appears only in promotional or marketing text ("T6948 Clearance") is a coincidental match, not proof of identity.
+
+When unsure, answer false. Substituting a wrong product is far worse than finding none.
+
+Respond with ONLY a JSON object: {{"match": true|false, "confidence": 0.0-1.0, "reason": "<short>"}}"""
+
+    try:
+        client = anthropic.Anthropic(api_key=os.environ["ANTHROPIC_API_KEY"])
+        response = client.messages.create(
+            model="claude-sonnet-4-5-20250929",
+            max_tokens=200,
+            messages=[{"role": "user", "content": prompt}],
+        )
+        text = response.content[0].text.strip()
+        m = re.search(r"\{.*\}", text, re.S)
+        if not m:
+            return False, 0.0
+        data = json.loads(m.group(0))
+        return bool(data.get("match")), float(data.get("confidence") or 0.0)
+    except Exception as e:
+        print(f"  ⚠️  alt-URL verify error: {e}")
+        return False, 0.0
+
+
+def _select_verified_alternate(product_id: str, expected: dict, candidates: list) -> str | None:
+    """Return the URL of the first candidate confirmed to be the SAME product.
+
+    Candidates are pre-filtered + ranked by name overlap, then the top few are
+    AI-verified. Returns None if none clear the bar — caller fails silently.
+
+    Ranking is by name-token overlap only. The slug SKU is the *retailer's*
+    internal code (rarely carried by a genuine reseller), so it is not used to
+    bypass the overlap floor — it would only add false-positive surface. It is
+    still passed to the AI verifier as identity context.
+    """
+    scored = [
+        (_name_overlap(expected.get("name", ""), c.get("name") or ""), c)
+        for c in candidates
+    ]
+    scored = [(ov, c) for ov, c in scored if ov >= _ALT_MIN_NAME_OVERLAP]
+    scored.sort(key=lambda x: x[0], reverse=True)
+
+    for _, c in scored[:_ALT_MAX_VERIFY]:
+        match, conf = _verify_same_product(expected, c)
+        if match and conf >= _ALT_MIN_CONFIDENCE:
+            print(f"  ✅ [{product_id}] Verified alternate (conf={conf:.2f}): {c.get('url')}")
+            return c.get("url")
+        print(f"  ✗ [{product_id}] Rejected alt (match={match} conf={conf:.2f}): {c.get('name')!r}")
+    return None
 
 
 def _find_alternate_url(product_id: str, blocked_url: str, supabase):
-    """Find a scrapeable alternate URL for a product whose site blocked us.
+    """Find a *verified* scrapeable alternate URL for a blocked product.
 
-    Tries two sources in order:
-      1. Google Shopping via product-search edge function (SerpAPI).
-      2. Amazon via rainforest-product-lookup edge function.
-
-    Returns the first URL on a different domain that is not a Google URL.
-    Returns None if neither source finds anything -- caller marks row failed.
+    Searches two sources — Google Shopping (SerpAPI) then Amazon (Rainforest) —
+    but only returns a URL that the verification gate confirms is the SAME
+    product. Returns None if nothing clears the bar; the caller then fails
+    silently (keeps the original URL, no wrong-product substitution).
     """
     import os, requests
     from urllib.parse import urlparse
@@ -510,47 +683,61 @@ def _find_alternate_url(product_id: str, blocked_url: str, supabase):
         row = (supabase.table("products").select("name,brand").eq("id", product_id).single().execute().data) or {}
     except Exception:
         pass
-    query = _query_from_url_and_row(blocked_url, row)
-    if not query:
+
+    expected = _expected_identity(blocked_url, row, blocked_domain)
+    if not expected["query"]:
         return None
-    print(f"  🔎 [{product_id}] Searching for alt URL: {query!r}")
+    # A retailer's own house/private-label product has no valid alternate on any
+    # other domain — don't even search (avoids matching third-party resellers).
+    if expected["house_brand"]:
+        print(f"  🚫 [{product_id}] {expected['brand']!r} is {blocked_domain}'s own "
+              f"label — no valid alternate, failing silently")
+        return None
+    print(f"  🔎 [{product_id}] Searching alt URL: {expected['query']!r} "
+          f"(verify against {expected['name']!r})")
 
-    # Pass 1: Google Shopping (SerpAPI)
-    try:
-        r = requests.post(
-            f"{sb_url}/functions/v1/product-search",
-            headers=headers, json={"query": query}, timeout=45,
-        )
-        if r.ok:
-            for p in (r.json() or {}).get("products") or []:
-                u = (p.get("url") or "").strip()
-                d = _domain(u)
-                if u and d and d != blocked_domain and "google." not in d:
-                    print(f"  🛒 [{product_id}] Google Shopping alt URL: {u}")
-                    return u
-        else:
-            print(f"  ⚠️  [{product_id}] product-search HTTP {r.status_code}: {r.text[:100]}")
-    except Exception as e:
-        print(f"  ⚠️  [{product_id}] product-search failed: {e}")
+    def _collect(endpoint: str, payload: dict, label: str) -> list:
+        out = []
+        try:
+            r = requests.post(
+                f"{sb_url}/functions/v1/{endpoint}",
+                headers=headers, json=payload, timeout=45,
+            )
+            if r.ok:
+                for p in (r.json() or {}).get("products") or []:
+                    u = (p.get("url") or "").strip()
+                    d = _domain(u)
+                    if u and d and d != blocked_domain and "google." not in d:
+                        out.append({
+                            "url": u,
+                            "name": p.get("name") or p.get("title") or "",
+                            "brand": p.get("brand") or "",
+                            "price": p.get("price") or "",
+                            "source": p.get("source") or d,
+                        })
+            else:
+                print(f"  ⚠️  [{product_id}] {label} HTTP {r.status_code}: {r.text[:100]}")
+        except Exception as e:
+            print(f"  ⚠️  [{product_id}] {label} failed: {e}")
+        return out
 
-    # Pass 2: Amazon via Rainforest
-    try:
-        r = requests.post(
-            f"{sb_url}/functions/v1/rainforest-product-lookup",
-            headers=headers, json={"keyword": query, "limit": 5}, timeout=30,
-        )
-        if r.ok:
-            for p in (r.json() or {}).get("products") or []:
-                u = (p.get("url") or "").strip()
-                d = _domain(u)
-                if u and d and d != blocked_domain and "google." not in d:
-                    print(f"  📦 [{product_id}] Rainforest/Amazon alt URL: {u}")
-                    return u
-        else:
-            print(f"  ⚠️  [{product_id}] rainforest-lookup HTTP {r.status_code}: {r.text[:100]}")
-    except Exception as e:
-        print(f"  ⚠️  [{product_id}] rainforest-lookup failed: {e}")
+    # Pass 1: Google Shopping (SerpAPI) — verified before accepting.
+    alt = _select_verified_alternate(
+        product_id, expected,
+        _collect("product-search", {"query": expected["query"]}, "product-search"),
+    )
+    if alt:
+        return alt
 
+    # Pass 2: Amazon via Rainforest — same verification gate.
+    alt = _select_verified_alternate(
+        product_id, expected,
+        _collect("rainforest-product-lookup", {"keyword": expected["query"], "limit": 5}, "rainforest-lookup"),
+    )
+    if alt:
+        return alt
+
+    print(f"  🚫 [{product_id}] No verified alternate for {expected['name']!r} — failing silently")
     return None
 
 
@@ -794,8 +981,10 @@ def scrape_and_update(product_id: str, url: str, is_fallback: bool = False):
 
         # Automatic alternate-URL fallback for blocked merchants.
         # Only runs on the first scrape attempt (not is_fallback) to avoid loops.
-        # We never fill data from search results (quality is unreliable) -- only
-        # the URL is used; the re-queued scrape provides the real product data.
+        # _find_alternate_url only returns a URL that the verification gate
+        # confirms is the SAME product; data is never filled from search results
+        # (the re-queued scrape provides the real product data). If no verified
+        # match exists we keep the original URL and fail silently.
         if is_blocked and not is_fallback:
             alt_url = None
             try:
@@ -812,13 +1001,14 @@ def scrape_and_update(product_id: str, url: str, is_fallback: bool = False):
                 print(f"🛟 [{product_id}] Blocked — re-scraping alternate URL: {alt_url}")
                 scrape_and_update.spawn(product_id, alt_url, is_fallback=True)
                 return
-            # No alternate URL found -- mark as failed with a clear label.
+            # No verified-same-product alternate -- keep the original URL and
+            # fail silently (never substitute a different product).
             supabase.table("products").update({
                 "scrape_status": "failed",
                 "scraped_at": datetime.now(timezone.utc).isoformat(),
-                "scrape_error": f"SITE_BLOCKED: {err_msg[:300]} — no scrapeable alternate URL found",
+                "scrape_error": f"SITE_BLOCKED: {err_msg[:300]} — no verified alternate product found",
             }).eq("id", product_id).execute()
-            print(f"🚫 [{product_id}] Blocked — no alternate URL found, marking failed")
+            print(f"🚫 [{product_id}] Blocked — no verified alternate, marking failed")
             return
 
         supabase.table("products").update({
