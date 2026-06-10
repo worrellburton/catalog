@@ -7,6 +7,7 @@ import { getUserGender, updateUserGender, type UserGender } from '~/services/gen
 import { refreshAuthUser } from '~/hooks/useAuth';
 import { supabase } from '~/utils/supabase';
 import BecomeCreatorSection from './BecomeCreatorSection';
+import '~/styles/profile-page.css';
 
 interface ProfilePageProps {
   user: {

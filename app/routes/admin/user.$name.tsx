@@ -220,9 +220,9 @@ export default function AdminUserDetail() {
 
       if (!prof) { setResolved(true); return; }
       const [{ data: u }, { data: g }, { data: s }] = await Promise.all([
-        supabase!.from('user_uploads').select('*').eq('user_id', prof.id).order('created_at', { ascending: false }),
-        supabase!.from('user_generations').select('*').eq('user_id', prof.id).order('created_at', { ascending: false }),
-        supabase!.from('style_generations').select('*').eq('user_id', prof.id).order('created_at', { ascending: false }),
+        supabase!.from('user_uploads').select('id, user_id, storage_path, public_url, mime_type, byte_size, width, height, created_at').eq('user_id', prof.id).order('created_at', { ascending: false }),
+        supabase!.from('user_generations').select('id, user_id, status, height_cm, height_label, age_label, weight_label, style, prompt, veo_model, video_url, storage_path, error, duration_seconds, model, crop_scale, crop_x, crop_y, created_at, completed_at, fal_request_id, display_name, error_code, error_raw, triggered_by_admin_id').eq('user_id', prof.id).order('created_at', { ascending: false }),
+        supabase!.from('style_generations').select('id, user_id, status, occasion, gender, name, height_label, age_label, resolved_prompt, reference_urls, error, created_at, completed_at').eq('user_id', prof.id).order('created_at', { ascending: false }),
       ]);
       if (cancelled) return;
       setUploads((u || []) as UserUpload[]);
@@ -233,7 +233,7 @@ export default function AdminUserDetail() {
       if (styleParents.length > 0) {
         const { data: imgs } = await supabase!
           .from('style_generation_images')
-          .select('*')
+          .select('id, generation_id, provider, sort_order, status, image_url, error, liked, created_at')
           .in('generation_id', styleParents.map(p => p.id))
           .order('sort_order');
         const byParent = new Map<string, StyleGenerationImage[]>();
@@ -297,7 +297,7 @@ export default function AdminUserDetail() {
     const handle = window.setInterval(async () => {
       const { data } = await supabase!
         .from('user_generations')
-        .select('*')
+        .select('id, user_id, status, height_cm, height_label, age_label, weight_label, style, prompt, veo_model, video_url, storage_path, error, duration_seconds, model, crop_scale, crop_x, crop_y, created_at, completed_at, fal_request_id, display_name, error_code, error_raw, triggered_by_admin_id')
         .eq('user_id', targetId)
         .order('created_at', { ascending: false });
       if (!data) return;

@@ -1,6 +1,8 @@
 import { useEffect, useState } from 'react';
 import { getMyFollowingDetailed, type FollowingDetail } from '~/services/follows';
 import { subscribeOnline } from '~/services/presence';
+import '~/styles/my-looks.css';
+import '~/styles/following-page.css';
 
 interface FollowingPageProps {
   /** Open a creator's catalog (their CreatorPage). */

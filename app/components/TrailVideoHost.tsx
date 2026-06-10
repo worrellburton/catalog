@@ -44,12 +44,17 @@ import { setVideoSource, detachSource } from '~/utils/hlsAttach';
 // fine on a desktop GPU but on iOS Safari each one holds GPU surfaces
 // AND a software decoder, so after chaining a few product
 // navigations the page felt locked / sluggish. We split the cap so
-// mobile keeps a tight pool (1.5 viewports of grid + the overlay's
-// own slot budget) while desktop keeps the generous 64-slot cap that
-// covers two viewports plus the full overlay rail set.
+// mobile keeps a tight pool while desktop keeps the generous 64-slot
+// cap that covers two viewports plus the full overlay rail set.
+// Mobile sits at 24 (two viewports of grid + the overlay's slot
+// budget): the previous 18 was under one render batch, so a couple of
+// scroll flicks filled the pool and every new card evicted a parked
+// element — pause + source-detach churn on each swipe. Decoder
+// pressure stays bounded by the idle-unload/prune paths below, which
+// strip src from parked elements independently of the pool cap.
 const POOL_MAX = typeof window !== 'undefined'
   && window.matchMedia?.('(max-width: 768px)').matches
-  ? 18
+  ? 24
   : 64;
 
 type TrimmableVideo = HTMLVideoElement & { __trimCleanup?: () => void };

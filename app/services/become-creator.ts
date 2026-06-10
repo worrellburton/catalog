@@ -27,7 +27,7 @@ export async function getMyCreatorRequest(): Promise<CreatorRequest | null> {
   if (!user) return null;
   const { data } = await supabase
     .from('become_creator_requests')
-    .select('*')
+    .select('id, user_id, status, message, created_at, reviewed_at, reviewed_by')
     .eq('user_id', user.id)
     .maybeSingle();
   return (data as CreatorRequest | null) ?? null;
@@ -54,7 +54,7 @@ export async function listCreatorRequests(status?: CreatorRequestStatus): Promis
   if (!supabase) return [];
   let q = supabase
     .from('become_creator_requests')
-    .select('*')
+    .select('id, user_id, status, message, created_at, reviewed_at, reviewed_by')
     .order('created_at', { ascending: false });
   if (status) q = q.eq('status', status);
   const { data, error } = await q;

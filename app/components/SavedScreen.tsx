@@ -4,6 +4,7 @@ import { type ProductAd } from '~/services/product-creative';
 import { useEscapeKey } from '~/hooks/useEscapeKey';
 import { useSavedLayout, productKeyOf } from '~/services/saved-layout';
 import LookCard from './LookCard';
+import '~/styles/saved-screen.css';
 
 interface BookmarksInterface {
   bookmarkedLooks: number[];

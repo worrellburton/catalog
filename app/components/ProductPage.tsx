@@ -42,6 +42,7 @@ import {
 } from '~/services/video-loading';
 import { lookPoster, productPoster } from '~/services/media-resolver';
 import { emitSavedToast } from '~/utils/savedToast';
+import '~/styles/product-page.css';
 
 interface ProductPageCreative {
   /** The product_creative.id - used to resolve the shared <video> element

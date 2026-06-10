@@ -22,6 +22,7 @@ import CommentParticles from './CommentParticles';
 import ParticleBackground from './ParticleBackground';
 import { isMobileViewport } from '~/services/video-loading';
 import { useCommentTyping } from '~/hooks/useCommentTyping';
+import '~/styles/comments.css';
 
 interface CommentsPageProps {
   targetType: CommentTargetType;

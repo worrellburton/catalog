@@ -3,6 +3,7 @@ import React, { useEffect, useMemo, useRef } from 'react';
 import CatalogLogo from './CatalogLogo';
 import { prefetchHomeFeed } from '~/services/product-creative';
 import { primeTrailAssets } from '~/utils/trailPrefetch';
+import '~/styles/landing-page.css';
 
 interface LandingPageProps {
   onStartBrowsing: () => void;

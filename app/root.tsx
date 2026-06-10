@@ -29,7 +29,18 @@ if (import.meta.env.DEV) void import("~/utils/perf-waterfall");
  * surfaces every visitor sees) live here. Per-route stylesheets
  * (admin.css, generate.css, deck-view.css, deck-v6.css,
  * deck-selector.css) are imported from inside their respective route
- * files so they only ship to users who actually visit those routes.
+ * files, and per-view sheets (product-page, creator-page, my-looks,
+ * comments, profile-page, following-page, saved-screen, landing-page,
+ * in-app-browser, share-page, import) are imported from inside their
+ * lazy components so they ride along with the chunk instead of
+ * render-blocking first paint. Before moving a sheet OUT of here,
+ * check that no entry-chunk component renders its classes
+ * (bookmarks.css and user-menu.css stay because the always-mounted
+ * header does; look-overlay.css/brand-page.css because the feed's
+ * InlineLookDetail does) and that light-mode/responsive overrides
+ * for it don't rely on load order (.light-mode wins on specificity,
+ * responsive.css media blocks do NOT — relocate those into the view
+ * sheet, as creator-page.css does).
  */
 import "./styles/base.css";
 import "./styles/password-gate.css";
@@ -42,31 +53,20 @@ import "./styles/bottom-bar.css";
 import "./styles/build-catalog.css";
 import "./styles/type-anywhere.css";
 import "./styles/bookmarks.css";
-import "./styles/saved-screen.css";
-import "./styles/comments.css";
 import "./styles/grid-view.css";
 import "./styles/look-overlay.css";
-import "./styles/product-page.css";
 import "./styles/similar-debug.css";
-import "./styles/creator-page.css";
 import "./styles/brand-page.css";
 import "./styles/user-menu.css";
-import "./styles/in-app-browser.css";
 import "./styles/light-mode.css";
 import "./styles/responsive.css";
 import "./styles/activity.css";
 import "./styles/generation-queue.css";
-import "./styles/landing-page.css";
 import "./styles/feed.css";
 import "./styles/empty-catalog.css";
-import "./styles/my-looks.css";
-import "./styles/following-page.css";
 import "./styles/creator-toast.css";
-import "./styles/import.css";
-import "./styles/share-page.css";
 import "./styles/confirm-modal.css";
 import "./styles/avatar-modal.css";
-import "./styles/profile-page.css";
 
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
