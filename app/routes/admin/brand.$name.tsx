@@ -14,23 +14,50 @@ interface AdRow {
   product: { id: string; name: string | null; brand: string | null; image_url: string | null; price: string | null; catalog_tags: string[] | null } | null;
 }
 
+interface ProductRow {
+  id: string;
+  name: string | null;
+  brand: string | null;
+  price: string | null;
+  image_url: string | null;
+  primary_image_url: string | null;
+  primary_video_url: string | null;
+  catalog_tags: string[] | null;
+  is_active: boolean | null;
+}
+
 const COMMISSION_RATE = 0.08; // Illustrative blended commission. Fine-tune per brand later.
 
 export default function BrandDashboard() {
   const { name: rawName } = useParams();
   const name = decodeURIComponent(rawName || '');
   const [ads, setAds] = useState<AdRow[]>([]);
+  const [products, setProducts] = useState<ProductRow[]>([]);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
       if (!supabase || !name) return;
-      const { data } = await supabase
-        .from('product_creative')
-        .select('id, status, style, video_url, impressions, clicks, cost_usd, created_at, product:products!inner(id, name, brand, image_url, price, catalog_tags)')
-        .eq('product.brand', name)
-        .order('created_at', { ascending: false });
-      setAds((data || []) as unknown as AdRow[]);
+      // Source products DIRECTLY from the products table — a brand with
+      // real products but no rendered ads must still show a non-zero
+      // count (the old query only read product_creative, so any brand
+      // without ads reported 0 across the board). ilike makes the brand
+      // match case-insensitive.
+      const [{ data: prodData }, { data: adData }] = await Promise.all([
+        supabase
+          .from('products')
+          .select('id, name, brand, price, image_url, primary_image_url, primary_video_url, catalog_tags, is_active')
+          .ilike('brand', name)
+          .eq('is_active', true)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('product_creative')
+          .select('id, status, style, video_url, impressions, clicks, cost_usd, created_at, product:products!inner(id, name, brand, image_url, price, catalog_tags)')
+          .ilike('product.brand', name)
+          .order('created_at', { ascending: false }),
+      ]);
+      setProducts((prodData || []) as ProductRow[]);
+      setAds((adData || []) as unknown as AdRow[]);
       setLoading(false);
     })();
   }, [name]);
@@ -40,19 +67,23 @@ export default function BrandDashboard() {
     const clicks = ads.reduce((s, a) => s + (a.clicks || 0), 0);
     const cost = ads.reduce((s, a) => s + (a.cost_usd || 0), 0);
     const liveAds = ads.filter(a => a.status === 'live').length;
-    const products = new Set(ads.map(a => a.product?.id).filter(Boolean)).size;
+    // Product count from the products table, not the ad join.
+    const productCount = products.length;
     const catalogs = new Set<string>();
+    products.forEach(p => (p.catalog_tags || []).forEach(c => catalogs.add(c)));
     ads.forEach(a => (a.product?.catalog_tags || []).forEach(c => catalogs.add(c)));
     // Rough estimated commission - clicks × AOV × commission rate. AOV
-    // derived from ad-weighted product prices (numeric parse).
-    const priceTotal = ads.reduce((s, a) => {
-      const priceNum = parseFloat((a.product?.price || '').replace(/[^0-9.]/g, '')) || 0;
+    // derived from the brand's product prices (numeric parse).
+    const priceTotal = products.reduce((s, p) => {
+      const priceNum = parseFloat((p.price || '').replace(/[^0-9.]/g, '')) || 0;
       return s + priceNum;
     }, 0);
-    const avgPrice = ads.length > 0 ? priceTotal / ads.length : 0;
+    const avgPrice = products.length > 0 ? priceTotal / products.length : 0;
     const estimatedRevenue = clicks * avgPrice * COMMISSION_RATE;
+    const withVideo = products.filter(p => p.primary_video_url).length;
     return {
-      products,
+      products: productCount,
+      withVideo,
       catalogs: Array.from(catalogs),
       liveAds,
       impressions,
@@ -62,7 +93,7 @@ export default function BrandDashboard() {
       avgPrice,
       estimatedRevenue,
     };
-  }, [ads]);
+  }, [ads, products]);
 
   const topCreative = useMemo(() =>
     [...ads]
@@ -76,7 +107,19 @@ export default function BrandDashboard() {
   , [ads]);
 
   const topProducts = useMemo(() => {
+    // Per-product impression/click rollup from ads, keyed by product id,
+    // but seeded from the products table so brands with zero ads still
+    // list their products (with 0 metrics).
     const map = new Map<string, { id: string; name: string; image: string | null; impressions: number; clicks: number }>();
+    products.forEach(p => {
+      map.set(p.id, {
+        id: p.id,
+        name: p.name || 'Unnamed',
+        image: p.primary_image_url || p.image_url || null,
+        impressions: 0,
+        clicks: 0,
+      });
+    });
     ads.forEach(a => {
       const pid = a.product?.id;
       if (!pid) return;
@@ -88,9 +131,9 @@ export default function BrandDashboard() {
       e.clicks += a.clicks || 0;
     });
     return Array.from(map.values())
-      .sort((a, b) => b.clicks - a.clicks)
-      .slice(0, 8);
-  }, [ads]);
+      .sort((a, b) => b.clicks - a.clicks || b.impressions - a.impressions)
+      .slice(0, 20);
+  }, [ads, products]);
 
   const handleExport = () => {
     const json = JSON.stringify({
@@ -140,9 +183,10 @@ export default function BrandDashboard() {
       </div>
 
       {/* Top-level stat strip */}
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(160px, 1fr))', gap: 12, marginBottom: 24 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(150px, 1fr))', gap: 12, marginBottom: 24 }}>
         {[
           { label: 'Products', value: stats.products.toLocaleString() },
+          { label: 'With video', value: stats.withVideo.toLocaleString() },
           { label: 'Live ads', value: stats.liveAds.toLocaleString() },
           { label: 'Impressions', value: stats.impressions.toLocaleString() },
           { label: 'Clicks', value: stats.clicks.toLocaleString() },
@@ -207,7 +251,7 @@ export default function BrandDashboard() {
 
       {topProducts.length > 0 && (
         <div>
-          <h3 style={{ fontSize: 13, fontWeight: 600, color: '#111', margin: '0 0 10px' }}>Top products by clicks</h3>
+          <h3 style={{ fontSize: 13, fontWeight: 600, color: '#111', margin: '0 0 10px' }}>Products</h3>
           <div className="admin-table-wrap">
             <table className="admin-table">
               <thead>

@@ -44,9 +44,16 @@ header {
   top: 0;
   left: 0;
   right: 0;
-  display: flex;
+  /* Three equal-fr columns with the center column shrinking to its
+     content (auto) so it sits at the viewport's geometric centre
+     regardless of how asymmetric the left/right wrappers get. The
+     previous `flex space-between` placed the center between its
+     siblings, which drifted with content width — see the comment on
+     .header-center below for the failed transform-based fix that
+     broke mobile. */
+  display: grid;
+  grid-template-columns: 1fr auto 1fr;
   align-items: center;
-  justify-content: space-between;
   padding: 18px 44px 36px;
   z-index: 100;
   /* Dark scrim so the Catalog title + bookmark/profile icons read
@@ -54,17 +61,22 @@ header {
      courts, beauty close-ups, etc.). The fade extends past the
      header chrome so card thumbnails dim naturally as they scroll
      into the title row. */
+  /* Header underlay — toned WAY down per user spec. The previous
+     scroll-driven 0.55/0.32 gradient + frost layer + wavy shimmer
+     read as a heavy bar on the feed. New treatment is a single
+     barely-noticeable dark wash that softly fades to transparent,
+     just enough to keep the wordmark + icons legible against
+     bright thumbnails. No scroll boost, no blur layer, no shimmer. */
   background: linear-gradient(
     to bottom,
-    rgba(0, 0, 0, 0.92) 0%,
-    rgba(0, 0, 0, 0.78) 30%,
-    rgba(0, 0, 0, 0.45) 65%,
+    rgba(0, 0, 0, 0.22) 0%,
+    rgba(0, 0, 0, 0.10) 50%,
     transparent 100%
   );
+  transition: background 200ms ease;
   /* Taller than the chrome itself so the fade-out is visible past
      the icons rather than ending abruptly. */
   height: 140px;
-  pointer-events: none;
 }
 
 /* Re-enable interactivity for the actual controls inside the
@@ -73,6 +85,20 @@ header {
 header > * {
   pointer-events: auto;
 }
+
+/* Glassy frost under the top UI row. Sits above the header's own
+   gradient (negative z-index inside the header's stacking context)
+   and below the logo/icons, so it frosts whatever feed content
+   scrolls beneath the chrome. Masked to fade out toward the bottom
+   edge so ONLY the top row gets the frosted treatment — the gradient
+   handles the soft fade past that. pointer-events:none keeps taps
+   falling through to cards bleeding into the header band. */
+/* The glassy frost layer (header::before) and the wavy shimmer
+   (header::after) were retired with the heavy gradient — the new
+   barely-noticeable underlay above is the only header treatment
+   now. Removed because they added GPU cost (backdrop-filter is
+   expensive on iOS) and read as visual noise on top of the soft
+   gradient. */
 
 .light-mode header {
   background: linear-gradient(
@@ -87,15 +113,176 @@ header > * {
 .header-left {
   display: flex;
   align-items: center;
+  /* Hug the left edge of the grid column so the wordmark sits where
+     the old space-between flex layout used to put it. */
+  justify-self: start;
 }
 
 .header-center {
-  position: absolute;
-  left: 50%;
-  transform: translateX(-50%);
+  /* Centering is owned by the parent <header>'s grid (see below) — we
+     just stretch to fill our column and center inner content. The
+     previous `position: absolute + transform: translate(-50%, -50%)`
+     fixed the desktop-asymmetry drift but broke the mobile rail: an
+     ancestor with a non-none transform turns position:fixed descendants
+     into containing-block-relative descendants, and the rail's mobile
+     override (position: fixed + left/right: 0) re-anchored to the
+     transformed .header-center instead of the viewport. Grid avoids
+     the transform entirely. */
   display: flex;
+  justify-content: center;
   align-items: center;
-  gap: 8px;
+  min-width: 0;
+}
+
+/* Thin vertical separator between following and followers groups */
+.follow-rail-separator {
+  width: 1px;
+  height: 18px;
+  background: rgba(255, 255, 255, 0.25);
+  margin: 0 10px;
+  flex-shrink: 0;
+}
+.light-mode .follow-rail-separator {
+  background: rgba(0, 0, 0, 0.18);
+}
+
+/* Pending look pill — floats as a toast BELOW the header row, centered, so
+   it never overlaps the header's right-side buttons (bookmark / profile /
+   add). It previously pulled up -28px into the header row and sat on top of
+   those controls, blocking taps. High z-index so it reads as a transient
+   notification over the creators rail beneath the header. */
+header > .pending-look-pill {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  right: 0;
+  margin-inline: auto;
+  width: max-content;
+  margin-top: 8px;
+  /* Sit above the creator row so the in-flight render reads as the priority
+     notification, not something tucked behind the avatars. */
+  z-index: 200;
+}
+
+/* "Your <style> look is rendering" pill — appears in the header
+   center when the signed-in user has bailed off /generate via
+   "Keep discovering" and a generation is still in-flight. Tap to
+   return. The spinner ring tells the user something is happening
+   without forcing them to read the label. */
+.pending-look-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  /* Matches the global follow-toast format (.follow-toast) so the app's
+     transient notifications share one visual language: dark glass, hairline
+     border, soft drop shadow, light text. */
+  padding: 8px 16px 8px 8px;
+  border-radius: 999px;
+  /* Green active accent + glow so the "rendering" notice dominates the
+     creator row instead of blending into the header chrome. */
+  border: 1px solid rgba(74, 222, 128, 0.55);
+  background: rgba(16, 20, 17, 0.95);
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5), 0 0 22px rgba(74, 222, 128, 0.28);
+  color: #f4f4f5;
+  /* Match the follow-toast scale (14px text, 10px gap, 34px leading visual)
+     so both in-app notifications are the same size. */
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.005em;
+  cursor: pointer;
+  font-family: inherit;
+  white-space: nowrap;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  transition: background 160ms ease, border-color 160ms ease, transform 160ms ease;
+}
+.pending-look-pill:hover {
+  background: rgba(28, 28, 30, 0.95);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+.pending-look-pill-spinner {
+  /* Sized to the follow-toast avatar (34px) so the pill matches its height
+     when no orbit imagery is available. */
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.25);
+  border-top-color: #fff;
+  animation: pending-look-spin 0.9s linear infinite;
+  flex-shrink: 0;
+}
+.pending-look-pill-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+/* Each rotating quip fades up as it swaps in (the React key change remounts
+   the span, restarting this animation). */
+.pending-look-pill-label--quip {
+  animation: pending-quip-in 0.42s ease;
+}
+@keyframes pending-quip-in {
+  from { opacity: 0; transform: translateY(3px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pending-look-pill-label--quip { animation: none; }
+}
+
+/* Mini 3D orbit of the look's face + products inside the pill. Same idea as
+   the full "Vision composes…" ring, shrunk to header size. */
+.pending-look-pill-orbit {
+  position: relative;
+  /* 34px to match the follow-toast avatar so both notifications are the
+     same height. */
+  width: 34px;
+  height: 34px;
+  flex-shrink: 0;
+  perspective: 260px;
+}
+.pending-look-pill-orbit-ring {
+  position: absolute;
+  inset: 0;
+  transform-style: preserve-3d;
+  animation: pending-look-orbit-spin 7s linear infinite;
+}
+.pending-look-pill-orbit-item {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 26px;
+  height: 26px;
+  margin: -13px 0 0 -13px;
+  transform: rotateY(calc(var(--i) * (360deg / var(--n)))) translateZ(21px);
+}
+.pending-look-pill-orbit-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 5px;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: #111;
+}
+@keyframes pending-look-orbit-spin {
+  from { transform: rotateY(0deg); }
+  to   { transform: rotateY(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pending-look-pill-orbit-ring { animation: none; }
+}
+@keyframes pending-look-spin {
+  to { transform: rotate(360deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pending-look-pill-spinner { animation: none; }
+}
+@media (max-width: 768px) {
+  .pending-look-pill {
+    max-width: 180px;
+    font-size: 11px;
+    padding: 4px 10px 4px 6px;
+  }
 }
 
 
@@ -103,7 +290,138 @@ header > * {
   display: flex;
   align-items: center;
   gap: 12px;
+  /* Hug the right edge of the grid column so the wallet/buttons stack
+     ends where the old space-between flex layout used to end. */
+  justify-self: end;
 }
+
+/* Earnings pill - sits next to the bookmark button in the header.
+   Renders whenever the user is signed in (defaults to $0.00 while
+   the balance loads). Compact, tabular-numerics, gold-on-dark so it
+   reads as a quiet currency indicator next to the icons. */
+.header-wallet-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 11px;
+  border-radius: 999px;
+  background: #22c55e;
+  color: #fff;
+  border: 1px solid #22c55e;
+  font-size: 12px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  font-family: inherit;
+  line-height: 1;
+  transition: background 0.15s, border-color 0.15s, transform 0.15s;
+  white-space: nowrap;
+}
+.header-wallet-pill:hover {
+  background: #16a34a;
+  border-color: #16a34a;
+  transform: translateY(-1px);
+}
+
+/* Mobile-only activity indicator. Sits to the LEFT of .header-wallet-pill
+   in .header-right; tap opens the wallet (which hosts the activity feed).
+   Hidden on desktop — the centered toast stack still handles activity
+   there, where there's room for it. */
+.header-activity-pill {
+  /* Shown on desktop AND mobile — the Activity button is a primary entry
+     point on every viewport now. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+  padding: 0;
+  font-family: inherit;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+  flex-shrink: 0;
+}
+.header-activity-pill:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  transform: translateY(-1px);
+}
+.header-activity-pill.has-unseen { color: #fff; }
+.header-activity-pill.is-pulsing {
+  animation: header-activity-pulse 1.6s ease-in-out;
+}
+@keyframes header-activity-pulse {
+  0%, 100% { box-shadow: 0 0 0 0   rgba(74, 222, 128, 0); }
+  50%      { box-shadow: 0 0 0 6px rgba(74, 222, 128, 0.22); }
+}
+/* Icon stack: waveform (idle) + AI diamond, cross-faded while generating. */
+.header-activity-icons {
+  position: relative;
+  width: 16px;
+  height: 16px;
+  display: inline-flex;
+}
+.hap-icon { position: absolute; inset: 0; }
+.hap-icon--diamond { opacity: 0; }
+.header-activity-pill.is-generating .hap-icon--wave {
+  animation: hap-wave 2.4s ease-in-out infinite;
+}
+.header-activity-pill.is-generating .hap-icon--diamond {
+  animation: hap-diamond 2.4s ease-in-out infinite;
+}
+@keyframes hap-wave {
+  0%, 38% { opacity: 1; }
+  50%, 88% { opacity: 0; }
+  100% { opacity: 1; }
+}
+@keyframes hap-diamond {
+  0%, 38% { opacity: 0; transform: scale(0.85) rotate(-8deg); }
+  50%, 88% { opacity: 1; transform: scale(1) rotate(0deg); }
+  100% { opacity: 0; transform: scale(0.85) rotate(-8deg); }
+}
+/* Green glow + ring while a generation is in flight. */
+.header-activity-pill.is-generating {
+  color: #4ade80;
+  border-color: rgba(74, 222, 128, 0.5);
+  animation: header-activity-generating 1.8s ease-in-out infinite;
+}
+@keyframes header-activity-generating {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(74, 222, 128, 0.0), 0 0 8px rgba(74, 222, 128, 0.25); }
+  50%      { box-shadow: 0 0 0 4px rgba(74, 222, 128, 0.18), 0 0 16px rgba(74, 222, 128, 0.5); }
+}
+
+.header-activity-pill-count {
+  position: absolute;
+  top: -3px;
+  right: -3px;
+  min-width: 14px;
+  height: 14px;
+  padding: 0 4px;
+  border-radius: 999px;
+  background: #22c55e;
+  color: #052e16;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 0 0 2px #0a0a0c;
+  font-variant-numeric: tabular-nums;
+}
+.light-mode .header-activity-pill {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.08);
+  color: rgba(15, 23, 42, 0.7);
+}
+.light-mode .header-activity-pill:hover { background: rgba(0, 0, 0, 0.08); color: #0f172a; }
+.light-mode .header-activity-pill-count { background: #16a34a; color: #fff; box-shadow: 0 0 0 2px #fff; }
+
 
 .logo {
   height: 36px;
@@ -201,7 +519,6 @@ header > * {
   left: 0;
   min-width: 240px;
   background: rgba(20, 20, 20, 0.95);
-  backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
   padding: 6px;
@@ -374,6 +691,23 @@ header > * {
   }
 }
 
+/* Desktop: only reveal the remix button once the shopper has scrolled
+   past the hero into the feed. On the cold hero it would just clutter
+   the matte black background without anything to "remix" — the
+   shuffle only affects the feed grid below. The .hero-scrolled flag
+   on .app-root is set by routes/_index.tsx once window.scrollY
+   crosses 50vh, and the existing pushState/popstate path keeps it in
+   sync with the URL. */
+.app-root.home-hero:not(.hero-scrolled) .remix-btn-fixed {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(8px);
+}
+.remix-btn-fixed {
+  transition: opacity 0.25s ease, transform 0.25s ease,
+              background 0.2s ease, box-shadow 0.2s ease;
+}
+
 /* View toggle (mobile only) */
 .view-toggle {
   background: rgba(128, 128, 128, 0.15);
@@ -394,8 +728,60 @@ header > * {
     display: flex;
   }
 
+  /* Collapse center slot on mobile — its children are fixed-positioned
+     at the bottom so it shouldn't consume header flex space. */
   .header-center {
+    flex: 0 !important;
+    min-width: 0 !important;
+  }
+
+  /* Mobile: rails move to fixed positions at screen edges,
+     just above the bottom search bar. */
+  .follow-rail-wrap--center {
+    position: fixed !important;
+    top: 50%;
+    left: 0;
+    right: 0;
+    bottom: auto;
+    transform: translateY(-50%) !important;
+    z-index: 99;
+    display: flex !important;
+    justify-content: space-between;
+    align-items: center;
+    gap: 0;
+    pointer-events: none;
+    padding: 0 12px;
+  }
+  .follow-rail-wrap--center > * {
+    pointer-events: auto;
+  }
+  .follow-rail-wrap--center .follow-rail-separator {
     display: none;
+  }
+  .follow-rail-wrap--center .follow-rail-stack {
+    flex-direction: column !important;
+    height: auto !important;
+    width: 28px;
+  }
+  .follow-rail-wrap--center .follow-rail-avatar {
+    width: 28px !important;
+    height: 28px !important;
+    font-size: 10px !important;
+    margin-left: 0 !important;
+    margin-top: -8px;
+  }
+  .follow-rail-wrap--center .follow-rail-stack > .follow-rail-avatar:first-child {
+    margin-top: 0 !important;
+  }
+  .follow-rail-popover {
+    position: fixed !important;
+    bottom: calc(100px + env(safe-area-inset-bottom)) !important;
+    top: auto !important;
+    left: 12px !important;
+    right: 12px !important;
+    transform: none !important;
+    max-width: none !important;
+    min-width: 0 !important;
   }
 
   header {
@@ -406,6 +792,30 @@ header > * {
     background: transparent;
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
+  }
+  /* Mobile top scrim: the header itself is transparent on mobile, so the
+     wordmark / icons / stories row floated over bright feed cards with no
+     separation. This fixed gradient fades from dark at the very top to
+     transparent, sitting BEHIND the chrome (pointer-events:none, z-index
+     below the header's own children) without moving anything. Lives only
+     in the mobile query; the Flutter shell hides <header> entirely so it
+     never shows there. */
+  header::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 150px;
+    background: linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, 0.85) 0%,
+      rgba(0, 0, 0, 0.5) 42%,
+      rgba(0, 0, 0, 0.18) 72%,
+      transparent 100%
+    );
+    pointer-events: none;
+    z-index: -1;
   }
 
   .logo {
@@ -560,4 +970,62 @@ header > * {
   width: 120px;
 }
 
+/* Newly-detected follower pop-in. The avatar overshoots its target
+   size once, then settles. Paired with a soft green glow ring so a
+   freshly-arrived follower reads at a glance. Class is added by
+   FollowingRail when a follower handle appears in the latest fetch
+   but wasn't present in the previous one; the class self-clears
+   after a few seconds. */
+@keyframes follow-rail-pop {
+  0%   { transform: scale(0.25); opacity: 0; }
+  55%  { transform: scale(1.18); opacity: 1; }
+  100% { transform: scale(1);    opacity: 1; }
+}
+@keyframes follow-rail-new-glow {
+  0%, 100% { box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.55), 0 0 14px rgba(34, 197, 94, 0.5); }
+  50%      { box-shadow: 0 0 0 2px rgba(34, 197, 94, 0.85), 0 0 22px rgba(34, 197, 94, 0.75); }
+}
+.follow-rail-avatar--new {
+  animation:
+    follow-rail-pop 520ms cubic-bezier(0.34, 1.56, 0.64, 1) 0ms 1 both,
+    follow-rail-new-glow 1.6s ease-in-out 520ms infinite;
+  z-index: 60 !important;
+}
+
+/* Online-now presence ring. A steady, soft green glow (not a flash) so
+   the eye reads "live" without being distracting. The ring is a green
+   box-shadow that breathes between a tight halo and a wider bloom. */
+@keyframes follow-rail-online-glow {
+  0%, 100% {
+    box-shadow:
+      0 0 0 2px rgba(34, 197, 94, 0.95),
+      0 0 7px 1px rgba(34, 197, 94, 0.45);
+  }
+  50% {
+    box-shadow:
+      0 0 0 2px rgba(34, 197, 94, 1),
+      0 0 15px 3px rgba(34, 197, 94, 0.75);
+  }
+}
+.follow-rail-avatar--online {
+  animation: follow-rail-online-glow 2.4s ease-in-out infinite;
+}
+/* When an avatar is both brand-new AND online, the new-follower pop +
+   green glow already conveys liveness; let the steadier online glow
+   take over once the pop settles. */
+.follow-rail-avatar--new.follow-rail-avatar--online {
+  animation:
+    follow-rail-pop 520ms cubic-bezier(0.34, 1.56, 0.64, 1) 0ms 1 both,
+    follow-rail-online-glow 2.4s ease-in-out 520ms infinite;
+}
+@media (prefers-reduced-motion: reduce) {
+  /* Respect reduced-motion: keep the green ring, drop the pulsing. */
+  .follow-rail-avatar--online,
+  .follow-rail-avatar--new.follow-rail-avatar--online {
+    animation: none;
+    box-shadow:
+      0 0 0 2px rgba(34, 197, 94, 0.95),
+      0 0 10px 2px rgba(34, 197, 94, 0.55);
+  }
+}
 

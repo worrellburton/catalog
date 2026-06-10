@@ -1,14 +1,52 @@
-import { useState, useCallback, useEffect, useRef, useMemo, lazy, Suspense } from 'react';
-import { useLocation, useParams } from '@remix-run/react';
+import { useState, useCallback, useEffect, useRef, useMemo, Suspense } from 'react';
+import { useLocation, useNavigate } from '@remix-run/react';
+import { lazyWithReload } from '~/utils/lazyWithReload';
 import PasswordGate from '~/components/PasswordGate';
 import WaitlistScreen from '~/components/WaitlistScreen';
 import SplashScreen from '~/components/SplashScreen';
+import ShoppingForHero from '~/components/home/ShoppingForHero';
+import SearchCeremony from '~/components/home/SearchCeremony';
+import SplashHost from '~/components/splash/SplashHost';
+import { getSplashConfig, DEFAULT_SPLASH_CONFIG, type SplashConfig } from '~/services/splash-config';
 import ContinuousFeed from '~/components/ContinuousFeed';
+import SiteParticleHost from '~/components/SiteParticleHost';
+import ParticleBackground from '~/components/ParticleBackground';
 import BottomBar from '~/components/BottomBar';
+import GuestSignupGate, { type GuestGateVariant } from '~/components/GuestSignupGate';
+import { isGuest, hasUsedFreeLook, markFreeLookUsed, setGuestIntent, takeGuestIntent, getNudgeCount, bumpNudgeCount, REQUIRE_SIGNUP_EVENT } from '~/services/guest';
 import { TrailVideoHost } from '~/components/TrailVideoHost';
 import { TrailRoot } from '~/components/TrailMotion';
 import CatalogLogo from '~/components/CatalogLogo';
 import UserMenu from '~/components/UserMenu';
+import { Look, Product } from '~/data/looks';
+import { useBookmarks } from '~/hooks/useBookmarks';
+import { useRecentProducts } from '~/hooks/useRecentProducts';
+import { useAuth } from '~/hooks/useAuth';
+import { useOverlayRouter } from '~/hooks/useOverlayRouter';
+import { useShellBridge } from '~/hooks/useShellBridge';
+import { useAppView } from '~/hooks/useAppView';
+import { useWaitlistMode, applyFlowOverrideFromUrl } from '~/hooks/useWaitlistMode';
+import { useSearchUrlSync } from '~/hooks/useSearchUrlSync';
+import { useShopperGender } from '~/hooks/useShopperGender';
+import { toCatalogName, getRandomCatalogName } from '~/utils/catalogName';
+import { prefetchSimilarProducts, prefetchCreativesByBrand, prefetchHomeFeed, type ProductAd } from '~/services/product-creative';
+import { getGraphPairs, type GraphPair } from '~/services/graph-pairs';
+import { getLooks, getLookByUuid } from '~/services/looks';
+import { creativeStill, creativePoster, productPoster } from '~/services/media-resolver';
+import { pickVideoUrl, pickPlaybackSource } from '~/services/video-loading';
+import { emitSavedToast } from '~/utils/savedToast';
+import { prefetchDials } from '~/services/dials';
+import { prefetchHiddenContent } from '~/hooks/useHiddenLooks';
+import { prefetchBrandLogos } from '~/hooks/useBrandLogoLookup';
+import { primeTrailAssets } from '~/utils/trailPrefetch';
+import { supabase } from '~/utils/supabase';
+import { trackClick, trackCreativeImpressions, resolveProductIdByUrl, trackProductClickout } from '~/services/session-tracker';
+import { registerAssetCache, maybeUnregisterSW } from '~/utils/registerSW';
+import HeaderWalletPill from '~/components/HeaderWalletPill';
+import HeaderActivityPill from '~/components/HeaderActivityPill';
+import FollowingRail from '~/components/FollowingRail';
+import PendingLookPill from '~/components/PendingLookPill';
+import ActivityRealtimeToasts from '~/components/ActivityRealtimeToasts';
 
 // Modal/overlay surfaces split into their own chunks. None of these are part
 // of first paint - the user has to tap into them. Splitting trims the
@@ -26,15 +64,46 @@ const importProductPage = () => import('~/components/ProductPage');
 const importLookOverlay = () => import('~/components/LookOverlay');
 const importInAppBrowser = () => import('~/components/InAppBrowser');
 const importMyLooks = () => import('~/components/MyLooks');
+const importCreatorWallet = () => import('~/components/CreatorWallet');
+const importProfilePage = () => import('~/components/ProfilePage');
+const importFollowingPage = () => import('~/components/FollowingPage');
+const importCommentsPage = () => import('~/components/CommentsPage');
 
-const LandingPage = lazy(importLandingPage);
-const CreatorPage = lazy(importCreatorPage);
-const BrandPage = lazy(importBrandPage);
-const BookmarksPage = lazy(importBookmarksPage);
-const ProductPage = lazy(importProductPage);
-const LookOverlay = lazy(importLookOverlay);
-const InAppBrowser = lazy(importInAppBrowser);
-const MyLooks = lazy(importMyLooks);
+const LandingPage = lazyWithReload(importLandingPage);
+const CreatorPage = lazyWithReload(importCreatorPage);
+const BrandPage = lazyWithReload(importBrandPage);
+const BookmarksPage = lazyWithReload(importBookmarksPage);
+const ProductPage = lazyWithReload(importProductPage);
+const LookOverlay = lazyWithReload(importLookOverlay);
+const InAppBrowser = lazyWithReload(importInAppBrowser);
+const MyLooks = lazyWithReload(importMyLooks);
+const CreatorWallet = lazyWithReload(importCreatorWallet);
+const ProfilePage = lazyWithReload(importProfilePage);
+const FollowingPage = lazyWithReload(importFollowingPage);
+// Shared Saved screen, embedded into My Account + My Catalog. Lazy so it
+// only loads when a saved surface actually mounts.
+const SavedScreen = lazyWithReload(() => import('~/components/SavedScreen'));
+// Comment thread, rendered as an in-app overlay (not a route) so backing
+// out of it never tears down / re-resolves the product or look underneath.
+// Its chunk is idle-prefetched (see IDLE_PREFETCH_ORDER) so tapping the
+// comments button never hits a cold/stale lazy-load — that failure path
+// triggered a full-page reload (auth-splash → home → comment deep-link),
+// which is the "splash then home then comments" jump we're killing here.
+const CommentsPage = lazyWithReload(importCommentsPage);
+
+/** Pause every currently-playing <video> in the document. Called on
+ *  every product → product navigation so the old hero + rail cards
+ *  don't keep decoding while the new page mounts. The
+ *  IntersectionObserver-driven autoplay in cards will resume whichever
+ *  videos are actually on screen once the new layout settles. */
+function pauseAllVideos(): void {
+  if (typeof document === 'undefined') return;
+  document.querySelectorAll<HTMLVideoElement>('video').forEach(v => {
+    if (!v.paused) {
+      try { v.pause(); } catch { /* WebKit can throw on hostile elements; safe to ignore */ }
+    }
+  });
+}
 
 // Order chosen by likelihood the user will open the surface in the next
 // minute: looks/products dominate, browser is the most-visited tail action,
@@ -42,6 +111,9 @@ const MyLooks = lazy(importMyLooks);
 const IDLE_PREFETCH_ORDER: Array<() => Promise<unknown>> = [
   importLookOverlay,
   importProductPage,
+  // Comments open straight from product/look surfaces, so warm it early —
+  // a stale lazy-load here forces a full reload (splash → home → comments).
+  importCommentsPage,
   importInAppBrowser,
   importBookmarksPage,
   importCreatorPage,
@@ -66,210 +138,127 @@ function prefetchOverlayChunks() {
   if (ric) ric(tick, { timeout: 2000 });
   else window.setTimeout(tick, 800);
 }
-import { Look, Product, looks as seedLooks } from '~/data/looks';
-import {
-  productSlug,
-  lookSlug,
-  brandSlug,
-  extractIdPrefix,
-  extractLookId,
-} from '~/utils/slug';
-import { useBookmarks } from '~/hooks/useBookmarks';
-import { useRecentProducts } from '~/hooks/useRecentProducts';
-import { useAuth } from '~/hooks/useAuth';
-import { catalogNames } from '~/data/catalogNames';
-import { getWaitlistStatus } from '~/services/waitlist';
-import { prefetchSimilarCreatives, prefetchCreativesByBrand, prefetchHomeFeed, setShopperGender, type ProductAd } from '~/services/product-creative';
-import { getLooks } from '~/services/looks';
-import { getUserGender } from '~/services/genders';
-import { primeTrailAssets } from '~/utils/trailPrefetch';
-import { supabase } from '~/utils/supabase';
-import { registerAssetCache, maybeUnregisterSW } from '~/utils/registerSW';
 
-type AppView = 'locked' | 'splash' | 'landing' | 'app' | 'waitlisted';
-
-// Map individual search words to catalogNames keys so queries like
-// "first date fit", "gym fits", or "cozy fall vibes" land on themed names.
-const KEYWORD_ALIASES: Record<string, string> = {
-  date: 'datenight', dating: 'datenight', romantic: 'datenight', night: 'datenight',
-  hot: 'datenight', rizz: 'datenight', first: 'datenight',
-  gym: 'workout', workout: 'workout', fitness: 'workout', yoga: 'workout',
-  run: 'workout', running: 'workout', pilates: 'workout', sweat: 'workout',
-  brunch: 'brunch', mimosa: 'brunch', sunday: 'brunch',
-  wedding: 'wedding', bridal: 'wedding',
-  festival: 'festival', concert: 'festival', coachella: 'festival',
-  office: 'office', work: 'office', business: 'office', corporate: 'office',
-  street: 'streetwear', streetwear: 'streetwear', hype: 'streetwear',
-  sneaker: 'streetwear', sneakers: 'streetwear', drop: 'streetwear',
-  minimal: 'minimalist', minimalist: 'minimalist', clean: 'minimalist',
-  capsule: 'minimalist',
-  vintage: 'vintage', retro: 'vintage', thrift: 'vintage', y2k: 'vintage',
-  boho: 'boho', bohemian: 'boho', hippie: 'boho',
-  luxury: 'luxury', rich: 'luxury', designer: 'luxury', quiet: 'luxury',
-  old: 'luxury', money: 'luxury',
-  formal: 'formal', gala: 'formal', black: 'formal', tie: 'formal',
-  cheap: 'budget', budget: 'budget', broke: 'budget', affordable: 'budget',
-  bed: 'bedroom', bedroom: 'bedroom', cozy: 'bedroom', sleep: 'bedroom',
-  kitchen: 'kitchen', cooking: 'kitchen', chef: 'kitchen',
-  bath: 'bathroom', bathroom: 'bathroom', shower: 'bathroom', spa: 'bathroom',
-  home: 'homedecor', decor: 'homedecor', apartment: 'homedecor',
-  cat: 'cats', cats: 'cats', kitten: 'cats',
-  dog: 'dogs', dogs: 'dogs', puppy: 'dogs',
-  wellness: 'wellness', matcha: 'wellness', skincare: 'wellness',
-  self: 'wellness', glow: 'wellness',
-  outfit: 'fashion', fit: 'fashion', fits: 'fashion', drip: 'fashion',
-  dress: 'fashion', dresses: 'fashion', pants: 'fashion', shoes: 'fashion',
-  airport: 'fashion', travel: 'fashion', beach: 'fashion', summer: 'fashion',
-  winter: 'fashion', spring: 'fashion', fall: 'fashion',
-  nyc: 'nyc', brooklyn: 'nyc', manhattan: 'nyc',
-  la: 'la', hollywood: 'la', calabasas: 'la',
-  paris: 'paris', french: 'paris',
-  tokyo: 'tokyo', japan: 'tokyo', harajuku: 'tokyo',
-  athleisure: 'athleisure',
-  dopamine: 'maximalist', maximalist: 'maximalist',
-  cottagecore: 'cottagecore', mushroom: 'cottagecore',
-  scandi: 'scandi', hygge: 'scandi', neutral: 'scandi',
-  industrial: 'industrial', loft: 'industrial',
-  midcentury: 'midcentury',
-  electronics: 'electronics', tech: 'electronics', gadget: 'electronics',
-  girly: 'women', girl: 'women', girls: 'women',
-  mens: 'men', guys: 'men', guy: 'men',
-};
-
-// Title-case the user's literal search so it reads as a proper catalog
-// name beneath the logo. Short single tokens are kept uppercase so
-// "omg" → "OMG", but longer words use Title Case.
-function toCatalogName(query: string): string {
-  return query
-    .trim()
-    .split(/\s+/)
-    .map(w => (w.length <= 3 ? w.toUpperCase() : w[0].toUpperCase() + w.slice(1).toLowerCase()))
-    .join(' ');
-}
-
-function getRandomCatalogName(query?: string): string {
-  if (query && query.trim()) {
-    const q = query.toLowerCase().trim();
-    const words = q.split(/\s+/).filter(w => w.length > 1);
-
-    // Collect candidate keys from alias + direct matches
-    const matched = new Set<string>();
-    for (const w of words) {
-      const alias = KEYWORD_ALIASES[w];
-      if (alias && catalogNames[alias]) matched.add(alias);
-    }
-    // Direct key lookup (covers combo keys like 'fashion+la')
-    for (const key of Object.keys(catalogNames)) {
-      const parts = key.split('+');
-      const allPartsMatched = parts.every(part =>
-        words.some(w => w === part || w.includes(part) || part.includes(w))
-      );
-      if (allPartsMatched) matched.add(key);
-    }
-
-    if (matched.size > 0) {
-      // Prefer combo keys (more specific) over single keys
-      const sorted = [...matched].sort((a, b) => b.split('+').length - a.split('+').length);
-      const names = catalogNames[sorted[0]];
-      if (names && names.length > 0) {
-        return names[Math.floor(Math.random() * names.length)];
-      }
-    }
-
-    // No match - fall back to generic fashion names instead of random unrelated theme
-    const fashion = catalogNames.fashion;
-    return fashion[Math.floor(Math.random() * fashion.length)];
-  }
-  const allNames = Object.values(catalogNames).flat();
-  return allNames[Math.floor(Math.random() * allNames.length)];
+// Disable the browser's scroll restoration on the landing page. Default
+// 'auto' restores the previous scroll position on F5 / pull-to-refresh
+// — which lands the user mid-hero on the home screen. The search bar
+// is pinned at bottom: 38vh from the viewport, but every fixed/sticky
+// header element above it is measured from "top of document", so a
+// mid-page reload offsets the bar off-center until the user scrolls
+// back to 0. Owning the restore manually keeps refresh at the top.
+if (typeof window !== 'undefined' && 'scrollRestoration' in window.history) {
+  try { window.history.scrollRestoration = 'manual'; } catch { /* Safari edge */ }
 }
 
 export default function Home() {
-  const [view, setView] = useState<AppView>('locked');
-  // First-visit splash: if the user has never been to catalog on this device,
-  // show a branded splash before surfacing the gate / landing. The flag is
-  // written once and never revisited so repeat visitors skip it.
-  //
-  // Splash timing is data-aware: we hold for at least 800ms (so the brand
-  // moment doesn't flash by) and at most 2500ms (so a slow network never
-  // hangs the user). In between, we dismiss as soon as the feed data lands
-  // - so by the time the splash drops, the cards render with real content
-  // already in cache.
-  const [firstVisit, setFirstVisit] = useState(() => {
-    try {
-      return typeof window !== 'undefined' && !window.localStorage.getItem('catalog:visited');
-    } catch { return false; }
+  // Hard scroll-to-top on every Home mount. Pairs with the
+  // scrollRestoration='manual' above to neutralise both the browser's
+  // restore-on-refresh AND any phantom anchor scroll from a deep-link
+  // (/p/, /l/, /b/) being closed back to "/". The bar pin reads off the
+  // viewport, so even a 40 px stale scroll throws its visual centering
+  // off until the next render.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    window.scrollTo(0, 0);
+  }, []);
+
+  const bookmarks = useBookmarks();
+  const { recentProducts, pushRecent } = useRecentProducts();
+  const { user, loading: authLoading, logout } = useAuth();
+  // Launch master switch (dials page). true = old waitlist/sign-in-only
+  // flow; false = open flow with the guest gates. Consume any ?flow=
+  // preview override once before the first read.
+  useState(() => { applyFlowOverrideFromUrl(); return null; });
+  const { waitlistMode, loading: waitlistLoading } = useWaitlistMode();
+
+  // Top-level view state machine (locked / splash / landing / app /
+  // waitlisted) + the two splash overlays (first-visit branded splash
+  // and the auth-resolving fade). See useAppView.
+  const {
+    view,
+    setView,
+    firstVisit,
+    showSplash,
+    setShowSplash,
+    authSplashMounted,
+    authSplashLeaving,
+  } = useAppView({ user, authLoading, waitlistMode, waitlistLoading });
+
+  // Cinematic cold-open splash. Plays once per fresh app boot (cold
+  // open), gated by the /admin/splash config. Distinct from the
+  // one-time first-visit SplashScreen — this fires every cold open.
+  // Skipped inside the Flutter shell (it draws its own launch screen)
+  // and when sessionStorage already marked this tab as opened.
+  const [cinematic, setCinematic] = useState<{ active: boolean; config: SplashConfig }>(() => {
+    if (typeof window === 'undefined') return { active: false, config: DEFAULT_SPLASH_CONFIG };
+    const inShell = document.documentElement.dataset.shell === 'catalog-app';
+    let alreadyOpened = false;
+    try { alreadyOpened = sessionStorage.getItem('catalog:cold-open-done') === '1'; } catch { /* ignore */ }
+    return { active: !inShell && !alreadyOpened, config: DEFAULT_SPLASH_CONFIG };
   });
   useEffect(() => {
-    if (!firstVisit) return;
-    try { window.localStorage.setItem('catalog:visited', '1'); } catch { /* quota */ }
+    if (!cinematic.active) return;
+    try { sessionStorage.setItem('catalog:cold-open-done', '1'); } catch { /* ignore */ }
+    // SplashScreen + SplashHost were retired — the big "Catalog" wordmark
+    // splash was duplicating the smaller auth-splash above. Drop the
+    // cinematic on the next tick and fire the done event so any
+    // listeners (ActivityRealtimeToasts, etc.) don't hang waiting for a
+    // splash that never paints.
+    const t = setTimeout(() => {
+      setCinematic(c => ({ ...c, active: false }));
+      try { window.dispatchEvent(new Event('catalog:splash-done')); } catch { /* ignore */ }
+    }, 0);
+    return () => clearTimeout(t);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
-    const SPLASH_MIN_MS = 800;
-    const SPLASH_MAX_MS = 2500;
-    const startedAt = Date.now();
-    let dismissed = false;
-    const dismiss = () => {
-      if (dismissed) return;
-      dismissed = true;
-      setFirstVisit(false);
-    };
-
-    // Race the feed fetch + the min floor; whoever wins LAST triggers
-    // dismiss (so we don't dismiss before either is ready). Then a
-    // hard ceiling timer guarantees we never hang past max.
-    const ceiling = window.setTimeout(dismiss, SPLASH_MAX_MS);
-    let feedReady = false;
-    let floorReached = false;
-    const tryDismiss = () => {
-      if (feedReady && floorReached) dismiss();
-    };
-    const floor = window.setTimeout(() => { floorReached = true; tryDismiss(); }, SPLASH_MIN_MS);
-    prefetchHomeFeed()
-      .then(rows => {
-        // Pre-warm posters from the FRESH list while the splash is still
-        // up so they're in browser cache by the time the feed renders.
-        for (const ad of rows.slice(0, 6)) {
-          const url = ad.thumbnail_url
-            || ad.product?.image_url
-            || (ad.product?.images && ad.product.images[0])
-            || '';
-          if (!url) continue;
-          const img = new Image();
-          img.decoding = 'async';
-          img.src = url;
-        }
-      })
-      .catch(() => { /* let the ceiling handle it */ })
-      .finally(() => {
-        const elapsed = Date.now() - startedAt;
-        // If the network beat the floor, mark ready and let the floor
-        // trigger dismiss; if it beat the ceiling but missed the floor,
-        // still wait for the floor for the brand moment.
-        feedReady = true;
-        if (elapsed >= SPLASH_MIN_MS) {
-          floorReached = true;
-          dismiss();
-        } else {
-          tryDismiss();
-        }
-      });
-
-    return () => {
-      window.clearTimeout(ceiling);
-      window.clearTimeout(floor);
-    };
-  }, [firstVisit]);
-  const [showSplash, setShowSplash] = useState(false);
   const [selectedLook, setSelectedLook] = useState<Look | null>(null); // kept for BookmarksPage/CreatorPage overlays
   const [creatorFilter, setCreatorFilter] = useState<string | null>(null);
   const [brandFilter, setBrandFilter] = useState<string | null>(null);
+  // "Make a catalog of who I follow" — handles array set when the
+  // shopper taps the CTA in the FollowingRail popover. Feeds the
+  // home feed through allowedCreatorHandles so only the followed
+  // creators' looks surface. null disables the filter.
+  const [followingCatalog, setFollowingCatalog] = useState<string[] | null>(null);
   const [showBookmarks, setShowBookmarks] = useState(false);
   const [showMyLooks, setShowMyLooks] = useState(false);
+  const [showWallet, setShowWallet] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
+  const [showFollowing, setShowFollowing] = useState(false);
+  // Sign-in gate overlay. Shown when a signed-out visitor tries to enter
+  // the app from the landing — the app is sign-in-only. Cleared the moment
+  // a session resolves (the auto-route effect then takes them in).
+  const [showSignIn, setShowSignIn] = useState(false);
+  useEffect(() => { if (user) setShowSignIn(false); }, [user]);
+  // Guest freemium gate. The signup scrim that dissolves over a look teaser
+  // ('look'), a creator catalog ('creator'), or the feed scroll nudge
+  // ('feed'). null = no gate showing. Cleared the moment a session resolves.
+  const [guestGate, setGuestGate] = useState<{ variant: GuestGateVariant } | null>(null);
+  const lookTeaseTimer = useRef<number | null>(null);
+  const creatorTeaseTimer = useRef<number | null>(null);
+  useEffect(() => { if (user) setGuestGate(null); }, [user]);
+  useEffect(() => () => {
+    if (lookTeaseTimer.current) window.clearTimeout(lookTeaseTimer.current);
+    if (creatorTeaseTimer.current) window.clearTimeout(creatorTeaseTimer.current);
+  }, []);
+  // Feature chokepoints (follow, …) raise the gate via this event when a
+  // guest attempts a signed-in action.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onRequire = () => setGuestGate(g => g ?? { variant: 'feed' });
+    window.addEventListener(REQUIRE_SIGNUP_EVENT, onRequire);
+    return () => window.removeEventListener(REQUIRE_SIGNUP_EVENT, onRequire);
+  }, []);
+  // Comment thread overlay target. Opening pushes /comments/<type>/<slug>
+  // via history.pushState (NOT a route nav) so the product/look overlay
+  // underneath stays mounted; backing out just clears this.
+  const [commentsTarget, setCommentsTarget] = useState<{ type: 'product' | 'look'; slug: string } | null>(null);
   const [selectedProduct, setSelectedProduct] = useState<Product | null>(null);
   const [selectedCreative, setSelectedCreative] = useState<ProductAd | null>(null);
   const [selectedSimilar, setSelectedSimilar] = useState<Product[] | null>(null);
   const [similarCreatives, setSimilarCreatives] = useState<ProductAd[] | null>(null);
   const [brandCreatives, setBrandCreatives] = useState<ProductAd[] | null>(null);
+  const [graphPairs, setGraphPairs] = useState<GraphPair[] | null>(null);
   // Popular-product fallback for the "More like this" feed. Populated
   // once on mount; used when find_similar_creatives returns nothing for
   // a given seed (e.g. cold-start product with no embedding yet).
@@ -286,48 +275,21 @@ export default function Home() {
   // products share a brand+name or React batches the re-render in a way
   // that makes the field-comparison deps appear unchanged.
   const [productNavCount, setProductNavCount] = useState(0);
-  const [activeFilter, setActiveFilter] = useState<'all' | 'men' | 'women'>('all');
-  // Once the user manually toggles the gender chip we stop auto-syncing
-  // it from the profile - otherwise their override would get clobbered
-  // on the next session-restore.
-  const filterUserOverride = useRef(false);
-  const handleGenderFilterChange = useCallback((next: 'all' | 'men' | 'women') => {
-    filterUserOverride.current = true;
-    setActiveFilter(next);
-    // Also update the module-level shopperGender used by every
-    // product-creative query (home feed, brand strip, similar rail).
-    // Without this, flipping the Shopping-for toggle to Women only
-    // re-scoped the looks (small portion of the feed) - the much
-    // larger creative grid kept rendering whatever the profile's
-    // signup gender was set to. Mapping is straightforward:
-    //   'men'   → 'male'
-    //   'women' → 'female'
-    //   'all'   → 'unknown' (no filter)
-    setShopperGender(next === 'men' ? 'male' : next === 'women' ? 'female' : 'unknown');
-  }, []);
-  // Initial searchQuery comes from the URL ?q= param so a deep-linked
-  // search (someone shares /catalog.shop/?q=shoes) lands in the right
-  // state on first paint. Subsequent commits push history entries - see
-  // the debounced syncSearchToUrl effect below - so the back button
-  // walks the user through their search history.
-  const initialUrlQuery = (() => {
-    if (typeof window === 'undefined') return '';
-    try { return new URLSearchParams(window.location.search).get('q') ?? ''; }
-    catch { return ''; }
-  })();
-  const [searchQuery, setSearchQuery] = useState(initialUrlQuery);
+  // Gender filter ('all' | 'men' | 'women') + profile-driven auto-sync.
+  // changeFilter locks the user-override flag so the auto-sync never
+  // clobbers an explicit toggle. lockOverride() lets handleOpenBrand
+  // mark override without flipping the filter value.
+  const {
+    activeFilter,
+    changeFilter: handleGenderFilterChange,
+    lockOverride: lockGenderOverride,
+    resetFilter: resetGenderFilter,
+  } = useShopperGender({ user, authLoading });
+  // Search query + ?q= URL sync, including the bump-trigger that lets
+  // Enter/suggestion-click bypass the in-feed typing debounce. See
+  // useSearchUrlSync.
+  const { searchQuery, setSearchQuery, searchTrigger, bumpSearchTrigger } = useSearchUrlSync();
   const [searchLoading, setSearchLoading] = useState(false);
-  // searchTrigger is bumped on Enter / suggestion-click for an immediate
-  // commit (bypassing the debounce inside ContinuousFeed). The
-  // initial-mount value is non-zero when the URL already has ?q=, so
-  // the feed knows to fire the search on first render rather than wait
-  // for typing.
-  const [searchTrigger, setSearchTrigger] = useState(initialUrlQuery ? 1 : 0);
-  // Set when we're applying a popstate-driven URL change so the
-  // outgoing-URL-push effect doesn't echo it back as a new history
-  // entry. Without this every back-button press would push a forward
-  // entry on top of the one we just came from.
-  const isApplyingUrlChange = useRef(false);
   const handleSearchLoadingChange = useCallback((loading: boolean) => {
     setSearchLoading(loading);
   }, []);
@@ -336,235 +298,218 @@ export default function Home() {
   const [shuffleKey, setShuffleKey] = useState(1);
   const [layoutMode, setLayoutMode] = useState(2);
   const [catalogName, setCatalogName] = useState<string>('all');
-  const [recentCatalogs, setRecentCatalogs] = useState<string[]>(() => {
-    try {
-      return JSON.parse(localStorage.getItem('recentCatalogs') || '[]');
-    } catch { return []; }
-  });
-  const [catalogDropdownOpen, setCatalogDropdownOpen] = useState(false);
-  const catalogDropdownRef = useRef<HTMLDivElement>(null);
+  const [mySizeOnly, setMySizeOnly] = useState(false);
 
-  const bookmarks = useBookmarks();
-  const { recentProducts, pushRecent } = useRecentProducts();
-  const { user, loading: authLoading, logout } = useAuth();
+  // ── New home: "What are you shopping for?" hero ──────────────────────
+  // The hero is the home entry; the catalog feed lives directly below it
+  // (scroll reveals it). A search plays the SearchCeremony then reveals
+  // results. Skipped inside the native Flutter shell (it has its own
+  // launch UX) and once a search/catalog filter is already active.
+  const inShell = typeof document !== 'undefined' && document.documentElement.dataset.shell === 'catalog-app';
+  const [heroMode, setHeroMode] = useState(() => !inShell);
+  const [heroScrolled, setHeroScrolled] = useState(false);
+  const [ceremony, setCeremony] = useState<{ active: boolean; query: string; kind: 'search' | 'brand' }>({ active: false, query: '', kind: 'search' });
+  // Result product images surfaced by ContinuousFeed once a search resolves —
+  // floated in the particle field behind the search ceremony.
+  const [ceremonyImages, setCeremonyImages] = useState<string[]>([]);
+  const [revealResults, setRevealResults] = useState(false);
+  // Chrome auto-hide on scroll-down once you're past the hero. Header
+  // slides up offscreen, bottom search bar slides down — full-screen feed.
+  // Scrolling up brings them back; stopping preserves the current state.
+  const [chromeHidden, setChromeHidden] = useState(false);
+  // Opening a look/product overlay locks the body with position:fixed, which
+  // snaps document scroll to 0 (and fires a synthetic scroll); closing
+  // restores the scroll (another synthetic scroll). Both scroll-trackers
+  // below would read those programmatic jumps as a real "scrolled to top →
+  // scrolled back down" and animate the search bar up to the hero
+  // (mid-screen) position and back — that round-trip IS the lag the shopper
+  // sees on open/close. This ref freezes both trackers for the whole time an
+  // overlay is open and through the close-restore (cleared a frame later), so
+  // the bar's position never moves across the round-trip.
+  const overlayScrollLockRef = useRef(false);
 
-  // Branded splash logic. Show the splash whenever we're in the
-  // 'locked' view AND either:
-  //   - auth is still resolving (initial bootstrap, OAuth code exchange,
-  //     or session restore from localStorage), OR
-  //   - auth has resolved with a user but the auto-route effect hasn't
-  //     yet flipped view to 'app' / 'waitlisted' (the waitlist-status
-  //     check is async and we don't want a blank screen during it).
-  // This keeps the password gate from ever flashing for users who are
-  // about to be signed in, and gives every cold start a unified splash.
-  const showAuthSplash = view === 'locked' && (authLoading || !!user);
-  const [splashLeaving, setSplashLeaving] = useState(false);
-  const [splashMounted, setSplashMounted] = useState(showAuthSplash);
+  // Referral capture: stash any ?ref=<handle> from the landing URL ASAP
+  // (before OAuth can strip it), then redeem it once the user is signed in
+  // (attribute the signup + skip the waitlist + reward the creator $0.25).
   useEffect(() => {
-    if (showAuthSplash) {
-      setSplashMounted(true);
-      setSplashLeaving(false);
-      return;
-    }
-    if (splashMounted) {
-      // Auth resolved - start the fade-out, then unmount after the
-      // CSS transition completes (240 ms; matching .auth-splash
-      // transition duration).
-      setSplashLeaving(true);
-      const t = window.setTimeout(() => setSplashMounted(false), 280);
-      return () => window.clearTimeout(t);
-    }
-  }, [showAuthSplash, splashMounted]);
-
-  // Track recent catalogs
+    import('~/services/referrals').then(({ captureRefFromUrl }) => captureRefFromUrl());
+  }, []);
   useEffect(() => {
-    if (catalogName) {
-      setRecentCatalogs(prev => {
-        const updated = [catalogName, ...prev.filter(n => n !== catalogName)].slice(0, 5);
-        localStorage.setItem('recentCatalogs', JSON.stringify(updated));
-        return updated;
-      });
-    }
-  }, [catalogName]);
-
-  // ── URL ↔ search state sync ─────────────────────────────────────────────
-  // Two-way binding between the ?q= URL param and searchQuery so each
-  // committed search is its own history entry and the back button walks
-  // the user through their search history.
-  //
-  // Push direction: debounce searchQuery by 350 ms so we don't blow the
-  // history stack on every keystroke. Only push when the URL would
-  // actually change, so a re-typed identical query doesn't add a
-  // redundant entry. The `isApplyingUrlChange` ref guards against echo
-  // when the change came from popstate.
-  //
-  // Pop direction: listen for popstate and read ?q=. When it differs
-  // from the current state, set isApplyingUrlChange before updating
-  // state so the push-effect's diff check skips the rebound.
-  useEffect(() => {
-    if (isApplyingUrlChange.current) {
-      isApplyingUrlChange.current = false;
-      return;
-    }
-    const t = window.setTimeout(() => {
-      const url = new URL(window.location.href);
-      const current = url.searchParams.get('q') ?? '';
-      const next = searchQuery;
-      if (current === next) return;
-      if (next) url.searchParams.set('q', next);
-      else      url.searchParams.delete('q');
-      window.history.pushState({ q: next }, '', url.toString());
-    }, 350);
-    return () => window.clearTimeout(t);
-  }, [searchQuery]);
-
-  useEffect(() => {
-    const onPop = () => {
-      try {
-        const q = new URLSearchParams(window.location.search).get('q') ?? '';
-        if (q !== searchQuery) {
-          isApplyingUrlChange.current = true;
-          setSearchQuery(q);
-          // Bump trigger so the feed re-runs the search rather than
-          // waiting for the user to type.
-          setSearchTrigger(t => t + 1);
-        }
-      } catch { /* malformed URL - ignore */ }
-    };
-    window.addEventListener('popstate', onPop);
-    return () => window.removeEventListener('popstate', onPop);
-  }, [searchQuery]);
-
-  // Auto-scope the feed by the shopper's profile gender so a guy lands
-  // on men + unisex looks, a girl on women + unisex. Manual taps on the
-  // gender chip set filterUserOverride so we never clobber the user's
-  // explicit choice. Runs once per session-bound user id.
-  useEffect(() => {
-    if (!user || authLoading) return;
-    if (filterUserOverride.current) return;
-    let cancelled = false;
-    getUserGender(user.id).then(g => {
-      if (cancelled) return;
-      // Always tell product-creative the gender so brand-strip and
-      // live-ads queries scope correctly, even when the looks-level
-      // filter is overridden by the user. Skip 'unknown' - that's the
-      // null-state and we never want to hide the catalog from someone
-      // we can't tag.
-      if (g === 'male' || g === 'female') setShopperGender(g);
-      if (filterUserOverride.current) return;
-      if (g === 'male') setActiveFilter('men');
-      else if (g === 'female') setActiveFilter('women');
-      // 'unknown' leaves the catalog wide-open ('all').
-    });
-    return () => { cancelled = true; };
-  }, [user, authLoading]);
-
-  // Close dropdown on outside click
-  useEffect(() => {
-    const handler = (e: MouseEvent) => {
-      if (catalogDropdownRef.current && !catalogDropdownRef.current.contains(e.target as Node)) {
-        setCatalogDropdownOpen(false);
-      }
-    };
-    if (catalogDropdownOpen) document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [catalogDropdownOpen]);
-
-  // Auto-route on sign-in: approved users enter the app, everyone else goes to the waitlist.
-  useEffect(() => {
-    if (authLoading) return;
     if (!user) return;
-    if (view !== 'locked') return;
-    // Clean OAuth artifacts from URL once sign-in is confirmed
-    if (
-      window.location.hash.includes('access_token') ||
-      window.location.search.includes('code=')
-    ) {
-      window.history.replaceState(null, '', window.location.pathname);
-    }
+    import('~/services/referrals').then(({ redeemStoredRef }) => { void redeemStoredRef(); });
+  }, [user]);
 
-    let cancelled = false;
-    (async () => {
-      if (user.role === 'admin') {
-        if (!cancelled) setView('app');
-        return;
-      }
-      // Wrap the waitlist lookup so a transient network failure (or RLS
-      // regression) can't leave the user pinned on 'locked' forever - that
-      // path renders an auth splash with no escape. On throw, default to the
-      // waitlist view: it's the same destination an unapproved user lands
-      // on, has a Retry affordance, and beats a stuck splash.
-      let status: Awaited<ReturnType<typeof getWaitlistStatus>> = null;
-      try {
-        status = await getWaitlistStatus(user.id);
-      } catch (err) {
-        console.warn('[auto-route] waitlist lookup failed', err);
-      }
-      if (cancelled) return;
-      setView(status?.approved ? 'app' : 'waitlisted');
-    })();
-    return () => { cancelled = true; };
-  }, [user, authLoading, view]);
-
-  // Read hash on mount for deep linking
+  // Backfill missing look posters in the background. Looks without a poster
+  // render as blank grey cards (Saved screen, etc.); generating one from the
+  // video frame fixes them everywhere. Gated to admins, who have write
+  // access, and fired once per session, idle, so it never blocks the feed.
   useEffect(() => {
-    const hash = window.location.hash.replace('#', '');
-    if (hash === 'app') {
-      setView('app');
-    } else if (hash === 'landing') {
-      setView('landing');
+    if (user?.role !== 'admin' && user?.role !== 'super_admin') return;
+    const run = () => import('~/services/poster-backfill')
+      .then(({ backfillMissingLookPosters }) => backfillMissingLookPosters())
+      .catch(() => {});
+    const ric = (window as unknown as { requestIdleCallback?: (cb: () => void) => number }).requestIdleCallback;
+    const id = ric ? ric(run) : window.setTimeout(run, 4000);
+    return () => {
+      const cic = (window as unknown as { cancelIdleCallback?: (h: number) => void }).cancelIdleCallback;
+      if (ric && cic) cic(id); else window.clearTimeout(id);
+    };
+  }, [user?.role]);
+
+  // Pause the site singleton particle field whenever the feed is the focus
+  // (hero dismissed or scrolled past) — it's fully covered there, so drawing
+  // it is wasted GPU that competes with video decode on scroll.
+  useEffect(() => {
+    import('~/services/particles').then(({ particleControls }) => {
+      particleControls.paused = !heroMode || heroScrolled;
+    });
+  }, [heroMode, heroScrolled]);
+
+  // Reveal the bottom search bar once the shopper scrolls down off the
+  // hero into the catalog (while heroMode is the active screen). While
+  // scrolling within the hero band we also write a 0→1 progress value
+  // to --hero-scroll-progress on the app root so CSS can fade the
+  // hero-positioned search bar out as the shopper scrolls into the
+  // feed peek — without that, the bar hovered awkwardly in the
+  // middle of the viewport until the 50% threshold flipped it down
+  // to the docked position in one step.
+  const [heroBarFaded, setHeroBarFaded] = useState(false);
+  useEffect(() => {
+    if (!heroMode) {
+      setHeroScrolled(true);
+      setHeroBarFaded(false);
+      if (typeof document !== 'undefined') {
+        document.documentElement.style.setProperty('--hero-scroll-progress', '1');
+      }
+      return;
     }
+    setHeroScrolled(false);
+    setHeroBarFaded(false);
+    if (typeof document !== 'undefined') {
+      document.documentElement.style.setProperty('--hero-scroll-progress', '0');
+    }
+    let raf = 0;
+    const onScroll = () => {
+      // Ignore the body-lock's programmatic scroll jumps while a look/product
+      // overlay is open — they aren't real scrolls and must not reposition the
+      // hero bar (the open→middle→down animation that read as lag).
+      if (overlayScrollLockRef.current) return;
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        const ratio = Math.min(1, Math.max(0, window.scrollY / (window.innerHeight * 0.5)));
+        document.documentElement.style.setProperty('--hero-scroll-progress', String(ratio));
+        // Same 0.625 cutoff as the CSS opacity formula (1 - r*1.6 ≤ 0)
+        // so pointer-events flip off the moment the bar is visually
+        // invisible. Without this hook the faded bar still ate taps
+        // meant for the product tiles below it.
+        setHeroBarFaded(ratio >= 0.625);
+        setHeroScrolled(window.scrollY > window.innerHeight * 0.5);
+      });
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [heroMode]);
+
+  // Scroll-direction tracker: once past the hero, hide chrome on scroll
+  // down and show it on scroll up. Small dead-zone so micro-jitter doesn't
+  // flicker the chrome. The search bar's hidden/shown state is preserved
+  // across an overlay open→close (the body-lock's synthetic scrolls are
+  // ignored via overlayScrollLockRef), so the bar only returns on a genuine
+  // scroll-up or at the hero top — never just because a look/product closed.
+  useEffect(() => {
+    if (!heroScrolled) { setChromeHidden(false); return; }
+    let lastY = window.scrollY;
+    const THRESHOLD = 8; // px of continuous direction before reacting
+    let accum = 0;
+    const onScroll = () => {
+      // Frozen while an overlay is open — see overlayScrollLockRef. Leaving
+      // lastY untouched keeps the delta continuous when scrolling resumes.
+      if (overlayScrollLockRef.current) return;
+      const y = window.scrollY;
+      const dy = y - lastY;
+      lastY = y;
+      // Always show near the very top.
+      if (y < window.innerHeight * 0.6) { setChromeHidden(false); accum = 0; return; }
+      // Same direction as accum: extend; opposite direction: reset.
+      if ((dy > 0 && accum >= 0) || (dy < 0 && accum <= 0)) accum += dy;
+      else accum = dy;
+      if (accum > THRESHOLD)       setChromeHidden(true);
+      else if (accum < -THRESHOLD) setChromeHidden(false);
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [heroScrolled]);
+
+  // Any committed search while on the hero (bottom bar Enter, a catalog
+  // pill, the type-anywhere overlay, or a deep-linked ?q=) bumps
+  // searchTrigger — that's our single universal cue to play the ceremony,
+  // then reveal results. Live typing doesn't bump the trigger, so the
+  // hero stays put while the shopper types.
+  const prevTriggerRef = useRef(searchTrigger);
+  useEffect(() => {
+    if (searchTrigger === prevTriggerRef.current) return;
+    prevTriggerRef.current = searchTrigger;
+    // Play the ceremony on EVERY committed search (Enter / suggestion tap /
+    // brand) — whether from the hero or the bottom search bar in the feed.
+    // Live typing doesn't bump the trigger, so it never fires mid-type.
+    if (searchQuery.trim() && !ceremony.active) {
+      setCeremonyImages([]);
+      setCeremony({ active: true, query: searchQuery, kind: 'search' });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [searchTrigger]);
+
+  const handleCeremonyDone = useCallback(() => {
+    setCeremony({ active: false, query: '', kind: 'search' });
+    setHeroMode(false);
+    window.scrollTo({ top: 0, behavior: 'auto' });
+    setRevealResults(true);
+    window.setTimeout(() => setRevealResults(false), 950);
   }, []);
 
-  // Sync hash when view changes
-  useEffect(() => {
-    // Don't clobber Supabase OAuth return URL - let the client parse it
-    // first. Both implicit (#access_token=…) and PKCE (?code=…) flows
-    // depend on the URL staying intact until supabase-js's async
-    // exchange completes.
-    if (window.location.hash.includes('access_token')) return;
-    if (window.location.search.includes('code=')) return;
-    // Deep-linked paths (/p/<slug>, /l/<slug>, /b/<slug>) manage their
-    // own URL via replaceState. Don't clobber them with a hash — using
-    // a fragment-only string like '#app' keeps the current path and
-    // would produce /p/slug#app.
-    if (window.location.pathname !== '/') return;
+  const handleRevealFeed = useCallback(() => {
+    window.scrollTo({ top: window.innerHeight, behavior: 'smooth' });
+  }, []);
 
-    let hash = '';
-    if (view === 'app') hash = 'app';
-    else if (view === 'landing') hash = 'landing';
-    else if (view === 'locked') hash = '';
-
-    if (hash) {
-      window.history.replaceState(null, '', `#${hash}`);
-    } else {
-      window.history.replaceState(null, '', window.location.pathname);
-    }
-  }, [view]);
-
-  // Native shell bridge - when running inside the Flutter wrapper
-  // (catalog-flutter), it dispatches CustomEvents on `window` to drive
-  // the feed without needing direct React state access.
-  useEffect(() => {
-    const onSetCategory = (e: Event) => {
-      const detail = (e as CustomEvent<string>).detail;
-      if (typeof detail !== 'string' || !detail) return;
+  // Native shell bridge: Flutter wrapper dispatches CustomEvents on
+  // `window` to drive the feed. See useShellBridge / CLAUDE.md Section 8.
+  useShellBridge({
+    onSetCategory: useCallback((detail: string) => {
       setSearchQuery('');
-      setActiveFilter('all');
+      resetGenderFilter();
       setCatalogName(detail);
       setShuffleKey(k => k + 1);
       setView('app');
-    };
-    const onOpenBookmarks = () => { history.pushState({}, '', '/bookmarks'); setShowBookmarks(true); };
-    const onOpenMyLooks = () => { history.pushState({}, '', '/my-looks'); setShowMyLooks(true); };
+    }, []),
+    onOpenBookmarks: useCallback(() => {
+      history.pushState({}, '', '/bookmarks');
+      setShowBookmarks(true);
+    }, []),
+    onOpenMyLooks: useCallback(() => {
+      history.pushState({}, '', '/my-looks');
+      setShowMyLooks(true);
+    }, []),
+  });
 
-    window.addEventListener('catalog:set-category', onSetCategory as EventListener);
-    window.addEventListener('catalog:open-bookmarks', onOpenBookmarks);
-    window.addEventListener('catalog:open-my-looks', onOpenMyLooks);
+  // Creator engagement toast click → open the wallet and scroll
+  // its Analytics section into view. Two rAF frames give setShowWallet
+  // time to commit and CreatorWallet time to mount its scroll-target.
+  useEffect(() => {
+    const onOpenWalletAnalytics = () => {
+      setShowWallet(true);
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => {
+          window.dispatchEvent(new CustomEvent('catalog:scroll-wallet-analytics'));
+        });
+      });
+    };
+    window.addEventListener('catalog:open-wallet-analytics', onOpenWalletAnalytics);
     return () => {
-      window.removeEventListener('catalog:set-category', onSetCategory as EventListener);
-      window.removeEventListener('catalog:open-bookmarks', onOpenBookmarks);
-      window.removeEventListener('catalog:open-my-looks', onOpenMyLooks);
+      window.removeEventListener('catalog:open-wallet-analytics', onOpenWalletAnalytics);
     };
   }, []);
 
@@ -573,9 +518,14 @@ export default function Home() {
   }, []);
 
   const handleRemix = useCallback(() => {
+    // Remix is a VIEW shuffle — re-seeds card order + cycles the grid
+    // layout. It used to ALSO rotate the catalog name string, but
+    // that turned every remix click into a new catalog, which is the
+    // opposite of what the user expects (the remix glyph should
+    // refresh the LOOK of the current catalog, not pick a different
+    // one). Catalog name stays put now.
     setShuffleKey(k => k + 1);
     setLayoutMode(m => (m % 3) + 1);
-    setCatalogName(getRandomCatalogName());
   }, []);
 
   // Right-click snaps the grid back to the default uniform layout (mosaic
@@ -586,6 +536,13 @@ export default function Home() {
     setLayoutMode(0);
   }, []);
 
+  // Remix navigate is used to reset the URL on logo click so Remix's
+  // router-level location stays in sync. A raw window.history.pushState
+  // here would desync useLocation() — subsequent searches via the
+  // TypeAnywhere overlay (which uses navigate('/?q=…')) would then
+  // appear as no-op location changes and silently drop the query.
+  const navigate = useNavigate();
+
   const handleLogoClick = useCallback(() => {
     // Reset every layer that could be sitting on top of the feed:
     // search query + filters, all modal overlays (product, look,
@@ -593,8 +550,10 @@ export default function Home() {
     // so the feed re-rolls to a fresh order, and dispatch a
     // 'catalog:close-search' event so BottomBar can drop its
     // local searchOpen state (the suggestions column).
+    // Also return to the "What are you shopping for?" home hero.
+    if (!inShell) { setHeroMode(true); window.scrollTo({ top: 0, behavior: 'auto' }); }
     setSearchQuery('');
-    setActiveFilter('all');
+    resetGenderFilter();
     setCreatorFilter(null);
     setBrandFilter(null);
     setSelectedProduct(null);
@@ -609,29 +568,65 @@ export default function Home() {
       // Push the URL bar back to "/" so clicking the logo from a
       // deep-linked surface (/l/<look-slug>, /p/<product-slug>,
       // /b/<brand-slug>, or /?q=<search>) cleanly resets to the
-      // catalog root. Bypasses a full page reload - we already
-      // reset every layer of state above, so a silent pushState
-      // is enough to keep the URL bar honest.
+      // catalog root. Use Remix's navigate (not raw pushState) so
+      // useLocation() stays in sync — otherwise re-submitting the
+      // same search via the TypeAnywhere overlay would land on the
+      // same router-level location and the ?q= effect wouldn't fire.
       const target = '/';
       if (window.location.pathname !== target || window.location.search) {
-        window.history.pushState({}, '', target);
+        navigate(target);
       }
       // Scroll to top of the feed so the user lands at the start
       // of the grid, not wherever they were last reading.
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
+  }, [navigate]);
+
+  // "Following" catalog pill (desktop search cloud, via TypeAnywhere)
+  // hands us the resolved follow handles through a CustomEvent. Scope
+  // the feed to them, same as the FollowingRail's CTA.
+  useEffect(() => {
+    const onFollowingCatalog = (e: Event) => {
+      const handles = (e as CustomEvent<{ handles?: string[] }>).detail?.handles ?? [];
+      const norm = Array.from(new Set(handles.map(h => h.toLowerCase().trim()).filter(Boolean)));
+      if (norm.length === 0) return;
+      setFollowingCatalog(norm);
+      setCatalogName('Following');
+      setCreatorFilter(null);
+      setBrandFilter(null);
+      setView('app');
+    };
+    window.addEventListener('catalog:following-catalog', onFollowingCatalog);
+    return () => window.removeEventListener('catalog:following-catalog', onFollowingCatalog);
+  }, [setView]);
+
+  // Stable callback for the FollowingRail "make a catalog of who I
+  // follow" CTA. Defined once (useCallback) so the memoized FollowingRail
+  // isn't re-rendered by a fresh arrow identity every parent render.
+  const handleCreateFollowingCatalog = useCallback((handles: string[]) => {
+    const norm = Array.from(new Set(handles.map(h => h.toLowerCase().trim()).filter(Boolean)));
+    if (norm.length === 0) return;
+    setFollowingCatalog(norm);
+    setCatalogName('Following');
+    setCreatorFilter(null);
+    setBrandFilter(null);
   }, []);
 
   const handleLandingToApp = useCallback(() => {
+    // The app is sign-in-only. A signed-out visitor tapping "Open the feed"
+    // gets the sign-in screen, not free access — closing the landing's old
+    // "no signup" hole. Once signed in, the auto-route effect takes them in.
+    if (!user) { setShowSignIn(true); return; }
+    // Fixed 2000ms beat so the splash feels the same regardless of entry.
     setShowSplash(true);
     setView('splash');
     setTimeout(() => {
       setView('app');
       setShowSplash(false);
-    }, 1200);
-  }, []);
+    }, 2000);
+  }, [user]);
 
-  const handleOpenLook = useCallback((look: Look) => {
+  const handleOpenLook = useCallback((look: Look, opts?: { bypassGate?: boolean }) => {
     // Trail navigation - when the user opens a look from inside a
     // ProductPage (or any other product overlay), close the product
     // surface so LookOverlay takes its place cleanly. Without this,
@@ -646,21 +641,132 @@ export default function Home() {
     // back to the previous look on close" so opening a product from
     // here doesn't bounce them somewhere unexpected.
     setProductOpenedFromLook(null);
+    // Fire-and-forget click telemetry for /admin/analytics. No-op for
+    // unauthenticated visitors (session tracker isn't running).
+    trackClick({ type: 'look', id: String(look.id ?? ''), uuid: look.uuid, context: look.title?.slice(0, 200) });
+
+    // Guest gate. Products are open; looks are a "feature". A shared /l/
+    // link (bypassGate) always plays fully so sharing still works. The
+    // first in-app look a guest opens plays free (a real taste); every one
+    // after that plays for ~1s then dissolves into the signup scrim.
+    if (lookTeaseTimer.current) { window.clearTimeout(lookTeaseTimer.current); lookTeaseTimer.current = null; }
     setSelectedLook(look);
-  }, []);
+    if (!waitlistMode && isGuest(user) && !opts?.bypassGate) {
+      if (hasUsedFreeLook()) {
+        // Stash the look so we can drop them right back into it post-signup.
+        if (look.uuid) setGuestIntent({ kind: 'look', uuid: look.uuid });
+        lookTeaseTimer.current = window.setTimeout(() => {
+          setGuestGate({ variant: 'look' });
+          lookTeaseTimer.current = null;
+        }, 1000);
+      } else {
+        markFreeLookUsed();
+      }
+    }
+  }, [user, waitlistMode]);
 
   const handleCloseLook = useCallback(() => {
+    // Drop any pending look-teaser timer + the signup scrim so closing the
+    // look returns the guest cleanly to the feed.
+    if (lookTeaseTimer.current) { window.clearTimeout(lookTeaseTimer.current); lookTeaseTimer.current = null; }
+    setGuestGate(null);
+    // Same back-button parity as handleProductClose: prefer
+    // history.back() so the pushed /l/<slug> entry pops cleanly. The
+    // popstate listener at the bottom of this file then clears
+    // selectedLook. If we're not on /l/ (cold load / no pushed entry)
+    // just clear directly.
+    if (typeof window !== 'undefined'
+        && window.location.pathname.startsWith('/l/')
+        && window.history.length > 1) {
+      window.history.back();
+      return;
+    }
+    // Cold-load / no /l/ entry to pop: reset the address bar to the
+    // catalog root so returning to the feed doesn't strand a stale
+    // /l/<slug> URL (the share-link case).
+    if (typeof window !== 'undefined' && window.location.pathname !== '/') {
+      window.history.replaceState({}, '', '/');
+    }
     setSelectedLook(null);
   }, []);
 
-  const handleOpenCreator = useCallback((creatorName: string) => {
+  const handleOpenCreator = useCallback((creatorName: string, opts?: { bypassGate?: boolean }) => {
+    // Close every higher-stacked overlay so the creator catalog comes to
+    // the foreground. Without nulling selectedProduct/selectedCreative,
+    // a tap on a creator pill inside ProductPage's "You might also like"
+    // would update the catalog *underneath* the still-visible product
+    // page and the click would look like a no-op. Mirrors the close
+    // pattern in handleOpenBrand.
+    setSelectedProduct(null);
+    setSelectedCreative(null);
     setSelectedLook(null);
+    setBrandFilter(null);
+    // Clear any active search so that backing out of the creator catalog
+    // lands on the clean main feed — not the search-filtered state the user
+    // was typing in when they tapped the creator (which read as the search
+    // re-initiating). Also closes the search sheet in BottomBar.
+    setSearchQuery('');
+    setCatalogName('all');
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('catalog:close-search'));
+    }
     setCreatorFilter(creatorName);
-  }, []);
+
+    // Guest gate. Creator catalogs are a "feature", but we OPEN the catalog
+    // first and let it show for a beat, THEN dissolve the signup scrim over
+    // it (with a back/X that returns to the feed) — a real taste, not a wall.
+    // Shared /c/ links (bypassGate) and the viewer's OWN catalog never gate.
+    if (creatorTeaseTimer.current) { window.clearTimeout(creatorTeaseTimer.current); creatorTeaseTimer.current = null; }
+    if (!waitlistMode && isGuest(user) && !opts?.bypassGate && !creatorName.startsWith('user:')) {
+      setGuestIntent({ kind: 'creator', handle: creatorName });
+      creatorTeaseTimer.current = window.setTimeout(() => {
+        setGuestGate({ variant: 'creator' });
+        creatorTeaseTimer.current = null;
+      }, 1100);
+    }
+  }, [user, waitlistMode]);
+
+  // The global TypeAnywhere search bar dispatches this when a creator
+  // autocomplete row is tapped — open that creator's catalog in-app
+  // (same path as a creator-chip tap, so /c/<slug> syncs too).
+  useEffect(() => {
+    const onOpenCreatorEvent = (e: Event) => {
+      const handle = (e as CustomEvent<{ handle?: string }>).detail?.handle;
+      if (!handle) return;
+      setView('app');
+      handleOpenCreator(handle);
+    };
+    window.addEventListener('catalog:open-creator', onOpenCreatorEvent);
+    return () => window.removeEventListener('catalog:open-creator', onOpenCreatorEvent);
+  }, [handleOpenCreator, setView]);
 
   const handleCloseCreator = useCallback(() => {
+    // Drop any pending creator-teaser timer + the signup scrim so closing the
+    // catalog (X / back) returns the guest cleanly to the feed.
+    if (creatorTeaseTimer.current) { window.clearTimeout(creatorTeaseTimer.current); creatorTeaseTimer.current = null; }
+    setGuestGate(null);
+    // Prefer history.back() when we landed here via the /c/<slug>
+    // push so the close X and the browser back button take the same
+    // path. The popstate listener above clears creatorFilter when
+    // the URL leaves /c/. Falls back to a direct state clear on cold
+    // load (no pushed entry to pop).
+    if (typeof window !== 'undefined'
+        && window.location.pathname.startsWith('/c/')
+        && window.history.length > 1) {
+      window.history.back();
+      return;
+    }
     setCreatorFilter(null);
   }, []);
+
+  // Following list page (mobile rail tap). Opening a creator from it closes
+  // the list first so the creator catalog comes to the foreground.
+  const openFollowingList = useCallback(() => setShowFollowing(true), []);
+  const closeFollowingList = useCallback(() => setShowFollowing(false), []);
+  const handleFollowingOpenCreator = useCallback((handle: string) => {
+    setShowFollowing(false);
+    handleOpenCreator(handle);
+  }, [handleOpenCreator]);
 
   // Brand catalog overlay. Opening from a product detail (or any
   // higher-stacked modal) closes those overlays so the new brand
@@ -669,22 +775,23 @@ export default function Home() {
   // BrandPage *underneath* the still-visible ProductPage.
   const handleOpenBrand = useCallback((brandName: string) => {
     if (!brandName) return;
-    // Close any open overlays so the feed below is the visible surface,
-    // then push the brand name into the search bar. The feed treats a
-    // brand match as a Tier-1 catalog hit and renders the brand's
-    // products inline. The ?q= URL effect picks this up and pushes a
-    // history entry so the back button returns the user to wherever
-    // they came from. We also bump searchTrigger so the feed fires the
-    // search immediately instead of waiting on the typing debounce.
+    // Open a brand → play the AI search ceremony FIRST with brand-
+    // specific copy ("Finding everything from <Brand>", etc.), then
+    // let handleCeremonyDone reveal the feed once the loading
+    // narrative has played out. Without this, the brand tap just
+    // snapped to the filtered feed with no transition.
     setSelectedProduct(null);
     setSelectedCreative(null);
     setSelectedLook(null);
     setBrandFilter(null);
     setSearchQuery(brandName);
     setCatalogName(toCatalogName(brandName));
-    setSearchTrigger(t => t + 1);
-    filterUserOverride.current = true;
-  }, []);
+    bumpSearchTrigger();
+    lockGenderOverride();
+    setHeroMode(true);
+    setCeremonyImages([]);
+    setCeremony({ active: true, query: brandName, kind: 'brand' });
+  }, [bumpSearchTrigger, lockGenderOverride]);
 
   const handleCloseBrand = useCallback(() => {
     setBrandFilter(null);
@@ -697,7 +804,32 @@ export default function Home() {
 
   const handleOpenBrowser = useCallback((url: string, title: string, product?: Product) => {
     if (!url) return;
-    setBrowserState({ url, title, product });
+    // Desktop: pop a real new tab so the merchant lives in its own
+    // window and the user can hop back to the catalog without the
+    // in-app browser overlay covering the feed. Mobile / native shell
+    // still use the in-app browser overlay so the trail of cards is
+    // never lost. The shell guard mirrors the data-shell check the
+    // rest of the app uses to gate native-only flows.
+    const inNativeShell = typeof document !== 'undefined'
+      && document.documentElement.dataset.shell === 'catalog-app';
+    // For now, every product link opens the merchant in a real new tab on
+    // web — desktop AND mobile — so the shopper keeps the catalog tab and
+    // lands directly on the product. Only the native Flutter shell keeps
+    // the in-app browser overlay (window.open doesn't pop a real tab
+    // inside the embedded webview, and the shell owns that flow).
+    if (!inNativeShell) {
+      window.open(url, '_blank', 'noopener,noreferrer');
+    } else {
+      setBrowserState({ url, title, product });
+    }
+    // Every product clickout flows through this handler — feed tile,
+    // look-overlay product chips, bookmarks page, ProductPage offers.
+    // Centralising the trackProductClickout call here means a single
+    // clickout firing once per actual click, regardless of which
+    // surface initiated it. Earlier only the ProductPage offer
+    // buttons reported clickouts so the admin Creators/Products
+    // analytics undercounted by an order of magnitude.
+    void trackProductClickout(url, product?.brand ?? null, product?.name ?? title);
   }, []);
 
   // Pull a "like-kinded" feed for the product page. Union of two signals:
@@ -708,14 +840,14 @@ export default function Home() {
   const fetchSimilarProducts = useCallback(async (brand: string | null, catalogTags: string[] | null, excludeId: string | null): Promise<Product[]> => {
     if (!supabase) return [];
 
-    type Row = { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null; url: string | null };
+    type Row = { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null; primary_image_url: string | null; url: string | null };
     const queries: Array<Promise<Row[]>> = [];
 
     if (brand) {
       queries.push((async () => {
         let q = supabase!
           .from('products')
-          .select('id, name, brand, price, image_url, url')
+          .select('id, name, brand, price, image_url, primary_image_url, url')
           .eq('is_active', true)
           .eq('brand', brand)
           .limit(18);
@@ -729,7 +861,7 @@ export default function Home() {
       queries.push((async () => {
         let q = supabase!
           .from('products')
-          .select('id, name, brand, price, image_url, url')
+          .select('id, name, brand, price, image_url, primary_image_url, url')
           .eq('is_active', true)
           .overlaps('catalog_tags', catalogTags)
           .limit(18);
@@ -753,7 +885,7 @@ export default function Home() {
           brand: row.brand || '',
           price: row.price || '',
           url: row.url || '',
-          image: row.image_url || undefined,
+          image: (row as { primary_image_url?: string | null }).primary_image_url || row.image_url || undefined,
         });
       }
     }
@@ -762,31 +894,143 @@ export default function Home() {
 
   const handleOpenProduct = useCallback(async (product: Product) => {
     pushRecent(product);
+    // Close the saved overlay if it's open so the product page isn't hidden
+    // behind it (the look path already does this via handleBookmarksOpenLook).
+    setShowBookmarks(false);
+    // Pause every currently-playing <video> before the nav lands so
+    // we don't briefly have two heroes + a rail of cards all decoding
+    // at once. The TrailVideoHost pool resumes whichever video the
+    // new page actually shows on mount.
+    pauseAllVideos();
     setProductNavCount(c => c + 1);
     // Remember the look the user came from (if any) so the back button
     // on ProductPage returns to that look instead of the empty feed.
     setProductOpenedFromLook(selectedLook);
     setSelectedLook(null);
-    setSelectedCreative(null);
+    // Unify the two product-page surfaces. Opening from a CreativeCard
+    // used to set selectedCreative (so the page rendered with the video
+    // hero), while opening from a Look's product list only set
+    // selectedProduct (so the page rendered with the still poster).
+    // Now that Product carries video_url + thumbnail_url (see
+    // services/looks.ts), we synthesize a creative shell from those
+    // fields whenever the product has a video, so the page is the same
+    // regardless of where the click came from. When the product has no
+    // primary video at all, selectedCreative stays null and the page
+    // falls back to the still poster — same as before.
+    const productVideoUrl = (product as Product & { video_url?: string }).video_url;
+    const productThumb = (product as Product & { thumbnail_url?: string }).thumbnail_url;
+    if (productVideoUrl) {
+      setSelectedCreative({
+        // Stable, non-empty id so the hero's TrailVideoHost slot keys correctly.
+        // An empty id ('') left the pooled <video> unkeyed — on desktop (large
+        // pool) it attached a posterless black element over the poster image
+        // (product-from-look opened to a black hero); mobile's tight pool
+        // evicted it so the poster showed. Mirror ProductPage's own fallback id.
+        id: (product as Product & { creative_id?: string }).creative_id
+          || `product:${product.brand}-${product.name}`,
+        product_id: (product as Product & { id?: string }).id || '',
+        look_id: null,
+        title: product.name,
+        description: null,
+        video_url: productVideoUrl,
+        mobile_video_url: null,
+        hls_url: product.primary_hls_url || null,
+        storage_path: null,
+        thumbnail_url: productThumb || product.image || null,
+        affiliate_url: null,
+        prompt: null,
+        prompt_extra: null,
+        style: '',
+        model: null,
+        status: 'live',
+        duration_seconds: null,
+        aspect_ratio: null,
+        resolution: null,
+        cost_usd: null,
+        impressions: 0,
+        clicks: 0,
+        error: null,
+        enabled: true,
+        created_at: '',
+        completed_at: null,
+        updated_at: null,
+        product: {
+          id: (product as Product & { id?: string }).id || '',
+          name: product.name,
+          brand: product.brand,
+          price: product.price,
+          image_url: product.image || null,
+          images: null,
+          url: product.url,
+          type: null,
+          catalog_tags: null,
+          gender: null,
+        },
+      });
+    } else {
+      setSelectedCreative(null);
+    }
     setSelectedProduct(product);
     setSelectedSimilar(null);
     setSimilarCreatives(null);
     setBrandCreatives(null);
-    // Seed "More like this" by finding any live creative for this product
-    // in the home feed cache (matched by brand + name). Falls back to
-    // nothing if the home feed hasn't loaded yet or the product has no
-    // live creatives — the section stays hidden in that case.
-    const seedCreative = popularFallback.find(ad => {
-      const b = (ad.product?.brand || '').trim().toLowerCase();
-      const n = (ad.product?.name || '').trim().toLowerCase();
-      return b === (product.brand || '').trim().toLowerCase()
-          && n === (product.name || '').trim().toLowerCase();
-    });
-    if (seedCreative) {
-      prefetchSimilarCreatives(seedCreative.id, 18)
-        .then(rows => { primeTrailAssets(rows); setSimilarCreatives(rows); })
-        .catch(() => {});
-    }
+    setGraphPairs(null);
+
+    // Resolve the product's DB id once. Products opened from a Look, search,
+    // or recents arrive WITHOUT an `id` but carry a `url`, so fall back to a
+    // URL → id lookup. This single id drives the impression ping, the graph
+    // "Pairs well with" rail, and the "Similar" rail below — all of which were
+    // silently skipped before whenever the id was absent (i.e. every non-feed
+    // entry point). Resolution is async so it never blocks navigation.
+    const directId = (product as Product & { id?: string }).id || null;
+    const context = [product.brand, product.name].filter(Boolean).join(' · ').slice(0, 200);
+    const productIdP: Promise<string | null> = directId
+      ? Promise.resolve(directId)
+      : (product.url ? resolveProductIdByUrl(product.url).then(id => id || null) : Promise.resolve(null));
+
+    void productIdP.then(productId => {
+      // Impression ping (matches prior behaviour: fired whenever we had a
+      // direct id or a url to resolve from).
+      if (directId || product.url) void trackCreativeImpressions(productId, null, context);
+      if (!productId) return;
+      getGraphPairs([productId]).then(setGraphPairs).catch(() => {});
+      // "Similar" rail: description-embedding similarity, seeded by product id
+      // (migration 020). Type-gated server-side; empty → Popular fills.
+      prefetchSimilarProducts(productId, 18)
+        .then(rows => {
+          primeTrailAssets(rows);
+          setSimilarCreatives(rows);
+        })
+        .catch(() => { /* leave rail empty rather than throw */ });
+      // Products opened from a look/search/recents can arrive WITHOUT the
+      // live primary video inline (the look's cached product data may
+      // predate the render). Fetch it and patch selectedProduct so the
+      // desktop hero plays the primary video instead of a static poster —
+      // ProductPage synthesizes a video hero from product.video_url.
+      if (!productVideoUrl && supabase) {
+        void supabase
+          .from('products')
+          .select('primary_video_url, primary_video_poster_url, primary_image_url, image_url')
+          .eq('id', productId)
+          .maybeSingle()
+          .then(({ data }) => {
+            const vurl = (data?.primary_video_url as string | null) || null;
+            if (!vurl) return;
+            const poster = (data?.primary_video_poster_url
+              || data?.primary_image_url
+              || data?.image_url
+              || product.image
+              || (product as Product & { thumbnail_url?: string }).thumbnail_url
+              || null) as string | null;
+            setSelectedProduct(prev =>
+              prev && prev.url === product.url && prev.name === product.name
+                ? { ...prev, video_url: vurl, thumbnail_url: poster ?? prev.thumbnail_url }
+                : prev,
+            );
+          });
+      }
+    }).catch(() => {});
+
     if (product.brand) {
       const sim = await fetchSimilarProducts(product.brand, null, null);
       setSelectedSimilar(sim);
@@ -800,11 +1044,13 @@ export default function Home() {
         })
         .catch(() => { /* leave rail empty rather than throw */ });
     }
-  }, [fetchSimilarProducts, pushRecent, selectedLook, popularFallback]);
+  }, [fetchSimilarProducts, pushRecent, selectedLook]);
 
   const lastOpenAtRef = useRef(0);
   const handleOpenCreative = useCallback(async (creative: ProductAd) => {
     if (!creative.product) return;
+    // Close the saved overlay if open so the product page isn't hidden behind it.
+    setShowBookmarks(false);
     // Debounce: while the morph is still in flight (~360ms), ignore extra
     // taps. Without this, a user double-tapping a card double-fires
     // setSelectedCreative which races the layoutId animation and produces a
@@ -813,29 +1059,58 @@ export default function Home() {
     if (now - lastOpenAtRef.current < 240) return;
     lastOpenAtRef.current = now;
 
-    const mapped: Product = {
+    // Product→product (a product page is already open, e.g. tapping a
+    // "More like this" tile): drop the PREVIOUS product's rails immediately
+    // so the new page never flashes the old one before its data loads. The
+    // in-page tiles don't rely on the feed's layoutId morph, and the hero
+    // paints the tapped creative's poster instantly — so the swap is clean
+    // and instant. On a fresh feed→product open the ref is null, so we skip
+    // this and keep the feed card's morph untouched.
+    if (selectedProductRef.current) {
+      setSimilarCreatives(null);
+      setBrandCreatives(null);
+      setGraphPairs(null);
+      setSelectedSimilar(null);
+    }
+
+    // Fire impressions for the primary product + every other product in the
+    // associated look (if any). Fire-and-forget — don't await so navigation
+    // is never blocked by the look_products query.
+    void trackCreativeImpressions(
+      creative.product.id || null,
+      creative.look_id || null,
+      [creative.product.brand, creative.product.name].filter(Boolean).join(' · ').slice(0, 200),
+    );
+
+    // Carry over the EXACT image the feed card already painted so the
+    // product-page hero never opens to black. The canonical creative chains
+    // (services/media-resolver) are the same ones the card paints, so the
+    // loaded image always hands off — image-only products (plants, candles)
+    // included.
+    const mapped: Product & { id?: string } = {
+      id: creative.product.id || undefined,
       name: creative.product.name || 'Shop Now',
       brand: creative.product.brand || '',
       price: creative.product.price || '',
       url: creative.product.url || '',
-      image: creative.product.image_url || undefined,
+      image: creativeStill(creative) || undefined,
+      // Secondary poster slot the hero falls back to (heroStill chain).
+      thumbnail_url: creativePoster(creative) || undefined,
     };
     pushRecent(mapped);
+    pauseAllVideos();
     setProductNavCount(c => c + 1);
     setProductOpenedFromLook(selectedLook);
     setSelectedLook(null);
     setSelectedProduct(mapped);
     setSelectedCreative(creative);
-    // Allow the Framer Motion morph one frame to read the old layoutId
-    // before wiping rail state. After 150 ms (well past the morph) clear
-    // stale results so a product opened from a different category (e.g.
-    // plant → clothing) never shows the previous page's rail. The timer
-    // is cancelled if the prefetch resolves first, keeping the instant
-    // swap for cards that were already hovered/prefetched.
-    const staleTimer = window.setTimeout(() => {
-      setSimilarCreatives(null);
-      setBrandCreatives(null);
-    }, 150);
+    // Don't blank the rail state here - that would unmount the tapped rail
+    // card the very moment Framer Motion is reading its layoutId for the
+    // morph, which produces a glitched/jumping transition. Keep the old
+    // rails visible; the .then() handlers below overwrite once new data
+    // arrives. If the prefetch was already done (likely, because tapping
+    // the card means the user hovered/touched it which fired prefetch),
+    // the swap is effectively instant.
 
     // Three lookups, all eager. Each is independently primed so the user's
     // hover often resolves them before they actually tap.
@@ -844,18 +1119,23 @@ export default function Home() {
       creative.product.catalog_tags || null,
       creative.product.id || null,
     );
-    const similarP = prefetchSimilarCreatives(creative.id, 18);
+    // "Similar" rail: description-embedding similarity seeded by product id
+    // (migration 020 / find_similar_products). Type-gated server-side so it
+    // never mixes garment categories; empty → the Popular fallback fills.
+    const similarP = prefetchSimilarProducts(creative.product.id || '', 18);
     const brandP = creative.product.brand
       ? prefetchCreativesByBrand(creative.product.brand, creative.product.id || null, 12)
       : Promise.resolve([] as ProductAd[]);
+    const graphP = creative.product.id
+      ? getGraphPairs([creative.product.id])
+      : Promise.resolve([] as GraphPair[]);
 
-    // Overwrite when data arrives; cancel the stale-clear timer if it
-    // arrives before the 150 ms window expires (prefetch cache hit).
+    // Overwrite when data arrives. No intermediate null state - old rail
+    // content stays put through the morph and gets replaced atomically.
     similarP.then(rows => {
-      clearTimeout(staleTimer);
       primeTrailAssets(rows);
       setSimilarCreatives(rows);
-    }).catch(() => { clearTimeout(staleTimer); /* keep rail empty rather than throw */ });
+    }).catch(() => { /* keep rail empty rather than throw */ });
 
     brandP.then(rows => {
       primeTrailAssets(rows);
@@ -863,12 +1143,19 @@ export default function Home() {
     }).catch(() => { /* keep brand rail empty rather than throw */ });
 
     simP.then(setSelectedSimilar).catch(() => { /* leave brand fallback empty */ });
+    graphP.then(rows => { if (rows.length) setGraphPairs(rows); }).catch(() => {});
   }, [fetchSimilarProducts, pushRecent, selectedLook]);
 
   // Editorial looks for the "You might also like" grid on ProductPage. One
   // fetch per session; reused across every overlay open.
   useEffect(() => {
     let cancelled = false;
+    // Fire the independent boot reads in parallel with the feed fetch so they
+    // collapse into the first wave instead of serializing after the grid
+    // renders: prefetchDials() batches all app_settings dials into one query,
+    // prefetchHiddenContent() warms the admin-hidden sets early.
+    void prefetchDials();
+    prefetchHiddenContent();
     getLooks().then(rows => { if (!cancelled) setLiveLooks(rows); }).catch(() => {});
     return () => { cancelled = true; };
   }, []);
@@ -883,6 +1170,9 @@ export default function Home() {
         if (cancelled) return;
         primeTrailAssets(rows.slice(0, 32));
         setPopularFallback(rows);
+        // Batch-warm brand logos from the feed's products in a single query
+        // instead of the per-brand tier-1 lookup each card fires on mount.
+        void prefetchBrandLogos(rows.map(r => r.product).filter((p): p is NonNullable<typeof p> => !!p));
       })
       .catch(() => { /* leave fallback empty rather than throw */ });
     return () => { cancelled = true; };
@@ -912,20 +1202,53 @@ export default function Home() {
       seenIds.add(idKey);
       seenCreatorVideo.add(creatorVideoKey);
       out.push(l);
-      if (out.length >= 12) break;
+      // Bumped from 12 to 24 so the "Featured in these looks" rail
+      // surfaces the full published-look feed, not a curated subset.
+      if (out.length >= 24) break;
     }
     return out;
   }, [liveLooks]);
 
+  // "Featured in Looks" — only show looks that actually contain the selected
+  // product. Matched by product name (case-insensitive). If no look contains
+  // the product, the section is hidden (empty array → conditional render in
+  // ProductPage skips the block entirely).
+  const lookCreativesForProduct = useMemo<Look[]>(() => {
+    if (!selectedProduct) return [];
+    const needle = selectedProduct.name.toLowerCase().trim();
+    const brand = (selectedProduct.brand || '').toLowerCase().trim();
+    return lookFeedTiles.filter(l =>
+      (l.products || []).some(p => {
+        if (p.name.toLowerCase().trim() !== needle) return false;
+        if (brand && p.brand && p.brand.toLowerCase().trim() !== brand) return false;
+        return true;
+      })
+    );
+  }, [selectedProduct, lookFeedTiles]);
+
   const handleCreateCatalog = useCallback((query: string) => {
-    setSelectedProduct(null);
-    setSelectedLook(null);
-    setSearchQuery(query);
-    // The catalog name is the user's actual query, title-cased - so a
-    // search for "omg shoes" surfaces as "OMG Shoes" under the logo.
-    // Single short tokens (acronyms) stay uppercase.
-    const trimmed = query.trim();
-    setCatalogName(trimmed ? toCatalogName(trimmed) : 'all');
+    const apply = () => {
+      setSelectedProduct(null);
+      setSelectedLook(null);
+      setSearchQuery(query);
+      // The catalog name is the user's actual query, title-cased - so a
+      // search for "omg shoes" surfaces as "OMG Shoes" under the logo.
+      // Single short tokens (acronyms) stay uppercase.
+      const trimmed = query.trim();
+      setCatalogName(trimmed ? toCatalogName(trimmed) : 'all');
+    };
+    // Mobile: if a text input is focused (keyboard up), dismiss it FIRST
+    // and let it start sliding down before the loading ceremony mounts —
+    // otherwise the loading animates up behind the keyboard. The URL/?q=
+    // path has no focused input, so it applies immediately.
+    const active = typeof document !== 'undefined' ? (document.activeElement as HTMLElement | null) : null;
+    const keyboardUp = !!active && (active.tagName === 'INPUT' || active.tagName === 'TEXTAREA' || active.isContentEditable);
+    if (typeof window !== 'undefined' && window.innerWidth <= 768 && keyboardUp) {
+      active!.blur();
+      window.setTimeout(apply, 180);
+      return;
+    }
+    apply();
   }, []);
 
   // The TypeAnywhere overlay (mounted in root.tsx) lands new
@@ -949,13 +1272,74 @@ export default function Home() {
     // re-runs on the next location update.
     if (params.has('code') || params.has('error_description')) return;
     handleCreateCatalog(q);
-    setSearchTrigger(t => t + 1);
+    bumpSearchTrigger();
     setView('app');
     params.delete('q');
     const remaining = params.toString();
     const url = `${window.location.pathname}${remaining ? `?${remaining}` : ''}${window.location.hash || ''}`;
     window.history.replaceState({}, '', url);
   }, [location.search, handleCreateCatalog]);
+
+  // Deep-link to a look's screen via /?look=<uuid>. The activity page's
+  // "Your looks" rail uses this to open a finished render's look overlay.
+  // Resolve the uuid against the live look set, open the overlay, then
+  // strip the param so refresh/share doesn't re-fire.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const params = new URLSearchParams(location.search);
+    const lookUuid = params.get('look');
+    if (!lookUuid) return;
+    if (params.has('code') || params.has('error_description')) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        // Live looks come from the cached public set; an inactive/unpublished
+        // look (e.g. a creator's fresh render) isn't in there, so fall back to
+        // a direct status-agnostic fetch.
+        const all = await getLooks();
+        const look = all.find(l => l.uuid === lookUuid) ?? await getLookByUuid(lookUuid);
+        if (!cancelled && look) {
+          setView('app');
+          // ?look= is a deep link (Activity "Your looks", shared) — play fully.
+          handleOpenLook(look, { bypassGate: true });
+        }
+      } catch { /* ignore — look may have been removed */ }
+    })();
+    params.delete('look');
+    const remaining = params.toString();
+    const url = `${window.location.pathname}${remaining ? `?${remaining}` : ''}${window.location.hash || ''}`;
+    window.history.replaceState({}, '', url);
+    return () => { cancelled = true; };
+  }, [location.search, handleOpenLook]);
+
+  // Replay guest intent after signup. When a guest hits the look/creator
+  // gate we stash what they were reaching for; once a session resolves
+  // (including after the Google OAuth redirect round-trip, where this fires
+  // on the fresh boot's null→user transition) we drop them straight into
+  // it — the single biggest conversion lift.
+  const prevUserRef = useRef(user);
+  useEffect(() => {
+    const wasGuest = !prevUserRef.current;
+    prevUserRef.current = user;
+    if (!user || !wasGuest) return;
+    const intent = takeGuestIntent();
+    if (!intent) return;
+    setGuestGate(null);
+    setView('app');
+    let cancelled = false;
+    (async () => {
+      if (intent.kind === 'creator') {
+        handleOpenCreator(intent.handle, { bypassGate: true });
+        return;
+      }
+      try {
+        const all = await getLooks();
+        const look = all.find(l => l.uuid === intent.uuid) ?? await getLookByUuid(intent.uuid);
+        if (!cancelled && look) handleOpenLook(look, { bypassGate: true });
+      } catch { /* look removed — land on the feed */ }
+    })();
+    return () => { cancelled = true; };
+  }, [user, handleOpenLook, handleOpenCreator, setView]);
 
   const toggleTheme = useCallback(() => {
     setIsLightMode(prev => !prev);
@@ -965,7 +1349,51 @@ export default function Home() {
   // wrappers on BottomBar and UserMenu actually cut renders - inline
   // arrow functions in JSX would create new identities every render.
   const openBookmarks = useCallback(() => setShowBookmarks(true), []);
-  const openMyLooks = useCallback(() => setShowMyLooks(true), []);
+  const openMyLooks = useCallback(() => {
+    // Reflect My Catalog in the URL so it's shareable / back-navigable
+    // (matches the Flutter bridge opener that already pushes /my-looks).
+    if (typeof window !== 'undefined' && !window.location.pathname.startsWith('/my-looks')) {
+      history.pushState({}, '', '/my-looks');
+    }
+    setShowMyLooks(true);
+  }, []);
+  // Cold load / refresh at /my-looks: open the My Catalog overlay so the
+  // deep link doesn't render a blank feed behind the URL.
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.location.pathname.startsWith('/my-looks')) {
+      setShowMyLooks(true);
+    }
+  }, []);
+  // Cross-component "open MyCatalog" hook. CreatorPage's self-view
+  // Edit button fires `catalog:open-my-catalog` instead of taking a
+  // prop callback through every render path — same pattern as
+  // catalog:open-account-menu and catalog:open-bookmarks.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onOpen = () => openMyLooks();
+    window.addEventListener('catalog:open-my-catalog', onOpen);
+    return () => window.removeEventListener('catalog:open-my-catalog', onOpen);
+  }, [openMyLooks]);
+  // "My information" on your own creator catalog opens the profile /
+  // info screen. Event-based for the same reason as open-my-catalog —
+  // avoids threading a callback prop through CreatorPage's render paths.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onOpen = () => { if (user) setShowProfile(true); };
+    window.addEventListener('catalog:open-profile', onOpen);
+    return () => window.removeEventListener('catalog:open-profile', onOpen);
+  }, [user]);
+  // Opening the wallet pushes a real history entry at /earnings so it's
+  // deep-linkable AND browser-back returns to the catalog screen the
+  // user was on (the navigation push, not an external referrer). Skip
+  // the push if we're already at /earnings (e.g. fresh page load).
+  const openWallet = useCallback(() => {
+    setShowWallet(true);
+    if (typeof window !== 'undefined' && window.location.pathname !== '/earnings') {
+      window.history.pushState({}, '', '/earnings');
+    }
+  }, []);
+  const openProfile = useCallback(() => setShowProfile(true), []);
   const closeBookmarks = useCallback(() => {
     history.replaceState({}, '', '/#app');
     setShowBookmarks(false);
@@ -973,6 +1401,157 @@ export default function Home() {
   const closeMyLooks = useCallback(() => {
     history.replaceState({}, '', '/#app');
     setShowMyLooks(false);
+  }, []);
+  const closeWallet = useCallback(() => {
+    // If we arrived at /earnings via in-app navigation (pushState), pop
+    // the history entry so browser-back semantics stay consistent —
+    // tapping back closes the wallet, doesn't bounce to a prior site.
+    // If the user hit /earnings cold (no history to pop), replace into
+    // /#app instead.
+    if (typeof window !== 'undefined' && window.location.pathname === '/earnings') {
+      if (window.history.length > 1) {
+        window.history.back();
+        // setShowWallet(false) will fire via the popstate listener below.
+        return;
+      }
+      window.history.replaceState({}, '', '/#app');
+    } else {
+      history.replaceState({}, '', '/#app');
+    }
+    setShowWallet(false);
+  }, []);
+
+  // Open the wallet on cold load at /earnings, and sync open/close to
+  // forward/back navigation so the URL is the source of truth.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const sync = () => {
+      const onEarnings = window.location.pathname === '/earnings';
+      setShowWallet(onEarnings);
+    };
+    sync();
+    window.addEventListener('popstate', sync);
+    return () => window.removeEventListener('popstate', sync);
+  }, []);
+
+  // Overlay-stack popstate listener. The user's complaint: "click the
+  // fig tree, hit back, it should take me back to THIS look, not
+  // somewhere else." useOverlayRouter pushes /p/<slug> when a product
+  // opens — pressing browser back pops that history entry and fires
+  // popstate here. We detect that selectedProduct is set but the URL
+  // is no longer /p/, fire the same close handler the X button uses
+  // (which restores productOpenedFromLook if it was set), and the
+  // look re-renders underneath. Same logic for /l/: if the URL is
+  // off /l/ but selectedLook is set, clear it.
+  //
+  // We use refs so the listener doesn't reattach on every state
+  // change — it reads the current state through .current at fire
+  // time. This makes the listener stable across re-renders.
+  const productOpenedFromLookRef = useRef(productOpenedFromLook);
+  productOpenedFromLookRef.current = productOpenedFromLook;
+  const selectedProductRef = useRef(selectedProduct);
+  selectedProductRef.current = selectedProduct;
+  const selectedLookRef = useRef(selectedLook);
+  selectedLookRef.current = selectedLook;
+  const brandFilterRef = useRef(brandFilter);
+  brandFilterRef.current = brandFilter;
+  const creatorFilterRef = useRef(creatorFilter);
+  creatorFilterRef.current = creatorFilter;
+  const commentsTargetRef = useRef(commentsTarget);
+  commentsTargetRef.current = commentsTarget;
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onPop = () => {
+      const path = window.location.pathname;
+      const onProduct = path.startsWith('/p/');
+      const onLook    = path.startsWith('/l/');
+      const onBrand   = path.startsWith('/b/');
+      const onCreator = path.startsWith('/c/');
+      const onComments = path.startsWith('/comments/');
+      // Comments overlay exit: URL left /comments/ but the overlay is still
+      // open → user pressed back out of the thread. Clear it; the product /
+      // look it sat on top of is still mounted underneath, untouched.
+      if (!onComments && commentsTargetRef.current) {
+        setCommentsTarget(null);
+      }
+      // Product overlay exit: URL is no longer /p/ but a product is
+      // still open in state → user just pressed back out of the
+      // product page. Mirror what the X close button does: clear the
+      // product + its rails, and if it was opened from a look,
+      // restore that look so the underlying surface reappears.
+      if (!onProduct && selectedProductRef.current) {
+        setSelectedProduct(null);
+        setSelectedCreative(null);
+        setSelectedSimilar(null);
+        setSimilarCreatives(null);
+        setBrandCreatives(null);
+        setGraphPairs(null);
+        const fromLook = productOpenedFromLookRef.current;
+        if (fromLook && onLook) {
+          setSelectedLook(fromLook);
+          setProductOpenedFromLook(null);
+        }
+      }
+      // Look overlay exit: URL is no longer /l/ but a look is still
+      // open → user backed out of the look overlay too.
+      if (!onLook && selectedLookRef.current) {
+        setSelectedLook(null);
+      }
+      // Brand overlay exit.
+      if (!onBrand && brandFilterRef.current) {
+        setBrandFilter(null);
+      }
+      // Creator catalog exit — URL is no longer /c/ but a creator is
+      // still open in state → user pressed back out of the creator
+      // catalog. Without this clear, back would pop the URL but the
+      // CreatorPage would stay mounted on top, and a second back
+      // would leave the site entirely (the original complaint).
+      if (!onCreator && creatorFilterRef.current) {
+        setCreatorFilter(null);
+      }
+      // Back gesture that lands on the bare feed (no overlay left in the
+      // URL) should return to the TOP — not wherever the feed was scrolled
+      // when the overlay opened (which read as a mid-feed "stuck" position).
+      if (!onProduct && !onLook && !onBrand && !onCreator && !onComments) {
+        window.scrollTo({ top: 0, behavior: 'auto' });
+      }
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+  }, []);
+  const closeProfile = useCallback(() => {
+    history.replaceState({}, '', '/#app');
+    setShowProfile(false);
+  }, []);
+
+  // Comments overlay. Open pushes the /comments/<type>/<slug> URL so it's
+  // shareable + the back button pops it, but it does NOT navigate routes —
+  // the product/look overlay underneath stays exactly as-is. Close goes
+  // back if we pushed the entry (so the URL pops cleanly), else just clears.
+  const openComments = useCallback((type: 'product' | 'look', slug: string) => {
+    if (!slug) return;
+    if (typeof window !== 'undefined') {
+      window.history.pushState({ overlay: 'comments' }, '', `/comments/${type === 'product' ? 'p' : 'l'}/${slug}`);
+    }
+    setCommentsTarget({ type, slug });
+  }, []);
+  const closeComments = useCallback(() => {
+    const onComments = typeof window !== 'undefined' && window.location.pathname.startsWith('/comments/');
+    if (onComments && window.history.length > 1) {
+      window.history.back();
+    } else {
+      // Cold load / no history to pop — just clear + normalize the URL.
+      setCommentsTarget(null);
+      if (onComments) window.history.replaceState({}, '', '/');
+    }
+  }, []);
+
+  // Cold-load deep link: /comments/p|l/<slug> mounts _index (the route
+  // re-exports it). Read the URL once and open the comment overlay.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const m = window.location.pathname.match(/^\/comments\/(p|l)\/(.+)$/);
+    if (m) setCommentsTarget({ type: m[1] === 'p' ? 'product' : 'look', slug: decodeURIComponent(m[2]) });
   }, []);
   const handleLogout = useCallback(async () => {
     await logout();
@@ -985,18 +1564,35 @@ export default function Home() {
   const handleSelectSuggestion = useCallback((q: string) => {
     setSearchQuery(q.toLowerCase());
     setCatalogName(toCatalogName(q));
-    setSearchTrigger(t => t + 1);
+    bumpSearchTrigger();
+    // The searchTrigger effect plays the ceremony when on the hero.
   }, []);
   const handleOpenLilyCreator = useCallback(() => setCreatorFilter('@lilywittman'), []);
   const handleProductClose = useCallback(() => {
+    // Prefer history.back() when the product page was pushed via the
+    // overlay router (i.e. the URL is currently /p/<slug>). That pops
+    // the pushed entry, the browser navigates back to the previous URL
+    // (the look's /l/<slug> or the feed at /), and the popstate
+    // listener up the file mirrors the state cleanup + restoreFromLook.
+    // Using history.back() instead of fresh state mutations means the
+    // X close button and the browser back button take the SAME path,
+    // so we never end up with a /l/ pushed on top of /p/ leaking
+    // history entries that have to be tapped through. Falls back to a
+    // direct state cleanup if there's no pushed entry to pop (e.g. the
+    // user opened /p/<slug> as a cold-load — history.length is 1).
+    if (typeof window !== 'undefined'
+        && window.location.pathname.startsWith('/p/')
+        && window.history.length > 1) {
+      window.history.back();
+      return;
+    }
+    // Cold-load / no pushed entry: just clear state directly.
     setSelectedProduct(null);
     setSelectedCreative(null);
     setSelectedSimilar(null);
     setSimilarCreatives(null);
     setBrandCreatives(null);
-    // If the product was opened from a look, restore that look so the
-    // back button feels like back-navigation. Otherwise fall through to
-    // the feed and pop /p/<slug> from the URL.
+    setGraphPairs(null);
     if (productOpenedFromLook) {
       setSelectedLook(productOpenedFromLook);
       setProductOpenedFromLook(null);
@@ -1007,124 +1603,32 @@ export default function Home() {
     }
   }, [productOpenedFromLook]);
 
-  // Sync handlers - push the canonical share URL whenever a modal
-  // opens via in-app interaction. We use replaceState (not navigate)
-  // so the SPA doesn't remount the whole feed; we just update the
-  // address bar so copy-link / back-button / refresh all do the
-  // right thing.
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (!selectedProduct) return;
-    const slug = productSlug({
-      id: selectedProduct.id ?? null,
-      brand: selectedProduct.brand ?? null,
-      name: selectedProduct.name ?? null,
-    });
-    if (!slug) return;
-    const target = `/p/${slug}`;
-    if (window.location.pathname !== target) {
-      window.history.replaceState({}, '', target);
-    }
-  }, [selectedProduct]);
+  // URL ↔ overlay state binding: push /p/<slug>, /l/<slug>, /b/<slug>
+  // when an overlay opens, and consume the slug on fresh load. See
+  // useOverlayRouter for the full sync contract.
+  // Deep-link opens (a shared /l/ or /c/ URL, or browser back/forward to
+  // one) bypass the guest gate so shared links always play — only in-app
+  // taps gate. The overlay router only calls these when reconciling the
+  // URL to state, never for an in-app tap (which sets state first).
+  const handleOpenLookDeepLink = useCallback((look: Look) => handleOpenLook(look, { bypassGate: true }), [handleOpenLook]);
+  const handleOpenCreatorDeepLink = useCallback((handle: string) => handleOpenCreator(handle, { bypassGate: true }), [handleOpenCreator]);
+  useOverlayRouter({
+    selectedProduct,
+    selectedLook,
+    brandFilter,
+    creatorFilter,
+    onOpenProduct: handleOpenProduct,
+    onOpenCreative: handleOpenCreative,
+    onOpenLook: handleOpenLookDeepLink,
+    onOpenBrand: handleOpenBrand,
+    onOpenCreator: handleOpenCreatorDeepLink,
+  });
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (!selectedLook) return;
-    const slug = lookSlug({
-      id: selectedLook.id ?? null,
-      creator: selectedLook.creator ?? null,
-      title: selectedLook.title ?? null,
-    });
-    if (!slug) return;
-    const target = `/l/${slug}`;
-    if (window.location.pathname !== target) {
-      window.history.replaceState({}, '', target);
-    }
-  }, [selectedLook]);
+  const handleBookmarksOpenLook = useCallback((look: Look) => {
+    setShowBookmarks(false);
+    handleOpenLook(look);
+  }, [handleOpenLook]);
 
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (!brandFilter) return;
-    const slug = brandSlug(brandFilter);
-    if (!slug) return;
-    const target = `/b/${slug}`;
-    if (window.location.pathname !== target) {
-      window.history.replaceState({}, '', target);
-    }
-  }, [brandFilter]);
-
-  // Pop URL when brand / look modals close. Product close handles
-  // its own pop above (it has more state to clear).
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (brandFilter) return;
-    if (window.location.pathname.startsWith('/b/')) {
-      window.history.replaceState({}, '', '/');
-    }
-  }, [brandFilter]);
-
-  // Fresh-load handler: read the route param the Remix router gave
-  // us and open the matching modal once. Runs on mount only - after
-  // that, in-app navigation drives state, and the URL syncs back via
-  // the effects above.
-  const params = useParams();
-  const slugParam = params.slug;
-  const initialSlugConsumed = useRef(false);
-  useEffect(() => {
-    if (initialSlugConsumed.current) return;
-    if (!slugParam) return;
-    initialSlugConsumed.current = true;
-    const path = location.pathname;
-    if (path.startsWith('/p/')) {
-      const idPrefix = extractIdPrefix(slugParam);
-      if (!idPrefix || !supabase) return;
-      // Look up the product by the 8-char UUID prefix. Sequence is
-      // products → handleOpenProduct so the rest of the modal stack
-      // (similar / brand rails) loads exactly like a tap-to-open.
-      supabase
-        .from('products')
-        .select('id, name, brand, price, image_url, images, url, catalog_tags, type, is_elite')
-        .ilike('id', `${idPrefix}%`)
-        .limit(1)
-        .then(({ data }) => {
-          const row = data?.[0];
-          if (!row) return;
-          const product: Product = {
-            id: row.id,
-            name: row.name || '',
-            brand: row.brand || '',
-            price: row.price || '',
-            url: row.url || '',
-            image: row.image_url || undefined,
-          };
-          handleOpenProduct(product);
-        });
-    } else if (path.startsWith('/l/')) {
-      const id = extractLookId(slugParam);
-      if (id == null) return;
-      const look = seedLooks.find(l => l.id === id);
-      if (look) handleOpenLook(look);
-    } else if (path.startsWith('/b/')) {
-      // Brand slug is the kebab brand name. Reverse-lookup against
-      // the products table to find the canonical brand string
-      // (preserves original casing / spacing).
-      if (!supabase) return;
-      supabase
-        .from('products')
-        .select('brand')
-        .not('brand', 'is', null)
-        .limit(2000)
-        .then(({ data }) => {
-          if (!data) return;
-          const target = slugParam.toLowerCase();
-          const match = (data as { brand: string }[]).find(r => brandSlug(r.brand) === target);
-          if (match?.brand) handleOpenBrand(match.brand);
-        });
-    }
-    // handleOpen* are stable refs; deliberately empty deps so this
-    // only runs once. The initialSlugConsumed ref guards re-runs.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [slugParam]);
   const handleBookmarksOpenCreator = useCallback((handle: string) => {
     history.replaceState({}, '', '/#app');
     setShowBookmarks(false);
@@ -1162,25 +1666,114 @@ export default function Home() {
   // that signals "what you tapped is now the focus" without feeling theatrical.
   const overlayOpen = !!selectedProduct || !!selectedLook;
 
+  // Guest scroll nudge — once a guest has scrolled a few screens of feed,
+  // dissolve in the soft "register for your daily feed" popup. Cadence
+  // (services/guest): show once at ~3 screens, re-nudge once deeper at ~8,
+  // then rest for the session. Never fires while a look/product/creator
+  // overlay is open (the nudge belongs to the feed) or once a gate is up.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    if (waitlistMode || !isGuest(user) || view !== 'app') return;
+    if (overlayOpen || creatorFilter || brandFilter || guestGate) return;
+    const onScroll = () => {
+      const shown = getNudgeCount();
+      if (shown >= 2) { window.removeEventListener('scroll', onScroll); return; }
+      const screensDeep = shown === 0 ? 3 : 8;
+      if (window.scrollY > window.innerHeight * screensDeep) {
+        bumpNudgeCount();
+        setGuestGate({ variant: 'feed' });
+      }
+    };
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, [user, view, overlayOpen, creatorFilter, brandFilter, guestGate, waitlistMode]);
+
+  // Lock the underlying feed while a product/look overlay is open so
+  // swipe-down-to-dismiss only moves the overlay, not the page beneath.
+  // iOS Safari needs position:fixed + saved scrollY (not just overflow:
+  // hidden) for this to actually stop the body from scrolling. On close
+  // we restore the prior scroll position so the shopper lands exactly
+  // where they tapped — no jump to the top.
+  useEffect(() => {
+    if (!overlayOpen) return;
+    if (typeof window === 'undefined') return;
+    const scrollY = window.scrollY;
+    // Freeze the chrome/hero scroll-trackers for the whole overlay lifecycle so
+    // the position:fixed jump (and the close-time restore) can't reposition the
+    // search bar. Set BEFORE locking the body so the open-time synthetic scroll
+    // is already ignored.
+    overlayScrollLockRef.current = true;
+    // When the overlay is opened from deep in the feed, retire the search bar to
+    // its hidden state so closing returns to a clean full-screen feed — the bar
+    // comes back only on a genuine scroll-up (or at the hero top), which is the
+    // intended "hidden until you scroll up" behaviour.
+    if (scrollY > window.innerHeight * 0.6) setChromeHidden(true);
+    const { body, documentElement: html } = document;
+    const prev = {
+      bodyPosition: body.style.position,
+      bodyTop: body.style.top,
+      bodyWidth: body.style.width,
+      bodyOverflow: body.style.overflow,
+      htmlOverflow: html.style.overflow,
+    };
+    body.style.position = 'fixed';
+    body.style.top = `-${scrollY}px`;
+    body.style.width = '100%';
+    body.style.overflow = 'hidden';
+    html.style.overflow = 'hidden';
+    return () => {
+      body.style.position = prev.bodyPosition;
+      body.style.top = prev.bodyTop;
+      body.style.width = prev.bodyWidth;
+      body.style.overflow = prev.bodyOverflow;
+      html.style.overflow = prev.htmlOverflow;
+      window.scrollTo(0, scrollY);
+      // Keep the trackers frozen through the restore scroll above (it fires
+      // asynchronously), then release a frame later so the next genuine scroll
+      // is read normally.
+      requestAnimationFrame(() => { overlayScrollLockRef.current = false; });
+    };
+  }, [overlayOpen]);
+
   return (
     <TrailRoot>
     <TrailVideoHost>
-    <div className={`app-root ${isLightMode ? 'light-mode' : ''}${overlayOpen ? ' has-overlay' : ''}`}>
+    <div className={`app-root ${isLightMode ? 'light-mode' : ''}${overlayOpen ? ' has-overlay' : ''}${heroMode ? ' home-hero' : ''}${heroScrolled ? ' hero-scrolled' : ''}${heroBarFaded ? ' hero-bar-faded' : ''}${chromeHidden ? ' chrome-hidden' : ''}`}>
+      {/* Singleton particle world — one canvas mounted at the app root,
+          always visible. Splash, hero, search-ceremony, empty-catalog all
+          render above this so the field stays continuous across every
+          screen transition (no re-mount = no reseed = the same drift
+          continues). Consumers retune speed via particleControls. */}
+      <SiteParticleHost />
       {/* Branded splash while auth is resolving. Stays mounted for one
           extra fade-out tick after auth resolves, so the gate or app
           underneath cross-fades in instead of snapping. */}
-      {splashMounted && (
-        <div className={`auth-splash${splashLeaving ? ' leaving' : ''}`} aria-hidden="true">
+      {authSplashMounted && (
+        <div className={`auth-splash${authSplashLeaving ? ' leaving' : ''}`} aria-hidden="true">
+          {/* Particle field painted INSIDE the splash, above its opaque
+              base but below the wordmark. The site singleton sits behind
+              the opaque splash bg (so it can't show through), so we mount
+              a dedicated instance here with an explicit speed — one-off
+              mounts ignore particleControls.paused and always render. */}
+          <div className="auth-splash-particles">
+            <ParticleBackground speed={1} />
+          </div>
           <CatalogLogo className="auth-splash-logo" />
         </div>
       )}
-      {view === 'locked' && !authLoading && !user && <PasswordGate />}
+      {(view === 'locked' || showSignIn) && !authLoading && !user && <PasswordGate />}
       {view === 'waitlisted' && user && (
         <WaitlistScreen user={user} onApproved={handleWaitlistApproved} />
       )}
 
-      {showSplash && <SplashScreen />}
-      {firstVisit && <SplashScreen />}
+      {/* The big SplashScreen and the cinematic SplashHost were both
+          retired — on desktop they stacked behind the smaller
+          auth-splash and read as two splashes. Only the auth-splash
+          (CatalogLogo above) renders now while auth resolves; once
+          auth settles, the app cross-fades in directly. See the
+          cinematic auto-dismiss effect a few lines down — it fires
+          'catalog:splash-done' for any listeners waiting on splash
+          end so nothing hangs. */}
 
       {view === 'landing' && (
         <Suspense fallback={null}>
@@ -1202,14 +1795,43 @@ export default function Home() {
                 )}
               </button>
             </div>
+            <div className="header-center">
+              <FollowingRail
+                mode="both"
+                onOpenCreator={handleOpenCreator}
+                onCreateFollowingCatalog={handleCreateFollowingCatalog}
+                onOpenFollowingList={openFollowingList}
+                selfEntry={
+                  (user?.role === 'creator' || user?.role === 'admin' || user?.role === 'super_admin') && user?.id
+                    ? { handle: `user:${user.id}`, displayName: user.displayName ?? null, avatarUrl: user.avatarUrl ?? null, ts: Number.MAX_SAFE_INTEGER }
+                    : null
+                }
+                onOpenSelf={openMyLooks}
+              />
+            </div>
+            <PendingLookPill onOpen={() => navigate('/generate')} />
             <div className="header-right">
+              {/* Earnings stays in its original slot. The activity pill
+                  moved to the RIGHT of it per the latest spec — earnings
+                  is the primary currency indicator, activity is the
+                  secondary indicator so it sits after. Mobile-only;
+                  desktop keeps the centered toast stack. Tap routes to
+                  /activity (a dedicated screen, not the wallet). */}
+              <HeaderWalletPill onOpenWallet={openWallet} />
+              <HeaderActivityPill />
+              {/* Super-admin entry lives under the profile picture now (the
+                  Admin quicklink directly below the avatar in UserMenu's
+                  popout, and the Super Admin section in the mobile Account
+                  page) — no standalone header button so the bar stays clean. */}
               <button className="bookmark-toggle" onClick={openBookmarks} aria-label="Bookmarks">
                 <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
                 {bookmarks.totalCount > 0 && <span className="bookmark-count">{bookmarks.totalCount}</span>}
               </button>
               <UserMenu
                 onOpenBookmarks={openBookmarks}
-                onOpenMyLooks={openMyLooks}
+                onOpenMyLooks={user?.role === 'creator' || user?.role === 'admin' || user?.role === 'super_admin' ? openMyLooks : undefined}
+                onOpenWallet={user?.role === 'creator' ? openWallet : undefined}
+                onOpenProfile={user ? openProfile : undefined}
                 bookmarkCount={bookmarks.totalCount}
                 user={user}
                 onLogout={handleLogout}
@@ -1218,12 +1840,27 @@ export default function Home() {
                 savedLooks={savedLooksForMenu}
                 onOpenLook={handleOpenLook}
                 onOpenProduct={handleOpenProduct}
+                onOpenCreator={handleOpenCreator}
                 activeFilter={activeFilter}
                 onChangeCatalogGender={handleGenderFilterChange}
+                onGuestSignup={!waitlistMode ? () => setGuestGate({ variant: 'feed' }) : undefined}
               />
             </div>
           </header>
 
+          {/* Activity — unified notification pipeline. Drives both
+              the realtime engagement toasts AND the catch-up
+              summary toasts (mount-time + tab-return). */}
+          <ActivityRealtimeToasts />
+
+          {/* New home entry: the ask hero sits above the feed; scrolling
+              down reveals the catalog. Hidden once a search resolves into
+              results (heroMode flips off). */}
+          {heroMode && !ceremony.active && (
+            <ShoppingForHero onRevealFeed={handleRevealFeed} />
+          )}
+
+          <div className={`home-feed-wrap${revealResults ? ' home-results-reveal' : ''}`}>
           <ContinuousFeed
             activeFilter={activeFilter}
             searchQuery={searchQuery}
@@ -1238,8 +1875,12 @@ export default function Home() {
             onCreateCatalog={handleCreateCatalog}
             bookmarks={bookmarks}
             onSearchLoadingChange={handleSearchLoadingChange}
+            onResultsReady={setCeremonyImages}
             searchTrigger={searchTrigger}
+            followedHandles={followingCatalog}
+            mySizeOnly={mySizeOnly}
           />
+          </div>
 
           <BottomBar
             activeFilter={activeFilter}
@@ -1250,7 +1891,15 @@ export default function Home() {
             onOpenCreators={handleOpenLilyCreator}
             catalogName={catalogName}
             searchLoading={searchLoading}
+            mySizeOnly={mySizeOnly}
+            onMySizeChange={setMySizeOnly}
+            onOpenCreative={handleOpenCreative}
           />
+
+          {/* Magical loading screen between a hero search and its results. */}
+          {ceremony.active && (
+            <SearchCeremony query={ceremony.query} kind={ceremony.kind} ready={!searchLoading} onDone={handleCeremonyDone} floatingImages={ceremonyImages} />
+          )}
 
           <button className="remix-btn-fixed" onClick={handleRemix} onContextMenu={handleRemixReset} title="Click to remix · Right-click to reset layout" aria-label="Remix">
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
@@ -1268,8 +1917,28 @@ export default function Home() {
                 onCreateCatalog={handleCreateCatalog}
                 onOpenLook={handleOpenLook}
                 bookmarks={bookmarks}
+                allLooks={liveLooks}
+                popularFallback={popularFallback}
+                onOpenCreative={handleOpenCreative}
+                onOpenComments={openComments}
               />
             </Suspense>
+          )}
+
+          {/* Guest freemium gate — dissolves over a look teaser ('look'),
+              a creator catalog ('creator'), or the feed scroll nudge
+              ('feed'). Looks gate after the first free one; creator
+              catalogs always gate; products stay open. */}
+          {guestGate && !waitlistMode && !authLoading && !user && (
+            <GuestSignupGate
+              variant={guestGate.variant}
+              onClose={
+                guestGate.variant === 'look' ? handleCloseLook
+                : guestGate.variant === 'creator' ? handleCloseCreator
+                : () => setGuestGate(null)
+              }
+              onContinueGuest={guestGate.variant === 'feed' ? () => setGuestGate(null) : undefined}
+            />
           )}
 
           {creatorFilter && (
@@ -1281,6 +1950,27 @@ export default function Home() {
                 onOpenProduct={handleOpenProduct}
                 onOpenBrowser={handleOpenBrowser}
                 onCreateCatalog={handleCreateCatalog}
+                renderSaved={
+                  // Only the viewer's OWN catalog gets a Saved section —
+                  // it's their personal saves, not the creator's.
+                  user && creatorFilter === `user:${user.id}`
+                    ? () => (
+                        <Suspense fallback={null}>
+                          <SavedScreen
+                            embedded
+                            bookmarks={bookmarks}
+                            savedLooks={savedLooksForMenu}
+                            onOpenLook={handleBookmarksOpenLook}
+                            onOpenBrowser={handleOpenBrowser}
+                            onOpenProduct={handleOpenProduct}
+                            onOpenCreative={handleOpenCreative}
+                            onOpenCreator={handleBookmarksOpenCreator}
+                            onOpenBrand={handleOpenBrand}
+                          />
+                        </Suspense>
+                      )
+                    : undefined
+                }
               />
             </Suspense>
           )}
@@ -1295,15 +1985,29 @@ export default function Home() {
             </Suspense>
           )}
 
+          {commentsTarget && (
+            <Suspense fallback={null}>
+              <CommentsPage
+                targetType={commentsTarget.type}
+                slug={commentsTarget.slug}
+                onClose={closeComments}
+                onOpenCreator={(h) => { closeComments(); handleOpenCreator(h); }}
+              />
+            </Suspense>
+          )}
+
           {showBookmarks && (
             <Suspense fallback={null}>
               <BookmarksPage
                 bookmarks={bookmarks}
                 onClose={closeBookmarks}
-                onOpenLook={handleOpenLook}
+                onOpenLook={handleBookmarksOpenLook}
                 onOpenBrowser={handleOpenBrowser}
+                onOpenProduct={handleOpenProduct}
+                onOpenCreative={handleOpenCreative}
                 onOpenCreator={handleBookmarksOpenCreator}
                 onOpenBrand={handleOpenBrand}
+                savedLooks={savedLooksForMenu}
               />
             </Suspense>
           )}
@@ -1312,6 +2016,59 @@ export default function Home() {
             <Suspense fallback={null}>
               <MyLooks onClose={closeMyLooks} />
             </Suspense>
+          )}
+
+          {showFollowing && (
+            <Suspense fallback={null}>
+              <FollowingPage
+                onOpenCreator={handleFollowingOpenCreator}
+                onClose={closeFollowingList}
+              />
+            </Suspense>
+          )}
+
+          {showProfile && user && (
+            <Suspense fallback={null}>
+              <ProfilePage
+                user={user}
+                onClose={closeProfile}
+                renderSaved={() => (
+                  <Suspense fallback={null}>
+                    <SavedScreen
+                      embedded
+                      bookmarks={bookmarks}
+                      savedLooks={savedLooksForMenu}
+                      onOpenLook={handleBookmarksOpenLook}
+                      onOpenBrowser={handleOpenBrowser}
+                      onOpenProduct={handleOpenProduct}
+                      onOpenCreative={handleOpenCreative}
+                      onOpenCreator={handleBookmarksOpenCreator}
+                      onOpenBrand={handleOpenBrand}
+                    />
+                  </Suspense>
+                )}
+              />
+            </Suspense>
+          )}
+
+          {showWallet && (
+            <div className="my-looks-overlay my-looks-overlay--wallet">
+              <div className="my-looks-container">
+                <div className="my-looks-header">
+                  <div className="my-looks-header-left">
+                    <button className="my-looks-back" onClick={closeWallet} aria-label="Back">
+                      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" />
+                      </svg>
+                    </button>
+                    <h1 className="my-looks-title">Wallet</h1>
+                  </div>
+                </div>
+                <Suspense fallback={<div style={{ padding: 32, textAlign: 'center', color: '#bbf7d0', fontSize: 14 }}>Loading wallet…</div>}>
+                  <CreatorWallet />
+                </Suspense>
+              </div>
+            </div>
           )}
 
           {selectedProduct && (
@@ -1325,15 +2082,49 @@ export default function Home() {
                 onOpenCreator={handleOpenCreator}
                 onOpenCreative={handleOpenCreative}
                 onOpenBrand={handleOpenBrand}
+                onCreateCatalog={handleCreateCatalog}
+                onOpenComments={openComments}
                 creative={
-                  selectedCreative?.video_url
-                    ? { id: selectedCreative.id, videoUrl: selectedCreative.video_url, thumbnailUrl: selectedCreative.thumbnail_url }
+                  selectedCreative && pickPlaybackSource(selectedCreative)
+                    ? {
+                        id: selectedCreative.id,
+                        // Must resolve to the SAME source CreativeCardV2
+                        // donated on tap (pickPlaybackSource → pickVideoUrl:
+                        // product.primary_video_url, then the mobile variant on
+                        // a mobile viewport, then full video_url). Passing the
+                        // raw video_url here made the detail hero request a
+                        // different src than the donated element carried, so
+                        // TrailVideoHost.attach() reset the src and RELOADED a
+                        // perfectly-good playing element — the multi-second
+                        // black hero on mobile. hlsUrl below still wins when an
+                        // HLS ladder exists (matches pickPlaybackSource order).
+                        videoUrl: pickVideoUrl(selectedCreative) || selectedCreative.video_url || '',
+                        // Prefer the product's HLS ladder, then the creative's,
+                        // so the hero plays one adaptive source and ramps to a
+                        // crisp rung full-screen. Null → falls back to MP4.
+                        hlsUrl:
+                          selectedCreative.product?.primary_hls_url
+                          || selectedCreative.hls_url
+                          || null,
+                        // Prefer the polished primary image so the hero
+                        // poster matches the catalog tile exactly — same
+                        // first frame the video animates from. Falls back
+                        // to thumbnail/image when polish hasn't run.
+                        thumbnailUrl:
+                          selectedCreative.product?.primary_image_url
+                          || selectedCreative.thumbnail_url
+                          || selectedCreative.product?.image_url
+                          || null,
+                      }
                     : undefined
                 }
                 similarCreatives={similarCreatives ?? undefined}
                 brandCreatives={brandCreatives ?? undefined}
+                graphPairs={graphPairs ?? undefined}
                 popularFallback={popularFallback}
-                lookCreatives={lookFeedTiles}
+                lookCreatives={lookCreativesForProduct}
+                allLooks={liveLooks}
+                fromLook={productOpenedFromLook}
                 bookmarks={bookmarks}
                 navKey={productNavCount}
               />
@@ -1350,7 +2141,12 @@ export default function Home() {
             title={browserState.title}
             product={browserState.product}
             isSaved={browserState.product ? bookmarks.isProductBookmarked(browserState.product) : undefined}
-            onToggleSave={browserState.product ? bookmarks.toggleProductBookmark : undefined}
+            onToggleSave={browserState.product ? (() => {
+              const p = browserState.product!;
+              const wasSaved = bookmarks.isProductBookmarked(p);
+              bookmarks.toggleProductBookmark(p);
+              emitSavedToast({ name: p.name || 'this product', imageUrl: productPoster(p), saved: !wasSaved });
+            }) : undefined}
             onClose={handleBrowserClose}
           />
         </Suspense>

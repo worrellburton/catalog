@@ -8,7 +8,7 @@ import {
   type ProductAd,
 } from '~/services/product-creative';
 
-type Action = 'approved' | 'rejected' | 'regenerated' | 'deleted';
+type Action = 'approved' | 'rejected' | 'regenerated' | 'deleted' | 'failed';
 
 export default function AdminModeration() {
   const [queue, setQueue] = useState<ProductAd[]>([]);
@@ -44,6 +44,8 @@ export default function AdminModeration() {
       setQueue(prev => prev.filter(a => a.id !== ad.id));
       setFocusIdx(i => Math.min(i, queue.length - 2));
       showToast(ad.id, 'approved');
+    } else {
+      showToast(ad.id, 'failed');
     }
   }, [queue, focusIdx, busyId, showToast]);
 
@@ -57,6 +59,8 @@ export default function AdminModeration() {
       setQueue(prev => prev.filter(a => a.id !== ad.id));
       setFocusIdx(i => Math.min(i, queue.length - 2));
       showToast(ad.id, 'deleted');
+    } else {
+      showToast(ad.id, 'failed');
     }
   }, [queue, focusIdx, busyId, showToast]);
 
@@ -81,6 +85,8 @@ export default function AdminModeration() {
       setQueue(prev => prev.filter(a => a.id !== adId));
       setFocusIdx(i => Math.min(i, queue.length - 2));
       showToast(adId, 'regenerated');
+    } else {
+      showToast(adId, 'failed');
     }
   }, [regenPrompt, queue.length, showToast]);
 
@@ -98,6 +104,8 @@ export default function AdminModeration() {
       setQueue(prev => prev.filter(a => a.id !== ad.id));
       setFocusIdx(i => Math.min(i, queue.length - 2));
       showToast(ad.id, 'rejected');
+    } else {
+      showToast(ad.id, 'failed');
     }
   }, [queue, focusIdx, busyId, showToast]);
 
@@ -182,6 +190,7 @@ export default function AdminModeration() {
           {lastAction.action === 'rejected' && '✕ Rejected - paused and hidden from feed'}
           {lastAction.action === 'regenerated' && '↻ Regenerating - new video queued'}
           {lastAction.action === 'deleted' && '🗑 Deleted'}
+          {lastAction.action === 'failed' && '⚠ Action failed — the card stayed in the queue, please retry'}
         </div>
       )}
 

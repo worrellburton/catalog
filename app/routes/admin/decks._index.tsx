@@ -1,10 +1,14 @@
 import { Link } from '@remix-run/react';
+import { useState } from 'react';
 
 interface DeckInfo {
   id: string;
   label: string;
   description: string;
   current?: boolean;
+  /** When set, the card shows a "Copy public link" button that copies this
+   *  shareable, non-admin URL (the deck is served publicly at this path). */
+  publicUrl?: string;
 }
 
 const CURRENT_DECK: DeckInfo = {
@@ -15,6 +19,7 @@ const CURRENT_DECK: DeckInfo = {
 };
 
 const PREVIOUS_DECKS: DeckInfo[] = [
+  { id: 'v2', label: 'Deck v2', description: 'Short 4-page deck', publicUrl: 'https://catalog.shop/deck-9f4k2x7m3q8' },
   { id: 'v1-1', label: 'Deck v1.1', description: 'Previous version' },
   { id: 'v1', label: 'Deck v.1', description: 'Previous version' },
   { id: 'v9', label: 'Deck v.9', description: 'Previous version' },
@@ -25,49 +30,108 @@ const PREVIOUS_DECKS: DeckInfo[] = [
 ];
 
 function DeckCard({ d }: { d: DeckInfo }) {
+  const [copied, setCopied] = useState(false);
+
+  const copyPublicUrl = () => {
+    if (!d.publicUrl) return;
+    const done = () => { setCopied(true); window.setTimeout(() => setCopied(false), 1800); };
+    if (navigator.clipboard?.writeText) {
+      navigator.clipboard.writeText(d.publicUrl).then(done).catch(() => {
+        window.prompt('Copy this public link:', d.publicUrl);
+      });
+    } else {
+      window.prompt('Copy this public link:', d.publicUrl);
+    }
+  };
+
   return (
-    <Link
-      to={`/admin/decks/${d.id}`}
-      style={{
-        display: 'flex',
-        flexDirection: 'column',
-        justifyContent: 'space-between',
-        minHeight: 160,
-        padding: 20,
-        borderRadius: 12,
-        border: '1px solid #e5e5e7',
-        background: d.current ? 'linear-gradient(135deg, #0a0a0a 0%, #2a2a2c 100%)' : '#fff',
-        color: d.current ? '#fff' : '#0a0a0a',
-        textDecoration: 'none',
-        transition: 'transform 0.15s ease, box-shadow 0.15s ease',
-      }}
-      onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'; }}
-      onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; }}
-    >
-      <div>
+    <div style={{ display: 'flex', flexDirection: 'column' }}>
+      <Link
+        to={`/admin/decks/${d.id}`}
+        style={{
+          display: 'flex',
+          flexDirection: 'column',
+          justifyContent: 'space-between',
+          minHeight: 160,
+          padding: 20,
+          borderRadius: 12,
+          border: '1px solid #e5e5e7',
+          background: d.current ? 'linear-gradient(135deg, #0a0a0a 0%, #2a2a2c 100%)' : '#fff',
+          color: d.current ? '#fff' : '#0a0a0a',
+          textDecoration: 'none',
+          transition: 'transform 0.15s ease, box-shadow 0.15s ease',
+        }}
+        onMouseEnter={(e) => { (e.currentTarget as HTMLElement).style.transform = 'translateY(-2px)'; }}
+        onMouseLeave={(e) => { (e.currentTarget as HTMLElement).style.transform = 'translateY(0)'; }}
+      >
+        <div>
+          <div style={{
+            fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em',
+            color: d.current ? 'rgba(255,255,255,0.6)' : '#86868b', marginBottom: 10,
+          }}>
+            {d.id.replace('-', '.').toUpperCase()}{d.current ? ' · Current' : ''}
+          </div>
+          <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em' }}>
+            {d.label}
+          </div>
+          <div style={{
+            fontSize: 14, marginTop: 6,
+            color: d.current ? 'rgba(255,255,255,0.7)' : '#6e6e73',
+          }}>
+            {d.description}
+          </div>
+        </div>
         <div style={{
-          fontSize: 10, fontWeight: 700, textTransform: 'uppercase', letterSpacing: '0.12em',
-          color: d.current ? 'rgba(255,255,255,0.6)' : '#86868b', marginBottom: 10,
+          marginTop: 16, fontSize: 13, fontWeight: 500,
+          color: d.current ? 'rgba(255,255,255,0.85)' : '#0a66c2',
         }}>
-          {d.id.replace('-', '.').toUpperCase()}{d.current ? ' · Current' : ''}
+          Open deck →
         </div>
-        <div style={{ fontSize: 22, fontWeight: 700, letterSpacing: '-0.02em' }}>
-          {d.label}
+      </Link>
+
+      {d.publicUrl && (
+        <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
+          <button
+            type="button"
+            onClick={copyPublicUrl}
+            title={d.publicUrl}
+            style={{
+              flex: 1,
+              appearance: 'none',
+              padding: '10px 12px',
+              borderRadius: 10,
+              border: `1px solid ${copied ? '#16a34a' : '#e5e5e7'}`,
+              background: copied ? '#16a34a' : '#f5f5f7',
+              color: copied ? '#fff' : '#0a0a0a',
+              fontSize: 12.5,
+              fontWeight: 600,
+              cursor: 'pointer',
+              transition: 'background 120ms, border-color 120ms',
+            }}
+          >
+            {copied ? '✓ Copied' : 'Copy public link'}
+          </button>
+          <a
+            href={d.publicUrl}
+            target="_blank"
+            rel="noreferrer"
+            style={{
+              padding: '10px 14px',
+              borderRadius: 10,
+              border: '1px solid #e5e5e7',
+              background: '#fff',
+              color: '#0a66c2',
+              fontSize: 12.5,
+              fontWeight: 600,
+              textDecoration: 'none',
+              whiteSpace: 'nowrap',
+            }}
+          >
+            Open ↗
+          </a>
         </div>
-        <div style={{
-          fontSize: 14, marginTop: 6,
-          color: d.current ? 'rgba(255,255,255,0.7)' : '#6e6e73',
-        }}>
-          {d.description}
-        </div>
-      </div>
-      <div style={{
-        marginTop: 16, fontSize: 13, fontWeight: 500,
-        color: d.current ? 'rgba(255,255,255,0.85)' : '#0a66c2',
-      }}>
-        Open deck →
-      </div>
-    </Link>
+      )}
+    </div>
   );
 }
 

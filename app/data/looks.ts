@@ -1,9 +1,59 @@
 export interface Product {
+  /** DB product id, when the product originated from the products table.
+   *  Optional because seed/look products may not carry one. Used to match
+   *  a creator's saved display order (creator_product_order). */
+  id?: string;
   name: string;
   brand: string;
   price: string;
   url: string;
   image?: string;
+  size_fit?: string | null;
+  materials_care?: string | null;
+  measurements?: Record<string, number> | null;
+  variants?: Array<{
+    size: string | null;
+    color: string | null;
+    availability: boolean | null;
+  }> | null;
+  size_chart?: Record<string, Record<string, number>> | null;
+  fit_intelligence?: {
+    fit_type: string;
+    body_type_match: string[];
+    layering: boolean;
+    warmth_rating: string;
+    stretch_behavior: string;
+    likely_feel: string;
+    true_to_size: string;
+    best_for_occasions: string[];
+    season: string[];
+  } | null;
+  materials_structured?: Array<{ fiber: string; pct: number | null }> | null;
+  product_taxonomy?: {
+    category: string;
+    subcategory: string;
+    style: string | null;
+  } | null;
+  styling_metadata?: {
+    works_with: string[];
+    occasion: string[];
+    season: string[];
+  } | null;
+  video_url?: string;
+  /** HLS master playlist for the product's primary video (adaptive ladder).
+   *  Preferred over video_url when present; falls back to MP4 otherwise. */
+  primary_hls_url?: string;
+  thumbnail_url?: string;
+  creative_id?: string;
+  /** Broad category (Shoes / Top / Pants / etc.). Sourced from
+   *  products.type — surfaced in the look-overlay product row as a
+   *  small chip so shoppers see the garment family at a glance. */
+  type?: string;
+  /** Sub-category under type (Sneakers / Sandals / Boots …). Sourced
+   *  from products.subtype. When both type and subtype exist we
+   *  render only subtype (the more specific label); when only type
+   *  exists we render that. */
+  subtype?: string;
 }
 
 export interface Creator {
@@ -17,6 +67,13 @@ export interface Look {
   id: number;
   /** Supabase UUID - present for DB-sourced looks, absent for static seed data. */
   uuid?: string;
+  /** Admin-assigned unified feed position (shared rank space with products
+   *  via apply_feed_order). Drives the consumer home-feed order so it
+   *  matches the /admin/catalogs FEED editor. null/undefined = unranked. */
+  feed_rank?: number | null;
+  /** When the curated look row was created (DB looks.created_at). Surfaced
+   *  in the admin Looks table's "Created At" column + sort. */
+  created_at?: string | null;
   title: string;
   video: string;
   // 'unisex' looks (and the rare untyped null in the DB) stay visible
@@ -33,51 +90,42 @@ export interface Look {
   // and avatar.
   creatorDisplayName?: string;
   creatorAvatar?: string;
+  /** True when the owning profile/creator is_ai=true. Drives the
+   *  Human / AI split filter on the admin Looks (Published) tab. */
+  creatorIsAi?: boolean;
   /** Server-extracted first frame of the video, used as the
    *  <video poster=> so the card paints a real image while the MP4
    *  streams. Populated by the Modal worker on upload + by the
    *  backfill job for legacy rows. Omitted means we fall back to the
    *  cover image (or nothing). */
   thumbnail_url?: string;
+  /** Mobile-optimized variant of the look video (480p H.264 ~600kbps).
+   *  Renderer picks this on narrow viewports / slow connections, same
+   *  contract as ProductAd.mobile_video_url. */
+  mobile_video_url?: string;
+  /** HLS master playlist (adaptive-bitrate ladder: 480p/720p/1080p). When
+   *  present every surface plays THIS one source — the player starts low for
+   *  an instant first frame and ramps to a high rung at full-screen size, so
+   *  the detail hero is crisp without a re-buffer. Falls back to
+   *  video / mobile_video_url when absent. */
+  hls_url?: string;
+  /** Trimmer in/out window (seconds). When set, look video players loop
+   *  [trimStart, trimEnd] instead of the whole clip. */
+  trimStart?: number;
+  trimEnd?: number;
   /** Static cover image - alternative to thumbnail_url, used by some
    *  legacy looks. Lower priority than thumbnail_url because it's
    *  often a product still rather than a video frame. */
   cover?: string;
 }
 
-export const creators: Record<string, Creator> = {
-  '@lilywittman': { name: '@lilywittman', displayName: 'Lily Wittman', avatar: 'https://i.pravatar.cc/100?img=47' },
-  '@garrett':     { name: '@garrett',     displayName: 'Garrett',      avatar: 'https://i.pravatar.cc/100?img=12' },
-};
+// Static seed creators + looks (@lilywittman, @garrett with their
+// gradient-placeholder looks) deleted intentionally — they don't
+// represent real creators or real content, just historical mock
+// data. All surfaces fall back to live Supabase data instead.
+export const creators: Record<string, Creator> = {};
 
-const guyProducts: Product[] = [
-  { name: 'Patchwork Pointelle Short-Sleeve Shirt', brand: 'Vince', price: '$568', url: 'https://www.vince.com/product/patchwork-pointelle-short-sleeve-shirt-M03516417A.html', image: 'https://images.unsplash.com/photo-1596755094514-f87e34085b2c?w=200&h=200&fit=crop' },
-  { name: 'Light Blue Straight Leg Jeans', brand: 'Suitsupply', price: '$199', url: 'https://suitsupply.com', image: 'https://images.unsplash.com/photo-1542272604-787c3835535d?w=200&h=200&fit=crop' },
-  { name: 'B27 Uptown Low-Top Sneaker Gray and White', brand: 'Dior', price: '$1,200', url: 'https://www.dior.com', image: 'https://images.unsplash.com/photo-1549298916-b41d501d3772?w=200&h=200&fit=crop' },
-  { name: 'Digital Camera', brand: 'Fujifilm', price: '$1,725', url: 'https://www.fujifilm.com', image: 'https://images.unsplash.com/photo-1516035069371-29a1b244cc32?w=200&h=200&fit=crop' },
-];
-
-const girlProducts: Product[] = [
-  { name: 'Rock Style Flap Shoulder Bag', brand: 'Zara', price: '$49', url: 'https://www.zara.com', image: 'https://images.unsplash.com/photo-1548036328-c9fa89d128fa?w=200&h=200&fit=crop' },
-  { name: 'Major Shade Cat Eye Sunglasses', brand: 'Windsor', price: '$10', url: 'https://www.windsorstore.com', image: 'https://images.unsplash.com/photo-1511499767150-a48a237f0083?w=200&h=200&fit=crop' },
-  { name: 'Oval D Glitter Case for iPhone 16 Pro', brand: 'Diesel', price: '$39', url: 'https://www.diesel.com', image: 'https://images.unsplash.com/photo-1601784551446-20c9e07cdbdb?w=200&h=200&fit=crop' },
-  { name: 'Cross Pendant Necklace', brand: 'Pavoi', price: '$13', url: 'https://www.pavoi.com', image: 'https://images.unsplash.com/photo-1599643478518-a784e5dc4c8f?w=200&h=200&fit=crop' },
-];
-
-export const looks: Look[] = [
-  { id: 1, title: 'Quiet Luxury, Loud Confidence', video: 'girl2.mp4', gender: 'women', creator: '@lilywittman', description: 'A curated selection of essential pieces for the modern wardrobe.', color: '#c4a882', products: girlProducts },
-  { id: 2, title: 'Off-Duty Model Energy', video: 'guy.mp4', gender: 'men', creator: '@garrett', description: 'Effortless layering with neutral tones and soft textures.', color: '#8b9e8b', products: guyProducts },
-  { id: 3, title: 'Soft Girl, Sharp Silhouette', video: 'girl2.mp4', gender: 'women', creator: '@lilywittman', description: 'Sharp tailoring meets relaxed silhouettes.', color: '#a89090', products: girlProducts },
-  { id: 4, title: 'The Minimalist Flex', video: 'guy.mp4', gender: 'men', creator: '@garrett', description: 'Minimalist elegance with bold accessories.', color: '#8899aa', products: guyProducts },
-  { id: 5, title: 'Weekend Uniform, Upgraded', video: 'girl2.mp4', gender: 'women', creator: '@lilywittman', description: 'Weekend ready with refined casual pieces.', color: '#b8a898', products: girlProducts },
-  { id: 6, title: 'The After-Hours Charmer', video: 'guy.mp4', gender: 'men', creator: '@garrett', description: 'Evening allure with timeless sophistication.', color: '#787878', products: guyProducts },
-  { id: 7, title: 'Between-Seasons, Always On', video: 'girl2.mp4', gender: 'women', creator: '@lilywittman', description: 'Transitional dressing for in-between seasons.', color: '#9ca88c', products: girlProducts },
-  { id: 8, title: 'All Black, Never Basic', video: 'guy.mp4', gender: 'men', creator: '@garrett', description: 'Monochrome mastery with textural contrast.', color: '#a09088', products: guyProducts },
-  { id: 9, title: 'Main Character Moment', video: 'girl2.mp4', gender: 'women', creator: '@lilywittman', description: 'Artful draping and fluid movement.', color: '#8a8a9e', products: girlProducts },
-  { id: 10, title: 'The Corner-Office Rebel', video: 'guy.mp4', gender: 'men', creator: '@garrett', description: 'Power dressing reimagined for today.', color: '#aa9e88', products: guyProducts },
-  { id: 11, title: 'Cashmere Hour', video: 'girl2.mp4', gender: 'women', creator: '@lilywittman', description: 'Soft palette with unexpected proportions.', color: '#9e8a7e', products: girlProducts },
-  { id: 12, title: 'Date Night, Zero Effort', video: 'guy.mp4', gender: 'men', creator: '@garrett', description: 'Polished ease for every occasion.', color: '#7e8e8e', products: guyProducts },
-];
+export const looks: Look[] = [];
 
 export const searchSuggestions = [
   'beach day', 'mens shorts', 'omg shoes', 'make me hot',

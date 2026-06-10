@@ -1,0 +1,512 @@
+/* GTM — the marketing function as one animated, top-down tree.
+   Self-contained; every class prefixed gtm-. Light admin background.
+   Cascading fade-up on load (per-node animation-delay set inline) + hover
+   tooltips for context. */
+
+.gtm-page {
+  --gtm-ink: #0f172a;
+  --gtm-muted: #64748b;
+  padding-bottom: 64px;
+}
+
+/* ── Cascade fade-in ─────────────────────────────────────────────────── */
+/* Opacity-only — no transform, so a node mid-reveal can never visually
+   overlap the node above it (that was the header/group overlap bug). */
+@keyframes gtm-fade {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.gtm-fade {
+  opacity: 0;                         /* hidden until its delay elapses */
+  animation: gtm-fade 0.62s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+.gtm-tree {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  max-width: 1180px;
+  margin: 0 auto;
+}
+
+/* ── Tier 0: Marketing ───────────────────────────────────────────────── */
+.gtm-root {
+  text-align: center;
+  padding: 18px 28px 22px;
+  border-radius: 20px;
+  background:
+    radial-gradient(120% 140% at 50% 0%, rgba(99, 102, 241, 0.10), transparent 60%),
+    #fff;
+  border: 1px solid #eef0f4;
+  box-shadow: 0 18px 50px rgba(15, 23, 42, 0.06);
+  max-width: 620px;
+}
+.gtm-root-kicker {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: #6366f1;
+  margin-bottom: 6px;
+}
+.gtm-root-title {
+  margin: 0 0 8px;
+  font-size: clamp(34px, 5vw, 52px);
+  font-weight: 700;
+  letter-spacing: -0.03em;
+  color: var(--gtm-ink);
+  background: linear-gradient(180deg, #1e293b, #475569);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+}
+.gtm-root-note {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--gtm-muted);
+}
+
+/* ── Funnel legend (sits under the root) ─────────────────────────────── */
+.gtm-legend {
+  margin-top: 16px;
+}
+
+/* ── Chart: budget bar → elbow connectors → pillar columns ───────────── */
+/* The split bar and the pillars live in ONE wrapper so they share a single
+   horizontal coordinate space — that's what lets each 60/25/15 segment
+   connect by an elbow to the (equal-thirds) pillar column it funds. */
+.gtm-chart {
+  position: relative;
+  width: 100%;
+}
+/* Connector SVG overlays the whole chart, behind the cards (which carry
+   their own white fill). The lines are only visible in the empty gap
+   between the split bar and the pillar columns. */
+.gtm-connectors {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: visible;
+}
+/* Vertical room for the elbows to turn through. */
+.gtm-connector-gap {
+  height: 52px;
+}
+.gtm-split {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  height: 48px;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid #eef0f4;
+  box-shadow: 0 10px 26px rgba(15, 23, 42, 0.06);
+}
+.gtm-split-seg {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  min-width: 0;
+  padding: 0 8px;
+  color: #fff;
+  line-height: 1.1;
+}
+.gtm-split-name {
+  font-size: 13px; font-weight: 700; letter-spacing: -0.01em; opacity: 0.96;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;
+}
+.gtm-legend {
+  display: flex; flex-wrap: wrap; align-items: center; justify-content: center;
+  gap: 8px 14px;
+}
+.gtm-legend-label {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.08em;
+  text-transform: uppercase; color: #94a3b8;
+}
+.gtm-legend-item {
+  display: inline-flex; align-items: center; gap: 5px;
+  font-size: 11.5px; font-weight: 600; color: #475569;
+}
+.gtm-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; flex: none; }
+
+/* Connector from Marketing down to the pillars. */
+.gtm-stem {
+  width: 2px;
+  height: 40px;
+  background: linear-gradient(#d8dbe4, transparent);
+}
+
+/* ── Tier 1: pillars ─────────────────────────────────────────────────── */
+.gtm-pillars {
+  position: relative;
+  z-index: 1;                 /* above the connector SVG */
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px;
+  width: 100%;
+}
+@media (max-width: 880px) {
+  .gtm-pillars { grid-template-columns: 1fr; }
+  /* Stacked single column — the segment→column elbows no longer map
+     1:1, so drop the connector layer and tighten the gap. */
+  .gtm-connectors { display: none; }
+  .gtm-connector-gap { height: 22px; }
+}
+
+.gtm-pillar {
+  background: #fff;
+  border: 1px solid #eef0f4;
+  border-top: 4px solid var(--accent, #6366f1);
+  border-radius: 16px;
+  padding: 0 0 16px;
+  overflow: hidden;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.05);
+}
+/* The pillar header is now a filled accent band so each pillar reads as a
+   labelled top-level card that its sub-items visibly sit inside. */
+.gtm-pillar-head {
+  margin: 0 0 14px;
+  padding: 14px 16px 13px;
+  background:
+    linear-gradient(180deg,
+      color-mix(in srgb, var(--accent, #6366f1) 15%, #fff),
+      color-mix(in srgb, var(--accent, #6366f1) 7%, #fff));
+  border-bottom: 1px solid color-mix(in srgb, var(--accent, #6366f1) 20%, #eef0f4);
+}
+.gtm-pillar-titlerow { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+.gtm-pillar-weight {
+  font-size: 13px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: #fff;
+  background: var(--accent, #6366f1);
+  border-radius: 999px;
+  padding: 3px 10px;
+  flex: none;
+}
+.gtm-pillar-name {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  color: var(--gtm-ink);
+}
+.gtm-pillar-name::before {
+  content: '';
+  display: inline-block;
+  width: 9px; height: 9px;
+  border-radius: 50%;
+  background: var(--accent, #6366f1);
+  margin-right: 8px;
+  vertical-align: middle;
+}
+.gtm-pillar-note {
+  margin: 8px 0 0;
+  font-size: 12.5px;
+  line-height: 1.5;
+  color: var(--gtm-muted);
+}
+
+/* ── Tier 2: groups — connected to the pillar by a left spine + ticks so
+   it reads as a branching diagram (parent points to each child). ───────── */
+.gtm-groups { display: flex; flex-direction: column; gap: 10px; position: relative; margin: 0 16px; padding-left: 16px; }
+.gtm-groups::before {
+  content: '';
+  position: absolute;
+  left: 4px; top: 10px; bottom: 10px;
+  width: 2px;
+  background: color-mix(in srgb, var(--accent, #6366f1) 28%, #e8eaf0);
+  border-radius: 1px;
+}
+.gtm-group::before {
+  content: '';
+  position: absolute;
+  left: -12px; top: 17px;
+  width: 12px; height: 2px;
+  background: color-mix(in srgb, var(--accent, #6366f1) 28%, #e8eaf0);
+}
+.gtm-group {
+  position: relative;
+  border: 1px solid #eef0f4;
+  border-radius: 12px;
+  padding: 11px 12px;
+  background: #fafafe;
+  transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+}
+.gtm-group:hover {
+  transform: translateY(-2px);
+  border-color: color-mix(in srgb, var(--accent, #6366f1) 45%, #eef0f4);
+  box-shadow: 0 12px 26px rgba(15, 23, 42, 0.08);
+}
+.gtm-group.is-added { border-style: dashed; background: #fff; }
+.gtm-group-top { display: flex; align-items: center; flex-wrap: wrap; gap: 6px 8px; }
+.gtm-group-name { font-size: 13.5px; font-weight: 650; color: var(--gtm-ink); }
+.gtm-suggested {
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #92400e;
+  background: #fef3c7;
+  border-radius: 999px;
+  padding: 2px 7px;
+}
+.gtm-stage {
+  margin-left: auto;
+  display: inline-flex; align-items: center; gap: 4px;
+  font-size: 10px; font-weight: 600; color: #64748b;
+  background: #fff; border: 1px solid #eef0f4; border-radius: 999px;
+  padding: 2px 8px; white-space: nowrap;
+}
+.gtm-group-note {
+  margin: 4px 0 0;
+  font-size: 11.5px;
+  line-height: 1.45;
+  color: var(--gtm-muted);
+}
+
+/* ── Tier 3: leaves (chips with hover tooltip) ───────────────────────── */
+.gtm-leaves { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 9px; }
+.gtm-leaf {
+  position: relative;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: #334155;
+  background: #fff;
+  border: 1px solid #e3e6ec;
+  border-radius: 999px;
+  padding: 4px 10px;
+  cursor: default;
+  outline: none;
+  transition: transform 0.15s ease, border-color 0.15s ease, color 0.15s ease, background 0.15s ease;
+}
+.gtm-leaf:hover, .gtm-leaf:focus-visible {
+  transform: translateY(-1px);
+  color: #fff;
+  background: var(--accent, #6366f1);
+  border-color: var(--accent, #6366f1);
+}
+.gtm-leaf.is-added { border-style: dashed; color: #92400e; }
+.gtm-leaf.is-added:hover, .gtm-leaf.is-added:focus-visible { color: #fff; background: #f59e0b; border-color: #f59e0b; }
+
+/* Tooltip — fades in on hover/focus of a leaf. */
+.gtm-tip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 50%;
+  transform: translateX(-50%) translateY(4px);
+  width: max-content;
+  max-width: 220px;
+  background: #0f172a;
+  color: #f8fafc;
+  font-size: 11px;
+  font-weight: 500;
+  line-height: 1.4;
+  text-align: center;
+  padding: 7px 10px;
+  border-radius: 8px;
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.28);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.16s ease, transform 0.16s ease;
+  z-index: 5;
+}
+.gtm-tip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 5px solid transparent;
+  border-top-color: #0f172a;
+}
+.gtm-leaf:hover .gtm-tip, .gtm-leaf:focus-visible .gtm-tip {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .gtm-fade { animation: none; opacity: 1; transform: none; }
+  .gtm-group:hover, .gtm-leaf:hover { transform: none; }
+  .gtm-tip { transition: opacity 0.16s ease; }
+}
+
+.gtm-pillar { position: relative; }
+
+/* ── Flywheel — a deck of full-viewport slides that snap one at a time ─── */
+.gtm-flywheel {
+  /* Break out of the .admin-page 24px/28px gutter so the slides read as
+     true full-page panels. The slides snap on the main page scroll — see
+     html.gtm-snap below — rather than trapping scroll in a nested viewport. */
+  position: relative;
+  margin: 48px -28px 0;
+  border-top: 1px solid #eef0f4;
+}
+
+/* ── Branded backdrop — a drifting grid of look videos behind a WHITE scrim
+   (the same treatment the investor decks use, inverted to light). Fixed so
+   it stays put while the slides snap over it; fades in only while a flywheel
+   slide is on screen so the diagram above stays clean. ──────────────────── */
+.gtm-fly-bg {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.8s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.gtm-flywheel.is-active .gtm-fly-bg { opacity: 1; }
+.gtm-fly-bg-grid {
+  position: absolute;
+  inset: -50% 0;
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-auto-rows: 33vh;
+  gap: 4px;
+  /* More present so the look/product feed actually reads behind the white
+     scrim (it was a barely-there 0.12 texture before). */
+  opacity: 0.32;
+  animation: insightScroll 45s linear infinite;
+}
+.gtm-fly-bg-video {
+  width: 100%; height: 100%;
+  object-fit: cover;
+  display: block;
+  border-radius: 6px;
+}
+.gtm-fly-bg-overlay {
+  position: absolute;
+  inset: 0;
+  /* WHITE scrim over the product feed (not black) — lighter than before so
+     the feed reads through while the copy stays legible. */
+  background:
+    linear-gradient(to right,
+      rgba(252, 252, 254, 0.80) 0%,
+      rgba(252, 252, 254, 0.72) 40%,
+      rgba(252, 252, 254, 0.62) 100%),
+    radial-gradient(ellipse at center, rgba(252, 252, 254, 0.30) 0%, rgba(252, 252, 254, 0.74) 80%);
+}
+@media (max-width: 768px) {
+  .gtm-fly-bg-grid { grid-template-columns: repeat(3, 1fr); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gtm-fly-bg-grid { animation: none; }
+}
+/* Toggled on <html> only while the GTM page is mounted so the snapping is
+   scoped to this page and never leaks to other admin screens. proximity (not
+   mandatory) lets the tree above scroll freely; the flywheel slides below are
+   the only snap points. */
+/* Snap each flywheel slide firmly into view. `mandatory` (not proximity)
+   makes the deck click into place reliably; scroll-padding-top clears the
+   sticky admin topbar (53px) so a slide snaps flush below it, not under it. */
+/* `proximity`, NOT `mandatory`: mandatory trapped the scroll on the
+   flywheel slides so you couldn't scroll back up to the chart/tree at the
+   top of the page. Proximity still snaps the slides when you're near one
+   but leaves the tree above freely scrollable. */
+html.gtm-snap { scroll-snap-type: y proximity; scroll-behavior: smooth; scroll-padding-top: 56px; }
+
+.gtm-fly-slide {
+  position: relative;
+  min-height: 100dvh;
+  scroll-snap-align: start;
+  scroll-snap-stop: always;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 64px 32px;
+  overflow: hidden;
+  /* Above the fixed branded backdrop; a faint accent vignette ties each slide
+     to its step colour while letting the look-video grid read through. */
+  z-index: 1;
+  background:
+    radial-gradient(120% 90% at 50% 0%, color-mix(in srgb, var(--accent, #6366f1) 10%, transparent), transparent 65%);
+}
+
+/* Giant faded step number behind the copy. */
+.gtm-fly-watermark {
+  position: absolute;
+  right: clamp(12px, 6vw, 96px);
+  top: 50%;
+  transform: translateY(-50%);
+  font-size: clamp(220px, 40vw, 460px);
+  font-weight: 800;
+  line-height: 0.8;
+  letter-spacing: -0.04em;
+  color: color-mix(in srgb, var(--accent, #6366f1) 9%, transparent);
+  pointer-events: none;
+  user-select: none;
+}
+
+.gtm-fly-inner {
+  position: relative;
+  z-index: 1;
+  max-width: 760px;
+  width: 100%;
+  /* Reveal each slide's copy as it scrolls into view. */
+  opacity: 0;
+  transform: translateY(20px);
+  transition: opacity 0.6s ease, transform 0.6s ease;
+}
+.gtm-fly-slide.is-in .gtm-fly-inner { opacity: 1; transform: translateY(0); }
+
+.gtm-fly-index {
+  display: block;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  color: var(--accent, #6366f1);
+  margin-bottom: 14px;
+}
+.gtm-fly-index-total { color: #cbd5e1; }
+.gtm-fly-tag {
+  display: inline-block;
+  font-size: 12px; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; color: var(--accent, #6366f1);
+  margin-bottom: 10px;
+}
+.gtm-fly-title {
+  margin: 0 0 22px;
+  /* Smaller max so the headline (e.g. "Turn the flywheel on.") sits on one
+     row at desktop width instead of wrapping. */
+  font-size: clamp(38px, 5vw, 58px);
+  font-weight: 800;
+  letter-spacing: -0.035em;
+  line-height: 1.04;
+  color: #0f172a;
+}
+/* Slide copy as bullet points (replaces the paragraph body). */
+.gtm-fly-bullets {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 13px;
+  max-width: 620px;
+}
+.gtm-fly-bullets li {
+  position: relative;
+  padding-left: 26px;
+  font-size: clamp(15px, 2vw, 20px);
+  line-height: 1.45;
+  color: #475569;
+}
+.gtm-fly-bullets li::before {
+  content: '';
+  position: absolute;
+  left: 3px;
+  top: 0.5em;
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: var(--accent, #6366f1);
+}
+@media (prefers-reduced-motion: reduce) {
+  html.gtm-snap { scroll-behavior: auto; }
+  .gtm-fly-inner { opacity: 1; transform: none; transition: none; }
+}

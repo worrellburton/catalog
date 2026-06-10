@@ -1,0 +1,1321 @@
+/* Style page — sibling of /generate (Try it on). Same visual direction
+   (dark, generous space, single accent), simpler layout: no wizard, just
+   a context strip + occasion input + 2x2 result grid. */
+
+.style-page {
+  width: 100%;
+  min-height: 100vh;
+  min-height: 100dvh;
+  background:
+    radial-gradient(ellipse at 50% -10%, rgba(255, 255, 255, 0.06), transparent 55%),
+    radial-gradient(ellipse at 100% 100%, rgba(120, 80, 220, 0.04), transparent 50%),
+    #050505;
+  color: #fff;
+  padding: clamp(16px, 3vw, 28px) clamp(20px, 5vw, 56px)
+           calc(64px + env(safe-area-inset-bottom));
+  font-feature-settings: 'ss01', 'cv11';
+  letter-spacing: -0.005em;
+}
+
+.style-loading,
+.style-empty {
+  padding: 48px 0;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.6);
+}
+
+.style-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 24px;
+}
+.style-header h1 {
+  font-size: clamp(22px, 3vw, 30px);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  margin: 0;
+}
+.style-back {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: #fff;
+  font-size: 18px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.style-back:hover { background: rgba(255, 255, 255, 0.08); }
+
+.style-context {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  flex-wrap: wrap;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+  margin-bottom: 24px;
+}
+.style-context-photos {
+  display: flex;
+  gap: 8px;
+}
+.style-context-photo {
+  width: 56px;
+  height: 56px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.04);
+}
+.style-context-photo img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.style-context-empty {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.45);
+}
+.style-context-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-left: auto;
+}
+.style-context-chip {
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.78);
+  text-transform: lowercase;
+}
+.style-context-edit {
+  background: none;
+  border: none;
+  color: #f0c060;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 6px;
+}
+.style-context-edit:hover { color: #ffd980; }
+
+.style-empty-cta {
+  padding: 32px;
+  text-align: center;
+  border: 1px dashed rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  margin-bottom: 24px;
+}
+.style-empty-cta p {
+  margin: 0 0 16px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.style-form {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  margin-bottom: 32px;
+}
+.style-question {
+  font-size: clamp(20px, 2.5vw, 26px);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: rgba(255, 255, 255, 0.95);
+}
+.style-input {
+  width: 100%;
+  padding: 14px 18px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: #fff;
+  font-size: 16px;
+  outline: none;
+  transition: border-color 0.2s, background 0.2s;
+}
+.style-input:focus {
+  border-color: rgba(240, 192, 96, 0.6);
+  background: rgba(255, 255, 255, 0.06);
+}
+.style-input::placeholder {
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.style-suggestions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.style-suggestion-chip {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.02);
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.style-suggestion-chip:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(240, 192, 96, 0.3);
+}
+.style-suggestion-chip:disabled { opacity: 0.5; cursor: default; }
+
+.style-primary {
+  align-self: flex-start;
+  padding: 12px 24px;
+  border-radius: 999px;
+  border: none;
+  background: #f0c060;
+  color: #000;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.1s, background 0.2s;
+}
+.style-primary:hover:not(:disabled) { background: #ffd071; }
+.style-primary:active:not(:disabled) { transform: scale(0.97); }
+.style-primary:disabled { opacity: 0.4; cursor: default; }
+
+.style-error {
+  padding: 10px 14px;
+  border-radius: 10px;
+  border: 1px solid rgba(255, 80, 80, 0.3);
+  background: rgba(255, 80, 80, 0.08);
+  color: #ff8a8a;
+  font-size: 13px;
+}
+
+/* History — vertical stack of past style sheets, newest on top.
+   Each is its own card with a header + 2x2 grid + delete button. */
+.style-history {
+  display: flex;
+  flex-direction: column;
+  gap: 24px;
+  margin-top: 8px;
+}
+.style-sheet {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+}
+.style-sheet-header {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.style-sheet-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.style-sheet-title {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  margin: 0;
+  color: #fff;
+  text-transform: capitalize;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.style-sheet-subtitle {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.5);
+}
+/* Tiles stack vertically as a single column at 16:9 — better for
+   referencing full-body outfit sheets than the previous 2x2 squares. */
+.style-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.style-tile {
+  position: relative;
+  aspect-ratio: 16 / 9;
+  width: 100%;
+  border-radius: 16px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.style-tile-open {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  cursor: zoom-in;
+  transition: transform 0.15s ease;
+}
+.style-tile-open:active { transform: scale(0.99); }
+.style-tile.is-done { transition: border-color 0.2s ease, box-shadow 0.2s ease; }
+.style-tile.is-done:hover {
+  border-color: rgba(240, 192, 96, 0.4);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+}
+/* Per-tile action chrome — heart on the left, trash on the right.
+   Same pill shape so they read as a pair; tap-friendly on mobile,
+   hover-revealed on desktop pointer devices. */
+.style-tile-delete,
+.style-tile-like {
+  position: absolute;
+  top: 8px;
+  z-index: 2;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  color: rgba(255, 255, 255, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, opacity 0.15s, transform 0.1s;
+  opacity: 1;
+}
+.style-tile-delete { right: 8px; }
+.style-tile-like   { left:  8px; }
+.style-tile-delete:hover {
+  background: rgba(255, 80, 80, 0.7);
+  border-color: rgba(255, 80, 80, 0.9);
+  color: #fff;
+}
+.style-tile-like:hover {
+  border-color: rgba(255, 110, 130, 0.7);
+  color: #ff8aa1;
+}
+.style-tile-like.is-liked {
+  background: rgba(255, 70, 110, 0.85);
+  border-color: rgba(255, 70, 110, 0.95);
+  color: #fff;
+}
+.style-tile-like.is-liked:hover { background: rgba(255, 90, 130, 0.95); }
+.style-tile-like:active,
+.style-tile-delete:active { transform: scale(0.92); }
+
+@media (hover: hover) and (pointer: fine) {
+  .style-tile-delete,
+  .style-tile-like {
+    opacity: 0;
+  }
+  /* Liked images keep the heart visible at rest so the user can see
+     which tiles they've saved without hovering. */
+  .style-tile-like.is-liked { opacity: 1; }
+  .style-tile:hover .style-tile-delete,
+  .style-tile:hover .style-tile-like,
+  .style-tile-delete:focus-visible,
+  .style-tile-like:focus-visible { opacity: 1; }
+}
+.style-tile img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.style-tile-badge {
+  position: absolute;
+  /* Provider chip moves to the bottom-right so the wordmark owns the
+     bottom-left brand slot. */
+  bottom: 8px;
+  right: 8px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(6px);
+  font-size: 10px;
+  font-weight: 600;
+  color: #fff;
+  letter-spacing: 0.02em;
+  text-transform: lowercase;
+}
+/* Catalog wordmark watermark — every successful tile + the lightbox
+   frame carry the brand in the lower-left. Rendered as text so it
+   stays crisp at any zoom; soft drop-shadow keeps it legible against
+   bright backgrounds. */
+.style-tile-wordmark,
+.style-lightbox-wordmark {
+  position: absolute;
+  bottom: 10px;
+  left: 12px;
+  font-family: 'Sentient', 'Sentient Variable', Georgia, serif;
+  font-weight: 600;
+  font-style: italic;
+  letter-spacing: -0.02em;
+  color: #fff;
+  pointer-events: none;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.55);
+  z-index: 2;
+}
+.style-tile-wordmark { font-size: 18px; }
+
+/* "{n} saved" chip on the bottom-right of a Style tile when the user
+   has previously ingested products from this look's lens scan. */
+.style-tile-ingest {
+  position: absolute;
+  bottom: 10px;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: rgba(40, 80, 50, 0.8);
+  color: #b6f3c2;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+  z-index: 2;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+}
+.style-tile-ingest svg { flex: 0 0 11px; }
+
+/* Super-admin only — small monospaced provider chip on the top-left
+   of each Style tile. Mirrors the colour scheme of admin chrome so
+   it's instantly readable as a diagnostic rather than UI. */
+.style-tile-provider {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.7);
+  color: #ffd980;
+  font-family: 'SF Mono', ui-monospace, Menlo, monospace;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+  z-index: 2;
+  border: 1px solid rgba(255, 217, 128, 0.3);
+}
+.style-lightbox-wordmark { font-size: 28px; bottom: 18px; left: 22px; }
+.style-tile.is-loading {
+  background:
+    linear-gradient(110deg, rgba(255,255,255,0.04) 30%, rgba(255,255,255,0.08) 50%, rgba(255,255,255,0.04) 70%) 0 0 / 200% 100%;
+  animation: style-shimmer 1.6s ease-in-out infinite;
+}
+@keyframes style-shimmer {
+  to { background-position: -200% 0; }
+}
+.style-tile-spinner {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.18);
+  border-top-color: #f0c060;
+  animation: style-spin 0.8s linear infinite;
+}
+@keyframes style-spin {
+  to { transform: rotate(360deg); }
+}
+.style-tile.is-failed {
+  flex-direction: column;
+  gap: 8px;
+  padding: 12px;
+  border-color: rgba(255, 80, 80, 0.25);
+  background: rgba(255, 80, 80, 0.05);
+}
+.style-tile-error {
+  font-size: 11px;
+  color: #ff8a8a;
+  text-align: center;
+  word-break: break-word;
+  line-height: 1.4;
+}
+
+/* Lightbox — click a done tile to expand it on its own. */
+.style-lightbox {
+  position: fixed;
+  inset: 0;
+  z-index: 10000;
+  background: rgba(0, 0, 0, 0.92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: clamp(20px, 6vw, 64px);
+  cursor: zoom-out;
+  animation: style-lightbox-fade 0.18s ease-out;
+}
+@keyframes style-lightbox-fade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+.style-lightbox-frame {
+  /* Inline-block frame so the wordmark anchors to the image's actual
+     bounds, not the viewport. */
+  position: relative;
+  display: inline-block;
+  max-width: 100%;
+  max-height: 100%;
+  cursor: default;
+}
+.style-lightbox-img {
+  display: block;
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  border-radius: 14px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.6);
+  cursor: zoom-in;
+  /* Smooth scale + pan; will-change so transform stays on the GPU
+     while the user drags. */
+  transition: transform 0.22s cubic-bezier(0.32, 0.72, 0, 1);
+  will-change: transform;
+  user-select: none;
+  -webkit-user-drag: none;
+  /* No native pan-zoom — we intercept pointer events for our own
+     drag-to-pan once the image is zoomed. */
+  touch-action: none;
+}
+.style-lightbox-img.is-zoomed {
+  cursor: grab;
+  /* While dragging the .is-zoomed image, the React handler suppresses
+     transitions implicitly because it updates pan every move. The
+     base transition above only fires on toggle, which is what we want. */
+}
+.style-lightbox-img.is-zoomed:active { cursor: grabbing; }
+.style-lightbox-close {
+  position: absolute;
+  top: 20px;
+  right: 24px;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(0, 0, 0, 0.6);
+  color: #fff;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.15s, border-color 0.15s;
+}
+.style-lightbox-close:hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(240, 192, 96, 0.5);
+}
+.style-lightbox-badge {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(6px);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: lowercase;
+}
+
+@media (max-width: 600px) {
+  .style-context { flex-direction: column; align-items: flex-start; }
+  .style-context-meta { margin-left: 0; }
+}
+
+/* Stats editor modal — opens from the "Edit" chip in the context strip.
+   Same dim-backdrop pattern as the lightbox, sized for a short form. */
+.style-stats-modal {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.7);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  z-index: 100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+}
+.style-stats-card {
+  width: 100%;
+  max-width: 420px;
+  background: #111;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+  padding: 22px 22px 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  color: #fff;
+}
+.style-stats-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 4px;
+}
+.style-stats-header h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+.style-stats-close {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: #fff;
+  font-size: 16px;
+  cursor: pointer;
+  display: grid;
+  place-items: center;
+}
+.style-stats-close:hover { background: rgba(255, 255, 255, 0.08); }
+.style-stats-hint {
+  margin: 0;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.55);
+}
+.style-stats-field {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  border: none;
+  padding: 0;
+}
+.style-stats-label {
+  font-size: 12px;
+  font-weight: 500;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.55);
+}
+.style-stats-field select {
+  width: 100%;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: #fff;
+  font-size: 15px;
+  outline: none;
+  appearance: none;
+  background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'><path d='M1 1l4 4 4-4' fill='none' stroke='%23999' stroke-width='1.5' stroke-linecap='round'/></svg>");
+  background-repeat: no-repeat;
+  background-position: right 14px center;
+}
+.style-stats-field select:focus {
+  border-color: rgba(240, 192, 96, 0.6);
+}
+.style-stats-gender {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.style-stats-gender-opt {
+  flex: 1 1 0;
+  min-width: 90px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 13px;
+  text-transform: capitalize;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.style-stats-gender-opt:hover { background: rgba(255, 255, 255, 0.08); }
+.style-stats-gender-opt.is-selected {
+  border-color: rgba(240, 192, 96, 0.7);
+  background: rgba(240, 192, 96, 0.1);
+  color: #ffd980;
+}
+.style-stats-gender-opt input {
+  display: none;
+}
+
+/* Advanced-mode disclosure — a quiet full-width toggle that reveals the
+   proportion + aesthetic inputs. Chevron rotates when open. */
+.style-stats-advanced-toggle {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 12px 14px;
+  margin-top: 2px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.03);
+  color: rgba(255, 255, 255, 0.82);
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.style-stats-advanced-toggle:hover { background: rgba(255, 255, 255, 0.06); }
+.style-stats-advanced-toggle svg { transition: transform 0.2s ease; }
+.style-stats-advanced-toggle.is-open svg { transform: rotate(180deg); }
+.style-stats-advanced-toggle.is-open {
+  border-color: rgba(240, 192, 96, 0.45);
+  color: #ffd980;
+}
+
+.style-stats-advanced {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  animation: style-stats-advanced-in 0.22s ease;
+}
+@keyframes style-stats-advanced-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.style-stats-row {
+  display: flex;
+  gap: 12px;
+}
+.style-stats-row .style-stats-field { flex: 1 1 0; min-width: 0; }
+
+/* Fashion-style tags — multi-select chips. */
+.style-stats-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.style-stats-tag {
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.style-stats-tag:hover { background: rgba(255, 255, 255, 0.08); }
+.style-stats-tag.is-selected {
+  border-color: rgba(240, 192, 96, 0.7);
+  background: rgba(240, 192, 96, 0.12);
+  color: #ffd980;
+}
+
+.style-stats-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 4px;
+}
+.style-stats-cancel {
+  padding: 12px 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: transparent;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 14px;
+  cursor: pointer;
+}
+.style-stats-cancel:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+.style-stats-cancel:disabled { opacity: 0.4; cursor: default; }
+
+/* ── Lens "Shop this look" sheet ─────────────────────────────────────
+   Opens from a Style sheet tile's lightbox CTA. Full-viewport overlay
+   with the source image up top, a grid of Google Lens visual matches
+   below, and a sticky bottom dock with the multi-select count + the
+   Try-it-on CTA. */
+
+.lens-sheet {
+  position: fixed;
+  inset: 0;
+  z-index: 110;
+  background: rgba(0, 0, 0, 0.78);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  display: flex;
+  flex-direction: column;
+}
+.lens-sheet-inner {
+  flex: 1 1 auto;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding: clamp(16px, 4vw, 32px);
+  padding-bottom: 140px; /* leaves room for the sticky dock */
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  max-width: 1080px;
+  width: 100%;
+  margin: 0 auto;
+}
+.lens-sheet-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.lens-sheet-close {
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+  font-size: 20px;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.lens-sheet-close:hover { background: rgba(255, 255, 255, 0.1); }
+.lens-sheet-title-block {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.lens-sheet-eyebrow {
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+  font-weight: 600;
+}
+.lens-sheet-occasion {
+  font-size: clamp(18px, 2.4vw, 22px);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #fff;
+}
+.lens-sheet-source {
+  width: 100%;
+  max-height: 32vh;
+  border-radius: 14px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.04);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.lens-sheet-source img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  max-height: 32vh;
+}
+.lens-sheet-loading,
+.lens-sheet-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 48px 16px;
+  color: rgba(255, 255, 255, 0.65);
+  font-size: 14px;
+  text-align: center;
+}
+.lens-sheet-empty { padding: 64px 24px; }
+
+.lens-sheet-grid {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: 14px;
+}
+.lens-card {
+  position: relative;
+  border-radius: 14px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  transition: border-color 0.15s, background 0.15s, transform 0.1s;
+}
+.lens-card.is-picked {
+  border-color: #f0c060;
+  background: rgba(240, 192, 96, 0.08);
+}
+.lens-card-button {
+  display: flex;
+  flex-direction: column;
+  width: 100%;
+  padding: 0;
+  border: none;
+  background: none;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+}
+.lens-card-button:active { transform: scale(0.98); }
+.lens-card-image {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  background: rgba(255, 255, 255, 0.04);
+  overflow: hidden;
+}
+.lens-card-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.lens-card-check {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  background: #f0c060;
+  color: #000;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3);
+}
+.lens-card-body {
+  padding: 10px 12px 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.lens-card-brand {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.55);
+}
+.lens-card-title {
+  font-size: 13px;
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.95);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.lens-card-meta {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  margin-top: 2px;
+}
+.lens-card-price {
+  font-size: 13px;
+  font-weight: 600;
+  color: #ffd980;
+}
+.lens-card-source {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.45);
+  text-overflow: ellipsis;
+  overflow: hidden;
+  white-space: nowrap;
+  max-width: 50%;
+}
+
+.lens-sheet-dock {
+  position: sticky;
+  bottom: 0;
+  z-index: 1;
+  padding: 14px clamp(16px, 4vw, 32px) calc(14px + env(safe-area-inset-bottom));
+  background: linear-gradient(180deg, rgba(5, 5, 5, 0) 0%, rgba(5, 5, 5, 0.92) 35%, #050505 100%);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+.lens-sheet-dock-count {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+/* ── Crop tool (Phase 3) ────────────────────────────────────────────
+   Full-screen overlay opened from the Lens sheet so the user can box
+   one specific garment before re-running lens-search. */
+.lens-crop {
+  position: fixed;
+  inset: 0;
+  z-index: 120;
+  background: #0b0b0b;
+  display: flex;
+  flex-direction: column;
+}
+.lens-crop-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: clamp(14px, 3vw, 22px);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+.lens-crop-stage {
+  flex: 1 1 auto;
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  padding: 16px;
+  touch-action: none; /* prevents iOS scroll while dragging */
+  user-select: none;
+}
+.lens-crop-stage img {
+  max-width: 100%;
+  max-height: 100%;
+  object-fit: contain;
+  pointer-events: none;
+}
+.lens-crop-rect {
+  position: absolute;
+  border: 2px solid #f0c060;
+  box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.55);
+  cursor: move;
+  /* Pin the rect to the image's CSS box. We compute the bbox in
+     percent-of-image-size and apply it via inline style so this
+     stays correct when the image aspect ratio resizes the rect. */
+}
+.lens-crop-handle {
+  position: absolute;
+  width: 14px;
+  height: 14px;
+  background: #f0c060;
+  border: 2px solid #0b0b0b;
+  border-radius: 50%;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+.lens-crop-handle-n,  .lens-crop-handle-s  { left: 50%; transform: translateX(-50%); cursor: ns-resize; }
+.lens-crop-handle-e,  .lens-crop-handle-w  { top: 50%; transform: translateY(-50%); cursor: ew-resize; }
+.lens-crop-handle-nw  { top: -8px; left: -8px; cursor: nwse-resize; }
+.lens-crop-handle-ne  { top: -8px; right: -8px; cursor: nesw-resize; }
+.lens-crop-handle-se  { bottom: -8px; right: -8px; cursor: nwse-resize; }
+.lens-crop-handle-sw  { bottom: -8px; left: -8px; cursor: nesw-resize; }
+.lens-crop-handle-n   { top: -8px; }
+.lens-crop-handle-s   { bottom: -8px; }
+.lens-crop-handle-w   { left: -8px; }
+.lens-crop-handle-e   { right: -8px; }
+.lens-crop-dock {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: clamp(14px, 3vw, 22px);
+  padding-bottom: calc(clamp(14px, 3vw, 22px) + env(safe-area-inset-bottom));
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  background: #0b0b0b;
+}
+.lens-crop-reset {
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 13px;
+  cursor: pointer;
+  padding: 8px 12px;
+}
+.lens-crop-reset:hover { color: #fff; }
+
+/* ── Lens sheet — crop chips + cached badge + ingested badge ──────── */
+.lens-sheet-source {
+  position: relative;
+}
+
+/* Full-image-area button so the whole source preview is a tap target.
+   Style sheets are usually a NxM grid; this lets the user point at one
+   outfit and have Lens scan only that. */
+.lens-sheet-source-tap {
+  display: block;
+  width: 100%;
+  padding: 0;
+  margin: 0;
+  border: none;
+  background: transparent;
+  cursor: crosshair;
+  position: relative;
+}
+.lens-sheet-source-tap:disabled { cursor: default; }
+.lens-sheet-source-tap img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  max-height: 32vh;
+  display: block;
+  pointer-events: none;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.04);
+}
+/* Discoverability hint — sits across the top edge of the source
+   preview the first time the user opens the sheet so the tap-to-pick
+   affordance is unmistakable. Hidden once a crop is active. */
+.lens-sheet-source-hint {
+  position: absolute;
+  top: 12px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.65);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  pointer-events: none;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+.lens-sheet-source-overlay {
+  position: absolute;
+  left: 12px;
+  bottom: 12px;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.lens-sheet-source-chip {
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s;
+}
+.lens-sheet-source-chip:hover:not(:disabled) {
+  background: rgba(0, 0, 0, 0.75);
+  border-color: rgba(255, 255, 255, 0.3);
+}
+.lens-sheet-source-chip:disabled { opacity: 0.5; cursor: default; }
+.lens-sheet-source-chip.is-primary {
+  background: #f0c060;
+  color: #000;
+  border-color: transparent;
+  font-weight: 600;
+}
+.lens-sheet-source-chip.is-primary:hover:not(:disabled) { background: #ffd071; }
+
+.lens-sheet-cached {
+  margin-left: 6px;
+  color: rgba(240, 192, 96, 0.85);
+  font-weight: 500;
+  text-transform: none;
+  letter-spacing: 0;
+}
+
+/* ── Skeleton cards (loading state) ───────────────────────────────── */
+.lens-card--skeleton {
+  pointer-events: none;
+  cursor: default;
+  background: rgba(255, 255, 255, 0.02);
+}
+.lens-card--skeleton .lens-card-image {
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.04) 0%,
+    rgba(255, 255, 255, 0.09) 50%,
+    rgba(255, 255, 255, 0.04) 100%
+  );
+  background-size: 200% 100%;
+  animation: lens-shimmer 1.4s ease-in-out infinite;
+}
+.lens-card-skeleton-line {
+  height: 10px;
+  border-radius: 5px;
+  background: linear-gradient(
+    90deg,
+    rgba(255, 255, 255, 0.04) 0%,
+    rgba(255, 255, 255, 0.09) 50%,
+    rgba(255, 255, 255, 0.04) 100%
+  );
+  background-size: 200% 100%;
+  animation: lens-shimmer 1.4s ease-in-out infinite;
+}
+.lens-card-skeleton-line--short { width: 40%; height: 8px; }
+@keyframes lens-shimmer {
+  0%, 100% { background-position: 100% 0; }
+  50%      { background-position: 0 0; }
+}
+
+/* ── Source favicon next to the merchant name ─────────────────────── */
+.lens-card-source {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+}
+.lens-card-source-favicon {
+  width: 12px;
+  height: 12px;
+  border-radius: 2px;
+  flex: 0 0 12px;
+  object-fit: contain;
+}
+
+/* ── External-merchant link button (top-right of each card) ───────── */
+.lens-card-external {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  color: rgba(255, 255, 255, 0.85);
+  display: grid;
+  place-items: center;
+  text-decoration: none;
+  opacity: 0;
+  transform: translateY(-2px);
+  transition: opacity 0.15s, transform 0.15s, background 0.15s;
+  pointer-events: none;
+}
+.lens-card:hover .lens-card-external,
+.lens-card:focus-within .lens-card-external {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+.lens-card-external:hover { background: rgba(0, 0, 0, 0.75); color: #fff; }
+/* Mobile / touch — no hover, so always show. */
+@media (hover: none) {
+  .lens-card-external {
+    opacity: 1;
+    transform: none;
+    pointer-events: auto;
+  }
+}
+
+.lens-card.is-ingested { border-color: rgba(120, 220, 140, 0.4); }
+.lens-card-ingested {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: rgba(40, 80, 50, 0.85);
+  color: #b6f3c2;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  pointer-events: none;
+}
+
+/* Lightbox CTA — sits on top of the existing zoom/pan transform of
+   the lightbox image. Tap targets are large enough for thumbs even
+   when the image is fully zoomed. */
+.style-lightbox-shop {
+  position: absolute;
+  bottom: 24px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 12px 22px;
+  border-radius: 999px;
+  border: none;
+  background: #f0c060;
+  color: #000;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  z-index: 2;
+  box-shadow: 0 6px 22px rgba(0, 0, 0, 0.45);
+  transition: background 0.15s, transform 0.1s;
+}
+.style-lightbox-shop:hover { background: #ffd071; }
+.style-lightbox-shop:active { transform: translateX(-50%) scale(0.97); }
+
+/* ── Your style (custom style descriptor → Seedance) ───────────────── */
+.style-own {
+  margin: 28px 16px 40px;
+  padding: 18px;
+  border-radius: 18px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.09);
+}
+.style-own-head { margin-bottom: 12px; }
+.style-own-title {
+  margin: 0 0 4px;
+  font-size: 17px;
+  font-weight: 700;
+  color: #f4f4f5;
+}
+.style-own-sub {
+  margin: 0;
+  font-size: 13px;
+  line-height: 1.45;
+  color: #9a9aa2;
+}
+.style-own-input {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  min-height: 76px;
+  padding: 12px 14px;
+  border-radius: 13px;
+  background: rgba(0,0,0,0.35);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: #f4f4f5;
+  font-size: 14px;
+  line-height: 1.45;
+  font-family: inherit;
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+.style-own-input::placeholder { color: #6f6f78; }
+.style-own-input:focus {
+  outline: none;
+  border-color: rgba(140,180,255,0.55);
+  box-shadow: 0 0 0 3px rgba(120,170,255,0.16);
+}
+.style-own-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 12px;
+  margin-top: 12px;
+}
+.style-own-flash {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #6ee7a8;
+  opacity: 0;
+  transform: translateY(2px);
+  transition: opacity 200ms ease, transform 200ms ease;
+}
+.style-own-flash.is-shown { opacity: 1; transform: translateY(0); }
+.style-own-save { width: auto; min-width: 132px; padding-inline: 20px; }

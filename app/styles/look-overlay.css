@@ -2,28 +2,45 @@
    LOOK OVERLAY - fullscreen 60/40 split
    ═══════════════════════════════════════════ */
 
-/* Full-screen container.
-   Entrance was a translateY slide; we now lean on the TrailMorph layoutId
-   to do the focal motion (the hero box morphs from the originating
-   LookCard) and the overlay itself just opacity-fades in over 280ms - same
-   timing as ProductPage so the two surfaces feel like one app. */
+/* Full-screen container — behaves like a bottom sheet.
+   The shared <video> hero is appendChild'd INTO a slot inside this
+   container (TrailVideoHost), so sliding the whole container keeps the
+   video riding along with it — no desync. Opens by sliding UP from the
+   bottom and closes by sliding back DOWN, matching the comments sheet. */
 .look-overlay {
   position: fixed;
   inset: 0;
   z-index: 200;
   background: #0a0a0a;
-  opacity: 0;
-  transition: opacity 0.28s cubic-bezier(0.32, 0.72, 0, 1);
+  opacity: 1;
+  /* No slide-up/down page transition — the look opens and closes instantly
+     (only the comments sheet keeps its glide). The drag-to-dismiss handler
+     still sets an inline transform 1:1 while the finger is down. */
+  transform: none;
   overflow: hidden;
+  will-change: transform;
 }
 
+/* Settled / open — no-op now that there's no enter slide. */
 .look-overlay--in {
   opacity: 1;
+  transform: none;
 }
 
+/* Close — hide instantly (no slide-down). The overlay still unmounts after
+   the JS close timeout; pointer-events off so the feed is usable at once. */
 .look-overlay--out {
   opacity: 0;
+  transition: none;
   pointer-events: none;
+}
+
+/* While the finger is down the panel must track 1:1 — no smoothing. The
+   drag handler sets an inline transform each frame; on release it either
+   fires handleClose (--out slides the rest of the way off) or clears the
+   inline transform so the panel eases back to translateY(0). */
+.look-overlay.is-dragging {
+  transition: none;
 }
 
 /* ── Left: media column (42%) ── */
@@ -62,6 +79,239 @@
 .look-back-btn:hover {
   background: rgba(255, 255, 255, 0.2);
   color: #fff;
+}
+
+/* Side-rail back button — desktop only. Fixed on the left edge of the
+   viewport, vertically centered. Mirrors .pd-back-rail on the product
+   page so the two surfaces share an identical "scroll-back" affordance. */
+.look-back-rail {
+  position: fixed;
+  left: max(20px, env(safe-area-inset-left));
+  top: 50%;
+  transform: translateY(-50%) translateX(-12px);
+  z-index: 9100;
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(12px) saturate(1.2);
+  -webkit-backdrop-filter: blur(12px) saturate(1.2);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 280ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 280ms cubic-bezier(0.16, 1, 0.3, 1),
+    background 180ms ease;
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.4);
+}
+.look-back-rail.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(-50%) translateX(0);
+}
+.look-back-rail:hover { background: rgba(0, 0, 0, 0.75); }
+.look-back-rail:active { transform: translateY(-50%) translateX(0) scale(0.94); }
+@media (max-width: 768px) {
+  .look-back-rail { display: none !important; }
+}
+.light-mode .look-back-rail {
+  background: rgba(255, 255, 255, 0.85);
+  color: #0f172a;
+  border-color: rgba(15, 23, 42, 0.08);
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.18);
+}
+.light-mode .look-back-rail:hover { background: rgba(255, 255, 255, 0.95); }
+
+/* ── Mobile-only: back + bookmark overlaid on the video ──
+   Mirroring the exact pattern from ProductPage (.pd-back).
+   Hidden on desktop; shown via the @media block below. */
+.look-video-overlay-btns {
+  display: none; /* desktop: hidden */
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  z-index: 10;
+  padding: 16px;
+  justify-content: space-between;
+  align-items: center;
+  /* Gradient scrim so buttons read over any video colour */
+  background: linear-gradient(to bottom, rgba(0,0,0,0.45) 0%, transparent 100%);
+  pointer-events: none; /* let touches pass through to video */
+}
+
+.look-video-back-btn,
+.look-video-bookmark-btn {
+  pointer-events: auto;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+  flex-shrink: 0;
+}
+
+.look-video-back-btn:hover,
+.look-video-bookmark-btn:hover {
+  background: rgba(0, 0, 0, 0.65);
+}
+
+.look-video-bookmark-btn.active {
+  color: #ffd75c;
+  border-color: rgba(255, 215, 92, 0.4);
+}
+
+/* Standalone video-overlay controls (mobile only): close top-left, share
+   top-right, and a bottom-right column (comments above save). Hidden on
+   desktop, where the info-panel topbar carries these. */
+.look-video-close,
+.look-video-share {
+  display: none;
+  position: absolute;
+  top: max(16px, var(--shell-sb, 0px));
+  z-index: 11;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #fff;
+  cursor: pointer;
+  align-items: center;
+  justify-content: center;
+  transition: background 0.2s;
+}
+.look-video-close { left: 16px; }
+.look-video-share { right: 16px; }
+.look-video-close:hover,
+.look-video-share:hover { background: rgba(0, 0, 0, 0.65); }
+.look-video-share.is-flashed { background: #16a34a; border-color: #16a34a; }
+
+/* Desktop parity with mobile: Share lives ON the video (top-right) and
+   Save lives bottom-right (see .look-video-actions). The info-panel
+   topbar's duplicate buttons are hidden on desktop (rule by .look-info-topbar).
+   The close button stays mobile-only — desktop uses the corner back chevron. */
+.look-video-share { display: inline-flex; }
+
+.look-video-actions {
+  display: flex;
+  position: absolute;
+  right: 16px;
+  bottom: 16px;
+  z-index: 11;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+}
+
+/* Shared green "comments" FAB (Google-Chat-ish) with a red count bubble.
+   Used on the look video (in .look-video-actions) and the product hero
+   (positioned by .product-page .detail-comments-fab). */
+.detail-comments-fab {
+  position: relative;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  background: #16a34a;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  color: #fff;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 10px rgba(22, 163, 74, 0.45);
+  transition: transform 0.16s ease, background 0.2s ease;
+  pointer-events: auto;
+}
+.detail-comments-fab:hover { background: #15a34a; transform: scale(1.07); }
+.detail-comments-fab__count {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  border-radius: 999px;
+  background: #ef4444;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+  border: 2px solid #0a0a0a;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Desktop topbar comment button turns green to match the FAB. */
+.look-comment-btn--green {
+  position: relative;
+  background: #16a34a !important;
+  border-color: #16a34a !important;
+  color: #fff !important;
+}
+.look-comment-btn--green:hover { background: #15a34a !important; }
+
+/* Labelled "Comments" button in the info body — replaces the floating
+   bubble; mirrors the product page's inline comments button. */
+.look-comments-labeled {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  /* Match the 24px horizontal inset of the product cards / description
+     above it so the button lines up with the rest of the column instead
+     of spanning edge-to-edge. width:auto + symmetric margins lets the
+     block-level flex button fill the container minus the insets. */
+  width: auto;
+  margin: 4px 24px 24px;
+  padding: 13px 16px;
+  /* Pill shape to match the product page's standard comments button. */
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.look-comments-labeled:hover { background: rgba(255, 255, 255, 0.1); }
+.look-comments-labeled svg { flex-shrink: 0; opacity: 0.85; }
+
+/* Glowing, gently-pulsing Comments CTA — the always-on comments button
+   under the creator info. A soft animated glow + a slow breathing scale
+   draw the eye without being noisy. Honours reduced-motion. */
+.look-comments-glow {
+  border-color: rgba(120, 170, 255, 0.5);
+  background: rgba(120, 170, 255, 0.10);
+  box-shadow: 0 0 0 rgba(120, 170, 255, 0.0);
+  animation: look-comments-glow-pulse 2.6s ease-in-out infinite;
+}
+.look-comments-glow:hover { background: rgba(120, 170, 255, 0.18); }
+.look-comments-glow svg { opacity: 1; }
+@keyframes look-comments-glow-pulse {
+  0%, 100% { box-shadow: 0 0 14px rgba(120, 170, 255, 0.18); border-color: rgba(120, 170, 255, 0.42); }
+  50%      { box-shadow: 0 0 26px rgba(120, 170, 255, 0.42); border-color: rgba(120, 170, 255, 0.75); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .look-comments-glow { animation: none; box-shadow: 0 0 18px rgba(120, 170, 255, 0.3); }
 }
 
 /* Wrapper to center media within the 60% column */
@@ -127,6 +377,22 @@
   flex-shrink: 0;
 }
 
+/* Desktop: Save + Share now live on the video (parity with mobile), so the
+   topbar's duplicate buttons are hidden. The bar itself stays as top spacing
+   above the tabs. Scoped to ≥769px; on mobile the whole topbar is hidden. */
+@media (min-width: 769px) {
+  .look-info-topbar .look-bookmark-btn,
+  .look-info-topbar .look-comment-btn {
+    display: none;
+  }
+  /* Proper breathing room on the right info column — content sat flush to
+     the right edge. Pad the column so every block (tabs, products, about,
+     comments) gets symmetric left/right inset on top of its own padding. */
+  .look-info-col {
+    padding-inline: 12px;
+  }
+}
+
 /* Mobile-only back button inside info panel */
 .look-back-btn-mobile {
   width: 34px;
@@ -183,8 +449,19 @@
   font-weight: 600;
   line-height: 1.3;
   color: #ffffff;
-  padding: 12px 24px 16px;
+  padding: 12px 24px 8px;
   margin: 0;
+}
+
+/* Save count shown below the title */
+.look-save-count {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  padding: 0 24px 14px;
+  color: rgba(255, 255, 255, 0.45);
+  font-size: 12px;
+  font-weight: 500;
 }
 
 /* Tabs */
@@ -250,33 +527,38 @@
   padding: 4px 24px 24px;
   display: flex;
   flex-direction: column;
+  gap: 8px;
 }
 
 .product-card {
   display: flex;
   align-items: center;
-  gap: 14px;
-  padding: 13px 4px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  gap: 12px;
+  padding: 10px 12px;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
   cursor: pointer;
-  transition: opacity 0.15s;
-}
-
-.product-card:last-child {
-  border-bottom: none;
+  transition: background 0.15s;
 }
 
 .product-card:hover {
-  opacity: 0.72;
+  background: rgba(255, 255, 255, 0.1);
 }
 
 .product-card-thumb {
-  width: 60px;
-  height: 60px;
-  border-radius: 10px;
+  /* 3:4 portrait — product/look posters are shot 3:4, so a 1:1 thumb cropped
+     them. Keep the native 3:4 aspect and let the row card grow taller to fit
+     (the flex row sizes to the tallest child) so the poster shows in full, not
+     a tight square crop. */
+  width: 78px;
+  height: 104px;
+  border-radius: 12px;
   overflow: hidden;
   flex-shrink: 0;
   background: rgba(255, 255, 255, 0.06);
+  /* ProductMiniMedia stacks an absolute <img> + <video> inside; make
+     this the positioning context so they fill the box. */
+  position: relative;
 }
 
 .product-card-info {
@@ -301,6 +583,14 @@
   font-size: 12px;
   color: rgba(255, 255, 255, 0.45);
   display: block;
+}
+
+.light-mode .product-card {
+  background: rgba(0, 0, 0, 0.04);
+}
+
+.light-mode .product-card:hover {
+  background: rgba(0, 0, 0, 0.08);
 }
 
 /* Creator About tab */
@@ -344,6 +634,32 @@
   color: rgba(255, 255, 255, 0.6);
   margin: 0;
 }
+.look-creator-about-ai-mark {
+  margin-right: 6px;
+  opacity: 0.85;
+}
+
+/* "View more info" toggle (replaced the About tab). */
+.look-more-info-btn {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  margin: 4px 0 0;
+  padding: 14px 16px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  color: #fff;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.look-more-info-btn:hover { background: rgba(255, 255, 255, 0.08); }
+.look-more-info-chevron { transition: transform 0.2s ease; opacity: 0.7; }
+.look-more-info-btn.is-open .look-more-info-chevron { transform: rotate(180deg); }
 
 .look-creator-about-btn {
   display: inline-flex;
@@ -367,15 +683,128 @@
   color: #fff;
 }
 
+.look-creator-more-section {
+  padding: 20px 0 32px;
+  margin-left: -16px;
+  margin-right: -16px;
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.look-creator-more-section .look-feed-heading {
+  font-size: 16px;
+  margin-bottom: 12px;
+  padding-left: 16px;
+}
+
+.look-creator-more-scroll {
+  display: grid;
+  /* 3-up mosaic of smaller look thumbnails in the right info column —
+     denser than the old 2-up so "more from this creator" reads as a
+     compact gallery beside the look rather than big cards. */
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 2px;
+  background: #111;
+}
+
+.look-creator-more-scroll::-webkit-scrollbar {
+  display: none;
+}
+
+/* Wrapper that positions the arrow buttons */
+.look-creator-more-scroll-wrap {
+  position: relative;
+}
+
+/* Arrow buttons — hidden on mobile, shown on desktop */
+.look-scroll-arrow {
+  display: none;
+}
+
+@media (min-width: 768px) {
+  .look-scroll-arrow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: absolute;
+    top: 50%;
+    transform: translateY(-50%);
+    z-index: 10;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    background: rgba(30, 30, 30, 0.85);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    color: #fff;
+    cursor: pointer;
+    transition: background 160ms ease, opacity 160ms ease;
+    padding: 0;
+  }
+  .look-scroll-arrow:hover {
+    background: rgba(60, 60, 60, 0.95);
+  }
+  .look-scroll-arrow--left  { left: -18px; }
+  .look-scroll-arrow--right { right: -6px; }
+}
+
+.look-creator-more-scroll .look-card {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  border-radius: 6px;
+  background: #111;
+}
+
+.look-creator-more-scroll .look-card .card-creator-row {
+  opacity: 0;
+}
+
+.look-creator-more-scroll .look-card:hover .card-creator-row {
+  opacity: 1;
+}
+
 /* ── Scrollable wrapper (makes the whole overlay a scrollable page) ── */
+/* Live particle field layered on the opaque black overlay base. Sits
+   behind the scroll content so the page background reads as a dynamic
+   surface, not a flat solid. Low opacity so it stays ambient. */
+.look-overlay-particles {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.55;
+}
+.look-overlay-particles .pw-particles {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
 .look-overlay-scroll {
+  position: relative;
+  z-index: 1;
   width: 100%;
   height: 100%;
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
+  /* Stop scroll-chaining: when the user reaches top or bottom of the
+     overlay's scroll, the browser was forwarding the leftover delta
+     to the underlying feed — causing the page behind the overlay to
+     scroll. `contain` keeps the scroll inside this element. */
+  overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: rgba(255,255,255,0.15) transparent;
+}
+
+/* Belt-and-suspenders for iOS Safari, which sometimes still bubbles
+   touch deltas to the body even with overscroll-behavior on the
+   scroll child. Lock the underlying page entirely while the overlay
+   is in its "in" state. */
+:root:has(.look-overlay.look-overlay--in),
+html:has(.look-overlay.look-overlay--in),
+body:has(.look-overlay.look-overlay--in) {
+  overflow: hidden !important;
+  overscroll-behavior: none;
 }
 
 .look-overlay-scroll::-webkit-scrollbar {
@@ -400,12 +829,184 @@
   width: 100%;
 }
 
-/* ── Feed section below the hero ── */
+/* ── Mobile: stack the 60/40 hero vertically ──
+   Below 768px we drop the row split (which would force the info
+   panel into a tiny 42% column with clipped overflow) and let the
+   media stack on top + the info column flow naturally below it.
+   The whole overlay scrolls inside .look-overlay-scroll. */
+@media (max-width: 768px) {
+  .look-hero-section {
+    flex-direction: column;
+    height: auto;
+    /* Belt-and-suspenders: any min-height the desktop rule introduces
+       must not constrain the column. Each child owns its own height. */
+    min-height: 0;
+  }
+  .look-media-col {
+    flex: 0 0 auto;
+    width: 100%;
+    /* The media column IS the first full viewport — owns the ENTIRE
+       100dvh (edge-to-edge, flush to the very top under the status bar)
+       so the look reads as the whole screen on landing AND so dragging
+       the overlay down can never expose a black gap above the media.
+       The top controls already clear the status bar via their own
+       `top: max(16px, --shell-sb)` offset. Info column flows below it
+       via normal document order; .look-overlay-scroll owns scroll. */
+    height: 100dvh;
+    flex-shrink: 0;
+  }
+  /* Drop the 40px padding so the video uses every pixel of the
+     viewport width; pair with width:100% on .look-media so the video
+     spans edge-to-edge. */
+  .look-media-centered {
+    padding: 0;
+    height: 100%;
+  }
+  .look-media {
+    width: 100%;
+    height: 100%;
+    max-height: 100%;
+    aspect-ratio: auto;
+    border-radius: 0;
+    /* Black backdrop lives on the wrapper (below the z-index:0 instant
+       poster), NOT on the video slot. Putting it on .look-media-video
+       (z-index:1) painted black OVER the Phase-9 poster until the
+       <video> moved in and decoded frame 0 - the multi-second black
+       hero flash on mobile. The wrapper backdrop only shows if the
+       poster itself is missing. */
+    background: #000;
+  }
+  .look-media-video {
+    object-fit: cover;
+    width: 100%;
+    height: 100%;
+  }
+  .look-info-col {
+    flex: 1 1 auto;
+    width: 100%;
+    border-left: 0;
+    border-top: 0;
+    /* Critical: remove the desktop `overflow: hidden` that was
+       clipping the products list and the "More looks you'll love"
+       feed below it. The parent .look-overlay-scroll owns scroll. */
+    overflow: visible;
+    /* Match the page bg so seam under the drag handle reads clean. */
+    background: #0a0a0a;
+  }
+  /* Drag handle is unused now that the layout is a normal scrolling
+     page rather than a bottom-sheet. Keeping it caused the info
+     column to look like it was supposed to be dragged up, which
+     obscured the affordance ("scroll for products"). */
+  .look-drag-strip {
+    display: none;
+  }
+  /* The morphing layout-id transform sometimes leaves a translate
+     on .look-info-col on phones. Reset it; the info column flows in
+     normal document order on mobile so any transform fights scroll. */
+  .look-overlay--in .look-info-col {
+    transform: none !important;
+  }
+
+  /* Hide desktop back button; show the one inside the info panel */
+  .look-back-btn {
+    display: none;
+  }
+  .look-back-btn-mobile {
+    display: flex;
+  }
+
+  /* Show the video-overlay controls on mobile: close (top-left), share
+     (top-right), and the bottom-right actions column (comments + save). */
+  .look-video-close,
+  .look-video-share {
+    display: inline-flex;
+  }
+  .look-video-actions {
+    display: flex;
+  }
+
+  /* Hide the info-panel topbar on mobile — back + bookmark live on the video */
+  .look-info-topbar {
+    display: none;
+  }
+
+  .look-creator-row {
+    padding: 2px 16px 10px;
+  }
+
+  .look-tabs {
+    padding: 0 16px;
+  }
+
+  .look-products-list {
+    padding: 4px 16px 24px;
+  }
+
+  /* Match the comments button inset to the 16px mobile column padding. */
+  .look-comments-labeled {
+    margin: 4px 16px 20px;
+  }
+
+  .look-feed-content {
+    padding: 24px 12px 32px;
+  }
+
+  /* Mobile edge-to-edge to mirror the home feed grid. */
+  .look-feed-grid {
+    gap: 2px;
+    padding: 0;
+  }
+
+  /* Legacy product-item / product-thumb selectors (used in some looks) */
+  .product-item {
+    padding: 10px 0;
+  }
+
+  .product-thumb {
+    width: 48px;
+    height: 48px;
+  }
+
+  .product-details h4 {
+    font-size: 13px;
+  }
+}
+
+/* ── Feed sections below the hero (stack like ProductPage) ── */
 .look-feed-section {
   width: 100%;
-  padding: 48px 32px 64px;
-  background: #0a0a0a;
+  max-width: none;
+  margin: 0 auto;
+  padding: 32px 0 0;
+  background: #111;
   border-top: 1px solid rgba(255, 255, 255, 0.06);
+}
+@media (max-width: 600px) {
+  /* Mobile mirrors the main feed: edge-to-edge 2-col with a 2px gap
+     and #111 backdrop so any flex gap reads as the card background
+     rather than a black hole. Title hangs off the left edge so it
+     still reads against the dark page. */
+  .look-feed-section {
+    padding: 16px 0 0;
+    background: #111;
+  }
+  .look-feed-heading {
+    font-size: 16px;
+    margin: 0 0 12px;
+    padding-left: 16px;
+  }
+}
+
+/* Last section keeps the trailing breathing room. Earlier sections
+   get a tighter bottom so consecutive sections aren't double-padded. */
+.look-feed-section + .look-feed-section {
+  border-top: none;
+}
+.look-feed-section:last-child {
+  padding-bottom: 56px;
+}
+.look-feed-section:not(:last-child) {
+  padding-bottom: 32px;
 }
 
 .look-feed-heading {
@@ -413,24 +1014,139 @@
   font-weight: 700;
   color: rgba(255, 255, 255, 0.85);
   margin: 0 0 24px;
+  padding-left: 16px;
   letter-spacing: -0.01em;
 }
 
 .look-feed-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 16px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 2px;
+  background: #111;
+}
+@media (min-width: 768px) {
+  .look-feed-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+@media (min-width: 1200px) {
+  .look-feed-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
 }
 
 .look-feed-grid .look-card {
-  aspect-ratio: 9 / 16;
+  aspect-ratio: 3 / 4;
+  border-radius: 6px;
+  background: #111;
+  /* Prevent auto-row stretch from collapsing the card to its zero-height
+     absolute content (which defeats the aspect-ratio). */
+  align-self: start;
+}
+
+/* GUARD — every poster/video inside the creator grid must FILL its 3:4
+   cell via cover, never stretch. All look posters are stored 9:16
+   (720×1280), so a 9:16 source dropped into a 3:4 cell should crop its
+   top/bottom and stay in proportion. This pins cover defensively so a
+   stray `fill`/`contain`/`100% 100%` placement can never squish a card
+   (which read as a "distorted" subject). */
+.look-feed-grid .look-card .card-video-slot {
+  background-size: cover !important;
+  background-position: center !important;
+}
+.look-feed-grid .look-card video,
+.look-feed-grid .look-card img {
+  object-fit: cover !important;
+}
+
+/* Inside the feed grid, simplify the creator chip to match pd-look-tile */
+.look-feed-grid .look-card .card-creator-row {
+  background: transparent;
+  border-color: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  padding: 0;
+  bottom: 10px;
+  left: 10px;
+}
+.look-feed-grid .look-card:hover .card-creator-row {
+  background: transparent;
+  border-color: transparent;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow: none;
+  transform: none;
+}
+.look-feed-grid .look-card .card-creator-row .card-creator-avatar {
+  width: 18px;
+  height: 18px;
+  min-width: 18px;
+  min-height: 18px;
+  max-width: 18px;
+  max-height: 18px;
+  border: none;
+  box-shadow: none;
+}
+.look-feed-grid .look-card .card-creator-row .card-creator-name {
+  font-size: 12px;
+  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.6);
+}
+
+/* Creator overlay bottom-left of video */
+.overlay-video-creator {
+  position: absolute;
+  bottom: 16px;
+  left: 12px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  border: none;
+  border-radius: 24px;
+  padding: 5px 12px 5px 5px;
+  cursor: pointer;
+  max-width: calc(100% - 90px);
+  transition: opacity 0.15s;
+}
+
+.overlay-video-creator:hover {
+  opacity: 0.8;
+}
+
+.overlay-video-creator__avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 1.5px solid rgba(255, 255, 255, 0.25);
+}
+
+.overlay-video-creator__avatar--initial {
+  background: rgba(255, 255, 255, 0.15);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.overlay-video-creator__name {
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.5);
 }
 
 /* Hotspot indicator (shared, within .look-media) */
 .look-media .hotspot-indicator {
   position: absolute;
   bottom: 16px;
-  left: 16px;
+  right: 16px;
+  left: auto;
   z-index: 4;
   pointer-events: none;
 }
@@ -706,7 +1422,18 @@
 .product-thumb-img {
   width: 100%;
   height: 100%;
+  /* The thumb box is now 3:4 (matches the poster's native aspect), so
+     `cover` fills it edge-to-edge with no crop for a 3:4 poster — the
+     image shows at its native framing instead of being squeezed into a
+     square. center keeps any off-aspect source balanced. */
   object-fit: cover;
+  object-position: center;
+}
+/* The poster <img> and the swap-in <video> MUST share framing or the
+   crossfade jumps. Mirror .product-thumb-img exactly. */
+.product-thumb-video {
+  object-fit: cover;
+  object-position: center;
 }
 
 .product-thumb-placeholder {
@@ -714,14 +1441,45 @@
   height: 100%;
 }
 
+.product-brand-row {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 3px;
+  min-width: 0;
+}
 .product-brand {
   font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.06em;
   color: rgba(255, 255, 255, 0.45);
-  display: block;
-  margin-bottom: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* Subtype / type pill next to the brand. Reads as a category tag —
+   "Sandals", "Sneakers", "Top" — so the shopper sees the garment
+   shape before the long product name. Subtle border + cyan tint to
+   distinguish from the brand text without competing with it. */
+.product-subtype-chip {
+  display: inline-block;
+  padding: 1px 7px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: rgba(167, 243, 208, 0.92);
+  background: rgba(16, 185, 129, 0.10);
+  border: 1px solid rgba(16, 185, 129, 0.25);
+  text-transform: capitalize;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.light-mode .product-subtype-chip {
+  color: #0e7490;
+  background: #ecfeff;
+  border-color: #a5f3fc;
 }
 
 .product-details h4 {
@@ -773,3 +1531,226 @@
   color: #1a1a1a;
 }
 
+/* ── Size match badges ───────────────────────────────────────────── */
+
+.size-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 8px;
+  border-radius: 6px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  line-height: 1.3;
+  white-space: nowrap;
+}
+
+.size-badge--high {
+  background: rgba(34, 197, 94, 0.15);
+  color: #4ade80;
+}
+
+.size-badge--medium {
+  background: rgba(250, 204, 21, 0.12);
+  color: #facc15;
+}
+
+.size-badge--low {
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.55);
+}
+
+.size-badge--oos {
+  opacity: 0.6;
+}
+
+.size-badge--oos .size-badge-size {
+  text-decoration: line-through;
+}
+
+.size-badge-oos {
+  font-size: 10px;
+  font-weight: 500;
+  color: rgba(255, 100, 100, 0.8);
+}
+
+.size-badge-note {
+  font-size: 10px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.4);
+}
+
+.size-badge--inline {
+  padding: 0;
+  background: none;
+}
+
+.size-match-summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  margin: 0 0 4px;
+  background: rgba(34, 197, 94, 0.08);
+  border-radius: 10px;
+  border: 1px solid rgba(34, 197, 94, 0.15);
+}
+
+.size-match-icon {
+  flex-shrink: 0;
+  color: #4ade80;
+}
+
+.size-match-text {
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.7);
+}
+
+.light-mode .size-badge--high {
+  background: rgba(34, 197, 94, 0.12);
+  color: #16a34a;
+}
+
+.light-mode .size-badge--medium {
+  background: rgba(234, 179, 8, 0.12);
+  color: #a16207;
+}
+
+.light-mode .size-badge--low {
+  background: rgba(0, 0, 0, 0.05);
+  color: rgba(0, 0, 0, 0.5);
+}
+
+.light-mode .size-badge-note {
+  color: rgba(0, 0, 0, 0.4);
+}
+
+.light-mode .size-badge-oos {
+  color: rgba(220, 50, 50, 0.8);
+}
+
+.light-mode .size-match-summary {
+  background: rgba(34, 197, 94, 0.06);
+  border-color: rgba(34, 197, 94, 0.12);
+}
+
+.light-mode .size-match-icon {
+  color: #16a34a;
+}
+
+.light-mode .size-match-text {
+  color: rgba(0, 0, 0, 0.6);
+}
+
+
+/* Avatar-only creator on the look video (bottom-left) — replaces the old
+   name pill. Single creator reference on the look. */
+.overlay-video-creator-avatar {
+  position: absolute;
+  bottom: 16px;
+  left: 12px;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+/* Creator name beside the avatar — legible over any video frame. */
+.overlay-video-creator-name {
+  max-width: 46vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  cursor: pointer;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  color: #fff;
+  text-shadow: 0 1px 6px rgba(0, 0, 0, 0.6);
+}
+
+/* ── Signed-out look gate ──────────────────────────────────────────────
+   Sits above the look overlay (z 200) with a translucent scrim so the look
+   shows through behind the sign-in card. */
+.look-signin-gate {
+  position: fixed;
+  inset: 0;
+  z-index: 9300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  animation: lsg-fade 0.22s ease both;
+}
+@keyframes lsg-fade { from { opacity: 0; } to { opacity: 1; } }
+.lsg-card {
+  position: relative;
+  width: 100%;
+  max-width: 380px;
+  background: #161618;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 22px;
+  padding: 30px 26px 26px;
+  text-align: center;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6);
+  animation: lsg-pop 0.28s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes lsg-pop { from { opacity: 0; transform: translateY(14px) scale(0.97); } to { opacity: 1; transform: translateY(0) scale(1); } }
+.lsg-close {
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 999px;
+  border: none;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.lsg-close:hover { background: rgba(255, 255, 255, 0.16); }
+.lsg-title {
+  font-size: 21px;
+  font-weight: 700;
+  color: #fff;
+  margin: 4px 0 8px;
+  letter-spacing: -0.01em;
+}
+.lsg-sub {
+  font-size: 14px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.6);
+  margin: 0 0 22px;
+}
+.lsg-google {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  width: 100%;
+  padding: 13px 16px;
+  border-radius: 14px;
+  border: none;
+  background: #fff;
+  color: #18181b;
+  font-size: 15px;
+  font-weight: 650;
+  font-family: inherit;
+  cursor: pointer;
+  transition: transform 0.12s ease, opacity 0.15s ease;
+}
+.lsg-google:hover { transform: translateY(-1px); }
+.lsg-google:disabled { opacity: 0.6; cursor: default; }
+.lsg-error { color: #f87171; font-size: 13px; margin: 12px 0 0; }

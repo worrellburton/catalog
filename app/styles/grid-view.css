@@ -190,13 +190,17 @@
   }
 }
 
-/* On hover, darken siblings - desktop only */
+/* On hover, darken siblings - desktop only. 1.2s ease-in-out so the
+ * fade feels cinematic rather than instant; matches the cadence of
+ * the video autoplay. cubic-bezier values are the canonical Material
+ * "standard" ease (in + out symmetric). */
 @media (hover: hover) {
+  .look-card {
+    transition: opacity 1.2s cubic-bezier(0.42, 0, 0.58, 1);
+  }
   #grid-container:hover .look-card {
     opacity: 0.5;
-    transition: opacity 0.4s ease;
   }
-
   #grid-container .look-card:hover {
     opacity: 1;
   }
@@ -209,6 +213,21 @@
   align-items: center;
   justify-content: center;
   position: relative;
+}
+
+/* Dials Phase 9 — when the video/still ratio dial changes, the
+   poster-only branch and the video-bearing branch swap places.
+   The slot div is fully re-mounted so a CSS transition on it
+   has nothing to interpolate from. A short fade-in keyframe
+   covers the swap so the change reads as a soft dissolve rather
+   than a hard cut. The animation only runs on mount, which means
+   the steady-state video doesn't constantly re-fade. */
+@keyframes card-slot-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+.look-card .card-video-slot {
+  animation: card-slot-fade-in 0.32s ease both;
 }
 
 /* Shimmer placeholder - shown until video loads. Visible regardless
@@ -257,6 +276,8 @@
   height: 60%;
   background: linear-gradient(transparent, rgba(0, 0, 0, 0.6));
   pointer-events: none;
+  /* Must sit above the director-appended <video> (z-index: 2) */
+  z-index: 3;
 }
 
 .look-card .card-title {
@@ -319,28 +340,74 @@
   display: flex;
   align-items: center;
   gap: 6px;
-  z-index: 2;
+  z-index: 4;
   cursor: pointer;
   text-decoration: none;
-  padding: 4px 10px 4px 4px;
-  border-radius: 20px;
-  border: 1px solid transparent;
-  transition: all 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+  padding: 4px 12px 4px 4px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(0, 0, 0, 0.32);
+  backdrop-filter: blur(10px) saturate(160%);
+  -webkit-backdrop-filter: blur(10px) saturate(160%);
+  transition: background 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+              border-color 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.2s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.2s cubic-bezier(0.16, 1, 0.3, 1);
 }
 
+/* Following = the chip itself glows with a soft white halo. No
+   "follow" affordance is rendered inside or beside the pill in
+   this state — the glow IS the signal. Border brightens too. */
+.look-card .card-creator-row.is-following {
+  border-color: rgba(255, 255, 255, 0.65);
+  box-shadow:
+    0 0 6px rgba(255, 255, 255, 0.55),
+    0 0 14px rgba(255, 255, 255, 0.32),
+    0 6px 18px rgba(255, 255, 255, 0.18);
+}
+
+/* Not following → FollowIconButton renders a small "+" badge that
+   floats in the upper-right corner of the chip. Anchored via the
+   chip's position:absolute (the row is already an absolute child
+   of .look-card). The badge sits above the chip border, half-out,
+   so it reads as a separate add affordance and doesn't crowd the
+   creator name inside. */
+.look-card .card-creator-row .follow-corner-badge {
+  position: absolute;
+  top: -8px;
+  right: -8px;
+  z-index: 5;
+}
+
+/* Card hover: subtle lift on the chip so it reads as part of the card's
+   primary content rather than a floating chip. */
 .look-card:hover .card-creator-row {
-  background: rgba(255, 255, 255, 0.15);
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  border-color: rgba(255, 255, 255, 0.25);
-  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.15);
+  background: rgba(0, 0, 0, 0.45);
+  border-color: rgba(255, 255, 255, 0.16);
 }
 
+/* Chip itself hover: full pill — bright background, clear border,
+   gentle scale so it lifts off the card. This is the affordance that
+   tells the user "click me to open the catalog." */
 .look-card .card-creator-row:hover {
-  background: rgba(255, 255, 255, 0.25);
-  border-color: rgba(255, 255, 255, 0.35);
-  transform: scale(1.03);
+  background: rgba(255, 255, 255, 0.96);
+  border-color: rgba(255, 255, 255, 1);
+  color: #0b0b0b;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35),
+              inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  transform: scale(1.04);
 }
+.look-card .card-creator-row:hover .card-creator-name {
+  color: #0b0b0b;
+}
+
+/* When the creator pill flips to a white background on hover, the
+   default white-on-transparent follow icon disappears. Invert the
+   stroke + border so the icon stays legible against the new bg. */
+/* The legacy .follow-icon-btn (white-on-transparent in-chip icon) was
+   retired when the chip itself became the glow signal — see
+   .card-creator-row.is-following. Its hover overrides used to live
+   here; nothing to override now. */
 
 .look-card .card-creator-row:active {
   transform: scale(0.97);
@@ -358,6 +425,20 @@
   border: 1.5px solid rgba(255, 255, 255, 0.5);
   flex-shrink: 0;
   box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+}
+/* Initial-letter fallback when the creator has no avatar (orphan
+   look published via the user-generation flow). Same circle so the
+   layout doesn't shift; gold tint reads as "user-generated". */
+.card-creator-avatar--initial {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(240, 192, 96, 0.92);
+  color: #0a0a0a;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  line-height: 1;
 }
 
 .card-creator-name {
@@ -383,6 +464,34 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+  object-position: center;
+}
+
+/* Any <video> inside a look-card MUST fill the tile (absolute, inset:0),
+   matching the inline styles the director and the declarative <video> both
+   set. Without this as the CSS default, a pooled element handed back into a
+   card carrying only TrailVideoHost's cssText (width/height/object-fit, but
+   NO position) lands in normal flow inside the flex-centered .card-inner and
+   shrinks to its intrinsic size — the "tiny thumbnail video floating inside
+   the tile" bug seen on the creator catalog grid after returning from a look
+   overlay. Pinning position here makes every video fill regardless of which
+   path placed it. z-index:2 keeps it above the poster <img> (z-index:1) and
+   below the bottom gradient (z-index:3). */
+.look-card video {
+  position: absolute;
+  inset: 0;
+  z-index: 2;
+  /* Lock the video's framing to EXACTLY match the poster <img> above
+     (cover / center). Previously this deferred width/height/object-fit to
+     whatever inline cssText the director or TrailVideoHost set, so a path
+     that handed the element a different object-fit/position made the video
+     display at a different crop than the poster — the poster "loads
+     displayed incorrectly" then snaps when the video reveals. !important so
+     a stale inline cssText can't reintroduce the mismatch. */
+  width: 100% !important;
+  height: 100% !important;
+  object-fit: cover !important;
+  object-position: center !important;
 }
 
 /* Stagger shimmer animation across cards */

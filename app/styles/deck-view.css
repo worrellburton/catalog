@@ -15,6 +15,12 @@
   scroll-behavior: smooth;
 }
 
+/* Hide the global generation-queue FAB while a deck is open - a presentation
+   surface shouldn't show the admin queue widget in the corner. */
+body:has(.deck-view.active) .gen-queue-host {
+  display: none !important;
+}
+
 .deck-slide {
   scroll-snap-align: start;
 }
@@ -1932,17 +1938,17 @@
 
 .deck-view-v8 .deck-v8-market-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  gap: 18px;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 22px;
   margin: 36px auto 0;
   width: 100%;
-  max-width: 1480px;
+  max-width: 1280px;
 }
 
-@media (max-width: 1280px) {
+@media (max-width: 980px) {
   .deck-view-v8 .deck-v8-market-grid {
-    grid-template-columns: repeat(2, 1fr);
-    max-width: 980px;
+    grid-template-columns: 1fr;
+    max-width: 540px;
   }
 }
 
@@ -4051,6 +4057,86 @@
   line-height: 1.5;
 }
 
+/* Outcome callout below the three priorities. Vertical tick from the
+   priorities row down to a single gold-tinted pill so the slide
+   reads "three priorities -> one result: sustained growth". */
+.deck-view-v8 .deck-v8-ask-outcome {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-top: clamp(18px, 2.2vh, 30px);
+  gap: 10px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition:
+    opacity 0.9s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 0.9s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.deck-view-v8 .deck-slide.visible .deck-v8-ask-outcome {
+  opacity: 1;
+  transform: translateY(0);
+  transition-delay: 2.4s;
+}
+.deck-view-v8 .deck-v8-ask-outcome-tick {
+  width: 1px;
+  height: clamp(16px, 2vh, 22px);
+  background: linear-gradient(
+    180deg,
+    rgba(74, 222, 128, 0.45),
+    rgba(245, 197, 66, 0.55)
+  );
+}
+.deck-view-v8 .deck-v8-ask-outcome-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 20px;
+  border-radius: 999px;
+  border: 1px solid rgba(245, 197, 66, 0.32);
+  background: linear-gradient(180deg, rgba(245, 197, 66, 0.1), rgba(245, 197, 66, 0.02));
+  box-shadow:
+    0 14px 36px rgba(245, 197, 66, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  font-size: clamp(11px, 1vw, 13px);
+}
+.deck-view-v8 .deck-v8-ask-outcome-icon {
+  flex: 0 0 auto;
+  color: rgba(253, 224, 130, 0.92);
+}
+.deck-view-v8 .deck-v8-ask-outcome-label {
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: #fde58a;
+}
+.deck-view-v8 .deck-v8-ask-outcome-sub {
+  border-left: 1px solid rgba(255, 255, 255, 0.14);
+  padding-left: 12px;
+  color: rgba(255, 255, 255, 0.62);
+  font-weight: 500;
+  letter-spacing: -0.005em;
+}
+.light-mode .deck-view-v8 .deck-v8-ask-outcome-tick {
+  background: linear-gradient(
+    180deg,
+    rgba(22, 163, 74, 0.55),
+    rgba(202, 138, 4, 0.6)
+  );
+}
+.light-mode .deck-view-v8 .deck-v8-ask-outcome-pill {
+  border-color: rgba(202, 138, 4, 0.35);
+  background: linear-gradient(180deg, rgba(202, 138, 4, 0.08), rgba(202, 138, 4, 0.02));
+  box-shadow: 0 14px 36px rgba(202, 138, 4, 0.1);
+}
+.light-mode .deck-view-v8 .deck-v8-ask-outcome-label { color: #92580b; }
+.light-mode .deck-view-v8 .deck-v8-ask-outcome-icon { color: rgba(146, 88, 11, 0.85); }
+.light-mode .deck-view-v8 .deck-v8-ask-outcome-sub {
+  border-left-color: rgba(0, 0, 0, 0.14);
+  color: rgba(0, 0, 0, 0.6);
+}
+
 /* Light mode */
 .light-mode .deck-view-v8 .deck-v8-ask-raise-card {
   background: linear-gradient(180deg, rgba(0, 0, 0, 0.03) 0%, rgba(0, 0, 0, 0.01) 100%);
@@ -4916,7 +5002,8 @@
   position: relative;
   z-index: 3;
 }
-.deck-view-v1 .deck-v1-tech-seed video {
+.deck-view-v1 .deck-v1-tech-seed video,
+.deck-view-v1 .deck-v1-tech-seed img {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -4957,7 +5044,8 @@
   border: 1px solid rgba(245, 197, 66, 0.35);
   position: relative;
 }
-.deck-view-v1 .deck-v1-tech-neighbor video {
+.deck-view-v1 .deck-v1-tech-neighbor video,
+.deck-view-v1 .deck-v1-tech-neighbor img {
   width: 100%;
   height: 100%;
   object-fit: cover;
@@ -5524,6 +5612,76 @@
 .light-mode .deck-view-v1 .deck-v1-payouts-list-item p { color: rgba(0, 0, 0, 0.6); }
 .light-mode .deck-view-v1 .deck-v1-payouts-list-item .deck-v1-payouts-num { color: #16a34a; }
 
+/* Affiliate sub-streams (2a / 2b / 2c). Indented under the parent
+   row, smaller type, dimmer green numbers — reads as a tiered list
+   inside #02 instead of as new top-level rows. */
+.deck-view-v1 .deck-v1-payouts-sublist {
+  list-style: none;
+  padding: 0;
+  margin: clamp(8px, 1vh, 12px) 0 2px;
+  display: flex;
+  flex-direction: column;
+  gap: clamp(6px, 0.8vh, 10px);
+  position: relative;
+}
+.deck-view-v1 .deck-v1-payouts-sublist::before {
+  content: '';
+  position: absolute;
+  left: clamp(8px, 0.9vw, 12px);
+  top: 4px;
+  bottom: 4px;
+  width: 1px;
+  background: linear-gradient(
+    180deg,
+    rgba(74, 222, 128, 0.18),
+    rgba(74, 222, 128, 0.04)
+  );
+}
+.deck-view-v1 .deck-v1-payouts-sublist-item {
+  display: grid;
+  grid-template-columns: clamp(24px, 2.4vw, 32px) 1fr;
+  gap: clamp(10px, 1vw, 14px);
+  align-items: start;
+  padding-left: clamp(14px, 1.6vw, 22px);
+}
+.deck-view-v1 .deck-v1-payouts-subnum {
+  font-size: clamp(11px, 0.95vw, 13px);
+  font-weight: 700;
+  color: rgba(74, 222, 128, 0.7);
+  letter-spacing: 0.06em;
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
+}
+.deck-view-v1 .deck-v1-payouts-sublist-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.deck-view-v1 .deck-v1-payouts-sublist-item h4 {
+  font-size: clamp(12px, 1vw, 14px);
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.88);
+  margin: 0;
+  letter-spacing: -0.005em;
+}
+.deck-view-v1 .deck-v1-payouts-sublist-item p {
+  font-size: clamp(10.5px, 0.85vw, 12.5px);
+  color: rgba(255, 255, 255, 0.45);
+  margin: 0;
+  line-height: 1.5;
+}
+.light-mode .deck-view-v1 .deck-v1-payouts-sublist::before {
+  background: linear-gradient(
+    180deg,
+    rgba(22, 163, 74, 0.28),
+    rgba(22, 163, 74, 0.06)
+  );
+}
+.light-mode .deck-view-v1 .deck-v1-payouts-sublist-item h4 { color: rgba(0, 0, 0, 0.82); }
+.light-mode .deck-view-v1 .deck-v1-payouts-sublist-item p { color: rgba(0, 0, 0, 0.5); }
+.light-mode .deck-view-v1 .deck-v1-payouts-subnum { color: #16a34a; }
+
 @media (max-width: 900px) {
   .deck-view-v1 .deck-v1-payouts-split {
     flex-direction: column;
@@ -5967,124 +6125,307 @@
 }
 
 /* ===========================================================
-   V1.2 Problem & Solution combined slide
+   V1.2 Problem & Solution slide.
+   Per-stakeholder row: shared headline word (Discovery / Revenue /
+   Acquisition) on top, two side-by-side description cells (Today vs
+   With Catalog) below. Hooks into the existing v8 fade-up + blur
+   reveal animation vocabulary so the slide unfolds in the same
+   cinematic style as the rest of the deck.
    =========================================================== */
 .deck-view-v1 .deck-v1-compare-slide {
   display: flex;
   flex-direction: column;
-  align-items: stretch;
-  justify-content: flex-start;
-  padding: clamp(48px, 5vh, 88px) clamp(40px, 5vw, 120px) !important;
-  gap: clamp(24px, 3vh, 44px);
+  align-items: center;
+  justify-content: center;
+  /* Generous horizontal padding so the inner content is well off the
+     slide edges; vertical padding stays compact so the 3 rows + head
+     fit one viewport even on shorter screens. */
+  padding: clamp(40px, 5vh, 72px) clamp(48px, 6vw, 120px) !important;
+  gap: clamp(20px, 2.6vh, 36px);
+  min-height: 100vh;
+}
+
+/* Inner column constrains content width so the head + rows sit in a
+   single centered stack instead of spreading across the whole slide.
+   max-width prevents the cells from looking sparse on ultrawide
+   displays. */
+.deck-view-v1 .deck-v1-compare-head,
+.deck-view-v1 .deck-v1-compare-rows {
+  width: 100%;
+  max-width: 1180px;
+  margin-left: auto;
+  margin-right: auto;
 }
 
 .deck-view-v1 .deck-v1-compare-head {
   display: flex;
   flex-direction: column;
-  gap: 12px;
-}
-
-.deck-view-v1 .deck-v1-compare-head h2 {
-  font-size: clamp(20px, 2.2vw, 34px);
-  line-height: 1.15;
-  letter-spacing: -0.015em;
-  margin: 0;
-  max-width: 60ch;
-  font-weight: 600;
-}
-
-.deck-view-v1 .deck-v1-compare-grid {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  column-gap: clamp(20px, 2.5vw, 40px);
-  row-gap: clamp(14px, 2vh, 22px);
-}
-
-.deck-view-v1 .deck-v1-compare-col {
-  display: flex;
+  gap: 10px;
+  text-align: center;
   align-items: center;
 }
 
-.deck-view-v1 .deck-v1-compare-col-label {
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.18em;
-  text-transform: uppercase;
-  padding: 6px 12px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.6);
+.deck-view-v1 .deck-v1-compare-head h2 {
+  /* Match the cover slide's "The AI for Shopping" headline scale so the
+     opening punchline and the problem/solution punchline read with
+     the same weight in the deck's narrative arc. */
+  font-size: clamp(36px, 5.2vw, 72px);
+  line-height: 1.08;
+  letter-spacing: -0.02em;
+  margin: 0;
+  font-weight: 600;
 }
-.deck-view-v1 .deck-v1-compare-col-label-problem {
-  color: #fca5a5;
-  background: rgba(248, 113, 113, 0.08);
-  border-color: rgba(248, 113, 113, 0.18);
+
+.deck-view-v1 .deck-v1-compare-rows {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: clamp(12px, 1.6vh, 22px);
 }
-.deck-view-v1 .deck-v1-compare-col-label-solution {
-  color: #6ee7b7;
-  background: rgba(110, 231, 183, 0.08);
-  border-color: rgba(110, 231, 183, 0.22);
+
+/* Paired layout: only two stakeholders, so close the gap and let the
+   inter-row connector do the visual stitching. */
+.deck-view-v1 .deck-v1-compare-rows-paired {
+  gap: clamp(8px, 1vh, 14px);
+  max-width: 980px;
 }
 
 .deck-view-v1 .deck-v1-compare-row {
-  display: contents;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: clamp(6px, 0.9vh, 12px);
+  width: 100%;
+}
+
+/* Inter-row connector: dashed verticals top + bottom with a small
+   uppercase pill in the middle so Shoppers and Creators read as the
+   two halves of the same circuit, not two parallel sections. */
+.deck-view-v1 .deck-v1-compare-link {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 2px 0;
+}
+.deck-view-v1 .deck-v1-compare-link-line {
+  width: 1px;
+  height: clamp(14px, 1.6vh, 22px);
+  background: repeating-linear-gradient(
+    180deg,
+    rgba(255, 255, 255, 0.22) 0 4px,
+    transparent 4px 8px
+  );
+}
+/* Bare connector (no pill): single line spanning the full inter-row
+   gap so the rows still read as stitched without a labeled element. */
+.deck-view-v1 .deck-v1-compare-link-bare {
+  padding: 0;
+}
+.deck-view-v1 .deck-v1-compare-link-bare .deck-v1-compare-link-line {
+  height: clamp(28px, 3.4vh, 48px);
+}
+.deck-view-v1 .deck-v1-compare-link-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.04), rgba(255, 255, 255, 0.01));
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.62);
+}
+.deck-view-v1 .deck-v1-compare-link-icon {
+  flex: 0 0 auto;
+  color: rgba(255, 255, 255, 0.55);
+}
+.light-mode .deck-view-v1 .deck-v1-compare-link-line {
+  background: repeating-linear-gradient(
+    180deg,
+    rgba(0, 0, 0, 0.22) 0 4px,
+    transparent 4px 8px
+  );
+}
+.light-mode .deck-view-v1 .deck-v1-compare-link-pill {
+  border-color: rgba(0, 0, 0, 0.12);
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.03), rgba(0, 0, 0, 0.005));
+  color: rgba(0, 0, 0, 0.6);
+}
+.light-mode .deck-view-v1 .deck-v1-compare-link-icon {
+  color: rgba(0, 0, 0, 0.5);
+}
+
+/* Match the existing row reveal vocabulary so the connector glides in
+   between rows 1 and 2 instead of popping. */
+.deck-view-v1 .deck-v1-compare-link {
+  opacity: 0;
+  transform: translateY(6px);
+  transition:
+    opacity 1.2s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 1.2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.deck-view-v8 .deck-slide.visible .deck-v1-compare-link {
+  opacity: 1;
+  transform: translateY(0);
+  transition-delay: 1.05s;
+}
+
+.deck-view-v1 .deck-v1-compare-row-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: flex-start;
+  text-align: left;
+  gap: clamp(10px, 1vw, 16px);
+  padding-left: 0;
+  width: 100%;
+}
+.deck-view-v1 .deck-v1-compare-row-num {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  color: rgba(255, 255, 255, 0.45);
+  font-variant-numeric: tabular-nums;
+  align-self: center;
+}
+/* Stakeholder name is the primary heading (Shoppers / Creators /
+   Brands). Word that follows is the secondary subhead. */
+.deck-view-v1 .deck-v1-compare-row-role {
+  font-size: clamp(22px, 2.4vw, 34px);
+  line-height: 1.05;
+  letter-spacing: -0.018em;
+  color: #fff;
+  margin: 0;
+  font-weight: 700;
+}
+.deck-view-v1 .deck-v1-compare-row-word {
+  font-size: clamp(14px, 1.3vw, 19px);
+  line-height: 1.05;
+  letter-spacing: -0.005em;
+  color: rgba(255, 255, 255, 0.55);
+  font-weight: 500;
+  align-self: center;
+}
+
+.deck-view-v1 .deck-v1-compare-row-cells {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: clamp(16px, 1.8vw, 26px);
 }
 
 .deck-view-v1 .deck-v1-compare-cell {
-  border-radius: 18px;
-  padding: clamp(16px, 1.6vw, 22px) clamp(18px, 1.8vw, 24px);
+  border-radius: 16px;
+  padding: clamp(14px, 1.4vw, 20px) clamp(16px, 1.6vw, 22px);
   border: 1px solid rgba(255, 255, 255, 0.06);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0.01));
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.025), rgba(255, 255, 255, 0.005));
   display: flex;
   flex-direction: column;
+  gap: 8px;
 }
 .deck-view-v1 .deck-v1-compare-cell-problem {
-  border-color: rgba(248, 113, 113, 0.15);
+  border-color: rgba(248, 113, 113, 0.16);
+  background: linear-gradient(180deg, rgba(248, 113, 113, 0.04), rgba(248, 113, 113, 0.01));
 }
 .deck-view-v1 .deck-v1-compare-cell-solution {
   border-color: rgba(110, 231, 183, 0.18);
+  background: linear-gradient(180deg, rgba(110, 231, 183, 0.05), rgba(110, 231, 183, 0.01));
 }
 
-/* Tighten the inherited problem-body styles inside compare cells so two
-   columns + three rows fit inside one slide without scrolling. */
-.deck-view-v1 .deck-v1-compare-cell .deck-v9-problem-body {
-  gap: 6px;
+.deck-view-v1 .deck-v1-compare-cell-label-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
 }
-.deck-view-v1 .deck-v1-compare-cell .deck-v9-problem-pain h3 {
-  font-size: clamp(22px, 2.2vw, 30px);
+.deck-view-v1 .deck-v1-compare-icon {
+  width: 22px;
+  height: 22px;
+  flex: 0 0 auto;
 }
-.deck-view-v1 .deck-v1-compare-cell .deck-v9-problem-body > p {
-  font-size: clamp(13px, 1vw, 15px);
-  line-height: 1.4;
+.deck-view-v1 .deck-v1-compare-cell-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+.deck-view-v1 .deck-v1-compare-cell-label-problem { color: #fca5a5; }
+.deck-view-v1 .deck-v1-compare-cell-label-solution { color: #6ee7b7; }
+
+.deck-view-v1 .deck-v1-compare-cell-text {
+  font-size: clamp(13px, 1.05vw, 16px);
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.78);
+  margin: 0;
 }
 
-.light-mode .deck-view-v1 .deck-v1-compare-col-label {
-  background: rgba(0, 0, 0, 0.04);
-  border-color: rgba(0, 0, 0, 0.08);
+/* ── Cinematic reveal: fade-up + blur, staggered per row + cell ──
+   Mirrors the deck-wide v8 reveal vocabulary (1.4s cubic-bezier,
+   24px translateY, blur(8px) for the headline word) so this slide
+   feels like the rest of the deck instead of a one-off. */
+.deck-view-v1 .deck-v1-compare-row-head,
+.deck-view-v1 .deck-v1-compare-cell {
+  opacity: 0;
+  transform: translateY(18px);
+  transition:
+    opacity 1.2s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 1.2s cubic-bezier(0.22, 1, 0.36, 1),
+    filter 1.2s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform, filter;
+}
+.deck-view-v1 .deck-v1-compare-row-word {
+  filter: blur(6px);
+  transition: filter 1.4s cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+.deck-view-v8 .deck-slide.visible .deck-v1-compare-row-head,
+.deck-view-v8 .deck-slide.visible .deck-v1-compare-cell {
+  opacity: 1;
+  transform: translateY(0);
+}
+.deck-view-v8 .deck-slide.visible .deck-v1-compare-row-word {
+  filter: blur(0);
+}
+
+/* Per-row stagger: header lands first, then problem cell, then solution
+   cell. --row-idx is set inline so each row picks up its base delay. */
+.deck-view-v8 .deck-slide.visible .deck-v1-compare-row > .deck-v1-compare-row-head {
+  transition-delay: calc(0.6s + var(--row-idx, 0) * 0.18s);
+}
+.deck-view-v8 .deck-slide.visible .deck-v1-compare-row > .deck-v1-compare-row-cells > .deck-v1-compare-cell-problem {
+  transition-delay: calc(0.78s + var(--row-idx, 0) * 0.18s);
+}
+.deck-view-v8 .deck-slide.visible .deck-v1-compare-row > .deck-v1-compare-row-cells > .deck-v1-compare-cell-solution {
+  transition-delay: calc(0.92s + var(--row-idx, 0) * 0.18s);
+}
+
+/* Light mode mirrors */
+.light-mode .deck-view-v1 .deck-v1-compare-row-num {
   color: rgba(0, 0, 0, 0.55);
 }
-.light-mode .deck-view-v1 .deck-v1-compare-col-label-problem {
-  color: #b91c1c;
-  background: rgba(185, 28, 28, 0.06);
-  border-color: rgba(185, 28, 28, 0.18);
-}
-.light-mode .deck-view-v1 .deck-v1-compare-col-label-solution {
-  color: #047857;
-  background: rgba(4, 120, 87, 0.06);
-  border-color: rgba(4, 120, 87, 0.2);
-}
+.light-mode .deck-view-v1 .deck-v1-compare-row-role { color: #0a0a0a; }
+.light-mode .deck-view-v1 .deck-v1-compare-row-word { color: rgba(0, 0, 0, 0.55); }
 .light-mode .deck-view-v1 .deck-v1-compare-cell {
-  background: linear-gradient(180deg, rgba(0, 0, 0, 0.025), rgba(0, 0, 0, 0.01));
+  background: linear-gradient(180deg, rgba(0, 0, 0, 0.02), rgba(0, 0, 0, 0.005));
   border-color: rgba(0, 0, 0, 0.08);
 }
+.light-mode .deck-view-v1 .deck-v1-compare-cell-problem {
+  background: linear-gradient(180deg, rgba(185, 28, 28, 0.05), rgba(185, 28, 28, 0.01));
+  border-color: rgba(185, 28, 28, 0.18);
+}
+.light-mode .deck-view-v1 .deck-v1-compare-cell-solution {
+  background: linear-gradient(180deg, rgba(4, 120, 87, 0.05), rgba(4, 120, 87, 0.01));
+  border-color: rgba(4, 120, 87, 0.18);
+}
+.light-mode .deck-view-v1 .deck-v1-compare-cell-label-problem { color: #b91c1c; }
+.light-mode .deck-view-v1 .deck-v1-compare-cell-label-solution { color: #047857; }
+.light-mode .deck-view-v1 .deck-v1-compare-cell-text { color: rgba(0, 0, 0, 0.72); }
 
 @media (max-width: 980px) {
-  .deck-view-v1 .deck-v1-compare-grid {
+  .deck-view-v1 .deck-v1-compare-row-cells {
     grid-template-columns: 1fr;
-  }
-  .deck-view-v1 .deck-v1-compare-col-solution {
-    margin-top: 12px;
   }
 }
 
@@ -6311,4 +6652,603 @@
 }
 .light-mode .deck-view-v1 .deck-v1-compare-sub {
   color: rgba(0, 0, 0, 0.55);
+}
+
+/* V1.2 Step Zero · Start the Flywheel combined slide.
+   The seed-product split layout keeps its existing rules; we just add
+   the priorities strip below it so both pieces fit on one slide. */
+.deck-view-v1 .deck-v1-step-zero-combined {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(20px, 2.4vh, 36px);
+  justify-content: center;
+}
+
+.deck-view-v1 .deck-v1-step-zero-priorities {
+  display: flex;
+  flex-direction: column;
+  gap: clamp(12px, 1.5vh, 20px);
+  border-top: 1px solid rgba(255, 255, 255, 0.06);
+  padding-top: clamp(16px, 2vh, 28px);
+  margin-top: clamp(8px, 1vh, 16px);
+}
+
+.deck-view-v1 .deck-v1-step-zero-priorities-head {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.deck-view-v1 .deck-v1-step-zero-priorities-head h3 {
+  font-size: clamp(20px, 2.2vw, 30px);
+  line-height: 1.15;
+  letter-spacing: -0.015em;
+  margin: 0;
+  font-weight: 600;
+}
+
+.light-mode .deck-view-v1 .deck-v1-step-zero-priorities {
+  border-top-color: rgba(0, 0, 0, 0.08);
+}
+
+/* V1.2 Ask slide - flywheel components sit under the SVG flow dots,
+   3 equal columns aligned with the dots at x=170/500/830 of a 1000-wide
+   viewBox (=17%/50%/83% center). */
+.deck-view-v1 .deck-v8-ask-components {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: clamp(16px, 2vw, 28px);
+  margin-top: clamp(-12px, -1vh, -8px);
+}
+
+@media (max-width: 980px) {
+  .deck-view-v1 .deck-v8-ask-components {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* V1.2 Technology slide - AI stack inventory.
+   2-col grid of categories on the left side of the tech slide. Each
+   group has a small uppercase label + a tight list of model names
+   with a one-line "what we use it for" suffix. */
+.deck-view-v1 .deck-v1-tech-stack {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: clamp(14px, 1.6vw, 22px) clamp(20px, 2vw, 32px);
+  margin-top: clamp(14px, 1.6vh, 22px);
+}
+.deck-view-v1 .deck-v1-tech-stack-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.deck-view-v1 .deck-v1-tech-stack-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+}
+.deck-view-v1 .deck-v1-tech-stack-group ul {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+.deck-view-v1 .deck-v1-tech-stack-group li {
+  font-size: clamp(11px, 0.95vw, 14px);
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.85);
+}
+
+.light-mode .deck-view-v1 .deck-v1-tech-stack-label { color: rgba(0, 0, 0, 0.55); }
+.light-mode .deck-view-v1 .deck-v1-tech-stack-group li { color: rgba(0, 0, 0, 0.78); }
+
+/* Cinematic reveal for the Tech slide so the label / headline /
+   lede / stack groups land on a stagger instead of all-at-once like
+   a static dump. Mirrors the deck-wide v8 reveal vocabulary
+   (1.2s cubic-bezier, 18 px translateY) so it feels native. */
+.deck-view-v1 .deck-v9-tech .deck-label,
+.deck-view-v1 .deck-v9-tech h2,
+.deck-view-v1 .deck-v9-tech-lede,
+.deck-view-v1 .deck-v1-tech-stack-group {
+  opacity: 0;
+  transform: translateY(18px);
+  transition:
+    opacity 1.2s cubic-bezier(0.22, 1, 0.36, 1),
+    transform 1.2s cubic-bezier(0.22, 1, 0.36, 1),
+    filter 1.2s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: opacity, transform, filter;
+}
+.deck-view-v1 .deck-v9-tech h2 {
+  filter: blur(6px);
+}
+.deck-view-v8 .deck-slide.visible .deck-v9-tech .deck-label,
+.deck-view-v8 .deck-slide.visible .deck-v9-tech h2,
+.deck-view-v8 .deck-slide.visible .deck-v9-tech-lede,
+.deck-view-v8 .deck-slide.visible .deck-v1-tech-stack-group {
+  opacity: 1;
+  transform: translateY(0);
+}
+.deck-view-v8 .deck-slide.visible .deck-v9-tech h2 {
+  filter: blur(0);
+}
+.deck-view-v8 .deck-slide.visible .deck-v9-tech .deck-label { transition-delay: 0.15s; }
+.deck-view-v8 .deck-slide.visible .deck-v9-tech h2 { transition-delay: 0.35s; }
+.deck-view-v8 .deck-slide.visible .deck-v9-tech-lede { transition-delay: 0.65s; }
+.deck-view-v8 .deck-slide.visible .deck-v1-tech-stack-group:nth-child(1) { transition-delay: 0.95s; }
+.deck-view-v8 .deck-slide.visible .deck-v1-tech-stack-group:nth-child(2) { transition-delay: 1.10s; }
+.deck-view-v8 .deck-slide.visible .deck-v1-tech-stack-group:nth-child(3) { transition-delay: 1.25s; }
+.deck-view-v8 .deck-slide.visible .deck-v1-tech-stack-group:nth-child(4) { transition-delay: 1.40s; }
+
+@media (max-width: 980px) {
+  .deck-view-v1 .deck-v1-tech-stack {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* ===========================================================
+   V1.2 Demo slide - the dramatic close of the main pitch.
+   Centered CTA + appendix indicator at the bottom showing more
+   slides exist as supporting material below.
+   =========================================================== */
+.deck-view-v1 .deck-v1-demo-slide {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: clamp(40px, 5vh, 72px) clamp(40px, 5vw, 120px) !important;
+  min-height: 100vh;
+  position: relative;
+  gap: clamp(14px, 2vh, 24px);
+}
+
+.deck-view-v1 .deck-v1-demo-h2 {
+  font-size: clamp(40px, 5.4vw, 84px) !important;
+  line-height: 1.04;
+  letter-spacing: -0.025em;
+  margin: 0;
+  max-width: 16ch;
+}
+
+.deck-view-v1 .deck-v1-demo-sub {
+  font-size: clamp(15px, 1.4vw, 22px);
+  color: rgba(255, 255, 255, 0.62);
+  margin: 0 0 clamp(18px, 2.4vh, 36px);
+  max-width: 42ch;
+  font-weight: 500;
+}
+
+.deck-view-v1 .deck-v1-demo-cta {
+  display: inline-flex;
+  align-items: center;
+  /* Asymmetric padding + tighter gap to compensate for the
+     optical-weight imbalance between the bold "Catalog" wordmark
+     (left) and the thin arrow glyph (right). Geometric centre and
+     optical centre now line up. */
+  gap: 18px;
+  padding: 26px 50px 26px 60px;
+  font-size: clamp(22px, 2.4vw, 36px);
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  color: #fff;
+  background: linear-gradient(180deg, #1a1a1a 0%, #050505 100%);
+  border: none;
+  border-radius: 999px;
+  cursor: pointer;
+  position: relative;
+  text-shadow:
+    0 -1px 0 rgba(0, 0, 0, 0.65),
+    0 1px 0 rgba(255, 255, 255, 0.18);
+  box-shadow:
+    0 0 80px rgba(255, 255, 255, 0.18),
+    0 0 28px rgba(255, 255, 255, 0.12),
+    0 12px 40px rgba(0, 0, 0, 0.55),
+    0 4px 14px rgba(0, 0, 0, 0.4),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.6);
+  animation: deck-v1-demo-cta-pulse 3.4s cubic-bezier(0.4, 0, 0.6, 1) infinite;
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+              box-shadow 0.3s cubic-bezier(0.22, 1, 0.36, 1),
+              opacity 0.5s ease,
+              filter 0.5s ease;
+}
+@keyframes deck-v1-demo-cta-pulse {
+  0%, 100% {
+    box-shadow:
+      0 0 80px rgba(255, 255, 255, 0.18),
+      0 0 28px rgba(255, 255, 255, 0.12),
+      0 12px 40px rgba(0, 0, 0, 0.55),
+      0 4px 14px rgba(0, 0, 0, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.16),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.6);
+  }
+  50% {
+    box-shadow:
+      0 0 110px rgba(255, 255, 255, 0.3),
+      0 0 44px rgba(255, 255, 255, 0.22),
+      0 14px 44px rgba(0, 0, 0, 0.55),
+      0 4px 14px rgba(0, 0, 0, 0.4),
+      inset 0 1px 0 rgba(255, 255, 255, 0.22),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.6);
+  }
+}
+.deck-view-v1 .deck-v1-demo-cta:hover {
+  transform: translateY(-2px) scale(1.015);
+  animation-play-state: paused;
+  box-shadow:
+    0 0 130px rgba(255, 255, 255, 0.36),
+    0 0 56px rgba(255, 255, 255, 0.26),
+    0 18px 56px rgba(0, 0, 0, 0.65),
+    0 6px 20px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.26),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.6);
+}
+.deck-view-v1 .deck-v1-demo-cta-logo {
+  height: clamp(20px, 2vw, 28px);
+  width: auto;
+  color: #fff;
+  filter: drop-shadow(0 1px 0 rgba(0, 0, 0, 0.5));
+}
+.deck-view-v1 .deck-v1-demo-cta:active { transform: translateY(0) scale(1); }
+
+.deck-view-v1 .deck-v1-demo-cta-arrow {
+  transition: transform 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.deck-view-v1 .deck-v1-demo-cta:hover .deck-v1-demo-cta-arrow {
+  transform: translateX(4px);
+}
+
+/* Exit animation: CTA scales up + lifts off the page while the overlay
+   fades in to black behind it. */
+.deck-view-v1 .deck-v1-demo-cta.is-exiting {
+  transform: scale(1.08) translateY(-4px);
+  filter: brightness(1.15);
+  pointer-events: none;
+}
+
+.deck-view-v1 .deck-v1-demo-exit-overlay {
+  position: fixed;
+  inset: 0;
+  background: #050505;
+  opacity: 0;
+  z-index: 9999;
+  pointer-events: none;
+  animation: deck-v1-demo-exit 700ms cubic-bezier(0.6, 0.04, 0.98, 0.34) forwards;
+}
+@keyframes deck-v1-demo-exit {
+  0%   { opacity: 0; transform: scale(1.0); }
+  60%  { opacity: 0.85; }
+  100% { opacity: 1; transform: scale(1.04); }
+}
+
+/* Appendix indicator - small uppercase label + bouncing down arrow
+   docked at the bottom of the slide. Tells the audience "the main
+   pitch ends here; what follows is supporting material." */
+.deck-view-v1 .deck-v1-demo-appendix {
+  position: absolute;
+  bottom: clamp(24px, 4vh, 56px);
+  left: 50%;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  color: rgba(255, 255, 255, 0.4);
+  pointer-events: none;
+}
+.deck-view-v1 .deck-v1-demo-appendix-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+}
+.deck-view-v1 .deck-v1-demo-appendix-arrow {
+  animation: deck-v1-demo-appendix-bounce 1.8s ease-in-out infinite;
+}
+@keyframes deck-v1-demo-appendix-bounce {
+  0%, 100% { transform: translateY(0); opacity: 0.55; }
+  50%      { transform: translateY(6px); opacity: 1; }
+}
+
+.light-mode .deck-view-v1 .deck-v1-demo-sub { color: rgba(0, 0, 0, 0.6); }
+.light-mode .deck-view-v1 .deck-v1-demo-appendix { color: rgba(0, 0, 0, 0.5); }
+.light-mode .deck-view-v1 .deck-v1-demo-cta {
+  color: #fff;
+}
+.light-mode .deck-view-v1 .deck-v1-demo-exit-overlay { background: #fafafa; }
+
+/* V1.2 combined Cover + Dream slide. Catalog wordmark sits above the
+   THE DREAM label / AI-for-Shopping h2 / human-taste subtitle, all
+   centered, with the floating intro icons behind. Tighter vertical
+   gap so the wordmark + headline read as one composition rather than
+   two stacked blocks. */
+.deck-view-v1 .deck-v1-cover-combined {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: clamp(20px, 2.6vh, 36px);
+}
+.deck-view-v1 .deck-v1-cover-combined .deck-logo {
+  margin: 0 auto;
+}
+.deck-view-v1 .deck-v1-cover-combined .deck-intro-content {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 12px;
+}
+
+/* V1.2 Payouts slide - money fly-up overlay. 36 emoji flakes scatter
+   from the bottom of the slide upward with randomized horizontal
+   drift, rotation, delay, and duration. Triggered when the slide
+   enters the viewport (.deck-slide.visible) so it doesn't burn
+   animation cycles off-screen. */
+.deck-view-v1 .deck-v1-money-burst {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  overflow: hidden;
+  z-index: 1;
+}
+.deck-view-v1 .deck-v1-money-flake {
+  position: absolute;
+  bottom: -10vh;
+  width: auto;
+  line-height: 1;
+  opacity: 0;
+  transform: translate(0, 0) rotate(0deg);
+  filter: drop-shadow(0 4px 12px rgba(0, 0, 0, 0.35));
+  will-change: transform, opacity;
+}
+
+/* Only animate while the slide is in viewport. The .visible class is
+   added by the deck's IntersectionObserver. */
+.deck-view-v8 .deck-slide.visible .deck-v1-money-flake {
+  animation: deck-v1-money-fly var(--money-dur, 6s) cubic-bezier(0.25, 0.46, 0.45, 0.94) var(--money-delay, 0s) infinite;
+}
+
+@keyframes deck-v1-money-fly {
+  0% {
+    transform: translate(0, 0) rotate(0deg);
+    opacity: 0;
+  }
+  8% {
+    opacity: 1;
+  }
+  85% {
+    opacity: 1;
+  }
+  100% {
+    transform: translate(var(--money-drift, 0), -120vh) rotate(var(--money-rot, 360deg));
+    opacity: 0;
+  }
+}
+
+/* Payouts content sits above the money layer. */
+.deck-view-v1 .deck-v1-payouts > *:not(.deck-v1-money-burst) {
+  position: relative;
+  z-index: 2;
+}
+
+/* Reduce motion - don't bombard accessibility-conscious users with
+   flying emoji. */
+@media (prefers-reduced-motion: reduce) {
+  .deck-view-v8 .deck-slide.visible .deck-v1-money-flake {
+    animation: none;
+    opacity: 0;
+  }
+}
+
+/* V1.2 Payouts sublist - 2a / 2b under Affiliate sales. Indented
+   slightly with a smaller number badge so the hierarchy reads
+   "main item -> two ways inside it" without competing with the
+   parent item's chip. */
+.deck-view-v1 .deck-v1-payouts-sublist {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.deck-view-v1 .deck-v1-payouts-sub {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+  font-size: clamp(12px, 0.95vw, 14px);
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.78);
+}
+.deck-view-v1 .deck-v1-payouts-sub-num {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  color: rgba(74, 222, 128, 0.85);
+  font-variant-numeric: tabular-nums;
+  flex: 0 0 auto;
+  text-transform: lowercase;
+}
+.deck-view-v1 .deck-v1-payouts-sub strong {
+  color: #fff;
+  font-weight: 600;
+}
+
+.light-mode .deck-view-v1 .deck-v1-payouts-sub { color: rgba(0, 0, 0, 0.78); }
+.light-mode .deck-view-v1 .deck-v1-payouts-sub strong { color: #0a0a0a; }
+.light-mode .deck-view-v1 .deck-v1-payouts-sub-num { color: #047857; }
+
+/* ============================================================
+   V1.2 MOBILE PASS
+   Every slide collapses to a single-column, single-viewport
+   layout at <=768px. Side-by-side splits stack vertically, type
+   scales down, padding tightens. Goal: any slide a shopper opens
+   on a phone reads as one screen, no scroll, no overflow.
+   ============================================================ */
+@media (max-width: 768px) {
+  /* Slide-level: every v1 slide is exactly 100dvh and clips overflow.
+     The slide-snap parent already snaps each slide to the viewport;
+     we just need to make sure content fits. */
+  .deck-view-v1 .deck-slide {
+    min-height: 100dvh;
+    height: auto;
+    padding: clamp(40px, 6vh, 64px) 20px !important;
+    box-sizing: border-box;
+  }
+
+  /* Cover + Dream combined slide */
+  .deck-view-v1 .deck-v1-cover-combined .deck-logo {
+    width: clamp(140px, 36vw, 220px);
+    height: auto;
+  }
+  .deck-view-v1 .deck-v1-dream-h2 {
+    font-size: clamp(34px, 9vw, 56px) !important;
+  }
+  .deck-view-v1 .deck-v1-dream-sub {
+    font-size: clamp(13px, 3.5vw, 17px);
+  }
+
+  /* Problem & Solution */
+  .deck-view-v1 .deck-v1-compare-slide {
+    padding: clamp(48px, 7vh, 72px) 18px !important;
+    gap: 14px;
+  }
+  .deck-view-v1 .deck-v1-compare-head h2 {
+    font-size: clamp(28px, 8vw, 44px);
+  }
+  .deck-view-v1 .deck-v1-compare-rows {
+    gap: 14px;
+  }
+  .deck-view-v1 .deck-v1-compare-row-cells {
+    grid-template-columns: 1fr;
+    gap: 8px;
+  }
+  .deck-view-v1 .deck-v1-compare-row-role {
+    font-size: clamp(20px, 6vw, 30px);
+  }
+  .deck-view-v1 .deck-v1-compare-row-word {
+    font-size: clamp(13px, 4vw, 18px);
+  }
+  .deck-view-v1 .deck-v1-compare-cell {
+    padding: 10px 14px;
+  }
+  .deck-view-v1 .deck-v1-compare-cell-text {
+    font-size: 13px;
+    line-height: 1.4;
+  }
+
+  /* Market Opportunity */
+  .deck-view-v8 .deck-v8-market-grid {
+    grid-template-columns: 1fr;
+    max-width: 480px;
+    gap: 14px;
+  }
+  .deck-view-v8 .deck-v8-market-card {
+    padding: 16px 16px 14px;
+  }
+  .deck-view-v8 .deck-v8-market-chart { display: none; }
+
+  /* Payouts split -> stacked, list condensed */
+  .deck-view-v1 .deck-v1-payouts-split {
+    flex-direction: column;
+    gap: 16px;
+  }
+  .deck-view-v1 .deck-v1-payouts-split-right { display: none; }
+  .deck-view-v1 .deck-v1-payouts-list-item {
+    padding: 8px 0;
+  }
+  .deck-view-v1 .deck-v1-payouts-list-body p {
+    font-size: 12px;
+  }
+
+  /* Technology - hide the vector-DB visual stage on mobile, AI stack
+     is the substance of the slide. */
+  .deck-view-v1 .deck-v9-tech-right { display: none; }
+  .deck-view-v1 .deck-v9-tech-left { width: 100%; }
+  .deck-view-v1 .deck-v1-tech-stack {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+
+  /* The Ask - SVG flow + components stack */
+  .deck-view-v1 .deck-v8-ask-flow { display: none; }
+  .deck-view-v1 .deck-v8-ask-components {
+    grid-template-columns: 1fr;
+    gap: 12px;
+  }
+  .deck-view-v1 .deck-v8-ask-raise-row {
+    flex-wrap: wrap;
+    gap: 12px;
+    justify-content: center;
+  }
+  .deck-view-v1 .deck-v8-ask-raise-divider { display: none; }
+
+  /* Demo */
+  .deck-view-v1 .deck-v1-demo-h2 {
+    font-size: clamp(36px, 10vw, 60px) !important;
+  }
+  .deck-view-v1 .deck-v1-demo-cta {
+    padding: 18px 36px;
+    font-size: clamp(18px, 5vw, 28px);
+    gap: 12px;
+  }
+  .deck-view-v1 .deck-v1-demo-cta-arrow { width: 24px; height: 24px; }
+
+  /* Projections - stats wrap, chart shrinks */
+  .deck-view-v1 .deck-v1-projections-summary {
+    grid-template-columns: 1fr 1fr;
+    gap: 8px;
+  }
+  .deck-view-v1 .deck-v1-projections-stat {
+    padding: 10px 12px;
+  }
+  .deck-view-v1 .deck-v1-projections-stat-value {
+    font-size: 18px;
+  }
+  .deck-view-v1 .deck-v1-projections-formula {
+    font-size: 11px;
+    line-height: 1.5;
+  }
+
+  /* Roadmap - cap height + condense rows */
+  .deck-view-v8 .deck-v8-roadmap {
+    overflow-x: auto;
+  }
+
+  /* Closing slide actions stack */
+  .deck-view-v1 .deck-v1-cover-combined .deck-end-actions {
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+    max-width: 320px;
+    margin: 16px auto 0;
+  }
+  .deck-view-v1 .deck-v1-cover-combined .deck-end-actions > * {
+    width: 100%;
+    text-align: center;
+  }
+
+  /* Slide nav dots - hide on phones, the side rail eats too much
+     of the narrow viewport. Slide-snap scrolling still works. */
+  .deck-view-v1 .deck-v9-nav { display: none; }
+}
+
+/* Even tighter at <=480px (small phones) */
+@media (max-width: 480px) {
+  .deck-view-v1 .deck-slide {
+    padding: clamp(36px, 5vh, 56px) 14px !important;
+  }
+  .deck-view-v1 .deck-v1-compare-slide {
+    padding: 48px 14px !important;
+  }
+  .deck-view-v1 .deck-v1-dream-h2 {
+    font-size: clamp(28px, 11vw, 44px) !important;
+  }
+  .deck-view-v1 .deck-v1-demo-h2 {
+    font-size: clamp(30px, 12vw, 48px) !important;
+  }
 }

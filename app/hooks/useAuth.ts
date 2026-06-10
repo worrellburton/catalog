@@ -1,5 +1,5 @@
 import { useCallback, useSyncExternalStore } from 'react';
-import { getCurrentUser, onAuthStateChange, signOut, type AuthUser } from '~/services/auth';
+import { getCurrentUser, onAuthStateChange, signOut, invalidateAuthCache, type AuthUser } from '~/services/auth';
 
 // Singleton auth store. The previous implementation had each component spin
 // up its own getCurrentUser() promise and its own onAuthStateChange
@@ -51,7 +51,18 @@ function bootstrap() {
   });
 
   onAuthStateChange((u) => {
-    setState({ user: u, loading: false });
+    if (!u) {
+      setState({ user: null, loading: false });
+      return;
+    }
+    // auth.ts clears the cache before calling this callback, so
+    // getCurrentUser() here will re-fetch the role from the profiles
+    // table rather than returning a stale cache hit. This ensures role
+    // is always correct after sign-in, token refresh, or any other
+    // auth state event (not just the initial bootstrap call above).
+    getCurrentUser().then((fullUser) => {
+      setState({ user: fullUser, loading: false });
+    });
   });
 
   // Fallback: if we're in an OAuth return state and SIGNED_IN never fires
@@ -73,6 +84,28 @@ function subscribe(listener: () => void) {
 
 function getSnapshot(): AuthState { return state; }
 function getServerSnapshot(): AuthState { return { user: null, loading: true }; }
+
+/**
+ * Force every useAuth() consumer to re-pull from getCurrentUser().
+ * Call this after a profile mutation (avatar upload, name change)
+ * so the UserMenu / FollowingRail / etc. re-render with the fresh
+ * fields immediately, without waiting for the next auth tick or
+ * page reload.
+ */
+export function refreshAuthUser(): void {
+  invalidateAuthCache();
+  getCurrentUser().then((u) => {
+    setState({ user: u, loading: false });
+  });
+}
+
+/** Synchronous read of the current auth user (or null). For non-React
+ *  callers — services/hooks that need a quick "is there a session" check
+ *  without spinning up an async getUser() round-trip (e.g. gating a guest
+ *  action). Returns the singleton store's latest snapshot. */
+export function getAuthUser(): AuthUser | null {
+  return state.user;
+}
 
 export function useAuth() {
   const snap = useSyncExternalStore(subscribe, getSnapshot, getServerSnapshot);

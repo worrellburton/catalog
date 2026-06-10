@@ -1,0 +1,565 @@
+/* Comment thread page (/comments/<type>/<slug>).
+ *
+ * Dark surface matching the look/product overlays. A WebGL avatar field
+ * drifts behind a centered, scrollable thread column. The product/look
+ * the thread is about is pinned at the top; the composer sits at the
+ * bottom of the column. */
+
+.comments-page {
+  position: fixed;
+  inset: 0;
+  background: #060606;
+  color: #f4f4f5;
+  /* Above the product (250) and look overlays so it sits on top when
+     opened as an in-app overlay. */
+  z-index: 400;
+  overflow: hidden;
+}
+
+/* TikTok-style bottom drawer: the thread slides up over the current screen
+   (dimmed behind the backdrop) and scrolls internally, instead of replacing
+   the whole view. */
+.comments-drawer-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 399;
+  background: rgba(0, 0, 0, 0.5);
+  animation: comments-backdrop-in 0.5s ease both;
+}
+.comments-drawer-backdrop.is-closing {
+  animation: comments-backdrop-out 0.36s ease both;
+}
+.comments-page--drawer {
+  inset: auto 0 0 0;
+  height: 82dvh;
+  border-radius: 22px 22px 0 0;
+  box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.5);
+  /* Slow, smooth ease-in. */
+  animation: comments-drawer-up 0.5s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.comments-page--drawer.is-closing {
+  /* Slow, smooth ease-out before unmount. */
+  animation: comments-drawer-down 0.36s cubic-bezier(0.4, 0, 0.7, 0.2) both;
+}
+/* Tap/drag zone at the top of the sheet — tap to close, drag down to
+   dismiss. Wide, touch-action:none so the pointer stream isn't stolen by
+   scroll. */
+.comments-drawer-handle-btn {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 30px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  z-index: 7;
+  cursor: grab;
+  touch-action: none;
+  -webkit-tap-highlight-color: transparent;
+}
+.comments-drawer-handle-btn:active { cursor: grabbing; }
+.comments-drawer-handle {
+  width: 40px;
+  height: 4px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.35);
+  pointer-events: none;
+}
+@keyframes comments-backdrop-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes comments-backdrop-out { from { opacity: 1; } to { opacity: 0; } }
+@keyframes comments-drawer-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes comments-drawer-down { from { transform: translateY(0); } to { transform: translateY(100%); } }
+@media (prefers-reduced-motion: reduce) {
+  .comments-page--drawer,
+  .comments-drawer-backdrop { animation: none; }
+}
+
+/* Desktop: instead of a bottom sheet, the thread is a right-side panel that
+   slides in from the right edge and occupies roughly the right third of the
+   screen. Mobile keeps the bottom-up drawer above. */
+@media (min-width: 769px) {
+  .comments-page--drawer {
+    inset: 0 0 0 auto;
+    width: clamp(380px, 33vw, 560px);
+    height: 100dvh;
+    border-radius: 22px 0 0 22px;
+    box-shadow: -12px 0 40px rgba(0, 0, 0, 0.5);
+    animation: comments-drawer-right 0.42s cubic-bezier(0.22, 1, 0.36, 1) both;
+  }
+  .comments-page--drawer.is-closing {
+    animation: comments-drawer-right-out 0.34s cubic-bezier(0.4, 0, 0.7, 0.2) both;
+  }
+  @keyframes comments-drawer-right { from { transform: translateX(100%); } to { transform: translateX(0); } }
+  @keyframes comments-drawer-right-out { from { transform: translateX(0); } to { transform: translateX(100%); } }
+}
+
+/* Ambient WebGL backdrop — sits behind the avatar particle field. Both
+   live at z-index 0; DOM order (this first) keeps it underneath. */
+.comments-webgl {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.9;
+}
+.comments-webgl canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.comments-particles {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.7;
+}
+.comments-particles-canvas {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+/* Radial scrim so the thread column stays legible over the avatar field. */
+.comments-page::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  pointer-events: none;
+  background: radial-gradient(120% 80% at 50% 40%, rgba(6,6,6,0.35) 0%, rgba(6,6,6,0.78) 55%, rgba(6,6,6,0.92) 100%);
+}
+
+.comments-shell {
+  position: relative;
+  z-index: 2;
+  /* Desktop column widened to 1200px; the max-width: 768px block below
+     keeps mobile on its full-bleed calc width. */
+  width: min(1200px, calc(100% - 32px));
+  margin-inline: auto;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  padding: 18px 0 0;
+}
+
+.comments-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: #f4f4f5;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 7px 13px 7px 9px;
+  border-radius: 999px;
+  cursor: pointer;
+  align-self: flex-start;
+  backdrop-filter: blur(8px);
+  transition: background 140ms ease;
+}
+.comments-back:hover { background: rgba(255,255,255,0.16); }
+/* Down-arrow close button — icon-only, circular. */
+.comments-back--down {
+  gap: 0;
+  width: 38px;
+  height: 38px;
+  padding: 0;
+  justify-content: center;
+}
+
+/* Host pager chrome (Activity Conversations): prev / next / minimize, pinned
+   top-right of the sheet opposite the close button. */
+.comments-host-nav {
+  position: absolute;
+  top: 18px;
+  right: 0;
+  z-index: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+.comments-host-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.12);
+  color: #f4f4f5;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  transition: background 140ms ease, opacity 140ms ease;
+}
+.comments-host-btn:hover { background: rgba(255,255,255,0.16); }
+.comments-host-btn:disabled { opacity: 0.32; cursor: default; }
+.light-mode .comments-host-btn {
+  background: rgba(0,0,0,0.05);
+  border-color: rgba(0,0,0,0.12);
+  color: #18181b;
+}
+
+.comments-target {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-top: 14px;
+  padding: 12px;
+  border-radius: 16px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.10);
+  text-decoration: none;
+  color: inherit;
+  backdrop-filter: blur(10px);
+  transition: background 140ms ease;
+}
+.comments-target:hover { background: rgba(255,255,255,0.1); }
+.comments-target-img {
+  width: 60px;
+  height: 76px;
+  object-fit: cover;
+  border-radius: 10px;
+  flex-shrink: 0;
+  background: #1a1a1a;
+}
+.comments-target-img--blank { display: inline-block; }
+.comments-target-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.comments-target-kind {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.7px;
+  color: #9ca3af;
+  font-weight: 700;
+}
+.comments-target-title {
+  font-size: 15px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.comments-target-sub { font-size: 12px; color: #b8b8bd; }
+
+.comments-heading {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 15px;
+  font-weight: 700;
+  margin: 20px 2px 8px;
+}
+.comments-count {
+  font-size: 12px;
+  font-weight: 700;
+  background: rgba(255,255,255,0.12);
+  color: #e5e5e5;
+  border-radius: 999px;
+  padding: 1px 9px;
+}
+
+.comments-list {
+  flex: 1;
+  overflow-y: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  padding: 4px 2px 12px;
+  scrollbar-width: thin;
+}
+.comments-empty {
+  color: #9ca3af;
+  font-size: 13px;
+  text-align: center;
+  padding: 32px 12px;
+}
+
+/* iMessage-style thread: others on the left (with avatar), you on the
+   right (accent bubble). */
+.comment-row { display: flex; gap: 10px; align-items: flex-end; }
+.comment-row.is-own { flex-direction: row-reverse; }
+.comment-avatar-btn {
+  background: none; border: none; padding: 0; cursor: pointer; flex-shrink: 0; line-height: 0;
+}
+.comment-avatar-btn:disabled { cursor: default; }
+.comment-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: #2a2a2a;
+}
+.comment-row.is-own .comment-avatar-btn { display: none; }
+.comment-avatar--initial {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 700;
+  color: #d4d4d8;
+  background: linear-gradient(135deg, #3f3f46, #27272a);
+}
+.comment-body { min-width: 0; max-width: 80%; display: flex; flex-direction: column; align-items: flex-start; }
+.comment-row.is-own .comment-body { align-items: flex-end; }
+.comment-meta { display: flex; align-items: center; gap: 8px; margin-bottom: 3px; padding: 0 4px; }
+.comment-row.is-own .comment-meta { flex-direction: row-reverse; }
+.comment-name {
+  font-size: 12px; font-weight: 600; color: #d4d4d8;
+  background: none; border: none; padding: 0; font-family: inherit; cursor: pointer;
+}
+.comment-name:disabled { cursor: default; }
+.comment-name:not(:disabled):hover { color: #fff; text-decoration: underline; }
+.comment-time { font-size: 11px; color: #8b8b91; }
+.comment-delete {
+  background: none;
+  border: none;
+  color: #8b8b91;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 0;
+}
+.comment-delete:hover { color: #f87171; }
+.comment-bubble {
+  margin: 0;
+  font-size: 14px;
+  line-height: 1.4;
+  color: #ececee;
+  background: rgba(255,255,255,0.09);
+  padding: 9px 13px;
+  border-radius: 18px;
+  border-bottom-left-radius: 5px;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+.comment-row.is-own .comment-bubble {
+  background: linear-gradient(135deg, #0a84ff, #0a6cff);
+  color: #fff;
+  border-radius: 18px;
+  border-bottom-right-radius: 5px;
+}
+
+/* 🔥 reaction — sits just under each bubble, aligned to the bubble side. */
+.comment-react-row {
+  display: flex;
+  margin-top: 4px;
+  padding: 0 2px;
+}
+.comment-row.is-own .comment-react-row { justify-content: flex-end; }
+.comment-fire {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px 3px 7px;
+  border-radius: 14px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.05);
+  color: #c9c9cf;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform 140ms ease, background 160ms ease, border-color 160ms ease, box-shadow 160ms ease;
+}
+.comment-fire:hover { background: rgba(255,255,255,0.1); }
+.comment-fire:active { transform: scale(0.92); }
+.comment-fire-emoji {
+  font-size: 14px;
+  filter: grayscale(0.55) opacity(0.8);
+  transition: filter 160ms ease, transform 160ms ease;
+}
+.comment-fire.is-lit {
+  background: rgba(255,138,40,0.16);
+  border-color: rgba(255,138,40,0.5);
+  color: #ffb070;
+  box-shadow: 0 0 16px rgba(255,120,30,0.28);
+}
+.comment-fire.is-lit .comment-fire-emoji {
+  filter: none;
+  transform: scale(1.08);
+}
+.comment-fire-count { font-variant-numeric: tabular-nums; }
+
+/* 5-fire milestone celebration banner, pinned at the top. */
+.comments-milestone {
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 14px;
+  margin-inline: auto;
+  width: min(420px, calc(100% - 48px));
+  z-index: 5;
+  text-align: center;
+  padding: 11px 16px;
+  border-radius: 16px;
+  font-size: 14px;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, rgba(255,120,30,0.95), rgba(255,72,72,0.95));
+  border: 1px solid rgba(255,180,120,0.6);
+  box-shadow: 0 10px 40px rgba(255,90,30,0.45);
+  animation: comments-milestone-in 320ms cubic-bezier(0.16,1,0.3,1);
+}
+@keyframes comments-milestone-in {
+  from { opacity: 0; transform: translateY(-14px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Composer — a single glass, glowing pill with the send button inside. */
+.comments-composer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 10px 0 16px;
+  padding: 5px 5px 5px 8px;
+  border-radius: 26px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.14);
+  backdrop-filter: blur(18px) saturate(160%);
+  -webkit-backdrop-filter: blur(18px) saturate(160%);
+  box-shadow: 0 8px 30px rgba(0,0,0,0.5), 0 0 22px rgba(120,170,255,0.12);
+  transition: border-color 180ms ease, box-shadow 180ms ease;
+}
+.comments-composer:focus-within {
+  border-color: rgba(140,180,255,0.6);
+  box-shadow: 0 8px 30px rgba(0,0,0,0.5), 0 0 30px rgba(120,170,255,0.4);
+}
+.comments-filter-btn {
+  width: 32px; height: 32px; border-radius: 50%; flex-shrink: 0;
+  background: rgba(255,255,255,0.07); border: none; color: #9ca3af;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.comments-input {
+  flex: 1;
+  resize: none;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #f4f4f5;
+  font: inherit;
+  font-size: 14px;
+  line-height: 1.35;
+  padding: 8px 2px;
+  max-height: 120px;
+}
+.comments-input::placeholder { color: #8b8b91; }
+.comments-send {
+  width: 36px; height: 36px; border-radius: 50%; flex-shrink: 0;
+  background: linear-gradient(135deg, #0a84ff, #0a6cff);
+  color: #fff; border: none; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  box-shadow: 0 0 16px rgba(10,132,255,0.5);
+  transition: transform 140ms ease, opacity 140ms ease, box-shadow 140ms ease;
+}
+.comments-send:disabled { opacity: 0.4; cursor: default; box-shadow: none; }
+.comments-send:not(:disabled):hover { transform: scale(1.08); }
+.comments-composer--signin { justify-content: center; padding: 8px; }
+.comments-send--signin {
+  width: auto; height: auto; border-radius: 999px; padding: 11px 20px;
+  font-weight: 700; font-size: 13px; box-shadow: 0 0 18px rgba(10,132,255,0.4);
+}
+/* "someone is typing…" — a left bubble with animated dots (iMessage). */
+.comment-typing {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 2px 4px;
+}
+.comment-typing-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  background: rgba(255,255,255,0.09);
+  padding: 10px 12px;
+  border-radius: 16px;
+  border-bottom-left-radius: 5px;
+}
+.comment-typing-dots i {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: #9ca3af;
+  animation: comment-typing-bounce 1.2s infinite ease-in-out;
+}
+.comment-typing-dots i:nth-child(2) { animation-delay: 0.15s; }
+.comment-typing-dots i:nth-child(3) { animation-delay: 0.3s; }
+.comment-typing-label { font-size: 12px; color: #8b8b91; }
+@keyframes comment-typing-bounce {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
+
+.comments-error {
+  color: #f87171;
+  font-size: 12px;
+  padding: 0 2px 12px;
+}
+
+/* Comment button shared by ProductPage (pd-comments-btn) and the look
+ * info topbar (look-comment-btn) — styled alongside their sibling
+ * action/bookmark buttons in their own stylesheets; here we only need
+ * the count bubble shared shape. */
+.comment-btn-count {
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 768px) {
+  .comments-shell { width: calc(100% - 24px); padding-top: 12px; }
+  .comments-target-img { width: 50px; height: 64px; }
+}
+
+/* ── "White" comments theme (experimental) ──────────────────────────────
+   White surface with the ambient particle field inverted to black, on both
+   mobile and desktop. These rules come after the dark defaults above so
+   they win at equal specificity. Revert by deleting this block. */
+.comments-page { background: #ffffff; color: #18181b; }
+.comments-page::after {
+  background: radial-gradient(120% 80% at 50% 40%, rgba(255,255,255,0) 0%, rgba(255,255,255,0.55) 60%, rgba(255,255,255,0.82) 100%);
+}
+/* Flip the ambient WebGL sparks from silver-white to black. The avatar
+   particle layer is left alone — those are real avatar images. */
+.comments-webgl canvas { filter: invert(1); }
+
+.comments-back { background: rgba(0,0,0,0.05); border-color: rgba(0,0,0,0.12); color: #18181b; }
+.comments-back:hover { background: rgba(0,0,0,0.1); }
+
+.comments-target { background: rgba(0,0,0,0.035); border-color: rgba(0,0,0,0.08); }
+.comments-target:hover { background: rgba(0,0,0,0.06); }
+.comments-target-img { background: #ececec; }
+.comments-target-kind { color: #6b7280; }
+.comments-target-sub { color: #6b7280; }
+
+.comments-heading { color: #18181b; }
+.comments-count { background: rgba(0,0,0,0.08); color: #3f3f46; }
+.comments-empty { color: #6b7280; }
+
+.comment-avatar { background: #e4e4e7; }
+.comment-avatar--initial { color: #52525b; background: linear-gradient(135deg, #e4e4e7, #d4d4d8); }
+.comment-name { color: #27272a; }
+.comment-name:not(:disabled):hover { color: #000; }
+.comment-time { color: #71717a; }
+.comment-delete { color: #71717a; }
+
+.comment-bubble { background: rgba(0,0,0,0.06); color: #18181b; }
+/* own (right-side) bubble keeps its blue accent — already readable on white */
+
+.comment-fire { background: rgba(0,0,0,0.04); border-color: rgba(0,0,0,0.12); color: #52525b; }
+.comment-fire:hover { background: rgba(0,0,0,0.08); }
+
+.comments-composer {
+  background: rgba(0,0,0,0.04);
+  border-color: rgba(0,0,0,0.12);
+  box-shadow: 0 8px 30px rgba(0,0,0,0.1), 0 0 22px rgba(120,170,255,0.08);
+}
+.comments-input { color: #18181b; }
+.comments-input::placeholder { color: #9ca3af; }
+
+.comment-typing-dots { background: rgba(0,0,0,0.06); }
+.comment-typing-label { color: #71717a; }

@@ -1,10 +1,14 @@
 import { useState, useRef, useEffect, useCallback, memo } from 'react';
+import { createPortal } from 'react-dom';
 import { useNavigate } from '@remix-run/react';
 import type { UserRole } from '~/types/roles';
 import { USER_ROLE_LABELS } from '~/types/roles';
+import ParticleBackground from './ParticleBackground';
 import type { Look, Product } from '~/data/looks';
 import { useDeleteMode } from '~/hooks/useDeleteMode';
 import { AvatarUpload } from './AvatarCropModal';
+import { getWallet } from '~/services/earnings';
+import { supabase } from '~/utils/supabase';
 
 interface UserMenuUser {
   id?: string;
@@ -17,6 +21,8 @@ interface UserMenuUser {
 interface UserMenuProps {
   onOpenBookmarks: () => void;
   onOpenMyLooks?: () => void;
+  onOpenWallet?: () => void;
+  onOpenProfile?: () => void;
   bookmarkCount: number;
   user?: UserMenuUser | null;
   onLogout?: () => void;
@@ -28,12 +34,19 @@ interface UserMenuProps {
   savedProducts?: Product[];
   onOpenLook?: (look: Look) => void;
   onOpenProduct?: (product: Product) => void;
+  /** Open a creator's catalog in-app. When provided, the Following
+   *  section uses it for instant transitions instead of a full
+   *  /c/<handle> page reload. */
+  onOpenCreator?: (handle: string) => void;
   // Catalog gender filter - wired through for the super-admin
   // "Shopping for" toggle. The page already auto-syncs activeFilter
   // from the profile gender, so when the toggle first renders it
   // reflects the admin's own setting.
   activeFilter?: 'all' | 'men' | 'women';
   onChangeCatalogGender?: (next: 'all' | 'men' | 'women') => void;
+  /** Guests have no account menu — tapping the avatar surfaces the signup
+   *  gate instead. When set AND there's no user, the trigger calls this. */
+  onGuestSignup?: () => void;
 }
 
 const STRIP_LIMIT = 8;
@@ -54,6 +67,8 @@ function MiniTile({ src, label, onClick }: { src?: string; label: string; onClic
 function UserMenu({
   onOpenBookmarks,
   onOpenMyLooks,
+  onOpenWallet,
+  onOpenProfile,
   bookmarkCount,
   user,
   onLogout,
@@ -63,25 +78,197 @@ function UserMenu({
   savedProducts = [],
   onOpenLook,
   onOpenProduct,
+  onOpenCreator,
   activeFilter,
   onChangeCatalogGender,
+  onGuestSignup,
 }: UserMenuProps) {
   const [open, setOpen] = useState(false);
+  // Mobile-only: opens a full-screen Account page instead of the popout.
+  // The origin (avatar's center, in viewport coords) drives the clip-path
+  // reveal animation so the page appears to grow out of the tapped avatar.
+  const [pageOpen, setPageOpen] = useState(false);
+  const [pageOrigin, setPageOrigin] = useState<{ x: number; y: number } | null>(null);
   const [deleteMode, setDeleteModeState] = useDeleteMode();
   const isSuperAdmin = user?.role === 'super_admin';
-  // Local override for the avatar URL so a fresh upload renders in
-  // the menu without waiting for the next auth-session refresh.
-  // Phase 10: a key change on the rendered <img> drives a flip-in
-  // animation defined in user-menu.css.
+  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
   const [avatarOverride, setAvatarOverride] = useState<string | null>(null);
   const renderedAvatarUrl = avatarOverride || user?.avatarUrl;
-  // Brief grace period after closing during which the scrim stays
-  // mounted, even though the popout is gone. Catches the phantom click
-  // iOS Safari dispatches after touchend (typically 0-300ms later) on
-  // whatever element ended up beneath the user's finger.
   const [cooldown, setCooldown] = useState(false);
+  const [walletBalance, setWalletBalance] = useState<number | null>(null);
+  const [dotsConnected, setDotsConnected] = useState<boolean | null>(null);
+  // Invite-and-earn: the signed-in creator's referral link + running stats.
+  const [invite, setInvite] = useState<{ handle: string | null; link: string | null; count: number; earnedCents: number } | null>(null);
+  const [inviteCopied, setInviteCopied] = useState(false);
   const menuRef = useRef<HTMLDivElement>(null);
+  const triggerRef = useRef<HTMLButtonElement | null>(null);
   const navigate = useNavigate();
+
+  // Decide which surface the trigger should open: full-page on mobile,
+  // the classic popout on desktop. Capture the avatar's center at click
+  // time so the page can reveal outward from that exact point.
+  const handleTriggerClick = useCallback(() => {
+    // Guests have no account — the avatar is a "Sign up / Log in" entry point.
+    if (!user && onGuestSignup) { onGuestSignup(); return; }
+    if (typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches) {
+      const rect = triggerRef.current?.getBoundingClientRect();
+      if (rect) setPageOrigin({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+      setOpen(false);
+      setPageOpen(true);
+    } else {
+      setOpen(o => !o);
+    }
+  }, [user, onGuestSignup]);
+
+  // External open via the global swipe-left gesture (SwipeMenuGesture
+  // mounted at app root). Treat it as a tap on the trigger but reveal
+  // from the trigger's current position so the page still feels
+  // anchored to the avatar. Mobile-only; the gesture is gated on
+  // matchMedia(max-width:768px) at the source so we don't double-gate.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onOpen = () => {
+      if (!user && onGuestSignup) { onGuestSignup(); return; }
+      const rect = triggerRef.current?.getBoundingClientRect();
+      if (rect) setPageOrigin({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
+      else setPageOrigin({ x: window.innerWidth - 30, y: 50 });
+      setOpen(false);
+      setPageOpen(true);
+    };
+    window.addEventListener('catalog:open-account-menu', onOpen);
+    return () => window.removeEventListener('catalog:open-account-menu', onOpen);
+  }, [user, onGuestSignup]);
+
+  // Close the page, but let the close animation play first (reverse of
+  // the reveal) before unmounting.
+  const [pageClosing, setPageClosing] = useState(false);
+
+  // Slide-in trigger. The page mounts at translateX(100%) (off-screen
+  // right) and the .is-open class flips it to translateX(0). CSS
+  // transitions only fire on STATE change, so if both the mount and
+  // .is-open happen in the same paint, the browser collapses them
+  // into a single computed state and skips the slide. Defer .is-open
+  // by one animation frame so there's a real prior state for the
+  // transition to interpolate from.
+  const [pageSlidIn, setPageSlidIn] = useState(false);
+  useEffect(() => {
+    if (!pageOpen) { setPageSlidIn(false); return; }
+    // Two rAFs — the first lets React commit the off-screen mount; the
+    // second adds .is-open. Without this layered defer some browsers
+    // (notably WebKit) still optimise the two states into one and skip
+    // the transition.
+    let raf2 = 0;
+    const raf1 = requestAnimationFrame(() => {
+      raf2 = requestAnimationFrame(() => setPageSlidIn(true));
+    });
+    return () => {
+      cancelAnimationFrame(raf1);
+      cancelAnimationFrame(raf2);
+    };
+  }, [pageOpen]);
+  const closePage = useCallback(() => {
+    setPageClosing(true);
+    window.setTimeout(() => {
+      setPageOpen(false);
+      setPageClosing(false);
+    }, 380);
+  }, []);
+
+  // Super-admin sub-section visibility within the page. Only super-admins see
+  // a small icon at the bottom; tapping it flips this to true and the body
+  // swaps from the consumer list to the admin-only list (Import / Admin /
+  // Decks / Delete mode). A back chevron in the header returns. Reset on
+  // page close so re-opening always lands on the consumer view.
+  const [superSection, setSuperSection] = useState(false);
+  useEffect(() => {
+    if (!pageOpen) setSuperSection(false);
+  }, [pageOpen]);
+
+  // Toggle a body class while the Account page is the active surface.
+  // CSS uses it to translate .app-root left by ~18% so the viewport
+  // reads as "slid over to reveal the menu" — see the horizontal-slide
+  // section in user-menu.css. The class follows `pageClosing` rather
+  // than `pageOpen` so the underlying app slides BACK in lockstep with
+  // the menu sliding OUT (otherwise the app snaps back before the menu
+  // finishes its close transition, breaking the illusion). Cleared on
+  // unmount so a stuck class can't leave the app stranded.
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    if (pageOpen && !pageClosing) {
+      document.body.classList.add('has-account-menu');
+    } else {
+      // pageOpen=false OR pageClosing=true → menu is sliding out (or
+      // already gone). Remove the class so .app-root translates back.
+      document.body.classList.remove('has-account-menu');
+    }
+    return () => { document.body.classList.remove('has-account-menu'); };
+  }, [pageOpen, pageClosing]);
+
+  // Escape hatches — multiple ways to recover if the slide-over ever
+  // gets stuck (transform left on .app-root, menu trapped open, etc.):
+  //   • Escape key always closes the page.
+  //   • An emergency `catalog:account-menu-reset` window event force-
+  //     clears the open/closing flags AND the body class. Triggerable
+  //     from devtools or via a triple-tap-the-top-edge gesture below.
+  //   • Triple-tapping the very top edge of the viewport (within 600ms)
+  //     fires the reset. Hard to trigger accidentally, easy to remember
+  //     if the menu is stuck and the user can't reach the close button.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const hardReset = () => {
+      setPageOpen(false);
+      setPageClosing(false);
+      document.body.classList.remove('has-account-menu');
+      // Defensive: if some other code added inline transforms, clear them.
+      const root = document.querySelector('.app-root') as HTMLElement | null;
+      if (root) root.style.transform = '';
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && (pageOpen || pageClosing)) hardReset();
+    };
+    const onReset = () => hardReset();
+
+    // Triple-tap-top-edge escape gesture. A tap counts only when it
+    // lands in the top 60px of the viewport AND inside ~600ms of the
+    // previous tap. Three in a row triggers the reset.
+    let taps: number[] = [];
+    const onTouch = (e: TouchEvent) => {
+      const t = e.touches[0] || e.changedTouches[0];
+      if (!t) return;
+      if (t.clientY > 60) { taps = []; return; }
+      const now = performance.now();
+      taps = taps.filter(x => now - x < 600);
+      taps.push(now);
+      if (taps.length >= 3) { taps = []; hardReset(); }
+    };
+
+    window.addEventListener('keydown', onKey);
+    window.addEventListener('catalog:account-menu-reset', onReset);
+    window.addEventListener('touchstart', onTouch, { passive: true });
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      window.removeEventListener('catalog:account-menu-reset', onReset);
+      window.removeEventListener('touchstart', onTouch);
+    };
+  }, [pageOpen, pageClosing]);
+
+  // When an action runs from the page, close the page first (with its
+  // animation), then dispatch the action — same pattern as runTile, just
+  // routed through the page lifecycle.
+  const runPageItem = useCallback((action: () => void) => () => {
+    closePage();
+    setCooldown(true);
+    window.setTimeout(() => setCooldown(false), 420);
+    window.setTimeout(action, 380);
+  }, [closePage]);
+
+  // Escape closes the page too.
+  useEffect(() => {
+    if (!pageOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') closePage(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [pageOpen, closePage]);
 
   const runItem = useCallback((action: () => void) => (e: React.MouseEvent | React.TouchEvent) => {
     e.preventDefault();
@@ -112,6 +299,62 @@ function UserMenu({
     return () => document.removeEventListener('mousedown', handleClick);
   }, [open]);
 
+  // Fetch invite link + referral stats when the menu/page opens.
+  useEffect(() => {
+    if ((!open && !pageOpen) || !user?.id) return;
+    let cancelled = false;
+    import('~/services/referrals').then(({ getMyInviteInfo }) => {
+      getMyInviteInfo().then(info => { if (!cancelled) setInvite(info); });
+    });
+    return () => { cancelled = true; };
+  }, [open, pageOpen, user?.id]);
+
+  // Share / copy the invite link. Native share sheet where available
+  // (mobile), clipboard copy fallback with a brief "Copied" confirmation.
+  const handleInvite = useCallback(() => {
+    const link = invite?.link;
+    if (!link) return;
+    const shareData = {
+      title: 'Catalog',
+      text: 'Join my catalog on Catalog — skip the waitlist:',
+      url: link,
+    };
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      navigator.share(shareData).catch(() => {});
+      return;
+    }
+    if (typeof navigator !== 'undefined' && navigator.clipboard) {
+      navigator.clipboard.writeText(link).then(() => {
+        setInviteCopied(true);
+        window.setTimeout(() => setInviteCopied(false), 1800);
+      }).catch(() => {});
+    }
+  }, [invite]);
+
+  // Fetch wallet balance + Dots connection status when menu opens
+  useEffect(() => {
+    if ((!open && !pageOpen) || !user?.id) return;
+    let cancelled = false;
+    // Check if Dots is connected
+    supabase
+      .from('profiles')
+      .select('is_payout_active')
+      .eq('id', user.id)
+      .single()
+      .then(({ data }) => {
+        if (cancelled) return;
+        const connected = data?.is_payout_active ?? false;
+        setDotsConnected(connected);
+        if (connected) {
+          getWallet(1, 1).then(
+            w => { if (!cancelled) setWalletBalance(w.current_balance); },
+            () => {},
+          );
+        }
+      }, () => { if (!cancelled) setDotsConnected(false); });
+    return () => { cancelled = true; };
+  }, [open, pageOpen, user?.id]);
+
   useEffect(() => {
     if (!open) return;
     const handleKey = (e: KeyboardEvent) => {
@@ -138,8 +381,26 @@ function UserMenu({
           <div className="user-menu-popout user-menu-popout--graphical">
             {user && (
               <>
-                <div className="user-menu-header">
-                  <div className="user-menu-avatar-wrap" key={renderedAvatarUrl || 'placeholder'}>
+                <div
+                  className={`user-menu-header${onOpenProfile ? ' user-menu-header--clickable' : ''}`}
+                  onClick={onOpenProfile ? runItem(onOpenProfile) : undefined}
+                  role={onOpenProfile ? 'button' : undefined}
+                  tabIndex={onOpenProfile ? 0 : undefined}
+                  onKeyDown={onOpenProfile ? (e) => { if (e.key === 'Enter' || e.key === ' ') runItem(onOpenProfile)(e as unknown as React.MouseEvent); } : undefined}
+                  title={onOpenProfile ? 'Edit profile' : undefined}
+                >
+                  {/* Tapping the avatar must ONLY open the crop/upload flow.
+                      Without stopPropagation the click bubbles to the header
+                      (which opens the Profile page), closing the menu and
+                      unmounting AvatarUpload mid-pick — so the crop modal
+                      never appeared and nothing uploaded. */}
+                  <div
+                    className="user-menu-avatar-wrap"
+                    key={renderedAvatarUrl || 'placeholder'}
+                    onClick={(e) => e.stopPropagation()}
+                    onPointerDown={(e) => e.stopPropagation()}
+                    onKeyDown={(e) => e.stopPropagation()}
+                  >
                     <AvatarUpload
                       userId={user.id}
                       currentUrl={renderedAvatarUrl}
@@ -151,19 +412,48 @@ function UserMenu({
                     {user.displayName && <span className="user-menu-name">{user.displayName}</span>}
                     {user.email && <span className="user-menu-email">{user.email}</span>}
                     {user.role && <span className={`user-menu-role user-menu-role-${user.role}`}>{USER_ROLE_LABELS[user.role]}</span>}
+                    {dotsConnected && walletBalance !== null && walletBalance > 0 && onOpenWallet && (
+                      <button
+                        onClick={(e) => { e.stopPropagation(); runItem(onOpenWallet)(e); }}
+                        style={{
+                          marginTop: 6, display: 'inline-flex', alignItems: 'center', gap: 4,
+                          padding: '4px 10px', background: '#dcfce7', color: '#15803d',
+                          border: '1px solid #bbf7d0', borderRadius: 20,
+                          fontSize: 12, fontWeight: 700, cursor: 'pointer', width: 'fit-content',
+                        }}
+                        title="Open Wallet"
+                      >
+                        <span>$</span>
+                        <span>{walletBalance.toFixed(2)}</span>
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                      </button>
+                    )}
                   </div>
+                  {onOpenProfile && (
+                    <svg className="user-menu-header-chevron" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                      <polyline points="9 18 15 12 9 6"/>
+                    </svg>
+                  )}
                 </div>
+                {/* Desktop super-admin shortcut — a direct Admin button right
+                    under the profile picture. Hidden on mobile (CSS) where the
+                    Super Admin → Admin path is used instead. */}
+                {isSuperAdmin && (
+                  <button
+                    type="button"
+                    className="user-menu-admin-quicklink"
+                    onClick={runItem(() => navigate('/admin'))}
+                    aria-label="Open Admin"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M12 2l9 4v6c0 5-3.7 9.4-9 10-5.3-.6-9-5-9-10V6l9-4z"/></svg>
+                    <span>Admin</span>
+                  </button>
+                )}
                 <div className="user-menu-divider" />
               </>
             )}
 
-            {/* Try it on - primary CTA. Sits at the top so it's the first
-                thing a returning shopper sees. */}
-            <button className="user-menu-cta" onClick={runItem(() => navigate('/generate'))}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
-              <span>Try it on</span>
-              <svg className="user-menu-cta-arrow" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-            </button>
+            {/* Try it on removed; Style moved to the super-admin section below. */}
 
             {/* Recently viewed - products tapped in the trail, newest first. */}
             {recents.length > 0 && onOpenProduct && (
@@ -224,41 +514,76 @@ function UserMenu({
 
             <div className="user-menu-divider" />
 
-            {/* Secondary nav (full bookmarks, my catalog, admin/decks/logout). */}
-            <button className="user-menu-item" onClick={runItem(onOpenBookmarks)}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
-              <span>Bookmarks</span>
-              {bookmarkCount > 0 && <span className="user-menu-badge">{bookmarkCount}</span>}
-            </button>
+            {/* Secondary nav (following, full bookmarks, my catalog,
+                admin/decks/logout). Following sits above Bookmarks
+                so the creators you've opted into reading rank ahead
+                of the things you've passively saved. */}
+            <FollowingMenuItem onOpenCreator={(handle) => {
+              setOpen(false);
+              if (onOpenCreator) onOpenCreator(handle);
+              else if (typeof window !== 'undefined') window.location.assign(`/c/${handle}`);
+            }} />
             {onOpenMyLooks && (
               <button className="user-menu-item" onClick={runItem(onOpenMyLooks)}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
                 <span>My Catalog</span>
               </button>
             )}
-            <div className="user-menu-item-flyout-wrap">
-              <button className="user-menu-item user-menu-item-flyout" type="button" onClick={runItem(() => navigate('/import'))}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-                <span>Import</span>
-                <svg className="user-menu-item-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
-              </button>
-              <div className="user-menu-flyout" role="menu">
-                <button className="user-menu-flyout-item" onClick={runItem(() => navigate('/import?source=shopmy'))}>
-                  Shop.my
-                </button>
-                <button className="user-menu-flyout-item" onClick={runItem(() => navigate('/import?source=ltk'))}>
-                  LTK
-                </button>
-                <button className="user-menu-flyout-item" onClick={runItem(() => navigate('/import?source=amazon'))}>
-                  Amazon Storefront
-                </button>
-              </div>
-            </div>
-            <button className="user-menu-item" onClick={runItem(() => navigate('/admin'))}>
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 15v2m-6 4h12a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2zm10-10V7a4 4 0 0 0-8 0v4h8z"/></svg>
-              <span>Admin</span>
+            <button className="user-menu-item" onClick={runItem(onOpenBookmarks)}>
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+              <span>Saved</span>
+              {bookmarkCount > 0 && <span className="user-menu-badge">{bookmarkCount}</span>}
             </button>
-            {isSuperAdmin && onChangeCatalogGender && (
+            {onOpenWallet && dotsConnected === false && (
+              <button className="user-menu-item" onClick={runItem(onOpenWallet)}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
+                <span>Setup Earnings</span>
+              </button>
+            )}
+            {onOpenWallet && dotsConnected === true && (
+              <button className="user-menu-item" onClick={runItem(onOpenWallet)}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>
+                <span>Wallet</span>
+                {walletBalance !== null && (
+                  <span style={{ marginLeft: 'auto', fontSize: 12, fontWeight: 700, color: walletBalance > 0 ? '#15803d' : 'var(--text-muted, #888)' }}>
+                    ${walletBalance.toFixed(2)}
+                  </span>
+                )}
+              </button>
+            )}
+            {isSuperAdmin && (
+              <button className="user-menu-item" onClick={runItem(() => navigate('/style'))}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l1.9 5.85h6.15l-4.97 3.62 1.9 5.85L12 13.7l-4.98 3.62 1.9-5.85L3.95 7.85h6.15z"/></svg>
+                <span>Style</span>
+              </button>
+            )}
+            {isSuperAdmin && (
+              <div className="user-menu-item-flyout-wrap">
+                <button className="user-menu-item user-menu-item-flyout" type="button" onClick={runItem(() => navigate('/import'))}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+                  <span>Import</span>
+                  <svg className="user-menu-item-chevron" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+                </button>
+                <div className="user-menu-flyout" role="menu">
+                  <button className="user-menu-flyout-item" onClick={runItem(() => navigate('/import?source=shopmy'))}>
+                    Shop.my
+                  </button>
+                  <button className="user-menu-flyout-item" onClick={runItem(() => navigate('/import?source=ltk'))}>
+                    LTK
+                  </button>
+                  <button className="user-menu-flyout-item" onClick={runItem(() => navigate('/import?source=amazon'))}>
+                    Amazon Storefront
+                  </button>
+                </div>
+              </div>
+            )}
+            {isAdmin && (
+              <button className="user-menu-item" onClick={runItem(() => navigate('/admin'))}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 15v2m-6 4h12a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2zm10-10V7a4 4 0 0 0-8 0v4h8z"/></svg>
+                <span>Admin</span>
+              </button>
+            )}
+            {onChangeCatalogGender && (
               <div className="user-menu-item user-menu-item--segmented" role="group" aria-label="Shopping for">
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                   <circle cx="12" cy="8" r="4"/>
@@ -327,17 +652,254 @@ function UserMenu({
           </div>
         </>
       )}
+
+      {/* Mobile full-page Account — replaces the popout on ≤768px. The reveal
+          uses a clip-path circle that grows from the avatar's tapped position
+          to cover the screen, and content staggers in after the wipe. */}
+      {pageOpen && typeof document !== 'undefined' && createPortal(
+        <div
+          // Portaled to document.body so the page escapes the .app-root
+          // containing block. When .app-root has transform:translateX(-18%)
+          // it becomes the containing block for position:fixed descendants
+          // — the menu's inset:0 + translate would otherwise be relative
+          // to the SHIFTED .app-root, not the viewport, pushing it
+          // off-screen. The portal keeps it anchored to the actual
+          // viewport so the slide-in lands where the user expects.
+          //
+          // .is-open is keyed on pageSlidIn (true one rAF after mount) so
+          // the CSS transition has a real prior state to interpolate from.
+          // Without this defer, browsers can collapse "mount at 100%" and
+          // "apply is-open" into a single computed state and skip the
+          // animation entirely — the symptom the user just hit.
+          className={`user-menu-page ${pageClosing ? 'is-closing' : (pageSlidIn ? 'is-open' : '')}`}
+          style={pageOrigin ? { '--ump-x': `${pageOrigin.x}px`, '--ump-y': `${pageOrigin.y}px` } as React.CSSProperties : undefined}
+          role="dialog"
+          aria-label="Account"
+        >
+          {/* Dedicated particle layer — sits behind the header + body
+              content. The page background is fully solid (so the feed
+              underneath doesn't ghost through during the slide-over),
+              so we mount a fresh ParticleBackground here instead of
+              relying on the singleton SiteParticleHost bleeding through. */}
+          <div className="ump-particles" aria-hidden="true">
+            <ParticleBackground />
+          </div>
+          <header className="user-menu-page-top">
+            <button
+              className="user-menu-page-back"
+              onClick={superSection ? () => setSuperSection(false) : closePage}
+              aria-label={superSection ? 'Back to account' : 'Close account'}
+            >
+              <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" /></svg>
+            </button>
+            <h1 className="user-menu-page-title">{superSection ? 'Super Admin' : ''}</h1>
+            <span style={{ width: 22 }} aria-hidden="true" />
+          </header>
+
+          <div className="user-menu-page-body">
+            {!superSection && user && (
+              <div className="user-menu-page-hero">
+                <div className="user-menu-page-avatar-wrap">
+                  <AvatarUpload
+                    userId={user.id}
+                    currentUrl={renderedAvatarUrl}
+                    fallbackInitial={user.displayName?.charAt(0) || user.email?.charAt(0)}
+                    onUploaded={setAvatarOverride}
+                    className="user-menu-page-avatar-upload"
+                  />
+                </div>
+                <button
+                  type="button"
+                  className="user-menu-page-identity-btn"
+                  onClick={onOpenProfile ? runPageItem(onOpenProfile) : undefined}
+                  aria-label="Edit profile"
+                >
+                  <span className="user-menu-page-identity">
+                    {user.displayName && <span className="user-menu-page-name">{user.displayName}</span>}
+                    {user.email && <span className="user-menu-page-email">{user.email}</span>}
+                    {user.role && <span className={`user-menu-role user-menu-role-${user.role}`} style={{ marginTop: 4 }}>{USER_ROLE_LABELS[user.role]}</span>}
+                  </span>
+                  {onOpenProfile && (
+                    <svg className="user-menu-page-hero-chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
+                  )}
+                </button>
+              </div>
+            )}
+
+            {!superSection && (
+              <>
+                {onOpenMyLooks && (
+                  <PageRow icon="grid" label="My Catalog" onClick={runPageItem(onOpenMyLooks)} />
+                )}
+
+                {/* Quick row — Activity, Earnings, Saved as three glowing
+                    columns. Auto-fits to 2 columns when Earnings is hidden
+                    (non-creators). Each tile pulses with a soft glow. */}
+                <div className="user-menu-quickrow">
+                  <button type="button" className="user-menu-quick" onClick={runPageItem(() => navigate('/activity'))}>
+                    <span className="user-menu-quick-icon" aria-hidden="true">
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+                    </span>
+                    <span className="user-menu-quick-label">Activity</span>
+                  </button>
+                  {onOpenWallet && (
+                    <button type="button" className="user-menu-quick" onClick={runPageItem(onOpenWallet)}>
+                      <span className="user-menu-quick-icon" aria-hidden="true">
+                        <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 5H5a2 2 0 0 0-2 2v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-3"/><path d="M16 12h5v-2a2 2 0 0 0-2-2h-3a2 2 0 0 0 0 4z"/></svg>
+                      </span>
+                      <span className="user-menu-quick-label">Earnings</span>
+                      {dotsConnected === true && walletBalance !== null && (
+                        <span className="user-menu-quick-sub">${walletBalance.toFixed(2)}</span>
+                      )}
+                      {dotsConnected === false && (
+                        <span className="user-menu-quick-sub">Set up</span>
+                      )}
+                    </button>
+                  )}
+                  <button type="button" className="user-menu-quick" onClick={runPageItem(onOpenBookmarks)}>
+                    <span className="user-menu-quick-icon" aria-hidden="true">
+                      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+                    </span>
+                    <span className="user-menu-quick-label">Saved</span>
+                    {bookmarkCount > 0 && (
+                      <span className="user-menu-quick-badge">{bookmarkCount > 99 ? '99+' : bookmarkCount}</span>
+                    )}
+                  </button>
+                </div>
+                {onChangeCatalogGender && (
+                  <div className="user-menu-page-row user-menu-page-row--segmented">
+                    <span className="user-menu-page-row-icon">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="8" r="4"/><path d="M4 21a8 8 0 0 1 16 0"/></svg>
+                    </span>
+                    <span className="user-menu-page-row-label">Shopping for</span>
+                    <div className="user-menu-segmented" style={{ marginLeft: 'auto' }}>
+                      <button className={`user-menu-segmented-btn ${activeFilter === 'men' ? 'is-on' : ''}`} onClick={() => onChangeCatalogGender('men')}>Men</button>
+                      <button className={`user-menu-segmented-btn ${activeFilter === 'women' ? 'is-on' : ''}`} onClick={() => onChangeCatalogGender('women')}>Women</button>
+                      <button className={`user-menu-segmented-btn ${activeFilter === 'all' ? 'is-on' : ''}`} onClick={() => onChangeCatalogGender('all')}>All</button>
+                    </div>
+                  </div>
+                )}
+
+                {/* Invite & earn — share your catalog link; signups skip the
+                    waitlist and you earn $0.25 each. Shows running earnings. */}
+                {invite?.link && (
+                  <button type="button" className="user-menu-page-row user-menu-invite-row" onClick={handleInvite}>
+                    <span className="user-menu-page-row-icon" aria-hidden="true">
+                      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="22" y1="11" x2="16" y2="11"/></svg>
+                    </span>
+                    <span className="user-menu-page-row-label">
+                      {inviteCopied ? 'Link copied!' : 'Invite a catalog & earn'}
+                    </span>
+                    {invite.earnedCents > 0 && (
+                      <span className="user-menu-page-row-trailing">${(invite.earnedCents / 100).toFixed(2)}</span>
+                    )}
+                    <svg className="user-menu-page-row-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/><polyline points="16 6 12 2 8 6"/><line x1="12" y1="2" x2="12" y2="15"/></svg>
+                  </button>
+                )}
+
+                {onLogout && (
+                  <PageRow icon="logout" label="Log out" onClick={runPageItem(onLogout)} variant="danger" />
+                )}
+
+                {/* Super-admin entry — only visible to super_admin role, sits
+                    on its own at the bottom of the consumer list. Routes to
+                    the super-admin sub-section instead of cluttering the
+                    main menu with admin-only chrome. */}
+                {isSuperAdmin && (
+                  <button
+                    type="button"
+                    className="user-menu-page-super-entry"
+                    onClick={() => setSuperSection(true)}
+                    aria-label="Open Super Admin"
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l9 4v6c0 5-3.7 9.4-9 10-5.3-.6-9-5-9-10V6l9-4z"/></svg>
+                    <span>Super Admin</span>
+                  </button>
+                )}
+              </>
+            )}
+
+            {superSection && isSuperAdmin && (
+              <>
+                <PageRow icon="shield" label="Admin" onClick={runPageItem(() => navigate('/admin'))} />
+                <PageRow icon="star" label="Style" onClick={runPageItem(() => navigate('/style'))} />
+                <PageRow icon="import" label="Import" onClick={runPageItem(() => navigate('/import'))} />
+                {onOpenDecks && (
+                  <PageRow icon="deck" label="Decks" onClick={runPageItem(onOpenDecks)} />
+                )}
+                <div className={`user-menu-page-row user-menu-page-row--toggle ${deleteMode ? 'is-on' : ''}`} onClick={() => setDeleteModeState(!deleteMode)} role="switch" aria-checked={deleteMode}>
+                  <span className="user-menu-page-row-icon">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6" /><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6" /></svg>
+                  </span>
+                  <span className="user-menu-page-row-label">Delete mode</span>
+                  <span className={`user-menu-switch ${deleteMode ? 'is-on' : ''}`} aria-hidden="true" style={{ marginLeft: 'auto' }}>
+                    <span className="user-menu-switch-thumb" />
+                  </span>
+                </div>
+              </>
+            )}
+          </div>
+        </div>,
+        document.body,
+      )}
+
       <button
-        className={`user-menu-trigger ${open ? 'active' : ''}`}
-        onClick={() => setOpen(o => !o)}
+        ref={triggerRef}
+        className={`user-menu-trigger ${open || pageOpen ? 'active' : ''}${renderedAvatarUrl ? ' has-avatar' : (user ? ' has-initial' : '')}`}
+        onClick={handleTriggerClick}
         aria-label="Account menu"
       >
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <circle cx="12" cy="8" r="4"/>
-          <path d="M4 21a8 8 0 0 1 16 0"/>
-        </svg>
+        {renderedAvatarUrl ? (
+          <img
+            src={renderedAvatarUrl}
+            alt=""
+            className="user-menu-trigger-avatar"
+            referrerPolicy="no-referrer"
+          />
+        ) : user ? (
+          <span className="user-menu-trigger-initial" aria-hidden="true">
+            {(user.displayName?.trim() || user.email?.trim() || 'U').charAt(0).toUpperCase()}
+          </span>
+        ) : (
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="8" r="4"/>
+            <path d="M4 21a8 8 0 0 1 16 0"/>
+          </svg>
+        )}
       </button>
     </div>
+  );
+}
+
+// Reusable row for the mobile Account page. The icon is keyed by name so
+// the row component stays compact; the SVGs are inline so we don't drag in
+// an icon library.
+type PageRowIcon = 'bookmark' | 'grid' | 'star' | 'wallet' | 'shield' | 'import' | 'deck' | 'logout';
+function PageRow({ icon, label, onClick, badge, trailing, variant }: {
+  icon: PageRowIcon;
+  label: string;
+  onClick: () => void;
+  badge?: number;
+  trailing?: string;
+  variant?: 'danger';
+}) {
+  return (
+    <button type="button" className={`user-menu-page-row ${variant === 'danger' ? 'is-danger' : ''}`} onClick={onClick}>
+      <span className="user-menu-page-row-icon" aria-hidden="true">
+        {icon === 'bookmark' && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>}
+        {icon === 'grid' && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>}
+        {icon === 'star' && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>}
+        {icon === 'wallet' && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>}
+        {icon === 'shield' && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 15v2m-6 4h12a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2zm10-10V7a4 4 0 0 0-8 0v4h8z"/></svg>}
+        {icon === 'import' && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>}
+        {icon === 'deck' && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="9" y1="4" x2="9" y2="20"/></svg>}
+        {icon === 'logout' && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>}
+      </span>
+      <span className="user-menu-page-row-label">{label}</span>
+      {badge != null && <span className="user-menu-page-row-badge">{badge}</span>}
+      {trailing && <span className="user-menu-page-row-trailing">{trailing}</span>}
+      <svg className="user-menu-page-row-chev" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6"/></svg>
+    </button>
   );
 }
 
@@ -345,3 +907,68 @@ function UserMenu({
 // open. Without memo + stable callbacks from the parent, the menu re-ran
 // its avatar / strip layout for every state change.
 export default memo(UserMenu);
+
+/**
+ * "Following N" menu item — surfaces the list of creators the user
+ * follows directly in the user menu. Fetches lazily (only when the
+ * menu has rendered) and shows the first 6 handles as clickable chips
+ * with a "See all" link to the full list. No-op when the user follows
+ * nobody yet (the row hides instead of rendering "Following 0").
+ */
+function FollowingMenuItem({ onOpenCreator }: { onOpenCreator: (handle: string) => void }) {
+  const [handles, setHandles] = useState<string[] | null>(null);
+  const [expanded, setExpanded] = useState(false);
+  useEffect(() => {
+    let cancelled = false;
+    import('~/services/follows').then(({ getMyFollowing }) => {
+      getMyFollowing().then(list => { if (!cancelled) setHandles(list); });
+    });
+    return () => { cancelled = true; };
+  }, []);
+  if (!handles || handles.length === 0) return null;
+  return (
+    <div>
+      <button
+        className="user-menu-item"
+        onClick={(e) => { e.stopPropagation(); setExpanded(v => !v); }}
+      >
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+          <path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+          <circle cx="8.5" cy="7" r="4"/>
+          <polyline points="17 11 19 13 23 9"/>
+        </svg>
+        <span>Following</span>
+        <span className="user-menu-badge">{handles.length}</span>
+      </button>
+      {expanded && (
+        <div style={{ padding: '4px 14px 8px', display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {handles.slice(0, 12).map(h => (
+            <button
+              key={h}
+              type="button"
+              onClick={(e) => { e.stopPropagation(); onOpenCreator(h); }}
+              style={{
+                padding: '3px 10px',
+                borderRadius: 999,
+                background: '#f1f5f9',
+                border: '1px solid #e2e8f0',
+                color: '#0f172a',
+                fontSize: 11,
+                fontWeight: 600,
+                cursor: 'pointer',
+                fontFamily: 'inherit',
+              }}
+            >
+              @{h}
+            </button>
+          ))}
+          {handles.length > 12 && (
+            <span style={{ fontSize: 11, color: '#64748b', alignSelf: 'center' }}>
+              +{handles.length - 12} more
+            </span>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}

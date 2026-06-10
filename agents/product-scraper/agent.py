@@ -18,6 +18,7 @@ import json
 import base64
 import re
 import os
+import random
 import time
 import argparse
 import urllib.request
@@ -121,6 +122,33 @@ TOOLS = [
         },
     },
     {
+        "name": "get_variants",
+        "description": (
+            "Extract all product variants (sizes, colors, styles) from the current page. "
+            "Parses variant selectors (dropdowns, radio buttons, swatches), JSON-LD "
+            "Product.offers, and Shopify/structured product data. Returns an array of "
+            "variant objects with size, color, availability, sku, and price info."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+    },
+    {
+        "name": "get_size_chart",
+        "description": (
+            "Find and extract size chart data from the current page. Looks for size chart "
+            "tables in modals, accordions, tabs, and inline sections. Returns structured "
+            "measurement data keyed by size label. Also checks for fit guide text."
+        ),
+        "input_schema": {
+            "type": "object",
+            "properties": {},
+            "required": [],
+        },
+    },
+    {
         "name": "save_product",
         "description": (
             "Save the final extracted product data. Call this once you have "
@@ -179,6 +207,80 @@ TOOLS = [
                 "gender": {
                     "type": ["string", "null"],
                     "description": "Target gender: 'male', 'female', or 'unisex'. Use null if uncertain.",
+                },
+                "size_fit": {
+                    "type": ["string", "null"],
+                    "description": (
+                        "Size and fit details from the product page (e.g. 'Slim fit. Fits true to size. "
+                        "Model is 6\'2\" wearing size medium.'). Include all bullet points from the "
+                        "Size & Fit section, joined with '. '. Null if not found."
+                    ),
+                },
+                "materials_care": {
+                    "type": ["string", "null"],
+                    "description": (
+                        "Materials and care instructions from the product page (e.g. '75% wool, 25% lyocell. "
+                        "Dry clean only. Imported.'). Include all bullet points from the Materials & Care "
+                        "section, joined with '. '. Null if not found."
+                    ),
+                },
+                "variants": {
+                    "type": ["array", "null"],
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "size": {"type": ["string", "null"]},
+                            "color": {"type": ["string", "null"]},
+                            "availability": {"type": ["boolean", "null"]},
+                            "sku": {"type": ["string", "null"]},
+                            "price_modifier": {"type": ["string", "null"],
+                                "description": "Price if different from main price, e.g. '+$10' or '$139.99'"},
+                        },
+                    },
+                    "description": (
+                        "All product variants extracted from the page. Each variant is a "
+                        "combination of size/color/style with its availability. Extract "
+                        "from dropdowns, swatches, JSON-LD offers, or get_variants tool results."
+                    ),
+                },
+                "size_chart": {
+                    "type": ["object", "null"],
+                    "description": (
+                        "Parsed size chart keyed by size label. Each value is an object of "
+                        "measurements in cm. Example: {\"M\": {\"chest_cm\": 102, \"waist_cm\": 86, "
+                        "\"length_cm\": 72}, \"L\": {\"chest_cm\": 107, ...}}. Use get_size_chart "
+                        "tool output or extract from visible tables. Convert inches to cm (×2.54). "
+                        "Null if no size chart found."
+                    ),
+                },
+                "materials_detail": {
+                    "type": ["array", "null"],
+                    "items": {
+                        "type": "object",
+                        "properties": {
+                            "fiber": {"type": "string", "description": "Fiber/material name, e.g. 'cotton', 'polyester', 'wool'"},
+                            "percentage": {"type": ["number", "null"], "description": "Percentage 0-100, null if not specified"},
+                        },
+                        "required": ["fiber"],
+                    },
+                    "description": (
+                        "Parsed material composition from materials_care text. "
+                        "Example: [{\"fiber\": \"cotton\", \"percentage\": 75}, {\"fiber\": \"polyester\", \"percentage\": 25}]. "
+                        "Null if composition cannot be parsed."
+                    ),
+                },
+                "product_category": {
+                    "type": ["object", "null"],
+                    "properties": {
+                        "category": {"type": "string", "description": "Top-level: fashion, beauty, home, tech, lifestyle"},
+                        "subcategory": {"type": "string", "description": "Specific: 'half zip sweater', 'slim fit jeans', 'running sneakers'"},
+                        "style": {"type": ["string", "null"], "description": "Style descriptor: 'minimal luxury', 'streetwear', 'classic', 'bohemian'"},
+                    },
+                    "description": (
+                        "Hierarchical product categorization. More specific than 'type'. "
+                        "category is broad (fashion/beauty/home), subcategory is specific "
+                        "(e.g. 'half zip sweater' not just 'Top'), style is the aesthetic."
+                    ),
                 },
             },
             "required": ["title", "images"],
@@ -405,9 +507,9 @@ class BrowserSession:
     """Manages a headless Chromium browser via Playwright.
 
     Options:
-        use_stealth: when True, applies playwright-stealth evasions on top of
-            the default fingerprint patches. Used as an automatic fallback
-            after a SITE_BLOCKED first attempt.
+        use_stealth: when True, drives a Patchright-patched Chromium that hides
+            the automation fingerprints Akamai/Cloudflare detect. Used as an
+            automatic fallback after a SITE_BLOCKED first attempt.
         proxy: optional dict {"server": "...", "username": "...", "password": "..."}
             forwarded to chromium.launch(proxy=...). Use a US residential proxy
             for sites that block datacenter IPs (Reiss / Akamai, Amazon, etc.).
@@ -420,9 +522,26 @@ class BrowserSession:
         self.page: Page | None = None
         self.use_stealth = use_stealth
         self.proxy = proxy
+        self._using_patchright = False
 
     def start(self):
-        self._pw = sync_playwright().start()
+        # For the bot-blocked retry (use_stealth=True), drive a Patchright
+        # Chromium instead of vanilla Playwright. Patchright removes the
+        # automation tells Akamai/Cloudflare sensors fingerprint — the CDP
+        # Runtime.enable leak, navigator.webdriver, console.debug hooks — far
+        # more thoroughly than playwright-stealth (which Akamai already
+        # detects). Falls back to vanilla Chromium if patchright isn't present.
+        sync_pw = sync_playwright
+        self._using_patchright = False
+        if self.use_stealth:
+            try:
+                from patchright.sync_api import sync_playwright as _patchright_sync  # type: ignore
+                sync_pw = _patchright_sync
+                self._using_patchright = True
+                print("  🛡️  using Patchright stealth browser")
+            except ImportError:
+                print("  ⚠️  use_stealth=True but patchright is not installed; using vanilla Chromium")
+        self._pw = sync_pw().start()
         launch_kwargs = dict(
             headless=True,
             args=[
@@ -474,24 +593,17 @@ class BrowserSession:
             {"name": "i18n_redirected", "value": "en-us", "domain": ".adidas.com", "path": "/"},
         ])
         self.page = self.context.new_page()
-        # Hide webdriver fingerprint to reduce bot-detection false positives
-        self.page.add_init_script("""
-            Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
-            Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3] });
-            Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
-            window.chrome = { runtime: {} };
-        """)
-        # Optional: layer playwright-stealth evasions for the retry attempt.
-        # Imported lazily so the package is only required when actually used.
-        if self.use_stealth:
-            try:
-                from playwright_stealth import stealth_sync  # type: ignore
-                stealth_sync(self.page)
-                print("  🥷 playwright-stealth applied")
-            except ImportError:
-                print("  ⚠️  use_stealth=True but playwright-stealth is not installed")
-            except Exception as e:
-                print(f"  ⚠️  stealth_sync failed: {e}")
+        # Patchright patches navigator.webdriver / plugins / chrome natively and
+        # consistently; layering our own init-script overrides on top would
+        # create the kind of property inconsistencies Akamai's sensor flags. So
+        # only apply the manual fingerprint shim on the vanilla-Chromium path.
+        if not self._using_patchright:
+            self.page.add_init_script("""
+                Object.defineProperty(navigator, 'webdriver', { get: () => undefined });
+                Object.defineProperty(navigator, 'plugins', { get: () => [1, 2, 3] });
+                Object.defineProperty(navigator, 'languages', { get: () => ['en-US', 'en'] });
+                window.chrome = { runtime: {} };
+            """)
 
     def stop(self):
         if self.browser:
@@ -724,6 +836,271 @@ class BrowserSession:
         self.page.evaluate("window.scrollBy(0, window.innerHeight)")
         self.page.wait_for_timeout(1000)
 
+    def get_variants(self) -> dict:
+        """Extract product variants from dropdowns, swatches, JSON-LD, and Shopify data."""
+        return self.page.evaluate(
+            """() => {
+            const variants = [];
+            const seen = new Set();
+            const addVariant = (v) => {
+                const key = JSON.stringify(v);
+                if (seen.has(key)) return;
+                seen.add(key);
+                variants.push(v);
+            };
+
+            // 1. JSON-LD Product.offers
+            const scripts = document.querySelectorAll('script[type="application/ld+json"]');
+            scripts.forEach(s => {
+                try {
+                    const data = JSON.parse(s.textContent);
+                    const roots = Array.isArray(data) ? data : [data];
+                    roots.forEach(root => {
+                        const items = root && root['@graph'] ? root['@graph'] : [root];
+                        items.forEach(item => {
+                            if (!item) return;
+                            const offers = item.offers
+                                ? (Array.isArray(item.offers) ? item.offers : [item.offers])
+                                : [];
+                            offers.forEach(offer => {
+                                if (offer['@type'] === 'AggregateOffer' && offer.offers) {
+                                    const subOffers = Array.isArray(offer.offers)
+                                        ? offer.offers : [offer.offers];
+                                    subOffers.forEach(so => {
+                                        addVariant({
+                                            size: so.name || so.sku || null,
+                                            color: null,
+                                            availability: so.availability
+                                                ? !so.availability.includes('OutOfStock') : null,
+                                            sku: so.sku || null,
+                                            price_modifier: so.price ? String(so.price) : null,
+                                        });
+                                    });
+                                } else {
+                                    addVariant({
+                                        size: offer.name || offer.sku || null,
+                                        color: null,
+                                        availability: offer.availability
+                                            ? !offer.availability.includes('OutOfStock') : null,
+                                        sku: offer.sku || null,
+                                        price_modifier: offer.price ? String(offer.price) : null,
+                                    });
+                                }
+                            });
+                        });
+                    });
+                } catch (_) {}
+            });
+
+            // 2. Shopify product JSON (window.ShopifyAnalytics or meta tag)
+            try {
+                const shopifyMeta = document.querySelector('script#ProductJson-product-template, script[data-product-json]');
+                if (shopifyMeta) {
+                    const product = JSON.parse(shopifyMeta.textContent);
+                    if (product && product.variants) {
+                        product.variants.forEach(v => {
+                            addVariant({
+                                size: v.option1 || v.title || null,
+                                color: v.option2 || null,
+                                availability: v.available != null ? v.available : null,
+                                sku: v.sku || null,
+                                price_modifier: v.price ? ('$' + (v.price / 100).toFixed(2)) : null,
+                            });
+                        });
+                    }
+                }
+            } catch (_) {}
+
+            // 3. Select dropdowns with size-like options
+            const selects = document.querySelectorAll('select');
+            selects.forEach(sel => {
+                const label = (sel.getAttribute('aria-label') || sel.name || sel.id || '').toLowerCase();
+                const isSize = /size|taille|größe|talla/i.test(label);
+                const isColor = /color|colour|colou?r|farbe/i.test(label);
+                if (!isSize && !isColor) return;
+                Array.from(sel.options).forEach(opt => {
+                    if (!opt.value || opt.value === '' || opt.disabled) return;
+                    const text = opt.textContent.trim();
+                    if (!text || /select|choose|pick/i.test(text)) return;
+                    const v = {
+                        size: isSize ? text : null,
+                        color: isColor ? text : null,
+                        availability: !opt.disabled && !/(sold out|unavailable|out of stock)/i.test(text),
+                        sku: null,
+                        price_modifier: null,
+                    };
+                    addVariant(v);
+                });
+            });
+
+            // 4. Radio buttons / swatches for size/color
+            const radios = document.querySelectorAll('input[type="radio"]');
+            radios.forEach(r => {
+                const name = (r.name || r.getAttribute('data-option-name') || '').toLowerCase();
+                const isSize = /size/i.test(name);
+                const isColor = /color|colour/i.test(name);
+                if (!isSize && !isColor) return;
+                const val = r.value || r.getAttribute('aria-label') || '';
+                if (!val) return;
+                addVariant({
+                    size: isSize ? val : null,
+                    color: isColor ? val : null,
+                    availability: !r.disabled,
+                    sku: null,
+                    price_modifier: null,
+                });
+            });
+
+            // 5. Button swatches (common pattern: <button data-value="M">M</button>)
+            const swatchBtns = document.querySelectorAll(
+                '[data-option-name] button, [class*="swatch"] button, [class*="variant"] button, [class*="size-selector"] button'
+            );
+            swatchBtns.forEach(btn => {
+                const container = btn.closest('[data-option-name]') || btn.closest('[class*="swatch"]');
+                const optName = (container?.getAttribute('data-option-name') || container?.className || '').toLowerCase();
+                const isSize = /size/i.test(optName);
+                const isColor = /color|colour/i.test(optName);
+                const val = btn.getAttribute('data-value') || btn.textContent.trim();
+                if (!val || val.length > 30) return;
+                addVariant({
+                    size: isSize ? val : null,
+                    color: isColor ? val : null,
+                    availability: !btn.disabled && !btn.classList.contains('sold-out')
+                        && !btn.classList.contains('unavailable'),
+                    sku: null,
+                    price_modifier: null,
+                });
+            });
+
+            return {variants: variants.slice(0, 100), count: variants.length};
+        }"""
+        )
+
+    def get_size_chart(self) -> dict:
+        """Find and extract size chart tables from modals, accordions, and inline content."""
+        return self.page.evaluate(
+            """() => {
+            const result = {size_chart: null, fit_guide_text: null, source: null};
+
+            // Helper: parse a <table> element into {sizeLabel: {measurement: value}}
+            const parseTable = (table) => {
+                const rows = Array.from(table.querySelectorAll('tr'));
+                if (rows.length < 2) return null;
+
+                const headers = Array.from(rows[0].querySelectorAll('th, td'))
+                    .map(c => c.textContent.trim().toLowerCase());
+                if (headers.length < 2) return null;
+
+                // Detect orientation: sizes in first column vs sizes in header row
+                const sizePatterns = /^(xxs|xs|s|m|l|xl|xxl|xxxl|2xl|3xl|4xl|5xl|\\d{1,2}|\\d{2}[.-]\\d{2}|one size|os|free)$/i;
+                const sizesInHeaders = headers.slice(1).some(h => sizePatterns.test(h));
+
+                const chart = {};
+
+                if (sizesInHeaders) {
+                    // Sizes are column headers, measurements are row labels
+                    const sizeLabels = headers.slice(1);
+                    for (let r = 1; r < rows.length; r++) {
+                        const cells = Array.from(rows[r].querySelectorAll('td, th'));
+                        const measureName = (cells[0]?.textContent || '').trim().toLowerCase()
+                            .replace(/[^a-z0-9 ]/g, '').replace(/\\s+/g, '_');
+                        if (!measureName) continue;
+                        for (let c = 1; c < cells.length && c <= sizeLabels.length; c++) {
+                            const val = parseFloat(cells[c]?.textContent?.replace(/[^0-9.]/g, '') || '');
+                            if (isNaN(val)) continue;
+                            const sizeKey = sizeLabels[c - 1].toUpperCase();
+                            if (!chart[sizeKey]) chart[sizeKey] = {};
+                            chart[sizeKey][measureName + '_cm'] = val;
+                        }
+                    }
+                } else {
+                    // Sizes are in the first column, measurements are headers
+                    const measureNames = headers.slice(1).map(h =>
+                        h.replace(/[^a-z0-9 ]/g, '').replace(/\\s+/g, '_')
+                    );
+                    for (let r = 1; r < rows.length; r++) {
+                        const cells = Array.from(rows[r].querySelectorAll('td, th'));
+                        const sizeLabel = (cells[0]?.textContent || '').trim().toUpperCase();
+                        if (!sizeLabel || !sizePatterns.test(sizeLabel)) continue;
+                        chart[sizeLabel] = {};
+                        for (let c = 1; c < cells.length && c <= measureNames.length; c++) {
+                            const val = parseFloat(cells[c]?.textContent?.replace(/[^0-9.]/g, '') || '');
+                            if (!isNaN(val) && measureNames[c - 1]) {
+                                chart[sizeLabel][measureNames[c - 1] + '_cm'] = val;
+                            }
+                        }
+                    }
+                }
+
+                return Object.keys(chart).length > 0 ? chart : null;
+            };
+
+            // Strategy 1: Find size chart tables in visible DOM
+            const tables = document.querySelectorAll('table');
+            for (const table of tables) {
+                const ctx = (table.closest('[class*="size"]') || table.closest('[id*="size"]')
+                    || table.closest('[data-testid*="size"]') || table.parentElement);
+                const ctxText = (ctx?.className || '') + ' ' + (ctx?.id || '');
+                if (/size[-_ ]?(chart|guide|table|fit)/i.test(ctxText)
+                    || /measurement/i.test(ctxText)) {
+                    const parsed = parseTable(table);
+                    if (parsed) {
+                        result.size_chart = parsed;
+                        result.source = 'html_table';
+                        break;
+                    }
+                }
+            }
+
+            // Strategy 2: If not found by context, try all tables with size-like content
+            if (!result.size_chart) {
+                for (const table of tables) {
+                    const text = table.textContent.toLowerCase();
+                    if (/(chest|bust|waist|hip|length|shoulder|inseam|sleeve)/i.test(text)) {
+                        const parsed = parseTable(table);
+                        if (parsed) {
+                            result.size_chart = parsed;
+                            result.source = 'html_table_fuzzy';
+                            break;
+                        }
+                    }
+                }
+            }
+
+            // Strategy 3: Look for size chart data in hidden modals / dialog elements
+            if (!result.size_chart) {
+                const modals = document.querySelectorAll(
+                    '[class*="size-chart"] table, [class*="size-guide"] table, '
+                    + '[id*="size-chart"] table, [id*="size-guide"] table, '
+                    + 'dialog table, [role="dialog"] table'
+                );
+                for (const table of modals) {
+                    const parsed = parseTable(table);
+                    if (parsed) {
+                        result.size_chart = parsed;
+                        result.source = 'modal_table';
+                        break;
+                    }
+                }
+            }
+
+            // Extract fit guide text (separate from size chart)
+            const fitSections = document.querySelectorAll(
+                '[class*="fit-guide"], [class*="fit_guide"], [class*="size-fit"], '
+                + '[data-testid*="fit"], [id*="fit-guide"], [id*="size-fit"]'
+            );
+            for (const sec of fitSections) {
+                const text = sec.textContent.trim();
+                if (text.length > 20 && text.length < 2000) {
+                    result.fit_guide_text = text.replace(/\\s+/g, ' ').slice(0, 500);
+                    break;
+                }
+            }
+
+            return result;
+        }"""
+        )
+
     def resolve_google_shopping(self, url: str) -> str:
         """Navigate to a Google Shopping product page and return the actual
         merchant product URL (the "Most popular" / first buying option).
@@ -787,13 +1164,31 @@ class BrowserSession:
                 f"Could not find a merchant offer link on Google Shopping page: {url}"
             )
 
-        # Follow the candidate URL -- Google's /url? and /aclk? endpoints
-        # redirect to the real merchant URL. A direct merchant URL just
-        # navigates straight there.
+        # If the candidate is already a direct merchant URL (not a Google
+        # redirect), return it without navigating -- many merchant sites
+        # (e.g. shop.lululemon.com) reject Playwright with HTTP2 protocol
+        # errors, but we already have the canonical URL we need.
+        candidate_host = (urlparse(candidate).hostname or "").lower()
+        is_google_redirect = (
+            "google.com" in candidate_host
+            and ("/url" in candidate or "/aclk" in candidate)
+        )
+        if not is_google_redirect:
+            return candidate
+
+        # Follow Google's /url? or /aclk? redirect to resolve the real
+        # merchant URL.
         try:
             self.page.goto(candidate, wait_until="domcontentloaded", timeout=60_000)
             self.page.wait_for_timeout(2000)
         except Exception as e:
+            # Navigation failed (often HTTP2 / bot protection on the merchant
+            # site). Fall back to the candidate URL if it already resolved
+            # away from google.com via the redirect chain.
+            current_url = self.page.url
+            current_host = (urlparse(current_url).hostname or "").lower()
+            if current_url and "google.com" not in current_host:
+                return current_url
             raise RuntimeError(
                 f"Failed to follow Google Shopping merchant link {candidate}: {e}"
             )
@@ -867,6 +1262,14 @@ def execute_tool(browser: BrowserSession, name: str, input: dict) -> list:
     if name == "scroll_down":
         browser.scroll_down()
         return [{"type": "text", "text": "Scrolled down one viewport."}]
+
+    if name == "get_variants":
+        result = browser.get_variants()
+        return [{"type": "text", "text": json.dumps(result, indent=2)}]
+
+    if name == "get_size_chart":
+        result = browser.get_size_chart()
+        return [{"type": "text", "text": json.dumps(result, indent=2)}]
 
     if name == "save_product":
         return [{"type": "text", "text": "Product data received. Saving…"}]
@@ -961,24 +1364,28 @@ def save_to_supabase(
 
 SYSTEM_PROMPT = """\
 You are a product data extraction agent. You control a real browser.
-Your job is to visit a product page, inspect it, and extract structured product data.
+Your job is to visit a product page, inspect it, and extract COMPREHENSIVE structured
+product data — not just the basics, but variants, size charts, materials breakdown,
+and categorization that helps users make purchasing decisions.
 
 Workflow:
 1. visit_page -- load the URL and read metadata / JSON-LD / visible text
 2. take_screenshot -- visually inspect the page to verify prices, sale badges, etc.
 3. get_all_images -- collect product image URLs
-4. (optional) get_page_html -- if prices or details are missing from step 1
-5. (optional) scroll_down + take_screenshot -- if content is below the fold
-6. save_product -- once all data is gathered, call this with the final values
+4. get_variants -- extract all sizes, colors, and variant combinations
+5. get_size_chart -- find and parse size chart tables with measurements
+6. (optional) get_page_html -- if prices or details are missing from step 1
+7. (optional) scroll_down + take_screenshot -- if content is below the fold
+8. save_product -- once all data is gathered, call this with the final values
 
 Rules:
 - Extract ACTUAL data from the page. Never guess or fabricate.
 - Include currency symbols in price strings (e.g. "$129.99").
 - If there is both an original price and a sale/discounted price, capture both.
 - **ALWAYS extract product type and gender** for quality scoring:
-  * TYPE: categorize as specifically as possible (e.g., "Sneakers" not "Shoes", 
+  * TYPE: categorize as specifically as possible (e.g., "Sneakers" not "Shoes",
     "Hoodie" not "Top", "Jeans" not "Pants" when applicable)
-  * GENDER: infer from product name, description, URL, or visual cues. Use 'male', 
+  * GENDER: infer from product name, description, URL, or visual cues. Use 'male',
     'female', or 'unisex'. If truly uncertain, use null.
 - IMAGE SELECTION (strict):
   * `get_all_images` returns `{ canonical: [...], page_images: [...] }`.
@@ -1008,6 +1415,52 @@ Rules:
     have 3-8 images showing different angles, colors, or styled views. Include
     all of them -- do not limit to just 1-2 images.
 - Keep description concise (1-3 sentences).
+
+VARIANT EXTRACTION (critical for sizing intelligence):
+- **ALWAYS call get_variants** to extract all available sizes, colors, and combinations.
+- Include the variants array in save_product even if only sizes are found (set color to null).
+- For each variant, capture availability (in stock / sold out).
+- If get_variants returns empty results, check visit_page text and get_page_html for
+  size/color selectors that the JS extraction may have missed. List them manually.
+
+SIZE CHART EXTRACTION:
+- **ALWAYS call get_size_chart** to look for measurement tables.
+- If get_size_chart finds a table, include it as the size_chart field in save_product.
+- If measurements are in inches, convert to cm (multiply by 2.54) and note the conversion.
+- Common measurement keys: chest_cm, waist_cm, hip_cm, shoulder_cm, length_cm,
+  sleeve_cm, inseam_cm, neck_cm, rise_cm. Use snake_case with _cm suffix.
+- If no structured table exists but size/fit text mentions specific measurements
+  (e.g. "chest 40 inches"), include those in the size_chart as best-effort data.
+
+MATERIALS & COMPOSITION:
+- Extract materials_care as the full text (existing behavior).
+- ALSO parse materials_detail: break composition into [{fiber, percentage}] array.
+  Examples: "75% cotton, 25% polyester" → [{"fiber":"cotton","percentage":75},{"fiber":"polyester","percentage":25}]
+  "100% Silk" → [{"fiber":"silk","percentage":100}]
+  If percentages aren't given, list fibers with null percentages.
+
+PRODUCT CATEGORIZATION:
+- In addition to the flat "type" field, populate product_category with:
+  * category: broad grouping (fashion, beauty, home, tech, lifestyle)
+  * subcategory: specific type (e.g. "half zip sweater", "slim fit chinos", "running sneakers")
+  * style: aesthetic descriptor (e.g. "minimal luxury", "streetwear", "classic", "bohemian", "athleisure")
+
+- **Extract size_fit and materials_care by recognising what the data IS, not what it's called**:
+  * size_fit → any content that describes how the garment fits the body: fit type
+    (slim/relaxed/oversized), size model info ("Model is 6'2\" wearing M"), inseam,
+    cut name, silhouette label, "fits true to size" notes, size chart references.
+    Section labels vary widely: "Size & Fit", "Fit Guide", "Silhouette", "Fit Notes",
+    "How it fits", dimension tables, etc. — recognise the content, not the label.
+  * materials_care → any content that describes what the item is made of or how to
+    care for it: fabric composition ("75% cotton, 25% polyester"), fibre trade names
+    (Lenzing™ Lyocell, TENCEL™), wash/dry/iron instructions, "dry clean only",
+    country of origin. Section labels vary: "Materials & Care", "Fabric & Care",
+    "Composition", "Garment Details", "Details", a spec table with Care/Composition
+    rows, fabric icons, etc. — recognise the content, not the label.
+  * Check visit_page text content and get_page_html first; scroll once if needed.
+  * Join all relevant bullet points / table rows with ". " into a single string.
+  * Do NOT keep scrolling or use extra turns just to hunt for these sections —
+    they are bonus fields. If not found after one look, use null and call save_product.
 - Use null for any field that cannot be determined.
 
 IMPORTANT -- non-product pages:
@@ -1055,6 +1508,64 @@ def _proxy_from_env() -> dict | None:
     return proxy
 
 
+# Path to the rotating residential proxy list (one "host:port:username:password"
+# entry per line). Baked into the Modal image at /root; override via env for
+# local runs. Each line is a distinct residential exit IP, so picking a random
+# line per attempt rotates the IP and defeats IP-based bot walls (Akamai etc.).
+_PROXY_LIST_PATH = os.environ.get(
+    "SCRAPER_PROXY_LIST",
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "residential-proxies.txt"),
+)
+
+_proxy_pool_cache: list[dict] | None = None
+
+
+def _load_proxy_pool() -> list[dict]:
+    """Parse the residential proxy list into Playwright proxy dicts.
+
+    Each line ``host:port:username:password`` → ``{"server": "http://host:port",
+    "username": ..., "password": ...}``. Lines that are blank, commented (#),
+    or malformed are skipped. The result is cached for the life of the process.
+    Returns an empty list if the file is missing (callers fall back to
+    ``_proxy_from_env``).
+    """
+    global _proxy_pool_cache
+    if _proxy_pool_cache is not None:
+        return _proxy_pool_cache
+    pool: list[dict] = []
+    try:
+        with open(_PROXY_LIST_PATH, "r") as f:
+            for line in f:
+                line = line.strip()
+                if not line or line.startswith("#"):
+                    continue
+                parts = line.split(":")
+                if len(parts) < 2:
+                    continue
+                host, port = parts[0], parts[1]
+                entry = {"server": f"http://{host}:{port}"}
+                if len(parts) >= 4 and parts[2]:
+                    entry["username"] = parts[2]
+                    entry["password"] = parts[3]
+                pool.append(entry)
+    except FileNotFoundError:
+        pool = []
+    _proxy_pool_cache = pool
+    if pool:
+        print(f"🌐 Loaded {len(pool)} residential proxies from {_PROXY_LIST_PATH}")
+    return pool
+
+
+def _random_proxy() -> dict | None:
+    """Pick a random residential proxy from the rotating pool. Falls back to the
+    single ``SCRAPER_PROXY_SERVER`` env var, then None if neither is configured.
+    """
+    pool = _load_proxy_pool()
+    if pool:
+        return random.choice(pool)
+    return _proxy_from_env()
+
+
 def run_agent(
     product_url: str,
     look_id: str | None = None,
@@ -1078,17 +1589,31 @@ def run_agent(
     except RuntimeError as e:
         if "SITE_BLOCKED" not in str(e).upper():
             raise
-        proxy = _proxy_from_env()
-        # Always retry with stealth; proxy only if configured. If neither
-        # gives us anything new (no proxy AND stealth not installed) we'd
-        # just fail the same way -- but stealth alone often clears
-        # Cloudflare/Akamai checks, so it's worth the attempt.
-        print(f"\n🔁 First attempt blocked ({e}); retrying with stealth"
-              f"{' + proxy' if proxy else ''}…\n")
-        return _run_agent_attempt(
-            product_url, look_id=look_id, save=save, on_save=on_save,
-            use_stealth=True, proxy=proxy,
-        )
+        # The direct attempt was blocked (Akamai/Cloudflare/etc). Retry with
+        # stealth + a residential proxy. A single residential exit IP can itself
+        # be flaky or already rate-limited, so when a rotating pool is available
+        # we cycle through up to 3 distinct exit IPs before giving up. Without a
+        # pool we still try stealth once (often clears soft Cloudflare checks).
+        pool = _load_proxy_pool()
+        max_retries = 3 if pool else 1
+        last_err: Exception = e
+        for i in range(max_retries):
+            proxy = _random_proxy()
+            label = (proxy.get("username") or proxy.get("server")) if proxy else "stealth-only"
+            print(f"\n🔁 First attempt blocked ({e}); proxied retry "
+                  f"{i + 1}/{max_retries} via {label}…\n")
+            try:
+                return _run_agent_attempt(
+                    product_url, look_id=look_id, save=save, on_save=on_save,
+                    use_stealth=True, proxy=proxy,
+                )
+            except RuntimeError as retry_err:
+                if "SITE_BLOCKED" not in str(retry_err).upper():
+                    raise
+                last_err = retry_err
+                if not proxy:
+                    break  # nothing left to rotate; further stealth retries won't help
+        raise last_err
 
 
 def _run_agent_attempt(
@@ -1110,6 +1635,8 @@ def _run_agent_attempt(
     nudge_count = 0
     MAX_NUDGES = 3
     last_agent_reply: str | None = None
+    consecutive_scrolls = 0
+    MAX_CONSECUTIVE_SCROLLS = 3
 
     # Fast-fail on URLs that obviously aren't product pages (Google search
     # results, bare homepages, etc.). Saves a Claude call per row.
@@ -1157,7 +1684,9 @@ def _run_agent_attempt(
                         messages=messages,
                     )
                     if force_save and not saved_product:
-                        create_kwargs["tool_choice"] = {"type": "any"}
+                        # Force specifically save_product -- "any" still lets
+                        # the agent pick scroll_down and burn the remaining turns.
+                        create_kwargs["tool_choice"] = {"type": "tool", "name": "save_product"}
                     response = client.messages.create(**create_kwargs)
                     break
                 except anthropic.RateLimitError as e:
@@ -1217,6 +1746,13 @@ def _run_agent_attempt(
                 tool_name = block.name
                 tool_input = block.input
                 print(f"  🔧 {tool_name}({json.dumps(tool_input)[:100]})")
+
+                # Track consecutive scrolls; after the cap, inject a user
+                # message telling the agent to stop scrolling and save.
+                if tool_name == "scroll_down":
+                    consecutive_scrolls += 1
+                else:
+                    consecutive_scrolls = 0
 
                 if tool_name == "save_product":
                     # Sanity check: a real product page virtually always has at
@@ -1289,6 +1825,14 @@ def _run_agent_attempt(
                         "images": public_images,
                         "image_missing_reason": image_missing_reason,
                         "availability": tool_input.get("availability"),
+                        "type": tool_input.get("type"),
+                        "gender": tool_input.get("gender"),
+                        "size_fit": tool_input.get("size_fit"),
+                        "materials_care": tool_input.get("materials_care"),
+                        "variants": tool_input.get("variants"),
+                        "size_chart": tool_input.get("size_chart"),
+                        "materials_detail": tool_input.get("materials_detail"),
+                        "product_category": tool_input.get("product_category"),
                         "scraped_at": datetime.now(timezone.utc).isoformat(),
                     }
 
@@ -1326,6 +1870,20 @@ def _run_agent_attempt(
                     )
 
             messages.append({"role": "user", "content": tool_results})
+
+            # If the agent has been scrolling too long without saving, inject
+            # a hard stop so it doesn't burn all remaining turns.
+            if consecutive_scrolls >= MAX_CONSECUTIVE_SCROLLS and not saved_product:
+                consecutive_scrolls = 0  # reset so we don't spam
+                messages.append({
+                    "role": "user",
+                    "content": (
+                        "You have scrolled the page several times. "
+                        "Stop scrolling now and call save_product immediately with "
+                        "whatever data you have collected so far. "
+                        "Use null for any fields you could not find."
+                    ),
+                })
 
             if saved_product:
                 break

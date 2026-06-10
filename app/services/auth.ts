@@ -184,11 +184,20 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
   try {
     const { data: profile } = await supabase
       .from('profiles')
-      .select('role, gender, full_name')
+      .select('role, gender, full_name, avatar_url')
       .eq('id', session.user.id)
       .single();
     if (profile?.role) {
       authUser.role = profile.role as UserRole;
+    }
+    // Prefer profiles.avatar_url over the OAuth-provider's metadata
+    // copy. After the user uploads a new avatar we update the
+    // profiles row but cannot rewrite user_metadata client-side, so
+    // the metadata copy goes stale forever. Reading profiles here
+    // means every getCurrentUser() refresh picks up the latest
+    // upload.
+    if (profile?.avatar_url) {
+      authUser.avatarUrl = profile.avatar_url as string;
     }
     // First-load gender backfill: if the profile has a name but no
     // gender signal, infer once from the first name and persist.
@@ -214,6 +223,16 @@ export async function signOut(): Promise<void> {
   if (!supabase) return;
   clearAuthCache();
   await supabase.auth.signOut();
+}
+
+/**
+ * Force the next getCurrentUser() to re-fetch from the profiles row
+ * instead of the sessionStorage cache. Used after the signed-in user
+ * uploads a new avatar — without this the UserMenu's `user.avatarUrl`
+ * stays on the cached pre-upload URL until the tab is reloaded.
+ */
+export function invalidateAuthCache(): void {
+  clearAuthCache();
 }
 
 export function onAuthStateChange(callback: (user: AuthUser | null) => void) {

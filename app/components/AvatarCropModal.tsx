@@ -43,6 +43,42 @@ const PIXEL_RATIO = typeof window !== 'undefined' ? Math.min(window.devicePixelR
 
 interface ImageDims { w: number; h: number }
 
+/** Decode a blob into an HTMLImageElement, downscale to fit `maxLong` on
+ *  the long edge, and return a JPEG blob at the given quality. Used to
+ *  optimize every uploaded avatar before the crop UI sees it — phone
+ *  photos can easily be 12-30 MB; the crop modal + Supabase storage are
+ *  both happier with something near 2 MB. */
+async function downscaleImage(input: Blob, maxLong: number, quality: number): Promise<Blob> {
+  const url = URL.createObjectURL(input);
+  try {
+    const img = await new Promise<HTMLImageElement>((resolve, reject) => {
+      const el = new Image();
+      el.onload = () => resolve(el);
+      el.onerror = () => reject(new Error('decode'));
+      el.src = url;
+    });
+    const long = Math.max(img.naturalWidth, img.naturalHeight);
+    if (long <= maxLong && input.size <= 4 * 1024 * 1024) {
+      // Small enough already — skip the canvas round-trip.
+      return input;
+    }
+    const scale = long > maxLong ? maxLong / long : 1;
+    const w = Math.round(img.naturalWidth * scale);
+    const h = Math.round(img.naturalHeight * scale);
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return input;
+    ctx.drawImage(img, 0, 0, w, h);
+    return await new Promise<Blob>((resolve) => {
+      canvas.toBlob(b => resolve(b || input), 'image/jpeg', quality);
+    });
+  } finally {
+    URL.revokeObjectURL(url);
+  }
+}
+
 function clamp(v: number, lo: number, hi: number): number {
   return Math.max(lo, Math.min(hi, v));
 }
@@ -56,6 +92,7 @@ export function AvatarCropModal({
   onClose,
 }: AvatarCropModalProps) {
   const [imgDims, setImgDims] = useState<ImageDims | null>(null);
+  const [loadError, setLoadError] = useState(false);
   const [zoom, setZoom] = useState(1);
   const [offset, setOffset] = useState<{ x: number; y: number }>({ x: 0, y: 0 });
   const [phase, setPhase] = useState<'enter' | 'open' | 'saving' | 'success' | 'leave'>('enter');
@@ -64,6 +101,9 @@ export function AvatarCropModal({
 
   const stageRef = useRef<HTMLDivElement | null>(null);
   const imgElRef = useRef<HTMLImageElement | null>(null);
+  // iOS Safari fires pointerdown → click on <button>. Guard against
+  // double-invocation of save/close when a pointerdown already ran.
+  const btnPointerRef = useRef<'save' | 'close' | null>(null);
 
   // Phase 8: open / leave animation drives via the className on the
   // wrapper. Set 'open' on the next frame so the CSS transition fires.
@@ -252,7 +292,12 @@ export function AvatarCropModal({
         setPhase('leave');
         window.setTimeout(onClose, 240);
       }, 600);
-    } catch {
+    } catch (err) {
+      // Surface Save failures so the user sees an error instead of a
+      // silent revert to the open state. Most common path here is a
+      // storage RLS denial or a transient network hiccup on the
+      // updateUserAvatar profiles update.
+      console.error('[avatar-modal] save failed:', err);
       setInternalBusy(false);
       setPhase('open');
     }
@@ -284,12 +329,10 @@ export function AvatarCropModal({
   return createPortal(
     <div
       className={`avatar-modal-backdrop avatar-modal--${phase}`}
-      // Only close when the click landed *directly* on the backdrop.
-      // A child element (image drag, slider, button) bubbling its
-      // click up to here would otherwise dismiss the modal — which
-      // matters most when the file dialog returns control via a
-      // synthesized click on whatever was beneath the user's finger.
-      onClick={(e) => {
+      // Use onPointerDown (not onClick) so iOS Safari fires reliably on
+      // plain div elements. Avoids the synthesized post-dialog click
+      // that iOS fires after the native file picker closes.
+      onPointerDown={(e) => {
         if (e.target !== e.currentTarget) return;
         if (!isBusy && phase === 'open') handleClose();
       }}
@@ -298,7 +341,7 @@ export function AvatarCropModal({
       aria-label="Crop your avatar"
       style={flipStyle}
     >
-      <div className="avatar-modal" onClick={(e) => e.stopPropagation()}>
+      <div className="avatar-modal" onPointerDown={(e) => e.stopPropagation()}>
         <header className="avatar-modal-head">
           <h2>Crop your avatar</h2>
           <button
@@ -327,7 +370,8 @@ export function AvatarCropModal({
             src={src}
             alt=""
             draggable={false}
-            onLoad={onImgLoad}
+            onLoad={() => { setLoadError(false); onImgLoad(); }}
+            onError={() => setLoadError(true)}
             className="avatar-modal-img"
             style={{
               transform: `translate(-50%, -50%) translate3d(${offset.x}px, ${offset.y}px, 0) scale(${displayedScale})`,
@@ -350,9 +394,31 @@ export function AvatarCropModal({
           <svg className="avatar-modal-success-check" viewBox="0 0 24 24" aria-hidden="true">
             <polyline points="5 13 10 18 19 7" pathLength={100} />
           </svg>
+
+          {/* The chosen image couldn't be decoded by this browser (e.g. a
+              HEIC on a non-Safari engine where the transcode also failed).
+              Surface it instead of leaving a blank circle the user can't
+              crop. */}
+          {loadError && (
+            <div className="avatar-modal-loaderr" role="alert">
+              <span>Couldn’t open that photo.<br />Try a JPEG or PNG.</span>
+            </div>
+          )}
         </div>
 
-        <div className="avatar-modal-zoom">
+        {/* Belt-and-suspenders stopPropagation on the zoom rail —
+            tapping the magnifier icons at either end was bubbling
+            taps that landed close to the modal edge through to the
+            backdrop, dismissing the dialog. Stop pointer events here
+            so even an off-pixel tap on the +/- icons stays inside
+            the modal. */}
+        <div
+          className="avatar-modal-zoom"
+          onPointerDown={(e) => e.stopPropagation()}
+          onMouseDown={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+          onClick={(e) => e.stopPropagation()}
+        >
           <span aria-hidden="true" className="avatar-modal-zoom-icon avatar-modal-zoom-icon-min">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round"><circle cx="11" cy="11" r="6" /><line x1="8" y1="11" x2="14" y2="11" /></svg>
           </span>
@@ -374,14 +440,16 @@ export function AvatarCropModal({
         <footer className="avatar-modal-foot">
           <button
             className="avatar-modal-cancel"
-            onClick={handleClose}
+            onPointerDown={() => { btnPointerRef.current = 'close'; handleClose(); }}
+            onClick={() => { if (btnPointerRef.current === 'close') { btnPointerRef.current = null; return; } handleClose(); }}
             disabled={isBusy}
           >
             Cancel
           </button>
           <button
             className={`avatar-modal-save${isBusy ? ' is-busy' : ''}`}
-            onClick={handleSave}
+            onPointerDown={() => { if (isBusy || !imgDims) return; btnPointerRef.current = 'save'; handleSave(); }}
+            onClick={() => { if (btnPointerRef.current === 'save') { btnPointerRef.current = null; return; } handleSave(); }}
             disabled={isBusy || !imgDims}
           >
             <span className="avatar-modal-save-label">
@@ -428,6 +496,10 @@ export function AvatarUpload({
   // either drops a file onto the zone or picks one through the
   // browser's file dialog. Either path funnels through processFile().
   const [pickerOpen, setPickerOpen] = useState(false);
+  // Broken-image guard for the trigger avatar — a 404/expired currentUrl
+  // drops to the initial instead of the browser's broken-image glyph.
+  const [imgErrored, setImgErrored] = useState(false);
+  useEffect(() => { setImgErrored(false); }, [currentUrl]);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const buttonRef = useRef<HTMLButtonElement | null>(null);
 
@@ -436,25 +508,43 @@ export function AvatarUpload({
     if (buttonRef.current) {
       setOriginRect(buttonRef.current.getBoundingClientRect());
     }
-    setPickerOpen(true);
+    // Open the native file picker straight away — no in-app drag-zone
+    // modal, no preview step we control. iOS Safari requires the
+    // .click() to fire from a user-gesture handler, which this one is.
+    //
+    // IMPORTANT (iOS Limited Photo Library): when the user has granted
+    // Safari "Selected Photos" access instead of "Full Access" (iOS
+    // Settings → Privacy → Photos → Safari), iOS shows its own
+    // confirmation screen with a timestamp + ✓/✗ buttons AFTER the
+    // user picks an image. That screen is OS-level and CANNOT be
+    // suppressed from web JS — there's no input attribute or API that
+    // skips it. To bypass it the user must grant "Full Access" in iOS
+    // Settings. Our flow is already as direct as web allows: tap →
+    // OS picker → (iOS confirmation if Limited) → our circle crop.
+    fileInputRef.current?.click();
   }, [userId]);
 
   // Shared file-handling pipeline used by both drag-drop and file-input
   // paths inside the drop modal. Validates → HEIC-decodes if needed →
   // creates the object URL → flips state so the crop modal renders.
   const processFile = useCallback(async (file: File) => {
-    const ok = ['image/jpeg', 'image/png', 'image/webp', 'image/heic', 'image/heif'].includes(file.type)
-      || /\.(jpe?g|png|webp|heic|heif)$/i.test(file.name);
-    if (!ok) {
+    // Be permissive about what counts as an image. iOS often hands the
+    // file input an empty MIME type (or an unexpected one) for Photos
+    // Library picks, and rejecting those was the bug where choosing a
+    // library photo never opened the crop screen. Accept anything that
+    // looks like an image by type OR extension OR has no type at all.
+    const looksLikeImage =
+      file.type.startsWith('image/')
+      || /\.(jpe?g|png|webp|heic|heif|gif|bmp|tiff?)$/i.test(file.name)
+      || !file.type;
+    if (!looksLikeImage) {
       setError('Use a JPEG, PNG, WebP, or HEIC image.');
       window.setTimeout(() => setError(null), 3000);
       return;
     }
-    if (file.size > 10 * 1024 * 1024) {
-      setError('That image is too large (10 MB max).');
-      window.setTimeout(() => setError(null), 3000);
-      return;
-    }
+    // No size rejection — modern phone photos are routinely 12-30 MB. We
+    // always downscale to ≤ 2048px on the long edge below, so any input
+    // size works and the upload stays small.
 
     let blob: Blob = file;
     if (
@@ -462,15 +552,29 @@ export function AvatarUpload({
       file.type === 'image/heif' ||
       /\.(heic|heif)$/i.test(file.name)
     ) {
+      // Try to transcode HEIC → JPEG for browsers that can't decode HEIC
+      // (Chrome / Firefox / Android). On Safari this often isn't needed —
+      // it renders HEIC natively — so a heic2any failure must NOT abort
+      // the flow: fall through with the original file and let the crop
+      // modal try to display it. Aborting here was why iPhone (HEIC)
+      // photos never reached the crop screen.
       try {
         const { default: heic2any } = await import('heic2any');
         const out = await heic2any({ blob: file, toType: 'image/jpeg', quality: 0.95 });
         blob = Array.isArray(out) ? out[0] : (out as Blob);
       } catch {
-        setError('Couldn’t read that HEIC. Try a JPEG.');
-        window.setTimeout(() => setError(null), 3000);
-        return;
+        blob = file; // keep original — Safari can still render it
       }
+    }
+
+    // Always optimize: decode → downscale to 2048px max → JPEG at 0.9.
+    // Keeps the crop modal snappy on big phone photos and removes the
+    // "image too large" failure mode entirely.
+    try {
+      blob = await downscaleImage(blob, 2048, 0.9);
+    } catch {
+      /* If decode fails, fall through with the original blob; the crop
+         modal can still handle it most of the time. */
     }
 
     setPickedSrc(URL.createObjectURL(blob));
@@ -492,15 +596,36 @@ export function AvatarUpload({
         const { updateUserAvatar } = await import('~/services/profiles');
         const { url, error: err } = await updateUserAvatar(userId, cropped);
         if (err || !url) {
+          console.error('[avatar-upload] save failed:', err);
           setError(err || 'Upload failed.');
           window.setTimeout(() => setError(null), 3500);
           throw new Error(err);
         }
+        // Bust the looks/creators cache so the next consumer fetch
+        // re-pulls the freshly-uploaded avatar into the creator chip
+        // on every look card. Without this, the in-memory looksPromise
+        // keeps serving stale rows from before the upload.
+        try {
+          const { invalidateLooksCache } = await import('~/services/looks');
+          invalidateLooksCache();
+        } catch { /* non-fatal */ }
         // Cache-bust so the rendered <img> picks up the new file
         // even when the path collides (it shouldn't, since we
         // timestamp it, but belt-and-suspenders).
         const cacheBusted = `${url}?t=${Date.now()}`;
         onUploaded(cacheBusted);
+        // Repaint every useAuth() consumer with the fresh avatar.
+        // Skip when an admin is uploading on behalf of another user
+        // — that mutation doesn't change the signed-in admin's own
+        // avatar so the auth singleton stays correct.
+        try {
+          const { supabase } = await import('~/utils/supabase');
+          const { data: { user: signedInUser } } = await supabase!.auth.getUser();
+          if (signedInUser?.id === userId) {
+            const { refreshAuthUser } = await import('~/hooks/useAuth');
+            refreshAuthUser();
+          }
+        } catch { /* non-fatal */ }
       } finally {
         setBusy(false);
       }
@@ -523,8 +648,8 @@ export function AvatarUpload({
         onClick={handleClick}
         aria-label="Change profile photo"
       >
-        {currentUrl ? (
-          <img src={currentUrl} alt="" className="avatar-upload-img" />
+        {currentUrl && !imgErrored ? (
+          <img src={currentUrl} alt="" className="avatar-upload-img" onError={() => setImgErrored(true)} />
         ) : (
           <span className="avatar-upload-fallback">
             {fallbackInitial ? fallbackInitial.toUpperCase() : '·'}
@@ -543,6 +668,10 @@ export function AvatarUpload({
         accept="image/jpeg,image/png,image/webp,image/heic,image/heif"
         hidden
         onChange={handleFileChange}
+        // Belt-and-suspenders: some browsers / extensions render the
+        // native "Choose File" button text even with the hidden
+        // attribute. Inline style guarantees it never paints.
+        style={{ display: 'none', position: 'absolute', width: 0, height: 0 }}
       />
       {pickerOpen && (
         <FileDropModal
@@ -588,6 +717,10 @@ function FileDropModal({
 }) {
   const [phase, setPhase] = useState<'enter' | 'open' | 'leave'>('enter');
   const [dragOver, setDragOver] = useState(false);
+  // Guard against iOS double-trigger: onPointerDown fires on touch start,
+  // then click fires again after the file picker closes. Track whether
+  // onPick was already called via pointerdown so onClick can skip it.
+  const pointerPickedRef = useRef(false);
 
   useEffect(() => {
     const t = window.setTimeout(() => setPhase('open'), 16);
@@ -631,18 +764,18 @@ function FileDropModal({
   return createPortal(
     <div
       className={`avatar-pick-backdrop avatar-pick--${phase}`}
-      // Only close on a direct backdrop click. Opening the file
-      // dialog via the Browse button or clicking the drop zone
-      // shouldn't dismiss the modal even if the synthesized
-      // post-dialog click lands on something inside the panel.
-      onClick={(e) => {
+      // Use onPointerDown (not onClick) so iOS Safari fires reliably on
+      // plain div elements. Also avoids the synthetic post-dialog click
+      // that iOS fires after the native file picker closes, which would
+      // otherwise land here and dismiss the modal unexpectedly.
+      onPointerDown={(e) => {
         if (e.target === e.currentTarget) close();
       }}
       role="dialog"
       aria-modal="true"
       aria-label="Choose a profile photo"
     >
-      <div className="avatar-pick" onClick={(e) => e.stopPropagation()}>
+      <div className="avatar-pick" onPointerDown={(e) => e.stopPropagation()}>
         <header className="avatar-pick-head">
           <h2>Change profile photo</h2>
           <button
@@ -658,6 +791,7 @@ function FileDropModal({
           onDragEnter={onDragOver}
           onDragLeave={onDragLeave}
           onDrop={onDrop}
+          onPointerDown={onPick}
           onClick={onPick}
           role="button"
           tabIndex={0}
@@ -694,7 +828,8 @@ function FileDropModal({
 
         <button
           className="avatar-pick-browse"
-          onClick={onPick}
+          onPointerDown={() => { pointerPickedRef.current = true; onPick(); }}
+          onClick={() => { if (pointerPickedRef.current) { pointerPickedRef.current = false; return; } onPick(); }}
           type="button"
         >
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">

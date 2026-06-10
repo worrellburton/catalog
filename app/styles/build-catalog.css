@@ -1,0 +1,273 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   Build Your Catalog — the manual-parameter catalog builder.
+   Matte-black glass, monochrome silver, AI-diamond brand. Selecting
+   parameters morphs a recommended catalog name at the top in real time.
+   Rebuilt from the old yellow filter sheet to match the new home aesthetic.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.bcat-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  animation: bcat-fade 0.22s ease both;
+}
+@keyframes bcat-fade { from { opacity: 0; } to { opacity: 1; } }
+
+.bcat-panel {
+  position: relative;
+  width: min(560px, 100%);
+  max-height: 92svh;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  border-radius: 28px 28px 0 0;
+  background:
+    radial-gradient(120% 70% at 50% 0%, #16171d 0%, #0b0b0e 60%, #08080a 100%);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-bottom: none;
+  box-shadow: 0 -20px 60px rgba(0, 0, 0, 0.6);
+  animation: bcat-rise 0.42s cubic-bezier(0.16, 1, 0.3, 1) both;
+  padding: 26px 22px calc(20px + env(safe-area-inset-bottom));
+}
+@keyframes bcat-rise {
+  from { opacity: 0; transform: translateY(40px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+/* Desktop: float it as a centered card instead of a bottom sheet. */
+@media (min-width: 769px) {
+  .bcat-backdrop { align-items: center; }
+  .bcat-panel {
+    border-radius: 28px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+    max-height: 86vh;
+  }
+}
+
+/* Subtle moving aurora behind everything — reads as "alive / from 2500". */
+.bcat-aurora {
+  position: absolute;
+  inset: -40% -20% auto -20%;
+  height: 70%;
+  pointer-events: none;
+  background:
+    radial-gradient(40% 60% at 30% 40%, rgba(120, 130, 160, 0.10), transparent 70%),
+    radial-gradient(40% 60% at 75% 30%, rgba(90, 100, 130, 0.08), transparent 70%);
+  filter: blur(20px);
+  animation: bcat-aurora 14s ease-in-out infinite alternate;
+}
+@keyframes bcat-aurora {
+  0%   { transform: translate3d(-4%, -2%, 0) rotate(0deg); }
+  100% { transform: translate3d(6%, 3%, 0) rotate(8deg); }
+}
+
+.bcat-close {
+  position: absolute;
+  top: 16px; right: 16px;
+  z-index: 2;
+  width: 34px; height: 34px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.7);
+  display: inline-flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.1s ease;
+}
+.bcat-close:active { transform: scale(0.92); background: rgba(255, 255, 255, 0.12); }
+
+/* ── Recommended-name bar ─────────────────────────────────────────────── */
+.bcat-namebar {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 4px 44px 18px 2px;
+}
+.bcat-spark {
+  flex-shrink: 0;
+  display: inline-flex;
+  filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.3));
+  animation: bcat-spark-spin 16s linear infinite;
+}
+@keyframes bcat-spark-spin { to { transform: rotate(360deg); } }
+.bcat-name-col { min-width: 0; flex: 1; }
+.bcat-eyebrow {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.4);
+  margin-bottom: 3px;
+}
+.bcat-name {
+  margin: 0;
+  font-size: clamp(20px, 5.5vw, 27px);
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  line-height: 1.12;
+  color: rgba(255, 255, 255, 0.62);
+  /* Re-keyed on every toggle → this entrance animation re-runs, so the
+     name reads as freshly "generated". */
+  animation: bcat-name-morph 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.bcat-name.is-named {
+  color: #f5f5f7;
+  background: linear-gradient(100deg, #fff 20%, #cbd5e1 50%, #fff 80%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: bcat-name-morph 0.5s cubic-bezier(0.16, 1, 0.3, 1) both,
+             bcat-name-sheen 4s linear infinite;
+}
+@keyframes bcat-name-morph {
+  from { opacity: 0; transform: translateY(8px); filter: blur(4px); }
+  to   { opacity: 1; transform: translateY(0); filter: blur(0); }
+}
+@keyframes bcat-name-sheen {
+  from { background-position: 200% 0; }
+  to   { background-position: -200% 0; }
+}
+.bcat-reset {
+  flex-shrink: 0;
+  align-self: flex-start;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.45);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 4px 2px;
+}
+.bcat-reset:active { color: #fff; }
+
+/* ── Scroll body ──────────────────────────────────────────────────────── */
+.bcat-scroll {
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  margin: 0 -22px;
+  padding: 0 22px;
+}
+.bcat-scroll::-webkit-scrollbar { display: none; }
+
+.bcat-section { padding: 14px 0; }
+.bcat-section + .bcat-section { border-top: 1px solid rgba(255, 255, 255, 0.05); }
+.bcat-section-label {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.42);
+  margin-bottom: 12px;
+}
+.bcat-section-count {
+  font-size: 10px;
+  font-weight: 700;
+  color: #0a0a0c;
+  background: #fff;
+  border-radius: 999px;
+  padding: 1px 7px;
+}
+
+.bcat-chips { display: flex; flex-wrap: wrap; gap: 8px; }
+
+/* The chip — monochrome glass pill; glowing white ring when selected. */
+.bcat-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 10px 15px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.78);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease, transform 0.12s ease, box-shadow 0.2s ease;
+}
+.bcat-chip--sm { padding: 8px 13px; font-size: 13px; }
+.bcat-chip:active { transform: scale(0.95); }
+.bcat-chip:hover { border-color: rgba(255, 255, 255, 0.22); }
+.bcat-chip.is-on {
+  background: #fff;
+  border-color: #fff;
+  color: #0a0a0c;
+  font-weight: 600;
+  box-shadow: 0 0 0 1px #fff, 0 0 18px rgba(255, 255, 255, 0.35);
+}
+.bcat-chip-ico { display: inline-flex; opacity: 0.9; }
+.bcat-chip.is-on .bcat-chip-ico { opacity: 1; }
+.bcat-chip--more { color: rgba(255, 255, 255, 0.5); font-weight: 600; }
+
+/* Expandable sub-panel (Fashion → occasion/type, Home → room/vibe). */
+.bcat-sub {
+  display: grid;
+  grid-template-rows: 0fr;
+  opacity: 0;
+  transition: grid-template-rows 0.32s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.25s ease, margin 0.3s ease;
+  margin-top: 0;
+}
+.bcat-sub.is-open {
+  grid-template-rows: 1fr;
+  opacity: 1;
+  margin-top: 14px;
+}
+.bcat-sub > * { min-height: 0; overflow: hidden; }
+.bcat-sub-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.32);
+  margin: 4px 0 10px;
+}
+.bcat-sub .bcat-chips + .bcat-sub-label { margin-top: 14px; }
+
+/* ── Build CTA ────────────────────────────────────────────────────────── */
+.bcat-build {
+  position: relative;
+  z-index: 1;
+  margin-top: 16px;
+  width: 100%;
+  min-height: 54px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 9px;
+  border: none;
+  border-radius: 16px;
+  background: #fff;
+  color: #0a0a0c;
+  font-family: inherit;
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  box-shadow: 0 12px 34px rgba(255, 255, 255, 0.16);
+  transition: transform 0.12s ease, box-shadow 0.2s ease;
+}
+.bcat-build:hover { box-shadow: 0 16px 40px rgba(255, 255, 255, 0.24); }
+.bcat-build:active { transform: scale(0.99); }
+
+@media (prefers-reduced-motion: reduce) {
+  .bcat-panel, .bcat-aurora, .bcat-spark, .bcat-name { animation: none !important; }
+}

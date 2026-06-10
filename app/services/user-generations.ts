@@ -1,5 +1,22 @@
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '~/utils/supabase';
 
+// Resolve the published/promoted look that a completed generation became,
+// so the "Your looks" rail can deep-link a finished render to its look
+// screen. Every completed generation auto-lands as a look with
+// source_generation_id pointing back here; returns that look's uuid (or
+// null if it hasn't been promoted yet).
+export async function getLookUuidForGeneration(genId: string): Promise<string | null> {
+  if (!supabase) return null;
+  const { data } = await supabase
+    .from('looks')
+    .select('id')
+    .eq('source_generation_id', genId)
+    .order('created_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  return (data as { id: string } | null)?.id ?? null;
+}
+
 export interface UserUpload {
   id: string;
   user_id: string;
@@ -19,6 +36,9 @@ export interface UserGeneration {
   height_cm: number | null;
   height_label: string | null;
   age_label: string | null;
+  /** Frozen weight phrase ("165 lb (75 kg)") captured at submit time;
+   *  null for legacy rows that pre-date the column. */
+  weight_label: string | null;
   style: string;
   prompt: string | null;
   veo_model: string | null;
@@ -47,12 +67,39 @@ export interface UserGeneration {
   /** Full raw error string from Fal/ByteDance, kept for the Show details
    *  panel so we can debug exotic failures. */
   error_raw?: string | null;
+  /** Auth.users.id of the admin who kicked this off via /generate?as_user=.
+   *  Null for normal self-triggered shopper rows. The admin user detail
+   *  page reads this to split the Generation queue into Admin / User. */
+  triggered_by_admin_id?: string | null;
 }
 
 export interface GenerationProduct {
   product_id: string;
   role_tag: string | null;
   sort_order: number;
+}
+
+/**
+ * A generation that has stayed non-terminal far longer than any real
+ * render budget (~3 min for a 5s clip, ~6 min for 10s) is treated as
+ * dead — the generate-look pipeline never reconciled it. 20 minutes is
+ * comfortably past the slowest legitimate render while still clearing a
+ * zombie row within the session.
+ *
+ * Used by the header pill and the grid LookCard so a stuck 'pending'
+ * row stops haunting the UI (an endless "look is rendering" pill +
+ * a card frozen at "Queued / 100%") and becomes deletable instead.
+ */
+export const GENERATION_STALE_MS = 20 * 60 * 1000;
+
+/** True while a generation is genuinely mid-render — non-terminal AND
+ *  not yet past the staleness cutoff. Stale zombie rows return false so
+ *  the UI treats them as finished (failed) rather than in-flight. */
+export function isGenerationInFlight(
+  row: Pick<UserGeneration, 'status' | 'created_at'>,
+): boolean {
+  if (row.status === 'done' || row.status === 'failed') return false;
+  return Date.now() - new Date(row.created_at).getTime() < GENERATION_STALE_MS;
 }
 
 // Eight preset styles - the Generate page dropdown picks one of these; the
@@ -332,10 +379,12 @@ function computeFraming(
     return 'Mid-shot crop, top of head to just below the waist. Do not render legs or feet.';
   }
 
-  // Has legs but no shoes - knees crop, omit feet so Seedance does
-  // not invent footwear that was not picked.
+  // Has legs but no shoes - show the bottom in full, down to BARE feet.
+  // We deliberately render the whole leg (not an ankle crop) so the
+  // featured bottom reads at full length; the wardrobe clause pins the
+  // feet to bare (no invented footwear) instead of cropping them out.
   if (legs && !feet) {
-    return 'Three-quarter crop from top of head to just above the ankles. Do not render feet or footwear.';
+    return 'Full-length shot, top of head down to the floor, showing bare feet — no footwear of any kind.';
   }
 
   // Has shoes but no legs/torso - feet/ankle crop.
@@ -350,6 +399,54 @@ function computeFraming(
 
   // Anything spanning torso through feet - full body.
   return 'Frame as a centered full-body shot, head to toe.';
+}
+
+/**
+ * Product-only wardrobe instruction. The model wears ONLY the attached
+ * products — no invented garments, layers, or branding. Whatever the
+ * products don't cover is left in plain, neutral, unbranded basics so all
+ * attention stays on the featured items (this is how we "maximise the
+ * product"). Coverage is gender-aware and only described for zones that
+ * are actually in frame, so it never fights the crop:
+ *   - bottom picked, no top  -> torso is shown -> plain neutral bra/tank
+ *   - bottom picked, no shoes -> legs shown to the floor -> bare feet
+ *   - top-only / head-only looks crop below the chest, so no extra
+ *     coverage is mentioned at all.
+ */
+function computeProductOnlyWardrobe(
+  productLines: { role_tag: string | null; name: string | null }[],
+  gender?: 'male' | 'female' | 'unknown' | null,
+): string {
+  const zones = new Set<BodyZone>();
+  for (const p of productLines) {
+    const role = ((p.role_tag || inferRoleFromName(p.name)) || '').toLowerCase().trim();
+    const z = role ? ROLE_ZONES[role] : null;
+    if (z) z.forEach(zone => zones.add(zone));
+  }
+  const hasTop = zones.has('torso');
+  const hasBottom = zones.has('legs') || zones.has('waist');
+  const hasShoes = zones.has('feet');
+
+  const base = 'Dress them in ONLY the referenced products — no other clothing, outerwear, layering, accessories, logos, or prints.';
+
+  // Neutral fillers, only for zones that the framing will actually show
+  // (i.e. once there's a bottom, the torso + legs are in frame).
+  const fillers: string[] = [];
+  if (hasBottom && !hasTop) {
+    fillers.push(
+      gender === 'female'
+        ? 'a plain seamless neutral-white bra (unbranded, no logos)'
+        : gender === 'male'
+          ? 'a bare torso or a plain unbranded white tank'
+          : 'a plain unbranded neutral top',
+    );
+  }
+  if (hasBottom && !hasShoes) {
+    fillers.push('bare feet');
+  }
+
+  if (fillers.length === 0) return base;
+  return `${base} Leave everything the products don't cover in plain, neutral, unbranded basics so the products stay the sole focus: ${fillers.join(', ')}.`;
 }
 
 /**
@@ -421,7 +518,7 @@ export async function uploadUserPhoto(
       mime_type: file.type || null,
       byte_size: file.size || null,
     })
-    .select('*')
+    .select('id, user_id, storage_path, public_url, mime_type, byte_size, width, height, created_at')
     .single();
 
   if (error) return { data: null, error: error.message };
@@ -432,7 +529,7 @@ export async function listUserUploads(userId: string): Promise<UserUpload[]> {
   if (!supabase) return [];
   const { data, error } = await supabase
     .from('user_uploads')
-    .select('*')
+    .select('id, user_id, storage_path, public_url, mime_type, byte_size, width, height, created_at')
     .eq('user_id', userId)
     .order('created_at', { ascending: false });
   if (error) {
@@ -550,6 +647,79 @@ export async function deleteUserGeneration(id: string): Promise<{ error: string 
 }
 
 /**
+ * Re-run a finished generation in place. Resets the user_generations
+ * row back to status='pending' + clears video_url / fal_request_id /
+ * error / completed_at, then invokes the generate-look edge function
+ * so the worker picks it up. Same inputs (uploads, products, prompt,
+ * style, model) — the row id stays the same, the source_generation_id
+ * link on any associated looks row stays intact.
+ *
+ * After the worker completes, the user_generations.video_url updates.
+ * The looks_creative row pointing at the old video is auto-rewritten
+ * by the DB trigger looks_creative_sync_from_user_generations so the
+ * consumer feed picks up the new video without the admin re-
+ * publishing. The realtime channel on looks_creative then propagates
+ * the change to every connected shopper tab.
+ */
+export async function regenerateUserGeneration(id: string): Promise<{ error: string | null }> {
+  if (!supabase) return { error: 'Supabase not configured' };
+  const { error: resetErr } = await supabase
+    .from('user_generations')
+    .update({
+      status: 'pending',
+      video_url: null,
+      fal_request_id: null,
+      completed_at: null,
+      error: null,
+    })
+    .eq('id', id);
+  if (resetErr) return { error: resetErr.message };
+  supabase.functions.invoke('generate-look', {
+    body: { generation_id: id },
+  }).then(({ error }) => {
+    if (error) console.warn('[regenerateUserGeneration] invoke error:', error);
+  }).catch(err => console.warn('[regenerateUserGeneration] invoke exception:', err));
+  return { error: null };
+}
+
+/**
+ * Flip is_published on a generation. The consumer feed (when wired to
+ * surface user-generated looks) filters on this column so a generation
+ * only goes public after the user explicitly opts in via the "How did I
+ * do?" feedback bar on the result step.
+ */
+export async function setGenerationPublished(
+  id: string,
+  isPublished: boolean,
+): Promise<{ error: string | null }> {
+  if (!supabase) return { error: 'Supabase not configured' };
+  const { error } = await supabase
+    .from('user_generations')
+    .update({ is_published: isPublished })
+    .eq('id', id);
+  return { error: error?.message ?? null };
+}
+
+/**
+ * Persist the user's "How did I do?" feedback. `kind` is 'love' (looks
+ * great) or 'off' (this is not it); reason is the optional free-text
+ * the user typed when picking 'off'. Doesn't write a row for the
+ * delete path because the row is gone by then.
+ */
+export async function setGenerationFeedback(
+  id: string,
+  kind: 'love' | 'off',
+  reason?: string,
+): Promise<{ error: string | null }> {
+  if (!supabase) return { error: 'Supabase not configured' };
+  const { error } = await supabase
+    .from('user_generations')
+    .update({ feedback_kind: kind, feedback_reason: reason ?? null })
+    .eq('id', id);
+  return { error: error?.message ?? null };
+}
+
+/**
  * Persist the display-time crop transform for a generation. Clamps
  * to the column check constraints so a slipped slider can't poison
  * the row.
@@ -628,10 +798,22 @@ export interface CreateGenerationInput {
   heightCm: number;
   heightLabel: string;
   ageLabel: string;
+  /** Frozen weight phrase the prompt should hear. Null/undefined when
+   *  the user hasn't set a weight on their profile yet — the prompt
+   *  builder omits the clause in that case rather than fabricating a
+   *  number. Optional during the gradual rollout so existing call
+   *  sites compile without forcing every caller to thread a value. */
+  weightLabel?: string | null;
   style: string;
   prompt: string;
   durationSeconds: number;
   model: 'fast' | 'pro';
+  /** Auth.users.id of the admin who triggered this generation via the
+   *  /generate?as_user=<id> impersonation flow. Null for the normal
+   *  shopper flow where the row's user_id IS the human triggering it.
+   *  Surfaced on the admin user detail page so the queue view can
+   *  split admin-triggered from self-triggered rows. */
+  triggeredByAdminId?: string | null;
 }
 
 /**
@@ -653,12 +835,14 @@ export async function createGeneration(
       height_cm: input.heightCm,
       height_label: input.heightLabel,
       age_label: input.ageLabel,
+      weight_label: input.weightLabel ?? null,
       style: input.style,
       prompt: input.prompt,
       duration_seconds: input.durationSeconds,
       model: input.model,
+      triggered_by_admin_id: input.triggeredByAdminId ?? null,
     })
-    .select('*')
+    .select('id, user_id, status, height_cm, height_label, age_label, weight_label, style, prompt, veo_model, video_url, storage_path, error, duration_seconds, model, crop_scale, crop_x, crop_y, created_at, completed_at, fal_request_id, display_name, error_code, error_raw, triggered_by_admin_id')
     .single();
 
   if (genErr || !gen) return { data: null, error: genErr?.message || 'Failed to create generation' };
@@ -704,7 +888,7 @@ export async function createGeneration(
 export async function getGeneration(id: string): Promise<UserGeneration | null> {
   if (!supabase) return null;
   const { data, error } = await supabase
-    .from('user_generations').select('*').eq('id', id).single();
+    .from('user_generations').select('id, user_id, status, height_cm, height_label, age_label, weight_label, style, prompt, veo_model, video_url, storage_path, error, duration_seconds, model, crop_scale, crop_x, crop_y, created_at, completed_at, fal_request_id, display_name, error_code, error_raw, triggered_by_admin_id').eq('id', id).single();
   if (error) return null;
   return data as UserGeneration;
 }
@@ -713,7 +897,7 @@ export async function listUserGenerations(userId: string): Promise<UserGeneratio
   if (!supabase) return [];
   const { data } = await supabase
     .from('user_generations')
-    .select('*')
+    .select('id, user_id, status, height_cm, height_label, age_label, weight_label, style, prompt, veo_model, video_url, storage_path, error, duration_seconds, model, crop_scale, crop_x, crop_y, created_at, completed_at, fal_request_id, display_name, error_code, error_raw, triggered_by_admin_id')
     .eq('user_id', userId)
     .order('created_at', { ascending: false });
   return (data || []) as UserGeneration[];
@@ -740,6 +924,33 @@ export interface GenerationDetail {
 }
 
 /**
+ * Batch-fetch the product images for a set of generations in a single query,
+ * keyed by generation id and ordered by the slot order. Used by the "Your
+ * looks" rail on the Activity page so each tile can show the products that
+ * went into the look as little circles instead of a text label.
+ */
+export async function getGenerationProductImages(
+  genIds: string[],
+): Promise<Record<string, string[]>> {
+  const out: Record<string, string[]> = {};
+  if (!supabase || genIds.length === 0) return out;
+  const { data } = await supabase
+    .from('user_generation_products')
+    .select('generation_id, sort_order, products(image_url)')
+    .in('generation_id', genIds)
+    .order('sort_order');
+  for (const row of (data || []) as unknown as Array<{
+    generation_id: string;
+    products: { image_url: string | null } | null;
+  }>) {
+    const url = row.products?.image_url;
+    if (!url) continue;
+    (out[row.generation_id] ||= []).push(url);
+  }
+  return out;
+}
+
+/**
  * Hydrate a single generation with its linked uploads and picked products,
  * so the Generate page can pre-fill the wizard for "edit & regenerate".
  */
@@ -748,7 +959,7 @@ export async function getGenerationDetail(id: string): Promise<GenerationDetail>
   if (!supabase) return empty;
 
   const [genRes, uploadsRes, productsRes] = await Promise.all([
-    supabase.from('user_generations').select('*').eq('id', id).single(),
+    supabase.from('user_generations').select('id, user_id, status, height_cm, height_label, age_label, weight_label, style, prompt, veo_model, video_url, storage_path, error, duration_seconds, model, crop_scale, crop_x, crop_y, created_at, completed_at, fal_request_id, display_name, error_code, error_raw, triggered_by_admin_id').eq('id', id).single(),
     supabase
       .from('user_generation_uploads')
       .select('upload_id, sort_order, user_uploads(*)')
@@ -803,10 +1014,39 @@ export async function getGenerationDetail(id: string): Promise<GenerationDetail>
  */
 export function buildGenerationPrompt(opts: {
   heightLabel: string;
+  /** Frozen weight phrase ("160 lb", "73 kg"). When set the model gets
+   *  a body-mass cue that materially improves silhouette accuracy
+   *  (Seedance otherwise defaults to a generic build regardless of
+   *  height). Omitted when the profile hasn't captured one yet — the
+   *  prompt just skips the clause instead of fabricating a number. */
+  weightLabel?: string | null;
   ageLabel?: string;
   style: string;
+  // Free-text occasion ("West Village Date Night", "work", etc.) —
+  // when present, mentioned in the prompt body so the model knows
+  // what the look is FOR. Set by the Style → Shop this look → Try it
+  // on flow which forwards the originating Style sheet's occasion via
+  // ?occasion= URL param.
+  occasion?: string;
+  /** The user's free-text "your style" descriptor, set on the Style page
+   *  and persisted on profiles.custom_style_prompt. Carried into the
+   *  Seedance prompt so generated looks reflect the user's personal
+   *  aesthetic regardless of which preset they pick. Empty when unset. */
+  customStyle?: string | null;
   productLines: { role_tag: string | null; brand: string | null; name: string | null }[];
   durationSeconds?: number;
+  /** Shopper gender — drives the neutral-coverage wording for any body
+   *  area the picked products don't cover (e.g. a plain bra vs. a bare
+   *  torso) so the model wears ONLY the products + tasteful basics. */
+  gender?: 'male' | 'female' | 'unknown' | null;
+  /** Advanced-mode proportions ("Short"/"Average"/"Long"). Appended to the
+   *  build description so Seedance shapes the silhouette; blank/omitted
+   *  drops the clause. */
+  armLengthLabel?: string | null;
+  legLengthLabel?: string | null;
+  /** Comma-joined aesthetic tags from Advanced mode, woven in as extra
+   *  style direction alongside the custom-style prompt. */
+  fashionStyles?: string | null;
 }): string {
   const stylePreset = STYLE_PRESETS.find(s => s.value === opts.style);
   // Strip brand + product names from the prompt - Bytedance/Seedance's
@@ -820,11 +1060,49 @@ export function buildGenerationPrompt(opts: {
     .join(', ');
 
   const ageClause = opts.ageLabel ? ` They look ${opts.ageLabel}.` : '';
+  // Weight is appended INSIDE the height clause so Seedance reads the
+  // build as one unit ("5'10" tall, ~160 lb"). Falsy/blank weight drops
+  // the clause entirely so the model isn't fed a phantom number.
+  // Advanced proportions append onto the build description ("...with long
+  // arms and short legs"). Only non-"Average", non-blank values are voiced —
+  // "Average" is the model's default so naming it adds noise.
+  const proportionBits: string[] = [];
+  const arm = (opts.armLengthLabel || '').trim();
+  const leg = (opts.legLengthLabel || '').trim();
+  if (arm && arm.toLowerCase() !== 'average') proportionBits.push(`${arm.toLowerCase()} arms`);
+  if (leg && leg.toLowerCase() !== 'average') proportionBits.push(`${leg.toLowerCase()} legs`);
+  const proportionSuffix = proportionBits.length ? ` with ${proportionBits.join(' and ')}` : '';
+  const buildClause = (opts.weightLabel
+    ? `${opts.heightLabel} tall, around ${opts.weightLabel}`
+    : `${opts.heightLabel} tall`) + proportionSuffix;
   // Picked-zone framing: only show body regions where the shopper
   // actually picked an item. Stops Seedance from inventing pants /
   // shoes / accessories that were never selected.
   const framing = computeFraming(opts.productLines);
+  // Product-only wardrobe: the model wears ONLY the attached products.
+  // Any body area a product doesn't cover stays in plain neutral basics
+  // (bare feet, a plain unbranded bra/tank, etc.) so nothing competes
+  // with the featured products. Maximises product visibility.
+  const wardrobe = computeProductOnlyWardrobe(opts.productLines, opts.gender);
   const seconds = opts.durationSeconds ?? 5;
+  // Occasion is appended at the END of each prompt variant below so
+  // it modifies the scene context without disrupting the existing
+  // style-preset prompt structures (commercial, street, etc.) Empty
+  // when not forwarded from the Style flow.
+  const occasionClause = opts.occasion ? ` Scene: ${opts.occasion}.` : '';
+  // Personal style direction from the Style page, woven in alongside the
+  // occasion so the user's saved aesthetic shapes the render on every
+  // preset. Trimmed/blank drops the clause.
+  // Custom style direction + advanced aesthetic tags both feed the same
+  // "Style direction" clause so the user's saved look shapes the render.
+  const styleDirectionBits: string[] = [];
+  if (opts.customStyle && opts.customStyle.trim()) styleDirectionBits.push(opts.customStyle.trim());
+  if (opts.fashionStyles && opts.fashionStyles.trim()) {
+    styleDirectionBits.push(`${opts.fashionStyles.trim()} aesthetic`);
+  }
+  const customStyleClause = styleDirectionBits.length
+    ? ` Style direction: ${styleDirectionBits.join('; ')}.`
+    : '';
 
   if (opts.style === 'commercial') {
     const tones = detectBrandTones(opts.productLines);
@@ -856,22 +1134,28 @@ export function buildGenerationPrompt(opts: {
       ? 'Structure across the clip in 4 beats: (1) hero entrance - wide composed frame, subject walks/turns into shot; (2) push-in close-up at ~25% - face / detail moment; (3) action beat at ~55% - wardrobe interaction (zip pull, hand-in-pocket, head turn) with a motion-blur transition that reads as a cut; (4) hero stance + product reveal in the final third with a clean rack focus.'
       : 'Structure across the clip in 3 beats: (1) hero entrance in the first ~30%; (2) action / wardrobe interaction with a motion-blur transition that reads as a cut around the midpoint; (3) close-up product or expression hero in the final third.';
     return [
-      `Use this person's face. Make them ${opts.heightLabel} tall.${ageClause}`,
+      `Use this person's face. Make them ${buildClause}.${ageClause}`,
       productList ? `Hero products on body: ${productList}.` : 'Hero the provided products on body.',
+      wardrobe,
       castLine,
       cameraLine,
       beatLine,
       framing,
-      `Lighting: strong key + rim, contrasty, motivated. Aggressive composition shifts that read as edit cuts. ${seconds}-second portrait clip, hero pacing, polished commercial grade.`,
+      `Lighting: strong key + rim, contrasty, motivated. Aggressive composition shifts that read as edit cuts. ${seconds}-second portrait clip, hero pacing, polished commercial grade.${occasionClause}${customStyleClause}`,
     ].join(' ');
   }
 
   const styleTag = stylePreset ? `, ${stylePreset.label.toLowerCase()} vibe` : '';
 
   return [
-    `Use this person's face. Make them ${opts.heightLabel} tall.${ageClause}`,
+    // buildClause (height + weight) so the body build — including weight —
+    // reaches Seedance on the default/lifestyle styles too, not just
+    // commercial. Previously this branch hard-coded height only and the
+    // weight clause was silently dropped.
+    `Use this person's face. Make them ${buildClause}.${ageClause}`,
     productList ? `Put these products on them: ${productList}.` : 'Put the provided products on them.',
+    wardrobe,
     framing,
-    `Natural motion, ${seconds}-second portrait clip${styleTag}.`,
+    `Natural motion, ${seconds}-second portrait clip${styleTag}.${occasionClause}${customStyleClause}`,
   ].join(' ');
 }

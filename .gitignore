@@ -56,3 +56,8 @@ venv/
 # misc
 trademark.pdf
 supabase/.temp/
+.vercel
+
+# residential proxy credentials (never commit)
+residential-proxies.txt
+agents/product-scraper/residential-proxies.txt

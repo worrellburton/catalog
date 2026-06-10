@@ -1,0 +1,1510 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   Home "What are you shopping for?" hero + search ceremony.
+   Matte-black, white text, Catalog-branded. The hero is the home entry;
+   the catalog feed sits directly below (scroll reveals it).
+   ═══════════════════════════════════════════════════════════════════════ */
+
+.sfh {
+  position: relative;
+  min-height: 100svh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-direction: column;
+  /* Translucent matte gradient so the SiteParticleHost canvas (z-index 0,
+     mounted behind the hero) bleeds through — this is how the hero shares
+     the ONE continuous particle world. The outer stop is kept well under
+     full opacity: on the wide desktop viewport most of the hero IS the
+     outer band, so a near-opaque edge (the old 0.9) hid the whole field
+     there. These lower alphas let the silver drift read across the entire
+     landing while still tinting the matte black enough for white text. */
+  background:
+    radial-gradient(125% 95% at 50% 26%, rgba(20, 21, 27, 0.36) 0%, rgba(10, 10, 13, 0.62) 52%, rgba(0, 0, 0, 0.8) 100%);
+  /* The fixed header (logo / wallet / avatar) owns the top, and the fixed
+     search bar floats at 46vh-from-bottom. Pad past both — top clears the
+     header, bottom reserves the bar's zone — so the spark + headline
+     auto-center in the band BETWEEN them. Result: header → headline → bar
+     fall into one evenly-spaced, vertically-centered column with no overlap. */
+  /* svh to match min-height: 100svh above — mixing vh here let the centered
+     spark+headline overflow down into the (svh-referenced) bar's zone on
+     mobile, so the search bar overlapped the headline. */
+  padding: calc(env(safe-area-inset-top, 0px) + 72px) 20px 54svh;
+  text-align: center;
+  overflow: hidden;
+}
+.sfh-stage {
+  position: relative;
+  z-index: 1;
+  width: min(560px, 100%);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 22px;
+  /* Fade the spark + headline out FAST on scroll while the search
+     bar holds its position below. Multiplier 4 means the trio is
+     gone by the time the user has scrolled ~25% of the threshold,
+     so the bar rises into focus as the user moves down. The +0
+     means at scroll=0 the stage is fully visible. */
+  opacity: clamp(0, calc(1 - var(--hero-scroll-progress, 0) * 4), 1);
+  transform: translateY(calc(var(--hero-scroll-progress, 0) * -16px));
+  transition: opacity 0.12s linear, transform 0.18s ease-out;
+}
+/* Hero owns its own ParticleBackground canvas (the same WebGL drift the
+   sign-in gate uses, but rendered as AI-diamond sparks). Push it behind
+   the stage so the spark + headline read above the field. */
+.sfh .pw-particles {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  /* Ambient texture behind the headline. Kept fairly present so the field
+     reads on the big desktop viewport (where 180 points spread thin). */
+  opacity: 0.8;
+  pointer-events: none;
+}
+/* Lift the scroll hint above the negative-margin feed peek (.home-feed-wrap
+   is pulled up under the hero by -3.5svh on mobile / -7vh on desktop). At
+   the default z-index:1 the cards' content stacked over the hint; bumping
+   it to 5 keeps it readable as the cards nose into view. */
+.sfh-scroll-hint { z-index: 5; }
+
+/* Brand spark — AI diamond core + catalog tiles orbiting at the cardinal
+   points. On mount the whole mark spins in from -360deg + 0.4 scale; idle
+   it drifts; on scroll the orbit speeds up. The per-element duration is
+   `var(--base) / (1 + boost)` so a scroll-driven boost shortens it (i.e.
+   speeds it up). */
+.sfh-spark {
+  --sfh-spark-boost: 0;
+  display: inline-flex;
+  filter: drop-shadow(0 0 18px rgba(255, 255, 255, 0.28));
+  animation: sfh-spark-in 1s cubic-bezier(0.16, 1, 0.3, 1) both,
+             sfh-spark-drift 7s ease-in-out infinite 1s;
+  transform-origin: center;
+}
+@keyframes sfh-spark-in {
+  from { opacity: 0; transform: rotate(-360deg) scale(0.4); }
+  to   { opacity: 1; transform: rotate(0deg)    scale(1);   }
+}
+@keyframes sfh-spark-drift {
+  0%, 100% { transform: translate(0, 0)      rotate(0deg); }
+  25%      { transform: translate(3px, -2px) rotate(2deg); }
+  50%      { transform: translate(0, 3px)    rotate(-3deg); }
+  75%      { transform: translate(-3px, -1px) rotate(2deg); }
+}
+
+/* The core diamond rotates one way, slowly. */
+.sfh-spark-core {
+  transform-origin: 70px 70px;
+  animation: sfh-spark-core-spin calc(14s / (1 + var(--sfh-spark-boost, 0))) linear infinite;
+}
+@keyframes sfh-spark-core-spin { to { transform: rotate(360deg); } }
+
+/* The orbit ring (catalog tiles) rotates the opposite way + a touch faster,
+   so they glide past the core. */
+.sfh-spark-orbit {
+  transform-origin: 70px 70px;
+  animation: sfh-spark-orbit-spin calc(10s / (1 + var(--sfh-spark-boost, 0))) linear infinite reverse;
+}
+@keyframes sfh-spark-orbit-spin { to { transform: rotate(360deg); } }
+
+/* The four catalog tiles breathe — slight scale + opacity pulse — so they
+   feel alive rather than rigidly spinning. */
+.sfh-spark-tile {
+  transform-origin: center;
+  animation: sfh-spark-tile-pulse 2.6s ease-in-out infinite;
+}
+.sfh-spark-tile:nth-child(2) { animation-delay: 0.65s; }
+.sfh-spark-tile:nth-child(3) { animation-delay: 1.3s;  }
+.sfh-spark-tile:nth-child(4) { animation-delay: 1.95s; }
+@keyframes sfh-spark-tile-pulse {
+  0%, 100% { opacity: 0.65; transform: scale(0.85); }
+  50%      { opacity: 1;    transform: scale(1.1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sfh-spark, .sfh-spark-core, .sfh-spark-orbit, .sfh-spark-tile {
+    animation: none !important;
+  }
+}
+
+.sfh-title {
+  margin: 0;
+  font-size: clamp(30px, 7.5vw, 46px);
+  line-height: 1.06;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: #f5f5f7;
+  animation: sfh-rise 0.7s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+/* Lyric variant — italic + slightly lighter weight so a song line reads
+   as a quote rather than a question. The 🎵 emoji on line 1 carries the
+   "this is a song lyric" signal so we don't need an attribution caption
+   underneath — keeps lyric headlines occupying the same vertical shape
+   as the plain ones. */
+.sfh-title--lyric {
+  font-style: italic;
+  font-weight: 500;
+  letter-spacing: -0.005em;
+}
+@keyframes sfh-rise {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Search pill — Gemini-ish, Catalog matte. */
+.sfh-pill {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 8px 8px 16px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow: 0 10px 40px rgba(0, 0, 0, 0.5), inset 0 1px 0 rgba(255, 255, 255, 0.06);
+  animation: sfh-rise 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.08s both;
+}
+.sfh-pill-lead { color: rgba(255, 255, 255, 0.5); display: inline-flex; flex-shrink: 0; }
+.sfh-input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #fff;
+  font-size: 17px;
+  font-family: inherit;
+  padding: 10px 2px;
+}
+.sfh-input::placeholder { color: rgba(255, 255, 255, 0.42); }
+.sfh-go {
+  flex-shrink: 0;
+  width: 42px; height: 42px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.55);
+  display: inline-flex; align-items: center; justify-content: center;
+  cursor: pointer;
+  transition: background 0.2s ease, color 0.2s ease, transform 0.2s ease;
+}
+.sfh-go.is-ready { background: #fff; color: #0a0a0c; transform: scale(1.04); }
+.sfh-go.is-ready:hover { transform: scale(1.1); }
+
+/* Scroll-for-best-sellers hint, sitting above the fixed bottom search
+   bar (which is the single search input on the hero). */
+.sfh-scroll-hint {
+  position: absolute;
+  /* Lifted above the peeking feed cards at the bottom of the hero so the
+     label never overlaps their tops. */
+  bottom: calc(104px + env(safe-area-inset-bottom));
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 12px;
+  letter-spacing: 0.02em;
+}
+/* "Your daily feed" label — a bare button that reveals the feed. */
+.sfh-scroll-cta {
+  order: 2;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  font-family: inherit;
+  font-weight: 700;
+  font-size: 14px;
+  letter-spacing: 0.01em;
+  color: rgba(255, 255, 255, 0.9);
+  transition: color 0.2s ease;
+}
+.sfh-scroll-cta:hover { color: #fff; }
+/* Short one-line tagline + the ? that opens the explanation popup. */
+.sfh-scroll-sub {
+  order: 3;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: min(380px, 82vw);
+  text-align: center;
+  font-size: 11.5px;
+  line-height: 1.4;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.5);
+}
+.sfh-scroll-info {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  background: none;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: inherit;
+  transition: border-color 0.2s ease, color 0.2s ease;
+}
+.sfh-scroll-info:hover { border-color: rgba(255, 255, 255, 0.7); color: #fff; }
+.sfh-scroll-chev-btn {
+  order: 4;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: inherit;
+  display: inline-flex;
+}
+.sfh-scroll-chev { animation: sfh-bob 2.2s ease-in-out infinite; }
+
+/* "How your daily feed works" popup. */
+.sfh-feed-info {
+  position: fixed;
+  inset: 0;
+  z-index: 1300;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  animation: sfh-feed-info-in 180ms ease;
+}
+@keyframes sfh-feed-info-in { from { opacity: 0; } to { opacity: 1; } }
+.sfh-feed-info-card {
+  position: relative;
+  width: min(480px, 100%);
+  background: rgba(20, 20, 22, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 22px;
+  padding: 30px 28px 30px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.55);
+  color: #f4f4f5;
+  text-align: left;
+}
+/* Close — a clean glass circle in the corner (was a bare ×). */
+.sfh-feed-info-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.07);
+  color: rgba(255, 255, 255, 0.65);
+  cursor: pointer;
+  transition: background 150ms ease, color 150ms ease, transform 150ms ease;
+}
+.sfh-feed-info-close:hover { color: #fff; background: rgba(255, 255, 255, 0.14); transform: scale(1.06); }
+.sfh-feed-info-title {
+  margin: 0 0 10px;
+  font-size: 18px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.sfh-feed-info-body {
+  margin: 0 0 10px;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.72);
+}
+.sfh-feed-info-body:last-child { margin-bottom: 0; }
+
+/* ── "Your daily feed" popup — frosted glass with a soft glow ─────── */
+.sfh-feed-info-card--magic {
+  overflow: hidden;
+  background:
+    radial-gradient(120% 80% at 50% -10%, rgba(124, 108, 255, 0.16), transparent 62%),
+    linear-gradient(180deg, rgba(30, 30, 36, 0.66), rgba(14, 14, 20, 0.66));
+  -webkit-backdrop-filter: blur(30px) saturate(1.4);
+  backdrop-filter: blur(30px) saturate(1.4);
+  border-color: rgba(255, 255, 255, 0.18);
+  /* Drop shadow + ambient glow + inner top highlight (the "glass" read). */
+  box-shadow:
+    0 30px 90px rgba(0, 0, 0, 0.6),
+    0 0 90px rgba(124, 108, 255, 0.28),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16);
+}
+.sfh-feed-info-content { position: relative; z-index: 1; }
+
+/* Catalog wordmark at the top of the popup. */
+.sfh-feed-info-logo {
+  display: block;
+  height: 22px;
+  width: auto;
+  margin: 0 0 16px;
+  color: #fafafa;
+  opacity: 0.96;
+}
+
+/* Sparkle badge — neutral white/gray, no float animation. */
+.sfh-feed-info-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 46px;
+  height: 46px;
+  margin-bottom: 14px;
+  border-radius: 14px;
+  color: #f4f4f5;
+  background: rgba(255, 255, 255, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.14);
+}
+.sfh-feed-info-card--magic .sfh-feed-info-title {
+  font-size: 20px;
+  color: #fafafa;
+}
+
+/* Benefit points — plain text with a subtle accent dot (icons removed). */
+.sfh-feed-info-points {
+  list-style: none;
+  margin: 14px 0 4px;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+}
+.sfh-feed-info-points li {
+  position: relative;
+  padding-left: 16px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: rgba(255, 255, 255, 0.74);
+}
+.sfh-feed-info-points li::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0.5em;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(167, 139, 250, 0.9);
+}
+
+/* Countdown HERO — the big animated centerpiece. Label sits right above
+   the oversized, glowing, gently-pulsing timer. */
+.sfh-feed-info-countdown {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 8px;
+  margin: 22px 0 4px;
+  padding: 22px 4px 6px;
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+}
+.sfh-feed-info-countdown-label {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+}
+.sfh-feed-info-countdown-time {
+  font-size: clamp(46px, 13vw, 72px);
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  color: #fff;
+  background: linear-gradient(180deg, #ffffff 0%, #c4b5fd 130%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  text-shadow: 0 0 36px rgba(167, 139, 250, 0.5);
+  animation: sfh-countdown-pulse 2.4s ease-in-out infinite;
+}
+@keyframes sfh-countdown-pulse {
+  0%, 100% { transform: scale(1); filter: drop-shadow(0 0 0 rgba(167, 139, 250, 0)); }
+  50%      { transform: scale(1.025); filter: drop-shadow(0 0 18px rgba(167, 139, 250, 0.35)); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sfh-feed-info-countdown-time { animation: none; }
+}
+@keyframes sfh-bob {
+  0%, 100% { transform: translateY(0); opacity: 0.6; }
+  50%      { transform: translateY(5px); opacity: 1; }
+}
+/* ── Search ceremony ─────────────────────────────────────────────────── */
+.search-ceremony {
+  position: fixed;
+  inset: 0;
+  z-index: 600;
+  background: radial-gradient(120% 100% at 50% 40%, #14141a 0%, #000 72%);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  animation: sc-in 0.32s ease both;
+}
+@keyframes sc-in { from { opacity: 0; } to { opacity: 1; } }
+.sc-stage {
+  position: relative;
+  z-index: 1;
+  width: min(420px, 86%);
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 20px;
+  text-align: left;
+}
+/* Particle canvas inside the ceremony sits behind the stage. */
+.search-ceremony .pw-particles {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  opacity: 0.7;
+  pointer-events: none;
+}
+
+/* Searched products drifting in the particle space behind the stage. */
+.sc-floaters {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+}
+.sc-floater {
+  position: absolute;
+  width: clamp(58px, 12vw, 104px);
+  aspect-ratio: 3 / 4;
+  transform: translate(-50%, -50%);
+  border-radius: 12px;
+  overflow: hidden;
+  opacity: 0;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  /* Fade in quickly but elegantly once results land (snappy 360ms with a
+     soft ease + a small per-tile stagger from --fade for a quick cascade),
+     then float forever on a gentle bob. */
+  animation:
+    sc-floater-in 360ms cubic-bezier(0.22, 1, 0.36, 1) var(--fade, 0s) both,
+    sc-floater-drift var(--dur, 8s) ease-in-out infinite var(--d, 0s);
+}
+.sc-floater img { width: 100%; height: 100%; object-fit: cover; display: block; }
+@keyframes sc-floater-in {
+  from { opacity: 0; transform: translate(-50%, -50%) scale(0.7); }
+  to   { opacity: 0.85; transform: translate(-50%, -50%) scale(1); }
+}
+@keyframes sc-floater-drift {
+  0%   { translate: 0 0; rotate: 0deg; }
+  33%  { translate: var(--dx, 6px) -12px; rotate: var(--rot, 2deg); }
+  66%  { translate: calc(var(--dx, 6px) * -0.5) -20px; rotate: calc(var(--rot, 2deg) * -1); }
+  100% { translate: 0 0; rotate: 0deg; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .sc-floater { animation: sc-floater-in 360ms ease both; }
+}
+
+/* 1 — Query echo: the committed query, pinned at the top of the flow. */
+.sc-echo {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding-bottom: 4px;
+}
+.sc-echo-spark {
+  flex-shrink: 0;
+  display: inline-flex;
+  color: #e2e8f0;
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.4));
+  animation: sc-spark-breathe 3.6s ease-in-out infinite;
+}
+@keyframes sc-spark-breathe {
+  0%, 100% { transform: scale(1) rotate(0deg); opacity: 0.9; }
+  50%      { transform: scale(1.12) rotate(10deg); opacity: 1; }
+}
+.sc-echo-q {
+  font-size: 22px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #f5f5f7;
+  line-height: 1.2;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* 2 — Thinking label: a shimmering "Thinking" that settles to "Ready". */
+.sc-think-label { font-size: 13px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
+.sc-think-shimmer {
+  background: linear-gradient(100deg,
+    rgba(255, 255, 255, 0.35) 30%, #fff 50%, rgba(255, 255, 255, 0.35) 70%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  animation: sc-shimmer 1.6s linear infinite;
+}
+@keyframes sc-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+.sc-think-done { color: #4ade80; }
+
+/* Streamed step list — each ticks from spinner to check. */
+.sc-steps { display: flex; flex-direction: column; gap: 12px; }
+.sc-step {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 15px;
+  font-weight: 500;
+  animation: sc-step-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes sc-step-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.sc-step.is-active { color: #f5f5f7; }
+.sc-step.is-done   { color: rgba(255, 255, 255, 0.62); }
+.sc-step-icon {
+  flex-shrink: 0;
+  width: 22px; height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+}
+.sc-step.is-active .sc-step-icon { color: #fff; }
+.sc-step.is-done .sc-step-icon {
+  color: #0a0a0c;
+  background: #4ade80;
+}
+.sc-step-spinner { animation: sc-spin 0.7s linear infinite; }
+@keyframes sc-spin { to { transform: rotate(360deg); } }
+.sc-step-label { min-width: 0; }
+
+.sc-bar {
+  margin-top: 4px;
+  width: 100%; height: 3px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  overflow: hidden;
+}
+.sc-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #94a3b8, #fff);
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.4);
+  transition: width 0.1s linear;
+}
+
+/* Peek-on-landing: the feed wrapper is pulled up under the hero by a
+   small amount ONLY while the hero is showing, so just the very top
+   edge of the first row's cards noses above the fold under the
+   centered bar. Desktop and mobile use different values because mobile
+   shows the same band as a much larger portion of the screen — what
+   reads as "a fingertip" on a 1440 desktop reads as "half a card" on a
+   390 phone. Hero-scrolled threshold (0.5 × innerHeight) still only
+   fires on a real scroll. Done with margin-top on the feed wrapper
+   (not by shrinking the hero box), so the spark + headline + bar trio
+   keeps its centered geometry intact. */
+/* Feed-peek: the home feed noses up under the hero so a strip of the
+   first cards is visible above the fold, reading as "there's more
+   below". Pulled up a touch on mobile so a sliver of the first row
+   peeks at the bottom of the first viewport (per request) while the
+   scroll cue + finger glyph stay readable above it. */
+.app-root.home-hero:not(.hero-scrolled) .home-feed-wrap {
+  margin-top: 0;
+}
+@media (max-width: 768px) {
+  .app-root.home-hero:not(.hero-scrolled) .home-feed-wrap {
+    margin-top: -6svh;
+  }
+}
+@media (min-width: 769px) {
+  /* Desktop feed peek — nose the feed up ~10svh so the top of the first
+     row of cards shows below the hero, signalling "there's more below".
+     Previously desktop had no peek (margin-top: 0). */
+  .app-root.home-hero:not(.hero-scrolled) .home-feed-wrap {
+    margin-top: -10svh;
+  }
+}
+
+/* Results reveal — classic chatbot answer: once the ceremony bows out the
+   catalog rises up into position from below the fold (bottom → top) and
+   settles, the way a chat response scrolls into view. A soft blur-to-sharp
+   + barely-there scale makes the arrival feel like it's "resolving" rather
+   than just sliding. */
+.home-results-reveal {
+  animation: home-reveal 0.85s cubic-bezier(0.16, 1, 0.3, 1) both;
+  transform-origin: center top;
+  will-change: transform, opacity;
+}
+@keyframes home-reveal {
+  0% {
+    opacity: 0;
+    transform: translateY(72px) scale(0.98);
+    filter: blur(6px);
+  }
+  55% {
+    opacity: 1;
+    filter: blur(0);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+    filter: blur(0);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .sfh-spark, .sfh-title, .sfh-pill, .sfh-scroll-hint,
+  .sc-echo-spark, .sc-think-shimmer, .sc-step, .sc-step-spinner,
+  .search-ceremony, .home-results-reveal {
+    animation: none !important;
+  }
+}
+
+/* ── Single search bar: centered on the hero → glides to the bottom ───
+   The one bottom search bar starts centered under the headline (like the
+   prior build) and animates down to its docked position once the shopper
+   scrolls into the feed. Smooth on desktop AND mobile (no snap). */
+/* Single source of truth for the hero trio's vertical anchor. Both
+   the search bar's `bottom` AND .sfh's padding-bottom derive from
+   this one variable so they can never desync. Tuned so the spark +
+   headline + bar group centres around mid-screen. Per-breakpoint
+   overrides live in the media queries below. */
+.app-root.home-hero {
+  --hero-bar-bottom: 36svh;
+}
+.app-root.home-hero .bottom-bar {
+  transition:
+    bottom 0.55s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.55s cubic-bezier(0.16, 1, 0.3, 1),
+    background 0.45s ease, border-color 0.45s ease, box-shadow 0.45s ease;
+}
+.app-root.home-hero:not(.hero-scrolled) .bottom-bar {
+  bottom: var(--hero-bar-bottom, 36svh);
+  /* The bar holds its opacity through the early scroll while the
+     spark + headline fade out fast (see .sfh-stage rule below).
+     Once they're gone, the bar itself fades — multiplier 1.8 means
+     bar opacity hits 0 around ratio 0.56, just before .hero-scrolled
+     fires and the docked-position bar takes over. */
+  opacity: clamp(0, calc(1.2 - var(--hero-scroll-progress, 0) * 1.8), 1);
+  transition: opacity 0.18s linear,
+              bottom 0.55s cubic-bezier(0.16, 1, 0.3, 1),
+              transform 0.55s cubic-bezier(0.16, 1, 0.3, 1),
+              background 0.45s ease, border-color 0.45s ease, box-shadow 0.45s ease;
+}
+/* Pointer-events can't be tied to a CSS variable expression, so the
+   scroll handler toggles the .hero-bar-faded helper class when
+   --hero-scroll-progress crosses the same opacity-0 threshold. With
+   the bar invisible we let taps fall through to whatever product
+   tile sits underneath. */
+.app-root.home-hero.hero-bar-faded:not(.hero-scrolled) .bottom-bar {
+  pointer-events: none;
+}
+
+@media (max-width: 640px) {
+  /* Mobile landing bar — match the new one-color glass treatment from
+     bottom-bar.css (top→bottom gradient surface, 999px pill, inner
+     highlight + bottom shadow). The previous override here re-stamped a
+     flat rgba(.07) background that defeated the gradient and brought
+     back the two-toned chip-inside-a-chip silhouette. Slightly darker
+     here than the docked-feed variant because the hero is matte black
+     and we want the bar to feel anchored, not float-y. */
+  .app-root.home-hero:not(.hero-scrolled) .bottom-bar {
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.04)),
+      rgba(15, 18, 24, 0.5);
+    border-color: rgba(255, 255, 255, 0.12);
+    border-radius: 999px;
+    -webkit-backdrop-filter: blur(22px) saturate(1.5);
+    backdrop-filter: blur(22px) saturate(1.5);
+    box-shadow:
+      0 14px 40px rgba(0, 0, 0, 0.42),
+      inset 0 1px 0 rgba(255, 255, 255, 0.10),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.18);
+  }
+  /* Search-open: keep the same glass treatment instead of going fully
+     transparent — the previous transparent state broke the bar's outline
+     mid-typing. */
+  .app-root.home-hero:not(.hero-scrolled) .bottom-bar.search-open {
+    background:
+      linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.04)),
+      rgba(15, 18, 24, 0.5);
+    border-color: rgba(255, 255, 255, 0.12);
+    -webkit-backdrop-filter: blur(22px) saturate(1.5);
+    backdrop-filter: blur(22px) saturate(1.5);
+    box-shadow:
+      0 14px 40px rgba(0, 0, 0, 0.42),
+      inset 0 1px 0 rgba(255, 255, 255, 0.10),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.18);
+  }
+  .app-root.home-hero:not(.hero-scrolled) .bottom-bar-inner.search-inline .bottom-search-input,
+  .app-root.home-hero:not(.hero-scrolled) .bottom-bar-inner.search-inline .bottom-search-input:focus {
+    color: #fff;
+  }
+  .app-root.home-hero:not(.hero-scrolled) .bottom-bar-inner.search-inline .bottom-search-input::placeholder {
+    color: rgba(255, 255, 255, 0.42);
+  }
+  .app-root.home-hero:not(.hero-scrolled) .bottom-bar-inner.search-inline > .filter-btn.inline {
+    /* Visible chip — same treatment as the docked-feed variant in
+       bottom-bar.css. The previous transparent rule made the filter
+       icon invisible against the matte hero. */
+    background: rgba(255, 255, 255, 0.10);
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    color: rgba(255, 255, 255, 0.85);
+  }
+  .app-root.home-hero:not(.hero-scrolled) .bottom-bar-inner.search-inline > .filter-btn.inline:hover {
+    background: rgba(255, 255, 255, 0.16);
+    color: #fff;
+    border-color: rgba(255, 255, 255, 0.22);
+  }
+}
+
+/* Desktop has no soft keyboard, so the hero search bar stays centered while
+   searching (its own 50vh rule lives below). */
+@media (min-width: 769px) {
+  .app-root.home-hero:not(.hero-scrolled) .bottom-bar.search-open {
+    bottom: 46svh;
+  }
+}
+/* Mobile: dock the hero search bar to the BOTTOM of the screen whenever the
+   keyboard is down. When the keyboard is up, BottomBar pins the bar inline to
+   the keyboard's top edge (kbInset), overriding this; the moment the keyboard
+   drops, the bar glides back down here instead of stranding mid-screen above
+   the (bottom-anchored) pill cloud. Net effect: the bar always rides the
+   keyboard, and the recommended tags always sit just above the bar. */
+@media (max-width: 768px) {
+  .app-root.home-hero:not(.hero-scrolled) .bottom-bar.search-open {
+    /* Clear the home indicator AND iOS Safari's bottom URL toolbar
+       (--ios-bottom-chrome), then add an 18px breathing gap so the bar
+       doesn't hug the very bottom edge. The pill cloud's reserved
+       clearance below is bumped to match so the tags still sit above it. */
+    bottom: calc(max(env(safe-area-inset-bottom, 0px), var(--ios-bottom-chrome, 0px)) + 18px);
+  }
+}
+
+/* ── Mobile: following / followers profile icons at the TOP of the hero,
+   not on the left/right edges — and gone once you scroll into the feed. */
+@media (max-width: 768px) {
+  /* On mobile the top rail becomes the Instagram-stories scroll of creators
+     you follow — hide the desktop overlapping-avatar stacks (both following
+     AND followers) + the separator, and reveal the stories rail. */
+  .follow-rail-wrap--center .follow-rail,
+  .follow-rail-wrap--center .follow-rail-separator {
+    display: none !important;
+  }
+  /* The 3D orbit carousel is built and ready (.follow-orbit), but we're
+     back on the flat horizontal stories scroll for now. Flip these two to
+     re-enable the orbit. */
+  .follow-rail-wrap--center .follow-stories-rail {
+    display: flex;
+  }
+  .follow-rail-wrap--center .follow-orbit {
+    display: none;
+  }
+
+  /* Reposition the center rail to a full-width row pinned at the top, BELOW
+     the header (logo/bookmark/profile), so the stories rail can scroll edge
+     to edge without colliding with that UI. */
+  .app-root.home-hero:not(.hero-scrolled) .follow-rail-wrap--center {
+    position: fixed !important;
+    top: calc(50px + env(safe-area-inset-top)) !important;
+    bottom: auto !important;
+    left: 0; right: 0;
+    transform: none !important;
+    display: block !important;
+    padding: 0;
+    /* Longer, gentle ease so the creator row fades in elegantly (rather than
+       a quick pop) when you scroll back to the top. Opacity-only — it fades
+       in place, never slides up. */
+    transition: opacity 0.9s cubic-bezier(0.22, 1, 0.36, 1), top 0.3s ease;
+  }
+  /* While a look is rendering, the "Adding…" pill sits just below the header
+     (header > .pending-look-pill, top:100% + 8px). Drop the creator stories
+     row below it with matching ~8px breathing room so the two stack cleanly
+     instead of overlapping. When the pill clears, `top` animates the row back
+     up to its resting position. */
+  body.has-pending-look .app-root.home-hero:not(.hero-scrolled) .follow-rail-wrap--center {
+    top: calc(50px + env(safe-area-inset-top) + 50px) !important;
+  }
+  /* Lay each group out horizontally (overlapping avatars in a row). */
+  .app-root.home-hero:not(.hero-scrolled) .follow-rail-wrap--center .follow-rail-stack {
+    flex-direction: row !important;
+    width: auto !important;
+  }
+  .app-root.home-hero:not(.hero-scrolled) .follow-rail-wrap--center .follow-rail-avatar {
+    margin-top: 0 !important;
+    margin-left: -8px !important;
+  }
+  .app-root.home-hero:not(.hero-scrolled) .follow-rail-wrap--center .follow-rail-stack > .follow-rail-avatar:first-child {
+    margin-left: 0 !important;
+  }
+  /* Once scrolled into the feed (or off the hero entirely), the rail goes
+     away on mobile — "when you scroll, let's not have that anymore". Hide
+     with opacity ONLY (no translate) so scrolling back up fades the row in
+     where it sits instead of sliding it up into place. */
+  .app-root.home-hero.hero-scrolled .follow-rail-wrap--center,
+  .app-root:not(.home-hero) .follow-rail-wrap--center {
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+
+  /* Center the spark + headline in the band BETWEEN the stories rail (top
+     ~25%) and the fixed search bar (22vh-from-bottom, ~28% reserved).
+     justify-content: center (not flex-end) so the stage NEVER overflows
+     into the bar's reserved zone — on tight viewports the flex-end + small
+     reservation collapse let the bar overlap "What are you shopping for?". */
+  /* Mobile lowers the trio's anchor a touch so the spark + headline +
+     bar group sits dead-centre on phone viewports. Both the bar and
+     the .sfh padding read this same var (see below) so they stay
+     locked together. */
+  .app-root.home-hero {
+    --hero-bar-bottom: 36svh;
+  }
+  .sfh {
+    /* The hero trio — spark + headline + search bar — is centred as
+       a GROUP in the viewport. The bar's vertical offset and this
+       padding are both derived from ONE variable (--hero-bar-bottom,
+       set on .app-root.home-hero below) so they can never desync and
+       drop the headline below the bar. padding reserves the bar's
+       zone PLUS a ~12vh cushion so the headline always sits just
+       above the bar with the whole group centred around mid-screen. */
+    min-height: 100svh;
+    justify-content: flex-end;
+    padding-top: calc(env(safe-area-inset-top, 0px) + 90px);
+    padding-bottom: calc(var(--hero-bar-bottom, 36svh) + 12svh);
+  }
+  .app-root.home-hero:not(.hero-scrolled) .bottom-bar:not(.search-open) {
+    /* Single source of truth for the bar's RESTING hero position. .sfh's
+       padding-bottom is derived from this same var so the two move
+       together — change this one number and the whole trio re-centres
+       without the headline ever colliding with the bar. The search-open
+       bar is intentionally excluded: it docks to the bottom of the screen
+       (see the mobile search-open rule above) so the keyboard rides it
+       down and the catalog tags sit above it. */
+    bottom: var(--hero-bar-bottom, 36svh);
+  }
+}
+
+/* ── Instagram-stories rail: glowing creator circles (mobile top) ─────── */
+@property --story-angle { syntax: '<angle>'; initial-value: 0deg; inherits: false; }
+
+/* Hidden on desktop — the header renders the avatar stacks there instead.
+   Shown on mobile via the .follow-rail-wrap--center .follow-stories-rail rule
+   above. */
+.follow-stories-rail { display: none; }
+
+.follow-story {
+  flex: 0 0 auto;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 5px;
+  width: 68px;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  font-family: inherit;
+}
+.follow-story:active { transform: scale(0.94); }
+
+/* Skeleton placeholders — shown before the real entries land so the
+   creator rail is already in place (and already blooming) by the time
+   the network responds. Each skeleton has the same width / shape /
+   bloom timing as a real story; the only difference is the avatar
+   slot and name caption are shimmer fills instead of img / text. */
+.follow-story--skeleton { pointer-events: none; cursor: default; }
+.follow-story-avatar--skeleton {
+  background: linear-gradient(90deg,
+    rgba(255, 255, 255, 0.06) 0%,
+    rgba(255, 255, 255, 0.14) 50%,
+    rgba(255, 255, 255, 0.06) 100%);
+  background-size: 200% 100%;
+  animation: follow-story-skel 1.4s ease-in-out infinite;
+  border-radius: 50%;
+}
+.follow-story-name--skeleton {
+  width: 60%;
+  height: 9px;
+  border-radius: 6px;
+  background: linear-gradient(90deg,
+    rgba(255, 255, 255, 0.06) 0%,
+    rgba(255, 255, 255, 0.14) 50%,
+    rgba(255, 255, 255, 0.06) 100%);
+  background-size: 200% 100%;
+  animation: follow-story-skel 1.4s ease-in-out infinite;
+}
+@keyframes follow-story-skel {
+  0%, 100% { background-position: 200% 0; }
+  50%      { background-position: -200% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .follow-story-avatar--skeleton,
+  .follow-story-name--skeleton { animation: none; }
+}
+
+/* Glowing, slowly-rotating gradient ring (silver to stay on-brand vs IG's
+   orange/pink), with a breathing glow. Online creators get a green-tinted
+   ring. */
+.follow-story-ring {
+  width: 58px; height: 58px;
+  border-radius: 50%;
+  padding: 2.5px;
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: conic-gradient(from var(--story-angle),
+    #ffffff, #cbd5e1, #94a3b8, #e2e8f0, #ffffff);
+  animation: follow-story-spin 7s linear infinite,
+             follow-story-glow 3.2s ease-in-out infinite;
+}
+
+/* Unseen-look count badge — a number in a circle that spins (conic ring)
+   and glows, signalling new looks from that creator. */
+/* New-looks count on a creator's stories avatar. Matches the saved /
+   bookmark count badge (white pill, dark text) instead of the old red +
+   spinning-gradient treatment — keeps a thin dark ring so it stays legible
+   over avatar photos. */
+.follow-story-unseen {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: #fff;
+  color: #000;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  z-index: 3;
+  box-shadow: 0 0 0 2px #0a0a0a;
+}
+.follow-story-ring.is-online {
+  background: conic-gradient(from var(--story-angle),
+    #4ade80, #ffffff, #86efac, #ffffff, #4ade80);
+}
+@keyframes follow-story-spin { to { --story-angle: 360deg; } }
+@keyframes follow-story-glow {
+  0%, 100% { box-shadow: 0 0 5px rgba(255, 255, 255, 0.22); }
+  50%      { box-shadow: 0 0 15px rgba(255, 255, 255, 0.5); }
+}
+.follow-story-avatar {
+  width: 100%; height: 100%;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #1b1f29;
+  border: 2.5px solid #0a0a0c;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.follow-story-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+.follow-story-initial { color: #cbd5e1; font-size: 20px; font-weight: 700; }
+.follow-story-name {
+  width: 100%;
+  max-width: 100%;
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.7);
+  text-align: center;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Trailing "See all" chip → full Following list page. */
+.follow-story-ring--all {
+  background: rgba(255, 255, 255, 0.12);
+  animation: none;
+}
+.follow-story-avatar--all { color: rgba(255, 255, 255, 0.8); }
+
+/* ── 3D orbit creator carousel (mobile home hero) ───────────────────────
+   Creators ride a slowly auto-rotating cylinder. Front avatars sit large and
+   bright (perspective makes them pop forward); the ones turning toward the
+   back lean away, shrink, and dim — JS writes per-frame opacity / z-order /
+   transforms (see FollowingOrbitRail). Hidden by default; revealed only in
+   the mobile center rail. */
+.follow-orbit {
+  display: none;
+  width: 100%;
+  touch-action: pan-y;
+  -webkit-user-select: none;
+  user-select: none;
+}
+.follow-orbit-viewport {
+  position: relative;
+  width: 100%;
+  height: 50px;
+  perspective: 440px;
+  perspective-origin: 50% 50%;
+}
+.follow-orbit-stage {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+.follow-orbit-item {
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 36px;
+  height: 36px;
+  margin: -18px 0 0 -18px; /* centre on the stage origin before its 3D seat */
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transform-origin: 50% 50%;
+  will-change: transform, opacity;
+}
+.follow-orbit-ring {
+  position: relative;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  padding: 1.5px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: conic-gradient(from var(--story-angle, 0deg),
+    #ffffff, #cbd5e1, #94a3b8, #e2e8f0, #ffffff);
+  animation: follow-story-spin 7s linear infinite,
+             follow-story-glow 3.2s ease-in-out infinite;
+}
+.follow-orbit-ring.is-online {
+  background: conic-gradient(from var(--story-angle, 0deg),
+    #4ade80, #ffffff, #86efac, #ffffff, #4ade80);
+}
+.follow-orbit-avatar {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  overflow: hidden;
+  background: #1b1f29;
+  border: 2.5px solid #0a0a0c;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.follow-orbit-avatar img { width: 100%; height: 100%; object-fit: cover; border-radius: 50%; }
+.follow-orbit-initial { color: #cbd5e1; font-size: 20px; font-weight: 700; }
+.follow-orbit-avatar--skeleton {
+  background: linear-gradient(90deg,
+    rgba(255, 255, 255, 0.06) 0%,
+    rgba(255, 255, 255, 0.14) 50%,
+    rgba(255, 255, 255, 0.06) 100%);
+  background-size: 200% 100%;
+  animation: follow-story-skel 1.4s ease-in-out infinite;
+}
+.follow-orbit-unseen {
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 8px;
+  background: #fff;
+  color: #000;
+  font-size: 9px;
+  font-weight: 700;
+  line-height: 1;
+  z-index: 3;
+  box-shadow: 0 0 0 2px #0a0a0a;
+}
+.follow-orbit-caption {
+  display: block;
+  text-align: center;
+  margin: 7px auto 0;
+  max-width: 72%;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.82);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.follow-orbit-seeall {
+  display: block;
+  margin: 2px auto 0;
+  background: none;
+  border: none;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 11px;
+  font-family: inherit;
+  cursor: pointer;
+}
+@media (prefers-reduced-motion: reduce) {
+  .follow-orbit-ring { animation: none; }
+}
+
+@media (max-width: 768px) {
+  .follow-stories-rail {
+    width: 100%;
+    gap: 14px;
+    align-items: flex-start;
+    overflow-x: auto;
+    overflow-y: hidden;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    /* Extra top padding so the unseen-count badge (which sits above the
+       avatar) isn't clipped by overflow-y:hidden. */
+    padding: 9px 16px 3px;
+    box-sizing: border-box;
+    /* Slow, elegant opacity-only fade-in (no transform/slide). At-rest CSS =
+       end state + `forwards` fill, so a missed animation can't leave the rail
+       invisible. */
+    opacity: 1;
+    animation: follow-stories-fade-in 900ms cubic-bezier(0.22, 1, 0.36, 1) forwards;
+  }
+  .follow-stories-rail::-webkit-scrollbar { display: none; }
+}
+@keyframes follow-stories-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .follow-stories-rail { animation: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .follow-story-ring { animation: none; }
+}
+
+/* Desktop: dock the centered search bar tighter under the headline so the
+   two read as one centered group (the wide/short desktop viewport made
+   46vh feel disconnected from the top-anchored title). */
+@media (min-width: 769px) {
+  /* Desktop: bar sits at 42vh-from-bottom (≈ screen center). Anchor the
+     spark + headline to the bottom of the hero box (flex-end) directly
+     above it, so logo + headline + bar read as ONE vertically-centered
+     cluster — same treatment as mobile. */
+  .sfh {
+    /* Desktop: full viewport. Same reason as mobile — the centered trio's
+       math depends on the hero being a full viewport tall, and the feed
+       "peek" is produced by a negative margin-top on .home-results-reveal
+       below (independent of this box's height). */
+    min-height: 100vh;
+    justify-content: flex-end;
+    padding-top: calc(env(safe-area-inset-top, 0px) + 96px);
+    /* Headline bottom lands ~54vh from top; bar at 32vh-from-bottom
+       (~62vh from top) sits ~8vh under it — a tight, vertically-centered
+       trio with balanced empty space above and below. */
+    padding-bottom: 46vh;
+  }
+  .app-root.home-hero:not(.hero-scrolled) .bottom-bar,
+  .app-root.home-hero:not(.hero-scrolled) .bottom-bar.search-open {
+    bottom: 44vh;
+  }
+
+  /* THE desktop search bar is TypeAnywhere's .ai-bar-wrap (the bottom-bar is
+     display:none on desktop). It's mounted in root.tsx OUTSIDE .app-root — a
+     SIBLING of .app-root under <body> — so `.app-root.home-hero .ai-bar-wrap`
+     can NEVER match (the bar isn't a descendant of .app-root). Target it from
+     the shared <body> ancestor with :has() instead.
+
+     Center it with the headline whenever the hero is showing; glide it back
+     to the bottom only once the shopper actually scrolls into the feed
+     (.hero-scrolled). Using the positive .hero-scrolled selector for the drop
+     (not :not(.hero-scrolled) for the centered state) means the centered
+     position is the default and can't be defeated by a transient
+     hero-scrolled flicker. The `bottom` transition is declared globally on
+     .ai-bar-wrap below so the dock glides smoothly. */
+  body:has(.app-root.home-hero) .ai-bar-wrap {
+    /* Desktop hero centering: the trio (spark + headline + bar) sits as a
+       balanced, vertically-centered group. Bar bottom 32vh + bar height
+       ~6vh puts the bar TOP at ~62vh from top; .sfh padding-bottom (46vh)
+       holds the headline bottom at ~54vh — an even ~8vh gap to the bar, so
+       the cluster brackets screen-center with roughly equal empty space
+       above and below (previously it crowded the top third).
+       When the bar gains focus (recommended-options panel about to appear
+       above), the trio rises 18vh (32vh → 50vh) so the panel has room
+       without colliding with the feed peek; .sfh matches with -18vh. */
+    bottom: 40vh;
+    /* MUST re-list transform here: this rule overrides the base
+       .ai-bar-wrap transition, and without transform the chrome auto-hide
+       slide-back would snap instead of animate. */
+    transition:
+      bottom 0.32s cubic-bezier(0.32, 0.72, 0, 1),
+      transform 0.4s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  body:has(.app-root.home-hero) .ai-bar-wrap:focus-within {
+    bottom: 52vh;
+  }
+  /* The desktop bar (.ai-bar-wrap) is a SIBLING of .app-root under <body>,
+     NOT a descendant — so this MUST be reached from the shared <body>
+     ancestor with :has(), the same way the .sfh-scroll-hint rule below
+     does. The earlier `.app-root.home-hero .ai-bar-wrap:focus-within`
+     forms could never match (the bar isn't inside .app-root), so the
+     headline never lifted and collided with the rising bar + pills. */
+  body:has(.ai-bar-wrap:focus-within) .app-root.home-hero .sfh-stage {
+    /* Slide ONLY the spark+headline up (not the whole .sfh section) when
+       the bar is focused, so the trio (spark + headline + bar) rises as
+       one group and clears the catalog-pills panel. Targeting .sfh-stage
+       rather than .sfh leaves the section's full-viewport gradient
+       background in place — translating the whole .sfh dragged its
+       background up too and exposed a bare band below it.
+
+       The lift MUST equal the bar's own focus rise (40vh → 52vh = 12vh
+       here) so the headline-to-bar gap is identical focused vs. resting.
+       The two shorter-viewport breakpoints below raise the bar more
+       (16vh / 18vh), so they re-match the lift there. */
+    transform: translateY(-12vh);
+    transition: transform 0.32s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+  body:has(.app-root.home-hero.hero-scrolled) .ai-bar-wrap {
+    bottom: max(env(safe-area-inset-bottom), 24px);
+  }
+
+  /* Creator profile pictures on desktop too: show the glowing stories rail
+     in the header center (where the avatar stacks used to sit), hide the
+     overlapping stacks. Compact — sized to match the user's own profile
+     avatar in the header (34px), no name captions. */
+  .header-center .follow-rail-wrap--center .follow-rail,
+  .header-center .follow-rail-wrap--center .follow-rail-separator {
+    display: none !important;
+  }
+  .header-center .follow-rail-wrap--center .follow-stories-rail {
+    display: flex;
+    width: auto;
+    max-width: min(440px, 36vw);
+    gap: 8px;
+    /* Top padding so the unseen badge isn't clipped by the scroll box. */
+    padding: 7px 0 3px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .header-center .follow-rail-wrap--center .follow-stories-rail::-webkit-scrollbar { display: none; }
+  /* Match the 34px profile-avatar trigger; thinner ring, no captions. */
+  .header-center .follow-story { width: auto; gap: 0; }
+  .header-center .follow-story-ring { width: 34px; height: 34px; padding: 1.5px; }
+  .header-center .follow-story-name { display: none; }
+}
+
+/* When the catalog-pills cloud comes up (search focused), fade the
+   "Scroll to find amazing things" cue out so the two don't overlap. */
+.sfh-scroll-hint { transition: opacity 0.3s ease, transform 0.3s ease; }
+.app-root.home-hero:has(.bottom-bar.search-open) .sfh-scroll-hint {
+  opacity: 0;
+  transform: translateX(-50%) translateY(8px);
+  pointer-events: none;
+}
+/* Desktop: the search bar is TypeAnywhere (.ai-bar-wrap — a SIBLING of
+   .app-root), so the mobile .search-open selector above can't match it.
+   Fade the scroll hint on bar focus from the shared body :has() ancestor
+   so it doesn't sit behind the rising prompts panel. */
+body:has(.ai-bar-wrap:focus-within) .app-root.home-hero .sfh-scroll-hint {
+  opacity: 0;
+  transform: translateX(-50%) translateY(8px);
+  pointer-events: none;
+}
+
+/* Hide the centered hero search bar (and its scroll hint) whenever the
+   profile/user menu is open — the menu (popout on desktop, full-page on
+   mobile) sits above the bar and the bar bleeding through reads as a
+   layering bug. */
+.app-root.home-hero:has(.user-menu-popout) .bottom-bar,
+.app-root.home-hero:has(.user-menu-popout) .sfh-scroll-hint,
+.app-root.home-hero:has(.user-menu-page) .bottom-bar,
+.app-root.home-hero:has(.user-menu-page) .sfh-scroll-hint {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+/* Mobile Account page is its own full-screen surface — hide the bottom
+   bar everywhere (even off the home hero) when it's mounted. */
+html:has(.user-menu-page) .bottom-bar {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.2s ease;
+}
+
+/* ── Scroll-driven chrome auto-hide ─────────────────────────────────────
+   Once past the hero, header slides up offscreen + bottom search bar
+   slides down on scroll-down. Scrolling up brings them back. Smooth glide
+   so it reads as "the page wants you to focus on the feed". The class is
+   set by the scroll-direction effect in _index.tsx; cleared near the top
+   of the page so the chrome always reappears when you've scrolled back. */
+.app-root header,
+.app-root .bottom-bar {
+  transition:
+    transform 0.4s cubic-bezier(0.32, 0.72, 0, 1),
+    opacity   0.3s cubic-bezier(0.32, 0.72, 0, 1);
+}
+/* will-change only on the bottom bar — NOT the header. will-change:
+   transform makes an element a containing block for fixed-position
+   descendants, and the mobile Account page (position:fixed) is rendered
+   INSIDE the header; with will-change on the header it positioned relative
+   to the 60px header box instead of the viewport — the menu looked broken.
+   The header still animates via the transition above. */
+.app-root .bottom-bar {
+  will-change: transform;
+}
+/* .ai-bar-wrap (desktop search bar) lives OUTSIDE .app-root (root.tsx), so
+   its transition / will-change / hide-state can't hang off .app-root — they
+   have to be declared on the global element and driven from <body> via
+   :has(). The `bottom` transition is what makes the hero→feed dock glide; the
+   transform/opacity transitions drive the scroll-direction chrome auto-hide. */
+.ai-bar-wrap {
+  transition:
+    bottom 0.55s cubic-bezier(0.16, 1, 0.3, 1),
+    transform 0.4s cubic-bezier(0.32, 0.72, 0, 1),
+    opacity 0.3s cubic-bezier(0.32, 0.72, 0, 1);
+  will-change: transform;
+}
+/* Pure Y-slide off the screen — no opacity fade. The opacity transition was
+   being clobbered by product-page.css's header/bottom-bar transition (which
+   only lists transform/filter), so opacity snapped to 0 and the chrome
+   "just disappeared" instead of easing. Sliding fully off-screen (header up,
+   bars down) eases smoothly via the always-transitioned transform and hides
+   them just as completely. */
+.app-root.chrome-hidden header {
+  transform: translateY(-130%);
+  pointer-events: none;
+}
+.app-root.chrome-hidden .bottom-bar {
+  transform: translateY(140%);
+  pointer-events: none;
+}
+body:has(.app-root.chrome-hidden) .ai-bar-wrap {
+  /* Fully clear the viewport. translateY(140%) left a sliver peeking on
+     desktop because the bar sits 24px (+safe-area) above the bottom edge,
+     so 140% of its own height wasn't enough — add that offset back. */
+  transform: translateY(calc(100% + max(env(safe-area-inset-bottom), 24px) + 24px));
+  pointer-events: none;
+}
+
+/* Desktop overlay handling — when any product/look/brand/creator
+   overlay opens, the desktop search bar should EXIT the viewport
+   downward instead of floating to whatever "hero" or "docked"
+   position the cascade lands on. Previously the bar drifted to
+   centre-screen mid-overlay (the user's "search bar floats to
+   middle" complaint) because none of the overlay paths owned its
+   vertical position. Mobile handles this via .bottom-bar's own
+   rules; this is the desktop equivalent. */
+@media (min-width: 769px) {
+  body:has(.app-root.has-overlay) .ai-bar-wrap {
+    transform: translateY(140%);
+    opacity: 0;
+    pointer-events: none;
+    transition:
+      transform 0.32s cubic-bezier(0.32, 0.72, 0, 1),
+      opacity 0.22s cubic-bezier(0.32, 0.72, 0, 1);
+  }
+}
+
+/* When the search sheet is open the bar still hides with a pure Y
+   slide — centering is margin-based, so no translateX to preserve. */
+.app-root.chrome-hidden .bottom-bar.search-open {
+  transform: translateY(140%);
+}
+
+/* ── Site singleton particle host ───────────────────────────────────────
+   ONE canvas mounted at the app root by SiteParticleHost. Sits at z-index 0,
+   behind every other surface; the splash, hero, ceremony, and empty-catalog
+   each render above it with a semi-transparent background so the particles
+   show through. Consumers retune speed via particleControls (search
+   ceremony bumps to 3.5×; everywhere else stays at 1×). */
+.site-particle-host {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  /* Master opacity for the entire particle layer. 1.0 lets the per-particle
+     pulse and the PARTICLE_INTENSITY knob in services do the brightness work
+     instead of capping them here. Was 0.85 — bumped now that the field is
+     deliberately more intense. */
+  opacity: 1;
+}
+.site-particle-host .pw-particles {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* The hero used to mount its own ParticleBackground inside .sfh — now that
+   the singleton covers it, drop the .sfh-local copy rule (kept here as a
+   comment so the file history reads cleanly). Hero stage sits at z-index 1
+   above the singleton; the .sfh background gradient is still there because
+   the singleton is positioned: fixed and only covers the viewport (not the
+   feed below). */
+
+/* Make consumer surfaces semi-transparent so the singleton particles read
+   through. The matte-black radial gradient on each is preserved as a base
+   tint via alpha; without this, the surfaces would block the field. */
+.search-ceremony {
+  /* OPAQUE — the ceremony fully covers the feed underneath so 'James
+     Perse' steps don't bleed across the cards below. The particle world
+     stays alive via the ceremony's own ParticleBackground (rendered ABOVE
+     this scrim, BELOW the .sc-stage content). The site singleton sits
+     below; that's fine — the ceremony's local canvas takes over visually
+     while it's on screen. */
+  background: radial-gradient(120% 100% at 50% 40%, #14141a 0%, #000 72%);
+}
+.search-ceremony .pw-particles {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  opacity: 0.8;
+  pointer-events: none;
+}
+.empty-catalog {
+  background: radial-gradient(120% 90% at 50% 14%,
+    rgba(21, 22, 28, 0.78) 0%,
+    rgba(10, 10, 12, 0.92) 56%,
+    rgba(0, 0, 0, 0.96) 100%);
+}
+.empty-catalog-content { position: relative; z-index: 1; }
+
+/* ── Hero overlap protection on short desktop windows ──────────────────
+   The resting bar sits at 40vh (a nicely-raised position) on tall screens.
+   But the headline is a FIXED px size, so as the window gets shorter it eats
+   a larger share of the height and its bottom edge drops toward the bar
+   (positioned in vh). Stepping the bar back down as the viewport shortens
+   keeps a clear gap between the headline and the search bar at every window
+   size — no overlap when you resize. These come after the base desktop rule
+   so they win at equal specificity. */
+@media (min-width: 769px) and (max-height: 880px) {
+  body:has(.app-root.home-hero) .ai-bar-wrap { bottom: 32vh; }
+  body:has(.app-root.home-hero) .ai-bar-wrap:focus-within { bottom: 48vh; }
+  /* Bar rises 16vh here (32vh → 48vh) — match the headline lift so the
+     gap stays constant focused vs. resting. */
+  body:has(.ai-bar-wrap:focus-within) .app-root.home-hero .sfh-stage {
+    transform: translateY(-16vh);
+  }
+}
+@media (min-width: 769px) and (max-height: 720px) {
+  body:has(.app-root.home-hero) .ai-bar-wrap { bottom: 24vh; }
+  body:has(.app-root.home-hero) .ai-bar-wrap:focus-within { bottom: 42vh; }
+  /* Bar rises 18vh here (24vh → 42vh) — match the headline lift. */
+  body:has(.ai-bar-wrap:focus-within) .app-root.home-hero .sfh-stage {
+    transform: translateY(-18vh);
+  }
+}

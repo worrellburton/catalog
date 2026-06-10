@@ -1,7 +1,13 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from '@remix-run/react';
+import CatalogLogo from '~/components/CatalogLogo';
+import ParticleBackground from '~/components/ParticleBackground';
+import AutoplayVideo from '~/components/AutoplayVideo';
+import { particleControls } from '~/services/particles';
 import { supabase } from '~/utils/supabase';
 import { useAuth } from '~/hooks/useAuth';
+import { startGenerationJob } from '~/services/generation-queue';
+import { playExplosion } from '~/utils/explode';
 
 // /generate-only styles. Used to be in root.tsx where the consumer paid
 // the bundle cost on every page.
@@ -12,6 +18,8 @@ import {
   createGeneration,
   nameLookForGeneration,
   deleteUserGeneration,
+  setGenerationPublished,
+  setGenerationFeedback,
   deleteUserUpload,
   getGeneration,
   getGenerationDetail,
@@ -22,13 +30,23 @@ import {
   updateGenerationCrop,
   uploadUserPhoto,
   checkFacePhoto,
+  GENERATION_STALE_MS,
   type UserUpload,
   type UserGeneration,
   type GenerationProductDetail,
 } from '~/services/user-generations';
+import { promoteGenerationToLook } from '~/services/promote-generation';
 import { getUserGender, type UserGender } from '~/services/genders';
-import { getUserHeightAge, updateUserHeightAge } from '~/services/profiles';
+import {
+  getUserHeightAge,
+  updateUserHeightAge,
+  getUserCustomStyle,
+  getImpersonationTarget,
+  type ImpersonationTarget,
+} from '~/services/profiles';
 import { ConfirmModal, useConfirm } from '~/components/ConfirmModal';
+import StatsEditorModal from '~/components/StatsEditorModal';
+import '~/styles/style-page.css'; /* shares the stats-editor modal CSS */
 import {
   createLookShare,
   getLookShare,
@@ -113,6 +131,8 @@ const typicalSecondsFor = (durationSeconds?: number | null) =>
 
 type Step = 'photos' | 'products' | 'style' | 'review' | 'result';
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 // Age presets keep the picker compact - Seedance just needs a phrase
 // to seed how old the subject reads. Defaults to "mid 20s".
 const AGE_PRESETS: { label: string }[] = [
@@ -134,6 +154,10 @@ interface PickedProduct {
   price: string | null;
   image_url: string | null;
   role_tag: string | null;
+  // Optional richer media for the unified field cards (poster + product video).
+  primary_image_url?: string | null;
+  primary_video_url?: string | null;
+  primary_video_poster_url?: string | null;
 }
 
 const ROLE_TAGS = ['Hat', 'Top', 'Jacket', 'Dress', 'Pants', 'Shoes', 'Bag', 'Jewelry', 'Sunglasses', 'Accessory'];
@@ -151,9 +175,16 @@ const CATEGORY_GROUPS: Array<{ label: string; tags: string[] | null }> = [
   { label: 'Objects', tags: null },
 ];
 
-/** True if the product belongs to the named bucket. `Objects` matches
- *  anything that doesn't fit a clothing role. */
+// "All" row pinned at the top of the picker: aggregates every product and
+// lets the shopper search across all products + brands in one place. Rendered
+// before the category rows (and defaults to expanded — see `expanded` below).
+const ALL_GROUP: { label: string; tags: string[] | null } = { label: 'All', tags: [] };
+const PICKER_GROUPS = [...CATEGORY_GROUPS, ALL_GROUP];
+
+/** True if the product belongs to the named bucket. `All` matches every
+ *  product; `Objects` matches anything that doesn't fit a clothing role. */
 function productInCategory(p: { role_tag?: string | null }, group: typeof CATEGORY_GROUPS[number]): boolean {
+  if (group.label === 'All') return true;
   if (group.tags === null) {
     return !p.role_tag || !ROLE_TAGS.includes(p.role_tag);
   }
@@ -199,10 +230,85 @@ function readStepFromUrl(): Step {
   return 'photos';
 }
 
+// Per-style glyph for the style cards. Animated (float / pop) via CSS so
+// each 3:4 card has a little moving icon above its label.
+// Per-style line-art glyph (SVG, no emoji) for the style cards.
+function StyleGlyph({ value }: { value: string }) {
+  const p = { width: 20, height: 20, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 1.7, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+  switch (value) {
+    case 'editorial': // camera
+      return <svg {...p}><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>;
+    case 'commercial': // megaphone (ad)
+      return <svg {...p}><path d="M3 11l16-5v12L3 14z"/><path d="M11.5 16.5a3 3 0 1 1-5.7-1.6"/><line x1="21" y1="9" x2="21" y2="13"/></svg>;
+    case 'lifestyle': // coffee cup
+      return <svg {...p}><path d="M18 8h1a3 3 0 0 1 0 6h-1"/><path d="M3 8h15v8a4 4 0 0 1-4 4H7a4 4 0 0 1-4-4z"/><line x1="7" y1="2" x2="7" y2="5"/><line x1="11" y1="2" x2="11" y2="5"/></svg>;
+    case 'studio': // lightbulb
+      return <svg {...p}><line x1="9" y1="18" x2="15" y2="18"/><line x1="10" y1="22" x2="14" y2="22"/><path d="M12 2a7 7 0 0 0-4 12.7c.6.4 1 1.1 1 1.8v.5h6v-.5c0-.7.4-1.4 1-1.8A7 7 0 0 0 12 2z"/></svg>;
+    case 'athletic': // bolt
+      return <svg {...p}><polyline points="13 2 4 14 11 14 10 22 20 9 13 9 13 2"/></svg>;
+    case 'evening': // moon
+      return <svg {...p}><path d="M21 12.8A9 9 0 1 1 11.2 3 7 7 0 0 0 21 12.8z"/></svg>;
+    case 'beach': // sun
+      return <svg {...p}><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.9 4.9l1.4 1.4M17.7 17.7l1.4 1.4M2 12h2M20 12h2M4.9 19.1l1.4-1.4M17.7 6.3l1.4-1.4"/></svg>;
+    case 'cinematic': // film strip
+      return <svg {...p}><rect x="2.5" y="3" width="19" height="18" rx="2"/><line x1="7" y1="3" x2="7" y2="21"/><line x1="17" y1="3" x2="17" y2="21"/><line x1="2.5" y1="12" x2="21.5" y2="12"/></svg>;
+    case 'street':
+    default: // walking person
+      return <svg {...p}><circle cx="13" cy="4" r="2"/><path d="M13 22l-2-6-3-2 1-5 4 2 2 3"/><path d="M11 9l-3 1-2 4"/></svg>;
+  }
+}
+
 export default function GeneratePage() {
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
   const [step, setStep] = useState<Step>(() => readStepFromUrl());
+
+  // Admin impersonation: when /generate?as_user=<id> is set AND the
+  // current session is an admin AND the target is an AI persona
+  // (is_ai=true), every wizard write attaches to the persona, not the
+  // admin. The RLS policies in 20260521020000 mirror this gate so a
+  // forged query string can't bypass it server-side either.
+  //
+  // `impersonate` is the resolved target row when impersonation is
+  // active, or null. `effectiveUserId` is what every downstream call
+  // keys off — defaults to the signed-in user.
+  const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
+  const asUserParam = useMemo(() => {
+    if (typeof window === 'undefined') return null;
+    const v = new URLSearchParams(window.location.search).get('as_user');
+    return v && UUID_RE.test(v) ? v : null;
+  }, []);
+  const [impersonate, setImpersonate] = useState<ImpersonationTarget | null>(null);
+  const [impersonateError, setImpersonateError] = useState<string | null>(null);
+  const impersonationRequested = !!asUserParam;
+  useEffect(() => {
+    if (!asUserParam) { setImpersonate(null); return; }
+    if (!user?.id) return;
+    if (!isAdmin) {
+      setImpersonate(null);
+      setImpersonateError('Only admins can run /generate as another user.');
+      return;
+    }
+    let cancelled = false;
+    getImpersonationTarget(asUserParam).then(t => {
+      if (cancelled) return;
+      if (!t) {
+        setImpersonate(null);
+        setImpersonateError('That user is not an AI persona — refusing to impersonate.');
+        return;
+      }
+      setImpersonate(t);
+      setImpersonateError(null);
+    });
+    return () => { cancelled = true; };
+  }, [asUserParam, isAdmin, user?.id]);
+
+  const effectiveUserId = impersonate?.id ?? user?.id ?? null;
+  // True only once the impersonation handshake has resolved (or wasn't
+  // requested at all). Used to gate every wizard side-effect so we
+  // don't accidentally load the admin's own uploads/slots in the
+  // window between mount and the profiles lookup landing.
+  const effectiveUserReady = !impersonationRequested || impersonate?.id != null || !!impersonateError;
   // Branded confirm modal — drop-in replacement for window.confirm()
   // across the three destructive sites in this page (feedback delete,
   // saved-look delete, upload delete). Render `confirmHostModal` once
@@ -292,7 +398,7 @@ export default function GeneratePage() {
   );
   const filledKey = filledPublicUrls.join('|');
   useEffect(() => {
-    if (!user?.id) return;
+    if (!effectiveUserId || !effectiveUserReady) return;
     if (filledPublicUrls.length === 0) {
       setSlotChecks(['idle', 'idle', 'idle']);
       setPhotoCheckReason(null);
@@ -308,7 +414,7 @@ export default function GeneratePage() {
 
     let cancelled = false;
     const timer = setTimeout(async () => {
-      const result = await checkFacePhoto(filledPublicUrls, user.id);
+      const result = await checkFacePhoto(filledPublicUrls, effectiveUserId);
       if (cancelled) return;
       setSlotChecks(prev => {
         const next = [...prev];
@@ -323,7 +429,7 @@ export default function GeneratePage() {
     // We deliberately key off filledKey + slot count so we don't re-run
     // when the user just reorders existingUploads.
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [filledKey, user?.id]);
+  }, [filledKey, effectiveUserId, effectiveUserReady]);
 
   // Past generations - rendered in phase 7 as the "Your looks" grid. We poll
   // pending/generating rows here so the grid promotes itself to done/failed
@@ -359,48 +465,313 @@ export default function GeneratePage() {
     setCategoryQueries(prev => (prev[label] === value ? prev : { ...prev, [label]: value }));
   }, []);
 
+  // Per-category brand filter. Null = no filter active. Selecting a
+  // brand chip narrows the row to just that brand's products; tapping
+  // the active chip again clears it.
+  const [categoryBrandFilters, setCategoryBrandFilters] = useState<Record<string, string | null>>({});
+  const setCategoryBrand = useCallback((label: string, brand: string | null) => {
+    setCategoryBrandFilters(prev => ({ ...prev, [label]: brand }));
+  }, []);
+
+  // Per-category collapse. Categories default to COLLAPSED — the picker
+  // opens compact and the user expands the rows they care about (a typed
+  // search auto-expands its row).
+  const [expandedCats, setExpandedCats] = useState<Record<string, boolean>>({});
+  const toggleCat = useCallback((label: string) => {
+    setExpandedCats(prev => ({ ...prev, [label]: !prev[label] }));
+  }, []);
+
   // Slice productResults into the 6 display buckets. Each bucket also
-  // applies its own per-row search query (name/brand contains). Memoized
-  // so re-renders that don't change inputs skip the work entirely.
+  // applies its own per-row search query (name/brand contains) AND its
+  // active brand-chip filter. Memoized so re-renders that don't change
+  // inputs skip the work entirely.
   const productsByCategory = useMemo(() => {
     const out: Record<string, PickedProduct[]> = {};
-    for (const group of CATEGORY_GROUPS) {
+    for (const group of PICKER_GROUPS) {
       const q = (categoryQueries[group.label] || '').trim().toLowerCase();
+      const brand = categoryBrandFilters[group.label] || null;
       out[group.label] = productResults.filter(p => {
         if (!productInCategory(p, group)) return false;
+        if (brand && (p.brand || '').toLowerCase() !== brand.toLowerCase()) return false;
         if (!q) return true;
         const name = (p.name || '').toLowerCase();
-        const brand = (p.brand || '').toLowerCase();
-        return name.includes(q) || brand.includes(q);
+        const pBrand = (p.brand || '').toLowerCase();
+        return name.includes(q) || pBrand.includes(q);
       });
     }
     return out;
-  }, [productResults, categoryQueries]);
+  }, [productResults, categoryQueries, categoryBrandFilters]);
+
+  // Unified product field — one floating cloud of ALL products with a single
+  // search + category chips (replaces the per-category rows).
+  const [cloudQuery, setCloudQuery] = useState('');
+  const [cloudCat, setCloudCat] = useState<string | null>(null);
+  const [cloudBrand, setCloudBrand] = useState<string | null>(null);
+
+  // Grid-density dial for the product picker — mirrors the creator catalog's
+  // wheel: cycles the grid between 2 / 3 / 4 columns on mobile. Scroll/drag to
+  // change, tap to cycle; persisted across sessions. Default = 3 columns.
+  const PICK_COLS = [2, 3, 4] as const;
+  const [pickColsIndex, setPickColsIndex] = useState<number>(() => {
+    try {
+      const v = Number(window.localStorage.getItem('catalog:gen-grid-cols'));
+      const i = PICK_COLS.indexOf(v as 2 | 3 | 4);
+      return i >= 0 ? i : 1;
+    } catch { return 1; }
+  });
+  const pickCols = PICK_COLS[pickColsIndex];
+  useEffect(() => {
+    try { window.localStorage.setItem('catalog:gen-grid-cols', String(pickCols)); } catch { /* quota */ }
+  }, [pickCols]);
+  const pickDialRef = useRef<HTMLDivElement | null>(null);
+  const pickDialDraggedRef = useRef(false);
+  const [pickDialHidden, setPickDialHidden] = useState(false);
+  const cyclePickCols = useCallback(() => {
+    if (pickDialDraggedRef.current) { pickDialDraggedRef.current = false; return; }
+    setPickColsIndex(i => (i + 1) % PICK_COLS.length);
+  }, []);
+  // Auto-hide on scroll-down / reveal on scroll-up — .gen-page is the scroller.
+  useEffect(() => {
+    if (step !== 'products') return;
+    const el = document.querySelector('.gen-page') as HTMLElement | null;
+    if (!el) return;
+    let last = el.scrollTop;
+    let raf = 0;
+    const onScroll = () => {
+      cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => {
+        const y = el.scrollTop;
+        if (y < 40) { setPickDialHidden(false); last = y; return; }
+        if (y - last > 8) { setPickDialHidden(true); last = y; }
+        else if (last - y > 8) { setPickDialHidden(false); last = y; }
+      });
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => { cancelAnimationFrame(raf); el.removeEventListener('scroll', onScroll); };
+  }, [step]);
+  // Wheel + vertical-drag stepping (non-passive so the dial doesn't scroll the page).
+  useEffect(() => {
+    const el = pickDialRef.current;
+    if (!el) return;
+    const clamp = (i: number) => Math.min(PICK_COLS.length - 1, Math.max(0, i));
+    let accum = 0;
+    let touchY: number | null = null;
+    const onWheel = (e: WheelEvent) => { e.preventDefault(); accum += e.deltaY; if (Math.abs(accum) > 22) { setPickColsIndex(i => clamp(i + (accum > 0 ? 1 : -1))); accum = 0; } };
+    const onTouchStart = (e: TouchEvent) => { touchY = e.touches[0].clientY; pickDialDraggedRef.current = false; };
+    const onTouchMove = (e: TouchEvent) => {
+      if (touchY == null) return;
+      e.preventDefault();
+      const dy = e.touches[0].clientY - touchY;
+      if (Math.abs(dy) > 24) { setPickColsIndex(i => clamp(i + (dy > 0 ? 1 : -1))); touchY = e.touches[0].clientY; pickDialDraggedRef.current = true; }
+    };
+    const onTouchEnd = () => { touchY = null; };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
+    el.addEventListener('touchend', onTouchEnd, { passive: true });
+    return () => {
+      el.removeEventListener('wheel', onWheel);
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchmove', onTouchMove);
+      el.removeEventListener('touchend', onTouchEnd);
+    };
+  }, [step]);
+  // Products in the active category (before brand/query filters) — drives both
+  // the brand chips and the final list.
+  const cloudInCat = useMemo(() => {
+    const grp = cloudCat ? CATEGORY_GROUPS.find(g => g.label === cloudCat) : null;
+    return grp ? productResults.filter(p => productInCategory(p, grp)) : productResults;
+  }, [productResults, cloudCat]);
+  // Top brands within the active category, for the brand chip row under types.
+  const cloudBrands = useMemo(() => {
+    const tally = new Map<string, number>();
+    for (const p of cloudInCat) {
+      const b = (p.brand || '').trim();
+      if (b) tally.set(b, (tally.get(b) || 0) + 1);
+    }
+    return [...tally.entries()].sort((a, b) => b[1] - a[1]).map(e => e[0]).slice(0, 12);
+  }, [cloudInCat]);
+  // Final, filtered product list for the unified field.
+  const cloudProducts = useMemo(() => {
+    const q = cloudQuery.trim().toLowerCase();
+    return cloudInCat.filter(p => {
+      if (cloudBrand && (p.brand || '').toLowerCase() !== cloudBrand.toLowerCase()) return false;
+      if (!q) return true;
+      return (p.name || '').toLowerCase().includes(q) || (p.brand || '').toLowerCase().includes(q);
+    });
+  }, [cloudInCat, cloudQuery, cloudBrand]);
+
+  // Top brands available within each category (pre-filter). We pull
+  // them from the unfiltered productResults so flipping a chip doesn't
+  // change which chips are visible.
+  const brandsByCategory = useMemo(() => {
+    const out: Record<string, string[]> = {};
+    for (const group of PICKER_GROUPS) {
+      const tally = new Map<string, number>();
+      for (const p of productResults) {
+        if (!productInCategory(p, group)) continue;
+        const b = (p.brand || '').trim();
+        if (!b) continue;
+        tally.set(b, (tally.get(b) || 0) + 1);
+      }
+      out[group.label] = [...tally.entries()]
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 4)
+        .map(([b]) => b);
+    }
+    return out;
+  }, [productResults]);
   const [picked, setPicked] = useState<PickedProduct[]>([]);
+  // Build transition: when leaving the pick step, the picked products fly
+  // forward into the next screen (the "build order"). null = idle.
+  const [launching, setLaunching] = useState(false);
+  const launchToNext = useCallback(() => {
+    if (picked.length === 0) { goNext('products', setStep); return; }
+    setLaunching(true);
+    window.setTimeout(() => { setLaunching(false); goNext('products', setStep); }, 720);
+  }, [picked.length]);
+
+  // Pre-pick a product when the user lands here from a Product page's
+  // "Try it on" button (?product_url=…). One-shot — once we hydrate we
+  // strip the param off the URL so a refresh doesn't re-add a row the
+  // user may have just removed. Matches against products.url since the
+  // consumer Product type has no id.
+  //
+  // Style → Shop this look → Try it on also lands here with an
+  // additional `?occasion=…` param. We capture it into state and feed
+  // it into the prompt builder at submit time so the resulting look
+  // reads "for {occasion}" alongside the picked products.
+  const productUrlPrefilled = useRef(false);
+  const [prefilledProductId, setPrefilledProductId] = useState<string | null>(null);
+  const [occasionHint, setOccasionHint] = useState<string>('');
+  // The user's saved "your style" descriptor (Style page). Threaded into
+  // the Seedance prompt so generations reflect their personal aesthetic.
+  const [customStyle, setCustomStyle] = useState<string>('');
+  // Resume a render by id — the activity "Your looks" rail links a still-
+  // rendering tile to /generate?gen=<id> so the creator lands straight on
+  // its progress screen (the result step polls it to completion).
+  const genResumeRef = useRef(false);
+  useEffect(() => {
+    if (genResumeRef.current) return;
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    const genId = url.searchParams.get('gen');
+    genResumeRef.current = true;
+    if (!genId) return;
+    url.searchParams.delete('gen');
+    window.history.replaceState({}, '', url.toString());
+    let cancelled = false;
+    (async () => {
+      const g = await getGeneration(genId);
+      if (cancelled || !g) return;
+      setGeneration(g);
+      setStep('result');
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  useEffect(() => {
+    if (productUrlPrefilled.current) return;
+    if (typeof window === 'undefined') return;
+    const url = new URL(window.location.href);
+    const productUrl = url.searchParams.get('product_url');
+    const occasionParam = url.searchParams.get('occasion');
+    if (occasionParam) {
+      setOccasionHint(occasionParam);
+      url.searchParams.delete('occasion');
+      window.history.replaceState({}, '', url.toString());
+    }
+    if (!productUrl) { productUrlPrefilled.current = true; return; }
+    productUrlPrefilled.current = true;
+
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from('products')
+        .select('id, name, brand, price, image_url')
+        .eq('url', productUrl)
+        .maybeSingle();
+      if (cancelled || !data) return;
+      const row = data as { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null };
+      setPicked(prev => prev.some(p => p.id === row.id) ? prev : [
+        { id: row.id, name: row.name, brand: row.brand, price: row.price, image_url: row.image_url, role_tag: roleTagFromName(row.name) },
+        ...prev,
+      ]);
+      // Surface the prefilled product as the centerpiece — the dock
+      // chip gets scrolled into the viewport center and a brief
+      // highlight ring fires so it's unmistakable that this is the
+      // product the user came here to try on.
+      setPrefilledProductId(row.id);
+      // Strip the param off so a hard reload doesn't re-prefill.
+      url.searchParams.delete('product_url');
+      window.history.replaceState({}, '', url.toString());
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  // Center + highlight effect for the prefilled product. Runs after the
+  // dock chip mounts; clears the highlight after the pulse animation
+  // (~2s) so it doesn't linger as the user keeps interacting.
+  useEffect(() => {
+    if (!prefilledProductId) return;
+    if (typeof window === 'undefined') return;
+    const tries = [0, 80, 240, 600]; // retry until the chip is mounted
+    const timers: number[] = [];
+    let scrolled = false;
+    tries.forEach(delay => {
+      timers.push(window.setTimeout(() => {
+        if (scrolled) return;
+        const el = document.querySelector<HTMLElement>(
+          `[data-prefilled-id="${prefilledProductId}"]`,
+        );
+        if (el) {
+          scrolled = true;
+          el.scrollIntoView({ behavior: 'smooth', block: 'center', inline: 'center' });
+        }
+      }, delay));
+    });
+    const clear = window.setTimeout(() => setPrefilledProductId(null), 2400);
+    return () => { timers.forEach(clearTimeout); clearTimeout(clear); };
+  }, [prefilledProductId]);
 
   // Phase 9/10 - height + style
   const [heightCm, setHeightCm] = useState<number>(178);  // 5'10" default
   const [heightLabel, setHeightLabel] = useState<string>("5'10\"");
+  const [weightKg, setWeightKg] = useState<number | null>(null);
+  const [weightLabel, setWeightLabel] = useState<string | null>(null);
   const [ageLabel, setAgeLabel] = useState<string>('mid 20s');
+  // Advanced-mode body proportions + aesthetic (edited via the stats modal's
+  // Advanced section). Held here so they prefill the modal and feed the
+  // generation prompt; the modal itself persists them to the profile.
+  const [armLengthLabel, setArmLengthLabel] = useState<string | null>(null);
+  const [legLengthLabel, setLegLengthLabel] = useState<string | null>(null);
+  const [fashionStyles, setFashionStyles] = useState<string | null>(null);
+  // Stats editor visibility (shared StatsEditorModal). The chips
+  // render next to the "You" title so the user can adjust height /
+  // age / gender without leaving the wizard.
+  const [editingStats, setEditingStats] = useState(false);
   const [style, setStyle] = useState<string>('street');
   // Output clip length. Seedance 2 /fast is 5s only; Pro can do 5
   // or 10. Default 5 for Fast; the model picker bumps it to 10 when
   // Pro is selected (and the user can knock it back to 5 if they
   // want).
-  const [clipSeconds, setClipSeconds] = useState<5 | 10>(5);
+  const [clipSeconds, setClipSeconds] = useState<5 | 10>(10);
   // Seedance 2 variant. 'fast' is fast + cheap + 5s only. 'pro' is
   // longer + higher quality when Fal exposes it; the edge function
   // falls back to /fast if the Pro slug 404s.
-  const [model, setModel] = useState<'fast' | 'pro'>('fast');
+  // Default to the premium path: Pro model, 10-second clip. The review
+  // screen still exposes the Fast / 5s toggles, but every new look starts
+  // as Pro+10s per the product default.
+  const [model, setModel] = useState<'fast' | 'pro'>('pro');
   // Shopper's gender, used to filter the product picker so a male
   // shopper only sees male + unisex (+ untagged) products. 'unknown'
   // disables the filter so we don't hide the catalog from anyone we
   // can't tag.
   const [userGender, setUserGender] = useState<UserGender>('unknown');
   useEffect(() => {
-    if (!user?.id) { setUserGender('unknown'); return; }
-    getUserGender(user.id).then(setUserGender);
-  }, [user?.id]);
+    if (!effectiveUserId || !effectiveUserReady) { setUserGender('unknown'); return; }
+    getUserGender(effectiveUserId).then(setUserGender);
+  }, [effectiveUserId, effectiveUserReady]);
 
   // Prefill height + age from the user's profile so they don't have
   // to re-enter on every wizard open. Set a flag once the prefill has
@@ -408,29 +779,36 @@ export default function GeneratePage() {
   // initial defaults back over the saved values during hydration.
   const heightAgeHydrated = useRef(false);
   useEffect(() => {
-    if (!user?.id) { heightAgeHydrated.current = true; return; }
+    heightAgeHydrated.current = false;
+    if (!effectiveUserId || !effectiveUserReady) { heightAgeHydrated.current = true; return; }
     let cancelled = false;
-    getUserHeightAge(user.id).then(saved => {
+    getUserHeightAge(effectiveUserId).then(saved => {
       if (cancelled) return;
       if (saved.heightCm)    setHeightCm(saved.heightCm);
       if (saved.heightLabel) setHeightLabel(saved.heightLabel);
+      if (saved.weightKg != null) setWeightKg(saved.weightKg);
+      if (saved.weightLabel) setWeightLabel(saved.weightLabel);
       if (saved.ageLabel)    setAgeLabel(saved.ageLabel);
+      setArmLengthLabel(saved.armLengthLabel);
+      setLegLengthLabel(saved.legLengthLabel);
+      setFashionStyles(saved.fashionStyles);
       heightAgeHydrated.current = true;
     });
+    getUserCustomStyle(effectiveUserId).then(s => { if (!cancelled && s) setCustomStyle(s); });
     return () => { cancelled = true; };
-  }, [user?.id]);
+  }, [effectiveUserId, effectiveUserReady]);
 
   // Persist height + age on change. Debounced so dragging the height
   // slider doesn't fire one PATCH per cm. The hydrated guard prevents
   // writing the local defaults back over the user's saved values
   // before the prefill has landed.
   useEffect(() => {
-    if (!user?.id || !heightAgeHydrated.current) return;
+    if (!effectiveUserId || !heightAgeHydrated.current) return;
     const handle = window.setTimeout(() => {
-      updateUserHeightAge(user.id, { heightCm, heightLabel, ageLabel }).catch(() => {});
+      updateUserHeightAge(effectiveUserId, { heightCm, heightLabel, weightKg, weightLabel, ageLabel }).catch(() => {});
     }, 600);
     return () => window.clearTimeout(handle);
-  }, [user?.id, heightCm, heightLabel, ageLabel]);
+  }, [effectiveUserId, heightCm, heightLabel, weightKg, weightLabel, ageLabel]);
 
   // Phase 12 - submit + poll
   const [submitting, setSubmitting] = useState(false);
@@ -457,6 +835,24 @@ export default function GeneratePage() {
     return () => { cancelled = true; };
   }, [generation?.id, step]);
 
+  // Images that orbit on the "Vision composes…" screen: the shopper's face
+  // photos + their chosen products. Prefer the data fetched for the
+  // generation being viewed (resultRefs / resultProducts); fall back to the
+  // in-session picks (slots + picked) for a just-submitted look.
+  const orbitImages = useMemo(() => {
+    const facesFromRefs = resultRefs.map(u => u.public_url).filter((u): u is string => !!u);
+    const facesFromSlots = slots
+      .map(id => existingUploads.find(u => u.id === id)?.public_url)
+      .filter((u): u is string => !!u);
+    const faces = facesFromRefs.length ? facesFromRefs : facesFromSlots;
+    const prodFromResult = resultProducts
+      .map(p => p.product?.image_url)
+      .filter((u): u is string => !!u);
+    const prodFromPicked = picked.map(p => p.image_url).filter((u): u is string => !!u);
+    const prods = prodFromResult.length ? prodFromResult : prodFromPicked;
+    return [...faces, ...prods];
+  }, [resultRefs, slots, existingUploads, resultProducts, picked]);
+
   // Load the user's existing uploads once we know who they are, so the
   // dropzone can offer "use a face you already uploaded" instead of
   // forcing a re-upload on every session. We also fetch the saved
@@ -465,11 +861,12 @@ export default function GeneratePage() {
   // what still exists, in case any were deleted).
   const slotsHydrated = useRef(false);
   useEffect(() => {
-    if (!user?.id) return;
+    slotsHydrated.current = false;
+    if (!effectiveUserId || !effectiveUserReady) return;
     let cancelled = false;
     Promise.all([
-      listUserUploads(user.id),
-      getUserSlots(user.id, MAX_PHOTOS),
+      listUserUploads(effectiveUserId),
+      getUserSlots(effectiveUserId, MAX_PHOTOS),
     ]).then(([uploads, savedSlots]) => {
       if (cancelled) return;
       setExistingUploads(uploads);
@@ -478,27 +875,40 @@ export default function GeneratePage() {
       savedSlots.slice(0, MAX_PHOTOS).forEach((id, i) => {
         if (typeof id === 'string' && known.has(id)) restored[i] = id;
       });
+      // Admin-impersonation convenience: when no saved slots exist on
+      // the persona but reference photos do, auto-pick the most recent
+      // uploads so the admin doesn't have to drag them in by hand
+      // every time. Only fires when ALL slots are empty so we never
+      // overwrite a deliberate pick during a re-hydrate; the
+      // persist-on-change effect below saves the choice back so it
+      // sticks for the next session.
+      const noSavedPicks = restored.every(id => id === null);
+      if (impersonate && noSavedPicks && uploads.length > 0) {
+        uploads.slice(0, MAX_PHOTOS).forEach((u, i) => {
+          (restored as Array<string | null>)[i] = u.id;
+        });
+      }
       setSlots(restored);
       slotsHydrated.current = true;
     });
     return () => { cancelled = true; };
-  }, [user?.id]);
+  }, [effectiveUserId, effectiveUserReady, impersonate?.id]);
 
   // Persist slot changes back to Supabase so they survive across
   // sessions and devices. Skipped until after the initial hydrate so
   // we don't overwrite the saved row with the empty `[null,null,null]`
   // default before we've had a chance to read it.
   useEffect(() => {
-    if (!user?.id || !slotsHydrated.current) return;
-    saveUserSlots(user.id, slots);
-  }, [user?.id, slots]);
+    if (!effectiveUserId || !slotsHydrated.current) return;
+    saveUserSlots(effectiveUserId, slots);
+  }, [effectiveUserId, slots]);
 
   // Initial load of past generations - Phase 7 renders them as cards.
   useEffect(() => {
-    if (!user?.id) return;
+    if (!effectiveUserId || !effectiveUserReady) return;
     let cancelled = false;
     setLoadingList(true);
-    listUserGenerations(user.id).then(rows => {
+    listUserGenerations(effectiveUserId).then(rows => {
       if (cancelled) return;
       setGenerations(rows);
       setLoadingList(false);
@@ -511,7 +921,7 @@ export default function GeneratePage() {
       }
     });
     return () => { cancelled = true; };
-  }, [user?.id]);
+  }, [effectiveUserId, effectiveUserReady]);
 
   // Poll in-flight list rows every 3s so the grid promotes pending/generating
   // rows as soon as the edge function finishes.
@@ -545,7 +955,7 @@ export default function GeneratePage() {
       // generation pipeline needs a visual reference per product.
       let query = supabase!
         .from('products')
-        .select('id, name, brand, price, image_url')
+        .select('id, name, brand, price, image_url, primary_image_url, primary_video_url, primary_video_poster_url')
         .not('image_url', 'is', null)
         .order('created_at', { ascending: false })
         .limit(1000);
@@ -565,10 +975,15 @@ export default function GeneratePage() {
       if (q) query = query.or(`name.ilike.%${q}%,brand.ilike.%${q}%`);
       const { data } = await query;
       if (cancelled) return;
-      setProductResults(((data || []) as PickedProduct[]).map(p => ({
+      const mapped = ((data || []) as PickedProduct[]).map(p => ({
         ...p,
         role_tag: roleTagFromName(p.name),
-      })));
+      }));
+      // Dresses are women-only: never surface them to a male creator, even
+      // when the row's gender tag is unisex / untagged.
+      setProductResults(
+        userGender === 'male' ? mapped.filter(p => p.role_tag !== 'Dress') : mapped,
+      );
       setProductsLoading(false);
     };
     const handle = window.setTimeout(run, 180);
@@ -576,16 +991,107 @@ export default function GeneratePage() {
   }, [step, productQuery, userGender]);
 
   // Phase 17 - poll the generation row every 2.5s until it lands on a
-  // terminal status, so the Result view replaces the spinner as soon as
-  // the edge function finishes.
+  // terminal status, so the Result view replaces the spinner as soon
+  // as the edge function finishes.
+  //
+  // Keyed off `generation?.id` only (not the whole `generation`
+  // object) so we don't tear down and rebuild the interval on every
+  // poll tick — the previous shape did, which left a ~2.5s gap each
+  // time the row updated and made the perceived "stuck at 99%" window
+  // longer than it had to be. We also kick a one-shot refetch when
+  // the tab becomes visible again, in case the browser throttled the
+  // interval while the page was backgrounded.
+  const generationIdForPoll = generation?.id ?? null;
+  const generationIsTerminal = generation?.status === 'done' || generation?.status === 'failed';
+
+  // Auto-add every completed generation to the creator's My Catalog as an
+  // INACTIVE look. Idempotent (promoteGenerationToLook keys off
+  // source_generation_id and leaves an existing row's status alone), fires
+  // once per generation id. The creator flips it Live from My Catalog.
+  const autoArchivedRef = useRef<Set<string>>(new Set());
   useEffect(() => {
-    if (!generation || generation.status === 'done' || generation.status === 'failed') return;
-    const id = window.setInterval(async () => {
-      const next = await getGeneration(generation.id);
-      if (next) setGeneration(next);
-    }, 2500);
-    return () => window.clearInterval(id);
-  }, [generation]);
+    const g = generation;
+    if (!g || g.status !== 'done' || !g.video_url || !effectiveUserId) return;
+    if (autoArchivedRef.current.has(g.id)) return;
+    autoArchivedRef.current.add(g.id);
+    const gender: 'men' | 'women' | 'unisex' =
+      userGender === 'male' ? 'men' : userGender === 'female' ? 'women' : 'unisex';
+    promoteGenerationToLook({
+      generationId: g.id,
+      creatorUserId: effectiveUserId,
+      videoUrl: g.video_url,
+      creatorLabel: g.display_name || 'You',
+      style: g.style || 'look',
+      gender,
+      status: 'archived',
+      products: picked.map(p => ({ id: p.id })),
+    }).catch(() => { autoArchivedRef.current.delete(g.id); });
+  }, [generation, effectiveUserId, userGender, picked]);
+  useEffect(() => {
+    if (!generationIdForPoll || generationIsTerminal) return;
+    let cancelled = false;
+    const tick = async () => {
+      const next = await getGeneration(generationIdForPoll);
+      if (cancelled || !next) return;
+      setGeneration(next);
+    };
+    const intervalId = window.setInterval(tick, 2500);
+    const onVisible = () => { if (document.visibilityState === 'visible') void tick(); };
+    document.addEventListener('visibilitychange', onVisible);
+    return () => {
+      cancelled = true;
+      window.clearInterval(intervalId);
+      document.removeEventListener('visibilitychange', onVisible);
+    };
+  }, [generationIdForPoll, generationIsTerminal]);
+
+  // Surface the in-flight try-on render in the global Generation Queue
+  // (bottom-right panel) so it shows alongside admin jobs. We mirror the
+  // poll's lifecycle: open a queue job when a generation goes in-flight,
+  // finish/fail it when it reaches a terminal status. Keyed off id+status
+  // so it fires exactly on the transitions.
+  const queueJobRef = useRef<{ genId: string; finish: (ms?: number, msg?: string) => void; fail: (msg?: string) => void } | null>(null);
+  useEffect(() => {
+    if (!generation) return;
+    const st = generation.status;
+    const inFlight = st === 'pending' || st === 'generating';
+    if (inFlight && queueJobRef.current?.genId !== generation.id) {
+      queueJobRef.current?.finish(); // close any stale one
+      const job = startGenerationJob({
+        kind: 'primary-video',
+        label: generation.display_name || 'Your look',
+        context: STYLE_PRESETS.find(s => s.value === style)?.label || 'Try-on',
+        model: model === 'pro' ? 'Seedance 2 Pro' : 'Seedance 2 Fast',
+        thumbnailUrl: existingUploads.find(u => u.id === pickedUploadIds[0])?.public_url ?? null,
+      });
+      queueJobRef.current = { genId: generation.id, finish: job.finish, fail: job.fail };
+    } else if ((st === 'done' || st === 'failed') && queueJobRef.current?.genId === generation.id) {
+      if (st === 'done') queueJobRef.current.finish(undefined, 'Done');
+      else queueJobRef.current.fail(generation.error || 'Failed');
+      queueJobRef.current = null;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [generation?.id, generation?.status]);
+
+  // Generating view = the in-flight result screen. The design wants it to
+  // read as one focused moment: header says "Generating" and the whole
+  // screen is pinned to a single mobile viewport with no page scroll.
+  const isGeneratingView = step === 'result'
+    && (generation?.status === 'pending' || generation?.status === 'generating');
+  // The Review step is also pinned to a single viewport (no page scroll) —
+  // the selected products live in the bottom dock, so the body stays short.
+  const lockOneViewport = isGeneratingView || step === 'review';
+  useEffect(() => {
+    if (!lockOneViewport) return;
+    const prevBody = document.body.style.overflow;
+    const prevHtml = document.documentElement.style.overflow;
+    document.body.style.overflow = 'hidden';
+    document.documentElement.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = prevBody;
+      document.documentElement.style.overflow = prevHtml;
+    };
+  }, [lockOneViewport]);
 
   // Tapping an existing upload toggles its membership in the slots - drops
   // it into the first empty slot, or removes it if it's already placed.
@@ -627,10 +1133,14 @@ export default function GeneratePage() {
     if (error) setUploadError(error);
   };
 
-  const removeGeneration = async (id: string) => {
+  // useCallback so the LookCard rows (memo'd) don't re-render on every
+  // parent re-render (e.g. typing into the prompt field). Both setState
+  // refs and the deleteUserGeneration module function are stable, so
+  // empty deps are safe.
+  const removeGeneration = useCallback(async (id: string) => {
     setGenerations(prev => prev.filter(g => g.id !== id));
     await deleteUserGeneration(id);
-  };
+  }, []);
 
   // Which slot the next file-picker upload should land in. Tracked via a
   // ref so onFileInput can target a specific slot when the user taps an
@@ -656,6 +1166,23 @@ export default function GeneratePage() {
   const [exportSlug, setExportSlug] = useState<string | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   const [exportSubmitting, setExportSubmitting] = useState(false);
+  // "How did I do?" feedback bar state. After generation completes the
+  // user picks one of three answers (love / off / delete). 'love'
+  // expands inline to keep-private vs publish-to-catalog; 'off'
+  // expands to a free-text reason; 'delete' fires a confirm + hard-
+  // delete. feedbackBusy guards double-click during the round-trip.
+  const [feedbackKind, setFeedbackKind] = useState<'love' | 'off' | null>(null);
+  const [feedbackReason, setFeedbackReason] = useState('');
+  const [feedbackBusy, setFeedbackBusy] = useState(false);
+  const [feedbackDone, setFeedbackDone] = useState<'kept' | 'published' | 'reported' | null>(null);
+  // Reset feedback state whenever the active generation changes so the
+  // bar doesn't show stale "Published!" UI on a fresh generation.
+  useEffect(() => {
+    setFeedbackKind(null);
+    setFeedbackReason('');
+    setFeedbackBusy(false);
+    setFeedbackDone(null);
+  }, [generation?.id]);
 
   const openPickerForSlot = (slotIndex: number) => {
     // If the user has any existing uploads, prefer the modal so they can
@@ -698,7 +1225,7 @@ export default function GeneratePage() {
   // slot the upload should land in; pass `null` to fall back to the
   // first empty slot.
   const uploadFileIntoSlot = async (file: File, targetSlot: number | null) => {
-    if (!user?.id) return;
+    if (!effectiveUserId) return;
     setUploading(true);
     setUploadError(null);
     const slotForProgress = targetSlot != null && targetSlot >= 0 && targetSlot < MAX_PHOTOS
@@ -785,7 +1312,7 @@ export default function GeneratePage() {
       return;
     }
 
-    const { data, error } = await uploadUserPhoto(fileToUpload, user.id, (pct) => {
+    const { data, error } = await uploadUserPhoto(fileToUpload, effectiveUserId, (pct) => {
       setUploadProgress(prev => prev?.slot === slotForProgress
         ? { slot: slotForProgress, pct }
         : prev);
@@ -856,13 +1383,46 @@ export default function GeneratePage() {
     }
     // Scroll the freshly-picked card into the visible center of its
     // category row so the user gets immediate confirmation. Only fires
-    // on the pick (not the unpick) and waits a tick for React to apply
-    // the is-picked class before the smooth scroll starts.
+    // on the pick (not the unpick).
+    //
+    // We can't use Element.scrollIntoView({ inline: 'center' }) here —
+    // that method walks EVERY scrollable ancestor and centers each one,
+    // so picking a card in a middle row also page-scrolls the rows
+    // above and below it (the regression in the user's screenshot).
+    // Instead we manually scroll ONLY the row's horizontal scroller by
+    // the delta between the card's centre and the row's centre. The
+    // page stays put.
     if (!wasPicked && typeof document !== 'undefined') {
       requestAnimationFrame(() => {
-        const card = document.querySelector(`[data-gen-card-id="${p.id}"]`);
-        if (card && 'scrollIntoView' in card) {
-          (card as HTMLElement).scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'center' });
+        const card = document.querySelector(`[data-gen-card-id="${p.id}"]`) as HTMLElement | null;
+        if (!card) return;
+        // Horizontal centering only applies to the legacy per-category rows;
+        // the unified cloud is a grid (no horizontal scroller).
+        const row = card.closest('.gen-cat-row-scroll') as HTMLElement | null;
+        if (row) {
+          const cardRect0 = card.getBoundingClientRect();
+          const rowRect = row.getBoundingClientRect();
+          const delta = (cardRect0.left + cardRect0.width / 2) - (rowRect.left + rowRect.width / 2);
+          if (Math.abs(delta) >= 4) row.scrollBy({ left: delta, behavior: 'smooth' });
+        }
+        const cardRect = card.getBoundingClientRect();
+        // Also bring the card to the vertical middle of the screen. Target
+        // ~46% of the viewport so the bottom dock doesn't cover it. Scroll the
+        // ACTUAL scroll container: .gen-page only scrolls on some viewports —
+        // on others the window scrolls — so walk to the nearest scrollable
+        // ancestor and fall back to the window. (Was scrolling .gen-page
+        // unconditionally, which no-ops when the window is the real scroller,
+        // so the card never moved to the middle.)
+        const vDelta = (cardRect.top + cardRect.height / 2) - window.innerHeight * 0.46;
+        if (Math.abs(vDelta) > 10) {
+          let scroller: HTMLElement | null = (row || card).parentElement;
+          while (scroller) {
+            const oy = getComputedStyle(scroller).overflowY;
+            if ((oy === 'auto' || oy === 'scroll') && scroller.scrollHeight > scroller.clientHeight + 1) break;
+            scroller = scroller.parentElement;
+          }
+          if (scroller) scroller.scrollBy({ top: vDelta, behavior: 'smooth' });
+          else window.scrollBy({ top: vDelta, behavior: 'smooth' });
         }
       });
     }
@@ -890,15 +1450,15 @@ export default function GeneratePage() {
 
   // Open a past generation in the Result view. Used when the shopper taps
   // a card in the "Your looks" grid.
-  const openGeneration = (g: UserGeneration) => {
+  const openGeneration = useCallback((g: UserGeneration) => {
     setGeneration(g);
     setStep('result');
-  };
+  }, []);
 
   // Hydrate the wizard from an existing generation and jump to Review so
   // the shopper can tweak + re-submit. A fresh row is created on submit so
   // the history in "Your looks" is preserved.
-  const editGeneration = async (id: string) => {
+  const editGeneration = useCallback(async (id: string) => {
     const detail = await getGenerationDetail(id);
     if (!detail.generation) return;
 
@@ -940,7 +1500,7 @@ export default function GeneratePage() {
     setGeneration(null);
     setSubmitError(null);
     setStep('review');
-  };
+  }, []);
 
   const startNewLook = () => {
     setGeneration(null);
@@ -999,22 +1559,33 @@ export default function GeneratePage() {
     // from the photos step. The model needs both anchors to render a
     // believable look, so we gate at the entry point.
     if (step === 'photos') return pickedUploadIds.length > 0 && !uploading && !!heightLabel && !!ageLabel;
-    if (step === 'products') return picked.length > 0;
-    if (step === 'style') return !!style;
+    // Products are optional — a shopper can render a styled video of just
+    // themselves (photos only), or drive it purely with a custom text
+    // direction. Don't block Next on having picked a product.
+    if (step === 'products') return true;
+    // A preset style OR a typed custom direction is enough to proceed.
+    if (step === 'style') return !!style || !!customStyle.trim();
     return true;
-  }, [step, pickedUploadIds.length, uploading, picked.length, heightLabel, ageLabel, style]);
+  }, [step, pickedUploadIds.length, uploading, heightLabel, ageLabel, style, customStyle]);
 
   const handleSubmit = async () => {
-    if (!user?.id) {
-      setSubmitError('Sign in required');
+    if (!effectiveUserId) {
+      setSubmitError(impersonationRequested ? 'Impersonation target unresolved' : 'Sign in required');
       return;
     }
     setSubmitting(true);
     setSubmitError(null);
     const prompt = buildGenerationPrompt({
       heightLabel,
+      weightLabel,
       ageLabel,
+      gender: userGender,
       style,
+      occasion: occasionHint || undefined,
+      customStyle: customStyle || undefined,
+      armLengthLabel: armLengthLabel || undefined,
+      legLengthLabel: legLengthLabel || undefined,
+      fashionStyles: fashionStyles || undefined,
       durationSeconds: clipSeconds,
       productLines: picked.map(p => ({
         role_tag: p.role_tag,
@@ -1023,16 +1594,21 @@ export default function GeneratePage() {
       })),
     });
     const { data, error } = await createGeneration({
-      userId: user.id,
+      userId: effectiveUserId,
       uploadIds: pickedUploadIds,
       products: picked.map((p, i) => ({ product_id: p.id, role_tag: p.role_tag, sort_order: i })),
       heightCm,
       heightLabel,
+      weightLabel,
       ageLabel,
       style,
       prompt,
       durationSeconds: clipSeconds,
       model,
+      // Stamp the admin's auth id on the row when impersonating an AI
+      // persona so the admin user detail page can split its queue into
+      // "Triggered by Admin" vs "Self-triggered".
+      triggeredByAdminId: impersonate ? user?.id ?? null : null,
     });
     setSubmitting(false);
     if (error || !data) {
@@ -1042,8 +1618,12 @@ export default function GeneratePage() {
     setGeneration(data);
     // Fire-and-forget Claude name generation. Doesn't block the user
     // from advancing to the result screen - the name lands on the row
-    // asynchronously and shows up in "Your looks" once it does.
-    void nameLookForGeneration(data.id);
+    // asynchronously and shows up in "Your looks" once it does. Surfaced
+    // in the global Generation Queue too (a quick text job).
+    {
+      const nameJob = startGenerationJob({ kind: 'other', label: 'Naming look', model: 'claude' });
+      nameLookForGeneration(data.id).then(() => nameJob.finish(undefined, 'Named')).catch(() => nameJob.fail());
+    }
     // Prepend the new row to the in-memory list so it shows up in
     // "Your looks" the moment the shopper hits Back from the result
     // screen - no page refresh needed. The list-polling effect will
@@ -1064,42 +1644,159 @@ export default function GeneratePage() {
       </div>
     );
   }
+  // Admin asked to impersonate but the target lookup either failed or
+  // resolved to a non-AI profile. Hard-stop the wizard so the admin
+  // doesn't think they're generating "as" the persona while every
+  // write silently lands on their own row.
+  if (impersonationRequested && !impersonate && (impersonateError || effectiveUserReady)) {
+    return (
+      <div className="gen-page">
+        <div className="gen-empty">
+          <h2>Can't generate as that user</h2>
+          <p>{impersonateError ?? 'That user is not an AI persona.'}</p>
+          <button className="gen-btn-primary" onClick={() => navigate('/admin/users?tab=ai')}>
+            Back to AI users
+          </button>
+        </div>
+      </div>
+    );
+  }
+  if (impersonationRequested && !effectiveUserReady) {
+    return <div className="gen-page"><div className="gen-empty">Resolving impersonation target…</div></div>;
+  }
 
   return (
-    <div className="gen-page">
+    <div className={`gen-page${isGeneratingView ? ' gen-page--generating' : ''}${step === 'review' ? ' gen-page--review' : ''}${step === 'style' ? ' gen-page--style' : ''}`}>
+      {/* Pick + Review: a live WebGL particle field sits behind the screen so
+          products/photos read as floating in 3D space over it. */}
+      {(step === 'products' || step === 'review' || step === 'photos') && (
+        <div className="gen-products-particles" aria-hidden="true">
+          <ParticleBackground />
+        </div>
+      )}
+      {/* Build transition: the picked products fly forward into the next screen. */}
+      {launching && (
+        <div className="gen-launch-overlay" aria-hidden="true">
+          {picked.map((p, i) => (
+            <div
+              key={p.id}
+              className="gen-launch-card"
+              style={{
+                ['--i']: i,
+                backgroundImage: p.image_url ? `url(${p.image_url})` : undefined,
+              } as React.CSSProperties}
+            />
+          ))}
+        </div>
+      )}
       {confirmHostModal}
-      <div className={`gen-head${step === 'products' ? ' gen-head-compact' : ''}`}>
-        <button
-          className="gen-back"
-          onClick={() => {
-            // From the result view, "back" should land the shopper on
-            // the Photos step (with their looks grid) rather than
-            // bouncing them all the way out to the catalog.
-            if (step === 'result') {
-              setStep('photos');
-              return;
-            }
-            navigate('/#app');
+      {impersonate && (
+        <div
+          role="status"
+          style={{
+            position: 'sticky', top: 0, zIndex: 50,
+            display: 'flex', alignItems: 'center', gap: 10,
+            background: '#fef3c7', color: '#92400e',
+            border: '1px solid #fcd34d', borderRadius: 8,
+            padding: '8px 12px', margin: '8px 12px 0', fontSize: 13,
           }}
-          aria-label={step === 'result' ? 'Back to your looks' : 'Back to catalog'}
         >
-          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
-          {step === 'result' ? 'Back to your looks' : 'Back to catalog'}
-        </button>
+          {impersonate.avatar_url && (
+            <img
+              src={impersonate.avatar_url}
+              alt=""
+              width={24}
+              height={24}
+              style={{ width: 24, height: 24, borderRadius: '50%', objectFit: 'cover' }}
+            />
+          )}
+          <span>
+            <strong>Generating as</strong>{' '}
+            {impersonate.full_name || impersonate.id.slice(0, 8)} — every upload &amp; look attaches to this AI persona, not your admin account.
+          </span>
+          <button
+            type="button"
+            onClick={() => navigate(`/admin/user/${impersonate.id}`)}
+            style={{
+              marginLeft: 'auto', background: 'transparent', border: '1px solid #fcd34d',
+              color: '#92400e', padding: '4px 8px', borderRadius: 6, fontSize: 12, cursor: 'pointer',
+            }}
+          >
+            Open persona
+          </button>
+        </div>
+      )}
+      <div className={`gen-head${step === 'products' ? ' gen-head-compact' : ''}`}>
+        {/* On the Products step the back affordance becomes the Catalog
+            wordmark — tap the logo to bail back to the home feed. The
+            text "Back to catalog" + arrow was wide and competed with
+            "Pick your products" below it. Logo reads as the canonical
+            "go home" gesture in every other consumer app. */}
+        {(() => {
+          // On the mid-wizard steps (style, review) the back affordance
+          // should walk one step back through the flow — not bail all the
+          // way out to the catalog — and the label names the screen you'll
+          // land on. Review → "Back to style" (the screen right before it),
+          // Style → "Back to products". Everything else keeps the
+          // catalog/your-looks exits.
+          const PREV_LABEL: Partial<Record<Step, string>> = {
+            review: 'Back to style',
+            style: 'Back to products',
+          };
+          const prevLabel = PREV_LABEL[step];
+          const label =
+            step === 'result' ? 'Back to your looks' : prevLabel || 'Back to catalog';
+          return (
+            <button
+              className={`gen-back${step === 'products' ? ' gen-back-logo' : ''}`}
+              onClick={() => {
+                // From the result view, "back" should land the shopper on
+                // the Photos step (with their looks grid) rather than
+                // bouncing them all the way out to the catalog.
+                if (step === 'result') {
+                  setStep('photos');
+                  return;
+                }
+                // Style / review step back to the previous wizard screen.
+                if (prevLabel) {
+                  goPrev(step, setStep);
+                  return;
+                }
+                navigate('/#app');
+              }}
+              aria-label={label}
+            >
+              {step === 'products' ? (
+                <CatalogLogo className="gen-back-logo-svg" />
+              ) : (
+                <>
+                  <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+                  {label}
+                </>
+              )}
+            </button>
+          );
+        })()}
         {/* Photos step gets a "Try this on" headline - the actual primary
             verb the page does. Products is dense and gets the back-only
             header. Other secondary steps fall back to the original
             "Generate" framing. */}
         {step === 'photos' && (
           <>
-            <h1>Try this on</h1>
+            <h1>Create a new look</h1>
             <p className="gen-sub">Drop in a few clean shots of yourself, then pick up to five products to dress up in.</p>
           </>
         )}
         {step !== 'products' && step !== 'photos' && (
           <>
-            <h1>Generate</h1>
-            <p className="gen-sub">Upload a face, pick up to five products, and we'll compose the look.</p>
+            <h1>{isGeneratingView ? 'Generating' : step === 'review' ? 'Review' : 'Generate'}</h1>
+            <p className="gen-sub">
+              {isGeneratingView
+                ? 'Hang tight — we’re composing your look.'
+                : step === 'review'
+                  ? 'Give it a once-over, then build your look.'
+                  : "Upload a face, pick up to five products, and we'll compose the look."}
+            </p>
           </>
         )}
       </div>
@@ -1125,7 +1822,31 @@ export default function GeneratePage() {
                 look button. Capped at ~1/3 of the viewport height so the
                 "Your looks" grid below can dominate the screen. */}
             <div className="gen-photos-form">
-              <h2 className="gen-photos-title">You</h2>
+              <div className="gen-photos-title-row">
+                <h2 className="gen-photos-title">You</h2>
+                {/* Stats chips + Edit button mirror the /style page so the
+                    user can spot and adjust the height / age / gender values
+                    that get fed into every prompt. Reuses the shared
+                    StatsEditorModal so both surfaces persist to the same
+                    profiles row. */}
+                <div className="style-context-meta gen-photos-stats">
+                  {heightLabel && <span className="style-context-chip">{heightLabel}</span>}
+                  {weightLabel && (
+                    <span className="style-context-chip">{weightLabel.replace(/\s*\(.*\)\s*/, '')}</span>
+                  )}
+                  {ageLabel && <span className="style-context-chip">{ageLabel}</span>}
+                  {userGender !== 'unknown' && (
+                    <span className="style-context-chip">{userGender}</span>
+                  )}
+                  <button
+                    type="button"
+                    className="style-context-edit"
+                    onClick={() => setEditingStats(true)}
+                  >
+                    Edit
+                  </button>
+                </div>
+              </div>
 
               <input
                 ref={fileInputRef}
@@ -1252,57 +1973,11 @@ export default function GeneratePage() {
 
             </div>
 
-            {/* "Make a new look" is the single primary CTA on the
-                photos step. Two states:
-                  - canAdvance (user uploaded photos + picked style) →
-                    call goNext to actually kick off generation. This
-                    folds in the work the previous "Create look" sticky
-                    button used to do, so there's only one button to
-                    click instead of two competing CTAs.
-                  - otherwise → scroll to the top of the page so the
-                    user lands on the upload slots and can start the
-                    flow. The button is never disabled because there's
-                    always a useful action to take.
-                Sits in the dock-style sticky bar at the bottom of the
-                viewport so it's always reachable, even with many
-                "Your looks" cards below. */}
-            <div className="gen-photos-cta-bar">
-              <button
-                type="button"
-                className="gen-creator-cta gen-creator-cta--primary"
-                onClick={() => {
-                  if (canAdvance) goNext(step, setStep);
-                  else window.scrollTo({ top: 0, behavior: 'smooth' });
-                }}
-              >
-                <span className="gen-creator-cta-icon" aria-hidden="true">
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
-                </span>
-                <span className="gen-creator-cta-label">Make a new look</span>
-                <span className="gen-creator-cta-chevron" aria-hidden="true">›</span>
-              </button>
-            </div>
-
-            {(generations.length > 0 || loadingList) && (
-              <>
-                <div className="gen-sectionlabel">Your looks</div>
-                {loadingList && generations.length === 0 ? (
-                  <div className="gen-empty">Loading your looks…</div>
-                ) : (
-                  <div className="gen-lookgrid">
-                    {generations.map(g => (
-                      <LookCard
-                        key={g.id}
-                        generation={g}
-                        onOpen={() => openGeneration(g)}
-                        onRegenerate={() => editGeneration(g.id)}
-                        onDelete={() => removeGeneration(g.id)}
-                      />
-                    ))}
-                  </div>
-                )}
-              </>
-            )}
+            {/* Continue CTA lives in the fixed bottom dock (rendered below,
+                outside the form) so it matches the toolbar on the Products /
+                Style / Review screens. */}
+            {/* "Your looks" grid removed from this page — generated looks now
+                live in My Catalog (as Inactive) instead. */}
           </section>
         )}
 
@@ -1334,52 +2009,100 @@ export default function GeneratePage() {
             {productsLoading && productResults.length === 0 ? (
               <div className="gen-empty">Loading products…</div>
             ) : (
-              CATEGORY_GROUPS.map(group => {
-                const rowProducts = productsByCategory[group.label] || [];
-                const rowQuery = categoryQueries[group.label] || '';
-                return (
-                  <div key={group.label} className="gen-cat-row">
-                    <div className="gen-cat-row-head">
-                      <span className="gen-cat-row-label">{group.label}</span>
-                      <input
-                        type="search"
-                        className="gen-cat-row-search"
-                        placeholder={`Search ${group.label.toLowerCase()}…`}
-                        value={rowQuery}
-                        onChange={e => setCategoryQuery(group.label, e.target.value)}
-                        aria-label={`Search ${group.label}`}
-                      />
-                    </div>
-                    <div className="gen-cat-row-scroll">
-                      {rowProducts.length === 0 ? (
-                        <div className="gen-cat-row-empty">
-                          {rowQuery ? `No ${group.label.toLowerCase()} match "${rowQuery}"` : `No ${group.label.toLowerCase()} yet`}
-                        </div>
-                      ) : (
-                        rowProducts.map(p => {
-                          const isPicked = picked.some(x => x.id === p.id);
-                          return (
-                            <button
-                              key={p.id}
-                              type="button"
-                              className={`gen-cat-card${isPicked ? ' is-picked' : ''}`}
-                              data-gen-card-id={p.id}
-                              onClick={() => togglePick(p)}
-                              /* No disabled state - a tap on a 6th card
-                                 surfaces the limit toast instead of
-                                 silently doing nothing. */
-                            >
-                              {p.image_url && <img src={p.image_url} alt="" loading="lazy" />}
-                              <span className="gen-cat-card-name">{p.name || 'Product'}</span>
-                              <span className="gen-cat-card-brand">{p.brand}</span>
-                            </button>
-                          );
-                        })
-                      )}
-                    </div>
+              <>
+                {/* Unified field: one search + category chips over a single
+                    floating cloud of all products. */}
+                <div className="gen-cloud-controls">
+                  <input
+                    type="search"
+                    className="gen-cloud-search"
+                    placeholder="Search products…"
+                    value={cloudQuery}
+                    onChange={e => setCloudQuery(e.target.value)}
+                    aria-label="Search products"
+                  />
+                  <div className="gen-cloud-chips" role="tablist" aria-label="Filter by category">
+                    <button type="button" role="tab" aria-selected={!cloudCat} className={`gen-cloud-chip${!cloudCat ? ' is-active' : ''}`} onClick={() => { setCloudCat(null); setCloudBrand(null); }}>All</button>
+                    {CATEGORY_GROUPS.map(g => (
+                      <button
+                        key={g.label}
+                        type="button"
+                        role="tab"
+                        aria-selected={cloudCat === g.label}
+                        className={`gen-cloud-chip${cloudCat === g.label ? ' is-active' : ''}`}
+                        onClick={() => { setCloudCat(c => (c === g.label ? null : g.label)); setCloudBrand(null); }}
+                      >{g.label}</button>
+                    ))}
                   </div>
-                );
-              })
+                  {/* Brands under the types — filter the field to one brand. */}
+                  {cloudBrands.length > 0 && (
+                    <div className="gen-cloud-chips gen-cloud-chips--brands" role="tablist" aria-label="Filter by brand">
+                      {cloudBrands.map(b => (
+                        <button
+                          key={b}
+                          type="button"
+                          role="tab"
+                          aria-selected={cloudBrand === b}
+                          className={`gen-cloud-chip gen-cloud-chip--brand${cloudBrand === b ? ' is-active' : ''}`}
+                          onClick={() => setCloudBrand(c => (c === b ? null : b))}
+                        >{b}</button>
+                      ))}
+                    </div>
+                  )}
+                </div>
+                <div className="gen-cloud" style={{ ['--gen-cols']: pickCols } as React.CSSProperties}>
+                  {cloudProducts.length === 0 ? (
+                    <div className="gen-cat-row-empty">
+                      {cloudQuery ? `No products match "${cloudQuery}"` : 'No products yet'}
+                    </div>
+                  ) : (
+                    cloudProducts.map(p => {
+                      const isPicked = picked.some(x => x.id === p.id);
+                      const poster = p.primary_video_poster_url || p.primary_image_url || p.image_url;
+                      return (
+                        <button
+                          key={p.id}
+                          type="button"
+                          className={`gen-cloud-card${isPicked ? ' is-picked' : ''}`}
+                          data-gen-card-id={p.id}
+                          onClick={() => togglePick(p)}
+                        >
+                          {p.primary_video_url ? (
+                            <AutoplayVideo className="gen-cloud-media" src={p.primary_video_url} poster={poster || undefined} />
+                          ) : poster ? (
+                            <img className="gen-cloud-media" src={poster} alt="" loading="lazy" decoding="async" />
+                          ) : null}
+                          <span className="gen-cloud-card-name">{p.name || 'Product'}</span>
+                          <span className="gen-cloud-card-brand">{p.brand}</span>
+                        </button>
+                      );
+                    })
+                  )}
+                </div>
+                {/* Grid-density dial — same wheel as the creator catalog.
+                    Scroll/drag to change columns (2/3/4), tap to cycle.
+                    Mobile-only; auto-hides on scroll-down. */}
+                <div
+                  ref={pickDialRef}
+                  className={`gen-grid-dial${pickDialHidden ? ' gen-grid-dial--hidden' : ''}`}
+                  role="group"
+                  aria-label="Grid columns"
+                  onClick={cyclePickCols}
+                >
+                  {PICK_COLS.map((c, i) => (
+                    <span
+                      key={c}
+                      className={`gen-grid-dial-dot${i === pickColsIndex ? ' is-active' : ''}`}
+                      aria-label={`${c} columns`}
+                      aria-current={i === pickColsIndex}
+                    >
+                      <span className="gen-grid-dial-bars">
+                        {Array.from({ length: c }).map((_, b) => <i key={b} />)}
+                      </span>
+                    </span>
+                  ))}
+                </div>
+              </>
             )}
           </section>
         )}
@@ -1387,87 +2110,129 @@ export default function GeneratePage() {
         {step === 'style' && (
           <section className="gen-step">
             <h2>Style</h2>
-            <div className="gen-stylegrid">
+            {/* Horizontal swiper of preset styles. */}
+            <div className="gen-styleswiper">
               {STYLE_PRESETS.map(s => (
                 <button
                   key={s.value}
                   type="button"
                   className={`gen-stylecard${style === s.value ? ' is-picked' : ''}`}
-                  onClick={() => setStyle(s.value)}
+                  onClick={() => { setStyle(s.value); setCustomStyle(''); }}
+                  aria-pressed={style === s.value}
                 >
+                  <span className="gen-stylecard-icon" aria-hidden="true"><StyleGlyph value={s.value} /></span>
                   <span className="gen-stylecard-label">{s.label}</span>
                   <span className="gen-stylecard-blurb">{s.blurb}</span>
                 </button>
               ))}
             </div>
+
+            {/* Direct your own video — free-text prompt fed straight into the
+                Seedance generation prompt (buildGenerationPrompt → customStyle
+                → "Style direction: …"). The render notifies globally on
+                completion via the existing generation-status toast. */}
+            <div className="gen-direct">
+              <h3 className="gen-direct-title">Or direct your own video</h3>
+              <p className="gen-direct-sub">Describe the vibe, setting, motion — anything you want your video to be like.</p>
+              <textarea
+                className="gen-direct-input"
+                value={customStyle}
+                onChange={e => {
+                  const v = e.target.value;
+                  setCustomStyle(v);
+                  // One or the other: typing a custom direction deselects the
+                  // preset cards; clearing it restores the default preset.
+                  setStyle(v.trim() ? '' : 'street');
+                }}
+                placeholder="e.g. slow walk through a neon-lit Tokyo alley at night, cinematic, light rain"
+                rows={3}
+                maxLength={500}
+              />
+            </div>
           </section>
         )}
 
         {step === 'review' && (
-          <section className="gen-step">
-            <h2>Review</h2>
-            <div className="gen-review">
-              <div className="gen-review-row"><span>Photos</span><span>{pickedUploadIds.length}</span></div>
-              <div className="gen-review-row"><span>Products</span><span>{picked.length}</span></div>
-              <div className="gen-review-row"><span>Height</span><span>{heightLabel}</span></div>
-              <div className="gen-review-row"><span>Age</span><span>{ageLabel}</span></div>
-              <div className="gen-review-row"><span>Style</span><span>{STYLE_PRESETS.find(s => s.value === style)?.label || style}</span></div>
-              <div className="gen-review-row"><span>Model</span><span style={{ textTransform: 'capitalize' }}>{model}</span></div>
-              <div className="gen-review-row"><span>Length</span><span>{clipSeconds}s</span></div>
-            </div>
-
-            <div className="gen-sectionlabel">Model</div>
-            <div className="gen-lengthgrid">
-              <button
-                type="button"
-                className={`gen-heightchip${model === 'fast' ? ' is-picked' : ''}`}
-                onClick={() => { setModel('fast'); setClipSeconds(5); }}
-                title="Fast: cheaper, ~3 min, 5-second output"
-              >
-                Fast
-              </button>
-              <button
-                type="button"
-                className={`gen-heightchip${model === 'pro' ? ' is-picked' : ''}`}
-                onClick={() => setModel('pro')}
-                title="Pro is in preview - currently runs at Fast quality (5-second clips) while Pro is being rolled out."
-              >
-                Pro
-              </button>
-            </div>
-
-            {model === 'pro' && (
-              <>
-                <div className="gen-pro-preview-note">
-                  Pro is in preview - your look will run at Fast quality (5-second clip) while Pro is being rolled out.
-                </div>
-                <div className="gen-sectionlabel">Clip length</div>
-                <div className="gen-lengthgrid">
-                  {[5, 10].map(sec => (
-                    <button
-                      key={sec}
-                      type="button"
-                      className={`gen-heightchip${clipSeconds === sec ? ' is-picked' : ''}`}
-                      onClick={() => setClipSeconds(sec as 5 | 10)}
+          <section className="gen-step gen-step-review">
+            {/* Rebuilt review — one centred stage, locked to a single
+                viewport. The chosen PRODUCTS are the hero in the middle of
+                the screen; the reference FACES sit above them as a single
+                connected chain (overlapping circles joined by a thread) so
+                they read as "these combine into one model". Build lives in
+                the fixed bottom dock. */}
+            <div className="gen-rv-stage">
+              {filledPublicUrls.length > 0 && (
+                <div className="gen-rv-faces" aria-label="Your reference photos">
+                  <span className="gen-rv-faces-thread" aria-hidden="true" />
+                  {filledPublicUrls.slice(0, 5).map((src, i, arr) => (
+                    <span
+                      key={`${src}-${i}`}
+                      className="gen-rv-face"
+                      style={{ ['--i' as string]: i, ['--n' as string]: arr.length }}
                     >
-                      {sec}s
-                    </button>
+                      <img src={src} alt="" loading="lazy" decoding="async" />
+                    </span>
                   ))}
                 </div>
-              </>
-            )}
+              )}
 
-            <div className="gen-review-products">
-              {picked.map(p => (
-                <div key={p.id} className="gen-review-product">
-                  {p.image_url && <img src={p.image_url} alt="" />}
-                  <div>
-                    <div className="gen-review-product-name">{p.name}</div>
-                    <div className="gen-review-product-role">{p.role_tag || 'Auto'}</div>
+              {picked.length > 0 && (
+                <div className="gen-rv-products" role="list" aria-label="Selected products">
+                  {picked.map((p, i) => (
+                    <span
+                      key={p.id}
+                      role="listitem"
+                      className="gen-rv-product"
+                      style={{ ['--i' as string]: i }}
+                    >
+                      {p.image_url && <img src={p.image_url} alt={p.name || 'Product'} loading="lazy" decoding="async" />}
+                      <span className="gen-rv-product-name">{p.name || 'Product'}</span>
+                    </span>
+                  ))}
+                </div>
+              )}
+
+              {/* Only the controls that change the build live here now —
+                  Model + Length. Height / age / style are already locked in
+                  on earlier steps, so the cluttered summary table is gone. */}
+              <div className="gen-rv-controls">
+                <div className="gen-rv-control">
+                  <span className="gen-rv-control-label">Model</span>
+                  <div className="gen-review-toggle">
+                    <button
+                      type="button"
+                      className={`gen-review-toggle-btn${model === 'fast' ? ' is-picked' : ''}`}
+                      onClick={() => { setModel('fast'); setClipSeconds(5); }}
+                      title="Fast: cheaper, ~3 min, 5-second output"
+                    >Fast</button>
+                    <button
+                      type="button"
+                      className={`gen-review-toggle-btn${model === 'pro' ? ' is-picked' : ''}`}
+                      onClick={() => setModel('pro')}
+                      title="Pro is in preview - currently runs at Fast quality (5-second clips) while Pro is being rolled out."
+                    >Pro</button>
                   </div>
                 </div>
-              ))}
+                <div className="gen-rv-control">
+                  <span className="gen-rv-control-label">Length</span>
+                  {model === 'pro' ? (
+                    <div className="gen-review-toggle">
+                      {[5, 10].map(sec => (
+                        <button
+                          key={sec}
+                          type="button"
+                          className={`gen-review-toggle-btn${clipSeconds === sec ? ' is-picked' : ''}`}
+                          onClick={() => setClipSeconds(sec as 5 | 10)}
+                        >{sec}s</button>
+                      ))}
+                    </div>
+                  ) : (
+                    <span className="gen-rv-control-value">{clipSeconds}s</span>
+                  )}
+                </div>
+              </div>
             </div>
+
             {submitError && <div className="gen-error">{submitError}</div>}
           </section>
         )}
@@ -1479,7 +2244,7 @@ export default function GeneratePage() {
               <div className="gen-result-stage">
             {!generation && <div className="gen-empty">Loading…</div>}
             {(generation?.status === 'pending' || generation?.status === 'generating') && (
-              <GenerationProgress generation={generation} />
+              <GenerationProgress generation={generation} images={orbitImages} />
             )}
             {generation?.status === 'failed' && (
               <GenerationErrorBox generation={generation} pickedCount={picked.length} faceCount={slots.filter(Boolean).length} />
@@ -1665,6 +2430,34 @@ export default function GeneratePage() {
                 <button className="gen-btn-primary" onClick={startNewLook}>
                   Get a new look going
                 </button>
+                {/* "Keep discovering" lets the shopper bail off the
+                    progress screen back to the catalog feed while the
+                    render finishes. The look continues processing in
+                    the background — generation state lives in
+                    user_generations and is polled the moment the user
+                    returns. Subtext reassures so they don't think the
+                    button cancels their in-flight look. */}
+                {generation.status !== 'done' && (
+                  <button
+                    type="button"
+                    className="gen-btn-secondary gen-btn-keep-discovering"
+                    onClick={() => {
+                      // Skip the cold-open splash — the shopper is mid-session
+                      // bailing back to the feed, not booting the app fresh.
+                      try { sessionStorage.setItem('catalog:cold-open-done', '1'); } catch { /* ignore */ }
+                      navigate('/#app');
+                      // Land at the very top of the feed, not wherever it was
+                      // last scrolled — otherwise the home opens mid-page.
+                      requestAnimationFrame(() => window.scrollTo({ top: 0, behavior: 'auto' }));
+                      window.setTimeout(() => window.scrollTo({ top: 0, behavior: 'auto' }), 60);
+                    }}
+                  >
+                    <span className="gen-btn-keep-discovering-label">Keep discovering</span>
+                    <span className="gen-btn-keep-discovering-sub">
+                      Don&rsquo;t worry — this won&rsquo;t end your look
+                    </span>
+                  </button>
+                )}
                 {generation.status === 'done' && generation.video_url && (
                   <>
                     <button
@@ -1673,14 +2466,19 @@ export default function GeneratePage() {
                     >
                       Crop
                     </button>
-                    {/* Export bakes the Catalog wordmark onto the video
-                        and mints a public /s/:slug share link via the
-                        share-look edge function + Modal worker. */}
+                    {/* Mints a public /s/:slug share link via the
+                        share-look edge function + Modal worker. The
+                        modal shows the URL with a copy button. */}
                     <button
                       className="gen-btn-secondary"
                       onClick={handleExportShare}
                     >
-                      Export
+                      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true" style={{ marginRight: 6, verticalAlign: '-2px' }}>
+                        <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8"/>
+                        <polyline points="16 6 12 2 8 6"/>
+                        <line x1="12" y1="2" x2="12" y2="15"/>
+                      </svg>
+                      Share link
                     </button>
                     {/* Edit & regenerate is only meaningful once the
                         current look has finished rendering — there's
@@ -1739,7 +2537,7 @@ export default function GeneratePage() {
                   CSS so the existing single-column flow is preserved. */}
               <aside className="gen-result-side" aria-label="Your other looks">
                 <div className="gen-result-side-label">
-                  {generation?.status === 'done' ? 'Your looks' : 'While Vision composes…'}
+                  {generation?.status === 'done' ? 'Your looks' : 'While we compose your look…'}
                 </div>
                 {generations.filter(g => g.id !== generation?.id && g.video_url).length === 0 ? (
                   <div className="gen-result-side-empty">
@@ -1789,15 +2587,30 @@ export default function GeneratePage() {
             {limitWarning}
           </div>
         )}
-        <aside className="gen-dock" aria-label="Step controls">
-          {/* Picked-products strip stays visible across products → style →
-              review so the user always sees what they're building. The
-              tap-to-remove × is still wired so they can tweak the lineup
-              without scrolling back to the products step. */}
-          {picked.length > 0 && (
+        <aside
+          className={`gen-dock${
+            // Products step + nothing picked yet → dock slides off
+            // the bottom and waits. The moment the user picks their
+            // first product the class flips and the dock eases up
+            // into view. Other steps (style, review) always show it.
+            step === 'products' && picked.length === 0 ? ' is-hidden' : ' is-revealed'
+          }`}
+          aria-label="Step controls"
+          aria-hidden={step === 'products' && picked.length === 0 ? 'true' : undefined}
+        >
+          {/* Picked-products strip stays visible across products → style so
+              the user always sees what they're building. Hidden on REVIEW —
+              the floating circles already show the face + products there, so
+              the thumbnail strip just crowds the dock. The tap-to-remove × is
+              still wired on the earlier steps. */}
+          {picked.length > 0 && step !== 'review' && (
             <div className="gen-dock-picks-strip" role="region" aria-label="Selected products">
               {picked.map(p => (
-                <div key={p.id} className="gen-dock-pick">
+                <div
+                  key={p.id}
+                  className={`gen-dock-pick${prefilledProductId === p.id ? ' is-prefilled' : ''}`}
+                  data-prefilled-id={prefilledProductId === p.id ? p.id : undefined}
+                >
                   {p.image_url && <img src={p.image_url} alt={p.name || 'Product'} />}
                   <button
                     type="button"
@@ -1818,17 +2631,69 @@ export default function GeneratePage() {
               Back
             </button>
             {step === 'review' ? (
-              <button className="gen-btn-primary" onClick={handleSubmit} disabled={submitting}>
-                {submitting ? 'Starting…' : 'Generate look'}
+              <button
+                className="gen-btn-primary gen-continue"
+                onClick={(e) => {
+                  const r = e.currentTarget.getBoundingClientRect();
+                  playExplosion(r.left + r.width / 2, r.top + r.height / 2, () => { void handleSubmit(); });
+                }}
+                disabled={submitting}
+              >
+                <span className="gen-continue-spark" aria-hidden="true" />
+                {submitting ? 'Starting…' : 'Build'}
               </button>
             ) : (
-              <button className="gen-btn-primary" disabled={!canAdvance} onClick={() => goNext(step, setStep)}>
+              <button
+                className="gen-btn-primary"
+                disabled={!canAdvance}
+                onClick={() => (step === 'products' ? launchToNext() : goNext(step, setStep))}
+              >
                 Next
               </button>
             )}
           </div>
         </aside>
         </>
+      )}
+
+      {/* Photos-step dock — same liquid-glass toolbar as the next screens,
+          but a single full-width Continue. canAdvance gates it forward;
+          otherwise it scrolls the user back up to the upload slots. */}
+      {step === 'photos' && (
+        <aside className="gen-dock gen-dock--solo is-revealed" aria-label="Step controls">
+          <div className="gen-dock-actions">
+            <button
+              type="button"
+              className="gen-btn-primary"
+              onClick={() => {
+                if (canAdvance) goNext(step, setStep);
+                else window.scrollTo({ top: 0, behavior: 'smooth' });
+              }}
+            >
+              Continue
+            </button>
+          </div>
+        </aside>
+      )}
+
+      {editingStats && effectiveUserId && (
+        <StatsEditorModal
+          userId={effectiveUserId}
+          initial={{ heightCm, heightLabel, weightKg, weightLabel, ageLabel, gender: userGender, armLengthLabel, legLengthLabel, fashionStyles }}
+          onClose={() => setEditingStats(false)}
+          onSaved={(next) => {
+            if (next.heightCm != null) setHeightCm(next.heightCm);
+            if (next.heightLabel) setHeightLabel(next.heightLabel);
+            if (next.weightKg != null) setWeightKg(next.weightKg);
+            if (next.weightLabel) setWeightLabel(next.weightLabel);
+            if (next.ageLabel) setAgeLabel(next.ageLabel);
+            setUserGender(next.gender);
+            setArmLengthLabel(next.armLengthLabel ?? null);
+            setLegLengthLabel(next.legLengthLabel ?? null);
+            setFashionStyles(next.fashionStyles ?? null);
+            setEditingStats(false);
+          }}
+        />
       )}
     </div>
   );
@@ -1861,6 +2726,24 @@ const BUILD_PHASES = [
   'Rendering motion frames',
   'Color grading',
   'Final pass',
+];
+
+// Rotating "analyzing" one-liners shown on the build screen — a words
+// ticker that keeps the wait playful. Cosmetic only; cycles independently
+// of the BUILD_PHASES label so there's always something moving.
+const BUILD_JOKES = [
+  'Analyzing your impeccable taste…',
+  'Consulting the fashion oracle…',
+  'Steaming the pixels…',
+  'Negotiating with the lighting…',
+  'Teaching the fabric to drape…',
+  'Auditioning camera angles…',
+  'Convincing the shoes to behave…',
+  'Whispering to the color grade…',
+  'Removing the awkward blink…',
+  'Tailoring at the speed of light…',
+  'Asking the AI to “make it pop”…',
+  'Polishing every last thread…',
 ];
 
 // Friendly summary for known Fal/Seedance failure shapes. Returns a
@@ -2019,12 +2902,31 @@ function GenerationErrorBox({
   );
 }
 
-function GenerationProgress({ generation }: { generation: UserGeneration }) {
+function GenerationProgress({ generation, images }: { generation: UserGeneration; images: string[] }) {
   // Tick four times a second so the border-progress + phase rotation
   // feel alive between polls.
   const [, setTick] = useState(0);
   useEffect(() => {
     const id = setInterval(() => setTick(t => t + 1), 250);
+    return () => clearInterval(id);
+  }, []);
+
+  // Crank the shared particle field while the look is building — the
+  // singleton canvas reads particleControls.speed every frame, and we
+  // mount a local ParticleBackground below so the field is visible on
+  // this screen regardless of route. Restore on unmount. (Same pattern
+  // as AddProductV2 / SearchCeremony.)
+  useEffect(() => {
+    const prev = particleControls.speed;
+    particleControls.speed = 5;
+    return () => { particleControls.speed = prev; };
+  }, []);
+
+  // Jokes ticker — rotate a playful "analyzing" line every ~3.4s,
+  // independent of the phase label so something is always in motion.
+  const [jokeIdx, setJokeIdx] = useState(() => Math.floor(Math.random() * BUILD_JOKES.length));
+  useEffect(() => {
+    const id = setInterval(() => setJokeIdx(i => (i + 1) % BUILD_JOKES.length), 3400);
     return () => clearInterval(id);
   }, []);
 
@@ -2054,40 +2956,44 @@ function GenerationProgress({ generation }: { generation: UserGeneration }) {
     : 'Almost there…';
 
   return (
-    <div className="gen-build">
-      <div
-        className="gen-build-frame is-building"
-        role="progressbar"
-        aria-valuemin={0}
-        aria-valuemax={100}
-        aria-valuenow={Math.round(pct)}
-        aria-label={`Generating - ${activePhase}`}
-      >
-        {/* Border progress: stroke a single rect along its perimeter
-            using `pathLength="100"` so the dasharray maps cleanly to
-            percent. preserveAspectRatio="none" lets the stroke trace
-            the 9:16 frame regardless of its rendered size. */}
-        <svg className="gen-build-border" viewBox="0 0 90 160" preserveAspectRatio="none" aria-hidden="true">
-          <rect className="gen-build-track" x="1" y="1" width="88" height="158" rx="6" ry="6" pathLength={100} />
-          <rect
-            className="gen-build-fill"
-            x="1" y="1" width="88" height="158" rx="6" ry="6"
-            pathLength={100}
-            strokeDasharray={`${pct} 100`}
-          />
-        </svg>
-
-        <div className="gen-build-shimmer" aria-hidden="true" />
-        <div className="gen-build-pulse" aria-hidden="true" />
-
-        <div className="gen-build-content">
-          <span className="gen-vision gen-build-vision">Vision</span>
-          <div className="gen-build-phase">{activePhase}</div>
-          <div className="gen-build-sub">{subLabel}</div>
-          <div className="gen-build-pct">{Math.round(pct)}%</div>
-        </div>
+    <div
+      className="gen-build gen-build-v2"
+      role="progressbar"
+      aria-valuemin={0}
+      aria-valuemax={100}
+      aria-valuenow={Math.round(pct)}
+      aria-label={`Generating - ${activePhase}`}
+    >
+      <div className="gen-build-particles" aria-hidden="true">
+        <ParticleBackground />
       </div>
 
+      {/* Frameless generating stage: the face + product circles (flowed in
+          from the review screen) orbit inside a soft glow halo over the
+          particle field — no phone frame. */}
+      <div className="gen-build-stage">
+        <div className="gen-build-halo" aria-hidden="true" />
+        {images.length > 0 && (
+          <div className="gen-orbit" aria-hidden="true">
+            <div className="gen-orbit-ring" style={{ ['--n' as string]: images.length }}>
+              {images.map((src, i) => (
+                <span key={`${src}-${i}`} className="gen-orbit-item" style={{ ['--i' as string]: i }}>
+                  <img src={src} alt="" loading="lazy" decoding="async" />
+                </span>
+              ))}
+            </div>
+          </div>
+        )}
+
+        <div className="gen-build-meta">
+          <div className="gen-build-phase">{activePhase}</div>
+          <div key={jokeIdx} className="gen-build-joke">{BUILD_JOKES[jokeIdx]}</div>
+          <div className="gen-build-bar" aria-hidden="true">
+            <div className="gen-build-bar-fill" style={{ width: `${pct}%` }} />
+          </div>
+          <div className="gen-build-sub">{subLabel} &middot; {Math.round(pct)}%</div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -2393,26 +3299,38 @@ function CropModal({
   );
 }
 
-function LookCard({
+// memo'd so a parent re-render (e.g. a keystroke in the prompt field on
+// the same screen) does not re-render every row in the looks grid. The
+// id-based callback signatures let the parent hand down stable refs;
+// without that, inline `() => onDelete(g.id)` arrows would defeat memo
+// on every render even when `generation` itself is unchanged.
+const LookCard = memo(function LookCard({
   generation,
   onOpen,
   onRegenerate,
   onDelete,
 }: {
   generation: UserGeneration;
-  onOpen: () => void;
-  onRegenerate: () => void;
-  onDelete: () => void;
+  onOpen: (g: UserGeneration) => void;
+  onRegenerate: (id: string) => void;
+  onDelete: (id: string) => void;
 }) {
   const [confirmOpen, setConfirmOpen] = useState(false);
   const style = STYLE_PRESETS.find(s => s.value === generation.style);
   const isDone = generation.status === 'done' && generation.video_url;
-  const isFailed = generation.status === 'failed';
-  const isBusy = generation.status === 'pending' || generation.status === 'generating';
+  const startedAt = useMemo(() => new Date(generation.created_at).getTime(), [generation.created_at]);
+  // A row stuck non-terminal far past any real render budget is dead —
+  // the generate-look pipeline never reconciled it. Treat it as failed
+  // ("Timed out") so it stops showing "Queued / 100%" forever and the
+  // delete button works. Mirrors PendingLookPill's staleness guard.
+  const isStale = (generation.status === 'pending' || generation.status === 'generating')
+    && (Date.now() - startedAt) > GENERATION_STALE_MS;
+  const isFailed = generation.status === 'failed' || isStale;
+  const isBusy = (generation.status === 'pending' || generation.status === 'generating') && !isStale;
 
   // Tick once a second while the row is in flight so the mini border
   // progress + phase label stay live on the grid card. We only run
-  // the timer for busy items so done/failed cards stay still.
+  // the timer for busy items so done/failed/stale cards stay still.
   const [, setTick] = useState(0);
   useEffect(() => {
     if (!isBusy) return;
@@ -2420,7 +3338,6 @@ function LookCard({
     return () => window.clearInterval(id);
   }, [isBusy]);
 
-  const startedAt = useMemo(() => new Date(generation.created_at).getTime(), [generation.created_at]);
   const elapsedSec = Math.max(0, (Date.now() - startedAt) / 1000);
   const typicalSec = typicalSecondsFor(generation.duration_seconds);
   const linearPct = (elapsedSec / typicalSec) * 95;
@@ -2436,7 +3353,7 @@ function LookCard({
   return (
     <div className="gen-lookcard">
       <div className="gen-lookcard-media-wrap" style={{ position: 'relative' }}>
-        <button type="button" className="gen-lookcard-media" onClick={onOpen}>
+        <button type="button" className="gen-lookcard-media" onClick={() => onOpen(generation)}>
           {isDone && generation.video_url ? (
             <video
               src={generation.video_url}
@@ -2457,12 +3374,11 @@ function LookCard({
                     <rect className="gen-build-track" x="1" y="1" width="88" height="158" rx="6" ry="6" pathLength={100} />
                     <rect className="gen-build-fill" x="1" y="1" width="88" height="158" rx="6" ry="6" pathLength={100} strokeDasharray={`${pct} 100`} />
                   </svg>
-                  <span className="gen-vision">Vision</span>
                   <span className="gen-lookcard-phase">{BUILD_PHASES[phaseIdx]}</span>
                   <span className="gen-lookcard-pct">{Math.round(pct)}%</span>
                 </>
               )}
-              {isFailed && <span>Failed</span>}
+              {isFailed && <span>{isStale ? 'Timed out' : 'Failed'}</span>}
             </div>
           )}
           {isBusy && <span className="gen-lookcard-chip">{generation.status === 'pending' ? 'Queued' : 'Generating'}</span>}
@@ -2483,7 +3399,7 @@ function LookCard({
           body="This can’t be undone."
           confirmLabel="Delete"
           destructive
-          onConfirm={() => { setConfirmOpen(false); onDelete(); }}
+          onConfirm={() => { setConfirmOpen(false); onDelete(generation.id); }}
           onCancel={() => setConfirmOpen(false)}
         />
       </div>
@@ -2492,14 +3408,14 @@ function LookCard({
         <button
           type="button"
           className="gen-lookcard-regen"
-          onClick={onRegenerate}
+          onClick={() => onRegenerate(generation.id)}
           aria-label="Edit and regenerate"
           title="Edit & regenerate"
         >↻</button>
       </div>
     </div>
   );
-}
+});
 
 function UploadPickerModal({
   slot,

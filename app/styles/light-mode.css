@@ -102,6 +102,10 @@
   color: #1a1a1a;
 }
 
+.light-mode .look-save-count {
+  color: rgba(0, 0, 0, 0.4);
+}
+
 .light-mode .product-brand {
   color: rgba(0, 0, 0, 0.45);
 }
@@ -170,6 +174,10 @@
   background: rgba(0, 0, 0, 0.04);
   border-color: rgba(0, 0, 0, 0.08);
   box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+
+.light-mode .bottom-bar.search-open {
+  background: rgba(240, 240, 240, 0.96);
 }
 
 .light-mode .filter-chip {

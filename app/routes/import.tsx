@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { Link, useSearchParams } from '@remix-run/react';
 import CatalogLogo from '~/components/CatalogLogo';
+import '~/styles/import.css';
 
 /* /import - Pull an existing storefront into Catalog.
  *

@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
-import LookCard from './LookCard';
-import CreativeCard from './CreativeCard';
+import CreativeCardV2 from './CreativeCardV2';
 import type { Look } from '~/data/looks';
 import type { ProductAd } from '~/services/product-creative';
 import { seededShuffle, hashSeed } from '~/utils/seededShuffle';
@@ -15,6 +14,7 @@ interface FeedSectionProps {
   creativesLoading?: boolean;
   canDeleteCreative?: boolean;
   onDeleteCreative?: (id: string) => void;
+  onDeleteLook?: (look: Look) => void;
   title?: string;
   batchSize?: number;
   isInitial?: boolean;
@@ -27,6 +27,25 @@ interface FeedSectionProps {
   searchMode?: boolean;
   /** Called when the user scrolls to the end of the current pool in search mode. */
   onLoadMore?: () => void;
+  /**
+   * Optional scroll container to use as the IntersectionObserver root for
+   * the load-more sentinel. When omitted, the default viewport is used
+   * (the home/feed case where the document itself scrolls). When the
+   * feed is nested inside an overflow:auto overlay (ProductPage,
+   * LookOverlay), pass the overlay's scroll element so the sentinel
+   * triggers based on that container's edges instead of the viewport's.
+   */
+  scrollRoot?: HTMLElement | null;
+  /**
+   * Prefix applied to every CreativeCardV2 `slotId` in this section.
+   * Use a unique value (e.g. `"look:${look.id}"`) for feeds inside overlays
+   * so their director registrations never collide with the main feed's
+   * entries. Without a prefix the same creative at the same display-index
+   * produces identical slotIds across feeds, causing the overlay's
+   * `unregister()` call on close to delete the main feed's entry and freeze
+   * that card permanently.
+   */
+  slotPrefix?: string;
 }
 
 // When we know creatives are still fetching, reserve roughly this share of
@@ -40,8 +59,18 @@ const LAYOUT_CONFIGS = [
   { name: 'spotlight', columns: 3 },
 ];
 
-const DEFAULT_BATCH = 12;
-const SUB_BATCH = 6;
+// First-paint batch. Sized to over-fill the first screen on a wide desktop
+// grid (up to 6 columns) so there's no half-empty first viewport waiting on a
+// scroll-triggered grow. Subsequent grows add `batch` more at a time.
+const DEFAULT_BATCH = 24;
+const SUB_BATCH = 8;
+// D1 — max cards kept mounted on the infinite MOBILE feed. Cards scrolled
+// further than this above the viewport are unmounted and their height replaced
+// by the grid's padding-top (so scroll position is preserved). ~160 ≈ many
+// screens of look-back, far beyond the director's play + warm bands, so a card
+// always re-mounts and re-warms before it scrolls back into view. Desktop and
+// the pre-measurement state keep windowStart = 0 → identical to before.
+const MAX_WINDOW = 160;
 
 // (Math.random shuffle removed - seeded shuffle below means the same
 // inputs always produce the same output, which is what useMemo needs to
@@ -57,16 +86,30 @@ function FeedSection({
   creativesLoading = false,
   canDeleteCreative = false,
   onDeleteCreative,
+  onDeleteLook,
   title,
   batchSize,
   isInitial = false,
   layoutMode = 0,
   searchMode = false,
   onLoadMore,
+  scrollRoot = null,
+  slotPrefix,
 }: FeedSectionProps) {
   const batch = batchSize ?? (isInitial ? DEFAULT_BATCH : SUB_BATCH);
   const [visibleCount, setVisibleCount] = useState(batch);
+  // Initial segment grows the pool in cycles for true infinite scroll.
+  // Each cycle adds CYCLE_SIZE more items by rebuilding/re-shuffling the
+  // deck; concurrent video decode is bounded by the playback director
+  // (viewport-distance promotion + pool cap) so DOM card count is safe to
+  // grow. Sub-segments render a fixed `looks.length` and don't cycle.
+  const [poolCycles, setPoolCycles] = useState(1);
   const sentinelRef = useRef<HTMLDivElement>(null);
+  const gridRef = useRef<HTMLDivElement>(null);
+  // D1: measured (columns, row height) of the mobile grid, so we can unmount
+  // cards far above the viewport and replace their height with padding-top.
+  // Null until measured → windowStart stays 0 (current behaviour).
+  const [rowMetrics, setRowMetrics] = useState<{ cols: number; rowH: number } | null>(null);
   const layout = LAYOUT_CONFIGS[layoutMode % LAYOUT_CONFIGS.length];
 
   const gridStyle = useMemo(() => {
@@ -85,10 +128,11 @@ function FeedSection({
     if (!isDesktop) return 'look-card';
     // Hash the seed so distribution doesn't cluster at regular intervals.
     const seed = ((layoutMode + 1) * 31 + globalIndex * 127) % 100;
-    if (seed < 8) return 'look-card look-card-featured';  // ~8%  2x2
-    if (seed < 22) return 'look-card look-card-wide';     // ~14% 2x1
-    if (seed < 36) return 'look-card look-card-tall';     // ~14% 1x2
-    return 'look-card';                                   // ~64% 1x1
+    if (seed < 8) return 'look-card look-card-featured';  // ~8%  2x2 (still 3/4)
+    return 'look-card';                                   // ~92% 1x1
+    // look-card-wide (2x1, 16:9) and look-card-tall (1x2, 3/8) retired —
+    // their landscape/portrait ratios clashed with the primary 3/4 grid
+    // cell. The 2x2 featured stays: scaling both dims keeps it at 3/4.
   }, [layoutMode]);
 
   // Build the pool by treating looks + creatives as one combined deck.
@@ -111,7 +155,12 @@ function FeedSection({
     // The initial segment is creative-only, so it should render even when
     // looks haven't resolved yet. Sub-segments need looks to draw similars.
     if (!isInitial && looks.length === 0) return [];
-    const targetCells = isInitial ? 200 : 50;
+    // Sub-segments (More like this) show the exact looks array — no cycling
+    // beyond the input so the section stays at exactly 8 items.
+    // Initial segment grows in cycles of CYCLE_SIZE; sentinel bumps poolCycles
+    // when the user nears the end so the feed scrolls indefinitely.
+    const CYCLE_SIZE = 80;
+    const targetCells = isInitial ? CYCLE_SIZE * poolCycles : looks.length;
 
     if (isInitial && creativesLoading) {
       // First paint while elite creatives are still loading - render *only*
@@ -124,9 +173,9 @@ function FeedSection({
       return items;
     }
 
-    // Initial segment is elite-creative-only - no static looks mixed in.
-    // Secondary "More like this" segments (isInitial=false) still pull from
-    // their look set since that's where look-driven discovery lives.
+    // Both initial and sub-segments pull from a mixed looks + creatives deck.
+    // The initial segment now includes look cards so creators' looks are
+    // discoverable from the main feed.
     type DeckEntry = { type: 'look'; look: Look } | { type: 'creative'; creative: ProductAd };
     // Seed combines layoutMode + sizes of the input arrays so the shuffle
     // is stable for a given (layoutMode, looks, creatives) but visibly
@@ -135,23 +184,75 @@ function FeedSection({
     let cycleSeed = baseSeed;
     const buildDeck = (): DeckEntry[] => {
       cycleSeed = (cycleSeed * 31 + 7) | 0;
-      return seededShuffle<DeckEntry>(
-        isInitial
-          ? creativeList.map(creative => ({ type: 'creative' as const, creative }))
-          : [
-              ...looks.map(look => ({ type: 'look' as const, look })),
-              ...creativeList.map(creative => ({ type: 'creative' as const, creative })),
-            ],
-        cycleSeed,
-      );
+      const entries: DeckEntry[] = [
+        ...looks.map(look => ({ type: 'look' as const, look })),
+        ...creativeList.map(creative => ({ type: 'creative' as const, creative })),
+      ];
+      // The initial home feed (not search) honours the admin's UNIFIED
+      // feed_rank order — looks AND products share one rank space
+      // (apply_feed_order), so sorting the combined deck by feed_rank
+      // reproduces the /admin/catalogs FEED arrangement exactly. Search
+      // results and later cycles still shuffle (relevance / variety).
+      if (isInitial && !searchMode) {
+        const rankOf = (e: DeckEntry) => {
+          const r = e.type === 'look' ? e.look.feed_rank : e.creative.feed_rank;
+          return typeof r === 'number' ? r : Number.POSITIVE_INFINITY;
+        };
+        // Looks lead on any rank tie. The admin writes a unified, dense
+        // feed_rank (no collisions), so ties only happen in the UNRANKED
+        // group (feed_rank null → Infinity) — there we keep looks first,
+        // matching the "looks go first" rule, then fall back to input order.
+        const typeRank = (e: DeckEntry) => (e.type === 'look' ? 0 : 1);
+        const sorted = entries
+          .map((e, i) => ({ e, i }))
+          .sort((a, b) => {
+            const d = rankOf(a.e) - rankOf(b.e);
+            if (d !== 0) return d;
+            const t = typeRank(a.e) - typeRank(b.e);
+            return t !== 0 ? t : a.i - b.i;
+          })
+          .map(x => x.e);
+        // Guarantee creator looks lead the home feed. The unified feed_rank
+        // can place products ahead of every gender-surviving look (with 0
+        // unisex looks, a gendered shopper only ever sees half the looks),
+        // which makes the feed read as product-only — the #1 reason "I don't
+        // see any looks". If no look lands in the first FRONT cells, pull the
+        // highest-ranked surviving look forward to just behind the lead item.
+        // Everything else keeps the admin's exact feed_rank order.
+        const FRONT = 4;
+        const firstLookIdx = sorted.findIndex(e => e.type === 'look');
+        if (firstLookIdx >= FRONT) {
+          const [lookEntry] = sorted.splice(firstLookIdx, 1);
+          sorted.splice(1, 0, lookEntry);
+        }
+        return sorted;
+      }
+      // Search results carry a RELEVANCE order (search_products V8 ranks the
+      // products, search_looks the looks). Never shuffle it — shuffling was
+      // the dominant reason a ranked query like "black shoes" rendered with
+      // white sneakers on top. Preserve each lane's order and weave looks
+      // into the product stream so products (the primary search signal) keep
+      // their exact ranking and looks still surface.
+      if (searchMode) {
+        const lookEntries = entries.filter((e): e is Extract<DeckEntry, { type: 'look' }> => e.type === 'look');
+        const creativeEntries = entries.filter((e): e is Extract<DeckEntry, { type: 'creative' }> => e.type === 'creative');
+        const woven: DeckEntry[] = [];
+        const WEAVE = 4; // products per woven-in look
+        let li = 0, ci = 0;
+        while (li < lookEntries.length || ci < creativeEntries.length) {
+          for (let k = 0; k < WEAVE && ci < creativeEntries.length; k++) woven.push(creativeEntries[ci++]);
+          if (li < lookEntries.length) woven.push(lookEntries[li++]);
+        }
+        return woven;
+      }
+      return seededShuffle<DeckEntry>(entries, cycleSeed);
     };
 
     const items: PoolItem[] = [];
     let deck = buildDeck();
     let displayIndex = 0;
 
-    // Empty deck (e.g. no elite creatives flagged yet on the initial segment)
-    // - leave the grid empty rather than falling back to looks.
+    // Empty deck (no looks and no creatives available yet) - nothing to render.
     if (deck.length === 0) return items;
 
     // In search mode: render each creative exactly once (no cycling).
@@ -203,32 +304,107 @@ function FeedSection({
     }
 
     return items;
-  }, [looks, creatives, creativesLoading, isInitial, layoutMode, searchMode]);
+  }, [looks, creatives, creativesLoading, isInitial, layoutMode, searchMode, poolCycles]);
 
-  const displayItems = useMemo(() => pool.slice(0, visibleCount), [pool, visibleCount]);
+  // ── D1: mobile DOM windowing ────────────────────────────────────────────
+  // A long mobile scroll otherwise mounts every card ever seen (hundreds →
+  // thousands of nodes) — the dominant memory + style-recalc cost on a phone.
+  // Cap the mounted set: drop whole rows far above the viewport and replace
+  // their height with padding-top so scroll position holds (overflow-anchor
+  // absorbs any residual). Desktop + the pre-measure state keep windowStart = 0,
+  // so this is byte-identical to the old behaviour until it can safely engage.
+  const mobileWindowing = isInitial
+    && typeof window !== 'undefined' && window.innerWidth <= 768;
+
+  const windowStart = useMemo(() => {
+    if (!mobileWindowing || !rowMetrics || visibleCount <= MAX_WINDOW) return 0;
+    const startRow = Math.floor((visibleCount - MAX_WINDOW) / rowMetrics.cols);
+    return Math.max(0, startRow * rowMetrics.cols);
+  }, [mobileWindowing, rowMetrics, visibleCount]);
+
+  const displayItems = useMemo(() => pool.slice(windowStart, visibleCount), [pool, windowStart, visibleCount]);
+
+  const padTop = windowStart > 0 && rowMetrics
+    ? (windowStart / rowMetrics.cols) * rowMetrics.rowH
+    : 0;
+
+  // Measure the mobile grid's column count + row height once its cards exist,
+  // re-measuring on resize. All children share a height (uniform 3:4 grid on
+  // mobile), so columns = the run of cards sharing the first card's offsetTop
+  // and rowH = the gap to the next row. Until measured, windowStart stays 0.
+  useEffect(() => {
+    if (!mobileWindowing) return;
+    const grid = gridRef.current;
+    if (!grid) return;
+    const measure = () => {
+      const cards = grid.querySelectorAll<HTMLElement>(':scope > *');
+      if (cards.length < 4) return;
+      const firstTop = cards[0].offsetTop;
+      let cols = 0;
+      for (let i = 0; i < cards.length; i++) {
+        if (cards[i].offsetTop === firstTop) cols++; else break;
+      }
+      if (cols < 1) return;
+      const nextRow = cards[cols];
+      const rowH = nextRow ? nextRow.offsetTop - firstTop : cards[0].offsetHeight;
+      if (rowH <= 0) return;
+      setRowMetrics(prev =>
+        prev && prev.cols === cols && Math.abs(prev.rowH - rowH) < 1 ? prev : { cols, rowH });
+    };
+    if (!rowMetrics) measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [mobileWindowing, visibleCount, rowMetrics]);
 
   useEffect(() => {
     const sentinel = sentinelRef.current;
     if (!sentinel) return;
     const observer = new IntersectionObserver(
       ([entry]) => {
-        if (entry.isIntersecting) {
-          if (visibleCount >= pool.length && searchMode && onLoadMore) {
-            // We've shown all current results - ask the parent for more.
-            onLoadMore();
-          } else {
+        if (!entry.isIntersecting) return;
+
+        if (searchMode) {
+          // Search mode: grow the rendered set, and page in the next batch of
+          // results once we're at the end of what's loaded.
+          if (visibleCount < pool.length) {
             setVisibleCount(prev => Math.min(prev + batch, pool.length));
+          } else {
+            onLoadMore?.();
           }
+          return;
+        }
+
+        // Home/initial + sub-segments: grow what's rendered every time the
+        // sentinel comes near.
+        setVisibleCount(prev => Math.min(prev + batch, pool.length));
+
+        // Keep the pool comfortably AHEAD of the rendered set so the grid
+        // never catches the pool's end. The old code only extended the pool
+        // AFTER visibleCount had already reached pool.length — at that moment
+        // there were no more items to render, so the user scrolled into a
+        // blank gap until the next observer cycle rebuilt a bigger pool and
+        // re-rendered. Extending while we're still a few batches short means
+        // there's always rendered (or instantly-renderable) content below the
+        // fold — no empty space, no fill-in pop. Only the initial home segment
+        // cycles infinitely; bounded sub-segments (similar looks) keep their
+        // fixed pool and simply stop. The director caps concurrent video
+        // decode regardless of how many cards are mounted.
+        if (isInitial && pool.length - visibleCount <= batch * 3) {
+          setPoolCycles(c => c + 1);
         }
       },
-      { rootMargin: '400px' }
+      // Wide lookahead: start filling well before the sentinel is on screen so
+      // rows are already mounted (and warming/playing) by the time they scroll
+      // into view.
+      { root: scrollRoot ?? null, rootMargin: '1600px' }
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
-  }, [batch, pool.length, visibleCount, searchMode, onLoadMore]);
+  }, [batch, pool.length, visibleCount, searchMode, onLoadMore, scrollRoot, isInitial]);
 
   useEffect(() => {
     setVisibleCount(batch);
+    setPoolCycles(1);
   }, [looks, batch]);
 
   // Hide only when both inputs are empty. Initial sections show creatives
@@ -238,8 +414,16 @@ function FeedSection({
   return (
     <div className={`feed-section layout-${layout.name}`}>
       {title && <div className="feed-section-header">{title}</div>}
-      <div className="feed-section-grid" id={isInitial ? 'grid-container' : undefined} style={gridStyle}>
+      <div
+        ref={gridRef}
+        className="feed-section-grid"
+        id={isInitial ? 'grid-container' : undefined}
+        style={padTop ? { ...gridStyle, paddingTop: padTop } : gridStyle}
+      >
         {displayItems.map((item, idx) => {
+          // Stable, pool-position index — keys/slotIds/priority must NOT shift
+          // when windowStart advances, or surviving cards would remount.
+          const globalIndex = windowStart + idx;
           if (item.type === 'placeholder') {
             return (
               <div key={item.key} className="look-card promo-card creative-placeholder" aria-hidden="true">
@@ -260,25 +444,29 @@ function FeedSection({
           }
           if (item.type === 'creative') {
             return (
-              <CreativeCard
-                key={`creative-${item.creative.id}-${idx}`}
+              <CreativeCardV2
+                key={`creative-${item.creative.id}-${globalIndex}`}
+                slotId={`${slotPrefix ? `${slotPrefix}:` : ''}creative-${item.creative.id}-${globalIndex}`}
                 creative={item.creative}
-                className={getCardClass(idx)}
+                className={getCardClass(globalIndex)}
                 onOpenProduct={onOpenCreativeProduct}
                 canDelete={canDeleteCreative}
                 onDelete={onDeleteCreative}
-                priority={idx < 6}
+                priority={globalIndex < 6}
               />
             );
           }
           return (
-            <LookCard
+            <CreativeCardV2
               key={`${item.look.id}-${item.look.displayIndex}`}
+              slotId={`${slotPrefix ? `${slotPrefix}:` : ''}look-${item.look.id}-${item.look.displayIndex}`}
               look={item.look}
-              className={getCardClass(item.look.displayIndex)}
+              className={getCardClass(globalIndex)}
               onOpenLook={onOpenLook}
               onOpenCreator={onOpenCreator}
-              onCreateCatalog={onCreateCatalog}
+              canDelete={canDeleteCreative}
+              onDeleteLook={onDeleteLook}
+              priority={globalIndex < 6}
             />
           );
         })}

@@ -14,16 +14,21 @@ const notify = (set: Set<Listener>) => set.forEach(l => l());
 // 3 Supabase round-trips (admin_hidden_looks, admin_hidden_products,
 // products?is_active=eq.false) for each component. Pooling collapses
 // those into one fetch each, regardless of how many components ask.
-let hiddenLookIdsPromise: Promise<Set<number>> | null = null;
+let hiddenLooksPromise: Promise<{ ids: Set<number>; uuids: Set<string> }> | null = null;
 let hiddenProductKeysPromise: Promise<Set<string>> | null = null;
 
-async function fetchHiddenLookIds(): Promise<Set<number>> {
-  if (!supabase) return new Set();
-  const { data, error } = await supabase.from('admin_hidden_looks').select('look_id');
-  if (error || !data) return new Set();
-  return new Set<number>(
-    (data as { look_id: number }[]).map(r => r.look_id).filter(n => Number.isFinite(n)),
-  );
+// Single fetch for BOTH the numeric-id and uuid hidden sets — they come from
+// the same admin_hidden_looks rows, so selecting both columns once collapses
+// what used to be two independent REST round-trips on every cold feed load.
+async function fetchHiddenLooks(): Promise<{ ids: Set<number>; uuids: Set<string> }> {
+  if (!supabase) return { ids: new Set(), uuids: new Set() };
+  const { data, error } = await supabase.from('admin_hidden_looks').select('look_id, look_uuid');
+  if (error || !data) return { ids: new Set(), uuids: new Set() };
+  const rows = data as { look_id: number | null; look_uuid: string | null }[];
+  return {
+    ids: new Set<number>(rows.map(r => r.look_id).filter((n): n is number => Number.isFinite(n as number))),
+    uuids: new Set<string>(rows.map(r => r.look_uuid).filter((s): s is string => !!s)),
+  };
 }
 
 async function fetchHiddenProductKeys(): Promise<Set<string>> {
@@ -47,14 +52,23 @@ async function fetchHiddenProductKeys(): Promise<Set<string>> {
   return keys;
 }
 
-function getHiddenLookIds(): Promise<Set<number>> {
-  if (!hiddenLookIdsPromise) {
-    hiddenLookIdsPromise = fetchHiddenLookIds().catch(err => {
-      hiddenLookIdsPromise = null;
+function getHiddenLooks(): Promise<{ ids: Set<number>; uuids: Set<string> }> {
+  if (!hiddenLooksPromise) {
+    hiddenLooksPromise = fetchHiddenLooks().catch(err => {
+      hiddenLooksPromise = null;
       throw err;
     });
   }
-  return hiddenLookIdsPromise;
+  return hiddenLooksPromise;
+}
+
+// Both keyed views derive from the one shared fetch above (no extra request).
+function getHiddenLookIds(): Promise<Set<number>> {
+  return getHiddenLooks().then(r => r.ids);
+}
+
+function getHiddenLookUuids(): Promise<Set<string>> {
+  return getHiddenLooks().then(r => r.uuids);
 }
 
 function getHiddenProductKeys(): Promise<Set<string>> {
@@ -65,6 +79,36 @@ function getHiddenProductKeys(): Promise<Set<string>> {
     });
   }
   return hiddenProductKeysPromise;
+}
+
+/**
+ * Whether a look should be hidden from the consumer feed.
+ *
+ * A look is hidden by its stable `uuid` (DB looks) or — only when it has a
+ * real, stable numeric id (`id >= 0`, i.e. a legacy seed look) — by that
+ * numeric id. The synthetic negative ids assigned to DB rows with no
+ * `legacy_id` are deliberately NEVER matched against the numeric set:
+ * those ids are fetch-order-derived and unstable, so a stale entry would
+ * otherwise suppress arbitrary (or all) looks.
+ */
+export function isLookHidden(
+  look: { id: number; uuid?: string | null },
+  hiddenIds: Set<number>,
+  hiddenUuids: Set<string>,
+): boolean {
+  if (look.uuid && hiddenUuids.has(look.uuid)) return true;
+  if (look.id >= 0 && hiddenIds.has(look.id)) return true;
+  return false;
+}
+
+/**
+ * Warm the admin-hidden look/product sets at boot so they load in parallel
+ * with the feed fetch instead of serializing after the first GridView mount.
+ * Reuses the singleton in-flight caches above, so it's safe to call repeatedly.
+ */
+export function prefetchHiddenContent(): void {
+  void getHiddenLookIds();
+  void getHiddenProductKeys();
 }
 
 function readLocalLookIds(): Set<number> {
@@ -97,15 +141,78 @@ function writeLocalLookIds(set: Set<number>) {
   try { window.localStorage.setItem('admin:hiddenLookIds', JSON.stringify([...set])); } catch { /* quota */ }
 }
 
-export async function hideLookId(id: number): Promise<void> {
+function writeLocalProductKeys(set: Set<string>) {
+  try { window.localStorage.setItem('admin:hiddenProductKeys', JSON.stringify([...set])); } catch { /* quota */ }
+}
+
+/**
+ * Soft-hide a product from the consumer feed (and from every look). Keyed by
+ * `${brand}-${name}` to match useHiddenProductKeys / the admin_hidden_products
+ * table. Optimistically writes localStorage + notifies subscribers so the feed
+ * drops it immediately, then best-effort persists to Supabase. Used by the
+ * super-admin long-press delete on the product page.
+ */
+export async function hideProductKey(brand: string, name: string): Promise<void> {
+  if (!brand || !name) return;
+  const current = readLocalProductKeys();
+  current.add(`${brand}-${name}`);
+  writeLocalProductKeys(current);
+  notify(productListeners);
+  if (supabase) {
+    // Ignore "table missing" errors — localStorage already made it stick.
+    await supabase.from('admin_hidden_products').upsert({ brand, name }, { onConflict: 'brand,name' });
+  }
+}
+
+function readLocalLookUuids(): Set<string> {
+  try {
+    const raw = typeof window !== 'undefined'
+      ? window.localStorage.getItem('admin:hiddenLookUuids')
+      : null;
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw);
+    return new Set(Array.isArray(arr) ? arr.map(String) : []);
+  } catch {
+    return new Set();
+  }
+}
+
+function writeLocalLookUuids(set: Set<string>) {
+  try { window.localStorage.setItem('admin:hiddenLookUuids', JSON.stringify([...set])); } catch { /* quota */ }
+}
+
+/**
+ * Soft-hide a look from the consumer feed.
+ *
+ * Looks that came from Supabase carry a stable `uuid` but their numeric
+ * `id` is a synthetic, fetch-order-derived value (`-(index+1)` when the
+ * row has no `legacy_id` — which is every DB look today). Keying a hide on
+ * that numeric id is a bug: the id reshuffles on the next fetch, so the
+ * stored value ends up matching a *different* look (or none), and a few
+ * stale entries can suppress the entire feed. So we hide by `uuid` whenever
+ * one exists, and only fall back to the numeric id for true legacy seed
+ * looks (positive, stable ids, no uuid).
+ */
+export async function hideLookId(look: { id: number; uuid?: string | null }): Promise<void> {
+  const uuid = look.uuid ?? null;
+  if (uuid) {
+    const current = readLocalLookUuids();
+    current.add(uuid);
+    writeLocalLookUuids(current);
+    notify(lookListeners);
+    if (supabase) {
+      // Best-effort cloud persist. Ignore "table/column missing" errors -
+      // localStorage already made the hide stick for this browser.
+      await supabase.from('admin_hidden_looks').upsert({ look_uuid: uuid }, { onConflict: 'look_uuid' });
+    }
+    return;
+  }
   const current = readLocalLookIds();
-  current.add(id);
+  current.add(look.id);
   writeLocalLookIds(current);
   notify(lookListeners);
   if (supabase) {
-    // Best-effort cloud persist. Ignore "table missing" errors - localStorage
-    // already made the hide stick for this browser.
-    await supabase.from('admin_hidden_looks').upsert({ look_id: id }, { onConflict: 'look_id' });
+    await supabase.from('admin_hidden_looks').upsert({ look_id: look.id }, { onConflict: 'look_id' });
   }
 }
 
@@ -141,6 +248,34 @@ export function useHiddenLooks(): Set<number> {
   return hidden;
 }
 
+// uuid-keyed companion to useHiddenLooks. DB-backed looks are hidden by
+// their stable uuid (see hideLookId) so a hide survives the fetch-order
+// reshuffle that scrambles the synthetic numeric id.
+export function useHiddenLookUuids(): Set<string> {
+  const [hidden, setHidden] = useState<Set<string>>(() => readLocalLookUuids());
+
+  useEffect(() => {
+    const listener = () => setHidden(readLocalLookUuids());
+    lookListeners.add(listener);
+    return () => { lookListeners.delete(listener); };
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    getHiddenLookUuids().then(uuids => {
+      if (cancelled) return;
+      setHidden(prev => {
+        const merged = new Set(prev);
+        uuids.forEach(u => merged.add(u));
+        return merged;
+      });
+    }).catch(() => { /* offline / RLS - keep localStorage view */ });
+    return () => { cancelled = true; };
+  }, []);
+
+  return hidden;
+}
+
 export function useHiddenProductKeys(): Set<string> {
   const [hidden, setHidden] = useState<Set<string>>(() => {
     try {
@@ -154,6 +289,18 @@ export function useHiddenProductKeys(): Set<string> {
       return new Set();
     }
   });
+
+  // Refresh from localStorage whenever hideProductKey() fires so a delete
+  // propagates to the feed immediately (merges, never drops DB-fetched keys).
+  useEffect(() => {
+    const listener = () => setHidden(prev => {
+      const merged = new Set(prev);
+      readLocalProductKeys().forEach(k => merged.add(k));
+      return merged;
+    });
+    productListeners.add(listener);
+    return () => { productListeners.delete(listener); };
+  }, []);
 
   useEffect(() => {
     let cancelled = false;

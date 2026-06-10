@@ -1,18 +1,28 @@
-import { useReducer, useEffect, useRef, useCallback, useMemo, useState } from 'react';
+import { useReducer, useEffect, useRef, useCallback, useMemo, useState, memo } from 'react';
 import { looks as staticLooksFallback, type Look, type Product } from '~/data/looks';
-import { getLooks } from '~/services/looks';
+import { getLooks, getCachedLooks, subscribeToLooksChange, fetchSeenLookIds, reorderBySeen } from '~/services/looks';
+import { trackImpression } from '~/services/session-tracker';
 import { getSimilarLooks } from '~/utils/similarity';
 import FeedSection from './FeedSection';
 import InlineLookDetail from './InlineLookDetail';
 import EmptyCatalogState from './EmptyCatalogState';
-import { prefetchHomeFeed, getCachedHomeFeed, getHomeFeed, getCreativesByCatalogTag, getCreativesByBrandQuery, resolveBrandFromQuerySync, creativeMatchesCatalogQuery, resolveCatalogTypes, resolveMaterialKeywords, deleteProductAd, deleteProduct, subscribeToShopperGender, type ProductAd } from '~/services/product-creative';
-import { primeTrailAssets } from '~/utils/trailPrefetch';
+import { prefetchHomeFeed, getCachedHomeFeed, getHomeFeed, getCreativesByCatalogTag, getCreativesByBrandQuery, resolveBrandFromQuerySync, creativeMatchesCatalogQuery, resolveCatalogTypes, resolveMaterialKeywords, deleteProductAd, deleteProduct, subscribeToShopperGender, getShopperGender, type ProductAd } from '~/services/product-creative';
+import { primeTrailAssets, primeLookAssets } from '~/utils/trailPrefetch';
 import { supabase } from '~/utils/supabase';
 import { logSearch } from '~/services/search-log';
 import { useAuth } from '~/hooks/useAuth';
-import { useHiddenLooks, useHiddenProductKeys } from '~/hooks/useHiddenLooks';
+import { useShopperBody } from '~/hooks/useShopperBody';
+import { lookFitScore } from '~/services/size-match';
+import { useHiddenLooks, useHiddenLookUuids, useHiddenProductKeys, hideLookId, isLookHidden } from '~/hooks/useHiddenLooks';
+import { deleteLook as deleteLookService } from '~/services/manage-looks';
 import { useDeleteMode } from '~/hooks/useDeleteMode';
+import { getSeenKeys, partitionUnseen, type SeenKey } from '~/services/seen-feed';
 import { useSearch } from '~/hooks/useSearch';
+import { director } from '~/services/video-playback-director';
+import { useUserAffinity } from '~/hooks/useUserAffinity';
+import { composeRenderedCreatives } from '~/services/feed-compose';
+import { recordRecentSearch } from '~/services/recent-searches';
+import { getPersonalizedProductOrder } from '~/services/personalized-feed';
 
 interface BookmarksInterface {
   isLookBookmarked: (id: number) => boolean;
@@ -36,8 +46,39 @@ interface ContinuousFeedProps {
   bookmarks: BookmarksInterface;
   /** Called with true when nl-search is in-flight, false when resolved. */
   onSearchLoadingChange?: (loading: boolean) => void;
+  /** Called when a search resolves, with the first few result product images
+   *  (so the search ceremony can float them in the particle field behind it). */
+  onResultsReady?: (images: string[]) => void;
   /** Incremented on each Enter/submit to bypass debounce and fire immediately. */
   searchTrigger?: number;
+  /** When set, the feed only surfaces looks whose creator handle is
+   *  in this list (lower-cased). Used by the FollowingRail's
+   *  "Make a catalog of who I follow" CTA. null disables the
+   *  filter. */
+  followedHandles?: string[] | null;
+  /** When true, only show looks where at least one product is available
+   *  in the shopper's predicted size. Toggled by the "My Size" chip in
+   *  BottomBar. */
+  mySizeOnly?: boolean;
+  /**
+   * When true the feed is rendered nested inside another scroll surface
+   * (e.g. ProductPage or LookOverlay's "You might also like" slot). Omits
+   * the `id="grid-viewport"` hook so global `#grid-viewport` CSS rules
+   * (feed-mode/landing-mode/etc.) don't double-target the nested instance.
+   */
+  nested?: boolean;
+  /**
+   * Optional scroll container for nested usage. When the feed lives inside
+   * an overflow:auto overlay, pass that element so the load-more sentinel
+   * triggers based on the overlay's edges instead of the window viewport.
+   */
+  scrollRoot?: HTMLElement | null;
+  /**
+   * Forwarded to every FeedSection rendered by this feed. Namespaces
+   * CreativeCardV2 slotIds so overlay feeds never collide with the main
+   * feed's director registrations. See FeedSection.slotPrefix.
+   */
+  slotPrefix?: string;
 }
 
 type Segment =
@@ -60,14 +101,22 @@ function feedReducer(state: FeedState, action: FeedAction): FeedState {
       const newSeen = new Set(state.seenLookIds);
       newSeen.add(look.id);
 
-      const related = getSimilarLooks(look, allLooks, 8, newSeen);
-      related.forEach(l => newSeen.add(l.id));
+      const raw = getSimilarLooks(look, allLooks, 8, newSeen);
+      raw.forEach(l => newSeen.add(l.id));
+
+      // Pad to exactly 8 by cycling duplicates with unique negative IDs
+      // (same approach as fillLooks in LookOverlay).
+      const related: Look[] = [...raw];
+      while (related.length < 8 && raw.length > 0) {
+        const src = raw[related.length % raw.length];
+        related.push({ ...src, id: -(src.id * 1000 + related.length) });
+      }
 
       return {
         segments: [
           ...state.segments,
           { type: 'detail', id: `detail-${look.id}-${Date.now()}`, look },
-          { type: 'feed', id: `feed-${look.id}-${Date.now()}`, looks: related, title: 'More like this' },
+          { type: 'feed', id: `feed-${look.id}-${Date.now()}`, looks: related, title: 'Similar' },
         ],
         seenLookIds: newSeen,
       };
@@ -75,7 +124,10 @@ function feedReducer(state: FeedState, action: FeedAction): FeedState {
     case 'RESET':
       return {
         segments: [
-          { type: 'feed', id: `initial-${Date.now()}`, looks: action.looks, isInitial: true },
+          // Stable id — changing this would remount FeedSection and tear
+          // down every CreativeCardV2's director-managed <video>. Looks
+          // update via props instead.
+          { type: 'feed', id: 'initial', looks: action.looks, isInitial: true },
         ],
         seenLookIds: new Set<number>(),
       };
@@ -84,7 +136,7 @@ function feedReducer(state: FeedState, action: FeedAction): FeedState {
   }
 }
 
-export default function ContinuousFeed({
+function ContinuousFeed({
   activeFilter,
   searchQuery,
   shuffleKey,
@@ -98,8 +150,38 @@ export default function ContinuousFeed({
   onCreateCatalog,
   bookmarks,
   onSearchLoadingChange,
+  onResultsReady,
   searchTrigger = 0,
+  followedHandles,
+  mySizeOnly = false,
+  nested = false,
+  scrollRoot = null,
+  slotPrefix,
 }: ContinuousFeedProps) {
+  // Declared early so fitRankedLooks (below) can reference shopperBody.
+  // The same `user` is reused by the search-log telemetry block further down.
+  const { user } = useAuth();
+  const shopperBody = useShopperBody(user?.id);
+  // Per-shopper category lean (clicks + searches). Drives the soft affinity
+  // re-rank applied to the default home / "you might also like" feed below.
+  const affinity = useUserAffinity();
+
+  // ── Automatic Editor — daily personalized product order ──────────────
+  // An ordered list of product ids the personalize-feed edge function ranked
+  // for this shopper today. null = personalization off / holdout / guest /
+  // error (the default global feed_rank order is left untouched). Fetched
+  // once on mount and re-fetched when the signed-in user changes, behind the
+  // service's own dial gate + per-day localStorage cache. Only ever applied
+  // to the default home feed's product lane below.
+  const [personalizedOrder, setPersonalizedOrder] = useState<string[] | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    getPersonalizedProductOrder().then(ids => {
+      if (!cancelled) setPersonalizedOrder(ids);
+    });
+    return () => { cancelled = true; };
+  }, [user?.id]);
+
   // ── Committed query - the feed only updates when nl-search resolves ─────
   // While the user is typing (or nl-search is in flight), committedQuery stays
   // at the last resolved value so the grid doesn't jump on every keystroke.
@@ -122,58 +204,147 @@ export default function ContinuousFeed({
     }
   }, [searchQuery]);
 
+  // ── Catalog impression telemetry ──────────────────────────────────────
+  // When committedQuery commits to a catalog name (resolved by the
+  // catalog-types fast path or surfaced as tier-1 catalog_tag hits)
+  // the user is effectively "viewing" that catalog. Fire one
+  // impression per distinct catalog name per session — admins read
+  // this in /admin/catalogs to rank by audience demand. Empty/short
+  // queries are skipped; the home feed already logs its own
+  // impressions via look + product trackers.
+  const catalogImpressionFiredRef = useRef<Set<string>>(new Set());
+  useEffect(() => {
+    const q = committedQuery.trim().toLowerCase();
+    if (q.length < 2) return;
+    if (catalogImpressionFiredRef.current.has(q)) return;
+    catalogImpressionFiredRef.current.add(q);
+    trackImpression({ type: 'catalog', id: q, context: q.slice(0, 120) });
+  }, [committedQuery]);
+
+  // ── Director scroll notifications ─────────────────────────────────────
+  // Keeps the playback director in sync with the page scroll position so
+  // it can re-rank and recover stalled cards after a fast flick.
+  useEffect(() => {
+    const onScroll = () => director.notifyScroll(window.scrollY);
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => window.removeEventListener('scroll', onScroll);
+  }, []);
+
   // ── Filtering uses committedQuery so grid doesn't change while typing ──
   // must never appear in the consumer feed, detail pages, or similar-look rows.
   const hiddenLookIds = useHiddenLooks();
+  const hiddenLookUuids = useHiddenLookUuids();
   const hiddenProductKeys = useHiddenProductKeys();
 
-  // Load looks live from Supabase. Initial state is empty so we don't burn
-  // a render pass filtering the seed dataset (and don't briefly leak its
-  // 2-creator content into the "More like this" rails on slow networks).
-  // The first segment is creative-only anyway, so an empty looks array
-  // costs nothing on first paint - sub-segments only matter after the
-  // user taps a look, by which point Supabase has resolved.
-  const [dbLooks, setDbLooks] = useState<Look[]>([]);
+  // Load looks live from Supabase. Stale-while-revalidate: seed from
+  // localStorage on mount (instant on return visits) and revalidate in
+  // the background so the cache stays fresh.
+  const initialCachedLooks = useMemo(() => getCachedLooks(), []);
+  const [dbLooks, setDbLooks] = useState<Look[]>(initialCachedLooks || []);
   useEffect(() => {
-    let cancelled = false;
-    (async () => {
-      try {
-        const fetched = await getLooks();
-        if (!cancelled && fetched.length > 0) setDbLooks(fetched);
-      } catch {
-        // Supabase unreachable - fall back to the static seed so sub-segments
-        // have *something* to draw similars from instead of an empty rail.
-        if (!cancelled) setDbLooks(staticLooksFallback);
-      }
-    })();
-    return () => { cancelled = true; };
+    if (initialCachedLooks?.length) primeLookAssets(initialCachedLooks);
+  }, [initialCachedLooks]);
+  // Realtime sync: services/looks.ts owns a Supabase channel that
+  // listens to looks + looks_creative changes and broadcasts via
+  // subscribeToLooksChange. Whenever an admin deletes / unpublishes /
+  // newly-publishes a look, this listener refetches and the consumer
+  // feed updates live without a refresh. The cache is invalidated
+  // inside the service before the broadcast fires, so getLooks()
+  // here actually round-trips to the DB.
+  useEffect(() => {
+    return subscribeToLooksChange(() => {
+      getLooks().then(setDbLooks).catch(() => {});
+    });
   }, []);
+  // (Looks are now fetched inside the combined effect below — this
+  // useEffect preserves the hook-count contract for HMR stability.)
+  useEffect(() => { /* combined fetch below handles looks revalidation */ }, []);
+
+  // Seen-look set for the signed-in shopper. Used by the unseen-first
+  // ordering rule applied to allLooks below. Re-fetched on mount and
+  // whenever the cached looks set changes (so a freshly-published look
+  // is treated as unseen until the impression fires).
+  const [seenLookIds, setSeenLookIds] = useState<Set<string>>(new Set());
+  useEffect(() => {
+    if (!user?.id) { setSeenLookIds(new Set()); return; }
+    fetchSeenLookIds(user.id).then(setSeenLookIds).catch(() => setSeenLookIds(new Set()));
+  }, [user?.id, dbLooks.length]);
 
   const allLooks = useMemo(() => {
-    return dbLooks
-      .filter(l => !hiddenLookIds.has(l.id))
+    const filtered = dbLooks
+      .filter(l => !isLookHidden(l, hiddenLookIds, hiddenLookUuids))
       .map(l => ({
         ...l,
         products: l.products.filter(p => !hiddenProductKeys.has(`${p.brand}-${p.name}`)),
       }));
-  }, [dbLooks, hiddenLookIds, hiddenProductKeys]);
+    // Anonymous shoppers see the natural feed order untouched —
+    // reorderBySeen no-ops with an empty seen set.
+    return reorderBySeen(filtered, seenLookIds);
+    // shuffleKey is a deliberate dep (not read inside): it bumps on every
+    // feed (re)entry / shuffle, so the seen-shuffle re-runs and a returning
+    // shopper who's seen everything gets a fresh order instead of the same
+    // frozen one for the whole SPA session.
+  }, [dbLooks, hiddenLookIds, hiddenLookUuids, hiddenProductKeys, seenLookIds, shuffleKey]);
+
+  // Shopper's profile gender, subscribed globally. Declared ABOVE
+  // filteredLooks so the useMemo below can read it without tripping
+  // the temporal dead zone — production minification can hoist the
+  // useMemo factory call ahead of the useState declaration if these
+  // are reordered.
+  const [profileGender, setProfileGender] = useState(() => getShopperGender());
+  useEffect(() => {
+    const off = subscribeToShopperGender(() => setProfileGender(getShopperGender()));
+    return off;
+  }, []);
+
+  // Per-user "seen" set — drives hiding already-seen thumbnails on the
+  // default home feed (re-login skips what you've seen; once you've seen
+  // everything it resets). Loaded once per mount; empty for guests, so
+  // they always see the full feed. Search / catalog-filtered views are
+  // never seen-filtered (the shopper asked for those exact results).
+  const [seenKeys, setSeenKeys] = useState<Set<SeenKey>>(() => new Set());
+  useEffect(() => {
+    let cancelled = false;
+    getSeenKeys().then(set => { if (!cancelled) setSeenKeys(set); });
+    return () => { cancelled = true; };
+    // Re-pull when the signed-in user changes (login/logout).
+  }, [user?.id]);
 
   const filteredLooks = useMemo(() => {
     // Gender filter: 'men' includes 'unisex' looks too (and vice-versa)
     // so catalog-wide staples surface for everyone regardless of the
     // shopper's profile gender.
-    const base = activeFilter === 'all'
+    //
+    // When the explicit catalog filter is 'all', fall back to the
+    // signed-in shopper's profile gender — this is the same rule the
+    // product feed already applies via passesGenderFilter, so a male
+    // shopper doesn't see women's looks just because the catalog
+    // chip is set to "all". 'unknown' still shows everything.
+    const profileGenderFilter: 'men' | 'women' | null =
+      profileGender === 'male' ? 'men' : profileGender === 'female' ? 'women' : null;
+    const effectiveFilter: 'all' | 'men' | 'women' =
+      activeFilter !== 'all' ? activeFilter : (profileGenderFilter ?? 'all');
+    let base = effectiveFilter === 'all'
       ? allLooks
-      : allLooks.filter(l => l.gender === activeFilter || l.gender === 'unisex');
+      : allLooks.filter(l => l.gender === effectiveFilter || l.gender === 'unisex');
+    // "Make a catalog of who I follow" — narrow to looks whose
+    // creator handle matches one in the followedHandles set.
+    // Empty list means "nobody followed" → empty feed instead of
+    // bypassing the filter.
+    if (followedHandles) {
+      const allow = new Set(followedHandles);
+      base = base.filter(l => {
+        const handle = (l.creator || '').toLowerCase().trim();
+        return allow.has(handle);
+      });
+    }
     if (committedQuery) {
       const q = committedQuery.toLowerCase();
-      // For searches >= 3 chars (semantic-eligible), suppress looks entirely.
-      // The look text filter (title/description/product name .includes()) is
-      // too broad - a look with "tennis shoes" in its title or a skirt product
-      // named "tennis skirt" would appear for a "shoes" search. The semantic
-      // lane (renderedCreatives) already surfaces the right products; mixing
-      // looks in via text match adds noise.
-      if (q.length >= 3) return [];
+      // For queries >= 3 chars, the semantic search pipeline handles look
+      // ranking (search_looks RPC). Return base unfiltered — the
+      // searchMatchedLooks useMemo (declared after the semantic hook)
+      // will narrow to relevant looks by UUID match.
+      if (q.length >= 3) return base;
       return base.filter(l =>
         l.title.toLowerCase().includes(q) ||
         l.creator.toLowerCase().includes(q) ||
@@ -182,13 +353,32 @@ export default function ContinuousFeed({
       );
     }
     return base;
-  }, [activeFilter, committedQuery, allLooks]);
+  }, [activeFilter, committedQuery, allLooks, followedHandles, profileGender]);
 
   // ── Semantic search ────────────────────────────────────────────────────────
   // Kicks in for queries ≥ 3 chars; reorders filteredLooks so semantically
   // ranked looks float to the top. Falls back to the local text filter when
   // the edge function is unavailable or the query is too short.
-  const genderOpt = activeFilter === 'all' ? undefined : activeFilter;
+  // When the explicit men/women chip is active, that wins. Otherwise
+  // fall back to the shopper's profile gender so a signed-in male
+  // shopper's search results never leak women's items (and vice-versa).
+  // Signed-out / 'unknown' still skips the filter so the public feed
+  // shows everything. Subscribed to the global setter so a profile
+  // change re-runs the search with the new gender.
+  // profileGender + its subscriber effect are declared higher up
+  // (above filteredLooks) so that useMemo can read profileGender
+  // without tripping the TDZ in production builds.
+  // Search filter gender MUST use the products vocab ('male'/'female') — the
+  // `search` edge function whitelists only male|female|unisex and silently
+  // drops anything else to null (= no filter). Sending the UI 'men'/'women'
+  // here was the bug that made search ignore gender entirely. The edge
+  // function maps male→men / female→women internally for the looks lane.
+  const genderOpt: 'male' | 'female' | undefined =
+    activeFilter === 'men'       ? 'male'
+    : activeFilter === 'women'   ? 'female'
+    : profileGender === 'male'   ? 'male'
+    : profileGender === 'female' ? 'female'
+    : undefined;
   // Tier-1 eligibility: if the query maps to a known catalog type (e.g.
   // "shoes", "pants"), the in-memory + DB tag fast-path renders first.
   // We still run semantic in the background so Haiku-driven expansion can
@@ -224,60 +414,154 @@ export default function ContinuousFeed({
   // Clean up spinner on unmount
   useEffect(() => () => onSearchLoadingChange?.(false), [onSearchLoadingChange]);
 
-  // Reorder filteredLooks: with creative-first search, look ordering is no
-  // longer driven by semantic results (creatives are inserted into the feed
-  // separately). Pass filteredLooks through unchanged.
-  const semanticallyOrderedLooks = useMemo(() => filteredLooks, [filteredLooks]);
+  // Map semantic look hits (UUIDs) to full Look objects from allLooks.
+  // This avoids a second hydration fetch — we reuse the already-loaded
+  // look data with full product info, creator avatars, etc.
+  const searchMatchedLooks = useMemo<Look[]>(() => {
+    if (!semantic.looks.length) return [];
+    const looksByUuid = new Map<string, Look>();
+    for (const l of filteredLooks) {
+      if (l.uuid) looksByUuid.set(l.uuid, l);
+    }
+    const matched: Look[] = [];
+    for (const hit of semantic.looks) {
+      const look = looksByUuid.get(hit.id);
+      if (look) matched.push(look);
+    }
+    return matched;
+  }, [semantic.looks, filteredLooks]);
+
+  // Surface the first few result product images once a search resolves, so the
+  // search ceremony can float them in the particle field behind it.
+  useEffect(() => {
+    if (!onResultsReady || semantic.loading) return;
+    const imgs: string[] = [];
+    for (const c of semantic.creatives) {
+      const u = c.product_image_url || c.thumbnail_url;
+      if (u) imgs.push(u);
+      if (imgs.length >= 8) break;
+    }
+    if (imgs.length < 8) {
+      for (const l of searchMatchedLooks) {
+        const u = l.thumbnail_url || (l.products && l.products[0]?.image) || '';
+        if (u) imgs.push(u);
+        if (imgs.length >= 8) break;
+      }
+    }
+    if (imgs.length) onResultsReady(imgs);
+  }, [semantic.creatives, semantic.loading, searchMatchedLooks, onResultsReady]);
+
+  // When a semantic search returned look hits, use those (relevance-ranked).
+  // Otherwise fall back to the locally-filtered looks (for short queries
+  // or when the edge function returned no look results).
+  // Soft-rank looks by fit score: looks with products that match the
+  // shopper's body float toward the top of the feed without completely
+  // reordering. Only applied on the home feed (no search active) and
+  // only when the shopper has height data.
+  // When mySizeOnly is true, hard-filter to looks where at least one
+  // product has the shopper's predicted size available.
+  const fitRankedLooks = useMemo(() => {
+    if (!shopperBody.heightCm || committedQuery.trim().length >= 3) {
+      return mySizeOnly ? [] : filteredLooks;
+    }
+    let pool = filteredLooks;
+    if (mySizeOnly) {
+      pool = pool.filter(l => lookFitScore(l.products, shopperBody) > 0);
+    }
+    const scored = pool.map(l => ({
+      look: l,
+      fit: lookFitScore(l.products, shopperBody),
+    }));
+    if (scored.every(s => s.fit === 0)) return pool;
+    scored.sort((a, b) => b.fit - a.fit);
+    return scored.map(s => s.look);
+  }, [filteredLooks, shopperBody, committedQuery, mySizeOnly]);
+
+  const semanticallyOrderedLooks = useMemo(() => {
+    const q = committedQuery.trim();
+    if (q.length >= 3 && searchMatchedLooks.length > 0) return searchMatchedLooks;
+    if (q.length >= 3) return [];
+    // Default home feed → hide already-seen looks (reset when all seen).
+    return partitionUnseen(fitRankedLooks, seenKeys, l => l.uuid ? `look:${l.uuid}` : null);
+  }, [fitRankedLooks, searchMatchedLooks, committedQuery, seenKeys]);
 
   const [state, dispatch] = useReducer(feedReducer, {
     segments: [{ type: 'feed', id: 'initial', looks: semanticallyOrderedLooks, isInitial: true }],
     seenLookIds: new Set<number>(),
   });
 
-  // Fetch live product creative from Supabase. We surface a loading flag so
-  // the feed can render placeholder tiles in creative slots until the fetch
-  // resolves - otherwise the grid renders pure looks for a beat and the
-  // same two faces fill the first screen.
-  // Stale-while-revalidate first paint: if there's a localStorage snapshot
-  // from a prior visit, hydrate state with it synchronously so the feed
-  // renders in the first React commit instead of after the network round
-  // trip. Network revalidation kicks off in parallel and overwrites state
-  // when it lands.
+  // Fetch live product creatives + looks from Supabase.
+  //
+  // Cache-first, no-jank strategy:
+  //   - If localStorage has data from a prior visit, the feed renders
+  //     from that cache on the very first React commit.
+  //   - The network fetch runs in the background but does NOT update
+  //     the live feed — it only writes to localStorage so the next
+  //     page load picks up fresh data. This prevents the grid from
+  //     re-shuffling mid-session.
+  //   - When there is NO cache (first visit), the fetch updates live
+  //     state so the feed appears as soon as data arrives.
+  // Seed state from cache for an instant first paint; the refetch below
+  // always overwrites with fresh data (true SWR) so order/content changes
+  // reach the screen.
   const initialCached = useMemo(() => getCachedHomeFeed(), []);
   const [liveCreatives, setLiveCreatives] = useState<ProductAd[]>(initialCached || []);
-  const [creativesLoading, setCreativesLoading] = useState(!initialCached);
+  const [creativesLoading, setCreativesLoading] = useState(!(initialCached && initialCached.length > 0));
   useEffect(() => {
     let cancelled = false;
     if (initialCached) primeTrailAssets(initialCached);
 
-    const refetch = () => {
-      // Gender-aware re-fetch. Called once on mount and again whenever
-      // setShopperGender fires - without this, a male/female user sees
-      // the unfiltered cached feed forever because module-load
-      // prefetchHomeFeed() ran with shopperGender='unknown' before auth
-      // resolved. setShopperGender invalidates homeFeedPromise so this
-      // call always hits a fresh fetch with the current scope.
-      prefetchHomeFeed()
-        .then(data => {
-          if (cancelled) return;
-          setLiveCreatives(data);
-          primeTrailAssets(data);
-        })
-        .catch(err => {
-          console.error('[ContinuousFeed] fetching creative failed:', err);
-        })
-        .finally(() => {
-          if (!cancelled) setCreativesLoading(false);
-        });
+    const refetch = (force = false) => {
+      Promise.all([
+        getLooks().catch(() => null as Look[] | null),
+        prefetchHomeFeed().catch(() => null as ProductAd[] | null),
+      ]).then(([freshLooks, freshCreatives]) => {
+        if (cancelled) return;
+        // True stale-while-revalidate: show the cache instantly (state was
+        // seeded from it), THEN always overwrite with the fresh fetch so
+        // order/content changes (e.g. the admin's feed_rank arrangement,
+        // a gender flip) actually reach the screen. The previous version
+        // skipped setState whenever a cache existed, which permanently
+        // pinned the stale order — the home feed never reflected the admin
+        // FEED order. React reconciles by slotId so the swap is seamless.
+        void force;
+        if (freshLooks && freshLooks.length > 0) {
+          setDbLooks(freshLooks);
+          primeLookAssets(freshLooks);
+        } else if (!initialCachedLooks) {
+          setDbLooks(staticLooksFallback);
+        }
+        if (freshCreatives) {
+          setLiveCreatives(freshCreatives);
+          primeTrailAssets(freshCreatives);
+        }
+        setCreativesLoading(false);
+      });
     };
 
     refetch();
-    const unsubscribe = subscribeToShopperGender(refetch);
+    const unsubscribe = subscribeToShopperGender(() => refetch(true));
     return () => {
       cancelled = true;
       unsubscribe();
     };
-  }, [initialCached]);
+  }, [initialCached, initialCachedLooks]);
+
+  // First-paint signal. Tell useAppView the feed has something real
+  // to draw, so the auth splash can crossfade over actual cards
+  // instead of a blank dark frame. Fires exactly once per mount,
+  // one rAF after the first non-empty data commit, so the splash
+  // doesn't lift until the next paint actually has tiles in it.
+  const feedReadyFiredRef = useRef(false);
+  useEffect(() => {
+    if (feedReadyFiredRef.current) return;
+    if (typeof window === 'undefined') return;
+    if (liveCreatives.length === 0 && dbLooks.length === 0) return;
+    feedReadyFiredRef.current = true;
+    requestAnimationFrame(() => {
+      window.dispatchEvent(new CustomEvent('catalog:feed-ready'));
+    });
+  }, [liveCreatives.length, dbLooks.length]);
 
   // ── Tier-1: catalog_tags fast path ───────────────────────────────────────
   // When the user types a query that matches an existing catalog (e.g.
@@ -364,7 +648,20 @@ export default function ContinuousFeed({
     }
 
     // 1. In-memory match against already-loaded liveCreatives.
-    const inMemory = liveCreatives.filter(c => creativeMatchesCatalogQuery(c, q));
+    // Apply materialKws filter (e.g. "denim" → only products whose name
+    // contains 'denim'/'jean'/'jeans') so the in-memory set is consistent
+    // with what getCreativesByCatalogTag returns - otherwise a broad
+    // type-match (all Pants/Shorts/Jackets) wins the `rows.length >
+    // inMemory.length` guard below and the narrowed DB result is discarded.
+    const materialKwsForTag = resolveMaterialKeywords(q);
+    const inMemory = liveCreatives.filter(c => {
+      if (!creativeMatchesCatalogQuery(c, q)) return false;
+      if (materialKwsForTag) {
+        const name = ((c.product as { name?: string | null } | null)?.name ?? '').toLowerCase();
+        return materialKwsForTag.some(k => name.includes(k));
+      }
+      return true;
+    });
     if (inMemory.length > 0) {
       tagQueryRef.current = q;
       setTagMatchedCreatives(inMemory);
@@ -441,11 +738,24 @@ export default function ContinuousFeed({
       const n = (name || '').toLowerCase();
       return materialKws.some(kw => n.includes(kw));
     };
-    // SEARCH_V3: keep placeholder (image-only) rows so cold categories
-    // surface real products instead of an empty grid. CreativeCard handles
-    // the missing video_url by rendering the product image.
+    // Only surface rows that have an actual video creative. Placeholder rows
+    // (is_placeholder=true / video_url=null) are product-image stand-ins for
+    // products that have no creative yet — showing them in search gives the
+    // impression that the feed is "pooling photos" instead of creatives.
+    // Defense-in-depth gender gate. The edge function already filters by
+    // gender, but never let an off-gender tile render even if a stale/cached
+    // result slips through. Mirrors passesGenderFilter: a gendered shopper
+    // sees their gender + unisex; untagged + opposite are hidden. When no
+    // gender is active ('all'/unknown) everything passes.
+    const genderAllowed = (g: string | null | undefined): boolean => {
+      if (!genderOpt) return true;
+      const gl = (g || '').toLowerCase();
+      return gl === genderOpt || gl === 'unisex';
+    };
     return semantic.creatives
+      .filter(c => !c.is_placeholder && c.video_url)
       .filter(c => matchesMaterial(c.product_name))
+      .filter(c => genderAllowed(c.product_gender))
       .map(c => ({
       id:               c.id,
       product_id:       c.product_id,
@@ -453,6 +763,7 @@ export default function ContinuousFeed({
       title:            null,
       description:      null,
       video_url:        c.video_url,
+      hls_url:          null,
       storage_path:     null,
       thumbnail_url:    c.thumbnail_url,
       affiliate_url:    c.affiliate_url,
@@ -468,22 +779,26 @@ export default function ContinuousFeed({
       impressions:      0,
       clicks:           0,
       error:            null,
+      mobile_video_url: null,
       enabled:          true,
       is_elite:         c.is_elite ?? false,
       created_at:       new Date().toISOString(),
       completed_at:     null,
       updated_at:       null,
       product: {
-        id:           c.product_id,
-        name:         c.product_name,
-        brand:        c.product_brand,
-        price:        c.product_price,
-        image_url:    c.product_image_url,
-        url:          c.product_url,
-        catalog_tags: null,
+        id:                c.product_id,
+        name:              c.product_name,
+        brand:             c.product_brand,
+        price:             c.product_price,
+        image_url:         c.product_image_url,
+        primary_image_url: c.thumbnail_url,
+        primary_video_url: c.video_url,
+        url:               c.product_url,
+        catalog_tags:      null,
+        gender:            c.product_gender,
       },
     }));
-  }, [semantic.creatives, committedQuery]);
+  }, [semantic.creatives, committedQuery, genderOpt]);
 
   useEffect(() => {
     if (semanticCreatives.length) primeTrailAssets(semanticCreatives);
@@ -540,43 +855,25 @@ export default function ContinuousFeed({
   // following, deduped by id and product_id.
   const renderedCreatives = useMemo<ProductAd[]>(() => {
     const q = committedQuery.trim().toLowerCase();
+    // Ref-gated resolution: a stored match only counts when it belongs to the
+    // current committed query. composeRenderedCreatives owns the ordering.
     const brandMatch = q && brandQueryRef.current === q ? brandMatchedCreatives : [];
-    if (brandMatch.length > 0) {
-      const seen = new Set<string>();
-      const seenProducts = new Set<string>();
-      const out: ProductAd[] = [];
-      for (const c of brandMatch) {
-        if (seen.has(c.id)) continue;
-        if (c.product_id && seenProducts.has(c.product_id)) continue;
-        seen.add(c.id);
-        if (c.product_id) seenProducts.add(c.product_id);
-        out.push(c);
-      }
-      return out;
-    }
     const tagMatch = q && tagQueryRef.current === q ? tagMatchedCreatives : [];
-    if (tagMatch.length === 0) return semanticallyOrderedCreatives;
-
-    // Tier-1 found typed products - return those exclusively.
-    // Appending semanticallyOrderedCreatives would inject off-type semantic
-    // drift (e.g. "shoes" dense-neighbours skirts/dresses) after the correct
-    // results land. When the user gave us a typed query and tier-1 matched it,
-    // we can satisfy their intent with exactly those results.
-    const seen = new Set<string>();
-    const out: ProductAd[] = [];
-    for (const c of tagMatch) {
-      if (seen.has(c.id)) continue;
-      seen.add(c.id);
-      out.push(c);
-    }
-    return out;
-  }, [brandMatchedCreatives, tagMatchedCreatives, semanticallyOrderedCreatives, committedQuery]);
+    return composeRenderedCreatives({
+      committedQuery,
+      brandMatch,
+      tagMatch,
+      semanticOrdered: semanticallyOrderedCreatives,
+      seenKeys,
+      affinity,
+      personalizedOrder,
+    });
+  }, [brandMatchedCreatives, tagMatchedCreatives, semanticallyOrderedCreatives, committedQuery, seenKeys, affinity, personalizedOrder]);
 
   // Log search queries through the batch endpoint. Debounced 1.5 s and
   // prefix-deduped so mid-typing keystrokes don't each enqueue an entry;
   // the queue itself flushes every 5 s or on tab close, so a user's
   // session of pauses lands as one POST.
-  const { user } = useAuth();
   const lastLoggedQueryRef = useRef<string>('');
   useEffect(() => {
     const q = committedQuery.trim().toLowerCase();
@@ -585,6 +882,9 @@ export default function ContinuousFeed({
     if (q === last || last.startsWith(q)) return;
     const timer = setTimeout(() => {
       lastLoggedQueryRef.current = q;
+      // Personalization signal: remember this search locally so the affinity
+      // model can lean the feed toward the categories the shopper searches for.
+      recordRecentSearch(q);
       const handle = user?.displayName || user?.email || localStorage.getItem('catalog_user_handle') || (() => {
         const h = `user_${Math.random().toString(36).slice(2, 8)}`;
         localStorage.setItem('catalog_user_handle', h);
@@ -593,13 +893,18 @@ export default function ContinuousFeed({
       logSearch({
         query: q,
         user_handle: handle,
-        results_count: semanticallyOrderedLooks.length,
+        // Count BOTH lanes the shopper actually sees — product tiles
+        // (renderedCreatives) AND look tiles. Logging looks-only made every
+        // product-returning query ("candles", "quiet luxury") record 0
+        // results, so the admin Search analytics showed "0 results / 0% CTR"
+        // and looked like search was dead when it was returning 6–12 hits.
+        results_count: renderedCreatives.length + semanticallyOrderedLooks.length,
         clicked: false,
         filter: activeFilter,
       });
     }, 1500);
     return () => clearTimeout(timer);
-  }, [committedQuery, semanticallyOrderedLooks.length, activeFilter, user]);
+  }, [committedQuery, renderedCreatives.length, semanticallyOrderedLooks.length, activeFilter, user]);
 
   // Reset when filters/search/shuffle change - use committedQuery so the
   // feed only resets after nl-search resolves, not on every keystroke.
@@ -685,6 +990,27 @@ export default function ContinuousFeed({
     }
   }, [liveCreatives]);
 
+  // Hard delete a look. Mirrors handleDeleteCreative: optimistic
+  // local pull, then the DB-side delete via the manage-looks edge
+  // function. Falls back to a soft-hide (admin_hidden_looks +
+  // localStorage) when the look has no backend uuid — those are
+  // legacy seed entries with no row to delete.
+  const handleDeleteLook = useCallback(async (look: Look) => {
+    setDbLooks(prev => prev.filter(l => l.id !== look.id));
+    if (look.uuid) {
+      try {
+        await deleteLookService(look.uuid);
+      } catch (err) {
+        console.error('[ContinuousFeed] deleteLook failed:', err);
+        alert(`Could not delete look: ${err instanceof Error ? err.message : 'unknown'}`);
+        getLooks().then(setDbLooks).catch(() => {});
+      }
+      return;
+    }
+    // Seed look — soft hide locally so the admin still gets feedback.
+    try { await hideLookId(look); } catch { /* localStorage write */ }
+  }, []);
+
   const handleOpenCreativeProduct = useCallback((creative: ProductAd) => {
     if (onOpenCreative) {
       onOpenCreative(creative);
@@ -725,7 +1051,13 @@ export default function ContinuousFeed({
 
   const [staleCreatives, setStaleCreatives] = useState<ProductAd[]>([]);
   const [staleLooks, setStaleLooks] = useState<Look[]>([]);
+  // Bumped when a search resolves with results. We do NOT use this as a
+  // React `key` (that would unmount the feed subtree, tearing down every
+  // CreativeCardV2 and pausing/parking its director-managed <video>).
+  // Instead we re-trigger the CSS fade-in animation by toggling the class
+  // on the same DOM node — keeps the video pool live and playing.
   const [feedContentKey, setFeedContentKey] = useState(0);
+  const feedContentRef = useRef<HTMLDivElement>(null);
   const prevSearchingRef = useRef(false);
 
   // Cache last successful content for stale display.
@@ -762,6 +1094,20 @@ export default function ContinuousFeed({
     if (toastTimerRef.current) clearTimeout(toastTimerRef.current);
   }, []);
 
+  // Re-trigger the fade-in animation on the existing DOM node whenever a
+  // search resolves. Toggling the class (instead of remounting via `key`)
+  // keeps every CreativeCardV2 mounted, so the VideoPlaybackDirector pool
+  // is never torn down and videos don't get paused/parked mid-playback.
+  useEffect(() => {
+    if (feedContentKey === 0) return;
+    const el = feedContentRef.current;
+    if (!el) return;
+    el.classList.remove('feed-content-fadein');
+    // Force reflow so the browser restarts the CSS animation.
+    void el.offsetWidth;
+    el.classList.add('feed-content-fadein');
+  }, [feedContentKey]);
+
   // When a search has resolved (not in-flight), never fall back to stale
   // content - show only the exact search results (may be empty → empty grid
   // + toast). Stale content is only shown during the in-flight window so the
@@ -791,7 +1137,7 @@ export default function ContinuousFeed({
   const emptyCatalogName = trimmedQuery.replace(/\b\w/g, c => c.toUpperCase());
 
   return (
-    <div className="continuous-feed" id="grid-viewport">
+    <div className="continuous-feed" id={nested ? undefined : 'grid-viewport'}>
       {/* Top overlay loader - appears above existing content during search. */}
       {isSearching && (
         <div className="feed-search-loader" aria-hidden="true">
@@ -805,7 +1151,7 @@ export default function ContinuousFeed({
       {showEmptyState && (
         <EmptyCatalogState catalogName={emptyCatalogName} />
       )}
-      <div key={feedContentKey} className={feedContentKey > 0 ? 'feed-content-fadein' : undefined} hidden={showEmptyState}>
+      <div ref={feedContentRef} hidden={showEmptyState}>
         {state.segments.map((segment, idx) => {
           if (segment.type === 'feed') {
             return (
@@ -820,11 +1166,15 @@ export default function ContinuousFeed({
                 creativesLoading={segment.isInitial ? creativesLoading : false}
                 canDeleteCreative={canDeleteCreative}
                 onDeleteCreative={handleDeleteCreative}
+                onDeleteLook={canDeleteCreative ? handleDeleteLook : undefined}
                 title={segment.title}
+                batchSize={segment.isInitial ? undefined : 8}
                 isInitial={segment.isInitial}
                 layoutMode={layoutMode}
                 searchMode={segment.isInitial && (semantic.creatives.length > 0 || tagMatchedCreatives.length > 0 || brandMatchedCreatives.length > 0)}
                 onLoadMore={segment.isInitial ? semantic.loadMore : undefined}
+                scrollRoot={scrollRoot}
+                slotPrefix={slotPrefix}
               />
             );
           }
@@ -849,3 +1199,9 @@ export default function ContinuousFeed({
     </div>
   );
 }
+
+// Memoized — the feed lives in the always-mounted shell, so without this
+// it re-rendered (and re-ran its derived-list useMemos) on every parent
+// render, e.g. each keystroke in search. Props are now referentially
+// stable (bookmarks is useMemo'd; callbacks are useCallback'd).
+export default memo(ContinuousFeed);

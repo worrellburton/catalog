@@ -1,11 +1,11 @@
 import { useState, useMemo, useRef, useEffect, useCallback, Fragment } from 'react';
-import { Outlet, NavLink, useNavigate, useSearchParams } from '@remix-run/react';
+import { Outlet, NavLink, useNavigate, useSearchParams, useLocation, useRouteError, isRouteErrorResponse } from '@remix-run/react';
 import CatalogLogo from '~/components/CatalogLogo';
-import LiveCursors from '~/components/LiveCursors';
 import { useAuth } from '~/hooks/useAuth';
-import { useLiveCursors } from '~/hooks/useLiveCursors';
+import { isAdminRole } from '~/types/roles';
 import { supabase } from '~/utils/supabase';
-import { deleteProductAd, promoteQueuedAds, regenerateAd } from '~/services/product-creative';
+import { promoteQueuedAds } from '~/services/product-creative';
+import { getAdminNavOrder, saveAdminNavOrder } from '~/services/admin-nav-order';
 import { AdminConfirmProvider } from '~/components/AdminConfirm';
 
 // Admin styles only ship when an admin route is rendered. Previously
@@ -24,26 +24,37 @@ interface NavItem {
 const navItems: NavItem[] = [
   { to: '/admin', label: 'Home', icon: 'M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z' },
   { to: '/admin/users', label: 'Users', icon: 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8' },
-  { to: '/admin/content', label: 'Content', icon: 'M15 10l4.553-2.276A1 1 0 0 1 21 8.618v6.764a1 1 0 0 1-1.447.894L15 14M3 6h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z' },
+  { to: '/admin/data', label: 'Data', icon: 'M15 10l4.553-2.276A1 1 0 0 1 21 8.618v6.764a1 1 0 0 1-1.447.894L15 14M3 6h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z' },
   { to: '/admin/catalogs', label: 'Catalogs', icon: 'M4 19.5A2.5 2.5 0 0 1 6.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z' },
+  { to: '/admin/brands', label: 'Brands', icon: 'M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82zM7 7h.01' },
+  { to: '/admin/pages', label: 'Pages', icon: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8' },
   { to: '/admin/search', label: 'Search', icon: 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.35-4.35' },
   { to: '/admin/advertisements', label: 'Partnerships', icon: 'M2 7v10M6 5v14M11 4l9 4v12l-9-4z' },
   { to: '/admin/links', label: 'Sign Up Links', icon: 'M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71' },
   { to: '/admin/affiliate', label: 'Affiliate', icon: 'M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82zM7 7h.01M14 14l3 3M17 11l-3-3' },
+  { to: '/admin/affiliate-com', label: 'Affiliate.com', icon: 'M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71' },
   { to: '/admin/earnings', label: 'Earnings', icon: 'M12 1v22M17 5H9.5a3.5 3.5 0 1 0 0 7h5a3.5 3.5 0 1 1 0 7H6' },
   { to: '/admin/finance', label: 'Finance', icon: 'M3 3v18h18M7 14l4-4 4 4 6-6' },
   { to: '/admin/activities', label: 'Engagement', icon: 'M22 12h-4l-3 9L9 3l-3 9H2' },
   { to: '/admin/creative', label: 'Creative', icon: 'M12 19l7-7 3 3-7 7-3-3zM18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5zM2 2l7.586 7.586M11 11a2 2 0 1 1-4 0 2 2 0 0 1 4 0z' },
   { to: '/admin/categories', label: 'Taxonomy', icon: 'M7 7h.01M7 3h5c.512 0 1 .448 1 1v5c0 .552-.448 1-1 1H7c-.552 0-1-.448-1-1V4c0-.552.448-1 1-1zM17 13h.01M13 13h5c.552 0 1 .448 1 1v5c0 .552-.448 1-1 1h-5c-.552 0-1-.448-1-1v-5c0-.552.448-1 1-1zM7 13h.01M3 13h5c.552 0 1 .448 1 1v5c0 .552-.448 1-1 1H3c-.552 0-1-.448-1-1v-5c0-.552.448-1 1-1z' },
+  { to: '/admin/comments', label: 'Comments', icon: 'M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z' },
   { to: '/admin/moderation', label: 'Moderation', icon: 'M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z' },
   { to: '/admin/revenue', label: 'Performance', icon: 'M3 3v18h18M7 14l4-4 4 4 6-6' },
+  { to: '/admin/analytics', label: 'Analytics', icon: 'M3 3v18h18M7 17v-5M11 17v-9M15 17v-2M19 17v-7' },
   { to: '/admin/agents', label: 'Agents', icon: 'M12 2a3 3 0 0 0-3 3v1a3 3 0 0 0 3 3 3 3 0 0 0 3-3V5a3 3 0 0 0-3-3zM4 22v-1a5 5 0 0 1 5-5h6a5 5 0 0 1 5 5v1M9 12h6' },
+  { to: '/admin/prompts', label: 'Prompts', icon: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z' },
+  { to: '/admin/ai-usage', label: 'AI Usage', icon: 'M9 3H5a2 2 0 0 0-2 2v4m6-6h10a2 2 0 0 1 2 2v4M9 3v18m0 0h10a2 2 0 0 0 2-2v-4M9 21H5a2 2 0 0 0-2-2v-4m0 0h18' },
   { to: '/admin/apis', label: 'APIs', icon: 'M4 6h16M4 12h16M4 18h16' },
   { to: '/admin/branding', label: 'Branding', icon: 'M4 7h16M4 12h10M4 17h16' },
   { to: '/admin/ui', label: 'UI', icon: 'M3 3h18v18H3zM3 9h18M9 21V9' },
+  { to: '/admin/splash', label: 'Splash', icon: 'M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83' },
+  { to: '/admin/dials', label: 'Dials', icon: 'M12 22c5.523 0 10-4.477 10-10S17.523 2 12 2 2 6.477 2 12s4.477 10 10 10zM12 6v6l4 2' },
   { to: '/admin/decks', label: 'Decks', icon: 'M4 4h16v4H4zM4 10h16v4H4zM4 16h16v4H4z' },
   { to: '/admin/fundraising', label: 'Fundraising', icon: 'M12 1v22M17 5H9.5a3.5 3.5 0 1 0 0 7h5a3.5 3.5 0 1 1 0 7H6' },
-  { to: '/admin/projections', label: 'Projections', icon: 'M3 3v18h18M7 17l5-5 4 4 5-7' },
+  { to: '/admin/model', label: 'Model', icon: 'M3 3v18h18M7 17l5-5 4 4 5-7' },
+  { to: '/admin/gtm', label: 'GTM', icon: 'M3 11l19-9-9 19-2-8-8-2z' },
+  { to: '/admin/sharing', label: 'Sharing', icon: 'M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13' },
 ];
 
 interface SearchItem {
@@ -55,10 +66,23 @@ interface SearchItem {
 const allSearchItems: SearchItem[] = [
   // Pages
   { label: 'Users', type: 'Page', to: '/admin/users' },
-  { label: 'Content', type: 'Page', to: '/admin/content' },
+  { label: 'AI Users', type: 'Page', to: '/admin/users?tab=ai' },
+  { label: 'Waitlist', type: 'Page', to: '/admin/users?tab=waitlist' },
+  { label: 'Admins', type: 'Page', to: '/admin/users?tab=admins' },
+  { label: 'Super Admins', type: 'Page', to: '/admin/users?tab=admins' },
+  { label: 'Data', type: 'Page', to: '/admin/data' },
+  // Old name kept in the search index so muscle memory still resolves.
+  { label: 'Content', type: 'Page', to: '/admin/data' },
   { label: 'Catalogs', type: 'Page', to: '/admin/catalogs' },
+  { label: 'Brands', type: 'Page', to: '/admin/brands' },
   { label: 'Search', type: 'Page', to: '/admin/search' },
   { label: 'Advertisements', type: 'Page', to: '/admin/advertisements' },
+  { label: 'Affiliate Networks', type: 'Page', to: '/admin/affiliate' },
+  { label: 'Affiliate.com', type: 'Page', to: '/admin/affiliate-com' },
+  { label: 'Affiliate Networks (.com)', type: 'Page', to: '/admin/affiliate-com?tab=networks' },
+  { label: 'Merchants', type: 'Page', to: '/admin/affiliate-com?tab=merchants' },
+  { label: 'Affiliate Products', type: 'Page', to: '/admin/affiliate-com?tab=products' },
+  { label: 'Identifier Conversion', type: 'Page', to: '/admin/affiliate-com?tab=conversion' },
   { label: 'Earnings', type: 'Page', to: '/admin/earnings' },
   { label: 'Finance', type: 'Page', to: '/admin/finance' },
   { label: 'Creative', type: 'Page', to: '/admin/creative' },
@@ -70,21 +94,39 @@ const allSearchItems: SearchItem[] = [
   { label: 'Taxonomy', type: 'Page', to: '/admin/categories' },
   { label: 'Categories', type: 'Page', to: '/admin/categories' },
   { label: 'Moderation', type: 'Page', to: '/admin/moderation' },
+  { label: 'Comments', type: 'Page', to: '/admin/comments' },
   { label: 'Administrators', type: 'Page', to: '/admin/administrators' },
   { label: 'Shoppers Waitlist', type: 'Page', to: '/admin/shoppers-waitlist' },
   { label: 'Waitlist', type: 'Page', to: '/admin/shoppers-waitlist' },
   { label: "What's New", type: 'Page', to: '/admin/whats-new' },
   { label: 'Decks', type: 'Page', to: '/admin/decks' },
   { label: 'Fundraising', type: 'Page', to: '/admin/fundraising' },
-  { label: 'Projections', type: 'Page', to: '/admin/projections' },
+  { label: 'Model', type: 'Page', to: '/admin/model' },
+  { label: 'Projections', type: 'Page', to: '/admin/model' },
+  { label: 'Go to Market', type: 'Page', to: '/admin/model?tab=gtm' },
+  { label: 'Monthly OpEx', type: 'Page', to: '/admin/model/opex' },
+  { label: 'OpEx', type: 'Page', to: '/admin/model/opex' },
   { label: 'Pitch', type: 'Page', to: '/admin/fundraising?section=pitch' },
   { label: '30 min pitch', type: 'Page', to: '/admin/fundraising?section=pitch&pitch=30' },
   { label: '60 min pitch', type: 'Page', to: '/admin/fundraising?section=pitch&pitch=60' },
   { label: 'UI', type: 'Page', to: '/admin/ui' },
+  { label: 'Splash', type: 'Page', to: '/admin/splash' },
+  { label: 'Splash screen', type: 'Page', to: '/admin/splash' },
+  { label: 'Dials', type: 'Page', to: '/admin/dials' },
+  { label: 'Video to still ratio', type: 'Page', to: '/admin/dials' },
   { label: 'Brand', type: 'Page', to: '/admin/ui/brand' },
   { label: 'Search bar', type: 'Page', to: '/admin/ui/search-bar' },
   { label: 'Beam', type: 'Page', to: '/admin/ui/search-bar' },
   { label: 'Agents', type: 'Page', to: '/admin/agents' },
+  { label: 'Analytics', type: 'Page', to: '/admin/analytics' },
+  { label: 'Analytics — Users', type: 'Page', to: '/admin/analytics?tab=users' },
+  { label: 'Analytics — Products', type: 'Page', to: '/admin/analytics?tab=products' },
+  { label: 'Prompts', type: 'Page', to: '/admin/prompts' },
+  { label: 'Style prompt', type: 'Page', to: '/admin/prompts' },
+  { label: 'Sharing', type: 'Page', to: '/admin/sharing' },
+  { label: 'Link Previews', type: 'Page', to: '/admin/sharing' },
+  { label: 'iMessage', type: 'Page', to: '/admin/sharing' },
+  { label: 'Open Graph', type: 'Page', to: '/admin/sharing' },
   { label: 'Crawls', type: 'Page', to: '/admin/agents?tab=crawls' },
   { label: 'Full Site Crawls', type: 'Page', to: '/admin/agents?tab=crawls&sub=full-site' },
   { label: 'Collection Crawls', type: 'Page', to: '/admin/agents?tab=crawls&sub=collections' },
@@ -125,167 +167,241 @@ function formatElapsed(seconds: number) {
   return m > 0 ? `${m}m ${String(s).padStart(2, '0')}s` : `${s}s`;
 }
 
-function FailedErrorView({ n, onRetry }: { n: GenNotification; onRetry?: () => void }) {
-  const [expanded, setExpanded] = useState(false);
-  const isQuota = n.error?.includes('RESOURCE_EXHAUSTED') || n.error?.includes('quota');
-  const is400 = n.error?.includes('400') || n.error?.includes('INVALID_ARGUMENT');
-  const is500 = n.error?.includes('500') || n.error?.includes('INTERNAL');
-  const label = isQuota
-    ? 'Quota exceeded'
-    : is400 ? 'Invalid request'
-    : is500 ? 'Veo server error'
-    : (n.error?.split(/[.{]/)[0] || 'Failed').slice(0, 60);
 
-  return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', gap: 6 }}>
-        <button
-          onClick={(e) => { e.stopPropagation(); setExpanded(v => !v); }}
-          style={{
-            fontSize: 11, fontWeight: 600, color: '#ef4444', background: 'none',
-            border: 'none', padding: 0, cursor: 'pointer', display: 'flex', alignItems: 'center', gap: 4,
-          }}
-        >
-          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3"
-            style={{ transform: expanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s' }}>
-            <polyline points="9 18 15 12 9 6" />
-          </svg>
-          {label}
-        </button>
-        {onRetry && (
-          <button
-            onClick={(e) => { e.stopPropagation(); onRetry(); }}
-            style={{
-              fontSize: 10, fontWeight: 600, color: '#3b82f6', background: '#eff6ff',
-              border: 'none', borderRadius: 4, padding: '1px 6px', cursor: 'pointer',
-            }}
-          >
-            Retry
-          </button>
-        )}
-      </div>
-      {expanded && (
-        <div style={{
-          marginTop: 6, padding: 8, background: '#fef2f2', border: '1px solid #fecaca',
-          borderRadius: 6, fontSize: 10, color: '#7f1d1d', lineHeight: 1.5,
-        }}>
-          {isQuota && (
-            <div style={{ marginBottom: 6 }}>
-              <div style={{ fontWeight: 600, marginBottom: 2 }}>
-                Model: <code style={{ background: '#fee2e2', padding: '1px 4px', borderRadius: 3 }}>{n.veoModel || 'unknown'}</code>
-              </div>
-              <div style={{ color: '#991b1b' }}>
-                Tier 1 has tight per-minute + daily limits for Veo preview models. Options:
-              </div>
-              <ul style={{ margin: '4px 0 4px 14px', padding: 0 }}>
-                <li>Wait - per-minute limits reset every minute, daily at midnight PDT</li>
-                <li>Upgrade to Tier 2+ at <a href="https://aistudio.google.com/apikey" target="_blank" rel="noopener noreferrer" style={{ color: '#1d4ed8' }}>aistudio.google.com/apikey</a></li>
-                <li>Switch to a non-preview model (e.g. <code>veo-2.0-generate-001</code>) which has higher limits</li>
-              </ul>
-              <div>
-                <a href="https://ai.google.dev/gemini-api/docs/rate-limits" target="_blank" rel="noopener noreferrer" style={{ color: '#1d4ed8' }}>
-                  Full rate-limit docs →
-                </a>
-              </div>
-            </div>
-          )}
-          <details style={{ marginTop: 4 }}>
-            <summary style={{ cursor: 'pointer', fontWeight: 600 }}>Raw error</summary>
-            <pre style={{
-              margin: '4px 0 0', padding: 6, background: '#fff', border: '1px solid #fecaca',
-              borderRadius: 4, overflow: 'auto', maxHeight: 120, whiteSpace: 'pre-wrap', wordBreak: 'break-word',
-              fontSize: 9, fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace',
-            }}>
-              {n.error || 'No error message'}
-            </pre>
-          </details>
-        </div>
-      )}
-    </div>
-  );
+// MRU helpers — pure functions so they're easy to unit-test if we
+// ever want to. `pickNavMatch` attributes the current location to
+// the longest-prefix nav item so /admin/users/abc credits Users,
+// not Home. `applyMruOrder` is the "visited-first, original order
+// for the rest" sort used by the sidebar.
+function pickNavMatch(pathname: string, items: NavItem[]): string | null {
+  const exact = items.find(i => i.to === pathname);
+  if (exact) return exact.to;
+  const candidates = items
+    .filter(i => pathname === i.to || pathname.startsWith(i.to + '/'))
+    .sort((a, b) => b.to.length - a.to.length);
+  return candidates[0]?.to ?? null;
 }
 
-function GenProgressBar({ n, onRetry }: { n: GenNotification; onRetry?: () => void }) {
-  const [now, setNow] = useState(Date.now());
-  useEffect(() => {
-    if (n.status !== 'generating' && n.status !== 'pending') return;
-    const t = setInterval(() => setNow(Date.now()), 1000);
-    return () => clearInterval(t);
-  }, [n.status]);
+// Routes that are PINNED at the top of the sidebar — never reordered
+// by the MRU bubble. Home is the user's compass; sliding it down
+// every time they click another tab made the sidebar feel rootless.
+const NAV_PINNED_TOP = new Set(['/admin']);
 
-  if (n.status === 'done') {
+function applyMruOrder(items: NavItem[], mru: string[]): NavItem[] {
+  const byTo = new Map(items.map(i => [i.to, i]));
+  const seen = new Set<string>();
+  const out: NavItem[] = [];
+  // 1. Pinned items first, in their original declaration order.
+  for (const item of items) {
+    if (NAV_PINNED_TOP.has(item.to) && !seen.has(item.to)) {
+      out.push(item);
+      seen.add(item.to);
+    }
+  }
+  // 2. MRU order for everything else.
+  for (const to of mru) {
+    if (NAV_PINNED_TOP.has(to)) continue;
+    const item = byTo.get(to);
+    if (item && !seen.has(to)) {
+      out.push(item);
+      seen.add(to);
+    }
+  }
+  // 3. Remaining items in their original order.
+  for (const item of items) {
+    if (!seen.has(item.to)) {
+      out.push(item);
+      seen.add(item.to);
+    }
+  }
+  return out;
+}
+
+// Sidebar nav: top 7 + collapsible "Other Pages". With a non-empty search
+// query the split collapses into a single flat filtered list so a typed
+// match always surfaces, regardless of which bucket it's in. Section
+// headers (the original "Content / Operations / Settings" groupings) are
+// only shown to brand-new admins who have no MRU history yet, same as
+// before.
+const TOP_NAV_COUNT = 7;
+
+function AdminNav({
+  orderedNavItems,
+  mruOrder,
+  navSearch,
+  otherOpen,
+  onToggleOther,
+  onItemClick,
+}: {
+  orderedNavItems: NavItem[];
+  mruOrder: string[];
+  navSearch: string;
+  otherOpen: boolean;
+  onToggleOther: () => void;
+  onItemClick: () => void;
+}) {
+  const trimmed = navSearch.trim().toLowerCase();
+  const searchActive = trimmed.length > 0;
+
+  // When the admin is searching, run the filter across the FULL nav list
+  // and render a single flat group — splitting top vs "Other Pages" would
+  // hide matches behind the dropdown.
+  const matches = useMemo(() => {
+    if (!searchActive) return orderedNavItems;
+    return orderedNavItems.filter(it =>
+      it.label.toLowerCase().includes(trimmed)
+      || it.to.toLowerCase().includes(trimmed),
+    );
+  }, [orderedNavItems, trimmed, searchActive]);
+
+  const renderItem = (item: NavItem, prev?: NavItem) => {
+    // Section headers are only meaningful in the static (non-MRU, non-search)
+    // ordering. Once the user has MRU history or is actively searching,
+    // grouping breaks down so we suppress them.
+    const showSectionHeader = !searchActive
+      && mruOrder.length === 0
+      && item.section
+      && item.section !== prev?.section;
     return (
-      <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="#22c55e" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12" /></svg>
-        <span style={{ fontSize: 11, fontWeight: 600, color: '#22c55e' }}>Complete</span>
-      </div>
+      <Fragment key={item.to}>
+        {showSectionHeader && (
+          <div
+            style={{
+              padding: '12px 14px 4px',
+              fontSize: 10,
+              fontWeight: 700,
+              textTransform: 'uppercase',
+              letterSpacing: '0.6px',
+              color: '#94a3b8',
+            }}
+          >
+            {item.section}
+          </div>
+        )}
+        <NavLink
+          to={item.to}
+          end={item.to === '/admin'}
+          prefetch="intent"
+          className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`}
+          onClick={onItemClick}
+        >
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <path d={item.icon} />
+          </svg>
+          <span>{item.label}</span>
+          {item.badge && (
+            <span className={`admin-nav-badge ${item.badge === '0' ? 'badge-zero' : ''}`}>
+              {item.badge}
+            </span>
+          )}
+        </NavLink>
+      </Fragment>
+    );
+  };
+
+  // Searching: flat list, no top/other split.
+  if (searchActive) {
+    return (
+      <nav className="admin-nav">
+        {matches.length === 0
+          ? <div className="admin-nav-empty">No pages match “{navSearch}”.</div>
+          : matches.map((it, i) => renderItem(it, matches[i - 1]))}
+      </nav>
     );
   }
-  if (n.status === 'failed') {
-    return <FailedErrorView n={n} onRetry={onRetry} />;
-  }
-  if (n.status === 'queued') {
-    return (
-      <div style={{ height: 4, borderRadius: 4, background: '#e2e8f0', overflow: 'hidden' }}>
-        <div style={{ width: '0%', height: '100%', background: '#94a3b8' }} />
-      </div>
-    );
-  }
 
-  // Use updatedAt so "elapsed" reflects time in current state, not when row was created.
-  // Rows can sit in 'queued' for hours before being promoted to 'pending'/'generating'.
-  const elapsed = (now - new Date(n.updatedAt).getTime()) / 1000;
-  const isStuck = elapsed > STUCK_THRESHOLD_SECONDS;
-  const pct = n.status === 'pending'
-    ? Math.min(15, (elapsed / 30) * 15)
-    : isStuck ? 95 : Math.min(95, (elapsed / ESTIMATED_GEN_SECONDS) * 100);
+  // Default split.
+  const top = orderedNavItems.slice(0, TOP_NAV_COUNT);
+  const other = orderedNavItems.slice(TOP_NAV_COUNT);
 
   return (
-    <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 2 }}>
-        <span style={{ fontSize: 10, fontWeight: 600, color: isStuck ? '#ef4444' : n.status === 'pending' ? '#f59e0b' : '#3b82f6', textTransform: 'uppercase' }}>
-          {isStuck ? 'Stuck' : n.status === 'pending' ? 'Pending' : 'Generating'}
-        </span>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          <span style={{ fontSize: 10, color: isStuck ? '#ef4444' : '#888' }}>{formatElapsed(elapsed)}</span>
-          {isStuck && onRetry && (
-            <button
-              onClick={(e) => { e.stopPropagation(); onRetry(); }}
-              style={{
-                fontSize: 10, fontWeight: 600, color: '#3b82f6', background: '#eff6ff',
-                border: 'none', borderRadius: 4, padding: '1px 6px', cursor: 'pointer',
-              }}
+    <nav className="admin-nav">
+      {top.map((it, i) => renderItem(it, top[i - 1]))}
+      {other.length > 0 && (
+        <>
+          <button
+            type="button"
+            className={`admin-nav-other-toggle${otherOpen ? ' is-open' : ''}`}
+            onClick={onToggleOther}
+            aria-expanded={otherOpen}
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="10" />
+              <line x1="8"  y1="12" x2="8.01"  y2="12" />
+              <line x1="12" y1="12" x2="12.01" y2="12" />
+              <line x1="16" y1="12" x2="16.01" y2="12" />
+            </svg>
+            <span>Other Pages</span>
+            <span className="admin-nav-other-count">{other.length}</span>
+            <svg
+              width="14" height="14" viewBox="0 0 24 24" fill="none"
+              stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+              style={{ marginLeft: 'auto', transform: otherOpen ? 'rotate(180deg)' : 'none', transition: 'transform 160ms ease' }}
             >
-              Retry
-            </button>
-          )}
-        </div>
-      </div>
-      <div style={{ position: 'relative', height: 4, borderRadius: 4, background: '#e2e8f0', overflow: 'hidden' }}>
-        <div style={{
-          position: 'absolute', inset: 0, width: `${pct}%`,
-          background: isStuck ? '#ef4444' : n.status === 'pending' ? '#f59e0b' : 'linear-gradient(90deg, #3b82f6, #8b5cf6)',
-          transition: 'width 1s ease',
-        }} />
-        {n.status === 'generating' && !isStuck && (
-          <div style={{
-            position: 'absolute', inset: 0,
-            background: 'linear-gradient(90deg, transparent, rgba(255,255,255,0.55), transparent)',
-            animation: 'admin-shimmer 1.4s infinite',
-          }} />
-        )}
-      </div>
-    </div>
+              <polyline points="6 9 12 15 18 9" />
+            </svg>
+          </button>
+          {otherOpen && other.map((it, i) => renderItem(it, other[i - 1]))}
+        </>
+      )}
+    </nav>
   );
 }
 
 export default function AdminLayout() {
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams, setSearchParams] = useSearchParams();
   const { user, loading } = useAuth();
   const [isDark, setIsDark] = useState(false);
   const [searchQuery, setSearchQuery] = useState(() => searchParams.get('q') || '');
   const [searchOpen, setSearchOpen] = useState(false);
+
+  // MRU sidebar order — persisted per admin on profiles.admin_nav_order.
+  // We hydrate once on mount (or when the signed-in user changes), then
+  // bubble the matching nav item to the top on every route change and
+  // write back to Supabase. The write is fire-and-forget: a failure
+  // just means the next session won't carry the latest tap, no UI
+  // disruption. mruHydrated gates the very first save so we don't
+  // overwrite the row before the read finishes.
+  const [mruOrder, setMruOrder] = useState<string[]>([]);
+  const [mruHydrated, setMruHydrated] = useState(false);
+  useEffect(() => {
+    if (!user?.id) return;
+    let cancelled = false;
+    getAdminNavOrder().then(order => {
+      if (cancelled) return;
+      setMruOrder(order);
+      setMruHydrated(true);
+    });
+    return () => { cancelled = true; };
+  }, [user?.id]);
+  useEffect(() => {
+    if (!mruHydrated) return;
+    const matched = pickNavMatch(location.pathname, navItems);
+    if (!matched) return;
+    setMruOrder(prev => {
+      // Already at the head? No-op — avoids a redundant write on
+      // initial mount when the user lands on whatever was already
+      // their most-recent page.
+      if (prev[0] === matched) return prev;
+      const next = [matched, ...prev.filter(t => t !== matched)];
+      void saveAdminNavOrder(next);
+      return next;
+    });
+  }, [location.pathname, mruHydrated]);
+
+  const orderedNavItems = useMemo(
+    () => applyMruOrder(navItems, mruOrder),
+    [mruOrder],
+  );
+
+  // The nav item for the page we're on — collapsed sidebar shows just
+  // this one icon, centred, until the admin hovers to expand the rail.
+  const activeNavItem = useMemo(() => {
+    const matchedTo = pickNavMatch(location.pathname, navItems);
+    return navItems.find(i => i.to === matchedTo) ?? navItems[0];
+  }, [location.pathname]);
 
   // Sync the topbar query to the URL ?q= so any admin page can read it
   // via useAdminSearch() and live-filter its visible data. Debounced so
@@ -305,14 +421,25 @@ export default function AdminLayout() {
   }, [searchQuery]); // eslint-disable-line react-hooks/exhaustive-deps
   const [userMenuOpen, setUserMenuOpen] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(false);
+  // Sidebar nav-search query (filters the rendered nav list) and the
+  // collapsed/expanded state of the "Other Pages" group. The first 7
+  // items of orderedNavItems stay always-visible; everything past that
+  // tucks under a single click-to-expand row so the sidebar isn't a
+  // 30+ item dump on load. AdminNav (below) handles the rendering split.
+  const [navSearch, setNavSearch] = useState('');
+  const [otherNavOpen, setOtherNavOpen] = useState(false);
   const searchRef = useRef<HTMLDivElement>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const userMenuRef = useRef<HTMLDivElement>(null);
 
-  // Generation notifications
+  // Background data hygiene for the admin AI ad pipeline.
+  // The UI for this stream now lives in the global GenerationQueueHost
+  // (floating lower-right circle, Active/History/Failed tabs). The polling
+  // call below stays in this layout because it does the SELF-HEAL work the
+  // queue UI doesn't: flipping stuck `generating` rows to `failed` and
+  // promoting `queued` rows when slots free up. Tracking job rows in local
+  // state is no longer needed since nothing in this file renders them.
   const [genNotifications, setGenNotifications] = useState<GenNotification[]>([]);
-  const [notifOpen, setNotifOpen] = useState(false);
-  const notifRef = useRef<HTMLDivElement>(null);
   const prevIdsRef = useRef<Set<string>>(new Set());
 
   const pollGenerations = useCallback(async () => {
@@ -383,27 +510,40 @@ export default function AdminLayout() {
   }, [genNotifications]);
 
   useEffect(() => {
+    // Initial load.
     pollGenerations();
-    const interval = setInterval(pollGenerations, 5000);
-    return () => clearInterval(interval);
+
+    // Subscribe to product_creative row changes via Supabase Realtime
+    // (postgres_changes WebSocket). Replaces the previous setInterval
+    // that hit the REST API every 5 seconds whether anything had
+    // changed or not — admins keeping the tab open burned ~720 hits
+    // an hour just for queue updates. Now we only re-poll when a row
+    // actually inserts / updates.
+    let channel: ReturnType<NonNullable<typeof supabase>['channel']> | null = null;
+    if (supabase) {
+      channel = supabase
+        .channel('admin-product-creative-changes')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'product_creative' },
+          () => { pollGenerations(); },
+        )
+        .subscribe();
+    }
+
+    // Self-heal + promote-queued steps still run on a slow timer
+    // (every 30s) — these aren't triggered by row changes, they sweep
+    // for stuck rows that the worker forgot to flip.
+    const sweepInterval = setInterval(() => {
+      pollGenerations();
+    }, 30000);
+
+    return () => {
+      clearInterval(sweepInterval);
+      if (channel && supabase) supabase.removeChannel(channel);
+    };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  useEffect(() => {
-    if (!notifOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (notifRef.current && !notifRef.current.contains(e.target as Node)) {
-        setNotifOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [notifOpen]);
-
-  const generatingCount = genNotifications.filter(n => n.status === 'generating' || n.status === 'pending').length;
-  const queuedCount = genNotifications.filter(n => n.status === 'queued').length;
-  const completedCount = genNotifications.filter(n => n.status === 'done').length;
-  const totalActiveCount = genNotifications.length;
-  const totalQueueCost = genNotifications.reduce((sum, n) => sum + (n.costUsd ?? ESTIMATED_COST_USD), 0);
 
   const searchResults = useMemo(() => {
     if (!searchQuery.trim()) return [];
@@ -414,7 +554,10 @@ export default function AdminLayout() {
   }, [searchQuery]);
 
   useEffect(() => {
-    if (!loading && !user) {
+    // Admin panel is admin/super_admin only. A signed-out visitor OR a
+    // signed-in non-admin (shopper/creator) is bounced to the consumer app —
+    // previously ANY authenticated account could reach every admin surface.
+    if (!loading && (!user || !isAdminRole(user.role))) {
       navigate('/', { replace: true });
     }
   }, [user, loading, navigate]);
@@ -454,20 +597,13 @@ export default function AdminLayout() {
     return () => document.removeEventListener('mousedown', handler);
   }, [userMenuOpen]);
 
-  const liveCursors = useLiveCursors({
-    selfId: user?.id,
-    selfName: user?.displayName || user?.email?.split('@')[0] || 'Admin',
-    enabled: !!user,
-  });
-
-  if (loading || !user) {
+  if (loading || !user || !isAdminRole(user.role)) {
     return null;
   }
 
   return (
     <AdminConfirmProvider>
     <div className={`admin-layout ${isDark ? 'admin-dark' : 'admin-light'} ${sidebarOpen ? 'admin-sidebar-open' : ''}`}>
-      <LiveCursors cursors={liveCursors} />
       <div
         className="admin-sidebar-backdrop"
         onClick={() => setSidebarOpen(false)}
@@ -475,49 +611,52 @@ export default function AdminLayout() {
       />
       <aside className="admin-sidebar">
         <div className="admin-sidebar-header">
-          <CatalogLogo className="admin-logo" />
+          {/* Tap the Catalog wordmark to leave the admin and land
+              back on the shopper home (catalog.shop/). Uses a plain
+              <a> instead of Remix's Link because we want a hard
+              navigation that resets the SPA from any deeply-nested
+              admin state. */}
+          <a
+            href="/"
+            className="admin-logo-link"
+            aria-label="Back to catalog.shop"
+            title="Back to catalog.shop"
+            style={{ display: 'inline-flex', alignItems: 'center', textDecoration: 'none', color: 'inherit', cursor: 'pointer' }}
+          >
+            <CatalogLogo className="admin-logo" />
+            {/* Collapsed-rail monogram — the wordmark clips at 64px, so a
+                compact "C" mark stands in until the sidebar expands. */}
+            <span className="admin-logo-mark" aria-hidden="true">C</span>
+          </a>
           <span className="admin-badge">Admin</span>
         </div>
-        <nav className="admin-nav">
-          {navItems.map((item, i) => {
-            const prev = navItems[i - 1];
-            const showSectionHeader = item.section && item.section !== prev?.section;
-            return (
-              <Fragment key={item.to}>
-                {showSectionHeader && (
-                  <div
-                    style={{
-                      padding: '12px 14px 4px',
-                      fontSize: 10,
-                      fontWeight: 700,
-                      textTransform: 'uppercase',
-                      letterSpacing: '0.6px',
-                      color: '#94a3b8',
-                    }}
-                  >
-                    {item.section}
-                  </div>
-                )}
-                <NavLink
-                  to={item.to}
-                  end={item.to === '/admin'}
-                  className={({ isActive }) => `admin-nav-item ${isActive ? 'active' : ''}`}
-                  onClick={() => setSidebarOpen(false)}
-                >
-                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                    <path d={item.icon} />
-                  </svg>
-                  <span>{item.label}</span>
-                  {item.badge && (
-                    <span className={`admin-nav-badge ${item.badge === '0' ? 'badge-zero' : ''}`}>
-                      {item.badge}
-                    </span>
-                  )}
-                </NavLink>
-              </Fragment>
-            );
-          })}
-        </nav>
+        {/* Sidebar nav search. Filters the full nav (top 7 + Other) by
+            label so an admin can jump to any page by typing it — same
+            behaviour as the topbar search but always at hand inside the
+            sidebar. Falls through when empty so the default split (top 7
+            visible, rest folded under "Other Pages") still renders. */}
+        <div className="admin-nav-search">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <circle cx="11" cy="11" r="8" />
+            <line x1="21" y1="21" x2="16.65" y2="16.65" />
+          </svg>
+          <input
+            type="text"
+            className="admin-nav-search-input"
+            placeholder="Search pages…"
+            value={navSearch}
+            onChange={(e) => setNavSearch(e.target.value)}
+            aria-label="Search admin pages"
+          />
+        </div>
+        <AdminNav
+          orderedNavItems={orderedNavItems}
+          mruOrder={mruOrder}
+          navSearch={navSearch}
+          otherOpen={otherNavOpen}
+          onToggleOther={() => setOtherNavOpen(o => !o)}
+          onItemClick={() => setSidebarOpen(false)}
+        />
         <div className="admin-sidebar-footer" ref={userMenuRef}>
           <NavLink
             to="/admin/whats-new"
@@ -582,6 +721,18 @@ export default function AdminLayout() {
             <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15"/></svg>
           </button>
         </div>
+        {/* Collapsed rail: when the sidebar is slim (not hovered) the
+            whole nav + search fade out and only the current page's icon
+            shows, centred. Hovering expands the sidebar, fades this out
+            and slides the full nav back in. Desktop-only — mobile keeps
+            the slide-over drawer. */}
+        <div className="admin-nav-rail" aria-hidden="true">
+          <span className="admin-nav-rail-icon" title={activeNavItem.label}>
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d={activeNavItem.icon} />
+            </svg>
+          </span>
+        </div>
       </aside>
       <main className="admin-main">
         <div className="admin-topbar" ref={searchRef}>
@@ -634,160 +785,45 @@ export default function AdminLayout() {
             </div>
           )}
 
-          {/* Notifications bell */}
-          <div ref={notifRef} style={{ position: 'relative', marginLeft: 'auto' }}>
-            <button
-              onClick={() => setNotifOpen(o => !o)}
-              style={{
-                position: 'relative', background: 'none', border: 'none', cursor: 'pointer',
-                padding: 8, borderRadius: 8, display: 'flex', alignItems: 'center',
-              }}
-              aria-label="Notifications"
-            >
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke={totalActiveCount > 0 ? '#111' : '#999'} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <path d="M12 3l1.9 4.6L18.5 9.5l-4.6 1.9L12 16l-1.9-4.6L5.5 9.5l4.6-1.9L12 3z" />
-                <path d="M19 14l.9 2.1L22 17l-2.1.9L19 20l-.9-2.1L16 17l2.1-.9L19 14z" />
-                <path d="M5 14l.6 1.4L7 16l-1.4.6L5 18l-.6-1.4L3 16l1.4-.6L5 14z" />
-              </svg>
-              {totalActiveCount > 0 && (
-                <span style={{
-                  position: 'absolute', top: 4, right: 4,
-                  width: 16, height: 16, borderRadius: '50%',
-                  background: completedCount > 0 ? '#22c55e' : '#3b82f6',
-                  color: '#fff', fontSize: 10, fontWeight: 700,
-                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                  lineHeight: 1,
-                }}>
-                  {totalActiveCount}
-                </span>
-              )}
-            </button>
-
-            {notifOpen && (
-              <div className="admin-notif-dropdown" style={{
-                position: 'absolute', top: '100%', right: 0, marginTop: 8,
-                width: 360, background: '#fff', borderRadius: 12, boxShadow: '0 8px 30px rgba(0,0,0,0.15)',
-                border: '1px solid #e5e7eb', zIndex: 100, display: 'flex', flexDirection: 'column',
-                maxHeight: 'calc(100vh - 80px)',
-              }}>
-                <div style={{ padding: '14px 16px 10px', borderBottom: '1px solid #f0f0f0', flexShrink: 0 }}>
-                  <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                    <span style={{ fontSize: 14, fontWeight: 600 }}>Generation Queue</span>
-                    <div style={{ display: 'flex', gap: 8, fontSize: 11, alignItems: 'center' }}>
-                      {generatingCount > 0 && (
-                        <span style={{ color: '#3b82f6', fontWeight: 600 }}>{generatingCount} generating</span>
-                      )}
-                      {queuedCount > 0 && (
-                        <span style={{ color: '#94a3b8', fontWeight: 600 }}>{queuedCount} queued</span>
-                      )}
-                    </div>
-                  </div>
-                  {genNotifications.length > 0 && (
-                    <div style={{ marginTop: 6, display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                      <div style={{ display: 'flex', alignItems: 'baseline', gap: 8 }}>
-                        <span style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.5px' }}>Est. total</span>
-                        <span style={{ fontSize: 13, fontWeight: 700, color: '#111' }}>${totalQueueCost.toFixed(2)}</span>
-                      </div>
-                      <button
-                        onClick={async () => {
-                          for (const n of genNotifications) {
-                            if (n.status !== 'done') await deleteProductAd(n.id);
-                          }
-                          setGenNotifications([]);
-                          prevIdsRef.current.clear();
-                        }}
-                        style={{
-                          fontSize: 10, fontWeight: 600, color: '#ef4444', background: '#fef2f2',
-                          border: 'none', borderRadius: 4, padding: '3px 8px', cursor: 'pointer',
-                        }}
-                      >
-                        Cancel all
-                      </button>
-                    </div>
-                  )}
-                </div>
-
-                {genNotifications.length === 0 ? (
-                  <div style={{ padding: '24px 16px', textAlign: 'center', color: '#999', fontSize: 13 }}>
-                    No active generations
-                  </div>
-                ) : (
-                  <div style={{ overflowY: 'auto', padding: '4px 0' }}>
-                    {genNotifications.map(n => (
-                      <div key={n.id} style={{
-                        padding: '10px 16px',
-                        borderBottom: '1px solid #f5f5f5',
-                        opacity: n.status === 'done' ? 0.7 : 1,
-                        transition: 'opacity 0.3s',
-                      }}>
-                        <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 4, gap: 8 }}>
-                          <div style={{ flex: 1, minWidth: 0 }}>
-                            <div style={{ fontSize: 12, fontWeight: 600, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                              {n.productName}
-                            </div>
-                            <div style={{ fontSize: 10, color: '#888', display: 'flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
-                              <span>{n.productBrand}</span>
-                              <span style={{ color: '#cbd5e1' }}>·</span>
-                              <span style={{ color: '#6366f1', fontWeight: 600 }}>{n.style.replace(/_/g, ' ')}</span>
-                              {n.veoModel && (
-                                <>
-                                  <span style={{ color: '#cbd5e1' }}>·</span>
-                                  <span style={{ color: '#0891b2', fontWeight: 500 }}>{n.veoModel}</span>
-                                </>
-                              )}
-                              <span style={{ color: '#cbd5e1' }}>·</span>
-                              <span style={{ color: n.costUsd != null ? '#0f766e' : '#94a3b8', fontWeight: 600 }}>
-                                {n.costUsd != null ? `$${n.costUsd.toFixed(3)}` : `~$${ESTIMATED_COST_USD.toFixed(2)}`}
-                              </span>
-                            </div>
-                          </div>
-                          <div style={{ display: 'flex', alignItems: 'center', gap: 6, flexShrink: 0 }}>
-                            {n.status === 'queued' && (
-                              <span style={{ fontSize: 10, fontWeight: 600, color: '#94a3b8', textTransform: 'uppercase' }}>Queued</span>
-                            )}
-                            {n.status !== 'done' && (
-                              <button
-                                onClick={async (e) => {
-                                  e.stopPropagation();
-                                  const wasActive = n.status === 'generating' || n.status === 'pending';
-                                  await deleteProductAd(n.id);
-                                  setGenNotifications(prev => prev.filter(x => x.id !== n.id));
-                                  prevIdsRef.current.delete(n.id);
-                                  if (wasActive) {
-                                    await promoteQueuedAds();
-                                    pollGenerations();
-                                  }
-                                }}
-                                title="Cancel generation"
-                                style={{
-                                  background: 'none', border: 'none', cursor: 'pointer',
-                                  padding: 4, borderRadius: 4, color: '#999',
-                                  display: 'flex', alignItems: 'center', justifyContent: 'center',
-                                }}
-                              >
-                                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                                  <line x1="18" y1="6" x2="6" y2="18" />
-                                  <line x1="6" y1="6" x2="18" y2="18" />
-                                </svg>
-                              </button>
-                            )}
-                          </div>
-                        </div>
-                        <GenProgressBar n={n} onRetry={async () => {
-                          await regenerateAd(n.id);
-                          pollGenerations();
-                        }} />
-                      </div>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-          </div>
         </div>
         <Outlet />
       </main>
     </div>
     </AdminConfirmProvider>
+  );
+}
+
+// Catches render/runtime errors anywhere in the admin route tree so a single
+// thrown error (e.g. a malformed Supabase row dereferenced during render)
+// degrades to a recoverable fallback instead of white-screening the whole
+// panel with no way back. Inline styles so it renders even if admin CSS
+// hasn't loaded.
+export function ErrorBoundary() {
+  const error = useRouteError();
+  const detail = isRouteErrorResponse(error)
+    ? `${error.status} ${error.statusText}`
+    : error instanceof Error
+      ? error.message
+      : 'An unexpected error occurred.';
+  return (
+    <div style={{
+      minHeight: '100vh', display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center', gap: 16, padding: 24,
+      background: '#0b0b0c', color: '#e7e7ea', textAlign: 'center',
+      fontFamily: 'system-ui, sans-serif',
+    }}>
+      <div style={{ fontSize: 15, fontWeight: 700 }}>Something went wrong in the admin panel</div>
+      <div style={{ fontSize: 13, opacity: 0.7, maxWidth: 480, wordBreak: 'break-word' }}>{detail}</div>
+      <div style={{ display: 'flex', gap: 10, marginTop: 4 }}>
+        <button
+          onClick={() => window.location.reload()}
+          style={{ padding: '8px 16px', borderRadius: 8, border: 'none', cursor: 'pointer', background: '#e7e7ea', color: '#0b0b0c', fontWeight: 600, fontSize: 13 }}
+        >Reload</button>
+        <a
+          href="/admin"
+          style={{ padding: '8px 16px', borderRadius: 8, border: '1px solid #333', cursor: 'pointer', color: '#e7e7ea', textDecoration: 'none', fontWeight: 600, fontSize: 13 }}
+        >Back to dashboard</a>
+      </div>
+    </div>
   );
 }

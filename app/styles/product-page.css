@@ -11,13 +11,17 @@
   will-change: auto; /* reset; the children own the hint below */
 }
 
-/* Trail depth: while an overlay is open, the under-layer recedes very
-   slightly (1.5% scale, 4px blur). Restraint matters - anything more reads
-   as a modal/dialog instead of a focus shift.
-   The transform is applied to a container the overlay sits on top of (the
-   feed + header live inside .app-root, the overlay portals over). The
-   overlay itself is *not* affected because it has its own ::before scrim
-   and the overlay div is a sibling, not a child of the receding wrapper. */
+/* Trail depth — RETIRED. Was scaling the under-layer to 0.985 and
+   blurring it to 4px while any overlay was open. The intent was a
+   subtle focus-shift; the regression was that the drag-to-dismiss
+   gesture revealed a blurred / shrunken mini-feed below the
+   sliding overlay (looked like the previous app state was "loading
+   in" behind the user's finger). The overlay carries its own
+   opaque background, so removing the depth treatment costs nothing
+   visually while it's open AND gives a clean reveal as it slides
+   back. Saves the blur filter's GPU cost too.
+   Kept the transition declaration below so unrelated callers that
+   set transform / filter on these elements still animate. */
 .app-root {
   transition:
     transform 360ms cubic-bezier(0.32, 0.72, 0, 1),
@@ -25,18 +29,15 @@
   transform-origin: 50% 0%;
 }
 
+/* No-op when an overlay is open — the under-layer renders normally.
+   pointer-events:none stays so taps on the under-layer can't fire
+   through the (transparent-on-mobile-during-drag) overlay. */
 .app-root.has-overlay > header,
 .app-root.has-overlay > .feed-container,
 .app-root.has-overlay > .continuous-feed,
 .app-root.has-overlay > .grid-view,
 .app-root.has-overlay > .bottom-bar,
 .app-root.has-overlay > .remix-btn-fixed {
-  transform: scale(0.985);
-  filter: blur(4px) saturate(0.9);
-  transition:
-    transform 360ms cubic-bezier(0.32, 0.72, 0, 1),
-    filter    360ms cubic-bezier(0.32, 0.72, 0, 1);
-  transform-origin: 50% 30%;
   pointer-events: none;
 }
 
@@ -53,52 +54,52 @@
   transform-origin: 50% 30%;
 }
 
-/* Product detail page - full-height scroller with a video/image hero
-   followed by a feed of similar products.
-   The hero box itself morphs from its grid card via Framer Motion's
-   layoutId, so the overlay's own entrance is a quick opacity fade instead
-   of a slide - that way the user reads "the card grew" rather than "a new
-   page came in", which is much more subtle. */
+/* Product detail page — full-height scroller with a video/image hero
+   followed by a feed of similar products. Behaves like a bottom sheet:
+   slides UP from the bottom on open and back DOWN on close, at ALL widths,
+   matching the look overlay and the comments sheet. (Was a desktop-only
+   opacity fade designed around the old Framer Motion card-morph, which has
+   since been removed — leaving products with no perceptible open/close.)
+   The shared <video> hero is appendChild'd INTO a slot inside this
+   container (TrailVideoHost), so the whole container sliding keeps the
+   video riding along with it — no desync. */
 .product-page-overlay {
   position: fixed;
   inset: 0;
   z-index: 250;
   background: #0a0a0a;
-  opacity: 0;
-  transition: opacity 0.28s cubic-bezier(0.32, 0.72, 0, 1);
-}
-
-.product-page-overlay--in {
   opacity: 1;
+  /* No slide-up/down page transition — the product page opens and closes
+     instantly (only the comments sheet keeps its glide). The drag-to-dismiss
+     handler still sets an inline transform 1:1 while the finger is down. */
+  transform: none;
+  will-change: transform;
 }
 
+/* Settled / open — no-op now that there's no enter slide. */
+.product-page-overlay--in {
+  transform: none;
+}
+
+/* Close — hide instantly (no slide-down). The overlay still unmounts after
+   the JS close timeout; pointer-events off so the feed is usable at once. */
 .product-page-overlay--out {
   opacity: 0;
+  transition: none;
   pointer-events: none;
 }
 
-/* Mobile: bottom-sheet behavior. Slides up from below on open, drag
-   down at the top of the scroll to dismiss (handled in JS). Rounded
-   top corners + a small grab handle sell the affordance. */
+/* While the finger is down the panel must track 1:1 — no smoothing (the
+   mobile drag handler sets an inline transform each frame; on release it
+   either fires handleClose (--out) or clears the inline transform so the
+   panel eases back to translateY(0)). */
+.product-page-overlay.is-dragging {
+  transition: none;
+}
+
+/* Mobile: rounded top corners + a grab handle sell the sheet affordance.
+   The slide itself is global (above). */
 @media (max-width: 959px) {
-  .product-page-overlay {
-    opacity: 1;
-    transform: translateY(100%);
-    transition: transform 320ms cubic-bezier(0.32, 0.72, 0, 1);
-    will-change: transform;
-  }
-  .product-page-overlay--in {
-    transform: translateY(0);
-  }
-  .product-page-overlay--out {
-    transform: translateY(100%);
-    pointer-events: none;
-  }
-  /* While the user's finger is on screen, suppress the transition so
-     the panel tracks 1:1 with the drag. JS toggles this class. */
-  .product-page-overlay.is-dragging {
-    transition: none;
-  }
   .product-page {
     border-top-left-radius: 16px;
     border-top-right-radius: 16px;
@@ -121,6 +122,24 @@
   }
 }
 
+/* Live particle field over the overlay's opaque black base. The base
+   (.product-page-overlay) blocks the feed; this layer makes the
+   background dynamic. Content scroller above it is transparent so the
+   field shows through the gaps. */
+.product-page-particles {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.55;
+}
+.product-page-particles .pw-particles {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
 .product-page {
   width: 100%;
   height: 100%;
@@ -129,8 +148,11 @@
   -webkit-overflow-scrolling: touch;
   scrollbar-width: thin;
   scrollbar-color: rgba(255,255,255,0.15) transparent;
-  background: #0a0a0a;
+  /* Transparent — the opaque black comes from .product-page-overlay so
+     the particle layer between them stays visible. */
+  background: transparent;
   position: relative;
+  z-index: 1;
 }
 
 .product-page::-webkit-scrollbar {
@@ -170,6 +192,126 @@
 .pd-back:hover {
   background: rgba(0, 0, 0, 0.65);
 }
+
+/* Share + Save overlay the hero media itself. Share mirrors .pd-back at
+   top-right; Save sits in the bottom-right corner of the hero — far
+   enough from the action row beneath the media that it doesn't read
+   as a duplicate of the old in-row Save button. Both share the .pd-back
+   glass treatment so the controls read as a coherent set. */
+.pd-share-floating,
+.pd-save-floating {
+  position: absolute;
+  z-index: 5;
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 50%;
+  cursor: pointer;
+  transition: background 0.2s, color 0.2s, transform 0.18s;
+  padding: 0;
+}
+.pd-share-floating { top: 16px; right: 16px; }
+.pd-save-floating  { bottom: 16px; right: 16px; }
+.pd-share-floating:hover,
+.pd-save-floating:hover {
+  background: rgba(0, 0, 0, 0.65);
+}
+.pd-save-floating.is-saved {
+  background: rgba(255, 255, 255, 0.92);
+  color: #0f172a;
+  border-color: rgba(255, 255, 255, 0.95);
+}
+.pd-save-floating.is-saved:hover {
+  background: rgba(255, 255, 255, 1);
+}
+
+/* Comments button sits in the action group alongside Shop / Add to a look
+   / View more info, styled like the other ghost actions. */
+
+/* Brief copied-to-clipboard pill shown when navigator.share isn't
+   available (desktop Chrome / Firefox). Sits above the Save button so
+   it doesn't collide. */
+.pd-share-toast {
+  position: absolute;
+  bottom: 68px;
+  right: 16px;
+  z-index: 6;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.78);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  pointer-events: none;
+  animation: pd-share-toast-in 160ms ease-out;
+}
+@keyframes pd-share-toast-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Side-rail back button — desktop only. Fixed on the left edge of the
+   viewport, vertically centered. Hidden by default; .is-visible fades it
+   in once the user has scrolled past the hero (the corner .pd-back is
+   off-screen by then). Hardware-accelerated transform + opacity so the
+   animation costs nothing. */
+.pd-back-rail {
+  position: fixed;
+  /* env() safe-area in case the rail ever appears under a notched
+     browser chrome on a desktop-rotated tablet. */
+  left: max(20px, env(safe-area-inset-left));
+  top: 50%;
+  transform: translateY(-50%) translateX(-12px);
+  z-index: 9100;
+  width: 44px;
+  height: 44px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(12px) saturate(1.2);
+  -webkit-backdrop-filter: blur(12px) saturate(1.2);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 50%;
+  cursor: pointer;
+  opacity: 0;
+  pointer-events: none;
+  transition:
+    opacity 280ms cubic-bezier(0.16, 1, 0.3, 1),
+    transform 280ms cubic-bezier(0.16, 1, 0.3, 1),
+    background 180ms ease;
+  box-shadow: 0 14px 32px rgba(0, 0, 0, 0.4);
+}
+.pd-back-rail.is-visible {
+  opacity: 1;
+  pointer-events: auto;
+  transform: translateY(-50%) translateX(0);
+}
+.pd-back-rail:hover { background: rgba(0, 0, 0, 0.75); }
+.pd-back-rail:active { transform: translateY(-50%) translateX(0) scale(0.94); }
+@media (max-width: 768px) {
+  /* Mobile gets its own dedicated dismiss affordances; the side rail is
+     desktop-only by design. */
+  .pd-back-rail { display: none !important; }
+}
+.light-mode .pd-back-rail {
+  background: rgba(255, 255, 255, 0.85);
+  color: #0f172a;
+  border-color: rgba(15, 23, 42, 0.08);
+  box-shadow: 0 14px 32px rgba(15, 23, 42, 0.18);
+}
+.light-mode .pd-back-rail:hover { background: rgba(255, 255, 255, 0.95); }
 
 /* Mobile: hero + info stack normally inside .pd-split (the desktop
    split rules below override at >= 960px). */
@@ -229,11 +371,12 @@
   .pd-split .pd-info {
     padding: 64px 48px 48px;
     align-self: stretch;
-    justify-content: flex-start;
+    justify-content: center;
   }
   .pd-split .pd-info-inner {
     max-width: 520px;
     gap: 12px;
+    margin-inline: auto;
   }
 
   /* On desktop the rail variant of the brand strip lives in the right
@@ -241,6 +384,280 @@
   .pd-brand-strip-section {
     display: none;
   }
+}
+
+/* Size & fit + Materials & care spec sheet that sits between the
+   retailer drawer and the brand rail. Two-row dl so the labels align
+   vertically; empty rows fade out so the section reads cleanly even
+   when the scraper hasn't backfilled the row yet. */
+/* "View more info" dropdown — wraps Size & fit, "Best for", "Popular in". */
+.pd-more-info {
+  /* Just wraps the collapsible panel now — the toggle button lives up in
+     the action group. No own margin so it doesn't add a phantom gap while
+     collapsed; the open panel supplies its own breathing room below. */
+  margin-top: 0;
+}
+
+.pd-more-info-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 16px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  font-family: inherit;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+.pd-more-info-btn:hover {
+  border-color: rgba(255, 255, 255, 0.30);
+  background: rgba(255, 255, 255, 0.10);
+}
+.light-mode .pd-more-info-btn {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.14);
+  color: #0a0a0a;
+}
+.light-mode .pd-more-info-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
+  border-color: rgba(0, 0, 0, 0.22);
+}
+.pd-more-info-chevron {
+  transition: transform 0.24s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.pd-more-info-btn.is-open .pd-more-info-chevron {
+  transform: rotate(180deg);
+}
+
+/* Panel reveal — animates open from the button. `hidden` keeps it out of
+   the a11y tree + layout when collapsed; when open it sits just below the
+   action group with a small gap so it reads as that toggle's content. */
+.pd-more-info-panel.is-open {
+  margin-top: 10px;
+  animation: pd-more-info-in 0.28s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+@keyframes pd-more-info-in {
+  from { opacity: 0; transform: translateY(-6px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+/* The first detail block inside the panel shouldn't re-draw the divider —
+   the dropdown wrapper already owns the top border. */
+.pd-more-info-panel > .pd-specs:first-child,
+.pd-more-info-panel > .pd-chips:first-child,
+.pd-more-info-panel > .pd-popular:first-child {
+  margin-top: 4px;
+  padding-top: 0;
+  border-top: none;
+}
+@media (prefers-reduced-motion: reduce) {
+  .pd-more-info-panel.is-open { animation: none; }
+}
+
+.pd-specs {
+  margin-top: 28px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.pd-specs-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.6);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 0 0 12px;
+}
+
+.pd-specs-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 0;
+}
+
+.pd-specs-row {
+  display: grid;
+  grid-template-columns: 86px minmax(0, 1fr);
+  gap: 12px;
+  align-items: baseline;
+}
+
+.pd-specs-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  margin: 0;
+}
+
+.pd-specs-value {
+  font-size: 14px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.88);
+  margin: 0;
+}
+
+.pd-specs-value.is-empty {
+  color: rgba(255, 255, 255, 0.35);
+  font-style: italic;
+}
+
+/* "Best for" suggestion chips — sits directly below the Size & fit spec
+   sheet. Each group is a label-aligned row (matching .pd-specs-row's
+   86px label column) followed by a wrapping flow of informational pills.
+   Chips are non-interactive: they communicate context, not actions. */
+.pd-chips {
+  margin-top: 24px;
+  padding-top: 20px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+
+.pd-chips-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.6);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 0 0 14px;
+}
+
+.pd-chip-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin: 0;
+}
+
+.pd-chip-group {
+  display: grid;
+  grid-template-columns: 86px minmax(0, 1fr);
+  gap: 12px;
+  align-items: start;
+}
+
+.pd-chip-group-label {
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.5);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  padding-top: 5px;
+}
+
+.pd-chip-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pd-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 5px 11px;
+  border-radius: 999px;
+  font-size: 12.5px;
+  line-height: 1.2;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.82);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  white-space: nowrap;
+}
+
+/* Tappable variant — each chip runs its label as a feed search, mirroring
+   the "Popular in" pills. Reset the <button> chrome back to the chip look,
+   then add the interactive affordances. */
+.pd-chip--tappable {
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+
+.pd-chip--tappable:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.24);
+}
+
+.pd-chip--tappable:active {
+  transform: scale(0.97);
+}
+
+/* Occasion is the headline value ("Great for date night") — give it a
+   touch more presence than the supporting fit/season/style groups. */
+.pd-chip-group--occasion .pd-chip {
+  color: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.1);
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+@media (max-width: 600px) {
+  .pd-chip-group {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+  .pd-chip-group-label {
+    padding-top: 0;
+  }
+}
+
+/* "Popular in" — tappable catalog pills. Same family as the "Best for"
+   chips, but interactive: each opens that catalog's feed. */
+.pd-popular {
+  margin-top: 20px;
+}
+
+.pd-popular-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.6);
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  margin: 0 0 12px;
+}
+
+.pd-popular-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.pd-popular-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 7px 14px;
+  border-radius: 999px;
+  font-size: 13px;
+  line-height: 1.2;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.1s ease;
+}
+
+.pd-popular-pill::before {
+  content: "✦";
+  font-size: 11px;
+  color: rgba(120, 220, 170, 0.9);
+}
+
+.pd-popular-pill:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.24);
+}
+
+.pd-popular-pill:active {
+  transform: scale(0.97);
 }
 
 /* Rail variant of "More from this brand" - desktop-only, 2-up grid
@@ -275,6 +692,68 @@
   width: 100%;
   height: auto;
   aspect-ratio: 3 / 4;
+}
+
+/* Pairs-well tile lives in the same side rail as "More from <brand>" —
+   mirrors the brand tile geometry so both sections read as a coherent
+   2-column grid in the info column. */
+.pd-info-brand-tile {
+  width: 100%;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  overflow: hidden;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+  font-family: inherit;
+  color: inherit;
+  transition: transform 0.18s ease, border-color 0.18s ease;
+  text-align: left;
+}
+.pd-info-brand-tile:hover {
+  transform: translateY(-2px);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+.pd-info-brand-tile-img {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  background: #0f0f10;
+  display: block;
+}
+.pd-info-brand-tile-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  padding: 8px 10px 10px;
+  min-width: 0;
+}
+.pd-info-brand-tile-brand {
+  font-size: 9.5px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.55);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.pd-info-brand-tile-name {
+  font-size: 12px;
+  color: #fff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  line-height: 1.25;
+}
+.pd-info-brand-tile-price {
+  font-size: 11.5px;
+  color: rgba(255, 255, 255, 0.7);
+  font-weight: 600;
+  margin-top: 2px;
 }
 
 @media (min-width: 960px) {
@@ -430,9 +909,53 @@
 
 .pd-actions {
   display: flex;
-  gap: 10px;
+  gap: 8px;
   flex-wrap: wrap;
-  align-items: center;
+  align-items: stretch;
+}
+
+/* Shop, Add to a look, Comments and the View more info toggle all share
+   one height + box model so they read as a single grouped set of buttons
+   rather than separate, mismatched pills. */
+.pd-shop-btn,
+.pd-tryon-btn,
+.pd-comments-btn,
+.pd-actions > .pd-more-info-btn {
+  min-height: 48px;
+  box-sizing: border-box;
+}
+
+/* One cohesive 2-up block: every action takes half the row, so the four
+   buttons stack into a tidy 2x2 grid —
+     Shop      · Add to a look
+     Comments  · View more info
+   A lone wrapped item (e.g. when Comments is disabled, or there's no extra
+   info) grows to fill its whole row instead of orphaning at half width. */
+.pd-actions > .pd-shop-btn,
+.pd-actions > .pd-tryon-btn,
+.pd-actions > .pd-comments-btn,
+.pd-actions > .pd-more-info-btn {
+  flex: 1 1 calc(50% - 4px);
+  min-width: 0;
+  justify-content: center;
+}
+
+/* Comments and View more info each take their OWN full-width row, below the
+   Shop / Add-to-a-look pair:
+     Shop      · Add to a look
+     Comments            (full row)
+     View more info      (full row)  */
+.pd-actions > .pd-comments-btn,
+.pd-actions > .pd-more-info-btn {
+  flex-basis: 100%;
+}
+
+/* The View more info toggle, now a member of the action group, matches the
+   ghost siblings exactly (Add to a look / Comments) so the set reads as one
+   family. The label + chevron stay centered like the others. */
+.pd-actions > .pd-more-info-btn {
+  padding: 12px 18px;
+  font-size: 14px;
 }
 
 .pd-shop-btn {
@@ -484,8 +1007,8 @@
    info card when the seed has a TwelveLabs Marengo embedding. Reuses the main
    feed's two-column card grid so it visually blends with the home page. */
 .pd-similar-feed {
-  padding: 32px 24px 16px;
-  max-width: 1280px;
+  padding: 32px 0 16px;
+  max-width: none;
   margin: 0 auto;
   /* Make absolutely sure the rail is reachable on mobile - the
      bottom-sheet behaviour above can clip flyout overflow if a
@@ -497,21 +1020,20 @@
 
 @media (max-width: 600px) {
   .pd-similar-feed {
-    padding: 20px 12px 8px;
-  }
-  .pd-similar-grid {
-    gap: 8px;
+    padding: 16px 0 8px;
   }
   .pd-feed-title {
     font-size: 14px;
     letter-spacing: 0.06em;
+    padding-left: 16px;
   }
 }
 
 .pd-similar-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 2px;
+  background: #111;
 }
 
 /* Trail rail entry - each card rises and fades in, staggered by ~40ms,
@@ -556,13 +1078,24 @@
 @media (min-width: 768px) {
   .pd-similar-grid {
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 16px;
   }
 }
 
-@media (min-width: 1200px) {
+@media (min-width: 1024px) {
   .pd-similar-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1280px) {
+  .pd-similar-grid {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+}
+
+@media (min-width: 1600px) {
+  .pd-similar-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
   }
 }
 
@@ -711,47 +1244,100 @@
   .pd-brand-tile { width: 132px; height: 176px; }
 }
 
-/* "You might also like" - editorial look creatives in a real grid. */
+/* "Featured in Looks" — editorial look creatives in a real grid. */
 .pd-look-feed {
-  padding: 32px 24px 56px;
-  max-width: 1280px;
+  padding: 32px 0 56px;
+  max-width: none;
   margin: 0 auto;
 }
 
 @media (max-width: 600px) {
   .pd-look-feed {
-    padding: 20px 12px 40px;
+    padding: 16px 0 32px;
   }
-  .pd-look-grid {
-    gap: 8px;
+  .pd-look-feed .pd-feed-title {
+    padding-left: 16px;
   }
 }
 
 .pd-look-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 2px;
+  background: #111;
+}
+
+/* GUARD — every tile in the product-page rails (.look-card / CreativeCard,
+   whose children are all position:absolute) must keep a 3:4 shape. In an
+   auto-row grid, the default align-self:stretch resolves the item to its
+   zero-height content and DEFEATS .look-card's own aspect-ratio, which
+   collapsed the card and shrank the poster inside it. Pin the ratio and
+   stop the stretch so the tile holds shape regardless of image load state. */
+.pd-similar-grid > *,
+.pd-look-grid > * {
+  aspect-ratio: 3 / 4;
+  align-self: start;
 }
 @media (min-width: 768px) {
-  .pd-look-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 16px; }
+  .pd-look-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
 }
-@media (min-width: 1200px) {
+@media (min-width: 1024px) {
   .pd-look-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+}
+@media (min-width: 1280px) {
+  .pd-look-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); }
+}
+@media (min-width: 1600px) {
+  .pd-look-grid { grid-template-columns: repeat(6, minmax(0, 1fr)); }
 }
 
 .pd-look-tile {
   position: relative;
-  aspect-ratio: 4 / 5;
-  border-radius: 14px;
+  aspect-ratio: 3 / 4;
+  border-radius: 6px;
   overflow: hidden;
-  background: #1a1a1a;
+  background: #111;
   border: 0;
   padding: 0;
   cursor: pointer;
   display: block;
-  transition: transform 240ms cubic-bezier(0.32, 0.72, 0, 1);
+  width: 100%;
 }
-.pd-look-tile:hover { transform: translateY(-2px); }
+
+/* Creator name beside the avatar inside the chip. White text on a
+   soft gradient (added in .pd-look-tile-meta) so it reads against
+   any video background. */
+.pd-look-tile-creator-name {
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 140px;
+}
+
+/* Shimmer loading state shown when a look tile has no poster image.
+   Uses the same sweep animation as .look-card .card-shimmer so the
+   tile is never a featureless black box while the video streams in. */
+.pd-look-tile .card-shimmer {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(
+    105deg,
+    #161616 0%,
+    #161616 28%,
+    #262626 40%,
+    #383838 46%,
+    #262626 52%,
+    #161616 64%,
+    #161616 100%
+  );
+  background-size: 200% 100%;
+  animation: shimmer 1.6s ease-in-out infinite, shimmerPulse 2.4s ease-in-out infinite;
+  z-index: 0;
+  pointer-events: none;
+  border-radius: 0;
+}
 
 .pd-look-tile-video {
   position: absolute;
@@ -765,29 +1351,67 @@
 .pd-look-tile-meta {
   position: absolute;
   left: 10px;
-  right: 10px;
   bottom: 10px;
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  text-align: left;
-  color: #fff;
-  text-shadow: 0 1px 8px rgba(0, 0, 0, 0.6);
-}
-.pd-look-tile-creator {
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  font-size: 12px;
-  font-weight: 600;
+  gap: 8px;
+  padding: 6px 12px 6px 6px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  color: #fff;
+  text-decoration: none;
+  cursor: pointer;
+  /* Sit above the video (z-index:1 inline) and the poster <img>
+     (z-index:0). Without this the chip paints under the playing
+     video and disappears entirely. */
+  z-index: 3;
+  /* Override the inherited pointer-events:none used elsewhere — the
+     chip IS the click target for "open creator catalog". */
+  pointer-events: auto;
+  transition: background 0.18s ease;
+}
+.pd-look-tile-meta:hover {
+  background: rgba(0, 0, 0, 0.75);
+}
+/* Keep the look-tile creator avatar + name WHITE, like the home feed —
+   not the gold "following" accent. The shared CreatorAvatarFollow turns the
+   ring (and badge) gold via .is-following; on the product page the creators
+   are usually ones you follow, so without this override every chip read
+   yellow. These selectors out-specify the feed.css .is-following rules. */
+.pd-look-tile-meta .creator-avatar-follow.is-following .creator-avatar-follow__img {
+  border-color: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.45);
+}
+.pd-look-tile-meta .creator-avatar-follow__badge.is-following {
+  background: #fff;
+  color: #1a1205;
+}
+.pd-look-tile-meta .card-creator-tag-name {
+  color: #fff;
 }
 .pd-look-tile-avatar {
-  width: 18px;
-  height: 18px;
+  width: 28px;
+  height: 28px;
   border-radius: 50%;
   object-fit: cover;
   background: rgba(255, 255, 255, 0.12);
   flex: 0 0 auto;
+}
+/* Initial-letter fallback when the creator has no avatar (orphan
+   looks created via the user-generation flow). Same circle size +
+   neutral background as the img so the layout doesn't shift. */
+.pd-look-tile-avatar--initial {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(240, 192, 96, 0.85);
+  color: #0a0a0a;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  line-height: 1;
 }
 
 /* Saved-by social proof row. Avatars overlap left-to-right with a thin
@@ -822,20 +1446,24 @@
 .pd-shop-btn {
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 8px;
   padding: 12px 22px;
   border-radius: 999px;
-  background: #fff;
+  /* Gold primary CTA — sets Shop apart from the ghost-style siblings. */
+  background: linear-gradient(135deg, #f3d27c 0%, #d8a93c 52%, #bd8a2c 100%);
   border: 0;
-  color: #0a0a0a;
+  color: #211803;
   font-size: 14px;
-  font-weight: 600;
+  font-weight: 700;
   font-family: inherit;
   cursor: pointer;
-  transition: transform 0.18s cubic-bezier(0.32, 0.72, 0, 1), box-shadow 0.2s ease;
-  box-shadow: 0 6px 18px rgba(255, 255, 255, 0.04);
+  transition: transform 0.18s cubic-bezier(0.32, 0.72, 0, 1), box-shadow 0.2s ease, filter 0.2s ease;
+  /* Soft, contained glow — enough to read as the primary gold CTA without
+     floating above its grouped siblings. */
+  box-shadow: 0 2px 10px rgba(216, 169, 60, 0.20);
 }
-.pd-shop-btn:hover { transform: translateY(-1px); box-shadow: 0 10px 24px rgba(255, 255, 255, 0.08); }
+.pd-shop-btn:hover { transform: translateY(-1px); box-shadow: 0 6px 18px rgba(216, 169, 60, 0.34); filter: brightness(1.05); }
 .pd-shop-btn:active { transform: scale(0.97); }
 .pd-shop-chevron {
   transition: transform 0.24s cubic-bezier(0.32, 0.72, 0, 1);
@@ -843,6 +1471,90 @@
 .pd-shop-btn.is-open .pd-shop-chevron {
   transform: rotate(180deg);
 }
+
+/* Creator earnings bubble — sits to the left of the Save bookmark
+   on the actions row. Reflects the signed-in creator's wallet
+   balance so they see what this product is earning at a glance. */
+.pd-earnings-bubble {
+  display: inline-flex;
+  align-items: center;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: rgba(34, 197, 94, 0.10);
+  border: 1px solid rgba(34, 197, 94, 0.40);
+  color: #22c55e;
+  font-size: 14px;
+  font-weight: 700;
+  font-family: inherit;
+  letter-spacing: -0.01em;
+  white-space: nowrap;
+}
+
+/* Try-it-on button — sits between Shop and Save. Outline pill so it
+   reads as a secondary CTA: less weight than Shop (filled), more
+   visual presence than Save (outline + icon). Tapping navigates to
+   /generate with this product pre-picked. */
+.pd-tryon-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 18px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+.pd-tryon-btn:hover {
+  background: rgba(255, 255, 255, 0.10);
+  border-color: rgba(240, 192, 96, 0.45);
+  color: #f0c060;
+}
+.pd-tryon-btn:active { transform: scale(0.97); }
+.light-mode .pd-tryon-btn {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.14);
+  color: #0a0a0a;
+}
+.light-mode .pd-tryon-btn:hover {
+  background: rgba(0, 0, 0, 0.08);
+  border-color: rgba(180, 130, 30, 0.5);
+  color: #b08230;
+}
+
+/* Comments — third action in the row, same ghost treatment as
+   "Add to a look" so Shop / Add to a look / Comments read as a set. */
+.pd-comments-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 18px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 600;
+  font-family: inherit;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, transform 0.15s ease;
+}
+.pd-comments-btn:hover {
+  background: rgba(255, 255, 255, 0.10);
+  border-color: rgba(255, 255, 255, 0.30);
+}
+.pd-comments-btn:active { transform: scale(0.97); }
+.light-mode .pd-comments-btn {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.14);
+  color: #0a0a0a;
+}
+.light-mode .pd-comments-btn:hover { background: rgba(0, 0, 0, 0.08); }
 
 /* Retailer drawer - collapsed by default, expands beneath the action row.
    Uses grid-template-rows 0fr → 1fr for a smooth height animation that
@@ -971,6 +1683,32 @@
   background: rgba(255, 215, 92, 0.08);
 }
 
+/* Comment button — same pill shape as Save, sits in the action row. */
+.pd-comment-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 18px;
+  border-radius: 999px;
+  background: transparent;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #fff;
+  font-size: 14px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s, transform 0.16s;
+}
+.pd-comment-btn:hover {
+  border-color: rgba(255, 255, 255, 0.36);
+  background: rgba(255, 255, 255, 0.06);
+}
+.pd-comment-btn:active { transform: scale(0.97); }
+.pd-comment-btn .comment-btn-count {
+  font-weight: 700;
+  opacity: 0.85;
+}
+
 /* Similar-products feed below the info card. Natural page scroll. */
 .pd-feed {
   padding: 32px 24px 56px;
@@ -985,6 +1723,7 @@
   letter-spacing: 0.08em;
   color: rgba(255, 255, 255, 0.35);
   margin: 0 0 18px;
+  padding-left: 16px;
 }
 
 .pd-feed-grid {
@@ -1111,8 +1850,8 @@
 }
 
 .light-mode .pd-shop-btn {
-  background: #111;
-  color: #fff;
+  background: linear-gradient(135deg, #f3d27c 0%, #d8a93c 52%, #bd8a2c 100%);
+  color: #211803;
 }
 
 .light-mode .pd-ghost-btn {
@@ -1143,3 +1882,96 @@
 .light-mode .pd-feed-price {
   color: rgba(0, 0, 0, 0.55);
 }
+
+/* ── Pairs well with ── horizontal product strip driven by entity_edges ─── */
+
+.pd-graph-pairs {
+  padding: 32px 24px 40px;
+  max-width: 1280px;
+  margin: 0 auto;
+}
+@media (max-width: 600px) {
+  .pd-graph-pairs { padding: 20px 12px 32px; }
+}
+
+.pd-graph-pairs-rail {
+  display: flex;
+  flex-direction: row;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  /* hide scrollbar on WebKit/Blink */
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.pd-graph-pairs-rail::-webkit-scrollbar { display: none; }
+
+.pd-graph-pair-tile {
+  flex: 0 0 auto;
+  width: 120px;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  text-align: left;
+  border-radius: 10px;
+  overflow: hidden;
+  transition: opacity 200ms ease;
+}
+.pd-graph-pair-tile:hover { opacity: 0.82; }
+@media (min-width: 600px) {
+  .pd-graph-pair-tile { width: 140px; }
+}
+
+.pd-graph-pair-img {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  object-fit: cover;
+  display: block;
+  border-radius: 10px;
+  background: #1a1a1a;
+}
+
+.pd-graph-pair-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 0 2px;
+}
+
+.pd-graph-pair-brand {
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.45);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.pd-graph-pair-name {
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.88);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  line-height: 1.3;
+}
+
+.pd-graph-pair-price {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+/* Light mode overrides */
+.light-mode .pd-graph-pair-brand { color: rgba(0, 0, 0, 0.4); }
+.light-mode .pd-graph-pair-name  { color: rgba(0, 0, 0, 0.85); }
+.light-mode .pd-graph-pair-price { color: rgba(0, 0, 0, 0.55); }
+.light-mode .pd-graph-pair-img   { background: #e8e8e3; }

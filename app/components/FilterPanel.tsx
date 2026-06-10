@@ -1,5 +1,4 @@
-
-import { useState, useCallback, useRef, useEffect } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { catalogNames } from '~/data/catalogNames';
 
 export interface ActiveFilters {
@@ -19,6 +18,12 @@ interface FilterPanelProps {
   onFiltersChange: (filters: ActiveFilters) => void;
   onApply: () => void;
   onClose: () => void;
+  /** True when the shopper has body data on file (height/weight). When
+   *  false the "My Size" filter is hidden — there's nothing to match
+   *  against. Sourced from useShopperBody by BottomBar. */
+  hasSizeData?: boolean;
+  mySizeOnly?: boolean;
+  onMySizeChange?: (v: boolean) => void;
 }
 
 export function getEmptyFilters(): ActiveFilters {
@@ -29,7 +34,7 @@ export function hasActiveFilters(filters: ActiveFilters): boolean {
   return Object.values(filters).some(arr => arr.length > 0);
 }
 
-export function getCatalogName(filters: ActiveFilters): string {
+export function getCatalogName(filters: ActiveFilters, previous?: string): string {
   const allActive: string[] = [];
   Object.values(filters).forEach(arr => allActive.push(...arr));
   if (allActive.length === 0) return 'Build Your Catalog';
@@ -40,280 +45,239 @@ export function getCatalogName(filters: ActiveFilters): string {
     allActive.forEach(v => { if (catalogNames[v]) options.push(...catalogNames[v]); });
     pool = options.length > 0 ? options : ['The Custom Catalog'];
   }
+  // De-dupe the previous pick so a toggle ALWAYS visibly changes the
+  // title — without this, Math.random can land on the same row and
+  // the modal looks frozen even though state did update.
+  if (previous && pool.length > 1) {
+    const filtered = pool.filter(n => n !== previous);
+    if (filtered.length > 0) pool = filtered;
+  }
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
-const allLocations = ['NYC', 'LA', 'Paris', 'Tokyo', 'London', 'Milan', 'Seoul', 'Miami', 'Berlin', 'Sydney', 'Dubai', 'Mexico City', 'Toronto', 'Barcelona', 'Amsterdam'];
+// ── Static option data ──────────────────────────────────────────────────
+const LOCATIONS = ['NYC', 'LA', 'Paris', 'Tokyo', 'London', 'Milan', 'Seoul', 'Miami', 'Berlin', 'Sydney', 'Dubai', 'Mexico City', 'Toronto', 'Barcelona', 'Amsterdam'];
 
-const pricePoints = [
+const PRICE_POINTS = [
   { val: 'under25', label: 'Under $25' },
-  { val: '25-50', label: '$25–$50' },
-  { val: '50-100', label: '$50–$100' },
-  { val: '100-200', label: '$100–$200' },
-  { val: '200-500', label: '$200–$500' },
+  { val: '25-50', label: '$25–50' },
+  { val: '50-100', label: '$50–100' },
+  { val: '100-200', label: '$100–200' },
+  { val: '200-500', label: '$200–500' },
   { val: '500plus', label: '$500+' },
 ];
 
-const bottomsKeywords = [
-  { val: 'jeans', label: 'Jeans', x: -120, y: -40 },
-  { val: 'trousers', label: 'Trousers', x: 120, y: -30 },
-  { val: 'shorts', label: 'Shorts', x: -90, y: 50 },
-  { val: 'skirts', label: 'Skirts', x: 100, y: 60 },
-  { val: 'joggers', label: 'Joggers', x: 0, y: -70 },
-  { val: 'leggings', label: 'Leggings', x: -50, y: 80 },
-  { val: 'cargo', label: 'Cargo', x: 60, y: 90 },
-  { val: 'chinos', label: 'Chinos', x: -140, y: 10 },
+const OCCASIONS = [
+  { val: 'datenight', label: 'Date night' },
+  { val: 'workout', label: 'Workout' },
+  { val: 'brunch', label: 'Brunch' },
+  { val: 'wedding', label: 'Wedding' },
+  { val: 'festival', label: 'Festival' },
+  { val: 'office', label: 'Office' },
+];
+const TYPES = [
+  { val: 'tops', label: 'Tops' },
+  { val: 'bottoms', label: 'Bottoms' },
+  { val: 'shoes', label: 'Shoes' },
+  { val: 'outerwear', label: 'Outerwear' },
+  { val: 'hats', label: 'Hats' },
+  { val: 'accessories', label: 'Accessories' },
+];
+const ROOMS = [
+  { val: 'living', label: 'Living room' },
+  { val: 'bedroom', label: 'Bedroom' },
+  { val: 'kitchen', label: 'Kitchen' },
+  { val: 'bathroom', label: 'Bathroom' },
+  { val: 'outdoor', label: 'Outdoor' },
+];
+const VIBES = [
+  { val: 'scandi', label: 'Scandinavian' },
+  { val: 'maximalist', label: 'Maximalist' },
+  { val: 'midcentury', label: 'Mid-century' },
+  { val: 'cottagecore', label: 'Cottagecore' },
+  { val: 'industrial', label: 'Industrial' },
 ];
 
-export default function FilterPanel({ activeFilters, onFiltersChange, onApply, onClose }: FilterPanelProps) {
-  const [openSubPanel, setOpenSubPanel] = useState<string | null>(null);
-  const [displayName, setDisplayName] = useState('Build Your Catalog');
-  const [locationOpen, setLocationOpen] = useState(false);
-  const [locationSearch, setLocationSearch] = useState('');
-  const [bottomsExpanded, setBottomsExpanded] = useState(false);
-  const locationRef = useRef<HTMLDivElement>(null);
+// Icon set for the "who" + category rows. Inline so the panel carries no
+// icon-library dependency.
+function WhoIcon({ kind }: { kind: string }) {
+  const p = { width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+  if (kind === 'men') return <svg {...p}><path d="M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="10" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="17" y1="11" x2="23" y2="11"/></svg>;
+  if (kind === 'women') return <svg {...p}><path d="M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="10" cy="7" r="4"/></svg>;
+  if (kind === 'dogs') return <svg {...p}><path d="M10 5.2C10 3.8 8.4 2.7 6.5 3 3.7 3.5 2.4 9 2.5 10c.1.7 1.7 1.7 3.7 1 1.3-.5 2-1.5 2.3-2.5"/><path d="M14.3 5.2c0-1.4 1.6-2.5 3.5-2.2C20.6 3.5 21.9 9 21.8 10c-.1.7-1.7 1.7-3.7 1-1.3-.5-1.9-1.5-2.2-2.5"/><path d="M4.4 11.2A13 13 0 0 0 4 14.6C4 18.7 7.6 21 12 21s8-2.3 8-6.4a11.7 11.7 0 0 0-.5-3.3"/></svg>;
+  return <svg {...p}><path d="M12 5c.7 0 1.4.1 2 .3 1.8-2 5-2.8 6.9-1 1 .9 1.1 2.6.4 3.8-.5.8-1.4 1.1-1.9 1.8C20.4 11.6 21 13.7 21 16c0 3.3-3.1 6-7 6h-4c-3.9 0-7-2.7-7-6 0-2.3.6-4.4 1.6-6.1-.5-.7-1.4-1-1.9-1.8-.7-1.2-.6-2.9.4-3.8 1.9-1.8 5.1-1 6.9 1 .7-.2 1.3-.3 2-.3Z"/></svg>;
+}
+function CatIcon({ kind }: { kind: string }) {
+  const p = { width: 18, height: 18, viewBox: '0 0 24 24', fill: 'none', stroke: 'currentColor', strokeWidth: 2, strokeLinecap: 'round' as const, strokeLinejoin: 'round' as const };
+  if (kind === 'fashion') return <svg {...p}><path d="M20.4 3.5 16 2l-4 3.5L8 2 3.6 3.5a2 2 0 0 0-1.3 2.2l.6 3.5a1 1 0 0 0 1 .8H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.2a1 1 0 0 0 1-.8l.6-3.5a2 2 0 0 0-1.3-2.2Z"/></svg>;
+  if (kind === 'homedecor') return <svg {...p}><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>;
+  if (kind === 'wellness') return <svg {...p}><path d="M19 14c1.5-1.5 3-3.2 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.8 0-3 .5-4.5 2-1.5-1.5-2.7-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4 3 5.5l7 7Z"/></svg>;
+  return <svg {...p}><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg>;
+}
 
-  const filteredLocations = locationSearch
-    ? allLocations.filter(l => l.toLowerCase().includes(locationSearch.toLowerCase()))
-    : allLocations;
+export default function FilterPanel({ activeFilters, onFiltersChange, onApply, onClose, hasSizeData = false, mySizeOnly = false, onMySizeChange }: FilterPanelProps) {
+  const [displayName, setDisplayName] = useState(() => getCatalogName(activeFilters));
+  const [nameKey, setNameKey] = useState(0); // bumps to re-trigger the name morph animation
+  const [locOpen, setLocOpen] = useState(false);
 
-  // Close location dropdown on outside click
-  useEffect(() => {
-    if (!locationOpen) return;
-    const handler = (e: MouseEvent) => {
-      if (locationRef.current && !locationRef.current.contains(e.target as Node)) {
-        setLocationOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handler);
-    return () => document.removeEventListener('mousedown', handler);
-  }, [locationOpen]);
+  const isActive = useCallback((cat: keyof ActiveFilters, val: string) => activeFilters[cat].includes(val), [activeFilters]);
 
-  const toggleFilter = useCallback((category: keyof ActiveFilters, value: string, expands?: string) => {
-    const updated = { ...activeFilters, [category]: [...activeFilters[category]] };
-    const idx = updated[category].indexOf(value);
-    if (idx >= 0) {
-      updated[category].splice(idx, 1);
-      if (expands && openSubPanel === expands) setOpenSubPanel(null);
-      if (value === 'bottoms') setBottomsExpanded(false);
-    } else {
-      updated[category].push(value);
-      if (expands) setOpenSubPanel(expands);
-      if (value === 'bottoms') setBottomsExpanded(true);
-    }
+  const toggle = useCallback((cat: keyof ActiveFilters, val: string) => {
+    const updated: ActiveFilters = { ...activeFilters, [cat]: [...activeFilters[cat]] };
+    const idx = updated[cat].indexOf(val);
+    if (idx >= 0) updated[cat].splice(idx, 1);
+    else updated[cat].push(val);
     onFiltersChange(updated);
-    setDisplayName(getCatalogName(updated));
-  }, [activeFilters, onFiltersChange, openSubPanel]);
+    setDisplayName(prev => getCatalogName(updated, prev));
+    setNameKey(k => k + 1);
+  }, [activeFilters, onFiltersChange]);
 
-  const isActive = (category: keyof ActiveFilters, value: string) => activeFilters[category].includes(value);
+  const reset = useCallback(() => {
+    onFiltersChange(getEmptyFilters());
+    setDisplayName('Build Your Catalog');
+    setNameKey(k => k + 1);
+    if (onMySizeChange) onMySizeChange(false);
+  }, [onFiltersChange, onMySizeChange]);
 
-  const selectedLocations = activeFilters.location;
+  // Escape closes.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') onClose(); };
+    document.addEventListener('keydown', onKey);
+    return () => document.removeEventListener('keydown', onKey);
+  }, [onClose]);
 
-  const btnText = displayName === 'Build Your Catalog' ? 'Build My Catalog' : `Build "${displayName}"`;
+  const showFashionSub = isActive('style', 'fashion');
+  const showHomeSub = isActive('style', 'homedecor');
+  const named = displayName !== 'Build Your Catalog';
+  const anyActive = hasActiveFilters(activeFilters) || mySizeOnly;
 
   return (
-    <div className="filter-panel-backdrop" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
-      <div className="bottom-bar-filters" onClick={(e) => e.stopPropagation()}>
-        <p className="filter-catalog-name">{displayName}</p>
+    <div
+      className="bcat-backdrop"
+      onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+    >
+      <div className="bcat-panel" role="dialog" aria-label="Build your catalog" onClick={(e) => e.stopPropagation()}>
+        <div className="bcat-aurora" aria-hidden="true" />
 
-        {/* Who's it for? */}
-        <div className="filter-section">
-          <div className="filter-section-label">Who&apos;s it for?</div>
-          <div className="filter-options">
-            <button className={`filter-option ${isActive('who', 'men') ? 'active' : ''}`} onClick={() => toggleFilter('who', 'men')}>
-              <span className="filter-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="10" cy="7" r="4"/><line x1="20" y1="8" x2="20" y2="14"/><line x1="17" y1="11" x2="23" y2="11"/></svg></span>Men
-            </button>
-            <button className={`filter-option ${isActive('who', 'women') ? 'active' : ''}`} onClick={() => toggleFilter('who', 'women')}>
-              <span className="filter-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="10" cy="7" r="4"/></svg></span>Women
-            </button>
-            <button className={`filter-option ${isActive('who', 'dogs') ? 'active' : ''}`} onClick={() => toggleFilter('who', 'dogs')}>
-              <span className="filter-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M10 5.172C10 3.782 8.423 2.679 6.5 3c-2.823.47-4.113 6.006-4 7 .08.703 1.725 1.722 3.656 1 1.261-.472 1.96-1.45 2.344-2.5"/><path d="M14.267 5.172c0-1.39 1.577-2.493 3.5-2.172 2.823.47 4.113 6.006 4 7-.08.703-1.725 1.722-3.656 1-1.261-.472-1.855-1.45-2.239-2.5"/><path d="M8 14v.5"/><path d="M16 14v.5"/><path d="M11.25 16.25h1.5L12 17l-.75-.75Z"/><path d="M4.42 11.247A13.152 13.152 0 0 0 4 14.556C4 18.728 7.582 21 12 21s8-2.272 8-6.444a11.702 11.702 0 0 0-.493-3.309"/></svg></span>Dogs
-            </button>
-            <button className={`filter-option ${isActive('who', 'cats') ? 'active' : ''}`} onClick={() => toggleFilter('who', 'cats')}>
-              <span className="filter-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 5c.67 0 1.35.09 2 .26 1.78-2 5.03-2.75 6.92-.95.97.92 1.12 2.62.42 3.81-.48.82-1.37 1.07-1.91 1.81C20.41 11.56 21 13.68 21 16c0 3.31-3.13 6-7 6h-4c-3.87 0-7-2.69-7-6 0-2.32.59-4.44 1.57-6.07-.54-.74-1.43-.99-1.91-1.81-.7-1.19-.55-2.89.42-3.81 1.89-1.8 5.14-1.05 6.92.95.65-.17 1.33-.26 2-.26Z"/><path d="M8 14v.5"/><path d="M16 14v.5"/><path d="M11.25 16.25h1.5L12 17l-.75-.75Z"/></svg></span>Cats
-            </button>
+        <button className="bcat-close" onClick={onClose} aria-label="Close">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+        </button>
+
+        {/* Recommended name — morphs on every toggle. */}
+        <div className="bcat-namebar">
+          <span className="bcat-spark" aria-hidden="true">
+            <svg viewBox="0 0 100 100" width="26" height="26">
+              <defs>
+                <linearGradient id="bcat-grad" x1="0" y1="0" x2="1" y2="1">
+                  <stop offset="0%" stopColor="#fff" /><stop offset="50%" stopColor="#cbd5e1" /><stop offset="100%" stopColor="#94a3b8" />
+                </linearGradient>
+              </defs>
+              <path d="M50 4 C54 30 70 46 96 50 C70 54 54 70 50 96 C46 70 30 54 4 50 C30 46 46 30 50 4 Z" fill="url(#bcat-grad)" />
+            </svg>
+          </span>
+          <div className="bcat-name-col">
+            <span className="bcat-eyebrow">{named ? 'Your catalog' : 'Pick a few — we’ll name it'}</span>
+            <h2 key={nameKey} className={`bcat-name${named ? ' is-named' : ''}`}>{displayName}</h2>
           </div>
+          {anyActive && (
+            <button className="bcat-reset" onClick={reset} aria-label="Reset">Reset</button>
+          )}
         </div>
 
-        {/* Category */}
-        <div className="filter-section">
-          <div className="filter-section-label">Category</div>
-          <div className="filter-options">
-            <button className={`filter-option filter-expandable ${isActive('style', 'fashion') ? 'active' : ''}`} onClick={() => toggleFilter('style', 'fashion', 'fashion-sub')}>
-              <span className="filter-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M20.38 3.46 16 2 12 5.5 8 2l-4.38 1.46a2 2 0 0 0-1.34 2.23l.58 3.47a1 1 0 0 0 .99.84H6v10c0 1.1.9 2 2 2h8a2 2 0 0 0 2-2V10h2.15a1 1 0 0 0 .99-.84l.58-3.47a2 2 0 0 0-1.34-2.23Z"/></svg></span>Fashion <svg className="expand-arrow" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-            </button>
-            <button className={`filter-option filter-expandable ${isActive('style', 'homedecor') ? 'active' : ''}`} onClick={() => toggleFilter('style', 'homedecor', 'homedecor-sub')}>
-              <span className="filter-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg></span>Home Decor <svg className="expand-arrow" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-            </button>
-            <button className={`filter-option ${isActive('style', 'wellness') ? 'active' : ''}`} onClick={() => toggleFilter('style', 'wellness')}>
-              <span className="filter-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 14c1.49-1.46 3-3.21 3-5.5A5.5 5.5 0 0 0 16.5 3c-1.76 0-3 .5-4.5 2-1.5-1.5-2.74-2-4.5-2A5.5 5.5 0 0 0 2 8.5c0 2.3 1.5 4.05 3 5.5l7 7Z"/></svg></span>Health &amp; Wellness
-            </button>
-            <button className={`filter-option ${isActive('style', 'electronics') ? 'active' : ''}`} onClick={() => toggleFilter('style', 'electronics')}>
-              <span className="filter-icon"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="2" y="3" width="20" height="14" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="17" x2="12" y2="21"/></svg></span>Electronics
-            </button>
-          </div>
+        <div className="bcat-scroll">
+          {hasSizeData && onMySizeChange && (
+            <section className="bcat-section">
+              <div className="bcat-section-label">Personalize</div>
+              <div className="bcat-chips">
+                <button className={`bcat-chip${mySizeOnly ? ' is-on' : ''}`} onClick={() => onMySizeChange(!mySizeOnly)} aria-pressed={mySizeOnly}>
+                  <span className="bcat-chip-ico"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7v10a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V7"/><path d="M16 3l-4 4-4-4"/></svg></span>
+                  My size only
+                </button>
+              </div>
+            </section>
+          )}
 
-          {/* Fashion sub-panel */}
-          <div className={`filter-sub-panel ${openSubPanel === 'fashion-sub' ? 'open' : ''}`}>
-            <div className="filter-sub-group">
-              <div className="filter-sub-label">By Occasion</div>
-              <div className="filter-options">
-                {[
-                  { val: 'datenight', label: 'Date Night' },
-                  { val: 'workout', label: 'Workout' },
-                  { val: 'brunch', label: 'Brunch' },
-                  { val: 'wedding', label: 'Wedding' },
-                  { val: 'festival', label: 'Festival' },
-                  { val: 'office', label: 'Office' },
-                ].map(o => (
-                  <button key={o.val} className={`filter-option filter-sub-option ${isActive('occasion', o.val) ? 'active' : ''}`} onClick={() => toggleFilter('occasion', o.val)}>{o.label}</button>
+          <section className="bcat-section">
+            <div className="bcat-section-label">Who&apos;s it for</div>
+            <div className="bcat-chips">
+              {[['men', 'Men'], ['women', 'Women'], ['dogs', 'Dogs'], ['cats', 'Cats']].map(([v, l]) => (
+                <button key={v} className={`bcat-chip${isActive('who', v) ? ' is-on' : ''}`} onClick={() => toggle('who', v)} aria-pressed={isActive('who', v)}>
+                  <span className="bcat-chip-ico"><WhoIcon kind={v} /></span>{l}
+                </button>
+              ))}
+            </div>
+          </section>
+
+          <section className="bcat-section">
+            <div className="bcat-section-label">Category</div>
+            <div className="bcat-chips">
+              {[['fashion', 'Fashion'], ['homedecor', 'Home decor'], ['wellness', 'Wellness'], ['electronics', 'Electronics']].map(([v, l]) => (
+                <button key={v} className={`bcat-chip${isActive('style', v) ? ' is-on' : ''}`} onClick={() => toggle('style', v)} aria-pressed={isActive('style', v)}>
+                  <span className="bcat-chip-ico"><CatIcon kind={v} /></span>{l}
+                </button>
+              ))}
+            </div>
+
+            <div className={`bcat-sub${showFashionSub ? ' is-open' : ''}`}>
+              <div className="bcat-sub-label">By occasion</div>
+              <div className="bcat-chips">
+                {OCCASIONS.map(o => (
+                  <button key={o.val} className={`bcat-chip bcat-chip--sm${isActive('occasion', o.val) ? ' is-on' : ''}`} onClick={() => toggle('occasion', o.val)}>{o.label}</button>
+                ))}
+              </div>
+              <div className="bcat-sub-label">By type</div>
+              <div className="bcat-chips">
+                {TYPES.map(o => (
+                  <button key={o.val} className={`bcat-chip bcat-chip--sm${isActive('type', o.val) ? ' is-on' : ''}`} onClick={() => toggle('type', o.val)}>{o.label}</button>
                 ))}
               </div>
             </div>
-            <div className="filter-sub-group">
-              <div className="filter-sub-label">By Type</div>
-              <div className="filter-options">
-                {[
-                  { val: 'tops', label: 'Tops' },
-                  { val: 'bottoms', label: 'Bottoms' },
-                  { val: 'shoes', label: 'Shoes' },
-                  { val: 'outerwear', label: 'Outerwear' },
-                  { val: 'hats', label: 'Hats' },
-                  { val: 'accessories', label: 'Accessories' },
-                ].map(o => (
-                  <button
-                    key={o.val}
-                    className={`filter-option filter-sub-option ${isActive('type', o.val) ? 'active' : ''}`}
-                    onClick={() => toggleFilter('type', o.val)}
-                  >
-                    {o.label}
-                  </button>
+
+            <div className={`bcat-sub${showHomeSub ? ' is-open' : ''}`}>
+              <div className="bcat-sub-label">By room</div>
+              <div className="bcat-chips">
+                {ROOMS.map(o => (
+                  <button key={o.val} className={`bcat-chip bcat-chip--sm${isActive('room', o.val) ? ' is-on' : ''}`} onClick={() => toggle('room', o.val)}>{o.label}</button>
+                ))}
+              </div>
+              <div className="bcat-sub-label">By vibe</div>
+              <div className="bcat-chips">
+                {VIBES.map(o => (
+                  <button key={o.val} className={`bcat-chip bcat-chip--sm${isActive('vibe', o.val) ? ' is-on' : ''}`} onClick={() => toggle('vibe', o.val)}>{o.label}</button>
                 ))}
               </div>
             </div>
+          </section>
 
-            {/* Bottoms branch-out */}
-            {bottomsExpanded && (
-              <div className="bottoms-branch">
-                <div className="bottoms-branch-center">Bottoms</div>
-                {bottomsKeywords.map((kw, i) => (
-                  <button
-                    key={kw.val}
-                    className={`bottoms-branch-keyword ${isActive('type', kw.val) ? 'active' : ''}`}
-                    style={{
-                      '--bx': `${kw.x}px`,
-                      '--by': `${kw.y}px`,
-                      animationDelay: `${i * 0.05}s`,
-                    } as React.CSSProperties}
-                    onClick={() => toggleFilter('type', kw.val)}
-                  >
-                    {kw.label}
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Home Decor sub-panel */}
-          <div className={`filter-sub-panel ${openSubPanel === 'homedecor-sub' ? 'open' : ''}`}>
-            <div className="filter-sub-group">
-              <div className="filter-sub-label">By Room</div>
-              <div className="filter-options">
-                {[
-                  { val: 'living', label: 'Living Room' },
-                  { val: 'bedroom', label: 'Bedroom' },
-                  { val: 'kitchen', label: 'Kitchen' },
-                  { val: 'bathroom', label: 'Bathroom' },
-                  { val: 'outdoor', label: 'Outdoor' },
-                ].map(o => (
-                  <button key={o.val} className={`filter-option filter-sub-option ${isActive('room', o.val) ? 'active' : ''}`} onClick={() => toggleFilter('room', o.val)}>{o.label}</button>
-                ))}
-              </div>
+          <section className="bcat-section">
+            <div className="bcat-section-label">
+              Where
+              {activeFilters.location.length > 0 && <span className="bcat-section-count">{activeFilters.location.length}</span>}
             </div>
-            <div className="filter-sub-group">
-              <div className="filter-sub-label">By Vibe</div>
-              <div className="filter-options">
-                {[
-                  { val: 'scandi', label: 'Scandinavian' },
-                  { val: 'maximalist', label: 'Maximalist' },
-                  { val: 'midcentury', label: 'Mid-Century' },
-                  { val: 'cottagecore', label: 'Cottagecore' },
-                  { val: 'industrial', label: 'Industrial' },
-                ].map(o => (
-                  <button key={o.val} className={`filter-option filter-sub-option ${isActive('vibe', o.val) ? 'active' : ''}`} onClick={() => toggleFilter('vibe', o.val)}>{o.label}</button>
-                ))}
-              </div>
+            <div className={`bcat-chips bcat-chips--loc${locOpen ? ' is-expanded' : ''}`}>
+              {(locOpen ? LOCATIONS : LOCATIONS.slice(0, 6)).map(loc => (
+                <button key={loc} className={`bcat-chip bcat-chip--sm${isActive('location', loc.toLowerCase()) ? ' is-on' : ''}`} onClick={() => toggle('location', loc.toLowerCase())}>{loc}</button>
+              ))}
+              {!locOpen && LOCATIONS.length > 6 && (
+                <button className="bcat-chip bcat-chip--sm bcat-chip--more" onClick={() => setLocOpen(true)}>+{LOCATIONS.length - 6} more</button>
+              )}
             </div>
-          </div>
+          </section>
+
+          <section className="bcat-section">
+            <div className="bcat-section-label">Budget</div>
+            <div className="bcat-chips">
+              {PRICE_POINTS.map(pp => (
+                <button key={pp.val} className={`bcat-chip bcat-chip--sm${isActive('price', pp.val) ? ' is-on' : ''}`} onClick={() => toggle('price', pp.val)}>{pp.label}</button>
+              ))}
+            </div>
+          </section>
         </div>
 
-        {/* Location - dropdown */}
-        <div className="filter-section">
-          <div className="filter-section-label">Location</div>
-          <div className="filter-dropdown" ref={locationRef}>
-            <button className="filter-dropdown-trigger" onClick={() => setLocationOpen(o => !o)}>
-              <span>{selectedLocations.length > 0 ? selectedLocations.map(l => l.charAt(0).toUpperCase() + l.slice(1)).join(', ') : 'Select locations...'}</span>
-              <svg className={`filter-dropdown-chevron ${locationOpen ? 'open' : ''}`} width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
-            </button>
-            {locationOpen && (
-              <div className="filter-dropdown-menu">
-                <input
-                  type="text"
-                  className="filter-dropdown-search"
-                  placeholder="Search..."
-                  value={locationSearch}
-                  onChange={(e) => setLocationSearch(e.target.value)}
-                  autoFocus
-                />
-                <div className="filter-dropdown-list">
-                  {filteredLocations.map(loc => (
-                    <button
-                      key={loc}
-                      className={`filter-dropdown-item ${isActive('location', loc.toLowerCase()) ? 'active' : ''}`}
-                      onClick={() => toggleFilter('location', loc.toLowerCase())}
-                    >
-                      <span className="filter-dropdown-check">{isActive('location', loc.toLowerCase()) ? '✓' : ''}</span>
-                      {loc}
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* Price Range - selectable price point buttons */}
-        <div className="filter-section">
-          <div className="filter-section-label">Price Range</div>
-          <div className="filter-price-points">
-            {pricePoints.map(pp => (
-              <button
-                key={pp.val}
-                className={`filter-price-point ${isActive('price', pp.val) ? 'active' : ''}`}
-                onClick={() => toggleFilter('price', pp.val)}
-              >
-                {pp.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Featured Creators */}
-        <div className="filter-section filter-section-creators">
-          <div className="filter-section-label">Featured Creators</div>
-          <div className="filter-options">
-            <button className={`filter-option filter-creator-option glow ${isActive('creator', '@lilywittman') ? 'active' : ''}`} onClick={() => toggleFilter('creator', '@lilywittman')}>
-              <img className="filter-creator-avatar" src="https://i.pravatar.cc/100?img=47" alt="" />
-              <span>@lilywittman</span>
-            </button>
-            <button className={`filter-option filter-creator-option glow ${isActive('creator', '@garrett') ? 'active' : ''}`} onClick={() => toggleFilter('creator', '@garrett')}>
-              <img className="filter-creator-avatar" src="https://i.pravatar.cc/100?img=12" alt="" />
-              <span>@garrett</span>
-            </button>
-          </div>
-        </div>
-
-        <button className="filter-apply-btn" onClick={onApply}>{btnText}</button>
+        <button className="bcat-build" onClick={onApply}>
+          {named ? `Build “${displayName}”` : 'Build my catalog'}
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>
+        </button>
       </div>
     </div>
   );

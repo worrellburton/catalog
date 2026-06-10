@@ -24,6 +24,9 @@
   "exclude": [
     "node_modules",
     "supabase/functions",
-    "**/*.test.ts"
+    "**/*.test.ts",
+    "scripts",
+    "tests",
+    "playwright.config.ts"
   ]
 }

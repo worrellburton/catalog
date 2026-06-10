@@ -1,0 +1,177 @@
+/* ── Admin Sharing page ─────────────────────────────────────────────────── */
+.admin-sharing-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 380px;
+  gap: 28px;
+  align-items: start;
+}
+@media (max-width: 1000px) {
+  .admin-sharing-layout { grid-template-columns: 1fr; }
+}
+.admin-sharing-form { margin-bottom: 0; max-width: none; }
+.admin-sharing-preview-col {
+  position: sticky;
+  top: 80px;
+}
+.admin-sharing-input {
+  padding: 9px 12px;
+  border: 1px solid #ddd;
+  border-radius: 7px;
+  font-size: 14px;
+  color: #111;
+  background: #fafafa;
+  width: 100%;
+  font-family: inherit;
+}
+.admin-sharing-input:focus {
+  outline: none;
+  border-color: #6366f1;
+  background: #fff;
+}
+.admin-sharing-input:disabled { opacity: 0.5; }
+.admin-sharing-textarea {
+  resize: vertical;
+  min-height: 60px;
+  line-height: 1.45;
+}
+.admin-sharing-hint {
+  font-size: 11px;
+  color: #888;
+  line-height: 1.4;
+}
+.admin-sharing-image-row {
+  display: flex;
+  gap: 14px;
+  align-items: flex-start;
+}
+.admin-sharing-image-thumb {
+  width: 140px;
+  height: 90px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+  flex-shrink: 0;
+}
+.admin-sharing-image-thumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.admin-sharing-image-empty {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: #9ca3af;
+}
+.admin-sharing-image-actions {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+/* iMessage preview card — visually mimics Apple's link-unfurl bubble. */
+.admin-sharing-imessage {
+  background: #f1f1f3;
+  border-radius: 18px;
+  padding: 16px;
+  font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+}
+.admin-sharing-imessage-meta {
+  font-size: 10px;
+  font-weight: 600;
+  color: #8e8e93;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  text-align: center;
+  margin-bottom: 10px;
+}
+.admin-sharing-bubble {
+  background: #fff;
+  border-radius: 14px;
+  overflow: hidden;
+  margin-left: auto;
+  max-width: 280px;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
+}
+.admin-sharing-bubble-image {
+  width: 100%;
+  aspect-ratio: 1.91 / 1;
+  background: #f3f4f6;
+  overflow: hidden;
+}
+.admin-sharing-bubble-image img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.admin-sharing-bubble-image-placeholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 11px;
+  color: #9ca3af;
+  text-align: center;
+  padding: 0 16px;
+}
+.admin-sharing-bubble-body {
+  padding: 10px 12px 12px;
+}
+.admin-sharing-bubble-title {
+  font-size: 13px;
+  font-weight: 600;
+  color: #000;
+  line-height: 1.3;
+  margin-bottom: 2px;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.admin-sharing-bubble-desc {
+  font-size: 11px;
+  color: #3c3c43;
+  line-height: 1.35;
+  margin-bottom: 4px;
+  overflow: hidden;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+.admin-sharing-bubble-domain {
+  font-size: 11px;
+  color: #8e8e93;
+}
+.admin-sharing-imessage-time {
+  font-size: 10px;
+  color: #8e8e93;
+  text-align: right;
+  margin-top: 6px;
+  padding-right: 4px;
+}
+
+/* Dark-mode admin variants. */
+.admin-dark .admin-sharing-form,
+.admin-dark .admin-settings-section {
+  background: #18181b;
+  border-color: #27272a;
+}
+.admin-dark .admin-sharing-input {
+  background: #0f0f10;
+  border-color: #27272a;
+  color: #f4f4f5;
+}
+.admin-dark .admin-sharing-input:focus {
+  background: #0f0f10;
+  border-color: #818cf8;
+}
+.admin-dark .admin-sharing-hint { color: #71717a; }
+.admin-dark .admin-sharing-image-thumb { background: #0f0f10; border-color: #27272a; }
+.admin-dark .admin-sharing-image-empty { color: #52525b; }
+

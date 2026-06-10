@@ -43,3 +43,33 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
 // private and not safe to read off the client object.
 export const SUPABASE_URL = supabaseUrl;
 export const SUPABASE_ANON_KEY = supabaseKey;
+
+/**
+ * Upsert one `app_settings` row via a `keepalive` fetch.
+ *
+ * supabase-js's normal `.upsert()` uses a regular fetch that the browser
+ * ABORTS the moment the page unloads — so a value typed and then immediately
+ * refreshed (or navigated away from) never reaches the server. `keepalive`
+ * lets the request outlive the page, which is exactly what the shared-model
+ * "save on refresh" path needs. Fire-and-forget; failures are best-effort.
+ *
+ * Auth: the app_settings upsert policies grant the anon role, so the anon key
+ * works for both `apikey` and `Authorization` here regardless of session.
+ */
+export function upsertAppSettingKeepalive(key: string, value: string): void {
+  if (typeof fetch === 'undefined') return;
+  try {
+    void fetch(`${SUPABASE_URL}/rest/v1/app_settings?on_conflict=key`, {
+      method: 'POST',
+      keepalive: true,
+      headers: {
+        apikey: SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${SUPABASE_ANON_KEY}`,
+        'Content-Type': 'application/json',
+        Prefer: 'resolution=merge-duplicates,return=minimal',
+      },
+      body: JSON.stringify({ key, value, updated_at: new Date().toISOString() }),
+    }).catch(() => { /* best-effort */ });
+  } catch { /* best-effort */ }
+}
+

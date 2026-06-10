@@ -1,6 +1,8 @@
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useNavigate, useLocation } from '@remix-run/react';
 import FilterPanel, { ActiveFilters, getEmptyFilters, hasActiveFilters } from './FilterPanel';
+import PopularCatalogPills from './PopularCatalogPills';
+import { getSearchSuggestions, getCreators } from '~/services/looks';
 
 /* Desktop-only AI-style search bar.
  *
@@ -28,11 +30,37 @@ const PLACEHOLDER_HINTS = [
   'Try "off duty"',
 ];
 
+// localStorage key — once the user types (or explicitly dismisses)
+// we set this and never re-show the floating "Just start typing"
+// hint on this device. Persisted so a returning visitor isn't told
+// a thing they already learned.
+const TYPE_HINT_DISMISSED_KEY = 'catalog:type-anywhere-hint-dismissed:v1';
+
+function readHintDismissed(): boolean {
+  if (typeof window === 'undefined') return true;
+  try { return window.localStorage.getItem(TYPE_HINT_DISMISSED_KEY) === '1'; }
+  catch { return false; }
+}
+
+function persistHintDismissed(): void {
+  if (typeof window === 'undefined') return;
+  try { window.localStorage.setItem(TYPE_HINT_DISMISSED_KEY, '1'); } catch { /* quota */ }
+}
+
+interface Suggestion {
+  text: string;
+  /** Present when the suggestion is a creator — drives the avatar +
+   *  routing straight to their catalog instead of a search. */
+  handle?: string;
+  avatar?: string;
+}
+
 export default function TypeAnywhere() {
   const navigate = useNavigate();
   const location = useLocation();
   const inputRef = useRef<HTMLInputElement>(null);
   const [text, setText] = useState('');
+  const [focused, setFocused] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [activeFilters, setActiveFilters] = useState<ActiveFilters>(getEmptyFilters());
   // Rotating placeholder. Picks a different hint every ~3s while
@@ -42,6 +70,64 @@ export default function TypeAnywhere() {
   // they've started - no point distracting them).
   const [hintIndex, setHintIndex] = useState(() => Math.floor(Math.random() * PLACEHOLDER_HINTS.length));
   const rotatingHint = PLACEHOLDER_HINTS[hintIndex];
+
+  // Type-ahead suggestion pool (loaded once) + matches for the current text.
+  // Structured so creator suggestions can render an avatar and route to
+  // the creator's catalog, while plain search terms run a catalog search.
+  const [allSuggestions, setAllSuggestions] = useState<Suggestion[]>([]);
+  useEffect(() => {
+    let cancelled = false;
+    Promise.all([getSearchSuggestions(), getCreators()])
+      .then(([sugg, creators]) => {
+        if (cancelled) return;
+        const seen = new Set<string>();
+        const merged: Suggestion[] = [];
+        for (const s of sugg) {
+          const sl = s.toLowerCase();
+          if (!seen.has(sl)) { merged.push({ text: s }); seen.add(sl); }
+        }
+        for (const [handle, c] of Object.entries(creators)) {
+          const name = c.displayName || c.name || handle;
+          const sl = name.toLowerCase();
+          if (name && !seen.has(sl)) {
+            merged.push({ text: name, handle, avatar: c.avatar || undefined });
+            seen.add(sl);
+          }
+        }
+        setAllSuggestions(merged);
+      })
+      .catch(() => {});
+    return () => { cancelled = true; };
+  }, []);
+  const suggestionMatches = useMemo(() => {
+    const q = text.trim().toLowerCase();
+    if (!q) return [];
+    const seen = new Set<string>();
+    const starts: Suggestion[] = [];
+    const contains: Suggestion[] = [];
+    for (const s of allSuggestions) {
+      const sl = s.text.toLowerCase();
+      if (sl === q || seen.has(sl)) continue;
+      if (sl.startsWith(q)) { starts.push(s); seen.add(sl); }
+      else if (sl.includes(q)) { contains.push(s); seen.add(sl); }
+    }
+    // Cap at 5 so the panel stays a tight, scannable list (creators +
+    // terms combined) rather than an overwhelming wall of options.
+    return [...starts, ...contains].slice(0, 5);
+  }, [text, allSuggestions]);
+
+  // Floating "Just start typing" tooltip above the bar. Shown once
+  // per device until the user types anything; then it fades out and
+  // never returns (persisted in localStorage). Desktop only — the
+  // bar itself already hides on mobile.
+  const [hintDismissed, setHintDismissed] = useState(true);
+  useEffect(() => { setHintDismissed(readHintDismissed()); }, []);
+  useEffect(() => {
+    if (text.length > 0 && !hintDismissed) {
+      setHintDismissed(true);
+      persistHintDismissed();
+    }
+  }, [text, hintDismissed]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -57,7 +143,10 @@ export default function TypeAnywhere() {
   const onAdmin = location.pathname.startsWith('/admin');
   // Suppress on /generate too - that flow owns its own input layer.
   const onGenerate = location.pathname.startsWith('/generate');
-  const hidden = onAdmin || onGenerate;
+  // Suppress on /activity - the insights page is a reading surface, not a
+  // search surface; the floating search bar just clutters it.
+  const onActivity = location.pathname.startsWith('/activity');
+  const hidden = onAdmin || onGenerate || onActivity;
 
   const submit = useCallback((q: string) => {
     const trimmed = q.trim();
@@ -68,6 +157,18 @@ export default function TypeAnywhere() {
     navigate(`/?q=${encodeURIComponent(trimmed)}#app`);
     setText('');
     inputRef.current?.blur();
+  }, [navigate]);
+
+  // "Following" pill → build a catalog of the creators the user follows.
+  // The home route owns that state, so we land on /#app and hand the
+  // resolved handles to _index via a CustomEvent (slight delay so the
+  // home view is mounted to receive it when coming from another route).
+  const handleFollowingCatalog = useCallback((handles: string[]) => {
+    navigate('/#app');
+    inputRef.current?.blur();
+    window.setTimeout(() => {
+      window.dispatchEvent(new CustomEvent('catalog:following-catalog', { detail: { handles } }));
+    }, 60);
   }, [navigate]);
 
   // Type-anywhere passthrough: keystrokes outside any form field
@@ -123,7 +224,74 @@ export default function TypeAnywhere() {
 
   return (
     <>
+      {/* Dark gradient scrim that rises from the bottom while the bar is
+          focused, so the catalog pills / autocomplete read against a bright
+          feed instead of disappearing into it. Sits behind the bar + pills. */}
+      {focused && <div className="ai-bar-scrim" aria-hidden="true" />}
       <div className="ai-bar-wrap" role="search" aria-label="Search catalog">
+        {/* Popular-catalog cloud — springs up above the bar when it's
+            focused with an empty query, and gives way the moment the
+            user starts typing. onMouseDown-preventDefault inside keeps
+            the input focused through the click. */}
+        {focused && !text && !filtersOpen && (
+          <PopularCatalogPills onPick={submit} onFollowingCatalog={handleFollowingCatalog} />
+        )}
+        {/* Type-ahead matches — replaces the cloud once the user types.
+            onMouseDown-preventDefault keeps the input focused through a
+            pick (the cloud uses the same guard). */}
+        {focused && !!text.trim() && !filtersOpen && (
+          <div className="ai-bar-autocomplete" onMouseDown={(e) => e.preventDefault()}>
+            {suggestionMatches.map(s => (
+              s.handle ? (
+                // Creator suggestion — avatar + name, taps straight into
+                // their catalog (/c/<slug>) rather than running a search.
+                <button
+                  key={`c:${s.handle}`}
+                  type="button"
+                  className="ai-bar-ac-item ai-bar-ac-item--creator"
+                  onClick={() => {
+                    setFocused(false);
+                    inputRef.current?.blur();
+                    // Same in-app path as a creator-chip tap: _index sets
+                    // creatorFilter, which opens the catalog + syncs /c/<slug>.
+                    try { window.dispatchEvent(new CustomEvent('catalog:open-creator', { detail: { handle: s.handle } })); } catch { /* no-op */ }
+                  }}
+                >
+                  {s.avatar ? (
+                    <img
+                      src={s.avatar}
+                      alt=""
+                      style={{ width: 22, height: 22, borderRadius: '50%', objectFit: 'cover', flexShrink: 0 }}
+                    />
+                  ) : (
+                    <span
+                      aria-hidden="true"
+                      style={{ width: 22, height: 22, borderRadius: '50%', flexShrink: 0, display: 'inline-flex', alignItems: 'center', justifyContent: 'center', background: 'linear-gradient(135deg,#3f3f46,#27272a)', color: '#d4d4d8', fontSize: 11, fontWeight: 700 }}
+                    >{s.text.charAt(0).toUpperCase()}</span>
+                  )}
+                  <span className="ai-bar-ac-text">{s.text}</span>
+                  <span style={{ marginLeft: 'auto', fontSize: 10, opacity: 0.5, textTransform: 'uppercase', letterSpacing: '0.04em' }}>Creator</span>
+                </button>
+              ) : (
+                <button key={`t:${s.text}`} type="button" className="ai-bar-ac-item" onClick={() => submit(s.text)}>
+                  <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                    <circle cx="11" cy="11" r="7" /><line x1="21" y1="21" x2="16.65" y2="16.65" />
+                  </svg>
+                  <span className="ai-bar-ac-text">{s.text}</span>
+                </button>
+              )
+            ))}
+            <button type="button" className="ai-bar-ac-item ai-bar-ac-item--run" onClick={() => submit(text)}>
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <line x1="5" y1="12" x2="19" y2="12" /><polyline points="12 5 19 12 12 19" />
+              </svg>
+              <span className="ai-bar-ac-text">Make a catalog for “{text.trim()}”</span>
+            </button>
+          </div>
+        )}
+        {!hintDismissed && (
+          <div className="ai-bar-hint" aria-hidden="true">Just start typing</div>
+        )}
         <div className="ai-bar">
           <button
             type="button"
@@ -150,6 +318,11 @@ export default function TypeAnywhere() {
             className="ai-bar-input"
             placeholder={text ? '' : rotatingHint}
             value={text}
+            onFocus={() => setFocused(true)}
+            // Delay so a pill click (which blurs the input) still lands
+            // before the cloud unmounts; the pill row's onMouseDown also
+            // guards focus, this is the belt-and-suspenders fallback.
+            onBlur={() => window.setTimeout(() => setFocused(false), 120)}
             onChange={(e) => setText(e.target.value.slice(0, 80))}
             onKeyDown={(e) => {
               if (e.key === 'Enter') {

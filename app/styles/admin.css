@@ -64,6 +64,10 @@
   transition: transform 0.4s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.3s ease;
 }
 
+/* Collapsed-rail monogram. Hidden by default (and on mobile); only the
+   desktop-collapse rules below flip it on. */
+.admin-logo-mark { display: none; }
+
 .admin-sidebar-header:hover .admin-logo {
   transform: scale(1.12) rotate(-3deg);
   filter: drop-shadow(0 0 8px rgba(0, 0, 0, 0.15));
@@ -140,6 +144,96 @@
 .admin-dark .admin-nav-section-title:hover {
   color: rgba(255, 255, 255, 0.5);
 }
+
+/* Sidebar nav search — sits between the logo and the nav list. Visually
+   the same matte search affordance as the topbar, but always visible so an
+   admin can jump straight to any page without opening the topbar overlay. */
+.admin-nav-search {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px 12px 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.55);
+}
+.admin-nav-search-input {
+  flex: 1;
+  min-width: 0;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #f8fafc;
+  font-family: inherit;
+  font-size: 13px;
+}
+.admin-nav-search-input::placeholder { color: rgba(255, 255, 255, 0.35); }
+.admin-light .admin-nav-search {
+  background: rgba(0, 0, 0, 0.03);
+  border-color: rgba(0, 0, 0, 0.06);
+  color: rgba(15, 23, 42, 0.55);
+}
+.admin-light .admin-nav-search-input { color: #0f172a; }
+.admin-light .admin-nav-search-input::placeholder { color: rgba(15, 23, 42, 0.4); }
+
+/* "Other Pages" collapse — same row geometry as a nav item so the
+   sidebar stays visually rhythmic. Count chip on the right mirrors the
+   admin's "Showing X / Y" footers elsewhere in the app. */
+.admin-nav-other-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: calc(100% - 16px);
+  margin: 6px 8px 2px;
+  padding: 9px 10px;
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.55);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  border-radius: 8px;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+  /* Keep the "Other Pages" label on a single line — in flex it would
+     otherwise shrink and wrap to "Other / Pages" once the count chip +
+     chevron claim the row width. */
+  white-space: nowrap;
+}
+.admin-nav-other-toggle > span:first-of-type { flex: 1; min-width: 0; }
+.admin-nav-other-toggle:hover {
+  background: rgba(255, 255, 255, 0.04);
+  color: #f8fafc;
+}
+.admin-nav-other-toggle.is-open { color: #f8fafc; }
+.admin-nav-other-count {
+  font-size: 10px;
+  font-weight: 800;
+  padding: 1px 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.75);
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.admin-light .admin-nav-other-toggle { color: rgba(15, 23, 42, 0.6); }
+.admin-light .admin-nav-other-toggle:hover { background: rgba(0, 0, 0, 0.04); color: #0f172a; }
+.admin-light .admin-nav-other-toggle.is-open { color: #0f172a; }
+.admin-light .admin-nav-other-count {
+  background: rgba(0, 0, 0, 0.06);
+  color: rgba(15, 23, 42, 0.75);
+}
+
+.admin-nav-empty {
+  padding: 24px 14px;
+  text-align: center;
+  font-size: 12.5px;
+  color: rgba(255, 255, 255, 0.5);
+}
+.admin-light .admin-nav-empty { color: rgba(15, 23, 42, 0.5); }
 
 .admin-nav-item {
   display: flex;
@@ -629,6 +723,55 @@ html.admin-on-dark-canvas .admin-topbar,
 
 .admin-clickable-row {
   cursor: pointer;
+  /* Pass 7: rows fade-up on first paint so realtime inserts /
+     reorderings don't pop. We key the table rows on user.id, so
+     when a user moves between tabs (e.g. promoted to admin) the
+     row in the destination tab mounts fresh and runs this. */
+  animation: admin-row-fade-in 0.22s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+
+@keyframes admin-row-fade-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes admin-spin { to { transform: rotate(360deg); } }
+.admin-spinner {
+  display: inline-block;
+  border-radius: 50%;
+  border: 2px solid rgba(99, 102, 241, 0.25);
+  border-top-color: #6366f1;
+  animation: admin-spin 0.8s linear infinite;
+}
+
+/* Inline text-link button (e.g. the creator name in the Looks table) —
+   looks like the surrounding text until hovered, then reads as a link. */
+.admin-link-btn {
+  border: none;
+  background: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  text-align: left;
+  border-radius: 4px;
+  transition: color 140ms ease;
+}
+.admin-link-btn:hover {
+  color: #4f46e5;
+  text-decoration: underline;
+}
+
+/* Automatic Add Products pipeline — per-step progress spinner. */
+.auto-spinner {
+  display: inline-block;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid rgba(79, 70, 229, 0.25);
+  border-top-color: #4f46e5;
+  animation: admin-spin 0.8s linear infinite;
 }
 
 .admin-clickable-row:hover td {
@@ -641,11 +784,16 @@ html.admin-on-dark-canvas .admin-topbar,
 
 .admin-page {
   padding: 24px 28px;
-  max-width: 1400px;
+  width: 100%;
   min-width: 0;
+  box-sizing: border-box;
 }
 
 .admin-page-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
   margin-bottom: 20px;
 }
 
@@ -1046,11 +1194,95 @@ html.admin-on-dark-canvas .admin-topbar,
   color: #fff;
 }
 
+/* Look status indicator — green=Live (published), amber=Inactive
+   (not published), red=Failed. Mirrors the consumer My Catalog dot so
+   the published===live / not-published===inactive rule reads the same
+   in admin. */
+.admin-status-dot {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 50%;
+  vertical-align: middle;
+  flex-shrink: 0;
+}
+.admin-status-dot--live     { background: #22c55e; box-shadow: 0 0 5px rgba(34, 197, 94, 0.6); }
+.admin-status-dot--inactive { background: #f59e0b; }
+.admin-status-dot--failed   { background: #ef4444; }
+
+/* Liquid-glass search bar for /admin/catalogs (replaced the old text-input
+   + filter-chips strip in the minimal-catalog rebuild). Frosted background
+   + subtle inner glow, sits above the table on the light admin surface. */
+.catalogs-table-search {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 6px 0 14px;
+  padding: 10px 14px;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.55);
+  border: 1px solid rgba(15, 23, 42, 0.08);
+  backdrop-filter: blur(14px) saturate(1.3);
+  -webkit-backdrop-filter: blur(14px) saturate(1.3);
+  box-shadow:
+    0 12px 28px rgba(15, 23, 42, 0.08),
+    inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  transition: border-color 160ms ease, box-shadow 160ms ease;
+}
+.catalogs-table-search:focus-within {
+  border-color: rgba(15, 23, 42, 0.18);
+  box-shadow:
+    0 14px 32px rgba(15, 23, 42, 0.1),
+    inset 0 1px 0 rgba(255, 255, 255, 0.7),
+    0 0 0 3px rgba(34, 197, 94, 0.12);
+}
+.catalogs-table-search-input {
+  flex: 1;
+  min-width: 0;
+  border: none;
+  outline: none;
+  background: transparent;
+  color: #0f172a;
+  font-family: inherit;
+  font-size: 13px;
+  letter-spacing: -0.005em;
+}
+.catalogs-table-search-input::placeholder { color: rgba(15, 23, 42, 0.45); }
+.catalogs-table-search-count {
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(15, 23, 42, 0.5);
+  font-variant-numeric: tabular-nums;
+}
+.admin-dark .catalogs-table-search {
+  background: rgba(15, 23, 42, 0.55);
+  border-color: rgba(255, 255, 255, 0.08);
+  box-shadow:
+    0 12px 28px rgba(0, 0, 0, 0.35),
+    inset 0 1px 0 rgba(255, 255, 255, 0.06);
+}
+.admin-dark .catalogs-table-search-input { color: #f8fafc; }
+.admin-dark .catalogs-table-search-input::placeholder { color: rgba(255, 255, 255, 0.4); }
+.admin-dark .catalogs-table-search-count { color: rgba(255, 255, 255, 0.5); }
+
 .admin-table-wrap {
   overflow-x: auto;
   background: #fff;
-  border: 1px solid #e5e5e5;
-  border-radius: 8px;
+  border: 1px solid #ebebeb;
+  border-radius: 12px;
+}
+
+.admin-row-promote {
+  /* Compact row-context override for the "Move to admin" button.
+     The base .admin-btn has 7/14 padding which makes the row taller
+     than the table's existing rhythm — pull it in so the row stays
+     the same height as one without a promote button. */
+  padding: 5px 10px;
+  font-size: 12px;
+  font-weight: 500;
+  white-space: nowrap;
 }
 
 .admin-row-delete {
@@ -1079,31 +1311,34 @@ html.admin-on-dark-canvas .admin-topbar,
 .admin-table {
   width: 100%;
   border-collapse: collapse;
-  font-size: 12px;
+  font-size: 13px;
 }
 
 .admin-table th {
-  text-align: center;
-  padding: 8px 12px;
-  font-size: 10px;
+  text-align: left;
+  padding: 10px 16px;
+  font-size: 11px;
   font-weight: 600;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: #999;
-  border-bottom: 1px solid #e5e5e5;
+  letter-spacing: 0.05em;
+  color: #b0b0b0;
+  background: #fafafa;
+  border-bottom: 1px solid #ebebeb;
   white-space: nowrap;
-}
-.admin-table th:first-child {
-  text-align: left;
 }
 
 .admin-th-sortable {
   cursor: pointer;
   user-select: none;
+  transition: color 0.15s;
 }
 
 .admin-th-sortable:hover {
-  color: #555;
+  color: #666;
+}
+
+.admin-th-sortable.is-active {
+  color: #333;
 }
 
 .admin-th-sortable-inner {
@@ -1123,23 +1358,129 @@ html.admin-on-dark-canvas .admin-topbar,
   opacity: 1;
 }
 
-.admin-table td {
-  padding: 8px 12px;
-  border-bottom: 1px solid #f0f0f0;
-  color: #444;
-  vertical-align: middle;
-  text-align: center;
-}
-.admin-table td:first-child {
-  text-align: left;
+/* Numeric column header — right-aligned to match cell values */
+.admin-th-num {
+  text-align: right;
 }
 
-.admin-table tbody tr:nth-child(even) td {
-  background: #fafafa;
+.admin-table td {
+  padding: 10px 16px;
+  border-bottom: 1px solid #f2f2f2;
+  color: #444;
+  vertical-align: middle;
+}
+
+.admin-table tbody tr:last-child td {
+  border-bottom: none;
 }
 
 .admin-table tr:hover td {
-  background: #f0f4ff;
+  background: #f7f7f7;
+}
+
+/* Mobile-only: convert admin user / waitlist tables into a 2-column
+   card grid. The list layout is unreadable on a phone — too many narrow
+   columns squeezed together — so on mobile each <tr> becomes a card and
+   each <td> stacks vertically inside it. Triggered by .admin-users-grid
+   applied to .admin-table-wrap by the users page; scoped narrowly so
+   non-user admin tables keep the standard table layout. */
+@media (max-width: 768px) {
+  .admin-users-grid {
+    overflow: visible;
+    background: transparent;
+    border: none;
+    box-shadow: none;
+  }
+  /* Stack the table into a single vertical column of full-width cards —
+     the old 2-column grid squished every card so toggles, names and the
+     trash icon were clipped. One column per row reads cleanly on phones. */
+  .admin-users-grid .admin-table,
+  .admin-users-grid .admin-table tbody {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    border: none;
+    width: 100%;
+  }
+  .admin-users-grid .admin-table thead { display: none; }
+  .admin-users-grid .admin-table tr {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    gap: 2px;
+    padding: 14px 16px;
+    border: 1px solid rgba(15, 23, 42, 0.10);
+    border-radius: 14px;
+    background: #fff;
+    width: 100%;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+  }
+  .admin-dark .admin-users-grid .admin-table tr {
+    border-color: rgba(255, 255, 255, 0.08);
+    background: rgba(255, 255, 255, 0.03);
+  }
+  /* Each cell becomes a labeled row: LABEL on the left (from data-label),
+     value on the right. */
+  .admin-users-grid .admin-table td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 7px 0;
+    border: none;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.06);
+    text-align: right;
+    font-size: 13px;
+    min-width: 0;
+  }
+  .admin-dark .admin-users-grid .admin-table td { border-bottom-color: rgba(255, 255, 255, 0.06); }
+  .admin-users-grid .admin-table td:last-child { border-bottom: none; }
+  .admin-users-grid .admin-table td[data-label]::before {
+    content: attr(data-label);
+    flex: 0 0 auto;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+    letter-spacing: 0.04em;
+    color: #94a3b8;
+    text-align: left;
+  }
+  /* Name cell = the card header: avatar + name, prominent, full-width,
+     no label, with room for the floating select checkbox at top-right. */
+  .admin-users-grid .admin-table td.admin-cell-name {
+    justify-content: flex-start;
+    font-size: 16px;
+    font-weight: 700;
+    white-space: normal;
+    padding: 0 40px 12px 0;
+    border-bottom: 1px solid rgba(15, 23, 42, 0.08);
+    margin-bottom: 4px;
+  }
+  /* Select checkbox (first cell, no data-label) floats to the card's
+     top-right instead of taking its own stacked row. */
+  .admin-users-grid .admin-table td:first-child {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    padding: 0;
+    border-bottom: none;
+    justify-content: flex-end;
+  }
+  /* Actions cell (toggles / trash) — let the inner flex row left-align and
+     use full width so nothing is clipped off the edge. */
+  .admin-users-grid .admin-table td:last-child > div {
+    justify-content: flex-start !important;
+    width: 100%;
+  }
+  .admin-users-grid .admin-table tr:hover td { background: transparent; }
+}
+
+/* Numeric value cells — right-aligned, tabular number spacing */
+.admin-cell-num {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+  color: #555;
 }
 
 .admin-cell-name {
@@ -1153,6 +1494,281 @@ html.admin-on-dark-canvas .admin-topbar,
 
 .admin-cell-muted {
   color: #999 !important;
+}
+
+/* Per-product thumbnail in the analytics Products table — small,
+   square, neutral chip; falls back to a placeholder square when no
+   image_url. Keeps the row height tight so the table stays scannable. */
+.admin-product-thumb {
+  width: 36px;
+  height: 36px;
+  border-radius: 6px;
+  object-fit: cover;
+  display: block;
+  background: rgba(0, 0, 0, 0.06);
+  flex-shrink: 0;
+}
+.admin-dark .admin-product-thumb { background: rgba(255, 255, 255, 0.06); }
+.admin-product-thumb--empty {
+  background:
+    linear-gradient(135deg, rgba(0, 0, 0, 0.04) 25%, transparent 25%) -8px 0 / 16px 16px,
+    rgba(0, 0, 0, 0.04);
+}
+.admin-th-thumb { width: 44px; }
+.admin-cell-thumb { width: 44px; padding-right: 0; }
+
+/* Long product names get clipped with an ellipsis instead of wrapping
+   the row across three lines. Hover tooltip surfaces the full name. */
+.admin-cell-name--clip {
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Plain text product name cell — bold + clipped, no flex (flex is only
+   needed in avatar+text combos like the users table). */
+.admin-cell-product-name {
+  font-weight: 600;
+  color: #111;
+  max-width: 280px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.admin-dark .admin-cell-product-name { color: #f0f0f0; }
+
+/* ── Product enrichment expansion row ───────────────────────────────── */
+.admin-enrichment-row td {
+  padding: 0 !important;
+  border-bottom: 2px solid #e8e8f0;
+}
+.admin-dark .admin-enrichment-row td {
+  border-bottom-color: rgba(255,255,255,0.08);
+}
+
+.admin-enrichment-panel {
+  padding: 16px 20px 20px;
+  background: #f7f8fc;
+  animation: admin-row-fade-in 0.18s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+.admin-dark .admin-enrichment-panel {
+  background: rgba(255,255,255,0.02);
+}
+
+.admin-enrichment-images {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+  overflow-x: auto;
+}
+.admin-enrichment-thumb {
+  width: 72px;
+  height: 96px;
+  object-fit: cover;
+  border-radius: 8px;
+  flex-shrink: 0;
+  border: 1px solid rgba(0,0,0,0.06);
+}
+.admin-dark .admin-enrichment-thumb {
+  border-color: rgba(255,255,255,0.08);
+}
+
+.admin-enrichment-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px;
+}
+
+.admin-detail-card--wide {
+  grid-column: 1 / -1;
+}
+
+.admin-enrichment-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.admin-enrichment-chip {
+  display: inline-block;
+  padding: 3px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  background: #eef0f6;
+  color: #444;
+  border: 1px solid rgba(0,0,0,0.06);
+  white-space: nowrap;
+}
+.admin-dark .admin-enrichment-chip {
+  background: rgba(255,255,255,0.07);
+  color: #ccc;
+  border-color: rgba(255,255,255,0.1);
+}
+
+.admin-enrichment-chip--size {
+  background: #e8edff;
+  color: #3b4fc8;
+  border-color: #c5cef5;
+  font-weight: 600;
+  font-family: 'SF Mono', 'Fira Code', monospace;
+}
+.admin-dark .admin-enrichment-chip--size {
+  background: rgba(99, 102, 241, 0.18);
+  color: #a5b4fc;
+  border-color: rgba(99, 102, 241, 0.3);
+}
+
+.admin-enrichment-chip--occasion {
+  background: #fef3c7;
+  color: #92400e;
+  border-color: #fde68a;
+}
+.admin-dark .admin-enrichment-chip--occasion {
+  background: rgba(251, 191, 36, 0.12);
+  color: #fcd34d;
+  border-color: rgba(251, 191, 36, 0.25);
+}
+
+.admin-enrichment-size-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+.admin-enrichment-size-table th,
+.admin-enrichment-size-table td {
+  padding: 5px 10px;
+  text-align: right;
+  border-bottom: 1px solid #eee;
+  white-space: nowrap;
+}
+.admin-enrichment-size-table th {
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #999;
+  text-align: right;
+}
+.admin-enrichment-size-table th:first-child,
+.admin-enrichment-size-table td:first-child {
+  text-align: left;
+}
+.admin-enrichment-size-table tbody tr:hover td {
+  background: rgba(0,0,0,0.02);
+}
+.admin-dark .admin-enrichment-size-table th,
+.admin-dark .admin-enrichment-size-table td {
+  border-bottom-color: rgba(255,255,255,0.06);
+}
+
+
+/* Narrow actions column at the end of a table row */
+.admin-th-actions { width: 40px; }
+.admin-cell-actions {
+  width: 40px;
+  text-align: right;
+  padding-right: 6px;
+}
+
+/* Brand filter chip shown above the products table when ?brand= is set */
+.admin-brand-filter-chip {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 7px 12px;
+  margin-bottom: 12px;
+  background: #f0f4ff;
+  border: 1px solid #c7d4f8;
+  border-radius: 8px;
+  font-size: 13px;
+  color: #334;
+}
+.admin-dark .admin-brand-filter-chip {
+  background: rgba(99, 122, 231, 0.12);
+  border-color: rgba(99, 122, 231, 0.3);
+  color: rgba(255, 255, 255, 0.8);
+}
+.admin-brand-filter-count {
+  margin-left: auto;
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.45);
+}
+.admin-dark .admin-brand-filter-count { color: rgba(255, 255, 255, 0.4); }
+
+/* The analytics products table has many columns — let the wrap host
+   scroll horizontally on narrow viewports rather than letting the
+   row push into the page chrome. */
+.admin-analytics-products { table-layout: auto; }
+
+/* Full-width row containing tabs (left) + count/live chip (right) */
+.admin-analytics-tabbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 20px;
+}
+/* Override default margin-bottom on admin-tabs when nested inside tabbar */
+.admin-analytics-tabbar .admin-tabs {
+  margin-bottom: 0;
+}
+/* Right slot: count label + live chip */
+.admin-tabs-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-shrink: 0;
+}
+/* Row count label */
+.admin-table-count {
+  font-size: 12px;
+  font-weight: 500;
+  color: rgba(0, 0, 0, 0.38);
+  letter-spacing: 0.01em;
+}
+.admin-dark .admin-table-count { color: rgba(255, 255, 255, 0.35); }
+.admin-live-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  background: rgba(0, 0, 0, 0.03);
+  color: rgba(0, 0, 0, 0.55);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+.admin-dark .admin-live-chip {
+  border-color: rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.5);
+}
+.admin-live-chip.is-live {
+  border-color: rgba(34, 197, 94, 0.5);
+  background: rgba(34, 197, 94, 0.10);
+  color: #16a34a;
+}
+.admin-live-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(120, 120, 120, 0.55);
+  transition: background 0.2s ease, box-shadow 0.2s ease;
+}
+.admin-live-chip.is-live .admin-live-dot {
+  background: #22c55e;
+  animation: admin-live-pulse 1.2s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+@keyframes admin-live-pulse {
+  0%   { box-shadow: 0 0 0 0   rgba(34, 197, 94, 0.55); }
+  70%  { box-shadow: 0 0 0 7px rgba(34, 197, 94, 0); }
+  100% { box-shadow: 0 0 0 0   rgba(34, 197, 94, 0); }
 }
 
 .admin-empty {
@@ -1184,6 +1800,29 @@ html.admin-on-dark-canvas .admin-topbar,
   border-radius: 50%;
   object-fit: cover;
   flex-shrink: 0;
+}
+
+/* Robust admin avatar — used in lists. Falls back from real photo to
+   a gradient-initial circle with Human/AI color coding when the URL
+   is missing or fails to load. */
+.adm-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  overflow: hidden;
+  flex-shrink: 0;
+  vertical-align: middle;
+}
+.adm-avatar-img { object-fit: cover; }
+.adm-avatar-fallback {
+  color: #fff;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', sans-serif;
+  text-transform: uppercase;
+  user-select: none;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.06);
 }
 
 /* SSO badge */
@@ -1332,6 +1971,19 @@ html.admin-on-dark-canvas .admin-topbar,
    Scoped under .admin-toggle (the <label>) so its ::after thumb
    doesn't leak onto the button-based .admin-toggle-btn variant
    below - they share .admin-toggle-track but render differently. */
+/* Status indicator dot for the admin Looks table. Matches the
+   consumer-side palette: green = live in the feed, yellow = inactive
+   (creator hid it OR an admin soft-deleted it via admin_hidden_looks). */
+.admin-status-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.7);
+}
+.admin-status-dot--live     { background: #22c55e; box-shadow: 0 0 6px rgba(34, 197, 94, 0.6); }
+.admin-status-dot--inactive { background: #f59e0b; }
+
 .admin-toggle {
   position: relative;
   display: inline-block;
@@ -1368,6 +2020,14 @@ html.admin-on-dark-canvas .admin-topbar,
 .admin-toggle input:checked + .admin-toggle-track { background: #2563eb; }
 .admin-toggle input:checked + .admin-toggle-track::after { transform: translateX(16px); }
 .admin-toggle input:focus-visible + .admin-toggle-track { box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.25); }
+.admin-toggle .admin-toggle-text {
+  font-size: 11px;
+  font-weight: 600;
+  color: #71717a;
+  letter-spacing: 0.02em;
+  margin-left: 6px;
+}
+.admin-toggle input:checked ~ .admin-toggle-text { color: #2563eb; }
 
 .admin-toggle-btn {
   background: none;
@@ -1376,6 +2036,17 @@ html.admin-on-dark-canvas .admin-topbar,
   cursor: pointer;
   outline: none;
   -webkit-tap-highlight-color: transparent;
+  /* The toggle is a leaf — make sure stray text from any wrapper
+     can't leak into the same flex slot and clip beside the pill.
+     Also pin the size so the column width doesn't expand when a
+     long label sneaks in next door. */
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  vertical-align: middle;
+  font-size: 0;
+  line-height: 0;
 }
 .admin-toggle-btn .admin-toggle-track {
   display: flex;
@@ -1457,6 +2128,38 @@ html.admin-on-dark-canvas .admin-topbar,
   color: #aaa;
   flex-shrink: 0;
 }
+.admin-activity-item--link {
+  text-decoration: none;
+  color: inherit;
+  border-radius: 8px;
+  padding: 6px;
+  margin: 0 -6px;
+  transition: background 120ms ease;
+}
+.admin-activity-item--link:hover { background: #f1f5f9; }
+.admin-dark .admin-activity-item--link:hover { background: #1f1f22; }
+.admin-activity-item--link strong { font-weight: 600; color: #0f172a; }
+.admin-dark .admin-activity-item--link strong { color: #f4f4f5; }
+
+/* Initials avatar in activity rows. */
+.admin-activity-avatar {
+  flex-shrink: 0;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 10px;
+  font-weight: 700;
+  color: #fff;
+  background: linear-gradient(135deg, #6366f1, #8b5cf6);
+}
+
+/* Recent-activity card header with a "Live ledger" link. */
+.admin-home-card-head { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.admin-home-card-link { font-size: 12px; font-weight: 600; color: #6366f1; text-decoration: none; white-space: nowrap; }
+.admin-home-card-link:hover { text-decoration: underline; }
 .admin-detail-empty {
   font-size: 12px;
   color: #aaa;
@@ -1647,6 +2350,51 @@ html.admin-on-dark-canvas .admin-topbar,
   border-top: 1px solid #f0f0f0;
 }
 
+/* Expanded look panel: creative (video + poster) left, products right. */
+.admin-look-expand-grid {
+  display: flex;
+  align-items: stretch;
+  gap: 0;
+  background: #fafafa;
+  border-top: 1px solid #f0f0f0;
+}
+.admin-look-expand-grid .admin-look-products {
+  flex: 1;
+  min-width: 0;
+  border-top: 0;
+}
+.admin-look-creative-col {
+  flex: 0 0 240px;
+  padding: 16px 20px 24px;
+  border-right: 1px solid #f0f0f0;
+}
+.admin-look-creative-tiles { display: flex; gap: 12px; }
+.admin-look-creative-fig { margin: 0; display: flex; flex-direction: column; gap: 6px; flex: 1; }
+.admin-look-creative-media {
+  position: relative;
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #111;
+}
+.admin-look-creative-media > * { width: 100%; height: 100%; }
+.admin-look-creative-media img,
+.admin-look-creative-media video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.admin-look-creative-empty { width: 100%; height: 100%; background: #1a1a1a; }
+.admin-look-creative-fig figcaption {
+  font-size: 10px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+  color: #94a3b8; text-align: center;
+}
+@media (max-width: 900px) {
+  .admin-look-expand-grid { flex-direction: column; }
+  .admin-look-creative-col { flex-basis: auto; border-right: 0; border-bottom: 1px solid #f0f0f0; }
+  .admin-look-creative-tiles { max-width: 320px; }
+}
+.admin-dark .admin-look-expand-grid { background: #161616; border-top-color: #262626; }
+.admin-dark .admin-look-creative-col { border-right-color: #262626; }
+.admin-dark .admin-look-creative-fig figcaption { color: #71717a; }
+
 .admin-products-title {
   font-size: 16px;
   font-weight: 700;
@@ -1658,6 +2406,82 @@ html.admin-on-dark-canvas .admin-topbar,
   background: #fff;
   border-radius: 8px;
   border: 1px solid #e5e5e5;
+}
+
+/* Measurements column on /admin/content?tab=products. Icon-only cell;
+   the tooltip pops above on hover and shows the size_fit /
+   materials_care copy the scraper extracted. Faded out when both
+   are null so the row reads "no data" at a glance. */
+.admin-measurements {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 6px;
+  color: #cbd5e1;
+  cursor: help;
+}
+.admin-measurements.has-data {
+  color: #4f46e5;
+  background: rgba(79, 70, 229, 0.08);
+}
+
+.admin-measurements-tooltip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  z-index: 30;
+  width: 280px;
+  padding: 10px 12px;
+  background: #1f2937;
+  color: #f9fafb;
+  border-radius: 8px;
+  font-size: 12px;
+  line-height: 1.5;
+  text-align: left;
+  white-space: normal;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.18);
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(2px);
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+/* Little arrow pointing back down at the icon. */
+.admin-measurements-tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  right: 10px;
+  border: 5px solid transparent;
+  border-top-color: #1f2937;
+}
+.admin-measurements:hover .admin-measurements-tooltip,
+.admin-measurements:focus-within .admin-measurements-tooltip {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.admin-measurements-row + .admin-measurements-row {
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.admin-measurements-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: rgba(255, 255, 255, 0.5);
+  margin-bottom: 2px;
+}
+.admin-measurements-value {
+  color: rgba(255, 255, 255, 0.9);
+  word-break: break-word;
+}
+.admin-measurements-value.is-empty {
+  color: rgba(255, 255, 255, 0.45);
+  font-style: italic;
 }
 
 .admin-product-actions {
@@ -1761,27 +2585,31 @@ html.admin-on-dark-canvas .admin-topbar,
 }
 
 .admin-dark .admin-table-wrap {
-  background: #111;
-  border-color: rgba(255, 255, 255, 0.06);
+  background: #161616;
+  border-color: rgba(255, 255, 255, 0.07);
 }
 
 .admin-dark .admin-table th {
-  color: rgba(255, 255, 255, 0.3);
-  border-bottom-color: rgba(255, 255, 255, 0.06);
+  background: rgba(255, 255, 255, 0.025);
+  color: rgba(255, 255, 255, 0.28);
+  border-bottom-color: rgba(255, 255, 255, 0.07);
 }
 
 .admin-dark .admin-th-sortable:hover {
   color: rgba(255, 255, 255, 0.6);
 }
-.admin-dark .admin-table td {
-  color: rgba(255, 255, 255, 0.7);
-  border-bottom-color: rgba(255, 255, 255, 0.04);
+.admin-dark .admin-th-sortable.is-active {
+  color: rgba(255, 255, 255, 0.85);
 }
-.admin-dark .admin-table tbody tr:nth-child(even) td {
-  background: rgba(255, 255, 255, 0.02);
+.admin-dark .admin-table td {
+  color: rgba(255, 255, 255, 0.68);
+  border-bottom-color: rgba(255, 255, 255, 0.05);
 }
 .admin-dark .admin-table tr:hover td {
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(255, 255, 255, 0.04);
+}
+.admin-dark .admin-cell-num {
+  color: rgba(255, 255, 255, 0.55);
 }
 
 .admin-dark .admin-cell-name {
@@ -2003,6 +2831,113 @@ html.admin-on-dark-canvas .admin-topbar,
   z-index: 9;
   opacity: 0;
   transition: opacity 0.2s ease;
+}
+
+/* ── Collapsible sidebar (desktop) ────────────────────────────────────
+   The sidebar rests as a slim 64px icon rail and expands to full width
+   on hover. Collapsed, it hides the nav + search and shows only the
+   current page's icon, centred (.admin-nav-rail). The main content's
+   left margin stays pinned to the collapsed width so expanding the rail
+   overlays the page instead of reflowing it — no content shift on hover.
+   Scoped to ≥861px so the mobile slide-over drawer below is untouched. */
+.admin-nav-rail { display: none; }
+
+@media (min-width: 861px) {
+  .admin-sidebar {
+    width: 64px;
+    overflow: hidden;
+    transition: width 0.24s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.24s ease;
+  }
+  .admin-main { margin-left: 64px; }
+
+  /* Expanded on hover. Raised above the sticky topbar (z-index 20) so the
+     expanding rail cleanly overlays it instead of sliding underneath —
+     otherwise the topbar clipped the wordmark + nav search at the top. */
+  .admin-sidebar:hover {
+    width: 208px;
+    overflow: visible;
+    box-shadow: 8px 0 32px rgba(15, 23, 42, 0.12);
+    z-index: 30;
+  }
+  .admin-dark .admin-sidebar:hover {
+    box-shadow: 8px 0 32px rgba(0, 0, 0, 0.45);
+  }
+
+  /* Collapsed: fade the full nav + search out, fade the rail in. */
+  .admin-nav,
+  .admin-nav-search {
+    transition: opacity 0.18s ease;
+  }
+  .admin-sidebar:not(:hover) .admin-nav,
+  .admin-sidebar:not(:hover) .admin-nav-search {
+    opacity: 0;
+    pointer-events: none;
+  }
+
+  /* Header: keep the logo from wrapping. */
+  .admin-sidebar-header { overflow: hidden; white-space: nowrap; }
+
+  /* Collapsed: drop the badge + wordmark out of layout entirely (opacity
+     alone left them occupying width, shoving the monogram off-screen)
+     and centre a compact "C" monogram in the 64px rail. */
+  .admin-sidebar:not(:hover) .admin-badge { display: none; }
+  .admin-sidebar:not(:hover) .admin-logo { display: none; }
+  .admin-sidebar:not(:hover) .admin-logo-link { width: 100%; justify-content: center; }
+  .admin-sidebar:not(:hover) .admin-sidebar-header { justify-content: center; padding: 0; }
+  .admin-logo-mark {
+    display: none;
+    width: 30px;
+    height: 30px;
+    border-radius: 8px;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 16px;
+    background: #111;
+    color: #fff;
+  }
+  .admin-sidebar:not(:hover) .admin-logo-mark { display: inline-flex; }
+  .admin-dark .admin-logo-mark { background: #f4f4f5; color: #111; }
+
+  /* Footer: collapse the user trigger down to just the avatar, and
+     hide the "What's New" label so only its icon shows. */
+  .admin-sidebar:not(:hover) .admin-user-name,
+  .admin-sidebar:not(:hover) .admin-user-trigger > svg:last-child,
+  .admin-sidebar:not(:hover) .admin-sidebar-footer .admin-nav-item span {
+    opacity: 0;
+  }
+  .admin-user-name,
+  .admin-user-trigger > svg:last-child { transition: opacity 0.18s ease; }
+
+  /* The centred single-icon rail. Sits between the header and footer
+     and only shows while the sidebar is collapsed. */
+  .admin-nav-rail {
+    display: flex;
+    position: absolute;
+    inset: 53px 0 96px;
+    align-items: center;
+    justify-content: center;
+    pointer-events: none;
+    opacity: 1;
+    transition: opacity 0.18s ease;
+  }
+  .admin-sidebar:hover .admin-nav-rail { opacity: 0; }
+  .admin-nav-rail-icon {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 10px;
+    background: rgba(0, 0, 0, 0.06);
+    color: #111;
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.6);
+  }
+  .admin-dark .admin-nav-rail-icon {
+    background: rgba(255, 255, 255, 0.08);
+    color: #f4f4f5;
+    box-shadow: none;
+  }
 }
 
 @media (max-width: 860px) {
@@ -2396,6 +3331,26 @@ html.admin-on-dark-canvas .admin-topbar,
 }
 .admin-btn-secondary:hover:not(:disabled) { background: #e8e8e8; }
 
+/* ─── Filter chips ─────────────────────────────────────────────────── */
+.admin-chip {
+  padding: 4px 10px;
+  border-radius: 12px;
+  border: 1px solid var(--border, #e0e0e0);
+  background: transparent;
+  font-size: 11px;
+  font-weight: 500;
+  color: #555;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+.admin-chip:hover { background: #f0f0f0; }
+.admin-chip-active {
+  background: #111;
+  color: #fff;
+  border-color: #111;
+}
+.admin-chip-active:hover { background: #333; }
+
 /* ─── Forms ────────────────────────────────────────────────────────── */
 .admin-form-group {
   margin-bottom: 14px;
@@ -2734,6 +3689,14 @@ html.admin-on-dark-canvas .admin-topbar,
 @keyframes admin-shimmer {
   0% { transform: translateX(-100%); }
   100% { transform: translateX(100%); }
+}
+
+/* Drives the placeholder shimmer on LazyThumb while the first-frame
+   snapshot is still extracting. Pans the gradient diagonally so the
+   thumb reads as "loading" instead of as a hard black square. */
+@keyframes admin-thumb-shimmer {
+  0%, 100% { background-position: 0% 50%; }
+  50%      { background-position: 100% 50%; }
 }
 
 /* ────────────────────────────────────────────────────────────────────
@@ -3149,6 +4112,21 @@ html.admin-on-dark-canvas .admin-topbar,
   width: min(320px, calc(100% - 16px));
   z-index: auto;
   margin: 0;
+  /* The real bar lives over translucent video so 0.06 white reads
+     fine; on the preview's flat #050505 it disappears. Bump the
+     surface + border so the pill is actually visible inside the
+     tile, AND so the 2 px beam ring lands on something readable. */
+  background: rgba(255, 255, 255, 0.10);
+  border-color: rgba(255, 255, 255, 0.18);
+}
+
+/* Thicken the beam ring inside the preview (3 px vs the 2 px the
+   real bar uses) so the animation is unmistakable at 64 px tile
+   height. Selector matches the existing beam ::before rule but
+   scoped to the admin mock. */
+.admin-ui-beam-mock.bottom-bar[class*="is-beam-"]:not(.is-beam-none)::before {
+  padding: 3px;
+  inset: -3px;
 }
 
 @media (max-width: 720px) {
@@ -4145,20 +5123,28 @@ html.admin-on-dark-canvas .admin-topbar,
 }
 .proj-tooltip-row {
   display: grid;
-  grid-template-columns: 1fr auto auto;
-  align-items: baseline;
-  gap: 8px;
+  grid-template-columns: 1fr auto 84px;
+  align-items: center;
+  gap: 10px;
+  min-height: 26px;
   font-size: 11px;
   line-height: 1.4;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
+.proj-tooltip-row:last-child { border-bottom: 0; }
+/* Separator between idea groups (money vs. demand). */
+.proj-tooltip-row--group { margin-top: 7px; padding-top: 7px; border-top: 1px solid rgba(255, 255, 255, 0.14); }
 .proj-tooltip-row-label {
   color: #94a3b8;
   font-weight: 500;
+  white-space: nowrap;
 }
 .proj-tooltip-row-current {
   color: #fff;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
+  text-align: right;
+  justify-self: end;
 }
 .proj-tooltip-row-delta {
   font-weight: 600;
@@ -4166,6 +5152,9 @@ html.admin-on-dark-canvas .admin-topbar,
   font-variant-numeric: tabular-nums;
   padding: 1px 6px;
   border-radius: 999px;
+  justify-self: end;
+  min-width: 72px;
+  text-align: center;
 }
 .proj-tooltip-row-delta.positive {
   background: rgba(16, 185, 129, 0.18);
@@ -4215,6 +5204,683 @@ html.admin-on-dark-canvas .admin-topbar,
   .proj-card-input { font-size: 18px; }
 }
 
+/* ── Model page (Revenue + Acquisition on one graph) ──────────────── */
+
+.model-rows {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin: 16px 0 20px;
+}
+
+/* A toggle row: checkbox (line on/off) + clickable title that drops the
+   assumptions down. */
+.model-row {
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #fff;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  overflow: hidden;
+}
+.model-row.is-open { box-shadow: 0 6px 20px rgba(15, 23, 42, 0.08); }
+
+.model-row-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 16px;
+}
+
+.model-row-check {
+  display: inline-flex;
+  align-items: center;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.model-row-check input { position: absolute; opacity: 0; width: 0; height: 0; }
+.model-row-dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  border: 2px solid #cbd5e1;
+  background: #fff;
+  transition: background 140ms ease, border-color 140ms ease, box-shadow 140ms ease;
+  position: relative;
+}
+.model-row.is-on .model-row-dot {
+  background: var(--dot);
+  border-color: var(--dot);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--dot) 22%, transparent);
+}
+.model-row.is-on .model-row-dot::after {
+  content: '';
+  position: absolute;
+  left: 5px; top: 1px;
+  width: 5px; height: 10px;
+  border: solid #fff;
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.model-row-grip {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 28px;
+  margin-right: -4px;
+  color: #cbd5e1;
+  cursor: grab;
+  flex-shrink: 0;
+}
+.model-row-grip:hover { color: #94a3b8; }
+.model-row-grip:active { cursor: grabbing; }
+.model-row.is-dragging { opacity: 0.5; }
+.model-row.is-drag-over { box-shadow: 0 0 0 2px #6366f1; }
+.admin-dark .model-row-grip { color: #52525b; }
+.admin-dark .model-row-grip:hover { color: #a1a1aa; }
+
+.model-row-title-btn {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 16px 0;
+  background: none;
+  border: 0;
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  color: #0f172a;
+}
+.model-row-title { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
+.model-row-sub { font-size: 12px; color: #94a3b8; font-weight: 500; }
+.model-row-chevron { color: #94a3b8; transition: transform 160ms ease; }
+
+/* Small icon buttons in the row header (reset + collapse). */
+.model-row-reset,
+.model-row-chevron-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border: 0;
+  background: none;
+  border-radius: 7px;
+  color: #94a3b8;
+  cursor: pointer;
+  transition: background 140ms ease, color 140ms ease;
+}
+.model-row-reset:hover { background: #f1f5f9; color: #475569; }
+.model-row-chevron-btn:hover { background: #f1f5f9; color: #475569; }
+.admin-dark .model-row-reset:hover,
+.admin-dark .model-row-chevron-btn:hover { background: #27272a; color: #e4e4e7; }
+
+.model-row-body {
+  padding: 0 16px 16px;
+  border-top: 1px solid #f1f5f9;
+}
+.model-row-actions {
+  display: flex;
+  justify-content: flex-end;
+  padding: 12px 0 4px;
+}
+.model-link-note {
+  margin: 4px 0 0;
+  font-size: 12.5px;
+  color: #64748b;
+  line-height: 1.5;
+}
+.model-link-note strong { color: #6366f1; }
+
+/* Layout: by default the graph stacks UNDER the calculations (single
+   column). Only when the browser is wide/maximised does it move to the
+   right — and there it takes the larger share of the row so it reads big.
+   The left column also caps its width when stacked so the cards don't
+   stretch absurdly wide. */
+.model-layout {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+  align-items: start;
+}
+.model-left { display: flex; flex-direction: column; gap: 16px; min-width: 0; }
+.model-right { min-width: 0; }
+.model-rows { margin: 0; }
+@media (min-width: 1500px) {
+  .model-layout { grid-template-columns: minmax(380px, 0.72fr) minmax(0, 1.5fr); }
+  .model-right { position: sticky; top: 68px; }
+}
+
+/* Compact dials in the left column so the calculations + results fit
+   alongside the graph. */
+.model-dials { grid-template-columns: repeat(2, minmax(0, 1fr)); margin: 0; gap: 10px; }
+.model-dials .proj-summary-card { padding: 12px 14px; }
+.model-dials .proj-summary-value { font-size: 20px; }
+
+/* Inside a row the cards shed their own top margin (the row body owns
+   the spacing) and run as an even, tight grid with smaller type so a
+   whole model fits on screen. */
+.model-cards {
+  margin: 8px 0 0;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+}
+.model-cards > .proj-card:nth-child(-n+3) { grid-column: span 1; }
+.model-cards .proj-card { padding: 9px 12px; gap: 3px; }
+.model-cards .proj-card-label { font-size: 9.5px; }
+.model-cards .proj-card-input { font-size: 15px; }
+.model-cards .proj-card-prefix,
+.model-cards .proj-card-suffix { font-size: 12px; }
+.model-cards .proj-card-hint { font-size: 9.5px; }
+
+/* Let the chart shrink to fit the right column instead of forcing a
+   720px min-width (which would add a horizontal scrollbar). */
+.model-right .proj-chart { min-width: 0; }
+.model-right .proj-chart-wrap { overflow: visible; }
+
+/* Benchmark line under a card's hint — italic, quieter than the hint. */
+.proj-card-bench {
+  font-size: 9.5px;
+  font-style: italic;
+  color: #a78bfa;
+  line-height: 1.3;
+}
+.admin-dark .proj-card-bench { color: #a78bfa; }
+
+/* Dials sit above the chart on the right — give them room before the curve. */
+.model-right .model-dials { margin-bottom: 14px; }
+
+/* "Live · shared" pill next to the page title. */
+.model-live {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: 12px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: #64748b;
+  background: #f1f5f9;
+  border: 1px solid #e5e7eb;
+  vertical-align: middle;
+}
+.model-live-dot { width: 7px; height: 7px; border-radius: 50%; background: #94a3b8; }
+.model-live.is-live { color: #047857; background: rgba(16, 185, 129, 0.10); border-color: rgba(16, 185, 129, 0.3); }
+.model-live.is-live .model-live-dot { background: #10b981; box-shadow: 0 0 0 3px rgba(16, 185, 129, 0.2); }
+.admin-dark .model-live { color: #a1a1aa; background: #27272a; border-color: #3f3f46; }
+.admin-dark .model-live.is-live { color: #34d399; background: rgba(16, 185, 129, 0.12); border-color: rgba(16, 185, 129, 0.35); }
+
+/* OpEx summary — all four cards on one row (stacks to 2-up when narrow). */
+.opex-summary-row { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 900px) { .opex-summary-row { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+
+/* Mismatch flag — click the badge to reveal why it's flagged. */
+.admin-mismatch { position: relative; display: inline-block; }
+.admin-mismatch-summary { list-style: none; }
+.admin-mismatch-summary::-webkit-details-marker { display: none; }
+.admin-mismatch-why {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 6px;
+  z-index: 40;
+  width: 280px;
+  padding: 11px 13px;
+  background: #fff;
+  border: 1px solid #fde68a;
+  border-radius: 10px;
+  box-shadow: 0 16px 40px rgba(15, 23, 42, 0.18);
+  font-size: 11.5px;
+  font-weight: 400;
+  letter-spacing: 0;
+  line-height: 1.5;
+  color: #475569;
+  white-space: normal;
+}
+.admin-mismatch-why strong { color: #0f172a; font-weight: 700; }
+.admin-dark .admin-mismatch-why { background: #1f1f22; border-color: #57430f; color: #d4d4d8; }
+.admin-dark .admin-mismatch-why strong { color: #f4f4f5; }
+
+/* "Rate my assumptions" button + modal. */
+.model-rate-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 14px;
+  border: 0;
+  border-radius: 8px;
+  font-family: inherit;
+  font-size: 12.5px;
+  font-weight: 700;
+  color: #fff;
+  cursor: pointer;
+  background: linear-gradient(135deg, #6366f1, #a855f7);
+  box-shadow: 0 4px 14px rgba(124, 92, 255, 0.35);
+}
+.model-rate-btn:hover { filter: brightness(1.07); box-shadow: 0 6px 20px rgba(124, 92, 255, 0.45); }
+/* Icon-only variant — just the AI spark in a gradient circle. */
+.model-rate-btn--icon {
+  gap: 0;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border-radius: 50%;
+  justify-content: center;
+}
+
+.rate-overlay {
+  position: fixed; inset: 0; z-index: 1400;
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+  background: rgba(2, 6, 23, 0.62);
+  backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px);
+}
+.rate-modal {
+  width: min(920px, 100%);
+  max-height: 88vh;
+  display: flex; flex-direction: column;
+  background: #fff;
+  border-radius: 16px;
+  box-shadow: 0 30px 80px rgba(2, 6, 23, 0.5);
+  overflow: hidden;
+}
+.admin-dark .rate-modal { background: #18181b; }
+.rate-modal-head {
+  display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid #eef2f7;
+}
+.admin-dark .rate-modal-head { border-bottom-color: #27272a; }
+.rate-modal-title { margin: 0; font-size: 18px; font-weight: 800; letter-spacing: -0.01em; color: #0f172a; }
+.admin-dark .rate-modal-title { color: #f4f4f5; }
+.rate-modal-sub { margin: 3px 0 0; font-size: 12.5px; color: #64748b; }
+.rate-modal-actions { display: flex; align-items: center; gap: 8px; }
+.rate-close { width: 30px; height: 30px; border: 0; background: none; font-size: 22px; line-height: 1; color: #94a3b8; cursor: pointer; border-radius: 8px; }
+.rate-close:hover { background: #f1f5f9; color: #0f172a; }
+.admin-dark .rate-close:hover { background: #27272a; color: #fff; }
+
+.rate-panels {
+  display: grid; grid-template-columns: 1fr 1fr; gap: 0;
+  overflow-y: auto;
+}
+@media (max-width: 760px) { .rate-panels { grid-template-columns: 1fr; } }
+.rate-panel { padding: 16px 20px; border-right: 1px solid #eef2f7; }
+.rate-panel:last-child { border-right: 0; }
+@media (max-width: 760px) { .rate-panel { border-right: 0; border-top: 1px solid #eef2f7; } }
+.admin-dark .rate-panel { border-color: #27272a; }
+.rate-panel-head { display: flex; align-items: center; gap: 8px; margin-bottom: 10px; }
+.rate-panel-dot { width: 9px; height: 9px; border-radius: 50%; }
+.rate-panel-title { font-size: 13px; font-weight: 700; color: #0f172a; }
+.admin-dark .rate-panel-title { color: #f4f4f5; }
+.rate-panel-model { font-size: 10px; color: #94a3b8; background: #f1f5f9; padding: 1px 6px; border-radius: 6px; }
+.admin-dark .rate-panel-model { background: #27272a; }
+.rate-panel-body { font-size: 13px; line-height: 1.55; color: #334155; }
+.admin-dark .rate-panel-body { color: #d4d4d8; }
+.rate-p { margin: 0 0 8px; }
+.rate-h { margin: 12px 0 6px; font-size: 12.5px; font-weight: 800; color: #0f172a; }
+.admin-dark .rate-h { color: #f4f4f5; }
+.rate-ul { margin: 0 0 8px; padding-left: 18px; display: flex; flex-direction: column; gap: 4px; }
+.rate-ul li { line-height: 1.45; }
+.rate-loading { display: flex; align-items: center; gap: 8px; color: #64748b; font-size: 12.5px; padding: 8px 0; }
+.rate-spinner { width: 14px; height: 14px; border: 2px solid #cbd5e1; border-top-color: #6366f1; border-radius: 50%; animation: rate-spin 0.7s linear infinite; }
+@keyframes rate-spin { to { transform: rotate(360deg); } }
+.rate-error { color: #b91c1c; font-size: 12.5px; background: rgba(239,68,68,0.08); border: 1px solid rgba(239,68,68,0.25); border-radius: 8px; padding: 8px 10px; }
+.rate-error--top { margin: 12px 20px 0; }
+.rate-disclaimer { margin: 0; padding: 10px 20px 16px; font-size: 11px; color: #94a3b8; border-top: 1px solid #eef2f7; }
+.admin-dark .rate-disclaimer { border-top-color: #27272a; }
+
+/* Model ↔ OpEx page switcher under the title. */
+.model-pageswitch { display: inline-flex; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; margin: 0 0 16px; }
+.model-pageswitch a { padding: 6px 18px; font-size: 12.5px; font-weight: 600; color: #475569; text-decoration: none; border-right: 1px solid #e5e7eb; }
+.model-pageswitch a:last-child { border-right: 0; }
+.model-pageswitch a:hover { background: #f1f5f9; }
+.model-pageswitch a.is-active { background: #0f172a; color: #fff; }
+.admin-dark .model-pageswitch { border-color: #3f3f46; }
+.admin-dark .model-pageswitch a { color: #d4d4d8; border-right-color: #3f3f46; }
+.admin-dark .model-pageswitch a:hover { background: #27272a; }
+.admin-dark .model-pageswitch a.is-active { background: #f4f4f5; color: #18181b; }
+
+/* Headline strip: scenario presets + export + investor metric chips. */
+.model-headline { margin: 8px 0 16px; }
+/* Centered scenario switcher: left spacer | centered group | export. */
+.model-toolbar { display: grid; grid-template-columns: 1fr auto 1fr; align-items: center; gap: 10px; margin-bottom: 12px; }
+.model-toolbar-left { min-width: 0; }
+.model-scenarios-group { display: inline-flex; align-items: center; gap: 10px; justify-self: center; }
+.model-toolbar-right { display: inline-flex; align-items: center; gap: 8px; justify-self: end; }
+.model-toolbar-label { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8; }
+.model-scenarios { display: inline-flex; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; }
+.model-scenarios button {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 6px 14px; border: 0; background: #fff; cursor: pointer;
+  font-family: inherit; font-size: 12.5px; font-weight: 600; color: #475569;
+  border-right: 1px solid #e5e7eb;
+}
+.model-scenarios button:last-child { border-right: 0; }
+.model-scenarios button:hover { background: #f1f5f9; }
+.model-scenarios button.is-active { background: #0f172a; color: #fff; }
+.admin-dark .model-scenarios { border-color: #3f3f46; }
+.admin-dark .model-scenarios button { background: #18181b; color: #d4d4d8; border-right-color: #3f3f46; }
+.admin-dark .model-scenarios button:hover { background: #27272a; }
+.admin-dark .model-scenarios button.is-active { background: #f4f4f5; color: #18181b; }
+@media (max-width: 900px) {
+  .model-toolbar { grid-template-columns: 1fr; justify-items: center; }
+  .model-toolbar-left { display: none; }
+  .model-toolbar-right { justify-self: center; }
+}
+
+/* Locked banner shown when viewing a derived (Bear/Bull) scenario. */
+.model-locked-banner {
+  display: flex; align-items: center; gap: 8px;
+  margin-bottom: 12px; padding: 9px 14px;
+  border-radius: 10px;
+  background: rgba(245, 158, 11, 0.10);
+  border: 1px solid rgba(245, 158, 11, 0.30);
+  color: #92400e; font-size: 12.5px;
+}
+.model-locked-banner svg { flex-shrink: 0; }
+.admin-dark .model-locked-banner { background: rgba(245, 158, 11, 0.12); color: #fbbf24; border-color: rgba(245, 158, 11, 0.35); }
+
+/* Read-only assumption card (Bear/Bull view). */
+.proj-card--ro { background: #f8fafc; }
+.proj-card--ro .proj-card-input { color: #64748b; cursor: not-allowed; }
+.admin-dark .proj-card--ro { background: #1c1c1f; }
+.admin-dark .proj-card--ro .proj-card-input { color: #a1a1aa; }
+
+/* One minimal "facts" card above the graph — a light bordered grid of
+   stat cells (replaces the old wall of dark cards). */
+.model-metrics {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(118px, 1fr));
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+  margin-bottom: 14px;
+}
+.model-metric {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 11px 14px;
+  border-right: 1px solid #f1f5f9;
+  border-bottom: 1px solid #f1f5f9;
+  cursor: help;
+  transition: background 120ms ease;
+}
+.model-metric:hover { background: #f8fafc; }
+.admin-dark .model-metric:hover { background: #1f1f22; }
+
+/* Hover breakdown popover — fixed-positioned so the card overflow can't
+   clip it. */
+.model-metric-pop {
+  position: fixed;
+  z-index: 60;
+  width: 244px;
+  padding: 10px 12px;
+  background: #0f172a;
+  color: #fff;
+  border-radius: 10px;
+  box-shadow: 0 18px 40px rgba(0, 0, 0, 0.35), 0 4px 12px rgba(0, 0, 0, 0.25);
+  pointer-events: none;
+  font-size: 11.5px;
+  line-height: 1.5;
+}
+.model-metric-pop-title {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #94a3b8;
+  margin-bottom: 4px;
+}
+.model-metric-pop-body { color: #e2e8f0; }
+
+.model-metric-label { font-size: 9.5px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; color: #94a3b8; }
+.model-metric-value { font-size: 17px; font-weight: 800; letter-spacing: -0.02em; color: #0f172a; line-height: 1.15; }
+.model-metric-sub { font-size: 9.5px; color: #94a3b8; }
+.model-metric-good .model-metric-value { color: #059669; }
+.model-metric-warn .model-metric-value { color: #d97706; }
+.admin-dark .model-metrics { background: #18181b; border-color: #27272a; }
+.admin-dark .model-metric { border-right-color: #27272a; border-bottom-color: #27272a; }
+.admin-dark .model-metric-value { color: #f4f4f5; }
+.admin-dark .model-metric-good .model-metric-value { color: #34d399; }
+.admin-dark .model-metric-warn .model-metric-value { color: #fbbf24; }
+
+.gtm-dial-cash { box-shadow: inset 3px 0 0 #14b8a6, 0 6px 20px rgba(15, 23, 42, 0.18); }
+
+/* Investor analysis blocks below the chart. */
+.model-analysis { display: flex; flex-direction: column; gap: 16px; margin-top: 20px; }
+.model-analysis-grid { display: grid; grid-template-columns: 1fr; gap: 16px; }
+@media (min-width: 900px) { .model-analysis-grid { grid-template-columns: 1.4fr 1fr; } }
+.model-card { background: #fff; border: 1px solid #e5e7eb; border-radius: 12px; padding: 16px; box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04); }
+.model-card h3 { margin: 0 0 12px; font-size: 13px; font-weight: 700; color: #0f172a; letter-spacing: -0.01em; }
+.model-card-head { display: flex; align-items: center; justify-content: space-between; }
+.model-card-head h3 { margin: 0; }
+.model-card-note { margin: 10px 0 0; font-size: 11.5px; color: #94a3b8; }
+.admin-dark .model-card { background: #18181b; border-color: #27272a; }
+.admin-dark .model-card h3 { color: #f4f4f5; }
+
+/* Sensitivity tornado. */
+.sens { display: flex; flex-direction: column; gap: 8px; }
+.sens-row { display: grid; grid-template-columns: 120px 1fr 78px; align-items: center; gap: 10px; }
+.sens-label { font-size: 12px; font-weight: 600; color: #475569; }
+.sens-track { height: 14px; background: #f1f5f9; border-radius: 999px; overflow: hidden; }
+.sens-bar { height: 100%; background: linear-gradient(90deg, #6366f1, #8b5cf6); border-radius: 999px; }
+.sens-val { font-size: 11.5px; font-weight: 700; color: #0f172a; text-align: right; font-variant-numeric: tabular-nums; }
+.admin-dark .sens-label { color: #d4d4d8; }
+.admin-dark .sens-track { background: #27272a; }
+.admin-dark .sens-val { color: #f4f4f5; }
+
+/* Cohort retention sparkline. */
+.retention-svg { width: 100%; height: 90px; display: block; }
+.retention-marks { display: flex; gap: 18px; margin-top: 6px; font-size: 11.5px; color: #94a3b8; }
+.retention-marks strong { color: #6366f1; }
+
+/* Funnel table. */
+.funnel-table-wrap { overflow-x: auto; margin-top: 12px; }
+.funnel-table { width: 100%; border-collapse: collapse; font-size: 12px; font-variant-numeric: tabular-nums; }
+.funnel-table th, .funnel-table td { padding: 6px 10px; text-align: right; white-space: nowrap; border-bottom: 1px solid #f1f5f9; }
+.funnel-table th:first-child, .funnel-table td:first-child { text-align: left; }
+.funnel-table th { font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8; font-weight: 600; }
+.funnel-table tbody tr:hover { background: #f8fafc; }
+.admin-dark .funnel-table th, .admin-dark .funnel-table td { border-bottom-color: #27272a; }
+.admin-dark .funnel-table tbody tr:hover { background: #1f1f22; }
+
+/* ── Monthly OpEx builder page ─────────────────────────────────────── */
+.opex-page .model-dials { margin: 0 0 16px; }
+.opex-page .model-card { margin-bottom: 16px; }
+.opex-link { color: #6366f1; font-weight: 600; text-decoration: none; }
+.opex-link:hover { text-decoration: underline; }
+
+.opex-chart-svg { width: 100%; height: auto; display: block; }
+.opex-legend { display: flex; flex-wrap: wrap; gap: 14px; margin-top: 8px; }
+.opex-legend-item { display: inline-flex; align-items: center; gap: 6px; font-size: 12px; font-weight: 600; color: #64748b; }
+.opex-legend-item i { width: 10px; height: 10px; border-radius: 3px; }
+.admin-dark .opex-legend-item { color: #a1a1aa; }
+
+.opex-table-wrap { overflow-x: auto; }
+.opex-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.opex-table th { text-align: left; font-size: 10.5px; text-transform: uppercase; letter-spacing: 0.04em; color: #94a3b8; font-weight: 600; padding: 4px 8px; }
+.opex-table td { padding: 4px 8px; border-top: 1px solid #f1f5f9; }
+.admin-dark .opex-table td { border-top-color: #27272a; }
+.opex-in {
+  width: 100%;
+  font-family: inherit;
+  font-size: 12.5px;
+  padding: 6px 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 7px;
+  background: #fff;
+  color: #0f172a;
+  outline: none;
+}
+.opex-in:focus { border-color: #6366f1; box-shadow: 0 0 0 2px rgba(99, 102, 241, 0.15); }
+.opex-in-name { min-width: 130px; }
+.opex-in-num { width: 92px; text-align: right; }
+.opex-in-sm { width: 60px; text-align: right; }
+.opex-in-pct { display: inline-flex; align-items: center; gap: 4px; color: #94a3b8; }
+.opex-monthly { font-weight: 700; color: #0f172a; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.admin-dark .opex-monthly { color: #f4f4f5; }
+.opex-thru { font-size: 12px; color: #94a3b8; white-space: nowrap; }
+
+/* Draggable OpEx sections. */
+.opex-section.is-dragging { opacity: 0.5; }
+.opex-section.is-drag-over { box-shadow: 0 0 0 2px #6366f1; }
+.opex-section-head { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+.opex-section-head h3 { margin: 0; }
+.opex-section-action { margin-left: auto; }
+
+/* Creator-payout mode toggle. */
+.creator-modes { display: inline-flex; border: 1px solid #e5e7eb; border-radius: 8px; overflow: hidden; margin: 4px 0 12px; }
+.creator-modes button {
+  padding: 7px 16px; border: 0; background: #fff; cursor: pointer;
+  font-family: inherit; font-size: 12.5px; font-weight: 600; color: #475569;
+  border-right: 1px solid #e5e7eb;
+}
+.creator-modes button:last-child { border-right: 0; }
+.creator-modes button:hover { background: #f1f5f9; }
+.creator-modes button.is-active { background: #f59e0b; color: #fff; }
+.admin-dark .creator-modes { border-color: #3f3f46; }
+.admin-dark .creator-modes button { background: #18181b; color: #d4d4d8; border-right-color: #3f3f46; }
+.admin-dark .creator-modes button.is-active { background: #f59e0b; color: #18181b; }
+
+/* Creator payout: input + small inline stats on one row. */
+.creator-row { display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.creator-input { flex: 0 0 200px; margin: 0; }
+.creator-stats { display: flex; flex-wrap: wrap; gap: 16px; font-size: 12px; color: #64748b; }
+.creator-stats strong { color: #0f172a; font-weight: 700; font-variant-numeric: tabular-nums; }
+.admin-dark .creator-stats { color: #a1a1aa; }
+.admin-dark .creator-stats strong { color: #f4f4f5; }
+
+/* Compact "+" add button. */
+.opex-add-btn {
+  width: 28px; height: 28px; border: 1px solid #e5e7eb; border-radius: 7px;
+  background: #fff; color: #475569; font-size: 18px; line-height: 1; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.opex-add-btn:hover { background: #f1f5f9; color: #0f172a; }
+.admin-dark .opex-add-btn { background: #18181b; border-color: #3f3f46; color: #d4d4d8; }
+.admin-dark .opex-add-btn:hover { background: #27272a; }
+
+/* Row drag handle + drop target. */
+.opex-grip-cell { width: 22px; padding-right: 0 !important; }
+.opex-grip-cell .model-row-grip { width: 16px; height: 24px; }
+.opex-row-over td { border-top: 2px solid #6366f1; }
+
+/* Spreadsheet view — every line × every month. */
+.opex-sheet-wrap { overflow-x: auto; }
+.opex-sheet { border-collapse: collapse; font-size: 11.5px; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.opex-sheet th, .opex-sheet td { padding: 5px 8px; text-align: right; border-bottom: 1px solid #f1f5f9; }
+.opex-sheet th { font-size: 10px; text-transform: uppercase; letter-spacing: 0.03em; color: #94a3b8; font-weight: 600; }
+.opex-sheet .opex-sheet-name { text-align: left; position: sticky; left: 0; background: #fff; font-weight: 600; color: #0f172a; min-width: 150px; }
+.opex-sheet thead .opex-sheet-name { color: #94a3b8; }
+.opex-sheet .opex-sheet-total { font-weight: 700; color: #0f172a; border-left: 1px solid #e5e7eb; }
+.opex-sheet-zero { color: #cbd5e1; }
+.opex-sheet tfoot td { border-top: 2px solid #e5e7eb; border-bottom: 0; font-weight: 800; color: #0f172a; }
+.opex-sheet tfoot .opex-sheet-name { background: #fff; }
+.admin-dark .opex-sheet th, .admin-dark .opex-sheet td { border-bottom-color: #27272a; }
+.admin-dark .opex-sheet .opex-sheet-name { background: #18181b; color: #f4f4f5; }
+.admin-dark .opex-sheet .opex-sheet-total { color: #f4f4f5; border-left-color: #3f3f46; }
+.admin-dark .opex-sheet tfoot td { color: #f4f4f5; border-top-color: #3f3f46; }
+.admin-dark .opex-sheet tfoot .opex-sheet-name { background: #18181b; }
+.admin-dark .opex-sheet-zero { color: #52525b; }
+.admin-dark .opex-in { background: #18181b; border-color: #3f3f46; color: #f4f4f5; }
+.opex-del {
+  width: 26px; height: 26px; border: 0; border-radius: 6px; background: none;
+  color: #cbd5e1; font-size: 18px; line-height: 1; cursor: pointer;
+}
+.opex-del:hover { background: rgba(239, 68, 68, 0.1); color: #ef4444; }
+.opex-empty { text-align: center; color: #94a3b8; padding: 20px; font-size: 12.5px; }
+
+/* Dark mode */
+.admin-dark .model-row { background: #18181b; border-color: #27272a; }
+.admin-dark .model-row-title-btn { color: #f4f4f5; }
+.admin-dark .model-row-body { border-top-color: #27272a; }
+.admin-dark .model-row-dot { background: #18181b; border-color: #3f3f46; }
+.admin-dark .model-link-note { color: #a1a1aa; }
+
+/* Go-to-Market has 5 inputs (vs Projections' 9) so it gets its own
+   even 5-up grid instead of the 6-col / first-3-span-2 projections
+   layout. Cancels that span rule for this panel. */
+.gtm-cards {
+  grid-template-columns: repeat(5, 1fr);
+}
+.gtm-cards > .proj-card:nth-child(-n+3) { grid-column: span 1; }
+@media (max-width: 980px) {
+  .gtm-cards { grid-template-columns: repeat(2, 1fr); }
+}
+@media (max-width: 720px) {
+  .gtm-cards { grid-template-columns: 1fr; }
+}
+
+/* Secondary dial row — slightly quieter than the headline cards. */
+.gtm-summary-sub { margin-top: -6px; }
+.gtm-summary-sub .proj-summary-value { font-size: 24px; }
+
+/* Paid / organic / engagement accent stripe on the matching dials. */
+.gtm-dial-paid { box-shadow: inset 3px 0 0 #6366f1, 0 6px 20px rgba(15, 23, 42, 0.18); }
+.gtm-dial-organic { box-shadow: inset 3px 0 0 #10b981, 0 6px 20px rgba(15, 23, 42, 0.18); }
+.gtm-dial-engage { box-shadow: inset 3px 0 0 #f59e0b, 0 6px 20px rgba(15, 23, 42, 0.18); }
+
+/* Chart legend (paid vs organic). */
+.gtm-legend {
+  display: flex;
+  justify-content: flex-end;
+  gap: 16px;
+  margin-bottom: 4px;
+}
+.gtm-legend-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #64748b;
+}
+.gtm-legend-item i {
+  width: 10px;
+  height: 10px;
+  border-radius: 3px;
+  display: inline-block;
+}
+.admin-dark .gtm-legend-item { color: #a1a1aa; }
+
+/* Featured operating-margin row at the bottom of the chart tooltip. */
+.proj-tooltip-feature {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 8px;
+  margin-top: 8px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.12);
+}
+.proj-tooltip-feature-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #94a3b8;
+}
+.proj-tooltip-feature-value { font-size: 18px; font-weight: 800; letter-spacing: -0.01em; }
+.proj-tooltip-feature-value.positive { color: #34d399; }
+.proj-tooltip-feature-value.negative { color: #fca5a5; }
+
+/* Tooltip "paid" pill — indigo to match the MAU line. */
+.proj-tooltip-row-delta.gtm-paid {
+  background: rgba(99, 102, 241, 0.20);
+  color: #a5b4fc;
+}
+/* Tooltip "sales" pill — amber to match the engagement line. */
+.proj-tooltip-row-delta.gtm-eng {
+  background: rgba(245, 158, 11, 0.20);
+  color: #fcd34d;
+}
+
 /* Stats column tint - everything in the Stats group (header + body cells)
    gets a distinct background and ink so the eye can isolate it from the
    other product columns at a glance. Applied to both the collapsed
@@ -4239,3 +5905,408 @@ tr:hover .admin-stats-col { background: rgba(99, 102, 241, 0.10); }
   color: #e0e7ff;
 }
 .admin-dark tr:hover .admin-stats-col { background: rgba(129, 140, 248, 0.14); }
+
+
+/* Primary-image star overlay on each photo in the product row's
+   photo gallery. Stays hidden until the photo cell is hovered (so it
+   doesn't clutter the gallery) UNLESS the star already marks the
+   current primary — then it stays visible at full opacity. */
+.admin-product-photo .admin-product-photo-primary-btn {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.62);
+  color: #fff;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  opacity: 0;
+  transition: opacity 0.12s ease, background 0.12s ease;
+}
+.admin-product-photo:hover .admin-product-photo-primary-btn {
+  opacity: 1;
+}
+.admin-product-photo .admin-product-photo-primary-btn[data-active='true'] {
+  background: #16a34a;
+  opacity: 1;
+  cursor: default;
+}
+
+/* ──────────────────────────────────────────────────────────────────
+   Admin home: filter pill row + window-scoped stats grid + mobile.
+   ────────────────────────────────────────────────────────────────── */
+.admin-home-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px 18px;
+  margin: 0 0 18px;
+  align-items: center;
+}
+.admin-home-filter-group {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  border-radius: 999px;
+  background: #f3f4f6;
+  border: 1px solid #e5e7eb;
+}
+.admin-home-filter-pill {
+  appearance: none;
+  border: none;
+  background: transparent;
+  padding: 6px 14px;
+  border-radius: 999px;
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  color: #4b5563;
+  cursor: pointer;
+  transition: background 160ms ease, color 160ms ease;
+  white-space: nowrap;
+}
+.admin-home-filter-pill:hover { color: #111; }
+.admin-home-filter-pill.is-active {
+  background: #111;
+  color: #fff;
+  box-shadow: 0 1px 2px rgba(0,0,0,0.08), 0 2px 8px rgba(0,0,0,0.06);
+}
+
+.admin-home-stats {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+  margin-bottom: 20px;
+}
+.admin-home-stat-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.admin-home-stat-icon {
+  width: 28px;
+  height: 28px;
+  border-radius: 8px;
+  background: #f3f4f6;
+  color: #374151;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 4px;
+}
+.admin-home-stat-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #6b7280;
+}
+.admin-home-stat-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: #111;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.admin-home-stat-value.is-loading {
+  color: #9ca3af;
+}
+.admin-home-stat-sub {
+  font-size: 11px;
+  color: #6b7280;
+}
+
+/* Tablet — 3 columns. */
+@media (max-width: 1024px) {
+  .admin-home-stats {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* Mobile — 2 columns, tighter padding, stacked filter row. */
+@media (max-width: 640px) {
+  .admin-home-filters {
+    flex-direction: column;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .admin-home-filter-group {
+    width: 100%;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+  .admin-home-filter-group::-webkit-scrollbar { display: none; }
+  .admin-home-filter-pill {
+    padding: 6px 12px;
+    font-size: 12px;
+  }
+  .admin-home-stats {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+  }
+  .admin-home-stat-card {
+    padding: 12px;
+  }
+  .admin-home-stat-value {
+    font-size: 20px;
+  }
+}
+
+/* Detail-page hover affordance for clickable stat cards. */
+.admin-home-stat-card--link {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: inherit;
+  text-decoration: none;
+  cursor: pointer;
+  transition: border-color 160ms ease, box-shadow 160ms ease, transform 160ms ease;
+}
+.admin-home-stat-card--link:hover {
+  border-color: #cbd5e1;
+  box-shadow: 0 4px 14px rgba(15, 23, 42, 0.08);
+  transform: translateY(-1px);
+}
+
+/* Gold cards — key model assumptions. Glowing amber border + tint. */
+.admin-home-stat-card--gold {
+  border-color: #f59e0b;
+  background: linear-gradient(180deg, rgba(245, 158, 11, 0.10), rgba(245, 158, 11, 0.02));
+  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.4), 0 0 18px rgba(245, 158, 11, 0.25);
+  animation: gold-pulse 2.8s ease-in-out infinite;
+}
+.admin-home-stat-card--gold .admin-home-stat-icon { color: #b45309; }
+.admin-home-stat-card--gold .admin-home-stat-value { color: #92400e; }
+.admin-home-stat-card--gold .admin-home-stat-sub { color: #b45309; font-weight: 600; }
+.admin-home-stat-card--gold:hover {
+  border-color: #f59e0b;
+  box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.6), 0 6px 22px rgba(245, 158, 11, 0.35);
+}
+@keyframes gold-pulse {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.4), 0 0 14px rgba(245, 158, 11, 0.20); }
+  50% { box-shadow: 0 0 0 1px rgba(245, 158, 11, 0.55), 0 0 22px rgba(245, 158, 11, 0.38); }
+}
+.admin-dark .admin-home-stat-card--gold {
+  background: linear-gradient(180deg, rgba(245, 158, 11, 0.16), rgba(245, 158, 11, 0.04));
+}
+.admin-dark .admin-home-stat-card--gold .admin-home-stat-icon,
+.admin-dark .admin-home-stat-card--gold .admin-home-stat-value { color: #fbbf24; }
+.admin-dark .admin-home-stat-card--gold .admin-home-stat-sub { color: #fcd34d; }
+
+/* ─────────────────────────────────────────────────────────────
+   Metric detail page — headline number + 30-bar time-series chart.
+   ───────────────────────────────────────────────────────────── */
+.admin-metric-headline {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 22px 24px;
+  margin: 0 0 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.admin-metric-headline-label {
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #6b7280;
+}
+.admin-metric-headline-value {
+  font-size: 44px;
+  font-weight: 700;
+  color: #111;
+  letter-spacing: -0.025em;
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+}
+.admin-metric-headline-value.is-loading { color: #9ca3af; }
+.admin-metric-headline-unit {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.admin-metric-chart-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 18px;
+  margin: 0 0 16px;
+}
+.admin-metric-chart {
+  display: flex;
+  align-items: flex-end;
+  gap: 4px;
+  height: 180px;
+  padding: 8px 0 24px;
+  position: relative;
+}
+.admin-metric-bar-col {
+  flex: 1;
+  height: 100%;
+  display: flex;
+  flex-direction: column-reverse;
+  align-items: center;
+  position: relative;
+}
+.admin-metric-bar {
+  width: 100%;
+  min-height: 2px;
+  background: linear-gradient(180deg, #111 0%, #374151 100%);
+  border-radius: 4px 4px 0 0;
+  transition: opacity 160ms ease;
+}
+.admin-metric-bar-col:hover .admin-metric-bar { opacity: 0.7; }
+.admin-metric-bar-label {
+  position: absolute;
+  bottom: -20px;
+  font-size: 10px;
+  color: #9ca3af;
+  white-space: nowrap;
+}
+
+.admin-metric-list-card {
+  background: #fff;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  padding: 18px;
+}
+.admin-metric-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.admin-metric-list-row {
+  display: grid;
+  grid-template-columns: 24px 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: #f9fafb;
+}
+.admin-metric-list-rank {
+  font-size: 13px;
+  font-weight: 700;
+  color: #6b7280;
+  text-align: center;
+}
+.admin-metric-list-name {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-size: 13px;
+  color: #111;
+}
+.admin-metric-list-sub {
+  font-size: 11px;
+  color: #6b7280;
+}
+.admin-metric-list-count {
+  font-size: 13px;
+  font-weight: 600;
+  color: #374151;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Incoming Creators queue ─────────────────────────────────────── */
+.admin-error {
+  margin: 12px 0;
+  padding: 10px 14px;
+  border-radius: 8px;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  color: #b91c1c;
+  font-size: 13px;
+}
+.admin-btn--approve { background: #16a34a; color: #fff; }
+.admin-btn--approve:hover:not(:disabled) { background: #15803d; }
+.admin-btn--deny { background: #f5f5f5; color: #374151; }
+.admin-btn--deny:hover:not(:disabled) { background: #e5e7eb; }
+
+.admin-creator-requests {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 16px;
+}
+.admin-creator-request {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 14px 16px;
+  border: 1px solid #e5e7eb;
+  border-radius: 12px;
+  background: #fff;
+}
+.admin-creator-request-who { display: flex; gap: 12px; min-width: 0; }
+.admin-creator-request-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: #f0f0f0;
+}
+.admin-creator-request-avatar--empty {
+  background: linear-gradient(135deg, #e5e7eb, #f3f4f6);
+}
+.admin-creator-request-meta { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.admin-creator-request-name { font-weight: 600; font-size: 14px; color: #111; }
+.admin-creator-request-sub { font-size: 12px; color: #6b7280; }
+.admin-creator-request-msg {
+  margin: 6px 0 0;
+  font-size: 13px;
+  color: #374151;
+  line-height: 1.5;
+}
+.admin-creator-request-actions { display: flex; gap: 8px; flex-shrink: 0; align-items: center; }
+.admin-creator-request-status {
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: capitalize;
+  padding: 5px 12px;
+  border-radius: 999px;
+}
+.admin-creator-request-status--approved { background: #dcfce7; color: #15803d; }
+.admin-creator-request-status--denied { background: #f3f4f6; color: #6b7280; }
+
+/* Admin publish-look page (publish.$id) — two columns (video preview +
+   form) on desktop, stacked to one column on mobile so the form fields and
+   the Publish button aren't squished off the right edge. The sticky preview
+   becomes a small, centered, non-sticky thumbnail on phones. */
+.admin-publish-grid {
+  display: grid;
+  grid-template-columns: minmax(220px, 320px) 1fr;
+  gap: 24px;
+  margin-top: 16px;
+  align-items: flex-start;
+}
+@media (max-width: 768px) {
+  .admin-publish-grid {
+    grid-template-columns: 1fr;
+    gap: 16px;
+  }
+  .admin-publish-preview {
+    position: static !important;
+    max-width: 180px;
+    margin: 0 auto !important;
+  }
+}

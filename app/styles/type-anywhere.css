@@ -13,6 +13,126 @@
   padding: 0 24px;
 }
 
+/* Dark gradient scrim behind the focused search bar so the catalog pills
+   and autocomplete stay legible over a bright feed. Sits below the bar
+   (z-index 70) but above the feed; never intercepts clicks. */
+.ai-bar-scrim {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  height: 72vh;
+  z-index: 69;
+  pointer-events: none;
+  background: linear-gradient(
+    to top,
+    rgba(0, 0, 0, 0.82) 0%,
+    rgba(0, 0, 0, 0.6) 26%,
+    rgba(0, 0, 0, 0.32) 52%,
+    rgba(0, 0, 0, 0.08) 78%,
+    transparent 100%
+  );
+  opacity: 0;
+  animation: ai-bar-scrim-in 0.28s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+@keyframes ai-bar-scrim-in { to { opacity: 1; } }
+@media (prefers-reduced-motion: reduce) {
+  .ai-bar-scrim { animation: none; opacity: 1; }
+}
+/* Mobile uses the BottomBar pill, not this layer — no scrim there. */
+@media (max-width: 768px) {
+  .ai-bar-scrim { display: none; }
+}
+
+/* Floating hint that sits above the AI bar on first run.
+   Disappears on the first keystroke (or once the user has dismissed
+   it on this device — see TypeAnywhere.tsx). Wrap is column so the
+   hint stacks above the row without affecting the bar's width. */
+.ai-bar-wrap { flex-direction: column; align-items: center; gap: 10px; }
+.ai-bar-hint {
+  pointer-events: none;
+  padding: 6px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(14px) saturate(1.2);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  color: rgba(255, 255, 255, 0.78);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  box-shadow: 0 4px 18px rgba(0, 0, 0, 0.25);
+  /* Soft fade-in + bob so it reads as a tooltip, not page chrome. */
+  animation: ai-bar-hint-in 0.5s ease-out both, ai-bar-hint-bob 2.4s ease-in-out 0.5s infinite;
+}
+@keyframes ai-bar-hint-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes ai-bar-hint-bob {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-2px); }
+}
+.light-mode .ai-bar-hint {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.08);
+  color: rgba(0, 0, 0, 0.7);
+}
+
+/* Type-ahead suggestions — stacks above the bar (column wrap) on the same
+   liquid-glass surface as .ai-bar. pointer-events:auto since the wrap is
+   pass-through. Rows run top→down, best match first; the freeform "Make a
+   catalog" row is last (nearest the input). */
+.ai-bar-autocomplete {
+  pointer-events: auto;
+  width: 100%;
+  max-width: 720px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 46vh;
+  overflow-y: auto;
+  padding: 6px;
+  border-radius: 22px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03)),
+    rgba(15, 18, 24, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  backdrop-filter: blur(22px) saturate(1.5);
+  -webkit-backdrop-filter: blur(22px) saturate(1.5);
+  box-shadow: 0 14px 40px rgba(0, 0, 0, 0.36);
+}
+.ai-bar-ac-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: none;
+  color: #fff;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 11px 14px;
+  border-radius: 16px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.ai-bar-ac-item:hover { background: rgba(255, 255, 255, 0.08); }
+.ai-bar-ac-item svg { flex-shrink: 0; opacity: 0.55; }
+.ai-bar-ac-item--run { opacity: 0.82; }
+.ai-bar-ac-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+.light-mode .ai-bar-autocomplete {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.9), rgba(255, 255, 255, 0.82)),
+    rgba(255, 255, 255, 0.9);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+.light-mode .ai-bar-ac-item { color: #111; }
+.light-mode .ai-bar-ac-item:hover { background: rgba(0, 0, 0, 0.05); }
+
 .ai-bar {
   pointer-events: auto;
   display: flex;
@@ -21,18 +141,42 @@
   width: 100%;
   max-width: 720px;
   min-height: 56px;
-  padding: 8px 8px 8px 14px;
-  border-radius: 32px;
-  background: rgba(20, 20, 22, 0.78);
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(18px) saturate(1.4);
-  -webkit-backdrop-filter: blur(18px) saturate(1.4);
+  /* Symmetric horizontal padding so the filter icon (left) and send
+     button (right) sit equidistant from the pill edges — the bar reads
+     as evenly balanced rather than left-heavy. */
+  padding: 8px 12px;
+  /* Match the mobile pill — 999px true pill, single liquid-glass surface
+     via a top→bottom rgba gradient (no flat wash + nested chip pills).
+     The old 32px radius + flat 0.78 wash + .ai-bar-icon-btn's own
+     background + .ai-bar-send's solid white produced a clearly multi-
+     toned bar (icon disc, input slot, white send disc). One surface now,
+     icons sit on top instead of as separate pills. */
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03)),
+    rgba(15, 18, 24, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  backdrop-filter: blur(22px) saturate(1.5);
+  -webkit-backdrop-filter: blur(22px) saturate(1.5);
   box-shadow:
-    0 12px 36px rgba(0, 0, 0, 0.32),
-    0 1px 0 rgba(255, 255, 255, 0.06) inset;
+    0 14px 40px rgba(0, 0, 0, 0.36),
+    inset 0 1px 0 rgba(255, 255, 255, 0.10),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.16);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   color: #f5f5f7;
   transition: border-color 180ms ease, box-shadow 180ms ease;
+  /* Entrance: the bar rises into position rather than popping in. The
+     wrap owns the exit (slides down via translateY when an overlay opens
+     or chrome auto-hides), so together the bar animates both into and out
+     of position instead of appearing/disappearing instantly. */
+  animation: ai-bar-enter 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes ai-bar-enter {
+  from { opacity: 0; transform: translateY(22px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .ai-bar { animation: none; }
 }
 
 .ai-bar:focus-within {
@@ -43,7 +187,46 @@
     0 1px 0 rgba(255, 255, 255, 0.08) inset;
 }
 
+/* On desktop, once the shopper has scrolled into the feed (the bar
+   is docked at the bottom), flip the bar to the white pill treatment
+   the mobile docked bar uses. Hero-state bar stays dark-glass; only
+   the docked variant changes. .hero-scrolled is set on .app-root by
+   the scroll handler in _index.tsx. */
+body:has(.app-root.home-hero.hero-scrolled) .ai-bar,
+body:has(.app-root:not(.home-hero)) .ai-bar {
+  background: #fff;
+  border-color: rgba(0, 0, 0, 0.08);
+  color: #111;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+  box-shadow:
+    0 1px 2px rgba(0, 0, 0, 0.04),
+    0 8px 28px rgba(0, 0, 0, 0.10);
+}
+body:has(.app-root.home-hero.hero-scrolled) .ai-bar-input,
+body:has(.app-root:not(.home-hero)) .ai-bar-input {
+  color: #111;
+}
+body:has(.app-root.home-hero.hero-scrolled) .ai-bar-input::placeholder,
+body:has(.app-root:not(.home-hero)) .ai-bar-input::placeholder {
+  color: rgba(0, 0, 0, 0.45);
+}
+body:has(.app-root.home-hero.hero-scrolled) .ai-bar-icon-btn,
+body:has(.app-root:not(.home-hero)) .ai-bar-icon-btn {
+  color: #111;
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.10);
+}
+body:has(.app-root.home-hero.hero-scrolled) .ai-bar-send,
+body:has(.app-root:not(.home-hero)) .ai-bar-send {
+  background: #111;
+  color: #fff;
+}
+
 .ai-bar-icon-btn {
+  /* In-bar icon — no own pill background or border. The icon sits on
+     the bar's glass surface; hover and active states use opacity-only
+     so they don't reintroduce the chip-inside-a-chip silhouette. */
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
@@ -52,23 +235,24 @@
   height: 36px;
   padding: 0;
   border-radius: 50%;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  background: rgba(255, 255, 255, 0.04);
-  color: rgba(255, 255, 255, 0.78);
+  border: none;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.55);
   cursor: pointer;
-  transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
+  transition: color 140ms ease, box-shadow 140ms ease;
 }
 
 .ai-bar-icon-btn:hover {
-  background: rgba(255, 255, 255, 0.08);
+  background: transparent;
   color: #fff;
-  border-color: rgba(255, 255, 255, 0.16);
 }
 
 .ai-bar-icon-btn.is-active {
-  background: rgba(255, 255, 255, 0.14);
+  /* Active filter: subtle inner ring instead of a fill — keeps the
+     "one surface" feel while marking the state. */
+  background: transparent;
   color: #fff;
-  border-color: rgba(255, 255, 255, 0.2);
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.4);
 }
 
 /* Mic listening - soft red pulse so users see the recording state. */
@@ -108,6 +292,11 @@
 .ai-bar-input::-webkit-search-decoration { -webkit-appearance: none; }
 
 .ai-bar-send {
+  /* Send arrow lives ON the bar's surface — not a stark white disc which
+     read as a second pill inside the search bar. Idle state is a subtle
+     icon; when there's text to submit (.is-ready), it brightens to a
+     soft glass disc so the affordance is obvious without breaking the
+     one-color treatment. */
   flex: 0 0 auto;
   display: inline-flex;
   align-items: center;
@@ -117,67 +306,61 @@
   padding: 0;
   border-radius: 50%;
   border: 0;
-  background: #fff;
-  color: #111;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.55);
   cursor: pointer;
-  transition: opacity 140ms ease, transform 140ms ease, background 140ms ease;
+  transition: background 140ms ease, color 140ms ease, transform 140ms ease;
 }
 
 .ai-bar-send:hover:not(:disabled) {
-  background: #f0f0f0;
+  background: rgba(255, 255, 255, 0.10);
+  color: #fff;
   transform: translateY(-1px);
 }
 
+/* The component toggles is-ready / is-disabled via the disabled prop —
+   when the input has text, surface the send as a brighter glass disc. */
+.ai-bar-send:not(:disabled) {
+  background: rgba(255, 255, 255, 0.14);
+  color: #fff;
+}
+
 .ai-bar-send:disabled {
-  background: rgba(255, 255, 255, 0.18);
-  color: rgba(255, 255, 255, 0.42);
+  /* No text yet — disabled state shows just the icon at the bar's tint.
+     No background fill so the bar stays one continuous surface. */
+  background: transparent;
+  color: rgba(255, 255, 255, 0.35);
   cursor: default;
 }
 
 /* Light mode - softer glass + dark icon set. */
 .light-mode .ai-bar {
-  background: rgba(255, 255, 255, 0.78);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.82));
   border-color: rgba(0, 0, 0, 0.08);
   color: #111;
   box-shadow:
     0 12px 36px rgba(0, 0, 0, 0.12),
-    0 1px 0 rgba(0, 0, 0, 0.04) inset;
+    inset 0 1px 0 rgba(255, 255, 255, 0.9),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.04);
 }
 
 .light-mode .ai-bar-icon-btn {
-  background: rgba(0, 0, 0, 0.04);
-  border-color: rgba(0, 0, 0, 0.08);
-  color: rgba(0, 0, 0, 0.7);
+  background: transparent;
+  border: none;
+  color: rgba(15, 23, 42, 0.55);
 }
-
-.light-mode .ai-bar-icon-btn:hover {
-  background: rgba(0, 0, 0, 0.08);
-  color: #111;
-  border-color: rgba(0, 0, 0, 0.16);
-}
-
+.light-mode .ai-bar-icon-btn:hover { background: transparent; color: #0f172a; }
 .light-mode .ai-bar-icon-btn.is-active {
-  background: rgba(0, 0, 0, 0.12);
-  color: #111;
+  background: transparent;
+  color: #0f172a;
+  box-shadow: inset 0 0 0 1px rgba(15, 23, 42, 0.35);
 }
-
-.light-mode .ai-bar-input::placeholder {
-  color: rgba(0, 0, 0, 0.42);
-}
-
-.light-mode .ai-bar-send {
-  background: #111;
-  color: #fff;
-}
-
-.light-mode .ai-bar-send:hover:not(:disabled) {
-  background: #222;
-}
-
-.light-mode .ai-bar-send:disabled {
-  background: rgba(0, 0, 0, 0.12);
-  color: rgba(0, 0, 0, 0.4);
-}
+.light-mode .ai-bar-input::placeholder { color: rgba(15, 23, 42, 0.45); }
+.light-mode .ai-bar-send { background: transparent; color: rgba(15, 23, 42, 0.45); }
+.light-mode .ai-bar-send:not(:disabled) { background: rgba(15, 23, 42, 0.10); color: #0f172a; }
+.light-mode .ai-bar-send:hover:not(:disabled) { background: rgba(15, 23, 42, 0.18); }
+.light-mode .ai-bar-send:disabled { background: transparent; color: rgba(15, 23, 42, 0.35); }
 
 /* Mobile - hard hide, BottomBar takes over. */
 @media (max-width: 768px) {
@@ -187,3 +370,150 @@
 /* Flutter shell - hide on the native webview. The shell has its
    own bottom UI and we don't want to stack our bar on top of it. */
 html[data-shell="catalog-app"] .ai-bar-wrap { display: none !important; }
+
+/* ── Popular-catalog pill cloud ─────────────────────────────────────────
+   Springs up above the desktop search bar when it's focused with an empty
+   query. Renders as the first child of .ai-bar-wrap (a centered column),
+   so it naturally stacks above the bar. Ranked by real search demand:
+   🔥 On fire (last 24h), ⭐ Most popular (all-time), ✨ Featured, plus a
+   👥 Following pill that builds a catalog of who you follow. */
+.catalog-pills {
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  /* Centre with auto margins + an explicit max-width, NOT
+     left:50%+translateX(-50%). The transform approach desynced from the
+     100vw-based row width (scrollbar/inset gutter) and shoved the cloud
+     off-screen on mobile — see the CLAUDE.md "centering fixed/overlay
+     pills" rule. Size in % so width and centering can't drift apart. */
+  max-width: min(760px, calc(100% - 32px));
+  /* Float the cloud ABOVE the bar (pinned by its bottom edge to the top
+     of the wrap) so a click on the docked bar — anywhere in the app, e.g.
+     over the scrolled feed — reveals the recommended catalogs just above
+     it. Absolute positioning keeps the wrap bar-sized so the bar's bottom
+     anchor doesn't shift when the cloud appears. The parent .ai-bar-wrap
+     is position: fixed (top of this file) and serves as the positioning
+     ancestor — do NOT add position: relative here (it would clobber the
+     fixed and the bar would vanish; that regression has bitten before).
+     In the un-scrolled home hero the bar instead rises to mid-screen and
+     the cloud drops BELOW it — see the hero override just below. */
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 0;
+  right: 0;
+  margin-inline: auto;
+  width: max-content;
+}
+@keyframes catalog-pills-in-above {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes catalog-pills-in-from-below {
+  from { opacity: 0; transform: translateY(-10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.catalog-pills { animation: catalog-pills-in-above 0.4s cubic-bezier(0.16, 1, 0.3, 1) both; }
+
+/* Home hero, before the feed-peek scroll: focusing the bar raises it to
+   mid-screen, so the pill cloud drops BELOW it into the lower half rather
+   than rising up into the headline. Once scrolled (docked at the bottom)
+   the default above-the-bar placement applies. */
+body:has(.app-root.home-hero:not(.hero-scrolled)) .catalog-pills {
+  top: calc(100% + 10px);
+  bottom: auto;
+  animation-name: catalog-pills-in-from-below;
+}
+.catalog-pills-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+}
+.catalog-pills-row {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+  /* Cap to the parent (which is already viewport-bounded) so the wrapping
+     row never runs off either edge on mobile — the parent cloud is
+     max-content, which would otherwise let the pills lay out on one
+     over-wide line. % (not vw) so it can't desync from the centering. */
+  max-width: 100%;
+}
+@keyframes catalog-pills-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+.catalog-pill {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 15px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  backdrop-filter: blur(14px) saturate(1.2);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  cursor: pointer;
+  white-space: nowrap;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.22);
+  /* Each pill springs in; stagger is set per-pill via inline
+     animation-delay in PopularCatalogPills. */
+  animation: catalog-pill-pop 0.52s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  transition: transform 0.18s ease, background 0.18s ease, border-color 0.18s ease, box-shadow 0.18s ease;
+}
+@keyframes catalog-pill-pop {
+  0%   { opacity: 0; transform: translateY(14px) scale(0.86); }
+  60%  { opacity: 1; }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+.catalog-pill:hover {
+  transform: translateY(-2px);
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.25);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.3);
+}
+.catalog-pill:active { transform: translateY(0) scale(0.97); }
+/* Monochrome glowing SVG glyph — white, soft halo. */
+.catalog-pill-icon {
+  display: inline-flex;
+  line-height: 0;
+  color: #fff;
+  filter: drop-shadow(0 0 5px rgba(255, 255, 255, 0.55));
+  animation: catalog-icon-glow 3.2s ease-in-out infinite;
+}
+@keyframes catalog-icon-glow {
+  0%, 100% { filter: drop-shadow(0 0 4px rgba(255, 255, 255, 0.35)); }
+  50%      { filter: drop-shadow(0 0 9px rgba(255, 255, 255, 0.75)); }
+}
+/* The 'Following' pill still uses this label class for its tag text.
+   Removed the +.catalog-pill-name divider rule because each catalog
+   pill now renders the name alone — the kind (fire/popular/featured)
+   is conveyed by the icon glyph, not a redundant text label. */
+.catalog-pill-tag { font-weight: 700; color: #fff; }
+
+/* Black & white glass — no per-kind hues. Every chip is the same matte
+   glass; the glowing icon is what distinguishes it. */
+
+/* Light mode */
+.light-mode .catalog-pills-label { color: rgba(0, 0, 0, 0.5); }
+.light-mode .catalog-pill {
+  background: rgba(0, 0, 0, 0.05);
+  border-color: rgba(0, 0, 0, 0.1);
+  color: #0f172a;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+}
+/* (Removed light-mode override for the tag+name divider — no longer used.) */
+
+@media (prefers-reduced-motion: reduce) {
+  .catalog-pills, .catalog-pill { animation: none; }
+}

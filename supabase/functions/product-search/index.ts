@@ -12,6 +12,7 @@
 //   SUPABASE_SERVICE_ROLE_KEY   — for ingest path
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { logAiUsage } from '../_shared/ai-usage.ts';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -54,6 +55,21 @@ function guessBrand(title: string, source: string): string {
     'Zara', 'H&M', 'Reformation', 'Skims', 'AGOLDE', 'The Row', 'Coach',
     'Mulberry', 'Saint Laurent', 'Bottega Veneta', 'Rolex', 'Cartier',
     'Omega', 'TAG Heuer', 'Apple', 'Samsung',
+    // Activewear / athleisure
+    'Lululemon', 'Alo', 'Alo Yoga', 'Vuori', 'Athleta', 'Gymshark',
+    'Sweaty Betty', 'Outdoor Voices', 'Girlfriend Collective', 'Carbon38',
+    'Fabletics', 'Peloton', 'Under Armour', 'Columbia', 'Patagonia', 'Arc\'teryx',
+    'The North Face', 'Fjällräven', 'Stone Island', 'CP Company',
+    // Contemporary / streetwear
+    'Supreme', 'Off-White', 'Palm Angels', 'Amiri', 'Fear of God', 'Essentials',
+    'Stüssy', 'Kith', 'Carhartt', 'Dickies', 'Polo Ralph Lauren', 'Tommy Hilfiger',
+    'Calvin Klein', 'Gap', 'Banana Republic', 'J.Crew', 'Madewell',
+    'Free People', 'Anthropologie', 'Urban Outfitters', 'Aritzia', 'Wilfred',
+    // Footwear
+    'UGG', 'Birkenstock', 'Dr. Martens', 'Timberland', 'Golden Goose', 'Salomon',
+    'Clarks', 'Sperry', 'Steve Madden', 'ALDO', 'Sam Edelman',
+    // Accessories / jewellery
+    'Mejuri', 'Missoma', 'Monica Vinader', 'Tiffany & Co.', 'Pandora',
   ];
   for (const b of known) {
     if (title.toLowerCase().includes(b.toLowerCase())) return b;
@@ -167,16 +183,20 @@ async function searchSerpApi(query: string, apiKey: string, detailLimit: number)
       if (u && !seen.has(u)) { seen.add(u); images.push(u); }
     }
 
-    // URL resolution chain:
+    // URL resolution chain (priority order):
     //  1. immersive merchant URL (resolved via google_immersive_product sellers)
-    //  2. r.product_link / r.link if it's NOT google.com (rare but possible)
-    //  3. drop the row in the .filter() below
+    //  2. r.product_link / r.link if it's NOT google.com
+    //  3. any available URL as a display fallback (Google Shopping URLs allowed here;
+    //     the frontend's isLikelyProductUrl guard prevents ingesting them).
     const candidates = [
       details?.merchantUrl || '',
       String(r.product_link || ''),
       String(r.link || ''),
     ];
-    const resolvedUrl = candidates.find(u => u && /^https?:\/\//i.test(u) && !isGoogleUrl(u)) || '';
+    // Prefer a direct (non-Google) merchant URL for ingest quality.
+    // Fall back to any valid URL so the product still appears in search results.
+    const merchantUrl = candidates.find(u => u && /^https?:\/\//i.test(u) && !isGoogleUrl(u)) || '';
+    const resolvedUrl = merchantUrl || candidates.find(u => u && /^https?:\/\//i.test(u)) || '';
 
     return {
       name: title,
@@ -189,9 +209,11 @@ async function searchSerpApi(query: string, apiKey: string, detailLimit: number)
       source,
     } as NormalizedProduct;
   }).filter((p: NormalizedProduct) =>
-    // Drop anything still missing a usable merchant URL or image — these are
-    // unscrapeable and would clog the products table forever.
-    p.url && p.image_url && p.name && !isGoogleUrl(p.url),
+    // Only require name and image — URL quality is enforced at ingest time by
+    // the frontend's isLikelyProductUrl check. This allows brand-name searches
+    // (e.g. "lululemon") to surface products even when we can't resolve a direct
+    // merchant URL from SerpAPI's immersive product data.
+    p.image_url && p.name,
   );
 }
 
@@ -217,11 +239,23 @@ Deno.serve(async (req: Request) => {
     if (!serpKey) return jsonRes({ success: false, error: 'SERPAPI_KEY not configured' }, 500);
 
     const rawLimit = url.searchParams.get('detailLimit');
-    let detailLimit = rawLimit ? parseInt(rawLimit, 10) : 20;
+    // Default to 5 immersive detail lookups (was 20) to reduce SerpAPI credit
+    // usage and latency. Each immersive call costs 1 credit and the merchant URL
+    // hit rate drops sharply beyond the top few results.
+    let detailLimit = rawLimit ? parseInt(rawLimit, 10) : 5;
     if (detailLimit < 0) detailLimit = 0;
     if (detailLimit > 20) detailLimit = 20;
 
     const products = await searchSerpApi(query, serpKey, detailLimit);
+
+    // Log the SerpAPI call (1 credit for the main search + up to detailLimit
+    // immersive lookups, each costing 1 credit too).
+    logAiUsage({
+      platform: 'serpapi',
+      operation: 'product-search',
+      units: 1 + Math.min(detailLimit, products.length),
+      metadata: { query, result_count: products.length, detail_limit: detailLimit },
+    });
 
     // ── Ingest path: persist + queue embeddings ─────────────────────────────
     let ingested: { id: string; name: string }[] = [];

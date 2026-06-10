@@ -4,8 +4,28 @@ import { Look, creators } from '~/data/looks';
 import { useAuth } from '~/hooks/useAuth';
 import { hideLookId } from '~/hooks/useHiddenLooks';
 import { useInViewport } from '~/hooks/useInViewport';
-import { useTrailVideo } from './TrailVideoHost';
+import { useTrailVideo, useTrailPrewarm } from './TrailVideoHost';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
+import { toggleFollowShared } from '~/hooks/useFollowState';
+import CreatorAvatarFollow from './CreatorAvatarFollow';
+import { useFollowState } from '~/hooks/useFollowState';
+import { trackImpression } from '~/services/session-tracker';
+import { lookPoster } from '~/services/media-resolver';
+import { useVideoStillRatio } from '~/hooks/useVideoStillRatio';
+import { shouldBeVideo } from '~/utils/videoStillSplit';
+import {
+  prefetchVideoBytes,
+  prefetchHlsHead,
+  captureVideoFrame,
+  isMobileViewport,
+  isSlowConnection,
+} from '~/services/video-loading';
+
+// Per-session impression dedupe so a user scrolling past the same
+// look five times only counts as one impression (one round trip).
+// Lives on module scope so it's shared across every LookCard mount
+// in the same tab; reset on a hard reload.
+const impressionsLogged = new Set<string>();
 
 interface LookCardProps {
   look: Look;
@@ -17,16 +37,59 @@ interface LookCardProps {
    *  Catalog page where the creator identity is already in the page
    *  header - per-tile attribution is redundant noise there. */
   hideCreator?: boolean;
+  /** IntersectionObserver rootMargin for the *active* band — cards inside
+   *  this band attach a live <video> element. Default: '50% 0%' (half a
+   *  viewport above + below). Cards outside this band but still within the
+   *  wider render band fall back to a static poster image, which releases
+   *  the video back to the TrailVideoHost pool. Pass a tighter value for
+   *  overlay feed sections that share bandwidth with a hero video. */
+  rootMargin?: string;
+  /** Skip video entirely and render a static poster thumbnail. Use for
+   *  overlay feed sections (similar looks, YMAL) where multiple simultaneous
+   *  video decoders cause CPU/fan spikes. Card is still tappable. */
+  previewOnly?: boolean;
+  /** Prefer the look's own poster frame (thumbnail/cover) over a product
+   *  packshot for the still tile. Used on the creator catalog so look tiles
+   *  read as looks. */
+  preferLookPoster?: boolean;
 }
 
-const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenLook, onOpenCreator, onCreateCatalog, hideCreator = false }: LookCardProps) {
+// Render band — cards within this margin keep their poster painted but
+// drop the video element. Wider than the active band so videos re-attach
+// before the user can scroll one back into view.
+const RENDER_MARGIN = '200% 0%';
+
+const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenLook, onOpenCreator, onCreateCatalog, hideCreator = false, rootMargin = '50% 0%', previewOnly = false, preferLookPoster = false }: LookCardProps) {
   const cardRef = useRef<HTMLDivElement>(null);
   const slotRef = useRef<HTMLDivElement | null>(null);
-  const [loaded, setLoaded] = useState(false);
-  const inViewport = useInViewport(cardRef);
+  // Poster-first: if the look has a poster image, treat the card as
+  // "loaded" immediately so we never flash a shimmer over a perfectly
+  // good still image while the MP4 streams in.
+  const posterReady = !!lookPoster(look);
+  const [loaded, setLoaded] = useState(() => previewOnly || posterReady);
+  // Active band — close enough to need a live video element.
+  const inActiveBand = useInViewport(cardRef, rootMargin);
+  // Render band — still on screen-ish, but far enough that we drop the
+  // video to free decoder/bandwidth. The card stays in the DOM with its
+  // poster so scrolling back is instant (no remount, no layout shift).
+  const inRenderBand = useInViewport(cardRef, RENDER_MARGIN);
+  // Anything in DOM at all gets the poster painted.
+  const inViewport = inActiveBand || inRenderBand;
   const { user } = useAuth();
   const isSuperAdmin = user?.role === 'super_admin';
   const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  // Follow state for the inline creator chip. We only fetch when the
+  // card actually enters the viewport (useInViewport already fires
+  // further down) — module-level cache in services/follows would be
+  // nicer, but per-card fetch is cheap (single COUNT(*)) and avoids
+  // a shared-state singleton for the first cut.
+  // Shared follow state — one query per handle, every card for the
+  // same creator stays in sync. Earlier this was per-card useState +
+  // useEffect which raced: with 8 cards for one creator, some
+  // resolved before others, so the "+ Follow" button appeared on
+  // some tiles and not others until every race settled.
+  const following = useFollowState(look.creator);
+  const [followBusy, setFollowBusy] = useState(false);
   const longPressTimer = useRef<number | null>(null);
   const longPressFired = useRef(false);
 
@@ -51,6 +114,19 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
     }
   }, []);
 
+  const onToggleFollow = useCallback(async (e: React.MouseEvent) => {
+    e.stopPropagation();
+    if (followBusy || !look.creator) return;
+    setFollowBusy(true);
+    try {
+      // toggleFollowShared updates the cache + every subscribed card
+      // before awaiting the DB write, so every tile for this creator
+      // flips together. Reverts cache-side on failure.
+      await toggleFollowShared(look.creator);
+    } catch { /* shared cache reverts itself */ }
+    finally { setFollowBusy(false); }
+  }, [followBusy, look.creator]);
+
   // Close the admin right-click menu on any outside click or Escape.
   useEffect(() => {
     if (!menu) return;
@@ -67,18 +143,61 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
   const creatorData = creators[look.creator];
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
   const trailId = lookTrailId(look.id);
-  const videoUrl = normalizeLookVideoUrl(look.video, basePath);
+  const fullVideoUrl = normalizeLookVideoUrl(look.video, basePath);
+  // Mobile / slow connections get the smaller H.264 480p variant when
+  // it exists (mirrors pickVideoUrl() in CreativeCard). Same URL is used
+  // by LookOverlay so TrailVideoHost's PoolEntry doesn't re-swap src on
+  // handoff (which would force a re-buffer + first-frame black).
+  const wantMobile = isMobileViewport() || isSlowConnection();
+  // HLS manifest (adaptive ladder) wins when present — one source for the tile
+  // AND the overlay hero, so TrailVideoHost's handoff reuses the same element
+  // and full-screen ramps to a high rung. LookOverlay picks the SAME url. When
+  // absent, fall back to the progressive mobile/full split (unchanged).
+  const videoUrl = look.hls_url || (wantMobile && look.mobile_video_url ? look.mobile_video_url : fullVideoUrl);
   // Look thumbnail (server-extracted) → look cover image → empty.
   // Used as the <video poster=> so the card paints a real image while
   // the MP4 streams. Empty string disables the attribute.
-  const posterUrl = look.thumbnail_url || look.cover || '';
+  const posterUrl = lookPoster(look);
+  // When the Dial pushes this card into still mode, prefer the first
+  // product's retail image over the look's own thumbnail — the
+  // product photo is the merchandising shot and reads better as a
+  // static tile. Falls back through the poster chain if no product
+  // images are attached.
+  const firstProductImage = look.products?.find(p => !!p.image)?.image || '';
+  // preferLookPoster (creator catalog) shows the LOOK's own poster frame so a
+  // look tile reads as the look — not a product packshot. The default feed
+  // behaviour keeps the merchandising product photo for dial-driven stills.
+  const lookOwnPoster = look.thumbnail_url || look.cover || '';
+  const stillImageUrl = preferLookPoster
+    ? (lookOwnPoster || firstProductImage || posterUrl)
+    : (firstProductImage || posterUrl);
 
-  // Defer slot population to viewport. The TrailVideoHost pool keeps the
-  // element alive so the LookOverlay hero (same trailId) reuses the same
-  // running <video> on tap - no remount, no first-frame black.
+  // Defer slot population to the *active* viewport band. Outside that
+  // band the video is detached and returned to the TrailVideoHost pool —
+  // bounded CPU/decoder use no matter how long the infinite feed gets.
+  // The LookOverlay hero (same trailId) still reuses the same running
+  // <video> on tap — no remount, no first-frame black.
+  //
+  // Video ↔ Still ratio dial (/admin/dials → video_still_ratio): when
+  // the global ratio is below 100, a deterministic per-card subset
+  // gets forced into the still-image path instead of the video path.
+  //
+  // Fallbacks (Phase 8): the dial is a preference, not a guarantee.
+  //   • A card flagged "still" with no poster falls back to video so
+  //     the slot isn't a flat colour block.
+  //   • A card flagged "video" with no video URL stays as a still
+  //     (its poster / cover image) — same behaviour as today.
+  // inActiveBand / previewOnly gates still apply, so off-screen and
+  // preview cards stay cheap regardless of the dial.
+  const globalVideoRatio = useVideoStillRatio();
+  const dialPrefersVideo = shouldBeVideo(look.id, globalVideoRatio);
+  const hasVideo  = !!videoUrl;
+  const hasPoster = !!posterUrl;
+  const allowVideoForThisCard = hasVideo && (dialPrefersVideo || !hasPoster);
+  const videoActive = inActiveBand && !previewOnly && allowVideoForThisCard;
   const setVideoSlot = useTrailVideo(
-    inViewport ? trailId : undefined,
-    inViewport ? videoUrl : undefined,
+    videoActive ? trailId : undefined,
+    videoActive ? videoUrl : undefined,
     posterUrl || undefined,
   );
 
@@ -87,9 +206,31 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
     setVideoSlot(node);
   }, [setVideoSlot]);
 
-  // Mark loaded once the host video has frames.
+  // Emit one impression per session per look the first time the card
+  // crosses the viewport. Deduped via a module-scope Set so a user
+  // scrolling past the same tile multiple times still counts as one.
   useEffect(() => {
     if (!inViewport) return;
+    const key = String(look.id ?? '');
+    if (!key || impressionsLogged.has(key)) return;
+    impressionsLogged.add(key);
+    trackImpression({ type: 'look', id: key, uuid: look.uuid, context: look.title?.slice(0, 200) });
+    // Tell the following rail this look is now seen so its unseen badge
+    // decrements live (the rail's catalog:look-seen listener no-ops when the
+    // uuid isn't one of its counted unseen looks). Without this the badge
+    // only cleared on a full refetch.
+    if (look.uuid) {
+      try {
+        window.dispatchEvent(new CustomEvent('catalog:look-seen', { detail: { uuid: look.uuid, creator: look.creator } }));
+      } catch { /* no-op */ }
+    }
+  }, [inViewport, look.id, look.uuid, look.creator, look.title]);
+
+  // Mark loaded once the host video has frames. If we already have a
+  // poster, `loaded` was true from the start — this just keeps things in
+  // sync for the rare no-poster path.
+  useEffect(() => {
+    if (!videoActive) return;
     const video = slotRef.current?.querySelector('video') as HTMLVideoElement | null;
     if (!video) return;
     if (video.readyState >= 2) { setLoaded(true); return; }
@@ -100,12 +241,41 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
       clearTimeout(timeout);
       ['playing', 'canplay', 'loadeddata'].forEach(evt => video.removeEventListener(evt, handler));
     };
-  }, [inViewport, trailId]);
+  }, [videoActive, trailId]);
+
+  // Pre-warm: create the <video> element in the offscreen pool as soon as
+  // the card enters the render band (~2 viewports away). The media pipeline
+  // starts buffering immediately. When the card enters the active band,
+  // useTrailVideo's attach() finds the already-loading element and starts
+  // playing near-instantly instead of cold-starting from zero.
+  // This mirrors what the VideoPlaybackDirector does for CreativeCardV2.
+  const prewarmId  = inRenderBand && !previewOnly && allowVideoForThisCard ? trailId   : undefined;
+  const prewarmSrc = inRenderBand && !previewOnly && allowVideoForThisCard ? videoUrl  : undefined;
+  useTrailPrewarm(prewarmId, prewarmSrc, posterUrl || undefined);
+
+  // For the overlay: when serving a down-sized mobile variant on this card,
+  // also warm the full-res URL so tapping in opens the overlay instantly.
+  useEffect(() => {
+    // HLS sources stream segments on demand via hls.js — no full-file byte
+    // prewarm needed (or wanted; it'd burn bytes on an MP4 we won't play).
+    if (!inRenderBand || previewOnly || look.hls_url || videoUrl === fullVideoUrl) return;
+    const t = window.setTimeout(() => prefetchVideoBytes(fullVideoUrl), 500);
+    return () => window.clearTimeout(t);
+  }, [inRenderBand, previewOnly, videoUrl, fullVideoUrl, look.hls_url]);
+
+  // HLS playback source: warm the manifest + lowest-rung init/first segments
+  // ahead of the play band so hls.js attaches to a cache hit and the first
+  // frame paints without a visible load as the card scrolls up.
+  useEffect(() => {
+    if (!inRenderBand || previewOnly || !allowVideoForThisCard) return;
+    if (look.hls_url) prefetchHlsHead(look.hls_url);
+  }, [inRenderBand, previewOnly, allowVideoForThisCard, look.hls_url]);
 
   return (
     <div
       ref={cardRef}
       className={`${className} ${loaded ? 'loaded' : ''}`}
+      data-present-id={`card:${look.id}`}
       onClick={(e) => {
         if (longPressFired.current) {
           longPressFired.current = false;
@@ -114,6 +284,19 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
           return;
         }
         if (!(e.target as HTMLElement).closest('.card-creator-row')) {
+          // Phase 9 — snapshot the currently-playing frame so LookOverlay
+          // can paint it as an instant poster behind its hero <video> slot.
+          // Eliminates the black flash between card → overlay even when
+          // the trail-host hasn't yet swapped the live element across.
+          try {
+            const video = slotRef.current?.querySelector('video') as HTMLVideoElement | null;
+            const frame = captureVideoFrame(video);
+            if (frame) {
+              const w = window as Window & { __feedTapPosters?: Record<string, string> };
+              w.__feedTapPosters = w.__feedTapPosters || {};
+              w.__feedTapPosters[trailId] = frame;
+            }
+          } catch { /* ignore — overlay falls back to thumbnail_url */ }
           onOpenLook(look);
         }
       }}
@@ -131,40 +314,52 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
     >
       <div className="card-inner">
         {!loaded && <div className="card-shimmer" />}
-        {/* TrailVideoHost slot - shared <video> hands off to LookOverlay's
+        {/* TrailVideoHost slot — shared <video> hands off to LookOverlay's
             hero on tap via DOM appendChild. No layout morph; the card's
-            own video frames stay alive while the overlay opacity-fades in. */}
-        <div
-          ref={setSlot}
-          className="card-video-slot"
-          data-trail-id={trailId}
-          style={{ position: 'absolute', inset: 0 } as React.CSSProperties}
-        />
+            own video frames stay alive while the overlay opacity-fades in.
+            We paint the poster as a CSS background on the slot itself so
+            the user sees a real still image instantly — the <video> then
+            decodes on top of it. previewOnly and out-of-active-band cards
+            skip the video entirely and render poster only. */}
+        {previewOnly || !videoActive ? (
+          <div
+            className="card-video-slot"
+            style={{
+              position: 'absolute',
+              inset: 0,
+              // Prefer the retail product image when the Dial forced
+              // this into the still path; thumbnail / cover are the
+              // fallback chain for cards in still mode for other
+              // reasons (previewOnly, out-of-band, missing video).
+              backgroundImage: (stillImageUrl || posterUrl) ? `url(${stillImageUrl || posterUrl})` : undefined,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              backgroundColor: look.color || '#111',
+            } as React.CSSProperties}
+          />
+        ) : (
+          <div
+            ref={setSlot}
+            className="card-video-slot"
+            data-trail-id={trailId}
+            style={{
+              position: 'absolute',
+              inset: 0,
+              backgroundImage: posterUrl ? `url(${posterUrl})` : undefined,
+              backgroundSize: 'cover',
+              backgroundPosition: 'center',
+              backgroundColor: look.color || '#111',
+            } as React.CSSProperties}
+          />
+        )}
         <div className="card-gradient" />
 
         {!hideCreator && (
-          <div
-            className="card-creator-row"
-            onClick={(e) => {
-              e.stopPropagation();
-              onOpenCreator(look.creator);
-            }}
-          >
-            <img
-              className="card-creator-avatar"
-              src={creatorData?.avatar || look.creatorAvatar || ''}
-              alt={creatorData?.displayName || look.creatorDisplayName || ''}
-            />
-            <span className="card-creator-name">
-              {/* Prefer the static-seed display name, then the look-level
-                  fallback emitted by user-published flows. If neither is
-                  set and the handle is a raw user:<uuid>, hide it - the
-                  uuid is noise in the UI. */}
-              {creatorData?.displayName
-                || look.creatorDisplayName
-                || (look.creator?.startsWith('user:') ? '' : look.creator)}
-            </span>
-          </div>
+          <LookCardCreatorChip
+            look={look}
+            creatorData={creatorData}
+            onOpenCreator={onOpenCreator}
+          />
         )}
       </div>
       {menu && isSuperAdmin && (
@@ -189,7 +384,7 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
             onClick={async (e) => {
               e.stopPropagation();
               setMenu(null);
-              await hideLookId(look.id);
+              await hideLookId(look);
             }}
             style={{
               width: '100%',
@@ -222,5 +417,50 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
     </div>
   );
 });
+
+/**
+ * Creator identity on a look card — avatar (+ follow badge) AND the creator
+ * name in the lower-left, identical to the main feed's CreativeCardV2 chip, so
+ * every look card reads the same wherever it appears (feed, creator catalog,
+ * "more like this" on the look/product pages). Uses the same .card-creator-tag
+ * markup + CSS as the feed; stopPropagation keeps a tap on the chip from
+ * opening the look underneath.
+ */
+function LookCardCreatorChip({
+  look,
+  creatorData,
+  onOpenCreator,
+}: {
+  look: Look;
+  creatorData: { displayName?: string; avatar?: string; name?: string } | undefined;
+  onOpenCreator: (name: string) => void;
+}) {
+  const avatar = look.creatorAvatar || creatorData?.avatar || '';
+  const name = creatorData?.displayName
+    || look.creatorDisplayName
+    || (look.creator?.startsWith('user:') ? '' : look.creator || '');
+  return (
+    <div className="card-creator-tag" onClick={(e) => e.stopPropagation()}>
+      <CreatorAvatarFollow
+        handle={look.creator}
+        avatarUrl={avatar}
+        displayName={name}
+        size={20}
+        onOpenCreator={onOpenCreator}
+        avatarOpensCreator
+      />
+      {name && (
+        <button
+          type="button"
+          className="card-creator-tag-name"
+          onClick={(e) => { e.stopPropagation(); onOpenCreator(look.creator); }}
+          aria-label={`Open ${name}'s catalog`}
+        >
+          {name}
+        </button>
+      )}
+    </div>
+  );
+}
 
 export default LookCard;

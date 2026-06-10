@@ -7,15 +7,52 @@ const MODAL_SCRAPER_URL = import.meta.env.VITE_MODAL_SCRAPER_URL || '';
 
 async function _triggerScrape(productId: string, url: string): Promise<void> {
   if (!MODAL_SCRAPER_URL) return;
-  try {
-    await fetch(MODAL_SCRAPER_URL, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ product_id: productId, url }),
-    });
-  } catch {
-    // Non-fatal - the daily cron will pick it up
-  }
+  // Fire-and-forget with a 6s ceiling. Modal cold-starts can stall this
+  // request for minutes; awaiting them froze the "Add via Brand
+  // Website" modal on the "Adding…" state until the network timed out.
+  // The DB row is already inserted before we get here, so the daily
+  // cron + the INSERT trigger both still pick this up if Modal never
+  // responds. Errors / timeouts are intentionally swallowed.
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 6000);
+  fetch(MODAL_SCRAPER_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ product_id: productId, url }),
+    signal: ctrl.signal,
+  })
+    .catch(() => { /* non-fatal — daily cron will pick it up */ })
+    .finally(() => clearTimeout(timer));
+}
+
+/**
+ * Trigger the scraper for a product immediately (non-fatal).
+ * Call after inserting a pending product so it doesn't wait for the daily cron.
+ */
+export async function triggerScrape(productId: string, url: string): Promise<void> {
+  return _triggerScrape(productId, url);
+}
+
+/**
+ * Ask the Modal scraper to flush every pending / failed row right now
+ * (it dispatches up to 10 per call, bounded by scrape_and_update's
+ * max_containers). Fire-and-forget so the admin UI never blocks on a
+ * Modal cold start; the queued rows still get picked up by the daily
+ * cron if this call fails. Used by the "Ingest measurements & fabrics"
+ * button on /admin/data?tab=products.
+ */
+export async function triggerScrapeFlush(): Promise<void> {
+  if (!MODAL_SCRAPER_URL) return;
+  const ctrl = new AbortController();
+  const timer = setTimeout(() => ctrl.abort(), 6000);
+  fetch(MODAL_SCRAPER_URL, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ flush_pending: true }),
+    signal: ctrl.signal,
+  })
+    .catch(() => { /* non-fatal — daily cron will pick it up */ })
+    .finally(() => clearTimeout(timer));
 }
 
 // ============================================
@@ -236,13 +273,13 @@ export async function reconcileStuckScrapes(staleAfterMinutes = 20): Promise<num
  * Insert a new product URL row with scrape_status='pending' and immediately
  * trigger the scraper (don't rely solely on the Supabase INSERT webhook).
  */
-export async function addProductUrl(url: string): Promise<ProductRow> {
+export async function addProductUrl(url: string, source = 'brand_url'): Promise<ProductRow> {
   if (!supabase) throw new Error('Supabase not configured');
   const reason = nonProductUrlReason(url);
   if (reason) throw new Error(`Refusing to add: ${reason}. Paste a direct product page URL.`);
   const { data, error } = await supabase
     .from('products')
-    .insert({ url, scrape_status: 'pending', source: 'brand_url' })
+    .insert({ url, scrape_status: 'pending', source })
     .select('id, name, brand, price, url, image_url, images, scrape_status, scraped_at, scrape_error, created_at')
     .single();
   if (error) throw new Error(error.message);

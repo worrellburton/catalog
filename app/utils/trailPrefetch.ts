@@ -11,7 +11,10 @@
 // Idempotent - calling twice with the same rows is a no-op.
 
 import type { ProductAd } from '~/services/product-creative';
-import { supabaseImage } from './supabaseImage';
+import type { Look } from '~/data/looks';
+import { withTransform } from './supabase-image';
+import { pickPosterUrl, prefetchHlsHead } from '~/services/video-loading';
+import { lookPoster } from '~/services/media-resolver';
 
 const POSTERS_TO_WARM = 16;
 // Warm the first ~2 viewports of cards. At ~6 cards per mobile viewport
@@ -19,6 +22,12 @@ const POSTERS_TO_WARM = 16;
 // initial set before the in-page IntersectionObserver has time to trigger
 // the regular preload chain.
 const VIDEOS_TO_WARM = 18;
+
+// Match CreativeCardV2's poster transform EXACTLY (same width/quality/resize
+// AND the pickPosterUrl source) so the warmed URL is a byte-for-byte cache hit
+// when the card mounts. A mismatch means the prefetch downloads one variant and
+// the card downloads another — double the bytes, zero benefit.
+const POSTER_TRANSFORM = { width: 540, quality: 72, resize: 'contain' as const };
 
 const warmedPosters = new Set<string>();
 const warmedVideos = new Set<string>();
@@ -76,14 +85,14 @@ async function decodeImage(url: string): Promise<void> {
 export function primeTrailAssets(rows: ProductAd[]): void {
   if (!rows?.length) return;
 
-  // Poster warm: only need a thumbnail for the first ~12 cards above-the-fold.
-  // Run Supabase Storage URLs through the render endpoint with width=480 so
-  // we pull a ~30 KB resized JPEG instead of a 1–2 MB original. External
-  // URLs (Unsplash, brand sites) pass through unchanged.
+  // Poster warm: the first ~16 cards above-the-fold. Derive the source AND the
+  // transform exactly the way CreativeCardV2 does (pickPosterUrl → withTransform)
+  // so the preload is a cache hit when the card mounts — not a second,
+  // differently-parameterised download. External URLs pass through unchanged.
   for (const row of rows.slice(0, POSTERS_TO_WARM)) {
-    const rawPoster = row.thumbnail_url || row.product?.image_url;
+    const rawPoster = pickPosterUrl(row);
     if (!rawPoster) continue;
-    const poster = supabaseImage(rawPoster, { width: 480, quality: 70 });
+    const poster = withTransform(rawPoster, POSTER_TRANSFORM) || rawPoster;
     if (warmedPosters.has(poster)) continue;
     warmedPosters.add(poster);
     injectPreload(poster, 'image');
@@ -95,6 +104,43 @@ export function primeTrailAssets(rows: ProductAd[]): void {
   if (!networkLooksHealthy()) return;
   for (const row of rows.slice(0, VIDEOS_TO_WARM)) {
     const url = row.video_url;
+    if (!url || warmedVideos.has(url)) continue;
+    warmedVideos.add(url);
+    injectPreload(url, 'video', 'video/mp4');
+  }
+}
+
+export function primeLookAssets(rows: Look[]): void {
+  if (!rows?.length) return;
+
+  for (const row of rows.slice(0, POSTERS_TO_WARM)) {
+    // Mirror CreativeCardV2's look-poster fallback EXACTLY (thumbnail → cover →
+    // first product image) so the warmed URL is the same one the card renders.
+    // ~60% of feed looks have no thumbnail_url and now poster off a product
+    // image; warming only thumbnail/cover left those cold, so they painted
+    // black for the download window when scrolled into view or on overlay
+    // return. Warming the product-image fallback makes them a cache hit.
+    const rawPoster = lookPoster(row);
+    if (!rawPoster) continue;
+    const poster = withTransform(rawPoster, POSTER_TRANSFORM) || rawPoster;
+    if (warmedPosters.has(poster)) continue;
+    warmedPosters.add(poster);
+    injectPreload(poster, 'image');
+    void decodeImage(poster);
+  }
+
+  if (!networkLooksHealthy()) return;
+  for (const row of rows.slice(0, VIDEOS_TO_WARM)) {
+    // HLS-aware: when a look ships the adaptive ladder (hls_url), that's the
+    // source LookCard/CreativeCardV2 actually play — warm its head (manifest +
+    // lowest-rung init + first segments) so hls.js attaches to a cache hit. A
+    // full-file <link rel=preload as=video> on the MP4 here would download bytes
+    // the player never reads AND steal bandwidth from the HLS segment fetch.
+    if (row.hls_url) {
+      prefetchHlsHead(row.hls_url);
+      continue;
+    }
+    const url = row.mobile_video_url || row.video;
     if (!url || warmedVideos.has(url)) continue;
     warmedVideos.add(url);
     injectPreload(url, 'video', 'video/mp4');

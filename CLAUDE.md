@@ -3,6 +3,7 @@
 > This file is the single source of truth for all AI tools (Claude Code, GitHub Copilot, etc.) working in this repo.
 > It is split into self-contained sections. Jump to the section relevant to your current task.
 
+
 ## Table of Contents
 
 0. [Session Startup Checklist](#section-0--session-startup-checklist)
@@ -39,6 +40,16 @@
 3. Project ref is `vtarjrnqvcqbhoclvcur`. See Section 7 for the full
    operational reference.
 
+## Working through queued tasks
+
+When several tasks are lined up (the user has stacked multiple requests,
+or one request fans out into several), and you use `AskUserQuestion` to
+sequence them, ALWAYS include an option like **"Do them all — just go in
+order (as they came in)"** as the first/recommended choice. Default to
+working through the whole queue top-to-bottom, shipping each as it's
+done, rather than stopping after one. Only ask for a different ordering
+when there's a genuine dependency or risk worth flagging.
+
 ---
 
 # SECTION 1 — Consumer App (Catalog)
@@ -49,7 +60,13 @@ A visual lookbook webapp for browsing fashion "looks" — short video clips pair
 
 | Environment | URL |
 |---|---|
-| Production / Dev | https://catalogdev.vercel.app |
+| Production | https://catalog.shop |
+| Dev preview | https://catalogdev.vercel.app |
+
+`catalog.shop` is the canonical production domain — it deploys from
+`main`. `catalogdev.vercel.app` is the Vercel-default preview host
+that builds from `dev`. Treat `catalog.shop` as the default URL when
+referring to the live app.
 
 (GitHub Pages at `worrellburton.github.io/catalog/` was the previous host
 and has been retired — see "Deployment" below. If you find a `gh-pages`
@@ -107,7 +124,7 @@ This project uses **three long-lived branches**. All AI tools (Claude Code, GitH
 |---|---|---|
 | `dev` | Active development, all new work goes here first | Vercel preview (per-branch URL) |
 | `staging` | Pre-release testing and QA | Vercel preview (per-branch URL) |
-| `main` | Production-ready code only | Production at https://catalogdev.vercel.app |
+| `main` | Production-ready code only | Production at https://catalog.shop |
 
 ### Rules
 
@@ -166,6 +183,26 @@ Single-page app with React state-driven views:
 - **IntersectionObserver for video** — Videos lazy-load and auto-play/pause based on viewport visibility
 - **localStorage bookmarks** — Custom useBookmarks hook for persistent state
 - **`import.meta.env.BASE_URL`** — Vite's built-in env var used for asset paths (replaces Next.js basePath)
+
+### CSS convention: centering fixed/overlay pills
+
+Center `position: fixed` / `absolute` pills, bars, and overlays with
+`left: 0; right: 0; margin-inline: auto` + an explicit width — **never**
+`left: 50% + transform: translateX(-50%)`. Two reasons this is a hard
+rule (both have already caused production regressions):
+
+1. **Transform clobbering** — any animation that sets `transform`
+   (chrome auto-hide, drag-to-dismiss, hover nudge) overwrites the
+   `translateX(-50%)` and snaps the element off-axis unless every such
+   rule re-chains it. Margin-based centering leaves `transform` free.
+2. **`100vw` desync** — sizing a centered element with `100vw`
+   (or `calc(100vw - x)`) counts the scrollbar/inset gutter while
+   `%`-based centering does not, so the width and the centering drift
+   apart and shove the element sideways. Size widths in `%`
+   (`min(560px, calc(100% - 48px))`), not `vw`.
+
+See `.bottom-bar` in `app/styles/bottom-bar.css` for the reference
+implementation (it carries a GUARD comment to the same effect).
 
 ---
 

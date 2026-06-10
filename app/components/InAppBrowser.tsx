@@ -12,6 +12,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Product } from '~/data/looks';
+import '~/styles/in-app-browser.css';
 
 interface InAppBrowserProps {
   url: string;

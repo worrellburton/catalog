@@ -1,16 +1,69 @@
 
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useMemo, useRef } from 'react';
 import CatalogLogo from './CatalogLogo';
 import { prefetchHomeFeed } from '~/services/product-creative';
 import { primeTrailAssets } from '~/utils/trailPrefetch';
+import '~/styles/landing-page.css';
 
 interface LandingPageProps {
   onStartBrowsing: () => void;
 }
 
+// CTA rotation — mirrors the hero-headline pattern in ShoppingForHero.
+// First LANDING_CTA_BASELINE_VISITS the visitor sees the canonical
+// "Start browsing" copy on every CTA; beyond that, the prominent
+// CTAs rotate through LANDING_CTA_VARIANTS keyed off the visit index
+// so the page feels fresh on a return visit without flickering
+// mid-session. Bottom + hero CTAs share the same picked variant so
+// the page reads as one consistent voice instead of two competing
+// invitations.
+const LANDING_CTA_VISIT_KEY = 'catalog:landing-cta-visits:v1';
+const LANDING_CTA_BASELINE_VISITS = 3;
+const BASELINE_HERO_CTA = 'Start browsing';
+const BASELINE_FINAL_CTA = 'Start browsing for free';
+const LANDING_CTA_VARIANTS: ReadonlyArray<{ hero: string; final: string }> = [
+  { hero: 'Try now',                    final: 'Try Catalog free' },
+  { hero: 'Show me looks',              final: 'Show me what’s trending' },
+  { hero: 'I’m in',                final: 'Drop me in the feed' },
+  { hero: 'Let’s shop',            final: 'Let’s go shopping' },
+  { hero: 'Browse the catalog',         final: 'Open the catalog' },
+  { hero: 'Find my style',              final: 'Find my next favorite look' },
+  { hero: 'See what’s new',        final: 'See what’s dropping today' },
+  { hero: 'Open the feed',              final: 'Open the feed, no signup' },
+];
+
+function readLandingVisitCount(): number {
+  if (typeof window === 'undefined') return 0;
+  try {
+    const raw = window.localStorage.getItem(LANDING_CTA_VISIT_KEY);
+    return raw ? parseInt(raw, 10) || 0 : 0;
+  } catch { return 0; }
+}
+function bumpLandingVisitCount(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const n = readLandingVisitCount() + 1;
+    window.localStorage.setItem(LANDING_CTA_VISIT_KEY, String(n));
+  } catch { /* quota */ }
+}
+
 const LandingPage: React.FC<LandingPageProps> = ({ onStartBrowsing }) => {
   const navRef = useRef<HTMLElement>(null);
   const basePath = import.meta.env.BASE_URL.replace(/\/$/, '');
+
+  // Pick the visit's CTA copy once on mount. Locking it in useMemo means
+  // the text never flips while the visitor is reading the page, even if
+  // the component re-renders (scroll observer, prefetch tick, etc.).
+  const ctaCopy = useMemo<{ hero: string; final: string }>(() => {
+    const visits = readLandingVisitCount();
+    if (visits < LANDING_CTA_BASELINE_VISITS) {
+      return { hero: BASELINE_HERO_CTA, final: BASELINE_FINAL_CTA };
+    }
+    return LANDING_CTA_VARIANTS[
+      (visits - LANDING_CTA_BASELINE_VISITS) % LANDING_CTA_VARIANTS.length
+    ];
+  }, []);
+  useEffect(() => { bumpLandingVisitCount(); }, []);
 
   // Prime the trail: fetch the live creative list and warm asset caches while
   // the visitor reads the marketing page. By the time they tap "Continue with
@@ -130,7 +183,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onStartBrowsing }) => {
           </p>
           <div className="landing-hero-actions">
             <button className="landing-hero-cta" onClick={onStartBrowsing}>
-              Start browsing
+              {ctaCopy.hero}
             </button>
             <button
               className="landing-hero-secondary"
@@ -342,7 +395,7 @@ const LandingPage: React.FC<LandingPageProps> = ({ onStartBrowsing }) => {
             Join thousands of shoppers already browsing creator-curated looks on Catalog.
           </p>
           <button className="landing-cta-btn" onClick={onStartBrowsing}>
-            Start browsing for free
+            {ctaCopy.final}
           </button>
         </div>
       </section>

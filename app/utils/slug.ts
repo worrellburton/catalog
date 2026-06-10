@@ -55,18 +55,48 @@ export function productSlug(p: ProductLike): string {
 
 export interface LookLike {
   id?: string | number | null;
+  /** DB looks carry a real UUID. When present it's the only stable,
+   *  resolvable identifier — `id` is often a synthetic negative
+   *  feed-index for DB rows with no legacy_id, which produces an
+   *  unresolvable share slug. Always prefer the uuid suffix. */
+  uuid?: string | null;
   creator?: string | null;
+  creatorDisplayName?: string | null;
   title?: string | null;
 }
 
+/**
+ * Pick the cleanest creator label for the URL. Orphan looks (looks
+ * promoted from a user-generation without a real handle) carry the
+ * synthetic placeholder `user:<uuid>` in the `creator` field — passing
+ * that to `kebab()` produces a 36-char UUID embedded in the slug,
+ * which is what the user just flagged ("/l/user-27729261-…"). When
+ * we see the placeholder we prefer the human display name; falling
+ * back to nothing rather than the UUID.
+ */
+function pickCreatorLabel(l: LookLike): string {
+  const c = (l.creator ?? '').trim();
+  if (c && !c.startsWith('user:')) return c;
+  const dn = (l.creatorDisplayName ?? '').trim();
+  return dn;
+}
+
 export function lookSlug(l: LookLike): string {
-  const human = kebab([l.creator, l.title].filter(Boolean).join(' '));
-  // Look IDs in the seed data are simple numbers; pass them through
-  // verbatim so the URL ends with /quiet-luxury-1 etc. UUID looks
-  // (if/when looks move to the DB) get the same 8-char prefix
-  // treatment products use.
-  const idStr = l.id == null ? '' : String(l.id);
-  const suffix = /^\d+$/.test(idStr) ? idStr : uuidPrefix(idStr);
+  const creatorLabel = pickCreatorLabel(l);
+  const human = kebab([creatorLabel, l.title].filter(Boolean).join(' '));
+  // Suffix priority:
+  //   1. DB look → 8-char UUID prefix (stable, resolvable on cold load).
+  //   2. Seed look → its simple numeric id verbatim (/quiet-luxury-1).
+  // A DB look's numeric `id` is frequently a synthetic negative
+  // feed-index (no legacy_id), which is NOT resolvable — so whenever a
+  // uuid exists it wins.
+  let suffix = '';
+  if (l.uuid) {
+    suffix = uuidPrefix(l.uuid);
+  } else if (l.id != null) {
+    const idStr = String(l.id);
+    suffix = /^\d+$/.test(idStr) ? idStr : uuidPrefix(idStr);
+  }
   if (!human && !suffix) return '';
   if (!suffix) return human;
   return human ? `${human}-${suffix}` : suffix;
@@ -76,6 +106,29 @@ export function lookSlug(l: LookLike): string {
  *  no UUID needed. */
 export function brandSlug(brand: string): string {
   return kebab(brand);
+}
+
+/** Creator slug for the URL bar. Two flavors:
+ *    • Real creator handles ("janehamilton", "@lily") → kebab(handle)
+ *    • Synthetic owner keys ("user:<uuid>") → "u-<uuid-8>" so the
+ *      bar shows something stable + recognizable instead of leaking
+ *      a 36-char user id into every share link.
+ *  reverseCreatorSlug() in useOverlayRouter handles the inverse. */
+export function creatorSlug(handle: string): string {
+  if (!handle) return '';
+  if (handle.startsWith('user:')) {
+    const uuid = handle.slice(5);
+    return `u-${uuid.slice(0, 8)}`;
+  }
+  return kebab(handle.replace(/^@/, ''));
+}
+
+/** Increment an 8-char hex prefix by 1 (for UUID range lookups).
+ *  Returns null on overflow (all-f prefix). */
+export function nextHexPrefix(prefix: string): string | null {
+  const n = parseInt(prefix, 16) + 1;
+  if (n > 0xffffffff) return null;
+  return n.toString(16).padStart(8, '0');
 }
 
 /** Pull the trailing 8-char UUID prefix off a product slug.

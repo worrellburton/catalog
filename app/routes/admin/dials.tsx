@@ -1,0 +1,913 @@
+import { useEffect, useMemo, useRef, useState } from 'react';
+import {
+  getVideoStillRatio,
+  setVideoStillRatio,
+  subscribeVideoStillRatio,
+  DEFAULT_VIDEO_STILL_RATIO,
+  getProductsImageOnly,
+  getShowBrandLogos,
+  setShowBrandLogos,
+  subscribeShowBrandLogos,
+  DEFAULT_SHOW_BRAND_LOGOS,
+  setProductsImageOnly,
+  subscribeProductsImageOnly,
+  DEFAULT_PRODUCTS_IMAGE_ONLY,
+  getProductSimilarityThreshold,
+  setProductSimilarityThreshold,
+  subscribeProductSimilarityThreshold,
+  DEFAULT_PRODUCT_SIMILARITY,
+  getLookSimilarityThreshold,
+  setLookSimilarityThreshold,
+  subscribeLookSimilarityThreshold,
+  DEFAULT_LOOK_SIMILARITY,
+  getCommentsEnabled,
+  setCommentsEnabled,
+  subscribeCommentsEnabled,
+  DEFAULT_COMMENTS_ENABLED,
+  getWaitlistMode,
+  setWaitlistMode,
+  subscribeWaitlistMode,
+  DEFAULT_WAITLIST_MODE,
+} from '~/services/dials';
+import { backfillBrandLogos, type BackfillResult } from '~/services/brandLogos';
+import { shouldBeVideo } from '~/utils/videoStillSplit';
+
+/**
+ * /admin/dials — global tuning knobs that affect the whole catalog
+ * surface. First dial: Video → Still image ratio. Phase 10 polish:
+ * snap points + a live preview grid that mirrors the predicate the
+ * consumer feed actually uses, so the admin knows what the result
+ * will look like before they walk away from the page.
+ */
+
+const SNAP_POINTS = [0, 25, 50, 75, 100] as const;
+
+// Stable demo grid for the preview — fixed ids so the predicate
+// keeps the same cards on the same side as the admin drags.
+const PREVIEW_CARD_IDS = Array.from({ length: 12 }, (_, i) => `preview-${i}`);
+
+export default function AdminDials() {
+  const [ratio, setRatio] = useState<number>(DEFAULT_VIDEO_STILL_RATIO);
+  const [loaded, setLoaded] = useState(false);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const saveTimer = useRef<number | null>(null);
+  // Latest value we've ASKED to persist — used to ignore realtime
+  // echoes of our own write so the slider doesn't jitter mid-drag.
+  const inflightValue = useRef<number | null>(null);
+
+  useEffect(() => {
+    let cancelled = false;
+    getVideoStillRatio().then(v => {
+      if (cancelled) return;
+      setRatio(v);
+      setLoaded(true);
+    });
+    const unsub = subscribeVideoStillRatio(v => {
+      if (cancelled) return;
+      if (inflightValue.current === v) return;
+      setRatio(v);
+    });
+    return () => { cancelled = true; unsub(); };
+  }, []);
+
+  const persist = (next: number) => {
+    if (saveTimer.current != null) window.clearTimeout(saveTimer.current);
+    saveTimer.current = window.setTimeout(() => {
+      saveTimer.current = null;
+      inflightValue.current = next;
+      setSaving(true);
+      setVideoStillRatio(next)
+        .catch(err => { setError(err.message || 'Save failed'); })
+        .finally(() => {
+          setSaving(false);
+          window.setTimeout(() => {
+            if (inflightValue.current === next) inflightValue.current = null;
+          }, 1500);
+        });
+    }, 180);
+  };
+
+  const onSlide = (next: number) => {
+    setRatio(next);
+    setError(null);
+    persist(next);
+  };
+
+  const previewSplit = useMemo(() => {
+    const videoCount = PREVIEW_CARD_IDS.filter(id => shouldBeVideo(id, ratio)).length;
+    return { videoCount, stillCount: PREVIEW_CARD_IDS.length - videoCount };
+  }, [ratio]);
+
+  // ── Products image-only toggle ──────────────────────────────────────
+  // When ON, the consumer feed renders product tiles as static images
+  // (looks still play video). Mirrors the ratio dial's
+  // realtime-sync + optimistic-update pattern.
+  const [productsImageOnly, setProductsImageOnlyState] = useState<boolean>(DEFAULT_PRODUCTS_IMAGE_ONLY);
+  const [productsImageOnlyLoaded, setProductsImageOnlyLoaded] = useState(false);
+  const [productsImageOnlySaving, setProductsImageOnlySaving] = useState(false);
+
+  // Brand-logos dial state. Same pattern as products-image-only.
+  const [showBrandLogos, setShowBrandLogosState] = useState<boolean>(DEFAULT_SHOW_BRAND_LOGOS);
+  const [brandLogosLoaded, setBrandLogosLoaded] = useState(false);
+  const [brandLogosSaving, setBrandLogosSaving] = useState(false);
+  const inflightBrandLogos = useRef<boolean | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    getShowBrandLogos().then(v => {
+      if (cancelled) return;
+      setShowBrandLogosState(v);
+      setBrandLogosLoaded(true);
+    });
+    const unsub = subscribeShowBrandLogos(v => {
+      if (cancelled) return;
+      if (inflightBrandLogos.current === v) return;
+      setShowBrandLogosState(v);
+    });
+    return () => { cancelled = true; unsub(); };
+  }, []);
+  const onToggleBrandLogos = (next: boolean) => {
+    setShowBrandLogosState(next);
+    inflightBrandLogos.current = next;
+    setBrandLogosSaving(true);
+    setShowBrandLogos(next)
+      .catch(err => { setError(err.message || 'Save failed'); })
+      .finally(() => {
+        setBrandLogosSaving(false);
+        window.setTimeout(() => {
+          if (inflightBrandLogos.current === next) inflightBrandLogos.current = null;
+        }, 1500);
+      });
+  };
+
+  // Brand logos backfill — walks distinct product brands, probes
+  // Brandfetch's CDN for each derived domain, and upserts the matching
+  // brand_logos row. Lets the admin canonicalize the logo table in one
+  // click instead of waiting for runtime lookups to populate it.
+  const [backfillRunning, setBackfillRunning] = useState(false);
+  const [backfillProgress, setBackfillProgress] = useState<{ scanned: number; total: number; currentBrand?: string } | null>(null);
+  const [backfillResult, setBackfillResult] = useState<BackfillResult | null>(null);
+  const [backfillError, setBackfillError] = useState<string | null>(null);
+  const runBackfill = async () => {
+    setBackfillRunning(true);
+    setBackfillError(null);
+    setBackfillResult(null);
+    setBackfillProgress({ scanned: 0, total: 0 });
+    try {
+      const result = await backfillBrandLogos((p) => {
+        setBackfillProgress({ scanned: p.scanned, total: p.total, currentBrand: p.currentBrand });
+      });
+      setBackfillResult(result);
+    } catch (err) {
+      setBackfillError(err instanceof Error ? err.message : 'Backfill failed');
+    } finally {
+      setBackfillRunning(false);
+      setBackfillProgress(null);
+    }
+  };
+  const inflightProductsImageOnly = useRef<boolean | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    getProductsImageOnly().then(v => {
+      if (cancelled) return;
+      setProductsImageOnlyState(v);
+      setProductsImageOnlyLoaded(true);
+    });
+    const unsub = subscribeProductsImageOnly(v => {
+      if (cancelled) return;
+      if (inflightProductsImageOnly.current === v) return;
+      setProductsImageOnlyState(v);
+    });
+    return () => { cancelled = true; unsub(); };
+  }, []);
+  const onToggleProductsImageOnly = (next: boolean) => {
+    setProductsImageOnlyState(next);
+    inflightProductsImageOnly.current = next;
+    setProductsImageOnlySaving(true);
+    setProductsImageOnly(next)
+      .catch(err => { setError(err.message || 'Save failed'); })
+      .finally(() => {
+        setProductsImageOnlySaving(false);
+        window.setTimeout(() => {
+          if (inflightProductsImageOnly.current === next) inflightProductsImageOnly.current = null;
+        }, 1500);
+      });
+  };
+
+  // ── Comments feature flag ───────────────────────────────────────────
+  // When ON, products + looks show a Comment button that opens the thread
+  // page. When OFF the button and the thread page are hidden everywhere.
+  const [commentsEnabled, setCommentsEnabledState] = useState<boolean>(DEFAULT_COMMENTS_ENABLED);
+  const [commentsLoaded, setCommentsLoaded] = useState(false);
+  const [commentsSaving, setCommentsSaving] = useState(false);
+  const inflightComments = useRef<boolean | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    getCommentsEnabled().then(v => {
+      if (cancelled) return;
+      setCommentsEnabledState(v);
+      setCommentsLoaded(true);
+    });
+    const unsub = subscribeCommentsEnabled(v => {
+      if (cancelled) return;
+      if (inflightComments.current === v) return;
+      setCommentsEnabledState(v);
+    });
+    return () => { cancelled = true; unsub(); };
+  }, []);
+  const onToggleComments = (next: boolean) => {
+    setCommentsEnabledState(next);
+    inflightComments.current = next;
+    setCommentsSaving(true);
+    setCommentsEnabled(next)
+      .catch(err => { setError(err.message || 'Save failed'); })
+      .finally(() => {
+        setCommentsSaving(false);
+        window.setTimeout(() => {
+          if (inflightComments.current === next) inflightComments.current = null;
+        }, 1500);
+      });
+  };
+
+  // ── Waitlist mode (launch master switch) ────────────────────────────
+  // ON  → old flow (sign-in-only, guests → landing, new accounts → waitlist).
+  // OFF → open flow (guests browse; looks/creators gate behind signup).
+  const [waitlistMode, setWaitlistModeState] = useState<boolean>(DEFAULT_WAITLIST_MODE);
+  const [waitlistLoaded, setWaitlistLoaded] = useState(false);
+  const [waitlistSaving, setWaitlistSaving] = useState(false);
+  const inflightWaitlist = useRef<boolean | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    getWaitlistMode().then(v => {
+      if (cancelled) return;
+      setWaitlistModeState(v);
+      setWaitlistLoaded(true);
+    });
+    const unsub = subscribeWaitlistMode(v => {
+      if (cancelled) return;
+      if (inflightWaitlist.current === v) return;
+      setWaitlistModeState(v);
+    });
+    return () => { cancelled = true; unsub(); };
+  }, []);
+  const onToggleWaitlist = (next: boolean) => {
+    setWaitlistModeState(next);
+    inflightWaitlist.current = next;
+    setWaitlistSaving(true);
+    setWaitlistMode(next)
+      .catch(err => { setError(err.message || 'Save failed'); })
+      .finally(() => {
+        setWaitlistSaving(false);
+        window.setTimeout(() => {
+          if (inflightWaitlist.current === next) inflightWaitlist.current = null;
+        }, 1500);
+      });
+  };
+
+  // ── Product similarity threshold ────────────────────────────────────
+  const [productSimilarity, setProductSimilarityState] = useState(DEFAULT_PRODUCT_SIMILARITY);
+  const [productSimilarityLoaded, setProductSimilarityLoaded] = useState(false);
+  const [productSimilaritySaving, setProductSimilaritySaving] = useState(false);
+  const [productSimilarityError, setProductSimilarityError] = useState<string | null>(null);
+  const inflightProductSimilarity = useRef<number | null>(null);
+  const productSimilarityTimer = useRef<number | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    getProductSimilarityThreshold().then(v => {
+      if (cancelled) return;
+      setProductSimilarityState(v);
+      setProductSimilarityLoaded(true);
+    });
+    const unsub = subscribeProductSimilarityThreshold(v => {
+      if (cancelled) return;
+      if (inflightProductSimilarity.current === v) return;
+      setProductSimilarityState(v);
+    });
+    return () => { cancelled = true; unsub(); };
+  }, []);
+  const onSlideProductSimilarity = (next: number) => {
+    setProductSimilarityState(next);
+    setProductSimilarityError(null);
+    if (productSimilarityTimer.current != null) window.clearTimeout(productSimilarityTimer.current);
+    productSimilarityTimer.current = window.setTimeout(() => {
+      productSimilarityTimer.current = null;
+      inflightProductSimilarity.current = next;
+      setProductSimilaritySaving(true);
+      setProductSimilarityThreshold(next)
+        .catch(err => setProductSimilarityError(err.message || 'Save failed'))
+        .finally(() => {
+          setProductSimilaritySaving(false);
+          window.setTimeout(() => {
+            if (inflightProductSimilarity.current === next) inflightProductSimilarity.current = null;
+          }, 1500);
+        });
+    }, 180);
+  };
+
+  // ── Look similarity threshold ────────────────────────────────────────
+  const [lookSimilarity, setLookSimilarityState] = useState(DEFAULT_LOOK_SIMILARITY);
+  const [lookSimilarityLoaded, setLookSimilarityLoaded] = useState(false);
+  const [lookSimilaritySaving, setLookSimilaritySaving] = useState(false);
+  const [lookSimilarityError, setLookSimilarityError] = useState<string | null>(null);
+  const inflightLookSimilarity = useRef<number | null>(null);
+  const lookSimilarityTimer = useRef<number | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    getLookSimilarityThreshold().then(v => {
+      if (cancelled) return;
+      setLookSimilarityState(v);
+      setLookSimilarityLoaded(true);
+    });
+    const unsub = subscribeLookSimilarityThreshold(v => {
+      if (cancelled) return;
+      if (inflightLookSimilarity.current === v) return;
+      setLookSimilarityState(v);
+    });
+    return () => { cancelled = true; unsub(); };
+  }, []);
+  const onSlideLookSimilarity = (next: number) => {
+    setLookSimilarityState(next);
+    setLookSimilarityError(null);
+    if (lookSimilarityTimer.current != null) window.clearTimeout(lookSimilarityTimer.current);
+    lookSimilarityTimer.current = window.setTimeout(() => {
+      lookSimilarityTimer.current = null;
+      inflightLookSimilarity.current = next;
+      setLookSimilaritySaving(true);
+      setLookSimilarityThreshold(next)
+        .catch(err => setLookSimilarityError(err.message || 'Save failed'))
+        .finally(() => {
+          setLookSimilaritySaving(false);
+          window.setTimeout(() => {
+            if (inflightLookSimilarity.current === next) inflightLookSimilarity.current = null;
+          }, 1500);
+        });
+    }, 180);
+  };
+
+  return (
+    <div className="admin-page">
+      <div className="admin-page-header">
+        <h1>Dials</h1>
+        <p className="admin-page-subtitle">
+          Live-tuning knobs that affect everyone on Catalog. Changes
+          apply across every device the moment you move a dial.
+        </p>
+      </div>
+
+      <div className="admin-detail-grid" style={{ gridTemplateColumns: '1fr', maxWidth: 720 }}>
+        <div className="admin-detail-card">
+          <h3>Video → Still image ratio</h3>
+          <p style={{ fontSize: 13, color: '#888', margin: '4px 0 16px' }}>
+            How many cards in the catalog feed play as autoplay video
+            versus render as still images. 100% = all video (current
+            behaviour). 0% = all stills. The split is deterministic
+            per-card so the same shopper sees the same set on refresh.
+          </p>
+          {!loaded ? (
+            <div className="admin-empty" style={{ marginTop: 0 }}>Loading…</div>
+          ) : (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={ratio}
+                  onChange={e => onSlide(parseInt(e.target.value, 10))}
+                  style={{ flex: 1 }}
+                  aria-label="Video to still image ratio percent"
+                />
+                <div style={{ minWidth: 56, textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
+                  {ratio}%
+                </div>
+              </div>
+              {/* Snap-point pills underneath the slider — one tap
+                  jumps to a common value. The active pill outlines
+                  itself so the current position reads at a glance. */}
+              <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                {SNAP_POINTS.map(point => (
+                  <button
+                    key={point}
+                    type="button"
+                    onClick={() => onSlide(point)}
+                    style={{
+                      padding: '4px 10px',
+                      fontSize: 11,
+                      fontVariantNumeric: 'tabular-nums',
+                      borderRadius: 999,
+                      border: `1px solid ${ratio === point ? '#1a1a1a' : '#e5e5e5'}`,
+                      background: ratio === point ? '#1a1a1a' : '#fff',
+                      color: ratio === point ? '#fff' : '#444',
+                      cursor: 'pointer',
+                      fontWeight: 500,
+                    }}
+                  >
+                    {point}%
+                  </button>
+                ))}
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 11, color: '#999' }}>
+                <span>0% — all stills</span>
+                <span>{saving ? 'Saving…' : 'Saved'}</span>
+                <span>100% — all video</span>
+              </div>
+              {error && (
+                <div style={{ marginTop: 8, fontSize: 12, color: '#dc2626' }}>{error}</div>
+              )}
+
+              {/* Live preview — mirrors the predicate the consumer
+                  feed uses. ▶ = video card, ▮ = still card. The
+                  same set of preview ids keeps cards on the same
+                  side as the admin drags, matching the per-card
+                  determinism in shouldBeVideo. */}
+              <div style={{ marginTop: 20, padding: '12px 14px', background: '#fafafa', borderRadius: 10 }}>
+                <div style={{ fontSize: 11, textTransform: 'uppercase', letterSpacing: 0.4, color: '#666', marginBottom: 8 }}>
+                  Live preview · {previewSplit.videoCount} video · {previewSplit.stillCount} still
+                </div>
+                <div
+                  style={{
+                    display: 'grid',
+                    gridTemplateColumns: 'repeat(6, 1fr)',
+                    gap: 6,
+                  }}
+                >
+                  {PREVIEW_CARD_IDS.map(id => {
+                    const asVideo = shouldBeVideo(id, ratio);
+                    return (
+                      <div
+                        key={id}
+                        title={asVideo ? 'Plays as video' : 'Renders as still'}
+                        style={{
+                          aspectRatio: '3 / 4',
+                          borderRadius: 6,
+                          background: asVideo
+                            ? 'linear-gradient(135deg, #1e293b, #0f172a)'
+                            : '#e5e5e5',
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'center',
+                          color: asVideo ? '#94a3b8' : '#94a3b8',
+                          fontSize: 18,
+                          transition: 'background 0.18s ease',
+                        }}
+                      >
+                        {asVideo ? '▶' : '▮'}
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            </>
+          )}
+        </div>
+
+        <div className="admin-detail-card">
+          <h3>Products: only show product image</h3>
+          <p style={{ fontSize: 13, color: '#888', margin: '4px 0 16px' }}>
+            When ON, every product tile in the consumer feed renders as
+            a still product image — no autoplay video. Looks keep their
+            video playback. Use this to silence the feed and lean on
+            the clean catalog imagery brands already produce.
+          </p>
+          {!productsImageOnlyLoaded ? (
+            <div className="admin-empty" style={{ marginTop: 0 }}>Loading…</div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#111' }}>
+                  {productsImageOnly ? 'On' : 'Off'}
+                </span>
+                <span style={{ fontSize: 11, color: '#999' }}>
+                  {productsImageOnly
+                    ? 'Products show as images. Looks still play video.'
+                    : 'Products and looks both play video (default).'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 11, color: '#999' }}>
+                  {productsImageOnlySaving ? 'Saving…' : 'Saved'}
+                </span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={productsImageOnly}
+                  onClick={() => onToggleProductsImageOnly(!productsImageOnly)}
+                  style={{
+                    position: 'relative',
+                    width: 44,
+                    height: 24,
+                    borderRadius: 999,
+                    border: 'none',
+                    background: productsImageOnly ? '#16a34a' : '#cbd5e1',
+                    cursor: 'pointer',
+                    transition: 'background 160ms ease',
+                    padding: 0,
+                  }}
+                >
+                  <span
+                    style={{
+                      position: 'absolute',
+                      top: 3,
+                      left: productsImageOnly ? 23 : 3,
+                      width: 18,
+                      height: 18,
+                      borderRadius: '50%',
+                      background: '#fff',
+                      boxShadow: '0 1px 3px rgba(0,0,0,0.25)',
+                      transition: 'left 160ms ease',
+                    }}
+                  />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="admin-detail-card">
+          <h3>Show brand logos on the feed</h3>
+          <p style={{ fontSize: 13, color: '#888', margin: '4px 0 16px' }}>
+            When ON, every tile in the consumer feed shows the brand's
+            logo image (from public.brand_logos) instead of the brand
+            name text. Tiles whose brand doesn't have a logo registered
+            fall back to the text — so flipping this dial never blanks
+            a label.
+          </p>
+          {!brandLogosLoaded ? (
+            <div className="admin-empty" style={{ marginTop: 0 }}>Loading…</div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#111' }}>
+                  {showBrandLogos ? 'On' : 'Off'}
+                </span>
+                <span style={{ fontSize: 11, color: '#999' }}>
+                  {showBrandLogos
+                    ? 'Brand logos render in place of brand names.'
+                    : 'Brand names render as text (default).'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 11, color: '#999' }}>
+                  {brandLogosSaving ? 'Saving…' : 'Saved'}
+                </span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={showBrandLogos}
+                  onClick={() => onToggleBrandLogos(!showBrandLogos)}
+                  style={{
+                    position: 'relative', width: 44, height: 24, borderRadius: 999,
+                    border: 'none', background: showBrandLogos ? '#16a34a' : '#cbd5e1',
+                    cursor: 'pointer', transition: 'background 160ms ease', padding: 0,
+                  }}
+                >
+                  <span
+                    style={{
+                      position: 'absolute', top: 3, left: showBrandLogos ? 23 : 3,
+                      width: 18, height: 18, borderRadius: '50%',
+                      background: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.25)',
+                      transition: 'left 160ms ease',
+                    }}
+                  />
+                </button>
+              </div>
+            </div>
+          )}
+
+          <div style={{ marginTop: 16, paddingTop: 14, borderTop: '1px solid #f0f0f2' }}>
+            <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2, minWidth: 0 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#111' }}>Fetch missing brand logos</span>
+                <span style={{ fontSize: 11, color: '#999', lineHeight: 1.4 }}>
+                  Walk every distinct brand in the products table, probe
+                  Brandfetch's CDN for each derived domain, and upsert
+                  the match into <code style={{ fontSize: 10 }}>brand_logos</code>.
+                  Skips brands already registered and those without a
+                  resolvable domain.
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={runBackfill}
+                disabled={backfillRunning}
+                style={{
+                  padding: '8px 14px',
+                  borderRadius: 8,
+                  border: '1px solid #111',
+                  background: backfillRunning ? '#fafafa' : '#111',
+                  color: backfillRunning ? '#666' : '#fff',
+                  fontSize: 12,
+                  fontWeight: 600,
+                  cursor: backfillRunning ? 'not-allowed' : 'pointer',
+                  whiteSpace: 'nowrap',
+                  flexShrink: 0,
+                }}
+              >
+                {backfillRunning ? 'Scanning…' : 'Run backfill'}
+              </button>
+            </div>
+
+            {backfillRunning && backfillProgress && (
+              <div style={{ marginTop: 10 }}>
+                <div style={{ fontSize: 11, color: '#666', marginBottom: 6, display: 'flex', justifyContent: 'space-between' }}>
+                  <span>
+                    {backfillProgress.total > 0
+                      ? `${backfillProgress.scanned} / ${backfillProgress.total}`
+                      : 'Counting brands…'}
+                    {backfillProgress.currentBrand && (
+                      <span style={{ color: '#999', marginLeft: 8, fontStyle: 'italic' }}>
+                        {backfillProgress.currentBrand}
+                      </span>
+                    )}
+                  </span>
+                </div>
+                <div style={{ height: 4, background: '#e5e5e5', borderRadius: 999, overflow: 'hidden' }}>
+                  <div
+                    style={{
+                      height: '100%',
+                      width: backfillProgress.total > 0
+                        ? `${Math.round((backfillProgress.scanned / backfillProgress.total) * 100)}%`
+                        : '0%',
+                      background: '#111',
+                      transition: 'width 220ms ease',
+                    }}
+                  />
+                </div>
+              </div>
+            )}
+
+            {backfillResult && (
+              <div style={{
+                marginTop: 10,
+                padding: '8px 12px',
+                background: '#f0fdf4',
+                border: '1px solid #bbf7d0',
+                borderRadius: 8,
+                fontSize: 12,
+                color: '#166534',
+                display: 'flex',
+                gap: 14,
+                flexWrap: 'wrap',
+              }}>
+                <span><strong>{backfillResult.added}</strong> added</span>
+                <span style={{ color: '#475569' }}>·</span>
+                <span><strong>{backfillResult.alreadyHad}</strong> already had</span>
+                <span style={{ color: '#475569' }}>·</span>
+                <span><strong>{backfillResult.skipped}</strong> skipped</span>
+                <span style={{ color: '#475569' }}>·</span>
+                <span><strong>{backfillResult.total}</strong> total brands</span>
+              </div>
+            )}
+
+            {backfillError && (
+              <div style={{
+                marginTop: 10,
+                padding: '8px 12px',
+                background: '#fef2f2',
+                border: '1px solid #fecaca',
+                borderRadius: 8,
+                fontSize: 12,
+                color: '#991b1b',
+              }}>
+                {backfillError}
+              </div>
+            )}
+          </div>
+        </div>
+        <div className="admin-detail-card" style={{ border: '1px solid #fde68a', background: '#fffbeb' }}>
+          <h3>Waitlist mode <span style={{ fontSize: 11, fontWeight: 500, color: '#92400e', marginLeft: 6 }}>launch switch</span></h3>
+          <p style={{ fontSize: 13, color: '#888', margin: '4px 0 16px' }}>
+            <strong>On</strong> keeps the app the way it was: sign-in-only,
+            signed-out visitors land on the marketing page, and new accounts
+            wait on the waitlist until approved. <strong>Off</strong> opens
+            the app: guests browse the feed and products, looks and creator
+            catalogs gate behind signup, and signing up grants access right
+            away. Applies to every visitor in real time. To preview a flow on
+            just this device without changing the global setting, open the
+            site with <code>?flow=open</code> or <code>?flow=waitlist</code>
+            {' '}(clear with <code>?flow=clear</code>).
+          </p>
+          {!waitlistLoaded ? (
+            <div className="admin-empty" style={{ marginTop: 0 }}>Loading…</div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#111' }}>
+                  {waitlistMode ? 'On — waitlist' : 'Off — app open'}
+                </span>
+                <span style={{ fontSize: 11, color: '#999' }}>
+                  {waitlistMode
+                    ? 'Sign-in-only; new accounts hit the waitlist.'
+                    : 'Guests browse; looks/creators gate behind signup.'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 11, color: '#999' }}>
+                  {waitlistSaving ? 'Saving…' : 'Saved'}
+                </span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={waitlistMode}
+                  onClick={() => onToggleWaitlist(!waitlistMode)}
+                  style={{
+                    position: 'relative', width: 44, height: 24, borderRadius: 999,
+                    border: 'none', background: waitlistMode ? '#16a34a' : '#cbd5e1',
+                    cursor: 'pointer', transition: 'background 160ms ease', padding: 0,
+                  }}
+                >
+                  <span
+                    style={{
+                      position: 'absolute', top: 3, left: waitlistMode ? 23 : 3,
+                      width: 18, height: 18, borderRadius: '50%',
+                      background: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.25)',
+                      transition: 'left 160ms ease',
+                    }}
+                  />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="admin-detail-card">
+          <h3>Comments on products & looks</h3>
+          <p style={{ fontSize: 13, color: '#888', margin: '4px 0 16px' }}>
+            When ON, every product and look shows a Comment button that
+            opens its comment thread (with the WebGL avatar field of the
+            people in the thread). When OFF the button is hidden
+            everywhere and the thread page reports comments are turned
+            off. Existing comments are preserved either way.
+          </p>
+          {!commentsLoaded ? (
+            <div className="admin-empty" style={{ marginTop: 0 }}>Loading…</div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#111' }}>
+                  {commentsEnabled ? 'On' : 'Off'}
+                </span>
+                <span style={{ fontSize: 11, color: '#999' }}>
+                  {commentsEnabled
+                    ? 'Shoppers can read and post comments.'
+                    : 'Comment buttons hidden platform-wide.'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 11, color: '#999' }}>
+                  {commentsSaving ? 'Saving…' : 'Saved'}
+                </span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={commentsEnabled}
+                  onClick={() => onToggleComments(!commentsEnabled)}
+                  style={{
+                    position: 'relative', width: 44, height: 24, borderRadius: 999,
+                    border: 'none', background: commentsEnabled ? '#16a34a' : '#cbd5e1',
+                    cursor: 'pointer', transition: 'background 160ms ease', padding: 0,
+                  }}
+                >
+                  <span
+                    style={{
+                      position: 'absolute', top: 3, left: commentsEnabled ? 23 : 3,
+                      width: 18, height: 18, borderRadius: '50%',
+                      background: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.25)',
+                      transition: 'left 160ms ease',
+                    }}
+                  />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="admin-detail-card">
+          <h3>Product "More like this" similarity</h3>
+          <p style={{ fontSize: 13, color: '#888', margin: '4px 0 16px' }}>
+            How closely related products must be to appear in the "More
+            like this" rail on the product page. Powered by TwelveLabs
+            Marengo visual embeddings (cosine similarity). At 0% all
+            nearest neighbours from the AI are shown. At 60% the rail
+            shows reasonably similar items. At 90% only near-identical
+            products pass — the rail may shrink when nothing qualifies.
+          </p>
+          {!productSimilarityLoaded ? (
+            <div className="admin-empty" style={{ marginTop: 0 }}>Loading…</div>
+          ) : (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={productSimilarity}
+                  onChange={e => onSlideProductSimilarity(parseInt(e.target.value, 10))}
+                  style={{ flex: 1 }}
+                  aria-label="Product similarity threshold percent"
+                />
+                <div style={{ minWidth: 56, textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
+                  {productSimilarity === 0 ? 'Off' : `${productSimilarity}%`}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                {[0, 50, 60, 70, 80, 90].map(point => (
+                  <button
+                    key={point}
+                    type="button"
+                    onClick={() => onSlideProductSimilarity(point)}
+                    style={{
+                      padding: '4px 10px',
+                      fontSize: 11,
+                      fontVariantNumeric: 'tabular-nums',
+                      borderRadius: 999,
+                      border: `1px solid ${productSimilarity === point ? '#1a1a1a' : '#e5e5e5'}`,
+                      background: productSimilarity === point ? '#1a1a1a' : '#fff',
+                      color: productSimilarity === point ? '#fff' : '#444',
+                      cursor: 'pointer',
+                      fontWeight: 500,
+                    }}
+                  >
+                    {point === 0 ? 'Off' : `${point}%`}
+                  </button>
+                ))}
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 11, color: '#999' }}>
+                <span>0% — no filter (show all)</span>
+                <span>{productSimilaritySaving ? 'Saving…' : 'Saved'}</span>
+                <span>100% — near-identical only</span>
+              </div>
+              {productSimilarityError && (
+                <div style={{ marginTop: 8, fontSize: 12, color: '#dc2626' }}>{productSimilarityError}</div>
+              )}
+            </>
+          )}
+        </div>
+
+        <div className="admin-detail-card">
+          <h3>Look "More like this" similarity</h3>
+          <p style={{ fontSize: 13, color: '#888', margin: '4px 0 16px' }}>
+            How many of the seed look's products a candidate look must
+            share to appear in "More like this". At 0% one shared
+            product name is enough (current behaviour). At 60% with a
+            3-product look, 2 must match. At 100% every product in the
+            seed must appear in the candidate — very strict.
+          </p>
+          {!lookSimilarityLoaded ? (
+            <div className="admin-empty" style={{ marginTop: 0 }}>Loading…</div>
+          ) : (
+            <>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+                <input
+                  type="range"
+                  min={0}
+                  max={100}
+                  step={1}
+                  value={lookSimilarity}
+                  onChange={e => onSlideLookSimilarity(parseInt(e.target.value, 10))}
+                  style={{ flex: 1 }}
+                  aria-label="Look similarity threshold percent"
+                />
+                <div style={{ minWidth: 56, textAlign: 'right', fontVariantNumeric: 'tabular-nums', fontWeight: 600 }}>
+                  {lookSimilarity === 0 ? 'Off' : `${lookSimilarity}%`}
+                </div>
+              </div>
+              <div style={{ display: 'flex', gap: 6, marginTop: 8, flexWrap: 'wrap' }}>
+                {[0, 25, 50, 75, 100].map(point => (
+                  <button
+                    key={point}
+                    type="button"
+                    onClick={() => onSlideLookSimilarity(point)}
+                    style={{
+                      padding: '4px 10px',
+                      fontSize: 11,
+                      fontVariantNumeric: 'tabular-nums',
+                      borderRadius: 999,
+                      border: `1px solid ${lookSimilarity === point ? '#1a1a1a' : '#e5e5e5'}`,
+                      background: lookSimilarity === point ? '#1a1a1a' : '#fff',
+                      color: lookSimilarity === point ? '#fff' : '#444',
+                      cursor: 'pointer',
+                      fontWeight: 500,
+                    }}
+                  >
+                    {point === 0 ? 'Off' : `${point}%`}
+                  </button>
+                ))}
+              </div>
+              <div style={{ display: 'flex', justifyContent: 'space-between', marginTop: 8, fontSize: 11, color: '#999' }}>
+                <span>0% — any 1 match (default)</span>
+                <span>{lookSimilaritySaving ? 'Saving…' : 'Saved'}</span>
+                <span>100% — all products must match</span>
+              </div>
+              {lookSimilarityError && (
+                <div style={{ marginTop: 8, fontSize: 12, color: '#dc2626' }}>{lookSimilarityError}</div>
+              )}
+            </>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}

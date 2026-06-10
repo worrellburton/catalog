@@ -60,7 +60,7 @@ export async function getLookShare(shareId: string): Promise<LookShare | null> {
   if (!supabase) return null;
   const { data } = await supabase
     .from('look_shares')
-    .select('*')
+    .select('id, slug, generation_id, created_by, watermarked_video_url, watermarked_storage_path, status, error, created_at, rendered_at')
     .eq('id', shareId)
     .maybeSingle();
   return (data as LookShare | null) ?? null;
@@ -72,7 +72,7 @@ export async function getLookShareBySlug(slug: string): Promise<LookShare | null
   if (!supabase) return null;
   const { data } = await supabase
     .from('look_shares')
-    .select('*')
+    .select('id, slug, generation_id, created_by, watermarked_video_url, watermarked_storage_path, status, error, created_at, rendered_at')
     .eq('slug', slug)
     .maybeSingle();
   return (data as LookShare | null) ?? null;

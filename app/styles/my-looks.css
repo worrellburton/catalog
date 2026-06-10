@@ -2,6 +2,106 @@
    MY LOOKS - Management Page
    ============================================ */
 
+/* Rendering section — only mounted while looks are mid-render. */
+.my-cat-rendering {
+  margin: 4px 16px 14px;
+  padding: 12px 14px;
+  border-radius: 16px;
+  background: linear-gradient(135deg, rgba(255,138,64,0.1), rgba(255,77,109,0.08));
+  border: 1px solid rgba(255,138,64,0.28);
+}
+.my-cat-rendering-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 10px;
+}
+.my-cat-rendering-title {
+  font-size: 13px;
+  font-weight: 800;
+  color: #fff;
+  letter-spacing: 0.01em;
+}
+.my-cat-rendering-count {
+  font-size: 11px;
+  font-weight: 800;
+  color: #1a1a1a;
+  background: linear-gradient(90deg, #ffd75c, #ff8a3d);
+  border-radius: 999px;
+  padding: 1px 8px;
+  min-width: 18px;
+  text-align: center;
+}
+.my-cat-rendering-row {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+.my-cat-rendering-row::-webkit-scrollbar { display: none; }
+.my-cat-rendering-tile {
+  position: relative;
+  flex: 0 0 auto;
+  width: 96px;
+  height: 138px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.08);
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-end;
+}
+.my-cat-rendering-shimmer {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(100deg, transparent 20%, rgba(255,255,255,0.1) 50%, transparent 80%);
+  background-size: 200% 100%;
+  animation: my-cat-rendering-shimmer 1.4s linear infinite;
+}
+@keyframes my-cat-rendering-shimmer { to { background-position: -200% 0; } }
+.my-cat-rendering-foot {
+  position: relative;
+  z-index: 1;
+  padding: 7px;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
+  background: linear-gradient(to top, rgba(0,0,0,0.72), transparent);
+}
+.my-cat-rendering-name {
+  font-size: 11px;
+  font-weight: 700;
+  color: #fff;
+  text-transform: capitalize;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.my-cat-rendering-bar {
+  display: block;
+  height: 3px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.18);
+  overflow: hidden;
+}
+.my-cat-rendering-bar-fill {
+  display: block;
+  height: 100%;
+  width: 40%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #ffd75c, #ff8a3d);
+  animation: my-cat-rendering-bar 1.3s ease-in-out infinite;
+}
+@keyframes my-cat-rendering-bar {
+  0%   { transform: translateX(-110%); }
+  100% { transform: translateX(360%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .my-cat-rendering-shimmer, .my-cat-rendering-bar-fill { animation: none; }
+  .my-cat-rendering-bar-fill { width: 100%; }
+}
+
 /* Native app shell: push content below status bar.
    --shell-sb is injected by the Flutter shell at AT_DOCUMENT_START.
    No Flutter back-bar exists so only the status bar height is needed. */
@@ -15,7 +115,37 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   z-index: 9000;
   background: #111;
   overflow-y: auto;
+  /* Lock horizontal panning — on mobile the wallet's particle ring
+     canvas + the off-screen $0 numeral were spilling past the
+     viewport edges, letting the page slide sideways. Vertical
+     scroll only. overscroll-behavior-x:none also kills the iOS
+     rubber-band swipe-right gesture. */
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
   -webkit-overflow-scrolling: touch;
+}
+
+/* Wallet variant: the WalletBackground canvas paints the surface
+   (white base + animated particle network), so the overlay layer
+   itself stays transparent. Only the earnings $ amount keeps its
+   green — every other element is black / neutral grey so the
+   number reads as the single anchor on the page. */
+.my-looks-overlay--wallet {
+  background: #0a0a0a;
+}
+/* The wave canvas paints the dark surface; pin the header + content
+   above it so the Back arrow / "Wallet" title / cards never get
+   covered. */
+.my-looks-overlay--wallet .my-looks-container,
+.my-looks-overlay--wallet .my-looks-header {
+  position: relative;
+  z-index: 2;
+}
+.my-looks-overlay--wallet .my-looks-title { color: #f8fafc; }
+.my-looks-overlay--wallet .my-looks-back  { color: rgba(248, 250, 252, 0.78); }
+.my-looks-overlay--wallet .my-looks-back:hover {
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
 }
 
 .my-looks-container {
@@ -819,4 +949,3724 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   }
 
   .media-uploader { padding: 24px 12px; }
+}
+
+/* ============================================
+   CREATOR WALLET — green animated theme
+   Layout: animated green canvas background → hero "Total Earned"
+   card → secondary cards (balance + withdrawn) → collapsible
+   Insights wrapping analytics + transaction history.
+   ============================================ */
+
+.wallet-root {
+  position: relative;
+  isolation: isolate;
+  min-height: 100%;
+  /* Belt-and-suspenders horizontal clip — the wave canvas and the
+     huge "$0" hero numeral are intentionally drawn larger than the
+     viewport for visual effect, but they MUST stay clipped or the
+     overlay becomes pannable sideways on mobile (see the .my-looks-
+     overlay rule above for the primary guard). */
+  overflow-x: clip;
+}
+
+/* Generative particle-network canvas. Fixed to the viewport so the
+   network stays "alive" while the wallet content scrolls over it —
+   the canvas itself reads the scroll position via prop and shifts
+   its parallax + pulse density to match. */
+.wallet-bg-canvas {
+  position: fixed;
+  inset: 0;
+  width: 100vw;
+  height: 100vh;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.wallet-content {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+/* Loading */
+.wallet-loading {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 0;
+}
+
+.wallet-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid rgba(0,0,0,0.12);
+  border-top-color: #16a34a;
+  border-radius: 50%;
+  animation: wallet-spin 0.7s linear infinite;
+  display: inline-block;
+}
+
+.wallet-spinner--sm {
+  width: 13px;
+  height: 13px;
+  margin-right: 6px;
+}
+
+@keyframes wallet-spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Setup banner — neutral card on white */
+.wallet-setup-banner {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 16px 18px;
+  background: #fafafa;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 16px;
+  flex-wrap: wrap;
+}
+
+.wallet-setup-icon {
+  width: 40px;
+  height: 40px;
+  background: rgba(0, 0, 0, 0.06);
+  border-radius: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #0a0a0a;
+  flex-shrink: 0;
+}
+
+.wallet-setup-text {
+  flex: 1;
+  min-width: 0;
+}
+
+.wallet-setup-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #0a0a0a;
+  margin-bottom: 2px;
+}
+
+.wallet-setup-sub {
+  font-size: 12px;
+  color: rgba(0, 0, 0, 0.55);
+}
+
+.wallet-setup-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 16px;
+  background: #0a0a0a;
+  color: #fff;
+  border: none;
+  border-radius: 9px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s, transform 0.15s;
+  flex-shrink: 0;
+}
+
+.wallet-setup-btn:hover { background: #222; transform: translateY(-1px); }
+
+/* Hero — Total Earned centerpiece */
+.wallet-hero {
+  /* Dead-centre the total-earned amount in the viewport. No card,
+     no border, just the green glow + the number. The "Show insights"
+     pill sits at the bottom of the same viewport-height block, so
+     above-the-fold is exclusively the hero. */
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  min-height: calc(100vh - 220px);
+  min-height: calc(100dvh - 220px);
+  padding: 20px;
+  background: transparent;
+  border: none;
+  overflow: visible;
+}
+
+/* Concentric ring stack centered on the $ amount. .wallet-hero-rings is
+   absolutely positioned at the hero's exact center (50%/50%) so every
+   ring inherits that center via translate(-50%,-50%) on the ring itself.
+   Bound to the hero, never to a hardcoded viewport offset — so layout
+   changes (different viewport height, banner state, scroll) can't pull
+   the rings off the amount. */
+.wallet-hero-rings {
+  position: absolute;
+  /* Sit on the same vertical center as the amount text. The amount has
+     a label above it (~26px line) so the visual center of the amount is
+     a hair below the hero's center; align rings to the amount, not the
+     hero's geometric center, by nudging down a little. */
+  left: 50%;
+  top: 50%;
+  width: 0;
+  height: 0;
+  pointer-events: none;
+  /* Same z-index plane as the glow so the number renders ON TOP via its
+     own z-index:1. */
+  z-index: 0;
+}
+.wallet-hero-ring {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  border-radius: 50%;
+  /* As thin as the renderer will draw. 0.5px reads as a single hairline
+     on retina; 1px falls back on standard DPI. */
+  border: 0.5px solid rgba(34, 197, 94, 0.16);
+  /* Bright arc segment via a conic-gradient masked to the ring border —
+     the mask is a tight 1px band so the visible "lightning" is the thinnest
+     line the GPU can draw, regardless of ring radius. The OLD mask used a
+     2% band of the radius which meant the 900px ring rendered 18px thick;
+     now every ring is the same hairline thickness. */
+  background:
+    conic-gradient(from 0deg,
+      transparent 0deg,
+      transparent 250deg,
+      rgba(74, 222, 128, 0.95) 320deg,
+      rgba(255, 255, 255, 0.95) 340deg,
+      rgba(74, 222, 128, 0.95) 360deg) border-box;
+  -webkit-mask:
+    radial-gradient(circle,
+      transparent calc(50% - 1px),
+      #000 calc(50% - 0.5px),
+      #000 50%,
+      transparent calc(50% + 0.5px));
+          mask:
+    radial-gradient(circle,
+      transparent calc(50% - 1px),
+      #000 calc(50% - 0.5px),
+      #000 50%,
+      transparent calc(50% + 0.5px));
+  box-shadow:
+    0 0 12px rgba(74, 222, 128, 0.14);
+  transform: translate(-50%, -50%);
+  transform-origin: center;
+  will-change: transform;
+  animation: wb-ring-spin 14s linear infinite;
+}
+/* Six radii — fixed sizes, each ring its own orbit speed (alternating
+   direction so adjacent rings counter-rotate, giving the field-line feel).
+   No more margin offsets — the centering is done with translate(-50%,-50%)
+   on the ring itself, so the math can't drift. */
+.wallet-hero-ring:nth-child(1) { width: 140px; height: 140px; animation-duration: 12s; }
+.wallet-hero-ring:nth-child(2) { width: 240px; height: 240px; animation-duration: 16s; animation-direction: reverse; }
+.wallet-hero-ring:nth-child(3) { width: 360px; height: 360px; animation-duration: 22s; }
+.wallet-hero-ring:nth-child(4) { width: 500px; height: 500px; animation-duration: 28s; animation-direction: reverse; }
+.wallet-hero-ring:nth-child(5) { width: 680px; height: 680px; animation-duration: 36s; }
+.wallet-hero-ring:nth-child(6) { width: 900px; height: 900px; animation-duration: 44s; animation-direction: reverse; }
+/* The spin keyframe in this file applies `transform: rotate(360deg)` which
+   would overwrite the translate(-50%,-50%) above. Compose them by writing
+   a ring-specific keyframe that preserves the center offset. */
+.wallet-hero-ring { animation-name: wallet-hero-ring-spin; }
+@keyframes wallet-hero-ring-spin {
+  from { transform: translate(-50%, -50%) rotate(0deg); }
+  to   { transform: translate(-50%, -50%) rotate(360deg); }
+}
+
+.wallet-hero-label {
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(248, 250, 252, 0.55);
+  margin-bottom: 14px;
+}
+
+.wallet-hero-amount {
+  position: relative;
+  z-index: 1;
+  font-family: 'DM Sans', sans-serif;
+  font-size: 72px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  color: #f8fafc;
+  font-variant-numeric: tabular-nums;
+  /* Soft green halo behind the white figure so the wallet still
+     reads as "earnings" without painting the number itself green. */
+  text-shadow:
+    0 0 28px rgba(34, 197, 94, 0.22),
+    0 0 60px rgba(34, 197, 94, 0.12);
+}
+
+/* Withdraw CTA right under the hero amount. Black pill, white text —
+   sits cleanly against the white background so only the earnings $
+   number is green. */
+.wallet-hero-withdraw {
+  position: relative;
+  z-index: 1;
+  margin-top: 20px;
+  padding: 14px 28px;
+  border-radius: 999px;
+  border: 1px solid rgba(34, 197, 94, 0.5);
+  background: #16a34a;
+  color: #fff;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+  box-shadow: 0 8px 24px rgba(22, 163, 74, 0.32);
+  transition: background 0.15s, transform 0.15s, box-shadow 0.15s;
+}
+.wallet-hero-withdraw:hover:not(:disabled) {
+  background: #22c55e;
+  transform: translateY(-1px);
+  box-shadow: 0 10px 28px rgba(22, 163, 74, 0.42);
+}
+.wallet-hero-withdraw:active:not(:disabled) { transform: translateY(0); }
+.wallet-hero-withdraw--disabled,
+.wallet-hero-withdraw:disabled {
+  opacity: 1;
+  cursor: default;
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.12);
+  box-shadow: none;
+  color: rgba(255, 255, 255, 0.5);
+}
+
+/* Hero glow removed — white surface, no green halo. */
+.wallet-hero-glow { display: none; }
+
+/* Secondary cards row */
+.wallet-cards {
+  display: flex;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.wallet-card {
+  flex: 1 1 200px;
+  padding: 20px 20px 18px;
+  border-radius: 16px;
+  min-width: 0;
+  /* Neutral dark frosted glass — matches the rest of the wallet (no blue
+     tint that fought with the green ring field underneath). */
+  background: rgba(20, 22, 26, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+
+.wallet-card--main {
+  background: rgba(20, 22, 26, 0.82);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+
+.wallet-card-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.6px;
+  text-transform: uppercase;
+  color: rgba(248, 250, 252, 0.55);
+  margin-bottom: 8px;
+}
+
+.wallet-card-amount {
+  font-size: 30px;
+  font-weight: 700;
+  color: #f8fafc;
+  line-height: 1;
+  font-family: 'DM Sans', sans-serif;
+  font-variant-numeric: tabular-nums;
+}
+
+.wallet-card-sub {
+  font-size: 11px;
+  color: rgba(248, 250, 252, 0.5);
+  margin-top: 6px;
+}
+
+/* Withdraw button inside main card */
+.wallet-withdraw-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 16px;
+  padding: 9px 20px;
+  background: #0a0a0a;
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  font-size: 13px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s, transform 0.15s, box-shadow 0.15s;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+.wallet-withdraw-btn:hover {
+  background: #222;
+  transform: translateY(-1px);
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.14);
+}
+
+.wallet-withdraw-btn--disabled {
+  opacity: 0.35;
+  cursor: default;
+  box-shadow: none;
+}
+.wallet-withdraw-btn--disabled:hover {
+  background: #0a0a0a;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Pending payout banner */
+.wallet-payout-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 14px;
+  background: rgba(251,191,36,0.1);
+  border: 1px solid rgba(251,191,36,0.28);
+  border-radius: 12px;
+  color: #fbbf24;
+  flex-wrap: wrap;
+}
+
+.wallet-payout-banner-text {
+  flex: 1;
+  font-size: 13px;
+  font-weight: 500;
+  color: #fde68a;
+}
+
+.wallet-payout-banner-btn {
+  padding: 6px 14px;
+  background: rgba(251,191,36,0.18);
+  color: #fbbf24;
+  border: 1px solid rgba(251,191,36,0.35);
+  border-radius: 7px;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s;
+  white-space: nowrap;
+}
+.wallet-payout-banner-btn:hover { background: rgba(251,191,36,0.28); }
+
+/* Error */
+.wallet-error {
+  padding: 10px 14px;
+  background: rgba(220,38,38,0.08);
+  border: 1px solid rgba(220,38,38,0.22);
+  border-radius: 10px;
+  color: #b91c1c;
+  font-size: 13px;
+}
+
+/* Insights — collapsible wrapper. Frosted-glass over the network. */
+.wallet-insights {
+  display: flex;
+  flex-direction: column;
+  border-radius: 16px;
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(0, 0, 0, 0.06);
+  overflow: hidden;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+}
+
+/* Show-insights pill — neutral chip on white. */
+.wallet-insights-toggle {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  margin: 0 auto;
+  padding: 10px 18px;
+  border-radius: 999px;
+  background: rgba(15, 22, 41, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  cursor: pointer;
+  color: #f8fafc;
+  font-family: inherit;
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  transition: background 0.15s, border-color 0.15s, transform 0.15s;
+}
+.wallet-insights-toggle:hover {
+  background: rgba(30, 41, 59, 0.85);
+  border-color: rgba(255, 255, 255, 0.25);
+  transform: translateY(-1px);
+}
+
+.wallet-insights-toggle-label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #f8fafc;
+}
+
+.wallet-insights-chevron {
+  color: rgba(0, 0, 0, 0.55);
+  transition: transform 0.32s ease;
+}
+.wallet-insights--open .wallet-insights-chevron {
+  transform: rotate(180deg);
+}
+
+/* When the pill sits inside the hero block, position it at the
+   bottom of the viewport-height hero so it reads as the
+   below-the-fold CTA. */
+.wallet-hero .wallet-insights-toggle {
+  position: absolute;
+  left: 50%;
+  bottom: 24px;
+  transform: translateX(-50%);
+}
+.wallet-hero .wallet-insights-toggle:hover {
+  transform: translateX(-50%) translateY(-1px);
+}
+
+/* Expand/collapse via grid-template-rows trick — no fixed max-height
+   so content of any size animates smoothly. */
+.wallet-insights-panel {
+  display: grid;
+  grid-template-rows: 0fr;
+  transition: grid-template-rows 0.36s ease;
+}
+.wallet-insights--open .wallet-insights-panel {
+  grid-template-rows: 1fr;
+}
+.wallet-insights-inner {
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 0 16px;
+  opacity: 0;
+  transition: opacity 0.28s ease, padding 0.32s ease;
+}
+.wallet-insights--open .wallet-insights-inner {
+  opacity: 1;
+  padding: 4px 16px 18px;
+}
+
+/* Analytics */
+.wallet-analytics {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.wallet-analytics-header {
+  padding: 0 2px;
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(0, 0, 0, 0.55);
+}
+.wallet-analytics-cards {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 10px;
+}
+.wallet-analytics-card {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: #fff;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  transition: border-color 0.18s, background 0.18s;
+}
+.wallet-analytics-card:hover {
+  border-color: rgba(0, 0, 0, 0.2);
+  background: #fafafa;
+}
+.wallet-analytics-card-label {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(0, 0, 0, 0.5);
+}
+.wallet-analytics-card-amount {
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #0a0a0a;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.1;
+}
+.wallet-analytics-card-sub {
+  font-size: 11.5px;
+  color: rgba(0, 0, 0, 0.55);
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Transaction history */
+.wallet-history {
+  border-radius: 12px;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  overflow: hidden;
+  background: #fff;
+}
+
+.wallet-history-header {
+  padding: 13px 16px;
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(0, 0, 0, 0.55);
+  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.wallet-history-empty {
+  padding: 36px;
+  text-align: center;
+  color: rgba(0, 0, 0, 0.4);
+  font-size: 14px;
+}
+
+.wallet-entry {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 13px 16px;
+  border-bottom: 1px solid rgba(0, 0, 0, 0.05);
+  transition: background 0.1s;
+}
+.wallet-entry:last-child { border-bottom: none; }
+.wallet-entry:hover { background: rgba(0, 0, 0, 0.03); }
+
+.wallet-entry-icon {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+}
+.wallet-entry-icon--credit { background: rgba(22,163,74,0.12); color: #16a34a; }
+.wallet-entry-icon--debit  { background: rgba(0,0,0,0.06); color: #0a0a0a; }
+.wallet-entry-icon--on_hold { background: rgba(0,0,0,0.06); color: rgba(0,0,0,0.6); }
+
+.wallet-entry-info { flex: 1; min-width: 0; }
+
+.wallet-entry-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #0a0a0a;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.wallet-entry-date {
+  font-size: 11px;
+  color: rgba(0, 0, 0, 0.45);
+  margin-top: 2px;
+}
+
+.wallet-entry-amounts { text-align: right; flex-shrink: 0; }
+
+.wallet-entry-amount {
+  font-size: 14px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.wallet-entry-amount--credit  { color: #16a34a; }
+.wallet-entry-amount--debit   { color: #0a0a0a; }
+.wallet-entry-amount--on_hold { color: rgba(0, 0, 0, 0.55); }
+
+.wallet-entry-bal {
+  font-size: 11px;
+  color: rgba(0, 0, 0, 0.45);
+  margin-top: 2px;
+}
+
+/* Connected status footer */
+.wallet-status {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px 16px;
+  background: #fafafa;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  gap: 10px;
+}
+
+.wallet-status-left {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.wallet-status-dot {
+  width: 7px;
+  height: 7px;
+  background: #16a34a;
+  border-radius: 50%;
+  flex-shrink: 0;
+  box-shadow: 0 0 6px rgba(22, 163, 74, 0.5);
+}
+
+.wallet-status-label {
+  font-size: 13px;
+  font-weight: 500;
+  color: #0a0a0a;
+}
+
+.wallet-status-badge {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.5px;
+  color: #0a0a0a;
+  background: rgba(0, 0, 0, 0.06);
+  padding: 2px 7px;
+  border-radius: 5px;
+}
+
+.wallet-status-disconnect {
+  background: none;
+  border: none;
+  cursor: pointer;
+  color: rgba(0, 0, 0, 0.5);
+  font-size: 12px;
+  font-weight: 500;
+  padding: 4px 8px;
+  border-radius: 6px;
+  transition: color 0.15s, background 0.15s;
+}
+.wallet-status-disconnect:hover { color: #b91c1c; background: rgba(220, 38, 38, 0.08); }
+.wallet-status-disconnect:disabled { opacity: 0.5; cursor: default; }
+
+@media (max-width: 640px) {
+  .wallet-hero { padding: 36px 16px 32px; }
+  .wallet-hero-amount { font-size: 56px; }
+  .wallet-hero-glow { width: 260px; height: 260px; }
+  .wallet-analytics-cards { grid-template-columns: 1fr; }
+  .wallet-analytics-card-amount { font-size: 22px; }
+  .wallet-card { flex-basis: 100%; }
+}
+
+/* ───────────────────────────────────────────────────────────────────
+   My Catalog — mirrors CreatorPage layout so the curator's own view
+   matches what shoppers see on the public CreatorPage. Selectors are
+   prefixed `my-cat-` (vs. the legacy `my-looks-` which still powers
+   the Wallet overlay above) so the two surfaces stay isolated.
+   ─────────────────────────────────────────────────────────────────── */
+
+.my-cat-page {
+  position: fixed;
+  inset: 0;
+  background: #0a0a0a;
+  color: #fff;
+  z-index: 150;
+  overflow-y: auto;
+  /* Cap the content column at 1200px centered — identical to .creator-page —
+     so My Catalog reads at the same width as the public creator catalogs
+     instead of stretching its cards full-bleed on wide desktops. */
+  padding: var(--header-height) max(28px, calc((100% - 1200px) / 2)) 28px;
+}
+
+/* Form-mode root - swaps the page padding so the LookForm fills the
+   whole canvas the way the legacy my-looks-form-container did. */
+.my-cat-page--form {
+  padding: 0;
+  background: #0a0a0a;
+}
+.my-cat-form-container {
+  position: absolute;
+  inset: 0;
+  overflow-y: auto;
+  /* Lock the create/edit-look flow to vertical scrolling only — no
+     sideways pan/rubber-band, which read as "broken" when a wide child
+     (e.g. the upload thumb row) let the surface drift horizontally. */
+  overflow-x: hidden;
+  overscroll-behavior-x: none;
+  touch-action: pan-y;
+}
+
+/* Top-left back link. Style + size copied from .creator-back. */
+.my-cat-back {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.6);
+  cursor: pointer;
+  border: none;
+  background: none;
+  padding: 0;
+  margin-bottom: 20px;
+}
+.my-cat-back:hover { color: #fff; }
+
+/* Top-right floating "+" button. Sits over the hero so it's reachable
+   on every viewport without competing with the back link. */
+.my-cat-create-fab {
+  position: absolute;
+  top: calc(var(--header-height, 0px) + 12px);
+  right: 28px;
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.4);
+  transition: transform 0.15s ease, background 0.15s ease;
+  z-index: 5;
+}
+.my-cat-create-fab:hover {
+  background: rgba(255, 255, 255, 0.18);
+  transform: translateY(-1px);
+}
+.my-cat-create-fab:active { transform: translateY(0); }
+
+/* Hero - same flex column / centered layout as CreatorPage. */
+/* The hero + tabs scroll normally with the page; the corner FABs (back /
+   settings / analytics / add) are the elements pinned to the top instead. */
+.my-cat-top {
+  position: static;
+}
+
+/* "Add look" chooser — its own full-screen page split into two big tap
+   targets: own-media path (top half) and AI path (bottom half). */
+.my-cat-addlook {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(120% 90% at 50% 0%, #15161b 0%, #0a0a0a 60%);
+  overflow: hidden;
+}
+/* Ambient particle field behind the cards. */
+.my-cat-addlook-particles {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  opacity: 0.6;
+  pointer-events: none;
+}
+.my-cat-addlook-particles canvas { width: 100%; height: 100%; }
+.my-cat-addlook-close {
+  position: fixed;
+  top: max(env(safe-area-inset-top), 18px);
+  left: 18px;
+  z-index: 5;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(20, 20, 22, 0.7);
+  color: #fff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.my-cat-addlook-cards {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+  padding: 24px;
+  box-sizing: border-box;
+}
+.my-cat-addlook-heading {
+  margin: 0 0 6px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.55);
+  opacity: 0;
+  animation: addlook-card-in 0.5s cubic-bezier(0.16, 1, 0.3, 1) 0.02s forwards;
+}
+/* The two paths are now cards, not full-height halves. */
+.my-cat-addlook-option {
+  width: min(440px, calc(100% - 8px));
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 22px 22px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  background: linear-gradient(160deg, rgba(32, 34, 40, 0.72), rgba(14, 15, 18, 0.72));
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  color: #fff;
+  cursor: pointer;
+  text-align: left;
+  font-family: inherit;
+  box-shadow: 0 18px 44px rgba(0, 0, 0, 0.4);
+  transition: transform 0.2s ease, border-color 0.2s ease, background 0.2s ease;
+  opacity: 0;
+  transform: translateY(18px) scale(0.98);
+  animation: addlook-card-in 0.55s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+.my-cat-addlook-option--own { animation-delay: 0.08s; }
+.my-cat-addlook-option--ai { animation-delay: 0.16s; }
+.my-cat-addlook-option:active { transform: scale(0.985); }
+@media (hover: hover) {
+  .my-cat-addlook-option:hover {
+    border-color: rgba(255, 255, 255, 0.24);
+    background: linear-gradient(160deg, rgba(40, 42, 49, 0.8), rgba(18, 19, 22, 0.8));
+  }
+}
+.my-cat-addlook-copy {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.my-cat-addlook-icon {
+  flex-shrink: 0;
+  width: 58px;
+  height: 58px;
+  border-radius: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.92);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+/* The upload glyph gently bobs. */
+.my-cat-addlook-option--own .my-cat-addlook-icon svg {
+  animation: addlook-bob 3.4s ease-in-out infinite;
+}
+.my-cat-addlook-title {
+  font-size: 18px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+}
+.my-cat-addlook-sub {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.52);
+  line-height: 1.45;
+}
+
+/* ── AI card: extra "magical", particle-y treatment (grayscale) ─────── */
+.my-cat-addlook-option--ai {
+  border-color: rgba(255, 255, 255, 0.16);
+}
+/* A slow grayscale shimmer sweeps across the AI card. */
+.my-cat-addlook-option--ai::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(115deg,
+    transparent 30%,
+    rgba(255, 255, 255, 0.35) 50%,
+    transparent 70%);
+  background-size: 250% 100%;
+  -webkit-mask: linear-gradient(#000 0 0) content-box, linear-gradient(#000 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+  animation: addlook-border-sweep 4.5s linear infinite;
+}
+.my-cat-addlook-spark {
+  position: relative;
+  flex-shrink: 0;
+  width: 58px;
+  height: 58px;
+  border-radius: 16px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  overflow: visible;
+}
+.my-cat-addlook-spark-glow {
+  position: absolute;
+  inset: -6px;
+  border-radius: 20px;
+  background: radial-gradient(circle, rgba(255, 255, 255, 0.32) 0%, transparent 68%);
+  animation: addlook-glow-breathe 2.8s ease-in-out infinite;
+}
+.my-cat-addlook-spark-glyph {
+  position: relative;
+  z-index: 2;
+  color: #fff;
+  animation: addlook-twinkle 2.6s ease-in-out infinite;
+}
+/* Orbiting motes — the "particle-y / magical" bit. A ring of small dots
+   spins around the sparkle, each twinkling on its own beat. Grayscale. */
+.my-cat-addlook-spark-orbit {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  animation: addlook-orbit-spin 7s linear infinite;
+}
+.my-cat-addlook-spark-orbit i {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 3px;
+  height: 3px;
+  margin: -1.5px 0 0 -1.5px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 0 5px rgba(255, 255, 255, 0.8);
+  animation: addlook-mote-twinkle 1.8s ease-in-out infinite;
+}
+.my-cat-addlook-spark-orbit i:nth-child(1) { transform: rotate(0deg) translateX(30px); }
+.my-cat-addlook-spark-orbit i:nth-child(2) { transform: rotate(60deg) translateX(30px); animation-delay: 0.3s; }
+.my-cat-addlook-spark-orbit i:nth-child(3) { transform: rotate(120deg) translateX(30px); animation-delay: 0.6s; }
+.my-cat-addlook-spark-orbit i:nth-child(4) { transform: rotate(180deg) translateX(30px); animation-delay: 0.9s; }
+.my-cat-addlook-spark-orbit i:nth-child(5) { transform: rotate(240deg) translateX(30px); animation-delay: 1.2s; }
+.my-cat-addlook-spark-orbit i:nth-child(6) { transform: rotate(300deg) translateX(30px); animation-delay: 1.5s; }
+
+@keyframes addlook-card-in {
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes addlook-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+@keyframes addlook-twinkle {
+  0%, 100% { transform: scale(1) rotate(0deg); opacity: 0.9; }
+  50% { transform: scale(1.12) rotate(8deg); opacity: 1; }
+}
+@keyframes addlook-glow-breathe {
+  0%, 100% { opacity: 0.45; transform: scale(0.92); }
+  50% { opacity: 0.9; transform: scale(1.08); }
+}
+@keyframes addlook-orbit-spin {
+  to { transform: rotate(360deg); }
+}
+@keyframes addlook-mote-twinkle {
+  0%, 100% { opacity: 0.25; }
+  50% { opacity: 1; }
+}
+@keyframes addlook-border-sweep {
+  0% { background-position: 150% 0; }
+  100% { background-position: -150% 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .my-cat-addlook-option,
+  .my-cat-addlook-heading,
+  .my-cat-addlook-option--own .my-cat-addlook-icon svg,
+  .my-cat-addlook-spark-glyph,
+  .my-cat-addlook-spark-glow,
+  .my-cat-addlook-spark-orbit,
+  .my-cat-addlook-spark-orbit i,
+  .my-cat-addlook-option--ai::before {
+    animation: none;
+  }
+  .my-cat-addlook-option { opacity: 1; transform: none; }
+}
+
+.my-cat-hero {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  padding: 40px 0 32px;
+}
+.my-cat-hero-avatar {
+  /* Matches the public creator-catalog hero avatar (.creator-hero-avatar,
+     100px) so the profile picture is the same size on both screens. */
+  width: 100px;
+  height: 100px;
+  border-radius: 50%;
+  object-fit: cover;
+  /* Bias the crop toward the top so portrait/legacy (non-square) avatars
+     keep the head in frame instead of cutting it off at the hairline. */
+  object-position: center 20%;
+  border: 3px solid rgba(255, 255, 255, 0.12);
+  margin-bottom: 20px;
+}
+.my-cat-hero-avatar--initial {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #1f2937, #374151);
+  color: #fff;
+  font-size: 36px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  text-transform: uppercase;
+}
+.my-cat-hero-curated {
+  font-size: 15px;
+  font-style: italic;
+  color: rgba(255, 255, 255, 0.5);
+  font-family: Georgia, 'Times New Roman', serif;
+}
+.my-cat-hero-name {
+  font-size: clamp(32px, 5vw, 48px);
+  font-weight: 600;
+  color: #fff;
+  margin: 4px 0 20px;
+  letter-spacing: -0.02em;
+}
+
+.my-cat-hero-stats {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.5);
+  margin: 0;
+  max-width: 480px;
+  line-height: 1.5;
+}
+
+/* Status filter row - matches .creator-nav layout (centered, tabs with
+   bottom-border underline). */
+.my-cat-nav {
+  display: flex;
+  justify-content: center;
+  gap: 28px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.10);
+  margin: 12px 0 24px;
+  flex-wrap: wrap;
+}
+.my-cat-nav-tab {
+  padding: 14px 4px;
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.5);
+  background: none;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s;
+  font-family: inherit;
+}
+.my-cat-nav-tab:hover { color: rgba(255, 255, 255, 0.8); }
+.my-cat-nav-tab.active {
+  color: #fff;
+  border-bottom-color: #fff;
+}
+.my-cat-nav-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  padding: 0 6px;
+  margin-left: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.8);
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.my-cat-nav-tab.active .my-cat-nav-count {
+  background: rgba(255, 255, 255, 0.9);
+  color: #111;
+}
+
+/* Divider between the look-status tabs and the Products tab. */
+.my-cat-nav-divider {
+  width: 1px;
+  align-self: stretch;
+  margin: 6px 4px;
+  background: rgba(255, 255, 255, 0.14);
+}
+
+/* ── Products tab — feed-card grid, drag-reorderable ──
+   Products render in the SAME feed-card view shoppers see on the public
+   catalog (reusing .creator-grid / .creator-product-feed / .cpf-*), with a
+   small grip overlaid on each card so the creator can rearrange them. */
+.my-cat-products-grid {
+  /* inherits .creator-grid (3-up, 3:4 tiles) */
+  touch-action: pan-y;
+}
+.my-cat-product-feed {
+  touch-action: pan-y;
+}
+.my-cat-product-feed.is-dragging {
+  opacity: 0.55;
+  outline: 2px solid rgba(255, 255, 255, 0.5);
+  outline-offset: -2px;
+}
+.my-cat-product-grip--feed {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  z-index: 2;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  padding: 0;
+  border-radius: 9px;
+  border: none;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  color: rgba(255, 255, 255, 0.85);
+  cursor: grab;
+  touch-action: none;
+}
+.my-cat-product-grip--feed:active { cursor: grabbing; }
+
+/* ── Catalog appearance: particle layer + settings panel ── */
+.my-cat-particles {
+  position: fixed;
+  inset: 0;
+  z-index: -1; /* over the page bg, behind all content */
+  pointer-events: none;
+  opacity: 0.55;
+}
+.my-cat-settings-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+}
+.my-cat-settings-panel {
+  width: 100%;
+  max-width: 380px;
+  background: #161618;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 18px;
+  padding: 18px;
+  box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+.my-cat-settings-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 12px;
+}
+.my-cat-settings-head h3 { margin: 0; font-size: 16px; font-weight: 700; color: #fff; }
+.my-cat-settings-close {
+  background: none; border: none; color: rgba(255,255,255,0.6);
+  font-size: 24px; line-height: 1; cursor: pointer; padding: 0 4px;
+}
+.my-cat-settings-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  padding: 12px 4px;
+  background: none;
+  border: none;
+  border-top: 1px solid rgba(255, 255, 255, 0.07);
+  color: #fff;
+  font-family: inherit;
+  cursor: pointer;
+}
+.my-cat-settings-row--col { flex-direction: column; align-items: stretch; gap: 10px; cursor: default; }
+.my-cat-settings-label { font-size: 14px; font-weight: 600; }
+.my-cat-settings-hue-head { display: flex; align-items: center; justify-content: space-between; }
+.my-cat-settings-clear {
+  background: rgba(255,255,255,0.08); border: none; color: rgba(255,255,255,0.75);
+  font-size: 12px; font-weight: 600; padding: 3px 10px; border-radius: 999px; cursor: pointer;
+}
+/* Toggle */
+.my-cat-toggle {
+  width: 44px; height: 26px; border-radius: 999px;
+  background: rgba(255, 255, 255, 0.15);
+  position: relative; transition: background 0.18s; flex-shrink: 0;
+}
+.my-cat-toggle.is-on { background: #16a34a; }
+.my-cat-toggle-knob {
+  position: absolute; top: 3px; left: 3px;
+  width: 20px; height: 20px; border-radius: 50%;
+  background: #fff; transition: transform 0.18s;
+}
+.my-cat-toggle.is-on .my-cat-toggle-knob { transform: translateX(18px); }
+/* Hue slider */
+.my-cat-hue-slider {
+  width: 100%;
+  -webkit-appearance: none; appearance: none;
+  height: 12px; border-radius: 999px;
+  background: linear-gradient(to right,
+    hsl(0,70%,50%), hsl(60,70%,50%), hsl(120,70%,50%),
+    hsl(180,70%,50%), hsl(240,70%,50%), hsl(300,70%,50%), hsl(360,70%,50%));
+  outline: none; cursor: pointer;
+}
+.my-cat-hue-slider::-webkit-slider-thumb {
+  -webkit-appearance: none; appearance: none;
+  width: 20px; height: 20px; border-radius: 50%;
+  background: #fff; border: 2px solid rgba(0,0,0,0.3); cursor: pointer;
+}
+.my-cat-hue-slider::-moz-range-thumb {
+  width: 20px; height: 20px; border-radius: 50%;
+  background: #fff; border: 2px solid rgba(0,0,0,0.3); cursor: pointer;
+}
+.my-cat-hue-preview {
+  height: 40px; border-radius: 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+/* Error banner - light tinted box above the grid. */
+.my-cat-error {
+  margin: 0 0 16px;
+  padding: 12px 16px;
+  background: rgba(217, 83, 79, 0.08);
+  border: 1px solid rgba(217, 83, 79, 0.25);
+  border-radius: 8px;
+  color: #b54a48;
+  font-size: 13px;
+}
+
+/* Looks grid - same 3-column layout as CreatorPage. Tile aspect ratio
+   is set on .my-cat-tile-media so the wrapper itself can host the
+   absolute-positioned status pill / action row. */
+.my-cat-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+
+/* Per-tile wrapper - position:relative so the status pill, action
+   row, and delete-confirm overlay can absolute-position over the
+   media area. Click anywhere on the card opens the editor. */
+.my-cat-tile {
+  position: relative;
+  cursor: pointer;
+  transition: transform 0.15s ease;
+}
+.my-cat-tile:hover { transform: translateY(-1px); }
+.my-cat-tile.is-dragging {
+  opacity: 0.55;
+  transform: scale(0.97);
+}
+
+/* Drag-to-reorder grip. touch-action:none so the pointer stream isn't
+   stolen by the scroll container mid-drag. Sits top-left; the coloured
+   status dot now lives in the bottom-left so the two never overlap. */
+.my-cat-tile-grip {
+  position: absolute;
+  top: 8px;
+  left: 8px;
+  z-index: 6;
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+  border: none;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.45);
+  color: #fff;
+  cursor: grab;
+  touch-action: none;
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+.my-cat-tile-grip:active { cursor: grabbing; }
+.my-cat-tile-grip svg { display: block; }
+
+/* Media area - 3:4 portrait, mirrors .creator-grid .look-card. */
+.my-cat-tile-media {
+  position: relative;
+  width: 100%;
+  /* Match the main feed cards (3:4, cover). */
+  aspect-ratio: 3 / 4;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #1a1a1a;
+}
+.my-cat-tile-img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.my-cat-tile-placeholder {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.18);
+}
+.my-cat-tile-scrim {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.55) 0%, rgba(0, 0, 0, 0) 38%);
+}
+.my-cat-tile-title {
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: 10px;
+  z-index: 2;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  text-shadow: 0 1px 2px rgba(0, 0, 0, 0.4);
+}
+
+/* Status dot — replaces the old LIVE text pill. Sits in the BOTTOM-left
+   corner so it's clear of the drag grip (top-left); the grip stays a
+   neutral handle and this coloured light alone signals live/active.
+   Color encodes visibility: green=live, amber=anything not live
+   (in review / draft / archived / denied). Soft white halo so it stays
+   legible against any tile poster (the scrim darkens this corner too). */
+.my-cat-tile-dot {
+  position: absolute;
+  bottom: 10px;
+  left: 10px;
+  z-index: 3;
+  width: 11px;
+  height: 11px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(255, 255, 255, 0.85);
+  pointer-events: none;
+  box-shadow: 0 1px 4px rgba(0, 0, 0, 0.35);
+}
+/* Binary status light per the published===live / not-published===inactive
+   rule: green when live, amber otherwise. */
+.my-cat-tile-dot--live      { background: #22c55e; box-shadow: 0 0 6px rgba(34, 197, 94, 0.65), 0 1px 4px rgba(0, 0, 0, 0.35); }
+.my-cat-tile-dot--inactive,
+.my-cat-tile-dot--submitted,
+.my-cat-tile-dot--in_review,
+.my-cat-tile-dot--draft,
+.my-cat-tile-dot--archived,
+.my-cat-tile-dot--denied    { background: #f59e0b; box-shadow: 0 0 6px rgba(245, 158, 11, 0.7), 0 1px 4px rgba(0, 0, 0, 0.35); }
+
+/* Small inline dot used inside the mobile tray's status segmented
+   control — same palette as the tile (green=live, yellow=anything
+   else). */
+.my-cat-tray-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.my-cat-tray-dot--live     { background: #22c55e; box-shadow: 0 0 6px rgba(34, 197, 94, 0.65); }
+.my-cat-tray-dot--inactive { background: #f59e0b; }
+.my-cat-tray-dot--archived { background: #f59e0b; }
+
+/* Live / Inactive segmented control row in the tray. Two pills side
+   by side; the one matching the current state is dimmed + inert. */
+.my-cat-tray-status-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 6px 6px 0;
+}
+.my-cat-tray-status-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  color: #fff;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.my-cat-tray-status-pill.is-current {
+  background: rgba(255, 255, 255, 0.10);
+  cursor: default;
+  opacity: 0.85;
+}
+.my-cat-tray-status-pill:not(.is-current):hover {
+  background: rgba(255, 255, 255, 0.08);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+/* Edit / Archive / Delete row - shown only when Creator Mode is on.
+   Top-right of the tile. Stops pointer events from reaching the
+   underlying LookCard. */
+.my-cat-tile-actions {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 4;
+  display: flex;
+  gap: 4px;
+  background: rgba(17, 17, 17, 0.92);
+  padding: 4px;
+  border-radius: 999px;
+  /* Hidden until the tile is hovered (desktop). Fades + lifts in. */
+  opacity: 0;
+  transform: translateY(-4px);
+  pointer-events: none;
+  transition: opacity 0.16s ease, transform 0.16s ease;
+}
+.my-cat-tile:hover .my-cat-tile-actions,
+.my-cat-tile:focus-within .my-cat-tile-actions {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+/* Touch devices have no hover — the bottom tool tray covers actions
+   there, so the inline bar is suppressed to avoid a dead, always-on
+   overlay competing with the tap-to-open-tray gesture. */
+@media (hover: none) {
+  .my-cat-tile-actions { display: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .my-cat-tile-actions { transition: none; }
+}
+.my-cat-tile-action {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: transparent;
+  color: rgba(255, 255, 255, 0.85);
+  border: none;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+.my-cat-tile-action:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+.my-cat-tile-action--danger:hover {
+  background: rgba(217, 83, 79, 0.25);
+  color: #fbb;
+}
+
+/* ── Mobile tool tray ───────────────────────────────────────────────
+   Tapping a tile on touch devices slides this up from the bottom with
+   the look's thumbnail + status and the Edit / Share / Archive / Delete
+   actions. */
+.my-cat-tray-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1200;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  animation: my-cat-fade-in 0.18s ease both;
+  backdrop-filter: blur(2px);
+}
+.my-cat-tray {
+  width: 100%;
+  max-width: 520px;
+  background: #1a1a1a;
+  border-radius: 20px 20px 0 0;
+  padding: 8px 14px calc(18px + env(safe-area-inset-bottom));
+  box-shadow: 0 -12px 40px rgba(0, 0, 0, 0.45);
+  animation: my-cat-tray-up 0.28s cubic-bezier(0.32, 0.72, 0, 1) both;
+}
+.my-cat-tray-grip {
+  width: 38px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.22);
+  margin: 6px auto 12px;
+}
+.my-cat-tray-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 4px 12px;
+  margin-bottom: 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.my-cat-tray-thumb {
+  width: 46px;
+  height: 58px;
+  border-radius: 8px;
+  overflow: hidden;
+  flex-shrink: 0;
+}
+.my-cat-tray-thumb img,
+.my-cat-tray-thumb video { width: 100%; height: 100%; object-fit: cover; display: block; }
+.my-cat-tray-head-text { display: flex; flex-direction: column; gap: 3px; min-width: 0; }
+.my-cat-tray-title {
+  font-size: 15px;
+  font-weight: 700;
+  color: #fff;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.my-cat-tray-status { font-size: 12px; font-weight: 600; }
+.my-cat-tray-action {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  padding: 14px 8px;
+  background: transparent;
+  border: none;
+  color: #f4f4f5;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  border-radius: 10px;
+  text-align: left;
+  transition: background 0.14s ease;
+}
+.my-cat-tray-action:active { background: rgba(255, 255, 255, 0.08); }
+.my-cat-tray-action svg { flex-shrink: 0; color: rgba(255, 255, 255, 0.7); }
+.my-cat-tray-chevron { margin-left: auto; transition: transform 0.2s ease; opacity: 0.6; }
+.my-cat-tray-chevron.is-open { transform: rotate(180deg); }
+
+/* Download sub-tree — 3 creative variants, indented under Download. */
+.my-cat-tray-subtree {
+  display: flex;
+  flex-direction: column;
+  margin: -2px 0 4px 18px;
+  padding-left: 14px;
+  border-left: 2px solid rgba(255, 255, 255, 0.1);
+  animation: my-cat-subtree-in 0.2s ease both;
+}
+@keyframes my-cat-subtree-in {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.my-cat-tray-suboption {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 11px 8px;
+  background: transparent;
+  border: none;
+  color: #f4f4f5;
+  cursor: pointer;
+  border-radius: 10px;
+  text-align: left;
+  transition: background 0.14s ease;
+}
+.my-cat-tray-suboption:active { background: rgba(255, 255, 255, 0.08); }
+.my-cat-tray-subnum {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+}
+.my-cat-tray-subtext { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+.my-cat-tray-subtitle { font-size: 14.5px; font-weight: 600; }
+.my-cat-tray-subdesc { font-size: 12px; font-weight: 500; color: rgba(255, 255, 255, 0.5); }
+.my-cat-tray-action--danger { color: #f87171; }
+.my-cat-tray-action--danger svg { color: #f87171; }
+.my-cat-tray-cancel {
+  width: 100%;
+  margin-top: 8px;
+  padding: 13px;
+  background: rgba(255, 255, 255, 0.06);
+  border: none;
+  border-radius: 12px;
+  color: #d4d4d8;
+  font-size: 15px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+/* ── Delete confirmation (centered, desktop + touch) ────────────────── */
+.my-cat-confirm-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 1300;
+  background: rgba(0, 0, 0, 0.6);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  animation: my-cat-fade-in 0.16s ease both;
+  backdrop-filter: blur(3px);
+}
+.my-cat-confirm {
+  width: 100%;
+  max-width: 380px;
+  background: #1c1c1f;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  padding: 22px;
+  text-align: center;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.5);
+  animation: my-cat-pop-in 0.22s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.my-cat-confirm h3 { margin: 0 0 8px; font-size: 18px; font-weight: 700; color: #fff; }
+.my-cat-confirm p { margin: 0 0 18px; font-size: 13.5px; line-height: 1.5; color: #a1a1aa; }
+.my-cat-confirm-actions { display: flex; gap: 10px; justify-content: center; }
+.my-cat-confirm-actions .my-cat-btn-cancel,
+.my-cat-confirm-actions .my-cat-btn-danger { flex: 1; padding: 11px; }
+
+/* Action-feedback toast (link copied, etc.). */
+.my-cat-toast {
+  position: fixed;
+  left: 50%;
+  bottom: calc(28px + env(safe-area-inset-bottom));
+  transform: translateX(-50%);
+  z-index: 1400;
+  background: rgba(23, 23, 23, 0.96);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 11px 18px;
+  border-radius: 999px;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4), 0 0 0 1px rgba(255, 255, 255, 0.06);
+  animation: my-cat-toast-in 0.24s cubic-bezier(0.34, 1.56, 0.64, 1) both;
+  pointer-events: none;
+}
+
+@keyframes my-cat-fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes my-cat-tray-up { from { transform: translateY(100%); } to { transform: translateY(0); } }
+@keyframes my-cat-pop-in { from { opacity: 0; transform: scale(0.92); } to { opacity: 1; transform: scale(1); } }
+@keyframes my-cat-toast-in { from { opacity: 0; transform: translate(-50%, 10px); } to { opacity: 1; transform: translate(-50%, 0); } }
+@media (prefers-reduced-motion: reduce) {
+  .my-cat-tray-backdrop, .my-cat-tray, .my-cat-confirm-backdrop, .my-cat-confirm, .my-cat-toast { animation: none; }
+}
+
+.my-cat-btn-danger {
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  background: #d9534f;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.my-cat-btn-danger:hover { background: #c9302c; }
+.my-cat-btn-cancel {
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  background: rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.85);
+  border: none;
+  border-radius: 6px;
+  cursor: pointer;
+}
+.my-cat-btn-cancel:hover { background: rgba(255, 255, 255, 0.2); color: #fff; }
+
+/* Skeleton + empty states - same look-and-feel as CreatorPage. */
+.my-cat-skeleton-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 12px;
+}
+.my-cat-skeleton-tile {
+  width: 100%;
+  aspect-ratio: 3 / 4;
+  border-radius: 12px;
+  background: linear-gradient(90deg, #f3f4f6 0%, #e5e7eb 50%, #f3f4f6 100%);
+  background-size: 200% 100%;
+  animation: my-cat-shimmer 1.4s ease-in-out infinite;
+}
+@keyframes my-cat-shimmer {
+  0%   { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+.my-cat-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 64px 24px;
+  text-align: center;
+  color: rgba(0, 0, 0, 0.55);
+}
+.my-cat-empty svg { color: rgba(0, 0, 0, 0.25); }
+.my-cat-empty h2 {
+  margin: 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: rgba(0, 0, 0, 0.85);
+}
+.my-cat-empty p {
+  margin: 0;
+  max-width: 360px;
+  font-size: 13px;
+  line-height: 1.55;
+}
+.my-cat-empty-btn {
+  margin-top: 8px;
+  padding: 10px 24px;
+  font-size: 13px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #fff;
+  background: #111;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+.my-cat-empty-btn:hover { opacity: 0.85; }
+
+/* Pagination row. */
+.my-cat-pagination {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  margin: 32px 0 16px;
+}
+.my-cat-page-btn {
+  padding: 8px 16px;
+  font-size: 13px;
+  font-weight: 500;
+  color: rgba(0, 0, 0, 0.7);
+  background: none;
+  border: 1px solid rgba(0, 0, 0, 0.15);
+  border-radius: 6px;
+  cursor: pointer;
+  transition: border-color 0.15s, color 0.15s;
+}
+.my-cat-page-btn:hover:not(:disabled) {
+  border-color: #111;
+  color: #111;
+}
+.my-cat-page-btn:disabled { opacity: 0.3; cursor: default; }
+.my-cat-page-info {
+  font-size: 13px;
+  color: rgba(0, 0, 0, 0.55);
+}
+
+/* Narrower viewports collapse to 2 columns. <520px goes single column. */
+@media (max-width: 720px) {
+  .my-cat-grid,
+  .my-cat-skeleton-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+  .my-cat-create-fab {
+    right: 16px;
+    width: 40px;
+    height: 40px;
+  }
+  .my-cat-page {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
+@media (max-width: 420px) {
+  .my-cat-grid,
+  .my-cat-skeleton-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+/* Top-right action FAB row — analytics + upload as siblings. */
+.my-cat-fab-row {
+  position: fixed;
+  top: 24px;
+  right: 24px;
+  display: flex;
+  gap: 8px;
+  z-index: 30;
+}
+.my-cat-fab-row .my-cat-create-fab {
+  position: static;
+  top: auto;
+  right: auto;
+  width: 40px;
+  height: 40px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0;
+}
+/* Analytics + theme FABs — solid black surface (same as the create FAB)
+   with a subtle outline so the icons read on every viewport (was
+   rgba(255,255,255,0.08), invisible on the light hero). */
+.my-cat-create-fab.my-cat-analytics-fab,
+.my-cat-create-fab.my-cat-theme-fab {
+  background: #111;
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.18);
+}
+.my-cat-create-fab.my-cat-analytics-fab:hover,
+.my-cat-create-fab.my-cat-theme-fab:hover {
+  background: #000;
+}
+
+/* Creator-theme wrapper around the CreatorPage when a creator's catalog is
+   set to light. display:contents → the wrapper carries the .light-mode
+   class for the global recolor rules without adding a layout box, so the
+   .creator-page inside keeps its position:fixed behavior. */
+.creator-theme-wrap { display: contents; }
+
+/* Grid: edge-to-edge 2-col on mobile to match the main feed. */
+@media (max-width: 768px) {
+  .my-cat-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 2px;
+    padding: 0;
+    background: #111;
+  }
+}
+
+/* Creator analytics modal */
+.my-cat-analytics-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.65);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 200;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.my-cat-analytics-card {
+  width: min(480px, 100%);
+  background: #18181b;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  overflow: hidden;
+  color: #fff;
+}
+.my-cat-analytics-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 18px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.my-cat-analytics-head h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  /* Truncate a long look title instead of letting it bleed across the
+     close button + the range-pill row beneath it. */
+  flex: 1;
+  min-width: 0;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.my-cat-analytics-head .my-cat-analytics-close {
+  flex-shrink: 0;
+  margin-left: 12px;
+}
+.my-cat-analytics-close {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0;
+}
+.my-cat-analytics-empty {
+  padding: 28px 18px;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 13px;
+}
+.my-cat-stat {
+  background: #18181b;
+  padding: 18px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.my-cat-stat-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.45);
+  font-weight: 600;
+}
+.my-cat-stat-value {
+  font-size: 26px;
+  font-weight: 700;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+.my-cat-stat-sub {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.55);
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Wallet background — concentric thin green rings + AI-diamond particles.
+   Money rippling outward, value growing together. The wallet content
+   (.my-looks-container > *) sits at z-index: 2; this background occupies
+   z-index 0/1 inside the .my-looks-overlay--wallet shell.
+   ═══════════════════════════════════════════════════════════════════════ */
+.wb-root {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+  background:
+    radial-gradient(60% 60% at 50% 38%, rgba(34, 197, 94, 0.08) 0%, transparent 70%),
+    #0a0a0c;
+}
+
+/* Wallet rings now live on .wallet-hero (see further down in this file)
+   so they're guaranteed centered on the $ amount no matter what the page
+   layout does. The old hardcoded `top: 28vh` approach detached them from
+   the amount any time the wallet content shifted (banner state, viewport
+   height, scroll position) — that's the bug where rings hung off the top
+   of the page. Keeping the keyframes here because the per-ring spinners
+   still use them. */
+@keyframes wb-ring-spin { to { transform: rotate(360deg); } }
+
+/* Localized burst (from wallet:burst event). One-shot, faster than the
+   ambient rings, slightly thicker. */
+.wb-burst {
+  position: absolute;
+  width: 40px;
+  height: 40px;
+  margin-left: -20px;
+  margin-top: -20px;
+  border-radius: 50%;
+  border: 1.5px solid rgba(34, 197, 94, 0.7);
+  box-shadow: 0 0 18px rgba(34, 197, 94, 0.35);
+  opacity: 0;
+  animation: wb-burst-expand 2.2s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+@keyframes wb-burst-expand {
+  0%   { transform: scale(0.3); opacity: 0; }
+  15%  { opacity: 1; }
+  100% { transform: scale(14); opacity: 0; border-width: 0.4px; }
+}
+/* Payout variant — bigger, brighter green burst centered on the balance. */
+.wb-burst--payout {
+  width: 80px;
+  height: 80px;
+  margin-left: -40px;
+  margin-top: -40px;
+  border-width: 2px;
+  border-color: rgba(74, 222, 128, 0.95);
+  box-shadow:
+    0 0 36px rgba(74, 222, 128, 0.55),
+    0 0 64px rgba(74, 222, 128, 0.25);
+  animation-duration: 3s;
+}
+
+/* Particle overlay — the AI-diamond field rendered above the rings, with
+   a soft green tint via CSS filter so it stays on-theme. Lower opacity
+   here so it doesn't compete with the rings. */
+.wb-particles {
+  position: absolute;
+  inset: 0;
+  opacity: 0.45;
+  /* Push the silver particles toward green via hue-rotate. */
+  filter: hue-rotate(85deg) saturate(0.9);
+}
+.wb-particles .pw-particles {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .wb-ring, .wb-burst { animation: none !important; opacity: 0.2; }
+}
+
+/* ──────────────────────────────────────────────────────────────────
+   CreateLookV2 — guided look-creation flow. Dark surface throughout.
+   The hero is a phone-shaped (9:19.5) tile that's the tap target
+   for upload AND the canvas the uploaded media fills. Sections
+   below it animate in once we have something to show.
+   ────────────────────────────────────────────────────────────────── */
+.cl-v2 {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 20px 16px 140px;
+  max-width: 520px;
+  margin: 0 auto;
+  color: #fff;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 320ms cubic-bezier(.32,.72,0,1), transform 320ms cubic-bezier(.32,.72,0,1);
+}
+.cl-v2.is-mounted { opacity: 1; transform: none; }
+
+/* ── Video trimmer (one viewport: header / video / scrub timeline) ── */
+.vtrim {
+  position: fixed;
+  inset: 0;
+  z-index: 500;
+  background: #0a0a0a;
+  color: #fff;
+  display: flex;
+  flex-direction: column;
+}
+.vtrim-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: max(12px, env(safe-area-inset-top)) 16px 12px;
+  flex: 0 0 auto;
+}
+.vtrim-cancel, .vtrim-done {
+  background: none;
+  border: none;
+  color: #fff;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 6px 4px;
+}
+.vtrim-done { color: #a78bfa; }
+.vtrim-done:disabled { opacity: 0.5; cursor: default; }
+.vtrim-title { font-size: 15px; font-weight: 700; }
+.vtrim-stage {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 8px 16px;
+  overflow: hidden;
+}
+.vtrim-video {
+  max-width: 100%;
+  max-height: 100%;
+  border-radius: 12px;
+  background: #000;
+}
+.vtrim-controls { padding: 14px 20px max(20px, env(safe-area-inset-bottom)); flex: 0 0 auto; }
+.vtrim-times {
+  display: flex;
+  justify-content: space-between;
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.6);
+  margin-bottom: 10px;
+}
+.vtrim-times-dur { color: #a78bfa; font-weight: 600; }
+.vtrim-track {
+  position: relative;
+  height: 44px;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.08);
+  touch-action: none;
+  user-select: none;
+}
+.vtrim-track-scrub { position: absolute; inset: 0; cursor: pointer; }
+.vtrim-sel {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  background: rgba(167, 139, 250, 0.18);
+  border: 2px solid #a78bfa;
+  border-radius: 10px;
+  pointer-events: none;
+}
+.vtrim-playhead {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  background: #fff;
+  pointer-events: none;
+}
+.vtrim-handle {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 18px;
+  margin-left: -9px;
+  border-radius: 6px;
+  background: #a78bfa;
+  cursor: ew-resize;
+  touch-action: none;
+}
+.vtrim-handle::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 2px;
+  height: 14px;
+  background: #fff;
+  border-radius: 1px;
+}
+.vtrim-hint { text-align: center; font-size: 12px; color: rgba(255, 255, 255, 0.5); margin: 12px 0 0; }
+
+/* Hero (empty) state — fills the full form container with a
+   particle backdrop + a small centered upload card. Drop the
+   default page padding so the card can true-center vertically; the
+   container above (.my-cat-form-container) is position:absolute
+   inset:0 with overflow:auto, so 100% here = viewport. */
+.cl-v2.is-hero {
+  padding: 16px;
+  height: 100%;
+  max-width: none;
+}
+
+/* Particle field — pinned to the entire form container so it bleeds
+   edge-to-edge regardless of .cl-v2's max-width. Behind everything. */
+.cl-v2-particles {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.85;
+}
+.cl-v2-particles .pw-particles {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+.cl-v2 > * { position: relative; z-index: 1; }
+
+/* Hero block — centers the small upload card + faded caption above
+   the particle field. Springs in on mount via .is-mounted. */
+.cl-v2-hero {
+  flex: 1;
+  min-height: 70vh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+}
+.cl-v2-hero-card {
+  width: 132px;
+  height: 132px;
+  border-radius: 28px;
+  border: 1.5px solid rgba(255,255,255,0.16);
+  background: rgba(255,255,255,0.04);
+  color: rgba(255,255,255,0.92);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  backdrop-filter: blur(8px) saturate(1.1);
+  -webkit-backdrop-filter: blur(8px) saturate(1.1);
+  box-shadow:
+    0 12px 36px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  /* Springs into view after the parent fades on. transitionDelay so
+     the card lands after the wrapper has settled. */
+  opacity: 0;
+  transform: scale(0.6);
+  transition:
+    opacity 520ms cubic-bezier(.16, 1, .3, 1) 160ms,
+    transform 520ms cubic-bezier(.16, 1, .3, 1) 160ms,
+    border-color 200ms ease,
+    background 200ms ease;
+}
+.cl-v2.is-mounted .cl-v2-hero-card {
+  opacity: 1;
+  transform: scale(1);
+}
+.cl-v2-hero-card:hover {
+  border-color: rgba(255,255,255,0.36);
+  background: rgba(255,255,255,0.07);
+}
+.cl-v2-hero-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.cl-v2-hero-label {
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  color: rgba(255, 255, 255, 0.5);
+  opacity: 0;
+  transform: translateY(6px);
+  transition:
+    opacity 480ms ease 360ms,
+    transform 480ms cubic-bezier(.16, 1, .3, 1) 360ms;
+}
+.cl-v2.is-mounted .cl-v2-hero-label {
+  opacity: 1;
+  transform: none;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .cl-v2-hero-card,
+  .cl-v2-hero-label {
+    transition: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.cl-v2-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+.cl-v2-head h2 {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+}
+.cl-v2-close {
+  width: 36px;
+  height: 36px;
+  border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.04);
+  color: #fff;
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+.cl-v2-close:hover { background: rgba(255,255,255,0.1); }
+
+/* Media stage — pinned in the top third. Instead of one big phone-
+   shaped tile, the working surface now shows a small horizontal row
+   of thumbnails (up to five photos/videos) plus a trailing "+ Add"
+   tile until the cap. Each thumbnail keeps a 9:16-ish portrait shape
+   so it reads as a mini feed card. */
+.cl-v2-stage {
+  display: flex;
+  justify-content: center;
+}
+.cl-v2-thumb-row {
+  display: flex;
+  gap: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+  padding: 4px 0;
+}
+.cl-v2-thumb {
+  position: relative;
+  width: 84px;
+  aspect-ratio: 9 / 16;
+  border-radius: 14px;
+  background: #0d0d0d;
+  border: 1px solid rgba(255,255,255,0.08);
+  overflow: hidden;
+  flex: 0 0 auto;
+}
+.cl-v2-thumb img,
+.cl-v2-thumb video {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.cl-v2-thumb-remove {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  width: 22px;
+  height: 22px;
+  border-radius: 11px;
+  background: rgba(0,0,0,0.6);
+  border: 1px solid rgba(255,255,255,0.2);
+  color: #fff;
+  font-size: 14px;
+  line-height: 1;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+}
+.cl-v2-thumb-remove:hover { background: rgba(0,0,0,0.8); }
+/* Trailing "+ Add" tile — dashed, taps the hidden file input. */
+.cl-v2-thumb-add {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
+  background: transparent;
+  border: 1.5px dashed rgba(255,255,255,0.18);
+  color: rgba(255,255,255,0.7);
+  font-size: 22px;
+  cursor: pointer;
+  transition: border-color 200ms ease, color 200ms ease;
+}
+.cl-v2-thumb-add:hover {
+  border-color: rgba(255,255,255,0.4);
+  color: #fff;
+}
+.cl-v2-thumb-add-label {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+}
+
+/* Analyzing pulse. Sits below the tile so the canvas itself stays
+   stable while the spinner runs. */
+.cl-v2-analyzing {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-size: 14px;
+  color: rgba(255,255,255,0.7);
+  padding: 4px 0 8px;
+}
+.cl-v2-spinner {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.18);
+  border-top-color: #fff;
+  animation: cl-v2-spin 0.8s linear infinite;
+}
+@keyframes cl-v2-spin { to { transform: rotate(360deg); } }
+
+/* Products review card. */
+.cl-v2-products {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 16px;
+  border-radius: 18px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+.cl-v2-section-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+}
+.cl-v2-section-head h3 {
+  font-size: 15px;
+  font-weight: 600;
+}
+.cl-v2-section-hint {
+  font-size: 12px;
+  color: rgba(255,255,255,0.55);
+}
+
+/* Product cards — real image + brand + name + price. One column on
+   phone, two on wider. Each card is a tappable confirm target with a
+   small × to drop the suggestion. */
+.cl-v2-card-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+@media (min-width: 460px) {
+  .cl-v2-card-grid { grid-template-columns: 1fr 1fr; }
+}
+.cl-v2-pcard {
+  position: relative;
+  display: flex;
+  align-items: stretch;
+  border-radius: 12px;
+  border: 1.5px solid rgba(255,255,255,0.10);
+  background: rgba(0,0,0,0.4);
+  overflow: hidden;
+  transition: border-color 160ms ease, background 160ms ease;
+}
+.cl-v2-pcard:hover { border-color: rgba(255,255,255,0.25); }
+.cl-v2-pcard.is-confirmed {
+  border-color: #fff;
+  background: rgba(255,255,255,0.08);
+}
+/* AI-detected rows get a faint blue wash so they read apart from
+   user-typed / search-result cards. */
+.cl-v2-pcard--ai { background: rgba(96, 165, 250, 0.06); }
+.cl-v2-pcard-body {
+  flex: 1;
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  background: none;
+  border: none;
+  color: #fff;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+}
+/* Product thumbnail. Has an image → show it as the poster. No image
+   → placeholder carrying the "Video generated after submit" badge. */
+.cl-v2-pcard-media {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  overflow: hidden;
+  flex: 0 0 auto;
+  background: rgba(255,255,255,0.04);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cl-v2-pcard-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.cl-v2-pcard-placeholder {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  background:
+    repeating-linear-gradient(
+      45deg,
+      rgba(255,255,255,0.04),
+      rgba(255,255,255,0.04) 6px,
+      rgba(255,255,255,0.07) 6px,
+      rgba(255,255,255,0.07) 12px
+    );
+}
+.cl-v2-pcard-badge {
+  font-size: 8px;
+  line-height: 1.15;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  color: rgba(255,255,255,0.55);
+  padding: 0 3px;
+}
+.cl-v2-pcard-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.cl-v2-pcard-brand {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: rgba(255,255,255,0.6);
+}
+.cl-v2-pcard-name {
+  font-size: 13px;
+  font-weight: 500;
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.cl-v2-pcard-price {
+  font-size: 12px;
+  font-weight: 600;
+  color: #fff;
+}
+.cl-v2-pcard-check {
+  width: 24px;
+  height: 24px;
+  border-radius: 12px;
+  background: rgba(0,0,0,0.6);
+  border: 1px solid rgba(255,255,255,0.4);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+.cl-v2-pcard.is-confirmed .cl-v2-pcard-check {
+  background: #fff;
+  color: #111;
+  border-color: #fff;
+}
+.cl-v2-pcard-remove {
+  width: 32px;
+  background: none;
+  border: none;
+  border-left: 1px solid rgba(255,255,255,0.08);
+  color: rgba(255,255,255,0.5);
+  font-size: 18px;
+  cursor: pointer;
+  flex: 0 0 auto;
+}
+.cl-v2-pcard-remove:hover { color: #fff; background: rgba(255,255,255,0.06); }
+
+/* Type-to-find product search. A text input + Go button; a pasted
+   link is added directly instead of searched. */
+.cl-v2-search {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.cl-v2-search-row {
+  display: flex;
+  gap: 8px;
+}
+.cl-v2-search-input {
+  flex: 1;
+  min-width: 0;
+  border-radius: 10px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(0,0,0,0.45);
+  color: #fff;
+  font: inherit;
+  font-size: 14px;
+  padding: 12px;
+}
+.cl-v2-search-input::placeholder { color: rgba(255,255,255,0.4); }
+.cl-v2-search-go {
+  flex: 0 0 auto;
+  min-width: 52px;
+  border-radius: 10px;
+  border: none;
+  background: #fff;
+  color: #111;
+  font-weight: 700;
+  font-size: 14px;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.cl-v2-search-go:disabled { opacity: 0.4; cursor: not-allowed; }
+.cl-v2-search-go .cl-v2-spinner {
+  border-color: rgba(0,0,0,0.25);
+  border-top-color: #111;
+}
+.cl-v2-search-hint {
+  font-size: 12px;
+  color: rgba(255,255,255,0.5);
+}
+.cl-v2-search-empty {
+  padding: 14px;
+  border-radius: 10px;
+  border: 1px dashed rgba(255,255,255,0.14);
+  background: rgba(0,0,0,0.3);
+  color: rgba(255,255,255,0.7);
+  font-size: 13px;
+  text-align: center;
+}
+
+/* Real product result cards — image + brand + name + price. Tapping
+   adds the result as a confirmed product. One column on phone, two
+   on wider. */
+.cl-v2-result-grid {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 8px;
+}
+@media (min-width: 460px) {
+  .cl-v2-result-grid { grid-template-columns: 1fr 1fr; }
+}
+.cl-v2-result {
+  display: grid;
+  grid-template-columns: auto 1fr auto;
+  gap: 12px;
+  align-items: center;
+  padding: 10px 12px;
+  border-radius: 12px;
+  border: 1.5px solid rgba(255,255,255,0.10);
+  background: rgba(0,0,0,0.4);
+  color: #fff;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  min-width: 0;
+  transition: border-color 160ms ease, background 160ms ease;
+}
+.cl-v2-result:hover { border-color: rgba(255,255,255,0.25); }
+.cl-v2-result.is-added {
+  border-color: rgba(255,255,255,0.3);
+  background: rgba(255,255,255,0.06);
+  cursor: default;
+}
+.cl-v2-result-media {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  overflow: hidden;
+  flex: 0 0 auto;
+  background: rgba(255,255,255,0.04);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.cl-v2-result-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.cl-v2-result-media .cl-v2-pcard-placeholder {
+  width: 100%;
+  height: 100%;
+}
+.cl-v2-result-meta {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.cl-v2-result-add {
+  width: 24px;
+  height: 24px;
+  border-radius: 12px;
+  background: rgba(0,0,0,0.6);
+  border: 1px solid rgba(255,255,255,0.4);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+}
+.cl-v2-result.is-added .cl-v2-result-add {
+  background: #fff;
+  color: #111;
+  border-color: #fff;
+}
+
+.cl-v2-error {
+  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(255, 80, 80, 0.12);
+  color: #ffb4b4;
+  font-size: 13px;
+}
+
+/* Sticky bottom preview button. Stays a thumb away on phones. */
+.cl-v2-footer {
+  position: sticky;
+  bottom: 0;
+  margin: 16px -16px -8px;
+  padding: 16px;
+  background: linear-gradient(to top, #0a0a0a 60%, rgba(10,10,10,0.6) 100%);
+}
+.cl-v2-preview-btn {
+  width: 100%;
+  height: 52px;
+  border-radius: 14px;
+  background: #fff;
+  color: #111;
+  font-size: 16px;
+  font-weight: 700;
+  border: none;
+  cursor: pointer;
+}
+.cl-v2-preview-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+/* Preview surface — mirrors the feed tile shape with the confirmed
+   products listed underneath. */
+.cl-v2-preview {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  border-radius: 18px;
+  background: rgba(255,255,255,0.04);
+  border: 1px solid rgba(255,255,255,0.08);
+}
+.cl-v2-preview h3 {
+  font-size: 15px;
+  font-weight: 600;
+}
+.cl-v2-preview-tile {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 14px;
+}
+@media (min-width: 600px) {
+  .cl-v2-preview-tile { grid-template-columns: 220px 1fr; }
+}
+.cl-v2-preview-tile > img,
+.cl-v2-preview-tile > video {
+  width: 100%;
+  aspect-ratio: 9 / 19.5;
+  object-fit: cover;
+  border-radius: 14px;
+  background: #000;
+}
+.cl-v2-preview-products {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.cl-v2-preview-product {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  font-size: 13px;
+  color: rgba(255,255,255,0.9);
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(0,0,0,0.3);
+}
+.cl-v2-sample-price {
+  font-size: 13px;
+  font-weight: 600;
+  color: #fff;
+}
+.cl-v2-publish-row {
+  display: flex;
+  gap: 10px;
+  justify-content: flex-end;
+}
+.cl-v2-back-btn {
+  padding: 12px 18px;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(255,255,255,0.75);
+  border: 1px solid rgba(255,255,255,0.18);
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+}
+.cl-v2-publish-btn {
+  padding: 12px 24px;
+  border-radius: 999px;
+  background: #fff;
+  color: #111;
+  font-weight: 700;
+  font-size: 14px;
+  border: none;
+  cursor: pointer;
+}
+.cl-v2-publish-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+/* ──────────────────────────────────────────────────────────────────
+   AddProductV2 — mirrors the Create-a-Look hero pattern (particle
+   backdrop, small glassy card that springs in, faded prompt copy)
+   then walks through search/confirm or paste-link/progress.
+   ────────────────────────────────────────────────────────────────── */
+.apv2 {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  padding: 16px;
+  height: 100%;
+  color: #fff;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 320ms cubic-bezier(.32,.72,0,1), transform 320ms cubic-bezier(.32,.72,0,1);
+}
+.apv2.is-mounted { opacity: 1; transform: none; }
+.apv2-particles {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  /* Bumped from 0.85 so the WebGL particle field reads clearly
+     against the dark base on this page. */
+  opacity: 1;
+}
+.apv2-particles .pw-particles { position: absolute; inset: 0; width: 100%; height: 100%; }
+.apv2 > * { position: relative; z-index: 1; }
+
+.apv2-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  max-width: 520px;
+  width: 100%;
+  margin: 0 auto;
+}
+.apv2-head h2 { font-size: 22px; font-weight: 700; letter-spacing: -0.02em; }
+.apv2-close {
+  width: 36px; height: 36px; border-radius: 18px;
+  border: 1px solid rgba(255,255,255,0.12);
+  background: rgba(255,255,255,0.04);
+  color: #fff; font-size: 22px; line-height: 1;
+  cursor: pointer;
+}
+.apv2-close:hover { background: rgba(255,255,255,0.1); }
+
+.apv2-hero {
+  flex: 1;
+  /* Re-center inside the VISIBLE viewport (full viewport minus the
+     soft keyboard, written to --apv2-kb by visualViewport on mount).
+     Without subtracting --apv2-kb the input slid under the keyboard
+     the moment the user tapped it. The minus accounts for the
+     header chrome too so the card has room to breathe. */
+  min-height: calc(70vh - var(--apv2-kb, 0px));
+  max-height: calc(100vh - var(--apv2-kb, 0px) - 80px);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 18px;
+  width: 100%;
+  max-width: 520px;
+  margin: 0 auto;
+  transition: min-height 220ms cubic-bezier(.32, .72, 0, 1),
+              max-height 220ms cubic-bezier(.32, .72, 0, 1);
+}
+/* Bare hero icon — no card / frame around it. The square the icon
+   used to live in implied "tap me", but the icon is decoration only;
+   the user types into the input below instead. Springs in just like
+   the framed version did. */
+.apv2-hero-icon-bare {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.88);
+  filter: drop-shadow(0 6px 18px rgba(0, 0, 0, 0.45));
+  opacity: 0;
+  transform: scale(0.6);
+  transition:
+    opacity 520ms cubic-bezier(.16, 1, .3, 1) 160ms,
+    transform 520ms cubic-bezier(.16, 1, .3, 1) 160ms;
+}
+.apv2.is-mounted .apv2-hero-icon-bare { opacity: 1; transform: scale(1); }
+
+.apv2-hero-label {
+  font-size: 14px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.5);
+  opacity: 0;
+  transform: translateY(6px);
+  transition: opacity 480ms ease 360ms, transform 480ms cubic-bezier(.16, 1, .3, 1) 360ms;
+  text-align: center;
+}
+.apv2.is-mounted .apv2-hero-label { opacity: 1; transform: none; }
+
+.apv2-input-row {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  max-width: 420px;
+  opacity: 0;
+  transform: translateY(8px);
+  transition: opacity 480ms ease 480ms, transform 480ms cubic-bezier(.16, 1, .3, 1) 480ms;
+}
+.apv2.is-mounted .apv2-input-row { opacity: 1; transform: none; }
+.apv2-input {
+  flex: 1;
+  height: 48px;
+  border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(0,0,0,0.45);
+  color: #fff;
+  font-family: inherit;
+  font-size: 14px;
+  padding: 0 18px;
+  outline: none;
+}
+.apv2-input::placeholder { color: rgba(255,255,255,0.4); }
+.apv2-input:focus { border-color: rgba(255,255,255,0.4); }
+.apv2-go {
+  height: 48px;
+  padding: 0 22px;
+  border-radius: 999px;
+  background: #fff;
+  color: #111;
+  font-weight: 700;
+  font-size: 14px;
+  border: none;
+  cursor: pointer;
+}
+.apv2-go:disabled { opacity: 0.4; cursor: not-allowed; }
+
+.apv2-error {
+  color: #ffb4b4;
+  font-size: 13px;
+  text-align: center;
+  max-width: 380px;
+}
+
+.apv2-status {
+  flex: 1;
+  min-height: 50vh;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: rgba(255,255,255,0.78);
+  font-size: 14px;
+}
+.apv2-spinner {
+  width: 14px; height: 14px; border-radius: 50%;
+  border: 2px solid rgba(255,255,255,0.18);
+  border-top-color: #fff;
+  animation: apv2-spin 0.8s linear infinite;
+}
+@keyframes apv2-spin { to { transform: rotate(360deg); } }
+
+.apv2-confirm {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  width: 100%;
+  max-width: 420px;
+  margin: 0 auto;
+}
+.apv2-confirm-q { font-size: 18px; font-weight: 600; letter-spacing: -0.01em; }
+.apv2-confirm-card {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 96px 1fr;
+  gap: 14px;
+  padding: 14px;
+  border-radius: 16px;
+  background: rgba(255,255,255,0.05);
+  border: 1px solid rgba(255,255,255,0.08);
+  align-items: center;
+}
+.apv2-confirm-card img {
+  width: 96px; height: 96px; border-radius: 12px; object-fit: cover; background: #111;
+}
+.apv2-confirm-card-blank { width: 96px; height: 96px; border-radius: 12px; background: #111; }
+.apv2-confirm-meta { display: flex; flex-direction: column; gap: 4px; min-width: 0; }
+.apv2-confirm-brand {
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.06em;
+  color: rgba(255,255,255,0.6);
+}
+.apv2-confirm-name {
+  font-size: 14px; font-weight: 500;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.apv2-confirm-price { font-size: 14px; font-weight: 600; }
+.apv2-confirm-row { display: flex; gap: 10px; width: 100%; justify-content: center; }
+
+.apv2-btn-secondary {
+  padding: 12px 18px;
+  border-radius: 999px;
+  background: transparent;
+  color: rgba(255,255,255,0.85);
+  border: 1px solid rgba(255,255,255,0.18);
+  font-weight: 600;
+  font-size: 14px;
+  cursor: pointer;
+}
+.apv2-btn-secondary:hover { background: rgba(255,255,255,0.06); }
+.apv2-btn-primary {
+  padding: 12px 22px;
+  border-radius: 999px;
+  background: #fff;
+  color: #111;
+  font-weight: 700;
+  font-size: 14px;
+  border: none;
+  cursor: pointer;
+}
+.apv2-btn-primary:disabled { opacity: 0.5; cursor: not-allowed; }
+
+.apv2-progress {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 14px;
+  width: 100%;
+  max-width: 420px;
+  margin: 0 auto;
+  text-align: center;
+}
+.apv2-progress-bar {
+  width: 100%;
+  height: 8px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.10);
+  overflow: hidden;
+}
+.apv2-progress-fill {
+  height: 100%;
+  background: linear-gradient(90deg, #22c55e, #4ade80);
+  transition: width 200ms linear;
+}
+.apv2-progress-label { font-size: 14px; font-weight: 500; color: rgba(255,255,255,0.9); }
+.apv2-progress-url {
+  font-size: 12px;
+  color: rgba(255,255,255,0.55);
+  max-width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.apv2-progress-hint {
+  font-size: 13px;
+  color: rgba(255,255,255,0.55);
+  max-width: 320px;
+  line-height: 1.4;
+}
+.apv2-progress-actions { display: flex; gap: 10px; margin-top: 6px; }
+
+@media (prefers-reduced-motion: reduce) {
+  .apv2,
+  .apv2-hero-icon-bare,
+  .apv2-hero-label,
+  .apv2-input-row {
+    transition: none;
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* ──────────────────────────────────────────────────────────────────
+   MyLooks: back FAB joins the top-right row + my-info hero button
+   + scrollable analytics modal with time-range pills.
+   ────────────────────────────────────────────────────────────────── */
+
+/* Back FAB — same pill as the analytics + create buttons, but pinned to
+   the top-LEFT corner (conventional back placement) instead of sitting in
+   the top-right fab row. It's no longer a child of .my-cat-fab-row, so the
+   base .my-cat-create-fab top-right anchor applies and must be flipped. */
+.my-cat-back-fab svg { display: block; }
+.my-cat-back-fab {
+  position: fixed;
+  top: 24px;
+  left: 24px;
+  right: auto;
+  z-index: 30;
+}
+
+/* My info pill on the hero — same slot the public CreatorPage uses
+   for Follow. Subtle dark glass with a white outline so it reads
+   as an inline action, not a primary CTA. */
+.my-cat-hero-info {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 16px;
+  margin-bottom: 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.92);
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: background 160ms ease, border-color 160ms ease;
+}
+.my-cat-hero-info:hover {
+  background: rgba(255, 255, 255, 0.10);
+  border-color: rgba(255, 255, 255, 0.24);
+}
+
+/* Analytics modal: scrollable detail. The base
+   .my-cat-analytics-card is fixed-height; this variant relaxes the
+   cap and lets the detail rails (top look, top products by metric)
+   scroll inside the card. */
+.my-cat-analytics-card--scroll {
+  max-height: min(82dvh, 720px);
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Time-range pill row. Horizontally scrollable on phones — there
+   are 7 options and they'd otherwise wrap awkwardly. */
+.my-cat-analytics-range {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 0 0 12px;
+  margin: -4px 0 6px;
+}
+.my-cat-analytics-range::-webkit-scrollbar { display: none; }
+.my-cat-analytics-range-pill {
+  flex-shrink: 0;
+  padding: 7px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  color: rgba(255, 255, 255, 0.75);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.my-cat-analytics-range-pill.is-active {
+  background: #fff;
+  color: #111;
+  border-color: #fff;
+}
+
+/* Detail sections — top look + product rails. */
+.my-cat-analytics-section {
+  margin-top: 16px;
+  padding-top: 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.my-cat-analytics-section h3 {
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.55);
+  margin: 0 0 10px;
+}
+
+/* ── Impressions hero card ──────────────────────────────────────────────
+   The headline metric, with its trend chart drawn right inside the card. */
+.my-cat-analytics-hero {
+  margin-top: 4px;
+  padding: 16px 16px 0;
+  border-radius: 18px;
+  background:
+    radial-gradient(120% 140% at 100% 0%, rgba(167, 139, 250, 0.16), transparent 60%),
+    rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  overflow: hidden;
+}
+.my-cat-analytics-hero-head {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.my-cat-analytics-hero-value {
+  font-size: 40px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  line-height: 1.04;
+  color: #fff;
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Clicks + clickouts: a clean 2-up of cards ─────────────────────────── */
+.my-cat-analytics-duo {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+}
+.my-cat-analytics-duo .my-cat-stat {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 16px;
+  padding: 14px 14px 16px;
+  gap: 5px;
+}
+
+/* Impressions trend — soft gradient area beneath a line that draws L→R with
+   a pulsing glow at the leading edge. */
+.an-trend { margin-top: 10px; }
+.an-trend-caption {
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: rgba(255, 255, 255, 0.4);
+  margin-bottom: 2px;
+}
+.an-trend-svg {
+  width: 100%;
+  height: 92px;
+  display: block;
+  overflow: visible;
+}
+.an-trend-area {
+  opacity: 0;
+  animation: an-trend-area-in 1.2s ease 0.3s forwards;
+}
+.an-trend--flat .an-trend-area { opacity: 0.5; animation: none; }
+@keyframes an-trend-area-in { to { opacity: 1; } }
+.an-trend-line {
+  fill: none;
+  stroke: #a78bfa;
+  stroke-width: 2;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  vector-effect: non-scaling-stroke;
+  stroke-dasharray: 1;
+  stroke-dashoffset: 1;
+  filter: drop-shadow(0 0 4px rgba(167, 139, 250, 0.5));
+  animation: an-trend-draw 2.6s cubic-bezier(0.45, 0, 0.2, 1) forwards;
+}
+.an-trend--flat .an-trend-line {
+  stroke: rgba(255, 255, 255, 0.22);
+  stroke-width: 1.5;
+  filter: none;
+  animation: none;
+  stroke-dashoffset: 0;
+}
+@keyframes an-trend-draw { to { stroke-dashoffset: 0; } }
+.an-trend-head {
+  fill: #c4b5fd;
+  opacity: 0;
+  transform-box: fill-box;
+  transform-origin: center;
+  animation: an-trend-head-in 0.4s ease 2.4s forwards,
+             an-trend-head-pulse 2.6s ease-in-out 2.6s infinite;
+}
+@keyframes an-trend-head-in { to { opacity: 1; } }
+@keyframes an-trend-head-pulse {
+  0%, 100% { filter: drop-shadow(0 0 2px rgba(196, 181, 253, 0.7)); transform: scale(1); }
+  50%      { filter: drop-shadow(0 0 7px rgba(196, 181, 253, 1)); transform: scale(1.3); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .an-trend-line { animation: none; stroke-dashoffset: 0; }
+  .an-trend-head { animation: none; opacity: 1; }
+  .an-trend-area { animation: none; opacity: 1; }
+}
+.my-cat-analytics-toplook {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+}
+.my-cat-analytics-toplook-title { font-size: 14px; font-weight: 600; color: #fff; }
+.my-cat-analytics-toplook-meta  { font-size: 12px; color: rgba(255,255,255,0.6); }
+
+.my-cat-analytics-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.my-cat-analytics-list-row {
+  display: grid;
+  grid-template-columns: 18px 1fr auto;
+  gap: 10px;
+  align-items: center;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+}
+.my-cat-analytics-list-rank {
+  font-size: 12px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.45);
+  text-align: center;
+}
+.my-cat-analytics-list-name {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-size: 13px;
+  color: #fff;
+}
+.my-cat-analytics-list-name > span:not(.my-cat-analytics-list-brand) {
+  display: -webkit-box;
+  -webkit-line-clamp: 1;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.my-cat-analytics-list-brand {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: rgba(255, 255, 255, 0.5);
+}
+.my-cat-analytics-list-count {
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.75);
+  white-space: nowrap;
+}
+
+/* Hero block is now a button — tapping anywhere on it opens the
+   profile / edit screen via catalog:open-profile. Strip native
+   button chrome and make it look like a flat tappable card. */
+.my-cat-hero--button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  width: 100%;
+  padding: 24px 16px 28px;
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.025);
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+  transition: background 180ms ease, border-color 180ms ease;
+}
+.my-cat-hero--button:hover {
+  background: rgba(255, 255, 255, 0.05);
+  border-color: rgba(255, 255, 255, 0.12);
+}
+.my-cat-hero--button:focus-visible {
+  outline: 2px solid rgba(255, 255, 255, 0.4);
+  outline-offset: 2px;
+}
+/* "My info" pill inside the button is presentation only now (no
+   onClick) so it doesn't need its own hover ramp. Keep the styling
+   but stop it from looking interactive on its own. */
+.my-cat-hero--button .my-cat-hero-info { pointer-events: none; }
+
+/* Analytics is a full-page surface now (was a centered modal). Pin
+   to the viewport, fill exactly one screen, let only the inner body
+   scroll if a tall catalog has lots of top-product detail. The X
+   stays as the only way out — the backdrop-click dismissal is gone
+   because there is no backdrop anymore. */
+.my-cat-analytics-page {
+  position: fixed;
+  inset: 0;
+  z-index: 9100;
+  background: #0a0a0a;
+  display: flex;
+  flex-direction: column;
+  /* dvh, not vh, so the iOS URL bar collapsing/expanding doesn't
+     leak a second scroll axis at the bottom. */
+  height: 100dvh;
+  overflow: hidden;
+}
+.my-cat-analytics-card--page {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  max-height: 100%;
+  max-width: 720px;
+  width: 100%;
+  margin: 0 auto;
+  padding: max(16px, env(safe-area-inset-top)) 16px max(16px, env(safe-area-inset-bottom));
+  background: transparent;
+  border-radius: 0;
+  box-shadow: none;
+}
+.my-cat-analytics-card--page .my-cat-analytics-head {
+  flex: 0 0 auto;
+  /* Guarantee the title row can never be overlapped by the range pills,
+     whatever the runtime layout does: solid bg + its own stacking level. */
+  position: relative;
+  z-index: 2;
+  background: #0a0a0a;
+}
+.my-cat-analytics-card--page .my-cat-analytics-range {
+  flex: 0 0 auto;
+  position: relative;
+  z-index: 1;
+  margin-top: 0; /* drop the -4px pull that nudged pills toward the title */
+}
+/* Only the metric grid + detail sections scroll, so the head + pill
+   row stay pinned. Wrap them in a flex child that takes the
+   remaining space and owns its own overflow. */
+.my-cat-analytics-card--page > .my-cat-analytics-hero,
+.my-cat-analytics-card--page > .my-cat-analytics-duo,
+.my-cat-analytics-card--page > .my-cat-analytics-section,
+.my-cat-analytics-card--page > .my-cat-analytics-look,
+.my-cat-analytics-card--page > .my-cat-analytics-empty {
+  flex: 0 0 auto;
+}
+/* Wrapper around the scrollable body — applied via the existing
+   styles by making the page itself a flex column and letting the
+   scroll happen inside the section list. Cap is the natural growth
+   of the section blocks; once they exceed the remaining viewport
+   they scroll. */
+.my-cat-analytics-card--page {
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* ── Per-look / per-product header ──────────────────────────────────────
+   The look (or drilled-in product) shown in the upper-left: a small
+   poster/video thumbnail beside the title, above the range pills. */
+.my-cat-analytics-look {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 4px 0 12px;
+}
+.my-cat-analytics-look-media {
+  flex: 0 0 auto;
+  width: 56px;
+  height: 72px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+}
+.my-cat-analytics-look-media--product {
+  /* Products read better as a square crop than the 3:4 look poster. */
+  height: 56px;
+}
+.my-cat-analytics-look-media video,
+.my-cat-analytics-look-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.my-cat-analytics-look-media--empty {
+  width: 100%;
+  height: 100%;
+  background: rgba(255, 255, 255, 0.04);
+}
+.my-cat-analytics-look-title {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #fff;
+}
+
+/* Back affordance in the drill-down header. */
+.my-cat-analytics-back {
+  flex: 0 0 auto;
+  margin-right: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.10);
+  color: rgba(255, 255, 255, 0.8);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.my-cat-analytics-back:hover { background: rgba(255, 255, 255, 0.10); }
+
+/* Single-card row — the "Converted to sales" placeholder sits alone,
+   reusing the duo grid but spanning the full width. */
+.my-cat-analytics-duo--single {
+  grid-template-columns: 1fr;
+}
+
+/* ── Per-product breakdown rows ─────────────────────────────────────────
+   Each product in the look, scoped to the active range, tappable to drill
+   into that product's own analytics. */
+.my-cat-analytics-prow {
+  display: grid;
+  grid-template-columns: 40px 1fr auto 14px;
+  gap: 12px;
+  align-items: center;
+  width: 100%;
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  color: #fff;
+  font-family: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+.my-cat-analytics-prow:hover { background: rgba(255, 255, 255, 0.06); }
+.my-cat-analytics-prow-media {
+  width: 40px;
+  height: 40px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.05);
+}
+.my-cat-analytics-prow-media img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+.my-cat-analytics-prow-name {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+  font-size: 13px;
+}
+.my-cat-analytics-prow-name > span:not(.my-cat-analytics-list-brand) {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.my-cat-analytics-prow-stats {
+  font-size: 11px;
+  color: rgba(255, 255, 255, 0.55);
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.my-cat-analytics-prow-chevron {
+  color: rgba(255, 255, 255, 0.35);
+  font-size: 16px;
+  text-align: center;
+}
+/* On narrow phones the inline stats line would crowd the chevron —
+   drop it under the name instead. */
+@media (max-width: 420px) {
+  .my-cat-analytics-prow {
+    grid-template-columns: 40px 1fr 14px;
+  }
+  .my-cat-analytics-prow-stats {
+    grid-column: 2 / 3;
+    grid-row: 2;
+    white-space: normal;
+  }
+}
+
+/* ── Product action sheet (My Catalog → Products) ─────────────────────── */
+.my-cat-product-feed { cursor: pointer; }
+.my-cat-product-feed.is-inactive { opacity: 0.42; }
+.cpf-inactive-badge {
+  position: absolute;
+  top: 8px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 3;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: #fff;
+  background: rgba(0, 0, 0, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 999px;
+  padding: 2px 9px;
+}
+.my-cat-product-menu-btn {
+  position: absolute;
+  top: 6px;
+  right: 6px;
+  z-index: 4;
+  width: 30px;
+  height: 30px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: none;
+  background: rgba(0, 0, 0, 0.5);
+  color: #fff;
+  cursor: pointer;
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  transition: background 0.15s ease;
+}
+.my-cat-product-menu-btn:hover { background: rgba(0, 0, 0, 0.72); }
+
+.my-cat-sheet-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 400;
+  background: rgba(0, 0, 0, 0.55);
+  backdrop-filter: blur(4px);
+  -webkit-backdrop-filter: blur(4px);
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  animation: my-cat-fade-in 0.16s ease;
+}
+.my-cat-sheet {
+  width: min(440px, 100%);
+  margin: 0 auto calc(12px + env(safe-area-inset-bottom));
+  background: #141414;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 20px;
+  padding: 10px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6);
+  animation: my-cat-sheet-up 0.22s cubic-bezier(0.22, 1, 0.36, 1);
+}
+@keyframes my-cat-sheet-up { from { transform: translateY(16px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+.my-cat-sheet-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px 12px;
+}
+.my-cat-sheet-thumb { width: 44px; height: 44px; border-radius: 10px; object-fit: cover; flex: none; }
+.my-cat-sheet-titles { display: flex; flex-direction: column; min-width: 0; }
+.my-cat-sheet-brand { font-size: 11px; font-weight: 600; color: rgba(255, 255, 255, 0.5); text-transform: uppercase; letter-spacing: 0.04em; }
+.my-cat-sheet-name { font-size: 15px; font-weight: 700; color: #fff; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.my-cat-sheet-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: 100%;
+  text-align: left;
+  padding: 14px 14px;
+  border: none;
+  border-radius: 12px;
+  background: transparent;
+  color: #f4f4f5;
+  font-size: 15px;
+  font-weight: 500;
+  font-family: inherit;
+  cursor: pointer;
+  transition: background 0.14s ease;
+}
+.my-cat-sheet-item:hover { background: rgba(255, 255, 255, 0.07); }
+.my-cat-sheet-count { font-size: 12px; color: rgba(255, 255, 255, 0.45); font-weight: 600; }
+.my-cat-sheet-new { display: flex; gap: 8px; padding: 8px 8px 4px; }
+.my-cat-sheet-new input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 12px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+  font-size: 14px;
+  font-family: inherit;
+  outline: none;
+}
+.my-cat-sheet-new button {
+  flex: none;
+  padding: 0 16px;
+  border-radius: 12px;
+  border: none;
+  background: #fff;
+  color: #0a0a0a;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.my-cat-sheet-new button:disabled { opacity: 0.4; cursor: not-allowed; }
+.my-cat-sheet-cancel {
+  width: 100%;
+  margin-top: 6px;
+  padding: 14px;
+  border: none;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 15px;
+  font-weight: 600;
+  font-family: inherit;
+  cursor: pointer;
 }

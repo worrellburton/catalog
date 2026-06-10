@@ -2457,8 +2457,8 @@ body.light-mode header {
 }
 
 .look-card video {
-  opacity: 0;
-  transition: opacity 0.6s ease;
+  opacity: 1;
+  transition: opacity 0.3s ease;
 }
 
 .look-card.loaded video {
@@ -2771,6 +2771,19 @@ body.light-mode header {
 .creator-back:hover {
   color: #fff;
 }
+
+/* Icon-only circular back button (matches the look/product overlays'
+   corner back button) — used in place of the "‹ Back" text. */
+.creator-back--icon {
+  width: 40px;
+  height: 40px;
+  justify-content: center;
+  gap: 0;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  color: #fff;
+}
+.creator-back--icon:hover { background: rgba(255, 255, 255, 0.16); }
 
 .creator-grid {
   display: grid;

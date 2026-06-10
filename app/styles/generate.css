@@ -5,14 +5,26 @@
 .gen-page {
   width: 100%;
   margin: 0 auto;
-  /* min-height: 100vh + the page-level overflow defaults let the page
-     scroll naturally when its content (photos grid, saved-looks list,
-     etc.) overflows on small screens. The bottom padding clears the
-     fixed dock + iOS safe-area inset; horizontal padding stays generous. */
-  padding: clamp(16px, 3vw, 28px) clamp(20px, 5vw, 56px)
+  /* The page itself scrolls on every viewport. We previously locked
+     the page to 100dvh + overflow:hidden and let the inner .gen-step
+     own scroll, but on viewports where the photos row alone fills
+     most of the height the step couldn't reliably reveal "Your looks"
+     below. Letting the page scroll is the simpler contract.
+     Top padding picks up safe-area-inset-top even outside the Flutter
+     shell (was Flutter-shell-only) so the "Generate" h1 clears Safari's
+     status bar on iOS PWA / standalone Safari fullscreen. Horizontal
+     padding is also capped so wide phones don't push content off the
+     side. */
+  padding: max(env(safe-area-inset-top, 0px), 44px) clamp(16px, 4vw, 56px)
            calc(180px + env(safe-area-inset-bottom));
   color: #fff;
   min-height: 100vh;
+  min-height: 100dvh;
+  overflow-y: auto;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
   background:
     radial-gradient(ellipse at 50% -10%, rgba(255, 255, 255, 0.06), transparent 55%),
     radial-gradient(ellipse at 100% 100%, rgba(120, 80, 220, 0.04), transparent 50%),
@@ -21,15 +33,335 @@
   letter-spacing: -0.005em;
 }
 
-/* Phone breakpoint: lock smooth touch scrolling on the page so the
-   photos grid + saved-looks list + height/age all reach without
-   getting stuck behind the fixed dock. */
-@media (max-width: 760px) {
-  .gen-page {
-    -webkit-overflow-scrolling: touch;
+/* Build transition — picked products fly forward into the next screen. */
+.gen-launch-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000;
+  pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 16px;
+  perspective: 1100px;
+}
+.gen-launch-card {
+  width: clamp(88px, 26vw, 130px);
+  aspect-ratio: 3 / 4;
+  border-radius: 16px;
+  background-size: cover;
+  background-position: center;
+  background-color: #1a1a1a;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55);
+  transform-style: preserve-3d;
+  animation: gen-launch-fly 0.72s cubic-bezier(0.5, 0, 0.2, 1) forwards;
+  animation-delay: calc(var(--i) * 70ms);
+}
+@keyframes gen-launch-fly {
+  0%   { transform: translateY(70px) scale(0.7); opacity: 0; }
+  28%  { transform: translateY(0) scale(1); opacity: 1; }
+  100% { transform: translateZ(560px) translateY(-90px) scale(1.65) rotateX(16deg); opacity: 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gen-launch-card { animation-duration: 0.3s; }
+}
+
+/* Pick-products particle field — fixed behind the whole picker; content sits
+   above it via z-index. */
+.gen-products-particles {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.7;
+}
+.gen-page > .gen-head,
+.gen-page > .gen-main { position: relative; z-index: 1; }
+/* The dock MUST stay fixed to the bottom of the viewport on every step
+   (this selector has higher specificity than the base `.gen-dock` rule,
+   so it has to re-assert position:fixed — otherwise it falls into normal
+   flow and the Build button drops below the fold on long/locked steps
+   like Review). z-index keeps it above the particle field. */
+.gen-page > .gen-dock { position: fixed; z-index: 50; }
+
+/* ── Unified product field (pick step) ─────────────────────────────────── */
+.gen-cloud-controls {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 2px 0 12px;
+}
+.gen-cloud-search {
+  width: 100%;
+  padding: 12px 16px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-size: 15px;
+  font-family: inherit;
+}
+.gen-cloud-search::placeholder { color: rgba(255, 255, 255, 0.4); }
+.gen-cloud-chips {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 2px;
+  scrollbar-width: none;
+}
+.gen-cloud-chips::-webkit-scrollbar { display: none; }
+.gen-cloud-chip {
+  flex-shrink: 0;
+  padding: 7px 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  font-family: inherit;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+.gen-cloud-chip.is-active { background: #fff; color: #0f172a; border-color: #fff; }
+/* Brand chips sit under the type chips — slightly smaller / secondary. */
+.gen-cloud-chips--brands { padding-top: 0; }
+.gen-cloud-chip--brand {
+  font-size: 12px;
+  padding: 5px 11px;
+  color: rgba(255, 255, 255, 0.6);
+}
+.gen-cloud-chip--brand.is-active { background: rgba(255, 255, 255, 0.92); color: #0f172a; }
+
+.gen-cloud {
+  display: grid;
+  /* Mobile: exactly three equal columns. `minmax(0, 1fr)` (not the
+     default `1fr` = `minmax(auto, 1fr)`) lets every column shrink to
+     share the row evenly, so the grid can NEVER outgrow its container
+     and bleed off the right edge. No horizontal padding here — the
+     page-level gutter already insets both sides symmetrically. */
+  /* Column count is driven by the grid-density dial (--gen-cols, default 3). */
+  grid-template-columns: repeat(var(--gen-cols, 3), minmax(0, 1fr));
+  gap: 10px;
+  padding: 16px 0 28px;
+  width: 100%;
+  /* Flows with the page so the user can scroll through ALL products. */
+}
+@media (min-width: 700px) {
+  .gen-cloud {
+    grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+    gap: 14px;
   }
 }
 
+/* ── Grid-density dial — same wheel as the creator catalog. Cycles the
+   picker between 2/3/4 columns. Mobile-only (the desktop grid auto-fills). */
+.gen-grid-dial {
+  position: fixed;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 60;
+  display: none;
+  flex-direction: column;
+  gap: 9px;
+  padding: 9px 7px;
+  border-radius: 999px;
+  background: rgba(20, 20, 22, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  opacity: 0.6;
+  transition: opacity 0.25s ease, transform 0.3s ease;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+.gen-grid-dial--hidden { transform: translateY(-50%) translateX(150%); opacity: 0; pointer-events: none; }
+.gen-grid-dial:hover, .gen-grid-dial:active { opacity: 0.9; }
+.gen-grid-dial-dot { display: flex; align-items: center; justify-content: center; width: 16px; height: 12px; opacity: 0.38; transition: opacity 0.15s ease, transform 0.15s ease; }
+.gen-grid-dial-dot.is-active { opacity: 1; transform: scale(1.08); }
+.gen-grid-dial-bars { display: flex; gap: 2px; width: 14px; height: 11px; }
+.gen-grid-dial-bars i { flex: 1; background: #fff; border-radius: 1px; }
+@media (max-width: 700px) { .gen-grid-dial { display: flex; } }
+.gen-cloud-card {
+  position: relative;
+  aspect-ratio: 3 / 4;
+  border-radius: 16px;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  cursor: pointer;
+  padding: 0;
+  font-family: inherit;
+  text-align: left;
+  transition: border-color 0.18s ease, box-shadow 0.18s ease, transform 0.18s ease;
+}
+.gen-cloud-card:active { transform: scale(0.97); }
+/* Poster image + product video both fill the card (cover) — no distortion. */
+.gen-cloud-card img,
+.gen-cloud-media,
+.gen-cloud-card video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+.gen-cloud-card::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.72), transparent 46%);
+  pointer-events: none;
+}
+.gen-cloud-card-name {
+  position: absolute;
+  left: 8px; right: 8px; bottom: 18px;
+  z-index: 1;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 600;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.gen-cloud-card-brand {
+  position: absolute;
+  left: 8px; right: 8px; bottom: 5px;
+  z-index: 1;
+  color: rgba(255, 255, 255, 0.72);
+  font-size: 10px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.8);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+.gen-cloud-card.is-picked {
+  border-color: #fff;
+  box-shadow: 0 0 0 2px #fff, 0 20px 50px rgba(0, 0, 0, 0.5);
+  animation-play-state: paused;
+}
+@media (prefers-reduced-motion: reduce) {
+  .gen-cloud-card { animation: none; }
+}
+
+/* Generating view — pin the in-flight result screen to a single viewport
+   so it can't scroll up or down at all (the progress moment is one focused
+   frame). The inner result layout flexes to fill the remaining height under
+   the header. */
+.gen-page--generating {
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  padding-bottom: calc(24px + env(safe-area-inset-bottom));
+}
+
+/* Review view — same single-viewport lock. The selected products live in the
+   bottom dock, so the body (summary table) stays short enough to fit without
+   page scroll. */
+.gen-page--review {
+  height: 100vh;
+  height: 100dvh;
+  min-height: 0;
+  overflow: hidden;
+  padding-bottom: calc(24px + env(safe-area-inset-bottom));
+}
+/* Style view — locked to a single viewport (like Review) so the screen
+   can't drift up and down. Everything — the style row and the "direct your
+   own video" field — fits between the header and the fixed dock with no
+   vertical scroll. The page is a flex column: the head sits at the top, the
+   style row keeps its natural height, and the direct field grows to fill
+   whatever's left above the dock. */
+.gen-page--style {
+  height: 100dvh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  /* Reserve room for the fixed dock at the bottom so the direct field never
+     tucks under it. */
+  padding-bottom: calc(120px + env(safe-area-inset-bottom));
+}
+/* Compact head so Style sits high on the screen — drop the "Generate"
+   sub-line and tighten the spacing/border that pushed the body down. */
+.gen-page--style .gen-head {
+  flex: 0 0 auto;
+  margin-bottom: 12px;
+  padding-bottom: 10px;
+}
+.gen-page--style .gen-head h1 { font-size: clamp(24px, 4vw, 34px); margin: 0; }
+.gen-page--style .gen-head .gen-sub { display: none; }
+/* Main + step fill the remaining height and pass the flex context down so the
+   direct field can stretch to the dock. */
+.gen-page--style .gen-main,
+.gen-page--style .gen-step {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+}
+.gen-page--style .gen-step { padding: 0; }
+.gen-page--style .gen-step > h2 { margin: 0 0 10px; flex: 0 0 auto; }
+/* Style row keeps its natural (one-row) height. */
+.gen-page--style .gen-styleswiper { flex: 0 0 auto; }
+/* Direct-video field owns the rest of the viewport above the dock. */
+.gen-page--style .gen-direct {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  margin-top: 14px;
+}
+.gen-page--style .gen-direct-input {
+  flex: 1 1 auto;
+  min-height: 0;
+  resize: none;
+}
+
+.gen-page--generating .gen-main {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+.gen-page--generating .gen-step-result,
+.gen-page--generating .gen-result-layout {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+/* Step container holds the wizard content. It no longer owns scroll —
+   the parent .gen-page is the scroll container. We keep the flex
+   column for layout but let the step grow with its content so the
+   page-level scroll reveals everything. */
+.gen-page > .gen-step {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+}
+
+/* Result step's phone-frame video is the tallest single element on the
+   wizard. Cap it to the available height so the frame scales to fit
+   instead of pushing the dock off-screen. */
+.gen-page .gen-step-result .gen-app-frame {
+  max-height: 100%;
+}
+.gen-page .gen-result-stage,
+.gen-page .gen-result-layout {
+  min-height: 0;
+  flex: 1 1 auto;
+}
 
 /* When running inside the native app shell, push content below the status bar.
    --shell-sb is injected at AT_DOCUMENT_START by Flutter with the real
@@ -43,10 +375,10 @@ html[data-shell="catalog-app"] .gen-page {
 .gen-head {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 4px;
+  gap: 6px;
   margin: 0 auto 28px;
   max-width: 1280px;
-  padding: 8px 0 20px;
+  padding: 16px 0 20px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.05);
 }
 .gen-back {
@@ -56,13 +388,30 @@ html[data-shell="catalog-app"] .gen-page {
   font-size: 13px;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
+  gap: 8px;
   cursor: pointer;
-  padding: 6px 0;
+  /* A touch more room so the back affordance isn't jammed against the top/edge. */
+  padding: 10px 4px;
+  margin-left: -4px;
   width: max-content;
   letter-spacing: 0;
 }
 .gen-back:hover { color: #fff; }
+/* Products-step variant: button hosts the Catalog wordmark instead of
+   the back arrow + text. Bigger tap target, no padding-trim, and the
+   wordmark inherits the same hover white-on-fade pattern. */
+.gen-back-logo {
+  padding: 4px 0;
+  color: #fff;
+  opacity: 0.85;
+  transition: opacity 0.18s ease;
+}
+.gen-back-logo:hover { opacity: 1; color: #fff; }
+.gen-back-logo-svg {
+  height: 22px;
+  width: auto;
+  display: block;
+}
 .gen-head h1 {
   margin: 6px 0 2px;
   font-size: clamp(28px, 4vw, 40px);
@@ -101,6 +450,14 @@ html[data-shell="catalog-app"] .gen-page {
 }
 
 .gen-main {
+  /* width:100% is load-bearing. .gen-page is a flex COLUMN, and an
+     `auto` cross-axis margin (margin: 0 auto) disables the default
+     align-items:stretch — so without an explicit width .gen-main
+     shrink-wraps to its content and the product grid collapses to a
+     narrow, off-centre strip (3 columns at ~66px instead of filling
+     the row). width:100% restores full width; max-width + auto margins
+     still centre it on desktop. */
+  width: 100%;
   max-width: 1280px;
   margin: 0 auto;
 }
@@ -156,7 +513,7 @@ html[data-shell="catalog-app"] .gen-page {
   .gen-lookgrid {
     grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
   }
-  .gen-heightgrid, .gen-stylegrid, .gen-productgrid, .gen-review, .gen-review-products {
+  .gen-heightgrid, .gen-stylegrid, .gen-productgrid {
     max-width: 880px;
     margin-left: auto;
     margin-right: auto;
@@ -712,73 +1069,300 @@ html[data-shell="catalog-app"] .gen-page {
 }
 
 .gen-stylecard {
+  position: relative;
   display: flex;
   flex-direction: column;
+  align-items: center;
+  justify-content: flex-start;
   gap: 4px;
-  padding: 14px;
+  padding: 10px 8px;
   border-radius: 12px;
   border: 1.5px solid rgba(255, 255, 255, 0.1);
   background: rgba(255, 255, 255, 0.03);
   color: #fff;
   cursor: pointer;
-  text-align: left;
+  text-align: center;
+  overflow: hidden;
+  transition: border-color 0.2s ease, background 0.2s ease, transform 0.15s ease;
 }
 .gen-stylecard.is-picked {
   border-color: #ffffff;
   background: rgba(255, 255, 255, 0.08);
 }
-.gen-stylecard-label {
-  font-size: 15px;
-  font-weight: 700;
+.gen-stylecard:active { transform: scale(0.97); }
+
+/* Animated glyph — small line-art SVG; gently floats, pops when picked. */
+.gen-stylecard-icon {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  line-height: 1;
+  margin-top: 10px;
+  filter: drop-shadow(0 3px 8px rgba(0, 0, 0, 0.5));
+  animation: gen-style-float 3s ease-in-out infinite;
 }
+.gen-stylecard-icon svg { width: 20px; height: 20px; display: block; }
+.gen-stylecard.is-picked .gen-stylecard-icon {
+  animation: gen-style-pop 2.2s ease-in-out infinite;
+}
+@keyframes gen-style-float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-6px); }
+}
+@keyframes gen-style-pop {
+  0%, 100% { transform: scale(1) rotate(0deg); }
+  50%      { transform: scale(1.14) rotate(-5deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gen-stylecard-icon { animation: none; }
+}
+
+.gen-stylecard-label {
+  font-size: 13px;
+  font-weight: 700;
+  margin-top: auto;
+}
+/* Description stays hidden until the card is tapped (picked), then reveals. */
 .gen-stylecard-blurb {
   font-size: 11px;
-  color: rgba(255, 255, 255, 0.6);
+  line-height: 1.35;
+  color: rgba(255, 255, 255, 0.62);
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden;
+  transition: max-height 0.3s ease, opacity 0.3s ease, margin-top 0.3s ease;
+}
+.gen-stylecard.is-picked .gen-stylecard-blurb {
+  max-height: 90px;
+  opacity: 1;
+  margin-top: 4px;
 }
 
-.gen-review {
+/* Style picker as a contained, wrapping grid — every preset fits within the
+   viewport with no horizontal bleed (was a sideways-scrolling rail that ran
+   off the right edge on mobile). auto-fill keeps it responsive: ~3 columns on
+   a phone, more on wider screens. */
+.gen-styleswiper {
+  display: grid;
+  grid-auto-flow: column;
+  /* One row — swipe horizontally through the presets. Show ~3.3 cards so the
+     next one peeks at the right edge, signalling the row scrolls sideways. */
+  grid-template-rows: auto;
+  grid-auto-columns: calc((100% - 26px) / 3.3);
+  gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  max-width: 100%;
+  min-width: 0;
+  padding-bottom: 4px;
+}
+.gen-styleswiper::-webkit-scrollbar { display: none; }
+.gen-styleswiper > .gen-stylecard {
+  width: auto;
+  aspect-ratio: 1 / 1;
+  scroll-snap-align: start;
+}
+
+/* Mobile fit: the style step and its free-text textarea never exceed the
+   viewport width. */
+.gen-step { min-width: 0; max-width: 100%; }
+.gen-direct { max-width: 100%; }
+.gen-direct-input { max-width: 100%; }
+
+/* Review "Continue" CTA — a sparkly button that bursts into an explosion
+   (see utils/explode.ts) when tapped to launch the render. */
+.gen-continue {
+  position: relative;
+  overflow: hidden;
+  background-image: linear-gradient(110deg, #ffffff 0%, #ffffff 40%, #f3e8ff 50%, #ffffff 60%, #ffffff 100%);
+  background-size: 220% 100%;
+  animation: gen-continue-sheen 2.6s linear infinite;
+}
+@keyframes gen-continue-sheen {
+  0%   { background-position: 140% 0; }
+  100% { background-position: -40% 0; }
+}
+/* Twinkling sparkle dots scattered across the button face. */
+.gen-continue-spark {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image:
+    radial-gradient(circle, rgba(180,130,255,0.95) 0 1.4px, transparent 2px),
+    radial-gradient(circle, rgba(120,170,255,0.9) 0 1.2px, transparent 2px),
+    radial-gradient(circle, rgba(255,255,255,0.95) 0 1.3px, transparent 2px),
+    radial-gradient(circle, rgba(255,180,230,0.9) 0 1px, transparent 1.6px);
+  background-size: 60px 40px, 90px 50px, 50px 60px, 110px 44px;
+  background-position: 8px 10px, 40px 26px, 64px 8px, 24px 30px;
+  animation: gen-continue-twinkle 1.5s steps(1) infinite;
+  opacity: 0.85;
+}
+@keyframes gen-continue-twinkle {
+  0%, 100% { opacity: 0.85; }
+  50%      { opacity: 0.35; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gen-continue { animation: none; }
+  .gen-continue-spark { animation: none; }
+}
+
+/* "Direct your own video" — free-text prompt under the style swiper. */
+.gen-direct { margin-top: 14px; }
+.gen-direct-title { font-size: 16px; font-weight: 700; margin: 0 0 4px; }
+.gen-direct-sub {
+  font-size: 13px;
+  color: rgba(255, 255, 255, 0.5);
+  margin: 0 0 10px;
+}
+.gen-direct-input {
+  width: 100%;
+  box-sizing: border-box;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 14px;
+  color: #fff;
+  font-family: inherit;
+  font-size: 14px;
+  line-height: 1.4;
+  padding: 12px 14px;
+  resize: vertical;
+  min-height: 60px;
+}
+.gen-direct-input:focus { outline: none; border-color: rgba(255, 255, 255, 0.42); }
+.gen-direct-input::placeholder { color: rgba(255, 255, 255, 0.35); }
+
+/* ===== Rebuilt Review stage =====
+   One centred stage that fills the locked viewport: reference faces as a
+   connected chain on top, the chosen products as the hero cluster in the
+   middle, the Model/Length controls below. Build lives in the fixed dock. */
+.gen-step-review {
+  flex: 1 1 auto;
+  min-height: 0;
   display: flex;
   flex-direction: column;
-  gap: 1px;
-  border-radius: 12px;
+  padding-bottom: calc(104px + env(safe-area-inset-bottom));
+}
+.gen-rv-stage {
+  flex: 1 1 auto;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  /* `safe center` centers when everything fits, but falls back to start
+     alignment when it overflows so the top isn't clipped out of the
+     scrollable area. */
+  justify-content: safe center;
+  gap: clamp(12px, 3vh, 28px);
+  /* Safety: if the faces + (wrapped) products + controls are taller than
+     the space above the fixed dock on a short viewport, scroll WITHIN the
+     stage instead of spilling down into / overlapping the dock. */
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+/* Reference faces — overlapping chain joined by a thin thread so they
+   read as one linked group that combines into a single model. */
+.gen-rv-faces {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+.gen-rv-faces-thread {
+  position: absolute;
+  left: 14%;
+  right: 14%;
+  top: 50%;
+  height: 2px;
+  transform: translateY(-50%);
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.4), transparent);
+  z-index: 0;
+}
+.gen-rv-face {
+  position: relative;
+  z-index: 1;
+  width: clamp(52px, 15vw, 72px);
+  height: clamp(52px, 15vw, 72px);
+  border-radius: 50%;
+  overflow: hidden;
+  margin-left: -16px;
+  border: 2px solid rgba(255, 255, 255, 0.88);
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5);
+  background: #1a1a1a;
+  animation: gen-rv-face-in 0.5s cubic-bezier(0.32, 0.72, 0, 1) both;
+  animation-delay: calc(var(--i) * 60ms);
+}
+.gen-rv-face:first-child { margin-left: 0; }
+.gen-rv-face img { width: 100%; height: 100%; object-fit: cover; display: block; }
+@keyframes gen-rv-face-in {
+  from { opacity: 0; transform: translateY(8px) scale(0.82); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Products — the centrepiece cluster. */
+.gen-rv-products {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 12px;
+  max-width: 520px;
+}
+.gen-rv-product {
+  position: relative;
+  /* Slightly smaller so a 4th product (which wraps to a second row) plus
+     the faces and controls still clear the bottom dock without overlap. */
+  width: clamp(70px, 21vw, 104px);
+  aspect-ratio: 3 / 4;
+  border-radius: 16px;
   overflow: hidden;
   background: rgba(255, 255, 255, 0.05);
-  margin-bottom: 18px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.5);
+  animation: gen-rv-prod-in 0.55s cubic-bezier(0.32, 0.72, 0, 1) both;
+  animation-delay: calc(120ms + var(--i) * 80ms);
 }
-.gen-review-row {
-  display: flex;
-  justify-content: space-between;
-  padding: 12px 16px;
-  background: rgba(0, 0, 0, 0.4);
-  font-size: 14px;
+.gen-rv-product img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+.gen-rv-product::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(0, 0, 0, 0.62), transparent 42%);
 }
-.gen-review-row span:first-child { color: rgba(255, 255, 255, 0.55); }
-.gen-review-row span:last-child { font-weight: 600; }
+.gen-rv-product-name {
+  position: absolute;
+  left: 6px; right: 6px; bottom: 5px;
+  z-index: 1;
+  font-size: 10px; font-weight: 600; color: #fff;
+  text-shadow: 0 1px 3px rgba(0, 0, 0, 0.85);
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+@keyframes gen-rv-prod-in {
+  from { opacity: 0; transform: translateY(16px) scale(0.9); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
 
-.gen-review-products {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 8px;
-}
-.gen-review-product {
+/* Build controls — Model + Length, side by side, compact. */
+.gen-rv-controls {
   display: flex;
-  gap: 10px;
-  align-items: center;
-  padding: 10px;
-  border-radius: 10px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.06);
+  gap: 28px;
+  align-items: flex-start;
+  justify-content: center;
+  flex-wrap: wrap;
 }
-.gen-review-product img {
-  width: 44px; height: 44px; object-fit: cover; border-radius: 6px;
+.gen-rv-control { display: flex; flex-direction: column; align-items: center; gap: 8px; }
+.gen-rv-control-label {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
 }
-.gen-review-product-name {
-  font-size: 12px; font-weight: 600;
-  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  max-width: 160px;
-}
-.gen-review-product-role {
-  font-size: 11px; color: rgba(255, 255, 255, 0.85);
+.gen-rv-control-value { font-size: 14px; font-weight: 600; }
+
+@media (prefers-reduced-motion: reduce) {
+  .gen-rv-face, .gen-rv-product { animation: none; }
 }
 
 /* .gen-foot is no longer used - Back/Next live inside the unified
@@ -805,6 +1389,31 @@ html[data-shell="catalog-app"] .gen-page {
 }
 .gen-btn-secondary:hover { background: rgba(255, 255, 255, 0.18); }
 
+/* Two-line "keep discovering" button — primary label + a reassuring
+   subtitle so the user knows tapping it doesn't cancel the in-flight
+   render. Sits next to "Get a new look going" while a generation is
+   pending. */
+.gen-btn-keep-discovering {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  padding: 10px 18px;
+  line-height: 1.2;
+}
+.gen-btn-keep-discovering-label {
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+}
+.gen-btn-keep-discovering-sub {
+  font-size: 11px;
+  font-weight: 400;
+  color: rgba(255, 255, 255, 0.55);
+  letter-spacing: 0.005em;
+}
+
 .gen-empty, .gen-spinner {
   padding: 40px 16px;
   text-align: center;
@@ -812,35 +1421,6 @@ html[data-shell="catalog-app"] .gen-page {
   font-size: 14px;
 }
 
-.gen-vision {
-  font-weight: 600;
-  letter-spacing: 0.01em;
-  background: linear-gradient(90deg, #a78bfa 0%, #60a5fa 40%, #22d3ee 70%, #a78bfa 100%);
-  background-size: 200% auto;
-  -webkit-background-clip: text;
-  background-clip: text;
-  -webkit-text-fill-color: transparent;
-  color: transparent;
-  filter: drop-shadow(0 0 8px rgba(96, 165, 250, 0.55))
-          drop-shadow(0 0 18px rgba(167, 139, 250, 0.35));
-  animation: gen-vision-shimmer 3.2s linear infinite,
-             gen-vision-pulse 2.4s ease-in-out infinite;
-}
-
-@keyframes gen-vision-shimmer {
-  0%   { background-position: 0% center; }
-  100% { background-position: 200% center; }
-}
-@keyframes gen-vision-pulse {
-  0%, 100% {
-    filter: drop-shadow(0 0 6px rgba(96, 165, 250, 0.45))
-            drop-shadow(0 0 14px rgba(167, 139, 250, 0.25));
-  }
-  50% {
-    filter: drop-shadow(0 0 12px rgba(96, 165, 250, 0.75))
-            drop-shadow(0 0 24px rgba(167, 139, 250, 0.55));
-  }
-}
 /* Failed-last-look dismissible banner (photos step) */
 .gen-failed-banner {
   display: flex;
@@ -965,6 +1545,13 @@ html[data-shell="catalog-app"] .gen-page {
   width: 100%;
   max-width: 420px;
   aspect-ratio: 9 / 16;
+  /* Cap the visible height on small viewports so the placeholder
+     doesn't swallow the screen when the source URL hasn't resolved.
+     420px wide on a tall phone would otherwise paint a ~745px black
+     box. max-height: 60svh keeps the video readable + leaves room for
+     the actions row + products list below the fold without scroll. */
+  max-height: 60svh;
+  object-fit: contain;
   border-radius: 16px;
   background: #111;
   display: block;
@@ -982,8 +1569,11 @@ html[data-shell="catalog-app"] .gen-page {
 /* "Products in this look" - surfaces the picked product list under the
    final video so the shopper can see the outfit it was assembled from. */
 .gen-result-products {
+  width: 100%;
   max-width: 480px;
   margin: 18px auto 0;
+  min-width: 0;
+  box-sizing: border-box;
 }
 .gen-result-products-label {
   font-size: 11px;
@@ -1009,6 +1599,15 @@ html[data-shell="catalog-app"] .gen-page {
   border-radius: 10px;
   background: rgba(255, 255, 255, 0.04);
   border: 1px solid rgba(255, 255, 255, 0.06);
+  /* Flex children default to min-width:auto, which is the INTRINSIC
+     content width. With white-space:nowrap on the product name, that
+     makes the LI as wide as the longest unbroken text and overflows
+     the viewport on mobile. min-width:0 lets the LI shrink to the UL's
+     box; combined with ellipsis on the name (already in place) the
+     text truncates cleanly instead of breaking the layout. */
+  min-width: 0;
+  width: 100%;
+  box-sizing: border-box;
 }
 .gen-result-product-img {
   width: 48px;
@@ -1115,6 +1714,10 @@ html[data-shell="catalog-app"] .gen-page {
   position: absolute;
   inset: 0;
   border-radius: inherit;
+  /* Decorative only — must not intercept clicks. The media button +
+     delete button sit in the same root stacking context, so without
+     this the overlay swallows taps on the × button (busy cards only). */
+  pointer-events: none;
 }
 .gen-lookcard-pulse {
   position: absolute;
@@ -1124,6 +1727,10 @@ html[data-shell="catalog-app"] .gen-page {
     rgba(167, 139, 250, 0.1) 35%, transparent 70%);
   animation: gen-build-pulse 2.6s ease-in-out infinite;
   z-index: 1;
+  /* Decorative only — see note on .gen-lookcard-busy above. This
+     full-card overlay (z-index:1) was painting above the delete
+     button (z-auto) and eating its click on in-flight cards. */
+  pointer-events: none;
 }
 .gen-lookcard-phase {
   font-size: 10px;
@@ -1197,6 +1804,9 @@ html[data-shell="catalog-app"] .gen-page {
   position: absolute;
   top: 8px;
   right: 8px;
+  /* Above every in-flight overlay (pulse z1, border z2, phase/pct z3)
+     so the × is both visible and clickable on busy cards. */
+  z-index: 4;
   width: 28px;
   height: 28px;
   border-radius: 50%;
@@ -1559,6 +2169,130 @@ html[data-shell="catalog-app"] .gen-page {
   flex: 0 0 auto;
 }
 
+/* Mobile-optimize the result step:
+   - Compact 2-up button grid so Keep-discovering + Get-new-look both
+     fit above the iOS browser chrome instead of one being pushed off
+     screen.
+   - Bottom padding reserves room for the iOS URL toolbar + Safari's
+     home indicator. Without it the primary CTA hides behind the
+     bottom chrome (visible in the user's screenshot — "Get a new
+     look going" was clipped by catalog.shop URL bar).
+   - Phone-frame max-height tightened so the video doesn't crowd the
+     buttons on shorter devices. */
+@media (max-width: 768px) {
+  /* Restyled the mobile result page to feel like a standard look
+     page (LookOverlay): full-bleed 9:16 hero video, the look-overlay
+     product card row style, glass back chevron in the corner.
+     Drops the "Generate" h2 + subhead on mobile because look pages
+     don't carry a title block. */
+  .gen-step-result {
+    padding: 0 0 calc(env(safe-area-inset-bottom, 0px) + 24px);
+  }
+  .gen-step-result > h2,
+  .gen-step-result > p:first-of-type {
+    display: none;
+  }
+  /* Video frame fills the viewport width like a LookOverlay hero
+     instead of sitting tiny in the middle of the screen. */
+  .gen-step-result .gen-build-frame {
+    width: 100%;
+    max-width: none;
+    border-radius: 0;
+    aspect-ratio: 9 / 16;
+    max-height: 78dvh;
+  }
+  .gen-step-result .gen-result-stage {
+    width: 100%;
+  }
+  .gen-step-result .gen-result-actions {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
+    margin-top: 14px;
+    padding: 0 12px;
+    width: 100%;
+    max-width: 480px;
+  }
+  /* Primary CTA spans both columns so it never gets squeezed below
+     the fold. */
+  .gen-step-result .gen-result-actions .gen-btn-primary {
+    grid-column: 1 / -1;
+  }
+  /* Mirror LookOverlay's .product-card: 12px gap, 72×72 thumb,
+     name on the right with brand caption + price. */
+  .gen-step-result .gen-result-products {
+    padding: 18px 12px 0;
+    margin-top: 0;
+  }
+  .gen-step-result .gen-result-products-label {
+    /* LookOverlay uses tabs, not a label. Closest equivalent is a
+       discreet section heading; tone it to match. */
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    color: rgba(255, 255, 255, 0.55);
+    margin-bottom: 12px;
+  }
+  .gen-step-result .gen-result-product {
+    gap: 12px;
+    padding: 10px 12px;
+    background: rgba(255, 255, 255, 0.05);
+    border: none;
+    border-radius: 12px;
+  }
+  .gen-step-result .gen-result-product-img {
+    width: 72px;
+    height: 72px;
+    border-radius: 12px;
+  }
+  .gen-step-result .gen-result-product-name {
+    font-size: 13px;
+    font-weight: 500;
+    color: #fff;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .gen-step-result .gen-result-product-price {
+    font-size: 12px;
+    color: rgba(255, 255, 255, 0.45);
+  }
+  .gen-step-result .gen-result-product-role {
+    font-size: 10px;
+    letter-spacing: 0.10em;
+    color: rgba(255, 255, 255, 0.55);
+    font-weight: 700;
+    text-transform: uppercase;
+  }
+  /* Back button on the result page becomes a corner glass chevron
+     like LookOverlay's .look-back-btn-mobile. */
+  .gen-step-result ~ .gen-back-link,
+  .gen-page:has(.gen-step-result) .gen-back-link {
+    position: fixed;
+    top: calc(env(safe-area-inset-top, 0px) + 12px);
+    left: 12px;
+    z-index: 60;
+    width: 36px;
+    height: 36px;
+    padding: 0;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.55);
+    backdrop-filter: blur(12px) saturate(1.2);
+    -webkit-backdrop-filter: blur(12px) saturate(1.2);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .gen-page:has(.gen-step-result) .gen-back-link span {
+    display: none;
+  }
+  .gen-step-result .gen-feedback,
+  .gen-step-result .gen-feedback-done {
+    margin-left: 12px;
+    margin-right: 12px;
+  }
+}
+
 /* Desktop two-column layout for the result step. Left column owns
    the phone mockup + actions; right column surfaces the user's
    other looks so the generation wait feels like browsing their
@@ -1684,6 +2418,89 @@ html[data-shell="catalog-app"] .gen-page {
   width: 100%;
 }
 
+/* Intense particle field behind the building frame — the shared canvas is
+   cranked to high speed in GenerationProgress while a look renders, and
+   this local mount makes it visible on the result stage. Sits behind the
+   opaque frame (z-index 0); the frame + its content overlay paint above. */
+.gen-build-particles {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  overflow: hidden;
+  border-radius: 22px;
+}
+.gen-build-particles .pw-particles {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+/* ── v2 build screen: frameless, centered, elegant ──────────────────────
+   No phone frame — the face + product orbit sits in a soft glow halo over
+   the particle field with minimal progress text below. Centered in the
+   stage so the top is never clipped (fixes the can't-scroll-to-top issue). */
+.gen-build-v2 {
+  justify-content: center;
+  gap: 0;
+  min-height: 66vh;
+  min-height: 66svh;
+}
+.gen-build-stage {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+  padding: 24px;
+}
+.gen-build-halo {
+  position: absolute;
+  top: 36%;
+  left: 50%;
+  width: min(360px, 80vw);
+  aspect-ratio: 1;
+  transform: translate(-50%, -50%);
+  background: radial-gradient(circle, rgba(150,170,255,0.22) 0%, rgba(150,170,255,0.07) 42%, transparent 70%);
+  filter: blur(6px);
+  pointer-events: none;
+  z-index: 0;
+  animation: gen-halo-pulse 4.2s ease-in-out infinite;
+}
+@keyframes gen-halo-pulse {
+  0%, 100% { opacity: 0.7;  transform: translate(-50%, -50%) scale(1); }
+  50%      { opacity: 1;    transform: translate(-50%, -50%) scale(1.08); }
+}
+.gen-build-v2 .gen-orbit { position: relative; z-index: 1; }
+.gen-build-meta {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  text-align: center;
+}
+.gen-build-bar {
+  width: min(260px, 70vw);
+  height: 4px;
+  margin-top: 6px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.12);
+  overflow: hidden;
+}
+.gen-build-bar-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #c7d2fe, #ffffff);
+  transition: width 0.5s ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .gen-build-halo { animation: none; }
+}
+
 .gen-build-frame {
   position: relative;
   width: min(360px, 80vw);
@@ -1799,12 +2616,58 @@ html[data-shell="catalog-app"] .gen-page {
   text-align: center;
   padding: 24px;
 }
-.gen-build-vision {
-  font-size: clamp(34px, 6vw, 52px);
-  font-weight: 700;
-  letter-spacing: -0.02em;
-  line-height: 1;
+
+/* 3D orbit — the shopper's face + chosen products circle in depth while the
+   look renders. All items share one center; each is rotated to its slot
+   around the ring and pushed out along Z, then the whole ring spins. */
+.gen-orbit {
+  position: relative;
+  width: 100%;
+  height: 150px;
+  margin-bottom: 8px;
+  perspective: 720px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
+.gen-orbit-ring {
+  position: relative;
+  width: 62px;
+  height: 62px;
+  transform-style: preserve-3d;
+  animation: gen-orbit-spin 18s linear infinite;
+}
+.gen-orbit-item {
+  position: absolute;
+  inset: 0;
+  transform: rotateY(calc(var(--i) * (360deg / var(--n)))) translateZ(98px);
+}
+.gen-orbit-item img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 12px;
+  border: 1.5px solid rgba(255, 255, 255, 0.2);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.55);
+  background: #111;
+  /* Settle-in: each thumbnail pops into the ring on mount (staggered), so
+     the review circles read as flowing into the build orbit. */
+  animation: gen-orbit-in 0.6s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+  animation-delay: calc(var(--i, 0) * 0.06s);
+}
+@keyframes gen-orbit-spin {
+  from { transform: rotateY(0deg); }
+  to   { transform: rotateY(360deg); }
+}
+@keyframes gen-orbit-in {
+  from { opacity: 0; transform: scale(0.15); }
+  to   { opacity: 1; transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gen-orbit-ring { animation: none; }
+  .gen-orbit-item img { animation: none; }
+}
+
 .gen-build-phase {
   font-size: 14px;
   font-weight: 600;
@@ -1812,6 +2675,20 @@ html[data-shell="catalog-app"] .gen-page {
   color: rgba(255, 255, 255, 0.92);
   min-height: 20px;
   animation: gen-build-fade 0.4s ease;
+}
+.gen-build-joke {
+  font-size: 12.5px;
+  font-style: italic;
+  color: rgba(255, 255, 255, 0.62);
+  letter-spacing: 0.01em;
+  line-height: 1.3;
+  min-height: 1.3em;
+  max-width: 240px;
+  animation: gen-joke-in 0.5s ease-out both;
+}
+@keyframes gen-joke-in {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 .gen-build-sub {
   font-size: 12px;
@@ -1898,6 +2775,12 @@ html[data-shell="catalog-app"] .gen-page {
 .gen-cat-row {
   margin-top: 18px;
   margin-bottom: 4px;
+  /* The products step is a flex column, so this row is a flex item with the
+     default min-width:auto — it won't shrink below its (wide) card content,
+     which made the horizontal scroller expand past the viewport and refuse
+     to scroll (cards cut off on the right). min-width:0 lets the row take
+     the column's width so .gen-cat-row-scroll's overflow-x can engage. */
+  min-width: 0;
 }
 
 .gen-cat-row-head {
@@ -1914,6 +2797,33 @@ html[data-shell="catalog-app"] .gen-page {
   letter-spacing: 0.14em;
   color: rgba(255, 255, 255, 0.55);
   flex-shrink: 0;
+}
+/* Collapse toggle on the row head (categories default to collapsed). */
+.gen-cat-row-toggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  padding: 0;
+  cursor: pointer;
+  color: inherit;
+  font-family: inherit;
+}
+.gen-cat-row-chevron {
+  opacity: 0.5;
+  transition: transform 0.2s ease;
+  flex-shrink: 0;
+}
+.gen-cat-row-chevron.is-open { transform: rotate(90deg); }
+.gen-cat-row-count {
+  font-size: 11px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.45);
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  padding: 1px 7px;
 }
 
 .gen-cat-row-search {
@@ -1940,14 +2850,39 @@ html[data-shell="catalog-app"] .gen-page {
 .gen-cat-row-scroll {
   display: flex;
   gap: 10px;
+  min-width: 0;
   overflow-x: auto;
   overflow-y: hidden;
   scroll-snap-type: x proximity;
   -webkit-overflow-scrolling: touch;
-  /* Hide scrollbar - we have plenty of cards spilling off-screen as the
-     visual cue that the row scrolls. */
+  scroll-behavior: smooth;
+  /* Allow BOTH horizontal pans (this row's own scroll) AND vertical
+     pans (the page underneath). The previous value of just `pan-x`
+     consumed every touch that landed inside a row — meaning the
+     moment you touched a product card you could no longer page-scroll
+     vertically. After spending a few seconds on the products step
+     the user would find themselves locked, because almost every part
+     of the visible viewport was a row. `pan-x pan-y` lets the browser
+     decide based on the first-move direction: drag sideways → row
+     scrolls; drag up/down → page scrolls. */
+  touch-action: pan-x pan-y;
+  /* Contain ONLY horizontal overscroll so a rail's sideways scroll doesn't
+     chain to the page (which reads as a "stuck" rubber-band on iOS). Never
+     contain the y-axis here — that would swallow the vertical page scroll
+     the moment a finger lands on a rail. */
+  overscroll-behavior-x: contain;
+  /* Hide scrollbar - the right-edge fade-mask below is the visual cue
+     that the row scrolls. */
   scrollbar-width: none;
-  padding: 4px 4px 12px;
+  /* Right padding bumped so even short rows (e.g. Hats with 3 cards)
+     have a guaranteed peek beyond the third card. Without that, the
+     viewport math made the row look 'full' and the scroll affordance
+     was invisible. */
+  padding: 4px 32px 12px 4px;
+  /* Right-edge fade so the user sees there's more content. Uses a
+     mask-image so the fade respects the underlying dark backdrop. */
+  -webkit-mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 48px), transparent 100%);
+          mask-image: linear-gradient(to right, #000 0, #000 calc(100% - 48px), transparent 100%);
 }
 .gen-cat-row-scroll::-webkit-scrollbar { display: none; }
 
@@ -1962,7 +2897,7 @@ html[data-shell="catalog-app"] .gen-page {
 .gen-cat-card {
   flex-shrink: 0;
   width: 132px;
-  background: rgba(255, 255, 255, 0.03);
+  background: rgba(255, 255, 255, 0.05);
   border: 1px solid rgba(255, 255, 255, 0.06);
   border-radius: 12px;
   overflow: hidden;
@@ -1970,6 +2905,10 @@ html[data-shell="catalog-app"] .gen-page {
   display: flex;
   flex-direction: column;
   scroll-snap-align: start;
+  /* glassy so it reads over the particle field behind the picker */
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  perspective: 600px;
   /* opacity transition included so the row-fade-out (when another
      card in the row is picked) animates smoothly. */
   transition: transform 0.28s ease, opacity 0.28s ease,
@@ -1977,6 +2916,25 @@ html[data-shell="catalog-app"] .gen-page {
   padding: 0;
   text-align: left;
   font-family: inherit;
+}
+/* Product image drifts in 3D over the particle field — the "products moving in
+   3D space" feel — applied to the IMG so the card's own hover/selection
+   transforms (and picking) still work. Staggered so the rail doesn't pulse in
+   unison. */
+.gen-cat-card img {
+  animation: gen-card-img-float 6.5s ease-in-out infinite;
+  transform-style: preserve-3d;
+  will-change: transform;
+}
+.gen-cat-card:nth-child(3n) img   { animation-delay: -1.6s; }
+.gen-cat-card:nth-child(3n+1) img { animation-delay: -3.4s; }
+.gen-cat-card:nth-child(4n) img   { animation-delay: -5.1s; }
+@keyframes gen-card-img-float {
+  0%, 100% { transform: translateZ(0) rotateY(0deg) scale(1); }
+  50%      { transform: translateZ(14px) rotateY(-3.5deg) scale(1.03); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .gen-cat-card img { animation: none; }
 }
 .gen-cat-card:hover:not(:disabled) {
   border-color: rgba(255, 255, 255, 0.18);
@@ -2029,6 +2987,16 @@ html[data-shell="catalog-app"] .gen-page {
 @media (min-width: 900px) {
   .gen-cat-card { width: 168px; }
 }
+/* Phones: tighter cards so more than two peek into view (reads as a mobile
+   rail, not a clipped desktop grid), and a tighter head so the per-row
+   search never crowds the screen edge. */
+@media (max-width: 480px) {
+  .gen-cat-card { width: 118px; }
+  .gen-cat-card-name { font-size: 11px; padding-top: 7px; }
+  .gen-cat-card-brand { font-size: 10px; }
+  .gen-cat-row-head { gap: 8px; }
+  .gen-cat-row-scroll { padding-right: 28px; }
+}
 
 /* ===== Unified bottom dock =====
    Single horizontal row: picked-products thumbnails on the left,
@@ -2038,7 +3006,6 @@ html[data-shell="catalog-app"] .gen-page {
 .gen-dock {
   position: fixed;
   left: 50%;
-  transform: translateX(-50%);
   bottom: calc(12px + env(safe-area-inset-bottom));
   z-index: 50;
   width: min(720px, calc(100vw - 24px));
@@ -2055,12 +3022,24 @@ html[data-shell="catalog-app"] .gen-page {
   box-shadow:
     inset 0 1px 0 rgba(255, 255, 255, 0.08),
     0 16px 48px rgba(0, 0, 0, 0.55);
-  animation: gen-dock-in 0.22s cubic-bezier(0.32, 0.72, 0, 1) both;
+  /* Two states driven by the is-hidden / is-revealed class on the
+     element. Hidden: parked just below the viewport, fully
+     transparent, pointer-events off so it can't be tapped through.
+     Revealed: eased up into place with a soft ease-in-out so the
+     entry feels intentional, not snappy. translateX(-50%) is chained
+     on every state to preserve horizontal centering. */
+  transition:
+    transform 360ms cubic-bezier(.42, 0, .58, 1),
+    opacity 280ms cubic-bezier(.42, 0, .58, 1);
 }
-
-@keyframes gen-dock-in {
-  from { opacity: 0; transform: translateX(-50%) translateY(8px); }
-  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+.gen-dock.is-hidden {
+  transform: translateX(-50%) translateY(140%);
+  opacity: 0;
+  pointer-events: none;
+}
+.gen-dock.is-revealed {
+  transform: translateX(-50%) translateY(0);
+  opacity: 1;
 }
 
 /* Picked-products strip - left side of the dock. Horizontal scroll
@@ -2106,6 +3085,29 @@ html[data-shell="catalog-app"] .gen-page {
   border: 1.5px solid rgba(255, 255, 255, 0.18);
 }
 
+/* Centerpiece pulse for the product the user came in to try on
+   (Try-it-on button on a product page → /generate?product_url=…).
+   Fires once for ~2s on landing, then the JS sets state back to null
+   and the class drops. Scale-pop + glow ring so it reads as "this is
+   the one" rather than just another picked chip. */
+.gen-dock-pick.is-prefilled {
+  animation: gen-dock-prefill 2s cubic-bezier(0.32, 0.72, 0, 1) both;
+  z-index: 1;
+}
+.gen-dock-pick.is-prefilled img {
+  border-color: #f0c060;
+  box-shadow:
+    0 0 0 3px rgba(240, 192, 96, 0.35),
+    0 8px 22px rgba(240, 192, 96, 0.25);
+}
+@keyframes gen-dock-prefill {
+  0%   { transform: scale(0.8); }
+  20%  { transform: scale(1.18); }
+  40%  { transform: scale(1.04); }
+  60%  { transform: scale(1.10); }
+  100% { transform: scale(1.00); }
+}
+
 .gen-dock-pick-x {
   position: absolute;
   top: -5px;
@@ -2139,51 +3141,126 @@ html[data-shell="catalog-app"] .gen-page {
   gap: 8px;
 }
 
+/* Solo dock (photos step) — a single full-width Continue inside the same
+   glass toolbar as the other steps. */
+.gen-dock--solo .gen-dock-actions { flex: 1 1 auto; width: 100%; }
+.gen-dock--solo .gen-btn-primary { flex: 1 1 auto; padding: 13px 18px; font-size: 15px; }
+
 /* ===== Photos step compact layout =====
    Reference photos + height + age are bundled in a single .gen-photos-form
    container at the top of the screen. The form caps at ~1/3 of the
    viewport so the "Your looks" grid below can dominate the page. */
 
+/* "About you" step — a floating glass panel over the particle field. The
+   pictures read as floating circular orbs that bob in 3D space, the stats sit
+   as floaty glass pills, and a single Continue CTA anchors the bottom. Tuned
+   to feel premium / AI-composed (depth shadows, glow rings, subtle motion)
+   and uniform with the products/review screens that share the particle bg. */
 .gen-step-photos {
-  /* The photos step lays out as a header form on top + Your Looks grid
-     below. No centered text alignment - the form is left-aligned so the
-     row of slots reads naturally. */
-  text-align: left;
+  text-align: center;
   padding-top: 8px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
 }
 
 .gen-photos-form {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-  padding-bottom: 12px;
-  margin-bottom: 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  gap: 22px;
+  width: 100%;
+  max-width: 560px;
+  margin: 8px auto 0;
+  padding: 28px 26px 30px;
+  border-radius: 28px;
+  /* Floating glass card lifted off the particle field. */
+  background: linear-gradient(160deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.02));
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  backdrop-filter: blur(22px) saturate(140%);
+  -webkit-backdrop-filter: blur(22px) saturate(140%);
+  box-shadow:
+    0 30px 80px rgba(0, 0, 0, 0.5),
+    0 2px 0 rgba(255, 255, 255, 0.06) inset,
+    0 0 60px rgba(140, 120, 255, 0.08);
+  animation: gen-photos-rise 0.6s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes gen-photos-rise {
+  from { opacity: 0; transform: translateY(16px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
 }
 
-/* Higher specificity (.gen-step h2.gen-photos-title) so this beats the
-   global .gen-step h2 rule that sets clamp(28px, 3.4vw, 44px). Without
-   the override below the title rendered as the page-headline 40px+
-   even though we wanted a compact section header. */
+/* Gentle floating bob, shared by the orbs + stat pills (staggered per item). */
+@keyframes gen-float {
+  0%, 100% { transform: translateY(0); }
+  50%      { transform: translateY(-7px); }
+}
+
+/* "You" title — elegant gradient wordmark, centered above the stats. */
 .gen-step h2.gen-photos-title {
-  font-size: 17px;
+  font-size: clamp(28px, 6vw, 40px);
   font-weight: 700;
-  letter-spacing: -0.01em;
+  letter-spacing: -0.03em;
   margin: 0;
-  line-height: 1.2;
+  line-height: 1;
+  background: linear-gradient(180deg, #ffffff 0%, rgba(255, 255, 255, 0.62) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
 }
 
-.gen-step-photos .gen-slots {
-  /* Compact slot strip: 3 squares in a row, smaller than the original
-     grid. Aspect ratio stays 3:4 so the slot still reads as portrait. */
-  grid-template-columns: repeat(3, 1fr);
-  gap: 8px;
+/* Title + stats stack, centered. */
+.gen-photos-title-row {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
   margin-bottom: 0;
 }
+.gen-photos-stats {
+  margin-left: 0;
+  justify-content: center;
+  flex-wrap: wrap;
+}
+/* Floaty glass stat pills — each bobs on its own gentle offset. */
+.gen-photos-stats .style-context-chip {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  box-shadow: 0 8px 22px rgba(0, 0, 0, 0.35), 0 0 0 1px rgba(255, 255, 255, 0.04) inset;
+  animation: gen-float 5.5s ease-in-out infinite;
+}
+.gen-photos-stats .style-context-chip:nth-child(2) { animation-delay: -1.8s; }
+.gen-photos-stats .style-context-chip:nth-child(3) { animation-delay: -3.4s; }
 
+/* Pictures as floating circular orbs. */
+.gen-step-photos .gen-slots {
+  grid-template-columns: repeat(3, 1fr);
+  gap: 16px;
+  margin-bottom: 0;
+}
 .gen-step-photos .gen-slot {
-  aspect-ratio: 3 / 4;
-  border-radius: 12px;
+  aspect-ratio: 1 / 1;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.04);
+  box-shadow:
+    0 18px 40px rgba(0, 0, 0, 0.45),
+    0 0 0 1px rgba(255, 255, 255, 0.06) inset;
+  animation: gen-float 6s ease-in-out infinite;
+}
+.gen-step-photos .gen-slot:nth-child(2) { animation-delay: -2s; }
+.gen-step-photos .gen-slot:nth-child(3) { animation-delay: -4s; }
+/* Round the inner empty button + glow ring so the orb reads as one piece. */
+.gen-step-photos .gen-slot-empty { border-radius: 50%; }
+.gen-step-photos .gen-slot.is-filled {
+  border: 0;
+  box-shadow:
+    0 18px 40px rgba(0, 0, 0, 0.5),
+    0 0 0 2px rgba(255, 255, 255, 0.9),
+    0 0 26px rgba(168, 150, 255, 0.45);
+}
+@media (prefers-reduced-motion: reduce) {
+  .gen-photos-form,
+  .gen-step-photos .gen-slot,
+  .gen-photos-stats .style-context-chip { animation: none; }
 }
 
 .gen-photos-meta {
@@ -2238,121 +3315,15 @@ html[data-shell="catalog-app"] .gen-page {
   color: #fff;
 }
 
-/* Create look CTA - pinned to the bottom of the viewport on the
-   photos step. Mirrors the gen-dock anchor pattern so the user
-   always has a one-tap path to the next step regardless of how
-   far they've scrolled into "Your looks". */
-/* "Make a new look" CTA - sits inline above the Your Looks grid so
-   it reads as "and here's how you start a new one" rather than
-   floating over the page chrome. Was a fixed-bottom dock previously
-   but that obscured the grid the user was trying to scroll. */
-.gen-photos-cta-bar {
-  position: relative;
-  margin: 16px auto 12px;
-  width: min(720px, calc(100vw - 24px));
-  display: flex;
-  justify-content: stretch;
-}
-
-.gen-photos-cta-bar .gen-create-btn {
-  pointer-events: auto;
-  flex: 1 1 auto;
-  margin: 0;
-  padding: 14px 28px;
-  font-size: 15px;
-  font-weight: 600;
-  border-radius: 999px;
-  /* Liquid-glass match to the gen-dock so the bottom of every step
-     reads as the same control surface. */
-  background: #fff;
-  color: #0a0a0a;
-  border: 0;
-  box-shadow: 0 12px 40px rgba(0, 0, 0, 0.45);
-  transition: opacity 0.18s ease, transform 0.18s ease;
-}
-
-.gen-photos-cta-bar .gen-create-btn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.gen-photos-cta-bar .gen-create-btn:not(:disabled):active {
-  transform: scale(0.985);
-}
-
 @media (max-width: 768px) {
-  /* Cap the input form so the looks grid takes the bottom 2/3. The
-     content inside is allowed to scroll if the user has all three slots
-     filled + selects open simultaneously, but in practice it fits. */
+  /* The floaty glass card owns the screen now (the old "Your looks" grid
+     that needed the bottom 2/3 was removed) — let it size to its content
+     and centre in the viewport instead of capping + scrolling. */
   .gen-photos-form {
-    max-height: 36vh;
-    overflow-y: auto;
-    overflow-x: hidden;
-    scrollbar-width: none;
+    padding: 24px 20px 26px;
+    gap: 20px;
   }
-  .gen-photos-form::-webkit-scrollbar { display: none; }
-
-  .gen-step h2.gen-photos-title {
-    font-size: 15px;
-  }
-}
-
-/* Become a creator CTA - sits above the "Your looks" grid on the
-   photos step. Pill-shaped row that reads as a navigation entry
-   point, not a primary action. Subtle treatment so it doesn't
-   compete with the Create look button above. */
-.gen-creator-cta {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  margin: 18px 0 14px;
-  padding: 14px 18px;
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.03);
-  color: rgba(255, 255, 255, 0.92);
-  font-family: inherit;
-  font-size: 14px;
-  font-weight: 600;
-  letter-spacing: -0.005em;
-  cursor: pointer;
-  text-align: left;
-  transition: border-color 0.18s ease, background 0.18s ease, transform 0.18s ease;
-}
-
-.gen-creator-cta:hover {
-  border-color: rgba(255, 255, 255, 0.18);
-  background: rgba(255, 255, 255, 0.06);
-}
-
-.gen-creator-cta:active {
-  transform: scale(0.99);
-}
-
-.gen-creator-cta-icon {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.85);
-  flex-shrink: 0;
-}
-
-.gen-creator-cta-label {
-  flex: 1 1 auto;
-  min-width: 0;
-}
-
-.gen-creator-cta-chevron {
-  font-size: 22px;
-  line-height: 1;
-  color: rgba(255, 255, 255, 0.4);
-  flex-shrink: 0;
-  margin-right: -2px;
+  .gen-step-photos .gen-slots { gap: 12px; }
 }
 
 /* Limit warning toast - surfaces when the user taps a 6th product
@@ -2404,14 +3375,6 @@ html[data-shell="catalog-app"] .gen-page {
   background: rgba(255, 255, 255, 0.95);
   color: #0a0a0a;
   border-color: rgba(255, 255, 255, 0.95);
-}
-
-/* Review-step product list scrolls within its own card so the wizard
-   stays single-viewport even when the user picked the max 5 products. */
-.gen-step .gen-review-products {
-  max-height: 38vh;
-  overflow-y: auto;
-  padding-right: 4px;
 }
 
 /* "How did I do?" feedback bar - sits below the result video on the
@@ -2477,6 +3440,13 @@ html[data-shell="catalog-app"] .gen-page {
   .gen-result-actions > .gen-btn-primary {
     grid-column: 1 / -1;
   }
+  /* The trailing secondary (e.g. "Edit & regenerate" when status=done)
+     would otherwise land alone in column 1 on row 3 with a fat empty
+     half-row next to it. Span it across both columns so the row reads
+     as a deliberate full-width action, not a layout accident. */
+  .gen-result-actions > .gen-btn-secondary:last-child {
+    grid-column: 1 / -1;
+  }
 
   /* Result-step layout: the video is the focal point. Drop the
      "Your look" heading (the video itself is self-evidently the
@@ -2502,41 +3472,112 @@ html[data-shell="catalog-app"] .gen-page {
     margin-bottom: 6px;
     text-align: center;
   }
-  /* Horizontal-scroll product chips on mobile - one row, swipeable.
-     Each chip shrinks to a tight thumb + name so eight products fit
-     in a single overflow-x band without crowding. */
+  /* Vertical list on mobile (was a horizontal scroller) — easier to
+     read product names + prices when the user is paused on the
+     result step and reviewing what made up the look. */
   .gen-result-products-list {
-    flex-direction: row;
-    overflow-x: auto;
-    overflow-y: hidden;
-    gap: 6px;
-    padding: 0 4px 4px;
-    scrollbar-width: none;
-    -webkit-overflow-scrolling: touch;
+    flex-direction: column;
+    overflow-x: visible;
+    overflow-y: visible;
+    gap: 8px;
+    padding: 0;
   }
-  .gen-result-products-list::-webkit-scrollbar { display: none; }
   .gen-result-product {
     flex: 0 0 auto;
-    width: 160px;
-    padding: 6px;
-    gap: 8px;
+    width: 100%;
+    padding: 8px 10px;
+    gap: 10px;
   }
   .gen-result-product-img {
-    width: 36px;
-    height: 36px;
-    border-radius: 6px;
+    width: 40px;
+    height: 40px;
+    border-radius: 8px;
   }
   .gen-result-product-name {
-    font-size: 11px;
+    font-size: 12px;
   }
   .gen-result-product-role {
     font-size: 9px;
     letter-spacing: 0.1em;
   }
   .gen-result-product-price {
-    font-size: 10px;
+    font-size: 11px;
   }
 }
+
+/* Phone-targeted polish for the result step. Caps the video so the
+   feedback row + action buttons stay visible above the fold instead
+   of landing below it; trims horizontal padding so content gets the
+   full viewport width. */
+@media (max-width: 480px) {
+  .gen-page {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+  /* The desktop result step is locked to one viewport via height:100%
+     + justify-content:center on the stage. On phones that math
+     fights natural document flow — once content exceeds the
+     viewport the centering keeps moving the visual midpoint as the
+     user scrolls, which reads as "drifting off-center". Let the
+     step flow from the top here. */
+  .gen-step-result {
+    height: auto;
+    min-height: 100%;
+    justify-content: flex-start;
+    /* align-items: center on the parent makes every child shrink to
+       its max-content width and then center. For the feedback panel
+       + actions row that meant they sized to the widest button — and
+       on phones the widest button (e.g. "Get a new look going" or the
+       2-up "It's okay…"/"It looks great!!" grid) is wider than the
+       viewport, so they overflowed off the right edge. Switching to
+       align-items: stretch on mobile makes every direct child fill
+       the cross-axis width, so they're bounded by the viewport-minus-
+       page-padding instead. The headline + video still center thanks
+       to text-align: center / margin: auto on their own selectors. */
+    align-items: stretch;
+  }
+  .gen-step-result .gen-result-stage {
+    flex: 0 0 auto;
+    justify-content: flex-start;
+    align-items: stretch;
+  }
+  .gen-step-result .gen-result-layout {
+    align-items: stretch;
+  }
+  .gen-step-result .gen-build,
+  .gen-step-result .gen-build-done {
+    justify-content: flex-start;
+  }
+  .gen-step-result .gen-build-frame,
+  .gen-step-result .gen-result-video {
+    /* Pick the smaller of full-viewport-width or the height-bounded
+       9:16 width so the frame stays inside the screen but never
+       collapses to 0 (which happened when the parent had height:auto
+       and the frame had only width:auto + aspect-ratio + max-height
+       — no axis was actually concrete). */
+    width: min(100%, calc((100dvh - 340px) * 9 / 16));
+    max-width: 100%;
+    aspect-ratio: 9 / 16;
+    margin: 0 auto;
+  }
+  .gen-result-actions {
+    /* Same 2-col grid, but let it stretch full width on phones so
+       buttons aren't artificially narrow at 360px max. */
+    max-width: 100%;
+  }
+  .gen-result-products {
+    /* Pull the products dock all the way to the edges so the
+     horizontal scroller has natural overflow gutters. */
+    margin-left: -16px;
+    margin-right: -16px;
+    width: calc(100% + 32px);
+  }
+  .gen-result-products-list {
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+}
+
 .gen-feedback-btn {
   padding: 10px 14px;
   font-size: 13px;
@@ -2628,4 +3669,50 @@ html[data-shell="catalog-app"] .gen-page {
   background: rgba(251, 191, 36, 0.10);
   border: 1px solid rgba(251, 191, 36, 0.25);
   color: #fde047;
+}
+
+/* Brand chip row — sits between the row head (label + search) and
+   the scrollable card row. Top 4 brands present in that category.
+   Glowing pill: white-on-dark with a soft outer halo, brighter when
+   active. Tap toggles the filter; the active chip stays lit. */
+.gen-cat-row-brands {
+  display: flex;
+  flex-wrap: nowrap;
+  gap: 6px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding: 0 4px 10px;
+  margin-top: -4px;
+  touch-action: pan-x pan-y;
+}
+.gen-cat-row-brands::-webkit-scrollbar { display: none; }
+.gen-cat-row-brand {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.78);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: background 180ms ease, border-color 180ms ease,
+              color 180ms ease, box-shadow 220ms ease;
+}
+.gen-cat-row-brand:hover {
+  border-color: rgba(255, 255, 255, 0.28);
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+  box-shadow: 0 0 12px rgba(255, 255, 255, 0.16);
+}
+.gen-cat-row-brand.is-active {
+  background: rgba(255, 255, 255, 0.92);
+  color: #111;
+  border-color: rgba(255, 255, 255, 0.92);
+  box-shadow:
+    0 0 0 1px rgba(255, 255, 255, 0.45),
+    0 0 14px rgba(255, 255, 255, 0.45),
+    0 6px 18px rgba(255, 255, 255, 0.22);
 }

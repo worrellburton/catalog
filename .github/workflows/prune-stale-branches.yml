@@ -1,0 +1,64 @@
+name: Prune stale branches
+
+# Conservative branch hygiene. Runs weekly and deletes:
+#   - any `claude/*` branch already merged into dev or main
+#   - any `claude/*` branch with no commits in 30 days
+# Protected branches (dev, main, staging, anything not matching the
+# claude/* pattern) are NEVER touched. The dry-run mode runs first
+# on every workflow execution and prints what WOULD be deleted; the
+# actual deletion only runs on a manual workflow_dispatch with the
+# `confirm` input set to `yes`.
+
+on:
+  schedule:
+    - cron: '0 12 * * 1' # Mondays at 12:00 UTC
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type "yes" to actually delete (default: dry-run only)'
+        required: false
+        default: 'no'
+
+permissions:
+  contents: write
+
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Identify stale claude/* branches
+        id: identify
+        run: |
+          git fetch --all --prune
+          echo "=== claude/* branches merged into dev or main ===" | tee report.txt
+          for ref in $(git branch -r | grep -E 'origin/claude/' | sed 's|^ *origin/||'); do
+            if git merge-base --is-ancestor "origin/$ref" origin/dev 2>/dev/null \
+              || git merge-base --is-ancestor "origin/$ref" origin/main 2>/dev/null; then
+              echo "merged: $ref" | tee -a report.txt
+            fi
+          done
+          echo "" | tee -a report.txt
+          echo "=== claude/* branches with no commits in 30 days ===" | tee -a report.txt
+          for ref in $(git branch -r | grep -E 'origin/claude/' | sed 's|^ *origin/||'); do
+            last_commit_ts=$(git log -1 --format=%ct "origin/$ref" 2>/dev/null || echo 0)
+            cutoff=$(($(date +%s) - 30 * 86400))
+            if [ "$last_commit_ts" -lt "$cutoff" ]; then
+              echo "stale: $ref" | tee -a report.txt
+            fi
+          done
+      - name: Dry-run summary
+        if: ${{ github.event.inputs.confirm != 'yes' }}
+        run: |
+          echo "::notice::Dry-run mode. Re-run with confirm=yes to actually delete."
+          cat report.txt
+      - name: Delete branches (confirmed)
+        if: ${{ github.event.inputs.confirm == 'yes' }}
+        run: |
+          for ref in $(grep -E '^(merged|stale): ' report.txt | awk '{print $2}'); do
+            echo "deleting $ref"
+            git push origin --delete "$ref" || true
+          done

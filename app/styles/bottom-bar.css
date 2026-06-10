@@ -6,107 +6,114 @@
 }
 .bottom-bar {
   position: fixed;
-  bottom: 24px;
-  left: 50%;
-  transform: translateX(-50%);
+  bottom: calc(12px + env(safe-area-inset-bottom));
+
+  /* ══════════════════════════════════════════════════════════════
+     SEARCH BAR HORIZONTAL POSITION — LOAD-BEARING. DO NOT REMOVE
+     `!important` FROM THIS BLOCK.
+     ══════════════════════════════════════════════════════════════
+     The user has reported "bar moved off-center" THREE separate
+     times this project. Every time, the cause was a different rule
+     in the cascade (a media-query width override, a transform
+     animation, an inline style from the keyboard handler) clobbering
+     ONE of the four properties below. Putting `!important` on each
+     means the cascade physically cannot break centering anymore.
+
+     The four properties form a complete, self-contained anchor:
+       1. left:  0    — start of the centering box at viewport left
+       2. right: 0    — end of the centering box at viewport right
+       3. margin-inline: auto — the bar centers in that 100% box
+       4. width: min(560px, calc(100% − 48px))  — known width
+
+     The base rule below is desktop / default. The mobile width
+     override @ ≤640px also uses `!important` for the same reason.
+
+     The runtime self-check in BottomBar.tsx tops this off: after
+     mount it measures the bar's left/right gap and console.warn's
+     if it ever drifts more than 4px. If you ever see that warning,
+     do NOT fight it with a competing rule — find what's overriding
+     this anchor and remove it. */
+  left: 0 !important;
+  right: 0 !important;
+  margin-inline: auto !important;
+  width: min(560px, calc(100% - 48px)) !important;
+
   z-index: 100;
   display: flex;
   flex-direction: column;
   align-items: center;
   gap: 0;
-  background: rgba(255, 255, 255, 0.06);
-  backdrop-filter: blur(24px) saturate(1.4);
-  -webkit-backdrop-filter: blur(24px) saturate(1.4);
-  border-radius: 28px;
-  border: 1px solid rgba(255, 255, 255, 0.1);
+  /* ONE-color glass pill. The previous treatment layered a flat
+     rgba(255,255,255,0.06) wash + an inset highlight on top of an inner
+     .filter-btn pill that had its OWN background — that's where the
+     "two-toned" look came from (the filter chip read as a darker disc
+     inside the outer bar). Replaced with a soft top→bottom gradient
+     that gives the bar a single liquid-glass surface, and stripped the
+     inner pill chrome below so the filter button + send button read as
+     icons sitting on top of the same surface, not as separate pills. */
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.04));
+  backdrop-filter: blur(28px) saturate(1.5);
+  -webkit-backdrop-filter: blur(28px) saturate(1.5);
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
   box-shadow:
-    0 8px 32px rgba(0, 0, 0, 0.3),
-    inset 0 1px 0 rgba(255, 255, 255, 0.08),
-    inset 0 -1px 0 rgba(255, 255, 255, 0.02);
+    0 12px 36px rgba(0, 0, 0, 0.36),
+    0 0 26px rgba(255, 255, 255, 0.10),
+    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.18);
   overflow: hidden;
-  transition: all 0.3s ease;
+  transition: box-shadow 0.3s ease, border-color 0.3s ease, background 0.3s ease;
+}
+/* Loud, glassy, glowing — the glow intensifies while the user is in the bar. */
+.bottom-bar:focus-within {
+  border-color: rgba(255, 255, 255, 0.34);
+  box-shadow:
+    0 12px 40px rgba(0, 0, 0, 0.4),
+    0 0 40px rgba(255, 255, 255, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.18);
+}
+/* The query text glows as you type (placeholder hidden = field has content). */
+.bottom-search-input:not(:placeholder-shown) {
+  text-shadow: 0 0 10px rgba(255, 255, 255, 0.55);
 }
 
 .bottom-bar-inner {
   display: flex;
   align-items: center;
   gap: 6px;
-  padding: 8px 12px;
+  /* Was padding: 8px 12px — meant the inner row had its OWN padding
+     zone inside the outer pill's padding zone, which gave the bar a
+     visible "pill-in-pill" feel (two stacked rounded regions). Drop to
+     zero; the input's own padding (14px 24px) is the only spacing now,
+     and the outer pill clips it cleanly. */
+  padding: 0;
 }
 
-/* Always-visible inline search variant - replaces the old "all" pill. The
-   filter button + input + clear-X stack horizontally inside the bar. */
+/* Always-visible inline search variant - replaces the old "all" pill.
+   The filter button + input + clear-X stack horizontally inside the bar. */
 .bottom-bar-inner.search-inline {
-  width: min(560px, calc(100vw - 48px));
-  padding: 6px 8px;
-  gap: 8px;
+  /* Fill the outer pill, which now owns the width (see .bottom-bar).
+     Never set a 100vw width here — it desyncs from the bar's centering. */
+  width: 100%;
+  padding: 0 8px 0 4px;
+  gap: 6px;
 }
 
-.bottom-bar-inner.search-inline .bottom-search-input {
-  /* Knock the standalone glow off - the bar already provides the surface. */
+.bottom-bar-inner.search-inline .bottom-search-input,
+.bottom-bar-inner.search-inline .bottom-search-input:focus,
+.bottom-bar-inner.search-inline .bottom-search-input:hover {
+  /* Base .bottom-search-input is already transparent + borderless +
+     no-shadow at the source now, but keep the !important here as a
+     defensive belt — any future theme or focus rule that tries to
+     reintroduce a pill background will get shot down. */
   animation: none;
-  background: transparent;
-  border-color: transparent;
-  padding: 12px 6px;
-}
-.bottom-bar-inner.search-inline .bottom-search-input:focus {
-  border-color: transparent;
-  animation: none;
-}
-
-.bottom-search-clear {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 28px;
-  height: 28px;
-  border-radius: 50%;
-  border: 0;
-  padding: 0;
-  background: rgba(255, 255, 255, 0.08);
-  color: rgba(255, 255, 255, 0.7);
-  cursor: pointer;
-  transition: background 0.18s ease, color 0.18s ease;
-  flex-shrink: 0;
-}
-.bottom-search-clear:hover {
-  background: rgba(255, 255, 255, 0.16);
-  color: #fff;
-}
-
-/* In-app submit button. Sits to the right of the clear button when
-   the input has content. Solid white pill so it reads as the
-   primary action - mirrors the keyboard's "Search" key without
-   making users reach for it. */
-.bottom-search-submit {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border-radius: 50%;
-  border: 0;
-  padding: 0;
-  margin-left: 4px;
-  background: #fff;
-  color: #111;
-  cursor: pointer;
-  transition: transform 0.15s ease, opacity 0.15s ease;
-  flex-shrink: 0;
-}
-
-.bottom-search-submit:hover {
-  transform: translateY(-1px);
-}
-
-.bottom-search-submit:active {
-  transform: translateY(0);
-  opacity: 0.85;
-}
-
-.light-mode .bottom-search-submit {
-  background: #111;
-  color: #fff;
+  background: transparent !important;
+  border: none !important;
+  border-color: transparent !important;
+  box-shadow: none !important;
+  padding: 13px 4px;
 }
 
 /* Spinner shown while nl-search is resolving */
@@ -226,6 +233,70 @@
 
 /* Filter button */
 .filter-btn {
+  /* Floating Filters chip — surfaces ABOVE the search bar when the bar
+   is in search-open state. Replaces the in-bar filter button (the bar
+   is now input-only). Positioned just above .bottom-bar (which sits
+   at bottom: 40px when search-open), so it reads as a sibling chip
+   right above the input. Tap opens the full FilterPanel. */
+.bottom-filters-chip {
+  position: fixed;
+  z-index: 105;
+  bottom: 104px;
+  left: 50%;
+  transform: translateX(-50%);
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  padding: 9px 14px;
+  border-radius: 999px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.04)),
+    rgba(15, 18, 24, 0.7);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  backdrop-filter: blur(20px) saturate(1.4);
+  -webkit-backdrop-filter: blur(20px) saturate(1.4);
+  box-shadow:
+    0 12px 28px rgba(0, 0, 0, 0.42),
+    inset 0 1px 0 rgba(255, 255, 255, 0.10);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 12.5px;
+  font-weight: 700;
+  letter-spacing: -0.005em;
+  font-family: inherit;
+  cursor: pointer;
+  animation: bottom-filters-chip-in 0.32s cubic-bezier(0.16, 1, 0.3, 1) both;
+  transition: transform 140ms ease, background 140ms ease;
+}
+.bottom-filters-chip:hover { transform: translateX(-50%) translateY(-1px); }
+.bottom-filters-chip:active { transform: translateX(-50%) translateY(0) scale(0.96); }
+.bottom-filters-chip.is-active { color: #f5f5f7; }
+.bottom-filters-chip-dot {
+  width: 6px; height: 6px; border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.7);
+  margin-left: 2px;
+}
+@keyframes bottom-filters-chip-in {
+  from { opacity: 0; transform: translateX(-50%) translateY(8px); }
+  to   { opacity: 1; transform: translateX(-50%) translateY(0); }
+}
+.light-mode .bottom-filters-chip {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 0.85));
+  border-color: rgba(15, 23, 42, 0.08);
+  color: rgba(15, 23, 42, 0.85);
+  box-shadow: 0 12px 28px rgba(0, 0, 0, 0.12);
+}
+.light-mode .bottom-filters-chip.is-active { color: #0f172a; }
+@media (min-width: 769px) {
+  /* Desktop has its own search UX via TypeAnywhere — this floating chip
+     is a mobile-only affordance for the BottomBar. */
+  .bottom-filters-chip { display: none !important; }
+}
+
+/* Default (standalone) filter chip — keeps the old pill chrome for
+     legacy callers that render it outside a search-pill context. The
+     in-bar version (.filter-btn.inline below) strips background and
+     border so it reads as an icon on the glass pill, not a second pill. */
   background: rgba(255, 255, 255, 0.06);
   border: 1px solid rgba(255, 255, 255, 0.1);
   color: rgba(255, 255, 255, 0.6);
@@ -249,6 +320,28 @@
   background: rgba(255, 255, 255, 0.9);
   color: #000;
   border-color: transparent;
+}
+
+/* In-bar filter button — small visible chip so the user can SEE the
+   filters affordance at a glance. The previous transparent-on-glass
+   variant made the icon invisible against the bar's gradient surface
+   (no contrast); a subtle filled disc reads as a proper button without
+   competing with the input. */
+.bottom-bar-inner.search-inline > .filter-btn.inline {
+  background: transparent;
+  border: 1px solid transparent;
+  color: rgba(255, 255, 255, 0.7);
+  transition: background 0.18s ease, color 0.18s ease, border-color 0.18s ease;
+}
+.bottom-bar-inner.search-inline > .filter-btn.inline:hover {
+  background: rgba(255, 255, 255, 0.10);
+  color: #fff;
+  border-color: transparent;
+}
+.bottom-bar-inner.search-inline > .filter-btn.inline.has-filters {
+  background: rgba(255, 255, 255, 0.95);
+  color: #0a0a0c;
+  border-color: rgba(255, 255, 255, 0.95);
 }
 
 /* Filter panel */
@@ -716,15 +809,192 @@
   flex-shrink: 0;
 }
 
+.my-size-chip {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 5px 10px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+
+.my-size-chip:hover {
+  background: rgba(255, 255, 255, 0.1);
+  color: rgba(255, 255, 255, 0.75);
+}
+
+.my-size-chip.active {
+  background: rgba(34, 197, 94, 0.15);
+  border-color: rgba(34, 197, 94, 0.3);
+  color: #4ade80;
+}
+
+.light-mode .my-size-chip {
+  border-color: rgba(0, 0, 0, 0.12);
+  background: rgba(0, 0, 0, 0.04);
+  color: rgba(0, 0, 0, 0.5);
+}
+
+.light-mode .my-size-chip:hover {
+  background: rgba(0, 0, 0, 0.08);
+  color: rgba(0, 0, 0, 0.7);
+}
+
+.light-mode .my-size-chip.active {
+  background: rgba(34, 197, 94, 0.1);
+  border-color: rgba(34, 197, 94, 0.25);
+  color: #16a34a;
+}
+
 /* The input now lives inside .bottom-bar-inner.search-inline at all times,
    so we no longer hide/swap blocks when search opens. The bar just lifts +
    widens slightly to read as "actively in use" while suggestions are up. */
+/* When the search sheet is open the .bottom-bar becomes a transparent layout
+   shell (column): a grab-handle indicator on top, then a row holding the
+   search pill + a close button beside it (Apple-Maps style). The pill surface
+   moves onto .bottom-bar-inner so the close button reads as a separate
+   control rather than living inside the field. */
 .bottom-bar.search-open {
+  z-index: 102;
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
   bottom: 40px;
   width: 90%;
-  max-width: 520px;
-  border-radius: 20px;
+  max-width: 540px;
+  border-radius: 0;
   overflow: visible;
+  padding: 0;
+  gap: 8px;
+  /* While search is open the bar is pinned to the keyboard top via an inline
+     `bottom` (kbInset) that updates continuously as the keyboard animates.
+     The base `transition: all 0.3s` made that `bottom` GLIDE — so on keyboard
+     dismiss the bar drifted through the middle of the screen while the pills
+     snapped, reading as the "broken overlap". Snapping (no position
+     transition) makes the bar track the keyboard 1:1 with no mid-glide. */
+  transition: none;
+}
+
+/* Row wrapper: invisible to layout at rest (display:contents → single child
+   behaves as a direct child of .bottom-bar), a flex row [pill][close] when
+   the search sheet is open. */
+.bottom-bar-row { display: contents; }
+.bottom-bar.search-open .bottom-bar-row {
+  display: flex;
+  align-items: stretch;
+  width: 100%;
+  gap: 10px;
+}
+
+/* The search pill — frosted glass pill matching the native iOS form-assistant
+   bar: semi-transparent dark fill, backdrop blur, fully pill-rounded, no border. */
+.bottom-bar.search-open .bottom-bar-inner.search-inline {
+  flex: 1 1 auto;
+  min-width: 0;
+  width: auto;
+  background: rgba(36, 36, 38, 0.78);
+  border: none;
+  border-radius: 100px;
+  padding: 6px 10px;
+  backdrop-filter: blur(28px) saturate(1.8);
+  -webkit-backdrop-filter: blur(28px) saturate(1.8);
+  box-shadow: none;
+}
+.light-mode .bottom-bar.search-open .bottom-bar-inner.search-inline {
+  background: rgba(220, 220, 225, 0.78);
+}
+
+/* The open search pill is dark glass on every breakpoint (the mobile rule
+   below otherwise paints the input #111 for the white resting pill — which
+   is invisible on the dark sheet). Force white input text + placeholder
+   whenever the sheet is open, regardless of hero/scroll/mobile state. Light
+   mode flips the open pill to light glass, so its text goes dark instead. */
+.bottom-bar.search-open .bottom-bar-inner.search-inline .bottom-search-input,
+.bottom-bar.search-open .bottom-bar-inner.search-inline .bottom-search-input:focus {
+  color: #fff;
+}
+.bottom-bar.search-open .bottom-bar-inner.search-inline .bottom-search-input::placeholder {
+  color: rgba(255, 255, 255, 0.5);
+}
+/* Lock the placeholder/typed text dead-center vertically. A fixed height +
+   matching line-height centres single-line text deterministically, instead of
+   relying on the input's intrinsic baseline (which iOS Safari renders a hair
+   high on type="search"). Zero the vertical padding so only the line-height
+   governs height. */
+.bottom-bar.search-open .bottom-bar-inner.search-inline .bottom-search-input {
+  height: 40px;
+  line-height: 40px;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+.light-mode .bottom-bar.search-open .bottom-bar-inner.search-inline .bottom-search-input,
+.light-mode .bottom-bar.search-open .bottom-bar-inner.search-inline .bottom-search-input:focus {
+  color: #111;
+}
+.light-mode .bottom-bar.search-open .bottom-bar-inner.search-inline .bottom-search-input::placeholder {
+  color: rgba(0, 0, 0, 0.4);
+}
+
+/* Circular close button — same frosted glass treatment as the pill. */
+.bottom-search-close {
+  flex: 0 0 auto;
+  align-self: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  /* Plain icon on the bar's glass — no separate disc "layer". */
+  background: transparent;
+  color: rgba(255, 255, 255, 0.6);
+  box-shadow: none;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.12s ease, color 0.12s ease, transform 0.1s ease;
+}
+.bottom-search-close:hover { color: rgba(255, 255, 255, 0.95); }
+.bottom-search-close:active { background: rgba(255, 255, 255, 0.08); transform: scale(0.92); }
+.light-mode .bottom-search-close {
+  background: rgba(220, 220, 225, 0.78);
+  color: rgba(0, 0, 0, 0.5);
+}
+
+/* Grab-handle indicator on the search sheet — Apple-Maps-style pull tab,
+   centered above the pill. The drag-to-dismiss gesture itself lives on the
+   dimmed backdrop (BottomBar onSheetDrag*), so this is purely a visual cue. */
+/* The little grab-handle that used to float above the open search pill read
+   as a stray "notch" on top of the bar, so it's hidden everywhere now. The
+   swipe-to-dismiss gesture still works — its handler lives on the dimmed
+   backdrop (BottomBar onSheetDrag*), not on this handle. */
+.search-drag-handle { display: none !important; }
+.search-drag-handle-bar {
+  width: 40px;
+  height: 5px;
+  border-radius: 3px;
+  background: rgba(255, 255, 255, 0.5);
+}
+.light-mode .search-drag-handle-bar { background: rgba(0, 0, 0, 0.25); }
+
+/* Hide the home feed header (logo / following rail / avatar) while the
+   search sheet is open, so it doesn't bleed through behind the top-docked
+   bar. Fades rather than display:none to avoid a reflow flash. */
+html:has(.bottom-bar.search-open) header {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.18s ease;
 }
 
 .bottom-search-tagline {
@@ -752,34 +1022,449 @@
   opacity: 0;
   visibility: hidden;
   transition: opacity 0.18s ease, visibility 0.18s ease;
-  /* Reserve space at the bottom for the input bar so the scroll
-     track doesn't run pills into / under the bar. Uses the live
-     --ios-bottom-chrome var BottomBar writes; on desktop it's 0. */
+  /* Reserve only the input-bar's own height (≈ 48px) + the 12px
+     bottom offset, so the lowest visible suggestion sits right above
+     the search bar with no awkward gap. The previous +88px left a
+     ~40px floating gap between "concert outfit" and the input. */
   --suggestions-bar-clear: max(
-    calc(env(safe-area-inset-bottom) + 88px),
-    calc(var(--ios-bottom-chrome, 0px) + 88px)
+    calc(env(safe-area-inset-bottom) + 78px),
+    calc(var(--ios-bottom-chrome, 0px) + 78px)
   );
   padding-bottom: var(--suggestions-bar-clear);
   box-sizing: border-box;
-  /* Soft entrance fade on just the top edge so the first row of
-     pills doesn't pop visually. No bottom mask - the input bar
-     itself is opaque and naturally clips the column. */
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0px, black 80px, black 100%);
-  mask-image: linear-gradient(to bottom, transparent 0px, black 100%);
+  /* Fade at the top edge (items exit upward) and bottom edge (items
+     emerge from the search bar, creating a rising-from-bar visual). */
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0px, black 60px, black 68%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0px, black 60px, black 68%, transparent 100%);
 }
 
-/* Make the underlying scrim a touch darker + blurrier so the
-   solid dim itself does the work of dimming the feed; no need
-   for a tracking gradient on the suggestions container. */
+/* While the search overlay is open, lock the underlying feed so the
+   user can't scroll the page behind the dim. :has() is supported in
+   every shipping browser we target (Safari 15.4+, Chrome 105+).
+   Belt-and-suspenders: also lock the html element + the consumer
+   feed container so iOS Safari's rubber-band can't peek through. */
+:root:has(.bottom-bar.search-open),
+html:has(.bottom-bar.search-open),
+body:has(.bottom-bar.search-open) {
+  overflow: hidden !important;
+  /* touch-action: none stops two-finger scroll attempts on iOS that
+     overflow:hidden alone won't catch. */
+  touch-action: none;
+  overscroll-behavior: none;
+}
+
+/* Full-viewport scrim. Pinned to the viewport edges (inset: 0) so the
+   dim covers the entire screen — including the area under the input
+   bar — instead of laying out inline at static position. The
+   suggestions column (z-index: 101) and input bar (z-index: 100)
+   stack above. */
 .search-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 99;
   background: rgba(0, 0, 0, 0.72);
   backdrop-filter: blur(14px) saturate(1.2);
   -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.18s ease, visibility 0.18s ease;
+  pointer-events: none;
+}
+.search-backdrop.visible {
+  opacity: 1;
+  visibility: visible;
+  pointer-events: auto;
 }
 
 .search-suggestions.visible {
   opacity: 1;
   visibility: visible;
+}
+
+/* Mobile search now shows a stack of catalog buttons (PopularCatalogPills)
+   above the bar instead of the old auto-scrolling text. Bottom-anchored so
+   the pills sit just above the search pill; wraps into stacked rows. */
+/* WebGL particle field behind the catalog pills in the mobile search. */
+.bb-search-particles {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.6;
+}
+.bb-search-particles .pw-particles {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+}
+
+.bb-pills {
+  position: absolute;
+  /* Box starts BELOW the pinned Catalog wordmark so overflow clips there
+     (overflow-y:auto) and can never spill up over the header/creator row —
+     the bug where a tall pill stack overlapped the top of the screen. The
+     bottom is pinned just above the search bar; excess scrolls between. */
+  top: calc(env(safe-area-inset-top, 0px) + 72px);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  /* NOT justify-content:flex-end — that clips the TOP when the cloud is
+     taller than the box (keyboard up = little room), hiding the "Jump into
+     a catalog" label + first row under the wordmark. Instead the first
+     child carries margin-top:auto, which pushes the cloud to the bottom
+     (just above the bar) when there's room and collapses to 0 when there
+     isn't, so overflow spills off the BOTTOM (scrollable) and the top is
+     never cut. */
+  justify-content: flex-start;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 18px var(--suggestions-bar-clear);
+  overflow-y: auto;
+  pointer-events: none;
+}
+/* Bottom-anchor the catalog tags without flex-end's top-clipping (see
+   above): margin-top:auto pushes the tag group to the bottom when there's
+   room and collapses to 0 when there isn't, so overflow spills off the
+   bottom and the top is never cut. The product tray (when present) sits
+   above it and fills the top space. */
+.bb-pills-bottom {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
+  margin-top: auto;
+}
+
+/* Shoppable product grid that fills the top of the search sheet when the
+   keyboard is down. Fades in elegantly so it reads as "here's something to
+   shop" rather than popping. */
+.bb-tray {
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+  pointer-events: auto;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  animation: bb-tray-in 0.4s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes bb-tray-in {
+  from { opacity: 0; transform: translateY(8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.bb-tray-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+  padding-left: 2px;
+}
+.bb-tray-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+.bb-tray-tile {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 0;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  text-align: left;
+  -webkit-tap-highlight-color: transparent;
+}
+.bb-tray-thumb {
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #1b1f29;
+  display: block;
+}
+.bb-tray-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.bb-tray-tile:active .bb-tray-thumb { transform: scale(0.97); transition: transform 0.12s ease; }
+.bb-tray-brand {
+  font-size: 11px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.7);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-left: 2px;
+}
+
+/* Catalog wordmark pinned to the top of the mobile search overlay. Sits
+   above the masked suggestions layer (z 102) so it never fades, and gives
+   the recompose a stable top anchor when the keyboard is up. */
+.bb-search-logo {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 20px);
+  left: 0;
+  right: 0;
+  margin-inline: auto;
+  width: max-content;
+  max-width: 62vw;
+  z-index: 102;
+  pointer-events: none;
+  color: #fff;
+  opacity: 0;
+  animation: bb-logo-in 0.32s cubic-bezier(0.16, 1, 0.3, 1) 0.04s both;
+}
+.bb-search-logo svg { height: 26px; width: auto; display: block; }
+.bb-search-logo span { height: 26px; font-size: 26px; display: inline-flex; }
+@keyframes bb-logo-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@media (min-width: 769px) { .bb-search-logo { display: none; } }
+
+/* Hot item — a single product card pinned at the top of the mobile search
+   recommendations. Tapping it opens the product. */
+.bb-hotitem {
+  pointer-events: auto;
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03));
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  -webkit-tap-highlight-color: transparent;
+  animation: bb-pills-in 0.34s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.bb-hotitem:active { transform: scale(0.99); }
+.bb-hotitem-thumb {
+  flex-shrink: 0;
+  width: 46px;
+  height: 58px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #1b1f29;
+}
+.bb-hotitem-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.bb-hotitem-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1; }
+.bb-hotitem-eyebrow {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #fb923c;
+}
+.bb-hotitem-flame { display: inline-flex; }
+.bb-hotitem-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bb-hotitem-brand {
+  font-size: 12px;
+  color: rgba(255, 255, 255, 0.55);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.bb-hotitem-go {
+  flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.7);
+}
+.light-mode .bb-hotitem-name { color: #111; }
+.light-mode .bb-hotitem { background: rgba(0, 0, 0, 0.04); border-color: rgba(0, 0, 0, 0.1); }
+
+/* Featured creators rail — a horizontal avatar scroller in the mobile
+   search recommendations. Tapping a creator opens their catalog. */
+.bb-creators {
+  pointer-events: auto;
+  width: 100%;
+  max-width: 560px;
+  margin: 0 auto;
+  animation: bb-pills-in 0.34s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.bb-creators-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.45);
+  padding: 0 4px 8px;
+}
+.bb-creators-row {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  padding: 2px 4px 6px;
+  scrollbar-width: none;
+}
+.bb-creators-row::-webkit-scrollbar { display: none; }
+.bb-creator {
+  flex: 0 0 auto;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  width: 64px;
+  background: none;
+  border: 0;
+  color: #fff;
+  font-family: inherit;
+  cursor: pointer;
+}
+.bb-creator-avatar {
+  border: 2px solid rgba(255, 255, 255, 0.18);
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.4);
+}
+.bb-creator-name {
+  font-size: 11px;
+  font-weight: 600;
+  max-width: 64px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  text-align: center;
+}
+@media (min-width: 769px) { .bb-creators { display: none; } }
+.bb-pills-showall {
+  pointer-events: auto;
+  background: rgba(255,255,255,0.1);
+  border: 1px solid rgba(255,255,255,0.18);
+  color: #fff;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 700;
+  padding: 8px 16px;
+  border-radius: 999px;
+  cursor: pointer;
+}
+/* Type-ahead suggestion list — replaces the popular pills while the user
+   is typing. Top-anchored so it fills the space from just below the status
+   bar down to the search bar (which sits at the keyboard's top edge), and
+   scrolls when the idea list is long. */
+.bb-autocomplete {
+  position: absolute;
+  /* Same clip-below-the-logo boundary as .bb-pills so typed-query matches
+     never overlap the header; results scroll within the clipped box. */
+  top: calc(env(safe-area-inset-top, 0px) + 56px);
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 6px;
+  padding: 10px 18px var(--suggestions-bar-clear);
+  overflow-y: auto;
+}
+.bb-autocomplete-label {
+  width: 100%;
+  max-width: 520px;
+  margin: 8px auto 2px;
+  padding: 0 4px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.4);
+}
+.bb-autocomplete-item {
+  pointer-events: auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  max-width: 520px;
+  margin: 0 auto;
+  text-align: left;
+  background: rgba(255, 255, 255, 0.07);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: #fff;
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  padding: 12px 16px;
+  border-radius: 14px;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+.bb-autocomplete-item:hover { background: rgba(255, 255, 255, 0.13); }
+.bb-autocomplete-item svg { flex-shrink: 0; opacity: 0.55; }
+.bb-autocomplete-item--run { opacity: 0.8; }
+.bb-autocomplete-text {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Creator match — round profile picture + a quiet "Creator" tag. */
+.bb-autocomplete-avatar {
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+.bb-autocomplete-avatar--fallback {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: linear-gradient(135deg, #3f3f46, #27272a);
+  color: #d4d4d8;
+  font-size: 12px;
+  font-weight: 700;
+}
+.bb-autocomplete-kind {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+/* Reset the desktop cloud's absolute/centered positioning + transform-based
+   entrance (which assume a fixed ai-bar ancestor) so it lays out inline,
+   stacked, inside the mobile overlay. */
+.bb-pills .catalog-pills {
+  position: static;
+  left: auto;
+  transform: none;
+  width: 100%;
+  max-width: 560px;
+  pointer-events: auto;
+  animation: bb-pills-in 0.34s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes bb-pills-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
 }
 
 /* Vertical track - the JS rAF loop translates this on Y. The doubled
@@ -904,6 +1589,18 @@
 }
 
 .bottom-search-input {
+  /* The input is a TRANSPARENT slot inside the bar's pill. It used to
+     ship its own dark-glass background + border + 50px radius +
+     glowPulse animation; even though the .bottom-bar-inner.search-inline
+     overrides at the top of this file zero those with !important, the
+     base style still leaked in three ways:
+       1. During the first paint before the override loaded.
+       2. iOS Safari draws a system rounded background on `type="search"`
+          inputs unless -webkit-appearance is explicitly disabled.
+       3. The glowPulse animation set box-shadow on the input directly,
+          which the override couldn't fully cancel.
+     Solution: strip ALL of that here at the source. The bar IS the pill;
+     the input is just a slot. */
   flex: 1;
   min-width: 0;
   width: 100%;
@@ -911,22 +1608,41 @@
   font-size: 15px;
   font-family: inherit;
   font-weight: 400;
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 50px;
+  background: transparent;
+  border: none;
+  border-radius: 0;
   color: #fff;
   outline: none;
-  animation: glowPulse 3s ease-in-out infinite;
-  transition: border-color 0.3s ease;
+  box-shadow: none;
+  /* Belt + suspenders against iOS Safari's system-painted rounded
+     background on type="search" inputs. */
+  -webkit-appearance: none;
+          appearance: none;
 }
 
 .bottom-search-input:focus {
-  border-color: rgba(255, 255, 255, 0.3);
-  animation: glowPulse 2s ease-in-out infinite;
+  /* No focus halo, no background flip — the parent pill is the focus
+     surface. Keeping this rule explicit so browsers don't fall back to
+     their default focus ring on top of the pill. */
+  background: transparent;
+  border: none;
+  box-shadow: none;
+  outline: none;
+}
+
+/* Kill the WebKit search-input UA chrome (the inset cancel-X + the
+   subtle rounded background some renderings still paint). Applies to
+   every .bottom-search-input no matter the context. */
+.bottom-search-input::-webkit-search-cancel-button,
+.bottom-search-input::-webkit-search-decoration,
+.bottom-search-input::-webkit-search-results-button,
+.bottom-search-input::-webkit-search-results-decoration {
+  -webkit-appearance: none;
+  display: none;
 }
 
 .bottom-search-input::placeholder {
-  color: rgba(255, 255, 255, 0.45);
+  color: rgba(255, 255, 255, 0.55);
 }
 
 /* Mobile: iOS Safari's bottom URL toolbar overlays the viewport when
@@ -947,20 +1663,42 @@
     border-radius: 22px;
   }
   .bottom-bar.search-open {
+    /* Resting fallback when there's no soft keyboard (e.g. an external
+       keyboard is paired): float 8px above the bottom chrome. When a soft
+       keyboard IS up, BottomBar pins the bar's bottom inline to the
+       keyboard's top edge — that inline value wins, so the bar rides the
+       keyboard 1:1 as it animates in/out. */
     bottom: max(
-      calc(env(safe-area-inset-bottom) + 28px),
-      calc(var(--ios-bottom-chrome, 0px) + 28px)
+      calc(env(safe-area-inset-bottom) + 8px),
+      calc(var(--ios-bottom-chrome, 0px) + 8px)
     );
   }
   .bottom-bar.filters-open {
     top: 0;
     bottom: 0;
   }
-  /* Suggestions float above the bar - keep them well clear of the URL
-     toolbar so the rolling list doesn't clip into Safari's chrome. */
-  .search-suggestions {
-    bottom: calc(180px + env(safe-area-inset-bottom));
+
+  /* The suggestion column rises UP from the bar (which is docked to the
+     keyboard top). It fills the layout viewport but reserves the keyboard +
+     bar height at the bottom so the lowest visible suggestion sits just
+     above the bar, then masks-fade as items scroll up toward the headline.
+     --ios-bottom-chrome tracks the keyboard height live (set in BottomBar),
+     so the reserved band shrinks/grows with the keyboard. */
+  html:not([data-shell="catalog-app"]) .search-suggestions {
+    padding-bottom: max(
+      calc(env(safe-area-inset-bottom) + 72px),
+      calc(var(--ios-bottom-chrome, 0px) + 72px)
+    );
   }
+
+  /* Auto-scroll (rAF) is now active on mobile too — no touch-scroll
+     override needed. The rAF drives translateY, so overflow stays hidden. */
+  /* Slightly more opaque dim on mobile so the page doesn't bleed
+     through the gap between the bar and the keyboard. */
+  .search-backdrop {
+    background: rgba(0, 0, 0, 0.88);
+  }
+}
 }
 
 
@@ -1202,5 +1940,122 @@
       rgba(120, 200, 255, 0.04) 400deg
     );
     animation: bb-beam-rotate-fallback 5s linear infinite;
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════════════════
+   Mobile Gemini-style search bar.
+   On ≤640px, transform the dark glass catalog search into a white pill
+   reminiscent of Google's Gemini composer: large rounded radius, generous
+   padding, big '+' glyph on the left, faint shadow, gray placeholder.
+   Desktop look is untouched. We don't change the React markup — the
+   existing filter button gets its hamburger replaced via CSS so all the
+   focus/iOS/keyboard logic in BottomBar.tsx keeps working.
+   ═══════════════════════════════════════════════════════════════════════ */
+@media (max-width: 640px) {
+  /* The outer bar becomes a pure white pill with a soft shadow. */
+  .bottom-bar {
+    /* Mobile width — load-bearing, see the SEARCH BAR HORIZONTAL
+       POSITION block on the base .bottom-bar rule. !important
+       keeps the cascade from breaking the four-property anchor. */
+    width: min(504px, calc(100% - 36px)) !important;
+    background: #fff;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+    border: 1px solid rgba(0, 0, 0, 0.06);
+    border-radius: 999px;
+    box-shadow:
+      0 1px 2px rgba(0, 0, 0, 0.04),
+      0 6px 22px rgba(0, 0, 0, 0.08);
+  }
+
+  /* The inner row: tighter vertical, breathing horizontal. Fills the
+     outer pill (which owns the width) — no 100vw here. */
+  .bottom-bar-inner.search-inline {
+    width: 100%;
+    padding: 7px 12px;
+    gap: 9px;
+  }
+
+  /* Replace the dark inline input with a transparent slot inside the pill. */
+  .bottom-bar-inner.search-inline .bottom-search-input,
+  .bottom-bar-inner.search-inline .bottom-search-input:focus {
+    background: transparent;
+    border: none;
+    color: #111;
+    /* 14px left padding gives the placeholder breathing room after the filter
+       icon — 4px sat right against the icon and read as cramped. */
+    padding: 12px 6px 12px 14px;
+    font-size: 16px;
+    font-weight: 400;
+    animation: none;
+    box-shadow: none;
+  }
+  .bottom-bar-inner.search-inline .bottom-search-input::placeholder {
+    color: #9aa0a6; /* Google neutral-500 — matches Gemini hint color */
+    font-weight: 400;
+  }
+
+  /* The leftmost button is the FILTERS control — show its sliders icon
+     (the inline SVG) rather than the old '+' glyph, so it reads as a
+     filters button. It already opens the filters sheet on tap. */
+  .bottom-bar-inner.search-inline > .filter-btn.inline {
+    width: 32px;
+    height: 32px;
+    background: transparent;
+    border: none;
+    border-radius: 50%;
+    color: #5f6368;
+    box-shadow: none;
+    position: relative;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+  }
+  .bottom-bar-inner.search-inline > .filter-btn.inline > svg {
+    display: block;
+    width: 18px;
+    height: 18px;
+  }
+  .bottom-bar-inner.search-inline > .filter-btn.inline:hover,
+  .bottom-bar-inner.search-inline > .filter-btn.inline.has-filters {
+    background: rgba(0, 0, 0, 0.06);
+    color: #202124;
+  }
+
+  /* My-size chip recolors to match the light surface. */
+  .bottom-bar-inner.search-inline > .my-size-chip {
+    background: rgba(0, 0, 0, 0.04);
+    border-color: rgba(0, 0, 0, 0.08);
+    color: #5f6368;
+  }
+  .bottom-bar-inner.search-inline > .my-size-chip.active {
+    background: rgba(34, 197, 94, 0.12);
+    border-color: rgba(34, 197, 94, 0.35);
+    color: #15803d;
+  }
+
+  /* The right-side spinner sits in a soft gray circle, echoing Gemini's
+     idle 'stop' chip. (Only renders while a search is in flight.) */
+  .bottom-bar-inner.search-inline .bottom-search-spinner {
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.06);
+    color: #5f6368;
+  }
+}
+
+/* When the keyboard is up (search input focused on mobile), the bar pins
+   flush to the keyboard's top edge — Gemini-style. BottomBar sets the exact
+   bottom inline from window.visualViewport (so it rides the keyboard 1:1 as
+   it animates); this CSS is the matching fallback + the transition that makes
+   the inline move glide. ~0.28s roughly matches the iOS keyboard slide, so
+   the bar and keyboard rise together. Mobile only; desktop has no soft
+   keyboard so its centered/floating position stays. */
+@media (max-width: 640px) {
+  .bottom-bar.search-open {
+    bottom: calc(var(--ios-bottom-chrome, 0px) + 8px);
+    transition: bottom 0.28s cubic-bezier(0.16, 1, 0.3, 1);
   }
 }

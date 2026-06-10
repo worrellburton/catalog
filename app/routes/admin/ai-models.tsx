@@ -39,6 +39,31 @@ const emptyForm: AiModelFormData = {
   enabled: true,
 };
 
+// Module-level styles must be declared BEFORE the components that
+// reference them — see scripts/check-tdz-forward-refs.mjs.
+const selectStyle: React.CSSProperties = {
+  width: '100%',
+  padding: '8px 10px',
+  border: '1px solid #ddd',
+  borderRadius: 6,
+  fontSize: 13,
+  outline: 'none',
+  background: '#fff',
+  boxSizing: 'border-box',
+};
+
+const textareaStyle: React.CSSProperties = {
+  width: '100%',
+  padding: '8px 10px',
+  border: '1px solid #ddd',
+  borderRadius: 6,
+  fontSize: 13,
+  outline: 'none',
+  resize: 'vertical',
+  fontFamily: 'inherit',
+  boxSizing: 'border-box',
+};
+
 export default function AdminAiModels() {
   const [models, setModels] = useState<AiModel[]>([]);
   const [loading, setLoading] = useState(true);
@@ -461,25 +486,3 @@ export default function AdminAiModels() {
   );
 }
 
-const selectStyle: React.CSSProperties = {
-  width: '100%',
-  padding: '8px 10px',
-  border: '1px solid #ddd',
-  borderRadius: 6,
-  fontSize: 13,
-  outline: 'none',
-  background: '#fff',
-  boxSizing: 'border-box',
-};
-
-const textareaStyle: React.CSSProperties = {
-  width: '100%',
-  padding: '8px 10px',
-  border: '1px solid #ddd',
-  borderRadius: 6,
-  fontSize: 13,
-  outline: 'none',
-  resize: 'vertical',
-  fontFamily: 'inherit',
-  boxSizing: 'border-box',
-};

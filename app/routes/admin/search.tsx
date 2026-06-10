@@ -1,6 +1,8 @@
 import { useState, useEffect, useRef } from 'react';
 import { Link } from '@remix-run/react';
 import { supabase } from '~/utils/supabase';
+import { getLiveCatalogs } from '~/services/catalogs';
+import { slugify } from './catalogs';
 
 interface LiveEntry {
   id: string;
@@ -9,6 +11,59 @@ interface LiveEntry {
   user_handle: string | null;
   results_count: number;
   clicked: boolean;
+}
+
+// Maps lowercased catalog name → slug so search terms in this page can deep-link
+// straight to /admin/catalogs/<slug>. Fetched once per session and shared across
+// all tabs to avoid re-querying when the admin flips between Live/Overview/Trends.
+let catalogMapCache: Map<string, string> | null = null;
+let catalogMapPromise: Promise<Map<string, string>> | null = null;
+
+function loadCatalogMap(): Promise<Map<string, string>> {
+  if (catalogMapCache) return Promise.resolve(catalogMapCache);
+  if (catalogMapPromise) return catalogMapPromise;
+  catalogMapPromise = getLiveCatalogs().then(catalogs => {
+    const map = new Map(catalogs.map(c => [c.name.toLowerCase(), c.slug]));
+    catalogMapCache = map;
+    return map;
+  }).catch(() => new Map<string, string>());
+  return catalogMapPromise;
+}
+
+function useTermLink() {
+  const [map, setMap] = useState<Map<string, string>>(catalogMapCache ?? new Map());
+  useEffect(() => {
+    let cancelled = false;
+    loadCatalogMap().then(m => { if (!cancelled) setMap(m); });
+    return () => { cancelled = true; };
+  }, []);
+  return {
+    termLink: (term: string): string => {
+      const slug = map.get(term.toLowerCase()) ?? slugify(term);
+      return `/admin/catalogs/${slug}`;
+    },
+    hasCatalog: (term: string): boolean => map.has(term.toLowerCase()),
+  };
+}
+
+// Renders a search term as a link into /admin/catalogs. If a matching catalog
+// exists the link opens that catalog's detail page; otherwise it opens the
+// catalogs index with the add-catalog modal pre-filled (via ?new=).
+function TermLink({ term, hasCatalog, href }: { term: string; hasCatalog: boolean; href: string }) {
+  return (
+    <Link
+      to={href}
+      title={hasCatalog ? `Open "${term}" catalog` : `Create "${term}" catalog`}
+      style={{
+        color: '#111',
+        textDecoration: 'none',
+        borderBottom: '1px dashed rgba(0,0,0,0.18)',
+        paddingBottom: 1,
+      }}
+    >
+      {term}
+    </Link>
+  );
 }
 
 function formatTimestamp(iso: string): string {
@@ -38,7 +93,9 @@ export default function AdminSearch() {
     <div className="admin-page">
       <div className="admin-page-header">
         <h1>Search</h1>
-        <p className="admin-page-subtitle">Search analytics and discovery insights</p>
+        <p className="admin-page-subtitle">
+          Search analytics and discovery insights — click any term to open it in <Link to="/admin/catalogs" style={{ color: '#2563eb' }}>Catalogs</Link>.
+        </p>
       </div>
 
       <div className="admin-tabs">
@@ -121,6 +178,7 @@ function formatRelativeTime(iso: string): string {
 }
 
 function OverviewTab() {
+  const { termLink, hasCatalog } = useTermLink();
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState<OverviewStats>({ totalSearches: 0, uniqueTerms: 0, avgResults: 0, clickThrough: 0, zeroResultsPct: 0, searchesPerUser: 0 });
   const [topSearches, setTopSearches] = useState<TopSearch[]>([]);
@@ -289,7 +347,9 @@ function OverviewTab() {
                   {topSearches.map((s, i) => (
                     <tr key={s.term}>
                       <td className="admin-cell-muted">{i + 1}</td>
-                      <td className="admin-cell-name">{s.term}</td>
+                      <td className="admin-cell-name">
+                        <TermLink term={s.term} hasCatalog={hasCatalog(s.term)} href={termLink(s.term)} />
+                      </td>
                       <td>{s.count}</td>
                       <td className="admin-cell-muted"> - </td>
                     </tr>
@@ -316,14 +376,37 @@ function OverviewTab() {
                     <th>Term</th>
                     <th>Count</th>
                     <th>Last Searched</th>
+                    <th></th>
                   </tr>
                 </thead>
                 <tbody>
                   {zeroResults.map(s => (
                     <tr key={s.term}>
-                      <td className="admin-cell-name">{s.term}</td>
+                      <td className="admin-cell-name">
+                        <TermLink term={s.term} hasCatalog={hasCatalog(s.term)} href={termLink(s.term)} />
+                      </td>
                       <td>{s.count}</td>
                       <td className="admin-cell-muted">{s.lastSearched}</td>
+                      <td style={{ textAlign: 'right' }}>
+                        <Link
+                          to={`/admin/catalogs?new=${encodeURIComponent(s.term)}`}
+                          style={{
+                            display: 'inline-block',
+                            padding: '2px 8px',
+                            fontSize: 10,
+                            fontWeight: 600,
+                            color: '#16a34a',
+                            background: 'rgba(34,197,94,0.10)',
+                            border: '1px solid rgba(34,197,94,0.25)',
+                            borderRadius: 999,
+                            textDecoration: 'none',
+                            whiteSpace: 'nowrap',
+                          }}
+                          title={`Create a "${s.term}" catalog so users find results for this term`}
+                        >
+                          + Create catalog
+                        </Link>
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -374,7 +457,9 @@ function OverviewTab() {
                   {recentSearches.map((s) => (
                     <tr key={s.id}>
                       <td className="admin-cell-name">{s.user}</td>
-                      <td>{s.term}</td>
+                      <td>
+                        <TermLink term={s.term} hasCatalog={hasCatalog(s.term)} href={termLink(s.term)} />
+                      </td>
                       <td className="admin-cell-muted">{s.time}</td>
                       <td>
                         {s.clicked ? (
@@ -398,6 +483,7 @@ function OverviewTab() {
 // ─── Live Activity Tab ───
 
 function LiveActivityTab() {
+  const { termLink, hasCatalog } = useTermLink();
   const [entries, setEntries] = useState<LiveEntry[]>([]);
   const [isPaused, setIsPaused] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -561,7 +647,7 @@ function LiveActivityTab() {
                 {formatTimestamp(entry.created_at)}
               </span>
               <span style={{ color: '#111', fontWeight: 500 }}>
-                {entry.query}
+                <TermLink term={entry.query} hasCatalog={hasCatalog(entry.query)} href={termLink(entry.query)} />
               </span>
               <span>
                 {entry.user_handle ? (
@@ -642,6 +728,7 @@ interface FilterCount {
 }
 
 function TrendsTab() {
+  const { termLink, hasCatalog } = useTermLink();
   const [loading, setLoading] = useState(true);
   const [risingTerms, setRisingTerms] = useState<TrendTerm[]>([]);
   const [decliningTerms, setDecliningTerms] = useState<TrendTerm[]>([]);
@@ -777,7 +864,9 @@ function TrendsTab() {
                 <tbody>
                   {risingTerms.map(t => (
                     <tr key={t.term}>
-                      <td className="admin-cell-name">{t.term}</td>
+                      <td className="admin-cell-name">
+                        <TermLink term={t.term} hasCatalog={hasCatalog(t.term)} href={termLink(t.term)} />
+                      </td>
                       <td>{t.currentCount}</td>
                       <td className="admin-cell-muted">{t.previousCount}</td>
                       <td style={{ color: '#4caf50', fontWeight: 600 }}>+{t.change}</td>
@@ -811,7 +900,9 @@ function TrendsTab() {
                 <tbody>
                   {decliningTerms.map(t => (
                     <tr key={t.term}>
-                      <td className="admin-cell-name">{t.term}</td>
+                      <td className="admin-cell-name">
+                        <TermLink term={t.term} hasCatalog={hasCatalog(t.term)} href={termLink(t.term)} />
+                      </td>
                       <td>{t.currentCount}</td>
                       <td className="admin-cell-muted">{t.previousCount}</td>
                       <td style={{ color: '#f44336', fontWeight: 600 }}>{t.change}</td>

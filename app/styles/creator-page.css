@@ -1,15 +1,66 @@
-/* Creator catalog page */
+/* Creator catalog page.
+   Dark consumer theme by default (black gradient surface) so it reads
+   as a continuation of the feed; light-mode overrides at the bottom
+   restore the editorial white look. */
 .creator-page {
   position: fixed;
   inset: 0;
-  background: #fff;
+  background: linear-gradient(180deg, #1a1a1a 0%, #0a0a0a 58%, #050505 100%);
+  color: #fff;
   z-index: 150;
   overflow-y: auto;
-  padding: var(--header-height) 28px 28px;
+  /* Background stays full-bleed; horizontal padding grows on wide
+     viewports so the content column is capped at 1200px and centered.
+     max() collapses to the base 28px gutter on mobile. */
+  padding: var(--header-height) max(28px, calc((100% - 1200px) / 2)) 28px;
+}
+
+/* Creator-chosen particle field — over the page bg, behind all content. */
+.creator-page-particles {
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  pointer-events: none;
+  opacity: 0.55;
 }
 
 .creator-page.hidden {
   display: none;
+}
+
+/* Elegant staggered fade-in when the catalog opens (desktop only).
+   Slow easeOutExpo so elements drift up and settle gently, one after
+   another. Gated to pointer/desktop + prefers-reduced-motion so mobile
+   and motion-sensitive users get the content at full opacity instantly
+   (no rule → no opacity:0). */
+@keyframes creator-fade-in {
+  from { opacity: 0; transform: translateY(16px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@media (min-width: 769px) and (prefers-reduced-motion: no-preference) {
+  .creator-hero-avatar,
+  .creator-hero-curated,
+  .creator-hero-name,
+  .creator-follow-btn,
+  .creator-hero-trust,
+  .creator-hero-socials,
+  .creator-nav,
+  .creator-brand-chips,
+  .creator-grid,
+  .creator-products-grid {
+    opacity: 0;
+    animation: creator-fade-in 1.2s cubic-bezier(0.16, 1, 0.3, 1) both;
+  }
+  .creator-hero-avatar   { animation-delay: 0.06s; }
+  .creator-hero-curated  { animation-delay: 0.20s; }
+  .creator-hero-name     { animation-delay: 0.34s; }
+  .creator-follow-btn    { animation-delay: 0.48s; }
+  .creator-hero-trust    { animation-delay: 0.60s; }
+  .creator-hero-socials  { animation-delay: 0.70s; }
+  .creator-nav           { animation-delay: 0.82s; }
+  .creator-brand-chips   { animation-delay: 0.92s; }
+  .creator-grid,
+  .creator-products-grid { animation-delay: 0.98s; }
 }
 
 /* Creator Hero - Nara Smith style centered profile */
@@ -22,27 +73,51 @@
 }
 
 .creator-hero-avatar {
+  /* Hero size — gives the creator presence on their own page. The
+     edit-hint pencil overlay rides at the bottom-right (see
+     .creator-hero-avatar-edit) so the avatar still leaves room for it. */
   width: 100px;
   height: 100px;
   border-radius: 50%;
   object-fit: cover;
-  border: 3px solid rgba(0, 0, 0, 0.08);
+  border: 3px solid rgba(255, 255, 255, 0.12);
   margin-bottom: 20px;
 }
 
 .creator-hero-curated {
   font-size: 15px;
   font-style: italic;
-  color: rgba(0, 0, 0, 0.4);
+  color: rgba(255, 255, 255, 0.45);
   font-family: Georgia, 'Times New Roman', serif;
 }
 
 .creator-hero-name {
   font-size: clamp(32px, 5vw, 48px);
   font-weight: 600;
-  color: #111;
+  color: #fff;
   margin: 4px 0 20px;
   letter-spacing: -0.02em;
+}
+
+/* Identity-loading skeletons — shown for the beat before the real name /
+   avatar / follow state resolve, so the header never flashes the raw handle
+   or a wrong FOLLOW button (see CreatorPage identityLoading). */
+.creator-hero-avatar--skeleton {
+  background: rgba(255, 255, 255, 0.06);
+  border-color: rgba(255, 255, 255, 0.08);
+  animation: creator-hero-skeleton 1.3s ease-in-out infinite;
+}
+.creator-hero-name-skeleton {
+  display: inline-block;
+  width: clamp(160px, 42vw, 240px);
+  height: clamp(30px, 5vw, 44px);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.08);
+  animation: creator-hero-skeleton 1.3s ease-in-out infinite;
+}
+@keyframes creator-hero-skeleton {
+  0%, 100% { opacity: 0.5; }
+  50%      { opacity: 0.9; }
 }
 
 .creator-follow-btn {
@@ -51,8 +126,8 @@
   font-weight: 600;
   text-transform: uppercase;
   letter-spacing: 0.08em;
-  color: #fff;
-  background: #111;
+  color: #111;
+  background: #fff;
   border: none;
   border-radius: 4px;
   cursor: pointer;
@@ -66,23 +141,156 @@
 
 .creator-hero-trust {
   font-size: 13px;
-  color: rgba(0, 0, 0, 0.4);
+  color: rgba(255, 255, 255, 0.4);
   margin-bottom: 12px;
+  display: inline-flex;
+  align-items: baseline;
+  gap: 7px;
 }
+.creator-hero-stat strong {
+  color: rgba(255, 255, 255, 0.82);
+  font-weight: 700;
+}
+.creator-hero-stat-sep { opacity: 0.5; }
+.light-mode .creator-hero-stat strong { color: rgba(0, 0, 0, 0.7); }
+
+/* Tappable follower / following stats. */
+.creator-hero-stat--btn {
+  background: none;
+  border: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: color 0.15s;
+}
+.creator-hero-stat--btn:hover { color: rgba(255, 255, 255, 0.85); }
+.light-mode .creator-hero-stat--btn:hover { color: rgba(0, 0, 0, 0.8); }
+
+/* ── Followers / following list sheet ───────────────────────────────── */
+.follow-list-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 1400;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(6px);
+  -webkit-backdrop-filter: blur(6px);
+  animation: follow-list-fade 160ms ease;
+}
+@keyframes follow-list-fade { from { opacity: 0; } to { opacity: 1; } }
+.follow-list-sheet {
+  width: min(420px, 100%);
+  max-height: 72vh;
+  display: flex;
+  flex-direction: column;
+  background: #161618;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 18px;
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+}
+.follow-list-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 18px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.follow-list-title {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  color: #fafafa;
+}
+.follow-list-close {
+  width: 30px;
+  height: 30px;
+  border: none;
+  background: none;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 22px;
+  line-height: 1;
+  cursor: pointer;
+}
+.follow-list-close:hover { color: #fff; }
+.follow-list-body {
+  overflow-y: auto;
+  padding: 8px;
+  -webkit-overflow-scrolling: touch;
+}
+.follow-list-empty {
+  margin: 0;
+  padding: 28px 12px;
+  text-align: center;
+  font-size: 13.5px;
+  color: rgba(255, 255, 255, 0.5);
+}
+.follow-list-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 12px;
+  background: none;
+  color: #fff;
+  cursor: pointer;
+  text-align: left;
+  transition: background 0.15s;
+}
+.follow-list-row:hover { background: rgba(255, 255, 255, 0.06); }
+.follow-list-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.08);
+}
+.follow-list-avatar--initial {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 17px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.8);
+}
+.follow-list-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 14px;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.follow-list-chevron { color: rgba(255, 255, 255, 0.35); flex-shrink: 0; }
 
 .creator-hero-socials {
   display: flex;
   gap: 16px;
-  color: rgba(0, 0, 0, 0.3);
+  color: rgba(255, 255, 255, 0.35);
+}
+
+.creator-hero-social {
+  display: inline-flex;
+  color: inherit;
+  transition: color 0.2s;
 }
 
 .creator-hero-socials svg {
   cursor: pointer;
-  transition: color 0.2s;
+  display: block;
 }
 
-.creator-hero-socials svg:hover {
-  color: rgba(0, 0, 0, 0.6);
+.creator-hero-social:hover {
+  color: rgba(255, 255, 255, 0.7);
 }
 
 /* Creator Navigation */
@@ -90,7 +298,7 @@
   display: flex;
   justify-content: center;
   gap: 32px;
-  border-bottom: 1px solid rgba(0, 0, 0, 0.08);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
   margin-bottom: 24px;
 }
 
@@ -98,7 +306,7 @@
   padding: 14px 8px;
   font-size: 15px;
   font-weight: 500;
-  color: rgba(0, 0, 0, 0.4);
+  color: rgba(255, 255, 255, 0.45);
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
@@ -108,12 +316,65 @@
 }
 
 .creator-nav-tab:hover {
-  color: rgba(0, 0, 0, 0.7);
+  color: rgba(255, 255, 255, 0.75);
 }
 
 .creator-nav-tab.active {
-  color: #111;
-  border-bottom-color: #111;
+  color: #fff;
+  border-bottom-color: #fff;
+}
+
+/* Collections selector — a swipeable row of the creator's collections
+   (derived from product category). Bolder/pill-shaped so it reads as the
+   primary "browse by collection" control above the secondary brand chips. */
+.creator-collections {
+  display: flex;
+  gap: 8px;
+  padding: 0 0 14px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  scroll-snap-type: x proximity;
+}
+.creator-collections::-webkit-scrollbar { display: none; }
+.creator-collection-chip {
+  scroll-snap-align: start;
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 16px;
+  font-size: 13px;
+  font-weight: 700;
+  color: rgba(255, 255, 255, 0.75);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 999px;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.18s, color 0.18s, border-color 0.18s;
+  font-family: inherit;
+}
+.creator-collection-chip:hover { color: #fff; background: rgba(255, 255, 255, 0.1); }
+.creator-collection-chip.active {
+  color: #1a1a1a;
+  background: #fff;
+  border-color: #fff;
+}
+.creator-collection-count {
+  font-size: 11px;
+  font-weight: 700;
+  opacity: 0.55;
+  font-variant-numeric: tabular-nums;
+}
+.light-mode .creator-collection-chip {
+  color: rgba(0, 0, 0, 0.6);
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.1);
+}
+.light-mode .creator-collection-chip.active {
+  color: #fff;
+  background: #1a1a1a;
+  border-color: #1a1a1a;
 }
 
 /* Brand filter chips */
@@ -133,9 +394,9 @@
   font-weight: 500;
   text-transform: uppercase;
   letter-spacing: 0.06em;
-  color: rgba(0, 0, 0, 0.45);
+  color: rgba(255, 255, 255, 0.5);
   background: none;
-  border: 1px solid rgba(0, 0, 0, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.18);
   border-radius: 4px;
   cursor: pointer;
   white-space: nowrap;
@@ -144,14 +405,14 @@
 }
 
 .creator-brand-chip:hover {
-  border-color: rgba(0, 0, 0, 0.3);
-  color: rgba(0, 0, 0, 0.7);
+  border-color: rgba(255, 255, 255, 0.4);
+  color: rgba(255, 255, 255, 0.8);
 }
 
 .creator-brand-chip.active {
-  background: #111;
-  color: #fff;
-  border-color: #111;
+  background: #fff;
+  color: #111;
+  border-color: #fff;
 }
 
 .creator-products-grid {
@@ -161,7 +422,7 @@
 }
 
 .creator-product-card {
-  background: #f7f7f7;
+  background: rgba(255, 255, 255, 0.06);
   border-radius: 12px;
   overflow: hidden;
   cursor: pointer;
@@ -169,7 +430,7 @@
 }
 
 .creator-product-card:hover {
-  background: #efefef;
+  background: rgba(255, 255, 255, 0.1);
   transform: translateY(-2px);
 }
 
@@ -187,7 +448,7 @@
 .creator-product-placeholder {
   width: 100%;
   height: 100%;
-  background: rgba(0, 0, 0, 0.04);
+  background: rgba(255, 255, 255, 0.06);
 }
 
 .creator-product-info {
@@ -199,14 +460,14 @@
 
 .creator-product-brand {
   font-size: 11px;
-  color: rgba(0, 0, 0, 0.4);
+  color: rgba(255, 255, 255, 0.5);
   text-transform: uppercase;
   letter-spacing: 0.04em;
 }
 
 .creator-product-name {
   font-size: 13px;
-  color: #222;
+  color: rgba(255, 255, 255, 0.92);
   font-weight: 500;
   display: -webkit-box;
   -webkit-line-clamp: 2;
@@ -217,8 +478,87 @@
 .creator-product-price {
   font-size: 14px;
   font-weight: 600;
-  color: #111;
+  color: #fff;
   margin-top: 4px;
+}
+
+/* Shop-tab products rendered in the SAME feed-card view as looks: a 3:4
+   tile (sized by .creator-grid .look-card) with the product image covering
+   it, a gradient scrim, and the brand/name/price overlaid at the bottom —
+   visually identical to the look cards in the feed. */
+.creator-product-feed {
+  position: relative;
+  overflow: hidden;
+  border-radius: 12px;
+  cursor: pointer;
+  background: rgba(255, 255, 255, 0.06);
+  /* Self-size to 3:4 so the card holds its shape even when the surrounding
+     grid's aspect-ratio rule isn't in scope or the poster <img> errors out
+     (onError hides it). Every child is position:absolute, so without this
+     the card collapses to a thin sliver after returning from a product
+     page — the "shrunk poster" bug. */
+  aspect-ratio: 3 / 4;
+  align-self: start;
+}
+.cpf-media {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  /* Poster sits at z-index 1; the director appends its pooled <video> at
+     z-index 2 directly over it (see CreatorProductTile / video-playback-director). */
+  z-index: 1;
+}
+.cpf-media--blank {
+  background: linear-gradient(135deg, rgba(255,255,255,0.08), rgba(255,255,255,0.02));
+}
+.cpf-gradient {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(to top, rgba(0,0,0,0.78) 0%, rgba(0,0,0,0.28) 36%, transparent 62%);
+  pointer-events: none;
+  /* Above the director's pooled <video> (z-index 2) so the bottom fade and the
+     brand/name/price labels are never hidden behind the playing clip. */
+  z-index: 3;
+}
+.cpf-info {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  padding: 10px 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  z-index: 4;
+}
+.cpf-brand {
+  font-size: 10.5px;
+  color: rgba(255, 255, 255, 0.72);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cpf-name {
+  font-size: 13px;
+  color: #fff;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cpf-price {
+  font-size: 13px;
+  font-weight: 700;
+  color: #fff;
+  margin-top: 2px;
+}
+@media (max-width: 768px) {
+  .cpf-info { padding: 8px 9px; }
 }
 
 .creator-empty-state {
@@ -228,7 +568,7 @@
   justify-content: center;
   gap: 16px;
   padding: 80px 0;
-  color: rgba(0, 0, 0, 0.3);
+  color: rgba(255, 255, 255, 0.4);
   font-size: 14px;
 }
 
@@ -237,7 +577,7 @@
   align-items: center;
   gap: 6px;
   font-size: 13px;
-  color: rgba(0, 0, 0, 0.5);
+  color: rgba(255, 255, 255, 0.55);
   text-decoration: none;
   margin-bottom: 20px;
   cursor: pointer;
@@ -247,7 +587,7 @@
 }
 
 .creator-back:hover {
-  color: #111;
+  color: #fff;
 }
 
 .creator-grid {
@@ -256,10 +596,91 @@
   gap: 12px;
 }
 
+/* ── Grid-density dial ──────────────────────────────────────────────────
+   Minimal scroll wheel pinned to the right edge of the catalog. Each segment
+   previews a column count (1 / 2 / 3 vertical bars); the active one lights up.
+   Dim and small by default so it stays out of the way. */
+.cat-view-dial {
+  position: fixed;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  /* Above .creator-page (z-index:150) — as a sibling at a lower z-index the
+     dial was painting BEHIND the full-screen page, so it never showed. */
+  z-index: 200;
+  /* Mobile only — desktop keeps its 3-column default and shows no dial.
+     Flipped to flex inside the max-width:768px block below. */
+  display: none;
+  flex-direction: column;
+  gap: 9px;
+  padding: 9px 7px;
+  border-radius: 999px;
+  background: rgba(20, 20, 22, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  opacity: 0.6;
+  transition: opacity 0.25s ease, transform 0.3s ease;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+/* Auto-hide on scroll-down: slide off the right edge (keeps the vertical
+   centering transform). Comes back on scroll-up. */
+.cat-view-dial--hidden {
+  transform: translateY(-50%) translateX(150%);
+  opacity: 0;
+  pointer-events: none;
+}
+.cat-view-dial:hover,
+.cat-view-dial:active { opacity: 0.9; }
+
+.cat-view-dial-dot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 12px;
+  opacity: 0.38;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.cat-view-dial-dot.is-active {
+  opacity: 1;
+  transform: scale(1.08);
+}
+.cat-view-dial-bars {
+  display: flex;
+  gap: 2px;
+  width: 14px;
+  height: 11px;
+}
+.cat-view-dial-bars i {
+  flex: 1;
+  background: #fff;
+  border-radius: 1px;
+}
+/* Show the dial on mobile only. */
+@media (max-width: 768px) {
+  .cat-view-dial { display: flex; }
+}
+
 .creator-grid .look-card {
   width: 100%;
+  /* Match the main feed (grid-view.css .look-card = 3/4) so creator catalogs
+     and the feed frame looks identically. */
   aspect-ratio: 3 / 4;
+  /* Don't let an auto-row grid stretch the (all-absolute-child) card to its
+     zero-height content and defeat the ratio — keeps the tile from
+     collapsing / shrinking the poster. */
+  align-self: start;
 }
+
+/* The look poster/video FILLS the 3:4 tile (cover), matching the main feed.
+   (The .card-poster-backdrop blurred-fill experiment was reverted — looks
+   should fill the container, not letterbox.) */
+.card-poster-backdrop { display: none; }
 
 /* ── Initial-letter avatar fallback ────────────────────────────────── */
 .creator-hero-avatar--initial {
@@ -274,6 +695,42 @@
   text-transform: uppercase;
 }
 
+/* ── Editable avatar (own profile) ─────────────────────────────────── */
+/* When the current user is on their own creator page, the avatar wraps
+   in the AvatarUpload trigger that opens the file picker + crop modal.
+   A small pencil hint sits over the lower-right of the circle so the
+   affordance is obvious. */
+.creator-hero-avatar-edit {
+  position: relative;
+  display: inline-block;
+  margin-bottom: 20px;
+  cursor: pointer;
+}
+.creator-hero-avatar-edit .creator-hero-avatar {
+  margin-bottom: 0;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+.creator-hero-avatar-edit:hover .creator-hero-avatar {
+  opacity: 0.85;
+}
+.creator-hero-avatar-edit-hint {
+  position: absolute;
+  right: 0;
+  bottom: 0;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: #fff;
+  color: #111;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 2px solid #111;
+  pointer-events: none;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.4);
+}
+
 /* ── Count badges next to tab labels ───────────────────────────────── */
 .creator-nav-count {
   display: inline-flex;
@@ -283,15 +740,15 @@
   padding: 0 6px;
   margin-left: 6px;
   border-radius: 999px;
-  background: rgba(0, 0, 0, 0.08);
-  color: rgba(0, 0, 0, 0.7);
+  background: rgba(255, 255, 255, 0.14);
+  color: rgba(255, 255, 255, 0.7);
   font-size: 10px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
 }
 .creator-nav-tab.active .creator-nav-count {
-  background: rgba(0, 0, 0, 0.85);
-  color: #fff;
+  background: #fff;
+  color: #111;
 }
 
 /* ── Skeleton grid (loading) ───────────────────────────────────────── */
@@ -304,7 +761,7 @@
   width: 100%;
   aspect-ratio: 3 / 4;
   border-radius: 12px;
-  background: linear-gradient(90deg, #f3f4f6 0%, #e5e7eb 50%, #f3f4f6 100%);
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.04) 0%, rgba(255, 255, 255, 0.09) 50%, rgba(255, 255, 255, 0.04) 100%);
   background-size: 200% 100%;
   animation: creator-skeleton-shimmer 1.4s ease-in-out infinite;
 }
@@ -322,14 +779,14 @@
   gap: 12px;
   padding: 64px 24px;
   text-align: center;
-  color: rgba(0, 0, 0, 0.55);
+  color: rgba(255, 255, 255, 0.55);
 }
-.creator-empty svg { color: rgba(0, 0, 0, 0.25); }
+.creator-empty svg { color: rgba(255, 255, 255, 0.25); }
 .creator-empty h2 {
   margin: 0;
   font-size: 18px;
   font-weight: 600;
-  color: rgba(0, 0, 0, 0.85);
+  color: rgba(255, 255, 255, 0.9);
 }
 .creator-empty p {
   margin: 0;
@@ -338,3 +795,134 @@
   line-height: 1.55;
 }
 
+/* ── Light-mode overrides ──────────────────────────────────────────────
+   Restore the editorial white look when the app is in light mode. (The
+   page background + back-button colors are also set in light-mode.css,
+   which loads later; these element-level rules cover everything else.) */
+.light-mode .creator-page {
+  background: #fff;
+  color: #111;
+}
+.light-mode .creator-hero-avatar { border-color: rgba(0, 0, 0, 0.08); }
+.light-mode .creator-hero-curated { color: rgba(0, 0, 0, 0.4); }
+.light-mode .creator-hero-name { color: #111; }
+.light-mode .creator-follow-btn { color: #fff; background: #111; }
+.light-mode .creator-hero-trust { color: rgba(0, 0, 0, 0.4); }
+.light-mode .creator-hero-socials { color: rgba(0, 0, 0, 0.3); }
+.light-mode .creator-hero-socials svg:hover { color: rgba(0, 0, 0, 0.6); }
+.light-mode .creator-nav { border-bottom-color: rgba(0, 0, 0, 0.08); }
+.light-mode .creator-nav-tab { color: rgba(0, 0, 0, 0.4); }
+.light-mode .creator-nav-tab:hover { color: rgba(0, 0, 0, 0.7); }
+.light-mode .creator-nav-tab.active { color: #111; border-bottom-color: #111; }
+.light-mode .creator-brand-chip {
+  color: rgba(0, 0, 0, 0.45);
+  border-color: rgba(0, 0, 0, 0.12);
+}
+.light-mode .creator-brand-chip:hover {
+  border-color: rgba(0, 0, 0, 0.3);
+  color: rgba(0, 0, 0, 0.7);
+}
+.light-mode .creator-brand-chip.active { background: #111; color: #fff; border-color: #111; }
+.light-mode .creator-product-card { background: #f7f7f7; }
+.light-mode .creator-product-card:hover { background: #efefef; }
+.light-mode .creator-product-placeholder { background: rgba(0, 0, 0, 0.04); }
+.light-mode .creator-product-brand { color: rgba(0, 0, 0, 0.4); }
+.light-mode .creator-product-name { color: #222; }
+.light-mode .creator-product-price { color: #111; }
+.light-mode .creator-empty-state { color: rgba(0, 0, 0, 0.3); }
+.light-mode .creator-hero-avatar-edit-hint {
+  background: #111;
+  color: #fff;
+  border-color: #fff;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.18);
+}
+.light-mode .creator-nav-count { background: rgba(0, 0, 0, 0.08); color: rgba(0, 0, 0, 0.7); }
+.light-mode .creator-nav-tab.active .creator-nav-count { background: rgba(0, 0, 0, 0.85); color: #fff; }
+.light-mode .creator-skeleton-tile {
+  background: linear-gradient(90deg, #f3f4f6 0%, #e5e7eb 50%, #f3f4f6 100%);
+  background-size: 200% 100%;
+}
+.light-mode .creator-empty { color: rgba(0, 0, 0, 0.55); }
+.light-mode .creator-empty svg { color: rgba(0, 0, 0, 0.25); }
+.light-mode .creator-empty h2 { color: rgba(0, 0, 0, 0.85); }
+
+/* Saved tab on the viewer's own catalog — hosts the shared SavedScreen. */
+.creator-saved { padding: 8px 0 40px; }
+
+/* Mobile adjustments — relocated from responsive.css so this sheet
+   stays self-contained now that it ships with the CreatorPage chunk
+   (load order vs the global responsive.css is no longer guaranteed). */
+@media (max-width: 768px) {
+  /* Creator page - mobile adjustments */
+  .creator-page {
+    padding-top: 60px;
+    padding-left: 16px;
+    padding-right: 16px;
+  }
+
+  .creator-hero {
+    padding: 24px 0 20px;
+  }
+
+  .creator-hero-avatar {
+    width: 80px;
+    height: 80px;
+  }
+
+  .creator-hero-name {
+    font-size: 28px;
+  }
+
+  .creator-follow-btn {
+    padding: 8px 24px;
+    font-size: 12px;
+  }
+
+  .creator-nav {
+    gap: 20px;
+  }
+
+  .creator-nav-tab {
+    font-size: 14px;
+    padding: 12px 4px;
+  }
+
+  .creator-grid {
+    /* Column count is driven by the mobile-only grid-density dial via the
+       --cat-cols custom property (default 2). Desktop ignores the var and
+       keeps its 3-column default (see creator-page.css). */
+    grid-template-columns: repeat(var(--cat-cols, 2), 1fr);
+    gap: 2px;
+    background: #111;
+    padding: 0;
+    margin: 0 -16px; /* claw back the parent's horizontal padding */
+  }
+
+  .creator-grid .look-card {
+    /* Match the main feed (3/4). */
+    aspect-ratio: 3/4;
+  }
+
+  .creator-products-grid {
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+  }
+
+  .creator-product-info {
+    padding: 8px;
+  }
+
+  .creator-product-name {
+    font-size: 12px;
+  }
+
+  .creator-brand-chips {
+    padding-bottom: 16px;
+    gap: 6px;
+  }
+
+  .creator-brand-chip {
+    padding: 6px 12px;
+    font-size: 11px;
+  }
+}

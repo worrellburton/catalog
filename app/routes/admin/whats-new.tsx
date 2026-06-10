@@ -143,6 +143,279 @@ function firstSentence(body: string): string {
   return (m ? m[1] : flat).trim();
 }
 
+type ReportRange =
+  | 'today'
+  | 'yesterday'
+  | 'this-week'
+  | 'last-week'
+  | 'this-month'
+  | 'last-month'
+  | 'this-quarter'
+  | 'this-year'
+  | 'last-year'
+  | 'last-30-days'
+  | 'last-90-days'
+  | 'all-time';
+
+const RANGE_LABEL: Record<ReportRange, string> = {
+  'today':        'Today',
+  'yesterday':    'Yesterday',
+  'this-week':    'This week',
+  'last-week':    'Last week',
+  'this-month':   'This month',
+  'last-month':   'Last month',
+  'this-quarter': 'This quarter',
+  'this-year':    'This year',
+  'last-year':    'Last year',
+  'last-30-days': 'Last 30 days',
+  'last-90-days': 'Last 90 days',
+  'all-time':     'All time',
+};
+
+// Range options exposed in the dropdown, in display order.
+const RANGE_OPTIONS: ReportRange[] = [
+  'today',
+  'yesterday',
+  'this-week',
+  'last-week',
+  'this-month',
+  'last-month',
+  'this-quarter',
+  'this-year',
+  'last-year',
+  'last-30-days',
+  'last-90-days',
+  'all-time',
+];
+
+// Calendar window for the selected range. "This month" is the current
+// CALENDAR month (1st → now), not the trailing 30 days; "Last month" is
+// the previous calendar month in full; weeks anchor on Monday so
+// business-week reporting stays predictable. Returns half-open [start, end)
+// in local time, with `end` clamped to now for ranges that include today.
+function rangeWindow(range: ReportRange): { start: Date; end: Date } {
+  const now = new Date();
+  const startOfDay = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate());
+  const endOfDay   = (d: Date) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), 23, 59, 59, 999);
+  const addDays    = (d: Date, n: number) => { const x = new Date(d); x.setDate(x.getDate() + n); return x; };
+  // Monday of the week containing `d`. getDay(): 0 = Sunday → treat as
+  // 7 so Sunday rolls back to the prior Monday rather than jumping a week.
+  const startOfWeek = (d: Date) => {
+    const dow = d.getDay() || 7;
+    return startOfDay(addDays(d, 1 - dow));
+  };
+  const today = startOfDay(now);
+
+  switch (range) {
+    case 'today':
+      return { start: today, end: now };
+    case 'yesterday': {
+      const y = addDays(today, -1);
+      return { start: y, end: endOfDay(y) };
+    }
+    case 'this-week':
+      return { start: startOfWeek(now), end: now };
+    case 'last-week': {
+      const thisWeek = startOfWeek(now);
+      const lastWeek = addDays(thisWeek, -7);
+      return { start: lastWeek, end: endOfDay(addDays(thisWeek, -1)) };
+    }
+    case 'this-month':
+      return { start: new Date(now.getFullYear(), now.getMonth(), 1), end: now };
+    case 'last-month': {
+      const start = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      // Day 0 of the current month = last day of the previous month.
+      const end   = endOfDay(new Date(now.getFullYear(), now.getMonth(), 0));
+      return { start, end };
+    }
+    case 'this-quarter': {
+      const qStartMonth = Math.floor(now.getMonth() / 3) * 3;
+      return { start: new Date(now.getFullYear(), qStartMonth, 1), end: now };
+    }
+    case 'this-year':
+      return { start: new Date(now.getFullYear(), 0, 1), end: now };
+    case 'last-year': {
+      const y = now.getFullYear() - 1;
+      return { start: new Date(y, 0, 1), end: endOfDay(new Date(y, 11, 31)) };
+    }
+    case 'last-30-days':
+      return { start: addDays(today, -30), end: now };
+    case 'last-90-days':
+      return { start: addDays(today, -90), end: now };
+    case 'all-time':
+      // 2020-01-01 covers everything in repo history with margin. Using
+      // epoch 0 here makes the printed range string look silly.
+      return { start: new Date(2020, 0, 1), end: now };
+  }
+}
+
+// Hours-per-commit estimate keyed off the conventional-commit prefix.
+// Calibrated against a few weeks of real shipped work — feats run
+// longer than fixes, chore/docs are quick, perf/refactor sit between.
+const HOURS_BY_PREFIX: Record<string, number> = {
+  feat: 3,
+  fix: 1,
+  perf: 1.5,
+  refactor: 1.5,
+  docs: 0.3,
+  chore: 0.5,
+  ci: 0.5,
+  style: 0.5,
+  merge: 0.25,
+};
+const DEFAULT_HOURS = 1;
+const HOURLY_RATE = 150;
+function hoursForCommit(prefix: string | null): number {
+  if (!prefix) return DEFAULT_HOURS;
+  return HOURS_BY_PREFIX[prefix] ?? DEFAULT_HOURS;
+}
+function fmtMoney(n: number): string {
+  return `$${Math.round(n).toLocaleString('en-US')}`;
+}
+function fmtHours(n: number): string {
+  // Trim trailing zeros on the decimal for compactness.
+  return n.toFixed(1).replace(/\.0$/, '') + 'h';
+}
+
+// Build a matte-black, white-text PDF (via the browser's print → Save as
+// PDF) summarising every shipped update in the chosen window: a headline
+// summary then a full ledger. Opens in a new window and triggers print.
+function buildAndPrintReport(commits: GitHubCommit[], range: ReportRange) {
+  const { start, end } = rangeWindow(range);
+  const startMs = start.getTime();
+  const endMs   = end.getTime();
+  const inRange = commits
+    .filter(c => !isMergeNoise(c.commit.message))
+    .filter(c => {
+      const t = new Date(c.commit.author.date).getTime();
+      return t >= startMs && t <= endMs;
+    })
+    .sort((a, b) => +new Date(b.commit.author.date) - +new Date(a.commit.author.date));
+
+  // Tally by type + accumulate hours/cost in a single pass.
+  const counts: Record<string, number> = {};
+  let totalHours = 0;
+  // Pre-compute per-commit hours so we don't re-derive them when building rows.
+  const perCommit = inRange.map(c => {
+    const subject = c.commit.message.split('\n')[0];
+    const { prefix, text } = parseSubject(subject);
+    const hours = hoursForCommit(prefix);
+    totalHours += hours;
+    const label = (prefix && PREFIX_LABEL[prefix]?.label) || 'Other';
+    counts[label] = (counts[label] || 0) + 1;
+    return { c, prefix, text, hours };
+  });
+  const totalCost = totalHours * HOURLY_RATE;
+
+  const esc = (s: string) => s.replace(/[&<>]/g, m => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[m]!));
+  const now = new Date();
+  // "Today" / "Yesterday" collapse to a single date label — the start
+  // and end fall on the same day so "Jun 4 – Jun 4" reads silly.
+  const fmtDate = (d: Date) => d.toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  const rangeStr = range === 'all-time'
+    ? `through ${fmtDate(end)}`
+    : fmtDate(start) === fmtDate(end)
+      ? fmtDate(start)
+      : `${fmtDate(start)} – ${fmtDate(end)}`;
+
+  // Headline chips: hours + cost lead, then per-type counts.
+  const headChips = `
+    <div class="chip chip-lg"><span class="chip-n">${fmtHours(totalHours)}</span><span class="chip-l">Estimated hours</span></div>
+    <div class="chip chip-lg"><span class="chip-n">${fmtMoney(totalCost)}</span><span class="chip-l">Estimated cost</span></div>
+    <div class="chip"><span class="chip-n">${inRange.length}</span><span class="chip-l">Updates</span></div>
+  `;
+  const typeChips = Object.entries(counts)
+    .sort((a, b) => b[1] - a[1])
+    .map(([label, n]) => `<div class="chip"><span class="chip-n">${n}</span><span class="chip-l">${esc(label)}</span></div>`)
+    .join('');
+
+  const rows = perCommit.map(({ c, prefix, text, hours }) => {
+    const tag = prefix ? PREFIX_LABEL[prefix] : null;
+    const summary = simplifySummary(firstSentence(text));
+    const date = new Date(c.commit.author.date).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+    const cost = hours * HOURLY_RATE;
+    return `<tr>
+      <td class="d">${date}</td>
+      <td>${tag ? `<span class="tag" style="color:${tag.color}">${esc(tag.label)}</span>` : ''}</td>
+      <td class="s">${esc(summary)}</td>
+      <td class="h">${fmtHours(hours)}</td>
+      <td class="r">${fmtMoney(HOURLY_RATE)}/h</td>
+      <td class="c">${fmtMoney(cost)}</td>
+      <td class="sha">${esc(c.sha.slice(0, 7))}</td>
+    </tr>`;
+  }).join('');
+
+  const html = `<!doctype html><html><head><meta charset="utf-8"><title>Catalog — What's New (${esc(RANGE_LABEL[range])})</title>
+  <style>
+    @page { margin: 14mm; }
+    * { box-sizing: border-box; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    body { margin: 0; background: #0a0a0a; color: #fff; font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", system-ui, sans-serif; padding: 26px 30px; font-size: 11px; }
+    .brand { font-size: 10px; letter-spacing: 4px; text-transform: uppercase; color: #8a8a8f; margin-bottom: 3px; }
+    h1 { font-size: 24px; margin: 0 0 3px; font-weight: 700; letter-spacing: -0.01em; }
+    .range { color: #b8b8bd; font-size: 11px; margin-bottom: 18px; }
+    .summary { display: flex; gap: 10px; flex-wrap: wrap; margin: 0 0 20px; }
+    .chip { background: #161618; border: 1px solid #262629; border-radius: 10px; padding: 10px 14px; min-width: 80px; }
+    .chip-lg { background: #1a1a1d; border-color: #2e2e33; }
+    .chip-n { display: block; font-size: 20px; font-weight: 800; letter-spacing: -0.01em; }
+    .chip-lg .chip-n { font-size: 22px; }
+    .chip-l { display: block; font-size: 9px; text-transform: uppercase; letter-spacing: 1px; color: #9a9aa0; margin-top: 2px; }
+    .total { font-size: 12px; color: #e6e6ea; margin-bottom: 16px; }
+    .total b { font-size: 13px; }
+    h2 { font-size: 10px; text-transform: uppercase; letter-spacing: 2px; color: #8a8a8f; border-top: 1px solid #262629; padding-top: 14px; margin: 6px 0 8px; }
+    table { width: 100%; border-collapse: collapse; font-size: 10px; }
+    thead th { text-align: left; font-size: 8.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.2px; color: #8a8a8f; padding: 4px 6px 8px; border-bottom: 1px solid #2a2a2d; }
+    td { padding: 5px 6px; border-bottom: 1px solid #1c1c1f; vertical-align: top; font-size: 10px; line-height: 1.4; }
+    td.d { color: #8a8a8f; white-space: nowrap; width: 50px; }
+    td.s { color: #ededf2; }
+    .tag { font-size: 8.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+    td.h, th.h { white-space: nowrap; width: 42px; color: #d2d2d7; font-variant-numeric: tabular-nums; }
+    td.r, th.r { white-space: nowrap; width: 62px; color: #8a8a8f; font-variant-numeric: tabular-nums; }
+    td.c, th.c { white-space: nowrap; width: 60px; color: #fff; font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; }
+    td.sha { color: #5a5a60; font-family: ui-monospace, Menlo, monospace; font-size: 9px; text-align: right; white-space: nowrap; width: 56px; }
+    tfoot td { border-top: 2px solid #2a2a2d; border-bottom: none; padding-top: 8px; font-weight: 700; color: #fff; }
+    tfoot td.lbl { text-align: right; color: #8a8a8f; font-size: 9px; text-transform: uppercase; letter-spacing: 1.2px; font-weight: 700; }
+    .empty { color: #8a8a8f; padding: 24px 0; }
+    .foot { margin-top: 20px; color: #5a5a60; font-size: 9px; }
+  </style></head>
+  <body>
+    <div class="brand">Catalog</div>
+    <h1>What's New</h1>
+    <div class="range">${esc(RANGE_LABEL[range])} · ${esc(rangeStr)}</div>
+    <div class="summary">${headChips}${typeChips}</div>
+    <div class="total"><b>${inRange.length}</b> update${inRange.length === 1 ? '' : 's'} shipped in this period · ≈ <b>${fmtHours(totalHours)}</b> · <b>${fmtMoney(totalCost)}</b> at ${fmtMoney(HOURLY_RATE)}/hr.</div>
+    <h2>Ledger</h2>
+    ${inRange.length ? `<table>
+      <thead><tr>
+        <th class="d">Date</th>
+        <th>Type</th>
+        <th>Summary</th>
+        <th class="h">Time</th>
+        <th class="r">Rate</th>
+        <th class="c">Cost</th>
+        <th class="sha">SHA</th>
+      </tr></thead>
+      <tbody>${rows}</tbody>
+      <tfoot><tr>
+        <td colspan="3" class="lbl">Total</td>
+        <td class="h">${fmtHours(totalHours)}</td>
+        <td class="r">${fmtMoney(HOURLY_RATE)}/h</td>
+        <td class="c">${fmtMoney(totalCost)}</td>
+        <td></td>
+      </tr></tfoot>
+    </table>` : '<div class="empty">No updates shipped in this window.</div>'}
+    <div class="foot">Generated ${esc(now.toLocaleString())} · catalog.shop · build ${esc((import.meta.env.VITE_VERCEL_GIT_COMMIT_SHA || 'dev').slice(0, 7))} · Hours are estimates derived from commit type.</div>
+  </body></html>`;
+
+  const w = window.open('', '_blank');
+  if (!w) { alert('Pop-up blocked — allow pop-ups to download the report.'); return; }
+  w.document.open();
+  w.document.write(html);
+  w.document.close();
+  // Give the new window a tick to lay out before invoking print.
+  w.onload = () => { w.focus(); w.print(); };
+  setTimeout(() => { try { w.focus(); w.print(); } catch { /* onload handles it */ } }, 400);
+}
+
 export default function AdminWhatsNew() {
   const [commits, setCommits] = useState<GitHubCommit[]>([]);
   const [loading, setLoading] = useState(true);
@@ -151,6 +424,34 @@ export default function AdminWhatsNew() {
   const [page, setPage] = useState(1);
   const [hasMore, setHasMore] = useState(true);
   const [expanded, setExpanded] = useState<Record<string, boolean>>({});
+  const [reportRange, setReportRange] = useState<ReportRange>('this-month');
+  const [generatingReport, setGeneratingReport] = useState(false);
+
+  // Build the PDF report: fetch enough commit pages to cover the chosen
+  // window (the page only lazy-loads 100 at a time), then hand off to the
+  // matte-black print view. For 'all-time' we cap at 6 pages (600 commits)
+  // to keep the print sane; older history can be filtered via narrower
+  // ranges if it ever matters.
+  const generateReport = async () => {
+    setGeneratingReport(true);
+    try {
+      const { start } = rangeWindow(reportRange);
+      const acc: GitHubCommit[] = [];
+      for (let p = 1; p <= 6; p++) {
+        let batch: GitHubCommit[];
+        try { batch = await fetchPage(p); } catch { break; }
+        acc.push(...batch);
+        if (batch.length < PAGE_SIZE) break;
+        const oldest = batch.length ? new Date(batch[batch.length - 1].commit.author.date) : null;
+        if (oldest && oldest < start) break;
+      }
+      const seen = new Set<string>();
+      const merged = [...acc, ...commits].filter(c => (seen.has(c.sha) ? false : (seen.add(c.sha), true)));
+      buildAndPrintReport(merged, reportRange);
+    } finally {
+      setGeneratingReport(false);
+    }
+  };
 
   const fetchPage = async (pageNum: number) => {
     const res = await fetch(
@@ -218,9 +519,33 @@ export default function AdminWhatsNew() {
       }}
     >
       <div className="admin-page-header" style={{ marginBottom: 20 }}>
-        <h1>What's New</h1>
-        <div className="admin-page-subtitle">
-          Plain-English updates from the team. Every change shipped to Catalog.
+        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
+          <div>
+            <h1>What's New</h1>
+            <div className="admin-page-subtitle">
+              Plain-English updates from the team. Every change shipped to Catalog.
+            </div>
+          </div>
+          {/* Download a matte-black PDF report for a date range. */}
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <select
+              value={reportRange}
+              onChange={e => setReportRange(e.target.value as ReportRange)}
+              style={{ fontSize: 13, padding: '7px 10px', borderRadius: 8, border: '1px solid #d1d5db', background: '#fff', color: '#111' }}
+            >
+              {RANGE_OPTIONS.map(r => (
+                <option key={r} value={r}>{RANGE_LABEL[r]}</option>
+              ))}
+            </select>
+            <button
+              className="admin-btn admin-btn-primary"
+              onClick={generateReport}
+              disabled={generatingReport}
+              style={{ fontSize: 13, padding: '7px 14px', whiteSpace: 'nowrap' }}
+            >
+              {generatingReport ? 'Preparing…' : '↓ Download report'}
+            </button>
+          </div>
         </div>
       </div>
 

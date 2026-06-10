@@ -1,0 +1,262 @@
+// affiliate-com service
+//
+// Typed client for the `affiliate-com` edge function (server-side proxy
+// that holds the AFFILIATE_COM_API_KEY secret). Every call goes through
+// supabase.functions.invoke so the key never touches the browser.
+//
+// The upstream affiliate.com response schema is not strictly known, so
+// the row types below are intentionally loose (Record-ish with the
+// fields we expect) and every accessor is defensive. `normalizeList`
+// shapes the common pagination envelopes server-side; here we just
+// surface them.
+
+import { supabase } from '~/utils/supabase';
+
+// ── Types ───────────────────────────────────────────────────────────
+
+export interface AffiliateListMeta {
+  items: unknown[];
+  total: number | null;
+  page: number | null;
+  per_page: number | null;
+}
+
+export interface AffiliateResult<T = unknown> {
+  success: boolean;
+  data: T | null;
+  list?: AffiliateListMeta;
+  error: string | null;
+  status?: number;
+}
+
+/** A merchant / advertiser program. Loose — real keys vary by network. */
+export interface AffiliateMerchant {
+  id?: string | number;
+  slug?: string;
+  name?: string;
+  logo?: string | null;
+  category?: string | null;
+  categories?: string[];
+  commission?: string | null;
+  commission_rate?: string | number | null;
+  cookie_duration?: string | null;
+  status?: string | null;
+  url?: string | null;
+  description?: string | null;
+  [k: string]: unknown;
+}
+
+/** A product returned by the product search. */
+export interface AffiliateProduct {
+  id?: string | number;
+  title?: string;
+  name?: string;
+  brand?: string | null;
+  merchant?: string | null;
+  merchant_id?: string | number | null;
+  price?: string | number | null;
+  sale_price?: string | number | null;
+  currency?: string | null;
+  image?: string | null;
+  image_url?: string | null;
+  url?: string | null;
+  affiliate_url?: string | null;
+  deep_link?: string | null;
+  category?: string | null;
+  description?: string | null;
+  [k: string]: unknown;
+}
+
+/** A network / network-group (the affiliate programs aggregated). */
+export interface AffiliateNetwork {
+  id?: string | number;
+  name?: string;
+  slug?: string;
+  group?: string | null;
+  status?: string | null;
+  merchant_count?: number | null;
+  [k: string]: unknown;
+}
+
+export interface AffiliateAccount {
+  id?: string | number;
+  name?: string | null;
+  email?: string | null;
+  balance?: string | number | null;
+  currency?: string | null;
+  status?: string | null;
+  [k: string]: unknown;
+}
+
+// ── Low-level invoke ────────────────────────────────────────────────
+
+async function call<T = unknown>(action: string, args: Record<string, unknown> = {}): Promise<AffiliateResult<T>> {
+  if (!supabase) return { success: false, data: null, error: 'Supabase not configured' };
+  try {
+    const { data, error } = await supabase.functions.invoke('affiliate-com', { body: { action, ...args } });
+    if (error) return { success: false, data: null, error: error.message || 'invoke error' };
+    if (!data?.success) return { success: false, data: null, error: data?.error || 'unknown', status: data?.status };
+    return { success: true, data: data.data as T, list: data.list as AffiliateListMeta | undefined, error: null, status: data?.status };
+  } catch (err) {
+    return { success: false, data: null, error: (err as Error).message || 'unknown' };
+  }
+}
+
+// ── Public actions (one per edge-function capability) ───────────────
+
+export const affiliateCom = {
+  ping: () => call<{ ok: boolean; sample_count?: number; total?: number | null; status: number }>('ping'),
+  account: () => call<AffiliateAccount>('account'),
+
+  networks: (args: { page?: number; per_page?: number; search?: string } = {}) =>
+    call<unknown>('networks', args),
+  networkGroups: (args: { page?: number; per_page?: number } = {}) =>
+    call<unknown>('network_groups', args),
+
+  listMerchants: (args: { page?: number; per_page?: number; q?: string; search?: string; network_ids?: string; has_logo?: number; product_count_min?: number } = {}) =>
+    call<unknown>('list_merchants', args),
+  findMerchant: (key: { id?: string | number; slug?: string; name?: string }) =>
+    call<AffiliateMerchant>('find_merchant', key),
+
+  // affiliate.com product search is a structured POST. `q` is the simple
+  // path (mapped server-side to a {field:'any', operator:'LIKE'} clause);
+  // pass `search` for advanced field/operator queries.
+  searchProducts: (args: {
+    q?: string; search?: unknown[]; page?: number; per_page?: number;
+    merchant_ids?: (string | number)[]; sort_by?: string; sort_order?: 'asc' | 'desc';
+  }) => call<unknown>('search_products', args),
+
+  // Conversion tools: url-to-barcode, barcode-to-sku, sku-to-barcode,
+  // asin-to-barcode, barcode-to-asin.
+  convert: (args: { type: string; data?: unknown[]; value?: string; config?: unknown }) =>
+    call<unknown>('convert', args),
+
+  /** Generic allowlisted passthrough — powers the API Explorer tab. */
+  raw: (args: { path: string; method?: 'GET' | 'POST'; query?: Record<string, unknown>; body?: unknown }) =>
+    call<unknown>('raw', args),
+};
+
+// ── Defensive field accessors (shared by the UI tabs) ───────────────
+
+// ── Defensive field accessors (shared by the UI tabs) ───────────────
+//
+// affiliate.com nests several fields as OBJECTS (e.g. merchant =
+// {id, object_id, name, logo_url}, brand = {name, ...}, currency =
+// {code, symbol}). Rendering any of those directly inside JSX throws
+// React error #31 ("Objects are not valid as a React child"). Every
+// accessor below returns a plain string, normalising the common
+// nested shapes (`.name`, `.code`, `.symbol`, `.title`).
+
+/** Pull a usable display string from a value that might be a primitive
+ *  or a {name|title|code|symbol} object. Returns null when nothing
+ *  presentable is available. */
+function asText(v: unknown): string | null {
+  if (v == null) return null;
+  if (typeof v === 'string') return v;
+  if (typeof v === 'number' || typeof v === 'boolean') return String(v);
+  if (typeof v === 'object') {
+    const o = v as Record<string, unknown>;
+    for (const k of ['name', 'title', 'label', 'code', 'symbol']) {
+      const inner = o[k];
+      if (typeof inner === 'string') return inner;
+      if (typeof inner === 'number') return String(inner);
+    }
+    return null;
+  }
+  return null;
+}
+
+export function merchantName(m: AffiliateMerchant): string {
+  return asText(m.name) ?? asText(m.slug) ?? asText(m.id) ?? 'Untitled merchant';
+}
+export function merchantCommission(m: AffiliateMerchant): string {
+  const c = asText(m.commission);
+  if (c) return c;
+  if (m.commission_rate != null) {
+    return typeof m.commission_rate === 'number' ? `${m.commission_rate}%` : (asText(m.commission_rate) ?? '—');
+  }
+  return '—';
+}
+export function productTitle(p: AffiliateProduct): string {
+  return asText(p.title) ?? asText(p.name) ?? 'Untitled product';
+}
+export function productBrand(p: AffiliateProduct): string {
+  return asText(p.brand) ?? asText(p.merchant) ?? '';
+}
+export function productImage(p: AffiliateProduct): string | null {
+  // image / image_url can be strings OR objects ({url, width, ...}).
+  return asText(p.image_url) ?? asText(p.image);
+}
+export function productLink(p: AffiliateProduct): string | null {
+  // affiliate.com nests links under `urls`: { affiliate, direct, outclick,
+  // shopnomix }. `affiliate` is the monetizable tracked URL (camref
+  // placeholders inside); `direct` is the bare merchant URL. Pick the
+  // tracked one first so clickouts actually pay out.
+  const urls = (p as Record<string, unknown>).urls as Record<string, unknown> | undefined;
+  if (urls) {
+    for (const k of ['affiliate', 'outclick', 'shopnomix', 'direct'] as const) {
+      const v = urls[k];
+      if (typeof v === 'string' && v.startsWith('http')) return v;
+    }
+  }
+  return asText((p as Record<string, unknown>).commission_url)
+    ?? asText((p as Record<string, unknown>).direct_url)
+    ?? asText(p.affiliate_url) ?? asText(p.deep_link) ?? asText(p.url);
+}
+
+/** Bare (non-tracked) merchant URL, separate from the affiliate link.
+ *  Used to surface the source merchant alongside the monetized link. */
+export function productDirectUrl(p: AffiliateProduct): string | null {
+  const urls = (p as Record<string, unknown>).urls as Record<string, unknown> | undefined;
+  if (urls && typeof urls.direct === 'string' && urls.direct.startsWith('http')) return urls.direct;
+  return asText((p as Record<string, unknown>).direct_url);
+}
+
+/** Merchant info on the affiliate.com product row. */
+export function productMerchant(p: AffiliateProduct): { name: string | null; logo: string | null } {
+  const m = (p as Record<string, unknown>).merchant as Record<string, unknown> | undefined;
+  if (!m || typeof m !== 'object') return { name: null, logo: null };
+  return {
+    name: asText(m.name),
+    logo: typeof m.logo_url === 'string' ? m.logo_url : null,
+  };
+}
+export function productPrice(p: AffiliateProduct): string {
+  const raw = p.sale_price ?? p.price;
+  if (raw == null) return '—';
+  const curText = asText(p.currency);
+  const cur = curText ? `${curText} ` : '$';
+  if (typeof raw === 'number') return `${cur}${raw.toFixed(2)}`;
+  return asText(raw) ?? '—';
+}
+
+/** Pull a friendly subset of keys for a generic row table when we don't
+ *  recognize the shape — keeps the explorer readable. */
+export function inferColumns(rows: unknown[], max = 6): string[] {
+  const seen = new Map<string, number>();
+  for (const r of rows.slice(0, 20)) {
+    if (r && typeof r === 'object' && !Array.isArray(r)) {
+      for (const k of Object.keys(r as Record<string, unknown>)) {
+        seen.set(k, (seen.get(k) ?? 0) + 1);
+      }
+    }
+  }
+  // Prefer human-meaningful keys first.
+  const priority = ['id', 'name', 'title', 'merchant', 'brand', 'price', 'commission', 'status', 'category', 'date'];
+  const keys = [...seen.keys()];
+  keys.sort((a, b) => {
+    const pa = priority.indexOf(a); const pb = priority.indexOf(b);
+    if (pa !== -1 || pb !== -1) return (pa === -1 ? 99 : pa) - (pb === -1 ? 99 : pb);
+    return (seen.get(b) ?? 0) - (seen.get(a) ?? 0);
+  });
+  return keys.slice(0, max);
+}
+
+export function cellValue(row: unknown, key: string): string {
+  if (!row || typeof row !== 'object') return '';
+  const v = (row as Record<string, unknown>)[key];
+  if (v == null) return '';
+  if (Array.isArray(v)) return v.map(x => asText(x) ?? '').filter(Boolean).join(', ');
+  if (typeof v === 'object') return asText(v) ?? JSON.stringify(v).slice(0, 80);
+  return String(v);
+}

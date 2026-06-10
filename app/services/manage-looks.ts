@@ -36,6 +36,16 @@ export interface LookProduct {
   };
 }
 
+export interface LookCreative {
+  id: string;
+  video_url: string | null;
+  thumbnail_url: string | null;
+  mobile_video_url: string | null;
+  is_primary: boolean;
+  status: string | null;
+  created_at: string;
+}
+
 export interface ManagedLook {
   id: string;
   title: string;
@@ -44,11 +54,13 @@ export interface ManagedLook {
   color: string | null;
   status: LookStatus;
   enabled: boolean;
+  sort_order: number;
   created_at: string;
   updated_at: string;
   look_photos: LookPhoto[];
   look_videos: LookVideo[];
   look_products: LookProduct[];
+  looks_creative: LookCreative[];
 }
 
 export interface CreateLookInput {
@@ -130,7 +142,12 @@ async function getCurrentUserId(): Promise<string> {
 // Look CRUD - reads use direct Supabase, writes use edge function
 // ============================================
 
-export async function getMyLooks(params?: { status?: LookStatus; page?: number; limit?: number }): Promise<PaginatedResponse<ManagedLook[]>> {
+// `status` accepts the literal 'inactive' as a virtual filter meaning
+// "not published" — every look whose status isn't 'live'. This is the
+// creator-facing rule: published === live, everything else === inactive
+// (draft, submitted, in_review, denied, archived all collapse to one
+// Inactive bucket), so completed-but-unpublished looks surface there.
+export async function getMyLooks(params?: { status?: LookStatus | 'inactive'; page?: number; limit?: number }): Promise<PaginatedResponse<ManagedLook[]>> {
   if (!supabase) throw new Error('Supabase not configured');
   const userId = await getCurrentUserId();
 
@@ -139,20 +156,39 @@ export async function getMyLooks(params?: { status?: LookStatus; page?: number; 
   const from = (page - 1) * limit;
   const to = from + limit - 1;
 
-  // Build query
+  // Build query. Explicit column list — the old `select *` was
+  // dragging back catalog_tags (jsonb), description, embedded_at,
+  // archived_at, etc. none of which MyLooks renders. looks_creative
+  // is the canonical home for generated videos + posters;
+  // look_photos/look_videos only get rows from the legacy manual-
+  // upload path. Include both so the tile can fall back.
   let query = supabase
     .from('looks')
     .select(`
-      *,
+      id, title, description, gender, color, status, enabled, sort_order, created_at, updated_at,
       look_photos ( id, order_index, storage_path, url, thumbnail_url, transform ),
       look_videos ( id, order_index, storage_path, url, poster_url, duration_seconds ),
+      looks_creative ( id, video_url, thumbnail_url, mobile_video_url, is_primary, status, created_at ),
       look_products ( sort_order, products:products ( id, name, brand, price, url, image_url ) )
     `, { count: 'exact' })
-    .eq('user_id', userId)
-    .order('created_at', { ascending: false })
-    .range(from, to);
+    .eq('user_id', userId);
 
-  if (params?.status) {
+  // Inactive (not-published) reads strictly newest-first by post date — the
+  // creator wants their most recent renders up top. Live keeps the manual
+  // drag order (sort_order) the creator curates.
+  if (params?.status === 'inactive') {
+    query = query.order('created_at', { ascending: false });
+  } else {
+    query = query
+      .order('sort_order', { ascending: true })
+      .order('created_at', { ascending: false });
+  }
+  query = query.range(from, to);
+
+  if (params?.status === 'inactive') {
+    // "Not published" — everything that isn't live.
+    query = query.neq('status', 'live');
+  } else if (params?.status) {
     query = query.eq('status', params.status);
   }
 
@@ -166,6 +202,7 @@ export async function getMyLooks(params?: { status?: LookStatus; page?: number; 
     look_photos: (row.look_photos as LookPhoto[]) || [],
     look_videos: (row.look_videos as LookVideo[]) || [],
     look_products: (row.look_products as LookProduct[]) || [],
+    looks_creative: (row.looks_creative as LookCreative[]) || [],
   })) as ManagedLook[];
 
   return {
@@ -175,6 +212,27 @@ export async function getMyLooks(params?: { status?: LookStatus; page?: number; 
   };
 }
 
+// Persist a new manual order for the current user's looks: sort_order
+// becomes the array index for each id. Owner-scoped via RLS ("Users can
+// update own looks"), so this writes directly rather than through the
+// edge function. Callers should reorder optimistically and only surface
+// an error if this rejects.
+export async function reorderLooks(orderedIds: string[], startIndex = 0): Promise<void> {
+  if (!supabase) throw new Error('Supabase not configured');
+  const userId = await getCurrentUserId();
+  const results = await Promise.all(
+    orderedIds.map((id, index) =>
+      supabase!
+        .from('looks')
+        .update({ sort_order: startIndex + index })
+        .eq('id', id)
+        .eq('user_id', userId),
+    ),
+  );
+  const failed = results.find(r => r.error);
+  if (failed?.error) throw new Error(failed.error.message);
+}
+
 export async function getLookDetail(lookId: string): Promise<{ success: boolean; data: ManagedLook }> {
   if (!supabase) throw new Error('Supabase not configured');
   const userId = await getCurrentUserId();
@@ -182,9 +240,10 @@ export async function getLookDetail(lookId: string): Promise<{ success: boolean;
   const { data, error } = await supabase
     .from('looks')
     .select(`
-      *,
+      id, title, description, gender, color, status, enabled, created_at, updated_at,
       look_photos ( id, order_index, storage_path, url, thumbnail_url, transform ),
       look_videos ( id, order_index, storage_path, url, poster_url, duration_seconds ),
+      looks_creative ( id, video_url, thumbnail_url, mobile_video_url, is_primary, status, created_at ),
       look_products ( sort_order, products:products ( id, name, brand, price, url, image_url ) )
     `)
     .eq('id', lookId)
@@ -200,7 +259,8 @@ export async function getLookDetail(lookId: string): Promise<{ success: boolean;
       look_photos: data.look_photos || [],
       look_videos: data.look_videos || [],
       look_products: data.look_products || [],
-    } as ManagedLook,
+      looks_creative: data.looks_creative || [],
+    } as unknown as ManagedLook,
   };
 }
 
@@ -230,6 +290,46 @@ export async function archiveLook(lookId: string): Promise<{ success: boolean; d
   return apiFetch(`/${lookId}/archive`, { method: 'POST' });
 }
 
+// Directly flip a look between published (live) and inactive (archived).
+// This is the creator-facing "Go live / Go inactive" control — it publishes
+// straight to the consumer feed with no review queue (the old path called
+// submitLook → status 'submitted', which never went live, so "Go live"
+// appeared to do nothing). Owner-scoped via the "Users can update own looks"
+// RLS policy, so it writes directly rather than through the edge function.
+export async function setLookLive(lookId: string, live: boolean): Promise<ManagedLook> {
+  if (!supabase) throw new Error('Supabase not configured');
+  const userId = await getCurrentUserId();
+  const patch: Record<string, unknown> = live
+    ? { status: 'live', enabled: true, archived_at: null }
+    : { status: 'archived', archived_at: new Date().toISOString() };
+
+  const { data, error } = await supabase
+    .from('looks')
+    .update(patch)
+    .eq('id', lookId)
+    .eq('user_id', userId)
+    .select(`
+      id, title, description, gender, color, status, enabled, sort_order, created_at, updated_at,
+      look_photos ( id, order_index, storage_path, url, thumbnail_url, transform ),
+      look_videos ( id, order_index, storage_path, url, poster_url, duration_seconds ),
+      looks_creative ( id, video_url, thumbnail_url, mobile_video_url, is_primary, status, created_at ),
+      look_products ( sort_order, products:products ( id, name, brand, price, url, image_url ) )
+    `)
+    .maybeSingle();
+
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error('Could not update visibility (0 rows — not the owner?)');
+
+  const row = data as Record<string, unknown>;
+  return {
+    ...row,
+    look_photos: (row.look_photos as LookPhoto[]) || [],
+    look_videos: (row.look_videos as LookVideo[]) || [],
+    look_products: (row.look_products as LookProduct[]) || [],
+    looks_creative: (row.looks_creative as LookCreative[]) || [],
+  } as ManagedLook;
+}
+
 // ============================================
 // Products
 // ============================================
@@ -252,7 +352,8 @@ export async function removeProductFromLook(lookId: string, productId: string): 
 export async function uploadLookMedia(
   lookId: string,
   file: File,
-  type: 'photo' | 'video'
+  type: 'photo' | 'video',
+  opts?: { posterDataUrl?: string; trimStart?: number; trimEnd?: number }
 ): Promise<{ storagePath: string; publicUrl: string }> {
   if (!supabase) throw new Error('Supabase not configured');
 
@@ -304,11 +405,39 @@ export async function uploadLookMedia(
     record.thumbnail_url = publicUrl;
   } else {
     record.url = publicUrl;
-    record.poster_url = publicUrl; // can be updated later with actual poster
+    // Use the trimmer's first-frame poster when provided; otherwise fall back
+    // to the video URL (server may still generate one).
+    let posterUrl = publicUrl;
+    if (opts?.posterDataUrl) {
+      try {
+        const blob = await (await fetch(opts.posterDataUrl)).blob();
+        const posterPath = `${userId}/${lookId}/posters/${crypto.randomUUID()}.jpg`;
+        const { error: pErr } = await supabase.storage
+          .from('look-media')
+          .upload(posterPath, blob, { contentType: 'image/jpeg', upsert: false });
+        if (!pErr) {
+          posterUrl = supabase.storage.from('look-media').getPublicUrl(posterPath).data.publicUrl;
+        }
+      } catch { /* keep the video-url fallback */ }
+    }
+    record.poster_url = posterUrl;
+    if (opts?.trimStart != null) record.trim_start = opts.trimStart;
+    if (opts?.trimEnd != null) record.trim_end = opts.trimEnd;
   }
 
   const { error: dbError } = await supabase.from(table).insert(record);
   if (dbError) throw new Error(`Failed to save media record: ${dbError.message}`);
+
+  // Propagate the trim window to the consumer creative (which the feed plays
+  // from) so look video players loop [start,end]. Best-effort: no-ops when the
+  // look has no primary creative yet.
+  if (type === 'video' && (opts?.trimStart != null || opts?.trimEnd != null)) {
+    await supabase
+      .from('looks_creative')
+      .update({ trim_start: opts?.trimStart ?? null, trim_end: opts?.trimEnd ?? null })
+      .eq('look_id', lookId)
+      .eq('is_primary', true);
+  }
 
   return { storagePath, publicUrl };
 }

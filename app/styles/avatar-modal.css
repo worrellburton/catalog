@@ -45,6 +45,12 @@
   width: 100%;
   height: 100%;
   object-fit: cover;
+  /* Bias the visible crop toward the upper portion of the source
+     photo where the face usually sits. With default object-position:
+     center, tightly framed selfies showed only the lower half of the
+     face (eyes/nose/mouth) and chopped the top of the head — exactly
+     what the user just reported on the Profile page. */
+  object-position: center 28%;
   border-radius: 50%;
   display: block;
 }
@@ -56,7 +62,9 @@
   justify-content: center;
 }
 
-/* Hover overlay: a soft camera icon fades in over the avatar. */
+/* Hover overlay: a soft camera icon fades in over the avatar. The icon
+   itself is dead-centered (no translateY offset, no idle scale) so it
+   reads as the focal element of the circle. */
 .avatar-upload-overlay {
   position: absolute;
   inset: 0;
@@ -66,25 +74,27 @@
   align-items: center;
   justify-content: center;
   opacity: 0;
-  transform: scale(0.9);
-  transition:
-    opacity 0.18s ease,
-    transform 0.22s cubic-bezier(0.32, 0.72, 0, 1);
+  transition: opacity 0.18s ease;
   pointer-events: none;
   border-radius: 50%;
 }
 .avatar-upload-overlay svg {
   filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.6));
-  transform: translateY(2px);
-  transition: transform 0.22s cubic-bezier(0.32, 0.72, 0, 1);
+  display: block;
 }
 .avatar-upload-trigger:hover .avatar-upload-overlay,
 .avatar-upload-trigger:focus-visible .avatar-upload-overlay {
   opacity: 1;
-  transform: scale(1);
 }
-.avatar-upload-trigger:hover .avatar-upload-overlay svg {
-  transform: translateY(0) scale(1.06);
+
+/* Touch / mobile: the always-on camera overlay obscured the user's
+   actual photo. Keep the overlay fully hidden by default; show it
+   briefly only while the avatar is being pressed so the user gets
+   visual confirmation of the tap without a permanent icon over their
+   face. */
+@media (hover: none) {
+  .avatar-upload-overlay { opacity: 0; }
+  .avatar-upload-trigger:active .avatar-upload-overlay { opacity: 0.85; }
 }
 
 .avatar-upload-error {
@@ -99,7 +109,7 @@
   font-size: 13px;
   font-weight: 600;
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.35);
-  z-index: 300;
+  z-index: 2147483001;
   animation: avatar-toast-in 0.24s cubic-bezier(0.32, 0.72, 0, 1);
 }
 @keyframes avatar-toast-in {
@@ -119,9 +129,16 @@
   align-items: center;
   justify-content: center;
   padding: 20px;
-  z-index: 250;
+  /* Top layer — the crop overlay must sit above EVERY in-app surface
+     (account menu z-index 12000, Profile overlay 9000, etc.). It opens from
+     those menus, so anything lower renders behind them and the user can't
+     see or use the crop. Near-max so nothing in-app outranks it. */
+  z-index: 2147483000;
   opacity: 0;
-  transition: opacity 0.22s ease, backdrop-filter 0.22s ease;
+  /* Only opacity animates on open. The blur value is constant, so listing
+     backdrop-filter here just forced the compositor to re-rasterize the
+     full-viewport blur every frame of the fade for no visual change. */
+  transition: opacity 0.22s ease;
 }
 .avatar-modal--open { opacity: 1; }
 .avatar-modal--saving { opacity: 1; }
@@ -194,6 +211,24 @@
 }
 
 /* ── Stage: the crop circle area ─────────────────────────────────── */
+
+/* Shown when the picked image can't be decoded by this browser. */
+.avatar-modal-loaderr {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  padding: 0 28px;
+  border-radius: 50%;
+  background: rgba(10, 10, 12, 0.82);
+  color: #f4f4f5;
+  font-size: 14px;
+  line-height: 1.45;
+  font-weight: 500;
+}
 
 .avatar-modal-stage {
   position: relative;
@@ -518,7 +553,9 @@
   align-items: center;
   justify-content: center;
   padding: 20px;
-  z-index: 240;
+  /* Same top-layer treatment as the crop modal — the file-pick sheet also
+     opens from high-z menus, so it must outrank them too. */
+  z-index: 2147483000;
   opacity: 0;
   transition: opacity 0.22s ease;
 }

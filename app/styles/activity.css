@@ -1,0 +1,215 @@
+/* Activity — realtime engagement toasts + catch-up summary toasts on
+   mount / tab return. One pipeline, one stack, centred at the top of
+   the viewport in catalog branding (dark glass + green accent). Each
+   toast is clickable and routes to /earnings (Insights). Imported via
+   app/root.tsx. */
+
+.activity-toasts {
+  position: fixed;
+  /* Anchored to the top-right, BELOW the header button row (wallet pill,
+     activity/bookmark badges, avatar) so the toast tucks under the buttons
+     instead of colliding with them. Can't just lower z-index — the header
+     carries its gradient background at z-index 100, which would occlude the
+     toast — so we clear the buttons by position instead. */
+  top: 76px;
+  right: 8px;
+  left: auto;
+  margin-inline: 0;
+  z-index: 10000;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  pointer-events: none;
+  width: max-content;
+  max-width: min(420px, calc(100% - 16px));
+}
+
+.activity-toast {
+  pointer-events: auto;
+  display: inline-flex;
+  align-items: center;
+  /* Tighter geometry: smaller copy, less padding, smaller pill so the
+     toast reads as a notification chip instead of a banner. The number
+     itself stays prominent (.activity-toast-count below) so the count-up
+     animation still draws the eye. */
+  /* Sized to match the global follow/unfollow toast (.follow-toast) so the
+     two notification styles read as one system. */
+  gap: 9px;
+  /* Thin notification chip — slim vertical padding so the bubble reads as a
+     compact pill rather than a banner. */
+  padding: 6px 18px 6px 8px;
+  border-radius: 999px;
+  background: rgba(15, 23, 42, 0.94);
+  color: #f8fafc;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  box-shadow:
+    0 14px 30px rgba(0, 0, 0, 0.4),
+    0 0 0 1px rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  font-family: inherit;
+  text-align: left;
+  position: relative;
+  animation: activity-fade-in 260ms ease both;
+  transition: transform 160ms ease, box-shadow 160ms ease, background 160ms ease;
+  max-width: 100%;
+}
+/* Fade out on dismiss — the row keeps a brief `--leaving` window before it's
+   removed from the stack so it eases away instead of vanishing. */
+.activity-toast--leaving {
+  animation: activity-fade-out 300ms ease forwards;
+  pointer-events: none;
+}
+@keyframes activity-fade-in {
+  from { opacity: 0; transform: translateY(-8px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+@keyframes activity-fade-out {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(-8px); }
+}
+/* Notch — a small pointer on the top edge, near the right, aimed up at the
+   header activity button (where you tap to see all this). ONLY the topmost
+   toast carries it: when several stack, a notch on every row poked up into
+   the toast above it (and collided with the header). :first-child is the
+   oldest/top toast — the one nearest the activity button. */
+.activity-toast:first-child::after {
+  content: '';
+  position: absolute;
+  top: -6px;
+  /* Sits under the analytics icon — the stack's right edge is anchored to
+     the .header-activity-pill (see ActivityRealtimeToasts), so this points
+     the notch up at that icon. */
+  right: 16px;
+  width: 13px;
+  height: 13px;
+  background: rgba(15, 23, 42, 0.94);
+  border-left: 1px solid rgba(255, 255, 255, 0.1);
+  border-top: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 3px 0 0 0;
+  transform: rotate(45deg);
+}
+.activity-toast:hover {
+  transform: translateY(-1px);
+  background: rgba(15, 23, 42, 0.96);
+  box-shadow:
+    0 22px 44px rgba(0, 0, 0, 0.5),
+    0 0 0 1px rgba(255, 255, 255, 0.08);
+}
+.activity-toast:active { transform: translateY(0); }
+
+/* Icon disc — catalog accent ring around the kind SVG. */
+.activity-toast-icon-disc {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background: rgba(34, 197, 94, 0.15);
+  color: #4ade80;
+  border: 1px solid rgba(34, 197, 94, 0.35);
+  flex-shrink: 0;
+}
+.activity-toast-icon-disc svg { width: 11px; height: 11px; }
+
+/* Kind accents — tint the icon disc to match the event. */
+.activity-toast--click    .activity-toast-icon-disc { background: rgba(124, 58, 237, 0.18); color: #c4b5fd; border-color: rgba(167, 139, 250, 0.42); }
+.activity-toast--clickout .activity-toast-icon-disc { background: rgba(34, 197, 94, 0.18);  color: #4ade80;  border-color: rgba(34, 197, 94, 0.42); }
+.activity-toast--follow   .activity-toast-icon-disc { background: rgba(56, 189, 248, 0.18); color: #7dd3fc;  border-color: rgba(56, 189, 248, 0.42); }
+.activity-toast--impression .activity-toast-icon-disc { background: rgba(248, 250, 252, 0.10); color: #e2e8f0; border-color: rgba(248, 250, 252, 0.22); }
+
+/* ── Per-event toast (avatar + message + thumb) ───────────────────── */
+.activity-toast-avatar {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.18);
+}
+.activity-toast-avatar--initial {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: #f8fafc;
+  font-size: 13px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.activity-toast-thumb {
+  width: 30px;
+  height: 40px;
+  border-radius: 6px;
+  object-fit: cover;
+  flex-shrink: 0;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+}
+.activity-toast-message {
+  flex: 1;
+  line-height: 1.3;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+/* ── Summary toast (animated +N + label) ──────────────────────────── */
+.activity-toast--summary { padding: 9px 18px 9px 10px; }
+.activity-toast-summary {
+  display: inline-flex;
+  align-items: baseline;
+  gap: 8px;
+  font-variant-numeric: tabular-nums;
+}
+.activity-toast-count {
+  /* Matched to the header wallet/earnings pill (12px / 700) so the toast
+     reads at the same scale as the rest of the header chrome. */
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: #f8fafc;
+  text-shadow: 0 0 18px rgba(74, 222, 128, 0.45);
+  animation: activity-toast-count-pop 380ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.activity-toast-summary-label {
+  /* Matched to the earnings/wallet pill (12px) so the whole toast reads at
+     the same scale as the header currency chip. */
+  font-size: 12px;
+  font-weight: 600;
+  color: rgba(248, 250, 252, 0.72);
+  text-transform: lowercase;
+}
+
+@keyframes activity-toast-in-centered {
+  from { transform: translateY(-14px) scale(0.94); opacity: 0; }
+  to   { transform: translateY(0)     scale(1);    opacity: 1; }
+}
+@keyframes activity-toast-count-pop {
+  0%   { transform: scale(0.78); opacity: 0; }
+  60%  { transform: scale(1.06); opacity: 1; }
+  100% { transform: scale(1);    opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .activity-toast, .activity-toast-count { animation: none; }
+}
+
+@media (max-width: 768px) {
+  /* Mobile: hide the centered toast stack entirely. The new
+     HeaderActivityPill (mobile-only, lives next to the wallet pill) is
+     the activity surface on phones. The realtime/catch-up pipeline still
+     runs and dispatches `catalog:activity-bump` so the pill's unseen
+     count ticks; the toasts just never render. */
+  .activity-toasts { display: none !important; }
+}
+
+/* Flutter shell — the native header overlaps the top zone, so nudge
+   the toasts down past it. */
+html[data-shell="catalog-app"] .activity-toasts {
+  top: calc(96px + var(--shell-sb, 0px));
+}

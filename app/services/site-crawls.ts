@@ -37,7 +37,7 @@ export async function listCrawlJobs(
   if (!supabase) return [];
   let query = supabase
     .from('crawl_jobs')
-    .select('*')
+    .select('id, site_url, site_name, job_type, status, total_urls, scraped_urls, error, started_at, completed_at, created_at, updated_at')
     .order('created_at', { ascending: false });
   if (options?.jobType) {
     query = query.eq('job_type', options.jobType);
@@ -51,7 +51,7 @@ export async function getCrawlJob(id: string): Promise<CrawlJob | null> {
   if (!supabase) return null;
   const { data, error } = await supabase
     .from('crawl_jobs')
-    .select('*')
+    .select('id, site_url, site_name, job_type, status, total_urls, scraped_urls, error, started_at, completed_at, created_at, updated_at')
     .eq('id', id)
     .single();
   if (error) throw error;
@@ -69,7 +69,7 @@ export async function createCrawlJob(siteUrl: string, siteName?: string): Promis
       status: 'pending',
       job_type: 'site',
     })
-    .select()
+    .select('id, site_url, site_name, job_type, status, total_urls, scraped_urls, error, started_at, completed_at, created_at, updated_at')
     .single();
   if (error) throw error;
   return data;
@@ -97,7 +97,7 @@ export async function createProfileCrawlJob(
       status: 'pending',
       job_type: 'profile',
     })
-    .select()
+    .select('id, site_url, site_name, job_type, status, total_urls, scraped_urls, error, started_at, completed_at, created_at, updated_at')
     .single();
   if (error) throw error;
   return data;
@@ -145,7 +145,7 @@ export async function listDiscoveredUrls(
 
   let query = supabase
     .from('crawl_discovered_urls')
-    .select('*', { count: 'exact' })
+    .select('id, crawl_job_id, url, collection_name, page_title, product_id, status, error, created_at', { count: 'exact' })
     .eq('crawl_job_id', crawlJobId)
     .order('created_at', { ascending: true });
 

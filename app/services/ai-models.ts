@@ -42,7 +42,7 @@ export async function getAiModels(): Promise<AiModel[]> {
   if (!supabase) return [];
   const { data, error } = await supabase
     .from('ai_models')
-    .select('*')
+    .select('id, creator_id, name, slug, gender, ethnicity, age_range, bio, face_images, primary_image, default_style, style_presets, persona_prompt, looks_count, followers_count, status, enabled, created_at, updated_at')
     .order('created_at', { ascending: false });
 
   if (error) {
@@ -56,7 +56,7 @@ export async function getAiModel(id: string): Promise<AiModel | null> {
   if (!supabase) return null;
   const { data, error } = await supabase
     .from('ai_models')
-    .select('*')
+    .select('id, creator_id, name, slug, gender, ethnicity, age_range, bio, face_images, primary_image, default_style, style_presets, persona_prompt, looks_count, followers_count, status, enabled, created_at, updated_at')
     .eq('id', id)
     .single();
 
@@ -108,7 +108,7 @@ export async function createAiModel(form: AiModelFormData): Promise<{ data: AiMo
       status: form.status || 'active',
       enabled: form.enabled ?? true,
     })
-    .select('*')
+    .select('id, creator_id, name, slug, gender, ethnicity, age_range, bio, face_images, primary_image, default_style, style_presets, persona_prompt, looks_count, followers_count, status, enabled, created_at, updated_at')
     .single();
 
   if (error) {

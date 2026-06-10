@@ -2,10 +2,12 @@
 Modal deployment for the Video Generator Agent.
 
 Exposes entry points:
-  1. POST /generate-ad      — Supabase webhook when product_creative row inserted
-  2. POST /generate-video   — Supabase webhook when products.scrape_status → done
-  3. Cron job               — every 30 min: retry pending/failed creatives & looks
-  4. Manual                 — generate_ad_job / generate_and_update
+  1. POST /generate-ad             — Supabase webhook when product_creative row inserted
+  2. POST /generate-video          — Supabase webhook when products.scrape_status → done
+  3. POST /generate-primary-poster — products DB trigger when primary_video_url is set
+  4. Cron job                      — every 30 min: retry pending creatives & looks,
+                                     backfill missing primary-video posters
+  5. Manual                        — generate_ad_job / generate_and_update
 
 Deploy:
     modal deploy modal_app.py
@@ -25,6 +27,11 @@ Supabase webhooks to configure in Dashboard → Database → Webhooks:
     → POST {modal_webhook_url}/generate-ad
   • Table: products, event: UPDATE (filter: scrape_status = done)
     → POST {modal_webhook_url}/generate-video
+
+The primary-poster endpoint is wired via a DB trigger instead of a
+dashboard webhook — see migration
+20260601000008_trg_generate_primary_poster.sql
+(trg_products_generate_primary_poster → POST /generate-primary-poster).
 """
 
 import modal
@@ -57,6 +64,12 @@ generator_image = (
     .add_local_file("ad_generator.py", "/root/ad_generator.py")
     .add_local_file("agent.py", "/root/agent.py")
     .add_local_file("watermark.py", "/root/watermark.py")
+    # Primary-video poster extraction (asset_encoder does the ffmpeg
+    # frame grab; primary_poster wraps upload + DB write).
+    .add_local_file("asset_encoder.py", "/root/asset_encoder.py")
+    .add_local_file("primary_poster.py", "/root/primary_poster.py")
+    # HLS ladder backfill (encode_hls_ladder_from_url + upload + hls_url write).
+    .add_local_file("backfill_creative_assets.py", "/root/backfill_creative_assets.py")
 )
 
 # ─── App ───────────────────────────────────────────────────────────────
@@ -113,66 +126,85 @@ def generate_ad_job(ad_id: str):
     return result
 
 
-# ─── Webhook: triggered when product_creative row is inserted ────────
+# ─── Web-function budget (Modal workspace cap = 8) ────────────────────
+# The `catalog` Modal workspace allows at most 8 web endpoints across ALL
+# apps. The other apps (product-scraper, site-crawler, url-resolver) hold
+# 5, leaving 3 for video-generator. We spend them on the two endpoints
+# that have live callers:
+#     • generate-primary-poster — fired by the products DB trigger
+#       (trg_products_generate_primary_poster) on every new primary video.
+#     • watermark-share         — fired by the share-look edge function.
+#
+# The old `generate-ad` and `generate-video` web endpoints were REMOVED:
+# nothing called them (no DB trigger, no Database Webhook, no edge fn —
+# verified against supabase_functions.hooks + pg_trigger). product_creative
+# ads and generated_videos looks are driven entirely by the generate_pending
+# cron below, which calls generate_ad_job / generate_and_update directly via
+# .starmap(). Keeping their unused web endpoints pushed the app to 4 web
+# functions (9 total > 8) so EVERY deploy silently failed — which is why the
+# primary-video poster endpoint 404'd ("modal-http: invalid function call")
+# and posters stopped generating. If instant (non-cron) ad/look generation
+# is ever needed, fold it into ONE dispatcher web endpoint (branch on the
+# record shape) rather than re-adding two, or upgrade the workspace plan.
+#
+# generate_ad_job and generate_and_update remain defined above as plain
+# Modal functions (cron + `modal run` entry points) — only their HTTP
+# wrappers are gone.
 
-@app.function(image=generator_image, secrets=secrets)
-@modal.fastapi_endpoint(method="POST", label="generate-ad")
-def generate_ad_webhook(body: dict):
-    """
-    POST /generate-ad
 
-    Called by Supabase Database Webhook on INSERT to product_creative.
-    Supabase sends the full new row as body["record"].
-    """
-    record = body.get("record", {})
-    ad_id = record.get("id")
-    status = record.get("status")
-
-    if not ad_id:
-        return {"error": "Missing ad id"}, 400
-
-    if status not in ("pending", None):
-        return {"status": "skipped", "reason": f"ad status is '{status}', expected pending"}
-
-    generate_ad_job.spawn(ad_id)
-    return {"status": "queued", "ad_id": ad_id}
-
-
+# ─── Primary-video poster: extract a 3:4 still that matches the clip ───
 
 @app.function(
     image=generator_image,
     secrets=secrets,
+    timeout=300,
+    retries=1,
+    max_containers=5,
 )
-@modal.fastapi_endpoint(method="POST", label="generate-video")
-def generate_webhook(body: dict):
+def generate_primary_poster_job(product_id: str):
+    """Extract the product's primary-video first frame (native 3:4) and
+    write products.primary_video_poster_url. Cheap (one ffmpeg frame grab),
+    so it runs with higher concurrency than the video generators."""
+    import os
+    import sys
+    sys.path.insert(0, "/root")
+    from supabase import create_client
+    from primary_poster import generate_primary_poster
+
+    supabase = create_client(
+        os.environ["SUPABASE_URL"],
+        os.environ["SUPABASE_SERVICE_ROLE_KEY"],
+    )
+    poster_url = generate_primary_poster(supabase, os.environ["SUPABASE_URL"], product_id)
+    print(f"[poster {product_id}] {poster_url}")
+    return {"product_id": product_id, "poster_url": poster_url}
+
+
+@app.function(image=generator_image, secrets=secrets)
+@modal.fastapi_endpoint(method="POST", label="generate-primary-poster")
+def generate_primary_poster_webhook(body: dict):
     """
-    POST /generate-video
+    POST /generate-primary-poster
 
-    Called by Supabase Database Webhook when products.scrape_status is updated to 'done'.
-    Supabase sends the full record as body["record"].
-
-    Expected body:
-        { "record": { "id": "uuid", "scrape_status": "done", ... } }
+    Called by the products DB trigger (trg_products_generate_primary_poster)
+    whenever primary_video_url appears/changes and no poster exists yet.
+    Supabase sends the full new row as body["record"].
     """
     record = body.get("record", {})
     product_id = record.get("id")
-    scrape_status = record.get("scrape_status")
-
     if not product_id:
         return {"error": "Missing product id"}, 400
+    if not record.get("primary_video_url"):
+        return {"status": "skipped", "reason": "no primary_video_url"}
+    if record.get("primary_video_poster_url"):
+        return {"status": "skipped", "reason": "poster already set"}
 
-    if scrape_status != "done":
-        return {"status": "skipped", "reason": "scrape_status is not done"}
-
-    # Check if product has images (required for image-to-video)
-    images = record.get("images")
-    if not images:
-        return {"status": "skipped", "reason": "no images"}
-
-    # Dispatch async — webhook returns immediately
-    generate_and_update.spawn(product_id)
-
+    generate_primary_poster_job.spawn(product_id)
     return {"status": "queued", "product_id": product_id}
+
+
+# Look posters are generated on our own codebase (client-side first-frame grab,
+# app/utils/video-poster.ts) — NOT on Modal. No look-poster job lives here.
 
 
 # ─── Watermark a user_generation for the public share flow ────────────
@@ -292,4 +324,88 @@ def generate_pending():
             pass
     else:
         print("No pending looks.")
+
+    # ── 3. Backfill missing primary-video posters ─────────────────────
+    # Safety net behind the DB trigger: catches any product whose
+    # primary_video_url was set without the webhook firing (trigger
+    # disabled, Modal endpoint down, historical autopromote rows) so the
+    # feed never falls back to the square, zoomed primary_image_url.
+    missing_posters = (
+        supabase.table("products")
+        .select("id")
+        .not_.is_("primary_video_url", "null")
+        .is_("primary_video_poster_url", "null")
+        .limit(20)
+        .execute()
+    )
+    poster_rows = missing_posters.data or []
+    if poster_rows:
+        print(f"Backfilling {len(poster_rows)} missing primary-video poster(s)…")
+        for _ in generate_primary_poster_job.starmap([(r["id"],) for r in poster_rows]):
+            pass
+    else:
+        print("No missing primary-video posters.")
+
+
+# ─── HLS adaptive-bitrate ladder backfill ─────────────────────────────
+# Encodes a 480/720/1080 HLS ladder per clip, uploads the tree to
+# <base>/hls/, and fills hls_url (products: primary_hls_url). Runs here
+# because the image already has ffmpeg + the service-role secret. The
+# client (TrailVideoHost) prefers hls_url and falls back to MP4 when null,
+# so a partial backfill is safe — only filled rows switch to adaptive.
+
+@app.function(
+    image=generator_image,
+    secrets=secrets,
+    timeout=86_400,   # full-catalog ladders can take a while; 24h ceiling
+    retries=0,
+)
+def hls_backfill_job(
+    table: str = "looks_creative",
+    limit: int | None = None,
+    concurrency: int = 1,
+    dry_run: bool = False,
+    statuses: list[str] | None = None,
+    reencode: bool = False,
+):
+    """Run the HLS ladder backfill for one table. Re-runnable: by default only
+    touches rows where hls_url (products: primary_hls_url) is still null.
+
+    `statuses` gates product_creative (default: live-only). `reencode=True`
+    also re-processes rows that ALREADY have a ladder (for an encoder change)."""
+    import sys
+    sys.path.insert(0, "/root")
+    from backfill_creative_assets import run_hls
+
+    rc = run_hls(table, limit, dry_run, concurrency, statuses, reencode)
+    return {"table": table, "rc": rc}
+
+
+@app.local_entrypoint()
+def hls_backfill(
+    table: str = "looks_creative",
+    limit: int = 0,
+    concurrency: int = 1,
+    dry_run: bool = False,
+    statuses: str = "live",
+    reencode: bool = False,
+):
+    """One-shot HLS ladder backfill on Modal.
+
+        # smoke-test a single look end-to-end:
+        modal run modal_app.py::hls_backfill --table looks_creative --limit 1
+        # then the rest, and the product surfaces:
+        modal run modal_app.py::hls_backfill --table looks_creative
+        modal run modal_app.py::hls_backfill --table products
+        modal run modal_app.py::hls_backfill --table product_creative
+        # include non-live product_creative (done/paused) creatives:
+        modal run modal_app.py::hls_backfill --table product_creative --statuses live,done,paused
+        # RE-ENCODE existing ladders after an encoder change (e.g. 1s segments):
+        modal run modal_app.py::hls_backfill --table product_creative --statuses live,done,paused --reencode
+
+    limit=0 → all eligible rows. `statuses` only gates product_creative;
+    `reencode` re-processes rows that already have a ladder."""
+    status_list = [s.strip() for s in statuses.split(",") if s.strip()] or None
+    res = hls_backfill_job.remote(table, (limit or None), concurrency, dry_run, status_list, reencode)
+    print(res)
 

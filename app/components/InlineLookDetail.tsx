@@ -1,5 +1,13 @@
-import { useRef, useState, useCallback, useEffect } from 'react';
+import { useRef, useState, useCallback, useMemo } from 'react';
 import { Look, creators, Product } from '~/data/looks';
+import { useInViewport } from '~/hooks/useInViewport';
+import { useTrailVideo } from './TrailVideoHost';
+import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
+import FollowIconButton from './FollowIconButton';
+import { sortByGarmentRole } from '~/utils/garmentOrder';
+import ProductMiniMedia from './ProductMiniMedia';
+import { lookPoster, productPoster } from '~/services/media-resolver';
+import { emitSavedToast } from '~/utils/savedToast';
 
 interface BookmarksInterface {
   isLookBookmarked: (id: number) => boolean;
@@ -19,43 +27,55 @@ interface InlineLookDetailProps {
 }
 
 export default function InlineLookDetail({ look, onOpenCreator, onOpenBrowser, onOpenProduct, onOpenBrand, onCreateCatalog, bookmarks }: InlineLookDetailProps) {
-  const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  // Sort products head-to-toe (hat → top → bottom → shoes → accessories)
+  // so the panel reads top-to-bottom the way a stylist would call out
+  // an outfit. Memoised so bookmark indices stay aligned to a stable
+  // array across renders.
+  const sortedProducts = useMemo(() => sortByGarmentRole(look.products), [look.products]);
   const [lookBookmarked, setLookBookmarked] = useState(bookmarks.isLookBookmarked(look.id));
   const [productBookmarks, setProductBookmarks] = useState(
-    look.products.map(p => bookmarks.isProductBookmarked(p))
+    sortedProducts.map(p => bookmarks.isProductBookmarked(p))
   );
 
   const basePath = (import.meta.env.BASE_URL || '/').replace(/\/$/, '');
   const creatorData = creators[look.creator];
 
-  // IntersectionObserver: play video when visible, pause when not
-  useEffect(() => {
-    const video = videoRef.current;
-    if (!video) return;
-    const observer = new IntersectionObserver(
-      ([entry]) => {
-        if (entry.isIntersecting) {
-          video.play().catch(() => {});
-        } else {
-          video.pause();
-        }
-      },
-      { threshold: 0.3 }
-    );
-    observer.observe(video);
-    return () => observer.disconnect();
-  }, []);
+  const trailId = lookTrailId(look.id);
+  const videoUrl = normalizeLookVideoUrl(look.video, basePath);
+  // Canonical look poster (services/media-resolver) — same chain as the feed
+  // card + overlay hero, so a thumbnail-less look never paints a black slot.
+  const poster = lookPoster(look);
+  const inViewport = useInViewport(containerRef);
+  const setVideoSlot = useTrailVideo(
+    inViewport ? trailId : undefined,
+    inViewport ? videoUrl : undefined,
+    poster || undefined,
+  );
 
   const handleToggleLookBookmark = useCallback(() => {
+    const wasBookmarked = bookmarks.isLookBookmarked(look.id);
     bookmarks.toggleLookBookmark(look.id);
     setLookBookmarked(b => !b);
-  }, [bookmarks, look.id]);
+    emitSavedToast({
+      name: look.title || look.creator || 'this look',
+      imageUrl: lookPoster(look),
+      saved: !wasBookmarked,
+      kind: 'look',
+    });
+  }, [bookmarks, look]);
 
   const handleToggleProductBookmark = useCallback((idx: number) => {
-    bookmarks.toggleProductBookmark(look.products[idx]);
+    const product = sortedProducts[idx];
+    const wasBookmarked = bookmarks.isProductBookmarked(product);
+    bookmarks.toggleProductBookmark(product);
     setProductBookmarks(prev => prev.map((b, i) => i === idx ? !b : b));
-  }, [bookmarks, look.products]);
+    emitSavedToast({
+      name: product.name || 'this product',
+      imageUrl: productPoster(product),
+      saved: !wasBookmarked,
+    });
+  }, [bookmarks, sortedProducts]);
 
   const handleProductClick = useCallback((p: Product) => {
     if (onOpenProduct) {
@@ -69,13 +89,7 @@ export default function InlineLookDetail({ look, onOpenCreator, onOpenBrowser, o
     <div className="inline-look-detail" ref={containerRef}>
       {/* Video section - full width popout card */}
       <div className="inline-look-video-wrap">
-        <video
-          ref={videoRef}
-          src={`${basePath}/${look.video}`}
-          loop
-          muted
-          playsInline
-        />
+        <div ref={setVideoSlot} style={{ width: '100%', height: '100%', display: 'block' }} />
         <div className="inline-look-video-overlay">
           <div className="hotspot-indicator">
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -109,6 +123,16 @@ export default function InlineLookDetail({ look, onOpenCreator, onOpenBrowser, o
             <span className="inline-look-creator-name">
               {creatorData?.displayName || look.creator}
             </span>
+            <FollowIconButton
+              handle={look.creator}
+              size={20}
+              style={{
+                marginLeft: 8,
+                borderColor: 'rgba(0,0,0,0.55)',
+                color: '#0f172a',
+                background: 'transparent',
+              }}
+            />
           </div>
           <button
             className={`inline-look-bookmark-btn ${lookBookmarked ? 'active' : ''}`}
@@ -125,18 +149,19 @@ export default function InlineLookDetail({ look, onOpenCreator, onOpenBrowser, o
 
         {/* Product list */}
         <div className="inline-look-products">
-          {look.products.map((p, pi) => (
+          {sortedProducts.map((p, pi) => (
             <div
               key={pi}
               className="inline-product-card"
               onClick={() => handleProductClick(p)}
             >
               <div className="inline-product-thumb">
-                {p.image ? (
-                  <img src={p.image} alt={p.name} />
-                ) : (
-                  <div className="inline-product-thumb-placeholder" style={{ background: look.color }} />
-                )}
+                <ProductMiniMedia
+                  posterSrc={p.thumbnail_url || p.image}
+                  videoSrc={p.video_url}
+                  alt={p.name}
+                  fallbackColor={look.color}
+                />
               </div>
               <div className="inline-product-info">
                 {p.brand && (

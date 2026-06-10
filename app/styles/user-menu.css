@@ -17,6 +17,30 @@
   height: 100%;
   border-radius: 50%;
   object-fit: cover;
+  display: block;
+}
+
+/* When the trigger renders the user's actual avatar instead of the
+   generic person silhouette, drop the chip background so the photo
+   fills the full circle. Same for the initial-letter fallback (which
+   gets a tinted bg). */
+.user-menu-trigger.has-avatar {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.18);
+  padding: 0;
+  overflow: hidden;
+}
+.user-menu-trigger.has-initial {
+  background: linear-gradient(135deg, #6366f1 0%, #4338ca 100%);
+  color: #fff;
+  border-color: rgba(255, 255, 255, 0.2);
+}
+.user-menu-trigger-initial {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  line-height: 1;
 }
 
 .user-menu-header {
@@ -24,6 +48,26 @@
   align-items: center;
   gap: 10px;
   padding: 12px 14px;
+}
+
+.user-menu-header--clickable {
+  cursor: pointer;
+  border-radius: 10px;
+  transition: background 0.15s;
+  margin: 2px 4px 0;
+  padding: 10px 10px;
+}
+.user-menu-header--clickable:hover {
+  background: rgba(255,255,255,0.06);
+}
+.user-menu-header--clickable:active {
+  background: rgba(255,255,255,0.1);
+}
+
+.user-menu-header-chevron {
+  flex-shrink: 0;
+  margin-left: auto;
+  color: rgba(255,255,255,0.3);
 }
 
 .user-menu-avatar {
@@ -169,8 +213,6 @@
   left: 0;
   min-width: 180px;
   background: rgba(30, 30, 30, 0.95);
-  backdrop-filter: blur(20px);
-  -webkit-backdrop-filter: blur(20px);
   border: 1px solid rgba(255, 255, 255, 0.1);
   border-radius: 12px;
   padding: 6px;
@@ -370,8 +412,6 @@
   border-radius: 12px;
   background: rgba(28, 28, 30, 0.96);
   border: 1px solid rgba(255, 255, 255, 0.08);
-  backdrop-filter: blur(20px) saturate(1.4);
-  -webkit-backdrop-filter: blur(20px) saturate(1.4);
   box-shadow: 0 12px 32px rgba(0, 0, 0, 0.45);
   display: flex;
   flex-direction: column;
@@ -548,3 +588,503 @@
 .light-mode .user-menu-item--toggle.is-on .user-menu-switch {
   background: #dc2626;
 }
+
+/* ═══════════════════════════════════════════════════════════════════════
+   User Menu — Mobile Full-Page
+   Replaces the popout on ≤768px with a full-screen vertical Account page.
+   Reveals via a clip-path circle that grows from the avatar's tap point
+   (--ump-x / --ump-y, set inline by UserMenu from the trigger's bbox), and
+   reverses on close. Inside, the content staggers in after the wipe.
+   ═══════════════════════════════════════════════════════════════════════ */
+.user-menu-page {
+  position: fixed;
+  inset: 0;
+  z-index: 9100;
+  /* SOLID matte background so the underlying feed doesn't ghost through
+     while the menu is open. The singleton SiteParticleHost (mounted on
+     .app-root at z-index 0) is HIDDEN behind this surface — we mount a
+     dedicated ParticleBackground INSIDE the page (.ump-particles below)
+     so the field is visible without leaking the feed. Was a translucent
+     rgba gradient (0.55 → 0.88) which left readers seeing "Match my
+     mood" / "Scroll to see most popular" behind the capsules. */
+  background:
+    radial-gradient(125% 95% at 50% 18%, #15161c 0%, #0a0a0c 56%, #000 100%);
+  color: #f5f5f7;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  display: flex;
+  flex-direction: column;
+  padding-top: max(env(safe-area-inset-top, 0px), 12px);
+  padding-bottom: max(env(safe-area-inset-bottom, 0px), 20px);
+}
+
+/* Dedicated particle layer inside the page. Sits behind the header +
+   body content (z-index 0) but ABOVE the solid background. Pointer
+   events off so taps fall through to the capsules. */
+.ump-particles {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  opacity: 0.85;
+}
+.ump-particles .pw-particles {
+  position: absolute;
+  inset: 0;
+}
+.user-menu-page-top,
+.user-menu-page-body { position: relative; z-index: 1; }
+/* Horizontal-slide reveal. The Account page acts as if it lives at
+   `right: -100%` of the main app — opening pulls it onto the screen
+   from the right edge while the underlying viewport (.app-root)
+   translates left by ~18% so the user sees that the menu "exists to
+   the right" of the page rather than overlaying it. Both halves use
+   the same easing so they feel like one continuous slide.
+
+   The page starts AT translateX(100%) (off-screen right) on every
+   mount so the keyframe doesn't need a from{} state and `.is-closing`
+   can just transition back to the start without a separate keyframe. */
+.user-menu-page {
+  transform: translateX(100%);
+  /* Transition handles BOTH directions — opening flips to translateX(0),
+     closing flips back to translateX(100%). No keyframes needed. */
+  transition: transform 0.36s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.user-menu-page.is-open    { transform: translateX(0); }
+.user-menu-page.is-closing { transform: translateX(100%); }
+
+/* The main app surface peels back when the menu is open so it reads
+   as "viewport slid left to reveal the menu" rather than "menu
+   appeared on top". The body class is toggled by UserMenu. */
+body.has-account-menu .app-root {
+  transform: translateX(-18%);
+  transition: transform 0.36s cubic-bezier(0.32, 0.72, 0, 1);
+}
+.app-root {
+  transition: transform 0.36s cubic-bezier(0.32, 0.72, 0, 1);
+}
+/* Prevent horizontal scrollbar while either half is translating. */
+body.has-account-menu { overflow-x: hidden; }
+
+/* Header — back chevron + title */
+.user-menu-page-top {
+  position: sticky;
+  top: 0;
+  z-index: 2;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 14px 14px;
+  background: linear-gradient(180deg, rgba(10, 10, 12, 0.92) 60%, rgba(10, 10, 12, 0));
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+}
+.user-menu-page-back {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: #f5f5f7;
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+.user-menu-page-back:active { background: rgba(255, 255, 255, 0.12); transform: scale(0.96); }
+.user-menu-page-title {
+  margin: 0;
+  font-size: 17px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: #f5f5f7;
+}
+
+/* Body — staggered content reveal. Each row is now a FLOATING GLASS
+   CAPSULE separated from its siblings by whitespace (no dividers, no
+   borders between sections). Smaller centered type, gap between cards
+   does the grouping work the dividers used to. */
+.user-menu-page-body {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 8px 20px 28px;
+  max-width: 480px;
+  align-self: center;
+  width: 100%;
+}
+.user-menu-page-body > * {
+  animation: ump-item-in 0.55s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+.user-menu-page-body > *:nth-child(1)  { animation-delay: 0.18s; }
+.user-menu-page-body > *:nth-child(2)  { animation-delay: 0.24s; }
+.user-menu-page-body > *:nth-child(3)  { animation-delay: 0.30s; }
+.user-menu-page-body > *:nth-child(4)  { animation-delay: 0.36s; }
+.user-menu-page-body > *:nth-child(5)  { animation-delay: 0.42s; }
+.user-menu-page-body > *:nth-child(6)  { animation-delay: 0.48s; }
+.user-menu-page-body > *:nth-child(7)  { animation-delay: 0.52s; }
+.user-menu-page-body > *:nth-child(8)  { animation-delay: 0.56s; }
+.user-menu-page-body > *:nth-child(9)  { animation-delay: 0.60s; }
+.user-menu-page-body > *:nth-child(n+10) { animation-delay: 0.64s; }
+@keyframes ump-item-in {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+/* Hero — big avatar + identity stacked CENTERED. No divider; the gap to
+   the first capsule below does the visual separation. The whole block
+   reads as a single brand moment at the top of the page. */
+.user-menu-page-hero {
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  padding: 18px 4px 6px;
+  border: none;
+  text-align: center;
+}
+.user-menu-page-hero .avatar-upload-trigger {
+  width: 64px; height: 64px;
+  border: none;
+  box-shadow: none;
+  font-size: 26px;
+}
+.user-menu-page-identity-btn {
+  /* Centered identity stack under the avatar (column-flow on the hero
+     now). The chevron is suppressed since the whole hero IS the tap
+     target and we don't need an inline disclosure. */
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  background: transparent;
+  border: none;
+  padding: 0;
+  color: inherit;
+  text-align: center;
+  font-family: inherit;
+  cursor: pointer;
+  transition: opacity 0.15s ease;
+}
+.user-menu-page-identity-btn .user-menu-page-hero-chev { display: none; }
+.user-menu-page-identity-btn:active { opacity: 0.7; }
+.user-menu-page-avatar-wrap {
+  position: relative;
+  flex-shrink: 0;
+  width: 64px; height: 64px;
+}
+.user-menu-page-avatar {
+  width: 100%; height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+  background: #1e2230;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 2px solid rgba(255, 255, 255, 0.12);
+}
+.user-menu-page-avatar--initial { color: #cbd5e1; font-size: 26px; font-weight: 700; }
+.user-menu-page-identity {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+/* Smaller, centered, generous letter-spacing for the brand moment. */
+.user-menu-page-name { font-size: 15px; font-weight: 600; color: #f5f5f7; letter-spacing: -0.005em; }
+.user-menu-page-email { font-size: 12px; color: rgba(255, 255, 255, 0.5); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 260px; }
+.user-menu-page-hero-chev { color: rgba(255, 255, 255, 0.5); flex-shrink: 0; }
+
+/* Floating glass capsule — shared geometry for every actionable row
+   on the Account page (Try it on / Style / Bookmarks / My Catalog /
+   Shopping for / Invite / Log out / super-admin entry). No dividers
+   between rows; whitespace + the capsule's own border do the work.
+   The label is CENTERED — the icon sits absolute-left and the chevron
+   absolute-right so the label can truly center independently of either
+   one's width. */
+.user-menu-page-cta,
+.user-menu-page-row {
+  position: relative;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 14px 50px;
+  /* Capsule with a soft glass surface — top→bottom highlight so each
+     row reads as a small object sitting on the matte black, not
+     embedded in a list. */
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 16px;
+  backdrop-filter: blur(14px) saturate(1.2);
+  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  color: #f5f5f7;
+  font-family: inherit;
+  font-size: 13.5px;
+  font-weight: 600;
+  letter-spacing: -0.005em;
+  cursor: pointer;
+  transition: transform 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+.user-menu-page-cta:hover,
+.user-menu-page-row:hover {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.04));
+  border-color: rgba(255, 255, 255, 0.14);
+}
+.user-menu-page-cta:active,
+.user-menu-page-row:active { transform: scale(0.985); }
+
+/* Icon docks LEFT — absolute so it doesn't push the centered label. */
+.user-menu-page-cta > svg:first-of-type,
+.user-menu-page-row .user-menu-page-row-icon {
+  position: absolute;
+  left: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+  color: rgba(255, 255, 255, 0.72);
+  flex-shrink: 0;
+}
+.user-menu-page-row .user-menu-page-row-icon {
+  width: 18px;
+  height: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.user-menu-page-row .user-menu-page-row-label {
+  text-align: center;
+}
+
+/* Chevron docks RIGHT — same absolute trick. */
+.user-menu-page-cta-chev,
+.user-menu-page-row-chev {
+  position: absolute;
+  right: 18px;
+  top: 50%;
+  transform: translateY(-50%);
+  margin: 0;
+  color: rgba(255, 255, 255, 0.45);
+}
+
+/* Featured CTA accent — Try it on / Style stay yellow on icon + label
+   so they read as the headline rows without breaking the unified
+   capsule treatment. */
+.user-menu-page-cta {
+  color: #fde68a;
+}
+.user-menu-page-cta > svg:first-of-type {
+  color: #fde68a;
+}
+
+.user-menu-page-row.is-danger { color: #fca5a5; }
+.user-menu-page-row.is-danger .user-menu-page-row-icon { color: #fca5a5; }
+.user-menu-page-row-icon {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: rgba(255, 255, 255, 0.72);
+}
+.user-menu-page-row.is-danger .user-menu-page-row-icon { color: #fca5a5; }
+.user-menu-page-row-label { flex: 1; min-width: 0; }
+.user-menu-page-row-badge {
+  background: #f5f5f7;
+  color: #0a0a0c;
+  font-size: 11px;
+  font-weight: 700;
+  border-radius: 999px;
+  padding: 2px 8px;
+  min-width: 22px;
+  text-align: center;
+}
+.user-menu-page-row-trailing {
+  color: #4ade80;
+  font-size: 13px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+}
+.user-menu-page-row-chev {
+  color: rgba(255, 255, 255, 0.35);
+  flex-shrink: 0;
+}
+
+/* Segmented + toggle variants share the row shell */
+.user-menu-page-row--segmented,
+.user-menu-page-row--toggle {
+  cursor: default;
+}
+.user-menu-page-row--segmented .user-menu-page-row-chev,
+.user-menu-page-row--toggle .user-menu-page-row-chev {
+  display: none;
+}
+.user-menu-page-row--toggle { cursor: pointer; }
+.user-menu-page-row--toggle.is-on { color: #fca5a5; }
+.user-menu-page-row--toggle.is-on .user-menu-page-row-icon { color: #fca5a5; }
+
+/* Quick row — Activity / Earnings / Saved as glowing columns.
+   auto-fit so it gracefully drops to 2 columns when Earnings is
+   hidden for non-creators. */
+.user-menu-quickrow {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(0, 1fr));
+  gap: 10px;
+  margin: 4px 0 6px;
+}
+.user-menu-quick {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  padding: 16px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  background:
+    radial-gradient(120% 120% at 50% 0%, rgba(120, 150, 255, 0.16), rgba(255, 255, 255, 0.03) 60%);
+  color: #fff;
+  font-family: inherit;
+  cursor: pointer;
+  overflow: hidden;
+  box-shadow: 0 0 0 0 rgba(120, 150, 255, 0.0);
+  animation: user-menu-quick-glow 3.4s ease-in-out infinite;
+  transition: transform 0.16s ease, border-color 0.16s ease;
+}
+.user-menu-quick:nth-child(2) { animation-delay: 0.5s; }
+.user-menu-quick:nth-child(3) { animation-delay: 1s; }
+.user-menu-quick:hover {
+  transform: translateY(-2px);
+  border-color: rgba(140, 170, 255, 0.5);
+}
+.user-menu-quick:active { transform: translateY(0); }
+@keyframes user-menu-quick-glow {
+  0%, 100% { box-shadow: 0 0 0 0 rgba(120, 150, 255, 0.0); border-color: rgba(255,255,255,0.1); }
+  50% { box-shadow: 0 0 20px -2px rgba(120, 150, 255, 0.45); border-color: rgba(140, 170, 255, 0.4); }
+}
+.user-menu-quick-icon {
+  display: inline-flex;
+  color: #c7d2ff;
+}
+.user-menu-quick-label {
+  font-size: 13px;
+  font-weight: 700;
+}
+.user-menu-quick-sub {
+  font-size: 11px;
+  font-weight: 700;
+  color: #4ade80;
+  font-variant-numeric: tabular-nums;
+}
+.user-menu-quick-badge {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background: #ff4d6d;
+  color: #fff;
+  font-size: 10px;
+  font-weight: 800;
+  border-radius: 999px;
+  padding: 1px 6px;
+  min-width: 18px;
+  text-align: center;
+}
+.light-mode .user-menu-quick {
+  color: #1a1a1a;
+  border-color: rgba(0, 0, 0, 0.1);
+  background: radial-gradient(120% 120% at 50% 0%, rgba(90, 120, 255, 0.12), rgba(0, 0, 0, 0.02) 60%);
+}
+.light-mode .user-menu-quick-icon { color: #4a5bd0; }
+
+@media (prefers-reduced-motion: reduce) {
+  .user-menu-page.is-open,
+  .user-menu-page.is-closing,
+  .user-menu-page-body > * {
+    animation: none !important;
+  }
+  .user-menu-page.is-open { opacity: 1; transform: none; }
+  .user-menu-quick { animation: none !important; }
+}
+
+/* Desktop: never use the page surface — desktop keeps the classic popout. */
+@media (min-width: 769px) {
+  .user-menu-page { display: none; }
+}
+
+/* Super-admin entry row at the very bottom of the Account list. Small,
+   muted, distinct from the consumer rows — reads as "admin tools live
+   behind this". Tapping it swaps the page body to the super-admin
+   sub-section (Import / Admin / Decks / Delete mode), with the page
+   back-chevron returning here. */
+.user-menu-page-super-entry {
+  /* Centered tiny pill at the bottom, distinct from the consumer
+     capsules so it reads as a separate utility. Subtle, muted, only
+     surfaces for super-admin role. */
+  margin-top: 18px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: rgba(255, 255, 255, 0.02);
+  border-radius: 999px;
+  color: rgba(255, 255, 255, 0.5);
+  font-family: inherit;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  cursor: pointer;
+  align-self: center;
+  transition: background 0.15s ease, color 0.15s ease;
+}
+.user-menu-page-super-entry:active {
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+
+/* Desktop super-admin Admin shortcut, sitting just under the profile header.
+   Hidden on mobile/touch where the Super Admin → Admin path is used. */
+.user-menu-admin-quicklink {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  width: fit-content;
+  margin: 10px 0 2px;
+  padding: 8px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  background: rgba(255, 255, 255, 0.04);
+  color: #f4f4f5;
+  font-family: inherit;
+  font-size: 13px;
+  font-weight: 650;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.user-menu-admin-quicklink:hover {
+  background: rgba(255, 255, 255, 0.09);
+  border-color: rgba(255, 255, 255, 0.2);
+}
+.user-menu-admin-quicklink svg { opacity: 0.85; }
+.light-mode .user-menu-admin-quicklink {
+  border-color: rgba(0, 0, 0, 0.1);
+  background: rgba(0, 0, 0, 0.04);
+  color: #18181b;
+}
+/* Desktop only — touch devices fall back to the Super Admin sub-section. */
+@media (hover: none), (max-width: 768px) {
+  .user-menu-admin-quicklink { display: none; }
+}
+
+/* Invite & earn row — same list-row shell; the upload-style arrow on the
+   right signals "share". Trailing $ shows running referral earnings. */
+.user-menu-invite-row .user-menu-page-row-chev { color: rgba(255, 255, 255, 0.45); }
