@@ -14,10 +14,11 @@
 //   - Cover: the live product feed as a dimmed collage, the wordmark
 //     centered with no other text, "The AI for shopping" at the bottom.
 //   - Page order: cover · magazine sheet (centered exec summary, market,
-//     customer) · revenue phases + key assumptions · go-to-market flywheel
-//     (creators + AI-driven content) · LTV breakdown (assumption-flagged,
-//     with creator-cohort LTV) · appendix (base-plan graph + CAC and
-//     conversion sensitivity — the two numbers every decision is held to).
+//     customer) · revenue phases + key assumptions · go-to-market ("this is
+//     just the beginning" + steps, AI content as the strategic marketing
+//     experiment at the bottom) · an "Appendix" divider page · LTV breakdown
+//     (assumption-flagged, with creator-cohort LTV) · CAC and conversion
+//     sensitivity — the two numbers every decision is held to.
 
 import { CATALOG_LOGO_PATH, CATALOG_LOGO_VIEWBOX } from '~/constants/brand-logo';
 import { buildModel } from '~/services/model';
@@ -105,10 +106,10 @@ interface ChartSeries {
 }
 
 /** Multi-line month chart. Y axis is dollars/mo, X is months 1..N. */
-function lineChart(series: ChartSeries[], opts: { width?: number; height?: number; area?: boolean } = {}): string {
+function lineChart(series: ChartSeries[], opts: { width?: number; height?: number; area?: boolean; axisLabel?: string } = {}): string {
   const W = opts.width ?? 720;
   const H = opts.height ?? 200;
-  const pad = { l: 46, r: 150, t: 10, b: 20 };
+  const pad = { l: 46, r: 150, t: opts.axisLabel ? 26 : 10, b: 20 };
   const n = series[0]?.values.length ?? 0;
   if (!n) return '';
   const yMax = niceCeiling(Math.max(...series.flatMap(s => s.values), 1));
@@ -149,7 +150,10 @@ function lineChart(series: ChartSeries[], opts: { width?: number; height?: numbe
       <text x="${W - pad.r + 8}" y="${ly.toFixed(1)}" class="chart-label${s.variant ? ' is-variant' : ''}">${esc(s.label)}</text>`;
   }).join('');
 
-  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img">${grid.join('')}${lines}</svg>`;
+  const axis = opts.axisLabel
+    ? `<text x="${pad.l}" y="11" class="chart-axis">${esc(opts.axisLabel.toUpperCase())}</text>`
+    : '';
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img">${axis}${grid.join('')}${lines}</svg>`;
 }
 
 /** Small bar chart for illustrative creator-cohort LTVs, with a dashed
@@ -165,7 +169,7 @@ function cohortBarChart(bars: Array<[string, number]>, reference: number): strin
   const rects = bars.map(([label, v], i) => {
     const bx = pad.l + i * bw + bw * 0.18;
     const by = y(v);
-    return `<rect x="${bx.toFixed(1)}" y="${by.toFixed(1)}" width="${(bw * 0.64).toFixed(1)}" height="${(H - pad.b - by).toFixed(1)}" fill="${ACCENT}"/>
+    return `<rect x="${bx.toFixed(1)}" y="${by.toFixed(1)}" width="${(bw * 0.64).toFixed(1)}" height="${(H - pad.b - by).toFixed(1)}" fill="#1c1916"/>
       <text x="${(pad.l + i * bw + bw / 2).toFixed(1)}" y="${(by - 5).toFixed(1)}" text-anchor="middle" class="chart-label">${esc(usd(v))}</text>
       <text x="${(pad.l + i * bw + bw / 2).toFixed(1)}" y="${H - 8}" text-anchor="middle" class="chart-tick">${esc(label)}</text>`;
   }).join('');
@@ -210,20 +214,16 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
   const convLo = revSeries({ ...mRev, productConversion: convLoVal }, mAcq);
   const convHi = revSeries({ ...mRev, productConversion: convHiVal }, mAcq);
 
-  const baseChart = lineChart(
-    [{ values: base, label: `Base · ${arrOf(base)} ARR` }],
-    { area: true },
-  );
   const cacChart = lineChart([
     { values: cpaLo, label: `CPA ${usd(cpaLoVal)} · ${arrOf(cpaLo)} ARR`, variant: true },
     { values: base, label: `CPA ${usd(mAcq.cpa)} (base) · ${arrOf(base)} ARR` },
     { values: cpaHi, label: `CPA ${usd(cpaHiVal)} · ${arrOf(cpaHi)} ARR`, variant: true },
-  ], { height: 180 });
+  ], { height: 190, axisLabel: 'Monthly commission revenue' });
   const convChart = lineChart([
     { values: convHi, label: `Conv ${pctTrim(convHiVal)} · ${arrOf(convHi)} ARR`, variant: true },
     { values: base, label: `Conv ${pctTrim(mRev.productConversion)} (base) · ${arrOf(base)} ARR` },
     { values: convLo, label: `Conv ${pctTrim(convLoVal)} · ${arrOf(convLo)} ARR`, variant: true },
-  ], { height: 180 });
+  ], { height: 190, axisLabel: 'Monthly commission revenue' });
 
   // Cover collage: pack the page with as many product tiles as the feed
   // can fill — grid density scales with how many images came back, and
@@ -313,7 +313,7 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
   * { box-sizing: border-box; }
   html, body { margin: 0; padding: 0; background: #efece6; color: var(--ink);
     font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif;
-    line-height: 1.6; -webkit-font-smoothing: antialiased; }
+    font-size: 13px; line-height: 1.6; -webkit-font-smoothing: antialiased; }
   .serif, h2, h3, .display, .pullquote, .step-no, .stat-value, .feature-item h4 {
     font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, 'Times New Roman', serif; }
   .page { position: relative; max-width: 860px; margin: 18px auto; padding: 44px 64px 56px;
@@ -322,12 +322,12 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
     padding: 12px 16px; background: rgba(239,236,230,0.92); backdrop-filter: blur(8px); }
   .toolbar button { font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
     border: 1px solid var(--line); background: #fff; color: var(--ink); border-radius: 8px; padding: 8px 14px; }
-  .toolbar button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  .toolbar button.primary { background: var(--ink); color: #fff; border-color: var(--ink); }
 
   /* Print: cover + one sheet per .page; nothing splits across pages. */
   @media print {
     .toolbar { display: none; }
-    body { background: #fff; font-size: 11px; line-height: 1.5;
+    body { background: #fff; font-size: 9px; line-height: 1.5;
       -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .page { padding: 26px 34px; max-width: none; margin: 0; box-shadow: none;
       page-break-before: always; background: var(--paper); }
@@ -336,18 +336,19 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
     .statband, .phases, .lens-grid, .lens, .feature-band, .chart, .flow, .steps,
     .features, table.ltv-chain { page-break-inside: avoid; break-inside: avoid; }
     .folio { margin-bottom: 18px; }
+    .divider { min-height: 82vh; }
     .kicker { margin-bottom: 3px; }
-    h2 { font-size: 19px; margin-bottom: 7px; }
-    .display { font-size: 27px; }
+    h2 { font-size: 15px; margin-bottom: 6px; }
+    .display { font-size: 21px; }
     p { margin-bottom: 7px; }
-    table.assumptions { font-size: 10.5px; }
+    table.assumptions { font-size: 9px; }
     table.assumptions td { padding: 5px 8px; }
     table.ltv-chain td { padding: 4px 8px; }
     .phase { padding: 11px 13px; }
-    .phase h4 { font-size: 13px; }
-    .phase p { font-size: 10.5px; line-height: 1.45; }
-    .step { padding: 11px 0; }
-    .step p { font-size: 11px; }
+    .phase h4 { font-size: 11px; }
+    .phase p { font-size: 9px; line-height: 1.45; }
+    .step { padding: 10px 0; }
+    .step p { font-size: 9.5px; }
     .statband { padding: 12px 0; }
     .footer { margin-top: 14px; padding-top: 8px; }
   }
@@ -375,13 +376,14 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
   .folio-no { margin-left: auto; color: var(--ink); font-variant-numeric: tabular-nums; }
 
   section { margin: 0 0 30px; }
-  .kicker { font-size: 10.5px; font-weight: 800; letter-spacing: 0.2em; text-transform: uppercase;
+  .kicker { font-size: 9.5px; font-weight: 800; letter-spacing: 0.2em; text-transform: uppercase;
     color: var(--accent); margin: 0 0 7px; }
   .kicker::after { content: ''; display: block; width: 34px; border-top: 2px solid var(--accent); margin-top: 6px; }
-  h2 { font-size: 25px; font-weight: 700; letter-spacing: -0.012em; line-height: 1.18; margin: 0 0 10px; }
-  h3 { font-size: 15px; font-weight: 700; margin: 14px 0 4px; }
-  p { margin: 0 0 10px; color: #35312c; }
-  .display { font-weight: 700; font-size: 36px; line-height: 1.12; letter-spacing: -0.015em; }
+  h2 { font-size: 20px; font-weight: 700; letter-spacing: -0.012em; line-height: 1.18; margin: 0 0 8px; }
+  h3 { font-size: 13px; font-weight: 700; margin: 12px 0 4px; }
+  p { margin: 0 0 10px; color: #3a352f; line-height: 1.62; }
+  .standfirst { font-size: 14px; line-height: 1.55; color: #57514a; max-width: 62ch; }
+  .display { font-weight: 700; font-size: 28px; line-height: 1.14; letter-spacing: -0.015em; }
 
   /* ── Magazine sheet ── */
   .exec { text-align: center; }
@@ -390,19 +392,21 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
   .statband { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px;
     border-top: 3px solid var(--ink); border-bottom: 1px solid var(--ink);
     padding: 16px 0 14px; margin: 20px 0 6px; }
-  .stat-value { font-size: 25px; font-weight: 700; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
-  .stat-label { font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); margin-top: 3px; }
+  .stat-value { font-size: 20px; font-weight: 700; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+  .stat-label { font-size: 9px; font-weight: 700; letter-spacing: 0.13em; text-transform: uppercase; color: var(--muted); margin-top: 3px; }
   .mag-row { display: grid; grid-template-columns: 5fr 7fr; gap: 30px; align-items: start; margin-top: 8px; }
   .mag-row.flip { grid-template-columns: 7fr 5fr; }
-  .pullquote { font-size: 27px; line-height: 1.22; font-weight: 700; letter-spacing: -0.01em;
-    border-left: 3px solid var(--accent); padding-left: 18px; margin: 4px 0; }
-  .dropcap::first-letter { font-family: 'Iowan Old Style', Palatino, Georgia, serif; font-size: 48px; font-weight: 700;
-    float: left; line-height: 0.82; padding: 5px 9px 0 0; color: var(--accent); }
-  .features { display: grid; gap: 16px; border-left: 2px solid var(--accent); padding-left: 18px; }
-  .feature-item h4 { margin: 0 0 3px; font-size: 16.5px; font-weight: 700; letter-spacing: -0.01em; }
-  .feature-item p { margin: 0; font-size: 12px; line-height: 1.55; color: var(--muted); }
+  .pullquote { font-size: 21px; line-height: 1.25; font-weight: 700; letter-spacing: -0.01em;
+    border-left: 3px solid var(--ink); padding-left: 18px; margin: 4px 0; }
+  .mag-row .dropcap { text-align: justify; hyphens: auto; -webkit-hyphens: auto; }
+  .mag-row > :last-child:not(.features) { border-left: 1px solid var(--line); padding-left: 28px; }
+  .dropcap::first-letter { font-family: 'Iowan Old Style', Palatino, Georgia, serif; font-size: 36px; font-weight: 700;
+    float: left; line-height: 0.82; padding: 4px 8px 0 0; color: var(--ink); }
+  .features { display: grid; gap: 14px; border-left: 1.5px solid var(--ink); padding-left: 18px; }
+  .feature-item h4 { margin: 0 0 3px; font-size: 13.5px; font-weight: 700; letter-spacing: -0.01em; }
+  .feature-item p { margin: 0; font-size: 10.5px; line-height: 1.55; color: var(--muted); }
 
-  table.assumptions { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 4px; }
+  table.assumptions { width: 100%; border-collapse: collapse; font-size: 11px; margin-top: 4px; }
   table.assumptions th { text-align: left; font-size: 9.5px; letter-spacing: 0.1em; text-transform: uppercase;
     color: var(--muted); padding: 5px 10px; border-bottom: 2px solid var(--ink); }
   table.assumptions td { padding: 7px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
@@ -411,70 +415,75 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
   .a-why { color: var(--muted); }
 
   /* Revenue roadmap cards. */
-  .phases { display: grid; grid-template-columns: repeat(3, 1fr); gap: 12px; margin: 8px 0 12px; }
-  .phase { border: 1px solid var(--line); border-radius: 14px; padding: 15px 16px; background: #fff; }
-  .phase.now { border: 1.5px solid var(--accent); }
-  .phase-stage { font-size: 10px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--accent); }
+  .phases { display: grid; grid-template-columns: repeat(3, 1fr); gap: 26px; margin: 12px 0 14px; }
+  .phase { border-top: 2px solid var(--ink); padding: 11px 0 0; }
+  .phase.now { border-top: 5px solid var(--ink); }
+  .phase-stage { font-size: 9px; font-weight: 800; letter-spacing: 0.12em; text-transform: uppercase; color: var(--muted); }
   .phase-stage .tag { display: inline-block; margin-left: 6px; padding: 1px 8px; border-radius: 999px;
-    background: var(--accent); color: #fff; font-size: 9px; letter-spacing: 0.06em; vertical-align: 1px; }
-  .phase h4 { margin: 6px 0 5px; font-size: 14.5px; letter-spacing: -0.01em; }
-  .phase p { margin: 0; font-size: 12px; color: var(--muted); line-height: 1.55; }
-  .phase-note { font-size: 11.5px; color: var(--muted); font-style: italic; }
+    background: var(--ink); color: #fff; font-size: 8.5px; letter-spacing: 0.06em; vertical-align: 1px; }
+  .phase h4 { margin: 5px 0 4px; font-size: 12.5px; letter-spacing: -0.01em; }
+  .phase p { margin: 0; font-size: 10.5px; color: var(--muted); line-height: 1.55; }
+  .phase-note { font-size: 10px; color: var(--muted); font-style: italic; }
 
   /* GTM: AI banner + vertical numbered steps. */
   .ai-banner { background: var(--ink); color: #fff; border-radius: 14px; padding: 17px 20px; margin: 14px 0;
     -webkit-print-color-adjust: exact; print-color-adjust: exact; }
   .ai-banner .kicker { color: #fff; }
-  .ai-banner .kicker::after { border-color: var(--accent); }
-  .ai-banner p { color: rgba(255,255,255,0.9); margin: 0; font-size: 13px; }
+  .ai-banner .kicker::after { border-color: #fff; }
+  .ai-banner p { color: rgba(255,255,255,0.9); margin: 0; font-size: 11px; }
   .steps { margin-top: 10px; }
   .step { display: grid; grid-template-columns: 70px 1fr; gap: 20px; align-items: start; padding: 16px 0; }
   .step + .step { border-top: 1px solid var(--line); }
-  .step-no { font-size: 46px; line-height: 0.85; font-weight: 700; color: var(--accent); }
-  .step h4 { margin: 0 0 5px; font-size: 16px; letter-spacing: -0.01em; }
-  .step p { margin: 0; font-size: 12.5px; color: #45403a; max-width: 64ch; }
+  .step-no { font-size: 38px; line-height: 0.85; font-weight: 700; color: var(--ink); }
+  .step h4 { margin: 0 0 4px; font-size: 13px; letter-spacing: -0.01em; }
+  .step p { margin: 0; font-size: 11px; color: #45403a; max-width: 64ch; }
 
   /* LTV chain. */
-  table.ltv-chain { width: 100%; border-collapse: collapse; font-size: 12.5px; margin: 6px 0 10px; }
+  table.ltv-chain { width: 100%; border-collapse: collapse; font-size: 11px; margin: 6px 0 10px; }
   table.ltv-chain td { padding: 7px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
-  .l-op { width: 22px; font-weight: 800; color: var(--accent); }
+  .l-op { width: 22px; font-weight: 800; color: var(--muted); }
   .l-label { font-weight: 600; }
   .l-value { font-weight: 700; width: 18%; font-variant-numeric: tabular-nums; }
   .l-run { color: var(--muted); width: 36%; text-align: right; font-variant-numeric: tabular-nums; }
   table.ltv-chain tr:last-child td { border-bottom: 2px solid var(--ink); }
-  table.ltv-chain tr:last-child .l-run { color: var(--accent); font-weight: 800; font-size: 14px; }
-  .footnote { font-size: 11px; color: var(--muted); font-style: italic; }
+  table.ltv-chain tr:last-child .l-run { color: var(--ink); font-weight: 800; font-size: 12px; }
+  .footnote { font-size: 9.5px; color: var(--muted); font-style: italic; }
+  .endmark { display: inline-block; width: 7px; height: 7px; background: var(--ink); margin-left: 6px; vertical-align: baseline; }
   .ltv-vs { display: flex; gap: 22px; align-items: baseline; margin: 10px 0 4px; }
-  .ltv-vs b { font-size: 19px; font-family: 'Iowan Old Style', Palatino, Georgia, serif; }
-  .ltv-vs .vs-arrow { color: var(--accent); font-weight: 800; }
+  .ltv-vs b { font-size: 15px; font-family: 'Iowan Old Style', Palatino, Georgia, serif; }
+  .ltv-vs .vs-arrow { color: var(--ink); font-weight: 800; }
 
   /* Creator attribution flow. */
   .flow { display: flex; align-items: stretch; gap: 8px; margin: 12px 0; }
-  .flow-step { flex: 1; border: 1px solid var(--line); border-radius: 11px; padding: 10px 12px;
-    font-size: 11.5px; color: #45403a; background: #fff; }
+  .flow-step { flex: 1; border-top: 1.5px solid var(--ink); padding: 8px 0 0;
+    font-size: 10px; color: #45403a; }
   .flow-step b { display: block; font-size: 10.5px; letter-spacing: 0.07em; text-transform: uppercase; margin-bottom: 2px; }
-  .flow-arrow { align-self: center; font-weight: 800; color: var(--accent); }
+  .flow-arrow { align-self: center; font-weight: 800; color: var(--muted); }
   .cohort-grid { display: grid; grid-template-columns: 7fr 5fr; gap: 22px; align-items: center; }
 
   /* Charts. */
   .chart { width: 100%; height: auto; display: block; margin: 6px 0 4px; }
   .chart-tick { font-size: 9px; fill: var(--muted); font-family: inherit; }
+  .chart-axis { font-size: 8.5px; font-weight: 700; letter-spacing: 0.14em; fill: var(--muted); font-family: inherit; }
   .chart-label { font-size: 9.5px; font-weight: 700; fill: var(--ink); font-family: inherit; }
   .chart-label.is-variant { font-weight: 500; fill: var(--muted); }
-  .chart-caption { font-size: 11px; color: var(--muted); margin: 0 0 12px; }
-  .lens-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-top: 10px; }
-  .lens { border: 1px solid var(--line); border-radius: 14px; padding: 14px 16px; background: #fff; }
-  .lens h4 { margin: 0 0 5px; font-size: 13.5px; }
-  .lens h4::before { content: ''; display: inline-block; width: 8px; height: 8px; background: var(--accent);
+  .chart-caption { font-size: 9.5px; color: var(--muted); margin: 0 0 12px; }
+  .lens-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 26px; margin-top: 14px; }
+  .lens { border-top: 2px solid var(--ink); padding: 10px 0 0; }
+  .lens h4 { margin: 0 0 4px; font-size: 11.5px; }
+  .lens h4::before { content: ''; display: inline-block; width: 7px; height: 7px; background: var(--ink);
     border-radius: 2px; margin-right: 7px; vertical-align: 1px; }
-  .lens p { margin: 0; font-size: 12px; color: var(--muted); }
+  .lens p { margin: 0; font-size: 10.5px; color: var(--muted); }
   .feature-band { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin: 8px 0 14px; }
-  .feature { border-top: 3px solid var(--accent); border-bottom: 1px solid var(--line); padding: 12px 2px 12px; }
-  .feature .stat-value { font-size: 28px; }
+  .feature { border-top: 3px solid var(--ink); padding: 10px 0 0; }
+  .feature .stat-value { font-size: 22px; }
 
-  .footer { margin-top: 28px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 11px; color: var(--muted); }
-  .footer b { color: var(--accent); }
-  .disclaimer { font-size: 11px; color: var(--muted); font-style: italic; }
+  .divider { min-height: 70vh; display: flex; align-items: center; justify-content: center; text-align: center; }
+  .divider .display { font-size: 40px; letter-spacing: 0.01em; }
+  .divider .display::before { content: ''; display: block; width: 40px; border-top: 2.5px solid var(--ink); margin: 0 auto 20px; }
+  .footer { margin-top: 24px; padding-top: 12px; border-top: 1px solid var(--line); font-size: 9.5px; color: var(--muted); }
+  .footer b { color: var(--ink); }
+  .disclaimer { font-size: 9.5px; color: var(--muted); font-style: italic; }
 </style>
 </head>
 <body>
@@ -492,7 +501,7 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
 
   <!-- Sheet 1 — magazine: centered summary, market, customer. -->
   <div class="page">
-    <div class="folio"><span class="folio-brand">Catalog</span><span>Business Plan</span><span class="folio-no">02 / 07</span></div>
+    <div class="folio"><span class="folio-brand">Catalog</span><span>Business Plan</span><span class="folio-no">02 / 08</span></div>
     <section class="exec">
       <p class="kicker">Executive summary</p>
       <h2 class="display">The shopping destination where discovery converts.</h2>
@@ -532,7 +541,7 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
 
   <!-- Sheet 2 — revenue phases + the key assumptions, one page. -->
   <div class="page">
-    <div class="folio"><span class="folio-brand">Catalog</span><span>Business Plan</span><span class="folio-no">03 / 07</span></div>
+    <div class="folio"><span class="folio-brand">Catalog</span><span>Business Plan</span><span class="folio-no">03 / 08</span></div>
     <section>
       <p class="kicker">03 · Revenue model</p>
       <h2>Three revenue lines, unlocked in sequence.</h2>
@@ -577,28 +586,36 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
 
   <!-- Sheet 3 — go-to-market: creators + AI-driven content, three steps. -->
   <div class="page">
-    <div class="folio"><span class="folio-brand">Catalog</span><span>Business Plan</span><span class="folio-no">04 / 07</span></div>
+    <div class="folio"><span class="folio-brand">Catalog</span><span>Business Plan</span><span class="folio-no">04 / 08</span></div>
     <section>
       <p class="kicker">05 · Go-to-market</p>
-      <h2>Turn the flywheel on.</h2>
-      <p>Marketing runs through creators, our primary advertising channel. Creators post their link, build catalogs, and share them with their audience; they are paid on every signup they bring and on that audience's ongoing engagement. Word-of-mouth adds ${pct(a.organicGrowth)} of the base each month on top of paid acquisition at a ~${usd(a.cpa)} blended CPA.</p>
-      <div class="ai-banner">
-        <p class="kicker">AI-driven content</p>
-        <p>A big part of this motion is AI-generated content: users try products on with AI, build catalogs of what they love, and post them. The people we acquire also make the content that acquires the next wave: creation compounds while production cost doesn't.</p>
-      </div>
+      <h2>This is just the beginning.</h2>
+      <p class="standfirst">Everything in this plan runs on the simplest version of the machine: marketing through creators, our primary advertising channel. Creators post their link, build catalogs, and share them with their audience; they are paid on every signup they bring and on that audience's ongoing engagement. Word-of-mouth adds ${pct(a.organicGrowth)} of the base each month on top of paid acquisition at a ~${usd(a.cpa)} blended CPA.</p>
       <div class="steps">
         ${gtmSteps.map(gtmStepRow).join('')}
+      </div>
+      <div class="ai-banner">
+        <p class="kicker">Strategic marketing experiment</p>
+        <p>Running alongside the core motion: AI-driven content. Users try products on with AI, build catalogs of what they love, and post them. The people we acquire also make the content that acquires the next wave: creation compounds while production cost doesn't.</p>
       </div>
     </section>
   </div>
 
-  <!-- Sheet 4 — LTV: assumption-flagged breakdown + creator cohorts. -->
+  <!-- Sheet 4 — appendix divider: just the word, centered. -->
   <div class="page">
-    <div class="folio"><span class="folio-brand">Catalog</span><span>Business Plan</span><span class="folio-no">05 / 07</span></div>
+    <div class="folio"><span class="folio-brand">Catalog</span><span>Business Plan</span><span class="folio-no">05 / 08</span></div>
+    <div class="divider">
+      <h2 class="display">Appendix</h2>
+    </div>
+  </div>
+
+  <!-- Sheet 5 — LTV: assumption-flagged breakdown + creator cohorts. -->
+  <div class="page">
+    <div class="folio"><span class="folio-brand">Catalog</span><span>Business Plan</span><span class="folio-no">06 / 08</span></div>
     <section>
-      <p class="kicker">06 · Lifetime value*</p>
+      <p class="kicker">Appendix A · Lifetime value*</p>
       <h2>What a user is worth, and how we'll know.</h2>
-      <p>LTV is the contribution a user generates over their expected lifetime: monthly revenue per user, kept margin applied, multiplied by how long the average user stays active. Step by step:</p>
+      <p class="standfirst">LTV is the contribution a user generates over their expected lifetime: monthly revenue per user, kept margin applied, multiplied by how long the average user stays active. Step by step:</p>
       <table class="ltv-chain">
         <tbody>
           ${ltvSteps.map(ltvRow).join('')}
@@ -615,9 +632,9 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
     </section>
 
     <section>
-      <p class="kicker">Creator cohorts</p>
+      <p class="kicker">Appendix A · Creator cohorts</p>
       <h2>LTV we can measure, per creator.</h2>
-      <p>Every creator shares a personal link. When their audience signs up through it, those users are tagged as that creator's cohort, and every order they ever place is attributed back to it. From day one the platform computes the lifetime value of each creator's audience automatically: which creators to double down on, and exactly what a signup from them is worth.</p>
+      <p class="standfirst">Every creator shares a personal link. When their audience signs up through it, those users are tagged as that creator's cohort, and every order they ever place is attributed back to it. From day one the platform computes the lifetime value of each creator's audience automatically: which creators to double down on, and exactly what a signup from them is worth.</p>
       <div class="flow">
         <div class="flow-step"><b>Creator posts link</b>Catalogs shared to their socials</div>
         <div class="flow-arrow">→</div>
@@ -636,22 +653,16 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
 
   <!-- Sheet 5 — appendix: the two numbers every decision is held against. -->
   <div class="page">
-    <div class="folio"><span class="folio-brand">Catalog</span><span>Business Plan</span><span class="folio-no">06 / 07</span></div>
+    <div class="folio"><span class="folio-brand">Catalog</span><span>Business Plan</span><span class="folio-no">07 / 08</span></div>
     <section>
-      <p class="kicker">Appendix · Sensitivity</p>
+      <p class="kicker">Appendix B · Sensitivity</p>
       <h2>The two numbers that run the company.</h2>
-      <p>The model's load-bearing inputs are <b>blended CAC</b> (what a user costs) and <b>product conversion</b> (what a feed impression is worth). Below: the base plan, then CPA at ${usd(cpaLoVal)} and ${usd(cpaHiVal)} against the ${usd(mAcq.cpa)} base, and conversion at ${pctTrim(convLoVal)} and ${pctTrim(convHiVal)} against ${pctTrim(mRev.productConversion)}, with everything else held constant.</p>
+      <p class="standfirst">The model's load-bearing inputs are <b>blended CAC</b> (what a user costs) and <b>product conversion</b> (what a feed impression is worth). Below: the base plan, then CPA at ${usd(cpaLoVal)} and ${usd(cpaHiVal)} against the ${usd(mAcq.cpa)} base, and conversion at ${pctTrim(convLoVal)} and ${pctTrim(convHiVal)} against ${pctTrim(mRev.productConversion)}, with everything else held constant. The ${d.horizonMonths}-month base case earns ${usd(r.total16moRevenue)} of commission on ${usd(r.gmvTotal, true)} GMV.</p>
       <div class="feature-band">
         <div class="feature"><div class="stat-value">${usd2(r.blendedCac)}</div><div class="stat-label">Blended CAC at base · paid CPA ${usd(a.cpa)}</div></div>
         <div class="feature"><div class="stat-value">${pct(rev.productConversion, 2)}</div><div class="stat-label">Product conversion at base · sale per impression</div></div>
       </div>
 
-    </section>
-
-    <section>
-      <h3>Base plan: monthly commission revenue</h3>
-      ${baseChart}
-      <p class="chart-caption">${d.horizonMonths}-month base case: ${usd(r.total16moRevenue)} total commission on ${usd(r.gmvTotal, true)} GMV.</p>
     </section>
 
     <section>
@@ -663,7 +674,7 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
 
   <!-- Sheet 6 — appendix continued: conversion sensitivity + the two lenses. -->
   <div class="page">
-    <div class="folio"><span class="folio-brand">Catalog</span><span>Business Plan</span><span class="folio-no">07 / 07</span></div>
+    <div class="folio"><span class="folio-brand">Catalog</span><span>Business Plan</span><span class="folio-no">08 / 08</span></div>
     <section>
       <h3>Conversion sensitivity: ${pctTrim(convLoVal)} / ${pctTrim(mRev.productConversion)} / ${pctTrim(convHiVal)}</h3>
       ${convChart}
@@ -680,7 +691,7 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
           <p>Feed relevance, AI try-on, and checkout friction all express themselves in one number, sales per impression, measured automatically on every session. Every product decision is judged by its effect on it.</p>
         </div>
       </div>
-      <p style="margin-top:10px">These two numbers are the leverage that turns the flywheel: better conversion raises LTV, which buys more acquisition at the same ratio; cheaper acquisition compounds the base, which sharpens the data, which raises conversion. Both are measured automatically by the attribution layer, and every decision the company makes is held against its effect on one of the two.</p>
+      <p style="margin-top:10px">These two numbers are the leverage that turns the flywheel: better conversion raises LTV, which buys more acquisition at the same ratio; cheaper acquisition compounds the base, which sharpens the data, which raises conversion. Both are measured automatically by the attribution layer, and every decision the company makes is held against its effect on one of the two.<span class="endmark" aria-hidden="true"></span></p>
     </section>
 
     <div class="footer">
