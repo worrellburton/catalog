@@ -85,6 +85,42 @@ export default defineConfig({
           if (id.includes('node_modules/react/')
               || id.includes('node_modules/react-dom/')
               || id.includes('node_modules/scheduler/')) return 'react-vendor';
+          // Same treatment for the router (@remix-run/react sits on
+          // react-router) and the Supabase client. Without these pins,
+          // Rollup's shared-dependency math buried both inside the
+          // `admin` chunk — which made the 1.8 MB admin bundle (and its
+          // 300 KB stylesheet, via the manifest's css attribution) a
+          // STATIC dependency of the root shell, downloaded and
+          // render-blocking for every consumer visitor. Pinning them
+          // into vendor chunks keeps the admin chunk admin-only.
+          if (id.includes('node_modules/@remix-run/')
+              || id.includes('node_modules/react-router')
+              || id.includes('node_modules/turbo-stream')) return 'router-vendor';
+          if (id.includes('node_modules/@supabase/')) return 'supabase-vendor';
+          // Shared app layers (services, utils, hooks, data,
+          // constants) get one deterministic chunk. Same burial risk
+          // as the vendors above: any module shared by consumer code
+          // AND an admin route was getting parked inside the admin
+          // chunk by Rollup's shared-dependency math, which made the
+          // 1.8 MB admin bundle a static dependency of the consumer
+          // shell. The consumer needs nearly all of these layers
+          // anyway; the few admin-only services this over-includes
+          // cost ~15 KB gz, versus the whole admin chunk leaving the
+          // consumer first paint.
+          if (id.includes('/app/services/')
+              || id.includes('/app/utils/')
+              || id.includes('/app/hooks/')
+              || id.includes('/app/data/')
+              || id.includes('/app/types/')
+              || id.includes('/app/constants/')) return 'app-core';
+          // Components rendered by BOTH consumer surfaces and admin
+          // routes — without a pin these get buried in the admin chunk
+          // too, chaining 1.2 MB of admin code onto consumer overlays.
+          if (id.includes('/components/ParticleBackground')
+              || id.includes('/components/CatalogLogo')
+              || id.includes('/components/AvatarCropModal')
+              || id.includes('/components/CountUp')
+              || id.includes('/components/SimilarDebugModal')) return 'app-core';
           if (id.includes('/routes/admin/')) return 'admin';
           if (id.includes('/components/DeckView') || id.includes('/components/deck')) return 'deck';
           if (id.includes('/components/CreatorWallet')) return 'wallet';
