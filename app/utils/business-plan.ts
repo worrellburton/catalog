@@ -9,13 +9,21 @@
 //   - Revenue is told as a three-phase roadmap: affiliate first (what the
 //     projections are built on), then advertising, then direct brand
 //     partnerships. Later phases are explicitly NOT in the numbers.
-//   - "Your daily feed" leads the cover.
-//   - Marketing is a SYSTEM (not an engine), with no budget-split numbers.
-//   - The whole document prints to THREE pages: cover + two content sheets
-//     (hard page breaks between them; copy is kept tight on purpose — when
-//     adding content, cut something else on the same sheet).
+//   - Monochrome, black-and-white palette only — the Catalog brand.
+//   - Cover: the live product feed as a dimmed collage, the wordmark
+//     centered with no other text, "The AI for shopping" at the bottom.
+//   - Page order: cover · magazine sheet (centered exec summary, market,
+//     customer) · revenue phases + key assumptions · go-to-market flywheel
+//     (creators + AI-driven content) · LTV breakdown (assumption-flagged,
+//     with creator-cohort LTV) · appendix (base-plan graph + CAC and
+//     conversion sensitivity — the two numbers every decision is held to).
 
 import { CATALOG_LOGO_PATH, CATALOG_LOGO_VIEWBOX } from '~/constants/brand-logo';
+import { buildModel } from '~/services/model';
+import { niceCeiling, type Assumptions } from '~/services/projections';
+import type { GtmAssumptions } from '~/services/go-to-market';
+import { supabase } from '~/utils/supabase';
+import { withTransform } from '~/utils/supabase-image';
 
 export interface BusinessPlanData {
   generatedAt: string;
@@ -46,6 +54,9 @@ export interface BusinessPlanData {
     cashRaised: number;          // $
   };
   creatorPayout: number;         // fraction of revenue
+  /** Raw model assumptions, so the appendix can re-run the projection with
+      CAC / conversion nudged and chart the sensitivity. */
+  model: { rev: Assumptions; acq: GtmAssumptions };
   results: {
     exitArr: number;             // run-rate ARR at the end of the horizon
     total16moRevenue: number;
@@ -59,6 +70,8 @@ export interface BusinessPlanData {
     runwayMonths: number | null; // null = never runs out within the horizon
     avgBurn: number;
   };
+  /** Product-feed poster URLs for the cover collage (injected at open time). */
+  feedImages?: string[];
 }
 
 const usd = (n: number, compact = false): string => {
@@ -68,9 +81,94 @@ const usd = (n: number, compact = false): string => {
   }
   return `$${Math.round(n).toLocaleString('en-US')}`;
 };
+const usd2 = (n: number): string => `$${n.toFixed(2)}`;
 const num = (n: number): string => Math.round(n).toLocaleString('en-US');
 const pct = (frac: number, dp = 0): string => `${(frac * 100).toFixed(dp)}%`;
 const esc = (s: string): string => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+
+// ── SVG charts (monochrome, print-safe) ─────────────────────────────
+
+interface ChartSeries {
+  values: number[];
+  /** End-of-line annotation, e.g. "CPA −20% · $8.1M ARR". */
+  label: string;
+  /** Dashed gray for sensitivity variants; solid black for the base. */
+  variant?: boolean;
+}
+
+/** Multi-line month chart. Y axis is dollars/mo, X is months 1..N. */
+function lineChart(series: ChartSeries[], opts: { width?: number; height?: number; area?: boolean } = {}): string {
+  const W = opts.width ?? 720;
+  const H = opts.height ?? 200;
+  const pad = { l: 46, r: 150, t: 10, b: 20 };
+  const n = series[0]?.values.length ?? 0;
+  if (!n) return '';
+  const yMax = niceCeiling(Math.max(...series.flatMap(s => s.values), 1));
+  const x = (i: number) => pad.l + (i / (n - 1)) * (W - pad.l - pad.r);
+  const y = (v: number) => pad.t + (1 - v / yMax) * (H - pad.t - pad.b);
+
+  const grid: string[] = [];
+  for (let g = 0; g <= 4; g++) {
+    const v = (yMax * g) / 4;
+    const gy = y(v).toFixed(1);
+    grid.push(`<line x1="${pad.l}" y1="${gy}" x2="${W - pad.r}" y2="${gy}" stroke="#e4e4e4" stroke-width="1"/>`);
+    grid.push(`<text x="${pad.l - 6}" y="${Number(gy) + 3}" text-anchor="end" class="chart-tick">${usd(v, true)}</text>`);
+  }
+  const ticks = [1, 4, 8, 12, n].filter((m, i, arr) => arr.indexOf(m) === i && m <= n);
+  for (const m of ticks) {
+    grid.push(`<text x="${x(m - 1).toFixed(1)}" y="${H - 6}" text-anchor="middle" class="chart-tick">M${m}</text>`);
+  }
+
+  // End labels: nudge apart so variants ±20% never overlap the base label.
+  const slots = series
+    .map((s, i) => ({ i, y: y(s.values[n - 1]) }))
+    .sort((a, b) => a.y - b.y);
+  for (let k = 1; k < slots.length; k++) {
+    if (slots[k].y - slots[k - 1].y < 11) slots[k].y = slots[k - 1].y + 11;
+  }
+  const labelY = new Map(slots.map(s => [s.i, s.y]));
+
+  const lines = series.map((s, i) => {
+    const pts = s.values.map((v, j) => `${x(j).toFixed(1)},${y(v).toFixed(1)}`).join(' ');
+    const stroke = s.variant ? '#9a9a9a' : '#0a0a0a';
+    const dash = s.variant ? ' stroke-dasharray="4 3"' : '';
+    const areaPath = opts.area && !s.variant
+      ? `<polygon points="${pts} ${x(n - 1).toFixed(1)},${y(0).toFixed(1)} ${x(0).toFixed(1)},${y(0).toFixed(1)}" fill="rgba(10,10,10,0.06)"/>`
+      : '';
+    const ly = (labelY.get(i) ?? y(s.values[n - 1])) + 3;
+    return `${areaPath}
+      <polyline points="${pts}" fill="none" stroke="${stroke}" stroke-width="${s.variant ? 1.4 : 2}"${dash}/>
+      <text x="${W - pad.r + 8}" y="${ly.toFixed(1)}" class="chart-label${s.variant ? ' is-variant' : ''}">${esc(s.label)}</text>`;
+  }).join('');
+
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img">${grid.join('')}${lines}</svg>`;
+}
+
+/** Small bar chart for illustrative creator-cohort LTVs, with a dashed
+    reference line at the blended LTV assumption. */
+function cohortBarChart(bars: Array<[string, number]>, reference: number): string {
+  const W = 380;
+  const H = 170;
+  const pad = { l: 10, r: 10, t: 18, b: 24 };
+  const yMax = niceCeiling(Math.max(...bars.map(b => b[1]), reference));
+  const bw = (W - pad.l - pad.r) / bars.length;
+  const y = (v: number) => pad.t + (1 - v / yMax) * (H - pad.t - pad.b);
+
+  const rects = bars.map(([label, v], i) => {
+    const bx = pad.l + i * bw + bw * 0.18;
+    const by = y(v);
+    return `<rect x="${bx.toFixed(1)}" y="${by.toFixed(1)}" width="${(bw * 0.64).toFixed(1)}" height="${(H - pad.b - by).toFixed(1)}" fill="#0a0a0a"/>
+      <text x="${(pad.l + i * bw + bw / 2).toFixed(1)}" y="${(by - 5).toFixed(1)}" text-anchor="middle" class="chart-label">${esc(usd(v))}</text>
+      <text x="${(pad.l + i * bw + bw / 2).toFixed(1)}" y="${H - 8}" text-anchor="middle" class="chart-tick">${esc(label)}</text>`;
+  }).join('');
+  const ry = y(reference).toFixed(1);
+
+  return `<svg class="chart chart-bars" viewBox="0 0 ${W} ${H}" role="img">
+    ${rects}
+    <line x1="${pad.l}" y1="${ry}" x2="${W - pad.r}" y2="${ry}" stroke="#9a9a9a" stroke-width="1.2" stroke-dasharray="4 3"/>
+    <text x="${W - pad.r}" y="${Number(ry) - 4}" text-anchor="end" class="chart-label is-variant">blended LTV assumption</text>
+  </svg>`;
+}
 
 /** Build the full business-plan HTML document string. */
 export function buildBusinessPlanHtml(d: BusinessPlanData): string {
@@ -79,12 +177,48 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
   const e = d.engagement;
   const rev = d.revenue;
   const c = d.costs;
-  // null runway = cash survives the whole horizon.
-  const runwayLabel = r.runwayMonths == null ? `${d.horizonMonths}+ mo` : `${r.runwayMonths} mo`;
-  const runwayWords = r.runwayMonths == null ? `more than ${d.horizonMonths} months` : `${r.runwayMonths} months`;
+
+  // ── LTV breakdown (mirrors investorMetrics: ARPU × margin × lifetime) ──
+  const impsPerUser = e.sessionsPerUserPerMonth * e.impressionsPerSession;
+  const ordersPerUser = impsPerUser * rev.productConversion;
+  const gmvPerUser = ordersPerUser * rev.avgOrderValue;
+  const arpu = gmvPerUser * rev.affiliateCommission;
+  const contribPerUser = arpu * c.grossMargin;
+  const lifetimeMonths = a.monthlyActiveChurn > 0 ? Math.min(60, 1 / a.monthlyActiveChurn) : 60;
+
+  // ── Appendix series: base plan + CAC / conversion nudged ±20% ─────────
+  const { rev: mRev, acq: mAcq } = d.model;
+  const revSeries = (rv: Assumptions, aq: GtmAssumptions) => buildModel(rv, aq, true).revenue.map(m => m.revenue);
+  const arrOf = (vals: number[]) => usd((vals[vals.length - 1] ?? 0) * 12, true);
+  const base = revSeries(mRev, mAcq);
+  const cpaLo = revSeries(mRev, { ...mAcq, cpa: mAcq.cpa * 0.8 });
+  const cpaHi = revSeries(mRev, { ...mAcq, cpa: mAcq.cpa * 1.2 });
+  const convLo = revSeries({ ...mRev, productConversion: mRev.productConversion * 0.8 }, mAcq);
+  const convHi = revSeries({ ...mRev, productConversion: mRev.productConversion * 1.2 }, mAcq);
+
+  const baseChart = lineChart(
+    [{ values: base, label: `Base · ${arrOf(base)} ARR` }],
+    { area: true },
+  );
+  const cacChart = lineChart([
+    { values: cpaLo, label: `CPA −20% · ${arrOf(cpaLo)} ARR`, variant: true },
+    { values: base, label: `Base ${usd(mAcq.cpa)} · ${arrOf(base)} ARR` },
+    { values: cpaHi, label: `CPA +20% · ${arrOf(cpaHi)} ARR`, variant: true },
+  ], { height: 180 });
+  const convChart = lineChart([
+    { values: convHi, label: `Conv +20% · ${arrOf(convHi)} ARR`, variant: true },
+    { values: base, label: `Base ${pct(rev.productConversion, 2)} · ${arrOf(base)} ARR` },
+    { values: convLo, label: `Conv −20% · ${arrOf(convLo)} ARR`, variant: true },
+  ], { height: 180 });
+
+  // Cover collage: cycle whatever feed posters loaded into a 4×5 wall.
+  const feed = d.feedImages ?? [];
+  const coverTiles = feed.length
+    ? Array.from({ length: 20 }, (_, i) => `<img src="${esc(feed[i % feed.length])}" alt="" loading="eager" />`).join('')
+    : '';
 
   // Assumption rows kept to the load-bearing ten so the table fits the
-  // two-sheet budget: label, value, the benchmark/why.
+  // one-page budget: label, value, the benchmark/why.
   const assumptions: Array<[string, string, string]> = [
     ['Total advertising spend', usd(a.budget), `over ${d.horizonMonths} months`],
     ['Blended CPA (paid)', usd(a.cpa), '$5-30 consumer benchmark'],
@@ -98,31 +232,50 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
     ['Monthly OpEx (avg)', usd(c.monthlyOpex), `incl. ${pct(d.creatorPayout)} creator payout`],
   ];
 
-  // Headline results — six cards, one row of three each in print. The
-  // model's end-of-horizon run-rate is presented as exactly that — never
-  // as an "exit".
-  const headline: Array<[string, string, string]> = [
-    ['Run-rate ARR', usd(r.exitArr), `annualised at month ${d.horizonMonths}`],
-    [`${d.horizonMonths}-mo revenue`, usd(r.total16moRevenue), 'commission earned'],
-    ['GMV', usd(r.gmvTotal, true), `${num(r.totalSales)} orders`],
-    ['LTV : CAC', `${r.ltvCac.toFixed(1)}×`, `${usd(r.ltv)} LTV · ${usd(r.blendedCac)} CAC`],
-    ['CAC payback', `${r.cacPaybackMonths.toFixed(1)} mo`, `${num(r.avgMau)} avg MAU`],
-    ['Runway', runwayLabel, `${usd(r.avgBurn, true)}/mo avg burn`],
-  ];
-
-  const card = ([label, value, sub]: [string, string, string]) => `
-    <div class="metric">
-      <div class="metric-label">${esc(label)}</div>
-      <div class="metric-value">${esc(value)}</div>
-      ${sub ? `<div class="metric-sub">${esc(sub)}</div>` : ''}
-    </div>`;
-
   const assumptionRow = ([label, value, why]: [string, string, string]) => `
     <tr>
       <td class="a-label">${esc(label)}</td>
       <td class="a-value">${esc(value)}</td>
       <td class="a-why">${esc(why)}</td>
     </tr>`;
+
+  // LTV calculation chain — each row is one factor and the running result.
+  const ltvSteps: Array<[string, string, string, string]> = [
+    ['', 'Sessions / user / month', num(e.sessionsPerUserPerMonth), ''],
+    ['×', 'Product impressions / session', num(e.impressionsPerSession), `${num(impsPerUser)} impressions / user / mo`],
+    ['×', 'Product conversion', pct(rev.productConversion, 2), `${ordersPerUser.toFixed(2)} orders / user / mo`],
+    ['×', 'Average order value', usd(rev.avgOrderValue), `${usd2(gmvPerUser)} GMV / user / mo`],
+    ['×', 'Affiliate commission', pct(rev.affiliateCommission), `${usd2(arpu)} revenue / user / mo`],
+    ['×', 'Gross margin', pct(c.grossMargin), `${usd2(contribPerUser)} contribution / user / mo`],
+    ['×', 'Expected lifetime (1 ÷ monthly churn)', `${Math.round(lifetimeMonths)} months`, `${usd(r.ltv)} LTV*`],
+  ];
+  const ltvRow = ([op, label, value, runningResult]: [string, string, string, string]) => `
+    <tr>
+      <td class="l-op">${op}</td>
+      <td class="l-label">${esc(label)}</td>
+      <td class="l-value">${esc(value)}</td>
+      <td class="l-run">${esc(runningResult)}</td>
+    </tr>`;
+
+  // GTM flywheel — condensed from the /admin/gtm flywheel deck.
+  const gtmSteps: Array<[string, string, string]> = [
+    ['Step 1', 'Hire.', 'Three BD and marketing consultants, month-to-month for three months, specialised in creator relations. Start small and scale what converts — marketing is a system run by people, and it needs to start being built.'],
+    ['Step 2', 'Deploy budget effectively.', 'A disciplined, mission-driven team deploying the budget as effectively as possible: every contact logged in the CRM, weekly targets held to, laser-focused on driving CPA down.'],
+    ['Step 3', 'Learn and repeat.', 'Continuous improvement every cycle — lean into what is working, cut what is not, tighten strategy, campaigns, and creator management. Drive CPA as low as it will go.'],
+  ];
+  const gtmCard = ([stage, title, body]: [string, string, string]) => `
+    <div class="phase">
+      <div class="phase-stage">${esc(stage)}</div>
+      <h4>${esc(title)}</h4>
+      <p>${esc(body)}</p>
+    </div>`;
+
+  // Creator-cohort LTV chart: illustrative cohorts around the blended
+  // assumption, until real attributed orders replace them.
+  const cohortChart = cohortBarChart(
+    [['Creator A', r.ltv * 0.6], ['Creator B', r.ltv * 1.0], ['Creator C', r.ltv * 1.45]],
+    r.ltv,
+  );
 
   return `<!doctype html>
 <html lang="en">
@@ -131,91 +284,143 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
 <meta name="viewport" content="width=device-width, initial-scale=1" />
 <title>Catalog Business Plan</title>
 <style>
-  :root { --ink:#0f172a; --muted:#64748b; --line:#e7e9ef; --indigo:#6366f1; --paper:#ffffff; }
+  :root { --ink:#0a0a0a; --muted:#6b6b6b; --line:#e4e4e4; --paper:#ffffff; }
   * { box-sizing: border-box; }
-  html, body { margin: 0; padding: 0; background: #f3f4f8; color: var(--ink);
+  html, body { margin: 0; padding: 0; background: #f4f4f4; color: var(--ink);
     font-family: -apple-system, BlinkMacSystemFont, 'Inter', 'Segoe UI', Roboto, sans-serif;
     line-height: 1.55; -webkit-font-smoothing: antialiased; }
   .page { max-width: 860px; margin: 0 auto; padding: 48px 64px 56px; background: var(--paper); }
-  .toolbar { position: sticky; top: 0; display: flex; justify-content: flex-end; gap: 8px;
-    padding: 12px 16px; background: rgba(243,244,248,0.9); backdrop-filter: blur(8px); }
+  .toolbar { position: sticky; top: 0; z-index: 2; display: flex; justify-content: flex-end; gap: 8px;
+    padding: 12px 16px; background: rgba(244,244,244,0.9); backdrop-filter: blur(8px); }
   .toolbar button { font: inherit; font-size: 13px; font-weight: 600; cursor: pointer;
     border: 1px solid var(--line); background: #fff; color: var(--ink); border-radius: 8px; padding: 8px 14px; }
-  .toolbar button.primary { background: var(--indigo); color: #fff; border-color: var(--indigo); }
+  .toolbar button.primary { background: var(--ink); color: #fff; border-color: var(--ink); }
 
-  /* Print: cover + exactly two content sheets. Type tightens a step so each
-     sheet's content fits one page; sections never split across pages. */
+  /* Print: cover + one sheet per .page. Type tightens a step so each sheet
+     fits one page; sections never split across pages. */
   @media print {
     .toolbar { display: none; }
-    body { background: #fff; font-size: 11px; line-height: 1.4; }
-    .page { padding: 0; max-width: none; }
-    .cover-page { min-height: 100vh; page-break-after: always; -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-    .sheet-2 { page-break-before: always; }
+    body { background: #fff; font-size: 11px; line-height: 1.45;
+      -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    .page { padding: 0; max-width: none; page-break-before: always; }
+    .cover-page { min-height: 100vh; page-break-after: always; }
     section { page-break-inside: avoid; margin-bottom: 16px; }
     .kicker { margin-bottom: 3px; }
-    h2 { font-size: 16px; margin-bottom: 6px; }
+    h2 { font-size: 17px; margin-bottom: 6px; }
+    .display { font-size: 24px; }
     p { margin-bottom: 7px; }
-    .metric { padding: 8px 10px; }
-    .metric-value { font-size: 15px; }
-    .metrics { gap: 8px; }
     table.assumptions { font-size: 10.5px; }
     table.assumptions td { padding: 4px 8px; }
-    .phases, .pillars { gap: 8px; }
-    .phase, .pillar { padding: 9px 11px; }
-    .phase h4, .pillar h4 { font-size: 12px; }
-    .phase p, .pillar p { font-size: 10.5px; line-height: 1.4; }
+    table.ltv-chain td { padding: 4px 8px; }
+    .phases { gap: 8px; }
+    .phase { padding: 9px 11px; }
+    .phase h4 { font-size: 12px; }
+    .phase p { font-size: 10.5px; line-height: 1.4; }
+    .statband { padding: 10px 0; }
     .footer { margin-top: 14px; padding-top: 8px; }
   }
 
-  /* Cover — its own full black page, white wordmark (the real logo). */
-  .cover-page { background: #000; color: #fff; min-height: 100vh;
-    display: flex; flex-direction: column; justify-content: center; align-items: flex-start; padding: 72px 64px; }
-  .cover-logo { width: clamp(200px, 30vw, 300px); height: auto; display: block; margin-bottom: 44px; }
-  .cover-page .doc-title { margin: 0 0 10px; color: #fff; }
-  .cover-page .doc-sub { color: rgba(255,255,255,0.72); }
-  .cover-page .doc-meta { color: rgba(255,255,255,0.5); }
-  .cover-page .doc-meta b { color: #fff; }
-  .doc-title { font-size: 44px; font-weight: 800; letter-spacing: -0.035em; line-height: 1.05; }
-  .doc-sub { margin: 0; color: var(--muted); font-size: 16px; }
-  .doc-sub .lead { color: #fff; font-weight: 700; }
-  .doc-meta { margin-top: 14px; font-size: 12px; color: var(--muted); letter-spacing: 0.02em; }
-  .doc-meta b { color: var(--ink); text-transform: capitalize; }
+  /* ── Cover: the product feed, dimmed, behind the centered wordmark. ── */
+  .cover-page { position: relative; overflow: hidden; background: #000; color: #fff; min-height: 100vh;
+    display: flex; align-items: center; justify-content: center;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .cover-feed { position: absolute; inset: 0; display: grid;
+    grid-template-columns: repeat(4, 1fr); grid-template-rows: repeat(5, 1fr); }
+  .cover-feed img { width: 100%; height: 100%; object-fit: cover; display: block;
+    filter: grayscale(1); opacity: 0.9; }
+  .cover-scrim { position: absolute; inset: 0;
+    background: linear-gradient(rgba(0,0,0,0.62), rgba(0,0,0,0.82)); }
+  .cover-logo { position: relative; z-index: 1; width: clamp(240px, 38vw, 400px); height: auto; display: block; }
+  .cover-tagline { position: absolute; z-index: 1; bottom: 52px; left: 0; right: 0; margin-inline: auto;
+    width: fit-content; font-size: 17px; font-weight: 500; letter-spacing: 0.01em; color: rgba(255,255,255,0.92); }
 
   section { margin: 0 0 26px; }
-  .kicker { font-size: 11px; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: var(--indigo); margin: 0 0 6px; }
+  .kicker { font-size: 11px; font-weight: 800; letter-spacing: 0.16em; text-transform: uppercase;
+    color: var(--ink); margin: 0 0 6px; }
+  .kicker::after { content: ''; display: block; width: 32px; border-top: 2px solid var(--ink); margin-top: 5px; }
   h2 { font-size: 22px; font-weight: 800; letter-spacing: -0.02em; margin: 0 0 10px; }
   h3 { font-size: 14px; font-weight: 700; margin: 14px 0 4px; }
-  p { margin: 0 0 10px; color: #334155; }
+  p { margin: 0 0 10px; color: #303030; }
+  .display { font-family: Georgia, 'Times New Roman', serif; font-weight: 700; font-size: 32px;
+    line-height: 1.15; letter-spacing: -0.01em; }
 
-  .metrics { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 6px 0 8px; }
-  .metric { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; background: #fcfcfe; }
-  .metric-label { font-size: 10px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: var(--muted); }
-  .metric-value { font-size: 21px; font-weight: 800; letter-spacing: -0.01em; margin-top: 2px; }
-  .metric-sub { font-size: 11px; color: var(--muted); margin-top: 2px; }
+  /* ── Magazine sheet ── */
+  .exec { text-align: center; }
+  .exec .kicker::after { margin-inline: auto; }
+  .exec p { max-width: 56ch; margin-inline: auto; }
+  .statband { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
+    border-top: 1px solid var(--ink); border-bottom: 1px solid var(--ink);
+    padding: 14px 0; margin: 18px 0 6px; }
+  .stat-value { font-size: 22px; font-weight: 800; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+  .stat-label { font-size: 10px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); margin-top: 2px; }
+  .mag-row { display: grid; grid-template-columns: 5fr 7fr; gap: 28px; align-items: start; margin-top: 8px; }
+  .mag-row.flip { grid-template-columns: 7fr 5fr; }
+  .pullquote { font-family: Georgia, 'Times New Roman', serif; font-size: 24px; line-height: 1.3;
+    font-weight: 700; border-left: 3px solid var(--ink); padding-left: 16px; margin: 4px 0; }
+  .dropcap::first-letter { font-family: Georgia, 'Times New Roman', serif; font-size: 46px; font-weight: 700;
+    float: left; line-height: 0.85; padding: 4px 8px 0 0; }
+  .sidestats { display: grid; gap: 12px; border-left: 1px solid var(--line); padding-left: 16px; }
+  .sidestats .stat-value { font-size: 20px; }
 
   table.assumptions { width: 100%; border-collapse: collapse; font-size: 12.5px; margin-top: 4px; }
   table.assumptions th { text-align: left; font-size: 10px; letter-spacing: 0.08em; text-transform: uppercase;
-    color: var(--muted); padding: 5px 10px; border-bottom: 2px solid var(--line); }
+    color: var(--muted); padding: 5px 10px; border-bottom: 2px solid var(--ink); }
   table.assumptions td { padding: 6px 10px; border-bottom: 1px solid var(--line); vertical-align: top; }
   .a-label { font-weight: 600; color: var(--ink); width: 36%; }
   .a-value { font-weight: 700; width: 22%; font-variant-numeric: tabular-nums; }
   .a-why { color: var(--muted); }
 
-  .pillars { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; }
-  .pillar { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
-  .pillar h4 { margin: 0 0 4px; font-size: 13.5px; }
-  .pillar p { margin: 0; font-size: 12px; color: var(--muted); }
-
-  /* Revenue roadmap — three phases that build on each other. */
+  /* Phase / step cards — shared by the revenue roadmap and the GTM steps. */
   .phases { display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin: 6px 0 10px; }
   .phase { border: 1px solid var(--line); border-radius: 12px; padding: 14px; }
-  .phase.now { border-color: var(--indigo); background: #fafaff; }
-  .phase-stage { font-size: 10px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--indigo); }
+  .phase.now { border-color: var(--ink); }
+  .phase-stage { font-size: 10px; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--ink); }
   .phase-stage .tag { display: inline-block; margin-left: 6px; padding: 1px 7px; border-radius: 999px;
-    background: var(--indigo); color: #fff; font-size: 9px; letter-spacing: 0.06em; vertical-align: 1px; }
+    background: var(--ink); color: #fff; font-size: 9px; letter-spacing: 0.06em; vertical-align: 1px; }
   .phase h4 { margin: 5px 0 5px; font-size: 14px; letter-spacing: -0.01em; }
   .phase p { margin: 0; font-size: 12px; color: var(--muted); line-height: 1.5; }
   .phase-note { font-size: 11.5px; color: var(--muted); font-style: italic; }
+
+  /* GTM: the AI-driven content banner. */
+  .ai-banner { background: var(--ink); color: #fff; border-radius: 12px; padding: 16px 18px; margin: 12px 0;
+    -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+  .ai-banner .kicker { color: #fff; }
+  .ai-banner .kicker::after { border-color: #fff; }
+  .ai-banner p { color: rgba(255,255,255,0.88); margin: 0; font-size: 13px; }
+
+  /* LTV chain. */
+  table.ltv-chain { width: 100%; border-collapse: collapse; font-size: 12.5px; margin: 6px 0 10px; }
+  table.ltv-chain td { padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: middle; }
+  .l-op { width: 22px; font-weight: 800; color: var(--muted); }
+  .l-label { font-weight: 600; }
+  .l-value { font-weight: 700; width: 18%; font-variant-numeric: tabular-nums; }
+  .l-run { color: var(--muted); width: 36%; text-align: right; font-variant-numeric: tabular-nums; }
+  table.ltv-chain tr:last-child td { border-bottom: 2px solid var(--ink); }
+  table.ltv-chain tr:last-child .l-run { color: var(--ink); font-weight: 800; }
+  .footnote { font-size: 11px; color: var(--muted); font-style: italic; }
+  .ltv-vs { display: flex; gap: 24px; align-items: baseline; margin: 8px 0 4px; }
+  .ltv-vs b { font-size: 18px; }
+
+  /* Creator attribution flow. */
+  .flow { display: flex; align-items: stretch; gap: 8px; margin: 10px 0; }
+  .flow-step { flex: 1; border: 1px solid var(--line); border-radius: 10px; padding: 9px 11px; font-size: 11.5px; color: #303030; }
+  .flow-step b { display: block; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; }
+  .flow-arrow { align-self: center; font-weight: 800; color: var(--muted); }
+  .cohort-grid { display: grid; grid-template-columns: 7fr 5fr; gap: 20px; align-items: center; }
+
+  /* Charts. */
+  .chart { width: 100%; height: auto; display: block; margin: 6px 0 4px; }
+  .chart-tick { font-size: 9px; fill: var(--muted); font-family: inherit; }
+  .chart-label { font-size: 9.5px; font-weight: 700; fill: var(--ink); font-family: inherit; }
+  .chart-label.is-variant { font-weight: 500; fill: var(--muted); }
+  .chart-caption { font-size: 11px; color: var(--muted); margin: 0 0 12px; }
+  .lens-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-top: 10px; }
+  .lens { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; }
+  .lens h4 { margin: 0 0 4px; font-size: 13.5px; }
+  .lens p { margin: 0; font-size: 12px; color: var(--muted); }
+  .feature-band { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin: 8px 0 14px; }
+  .feature { border: 1px solid var(--ink); border-radius: 12px; padding: 12px 14px; }
+  .feature .stat-value { font-size: 24px; }
 
   .footer { margin-top: 28px; padding-top: 14px; border-top: 1px solid var(--line); font-size: 11px; color: var(--muted); }
   .disclaimer { font-size: 11px; color: var(--muted); font-style: italic; }
@@ -225,41 +430,55 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
   <div class="toolbar">
     <button class="primary" onclick="window.print()">Save as PDF</button>
   </div>
+
+  <!-- Cover — the product feed behind the wordmark. No other copy. -->
   <div class="cover-page">
+    ${coverTiles ? `<div class="cover-feed">${coverTiles}</div>` : ''}
+    <div class="cover-scrim"></div>
     <svg class="cover-logo" viewBox="${CATALOG_LOGO_VIEWBOX}" role="img" aria-label="Catalog"><path fill="#ffffff" d="${CATALOG_LOGO_PATH}" /></svg>
-    <h1 class="doc-title">Business Plan</h1>
-    <p class="doc-sub"><span class="lead">Your daily feed.</span> The shopping app for everything — one platform across web, iOS, and Android, one user base.</p>
-    <div class="doc-meta">Generated ${esc(d.generatedAt)} · Financial scenario: <b>${esc(d.scenario)}</b> · ${d.horizonMonths}-month horizon</div>
+    <p class="cover-tagline">The AI for shopping</p>
   </div>
 
-  <!-- Sheet 1 — the story: summary, market, customer, product, revenue model. -->
-  <div class="page sheet-1">
-    <section>
+  <!-- Sheet 1 — magazine: centered summary, market, customer. -->
+  <div class="page">
+    <section class="exec">
       <p class="kicker">Executive summary</p>
-      <h2>The shopping destination where discovery converts.</h2>
+      <h2 class="display">The shopping destination where discovery converts.</h2>
       <p>Catalog is your daily feed for everything you shop — one consumer app across web, iOS, and Android with a single user base, turning short, shoppable video into a personal storefront. Shoppers scroll a feed tuned to their taste, tap a look, see the exact products in it, and check out with the merchant. We hold no inventory, so the business scales with attention rather than logistics.</p>
-      <p>Revenue starts with affiliate commission on every sale we drive — the model this plan's projections are built on. As the audience and conversion data compound, the same feed opens two larger lines we already have the rails for: native advertising sold against proven purchase intent, and direct brand partnerships at negotiated take rates above affiliate baselines. Each phase funds and de-risks the next. On affiliate economics alone, the plan projects <b>${usd(r.total16moRevenue)}</b> of commission revenue over ${d.horizonMonths} months on <b>${usd(r.gmvTotal, true)}</b> of GMV, reaching a <b>${usd(r.exitArr)}</b> run-rate ARR by month ${d.horizonMonths} at an LTV:CAC of <b>${r.ltvCac.toFixed(1)}×</b>.</p>
+      <p>Revenue starts with affiliate commission on every sale we drive — the model these projections are built on. Advertising and direct brand partnerships follow on the same rails, and are upside on top of every figure in this plan.</p>
+      <div class="statband">
+        <div><div class="stat-value">${usd(r.total16moRevenue)}</div><div class="stat-label">${d.horizonMonths}-mo commission revenue</div></div>
+        <div><div class="stat-value">${usd(r.gmvTotal, true)}</div><div class="stat-label">GMV · ${num(r.totalSales)} orders</div></div>
+        <div><div class="stat-value">${usd(r.exitArr)}</div><div class="stat-label">Run-rate ARR at month ${d.horizonMonths}</div></div>
+        <div><div class="stat-value">${r.ltvCac.toFixed(1)}×</div><div class="stat-label">LTV : CAC</div></div>
+      </div>
     </section>
 
     <section>
       <p class="kicker">01 · Market &amp; opportunity</p>
-      <h2>Discovery commerce, where the spend is moving.</h2>
-      <p>Commerce is shifting from search to feed. Social platforms proved that shoppable video converts, but they bury it inside content people came to see for other reasons — entertainment first, shopping as an interruption. Catalog is the destination built for it: a shopping-first daily feed across every brand, with attribution and unit economics designed in from day one. We monetize the purchase intent that social platforms create but don't own.</p>
+      <div class="mag-row">
+        <div class="pullquote">Commerce is shifting from search to feed.</div>
+        <p class="dropcap">Social platforms proved that shoppable video converts, but they bury it inside content people came to see for other reasons — entertainment first, shopping as an interruption. Catalog is the destination built for it: a shopping-first daily feed across every brand, with attribution and unit economics designed in from day one. We monetize the purchase intent that social platforms create but don't own.</p>
+      </div>
     </section>
 
     <section>
       <p class="kicker">02 · Target customer</p>
-      <h2>The shopper who lives in their feed.</h2>
-      <p>Our core customer is the everyday consumer who already discovers products by scrolling — the person who screenshots outfits, saves links, and asks "where's that from?" They are mobile-first, visually driven, and shop across categories: apparel, beauty, home, lifestyle. Think the audience of Amazon, Pinterest, and TikTok Shop, not a fashion-only niche — discovery-led, impulse-friendly, returning ${num(e.sessionsPerUserPerMonth)} times a month for ~${num(e.sessionTimeMinutes)}-minute sessions. Their taste is scattered across screenshots and tabs; we give them one feed, every brand, tuned to the individual — a personal storefront that gets sharper with every tap, save, and shop.</p>
+      <div class="mag-row flip">
+        <p class="dropcap">Our core customer is the everyday consumer who already discovers products by scrolling — the person who screenshots outfits, saves links, and asks "where's that from?" They are mobile-first, visually driven, and shop across categories: apparel, beauty, home, lifestyle. Think the audience of Amazon, Pinterest, and TikTok Shop, not a fashion-only niche. Their taste is scattered across screenshots and tabs; we give them one feed, every brand, tuned to the individual — a personal storefront that gets sharper with every tap, save, and shop.</p>
+        <div class="sidestats">
+          <div><div class="stat-value">${num(e.sessionsPerUserPerMonth)}×</div><div class="stat-label">Sessions / month</div></div>
+          <div><div class="stat-value">~${num(e.sessionTimeMinutes)} min</div><div class="stat-label">Per session</div></div>
+          <div><div class="stat-value">Every brand</div><div class="stat-label">One feed, one taste profile</div></div>
+        </div>
+      </div>
     </section>
+  </div>
 
+  <!-- Sheet 2 — revenue phases + the key assumptions, one page. -->
+  <div class="page">
     <section>
-      <p class="kicker">03 · Product</p>
-      <h2>Shoppable video, indexed by AI.</h2>
-      <p>Every look is a short video paired with its products. We encode each one into a vector database — composition, color, garment, and mood become coordinates a model can reason about — so the feed surfaces visually similar products in ~12ms. Creators publish looks, brands' catalogs sync automatically, AI generates and polishes the creative, and every sale is attributed back to us. That attribution layer is the strategic asset: first-party conversion data that personalises the feed today and becomes the sales story for advertisers and brand partners tomorrow.</p>
-    </section>
-    <section>
-      <p class="kicker">04 · Revenue model</p>
+      <p class="kicker">03 · Revenue model</p>
       <h2>Three revenue lines, unlocked in sequence.</h2>
       <div class="phases">
         <div class="phase now">
@@ -278,31 +497,12 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
           <p>Negotiated take rates above affiliate baselines, exclusive drops, co-created creator campaigns, and managed storefronts on the partner platform we've already built. The deepest margins and the strongest moat.</p>
         </div>
       </div>
-      <p class="phase-note">The financials below are built on Phase 1 economics only — advertising and direct-partnership revenue are upside on top of every figure in this document.</p>
-      <p>Unit economics: revenue = impressions × conversion × order value × commission. Each acquired user is worth <b>${usd(r.ltv)}</b> against a blended CAC of <b>${usd(r.blendedCac)}</b> — <b>${r.ltvCac.toFixed(1)}×</b> LTV:CAC, paid back in <b>${r.cacPaybackMonths.toFixed(1)} months</b>, with word-of-mouth adding ${pct(a.organicGrowth)} of the base per month.</p>
-    </section>
-  </div>
-
-  <!-- Sheet 2 — the business: marketing system, financials. -->
-  <div class="page sheet-2">
-    <section>
-      <p class="kicker">05 · Marketing system</p>
-      <h2>A marketing system that compounds.</h2>
-      <p>Marketing is run as a system by a small, disciplined team, built on creators as the primary channel:</p>
-      <div class="pillars">
-        <div class="pillar"><h4>Digital Marketing</h4><p>The performance and organic engine: SEO, paid, social, lifecycle, ASO. Drives installs and sessions at a ~${usd(a.cpa)} blended CPA.</p></div>
-        <div class="pillar"><h4>Business Development</h4><p>Supply and distribution: creators, brands, and affiliate networks that fill the feed — and seed the Phase 2/3 brand relationships.</p></div>
-        <div class="pillar"><h4>Strategy &amp; Branding</h4><p>Positioning, brand, and measurement: why this is THE shopping app, tied back to the model.</p></div>
-      </div>
-      <p style="margin-top:12px">Budget deploys against weekly targets logged in a CRM; creators are paid on signups and ongoing engagement; every cycle the learnings drive CPA down.</p>
+      <p class="phase-note">The financials in this plan are built on Phase 1 economics only — advertising and direct-partnership revenue are upside on top of every figure in this document.</p>
     </section>
 
     <section>
-      <p class="kicker">06 · Financial assumptions</p>
-      <h2>${d.horizonMonths}-month projection (${esc(d.scenario)} case).</h2>
-      <div class="metrics">
-        ${headline.map(card).join('')}
-      </div>
+      <p class="kicker">04 · Key assumptions</p>
+      <h2>The ten numbers the plan runs on (${esc(d.scenario)} case, ${d.horizonMonths} months).</h2>
       <table class="assumptions">
         <thead><tr><th>Assumption</th><th>Value</th><th>Why / benchmark</th></tr></thead>
         <tbody>
@@ -311,26 +511,139 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
       </table>
       <p class="disclaimer" style="margin-top:8px">Model projections from the assumptions above, not guarantees. Affiliate (Phase 1) revenue only.</p>
     </section>
+  </div>
+
+  <!-- Sheet 3 — go-to-market: creators + AI-driven content, three steps. -->
+  <div class="page">
+    <section>
+      <p class="kicker">05 · Go-to-market</p>
+      <h2>Turn the flywheel on.</h2>
+      <p>Marketing runs through creators — our primary advertising channel. Creators post their link, build catalogs, and share them with their audience; they are paid on every signup they bring and on that audience's ongoing engagement. Word-of-mouth adds ${pct(a.organicGrowth)} of the base each month on top of paid acquisition at a ~${usd(a.cpa)} blended CPA.</p>
+      <div class="ai-banner">
+        <p class="kicker">AI-driven content</p>
+        <p>A big part of this motion is AI-generated content: users try products on with AI, build catalogs of what they love, and post them. The people we acquire also make the content that acquires the next wave — creation compounds while production cost doesn't.</p>
+      </div>
+      <div class="phases">
+        ${gtmSteps.map(gtmCard).join('')}
+      </div>
+    </section>
+  </div>
+
+  <!-- Sheet 4 — LTV: assumption-flagged breakdown + creator cohorts. -->
+  <div class="page">
+    <section>
+      <p class="kicker">06 · Lifetime value*</p>
+      <h2>What a user is worth — and how we'll know.</h2>
+      <p>LTV is the contribution a user generates over their expected lifetime: monthly revenue per user, kept margin applied, multiplied by how long the average user stays active. Step by step:</p>
+      <table class="ltv-chain">
+        <tbody>
+          ${ltvSteps.map(ltvRow).join('')}
+        </tbody>
+      </table>
+      <div class="ltv-vs">
+        <span><b>${usd(r.ltv)}</b> LTV*</span>
+        <span>vs</span>
+        <span><b>${usd2(r.blendedCac)}</b> blended CAC</span>
+        <span>→ <b>${r.ltvCac.toFixed(1)}×</b> LTV:CAC, paid back in <b>${r.cacPaybackMonths.toFixed(1)} months</b></span>
+      </div>
+      <p class="footnote">* These are assumptions. Pre-product, LTV can't be measured — only assumed: every input above comes from the assumption table, not observed behaviour. The attribution layer exists to replace each of these assumptions with a measurement, starting from the first order.</p>
+    </section>
 
     <section>
-      <p class="kicker">07 · Use of funds</p>
-      <h2>Capital to turn the flywheel on.</h2>
-      <p>This plan runs on <b>${usd(c.cashRaised)}</b> of cash at an average monthly burn of <b>${usd(r.avgBurn, true)}</b> — <b>${runwayWords}</b> of runway. Capital goes into the marketing system above and the team that runs it: compounding organic growth, driving CAC down each cycle, and building the audience and conversion record that unlock the advertising and direct-partnership phases.</p>
+      <p class="kicker">Creator cohorts</p>
+      <h2>LTV we can measure, per creator.</h2>
+      <p>Every creator shares a personal link. When their audience signs up through it, those users are tagged as that creator's cohort — and every order they ever place is attributed back to it. From day one the platform computes the lifetime value of each creator's audience automatically: which creators to double down on, and exactly what a signup from them is worth.</p>
+      <div class="flow">
+        <div class="flow-step"><b>Creator posts link</b>Catalogs shared to their socials</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step"><b>Audience signs up</b>Users tagged to the creator's cohort</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step"><b>Orders attributed</b>Every purchase tied back to the cohort</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step"><b>Creator LTV</b>Cohort value computed automatically</div>
+      </div>
+      <div class="cohort-grid">
+        <div>${cohortChart}</div>
+        <p class="chart-caption">Illustrative — cohorts will price differently. A creator whose audience converts at 1.5× the blended assumption earns more per signup; one below it gets coached or cut. Creator payouts follow measured cohort LTV, not follower counts.</p>
+      </div>
+    </section>
+  </div>
+
+  <!-- Sheet 5 — appendix: the two numbers every decision is held against. -->
+  <div class="page">
+    <section>
+      <p class="kicker">Appendix · Sensitivity</p>
+      <h2>The two numbers that run the company.</h2>
+      <p>The model's load-bearing inputs are <b>blended CAC</b> (what a user costs) and <b>product conversion</b> (what a feed impression is worth). Below: the base plan, then each nudged ±20% with everything else held constant.</p>
+      <div class="feature-band">
+        <div class="feature"><div class="stat-value">${usd2(r.blendedCac)}</div><div class="stat-label">Blended CAC at base · paid CPA ${usd(a.cpa)}</div></div>
+        <div class="feature"><div class="stat-value">${pct(rev.productConversion, 2)}</div><div class="stat-label">Product conversion at base · sale per impression</div></div>
+      </div>
+
+      <h3>Base plan — monthly commission revenue</h3>
+      ${baseChart}
+      <p class="chart-caption">${d.horizonMonths}-month base case: ${usd(r.total16moRevenue)} total commission on ${usd(r.gmvTotal, true)} GMV.</p>
+
+      <h3>CAC sensitivity — paid CPA ±20%</h3>
+      ${cacChart}
+      <h3>Conversion sensitivity — product conversion ±20%</h3>
+      ${convChart}
+
+      <div class="lens-grid">
+        <div class="lens">
+          <h4>CAC is the marketing lens.</h4>
+          <p>Every channel, creator deal, and campaign is judged by its effect on blended CAC. Attribution measures it automatically per channel and per creator cohort, so budget continuously moves to whatever acquires cheapest.</p>
+        </div>
+        <div class="lens">
+          <h4>Conversion is the product lens.</h4>
+          <p>Feed relevance, AI try-on, and checkout friction all express themselves in one number — sales per impression — measured automatically on every session. Every product decision is judged by its effect on it.</p>
+        </div>
+      </div>
+      <p style="margin-top:10px">These two numbers are the leverage that turns the flywheel: better conversion raises LTV, which buys more acquisition at the same ratio; cheaper acquisition compounds the base, which sharpens the data, which raises conversion. Both are measured automatically by the attribution layer — and every decision the company makes is held against its effect on one of the two.</p>
     </section>
 
     <div class="footer">
-      Catalog · Confidential business plan · Generated ${esc(d.generatedAt)}. Projections are illustrative and depend on the stated assumptions.
+      Catalog · Confidential business plan · Generated ${esc(d.generatedAt)} · ${esc(d.scenario)} scenario, ${d.horizonMonths}-month horizon. Projections are illustrative and depend on the stated assumptions.
     </div>
   </div>
 </body>
 </html>`;
 }
 
+// ── Cover collage feed ───────────────────────────────────────────────
+
+/** Pull a wall of product-feed posters for the cover. Best-effort: any
+    failure (offline, RLS, empty table) falls back to the plain black cover. */
+async function fetchFeedImages(count = 20): Promise<string[]> {
+  try {
+    const { data, error } = await supabase
+      .from('products')
+      .select('primary_video_poster_url, primary_image_url, image_url')
+      .not('primary_video_poster_url', 'is', null)
+      .limit(count * 2);
+    if (error || !data) return [];
+    const urls = data
+      .map(p => p.primary_video_poster_url || p.primary_image_url || p.image_url)
+      .filter((u): u is string => typeof u === 'string' && /^https?:\/\//i.test(u));
+    return [...new Set(urls)]
+      .slice(0, count)
+      .map(u => withTransform(u, { width: 480, quality: 70 }) ?? u);
+  } catch {
+    return [];
+  }
+}
+
+const withTimeout = <T,>(p: Promise<T>, ms: number, fallback: T): Promise<T> =>
+  Promise.race([p, new Promise<T>(resolve => setTimeout(() => resolve(fallback), ms))]);
+
 /** Open the business plan in a new tab (reader can Save as PDF from there). */
-export function openBusinessPlan(d: BusinessPlanData): void {
+export async function openBusinessPlan(d: BusinessPlanData): Promise<void> {
   if (typeof window === 'undefined') return;
-  const html = buildBusinessPlanHtml(d);
+  // Open synchronously inside the click gesture so popup blockers allow it,
+  // then fill the document once the cover collage has been fetched.
   const w = window.open('', '_blank');
+  const feedImages = await withTimeout(fetchFeedImages(), 5000, []);
+  const html = buildBusinessPlanHtml({ ...d, feedImages });
   if (!w) {
     // Popup blocked — fall back to a download.
     const blob = new Blob([html], { type: 'text/html;charset=utf-8' });
