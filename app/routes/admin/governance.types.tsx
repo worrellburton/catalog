@@ -18,6 +18,8 @@ import ParticleBackground from '~/components/ParticleBackground';
 import TypeBrainGraph, { type BrainNode, type BrainProduct, type BrainViewMode } from '~/components/admin/TypeBrainGraph';
 import {
   auditProductTypes,
+  computeEffectiveGenders,
+  computeTypePaths,
   createTypeNode,
   executeGovernanceOps,
   fetchGovernanceProducts,
@@ -51,36 +53,8 @@ interface HistoryEntry {
   at: number;
 }
 
-/** Full ancestry string per node, matching products.type_path format. */
-function computePaths(nodes: TypeNode[]): Map<string, string> {
-  const byId = new Map(nodes.map(n => [n.id, n]));
-  const memo = new Map<string, string>();
-  const path = (n: TypeNode): string => {
-    const cached = memo.get(n.id);
-    if (cached) return cached;
-    const parent = n.parentId ? byId.get(n.parentId) : null;
-    const v = parent ? `${path(parent)} / ${n.name}` : n.name;
-    memo.set(n.id, v);
-    return v;
-  };
-  nodes.forEach(path);
-  return memo;
-}
-
-/** Effective gender per node: its own, else the nearest ancestor's. */
-function computeGenders(nodes: TypeNode[]): Map<string, string | null> {
-  const byId = new Map(nodes.map(n => [n.id, n]));
-  const memo = new Map<string, string | null>();
-  const eff = (n: TypeNode): string | null => {
-    if (memo.has(n.id)) return memo.get(n.id) ?? null;
-    const parent = n.parentId ? byId.get(n.parentId) : null;
-    const v = n.gender ?? (parent ? eff(parent) : null);
-    memo.set(n.id, v);
-    return v;
-  };
-  nodes.forEach(eff);
-  return memo;
-}
+const computePaths = computeTypePaths;
+const computeGenders = computeEffectiveGenders;
 
 export default function AdminGovernanceTypes() {
   const [tree, setTree] = useState<TypeNode[]>([]);
@@ -92,6 +66,11 @@ export default function AdminGovernanceTypes() {
   const [drill, setDrill] = useState<{ nodeId: string; ox: number; oy: number } | null>(null);
   // Multi-select inside the drill view → "Assign to type…" re-types them.
   const [drillSel, setDrillSel] = useState<Set<string>>(new Set());
+  // Drag-marquee over the drill grid (client coords; cards re-measured per
+  // move so scrolling mid-drag stays correct). base = selection at gesture
+  // start so shift-drags extend instead of replace.
+  const drillMarquee = useRef<{ x0: number; y0: number; base: Set<string> } | null>(null);
+  const [drillRect, setDrillRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignQuery, setAssignQuery] = useState('');
   // Double-click the drill title to rename the type (the canvas double-click
@@ -121,6 +100,8 @@ export default function AdminGovernanceTypes() {
   const [toast, setToast] = useState<{ label: string; key: number } | null>(null);
   // "Move to…" armed: the next node click re-parents the whole selection.
   const [pickMode, setPickMode] = useState(false);
+  // Organize button: each press re-runs the tidy radial layout.
+  const [organizeSignal, setOrganizeSignal] = useState(0);
   // Ring dials — view preferences, sticky per admin via localStorage.
   const [ringOpacity, setRingOpacity] = useState(() =>
     Number(typeof localStorage !== 'undefined' && localStorage.getItem('gov-ring-opacity')) || 0.15);
@@ -539,6 +520,14 @@ export default function AdminGovernanceTypes() {
           <button
             type="button"
             className="gov-ghost"
+            title="Evenly space every ring and keep branches in their own sectors"
+            onClick={() => setOrganizeSignal(n => n + 1)}
+          >
+            ✦ Organize
+          </button>
+          <button
+            type="button"
+            className="gov-ghost"
             title="Scan every product for a better-fitting type and review the recommended moves"
             onClick={() => setAudit(auditProductTypes(products, tree))}
           >
@@ -576,6 +565,8 @@ export default function AdminGovernanceTypes() {
             handleReparent(editableSelection, targetId);
           }}
           onReparent={handleReparent}
+          onRename={handleRename}
+          organizeSignal={organizeSignal}
           onDelete={handleDelete}
           onAddChild={(id) => { void handleAddChild(id); }}
           onAssignProducts={handleAssign}
@@ -605,6 +596,7 @@ export default function AdminGovernanceTypes() {
               <button
                 key={prod.id}
                 type="button"
+                data-prod-id={prod.id}
                 className={`gov-drill-card${isSel ? ' is-selected' : ''}`}
                 title={`${prod.name} — click to select`}
                 onClick={() => setDrillSel(prev => {
@@ -633,9 +625,43 @@ export default function AdminGovernanceTypes() {
           };
           return (
             <div
-              className="gov-drill"
+              className={`gov-drill${drillRect ? ' is-marquee' : ''}`}
               style={{ ['--ox' as string]: `${drill.ox}px`, ['--oy' as string]: `${drill.oy}px` }}
+              onPointerDown={ev => {
+                // Marquee starts on empty space only — buttons/inputs keep
+                // their own gestures (card toggle, pickers, header).
+                if ((ev.target as HTMLElement).closest('button, input, a')) return;
+                (ev.currentTarget as Element).setPointerCapture?.(ev.pointerId);
+                drillMarquee.current = {
+                  x0: ev.clientX, y0: ev.clientY,
+                  base: ev.shiftKey ? new Set(drillSel) : new Set(),
+                };
+                if (!ev.shiftKey) setDrillSel(new Set());
+              }}
+              onPointerMove={ev => {
+                const m = drillMarquee.current;
+                if (!m) return;
+                const [lx, hx] = [Math.min(m.x0, ev.clientX), Math.max(m.x0, ev.clientX)];
+                const [ly, hy] = [Math.min(m.y0, ev.clientY), Math.max(m.y0, ev.clientY)];
+                setDrillRect({ x: lx, y: ly, w: hx - lx, h: hy - ly });
+                if (hx - lx < 4 && hy - ly < 4) return;
+                const hits = new Set(m.base);
+                document.querySelectorAll<HTMLElement>('.gov-drill [data-prod-id]').forEach(el => {
+                  const r = el.getBoundingClientRect();
+                  if (r.left < hx && r.right > lx && r.top < hy && r.bottom > ly) {
+                    hits.add(el.dataset.prodId!);
+                  }
+                });
+                setDrillSel(hits);
+              }}
+              onPointerUp={() => { drillMarquee.current = null; setDrillRect(null); }}
             >
+              {drillRect && (
+                <div
+                  className="gov-drill-marquee"
+                  style={{ left: drillRect.x, top: drillRect.y, width: drillRect.w, height: drillRect.h }}
+                />
+              )}
               <div className="gov-drill-head">
                 <button type="button" className="gov-ghost" onClick={() => setDrill(null)}>
                   ← Back to the brain

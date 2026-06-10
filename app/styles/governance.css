@@ -1039,3 +1039,39 @@ html.gov-void .tb-wrap {
 }
 .gov-audit-apply:disabled { opacity: 0.4; cursor: default; }
 .gov-audit-apply:not(:disabled):hover { background: #a5b4fc; }
+
+/* ── Label-click rename (graph) ── */
+.tb-node .tb-label { pointer-events: auto; cursor: text; }
+.tb-node .tb-label:hover { text-decoration: underline; }
+.tb-rename {
+  position: absolute;
+  transform: translate(-50%, -50%);
+  width: 150px;
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  text-align: center;
+  color: #fff;
+  background: #18181b;
+  border: 1.5px solid #818cf8;
+  border-radius: 8px;
+  padding: 6px 8px;
+  outline: none;
+  z-index: 7;
+}
+
+/* ── Drill drag-marquee ── */
+.gov-drill.is-marquee { user-select: none; cursor: crosshair; }
+.gov-drill-marquee {
+  position: fixed;
+  z-index: 30;
+  background: rgba(129, 140, 248, 0.12);
+  border: 1px dashed #818cf8;
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+/* ── Viewport fit: the page lives BELOW the 53px admin topbar, so a
+   100vh page always clipped its bottom edge (worst on tall monitors —
+   the drill's last card row vanished). Size to the remaining space. ── */
+html.gov-void .gov-page.gov-types { height: calc(100vh - 53px); }

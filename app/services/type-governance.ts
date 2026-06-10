@@ -250,6 +250,37 @@ export function auditProductTypes(
   return recs;
 }
 
+/** Full ancestry string per node, matching products.type_path format. */
+export function computeTypePaths(nodes: TypeNode[]): Map<string, string> {
+  const byId = new Map(nodes.map(n => [n.id, n]));
+  const memo = new Map<string, string>();
+  const path = (n: TypeNode): string => {
+    const cached = memo.get(n.id);
+    if (cached) return cached;
+    const parent = n.parentId ? byId.get(n.parentId) : null;
+    const v = parent ? `${path(parent)} / ${n.name}` : n.name;
+    memo.set(n.id, v);
+    return v;
+  };
+  nodes.forEach(path);
+  return memo;
+}
+
+/** Effective gender per node: its own, else the nearest ancestor's. */
+export function computeEffectiveGenders(nodes: TypeNode[]): Map<string, string | null> {
+  const byId = new Map(nodes.map(n => [n.id, n]));
+  const memo = new Map<string, string | null>();
+  const eff = (n: TypeNode): string | null => {
+    if (memo.has(n.id)) return memo.get(n.id) ?? null;
+    const parent = n.parentId ? byId.get(n.parentId) : null;
+    const v = n.gender ?? (parent ? eff(parent) : null);
+    memo.set(n.id, v);
+    return v;
+  };
+  nodes.forEach(eff);
+  return memo;
+}
+
 export async function createTypeNode(name: string, parentId: string | null): Promise<TypeNode | null> {
   if (!supabase) return null;
   const { data, error } = await supabase
