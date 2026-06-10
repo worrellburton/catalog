@@ -93,18 +93,20 @@ export async function ingestRainforestProduct(product: RainforestProduct): Promi
   return { id: inserted.id };
 }
 
-// Batch ingest - used by the search-mode multi-select flow.
-export async function ingestRainforestProducts(products: RainforestProduct[]): Promise<{ inserted: number; failed: number }> {
+// Batch ingest - used by the search-mode multi-select flow. `ids` carries
+// the ingested row ids so callers can post-process (e.g. assign a type).
+export async function ingestRainforestProducts(products: RainforestProduct[]): Promise<{ inserted: number; failed: number; ids: string[] }> {
   let inserted = 0;
   let failed = 0;
+  const ids: string[] = [];
   for (const p of products) {
     try {
       const row = await ingestRainforestProduct(p);
-      if (row) inserted += 1;
+      if (row) { inserted += 1; ids.push(row.id); }
       else failed += 1;
     } catch {
       failed += 1;
     }
   }
-  return { inserted, failed };
+  return { inserted, failed, ids };
 }
