@@ -1590,8 +1590,11 @@ export default function ProductPage({
             </h2>
             <div className="pd-similar-grid">
               {/* CreativeCard handles the layoutId morph + shared video element
-                  so a tap here continues the trail with the same fluid handoff. */}
-              {fillToExact(moreLikeThis, similarLimit).map((c, i) => (
+                  so a tap here continues the trail with the same fluid handoff.
+                  Render the unique matches only (capped at the limit) — never
+                  pad with fillToExact, which cycles duplicates to reach the
+                  count and put the same tile on screen twice. */}
+              {moreLikeThis.slice(0, similarLimit).map((c, i) => (
                 <CreativeCard
                   key={`mlt-${c.id}-${i}`}
                   creative={c}
