@@ -90,10 +90,10 @@ const pct = (frac: number, dp = 0): string => `${(frac * 100).toFixed(dp)}%`;
 const pctTrim = (frac: number): string => `${(frac * 100).toFixed(2).replace(/\.?0+$/, '')}%`;
 const esc = (s: string): string => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 
-// Catalog editorial red — the one accent in the document. Kept as a TS
-// const so the SVG charts and the stylesheet stay in lockstep.
-const ACCENT = '#e8472b';
-const ACCENT_SOFT = 'rgba(232, 71, 43, 0.08)';
+// Pure ink palette (founder's call: no color accents in the document).
+// Kept as TS consts so the SVG charts and the stylesheet stay in lockstep.
+const ACCENT = '#141210';
+const ACCENT_SOFT = 'rgba(20, 18, 16, 0.06)';
 
 // ── SVG charts (monochrome, print-safe) ─────────────────────────────
 
@@ -218,12 +218,12 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
     { values: cpaLo, label: `CPA ${usd(cpaLoVal)} · ${arrOf(cpaLo)} ARR`, variant: true },
     { values: base, label: `CPA ${usd(mAcq.cpa)} (base) · ${arrOf(base)} ARR` },
     { values: cpaHi, label: `CPA ${usd(cpaHiVal)} · ${arrOf(cpaHi)} ARR`, variant: true },
-  ], { height: 190, axisLabel: 'Monthly commission revenue' });
+  ], { height: 148, axisLabel: 'Monthly commission revenue' });
   const convChart = lineChart([
     { values: convHi, label: `Conv ${pctTrim(convHiVal)} · ${arrOf(convHi)} ARR`, variant: true },
     { values: base, label: `Conv ${pctTrim(mRev.productConversion)} (base) · ${arrOf(base)} ARR` },
     { values: convLo, label: `Conv ${pctTrim(convLoVal)} · ${arrOf(convLo)} ARR`, variant: true },
-  ], { height: 190, axisLabel: 'Monthly commission revenue' });
+  ], { height: 148, axisLabel: 'Monthly commission revenue' });
 
   // Cover collage: pack the page with as many product tiles as the feed
   // can fill — grid density scales with how many images came back, and
@@ -239,6 +239,16 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
     ? Array.from({ length: coverCols * coverRows }, (_, i) => `<img src="${esc(feed[i % feed.length])}" alt="" loading="eager" />`).join('')
     : '';
   const coverGridStyle = `grid-template-columns: repeat(${coverCols}, minmax(0, 1fr)); grid-template-rows: repeat(${coverRows}, minmax(0, 1fr));`;
+
+  // Editorial photo strip at the foot of the magazine sheet — a different
+  // slice of the feed than the cover's top rows, so the pages don't repeat.
+  const stripImages = feed.length >= 28 ? feed.slice(20, 28) : feed.slice(0, 8);
+  const photoStrip = stripImages.length
+    ? `<div class="photo-strip">
+        <div class="photo-strip-row">${stripImages.map(u => `<img src="${esc(u)}" alt="" loading="eager" />`).join('')}</div>
+        <p class="photo-strip-caption">From the live product feed.</p>
+      </div>`
+    : '';
 
   // Assumption rows kept to the load-bearing ten so the table fits the
   // one-page budget: label, value, the benchmark/why.
@@ -334,7 +344,10 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
     .cover-page { min-height: 100vh; page-break-after: always; }
     section { page-break-inside: avoid; break-inside: avoid; margin-bottom: 18px; }
     .statband, .phases, .lens-grid, .lens, .feature-band, .chart, .flow, .steps,
-    .features, table.ltv-chain { page-break-inside: avoid; break-inside: avoid; }
+    .features, .photo-strip, table.ltv-chain { page-break-inside: avoid; break-inside: avoid; }
+    .photo-strip { margin-top: 20px; }
+    .solutions { page-break-inside: avoid; break-inside: avoid; margin-top: 20px; }
+    .solution p { font-size: 9.5px; }
     .folio { margin-bottom: 18px; }
     .divider { min-height: 82vh; }
     .kicker { margin-bottom: 3px; }
@@ -386,7 +399,8 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
   .display { font-weight: 700; font-size: 28px; line-height: 1.14; letter-spacing: -0.015em; }
 
   /* ── Magazine sheet ── */
-  .exec { text-align: center; }
+  .exec { text-align: center; margin-bottom: 40px; }
+  .mag-row { margin-bottom: 14px; }
   .exec .kicker::after { margin-inline: auto; }
   .exec p { max-width: 58ch; margin-inline: auto; }
   .statband { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px;
@@ -403,6 +417,16 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
   .dropcap::first-letter { font-family: 'Iowan Old Style', Palatino, Georgia, serif; font-size: 36px; font-weight: 700;
     float: left; line-height: 0.82; padding: 4px 8px 0 0; color: var(--ink); }
   .features { display: grid; gap: 14px; border-left: 1.5px solid var(--ink); padding-left: 18px; }
+  .solutions { display: grid; grid-template-columns: repeat(3, 1fr); gap: 26px; margin-top: 30px; }
+  .solution { border-top: 2px solid var(--ink); padding-top: 9px; }
+  .solution span { display: block; font-size: 9px; font-weight: 800; letter-spacing: 0.16em;
+    text-transform: uppercase; color: var(--muted); margin-bottom: 4px; }
+  .solution p { margin: 0; font-size: 11px; line-height: 1.55; color: #3a352f; }
+  .photo-strip { margin-top: 30px; border-top: 2px solid var(--ink); padding-top: 12px; }
+  .photo-strip-row { display: grid; grid-template-columns: repeat(8, minmax(0, 1fr)); gap: 7px; }
+  .photo-strip-row img { width: 100%; aspect-ratio: 3 / 4; object-fit: cover; display: block; min-width: 0; }
+  .photo-strip-caption { margin: 8px 0 0; font-size: 9px; font-weight: 700; letter-spacing: 0.14em;
+    text-transform: uppercase; color: var(--muted); }
   .feature-item h4 { margin: 0 0 3px; font-size: 13.5px; font-weight: 700; letter-spacing: -0.01em; }
   .feature-item p { margin: 0; font-size: 10.5px; line-height: 1.55; color: var(--muted); }
 
@@ -501,7 +525,7 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
 
   <!-- Sheet 1 — magazine: centered summary, market, customer. -->
   <div class="page">
-    <div class="folio"><span class="folio-brand">Catalog</span><span>Business Plan</span><span class="folio-no">02 / 08</span></div>
+    <div class="folio"><span class="folio-brand">Catalog</span><span>Business Plan</span><span class="folio-no">02 / 07</span></div>
     <section class="exec">
       <p class="kicker">Executive summary</p>
       <h2 class="display">The shopping destination where discovery converts.</h2>
@@ -537,11 +561,26 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
         </div>
       </div>
     </section>
+    <div class="solutions">
+      <div class="solution">
+        <span>For shoppers</span>
+        <p>The most elegant way to discover products: one feed, every brand, already tuned to your taste.</p>
+      </div>
+      <div class="solution">
+        <span>For creators</span>
+        <p>The easiest way to earn on retail content: publish a look, every product tagged, paid on the sales it drives.</p>
+      </div>
+      <div class="solution">
+        <span>For brands</span>
+        <p>Full transparency on the numbers: attribution to the order, analytics per look, per creator, per product.</p>
+      </div>
+    </div>
+    ${photoStrip}
   </div>
 
   <!-- Sheet 2 — revenue phases + the key assumptions, one page. -->
   <div class="page">
-    <div class="folio"><span class="folio-brand">Catalog</span><span>Business Plan</span><span class="folio-no">03 / 08</span></div>
+    <div class="folio"><span class="folio-brand">Catalog</span><span>Business Plan</span><span class="folio-no">03 / 07</span></div>
     <section>
       <p class="kicker">03 · Revenue model</p>
       <h2>Three revenue lines, unlocked in sequence.</h2>
@@ -586,7 +625,7 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
 
   <!-- Sheet 3 — go-to-market: creators + AI-driven content, three steps. -->
   <div class="page">
-    <div class="folio"><span class="folio-brand">Catalog</span><span>Business Plan</span><span class="folio-no">04 / 08</span></div>
+    <div class="folio"><span class="folio-brand">Catalog</span><span>Business Plan</span><span class="folio-no">04 / 07</span></div>
     <section>
       <p class="kicker">05 · Go-to-market</p>
       <h2>This is just the beginning.</h2>
@@ -603,7 +642,7 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
 
   <!-- Sheet 4 — appendix divider: just the word, centered. -->
   <div class="page">
-    <div class="folio"><span class="folio-brand">Catalog</span><span>Business Plan</span><span class="folio-no">05 / 08</span></div>
+    <div class="folio"><span class="folio-brand">Catalog</span><span>Business Plan</span><span class="folio-no">05 / 07</span></div>
     <div class="divider">
       <h2 class="display">Appendix</h2>
     </div>
@@ -611,7 +650,7 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
 
   <!-- Sheet 5 — LTV: assumption-flagged breakdown + creator cohorts. -->
   <div class="page">
-    <div class="folio"><span class="folio-brand">Catalog</span><span>Business Plan</span><span class="folio-no">06 / 08</span></div>
+    <div class="folio"><span class="folio-brand">Catalog</span><span>Business Plan</span><span class="folio-no">06 / 07</span></div>
     <section>
       <p class="kicker">Appendix A · Lifetime value*</p>
       <h2>What a user is worth, and how we'll know.</h2>
@@ -653,7 +692,7 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
 
   <!-- Sheet 5 — appendix: the two numbers every decision is held against. -->
   <div class="page">
-    <div class="folio"><span class="folio-brand">Catalog</span><span>Business Plan</span><span class="folio-no">07 / 08</span></div>
+    <div class="folio"><span class="folio-brand">Catalog</span><span>Business Plan</span><span class="folio-no">07 / 07</span></div>
     <section>
       <p class="kicker">Appendix B · Sensitivity</p>
       <h2>The two numbers that run the company.</h2>
@@ -670,11 +709,6 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
       ${cacChart}
     </section>
 
-  </div>
-
-  <!-- Sheet 6 — appendix continued: conversion sensitivity + the two lenses. -->
-  <div class="page">
-    <div class="folio"><span class="folio-brand">Catalog</span><span>Business Plan</span><span class="folio-no">08 / 08</span></div>
     <section>
       <h3>Conversion sensitivity: ${pctTrim(convLoVal)} / ${pctTrim(mRev.productConversion)} / ${pctTrim(convHiVal)}</h3>
       ${convChart}
