@@ -109,7 +109,7 @@ interface ChartSeries {
 function lineChart(series: ChartSeries[], opts: { width?: number; height?: number; area?: boolean; axisLabel?: string } = {}): string {
   const W = opts.width ?? 720;
   const H = opts.height ?? 200;
-  const pad = { l: 46, r: 150, t: opts.axisLabel ? 26 : 10, b: 20 };
+  const pad = { l: 46, r: 175, t: opts.axisLabel ? 26 : 10, b: 20 };
   const n = series[0]?.values.length ?? 0;
   if (!n) return '';
   const yMax = niceCeiling(Math.max(...series.flatMap(s => s.values), 1));
@@ -733,12 +733,13 @@ async function fetchFeedImages(count = 120): Promise<string[]> {
   try {
     const { data, error } = await supabase
       .from('products')
-      .select('primary_video_poster_url, primary_image_url, image_url')
+      .select('primary_image_url')
       .eq('is_active', true)
+      .not('primary_image_url', 'is', null)
       .limit(500);
     if (error || !data) return [];
     const urls = data
-      .map(p => p.primary_video_poster_url || p.primary_image_url || p.image_url)
+      .map(p => p.primary_image_url)
       .filter((u): u is string => typeof u === 'string' && /^https?:\/\//i.test(u));
     return [...new Set(urls)]
       .slice(0, count)
