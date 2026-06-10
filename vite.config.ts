@@ -203,6 +203,8 @@ export default defineConfig({
             route("projections", "routes/admin/projections.tsx");
             route("creative", "routes/admin/creative.tsx");
             route("catalogs", "routes/admin/catalogs.tsx");
+            route("governance", "routes/admin/governance.tsx");
+            route("governance/types", "routes/admin/governance.types.tsx");
             route("catalogs/:slug", "routes/admin/catalogs.$slug.tsx");
             route("branding", "routes/admin/branding.tsx");
             route("ui", "routes/admin/ui.tsx", () => {
