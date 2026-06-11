@@ -423,7 +423,10 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
   /* Print: cover + one sheet per .page; nothing splits across pages. */
   @media print {
     .toolbar { display: none; }
-    body { background: #fff; font-size: 9px; line-height: 1.5;
+    /* The whole printed sheet is paper-colored — without this the page
+       background only covered the content box, leaving the rest of the
+       sheet white (a two-tone page). */
+    body { background: var(--paper); font-size: 9px; line-height: 1.5;
       -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .page { padding: 26px 34px; max-width: none; margin: 0; box-shadow: none;
       page-break-before: always; background: var(--paper); }
