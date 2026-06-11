@@ -10,7 +10,7 @@ import { lookPoster, productPoster } from '~/services/media-resolver';
 import { emitSavedToast } from '~/utils/savedToast';
 import { useCommentsEnabled } from '~/hooks/useCommentsEnabled';
 import { useEscapeKey } from '~/hooks/useEscapeKey';
-import LookCard from './LookCard';
+import CreativeCardV2 from './CreativeCardV2';
 import { sortByGarmentRole } from '~/utils/garmentOrder';
 import ContinuousFeed from './ContinuousFeed';
 import { useActiveGenderFilter } from '~/hooks/useActiveGenderFilter';
@@ -1042,14 +1042,15 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
               )}
             </h3>
             <div className="look-feed-grid">
-              {feedSections.looksLikeThis.slice(0, similarLimit).map(fl => (
-                <LookCard
+              {feedSections.looksLikeThis.slice(0, similarLimit).map((fl, i) => (
+                <CreativeCardV2
                   key={`like-${fl.id}`}
+                  slotId={`${directorScope}:like-${fl.id}`}
                   look={fl}
                   className="look-card"
                   onOpenLook={handleFeedLookClick}
                   onOpenCreator={onOpenCreator}
-                  onCreateCatalog={onCreateCatalog}
+                  priority={i < 2}
                 />
               ))}
             </div>
@@ -1068,13 +1069,13 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                 .filter(fl => fl.id !== look.id)
                 .slice(0, moreFromCreatorLimit)
                 .map(fl => (
-                  <LookCard
+                  <CreativeCardV2
                     key={`creator-more-${fl.id}`}
+                    slotId={`${directorScope}:creator-more-${fl.id}`}
                     look={fl}
                     className="look-card"
                     onOpenLook={handleFeedLookClick}
                     onOpenCreator={onOpenCreator}
-                    onCreateCatalog={onCreateCatalog}
                   />
                 ))}
             </div>

@@ -4,7 +4,7 @@ import { Product, Look, creators as staticCreators } from '~/data/looks';
 import ContinuousFeed from '~/components/ContinuousFeed';
 import { useActiveGenderFilter } from '~/hooks/useActiveGenderFilter';
 import { useEscapeKey } from '~/hooks/useEscapeKey';
-import CreativeCard from '~/components/CreativeCard';
+import CreativeCardV2 from '~/components/CreativeCardV2';
 import CreatorAvatarFollow from '~/components/CreatorAvatarFollow';
 import { useTrailVideo, useTrailVideoManager } from '~/components/TrailVideoHost';
 import { useInViewport } from '~/hooks/useInViewport';
@@ -450,7 +450,9 @@ function LookTile({
 }
 
 /** Pads `arr` to exactly `count` items by cycling duplicates, or trims.
- *  Safe for CreativeCard (own <video> per instance, no shared pool). */
+ *  Safe for CreativeCardV2: each rendered tile gets a per-index slotId
+ *  (`…:ymal-<id>-<i>`), so padded duplicates never collide on a shared
+ *  director pool slot. */
 function fillToExact<T>(arr: T[], count: number): T[] {
   if (arr.length === 0) return [];
   if (arr.length >= count) return arr.slice(0, count);
@@ -1066,8 +1068,8 @@ export default function ProductPage({
 
   const heroClassName = `pd-hero${effectiveCreative ? ' pd-hero--video' : heroStill ? ' pd-hero--image' : ' pd-hero--empty'}`;
 
-  // Tap-handoff poster: when CreativeCard navigates here, it stashes a
-  // canvas snapshot of the playing card frame on window.__feedTapPosters.
+  // Tap-handoff poster: when a CreativeCardV2 tile navigates here, it stashes
+  // a canvas snapshot of the playing card frame on window.__feedTapPosters.
   // We pick it up synchronously so the hero can paint that exact frame
   // BEFORE the trail-host has had a chance to swap in the live element.
   // Cleared after read so the next tap doesn't reuse a stale snapshot.
@@ -1589,17 +1591,21 @@ export default function ProductPage({
               )}
             </h2>
             <div className="pd-similar-grid">
-              {/* CreativeCard handles the layoutId morph + shared video element
-                  so a tap here continues the trail with the same fluid handoff.
+              {/* CreativeCardV2 plays via the shared director pool (same as the
+                  feed) and donates its live <video> on tap, so the trail
+                  continues with the same fluid handoff. slotId is scoped to this
+                  overlay (`${directorScope}:…`) so the tiles actually play.
                   Render the unique matches only (capped at the limit) — never
                   pad with fillToExact, which cycles duplicates to reach the
                   count and put the same tile on screen twice. */}
               {moreLikeThis.slice(0, similarLimit).map((c, i) => (
-                <CreativeCard
+                <CreativeCardV2
                   key={`mlt-${c.id}-${i}`}
+                  slotId={`${directorScope}:mlt-${c.id}-${i}`}
                   creative={c}
                   className="look-card"
                   onOpenProduct={onOpenCreative}
+                  priority={i < 2}
                 />
               ))}
             </div>
@@ -1678,8 +1684,9 @@ export default function ProductPage({
               </h2>
               <div className="pd-similar-grid">
                 {fillToExact(popularFallback, ymalLimit).map((c, i) => (
-                  <CreativeCard
+                  <CreativeCardV2
                     key={`ymal-${c.id}-${i}`}
+                    slotId={`${directorScope}:ymal-${c.id}-${i}`}
                     creative={c}
                     className="look-card"
                     onOpenProduct={onOpenCreative}
