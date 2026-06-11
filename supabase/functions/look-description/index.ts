@@ -1,7 +1,8 @@
-// Generates (and caches) a UNIQUE description for a single look. Gemini is
-// shown the look's poster frame (the still that the consumer feed paints) plus
-// the list of products featured in the look, and writes 1-2 grounded sentences
-// about that specific outfit. Cached in look_descriptions keyed by look_id.
+// Generates (and caches) a UNIQUE editorial commentary for a single look.
+// Gemini PRO is shown the look's actual video clip, the product photos, and
+// each product's brand/type/price, and writes 3-4 fun, sophisticated
+// sentences of commentary. Cached in look_descriptions keyed by look_id;
+// pre-pro cached rows regenerate organically on next request.
 //
 // Callable two ways:
 //   1. With { lookId, title, imageUrl, products } from the client (on view).
@@ -55,10 +56,25 @@ const CORS_HEADERS = {
 };
 
 const FRESH_DAYS = 180;
-const MODEL = 'gemini-2.5-flash';
+// Top-shelf Gemini (founder's call): the description is a piece of
+// editorial content people should WANT to read, so it gets the pro model,
+// the actual video, and the product images — not a single still on flash.
+const MODEL = 'gemini-2.5-pro';
 const GEMINI_ENDPOINT = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL}:generateContent`;
 const IMAGE_TIMEOUT_MS = 8_000;
-const GEMINI_TIMEOUT_MS = 20_000;
+const VIDEO_TIMEOUT_MS = 20_000;
+const GEMINI_TIMEOUT_MS = 60_000;
+/** Inline-data budget for the clip (Gemini inline request cap is ~20MB
+ *  total; the 480w mobile variant of a look runs 1.5–5MB). */
+const VIDEO_MAX_BYTES = 14_000_000;
+const PRODUCT_IMAGE_MAX = 4;
+
+/** Small rendition of a Supabase-storage image so four product shots
+ *  don't blow the request budget; non-storage URLs pass through. */
+function smallRendition(url: string): string {
+  if (!/\/storage\/v1\/object\/public\//.test(url)) return url;
+  return url.replace('/storage/v1/object/public/', '/storage/v1/render/image/public/') + '?width=512&quality=75&resize=contain';
+}
 
 function jsonRes(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -105,16 +121,21 @@ function heuristicDescription(title: string, products: ProductInput[]): string {
   return `A look built around ${piece}${by} — every piece is shoppable.`;
 }
 
-async function fetchImageInline(url: string): Promise<{ mime: string; data: string } | null> {
+async function fetchInline(
+  url: string,
+  kind: 'image' | 'video',
+): Promise<{ mime: string; data: string } | null> {
   const ctrl = new AbortController();
-  const timer = setTimeout(() => ctrl.abort(), IMAGE_TIMEOUT_MS);
+  const timer = setTimeout(() => ctrl.abort(), kind === 'video' ? VIDEO_TIMEOUT_MS : IMAGE_TIMEOUT_MS);
   try {
     const res = await fetch(url, { signal: ctrl.signal });
     if (!res.ok) return null;
-    const mime = res.headers.get('content-type')?.split(';')[0] || 'image/jpeg';
-    if (!mime.startsWith('image/')) return null;
+    const fallback = kind === 'video' ? 'video/mp4' : 'image/jpeg';
+    const mime = res.headers.get('content-type')?.split(';')[0] || fallback;
+    if (!mime.startsWith(`${kind}/`)) return null;
     const bytes = new Uint8Array(await res.arrayBuffer());
     if (bytes.length === 0) return null;
+    if (kind === 'video' && bytes.length > VIDEO_MAX_BYTES) return null;
     return { mime, data: bytesToBase64(bytes) };
   } catch {
     return null;
@@ -123,26 +144,28 @@ async function fetchImageInline(url: string): Promise<{ mime: string; data: stri
   }
 }
 
-const PROMPT_INTRO = `You write vivid, specific descriptions of fashion "looks" for a shopping app.
+const PROMPT_INTRO = `You are a sharp, funny fashion-and-culture writer doing a short commentary on a shoppable "look" video. You are given the actual video clip, photos of the exact products in it, and each product's brand, type, and price.
 
-You are shown a still frame from the look's video and the exact list of products featured in it. Write ONE to TWO sentences (max ~40 words) describing THIS specific look: the vibe, how the pieces come together, and what occasion or mood it suits. Ground every detail in what you can actually see in the image and in the product list — do not invent brands or items that aren't listed.
+Write THREE to FOUR sentences of commentary on this specific look. This is editorial, not ad copy: have a point of view, notice the telling detail (how something moves in the video, an unexpected pairing, what the price says, where this outfit is clearly headed), and land at least one genuinely witty or surprising line. Sophisticated, playful, a little knowing — the kind of writing people read to the end and quote to a friend.
 
 Rules:
+- Ground everything in what is actually visible in the video, the product photos, and the listed facts. Never invent brands, items, or details.
+- You may open with a short punchy fragment (two to four words) if it earns its place.
 - Be concrete and sensory, never generic or salesy.
-- Do NOT use the words "curate/curated", "elevate", "effortless", "fashionista", "vibe check", or "stunning".
-- Do NOT mention the creator's name, the app, or "this look".
+- Do NOT use the words "curate/curated", "elevate", "effortless", "fashionista", "vibe check", "stunning", or "serving".
+- Do NOT mention the creator's name, the app, or the phrase "this look".
 - Do NOT use hashtags, emoji, or quotation marks.
-- Return ONLY the sentence(s).`;
+- Return ONLY the sentences.`;
 
 async function describeWithGemini(
   title: string,
   products: ProductInput[],
-  image: { mime: string; data: string } | null,
+  media: Array<{ mime: string; data: string }>,
   apiKey: string,
 ): Promise<{ text: string; inputTokens: number | null; outputTokens: number | null }> {
-  const facts = `Look title: ${title || '(untitled)'}\nProducts in this look:\n${productLines(products) || '(none listed)'}`;
+  const facts = `Look title: ${title || '(untitled)'}\nProducts in this look (brand — name (type, price)):\n${productLines(products) || '(none listed)'}`;
   const parts: Array<Record<string, unknown>> = [{ text: `${PROMPT_INTRO}\n\n${facts}` }];
-  if (image) parts.push({ inline_data: { mime_type: image.mime, data: image.data } });
+  for (const m of media) parts.push({ inline_data: { mime_type: m.mime, data: m.data } });
 
   const ctrl = new AbortController();
   const timer = setTimeout(() => ctrl.abort(), GEMINI_TIMEOUT_MS);
@@ -153,7 +176,7 @@ async function describeWithGemini(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ role: 'user', parts }],
-        generationConfig: { maxOutputTokens: 200, temperature: 0.8 },
+        generationConfig: { maxOutputTokens: 600, temperature: 0.9 },
       }),
       signal: ctrl.signal,
     });
@@ -203,12 +226,15 @@ Deno.serve(async (req: Request) => {
     if (!force) {
       const { data: cached } = await db
         .from('look_descriptions')
-        .select('description, generated_at')
+        .select('description, generated_at, source')
         .eq('look_id', lookId)
         .maybeSingle();
       if (cached?.description) {
         const ageDays = (Date.now() - Date.parse(cached.generated_at)) / 86_400_000;
-        if (ageDays < FRESH_DAYS) {
+        // Only the current style (pro model + video commentary) counts as
+        // fresh — older flash/heuristic blurbs regenerate on next request.
+        const currentStyle = String(cached.source || '').startsWith('gemini-pro');
+        if (ageDays < FRESH_DAYS && currentStyle) {
           return jsonRes({ success: true, description: cached.description, source: 'cache' });
         }
       }
@@ -264,17 +290,51 @@ Deno.serve(async (req: Request) => {
       source = 'heuristic';
     } else {
       try {
-        const image = imageUrl ? await fetchImageInline(imageUrl) : null;
-        const out = await describeWithGemini(title, products, image, apiKey);
+        // The ACTUAL clip (mobile rendition keeps the payload small) plus
+        // up to four product photos ride along with the facts.
+        const { data: creativeRow } = await db
+          .from('looks_creative')
+          .select('mobile_video_url, video_url')
+          .eq('look_id', lookId)
+          .eq('is_primary', true)
+          .maybeSingle();
+        const videoUrl = String(creativeRow?.mobile_video_url || creativeRow?.video_url || '').trim();
+
+        const { data: lpRows } = await db
+          .from('look_products')
+          .select('products ( image_url, primary_image_url )')
+          .eq('look_id', lookId)
+          .limit(PRODUCT_IMAGE_MAX);
+        const productImageUrls = (lpRows || [])
+          .map((r: { products: { image_url?: string | null; primary_image_url?: string | null } | null }) =>
+            r.products?.primary_image_url || r.products?.image_url || null)
+          .filter((u: string | null): u is string => !!u)
+          .slice(0, PRODUCT_IMAGE_MAX);
+
+        const media: Array<{ mime: string; data: string }> = [];
+        const video = videoUrl ? await fetchInline(videoUrl, 'video') : null;
+        if (video) media.push(video);
+        for (const u of productImageUrls) {
+          const img = await fetchInline(smallRendition(u), 'image');
+          if (img) media.push(img);
+        }
+        // No video came back (missing / oversized): fall back to the
+        // poster frame so the model still SEES the look.
+        if (!video && imageUrl) {
+          const poster = await fetchInline(imageUrl, 'image');
+          if (poster) media.unshift(poster);
+        }
+
+        const out = await describeWithGemini(title, products, media, apiKey);
         description = out.text;
-        source = image ? 'gemini+image' : 'gemini';
+        source = video ? 'gemini-pro+video' : media.length > 0 ? 'gemini-pro+image' : 'gemini-pro';
         logAiUsage({
           platform: 'google',
           operation: 'look-description',
           model: MODEL,
           input_tokens: out.inputTokens,
           output_tokens: out.outputTokens,
-          metadata: { has_image: !!image },
+          metadata: { has_video: !!video, product_images: productImageUrls.length },
         });
       } catch (err) {
         const msg = err instanceof Error ? err.message : String(err);
