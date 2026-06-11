@@ -166,6 +166,20 @@ export default function CreatorPage({
     };
   }, [activeTab]);
 
+  // Feed the playback director this page's scroll position. The director listens
+  // on `window`, which never sees this fixed/overflow:auto container's scroll, so
+  // without it rank/prearm only re-fire on sparse near-band crossings and tiles
+  // hold longer on their poster. Mirrors ContinuousFeed's window notifier; keeps
+  // prearm warm so reveal-on-stop is instant (the .is-scrolling layer above still
+  // owns the during-scroll poster look). Not device-gated.
+  useEffect(() => {
+    const el = pageScrollRef.current;
+    if (!el) return;
+    const onScroll = () => director.notifyScroll(el.scrollTop);
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, [activeTab]);
+
   // Backfill any look (in this catalog) still missing its own poster frame, so
   // a posterless look stops falling back to a product image. Admin-gated (write
   // access), fired idle. Re-runnable, so it retries looks that failed elsewhere.

@@ -231,6 +231,12 @@ class VideoPlaybackDirector {
   private lastScrollTime = Date.now();
   private isScrollFast = false;
   private scrollRestTimer: ReturnType<typeof setTimeout> | null = null;
+  // Set on a scope transition (overlay open/close). The NEXT markScroll then
+  // re-baselines instead of computing velocity — the scroll origin just changed
+  // (window scrollY ↔ an overlay scroller's scrollTop), so a cross-origin delta
+  // would be a bogus huge velocity that trips the fast-flick gate and wrongly
+  // suppresses prearm on the surface the user just landed on.
+  private scrollBaselinePending = false;
   private subscribers = new Map<string, Set<(s: CardStatus) => void>>();
   private initialized = false;
   // Overlay scope stack. While an overlay (LookOverlay, ProductPage, …) is
@@ -640,6 +646,19 @@ class VideoPlaybackDirector {
    */
   private markScroll(scrollY: number): void {
     const now = Date.now();
+    // First event after a scope transition: record position as the new baseline
+    // (no velocity sample) and clear any stale fast-flick state, so prearm is
+    // available immediately on the surface the user just moved to. See
+    // scrollBaselinePending / resetScrollBaseline.
+    if (this.scrollBaselinePending) {
+      this.scrollBaselinePending = false;
+      this.lastScrollY = scrollY;
+      this.lastScrollTime = now;
+      this.isScrollFast = false;
+      if (this.scrollRestTimer) { clearTimeout(this.scrollRestTimer); this.scrollRestTimer = null; }
+      this.scheduleRank();
+      return;
+    }
     const dy = Math.abs(scrollY - this.lastScrollY);
     const dt = Math.max(1, now - this.lastScrollTime);
     const velocity = (dy / dt) * 1000; // px/s
@@ -668,6 +687,9 @@ class VideoPlaybackDirector {
     // rapid close→reopen of the same scope re-gates the background feed.
     this.exitingScopes.delete(prefix);
     this.scopeStack.push(prefix);
+    // The active scroll surface is about to change to the overlay's own
+    // scroller; re-baseline so its first notifyScroll isn't read as a flick.
+    this.resetScrollBaseline();
     this.scheduleRank();
   }
 
@@ -678,7 +700,21 @@ class VideoPlaybackDirector {
     if (idx !== -1) this.scopeStack.splice(idx, 1);
     // Once the prefix is fully gone from the stack, drop its exit flag too.
     if (!this.scopeStack.includes(prefix)) this.exitingScopes.delete(prefix);
+    // Returning to the surface beneath (feed or a parent overlay); re-baseline
+    // so its first scroll event after the handoff isn't a cross-origin flick.
+    this.resetScrollBaseline();
     this.scheduleRank();
+  }
+
+  /** Re-baseline scroll-motion tracking on the NEXT markScroll. Called on scope
+   *  transitions because the active scroll surface (and thus the meaning of the
+   *  scrollY value fed in) changes — a delta across that boundary would be a
+   *  spurious velocity. Also clears stale fast-flick state so the new surface's
+   *  prearm isn't gated off the instant it opens. */
+  private resetScrollBaseline(): void {
+    this.scrollBaselinePending = true;
+    this.isScrollFast = false;
+    if (this.scrollRestTimer) { clearTimeout(this.scrollRestTimer); this.scrollRestTimer = null; }
   }
 
   /**

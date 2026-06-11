@@ -824,6 +824,20 @@ export default function ProductPage({
     };
   }, [scrollerEl]);
 
+  // Feed the playback director this page's INNER-scroller position. The
+  // director listens on `window`, which never sees this container's scroll, so
+  // without this its rank/prearm only re-fire on sparse near-band crossings and
+  // the Similar/Popular rail tiles hold on their poster until you stop scrolling
+  // ("posters until pause"). Mirrors ContinuousFeed's window notifier. NOT
+  // device-gated: mobile HLS is where the poster-hold is worst.
+  useEffect(() => {
+    const scroller = scrollerEl;
+    if (!scroller) return;
+    const onScroll = () => director.notifyScroll(scroller.scrollTop);
+    scroller.addEventListener('scroll', onScroll, { passive: true });
+    return () => scroller.removeEventListener('scroll', onScroll);
+  }, [scrollerEl]);
+
   // Re-sync the drawer when the user navigates to a different product:
   // open by default on desktop, closed on mobile.
   useEffect(() => {
