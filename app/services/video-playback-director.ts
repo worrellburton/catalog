@@ -11,13 +11,14 @@
 // play() independently) and gives us a clean recovery path after
 // modal open/close and tab visibility changes.
 
-import { captureVideoFrame, getPrefetchCount, isSlowConnection } from './video-loading';
+import { captureVideoFrame, getPrefetchCount, isSlowConnection, isMobileViewport } from './video-loading';
 import {
   setVideoSource,
   getVideoSource,
   browserSupportsNativeHls,
   prefetchHlsModule,
 } from '~/utils/hlsAttach';
+import { videoPipelineMode } from './video-pipeline';
 
 // ── Constants ──────────────────────────────────────────────────────────
 //
@@ -63,6 +64,11 @@ const RELEASE_MARGIN_VH_MOBILE = 1.25;
  *  These values cover a full screen + a lookahead row on realistic viewports. */
 const POOL_MAX_DESKTOP = 32;
 const POOL_MAX_MOBILE = 14;
+/** Upper clamp for the DYNAMIC mobile cap (see poolMax). The mobile pool grows
+ *  to cover the play band on tall viewports so far-band cards don't freeze on
+ *  their poster, but never past this ceiling — keeps simultaneous HLS decoders
+ *  clear of the iOS limit. */
+const POOL_MAX_MOBILE_CEILING = 20;
 /** While a detail overlay is open, the background home feed is out of the
  *  active scope and would normally have ALL its <video>s released — parked
  *  off-screen (mobile drops their decoded surface) and freed for the overlay's
@@ -119,19 +125,31 @@ const PREARM_MAX_DESKTOP = 3;
 // (into a spare pool element), so a promoted card reveals instantly instead of
 // holding its poster while it cold-buffers. At 1, only the single nearest
 // upcoming clip was ready on mobile; a 2-col grid scrolls two new cards in per
-// row, so the second always popped late. 3 keeps the next ~row-and-a-half warm.
-// Still bounded by poolMax (prearm only runs while assignedIds < cap and never
-// evicts a playing card), so total decoders stay under the same ceiling.
-const PREARM_MAX_MOBILE = 3;
+// row, so the second always popped late. 4 keeps the next TWO full rows warm
+// (2 cols × 2 rows), so a normal scroll-down finds the incoming clips already
+// decoded instead of cold-attaching the HLS chain (manifest → playlist → init →
+// segment) and flashing its poster for a beat — the residual HLS poster-pop the
+// pipeline-by-device split otherwise leaves on the mobile feed. Still bounded by
+// poolMax (prearm only runs while assignedIds < cap and never evicts a playing
+// card), so total decoders stay under the ceiling.
+const PREARM_MAX_MOBILE = 4;
 // Lookahead band for prebuffering. MUST sit between the play and release bands
 // (play < prearm < release < near-band) so prearmed cards are still tracked by
-// rank() and are never past the point where they'd be released.
+// rank() and are never past the point where they'd be released. Mobile widened
+// to 1.1 (still < RELEASE_MARGIN_VH_MOBILE=1.25) so the prearm ring actually
+// contains the next two incoming rows that PREARM_MAX_MOBILE=4 warms.
 const PREARM_MARGIN_VH_DESKTOP = 1.1;
-const PREARM_MARGIN_VH_MOBILE = 0.95;
+const PREARM_MARGIN_VH_MOBILE = 1.1;
 
-function isMobileViewport(): boolean {
-  return typeof window !== 'undefined' && window.innerWidth <= 600;
-}
+// Device tuning keys off the SAME mobile breakpoint as the video pipeline and
+// the feed grid (isMobileViewport, ≤768px, imported from video-loading.ts).
+// Previously the director used a local ≤600px cutoff, so a 601–768px viewport —
+// which renders the 2-col MOBILE grid (FeedSection) AND is served the HLS
+// pipeline (video-pipeline) — ran with DESKTOP pool tuning (POOL_MAX 32, wider
+// play band). On Safari/iOS that over-saturated the simultaneous-HLS-decoder
+// ceiling, so clips stalled on their poster then played a beat later. Sharing
+// one breakpoint keeps the whole HLS/mobile regime on the decoder-safe mobile
+// pool (POOL_MAX 14). Desktop (>768px, MP4) is unchanged.
 function playMarginPx(): number {
   if (typeof window === 'undefined') return 0;
   return window.innerHeight * (isMobileViewport() ? PLAY_MARGIN_VH_MOBILE : PLAY_MARGIN_VH_DESKTOP);
@@ -140,8 +158,26 @@ function releaseMarginPx(): number {
   if (typeof window === 'undefined') return 0;
   return window.innerHeight * (isMobileViewport() ? RELEASE_MARGIN_VH_MOBILE : RELEASE_MARGIN_VH_DESKTOP);
 }
+/** Mobile pool cap is sized to COVER the play band, not a flat constant: the
+ *  band spans (1 + 2·PLAY_MARGIN)·vh and the 2-col 3:4 grid's row pitch scales
+ *  with width, so a tall/narrow viewport can hold >14 cards in-band. A flat cap
+ *  below that count freezes the farthest in-band cards on their poster (rank()
+ *  won't evict a nearer card for a farther one) — the opposite of "always
+ *  playing." So compute the band's card count and clamp it to
+ *  [POOL_MAX_MOBILE, POOL_MAX_MOBILE_CEILING]: never below the tuned minimum,
+ *  never past the decoder-safe ceiling. The cap is a CEILING, not a target —
+ *  the steady-state decode count is whatever falls inside the (tight) play band.
+ *  Desktop keeps its flat cap. */
 function poolMax(): number {
-  return isMobileViewport() ? POOL_MAX_MOBILE : POOL_MAX_DESKTOP;
+  if (!isMobileViewport()) return POOL_MAX_DESKTOP;
+  if (typeof window === 'undefined') return POOL_MAX_MOBILE;
+  const COLS = 2, GAP = 2; // mobile feed grid: repeat(2, 1fr), 2px gap (feed.css)
+  const cardW = (window.innerWidth - GAP) / COLS;
+  const rowPitch = cardW * (4 / 3) + GAP; // 3:4 cards
+  const bandPx = window.innerHeight * (1 + 2 * PLAY_MARGIN_VH_MOBILE);
+  // +1 row of headroom covers the partial-row overlap at both band ends.
+  const needed = (Math.ceil(bandPx / rowPitch) + 1) * COLS;
+  return Math.min(POOL_MAX_MOBILE_CEILING, Math.max(POOL_MAX_MOBILE, needed));
 }
 function prearmMarginPx(): number {
   if (typeof window === 'undefined') return 0;
@@ -351,8 +387,9 @@ class VideoPlaybackDirector {
   }
 
   // Opt-in debug HUD. Enable on any device: localStorage.setItem('pd-hud','1')
-  // then reload. Shows pool occupancy, playing count, prewarm count, and the
-  // assign→first-frame reveal latency that issue #1/#2 are about.
+  // then reload. Shows the active video pipeline (HLS vs MP4) for THIS device,
+  // pool occupancy, playing count, prewarm count, and the assign→first-frame
+  // reveal latency that issue #1/#2 are about.
   private initHud(): void {
     if (typeof localStorage === 'undefined') return;
     try { if (localStorage.getItem('pd-hud') !== '1') return; } catch { return; }
@@ -376,12 +413,59 @@ class VideoPlaybackDirector {
     const s = this.revealSamples;
     const last = s.length ? s[s.length - 1] : null;
     const avg = s.length ? Math.round(s.reduce((a, b) => a + b.ms, 0) / s.length) : 0;
+
+    // ── Pipeline line ── the effective mode for THIS device + what the assigned
+    // pool elements are ACTUALLY playing: getVideoSource() returns the desired
+    // source URL (the .m3u8 manifest on the HLS path, the .mp4 on the legacy
+    // path), so an .m3u8 here is a live confirmation the clip is HLS — even when
+    // hls.js has swapped el.src to an opaque MediaSource blob.
+    const w = typeof window !== 'undefined' ? window.innerWidth : 0;
+    const device = w <= 768 ? 'mobile' : 'desktop';
+    const mode = videoPipelineMode();
+    const hlsImpl = browserSupportsNativeHls() ? 'native' : 'hls.js';
+    let hlsSrc = 0, mp4Src = 0;
+    for (const p of this.pool) {
+      if (!p.assignedTo) continue;
+      const src = getVideoSource(p.el);
+      if (!src) continue;
+      if (/\.m3u8(\?|#|$)/i.test(src)) hlsSrc++; else mp4Src++;
+    }
+
     this.hudEl.textContent =
+      `pipe ${mode.toUpperCase()} · ${device} ${w}w · ${hlsImpl}\n` +
+      `src  hls ${hlsSrc} / mp4 ${mp4Src}\n` +
       `pool ${assigned}/${this.pool.length}   playing ${playing}\n` +
       `near ${this.nearIds.size} / mounted ${this.cards.size}\n` +
       `prewarmed ${getPrefetchCount()}\n` +
       `reveal last ${last ? `${last.ms}ms (${last.via})` : '—'}\n` +
       `reveal avg  ${avg}ms  n=${s.length}`;
+
+    this.updateSrcBadges();
+  }
+
+  // pd-hud only: tag every mounted card with an HLS/MP4 badge (top-right) so you
+  // can see at a glance WHICH clips fell back to MP4 (no hls_url ladder) vs play
+  // the HLS ladder. entry.videoUrl is the device-aware source pickPlaybackSource
+  // chose, so an .m3u8 here means that card is on HLS. Green = HLS, red = MP4.
+  private updateSrcBadges(): void {
+    type BadgeHost = HTMLDivElement & { __pdBadge?: HTMLDivElement };
+    this.cards.forEach(entry => {
+      const isHls = /\.m3u8(\?|#|$)/i.test(entry.videoUrl || '');
+      const host = entry.slotEl as BadgeHost;
+      let badge = host.__pdBadge;
+      if (!badge) {
+        badge = document.createElement('div');
+        badge.setAttribute('aria-hidden', 'true');
+        badge.style.cssText =
+          'position:absolute;top:6px;right:6px;z-index:2147483646;' +
+          'font:9px/1.35 ui-monospace,Menlo,monospace;padding:1px 5px;' +
+          'border-radius:4px;pointer-events:none;letter-spacing:.4px;font-weight:700;color:#000';
+        host.appendChild(badge);
+        host.__pdBadge = badge;
+      }
+      badge.textContent = isHls ? 'HLS' : 'MP4';
+      badge.style.background = isHls ? 'rgba(63,255,120,.9)' : 'rgba(255,120,90,.92)';
+    });
   }
 
   private createVideoEl(): HTMLVideoElement {
