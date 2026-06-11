@@ -18,7 +18,8 @@
 //     just the beginning" + steps, AI content as the strategic marketing
 //     experiment at the bottom) · an "Appendix" divider page · LTV breakdown
 //     (assumption-flagged, with creator-cohort LTV) · CAC and conversion
-//     sensitivity — the two numbers every decision is held to.
+//     sensitivity — the two numbers every decision is held to · aligned
+//     incentives closer (Shopnomix: cash per order + equity + exclusivity).
 
 import { CATALOG_LOGO_PATH, CATALOG_LOGO_VIEWBOX } from '~/constants/brand-logo';
 import { buildModel } from '~/services/model';
@@ -182,6 +183,58 @@ function cohortBarChart(bars: Array<[string, number]>, reference: number): strin
   </svg>`;
 }
 
+/** GTM cycle diagram: a HIRE circle feeds a strict three-beat loop
+    (strategy → deploy the budget → learn) drawn as a ring of arrows —
+    the ring itself is the repeat. Pure ink, print-safe. */
+function gtmCycleDiagram(): string {
+  const W = 720;
+  const H = 240;
+  const cx = 470;
+  const cy = 120;
+  const R = 84;
+  const nodeR = 38;
+  const pos = (deg: number, r: number) => {
+    const rad = (deg * Math.PI) / 180;
+    return { x: cx + r * Math.cos(rad), y: cy + r * Math.sin(rad) };
+  };
+  // Clockwise arc on the ring between two node angles, trimmed at the
+  // node edges so the arrowheads land just outside each circle.
+  const arc = (a1: number, a2: number) => {
+    const gapDeg = (nodeR / R) * (180 / Math.PI) + 5;
+    const p1 = pos(a1 + gapDeg, R);
+    const p2 = pos(a2 - gapDeg, R);
+    return `M ${p1.x.toFixed(1)} ${p1.y.toFixed(1)} A ${R} ${R} 0 0 1 ${p2.x.toFixed(1)} ${p2.y.toFixed(1)}`;
+  };
+  const nodes: Array<{ a: number; l1: string; l2?: string }> = [
+    { a: -90, l1: 'STRATEGY' },
+    { a: 30, l1: 'DEPLOY', l2: 'THE BUDGET' },
+    { a: 150, l1: 'LEARN' },
+  ];
+  const nodeSvg = nodes.map(n => {
+    const c = pos(n.a, R);
+    const text = n.l2
+      ? `<text x="${c.x.toFixed(1)}" y="${(c.y - 2).toFixed(1)}" text-anchor="middle" class="cycle-node-label">${n.l1}</text>
+         <text x="${c.x.toFixed(1)}" y="${(c.y + 9).toFixed(1)}" text-anchor="middle" class="cycle-node-label">${n.l2}</text>`
+      : `<text x="${c.x.toFixed(1)}" y="${(c.y + 3).toFixed(1)}" text-anchor="middle" class="cycle-node-label">${n.l1}</text>`;
+    return `<circle cx="${c.x.toFixed(1)}" cy="${c.y.toFixed(1)}" r="${nodeR}" fill="#fffdf8" stroke="#141210" stroke-width="1.6"/>${text}`;
+  }).join('');
+  const arcs = [arc(-90, 30), arc(30, 150), arc(150, 270)]
+    .map(d => `<path d="${d}" fill="none" stroke="#141210" stroke-width="1.6" marker-end="url(#cycle-arr)"/>`)
+    .join('');
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Hire feeds the strategy, deploy, learn cycle">
+    <defs><marker id="cycle-arr" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="7" markerHeight="7" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#141210"/></marker></defs>
+    <circle cx="96" cy="${cy}" r="46" fill="#141210"/>
+    <text x="96" y="${cy + 4}" text-anchor="middle" class="cycle-hire-label">HIRE</text>
+    <text x="96" y="${cy + 64}" text-anchor="middle" class="cycle-sub">MONTH-TO-MONTH ·</text>
+    <text x="96" y="${cy + 76}" text-anchor="middle" class="cycle-sub">FULL-TIME PROMISE</text>
+    <line x1="146" y1="${cy}" x2="${cx - R - 8}" y2="${cy}" stroke="#141210" stroke-width="1.6" marker-end="url(#cycle-arr)"/>
+    ${arcs}
+    ${nodeSvg}
+    <text x="${cx}" y="${cy - 2}" text-anchor="middle" class="cycle-node-label">REPEAT</text>
+    <text x="${cx}" y="${cy + 10}" text-anchor="middle" class="cycle-sub">EVERY CYCLE</text>
+  </svg>`;
+}
+
 /** Build the full business-plan HTML document string. */
 export function buildBusinessPlanHtml(d: BusinessPlanData): string {
   const r = d.results;
@@ -209,6 +262,11 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
   const convLoVal = Math.max(0.0005, mRev.productConversion - 0.001);
   const convHiVal = mRev.productConversion + 0.001;
   const base = revSeries(mRev, mAcq);
+  const spendSeries = buildModel(mRev, mAcq, true).acquisition.map(m => m.spend);
+  const rampChart = lineChart(
+    [{ values: spendSeries, label: `${usd(spendSeries[spendSeries.length - 1] ?? 0, true)} / mo by M${d.horizonMonths}` }],
+    { height: 150, area: true, axisLabel: 'Monthly ad spend' },
+  );
   const cpaLo = revSeries(mRev, { ...mAcq, cpa: cpaLoVal });
   const cpaHi = revSeries(mRev, { ...mAcq, cpa: cpaHiVal });
   const convLo = revSeries({ ...mRev, productConversion: convLoVal }, mAcq);
@@ -281,21 +339,6 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
       <td class="l-run">${esc(runningResult)}</td>
     </tr>`;
 
-  // GTM flywheel — condensed from the /admin/gtm flywheel deck.
-  const gtmSteps: Array<[string, string, string]> = [
-    ['1', 'Hire.', 'Three BD and marketing consultants, month-to-month for three months, specialised in creator relations. Start small and scale what converts. Marketing is a system run by people, and it needs to start being built.'],
-    ['2', 'Deploy budget effectively.', 'A disciplined, mission-driven team deploying the budget as effectively as possible: every contact logged in the CRM, weekly targets held to, laser-focused on driving CPA down.'],
-    ['3', 'Learn and repeat.', 'Continuous improvement every cycle: lean into what is working, cut what is not, tighten strategy, campaigns, and creator management. Drive CPA as low as it will go.'],
-  ];
-  const gtmStepRow = ([no, title, body]: [string, string, string]) => `
-    <div class="step">
-      <span class="step-no">${esc(no)}</span>
-      <div>
-        <h4>${esc(title)}</h4>
-        <p>${esc(body)}</p>
-      </div>
-    </div>`;
-
   // Creator-cohort LTV chart: illustrative cohorts around the blended
   // assumption, until real attributed orders replace them.
   const cohortChart = cohortBarChart(
@@ -334,8 +377,8 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
       page-break-before: always; background: var(--paper); }
     .cover-page { min-height: 100vh; page-break-after: always; }
     section { page-break-inside: avoid; break-inside: avoid; margin-bottom: 18px; }
-    .statband, .phases, .lens-grid, .lens, .feature-band, .chart, .flow, .steps,
-    .features, table.ltv-chain { page-break-inside: avoid; break-inside: avoid; }
+    .statband, .phases, .lens-grid, .lens, .feature-band, .chart, .flow,
+    .features, .solutions, table.ltv-chain { page-break-inside: avoid; break-inside: avoid; }
     .solutions { page-break-inside: avoid; break-inside: avoid; margin-top: 20px; }
     .solution p { font-size: 9.5px; }
     .folio { margin-bottom: 18px; }
@@ -350,8 +393,6 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
     .phase { padding: 11px 13px; }
     .phase h4 { font-size: 11px; }
     .phase p { font-size: 9px; line-height: 1.45; }
-    .step { padding: 10px 0; }
-    .step p { font-size: 9.5px; }
     .statband { padding: 12px 0; }
     .footer { margin-top: 14px; padding-top: 8px; }
   }
@@ -443,12 +484,10 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
   .ai-banner .kicker { color: #fff; }
   .ai-banner .kicker::after { border-color: #fff; }
   .ai-banner p { color: rgba(255,255,255,0.9); margin: 0; font-size: 11px; }
-  .steps { margin-top: 10px; }
-  .step { display: grid; grid-template-columns: 70px 1fr; gap: 20px; align-items: start; padding: 16px 0; }
-  .step + .step { border-top: 1px solid var(--line); }
-  .step-no { font-size: 38px; line-height: 0.85; font-weight: 700; color: var(--ink); }
-  .step h4 { margin: 0 0 4px; font-size: 13px; letter-spacing: -0.01em; }
-  .step p { margin: 0; font-size: 11px; color: #45403a; max-width: 64ch; }
+  .solutions--two { grid-template-columns: 1fr 1fr; }
+  .cycle-hire-label { font-size: 13px; font-weight: 800; letter-spacing: 0.14em; fill: #fff; font-family: inherit; }
+  .cycle-node-label { font-size: 9.5px; font-weight: 800; letter-spacing: 0.1em; fill: var(--ink); font-family: inherit; }
+  .cycle-sub { font-size: 8px; font-weight: 700; letter-spacing: 0.12em; fill: var(--muted); font-family: inherit; }
 
   /* LTV chain. */
   table.ltv-chain { width: 100%; border-collapse: collapse; font-size: 11px; margin: 6px 0 10px; }
@@ -610,15 +649,86 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
     </section>
   </div>
 
-  <!-- Sheet 3 — go-to-market: creators + AI-driven content, three steps. -->
+  <!-- Sheet 3 — go-to-market I: the whole machine, ramped with product
+       readiness. Channel grid + the model's real spend ramp + sequence. -->
   <div class="page">
     <div class="folio"><svg class="folio-logo" viewBox="${CATALOG_LOGO_VIEWBOX}" role="img" aria-label="Catalog"><path fill="#141210" d="${CATALOG_LOGO_PATH}" /></svg><span>Business Plan</span><span class="folio-no">04</span></div>
     <section>
       <p class="kicker">05 · Go-to-market</p>
+      <h2>Every channel, when the product is ready.</h2>
+      <p class="standfirst">The full machine runs every channel and, once tuned, runs without hand-holding. But channels only compound on a product that works: users, stickiness, effectiveness. So the budget ramps with product readiness, and the big influencer budgets come last, once the machine deserves them.</p>
+      <div class="solutions">
+        <div class="solution">
+          <span>SEO</span>
+          <p>Every look, product, and catalog page indexed and ranking.</p>
+        </div>
+        <div class="solution">
+          <span>Paid ads</span>
+          <p>Performance campaigns on Meta, TikTok, and Google.</p>
+        </div>
+        <div class="solution">
+          <span>Social on cadence</span>
+          <p>Organic posting, native to each platform, on a fixed schedule.</p>
+        </div>
+        <div class="solution">
+          <span>Creators</span>
+          <p>The primary channel: paid on signups and ongoing engagement.</p>
+        </div>
+        <div class="solution">
+          <span>Lifecycle</span>
+          <p>Email, SMS, and push, built around the daily feed drop.</p>
+        </div>
+        <div class="solution">
+          <span>Measurement</span>
+          <p>Attribution ties every channel back to CAC, automatically.</p>
+        </div>
+      </div>
+    </section>
+
+    <section>
+      <h3>The ramp: spend follows readiness</h3>
+      ${rampChart}
+      <p class="chart-caption">${pct(a.budgetSplitEarly)} of the ${usd(a.budget)} budget deploys early while the product sharpens; ${pct(a.budgetSplitLate)} arrives at the tail, when stickiness is proven and the channels are tuned.</p>
+    </section>
+
+    <section>
+      <div class="flow">
+        <div class="flow-step"><b>1 · Sharpen the product</b>Make the feed convert.</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step"><b>2 · Prove stickiness</b>Users return on their own.</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step"><b>3 · Scale the channels</b>The system runs itself.</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step"><b>4 · Big influencers</b>Big budgets, deployed last.</div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Sheet 4 — go-to-market II: creators + AI-driven content, three steps. -->
+  <div class="page">
+    <div class="folio"><svg class="folio-logo" viewBox="${CATALOG_LOGO_VIEWBOX}" role="img" aria-label="Catalog"><path fill="#141210" d="${CATALOG_LOGO_PATH}" /></svg><span>Business Plan</span><span class="folio-no">05</span></div>
+    <section>
+      <p class="kicker">05 · Go-to-market, continued</p>
       <h2>This is just the beginning.</h2>
-      <p class="standfirst">Everything in this plan runs on the simplest version of the machine: marketing through creators, our primary advertising channel. Creators post their link, build catalogs, and share them with their audience; they are paid on every signup they bring and on that audience's ongoing engagement. Word-of-mouth adds ${pct(a.organicGrowth)} of the base each month on top of paid acquisition at a ~${usd(a.cpa)} blended CPA.</p>
-      <div class="steps">
-        ${gtmSteps.map(gtmStepRow).join('')}
+      <p class="standfirst">One small, disciplined, aggressive team running a strict cycle. Marketing moves through creators, our primary channel: they post their link, build catalogs, and are paid on every signup and on that audience's ongoing engagement. Word-of-mouth adds ${pct(a.organicGrowth)} of the base each month on top of paid acquisition at a ~${usd(a.cpa)} blended CPA.</p>
+      ${gtmCycleDiagram()}
+      <div class="solutions solutions--two">
+        <div class="solution">
+          <span>The hires</span>
+          <p>Three BD and marketing consultants, month-to-month, specialised in creator relations, with a real promise on the table: prove it here and convert to full-time. Hungry and aggressive is the job description.</p>
+        </div>
+        <div class="solution">
+          <span>The discipline</span>
+          <p>Every contact, campaign, and dollar lives in the CRM. Weekly targets are held to. Nothing deploys without a number attached to it.</p>
+        </div>
+        <div class="solution">
+          <span>The cycle</span>
+          <p>Strategy picks the campaigns, the budget deploys strictly against them, the results are read honestly, and the next cycle starts sharper. CPA falls every loop.</p>
+        </div>
+        <div class="solution">
+          <span>The goal</span>
+          <p>Sharpen the product until it converts and retains on its own. The big influencer budgets only go in once the machine has earned them.</p>
+        </div>
       </div>
       <div class="ai-banner">
         <p class="kicker">Strategic marketing experiment</p>
@@ -637,7 +747,7 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
 
   <!-- Sheet 5 — LTV: assumption-flagged breakdown + creator cohorts. -->
   <div class="page">
-    <div class="folio"><svg class="folio-logo" viewBox="${CATALOG_LOGO_VIEWBOX}" role="img" aria-label="Catalog"><path fill="#141210" d="${CATALOG_LOGO_PATH}" /></svg><span>Business Plan</span><span class="folio-no">06</span></div>
+    <div class="folio"><svg class="folio-logo" viewBox="${CATALOG_LOGO_VIEWBOX}" role="img" aria-label="Catalog"><path fill="#141210" d="${CATALOG_LOGO_PATH}" /></svg><span>Business Plan</span><span class="folio-no">07</span></div>
     <section>
       <p class="kicker">Appendix A · Lifetime value*</p>
       <h2>What a user is worth, and how we'll know.</h2>
@@ -679,7 +789,7 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
 
   <!-- Sheet 5 — appendix: the two numbers every decision is held against. -->
   <div class="page">
-    <div class="folio"><svg class="folio-logo" viewBox="${CATALOG_LOGO_VIEWBOX}" role="img" aria-label="Catalog"><path fill="#141210" d="${CATALOG_LOGO_PATH}" /></svg><span>Business Plan</span><span class="folio-no">07</span></div>
+    <div class="folio"><svg class="folio-logo" viewBox="${CATALOG_LOGO_VIEWBOX}" role="img" aria-label="Catalog"><path fill="#141210" d="${CATALOG_LOGO_PATH}" /></svg><span>Business Plan</span><span class="folio-no">08</span></div>
     <section>
       <p class="kicker">Appendix B · Sensitivity</p>
       <h2>The two numbers that run the company.</h2>
@@ -713,6 +823,41 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
         </div>
       </div>
       <p style="margin-top:10px">These two numbers are the leverage that turns the flywheel: better conversion raises LTV, which buys more acquisition at the same ratio; cheaper acquisition compounds the base, which sharpens the data, which raises conversion. Both are measured automatically by the attribution layer, and every decision the company makes is held against its effect on one of the two.<span class="endmark" aria-hidden="true"></span></p>
+    </section>
+
+  </div>
+
+  <!-- Sheet 8 — aligned incentives: Shopnomix as the investor whose rails
+       we run on. Cash from every order + equity upside + exclusivity. -->
+  <div class="page">
+    <div class="folio"><svg class="folio-logo" viewBox="${CATALOG_LOGO_VIEWBOX}" role="img" aria-label="Catalog"><path fill="#141210" d="${CATALOG_LOGO_PATH}" /></svg><span>Business Plan</span><span class="folio-no">09</span></div>
+    <section>
+      <p class="kicker">Aligned incentives</p>
+      <h2>Shopnomix: an investment that pays itself twice.</h2>
+      <p class="standfirst">Shopnomix (a Nomix Group company) is a performance monetization platform built for AI commerce: CPA rails across tens of thousands of merchants and, with Affiliate.com, a billion-product dataset made for AI surfaces. Catalog is the destination those rails were built for, and that makes them a uniquely aligned investor.</p>
+      <div class="solutions">
+        <div class="solution">
+          <span>Cash from the first order</span>
+          <p>Catalog routes its affiliate links through Shopnomix rails, so every sale we drive pays them their cut immediately. The base case pushes ${usd(r.gmvTotal, true)} of GMV through those links in ${d.horizonMonths} months: their investment generates its own revenue as we grow.</p>
+        </div>
+        <div class="solution">
+          <span>An asset that compounds</span>
+          <p>The same growth that grows their link revenue grows the value of their stake. One cheque produces cash flow today and asset value tomorrow, and the two reinforce each other.</p>
+        </div>
+        <div class="solution">
+          <span>Exclusive rights</span>
+          <p>Shopnomix holds exclusive rights over the links they carry on Catalog. As the catalog and its AI surfaces grow, that exclusivity appreciates with them.</p>
+        </div>
+      </div>
+      <div class="flow">
+        <div class="flow-step"><b>Their capital</b>Funds the growth plan</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step"><b>Our growth</b>More shoppers, more orders</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step"><b>Their rails</b>Every order pays their cut</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step"><b>Their upside</b>Cash now, asset value as we scale</div>
+      </div>
     </section>
 
     <div class="footer">
