@@ -263,6 +263,18 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
   const convHiVal = mRev.productConversion + 0.001;
   const base = revSeries(mRev, mAcq);
   const spendSeries = buildModel(mRev, mAcq, true).acquisition.map(m => m.spend);
+  // Cumulative commission stream for the aligned-incentives closer: the
+  // receivables that cross the investor's rails, against their cheque.
+  const cumCommission: number[] = [];
+  {
+    let acc = 0;
+    for (const v of base) { acc += v; cumCommission.push(acc); }
+  }
+  const investCrossIdx = cumCommission.findIndex(v => v >= c.cashRaised);
+  const receivablesChart = lineChart([
+    { values: base.map(() => c.cashRaised), label: `Your investment · ${usd(c.cashRaised, true)}`, variant: true },
+    { values: cumCommission, label: `Cumulative · ${usd(r.total16moRevenue, true)}` },
+  ], { height: 170, axisLabel: 'Commission routed through your rails, cumulative' });
   const rampChart = lineChart(
     [{ values: spendSeries, label: `${usd(spendSeries[spendSeries.length - 1] ?? 0, true)} / mo by M${d.horizonMonths}` }],
     { height: 150, area: true, axisLabel: 'Monthly ad spend' },
@@ -294,9 +306,10 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
   // rows always land flush on the page edge — no bands, no strips.
   const coverCols = feed.length >= 64 ? 8 : feed.length >= 36 ? 6 : 4;
   const coverTiles = feed.length
-    ? Array.from({ length: coverCols * coverCols }, (_, i) => `<img src="${esc(feed[i % feed.length])}" alt="" loading="eager" />`).join('')
+    ? Array.from({ length: coverCols * 12 }, (_, i) =>
+        `<img src="${esc(feed[i % feed.length])}" alt="" loading="eager"${i >= coverCols * coverCols ? ' class="cover-extra"' : ''} />`).join('')
     : '';
-  const coverGridStyle = `grid-template-columns: repeat(${coverCols}, minmax(0, 1fr)); grid-template-rows: repeat(${coverCols}, minmax(0, 1fr));`;
+  const coverGridStyle = `grid-template-columns: repeat(${coverCols}, minmax(0, 1fr)); grid-template-rows: repeat(${coverCols}, minmax(0, 1fr)); --cover-cols: ${coverCols};`;
 
 
   // Assumption rows kept to the load-bearing ten so the table fits the
@@ -383,6 +396,7 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
     .solution p { font-size: 9.5px; }
     .folio { margin-bottom: 18px; }
     .divider { min-height: 82vh; }
+    .cover-feed img.cover-extra { display: none; }
     .kicker { margin-bottom: 3px; }
     h2 { font-size: 15px; margin-bottom: 6px; }
     .display { font-size: 21px; }
@@ -405,6 +419,17 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
      is a fixed 3:4 card, cover-filled by its product image — uniform wall,
      no letterbox strips. Rows overflow the page and crop at the edge. */
   .cover-feed { position: absolute; inset: 0; display: grid; gap: 5px; padding: 5px; background: #000; }
+  /* Screen: literal 3:4 frames regardless of viewport shape (the inline
+     stretch rows are a print concern); extra rows render and the page
+     center-crops them. Print keeps the flush stretch grid and hides the
+     extras so the page edge stays clean. */
+  @media screen {
+    .cover-feed {
+      grid-template-rows: none !important;
+      grid-auto-rows: calc((100vw - (var(--cover-cols, 8) + 1) * 5px) / var(--cover-cols, 8) * 4 / 3);
+      align-content: center;
+    }
+  }
   /* contain, not cover: the full, un-zoomed product picture on a white
      card. Print cells are ~3:4 (the primaries' own shape), so the fit is
      near-exact there; any sliver is white-on-white and invisible. */
@@ -417,6 +442,9 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
   .cover-tagline { position: relative; z-index: 1; margin: 0;
     font-size: 15px; font-weight: 500; letter-spacing: 0.24em; text-transform: uppercase;
     color: rgba(255,255,255,0.95); text-shadow: 0 2px 14px rgba(0,0,0,0.6); }
+  .cover-for { position: relative; z-index: 1; margin: 10px 0 0;
+    font-size: 10.5px; font-weight: 700; letter-spacing: 0.3em; text-transform: uppercase;
+    color: rgba(255,255,255,0.62); text-shadow: 0 2px 14px rgba(0,0,0,0.6); }
 
   /* ── Page furniture: running head + page number, like a magazine folio. ── */
   .folio { display: flex; align-items: center; gap: 14px; font-size: 9.5px; font-weight: 700;
@@ -551,6 +579,7 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
     <div class="cover-scrim"></div>
     <svg class="cover-logo" viewBox="${CATALOG_LOGO_VIEWBOX}" role="img" aria-label="Catalog"><path fill="#ffffff" d="${CATALOG_LOGO_PATH}" /></svg>
     <p class="cover-tagline">The AI for shopping</p>
+    <p class="cover-for">Prepared for Shopnomix</p>
   </div>
 
   <!-- Sheet 1 — magazine: centered summary, market, customer. -->
@@ -721,6 +750,10 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
           <p>Three BD and marketing consultants, month-to-month, specialised in creator relations, with a real promise on the table: prove it here and convert to full-time. Hungry and aggressive is the job description.</p>
         </div>
         <div class="solution">
+          <span>The CMO</span>
+          <p>When the cycle proves itself, a CMO comes in to own it: one accountable operator over the consultants, the CRM, and the channel mix, hired to scale a machine that already works rather than to invent one.</p>
+        </div>
+        <div class="solution">
           <span>The discipline</span>
           <p>Every contact, campaign, and dollar lives in the CRM. Weekly targets are held to. Nothing deploys without a number attached to it.</p>
         </div>
@@ -835,31 +868,35 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
   <div class="page">
     <div class="folio"><svg class="folio-logo" viewBox="${CATALOG_LOGO_VIEWBOX}" role="img" aria-label="Catalog"><path fill="#141210" d="${CATALOG_LOGO_PATH}" /></svg><span>Business Plan</span><span class="folio-no">09</span></div>
     <section>
-      <p class="kicker">Aligned incentives</p>
-      <h2>Shopnomix: an investment that pays itself twice.</h2>
-      <p class="standfirst">Shopnomix (a Nomix Group company) is a performance monetization platform built for AI commerce: CPA rails across tens of thousands of merchants and, with Affiliate.com, a billion-product dataset made for AI surfaces. Catalog is the destination those rails were built for, and that makes them a uniquely aligned investor.</p>
+      <p class="kicker">Aligned incentives · To Shopnomix</p>
+      <h2>An investment that pays you twice.</h2>
+      <p class="standfirst">You built the rails for AI commerce: CPA monetization across tens of thousands of merchants and, with Affiliate.com, a billion-product dataset made for AI surfaces. Catalog is the destination those rails have been missing. Your cheque funds a feed whose every order crosses your links, which makes you a different kind of investor here: one we pay back twice.</p>
       <div class="solutions">
         <div class="solution">
           <span>Cash from the first order</span>
-          <p>Catalog routes its affiliate links through Shopnomix rails, so every sale we drive pays them their cut immediately. The base case pushes ${usd(r.gmvTotal, true)} of GMV through those links in ${d.horizonMonths} months: their investment generates its own revenue as we grow.</p>
+          <p>Catalog routes its affiliate links through your rails, so every sale we drive pays you your cut immediately. The base case pushes ${usd(r.gmvTotal, true)} of GMV through your links in ${d.horizonMonths} months: your investment generates its own revenue as we grow.</p>
         </div>
         <div class="solution">
           <span>An asset that compounds</span>
-          <p>The same growth that grows their link revenue grows the value of their stake. One cheque produces cash flow today and asset value tomorrow, and the two reinforce each other.</p>
+          <p>The same growth that grows your link revenue grows the value of your stake. One cheque produces cash flow today and asset value tomorrow, and the two reinforce each other.</p>
         </div>
         <div class="solution">
           <span>Exclusive rights</span>
-          <p>Shopnomix holds exclusive rights over the links they carry on Catalog. As the catalog and its AI surfaces grow, that exclusivity appreciates with them.</p>
+          <p>You hold exclusive rights over the links you carry on Catalog. As the catalog and its AI surfaces grow, that exclusivity appreciates with them.</p>
         </div>
       </div>
+
+      <h3>Your investment, diagrammed against the receivables</h3>
+      ${receivablesChart}
+      <p class="chart-caption">The solid line is the commission stream crossing your rails (cumulative, base case); the dashed line is the cheque.${investCrossIdx >= 0 ? ` The stream passes the size of the investment itself in month ${investCrossIdx + 1}, and your cut of it flows from the first order.` : ' Your cut of that stream flows from the first order.'}</p>
       <div class="flow">
-        <div class="flow-step"><b>Their capital</b>Funds the growth plan</div>
+        <div class="flow-step"><b>Your capital</b>Funds the growth plan</div>
         <div class="flow-arrow">→</div>
         <div class="flow-step"><b>Our growth</b>More shoppers, more orders</div>
         <div class="flow-arrow">→</div>
-        <div class="flow-step"><b>Their rails</b>Every order pays their cut</div>
+        <div class="flow-step"><b>Your rails</b>Every order pays your cut</div>
         <div class="flow-arrow">→</div>
-        <div class="flow-step"><b>Their upside</b>Cash now, asset value as we scale</div>
+        <div class="flow-step"><b>Your upside</b>Cash now, asset value as we scale</div>
       </div>
     </section>
 
