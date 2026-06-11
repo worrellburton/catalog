@@ -1006,7 +1006,7 @@ export default function CreatorPage({
       {/* Looks grid */}
       {activeTab === 'looks' && (
         loading && creatorLooks.length === 0 ? (
-          <div className="creator-skeleton-grid">
+          <div className="creator-skeleton-grid" style={{ ['--cat-cols']: gridCols } as CSSProperties}>
             {Array.from({ length: 6 }).map((_, i) => <div key={i} className="creator-skeleton-tile" />)}
           </div>
         ) : creatorLooks.length === 0 ? (
@@ -1040,7 +1040,7 @@ export default function CreatorPage({
       {/* Products grid */}
       {activeTab === 'products' && (
         loading && allProducts.length === 0 ? (
-          <div className="creator-skeleton-grid">
+          <div className="creator-skeleton-grid" style={{ ['--cat-cols']: gridCols } as CSSProperties}>
             {Array.from({ length: 8 }).map((_, i) => <div key={i} className="creator-skeleton-tile" />)}
           </div>
         ) : filteredProducts.length === 0 ? (

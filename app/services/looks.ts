@@ -39,7 +39,11 @@ function writeLooksToStorage(rows: Look[]): void {
 }
 
 export function getCachedLooks(): Look[] | null {
-  return readLooksFromStorage();
+  const rows = readLooksFromStorage();
+  // Cached batches written before dedupeLookIds existed may carry aliased
+  // ids — repair them on read so every consumer sees unique ids.
+  if (rows) dedupeLookIds(rows);
+  return rows;
 }
 
 // ============================================
@@ -99,6 +103,29 @@ export function stableLookId(uuid: string): number {
     h = (Math.imul(h, 31) + uuid.charCodeAt(i)) | 0;
   }
   return -((Math.abs(h) % 2_000_000_000) + 1);
+}
+
+/** Enforce UNIQUE numeric ids across a fetched batch. legacy_id carries no
+ *  uniqueness guarantee in the DB — two rows sharing one legacy_id gave two
+ *  different looks the SAME Look.id, which collided React keys, director
+ *  slotIds, and TrailVideoHost trail ids (the long-standing "clicked one
+ *  look, a different look opened" main-feed bug). First occurrence keeps
+ *  its id; later duplicates fall back to the uuid hash (perturbed until
+ *  free, so even a hash collision can't alias two cards). */
+function dedupeLookIds(looks: Look[]): void {
+  const taken = new Set<number>();
+  for (const l of looks) {
+    if (taken.has(l.id)) {
+      let candidate = stableLookId(l.uuid || String(l.id));
+      let salt = 0;
+      while (taken.has(candidate)) {
+        salt += 1;
+        candidate = stableLookId(`${l.uuid || l.id}:${salt}`);
+      }
+      l.id = candidate;
+    }
+    taken.add(l.id);
+  }
 }
 
 // Disambiguate looks that would render an identical title. Titles are
@@ -396,7 +423,9 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
     }
   }
 
-  // Make repeated auto-generated titles read as distinct cards (cosmetic).
+  // Identity + presentation passes: ids must be unique before anything
+  // downstream keys on them; title disambiguation is cosmetic.
+  dedupeLookIds(result);
   disambiguateTitles(result);
 
   writeLooksToStorage(result);

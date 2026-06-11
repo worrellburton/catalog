@@ -811,6 +811,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                   <CreatorAvatarFollow
                     handle={look.creator}
                     avatarUrl={look.creatorAvatar || creatorData?.avatar || ''}
+                    eager
                     displayName={creatorData?.displayName || look.creatorDisplayName || look.creator}
                     size={46}
                     onOpenCreator={(h) => { handleClose(); onOpenCreator(h); }}
