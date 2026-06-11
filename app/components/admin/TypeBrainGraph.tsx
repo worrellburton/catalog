@@ -65,7 +65,7 @@ interface Props {
   organizeSignal: number;
 }
 
-const ROOT_ID = '__root__';
+export const ROOT_ID = '__root__';
 /** Below this much pointer travel a satellite gesture counts as a click. */
 const CLICK_SLOP = 5;
 
@@ -348,8 +348,11 @@ export default function TypeBrainGraph(p: Props) {
           );
         })}
 
-        {/* Root */}
-        <g className="tb-root">
+        {/* Root — hover it to grow a new tier-1 type */}
+        <g className="tb-root"
+          onPointerEnter={() => hoverEnter(ROOT_ID)}
+          onPointerLeave={hoverLeave}
+        >
           <circle cx={rootPos.x} cy={rootPos.y} r={34} />
           <text x={rootPos.x} y={rootPos.y + 4}>catalog</text>
         </g>
@@ -445,6 +448,17 @@ export default function TypeBrainGraph(p: Props) {
             </div>,
           ] : []);
         })}
+
+        {hovered === ROOT_ID && !p.pickMode && (
+          <button
+            className="tb-add"
+            style={{ left: rootPos.x + 34 + 16, top: rootPos.y }}
+            title="Add a new top-level type"
+            onPointerEnter={() => hoverEnter(ROOT_ID)}
+            onPointerLeave={hoverLeave}
+            onClick={() => p.onAddChild(ROOT_ID)}
+          >+</button>
+        )}
 
         {hovered && !p.pickMode && (() => {
           const n = byId.get(hovered);

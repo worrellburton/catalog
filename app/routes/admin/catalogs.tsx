@@ -575,7 +575,6 @@ export default function AdminCatalogs() {
   const [homeCatalog, setHomeCatalog] = useState<CatalogService | null>(null);
   // Daily-feed lens: while an admin is viewing the feed AS a user, the
   // baseline dropdown hides — no two shoppers see that exact order.
-  const [feedLensActive, setFeedLensActive] = useState(false);
   // The signed-out landing screen row (slug guest-home) — pinned under home.
   const [guestCatalog, setGuestCatalog] = useState<Catalog | null>(null);
   const [searchCounts, setSearchCounts] = useState<Map<string, CatalogSearchCounts>>(new Map());
@@ -2249,34 +2248,10 @@ export default function AdminCatalogs() {
                   {isOpen && (
                     <tr>
                       <td colSpan={7} style={{ padding: 0, background: '#fafafa', borderTop: 'none' }}>
-                        {/* USER LENS FIRST (founder's call): the per-user view
-                            leads; the editable baseline below is the pool +
-                            starting order every personal feed re-ranks from. */}
-                        <DailyFeedLens showToast={showToast} onActiveChange={setFeedLensActive} />
-                        {!feedLensActive && <CatalogCreativeDropdown
-                          isAll={false}
-                          isUniverse={true}
-                          catalogName={homeCatalog.name}
-                          loading={isLoadingCreative}
-                          creative={creative}
-                          metricsLoading={metricsLoading}
-                          catalogNames={all.filter(x => x.name !== homeCatalog.name && !isAllCatalog(x.name)).map(x => x.name)}
-                          onReorder={(section, from, to) => reorderAllSection(homeCatalog.id, section, from, to)}
-                          // Add/Recommend affordances live inside the
-                          // section headings now (LOOKS + PRODUCTS).
-                          onOpenAddLooks={looks.length === 0 ? undefined : () => openAddLooks(homeAsLocal)}
-                          onOpenAddProducts={products.length === 0 ? undefined : () => openAdd(homeAsLocal)}
-                          onRecommendProducts={() => openSuggest(homeAsLocal)}
-                          // Claude-recommend for looks is not wired up
-                          // yet — placeholder toast keeps the affordance
-                          // visible without faking a working endpoint.
-                          onRecommendLooks={() => openRecommendLooks(homeAsLocal)}
-                          onAfterBulkMutation={() => {
-                            setCreativeByCatalog(prev => { const next = { ...prev }; delete next[homeCatalog.id]; return next; });
-                            loadLooks();
-                            loadProducts();
-                          }}
-                        />}
+                        {/* USER LENS ONLY (founder's call): no feed shows
+                            until a user is typed — there is no "the" feed,
+                            only each shopper's. */}
+                        <DailyFeedLens showToast={showToast} />
                       </td>
                     </tr>
                   )}

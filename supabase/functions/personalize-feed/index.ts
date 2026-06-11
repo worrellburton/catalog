@@ -96,7 +96,7 @@ const DEFAULT_RULES: FeedRules = {
   freshnessBoost:  { enabled: false, weight: 3 },
   seenDecay:       { enabled: true,  weight: 5 },
   diversityGuard:  { enabled: false, weight: 3 },
-  genderStrict:    { enabled: false, weight: 0 },
+  genderStrict:    { enabled: true,  weight: 0 },
   trendingBoost:   { enabled: false, weight: 4 },
   // Fresh-slot quota: weight = how many of the TOP 20 slots are reserved
   // for items this shopper has never been shown. THE "new feed every
@@ -376,7 +376,7 @@ Deno.serve(async (req: Request) => {
       rules: appliedRules,
     };
 
-    if (apiKey) {
+    if (apiKey && !preview) {
       try {
         const topSlice = scored.slice(0, CLAUDE_TOP_N).map(s => s.c);
         const { order: claudeOrder, inputTokens, outputTokens } = await claudeRerank(topSlice, brandWeight, typeWeight, seen, apiKey);

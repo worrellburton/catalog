@@ -15,25 +15,25 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ParticleBackground from '~/components/ParticleBackground';
-import TypeBrainGraph, { type BrainNode, type BrainProduct, type BrainViewMode } from '~/components/admin/TypeBrainGraph';
+import TypeBrainGraph, { ROOT_ID, type BrainNode, type BrainProduct, type BrainViewMode } from '~/components/admin/TypeBrainGraph';
 import {
-  auditProductTypes,
   computeEffectiveGenders,
   computeTypePaths,
   createTypeNode,
   executeGovernanceOps,
   fetchGovernanceProducts,
   fetchTypeTree,
+  kaizenSweep,
   normalizeTypeName,
   snapshotGroups,
   type GovernanceOp,
   type GovernanceProduct,
+  type KaizenReport,
   type ProductGroup,
-  type TypeAuditRecommendation,
   type TypeNode,
 } from '~/services/type-governance';
 import DrillAddProducts, { type DrillAddSource } from '~/components/admin/DrillAddProducts';
-import TypeAuditPanel from '~/components/admin/TypeAuditPanel';
+import KaizenPanel, { type KaizenPicked } from '~/components/admin/KaizenPanel';
 import { productSlug } from '~/utils/slug';
 import '~/styles/governance.css';
 
@@ -82,8 +82,8 @@ export default function AdminGovernanceTypes() {
   // Collapsible subtype rows at the bottom of the drill — open by default
   // so the subtype products are visible "in here".
   const [openSubs, setOpenSubs] = useState<Set<string>>(new Set());
-  // Type-audit report (null = closed).
-  const [audit, setAudit] = useState<TypeAuditRecommendation[] | null>(null);
+  // Kaizen report (null = closed).
+  const [audit, setAudit] = useState<KaizenReport | null>(null);
   useEffect(() => {
     setDrillSel(new Set());
     setAssignOpen(false);
@@ -403,11 +403,13 @@ export default function AdminGovernanceTypes() {
 
   const handleAddChild = async (parentId: string) => {
     if (parentId === UNASSIGNED_ID) return;
-    const created = await createTypeNode('new type', parentId);
+    // Hovering catalog itself grows a tier-1 type (no parent).
+    const isRoot = parentId === ROOT_ID;
+    const created = await createTypeNode('new type', isRoot ? null : parentId);
     if (!created) { showToast('Failed to add type'); return; }
     setTree(prev => [...prev, created]);
     setHistory(prev => [...prev, {
-      label: `Added type under ${tree.find(n => n.id === parentId)?.name ?? '?'}`,
+      label: isRoot ? 'Added top-level type' : `Added type under ${tree.find(n => n.id === parentId)?.name ?? '?'}`,
       inverse: [{ op: 'node-delete', id: created.id }],
       undone: false, at: Date.now(),
     }]);
@@ -456,31 +458,99 @@ export default function AdminGovernanceTypes() {
     queue.current = queue.current.then(() => reload());
   };
 
-  /** Apply the checked audit recommendations as one undoable gesture. */
-  const applyAudit = (recs: TypeAuditRecommendation[]) => {
+  /** Apply the checked kaizen improvements as one undoable gesture.
+   *  Op order: create nodes → product patches → delete nodes, so product
+   *  moves never reference a node mid-delete. */
+  const applyKaizen = (picked: KaizenPicked) => {
     setAudit(null);
-    if (!recs.length) return;
-    const byNode = new Map<string, TypeAuditRecommendation[]>();
-    for (const r of recs) byNode.set(r.toNodeId, [...(byNode.get(r.toNodeId) ?? []), r]);
-    const groups: ProductGroup[] = [...byNode.entries()].map(([nodeId, rs]) => ({
-      ids: rs.map(r => r.productId),
-      patch: {
-        type: tree.find(n => n.id === nodeId)?.name ?? null,
-        gender: genders.get(nodeId) ?? null,
-        type_path: paths.get(nodeId) ?? null,
-      },
-    }));
-    const idSet = new Set(recs.map(r => r.productId));
-    const matched = products.filter(p => idSet.has(p.id));
-    commit(
-      `Type audit: re-typed ${recs.length} product${recs.length === 1 ? '' : 's'}`,
-      [{ op: 'products-update', groups }],
-      [
+    const ops: GovernanceOp[] = [];
+    const inverse: GovernanceOp[] = [];
+    const groups: ProductGroup[] = [];
+    const insertedNodes: TypeNode[] = [];
+    const deletedIds = new Set<string>();
+    const labels: string[] = [];
+
+    // Unowned type names → new tier-1 nodes + path sync for their products.
+    if (picked.orphanTypes.length) {
+      const rows = picked.orphanTypes.map(o => ({
+        id: crypto.randomUUID(), name: o.typeName, parent_id: null, sort: 999,
+        color: null, gender: null,
+      }));
+      ops.push({ op: 'node-insert', rows });
+      rows.forEach((row, i) => {
+        insertedNodes.push({ id: row.id, name: row.name, parentId: null, sort: 999, color: null, gender: null, iconPath: null });
+        groups.push({ ids: picked.orphanTypes[i].productIds, patch: { type: row.name, type_path: row.name } });
+        inverse.push({ op: 'node-delete', id: row.id });
+      });
+      labels.push(`${rows.length} type${rows.length === 1 ? '' : 's'} created`);
+    }
+
+    // Better placements + drift syncs are both product patches.
+    const byNode = new Map<string, string[]>();
+    for (const r of picked.retypes) byNode.set(r.toNodeId, [...(byNode.get(r.toNodeId) ?? []), r.productId]);
+    for (const [nodeId, ids] of byNode) {
+      groups.push({
+        ids,
+        patch: {
+          type: tree.find(n => n.id === nodeId)?.name ?? null,
+          gender: genders.get(nodeId) ?? null,
+          type_path: paths.get(nodeId) ?? null,
+        },
+      });
+    }
+    if (picked.retypes.length) labels.push(`${picked.retypes.length} re-typed`);
+    for (const d of picked.drift) {
+      groups.push({ ids: [d.productId], patch: { type: d.toType, gender: d.toGender, type_path: d.toPath } });
+    }
+    if (picked.drift.length) labels.push(`${picked.drift.length} synced`);
+
+    // Duplicate types: move the drop node's products to the keeper, delete it.
+    for (const d of picked.duplicateTypes) {
+      const keep = tree.find(n => n.id === d.keepId);
+      const drop = tree.find(n => n.id === d.dropId);
+      if (!keep || !drop) continue;
+      const ids = products
+        .filter(p => p.type && normalizeTypeName(p.type) === normalizeTypeName(drop.name))
+        .map(p => p.id);
+      if (ids.length) groups.push({ ids, patch: { type: keep.name, gender: genders.get(keep.id) ?? null, type_path: paths.get(keep.id) ?? null } });
+      ops.push({ op: 'node-delete', id: drop.id });
+      deletedIds.add(drop.id);
+      inverse.push({ op: 'node-insert', rows: [{ id: drop.id, name: drop.name, parent_id: drop.parentId, sort: drop.sort, color: drop.color, gender: drop.gender }] });
+    }
+    if (picked.duplicateTypes.length) labels.push(`${picked.duplicateTypes.length} duplicate${picked.duplicateTypes.length === 1 ? '' : 's'} merged`);
+
+    // Empty branches: delete the topmost node (children cascade); the
+    // inverse re-inserts the whole subtree, parents first.
+    for (const e of picked.emptyTypes) {
+      const rows = tree.filter(n => e.subtreeIds.includes(n.id))
+        .map(n => ({ id: n.id, name: n.name, parent_id: n.parentId, sort: n.sort, color: n.color, gender: n.gender }));
+      ops.push({ op: 'node-delete', id: e.nodeId });
+      for (const id of e.subtreeIds) deletedIds.add(id);
+      inverse.unshift({ op: 'node-insert', rows });
+    }
+    if (picked.emptyTypes.length) labels.push(`${picked.emptyTypes.length} empty branch${picked.emptyTypes.length === 1 ? '' : 'es'} removed`);
+
+    if (groups.length) {
+      // Product patches run after node inserts, before node deletes.
+      const deleteAt = ops.findIndex(o => o.op === 'node-delete');
+      ops.splice(deleteAt < 0 ? ops.length : deleteAt, 0, { op: 'products-update', groups });
+      const idSet = new Set(groups.flatMap(g => g.ids));
+      const matched = products.filter(p => idSet.has(p.id));
+      inverse.push(
         { op: 'products-update', groups: snapshotGroups(matched, 'type') },
         { op: 'products-update', groups: snapshotGroups(matched, 'gender') },
         { op: 'products-update', groups: snapshotGroups(matched, 'typePath') },
-      ],
-      () => applyGroupsLocal(groups),
+      );
+    }
+    if (!ops.length) return;
+    commit(
+      `Kaizen: ${labels.join(' · ')}`,
+      ops,
+      inverse,
+      () => {
+        setTree(prev => [...prev.filter(n => !deletedIds.has(n.id)), ...insertedNodes]);
+        if (groups.length) applyGroupsLocal(groups);
+      },
     );
   };
 
@@ -528,10 +598,10 @@ export default function AdminGovernanceTypes() {
           <button
             type="button"
             className="gov-ghost"
-            title="Scan every product for a better-fitting type and review the recommended moves"
-            onClick={() => setAudit(auditProductTypes(products, tree))}
+            title="Continuous improvement: sweep everything — product placement, drifted columns, duplicate / empty / unowned types — and apply the fixes. Also runs every morning at 6 a.m. ET."
+            onClick={() => setAudit(kaizenSweep(products, tree))}
           >
-            Type audit
+            改 Kaizen
           </button>
           <button type="button" className="gov-ghost" disabled={!canUndo} onClick={handleUndo}>
             ↩ Undo
@@ -891,9 +961,9 @@ export default function AdminGovernanceTypes() {
       )}
 
       {audit && (
-        <TypeAuditPanel
-          recommendations={audit}
-          onApply={applyAudit}
+        <KaizenPanel
+          report={audit}
+          onApply={applyKaizen}
           onClose={() => setAudit(null)}
         />
       )}
