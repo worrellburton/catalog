@@ -806,6 +806,9 @@
 /* ── Skeleton grid (loading) ───────────────────────────────────────── */
 .creator-skeleton-grid {
   display: grid;
+  /* Mirror .creator-grid exactly — the skeleton must load in the SAME
+     column count the content will use (the density dial / 2-col default),
+     never its own. */
   grid-template-columns: repeat(3, 1fr);
   gap: 12px;
 }
@@ -948,6 +951,12 @@
     background: #111;
     padding: 0;
     margin: 0 -16px; /* claw back the parent's horizontal padding */
+  }
+
+  .creator-skeleton-grid {
+    grid-template-columns: repeat(var(--cat-cols, 2), 1fr);
+    gap: 2px;
+    margin: 0 -16px;
   }
 
   .creator-grid .look-card {

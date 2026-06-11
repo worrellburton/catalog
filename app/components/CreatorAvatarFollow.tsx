@@ -54,6 +54,11 @@ interface Props {
    *  card so the look/product opens) — only the +/− badge acts. Used on feed
    *  cards + tiles where the whole tile opens the item. Default true. */
   avatarOpensCreator?: boolean;
+  /** Fetch/decode the avatar immediately instead of lazily. Pass from
+   *  overlay surfaces where the avatar is above the fold on mount — the
+   *  browser otherwise defers a lazy <img> a beat even when it's cached,
+   *  which reads as a reload of an avatar the feed already painted. */
+  eager?: boolean;
   className?: string;
 }
 
@@ -64,6 +69,7 @@ export default function CreatorAvatarFollow({
   size = 40,
   onOpenCreator,
   avatarOpensCreator = true,
+  eager = false,
   className,
 }: Props) {
   const following = useFollowState(handle);
@@ -137,7 +143,7 @@ export default function CreatorAvatarFollow({
         : {})}
     >
       {shownAvatar && !imgErrored ? (
-        <img className="creator-avatar-follow__img" src={shownAvatar} alt={displayName || ''} loading="lazy" onError={() => setImgErrored(true)} />
+        <img className="creator-avatar-follow__img" src={shownAvatar} alt={displayName || ''} loading={eager ? 'eager' : 'lazy'} decoding={eager ? 'sync' : 'async'} onError={() => setImgErrored(true)} />
       ) : (
         <span className="creator-avatar-follow__img creator-avatar-follow__img--initial" aria-hidden="true">{initial}</span>
       )}
