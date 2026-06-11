@@ -852,7 +852,7 @@ class VideoPlaybackDirector {
       if (done) return;
       done = true;
       el.removeEventListener('seeked', finish);
-      this.unfreezeCard(entry);
+      this.fadeOutFreeze(entry); // reveal: crossfade the pinned frame out
     };
     el.addEventListener('seeked', finish, { once: true });
     // Backstop: never leave the freeze up if 'seeked' doesn't fire.
@@ -911,7 +911,7 @@ class VideoPlaybackDirector {
     entry.status = 'playing';
     this.assignedIds.add(cardId);
     this.applyCoverSize(entry, el);
-    this.unfreezeCard(entry);
+    this.fadeOutFreeze(entry); // warm reveal: crossfade the pinned frame out
     this.emit(cardId, 'playing');
     this.playEl(cardId, entry);
     return true;
@@ -1284,7 +1284,7 @@ class VideoPlaybackDirector {
     // covers. canReveal guards against revealing a stale prior-clip frame (see above).
     if (canReveal && el.readyState >= 2) {
       el.style.opacity = '1';
-      this.unfreezeCard(entry);
+      this.fadeOutFreeze(entry); // reveal: crossfade the pinned frame out (if any)
     }
   }
 
@@ -1391,15 +1391,27 @@ class VideoPlaybackDirector {
           width: '100%',
           height: '100%',
           objectFit: 'cover',
-          zIndex: '2',
+          // ABOVE the pooled <video> (z-index 2): the freeze covers the gap
+          // while the re-attached clip cold-buffers, then fadeOutFreeze fades it
+          // DOWN on reveal so the live video shows through it — a soft
+          // poster→video crossfade instead of a hard snap (the felt "freeze then
+          // resume" on back from an overlay). Fading the freeze (a static image
+          // of THIS card's own last frame) is identity-safe; fading the recycled
+          // <video> itself is not (hls.js reuse can hold a prior clip's frame).
+          zIndex: '3',
           display: 'block',
           pointerEvents: 'none',
+          opacity: '1',
+          transition: 'none',
         });
         entry.freezeEl = img;
+      } else {
+        // Reused after a prior fade-out was armed — restore it to fully opaque
+        // and cancel any pending transition so it covers the new gap cleanly.
+        img.style.transition = 'none';
+        img.style.opacity = '1';
       }
       img.src = frame;
-      // The (re)attached <video> is appended AFTER this img, so once it
-      // reveals it paints above; until then the freeze frame covers.
       if (img.parentElement !== entry.slotEl) entry.slotEl.appendChild(img);
     } catch { /* best-effort — poster remains the fallback */ }
   }
@@ -1409,6 +1421,28 @@ class VideoPlaybackDirector {
     if (!img) return;
     entry.freezeEl = null;
     try { img.remove(); } catch { /* already detached */ }
+  }
+
+  /** Crossfade the freeze-frame OUT at reveal time: the live video is already
+   *  painting at full opacity beneath it (z-index 2 vs the freeze's 3), so
+   *  fading the freeze down reveals the clip through it — a soft poster→video
+   *  swap instead of a hard cut. Detaches the img from the entry IMMEDIATELY so
+   *  a concurrent re-acquire/freeze never reuses the fading element, then removes
+   *  it once the transition ends (with a timeout backstop). Used only on the
+   *  same-identity reveal paths; identity-CHANGE paths still call unfreezeCard
+   *  for an instant drop so a prior item's frame can't linger over a new one. */
+  private fadeOutFreeze(entry: CardEntry): void {
+    const img = entry.freezeEl;
+    if (!img) return;
+    entry.freezeEl = null;
+    const FADE_MS = 140;
+    let removed = false;
+    const drop = () => { if (removed) return; removed = true; try { img.remove(); } catch { /* detached */ } };
+    img.style.transition = `opacity ${FADE_MS}ms linear`;
+    // Flip on the next frame so the transition animates from opacity:1.
+    requestAnimationFrame(() => { img.style.opacity = '0'; });
+    img.addEventListener('transitionend', drop, { once: true });
+    window.setTimeout(drop, FADE_MS + 80); // backstop if transitionend never fires
   }
 
   private releaseVideoEl(cardId: string, el: HTMLVideoElement): void {
