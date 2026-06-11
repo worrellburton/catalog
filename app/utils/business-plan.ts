@@ -183,6 +183,45 @@ function cohortBarChart(bars: Array<[string, number]>, reference: number): strin
   </svg>`;
 }
 
+/** Competitive 2x2: search-first ↔ discovery-first on x, AI bolted on ↔
+    AI-native on y. Catalog is the filled mark in the open upper-right. */
+function quadrantChart(): string {
+  const W = 720;
+  const H = 330;
+  const pad = { l: 110, r: 110, t: 34, b: 34 };
+  const px = (fx: number) => pad.l + fx * (W - pad.l - pad.r);
+  const py = (fy: number) => pad.t + fy * (H - pad.t - pad.b);
+  const players: Array<{ x: number; y: number; name: string; self?: boolean }> = [
+    { x: 0.10, y: 0.74, name: 'Amazon' },
+    { x: 0.20, y: 0.16, name: 'ChatGPT shopping' },
+    { x: 0.72, y: 0.78, name: 'TikTok Shop' },
+    { x: 0.58, y: 0.58, name: 'Pinterest' },
+    { x: 0.46, y: 0.86, name: 'LTK / ShopMy' },
+    { x: 0.88, y: 0.10, name: 'Catalog', self: true },
+  ];
+  const dots = players.map(pl => {
+    const cx = px(pl.x).toFixed(1);
+    const cy = py(pl.y).toFixed(1);
+    return pl.self
+      ? `<circle cx="${cx}" cy="${cy}" r="7" fill="#141210"/>
+         <text x="${cx}" y="${Number(cy) + 22}" text-anchor="middle" class="quad-name quad-name--self">${pl.name}</text>`
+      : `<circle cx="${cx}" cy="${cy}" r="5" fill="#fffdf8" stroke="#141210" stroke-width="1.5"/>
+         <text x="${cx}" y="${Number(cy) + 19}" text-anchor="middle" class="quad-name">${pl.name}</text>`;
+  }).join('');
+  const mx = (pad.l + (W - pad.r)) / 2;
+  const my = (pad.t + (H - pad.b)) / 2;
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" role="img" aria-label="Competitive positioning map">
+    <rect x="${pad.l}" y="${pad.t}" width="${W - pad.l - pad.r}" height="${H - pad.t - pad.b}" fill="none" stroke="#e4e4e4"/>
+    <line x1="${mx}" y1="${pad.t}" x2="${mx}" y2="${H - pad.b}" stroke="#e4e4e4"/>
+    <line x1="${pad.l}" y1="${my}" x2="${W - pad.r}" y2="${my}" stroke="#e4e4e4"/>
+    <text x="${mx}" y="${pad.t - 12}" text-anchor="middle" class="chart-axis">AI-NATIVE</text>
+    <text x="${mx}" y="${H - pad.b + 22}" text-anchor="middle" class="chart-axis">AI BOLTED ON</text>
+    <text x="${pad.l - 10}" y="${my + 3}" text-anchor="end" class="chart-axis">SEARCH-FIRST</text>
+    <text x="${W - pad.r + 10}" y="${my + 3}" text-anchor="start" class="chart-axis">DISCOVERY-FIRST</text>
+    ${dots}
+  </svg>`;
+}
+
 /** GTM cycle diagram: a HIRE circle feeds a strict three-beat loop
     (strategy → deploy the budget → learn) drawn as a ring of arrows —
     the ring itself is the repeat. Pure ink, print-safe. */
@@ -519,6 +558,8 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
   .cycle-hire-label { font-size: 13px; font-weight: 800; letter-spacing: 0.14em; fill: #fff; font-family: inherit; }
   .cycle-node-label { font-size: 9.5px; font-weight: 800; letter-spacing: 0.1em; fill: var(--ink); font-family: inherit; }
   .cycle-sub { font-size: 8px; font-weight: 700; letter-spacing: 0.12em; fill: var(--muted); font-family: inherit; }
+  .quad-name { font-size: 10px; font-weight: 600; fill: #57514a; font-family: inherit; }
+  .quad-name--self { font-weight: 800; fill: var(--ink); font-size: 11px; }
 
   /* LTV chain. */
   table.ltv-chain { width: 100%; border-collapse: collapse; font-size: 11px; margin: 6px 0 10px; }
@@ -863,10 +904,74 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
 
   </div>
 
-  <!-- Sheet 8 — aligned incentives: Shopnomix as the investor whose rails
-       we run on. Cash from every order + equity upside + exclusivity. -->
+  <!-- Sheet 8 — appendix C: the competitive map. -->
   <div class="page">
     <div class="folio"><svg class="folio-logo" viewBox="${CATALOG_LOGO_VIEWBOX}" role="img" aria-label="Catalog"><path fill="#141210" d="${CATALOG_LOGO_PATH}" /></svg><span>Business Plan</span><span class="folio-no">09</span></div>
+    <section>
+      <p class="kicker">Appendix C · Competitive map</p>
+      <h2>The seat nobody is sitting in.</h2>
+      <p class="standfirst">Everyone monetizes shopping; no one is built for AI-native discovery. The incumbents bolt AI onto a search funnel, the feeds bury shopping inside entertainment, and the creator platforms monetize links without a destination. The open seat is where taste, creators, and AI meet.</p>
+      ${quadrantChart()}
+      <p class="chart-caption">Positioning, not market share: the upper right is open because AI-native, discovery-first shopping has no incumbent.</p>
+      <div class="solutions">
+        <div class="solution">
+          <span>The incumbents</span>
+          <p>Amazon and ChatGPT shopping own search-first intent: you arrive already knowing what you want. Their AI retrofits an old funnel.</p>
+        </div>
+        <div class="solution">
+          <span>The feeds</span>
+          <p>TikTok Shop and Pinterest prove discovery converts, but shopping interrupts the content their users actually came for.</p>
+        </div>
+        <div class="solution">
+          <span>The open seat</span>
+          <p>Creator platforms monetize links without a home. Nobody owns AI-native, shopping-first discovery. Catalog is built to.</p>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Sheet 9 — appendix D: team & hiring, headcount behind proof. -->
+  <div class="page">
+    <div class="folio"><svg class="folio-logo" viewBox="${CATALOG_LOGO_VIEWBOX}" role="img" aria-label="Catalog"><path fill="#141210" d="${CATALOG_LOGO_PATH}" /></svg><span>Business Plan</span><span class="folio-no">10</span></div>
+    <section>
+      <p class="kicker">Appendix D · Team &amp; hiring</p>
+      <h2>Headcount follows proof.</h2>
+      <p class="standfirst">The team scales in the same order as the budget: consultants prove the cycle, a CMO takes ownership of it, and the hungriest consultants convert into the full-time core. Payroll never runs ahead of the machine.</p>
+      <div class="flow">
+        <div class="flow-step"><b>1 · Founder-led</b>Product, feed, and creator relationships, hands-on</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step"><b>2 · Consultants</b>Three BD and marketing hires, month-to-month</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step"><b>3 · CMO</b>One accountable owner for the proven machine</div>
+        <div class="flow-arrow">→</div>
+        <div class="flow-step"><b>4 · Convert &amp; scale</b>The hungry become the full-time core</div>
+      </div>
+      <div class="statband" style="grid-template-columns: repeat(3, 1fr);">
+        <div><div class="stat-value">${usd(c.monthlyOpex)}</div><div class="stat-label">Avg monthly OpEx, all-in</div></div>
+        <div><div class="stat-value">${pct(d.creatorPayout)}</div><div class="stat-label">Of revenue paid to creators</div></div>
+        <div><div class="stat-value">${r.runwayMonths == null ? `${d.horizonMonths}+ mo` : `${r.runwayMonths} mo`}</div><div class="stat-label">Runway on this plan</div></div>
+      </div>
+      <div class="solutions">
+        <div class="solution">
+          <span>The principle</span>
+          <p>Nobody is hired to figure out whether the machine works. People are hired when the machine has shown it does, to run it harder.</p>
+        </div>
+        <div class="solution">
+          <span>The promise</span>
+          <p>Consultants start month-to-month with a real path: prove it through the cycle and convert to full-time. Hungry and aggressive is the bar.</p>
+        </div>
+        <div class="solution">
+          <span>The spend</span>
+          <p>Operating cost stays lean and creator-weighted: the largest line is the ${pct(d.creatorPayout)} of revenue redistributed to the people who fill the feed.</p>
+        </div>
+      </div>
+    </section>
+  </div>
+
+  <!-- Sheet 10 — aligned incentives: Shopnomix as the investor whose rails
+       we run on. Cash from every order + equity upside + exclusivity. -->
+  <div class="page">
+    <div class="folio"><svg class="folio-logo" viewBox="${CATALOG_LOGO_VIEWBOX}" role="img" aria-label="Catalog"><path fill="#141210" d="${CATALOG_LOGO_PATH}" /></svg><span>Business Plan</span><span class="folio-no">11</span></div>
     <section>
       <p class="kicker">Aligned incentives · To Shopnomix</p>
       <h2>An investment that pays you twice.</h2>
