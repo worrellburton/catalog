@@ -15,7 +15,10 @@ interface TransformOpts {
   /** Target rendered width in CSS pixels. The helper auto-doubles on
    *  retina via the `2x` suffix on srcSet, so pass the natural size. */
   width: number;
-  /** Optional height. When omitted, Supabase preserves aspect ratio. */
+  /** Optional height. When omitted, the helper sends resize=contain —
+   *  the only mode where the render API truly preserves aspect ratio
+   *  (width-only + cover pins the height to 2× width, shipping a 1:2
+   *  center-crop that made poster→video swaps visibly zoom). */
   height?: number;
   /** 1–100. Defaults to 75 which is visually indistinguishable from
    *  the original for thumbnails but ~60% smaller. */
@@ -49,7 +52,11 @@ export function withTransform(url: string | null | undefined, opts: TransformOpt
   params.set('width', String(opts.width));
   if (opts.height) params.set('height', String(opts.height));
   params.set('quality', String(opts.quality ?? 75));
-  params.set('resize', opts.resize ?? 'cover');
+  // Width-only requests MUST be contain: the render API's cover mode
+  // without an explicit height crops to width×2 (1:2) instead of
+  // preserving the source aspect. Cover stays the default only when the
+  // caller actually specifies the box.
+  params.set('resize', opts.resize ?? (opts.height ? 'cover' : 'contain'));
   if (opts.format) params.set('format', opts.format);
   return `${base}?${params.toString()}`;
 }

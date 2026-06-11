@@ -176,7 +176,7 @@ async function describeWithGemini(
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
         contents: [{ role: 'user', parts }],
-        generationConfig: { maxOutputTokens: 600, temperature: 0.9 },
+        generationConfig: { maxOutputTokens: 2000, temperature: 0.9, thinkingConfig: { thinkingBudget: 512 } },
       }),
       signal: ctrl.signal,
     });
@@ -354,7 +354,7 @@ Deno.serve(async (req: Request) => {
       .from('look_descriptions')
       .upsert(
         { look_id: lookId, description, source, generated_at: new Date().toISOString() },
-        { onConflict: 'look_id' },
+        { onConflict: 'look_id', ignoreDuplicates: source === 'heuristic' },
       );
 
     return jsonRes({ success: true, description, source });

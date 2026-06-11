@@ -1013,45 +1013,56 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                         identity, so this card stays slim (just the summary +
                         "View all looks"). */}
                     {lookDescription ? (
-                      // Unique, image-grounded description for THIS look.
+                      // Unique, image-grounded description for THIS look —
+                      // centered, glowing editorial copy (no spark mark).
                       <p className="look-creator-about-bio look-creator-about-bio--ai">
-                        <span className="look-creator-about-ai-mark" aria-hidden="true"><svg viewBox="0 0 100 100" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M50 4 C54 30 70 46 96 50 C70 54 54 70 50 96 C46 70 30 54 4 50 C30 46 46 30 50 4 Z" /></svg></span>
                         {lookDescription}
                       </p>
                     ) : creatorData?.bio ? (
                       <p className="look-creator-about-bio">{creatorData.bio}</p>
                     ) : aboutSummary ? (
                       <p className="look-creator-about-bio look-creator-about-bio--ai">
-                        <span className="look-creator-about-ai-mark" aria-hidden="true"><svg viewBox="0 0 100 100" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M50 4 C54 30 70 46 96 50 C70 54 54 70 50 96 C46 70 30 54 4 50 C30 46 46 30 50 4 Z" /></svg></span>
                         {aboutSummary}
                       </p>
                     ) : null}
+                  </div>
+
+                  {/* One action row: the creator's catalog (avatar + name)
+                      beside Comments (founder's call — same row). */}
+                  <div className="look-about-actions">
                     <button
                       className="look-creator-about-btn"
                       onClick={() => { handleClose(); onOpenCreator(look.creator); }}
                     >
-                      View all looks
+                      {(look.creatorAvatar || creatorData?.avatar) && (
+                        <img
+                          className="look-about-btn-avatar"
+                          src={look.creatorAvatar || creatorData?.avatar || ''}
+                          alt=""
+                          loading="lazy"
+                        />
+                      )}
+                      <span className="look-about-btn-label">
+                        View all {(creatorData?.displayName || look.creatorDisplayName || look.creator || 'their').split(' ')[0]}&rsquo;s looks
+                      </span>
                       <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
                         <polyline points="9 18 15 12 9 6"/>
                       </svg>
                     </button>
+                    {commentsEnabled && commentSlug && onOpenComments && (
+                      <button
+                        type="button"
+                        className="look-comments-labeled"
+                        onClick={() => onOpenComments('look', commentSlug)}
+                        aria-label="Comments"
+                      >
+                        <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                          <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
+                        </svg>
+                        <span>{commentCount != null ? `Comments ${commentCount > 99 ? '99+' : commentCount}` : 'Comments'}</span>
+                      </button>
+                    )}
                   </div>
-
-                  {/* Comments — glowing, animated button with a live count,
-                      sits directly under the (always-shown) creator info. */}
-                  {commentsEnabled && commentSlug && onOpenComments && (
-                    <button
-                      type="button"
-                      className="look-comments-labeled"
-                      onClick={() => onOpenComments('look', commentSlug)}
-                      aria-label="Comments"
-                    >
-                      <svg width="17" height="17" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M21 11.5a8.38 8.38 0 0 1-.9 3.8 8.5 8.5 0 0 1-7.6 4.7 8.38 8.38 0 0 1-3.8-.9L3 21l1.9-5.7a8.38 8.38 0 0 1-.9-3.8 8.5 8.5 0 0 1 4.7-7.6 8.38 8.38 0 0 1 3.8-.9h.5a8.48 8.48 0 0 1 8 8v.5z"/>
-                      </svg>
-                      <span>{commentCount != null ? `Comments ${commentCount > 99 ? '99+' : commentCount}` : 'Comments'}</span>
-                    </button>
-                  )}
                 </>
               </>
             </div>
