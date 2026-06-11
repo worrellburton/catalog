@@ -37,7 +37,8 @@ import {
   type CommentMedia,
 } from '~/services/activity';
 import type { CommentTargetType } from '~/services/comments';
-import { listUserGenerations, isGenerationInFlight, getLookUuidForGeneration, getGenerationProductImages, type UserGeneration } from '~/services/user-generations';
+import { listUserGenerations, isGenerationInFlight, getLookUuidForGeneration, getGenerationProductImages,
+  getGenerationLookPosters, type UserGeneration } from '~/services/user-generations';
 import CountUp from '~/components/CountUp';
 import SiteParticleHost from '~/components/SiteParticleHost';
 import ConsumerAvatar from '~/components/ConsumerAvatar';
@@ -546,11 +547,15 @@ function YourLooksRail({ generations }: { generations: UserGeneration[] | null }
   // The products that went into each look — shown as little circles on the
   // tile instead of a text label.
   const [productImgs, setProductImgs] = useState<Record<string, string[]>>({});
+  // The look's own poster frame per generation — painted under each clip
+  // so tiles are visually complete before the video streams in.
+  const [lookPosters, setLookPosters] = useState<Record<string, string>>({});
   useEffect(() => {
     const ids = recentKey ? recentKey.split(',') : [];
     if (ids.length === 0) return;
     let cancelled = false;
     getGenerationProductImages(ids).then(m => { if (!cancelled) setProductImgs(m); });
+    getGenerationLookPosters(ids).then(m => { if (!cancelled) setLookPosters(m); });
     return () => { cancelled = true; };
   }, [recentKey]);
   if (recent.length === 0) return null;
@@ -564,7 +569,7 @@ function YourLooksRail({ generations }: { generations: UserGeneration[] | null }
         </span>
       </div>
       <div className="ap-gens-rail">
-        {recent.map(g => <GenTile key={g.id} gen={g} productImgs={productImgs[g.id] || []} />)}
+        {recent.map(g => <GenTile key={g.id} gen={g} productImgs={productImgs[g.id] || []} lookPoster={lookPosters[g.id]} />)}
       </div>
     </section>
   );
@@ -588,14 +593,15 @@ function GenProductCircles({ images }: { images: string[] }) {
   );
 }
 
-function GenTile({ gen, productImgs }: { gen: UserGeneration; productImgs: string[] }) {
+function GenTile({ gen, productImgs, lookPoster }: { gen: UserGeneration; productImgs: string[]; lookPoster?: string }) {
   const navigate = useNavigate();
   const [loaded, setLoaded] = useState(false);
-  // Generations carry no poster column; the first product image (already
-  // fetched for the foot circles) paints the tile instantly while the
-  // clip streams in behind it.
-  const tilePoster = productImgs[0]
-    ? withTransform(productImgs[0], { width: 240, quality: 60, format: 'webp' })
+  // The look's OWN poster frame when it exists (exact first frame of the
+  // clip), else the first product image — either way the tile paints
+  // instantly while the video loads in the background.
+  const rawPoster = lookPoster || productImgs[0];
+  const tilePoster = rawPoster
+    ? withTransform(rawPoster, { width: 240, quality: 60, format: 'webp' })
     : undefined;
   const inFlight = isGenerationInFlight(gen);
   const failed = gen.status === 'failed' || (!inFlight && gen.status !== 'done');
