@@ -3,11 +3,12 @@
 // shoppers see the same order).
 //
 // Type a user → the feed renders AS THEM (live compute via the
-// personalize-feed edge function; previews skip the daily cache so the
-// pinned rule dials re-rank in real time). Movement badges show how far
-// each item moved vs the baseline (cold-start) order. Inspect-only by
-// design: editing happens at the baseline + rules level so changes scale
-// to every shopper.
+// personalize-feed edge function; previews skip the daily cache AND the
+// Claude re-rank so the pinned rule dials respond in ~a second). Movement
+// badges show how far each item moved vs the baseline (cold-start) order.
+// Until a user is typed, NO feed renders — there is no "the" feed, only
+// each shopper's. Inspect-only by design: editing happens at the rules
+// level so changes scale to every shopper.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { supabase } from '~/utils/supabase';
@@ -37,11 +38,9 @@ interface FeedReason {
 
 interface Props {
   showToast: (msg: string) => void;
-  /** True while a user lens is active — the parent hides the baseline list. */
-  onActiveChange: (active: boolean) => void;
 }
 
-export default function DailyFeedLens({ showToast, onActiveChange }: Props) {
+export default function DailyFeedLens({ showToast }: Props) {
   const [query, setQuery] = useState('');
   const [suggestions, setSuggestions] = useState<{ id: string; label: string; sub: string }[]>([]);
   const [active, setActive] = useState<{ id: string; label: string } | null>(null);
@@ -54,7 +53,6 @@ export default function DailyFeedLens({ showToast, onActiveChange }: Props) {
   const ruleTimer = useRef(0);
 
   useEffect(() => { void getFeedRules().then(setRules); }, []);
-  useEffect(() => { onActiveChange(!!active); }, [active, onActiveChange]);
 
   // Live typeahead over profiles.
   useEffect(() => {
@@ -193,7 +191,7 @@ export default function DailyFeedLens({ showToast, onActiveChange }: Props) {
         )}
         {!active && (
           <span style={{ fontSize: 12, color: '#92741e' }}>
-            Showing the baseline below — every shopper&apos;s feed is a personal re-rank of it.
+            There is no single feed — type a user to see the catalog through their eyes.
           </span>
         )}
       </div>
