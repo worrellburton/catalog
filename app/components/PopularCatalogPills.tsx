@@ -85,6 +85,11 @@ export default function PopularCatalogPills({ onPick, onFollowingCatalog }: Popu
 
   if (!pills || pills.length === 0) return null;
 
+  // Mobile (keyboard-up search sheet) fits one row less than desktop —
+  // trim a pill so the cloud never crowds the input.
+  const isMobile = typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches;
+  const shownPills = isMobile ? pills.slice(0, Math.max(1, pills.length - 1)) : pills;
+
   const showFollowing = !!onFollowingCatalog && followHandles.length > 0;
   // Index drives the per-pill stagger delay; account for the Following
   // pill occupying slot 0 when present.
@@ -115,7 +120,7 @@ export default function PopularCatalogPills({ onPick, onFollowingCatalog }: Popu
             <span className="catalog-pill-tag">Following</span>
           </button>
         )}
-        {pills.map((p) => {
+        {shownPills.map((p) => {
           const meta = KIND_META[p.kind];
           const delay = `${idx++ * 38}ms`;
           // Render each catalog as a single pill — just the name.

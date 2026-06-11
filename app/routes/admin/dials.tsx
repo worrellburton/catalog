@@ -463,7 +463,8 @@ export default function AdminDials() {
           )}
         </div>
 
-        <VideoPipelineCard />
+        <VideoPipelineCard device="desktop" />
+        <VideoPipelineCard device="mobile" />
 
         <div className="admin-detail-card">
           <h3>Products: only show product image</h3>

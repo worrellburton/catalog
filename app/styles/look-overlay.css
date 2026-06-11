@@ -342,6 +342,17 @@
   display: block;
 }
 
+/* Playback-time sharpen for the look hero (and its handoff poster). Same
+   rationale as the product hero: counteract upscale-softness of the ≤834px
+   source clip in the full-screen hero — no new asset, no feed impact. The
+   pooled <video> is appended into .look-media-video; the feed grid uses
+   .card-video-slot and is untouched. Tuning/kill-switch: --hero-video-enhance
+   in base.css. */
+.look-media-video,
+.look-media-handoff-poster {
+  filter: var(--hero-video-enhance);
+}
+
 /* ── Right: info panel (58%) ── */
 .look-info-col {
   flex: 0 0 58%;

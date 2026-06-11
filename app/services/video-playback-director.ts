@@ -11,13 +11,14 @@
 // play() independently) and gives us a clean recovery path after
 // modal open/close and tab visibility changes.
 
-import { captureVideoFrame, getPrefetchCount, isSlowConnection } from './video-loading';
+import { captureVideoFrame, getPrefetchCount, isSlowConnection, isMobileViewport } from './video-loading';
 import {
   setVideoSource,
   getVideoSource,
   browserSupportsNativeHls,
   prefetchHlsModule,
 } from '~/utils/hlsAttach';
+import { videoPipelineMode } from './video-pipeline';
 
 // ── Constants ──────────────────────────────────────────────────────────
 //
@@ -63,24 +64,38 @@ const RELEASE_MARGIN_VH_MOBILE = 1.25;
  *  These values cover a full screen + a lookahead row on realistic viewports. */
 const POOL_MAX_DESKTOP = 32;
 const POOL_MAX_MOBILE = 14;
+/** Upper clamp for the DYNAMIC mobile cap (see poolMax). The mobile pool grows
+ *  to cover the play band on tall viewports so far-band cards don't freeze on
+ *  their poster, but never past this ceiling — keeps simultaneous HLS decoders
+ *  clear of the iOS limit. */
+const POOL_MAX_MOBILE_CEILING = 20;
 /** While a detail overlay is open, the background home feed is out of the
  *  active scope and would normally have ALL its <video>s released — parked
  *  off-screen (mobile drops their decoded surface) and freed for the overlay's
  *  own nested feed to repurpose. Returning then cold re-buffers, so the feed
  *  shows posters ("looks dead") for a beat — worst on HLS, whose re-attach
- *  overruns the ~360ms close animation. Instead we keep this many of the
- *  NEAREST background cards alive-but-PAUSED (element + decoded surface kept,
- *  zero decode while covered) so returning is an instant paused→play resume.
- *  Bounded well under poolMax so the overlay's nested feed still gets slots. */
-const KEEP_WARM_UNDER_OVERLAY_DESKTOP = 8;
-// Mobile shows ~8 cards/viewport (2 cols × ~4 rows). At 4, only half the
-// visible grid resumed instantly on back — the other half cold re-buffered,
-// which is the "feed dead for a beat" on return from a look/product. 6 covers
-// most of the visible grid while still leaving the overlay's nested feed
-// enough of the 14-slot pool (6 paused-but-retained + ~8 nested = pool cap),
-// so it isn't starved. Kept at 6 (not 8) to avoid crowding the nested feed and
-// to stay clear of iOS's simultaneous-decoder ceiling (POOL_MAX_MOBILE = 14).
-const KEEP_WARM_UNDER_OVERLAY_MOBILE = 6;
+ *  overruns the ~360ms close animation, so the cold attach can't beat the slide
+ *  and the user lands on posters. A cold attach is fundamentally not instant;
+ *  only a PAUSED-but-decoded element resumes instantly (play(), no re-buffer).
+ *
+ *  So instead of keeping a small fixed handful warm, we keep the WHOLE visible
+ *  grid warm and reserve only enough of the pool for the overlay's own nested
+ *  rails: keepWarm = poolMax() - NESTED_FEED_RESERVE. Because keep-warm cards
+ *  are PAUSED (hold a decoder instance but don't decode while covered) and
+ *  warm + nested <= poolMax <= the decoder-safe ceiling, this never exceeds the
+ *  simultaneous-decoder budget the pool cap already guarantees — it just shifts
+ *  it toward "feed resumes instantly on back" and away from "nested rail plays a
+ *  few more tiles". The rails are off-screen when an overlay first opens, so the
+ *  reserve sits free until you actually scroll to them. The kept cards are also
+ *  PROTECTED from the nested feed's eviction (see rank()) so they survive while
+ *  the overlay is open instead of being stolen the moment a rail tile needs a
+ *  slot — without that, raising the count alone is silently defeated. */
+const NESTED_FEED_RESERVE_DESKTOP = 8;
+// Mobile pool is 14 and bumps against the iOS simultaneous-HLS-decoder ceiling,
+// so the reserve is the tighter lever here: 6 leaves keepWarm = 14 - 6 = 8 =
+// a full mobile viewport (2 cols x ~4 rows), so the entire visible grid resumes
+// instantly on back while the nested rail still gets 6 concurrent tiles.
+const NESTED_FEED_RESERVE_MOBILE = 6;
 /** px/s scroll speed above which we skip play() calls (poster only). */
 const SCROLL_VELOCITY_THRESHOLD = 2500;
 /** ms of scroll-quiet before we re-rank after a fast flick. */
@@ -119,19 +134,47 @@ const PREARM_MAX_DESKTOP = 3;
 // (into a spare pool element), so a promoted card reveals instantly instead of
 // holding its poster while it cold-buffers. At 1, only the single nearest
 // upcoming clip was ready on mobile; a 2-col grid scrolls two new cards in per
-// row, so the second always popped late. 3 keeps the next ~row-and-a-half warm.
-// Still bounded by poolMax (prearm only runs while assignedIds < cap and never
-// evicts a playing card), so total decoders stay under the same ceiling.
-const PREARM_MAX_MOBILE = 3;
+// row, so the second always popped late. 4 keeps the next TWO full rows warm
+// (2 cols × 2 rows), so a normal scroll-down finds the incoming clips already
+// decoded instead of cold-attaching the HLS chain (manifest → playlist → init →
+// segment) and flashing its poster for a beat — the residual HLS poster-pop the
+// pipeline-by-device split otherwise leaves on the mobile feed. Still bounded by
+// poolMax (prearm only runs while assignedIds < cap and never evicts a playing
+// card), so total decoders stay under the ceiling.
+const PREARM_MAX_MOBILE = 4;
 // Lookahead band for prebuffering. MUST sit between the play and release bands
 // (play < prearm < release < near-band) so prearmed cards are still tracked by
-// rank() and are never past the point where they'd be released.
+// rank() and are never past the point where they'd be released. Mobile widened
+// to 1.1 (still < RELEASE_MARGIN_VH_MOBILE=1.25) so the prearm ring actually
+// contains the next two incoming rows that PREARM_MAX_MOBILE=4 warms.
 const PREARM_MARGIN_VH_DESKTOP = 1.1;
-const PREARM_MARGIN_VH_MOBILE = 0.95;
+const PREARM_MARGIN_VH_MOBILE = 1.1;
 
-function isMobileViewport(): boolean {
-  return typeof window !== 'undefined' && window.innerWidth <= 600;
-}
+// ── Cold-attach budget (anti-burst) ──────────────────────────────────────
+// Max number of COLD attaches (a fresh setVideoSource → HLS manifest→playlist
+// →init→segment chain + first-frame decode) a single rank() pass may kick off.
+// When an overlay closes, the near-band re-balloons and one rank() pass would
+// otherwise cold-attach the whole visible grid AT ONCE — a synchronized decoder
+// burst that spikes the main thread and starves every clip's bytes, i.e. the
+// beat-long "feed freezes on poster then resumes" on back. Capping cold attaches
+// per pass and re-ranking next frame spreads the burst over a few rAF frames
+// (~16ms each), so the nearest cards light up first and the rest trail by a
+// frame or two (sub-100ms, covered by their poster/freeze-frame meanwhile).
+// FREE and never counted: keep-playing unpauses, same-src reclaims (a card
+// adopting its own parked element on return), and prearm adopts — only genuine
+// cold attaches cost budget, so the instant-resume paths are never throttled.
+const ATTACH_BUDGET_DESKTOP = 6;
+const ATTACH_BUDGET_MOBILE = 3;
+
+// Device tuning keys off the SAME mobile breakpoint as the video pipeline and
+// the feed grid (isMobileViewport, ≤768px, imported from video-loading.ts).
+// Previously the director used a local ≤600px cutoff, so a 601–768px viewport —
+// which renders the 2-col MOBILE grid (FeedSection) AND is served the HLS
+// pipeline (video-pipeline) — ran with DESKTOP pool tuning (POOL_MAX 32, wider
+// play band). On Safari/iOS that over-saturated the simultaneous-HLS-decoder
+// ceiling, so clips stalled on their poster then played a beat later. Sharing
+// one breakpoint keeps the whole HLS/mobile regime on the decoder-safe mobile
+// pool (POOL_MAX 14). Desktop (>768px, MP4) is unchanged.
 function playMarginPx(): number {
   if (typeof window === 'undefined') return 0;
   return window.innerHeight * (isMobileViewport() ? PLAY_MARGIN_VH_MOBILE : PLAY_MARGIN_VH_DESKTOP);
@@ -140,8 +183,26 @@ function releaseMarginPx(): number {
   if (typeof window === 'undefined') return 0;
   return window.innerHeight * (isMobileViewport() ? RELEASE_MARGIN_VH_MOBILE : RELEASE_MARGIN_VH_DESKTOP);
 }
+/** Mobile pool cap is sized to COVER the play band, not a flat constant: the
+ *  band spans (1 + 2·PLAY_MARGIN)·vh and the 2-col 3:4 grid's row pitch scales
+ *  with width, so a tall/narrow viewport can hold >14 cards in-band. A flat cap
+ *  below that count freezes the farthest in-band cards on their poster (rank()
+ *  won't evict a nearer card for a farther one) — the opposite of "always
+ *  playing." So compute the band's card count and clamp it to
+ *  [POOL_MAX_MOBILE, POOL_MAX_MOBILE_CEILING]: never below the tuned minimum,
+ *  never past the decoder-safe ceiling. The cap is a CEILING, not a target —
+ *  the steady-state decode count is whatever falls inside the (tight) play band.
+ *  Desktop keeps its flat cap. */
 function poolMax(): number {
-  return isMobileViewport() ? POOL_MAX_MOBILE : POOL_MAX_DESKTOP;
+  if (!isMobileViewport()) return POOL_MAX_DESKTOP;
+  if (typeof window === 'undefined') return POOL_MAX_MOBILE;
+  const COLS = 2, GAP = 2; // mobile feed grid: repeat(2, 1fr), 2px gap (feed.css)
+  const cardW = (window.innerWidth - GAP) / COLS;
+  const rowPitch = cardW * (4 / 3) + GAP; // 3:4 cards
+  const bandPx = window.innerHeight * (1 + 2 * PLAY_MARGIN_VH_MOBILE);
+  // +1 row of headroom covers the partial-row overlap at both band ends.
+  const needed = (Math.ceil(bandPx / rowPitch) + 1) * COLS;
+  return Math.min(POOL_MAX_MOBILE_CEILING, Math.max(POOL_MAX_MOBILE, needed));
 }
 function prearmMarginPx(): number {
   if (typeof window === 'undefined') return 0;
@@ -149,6 +210,9 @@ function prearmMarginPx(): number {
 }
 function prearmMax(): number {
   return isMobileViewport() ? PREARM_MAX_MOBILE : PREARM_MAX_DESKTOP;
+}
+function attachBudget(): number {
+  return isMobileViewport() ? ATTACH_BUDGET_MOBILE : ATTACH_BUDGET_DESKTOP;
 }
 
 // ── Types ──────────────────────────────────────────────────────────────
@@ -195,6 +259,12 @@ class VideoPlaybackDirector {
   private lastScrollTime = Date.now();
   private isScrollFast = false;
   private scrollRestTimer: ReturnType<typeof setTimeout> | null = null;
+  // Set on a scope transition (overlay open/close). The NEXT markScroll then
+  // re-baselines instead of computing velocity — the scroll origin just changed
+  // (window scrollY ↔ an overlay scroller's scrollTop), so a cross-origin delta
+  // would be a bogus huge velocity that trips the fast-flick gate and wrongly
+  // suppresses prearm on the surface the user just landed on.
+  private scrollBaselinePending = false;
   private subscribers = new Map<string, Set<(s: CardStatus) => void>>();
   private initialized = false;
   // Overlay scope stack. While an overlay (LookOverlay, ProductPage, …) is
@@ -331,7 +401,14 @@ class VideoPlaybackDirector {
         // must NOT keep the heartbeat awake (that would defeat its idle-quiet).
         // No overlay open ⇒ activeScope() is null ⇒ inActiveScope() is always
         // true ⇒ behaviour is unchanged.
-        if (this.cards.get(id)?.status !== 'playing' && this.inActiveScope(id)) {
+        const e = this.cards.get(id);
+        // A card whose STATUS says playing but whose element is actually
+        // paused is a silent stall (browser paused it under memory/decoder
+        // pressure, or a pause raced a play) — treat it as not playing so
+        // the rank pass below kicks it. This is the "visible videos always
+        // play" guarantee's detection half.
+        const silentlyStalled = !!e?.videoEl && e.status === 'playing' && e.videoEl.paused;
+        if ((e?.status !== 'playing' || silentlyStalled) && this.inActiveScope(id)) {
           this.scheduleRank();
           break;
         }
@@ -351,8 +428,9 @@ class VideoPlaybackDirector {
   }
 
   // Opt-in debug HUD. Enable on any device: localStorage.setItem('pd-hud','1')
-  // then reload. Shows pool occupancy, playing count, prewarm count, and the
-  // assign→first-frame reveal latency that issue #1/#2 are about.
+  // then reload. Shows the active video pipeline (HLS vs MP4) for THIS device,
+  // pool occupancy, playing count, prewarm count, and the assign→first-frame
+  // reveal latency that issue #1/#2 are about.
   private initHud(): void {
     if (typeof localStorage === 'undefined') return;
     try { if (localStorage.getItem('pd-hud') !== '1') return; } catch { return; }
@@ -376,12 +454,59 @@ class VideoPlaybackDirector {
     const s = this.revealSamples;
     const last = s.length ? s[s.length - 1] : null;
     const avg = s.length ? Math.round(s.reduce((a, b) => a + b.ms, 0) / s.length) : 0;
+
+    // ── Pipeline line ── the effective mode for THIS device + what the assigned
+    // pool elements are ACTUALLY playing: getVideoSource() returns the desired
+    // source URL (the .m3u8 manifest on the HLS path, the .mp4 on the legacy
+    // path), so an .m3u8 here is a live confirmation the clip is HLS — even when
+    // hls.js has swapped el.src to an opaque MediaSource blob.
+    const w = typeof window !== 'undefined' ? window.innerWidth : 0;
+    const device = w <= 768 ? 'mobile' : 'desktop';
+    const mode = videoPipelineMode();
+    const hlsImpl = browserSupportsNativeHls() ? 'native' : 'hls.js';
+    let hlsSrc = 0, mp4Src = 0;
+    for (const p of this.pool) {
+      if (!p.assignedTo) continue;
+      const src = getVideoSource(p.el);
+      if (!src) continue;
+      if (/\.m3u8(\?|#|$)/i.test(src)) hlsSrc++; else mp4Src++;
+    }
+
     this.hudEl.textContent =
+      `pipe ${mode.toUpperCase()} · ${device} ${w}w · ${hlsImpl}\n` +
+      `src  hls ${hlsSrc} / mp4 ${mp4Src}\n` +
       `pool ${assigned}/${this.pool.length}   playing ${playing}\n` +
       `near ${this.nearIds.size} / mounted ${this.cards.size}\n` +
       `prewarmed ${getPrefetchCount()}\n` +
       `reveal last ${last ? `${last.ms}ms (${last.via})` : '—'}\n` +
       `reveal avg  ${avg}ms  n=${s.length}`;
+
+    this.updateSrcBadges();
+  }
+
+  // pd-hud only: tag every mounted card with an HLS/MP4 badge (top-right) so you
+  // can see at a glance WHICH clips fell back to MP4 (no hls_url ladder) vs play
+  // the HLS ladder. entry.videoUrl is the device-aware source pickPlaybackSource
+  // chose, so an .m3u8 here means that card is on HLS. Green = HLS, red = MP4.
+  private updateSrcBadges(): void {
+    type BadgeHost = HTMLDivElement & { __pdBadge?: HTMLDivElement };
+    this.cards.forEach(entry => {
+      const isHls = /\.m3u8(\?|#|$)/i.test(entry.videoUrl || '');
+      const host = entry.slotEl as BadgeHost;
+      let badge = host.__pdBadge;
+      if (!badge) {
+        badge = document.createElement('div');
+        badge.setAttribute('aria-hidden', 'true');
+        badge.style.cssText =
+          'position:absolute;top:6px;right:6px;z-index:2147483646;' +
+          'font:9px/1.35 ui-monospace,Menlo,monospace;padding:1px 5px;' +
+          'border-radius:4px;pointer-events:none;letter-spacing:.4px;font-weight:700;color:#000';
+        host.appendChild(badge);
+        host.__pdBadge = badge;
+      }
+      badge.textContent = isHls ? 'HLS' : 'MP4';
+      badge.style.background = isHls ? 'rgba(63,255,120,.9)' : 'rgba(255,120,90,.92)';
+    });
   }
 
   private createVideoEl(): HTMLVideoElement {
@@ -556,6 +681,19 @@ class VideoPlaybackDirector {
    */
   private markScroll(scrollY: number): void {
     const now = Date.now();
+    // First event after a scope transition: record position as the new baseline
+    // (no velocity sample) and clear any stale fast-flick state, so prearm is
+    // available immediately on the surface the user just moved to. See
+    // scrollBaselinePending / resetScrollBaseline.
+    if (this.scrollBaselinePending) {
+      this.scrollBaselinePending = false;
+      this.lastScrollY = scrollY;
+      this.lastScrollTime = now;
+      this.isScrollFast = false;
+      if (this.scrollRestTimer) { clearTimeout(this.scrollRestTimer); this.scrollRestTimer = null; }
+      this.scheduleRank();
+      return;
+    }
     const dy = Math.abs(scrollY - this.lastScrollY);
     const dt = Math.max(1, now - this.lastScrollTime);
     const velocity = (dy / dt) * 1000; // px/s
@@ -584,6 +722,9 @@ class VideoPlaybackDirector {
     // rapid close→reopen of the same scope re-gates the background feed.
     this.exitingScopes.delete(prefix);
     this.scopeStack.push(prefix);
+    // The active scroll surface is about to change to the overlay's own
+    // scroller; re-baseline so its first notifyScroll isn't read as a flick.
+    this.resetScrollBaseline();
     this.scheduleRank();
   }
 
@@ -594,7 +735,21 @@ class VideoPlaybackDirector {
     if (idx !== -1) this.scopeStack.splice(idx, 1);
     // Once the prefix is fully gone from the stack, drop its exit flag too.
     if (!this.scopeStack.includes(prefix)) this.exitingScopes.delete(prefix);
+    // Returning to the surface beneath (feed or a parent overlay); re-baseline
+    // so its first scroll event after the handoff isn't a cross-origin flick.
+    this.resetScrollBaseline();
     this.scheduleRank();
+  }
+
+  /** Re-baseline scroll-motion tracking on the NEXT markScroll. Called on scope
+   *  transitions because the active scroll surface (and thus the meaning of the
+   *  scrollY value fed in) changes — a delta across that boundary would be a
+   *  spurious velocity. Also clears stale fast-flick state so the new surface's
+   *  prearm isn't gated off the instant it opens. */
+  private resetScrollBaseline(): void {
+    this.scrollBaselinePending = true;
+    this.isScrollFast = false;
+    if (this.scrollRestTimer) { clearTimeout(this.scrollRestTimer); this.scrollRestTimer = null; }
   }
 
   /**
@@ -713,7 +868,7 @@ class VideoPlaybackDirector {
       if (done) return;
       done = true;
       el.removeEventListener('seeked', finish);
-      this.unfreezeCard(entry);
+      this.fadeOutFreeze(entry); // reveal: crossfade the pinned frame out
     };
     el.addEventListener('seeked', finish, { once: true });
     // Backstop: never leave the freeze up if 'seeked' doesn't fire.
@@ -772,7 +927,7 @@ class VideoPlaybackDirector {
     entry.status = 'playing';
     this.assignedIds.add(cardId);
     this.applyCoverSize(entry, el);
-    this.unfreezeCard(entry);
+    this.fadeOutFreeze(entry); // warm reveal: crossfade the pinned frame out
     this.emit(cardId, 'playing');
     this.playEl(cardId, entry);
     return true;
@@ -847,17 +1002,18 @@ class VideoPlaybackDirector {
       ranked.push({ id, entry, distance: this.distanceToViewport(rect) });
     }
 
-    // While an overlay scope is active, keep the NEAREST few background cards
-    // alive-but-paused instead of releasing them, so returning to the feed is
-    // an instant paused→play resume (decoded surface retained) rather than a
-    // cold re-buffer that shows posters for a beat. Bounded by KEEP_WARM_* so
-    // the overlay's own nested feed still gets pool slots. The kept cards sit
-    // out of the active scope, so step 2 below never re-plays them while the
-    // overlay is up; the moment beginScopeExit/close clears the scope they
-    // fall into wantsPlay and resume from their retained frame.
+    // While an overlay scope is active, keep the background cards ALIVE instead
+    // of releasing them, so returning to the feed never shows a cold re-buffer
+    // ("feed dead on back"). The budget is the pool MINUS a reserve for the
+    // overlay's own nested rails (keepWarm = poolMax - NESTED_FEED_RESERVE), so
+    // the WHOLE visible grid stays warm while warm + nested ≤ poolMax keeps total
+    // decoders within the safe ceiling. Desktop keeps them PLAYING (seamless,
+    // zero hitch on back); mobile PAUSES them (decoder-safe, instant resume from
+    // the retained surface) — see the device-split in the release step below.
     const keepWarm = new Set<string>();
     if (this.activeScope() !== null) {
-      const warmBudget = isMobileViewport() ? KEEP_WARM_UNDER_OVERLAY_MOBILE : KEEP_WARM_UNDER_OVERLAY_DESKTOP;
+      const reserve = isMobileViewport() ? NESTED_FEED_RESERVE_MOBILE : NESTED_FEED_RESERVE_DESKTOP;
+      const warmBudget = Math.max(0, max - reserve);
       const warmCandidates = ranked
         .filter(r => r.entry.videoEl && !this.inActiveScope(r.id) && r.distance <= playMargin)
         .sort((a, b) => a.distance - b.distance)
@@ -867,12 +1023,24 @@ class VideoPlaybackDirector {
 
     // 1. Release: anything past releaseMargin — OR outside the active overlay
     //    scope (e.g. the home feed behind an open overlay) — gives its slot
-    //    back so it stops decoding. EXCEPT the keep-warm set, which we pause in
-    //    place (element + surface retained) for an instant resume on return.
+    //    back so it stops decoding. EXCEPT the keep-warm set.
+    //
+    //    Keep-warm handling is DEVICE-SPLIT:
+    //    • Desktop — leave the card PLAYING under the overlay (do NOT pause it).
+    //      The overlay surface is opaque (#0a0a0a fully covers the feed — there's
+    //      no backdrop blur over it to re-rasterize), and desktop has decode
+    //      headroom with no iOS decoder ceiling, so the only cost is decoding a
+    //      covered clip. The payoff: returning to the feed is TRULY seamless —
+    //      the card never paused, so there's nothing to resume and no visible
+    //      "adjacent videos pause then resume on back" hitch.
+    //    • Mobile — PAUSE in place (element + decoded surface retained) to stay
+    //      under the iOS simultaneous-decoder ceiling; the retained surface still
+    //      makes the paused→play resume instant on return.
+    const pauseWarm = isMobileViewport();
     for (const { id, entry, distance } of ranked) {
       if (!entry.videoEl) continue;
       if (keepWarm.has(id)) {
-        if (!entry.videoEl.paused) {
+        if (pauseWarm && !entry.videoEl.paused) {
           try { entry.videoEl.pause(); } catch { /* ignore */ }
           entry.status = 'paused';
           this.emit(id, 'paused');
@@ -894,6 +1062,13 @@ class VideoPlaybackDirector {
       .filter(r => r.distance <= playMargin && this.inActiveScope(r.id))
       .sort((a, b) => a.distance - b.distance);
 
+    // Anti-burst: bound the COLD attaches this pass; defer the rest to the next
+    // rAF so a return-from-overlay wave lights up progressively instead of
+    // freezing on a synchronized decoder burst. Resumes/same-src reclaims are
+    // free (handled before this is decremented). See ATTACH_BUDGET_* docs.
+    let coldBudget = attachBudget();
+    let deferredColdAttach = false;
+
     for (const { id, entry, distance } of wantsPlay) {
       if (entry.videoEl) {
         // Already assigned — keep it playing. If it's paused for any reason
@@ -911,12 +1086,25 @@ class VideoPlaybackDirector {
       // Need a slot. Prefer a free slot that ALREADY holds this card's clip
       // — after a detail overlay released the feed, this lets a card reclaim
       // its own element (no src swap, no reload, no black flash, instant
-      // resume from where it paused). Then an EMPTY free slot — so an overlay's
-      // nested feed clobbers blank slots before the parked home-feed clips,
-      // leaving those reclaimable on return. Then any free slot; if none, grow
-      // up to poolMax(); if at cap, evict the most-distant assigned card.
+      // resume from where it paused). This reclaim is FREE (no cold-attach
+      // cost), so it's never throttled by the budget below.
+      const warmSlot = this.pool.find(
+        p => p.assignedTo === null && getVideoSource(p.el) === entry.videoUrl,
+      );
+      // No own-clip slot to reclaim → this would be a COLD attach. If the per-
+      // pass budget is spent, defer this card to the next rank() (it's still in
+      // the play band; its poster/freeze-frame covers until then). wantsPlay is
+      // nearest-first, so the closest cards spend the budget first.
+      if (!warmSlot && coldBudget <= 0) {
+        deferredColdAttach = true;
+        continue;
+      }
+      // Then an EMPTY free slot — so an overlay's nested feed clobbers blank
+      // slots before the parked home-feed clips, leaving those reclaimable on
+      // return. Then any free slot; if none, grow up to poolMax(); if at cap,
+      // evict the most-distant assigned card.
       let slot =
-        this.pool.find(p => p.assignedTo === null && getVideoSource(p.el) === entry.videoUrl) ||
+        warmSlot ||
         this.pool.find(p => p.assignedTo === null && !getVideoSource(p.el)) ||
         this.pool.find(p => p.assignedTo === null);
       if (!slot && this.pool.length < max) {
@@ -930,6 +1118,12 @@ class VideoPlaybackDirector {
         let victim: { slot: PoolSlot; entry: CardEntry; id: string } | null = null;
         for (const p of this.pool) {
           if (!p.assignedTo) continue;
+          // PROTECT keep-warm: a paused background card retained for an instant
+          // resume on back must NOT be stolen by the overlay's nested rail —
+          // evicting it cold-rebuffers the feed on return, exactly what keep-warm
+          // exists to prevent. The reserve guarantees the rail enough non-warm
+          // slots, so its acquires never need to reach for these.
+          if (keepWarm.has(p.assignedTo)) continue;
           const e = this.cards.get(p.assignedTo);
           if (!e || !e.videoEl) continue;
           const d = this.distanceToViewport(e.getRect());
@@ -965,8 +1159,9 @@ class VideoPlaybackDirector {
         // Point the element at the src and start buffering. setVideoSource routes
         // HLS via hls.js / native (and MP4 straight to el.src), kicking off
         // buffering — no explicit load() needed (load() on an hls.js element
-        // resets its MSE pipeline).
+        // resets its MSE pipeline). This is the COLD attach the budget bounds.
         setVideoSource(slot.el, entry.videoUrl);
+        coldBudget--;
       }
       Object.assign(slot.el.style, {
         position: 'absolute',
@@ -1012,12 +1207,38 @@ class VideoPlaybackDirector {
       this.playEl(id, entry);
     }
 
+    // Cold-attach budget was hit this pass — at least one in-band card still
+    // wants a fresh element. Re-rank next frame to promote the next nearest
+    // batch, so a big return wave lights up over a few frames instead of one.
+    // scheduleRank() self-coalesces (no-op if a rAF is already queued).
+    if (deferredColdAttach) this.scheduleRank();
+
+    // 2.5 Watchdog resume: a card inside the play band that HOLDS an
+    //     element but isn't actually playing gets kicked back into
+    //     playback — covers silent browser pauses, play/pause races, and
+    //     post-overlay returns. keepWarm cards are deliberately paused
+    //     behind an overlay; failed elements back off briefly so a
+    //     genuinely unplayable clip can't hot-loop play() calls.
+    if (!this.isScrollFast) {
+      for (const r of ranked) {
+        if (r.distance > playMargin) continue;
+        const e = r.entry;
+        if (!e.videoEl || !e.videoEl.paused) continue;
+        if (!this.inActiveScope(r.id)) continue;
+        if (keepWarm.has(r.id)) continue;
+        if (e.retryCount > 2 && Date.now() - e.lastFailureAt < 5000) continue;
+        this.playEl(r.id, e);
+      }
+    }
+
     // 3. Pre-attach: prebuffer the nearest UPCOMING clips (just outside the
     //    play band) into spare pool elements so promotion is an instant adopt
     //    instead of a cold HLS chain. Best-effort + hard-bounded (see PREARM
     //    docs): never evicts a playing card, never exceeds poolMax, skipped on
-    //    fast flicks / save-data / when disabled.
-    if (PREARM_ENABLED && !this.isScrollFast && !isSlowConnection() && this.assignedIds.size < max) {
+    //    fast flicks / save-data / when disabled. Also skipped while a cold-
+    //    attach wave is still draining (deferredColdAttach) so the budget
+    //    promotes every VISIBLE card before we spend slots on lookahead.
+    if (PREARM_ENABLED && !this.isScrollFast && !isSlowConnection() && !deferredColdAttach && this.assignedIds.size < max) {
       const useNativeHls = browserSupportsNativeHls();
       // The nearest N upcoming cards we want kept warm. Slicing to prearmMax
       // FIRST bounds the ACTIVE prebuffer set to ~N regardless of how many rank
@@ -1116,7 +1337,7 @@ class VideoPlaybackDirector {
     // covers. canReveal guards against revealing a stale prior-clip frame (see above).
     if (canReveal && el.readyState >= 2) {
       el.style.opacity = '1';
-      this.unfreezeCard(entry);
+      this.fadeOutFreeze(entry); // reveal: crossfade the pinned frame out (if any)
     }
   }
 
@@ -1223,15 +1444,27 @@ class VideoPlaybackDirector {
           width: '100%',
           height: '100%',
           objectFit: 'cover',
-          zIndex: '2',
+          // ABOVE the pooled <video> (z-index 2): the freeze covers the gap
+          // while the re-attached clip cold-buffers, then fadeOutFreeze fades it
+          // DOWN on reveal so the live video shows through it — a soft
+          // poster→video crossfade instead of a hard snap (the felt "freeze then
+          // resume" on back from an overlay). Fading the freeze (a static image
+          // of THIS card's own last frame) is identity-safe; fading the recycled
+          // <video> itself is not (hls.js reuse can hold a prior clip's frame).
+          zIndex: '3',
           display: 'block',
           pointerEvents: 'none',
+          opacity: '1',
+          transition: 'none',
         });
         entry.freezeEl = img;
+      } else {
+        // Reused after a prior fade-out was armed — restore it to fully opaque
+        // and cancel any pending transition so it covers the new gap cleanly.
+        img.style.transition = 'none';
+        img.style.opacity = '1';
       }
       img.src = frame;
-      // The (re)attached <video> is appended AFTER this img, so once it
-      // reveals it paints above; until then the freeze frame covers.
       if (img.parentElement !== entry.slotEl) entry.slotEl.appendChild(img);
     } catch { /* best-effort — poster remains the fallback */ }
   }
@@ -1241,6 +1474,28 @@ class VideoPlaybackDirector {
     if (!img) return;
     entry.freezeEl = null;
     try { img.remove(); } catch { /* already detached */ }
+  }
+
+  /** Crossfade the freeze-frame OUT at reveal time: the live video is already
+   *  painting at full opacity beneath it (z-index 2 vs the freeze's 3), so
+   *  fading the freeze down reveals the clip through it — a soft poster→video
+   *  swap instead of a hard cut. Detaches the img from the entry IMMEDIATELY so
+   *  a concurrent re-acquire/freeze never reuses the fading element, then removes
+   *  it once the transition ends (with a timeout backstop). Used only on the
+   *  same-identity reveal paths; identity-CHANGE paths still call unfreezeCard
+   *  for an instant drop so a prior item's frame can't linger over a new one. */
+  private fadeOutFreeze(entry: CardEntry): void {
+    const img = entry.freezeEl;
+    if (!img) return;
+    entry.freezeEl = null;
+    const FADE_MS = 140;
+    let removed = false;
+    const drop = () => { if (removed) return; removed = true; try { img.remove(); } catch { /* detached */ } };
+    img.style.transition = `opacity ${FADE_MS}ms linear`;
+    // Flip on the next frame so the transition animates from opacity:1.
+    requestAnimationFrame(() => { img.style.opacity = '0'; });
+    img.addEventListener('transitionend', drop, { once: true });
+    window.setTimeout(drop, FADE_MS + 80); // backstop if transitionend never fires
   }
 
   private releaseVideoEl(cardId: string, el: HTMLVideoElement): void {

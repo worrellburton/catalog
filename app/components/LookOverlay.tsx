@@ -119,6 +119,21 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
       scroller.removeEventListener('scroll', onScroll);
     };
   }, [scrollEl]);
+
+  // Feed the playback director this overlay's INNER-scroller position. The
+  // director's own listener is on `window`, which never sees this container's
+  // scroll, so without this its rank/prearm only re-fire on sparse near-band
+  // crossings and the rail tiles hold on their poster until you stop scrolling
+  // ("posters until pause"). Mirrors ContinuousFeed's window notifier. NOT
+  // device-gated: mobile HLS is where the poster-hold is worst.
+  useEffect(() => {
+    const scroller = scrollEl;
+    if (!scroller) return;
+    const onScroll = () => director.notifyScroll(scroller.scrollTop);
+    scroller.addEventListener('scroll', onScroll, { passive: true });
+    return () => scroller.removeEventListener('scroll', onScroll);
+  }, [scrollEl]);
+
   const [isAnimatingOut, setIsAnimatingOut] = useState(false);
   const [lookBookmarked, setLookBookmarked] = useState(bookmarks.isLookBookmarked(look.id));
 

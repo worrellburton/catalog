@@ -473,7 +473,12 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
     };
   }, [evictIfNeeded, cancelIdleUnload, scheduleIdleUnload]);
 
+  // While suspendFeed is in force, only the hero may play — the watchdog
+  // below must not fight that deliberate pause.
+  const suspendedHeroRef = useRef<string | null>(null);
+
   const suspendFeed = useCallback((heroTrailId: string) => {
+    suspendedHeroRef.current = heroTrailId;
     const offscreen = poolRef.current;
     for (const [id, { el }] of elementsRef.current) {
       if (id === heroTrailId) continue;
@@ -483,12 +488,37 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
   }, []);
 
   const resumeFeed = useCallback(() => {
+    suspendedHeroRef.current = null;
     const offscreen = poolRef.current;
     for (const { el } of elementsRef.current.values()) {
       if (!el.parentElement || el.parentElement === offscreen) continue;
       if (!el.paused) continue;
       void el.play().catch(() => {});
     }
+  }, []);
+
+  // Stall watchdog — same guarantee the playback director gives feed
+  // cards, extended to every trail-managed video (overlay heroes, legacy
+  // cards, brand strips): any in-slot, on-screen element that sits paused
+  // gets play() kicked. Browsers silently pause videos under decoder /
+  // memory pressure and a pause can race a play; this sweeps those up.
+  // Deliberate pauses (suspendFeed while an overlay owns the hero) and
+  // off-screen elements are left alone.
+  useEffect(() => {
+    const t = window.setInterval(() => {
+      if (typeof document === 'undefined' || document.hidden) return;
+      const offscreen = poolRef.current;
+      const hero = suspendedHeroRef.current;
+      for (const [id, { el }] of elementsRef.current) {
+        if (!el.parentElement || el.parentElement === offscreen) continue;
+        if (hero && id !== hero) continue;
+        if (!el.paused) continue;
+        const r = el.getBoundingClientRect();
+        if (r.width === 0 || r.bottom < -100 || r.top > window.innerHeight + 100) continue;
+        void el.play().catch(() => { /* autoplay policy — retried next sweep */ });
+      }
+    }, 2000);
+    return () => window.clearInterval(t);
   }, []);
 
   // Pre-creates a video element in the offscreen pool so the media pipeline

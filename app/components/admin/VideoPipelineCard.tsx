@@ -1,21 +1,23 @@
 import { useEffect, useRef, useState } from 'react';
 import {
-  hydrateVideoPipeline,
-  saveVideoPipelineMode,
-  subscribeVideoPipeline,
-  videoPipelineMode,
+  hydratePipelineDevice,
+  savePipelineMode,
+  subscribePipelineDevice,
+  pipelineModeForDevice,
   type VideoPipelineMode,
+  type PipelineDevice,
 } from '~/services/video-pipeline';
 
 /**
- * /admin/dials → "Video delivery pipeline" card.
+ * /admin/dials → "Video delivery pipeline" card, one instance per device.
  *
- * The ONLY remaining video setting for the consumer feed: which delivery path
- * every video grid (feed, look cards, overlays, product heroes — everything
- * through pickPlaybackSource) uses. All prewarm / cache / HLS-head tuning was
- * removed and is now hardcoded for best performance in services/video-loading.
- * Switching the mode persists to app_settings and propagates to every connected
- * client over realtime — no deploy, no refresh.
+ * Which delivery path every video grid (feed, look cards, overlays, product
+ * heroes, creator profiles — everything through pickPlaybackSource) uses, set
+ * SEPARATELY for desktop and mobile so we can run, e.g., HLS on phones and
+ * progressive MP4 on desktop browsers. All prewarm / cache / HLS-head tuning is
+ * hardcoded for best performance in services/video-loading. Switching the mode
+ * persists to app_settings and propagates to every connected client of that
+ * device class over realtime — no deploy, no refresh.
  */
 
 const MODE_OPTIONS: { value: VideoPipelineMode; label: string; hint: string }[] = [
@@ -23,8 +25,21 @@ const MODE_OPTIONS: { value: VideoPipelineMode; label: string; hint: string }[] 
   { value: 'mp4', label: 'Progressive MP4', hint: 'The legacy path: plain MP4s with full-file prewarm into the browser cache. Instant + lag-free feed.' },
 ];
 
-export default function VideoPipelineCard() {
-  const [mode, setMode] = useState<VideoPipelineMode>(videoPipelineMode());
+const COPY: Record<PipelineDevice, { title: string; badge: string; scope: string }> = {
+  desktop: {
+    title: 'Desktop video delivery pipeline',
+    badge: 'desktop · >768px',
+    scope: 'desktop browsers (viewport wider than 768px)',
+  },
+  mobile: {
+    title: 'Mobile video delivery pipeline',
+    badge: 'mobile · ≤768px',
+    scope: 'phones and the native app (viewport 768px or narrower)',
+  },
+};
+
+export default function VideoPipelineCard({ device }: { device: PipelineDevice }) {
+  const [mode, setMode] = useState<VideoPipelineMode>(pipelineModeForDevice(device));
   const [loaded, setLoaded] = useState(false);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -34,17 +49,17 @@ export default function VideoPipelineCard() {
 
   useEffect(() => {
     let cancelled = false;
-    hydrateVideoPipeline().then(m => {
+    hydratePipelineDevice(device).then(m => {
       if (cancelled) return;
       setMode(m);
       setLoaded(true);
     });
-    const unsub = subscribeVideoPipeline(m => {
+    const unsub = subscribePipelineDevice(device, m => {
       if (cancelled || editingRef.current) return;
       setMode(m);
     });
     return () => { cancelled = true; unsub(); };
-  }, []);
+  }, [device]);
 
   const choose = (next: VideoPipelineMode) => {
     if (next === mode) return;
@@ -52,7 +67,7 @@ export default function VideoPipelineCard() {
     setMode(next);
     editingRef.current = true;
     setSaving(true);
-    saveVideoPipelineMode(next)
+    savePipelineMode(device, next)
       .catch(err => setError(err instanceof Error ? err.message : 'Save failed'))
       .finally(() => {
         setSaving(false);
@@ -60,17 +75,22 @@ export default function VideoPipelineCard() {
       });
   };
 
+  const copy = COPY[device];
+
   return (
     <div className="admin-detail-card">
-      <h3>Video delivery pipeline</h3>
+      <h3>
+        {copy.title}
+        <span style={{ fontSize: 11, fontWeight: 500, color: '#888', marginLeft: 8 }}>{copy.badge}</span>
+      </h3>
       <p style={{ fontSize: 13, color: '#888', margin: '4px 0 16px' }}>
-        How every video grid on the consumer app (feed, look cards, overlays,
-        product heroes) delivers its clips. Two independent paths: the{' '}
+        How every video grid delivers its clips on {copy.scope} — the{' '}
         <strong>HLS</strong> adaptive ladder, or the legacy{' '}
-        <strong>progressive MP4</strong> path with full-file prewarm and
-        browser caching. Switching applies to every device in real time; clips
-        without an HLS ladder always fall back to MP4 either way. All prewarm,
-        cache and HLS-head tuning is fixed for best performance.
+        <strong>progressive MP4</strong> path with full-file prewarm and browser
+        caching. Switching applies to every matching device in real time; clips
+        without an HLS ladder always fall back to MP4 either way. The active
+        pipeline is chosen by viewport, so the same shopper on a phone and a
+        laptop can be served different paths.
       </p>
       {!loaded ? (
         <div className="admin-empty" style={{ marginTop: 0 }}>Loading…</div>

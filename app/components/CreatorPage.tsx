@@ -166,6 +166,20 @@ export default function CreatorPage({
     };
   }, [activeTab]);
 
+  // Feed the playback director this page's scroll position. The director listens
+  // on `window`, which never sees this fixed/overflow:auto container's scroll, so
+  // without it rank/prearm only re-fire on sparse near-band crossings and tiles
+  // hold longer on their poster. Mirrors ContinuousFeed's window notifier; keeps
+  // prearm warm so reveal-on-stop is instant (the .is-scrolling layer above still
+  // owns the during-scroll poster look). Not device-gated.
+  useEffect(() => {
+    const el = pageScrollRef.current;
+    if (!el) return;
+    const onScroll = () => director.notifyScroll(el.scrollTop);
+    el.addEventListener('scroll', onScroll, { passive: true });
+    return () => el.removeEventListener('scroll', onScroll);
+  }, [activeTab]);
+
   // Backfill any look (in this catalog) still missing its own poster frame, so
   // a posterless look stops falling back to a product image. Admin-gated (write
   // access), fired idle. Re-runnable, so it retries looks that failed elsewhere.
@@ -945,7 +959,9 @@ export default function CreatorPage({
           className={`creator-nav-tab ${activeTab === 'products' ? 'active' : ''}`}
           onClick={() => setActiveTab('products')}
         >
-          Shop {allProducts.length > 0 && <span className="creator-nav-count">{allProducts.length}</span>}
+          {/* The tab IS the creator's collections once they've set some;
+              plain product list otherwise. */}
+          {shopCollections.length > 0 ? 'Collections' : 'Shop'} {allProducts.length > 0 && <span className="creator-nav-count">{allProducts.length}</span>}
         </button>
         {renderSaved && (
           <button
@@ -972,7 +988,7 @@ export default function CreatorPage({
             className={`creator-collection-chip ${!activeCollection ? 'active' : ''}`}
             onClick={() => setActiveCollection(null)}
           >
-            All
+            All products
           </button>
           {shopCollections.map(col => (
             <button
