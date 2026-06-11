@@ -148,8 +148,13 @@ const CreativeCardV2 = memo(function CreativeCardV2({
   // un-cropped). With 'contain' the poster keeps the clip's exact aspect, so
   // the browser's object-fit:cover fits it to the 3:4 tile identically to the
   // video — poster and playback match.
-  const posterUrl = withTransform(rawPosterUrl, { width: 540, quality: 72, resize: 'contain' }) || rawPosterUrl;
-  const stillImageUrl = withTransform(rawStillImageUrl, { width: 540, quality: 72, resize: 'contain' }) || rawStillImageUrl;
+  // quality 82 (was 72): 540px already matches the tile's device-pixel size, so
+  // the poster wasn't under-resolved — it was under-COMPRESSED relative to the
+  // video. Since the poster is the clip's frame 0, the leftover compression
+  // delta is what you see "pop" the instant the <video> cuts in over it. q82
+  // closes that gap (still a ~25 KB WebP) so poster→playback reads as one image.
+  const posterUrl = withTransform(rawPosterUrl, { width: 540, quality: 82, resize: 'contain' }) || rawPosterUrl;
+  const stillImageUrl = withTransform(rawStillImageUrl, { width: 540, quality: 82, resize: 'contain' }) || rawStillImageUrl;
 
   // Dial: /admin/dials → video_still_ratio controls whether this card
   // renders as a still image or plays video. When the dial pushes the
@@ -181,11 +186,16 @@ const CreativeCardV2 = memo(function CreativeCardV2({
   // Passing null keeps the card unregistered (still-only path).
   const activeVideoUrl = (!renderAsStill || hoverPlaying) ? playableUrl : null;
 
-  // Poster-first: if we have a poster/still image, skip the shimmer
-  // entirely — the <img> paints immediately. Same logic for looks and
-  // products: both use an <img> tag for the poster so the browser's
-  // resource scheduler handles priority and decoding.
-  const [loaded, setLoaded] = useState(() => !!posterUrl);
+  // Shimmer until the poster actually PAINTS (img onLoad) or the director
+  // assigns a video — not merely because a posterUrl string exists. The old
+  // `!!posterUrl` start assumed the <img> was already on screen; but a poster
+  // whose bytes haven't arrived paints nothing, so the tile sat BLACK (no
+  // shimmer, no image) until the fetch landed — the "black grid while
+  // scrolling" before the poster shows. Starting false shows the shimmer in
+  // that gap instead of black; combined with eager posters (loaded into cache
+  // ahead of the viewport) a scrolled-to tile has usually already fired onLoad,
+  // so the shimmer doesn't visibly flash.
+  const [loaded, setLoaded] = useState(false);
   const impressionTracked = useRef(false);
   const trailMgr = useTrailVideoManager();
   const { user } = useAuth();
@@ -240,14 +250,18 @@ const CreativeCardV2 = memo(function CreativeCardV2({
     }
   }, [inPrewarmBand, activeVideoUrl]);
 
-  // Remove shimmer as soon as the director has assigned a video element
-  // (status 'loading' = play() in-flight, video appended to DOM).
-  // We don't wait for 'playing' — the video poster is visible the instant
-  // the element mounts, so the shimmer is redundant from that point on.
+  // Drop the shimmer only when a real frame is PAINTED ('playing'), not on
+  // 'loading'. 'loading' means the director appended the <video> and called
+  // play(), but the element's own poster attribute may not have decoded yet
+  // and no frame exists — hiding the shimmer there left a BLACK tile until the
+  // first frame arrived. The poster <img>'s onLoad (below) is the other, more
+  // common exit: with eager posters it usually fires first, so the still poster
+  // covers the tile well before playback. Net: shimmer → poster → video, never
+  // shimmer → black → video.
   useEffect(() => {
-    if (status === 'loading' || status === 'playing') {
+    if (status === 'playing') {
       setLoaded(true);
-      if (status === 'playing') markFeedMilestone(`first-frame:${directorId}`);
+      markFeedMilestone(`first-frame:${directorId}`);
     }
   }, [status, directorId]);
 
@@ -432,10 +446,19 @@ const CreativeCardV2 = memo(function CreativeCardV2({
             className="card-poster"
             src={renderAsStill && !hoverPlaying ? stillImageUrl : posterUrl ?? undefined}
             alt=""
-            loading={priority ? 'eager' : 'lazy'}
+            // Eager, not lazy. The grid mounts cards ~1600px ahead of the
+            // viewport (FeedSection sentinel) and windows the mounted set, so
+            // eager-loading fetches each poster into cache BEFORE its tile
+            // scrolls in — killing the "black tile → poster pops in → video"
+            // lag on scroll. `loading="lazy"` deferred the fetch until the tile
+            // was nearly on screen, which a fast flick always outran. Bandwidth
+            // stays bounded by the mounted window; first-screen tiles keep the
+            // high fetchPriority so initial paint is unaffected.
+            loading="eager"
             decoding="async"
             fetchPriority={priority ? 'high' : undefined}
-            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+            onLoad={() => setLoaded(true)}
+            onError={(e) => { setLoaded(true); (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
             style={{
               position: 'absolute', inset: 0, width: '100%', height: '100%',
               objectFit: 'cover', zIndex: 1,

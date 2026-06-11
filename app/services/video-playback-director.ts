@@ -73,7 +73,14 @@ const POOL_MAX_MOBILE = 14;
  *  zero decode while covered) so returning is an instant paused→play resume.
  *  Bounded well under poolMax so the overlay's nested feed still gets slots. */
 const KEEP_WARM_UNDER_OVERLAY_DESKTOP = 8;
-const KEEP_WARM_UNDER_OVERLAY_MOBILE = 4;
+// Mobile shows ~8 cards/viewport (2 cols × ~4 rows). At 4, only half the
+// visible grid resumed instantly on back — the other half cold re-buffered,
+// which is the "feed dead for a beat" on return from a look/product. 6 covers
+// most of the visible grid while still leaving the overlay's nested feed
+// enough of the 14-slot pool (6 paused-but-retained + ~8 nested = pool cap),
+// so it isn't starved. Kept at 6 (not 8) to avoid crowding the nested feed and
+// to stay clear of iOS's simultaneous-decoder ceiling (POOL_MAX_MOBILE = 14).
+const KEEP_WARM_UNDER_OVERLAY_MOBILE = 6;
 /** px/s scroll speed above which we skip play() calls (poster only). */
 const SCROLL_VELOCITY_THRESHOLD = 2500;
 /** ms of scroll-quiet before we re-rank after a fast flick. */
@@ -108,7 +115,14 @@ const NEAR_BAND_ROOT_MARGIN = '200% 0%';
 //   • PREARM_ENABLED=false fully disables it (instant fall back to cold attach).
 const PREARM_ENABLED = true;
 const PREARM_MAX_DESKTOP = 3;
-const PREARM_MAX_MOBILE = 1;
+// This is the ONLY warm that actually decodes an upcoming clip's first frame
+// (into a spare pool element), so a promoted card reveals instantly instead of
+// holding its poster while it cold-buffers. At 1, only the single nearest
+// upcoming clip was ready on mobile; a 2-col grid scrolls two new cards in per
+// row, so the second always popped late. 3 keeps the next ~row-and-a-half warm.
+// Still bounded by poolMax (prearm only runs while assignedIds < cap and never
+// evicts a playing card), so total decoders stay under the same ceiling.
+const PREARM_MAX_MOBILE = 3;
 // Lookahead band for prebuffering. MUST sit between the play and release bands
 // (play < prearm < release < near-band) so prearmed cards are still tracked by
 // rank() and are never past the point where they'd be released.
@@ -792,7 +806,15 @@ class VideoPlaybackDirector {
         objectFit: 'cover',
         zIndex: '2',
         display: 'block',
-        transition: 'opacity 0.12s ease',
+        // Instant cut, not a fade. The poster <img> beneath is the clip's
+        // frame 0 (primary_video_poster_url) at the same 3:4 framing, so once
+        // revealVideoWhenReady has a decoded frame (readyState >= 2) the video
+        // is pixel-aligned with the poster and a hard swap is invisible. The
+        // old 0.12s opacity dissolve cross-faded a compressed poster against
+        // the full-res first frame — that blend is exactly the "flash" on
+        // reveal. (The black-flash guard is the readyState gate, NOT this
+        // transition, so dropping the fade is safe.)
+        transition: 'none',
       });
 
       slot.assignedTo = id;
