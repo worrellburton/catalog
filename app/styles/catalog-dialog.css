@@ -1,0 +1,113 @@
+/* Catalog dialog — the one popup in the product. Dark glass, centered,
+   fade in/out with the brand spring on the card. Replaces every native
+   confirm/alert/prompt. */
+
+.cat-dialog-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 12000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 20px;
+  background: rgba(0, 0, 0, 0.45);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  animation: cat-dialog-fade-in 200ms ease both;
+}
+.cat-dialog-overlay.is-closing {
+  animation: cat-dialog-fade-out 170ms ease both;
+  pointer-events: none;
+}
+
+.cat-dialog {
+  width: 420px;
+  max-width: 92vw;
+  padding: 24px 24px 20px;
+  border-radius: 20px;
+  background: rgba(16, 16, 18, 0.74);
+  -webkit-backdrop-filter: blur(24px) saturate(1.4);
+  backdrop-filter: blur(24px) saturate(1.4);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  box-shadow: 0 32px 80px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  color: #fff;
+  /* The Catalog spring: overshoot in, settle. */
+  animation: cat-dialog-spring-in 380ms cubic-bezier(0.34, 1.56, 0.64, 1) both;
+}
+.cat-dialog-overlay.is-closing .cat-dialog {
+  animation: cat-dialog-shrink-out 170ms ease both;
+}
+
+.cat-dialog h2 {
+  margin: 0;
+  font-size: 16px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.35;
+}
+.cat-dialog p {
+  margin: 8px 0 0;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.7);
+  white-space: pre-wrap;
+}
+
+.cat-dialog-input {
+  width: 100%;
+  box-sizing: border-box;
+  margin-top: 14px;
+  font: inherit;
+  font-size: 14px;
+  color: #fff;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  border-radius: 12px;
+  padding: 10px 12px;
+  outline: none;
+}
+.cat-dialog-input:focus { border-color: rgba(255, 255, 255, 0.45); }
+.cat-dialog-input::placeholder { color: rgba(255, 255, 255, 0.35); }
+
+.cat-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 20px;
+}
+.cat-dialog-btn {
+  font: inherit;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.85);
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 999px;
+  padding: 8px 16px;
+  cursor: pointer;
+  transition: background 140ms, border-color 140ms, transform 140ms cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.cat-dialog-btn:hover { background: rgba(255, 255, 255, 0.14); }
+.cat-dialog-btn:active { transform: scale(0.96); }
+.cat-dialog-btn.is-primary {
+  color: #0a0a0a;
+  background: #fff;
+  border-color: #fff;
+}
+.cat-dialog-btn.is-primary:hover { background: rgba(255, 255, 255, 0.88); }
+.cat-dialog-btn.is-primary.is-danger {
+  color: #fff;
+  background: #dc2626;
+  border-color: #dc2626;
+}
+.cat-dialog-btn.is-primary.is-danger:hover { background: #b91c1c; }
+
+@keyframes cat-dialog-fade-in { from { opacity: 0; } }
+@keyframes cat-dialog-fade-out { to { opacity: 0; } }
+@keyframes cat-dialog-spring-in {
+  from { opacity: 0; transform: scale(0.86); }
+  to { opacity: 1; transform: scale(1); }
+}
+@keyframes cat-dialog-shrink-out {
+  to { opacity: 0; transform: scale(0.94); }
+}

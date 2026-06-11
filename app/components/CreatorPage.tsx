@@ -849,7 +849,11 @@ export default function CreatorPage({
             ? <span className="creator-hero-name-skeleton" aria-hidden="true" />
             : displayName}
         </h1>
-        {identityLoading ? null : currentUser?.id && creatorUserId === currentUser.id ? (
+        {identityLoading ? (
+          /* Button-shaped shimmer so the header holds its final height —
+             without it the grid jumped down when Follow/Following arrived. */
+          <span className="creator-follow-btn creator-follow-btn--skeleton" aria-hidden="true" />
+        ) : currentUser?.id && creatorUserId === currentUser.id ? (
           /* Self-view: this is YOUR creator page (matched by resolved owner
               id so it also catches the handle-route, not just user:<uuid>).
               You can't follow yourself, so the Follow slot becomes "My
@@ -1006,7 +1010,7 @@ export default function CreatorPage({
       {/* Looks grid */}
       {activeTab === 'looks' && (
         loading && creatorLooks.length === 0 ? (
-          <div className="creator-skeleton-grid">
+          <div className="creator-skeleton-grid" style={{ ['--cat-cols']: gridCols } as CSSProperties}>
             {Array.from({ length: 6 }).map((_, i) => <div key={i} className="creator-skeleton-tile" />)}
           </div>
         ) : creatorLooks.length === 0 ? (
@@ -1040,7 +1044,7 @@ export default function CreatorPage({
       {/* Products grid */}
       {activeTab === 'products' && (
         loading && allProducts.length === 0 ? (
-          <div className="creator-skeleton-grid">
+          <div className="creator-skeleton-grid" style={{ ['--cat-cols']: gridCols } as CSSProperties}>
             {Array.from({ length: 8 }).map((_, i) => <div key={i} className="creator-skeleton-tile" />)}
           </div>
         ) : filteredProducts.length === 0 ? (

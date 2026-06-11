@@ -145,6 +145,17 @@
   50%      { opacity: 0.9; }
 }
 
+.creator-follow-btn--skeleton {
+  display: inline-block;
+  width: 132px;
+  min-height: 38px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.16) 50%, rgba(255, 255, 255, 0.08) 100%) !important;
+  background-size: 200% 100% !important;
+  animation: creator-skeleton-shimmer 1.4s ease-in-out infinite;
+  border: none !important;
+  pointer-events: none;
+}
+
 .creator-follow-btn {
   padding: 10px 32px;
   font-size: 13px;
@@ -806,6 +817,9 @@
 /* ── Skeleton grid (loading) ───────────────────────────────────────── */
 .creator-skeleton-grid {
   display: grid;
+  /* Mirror .creator-grid exactly — the skeleton must load in the SAME
+     column count the content will use (the density dial / 2-col default),
+     never its own. */
   grid-template-columns: repeat(3, 1fr);
   gap: 12px;
 }
@@ -858,7 +872,18 @@
 .light-mode .creator-hero-avatar { border-color: rgba(0, 0, 0, 0.08); }
 .light-mode .creator-hero-curated { color: rgba(0, 0, 0, 0.4); }
 .light-mode .creator-hero-name { color: #111; }
-.light-mode .creator-follow-btn { color: #fff; background: #111; }
+.light-mode .creator-follow-btn--skeleton {
+  display: inline-block;
+  width: 132px;
+  min-height: 38px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.16) 50%, rgba(255, 255, 255, 0.08) 100%) !important;
+  background-size: 200% 100% !important;
+  animation: creator-skeleton-shimmer 1.4s ease-in-out infinite;
+  border: none !important;
+  pointer-events: none;
+}
+
+.creator-follow-btn { color: #fff; background: #111; }
 .light-mode .creator-hero-trust { color: rgba(0, 0, 0, 0.4); }
 .light-mode .creator-hero-socials { color: rgba(0, 0, 0, 0.3); }
 .light-mode .creator-hero-socials svg:hover { color: rgba(0, 0, 0, 0.6); }
@@ -925,7 +950,18 @@
     font-size: 28px;
   }
 
-  .creator-follow-btn {
+  .creator-follow-btn--skeleton {
+  display: inline-block;
+  width: 132px;
+  min-height: 38px;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.08) 0%, rgba(255, 255, 255, 0.16) 50%, rgba(255, 255, 255, 0.08) 100%) !important;
+  background-size: 200% 100% !important;
+  animation: creator-skeleton-shimmer 1.4s ease-in-out infinite;
+  border: none !important;
+  pointer-events: none;
+}
+
+.creator-follow-btn {
     padding: 8px 24px;
     font-size: 12px;
   }
@@ -949,6 +985,16 @@
     padding: 0;
     margin: 0 -16px; /* claw back the parent's horizontal padding */
   }
+
+  .creator-skeleton-grid {
+    grid-template-columns: repeat(var(--cat-cols, 2), 1fr);
+    gap: 2px;
+    margin: 0 -16px;
+  }
+
+  /* Flush, square tiles on mobile — identical geometry to the loaded
+     grid so media lands exactly where its shimmer was. */
+  .creator-skeleton-grid .creator-skeleton-tile { border-radius: 0; }
 
   .creator-grid .look-card {
     /* Match the main feed (3/4). */

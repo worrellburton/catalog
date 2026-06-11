@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { catalogConfirm } from '~/components/CatalogDialog';
 import { checkBudgetForRerun, getAiBudget, setAiBudget, type BudgetCheck } from '~/utils/aiBudget';
 
 interface BaseProps {
@@ -43,7 +44,7 @@ export default function RerunAllStuckButton(props: Props) {
       setOpen(true);
     } else {
       // No balance check - just confirm + run.
-      if (!window.confirm(`Rerun ${stuckCount} stuck job${stuckCount === 1 ? '' : 's'}?`)) return;
+      if (!(await catalogConfirm({ title: `Rerun ${stuckCount} stuck job${stuckCount === 1 ? '' : 's'}?`, confirmLabel: 'Rerun' }))) return;
       setRunning(true);
       try {
         await onRerunAll();

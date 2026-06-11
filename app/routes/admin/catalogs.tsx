@@ -4230,7 +4230,11 @@ export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loadin
       )}
       {!isAll && isUniverse && (
         <div style={{ fontSize: 11, color: '#475569', background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 6, padding: '6px 10px' }}>
-          The <strong>home</strong> catalog mirrors the consumer landing feed — every live look and product, ranked by what shoppers see right now.
+          The <strong>home</strong> catalog is the <strong>candidate pool + baseline order</strong> —
+          what a brand-new shopper sees, and the starting point every personal daily feed
+          re-ranks from (Automatic Editor + feed rules). No two shoppers see this exact
+          order: curate the pool and baseline here, tune the rules in Automatic Editor,
+          and use <strong>Preview feed</strong> to see the result as any specific user.
         </div>
       )}
 

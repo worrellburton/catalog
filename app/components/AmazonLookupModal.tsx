@@ -12,6 +12,9 @@ type Mode = 'lookup' | 'search';
 interface AmazonLookupModalProps {
   onClose: () => void;
   onIngested: (count: number) => void;
+  /** Row ids of everything ingested — for callers that post-process the
+   *  new products (e.g. the type-brain drill assigns them to its type). */
+  onIngestedIds?: (ids: string[]) => void;
   onPending?: (urls: string[]) => void;
 }
 
@@ -28,7 +31,7 @@ function looksLikeUrlOrAsin(s: string): boolean {
   return /^[A-Z0-9]{10}$/i.test(t) || /^https?:\/\//i.test(t);
 }
 
-export default function AmazonLookupModal({ onClose, onIngested, onPending }: AmazonLookupModalProps) {
+export default function AmazonLookupModal({ onClose, onIngested, onIngestedIds, onPending }: AmazonLookupModalProps) {
   const [mode, setMode] = useState<Mode>('search');
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
@@ -96,6 +99,7 @@ export default function AmazonLookupModal({ onClose, onIngested, onPending }: Am
       if (product.url) onPending?.([product.url]);
       const row = await ingestRainforestProduct(product);
       if (!row) throw new Error('Failed to save product');
+      onIngestedIds?.([row.id]);
       onIngested(1);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
@@ -112,10 +116,11 @@ export default function AmazonLookupModal({ onClose, onIngested, onPending }: Am
     try {
       const pendingUrls = picks.map(p => p.url).filter((u): u is string => !!u);
       if (pendingUrls.length > 0) onPending?.(pendingUrls);
-      const { inserted, failed } = await ingestRainforestProducts(picks);
+      const { inserted, failed, ids } = await ingestRainforestProducts(picks);
       if (failed > 0 && inserted === 0) {
         setError(`All ${failed} ingests failed`);
       } else {
+        if (ids.length) onIngestedIds?.(ids);
         onIngested(inserted);
       }
     } catch (err) {

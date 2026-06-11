@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useSearchParams } from '@remix-run/react';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
-import { useAdminConfirm } from '~/components/AdminConfirm';
+import { useCatalogDialog } from '~/components/CatalogDialog';
 import {
   listAllComments,
   subscribeAllComments,
@@ -50,7 +50,7 @@ export default function AdminComments() {
   const [loading, setLoading] = useState(true);
   const [busyId, setBusyId] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const { confirm } = useAdminConfirm();
+  const { confirm } = useCatalogDialog();
   const [searchParams] = useSearchParams();
   const q = (searchParams.get('q') || '').toLowerCase().trim();
 

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { getHomeFeed, type ProductAd } from '~/services/product-creative';
+import { withTransform } from '~/utils/supabase-image';
 
 // A small grid of shoppable products shown in the TOP space of the mobile
 // search overlay when the keyboard is down — otherwise that area is a big
@@ -29,13 +30,17 @@ function loadTray(): Promise<ProductAd[]> {
 }
 
 function tileImage(ad: ProductAd): string {
-  return (
+  const raw =
     ad.product?.primary_image_url ||
     ad.product?.image_url ||
     ad.thumbnail_url ||
     (ad.product?.images && ad.product.images[0]) ||
-    ''
-  );
+    '';
+  // SAME rendition params as the feed cards (CreativeCardV2's poster
+  // transform), so these tiles are byte-identical URLs the feed already
+  // fetched — instant HTTP-cache hits instead of cold full-res originals
+  // trickling in one by one.
+  return withTransform(raw, { width: 540, quality: 72, resize: 'contain' }) || raw;
 }
 
 export default function BottomBarProductTray({ onOpen }: { onOpen: (ad: ProductAd) => void }) {
@@ -66,7 +71,7 @@ export default function BottomBarProductTray({ onOpen }: { onOpen: (ad: ProductA
               title={`${ad.product?.brand ? ad.product.brand + ' · ' : ''}${ad.product?.name || ''}`}
             >
               <span className="bb-tray-thumb">
-                {img ? <img src={img} alt="" loading="lazy" decoding="async" /> : null}
+                {img ? <img src={img} alt="" loading="eager" decoding="async" /> : null}
               </span>
               {ad.product?.brand && <span className="bb-tray-brand">{ad.product.brand}</span>}
             </button>

@@ -9,7 +9,7 @@ import CreatorAvatarFollow from '~/components/CreatorAvatarFollow';
 import { useTrailVideo, useTrailVideoManager } from '~/components/TrailVideoHost';
 import { useInViewport } from '~/hooks/useInViewport';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
-import { trackAdClick, prefetchSimilarProducts, getSimilarProductsDiagnostics, type ProductAd } from '~/services/product-creative';
+import { trackAdClick, prefetchSimilarProducts, getSimilarProductsDiagnostics, deleteProduct, type ProductAd } from '~/services/product-creative';
 import SimilarDebugModal, { buildProductSimilarReport, buildGraphPairsReport, buildAffinityReport, type SimilarDebugReport } from '~/components/SimilarDebugModal';
 import { getProductDetails, type ProductDetails } from '~/services/product-details';
 import ProductMeasurementsDiagram from '~/components/ProductMeasurementsDiagram';
@@ -20,6 +20,7 @@ import { isFitRelevant, deriveFitLabel, buildSuggestionChipGroups } from '~/util
 import { type GraphPair } from '~/services/graph-pairs';
 import { useAuth } from '~/hooks/useAuth';
 import { ConfirmModal } from '~/components/ConfirmModal';
+import { catalogAlert, catalogConfirm } from '~/components/CatalogDialog';
 import { hideProductKey } from '~/hooks/useHiddenLooks';
 import { useShopperBody } from '~/hooks/useShopperBody';
 import { usePageSections, isSectionEnabled, getSectionLimit, isSectionInfinite } from '~/hooks/usePageSections';
@@ -912,6 +913,11 @@ export default function ProductPage({
   }, [navKey]);
 
   const handleClose = useCallback(() => {
+    // Reverse handoff — see LookOverlay.handleClose: the source card resumes
+    // at the hero's exact frame instead of restarting.
+    if (effectiveCreative?.id) {
+      director.syncFromTrailReturn(effectiveCreative.id, heroHostRef.current?.querySelector('video') ?? null);
+    }
     // Flag the scope exiting at gesture start (not on unmount 360 ms later) so
     // the background feed re-warms under cover of the slide-out and is already
     // playing when this page clears. The suspend effect still pops on unmount.
@@ -1067,6 +1073,10 @@ export default function ProductPage({
   const heroStill = productPoster(product);
 
   const heroClassName = `pd-hero${effectiveCreative ? ' pd-hero--video' : heroStill ? ' pd-hero--image' : ' pd-hero--empty'}`;
+  // Hi-res hero upgrade for image-only products. The page remounts per
+  // navigation (parent keys it), so this never carries stale state.
+  const heroHiResSrc = heroStill ? heroStill.replace('w=200&h=200', 'w=1200&h=1600') : '';
+  const [heroHiResLoaded, setHeroHiResLoaded] = useState(false);
 
   // Tap-handoff poster: when a CreativeCardV2 tile navigates here, it stashes
   // a canvas snapshot of the playing card frame on window.__feedTapPosters.
@@ -1100,11 +1110,16 @@ export default function ProductPage({
   // Prefer the HLS manifest (when the pipeline dial allows it) so the
   // full-screen hero ramps to a crisp rung; fall back to the progressive MP4
   // when no ladder exists for this clip or the pipeline is in 'mp4' mode.
-  const setHeroSlot = useTrailVideo(
+  const heroHostRef = useRef<HTMLElement | null>(null);
+  const setHeroSlotBase = useTrailVideo(
     effectiveCreative?.id,
     heroHlsUrl || effectiveCreative?.videoUrl,
     heroPoster || undefined,
   );
+  const setHeroSlot = useCallback((node: HTMLElement | null) => {
+    heroHostRef.current = node;
+    setHeroSlotBase(node);
+  }, [setHeroSlotBase]);
 
   // Phase 8 helper: kick off a high-res prefetch on hero mount in case
   // the card-side preload (only fires on mobile) didn't run. Idempotent
@@ -1263,15 +1278,63 @@ export default function ProductPage({
                 />
               </>
             ) : heroStill ? (
-              <img
-                src={heroStill.replace('w=200&h=200', 'w=1200&h=1600')}
-                alt={product.name}
-                className="pd-hero-media"
-              />
+              <>
+                {/* Two-layer still: the bottom <img> is the EXACT URL the
+                    tapped tile already painted (browser-cached → first
+                    frame), the top one is the hi-res rendition fading in
+                    when it lands. Previously only the hi-res rendered, so
+                    image-only products opened to the hero's black backdrop
+                    while a brand-new URL loaded. */}
+                <img
+                  src={heroStill}
+                  alt=""
+                  aria-hidden="true"
+                  className="pd-hero-media"
+                  style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
+                />
+                {heroHiResSrc !== heroStill && (
+                  <img
+                    src={heroHiResSrc}
+                    alt={product.name}
+                    className="pd-hero-media"
+                    style={{ position: 'relative', opacity: heroHiResLoaded ? 1 : 0, transition: 'opacity 160ms ease' }}
+                    onLoad={() => setHeroHiResLoaded(true)}
+                  />
+                )}
+              </>
             ) : (
               <div className="pd-hero-placeholder" />
             )}
             <div className="pd-hero-scrim" />
+            {/* Super-admin only: an INVISIBLE tap target on the middle-right
+                of the hero that deletes this product everywhere (confirm
+                first). Deliberately unstyled/invisible — a stealth admin
+                affordance on the public surface. */}
+            {isSuperAdmin && (
+              <button
+                type="button"
+                className="pd-admin-delete"
+                aria-label="Delete this product (super admin)"
+                onClick={async () => {
+                  if (!ownProductId) {
+                    void catalogAlert({ title: 'No product id', message: 'This product has no database id to delete.' });
+                    return;
+                  }
+                  const ok = await catalogConfirm({
+                    title: `Delete "${product.name}"?`,
+                    message: 'Removes the product and its creatives everywhere. This cannot be undone.',
+                    danger: true,
+                  });
+                  if (!ok) return;
+                  const { error } = await deleteProduct(ownProductId);
+                  if (error) {
+                    void catalogAlert({ title: 'Delete failed', message: String(error) });
+                    return;
+                  }
+                  handleClose();
+                }}
+              />
+            )}
             {/* Top-right share + bottom-right save, both overlaying the
                 hero media. Mirror the .pd-back glass treatment so the
                 three controls (back / share / save) read as a set. */}
@@ -1366,6 +1429,49 @@ export default function ProductPage({
                   </svg>
                 </button>
               )}
+              {/* Retailer comparison drawer — a full-width row INSIDE the
+                  action grid, so the offers expand directly under the Shop
+                  button (not below the whole 2×2 button group). Each chip:
+                  retailer + price; cheapest badged; brand site first. */}
+              {retailerOffers.length > 0 && (
+              <div
+                id="pd-retailers-drawer"
+                className={`pd-retailers-drawer${showRetailers ? ' is-open' : ''}`}
+                role="region"
+                aria-label="Where to buy"
+                hidden={!showRetailers}
+              >
+                <div className="pd-retailers" role="list">
+                  {retailerOffers.map(offer => (
+                    <button
+                      key={offer.retailer}
+                      type="button"
+                      className={`pd-retailer-chip${offer.badge ? ` is-${offer.badge}` : ''}`}
+                      onClick={() => {
+                        setShowRetailers(false);
+                        // handleOpenBrowser in _index.tsx fires
+                        // trackProductClickout centrally now — no need
+                        // for a per-callsite trigger here.
+                        onOpenBrowser(offer.url, `${offer.retailer} - ${product.name}`, product);
+                      }}
+                      role="listitem"
+                    >
+                      <span className="pd-retailer-name">{offer.retailer}</span>
+                      <span className="pd-retailer-price">{offer.price}</span>
+                      {offer.badge === 'official' && <span className="pd-retailer-badge">Official</span>}
+                      {offer.badge === 'lowest' && <span className="pd-retailer-badge pd-retailer-badge--lowest">Lowest</span>}
+                      {offer.badge === 'discount' && (
+                        <span className="pd-retailer-badge pd-retailer-badge--discount">−{offer.discountPct}%</span>
+                      )}
+                      <svg className="pd-retailer-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                        <line x1="7" y1="17" x2="17" y2="7" />
+                        <polyline points="7 7 17 7 17 17" />
+                      </svg>
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
               {/* "Add to a look" — kicks off the look-builder (/generate)
                   with this product pre-picked. Works for any product type
                   (a candle or a pot can be added to a look even though you
@@ -1415,52 +1521,6 @@ export default function ProductPage({
                 </button>
               )}
             </div>
-
-            {/* Retailer comparison drawer. Hidden until the user taps Shop.
-                Each chip says the retailer name + the price at that
-                retailer. Tap goes straight to that retailer's page (in-app
-                browser). The cheapest is badged "Lowest" or "Discount −X%"
-                based on % off MSRP. The brand's own site sits first,
-                marked "Official". */}
-            {retailerOffers.length > 0 && (
-              <div
-                id="pd-retailers-drawer"
-                className={`pd-retailers-drawer${showRetailers ? ' is-open' : ''}`}
-                role="region"
-                aria-label="Where to buy"
-                hidden={!showRetailers}
-              >
-                <div className="pd-retailers" role="list">
-                  {retailerOffers.map(offer => (
-                    <button
-                      key={offer.retailer}
-                      type="button"
-                      className={`pd-retailer-chip${offer.badge ? ` is-${offer.badge}` : ''}`}
-                      onClick={() => {
-                        setShowRetailers(false);
-                        // handleOpenBrowser in _index.tsx fires
-                        // trackProductClickout centrally now — no need
-                        // for a per-callsite trigger here.
-                        onOpenBrowser(offer.url, `${offer.retailer} - ${product.name}`, product);
-                      }}
-                      role="listitem"
-                    >
-                      <span className="pd-retailer-name">{offer.retailer}</span>
-                      <span className="pd-retailer-price">{offer.price}</span>
-                      {offer.badge === 'official' && <span className="pd-retailer-badge">Official</span>}
-                      {offer.badge === 'lowest' && <span className="pd-retailer-badge pd-retailer-badge--lowest">Lowest</span>}
-                      {offer.badge === 'discount' && (
-                        <span className="pd-retailer-badge pd-retailer-badge--discount">−{offer.discountPct}%</span>
-                      )}
-                      <svg className="pd-retailer-arrow" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                        <line x1="7" y1="17" x2="17" y2="7" />
-                        <polyline points="7 7 17 7 17 17" />
-                      </svg>
-                    </button>
-                  ))}
-                </div>
-              </div>
-            )}
 
             {/* "View more info" panel — collapses Size & fit, the
                 "Best for" chips (occasion / season / "Suits …" / style),

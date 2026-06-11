@@ -1,11 +1,14 @@
-// "Add Manually" product modal (admin /admin/data → Add Products menu).
+// "Add Manually" product modal (admin /admin/data → Add Products menu,
+// also the type-brain drill's "Add products → Manually").
 // Flow: drop a screenshot of any product page → Claude vision prefills
 // name / brand / price / currency / description / type / gender → the
 // admin reviews, uploads the REAL primary image (+ optional gallery),
 // and saves. The screenshot is only an extraction source — it is never
 // stored; the uploaded images are what the product ships with.
+// Images can be clicked-to-upload OR pasted from the clipboard: the first
+// pasted image fills the primary slot, further pastes append to the gallery.
 
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import {
   createManualProduct,
   extractProductFromScreenshot,
@@ -18,6 +21,8 @@ interface Props {
   /** Receives the inserted row (ingest-select shape) for table merge. */
   onIngested: (row: Record<string, unknown>) => void;
   showToast: (msg: string) => void;
+  /** Prefill (e.g. the type-brain drill pins `type` to the drilled node). */
+  initialFields?: Partial<ExtractedProductFields>;
 }
 
 const EMPTY_FIELDS: ExtractedProductFields = {
@@ -33,8 +38,8 @@ const input: React.CSSProperties = {
   border: '1px solid #ddd', fontSize: 13, fontFamily: 'inherit',
 };
 
-export default function ManualProductModal({ onClose, onIngested, showToast }: Props) {
-  const [fields, setFields] = useState<ExtractedProductFields>(EMPTY_FIELDS);
+export default function ManualProductModal({ onClose, onIngested, showToast, initialFields }: Props) {
+  const [fields, setFields] = useState<ExtractedProductFields>(() => ({ ...EMPTY_FIELDS, ...initialFields }));
   const [url, setUrl] = useState('');
   const [extracting, setExtracting] = useState(false);
   const [extractErr, setExtractErr] = useState<string | null>(null);
@@ -86,7 +91,7 @@ export default function ManualProductModal({ onClose, onIngested, showToast }: P
     }
   };
 
-  const onGallery = async (files: FileList | null) => {
+  const onGallery = async (files: FileList | File[] | null) => {
     if (!files || files.length === 0) return;
     const list = Array.from(files).slice(0, 8);
     setGalleryUploading(n => n + list.length);
@@ -101,6 +106,34 @@ export default function ManualProductModal({ onClose, onIngested, showToast }: P
       }
     }
   };
+
+  // Clipboard paste anywhere in the modal: first image → primary slot,
+  // the rest → gallery. Same upload path as the click-to-upload buttons.
+  const primaryRef = useRef(primary);
+  primaryRef.current = primary;
+  useEffect(() => {
+    const onPaste = (ev: ClipboardEvent) => {
+      const files = Array.from(ev.clipboardData?.items ?? [])
+        .filter(item => item.kind === 'file' && item.type.startsWith('image/'))
+        .map(item => item.getAsFile())
+        .filter((f): f is File => f !== null);
+      if (!files.length) return;
+      ev.preventDefault();
+      const [first, ...rest] = files;
+      if (!primaryRef.current) {
+        void onPrimary(first);
+        if (rest.length) void onGallery(rest);
+      } else {
+        void onGallery(files);
+      }
+      showToast(`Pasted ${files.length} image${files.length === 1 ? '' : 's'}`);
+    };
+    document.addEventListener('paste', onPaste);
+    return () => document.removeEventListener('paste', onPaste);
+    // onPrimary/onGallery are stable per render usage; the listener reads
+    // the live primary slot through primaryRef.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const save = async () => {
     if (!fields.name.trim()) { showToast('Name is required'); return; }
@@ -133,7 +166,8 @@ export default function ManualProductModal({ onClose, onIngested, showToast }: P
         <h2 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 600 }}>Add product manually</h2>
         <p style={{ margin: '0 0 16px', fontSize: 13, color: '#888' }}>
           Drop a screenshot of the product page — Claude pulls out the name, brand, price and
-          details. Then upload the real primary image and any gallery shots.
+          details. Then upload the real primary image and any gallery shots — click a slot, or
+          paste images straight from the clipboard (⌘V).
         </p>
 
         {/* Screenshot extraction */}
@@ -223,7 +257,7 @@ export default function ManualProductModal({ onClose, onIngested, showToast }: P
                 cursor: 'pointer', fontSize: 12, color: '#9ca3af', position: 'relative',
               }}
             >
-              {!primary && '+ upload'}
+              {!primary && '+ upload / paste'}
               {primary?.uploading && (
                 <span style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'rgba(255,255,255,0.7)', fontSize: 11, fontWeight: 700, color: '#4338ca' }}>uploading…</span>
               )}

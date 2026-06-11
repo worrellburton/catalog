@@ -50,6 +50,9 @@ export function useForceSim(
 ) {
   const bodiesRef = useRef<Map<string, Body>>(new Map());
   const alphaRef = useRef(1);
+  // While a drag is live the sim is frozen: only the pinned node moves, so
+  // every other node holds still and overlap-drops land every time.
+  const draggingRef = useRef(false);
   const gapRef = useRef(110);
   const [positions, setPositions] = useState<Map<string, SimNodeState>>(new Map());
   const frameRef = useRef(0);
@@ -93,7 +96,7 @@ export function useForceSim(
     const tick = () => {
       const bodies = bodiesRef.current;
       const alpha = alphaRef.current;
-      if (alpha > MIN_ALPHA) {
+      if (alpha > MIN_ALPHA && !draggingRef.current) {
         const arr = [...bodies.values()];
         const ring = gapRef.current;
         // Many-body repulsion (spreads nodes along their rings).
@@ -123,9 +126,11 @@ export function useForceSim(
           if (!a.pinned) { a.vx += fx; a.vy += fy; }
           if (!b.pinned) { b.vx -= fx; b.vy -= fy; }
         }
-        // Integrate, then SNAP onto the depth ring (the ring is a hard
-        // constraint, not a suggestion), then clamp to the canvas.
-        const pad = 56;
+        // Integrate, then SNAP onto the depth ring. The ring is a hard
+        // constraint: the pull eases in for a smooth glide, then lands
+        // EXACTLY on the radius — never a rectangular clamp afterwards
+        // (the old canvas clamp shoved edge nodes off their ring; the
+        // canvas pans/zooms, so containment isn't the sim's job).
         for (const b of arr) {
           if (b.depth === 0) { b.x = cx; b.y = cy; b.vx = 0; b.vy = 0; continue; }
           if (b.pinned) continue;
@@ -134,11 +139,9 @@ export function useForceSim(
           const dx = b.x - cx, dy = b.y - cy;
           const d = Math.sqrt(dx * dx + dy * dy) || 1;
           const target = b.depth * ring;
-          const nd = d + (target - d) * RING_SNAP;
+          const nd = Math.abs(target - d) < 0.75 ? target : d + (target - d) * RING_SNAP;
           b.x = cx + (dx / d) * nd;
           b.y = cy + (dy / d) * nd;
-          b.x = Math.min(Math.max(b.x, pad), width - pad);
-          b.y = Math.min(Math.max(b.y, pad), height - pad);
         }
         alphaRef.current = alpha * ALPHA_DECAY;
         setPositions(new Map([...bodies.entries()].map(([id, b]) => [id, { x: b.x, y: b.y }])));
@@ -149,19 +152,73 @@ export function useForceSim(
     return () => cancelAnimationFrame(frameRef.current);
   }, [links, width, height]);
 
-  /** Drag API: pin under the pointer, release reheats so neighbours settle. */
+  /** Organize: deterministic tidy radial layout. Every branch gets an
+   *  angular wedge (blend of equal-share and leaf-count share, so big
+   *  branches breathe but depth-1 nodes stay roughly evenly spaced);
+   *  leaves spread evenly inside their wedge, parents sit at their
+   *  wedge's midpoint. One click = even spacing + no branch overlap. */
+  const organize = () => {
+    const bodies = bodiesRef.current;
+    const kids = new Map<string, string[]>();
+    for (const l of links) kids.set(l.source, [...(kids.get(l.source) ?? []), l.target]);
+    const leafCount = (id: string): number => {
+      const c = kids.get(id) ?? [];
+      if (c.length === 0) return 1;
+      return c.reduce((acc, k) => acc + leafCount(k), 0);
+    };
+    const angleOf = (id: string): number => {
+      const b = bodies.get(id);
+      if (!b) return 0;
+      return Math.atan2(b.y - height / 2, b.x - width / 2);
+    };
+    const cx = width / 2;
+    const cy = height / 2;
+    const ring = gapRef.current;
+    const place = (id: string, a0: number, a1: number, depth: number) => {
+      const mid = (a0 + a1) / 2;
+      const b = bodies.get(id);
+      if (b && depth > 0) {
+        b.x = cx + Math.cos(mid) * depth * ring;
+        b.y = cy + Math.sin(mid) * depth * ring;
+        b.vx = 0; b.vy = 0;
+      }
+      // Children keep their current angular ORDER (least travel), then
+      // split the wedge: half equally, half by subtree size.
+      const c = [...(kids.get(id) ?? [])].sort((x, y) => angleOf(x) - angleOf(y));
+      if (c.length === 0) return;
+      const total = c.reduce((acc, k) => acc + leafCount(k), 0);
+      let cursor = a0;
+      for (const k of c) {
+        const span = (a1 - a0) * (0.5 / c.length + 0.5 * (leafCount(k) / total));
+        place(k, cursor, cursor + span, depth + 1);
+        cursor += span;
+      }
+    };
+    // Root owns the full circle, starting at 12 o'clock. '__root__' is the
+    // graph's synthetic centre id (TypeBrainGraph ROOT_ID).
+    place('__root__', -Math.PI / 2, Math.PI * 1.5, 0);
+    // Barely-warm alpha: nodes are already exactly placed — just enough
+    // life for satellites/edges to repaint without re-scrambling.
+    alphaRef.current = 0.02;
+    setPositions(new Map([...bodies.entries()].map(([id, b]) => [id, { x: b.x, y: b.y }])));
+  };
+
+  /** Drag API: pin under the pointer and freeze everyone else — neighbours
+   *  hold position so the drop target can't drift away mid-gesture.
+   *  Release unfreezes + reheats so the graph settles back onto the rings. */
   const dragTo = (id: string, x: number, y: number) => {
     const b = bodiesRef.current.get(id);
     if (!b) return;
     b.pinned = true; b.x = x; b.y = y; b.vx = 0; b.vy = 0;
-    alphaRef.current = Math.max(alphaRef.current, 0.3);
+    draggingRef.current = true;
     setPositions(prev => new Map(prev).set(id, { x, y }));
   };
   const release = (id: string) => {
     const b = bodiesRef.current.get(id);
     if (b) b.pinned = false;
+    draggingRef.current = false;
     alphaRef.current = Math.max(alphaRef.current, 0.5);
   };
 
-  return { positions, dragTo, release, ringRadii };
+  return { positions, dragTo, release, ringRadii, organize };
 }

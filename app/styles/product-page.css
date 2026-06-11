@@ -1587,6 +1587,7 @@
 
 .pd-retailer-chip {
   display: grid;
+  width: 100%;
   grid-template-columns: 1fr auto auto auto;
   align-items: center;
   gap: 10px;
@@ -1975,3 +1976,23 @@
 .light-mode .pd-graph-pair-name  { color: rgba(0, 0, 0, 0.85); }
 .light-mode .pd-graph-pair-price { color: rgba(0, 0, 0, 0.55); }
 .light-mode .pd-graph-pair-img   { background: #e8e8e3; }
+
+/* Super-admin stealth delete — an invisible 56x72 tap zone on the
+   middle-right edge of the hero. No visual treatment on purpose. */
+.pd-admin-delete {
+  position: absolute;
+  right: 0;
+  top: calc(50% - 36px);
+  width: 56px;
+  height: 72px;
+  background: transparent;
+  border: none;
+  padding: 0;
+  z-index: 3;
+  cursor: default;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* The retailers drawer lives INSIDE the .pd-actions grid now — span the
+   full row so offers open edge-to-edge directly under the Shop button. */
+.pd-actions > .pd-retailers-drawer { grid-column: 1 / -1; }

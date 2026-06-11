@@ -17,6 +17,9 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ParticleBackground from '~/components/ParticleBackground';
 import TypeBrainGraph, { type BrainNode, type BrainProduct, type BrainViewMode } from '~/components/admin/TypeBrainGraph';
 import {
+  auditProductTypes,
+  computeEffectiveGenders,
+  computeTypePaths,
   createTypeNode,
   executeGovernanceOps,
   fetchGovernanceProducts,
@@ -26,8 +29,11 @@ import {
   type GovernanceOp,
   type GovernanceProduct,
   type ProductGroup,
+  type TypeAuditRecommendation,
   type TypeNode,
 } from '~/services/type-governance';
+import DrillAddProducts, { type DrillAddSource } from '~/components/admin/DrillAddProducts';
+import TypeAuditPanel from '~/components/admin/TypeAuditPanel';
 import { productSlug } from '~/utils/slug';
 import '~/styles/governance.css';
 
@@ -47,36 +53,8 @@ interface HistoryEntry {
   at: number;
 }
 
-/** Full ancestry string per node, matching products.type_path format. */
-function computePaths(nodes: TypeNode[]): Map<string, string> {
-  const byId = new Map(nodes.map(n => [n.id, n]));
-  const memo = new Map<string, string>();
-  const path = (n: TypeNode): string => {
-    const cached = memo.get(n.id);
-    if (cached) return cached;
-    const parent = n.parentId ? byId.get(n.parentId) : null;
-    const v = parent ? `${path(parent)} / ${n.name}` : n.name;
-    memo.set(n.id, v);
-    return v;
-  };
-  nodes.forEach(path);
-  return memo;
-}
-
-/** Effective gender per node: its own, else the nearest ancestor's. */
-function computeGenders(nodes: TypeNode[]): Map<string, string | null> {
-  const byId = new Map(nodes.map(n => [n.id, n]));
-  const memo = new Map<string, string | null>();
-  const eff = (n: TypeNode): string | null => {
-    if (memo.has(n.id)) return memo.get(n.id) ?? null;
-    const parent = n.parentId ? byId.get(n.parentId) : null;
-    const v = n.gender ?? (parent ? eff(parent) : null);
-    memo.set(n.id, v);
-    return v;
-  };
-  nodes.forEach(eff);
-  return memo;
-}
+const computePaths = computeTypePaths;
+const computeGenders = computeEffectiveGenders;
 
 export default function AdminGovernanceTypes() {
   const [tree, setTree] = useState<TypeNode[]>([]);
@@ -88,14 +66,42 @@ export default function AdminGovernanceTypes() {
   const [drill, setDrill] = useState<{ nodeId: string; ox: number; oy: number } | null>(null);
   // Multi-select inside the drill view → "Assign to type…" re-types them.
   const [drillSel, setDrillSel] = useState<Set<string>>(new Set());
+  // Drag-marquee over the drill grid (client coords; cards re-measured per
+  // move so scrolling mid-drag stays correct). base = selection at gesture
+  // start so shift-drags extend instead of replace.
+  const drillMarquee = useRef<{ x0: number; y0: number; base: Set<string> } | null>(null);
+  const [drillRect, setDrillRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignQuery, setAssignQuery] = useState('');
-  useEffect(() => { setDrillSel(new Set()); setAssignOpen(false); setAssignQuery(''); }, [drill?.nodeId]);
+  // Double-click the drill title to rename the type (the canvas double-click
+  // is the zoom-in gesture now).
+  const [drillRenaming, setDrillRenaming] = useState(false);
+  // "Add products" inside the drill: menu + which source flow is open.
+  const [addMenuOpen, setAddMenuOpen] = useState(false);
+  const [addSource, setAddSource] = useState<DrillAddSource | null>(null);
+  // Collapsible subtype rows at the bottom of the drill — open by default
+  // so the subtype products are visible "in here".
+  const [openSubs, setOpenSubs] = useState<Set<string>>(new Set());
+  // Type-audit report (null = closed).
+  const [audit, setAudit] = useState<TypeAuditRecommendation[] | null>(null);
+  useEffect(() => {
+    setDrillSel(new Set());
+    setAssignOpen(false);
+    setAssignQuery('');
+    setDrillRenaming(false);
+    setAddMenuOpen(false);
+    setAddSource(null);
+    setOpenSubs(new Set(tree.filter(n => n.parentId === drill?.nodeId).map(n => n.id)));
+    // Reset on drill change only — `tree` is read fresh at open time.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [drill?.nodeId]);
   const [history, setHistory] = useState<HistoryEntry[]>([]);
   const [logOpen, setLogOpen] = useState(false);
   const [toast, setToast] = useState<{ label: string; key: number } | null>(null);
   // "Move to…" armed: the next node click re-parents the whole selection.
   const [pickMode, setPickMode] = useState(false);
+  // Organize button: each press re-runs the tidy radial layout.
+  const [organizeSignal, setOrganizeSignal] = useState(0);
   // Ring dials — view preferences, sticky per admin via localStorage.
   const [ringOpacity, setRingOpacity] = useState(() =>
     Number(typeof localStorage !== 'undefined' && localStorage.getItem('gov-ring-opacity')) || 0.15);
@@ -431,6 +437,53 @@ export default function AdminGovernanceTypes() {
     );
   };
 
+  /** Products created from the drill's "Add products" flows → the drilled
+   *  type. The new rows aren't in local state yet, so the groups are built
+   *  straight from the ids and a reload follows the queued write. */
+  const handleAssignNew = (productIds: string[], nodeId: string) => {
+    const node = tree.find(n => n.id === nodeId);
+    if (!node || !productIds.length) return;
+    const groups: ProductGroup[] = [{
+      ids: productIds,
+      patch: { type: node.name, gender: genders.get(nodeId) ?? null, type_path: paths.get(nodeId) ?? null },
+    }];
+    commit(
+      `Added ${productIds.length} product${productIds.length === 1 ? '' : 's'} → ${node.name}`,
+      [{ op: 'products-update', groups }],
+      [{ op: 'products-update', groups: [{ ids: productIds, patch: { type: null, gender: null, type_path: null } }] }],
+      () => { /* rows enter local state via the queued reload */ },
+    );
+    queue.current = queue.current.then(() => reload());
+  };
+
+  /** Apply the checked audit recommendations as one undoable gesture. */
+  const applyAudit = (recs: TypeAuditRecommendation[]) => {
+    setAudit(null);
+    if (!recs.length) return;
+    const byNode = new Map<string, TypeAuditRecommendation[]>();
+    for (const r of recs) byNode.set(r.toNodeId, [...(byNode.get(r.toNodeId) ?? []), r]);
+    const groups: ProductGroup[] = [...byNode.entries()].map(([nodeId, rs]) => ({
+      ids: rs.map(r => r.productId),
+      patch: {
+        type: tree.find(n => n.id === nodeId)?.name ?? null,
+        gender: genders.get(nodeId) ?? null,
+        type_path: paths.get(nodeId) ?? null,
+      },
+    }));
+    const idSet = new Set(recs.map(r => r.productId));
+    const matched = products.filter(p => idSet.has(p.id));
+    commit(
+      `Type audit: re-typed ${recs.length} product${recs.length === 1 ? '' : 's'}`,
+      [{ op: 'products-update', groups }],
+      [
+        { op: 'products-update', groups: snapshotGroups(matched, 'type') },
+        { op: 'products-update', groups: snapshotGroups(matched, 'gender') },
+        { op: 'products-update', groups: snapshotGroups(matched, 'typePath') },
+      ],
+      () => applyGroupsLocal(groups),
+    );
+  };
+
   const handleOpenProduct = (productId: string) => {
     const prod = products.find(p => p.id === productId);
     if (!prod) return;
@@ -464,6 +517,22 @@ export default function AdminGovernanceTypes() {
           controls float inside the canvas instead. */}
       <div className="gov-canvas">
         <div className="gov-controls-row gov-canvas-controls">
+          <button
+            type="button"
+            className="gov-ghost"
+            title="Evenly space every ring and keep branches in their own sectors"
+            onClick={() => setOrganizeSignal(n => n + 1)}
+          >
+            ✦ Organize
+          </button>
+          <button
+            type="button"
+            className="gov-ghost"
+            title="Scan every product for a better-fitting type and review the recommended moves"
+            onClick={() => setAudit(auditProductTypes(products, tree))}
+          >
+            Type audit
+          </button>
           <button type="button" className="gov-ghost" disabled={!canUndo} onClick={handleUndo}>
             ↩ Undo
           </button>
@@ -497,6 +566,7 @@ export default function AdminGovernanceTypes() {
           }}
           onReparent={handleReparent}
           onRename={handleRename}
+          organizeSignal={organizeSignal}
           onDelete={handleDelete}
           onAddChild={(id) => { void handleAddChild(id); }}
           onAssignProducts={handleAssign}
@@ -510,21 +580,145 @@ export default function AdminGovernanceTypes() {
           const color = drill.nodeId === UNASSIGNED_ID
             ? '#f59e0b'
             : GENDER_COLORS[genders.get(drill.nodeId) ?? ''] ?? NEUTRAL;
+          // Subtypes: one collapsible row per direct child at the bottom,
+          // each listing its whole subtree's products.
+          const children = node
+            ? tree
+                .filter(n => n.parentId === drill.nodeId)
+                .sort((a, b) => a.sort - b.sort || a.name.localeCompare(b.name))
+            : [];
+          const subProducts = (childId: string): GovernanceProduct[] =>
+            [...subtreeIds(childId)].flatMap(id => attach.get(id) ?? []);
+          const subTotal = children.reduce((acc, c) => acc + subProducts(c.id).length, 0);
+          const renderCard = (prod: GovernanceProduct) => {
+            const isSel = drillSel.has(prod.id);
+            return (
+              <button
+                key={prod.id}
+                type="button"
+                data-prod-id={prod.id}
+                className={`gov-drill-card${isSel ? ' is-selected' : ''}`}
+                title={`${prod.name} — click to select`}
+                onClick={() => setDrillSel(prev => {
+                  const next = new Set(prev);
+                  if (next.has(prod.id)) next.delete(prod.id);
+                  else next.add(prod.id);
+                  return next;
+                })}
+              >
+                <div className="gov-drill-media">
+                  {prod.image
+                    ? <img src={prod.image} alt="" loading="lazy" decoding="async" />
+                    : <span>{prod.name.slice(0, 2)}</span>}
+                  <i className="gov-drill-check" aria-hidden="true">✓</i>
+                  <span
+                    className="gov-drill-open"
+                    role="button"
+                    title="Open product page"
+                    onClick={ev => { ev.stopPropagation(); handleOpenProduct(prod.id); }}
+                  >↗</span>
+                </div>
+                {prod.brand && <em>{prod.brand}</em>}
+                <strong>{prod.name}</strong>
+              </button>
+            );
+          };
           return (
             <div
-              className="gov-drill"
+              className={`gov-drill${drillRect ? ' is-marquee' : ''}`}
               style={{ ['--ox' as string]: `${drill.ox}px`, ['--oy' as string]: `${drill.oy}px` }}
+              onPointerDown={ev => {
+                // Marquee starts on empty space only — buttons/inputs keep
+                // their own gestures (card toggle, pickers, header).
+                if ((ev.target as HTMLElement).closest('button, input, a')) return;
+                (ev.currentTarget as Element).setPointerCapture?.(ev.pointerId);
+                drillMarquee.current = {
+                  x0: ev.clientX, y0: ev.clientY,
+                  base: ev.shiftKey ? new Set(drillSel) : new Set(),
+                };
+                if (!ev.shiftKey) setDrillSel(new Set());
+              }}
+              onPointerMove={ev => {
+                const m = drillMarquee.current;
+                if (!m) return;
+                const [lx, hx] = [Math.min(m.x0, ev.clientX), Math.max(m.x0, ev.clientX)];
+                const [ly, hy] = [Math.min(m.y0, ev.clientY), Math.max(m.y0, ev.clientY)];
+                setDrillRect({ x: lx, y: ly, w: hx - lx, h: hy - ly });
+                if (hx - lx < 4 && hy - ly < 4) return;
+                const hits = new Set(m.base);
+                document.querySelectorAll<HTMLElement>('.gov-drill [data-prod-id]').forEach(el => {
+                  const r = el.getBoundingClientRect();
+                  if (r.left < hx && r.right > lx && r.top < hy && r.bottom > ly) {
+                    hits.add(el.dataset.prodId!);
+                  }
+                });
+                setDrillSel(hits);
+              }}
+              onPointerUp={() => { drillMarquee.current = null; setDrillRect(null); }}
             >
+              {drillRect && (
+                <div
+                  className="gov-drill-marquee"
+                  style={{ left: drillRect.x, top: drillRect.y, width: drillRect.w, height: drillRect.h }}
+                />
+              )}
               <div className="gov-drill-head">
                 <button type="button" className="gov-ghost" onClick={() => setDrill(null)}>
                   ← Back to the brain
                 </button>
                 <div className="gov-drill-title">
                   <span className="gov-drill-dot" style={{ background: color }} />
-                  <h2>{name}</h2>
-                  <span>{prods.length} product{prods.length === 1 ? '' : 's'}</span>
+                  {drillRenaming && node ? (
+                    <input
+                      className="gov-drill-rename"
+                      defaultValue={name}
+                      autoFocus
+                      onFocus={ev => ev.currentTarget.select()}
+                      onKeyDown={ev => {
+                        if (ev.key === 'Enter') {
+                          const v = ev.currentTarget.value.trim();
+                          if (v && v !== name) handleRename(node.id, v);
+                          setDrillRenaming(false);
+                        } else if (ev.key === 'Escape') setDrillRenaming(false);
+                      }}
+                      onBlur={() => setDrillRenaming(false)}
+                    />
+                  ) : (
+                    <h2
+                      title={node ? 'Double-click to rename' : undefined}
+                      onDoubleClick={() => { if (node) setDrillRenaming(true); }}
+                    >{name}</h2>
+                  )}
+                  <span>
+                    {prods.length} product{prods.length === 1 ? '' : 's'}
+                    {subTotal > 0 ? ` · ${subTotal} in subtypes` : ''}
+                  </span>
                 </div>
                 {node && <span className="gov-drill-path">{paths.get(node.id)}</span>}
+                {node && (
+                  <div className="gov-drill-add">
+                    <button type="button" className="gov-moveto" onClick={() => setAddMenuOpen(v => !v)}>
+                      + Add products
+                    </button>
+                    {addMenuOpen && (
+                      <div className="gov-drill-addmenu" role="menu">
+                        {([
+                          ['google', 'Add via Google Shopping'],
+                          ['amazon', 'Add via Amazon Shopping'],
+                          ['brand', 'Add via Brand Website'],
+                          ['manual', 'Add Manually'],
+                        ] as [DrillAddSource, string][]).map(([src, label]) => (
+                          <button
+                            key={src}
+                            type="button"
+                            role="menuitem"
+                            onClick={() => { setAddMenuOpen(false); setAddSource(src); }}
+                          >{label}</button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
               {drillSel.size > 0 && (
                 <div className="gov-drill-assign">
@@ -571,44 +765,62 @@ export default function AdminGovernanceTypes() {
                 </div>
               )}
               {prods.length === 0 ? (
-                <p className="gov-drill-empty">No products attached to this type yet.</p>
+                <p className="gov-drill-empty">No products attached directly to this type yet.</p>
               ) : (
                 <div className="gov-drill-grid">
-                  {prods.map(prod => {
-                    const isSel = drillSel.has(prod.id);
+                  {prods.map(renderCard)}
+                </div>
+              )}
+
+              {children.length > 0 && (
+                <div className="gov-drill-subs">
+                  <h3>Subtypes</h3>
+                  {children.map(child => {
+                    const list = subProducts(child.id);
+                    const open = openSubs.has(child.id);
                     return (
-                      <button
-                        key={prod.id}
-                        type="button"
-                        className={`gov-drill-card${isSel ? ' is-selected' : ''}`}
-                        title={`${prod.name} — click to select`}
-                        onClick={() => setDrillSel(prev => {
-                          const next = new Set(prev);
-                          if (next.has(prod.id)) next.delete(prod.id);
-                          else next.add(prod.id);
-                          return next;
-                        })}
-                      >
-                        <div className="gov-drill-media">
-                          {prod.image
-                            ? <img src={prod.image} alt="" loading="lazy" decoding="async" />
-                            : <span>{prod.name.slice(0, 2)}</span>}
-                          <i className="gov-drill-check" aria-hidden="true">✓</i>
-                          <span
-                            className="gov-drill-open"
-                            role="button"
-                            title="Open product page"
-                            onClick={ev => { ev.stopPropagation(); handleOpenProduct(prod.id); }}
-                          >↗</span>
-                        </div>
-                        {prod.brand && <em>{prod.brand}</em>}
-                        <strong>{prod.name}</strong>
-                      </button>
+                      <div key={child.id} className={`gov-drill-sub${open ? ' is-open' : ''}`}>
+                        <button
+                          type="button"
+                          className="gov-drill-sub-head"
+                          aria-expanded={open}
+                          onClick={() => setOpenSubs(prev => {
+                            const next = new Set(prev);
+                            if (next.has(child.id)) next.delete(child.id);
+                            else next.add(child.id);
+                            return next;
+                          })}
+                        >
+                          <em className="gov-drill-sub-chevron" aria-hidden="true">{open ? '▾' : '▸'}</em>
+                          <span className="gov-drill-dot" style={{ background: GENDER_COLORS[genders.get(child.id) ?? ''] ?? NEUTRAL }} />
+                          <strong>{child.name}</strong>
+                          <span className="gov-drill-sub-count">{list.length} product{list.length === 1 ? '' : 's'}</span>
+                        </button>
+                        {open && (
+                          list.length === 0
+                            ? <p className="gov-drill-empty">No products in this subtype yet.</p>
+                            : <div className="gov-drill-grid">{list.map(renderCard)}</div>
+                        )}
+                      </div>
                     );
                   })}
                 </div>
               )}
             </div>
+          );
+        })()}
+
+        {drill && addSource && (() => {
+          const node = tree.find(n => n.id === drill.nodeId);
+          if (!node) return null;
+          return (
+            <DrillAddProducts
+              source={addSource}
+              typeName={node.name}
+              onClose={() => setAddSource(null)}
+              onCreated={ids => handleAssignNew(ids, node.id)}
+              showToast={showToast}
+            />
           );
         })()}
 
@@ -670,6 +882,14 @@ export default function AdminGovernanceTypes() {
             </div>
           ))}
         </div>
+      )}
+
+      {audit && (
+        <TypeAuditPanel
+          recommendations={audit}
+          onApply={applyAudit}
+          onClose={() => setAudit(null)}
+        />
       )}
 
       {toast && (

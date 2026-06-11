@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { catalogPrompt } from '~/components/CatalogDialog';
 import { creators, Look, Product } from '~/data/looks';
 import { type ProductAd } from '~/services/product-creative';
 import { useEscapeKey } from '~/hooks/useEscapeKey';
@@ -435,8 +436,8 @@ export default function SavedScreen({
         <button
           type="button"
           className="saved-tray-new"
-          onClick={() => {
-            const name = window.prompt('New collection name');
+          onClick={async () => {
+            const name = await catalogPrompt({ title: 'New collection', placeholder: 'Collection name', confirmLabel: 'Create' });
             if (name && name.trim()) { const id = layout.createCollection(name); layout.toggleInCollection(id, trayKey); }
           }}
         >

@@ -11,7 +11,7 @@
 // play() independently) and gives us a clean recovery path after
 // modal open/close and tab visibility changes.
 
-import { getPrefetchCount, isSlowConnection } from './video-loading';
+import { captureVideoFrame, getPrefetchCount, isSlowConnection } from './video-loading';
 import {
   setVideoSource,
   getVideoSource,
@@ -161,6 +161,11 @@ interface CardEntry {
   posterUrl: string;
   slotEl: HTMLDivElement;
   videoEl: HTMLVideoElement | null;
+  /** Freeze-frame <img> left in the slot when the video element is taken
+   *  away (eviction / steal). Shows the EXACT frame the card was on, so
+   *  the card never falls back to its frame-0 poster ("weird thumbnail"
+   *  flash on return from an overlay). Cleared when a video reveals. */
+  freezeEl: HTMLImageElement | null;
   retryCount: number;
   lastFailureAt: number;
   status: CardStatus;
@@ -175,6 +180,9 @@ interface PoolSlot {
 
 class VideoPlaybackDirector {
   private cards = new Map<string, CardEntry>();
+  /** trailId → cardId, registered when a card donates its element to an
+   *  overlay hero, so the CLOSE direction can hand the frame back. */
+  private trailReturn = new Map<string, string>();
   private pool: PoolSlot[] = [];
   private parkingDiv: HTMLDivElement | null = null;
   private rafId: number | null = null;
@@ -383,6 +391,10 @@ class VideoPlaybackDirector {
 
   private createVideoEl(): HTMLVideoElement {
     const el = document.createElement('video');
+    // anonymous CORS so canvas captures (freeze-frames on evict/steal,
+    // tap-to-detail handoffs) aren't tainted — matches TrailVideoHost's
+    // elements. Supabase storage serves ACAO:*, so playback is unaffected.
+    el.crossOrigin = 'anonymous';
     el.muted = true;
     el.defaultMuted = true;
     el.autoplay = true;
@@ -414,15 +426,21 @@ class VideoPlaybackDirector {
     const existing = this.cards.get(cardId);
     if (existing) {
       // Update mutable fields (slot may have re-mounted into a different node)
-      if (existing.slotEl !== slotEl) this.unobserveNear(existing.slotEl);
+      if (existing.slotEl !== slotEl) {
+        this.unobserveNear(existing.slotEl);
+        this.unfreezeCard(existing);
+      }
       existing.getRect = getRect;
       existing.slotEl = slotEl;
       if (existing.videoUrl !== videoUrl) {
-        // URL changed — release current element so rank() re-assigns with new src
+        // URL changed — release current element so rank() re-assigns with new
+        // src. Drop any freeze frame too: it belongs to the PREVIOUS item and
+        // must never paint over the new item's poster.
         if (existing.videoEl) {
           this.releaseVideoEl(cardId, existing.videoEl);
           existing.videoEl = null;
         }
+        this.unfreezeCard(existing);
         existing.videoUrl = videoUrl;
         existing.status = 'idle';
       }
@@ -436,6 +454,7 @@ class VideoPlaybackDirector {
       posterUrl,
       slotEl,
       videoEl: null,
+      freezeEl: null,
       retryCount: 0,
       lastFailureAt: 0,
       status: 'idle',
@@ -470,6 +489,7 @@ class VideoPlaybackDirector {
       this.releaseVideoEl(cardId, entry.videoEl);
       entry.videoEl = null;
     }
+    this.unfreezeCard(entry);
     this.unobserveNear(entry.slotEl);
     this.nearIds.delete(cardId);
     this.cards.delete(cardId);
@@ -597,10 +617,51 @@ class VideoPlaybackDirector {
    * The director re-assigns a fresh pool element to the card on the next
    * rank cycle.
    */
+  /** Remember which card donated under a TrailVideoHost trail id, so the
+   *  overlay can sync the frame back on close (the open direction donates
+   *  the element; without this the card resumed at an arbitrary time). */
+  registerTrailReturn(trailId: string, cardId: string): void {
+    this.trailReturn.set(trailId, cardId);
+  }
+
+  /**
+   * Reverse handoff on overlay close: pin the overlay hero's EXACT current
+   * frame over the source card, seek the card's own element to the hero's
+   * time, and unfreeze once the seek lands — the card continues from the
+   * same frame the overlay was showing, no restart-from-zero jump.
+   */
+  syncFromTrailReturn(trailId: string, heroEl: HTMLVideoElement | null): void {
+    if (!heroEl) return;
+    const cardId = this.trailReturn.get(trailId);
+    const entry = cardId ? this.cards.get(cardId) : undefined;
+    if (!entry) return;
+    this.freezeCard(entry, heroEl);
+    const el = entry.videoEl;
+    if (!el) return; // not re-acquired yet — reveal path unfreezes later
+    const t = heroEl.currentTime;
+    if (!isFinite(t)) { this.unfreezeCard(entry); return; }
+    try {
+      el.currentTime = el.duration && isFinite(el.duration) ? t % el.duration : t;
+    } catch { this.unfreezeCard(entry); return; }
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      el.removeEventListener('seeked', finish);
+      this.unfreezeCard(entry);
+    };
+    el.addEventListener('seeked', finish, { once: true });
+    // Backstop: never leave the freeze up if 'seeked' doesn't fire.
+    window.setTimeout(finish, 600);
+  }
+
   stealVideoElement(cardId: string): HTMLVideoElement | null {
     const entry = this.cards.get(cardId);
     if (!entry || !entry.videoEl) return null;
     const el = entry.videoEl;
+    // The card keeps painting the stolen element's exact frame while the
+    // overlay owns it — on return, the re-attached video reveals over this.
+    this.freezeCard(entry, el);
     // Remove the slot from the pool entirely so rank() cannot reclaim this
     // element. If we only mark assignedTo=null the director's next RAF
     // immediately re-uses the "free" slot, stealing the element back from
@@ -781,7 +842,7 @@ class VideoPlaybackDirector {
         // load() on an hls.js-managed element would reset its MSE pipeline).
         slot.el.preload = 'auto';
         setVideoSource(slot.el, entry.videoUrl);
-        this.revealVideoWhenReady(slot.el, entry.videoUrl);
+        this.revealVideoWhenReady(slot.el, entry.videoUrl, entry);
       } else {
         // Same src (pool reuse). The element still points at the right clip,
         // but its decoded surface may NOT have survived: while a detail
@@ -792,12 +853,15 @@ class VideoPlaybackDirector {
         // every return from a look/product. Gate the reveal on a real frame
         // instead so the poster covers the gap when the surface was dropped.
         slot.el.preload = 'auto';
-        this.revealVideoWhenReady(slot.el, entry.videoUrl);
+        this.revealVideoWhenReady(slot.el, entry.videoUrl, entry);
       }
-      const poster = entry.posterUrl;
-      if (poster && slot.el.getAttribute('poster') !== poster) {
-        slot.el.setAttribute('poster', poster);
-      }
+      // NO poster attribute on pooled elements. When iOS drops a parked
+      // element's decoded surface but still reports readyState>=2, the
+      // reveal shows the element before a real frame exists — and a video
+      // poster paints LETTERBOXED (not cover), flashing a shrunken
+      // thumbnail over the card. With no poster the frameless element is
+      // transparent, so the card's own cover-fit poster/freeze-frame
+      // underneath stays visible until real frames paint.
       Object.assign(slot.el.style, {
         position: 'absolute',
         inset: '0',
@@ -883,13 +947,14 @@ class VideoPlaybackDirector {
    * `loadeddata`, with `playing` as a backstop. The target-URL guard stops a
    * stale once-listener from a prior assignment revealing a recycled element.
    */
-  private revealVideoWhenReady(el: HTMLVideoElement, targetUrl: string): void {
+  private revealVideoWhenReady(el: HTMLVideoElement, targetUrl: string, entry?: CardEntry): void {
     // Compare the LOGICAL source (manifest URL for HLS) — under hls.js
     // el.src / el.currentSrc are MSE blobs that never equal targetUrl.
     const matches = () => getVideoSource(el) === targetUrl;
     // HAVE_CURRENT_DATA (2): the current frame is decoded and paintable.
     if (el.readyState >= 2 && matches()) {
       el.style.opacity = '1';
+      if (entry) this.unfreezeCard(entry);
       return;
     }
     el.style.opacity = '0';
@@ -898,6 +963,7 @@ class VideoPlaybackDirector {
     const reveal = (via: 'loadeddata' | 'playing') => {
       if (!matches()) return;
       el.style.opacity = '1';
+      if (entry) this.unfreezeCard(entry);
       if (!revealed) {
         revealed = true;
         this.recordReveal(this.now() - revealT0, via);
@@ -927,9 +993,6 @@ class VideoPlaybackDirector {
     // autoplay on adopt. Staying paused avoids currentTime drift so the adopted
     // clip still starts at frame 0 (matches the poster — no zoom pop).
     el.autoplay = false;
-    if (entry.posterUrl && el.getAttribute('poster') !== entry.posterUrl) {
-      el.setAttribute('poster', entry.posterUrl);
-    }
     if (getVideoSource(el) !== entry.videoUrl) {
       setVideoSource(el, entry.videoUrl);
     }
@@ -995,7 +1058,50 @@ class VideoPlaybackDirector {
     });
   }
 
+  /** Pin the element's current decoded frame into the card's slot as an
+   *  <img> overlay. Best-effort: CORS-tainted canvases / frameless elements
+   *  simply leave the poster fallback in place. */
+  private freezeCard(entry: CardEntry, el: HTMLVideoElement): void {
+    try {
+      if (el.readyState < 2) return;
+      const frame = captureVideoFrame(el);
+      if (!frame) return;
+      let img = entry.freezeEl;
+      if (!img) {
+        img = document.createElement('img');
+        img.setAttribute('aria-hidden', 'true');
+        Object.assign(img.style, {
+          position: 'absolute',
+          inset: '0',
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
+          zIndex: '2',
+          display: 'block',
+          pointerEvents: 'none',
+        });
+        entry.freezeEl = img;
+      }
+      img.src = frame;
+      // The (re)attached <video> is appended AFTER this img, so once it
+      // reveals it paints above; until then the freeze frame covers.
+      if (img.parentElement !== entry.slotEl) entry.slotEl.appendChild(img);
+    } catch { /* best-effort — poster remains the fallback */ }
+  }
+
+  private unfreezeCard(entry: CardEntry): void {
+    const img = entry.freezeEl;
+    if (!img) return;
+    entry.freezeEl = null;
+    try { img.remove(); } catch { /* already detached */ }
+  }
+
   private releaseVideoEl(cardId: string, el: HTMLVideoElement): void {
+    // Before the element leaves the slot, pin its current frame into the
+    // card so the poster never flashes underneath (the frame-0 thumbnail
+    // "pop" on return from a look/product overlay).
+    const entry = this.cards.get(cardId);
+    if (entry && entry.videoEl === el) this.freezeCard(entry, el);
     try { el.pause(); } catch { /* ignore */ }
     this.assignedIds.delete(cardId);
     const slot = this.pool.find(p => p.el === el);

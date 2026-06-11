@@ -1,6 +1,7 @@
 import { useState, Fragment, useMemo, useCallback, useEffect, useRef, useId } from 'react';
 import ParticleBackground from '~/components/ParticleBackground';
 import ManualProductModal from '~/components/admin/ManualProductModal';
+import GovernanceTypeCell from '~/components/admin/GovernanceTypeCell';
 import {
   spotifySearch,
   listMusics,
@@ -38,7 +39,7 @@ import { researchProducts, brainstormCatalogProducts, type ResearchedProduct, ty
 import AmazonLookupModal from '~/components/AmazonLookupModal';
 import PromptSettingsModal from '~/components/admin/PromptSettingsModal';
 import { startGenerationJob } from '~/services/generation-queue';
-import { useAdminConfirm } from '~/components/AdminConfirm';
+import { catalogAlert, catalogConfirm } from '~/components/CatalogDialog';
 import { generateAndStorePoster } from '~/utils/video-poster';
 import { regeneratePrimaryPoster, PosterRegenError } from '~/services/regenerate-poster';
 
@@ -2264,7 +2265,7 @@ export default function AdminData() {
     const target = looks.find(l => l.id === id);
     const lookUuid = target?.uuid;
     if (!supabase || !lookUuid) return;
-    if (!window.confirm('Re-generate this look? The current video will be replaced once the new one finishes (~3 min).')) return;
+    if (!(await catalogConfirm({ title: 'Re-generate this look?', message: 'The current video will be replaced once the new one finishes (~3 min).', confirmLabel: 'Re-generate' }))) return;
     setRegeneratingIds(prev => { const n = new Set(prev); n.add(id); return n; });
     try {
       const { data: lookRow, error: lookErr } = await supabase
@@ -2275,21 +2276,21 @@ export default function AdminData() {
       if (lookErr) throw new Error(lookErr.message);
       const sourceGenId = (lookRow as { source_generation_id?: string | null } | null)?.source_generation_id ?? null;
       if (!sourceGenId) {
-        window.alert('This look has no source generation — it was hand-curated. Re-generate is only available for AI-generated looks.');
+        await catalogAlert({ title: 'No source generation', message: 'This look was hand-curated — re-generate is only available for AI-generated looks.' });
         return;
       }
       const { error: regenErr } = await regenerateUserGeneration(sourceGenId);
       if (regenErr) throw new Error(regenErr);
-      window.alert('Re-generation queued. The new video will replace the current one when it finishes (~3 min). Realtime updates the feed automatically.');
+      await catalogAlert({ title: 'Re-generation queued', message: 'The new video will replace the current one when it finishes (~3 min). Realtime updates the feed automatically.' });
     } catch (err) {
-      window.alert(err instanceof Error ? `Re-generate failed: ${err.message}` : 'Re-generate failed');
+      await catalogAlert({ title: 'Re-generate failed', message: err instanceof Error ? err.message : undefined });
     } finally {
       setRegeneratingIds(prev => { const n = new Set(prev); n.delete(id); return n; });
     }
   }, [regeneratingIds, looks]);
 
   const deleteLook = useCallback(async (id: number) => {
-    if (!window.confirm('Delete this look? It will be removed from the curated catalog AND from the creator’s My Looks. This cannot be undone.')) return;
+    if (!(await catalogConfirm({ title: 'Delete this look?', message: 'It will be removed from the curated catalog AND from the creator’s My Looks. This cannot be undone.', danger: true }))) return;
     // Resolve legacy id → UUID + source generation id so we can hit both
     // sides of the cascade. The looks table is the source of truth; the
     // FK ON DELETE CASCADE in migration 20260603_looks_source_generation_cascade
@@ -2371,7 +2372,7 @@ export default function AdminData() {
         writeLocalSet(LOCAL_LOOKS_KEY, next);
         return next;
       });
-      window.alert(err instanceof Error ? `Delete failed: ${err.message}` : 'Delete failed');
+      await catalogAlert({ title: 'Delete failed', message: err instanceof Error ? err.message : undefined });
     }
   }, [looks]);
 
@@ -2556,7 +2557,7 @@ export default function AdminData() {
       setCreateLookStyle('Street Style');
     } catch (err) {
       console.error('[createLook] failed:', err);
-      alert(`Could not create look: ${err instanceof Error ? err.message : 'Unknown error'}`);
+      await catalogAlert({ title: 'Could not create look', message: err instanceof Error ? err.message : 'Unknown error' });
     } finally {
       setCreatingLook(false);
     }
@@ -3550,7 +3551,7 @@ export default function AdminData() {
   // we reload the ad map so the UI catches up with reality.
   const deleteCreative = useCallback(async (creativeId: string, videoUrl: string, productId: string | undefined) => {
     if (!supabase) return;
-    if (!confirm('Delete this creative? This removes the video from the product everywhere.')) return;
+    if (!(await catalogConfirm({ title: 'Delete this creative?', message: 'This removes the video from the product everywhere.', danger: true }))) return;
     // Optimistic: drop the URL from adVideoMap + adMetaByUrl so the
     // tile disappears the moment the user confirms. We also nuke the
     // product_creative row server-side; a successful round-trip keeps
@@ -4737,7 +4738,7 @@ export default function AdminData() {
                 style={{ background: 'rgba(220,38,38,0.18)', color: '#fca5a5', border: '1px solid rgba(220,38,38,0.35)', padding: '6px 14px', borderRadius: 999, fontWeight: 700, fontSize: 12, cursor: bulkUnpubBusy ? 'wait' : 'pointer' }}
                 onClick={async () => {
                   const n = selectedUnpubIds.size;
-                  if (!window.confirm(`Delete ${n} unpublished look${n === 1 ? '' : 's'}?\n\nThis removes the user_generation row${n === 1 ? '' : 's'} permanently. The source media stays in storage but the row${n === 1 ? '' : 's'} won't appear anywhere in the admin again.\n\nCannot be undone.`)) return;
+                  if (!(await catalogConfirm({ title: `Delete ${n} unpublished look${n === 1 ? '' : 's'}?`, message: `This removes the user_generation row${n === 1 ? '' : 's'} permanently. The source media stays in storage but the row${n === 1 ? '' : 's'} won't appear anywhere in the admin again.\n\nCannot be undone.`, danger: true }))) return;
                   setBulkUnpubBusy(true);
                   if (supabase) {
                     const ids = [...selectedUnpubIds];
@@ -5796,10 +5797,10 @@ export default function AdminData() {
                 // in the confirm so it can't be a surprise.
                 const isHard = productFilter === 'soft-deleted';
                 const n = selectedProductKeys.size;
-                const confirmMessage = isHard
-                  ? `HARD DELETE ${n} product${n === 1 ? '' : 's'}?\n\nThis permanently removes:\n  • the product${n === 1 ? '' : 's'} from the database\n  • every generated creative (videos + posters)\n  • every analytics row (impressions, clicks, clickouts)\n  • every catalog and look that referenced ${n === 1 ? 'it' : 'them'}\n\nThis cannot be undone.`
-                  : `Delete ${n} selected product${n === 1 ? '' : 's'}? This will also remove any generated creatives.`;
-                if (!window.confirm(confirmMessage)) return;
+                const ok = await catalogConfirm(isHard
+                  ? { title: `HARD DELETE ${n} product${n === 1 ? '' : 's'}?`, message: `This permanently removes:\n  • the product${n === 1 ? '' : 's'} from the database\n  • every generated creative (videos + posters)\n  • every analytics row (impressions, clicks, clickouts)\n  • every catalog and look that referenced ${n === 1 ? 'it' : 'them'}\n\nThis cannot be undone.`, danger: true }
+                  : { title: `Delete ${n} selected product${n === 1 ? '' : 's'}?`, message: 'This will also remove any generated creatives.', danger: true });
+                if (!ok) return;
                 // Resolve IDs for real cloud deletes; anything without an id
                 // falls back to the admin_hidden_products table.
                 const selected = [...selectedProductKeys];
@@ -6399,20 +6400,19 @@ export default function AdminData() {
                       <span style={{ color: '#94a3b8' }}>—</span>
                     )}
                   </td>
-                  <td style={{ textAlign: 'left', fontSize: 12 }}>
-                    {p.type ? (
-                      <span style={{
-                        display: 'inline-block',
-                        padding: '2px 8px',
-                        borderRadius: 999,
-                        background: '#f1f5f9',
-                        color: '#334155',
-                        fontWeight: 500,
-                        fontSize: 11,
-                      }}>{p.type}</span>
-                    ) : (
-                      <span style={{ color: '#cbd5e1' }}> - </span>
-                    )}
+                  <td style={{ textAlign: 'left', fontSize: 12 }} onClick={e => e.stopPropagation()}>
+                    {/* Governed type cell — the live connection to
+                        /admin/governance/types. Assigning writes the same
+                        type/gender/type_path cascade the brain writes. */}
+                    <GovernanceTypeCell
+                      productId={p.id ?? ''}
+                      type={p.type ?? null}
+                      showToast={showToast}
+                      onAssigned={(patch) => {
+                        setCrawledProducts(prev => prev.map(r =>
+                          r.id === p.id ? { ...r, type: patch.type, gender: patch.gender } : r));
+                      }}
+                    />
                   </td>
                   {/* Subtype: a finer-grained classifier under type.
                       Shoes → Sneakers/Sandals/Boots/Heels/Loafers/Flats.
@@ -6679,7 +6679,7 @@ export default function AdminData() {
                           title="Permanently delete this product from the database. Cannot be undone."
                           onClick={async (e) => {
                             e.stopPropagation();
-                            if (!window.confirm(`HARD DELETE "${p.name}" by ${p.brand}? This permanently removes the row from the database and any generated ads. Cannot be undone.`)) return;
+                            if (!(await catalogConfirm({ title: `HARD DELETE "${p.name}" by ${p.brand}?`, message: 'This permanently removes the row from the database and any generated ads. Cannot be undone.', danger: true }))) return;
                             const key = `${p.brand}-${p.name}`;
                             if (p.id && supabase) {
                               await supabase.from('product_creative').delete().eq('product_id', p.id);
@@ -6711,7 +6711,7 @@ export default function AdminData() {
                       title="Soft delete — hides from the feed + this list. Restore from the Soft delete tab. Re-adding the same URL via Add Products resurfaces it automatically."
                       onClick={async (e) => {
                         e.stopPropagation();
-                        if (!window.confirm(`Soft delete "${p.name}" by ${p.brand}? You can restore it from the Soft delete tab.`)) return;
+                        if (!(await catalogConfirm({ title: `Soft delete "${p.name}" by ${p.brand}?`, message: 'You can restore it from the Soft delete tab.', danger: true, confirmLabel: 'Soft delete' }))) return;
                         const key = `${p.brand}-${p.name}`;
                         // SOFT delete only — keeps the row in the DB
                         // so re-adding the same URL resurfaces it
@@ -9080,7 +9080,7 @@ function MusicsPanel() {
   };
 
   const handleDelete = async (track: MusicTrack) => {
-    if (!confirm(`Remove "${track.name}" from the library?`)) return;
+    if (!(await catalogConfirm({ title: `Remove "${track.name}" from the library?`, danger: true, confirmLabel: 'Remove' }))) return;
     setBusyTrackId(track.id);
     try {
       await deleteMusic(track.id);

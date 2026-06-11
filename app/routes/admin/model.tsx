@@ -204,11 +204,12 @@ export default function AdminModel() {
     URL.revokeObjectURL(url);
   };
 
-  // Full Catalog-branded business plan (target customer → product → market →
-  // GTM → unit economics → financials WITH assumptions), built from the live
-  // model snapshot. Opens in a new tab to read / Save as PDF.
+  // Full Catalog-branded business plan (feed-collage cover → magazine summary
+  // → revenue phases + assumptions → GTM flywheel → LTV breakdown → CAC/
+  // conversion sensitivity appendix), built from the live model snapshot.
+  // Opens in a new tab to read / Save as PDF.
   const downloadBusinessPlan = () => {
-    openBusinessPlan({
+    void openBusinessPlan({
       generatedAt: new Date().toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }),
       scenario: ui.scenario,
       horizonMonths: MONTHS,
@@ -233,6 +234,7 @@ export default function AdminModel() {
       },
       costs: { grossMargin: eecon.grossMargin, monthlyOpex: opexAvg, cashRaised: eecon.startingCash },
       creatorPayout: creatorPayout.percent,
+      model: { rev: erev, acq: eacq },
       results: {
         exitArr: metrics.exitArr,
         total16moRevenue: revSummary.total,

@@ -230,6 +230,13 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   // path (pool element evicted between card unmount and hero attach) still
   // paints a real image.
   const setHeroSlot = useTrailVideo(trailId, heroVideoUrl, heroPoster || undefined);
+  // Container ref alongside the trail attach, so close can read the hero's
+  // <video> for the reverse frame handoff.
+  const heroHostRef = useRef<HTMLElement | null>(null);
+  const setHeroSlotRef = useCallback((node: HTMLElement | null) => {
+    heroHostRef.current = node;
+    setHeroSlot(node);
+  }, [setHeroSlot]);
 
   // Phase 8 — kick off a high-res prefetch on overlay mount in case the
   // card-side preload didn't run (e.g. user opened the overlay from a
@@ -563,6 +570,10 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   useEscapeKey(() => handleClose());
 
   const handleClose = useCallback(() => {
+    // Reverse handoff: pin the hero's exact frame onto the source card and
+    // seek the card's element to match, so the grid resumes where the
+    // overlay left off instead of restarting the clip.
+    director.syncFromTrailReturn(trailId, heroHostRef.current?.querySelector('video') ?? null);
     // Flag the scope exiting NOW (gesture start), not on unmount 360 ms later:
     // the background feed re-acquires + decodes its videos under cover of the
     // slide-out so it's already playing when the overlay clears — no dead feed
@@ -799,7 +810,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                     element on tap, so playback continues unbroken across
                     the navigation. */}
                 <div
-                  ref={setHeroSlot}
+                  ref={setHeroSlotRef}
                   className="look-media-video"
                   data-trail-id={trailId}
                   style={{ position: 'relative', zIndex: 1 }}
@@ -811,6 +822,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                   <CreatorAvatarFollow
                     handle={look.creator}
                     avatarUrl={look.creatorAvatar || creatorData?.avatar || ''}
+                    eager
                     displayName={creatorData?.displayName || look.creatorDisplayName || look.creator}
                     size={46}
                     onOpenCreator={(h) => { handleClose(); onOpenCreator(h); }}
