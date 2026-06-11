@@ -184,7 +184,7 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
   try {
     const { data: profile } = await supabase
       .from('profiles')
-      .select('role, gender, full_name, avatar_url')
+      .select('role, gender, full_name, avatar_url, country')
       .eq('id', session.user.id)
       .single();
     if (profile?.role) {
@@ -210,6 +210,13 @@ export async function getCurrentUser(): Promise<AuthUser | null> {
       if (inferred !== 'unknown') {
         void supabase.from('profiles').update({ gender: inferred }).eq('id', session.user.id);
       }
+    }
+    // Same one-shot pattern for country (drives the user brain's
+    // by-country drill): IANA timezone → region code, falling back to
+    // the navigator.language region. Best-effort, persists once.
+    if (profile && !(profile as { country?: string | null }).country) {
+      const c = inferCountry();
+      if (c) void supabase.from('profiles').update({ country: c }).eq('id', session.user.id);
     }
   } catch {
     // role column may not exist yet
@@ -254,4 +261,33 @@ export function onAuthStateChange(callback: (user: AuthUser | null) => void) {
   });
 
   return { unsubscribe: () => data.subscription.unsubscribe() };
+}
+
+// ── Country inference (client-side, no network) ───────────────────────
+// Timezone is the strongest signal a browser gives without permission
+// prompts ('America/New_York' → US); locale region is the fallback
+// ('en-GB' → GB). Returns an ISO alpha-2 code or null.
+const TZ_COUNTRY: Record<string, string> = {
+  'New_York': 'US', 'Chicago': 'US', 'Denver': 'US', 'Los_Angeles': 'US', 'Phoenix': 'US', 'Anchorage': 'US', 'Detroit': 'US',
+  'Toronto': 'CA', 'Vancouver': 'CA', 'Edmonton': 'CA', 'Winnipeg': 'CA', 'Halifax': 'CA', 'Montreal': 'CA',
+  'Mexico_City': 'MX', 'Sao_Paulo': 'BR', 'Buenos_Aires': 'AR', 'Bogota': 'CO', 'Lima': 'PE', 'Santiago': 'CL',
+  'London': 'GB', 'Dublin': 'IE', 'Paris': 'FR', 'Berlin': 'DE', 'Madrid': 'ES', 'Rome': 'IT', 'Amsterdam': 'NL',
+  'Brussels': 'BE', 'Zurich': 'CH', 'Vienna': 'AT', 'Stockholm': 'SE', 'Oslo': 'NO', 'Copenhagen': 'DK', 'Helsinki': 'FI',
+  'Lisbon': 'PT', 'Warsaw': 'PL', 'Prague': 'CZ', 'Athens': 'GR', 'Istanbul': 'TR', 'Kiev': 'UA', 'Kyiv': 'UA', 'Moscow': 'RU',
+  'Dubai': 'AE', 'Riyadh': 'SA', 'Jerusalem': 'IL', 'Tel_Aviv': 'IL',
+  'Tokyo': 'JP', 'Seoul': 'KR', 'Shanghai': 'CN', 'Hong_Kong': 'HK', 'Taipei': 'TW', 'Singapore': 'SG',
+  'Bangkok': 'TH', 'Jakarta': 'ID', 'Manila': 'PH', 'Kolkata': 'IN', 'Karachi': 'PK', 'Dhaka': 'BD',
+  'Sydney': 'AU', 'Melbourne': 'AU', 'Brisbane': 'AU', 'Perth': 'AU', 'Auckland': 'NZ',
+  'Johannesburg': 'ZA', 'Lagos': 'NG', 'Nairobi': 'KE', 'Cairo': 'EG', 'Casablanca': 'MA',
+};
+
+function inferCountry(): string | null {
+  try {
+    const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+    const city = tz.split('/').pop() ?? '';
+    if (TZ_COUNTRY[city]) return TZ_COUNTRY[city];
+    const region = (navigator.language || '').split('-')[1];
+    if (region && /^[A-Za-z]{2}$/.test(region)) return region.toUpperCase();
+  } catch { /* SSR / very old browsers */ }
+  return null;
 }

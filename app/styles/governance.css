@@ -1092,3 +1092,47 @@ html.gov-void .gov-page.gov-types { height: calc(100vh - 53px); }
 .gov-kaizen-section h3 { margin: 0; font-size: 13.5px; }
 .gov-kaizen-section h3 em { font-style: normal; opacity: 0.55; font-weight: 500; }
 .gov-kaizen-section small { display: block; margin-top: 2px; font-size: 11px; opacity: 0.55; }
+
+/* ── User brain (/admin/governance/users) ───────────────────────────── */
+.ub-stats {
+  margin-left: auto;
+  align-self: center;
+  font-size: 12px;
+  color: #a1a1aa;
+  white-space: nowrap;
+}
+.ub-node .tb-label { font-size: 12.5px; }
+.ub-node:hover circle { transition: stroke-opacity 0.15s ease; }
+.ub-user-row {
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+}
+.ub-user-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-left: auto;
+  font-size: 11.5px;
+  white-space: nowrap;
+}
+.ub-user-meta b { font-weight: 700; }
+.ub-user-meta .ub-g-male { color: #60a5fa; }
+.ub-user-meta .ub-g-female { color: #f472b6; }
+.ub-user-meta .ub-g-unknown { color: #71717a; font-weight: 500; }
+.ub-user-meta i { font-style: normal; color: #a1a1aa; }
+.ub-user-meta em {
+  font-style: normal;
+  padding: 1px 7px;
+  border-radius: 999px;
+  border: 1px solid #3f3f46;
+  color: #d4d4d8;
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.ub-user-meta small { color: #71717a; }

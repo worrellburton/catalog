@@ -5,14 +5,20 @@
 import { useEffect, useState } from 'react';
 import { Link } from '@remix-run/react';
 import { fetchGovernanceProducts, fetchTypeTree } from '~/services/type-governance';
+import { fetchGovernanceUsers } from '~/services/user-governance';
 import '~/styles/governance.css';
 
 export default function AdminGovernance() {
-  const [counts, setCounts] = useState<{ types: number; products: number } | null>(null);
+  const [counts, setCounts] = useState<{ types: number; products: number; users: number; countries: number } | null>(null);
   useEffect(() => {
     void (async () => {
-      const [tree, products] = await Promise.all([fetchTypeTree(), fetchGovernanceProducts()]);
-      setCounts({ types: tree.length, products: products.length });
+      const [tree, products, users] = await Promise.all([
+        fetchTypeTree(), fetchGovernanceProducts(), fetchGovernanceUsers(),
+      ]);
+      setCounts({
+        types: tree.length, products: products.length, users: users.length,
+        countries: new Set(users.map(u => u.country).filter(Boolean)).size,
+      });
     })();
   }, []);
 
@@ -47,6 +53,23 @@ export default function AdminGovernance() {
           </p>
           <span className="gov-card-meta">
             {counts ? `${counts.types} types · ${counts.products} products governed` : '…'}
+          </span>
+        </Link>
+
+        <Link to="/admin/governance/users" className="gov-card">
+          <svg viewBox="0 0 48 48" aria-hidden="true">
+            <circle cx="24" cy="24" r="6" />
+            <circle cx="9" cy="14" r="3.4" /><circle cx="39" cy="14" r="3.4" />
+            <circle cx="9" cy="36" r="3.4" /><circle cx="39" cy="36" r="3.4" />
+            <path d="M19 21 12 16M29 21l7-5M19 27l-7 7M29 27l7 7" fill="none" />
+          </svg>
+          <h2>Users — the population as a constellation</h2>
+          <p>
+            The user brain: everyone orbiting by country, gender-split rings, age cohorts.
+            Toggle men / women / age and drill into any country.
+          </p>
+          <span className="gov-card-meta">
+            {counts ? `${counts.users} users · ${counts.countries} countr${counts.countries === 1 ? 'y' : 'ies'} located` : '…'}
           </span>
         </Link>
 
