@@ -959,7 +959,9 @@ export default function CreatorPage({
           className={`creator-nav-tab ${activeTab === 'products' ? 'active' : ''}`}
           onClick={() => setActiveTab('products')}
         >
-          Shop {allProducts.length > 0 && <span className="creator-nav-count">{allProducts.length}</span>}
+          {/* The tab IS the creator's collections once they've set some;
+              plain product list otherwise. */}
+          {shopCollections.length > 0 ? 'Collections' : 'Shop'} {allProducts.length > 0 && <span className="creator-nav-count">{allProducts.length}</span>}
         </button>
         {renderSaved && (
           <button
@@ -986,7 +988,7 @@ export default function CreatorPage({
             className={`creator-collection-chip ${!activeCollection ? 'active' : ''}`}
             onClick={() => setActiveCollection(null)}
           >
-            All
+            All products
           </button>
           {shopCollections.map(col => (
             <button
