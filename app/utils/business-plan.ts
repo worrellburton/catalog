@@ -230,15 +230,15 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
   // the wall cycles if there are fewer images than cells so the page is
   // always fully covered.
   const feed = d.feedImages ?? [];
-  const [coverCols, coverRows] = feed.length >= 100 ? [10, 10]
-    : feed.length >= 81 ? [9, 9]
-    : feed.length >= 64 ? [8, 8]
-    : feed.length >= 36 ? [6, 6]
-    : [4, 5];
+  // ~3:4 tiles, cover-filled by the 3:4 primary product images (≈3% crop,
+  // invisible). Equal cols and rows on a portrait page give cells within a
+  // few percent of 3:4, and fractional rows always land flush on the page
+  // edge — no black bands, no letterboxed strips.
+  const coverCols = feed.length >= 64 ? 8 : feed.length >= 36 ? 6 : 4;
   const coverTiles = feed.length
-    ? Array.from({ length: coverCols * coverRows }, (_, i) => `<img src="${esc(feed[i % feed.length])}" alt="" loading="eager" />`).join('')
+    ? Array.from({ length: coverCols * coverCols }, (_, i) => `<img src="${esc(feed[i % feed.length])}" alt="" loading="eager" />`).join('')
     : '';
-  const coverGridStyle = `grid-template-columns: repeat(${coverCols}, minmax(0, 1fr)); grid-template-rows: repeat(${coverRows}, minmax(0, 1fr));`;
+  const coverGridStyle = `grid-template-columns: repeat(${coverCols}, minmax(0, 1fr)); grid-template-rows: repeat(${coverCols}, minmax(0, 1fr));`;
 
 
   // Assumption rows kept to the load-bearing ten so the table fits the
@@ -360,12 +360,12 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
   .cover-page { position: relative; overflow: hidden; background: #000; color: #fff; min-height: 100vh;
     display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 26px;
     -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  /* Grid columns/rows arrive inline — density scales with image count.
-     Uniform white cards with a dark gutter: products stay uncropped
-     inside identical tiles, so the wall reads even and together. */
-  .cover-feed { position: absolute; inset: 0; display: grid; gap: 6px; padding: 6px; background: #000; }
+  /* Columns arrive inline (density scales with image count). Every tile
+     is a fixed 3:4 card, cover-filled by its product image — uniform wall,
+     no letterbox strips. Rows overflow the page and crop at the edge. */
+  .cover-feed { position: absolute; inset: 0; display: grid; gap: 5px; padding: 5px; background: #000; }
   .cover-feed img { width: 100%; height: 100%; min-width: 0; min-height: 0;
-    object-fit: contain; background: #fff; padding: 5px; box-sizing: border-box; display: block; }
+    object-fit: cover; background: #111; display: block; }
   .cover-scrim { position: absolute; inset: 0;
     background: linear-gradient(rgba(0,0,0,0.66), rgba(0,0,0,0.80)); }
   .cover-logo { position: relative; z-index: 1; width: clamp(240px, 38vw, 400px); height: auto; display: block;
@@ -516,9 +516,9 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
     <div class="folio"><svg class="folio-logo" viewBox="${CATALOG_LOGO_VIEWBOX}" role="img" aria-label="Catalog"><path fill="#141210" d="${CATALOG_LOGO_PATH}" /></svg><span>Business Plan</span><span class="folio-no">02</span></div>
     <section class="exec">
       <p class="kicker">Executive summary</p>
-      <h2 class="display">The shopping destination where discovery converts.</h2>
-      <p>Catalog is your daily feed for everything you shop: one consumer app across web, iOS, and Android with a single user base, turning short, shoppable video into a personal storefront. Shoppers scroll a feed tuned to their taste, tap a look, see the exact products in it, and check out with the merchant. We hold no inventory, so the business scales with attention rather than logistics.</p>
-      <p>Revenue starts with affiliate commission on every sale we drive. That is the model these projections are built on. Advertising and direct brand partnerships follow on the same rails, and are upside on top of every figure in this plan.</p>
+      <h2 class="display">AI shopping doesn't have a home yet. We're building it.</h2>
+      <p>Catalog is where you discover what to buy next: a daily feed of shoppable looks made by creators and indexed by AI, across every brand at once. Creators publish their taste, AI makes it searchable, and every product in every look is one tap from checkout. Discovery stops being something that interrupts you on a social app and becomes the product itself.</p>
+      <p>Search answers what you already know you want, and social buries shopping inside entertainment. There is no destination built for AI-native shopping; Catalog is built to be it. Revenue starts with affiliate commission on every sale we drive (the model these projections are built on); advertising and direct brand partnerships follow on the same rails, upside on top of every figure in this plan.</p>
     </section>
 
     <section>
