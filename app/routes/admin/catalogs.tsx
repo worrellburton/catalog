@@ -12,6 +12,7 @@ import {
 import { getFeedSearchResults, getFeedSearchDiagnostics } from '~/services/feed-search';
 import SimilarDebugModal, { buildFeedSearchReport, type SimilarDebugReport } from '~/components/SimilarDebugModal';
 import DailyFeedPreview from '~/components/admin/DailyFeedPreview';
+import DailyFeedLens from '~/components/admin/DailyFeedLens';
 import { useAuth } from '~/hooks/useAuth';
 import type { ProductAd } from '~/services/product-creative';
 import { getShopperGender, setShopperGender, subscribeToShopperGender } from '~/services/product-creative';
@@ -32,6 +33,7 @@ import {
   type AutoEditorConfig,
   getFeedRules, setFeedRules,
   DEFAULT_FEED_RULES,
+  FEED_RULE_META,
   type FeedRules,
 } from '~/services/dials';
 
@@ -571,6 +573,9 @@ export async function loadCatalogCreativePayload(
 export default function AdminCatalogs() {
   const [custom, setCustom] = useState<Catalog[]>([]);
   const [homeCatalog, setHomeCatalog] = useState<CatalogService | null>(null);
+  // Daily-feed lens: while an admin is viewing the feed AS a user, the
+  // baseline dropdown hides — no two shoppers see that exact order.
+  const [feedLensActive, setFeedLensActive] = useState(false);
   // The signed-out landing screen row (slug guest-home) — pinned under home.
   const [guestCatalog, setGuestCatalog] = useState<Catalog | null>(null);
   const [searchCounts, setSearchCounts] = useState<Map<string, CatalogSearchCounts>>(new Map());
@@ -2244,7 +2249,11 @@ export default function AdminCatalogs() {
                   {isOpen && (
                     <tr>
                       <td colSpan={7} style={{ padding: 0, background: '#fafafa', borderTop: 'none' }}>
-                        <CatalogCreativeDropdown
+                        {/* USER LENS FIRST (founder's call): the per-user view
+                            leads; the editable baseline below is the pool +
+                            starting order every personal feed re-ranks from. */}
+                        <DailyFeedLens showToast={showToast} onActiveChange={setFeedLensActive} />
+                        {!feedLensActive && <CatalogCreativeDropdown
                           isAll={false}
                           isUniverse={true}
                           catalogName={homeCatalog.name}
@@ -2267,7 +2276,7 @@ export default function AdminCatalogs() {
                             loadLooks();
                             loadProducts();
                           }}
-                        />
+                        />}
                       </td>
                     </tr>
                   )}
@@ -7351,22 +7360,6 @@ function AutoEditorModal({
   );
 }
 
-// The ten daily-feed rules, in founder-priority order. `weight: false`
-// renders switch-only (the rule is binary).
-const FEED_RULE_META: {
-  key: keyof FeedRules; label: string; hint: string; weight: boolean; min?: number; max?: number;
-}[] = [
-  { key: 'convertingBoost', label: 'Show the highest-converting products', hint: 'Boost products with the best clickout rate platform-wide', weight: true },
-  { key: 'clickedProducts', label: 'Resurface products they clicked before', hint: 'Their own click history pulls those exact items back up', weight: true },
-  { key: 'engagedBrands', label: 'Lean into brands they engage with', hint: 'Brands they click and buy from rank higher', weight: true },
-  { key: 'engagedTypes', label: 'Lean into categories they engage with', hint: 'Their most-tapped product types rank higher', weight: true },
-  { key: 'savedBrands', label: 'Boost brands they saved', hint: 'Brands from their saved items float up (applies on-device)', weight: true },
-  { key: 'freshnessBoost', label: 'Push the newest arrivals up', hint: 'Recently added products get a freshness lift', weight: true },
-  { key: 'seenDecay', label: 'Rest things they already saw', hint: 'Already-seen items sink so the feed feels new daily', weight: true },
-  { key: 'diversityGuard', label: 'Brand diversity guard', hint: 'Max items per brand in the top 20 (weight = the cap)', weight: true, min: 1, max: 5 },
-  { key: 'genderStrict', label: 'Strict gender matching', hint: 'Only their gender + unisex products appear', weight: false },
-  { key: 'trendingBoost', label: 'Show what is trending this week', hint: 'Platform-wide clickout velocity (last 7 days)', weight: true },
-];
 
 // ── Suggest Products modal (self-contained) ─────────────────────────
 // Claude brainstorms product ideas for the catalog vibe, searches Google
