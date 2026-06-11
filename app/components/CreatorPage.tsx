@@ -849,7 +849,11 @@ export default function CreatorPage({
             ? <span className="creator-hero-name-skeleton" aria-hidden="true" />
             : displayName}
         </h1>
-        {identityLoading ? null : currentUser?.id && creatorUserId === currentUser.id ? (
+        {identityLoading ? (
+          /* Button-shaped shimmer so the header holds its final height —
+             without it the grid jumped down when Follow/Following arrived. */
+          <span className="creator-follow-btn creator-follow-btn--skeleton" aria-hidden="true" />
+        ) : currentUser?.id && creatorUserId === currentUser.id ? (
           /* Self-view: this is YOUR creator page (matched by resolved owner
               id so it also catches the handle-route, not just user:<uuid>).
               You can't follow yourself, so the Follow slot becomes "My
