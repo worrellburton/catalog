@@ -294,3 +294,129 @@ export async function createTypeNode(name: string, parentId: string | null): Pro
   return { id: r.id, name: r.name, parentId: r.parent_id, sort: r.sort, color: r.color, gender: r.gender,
     iconPath: r.icon_path };
 }
+
+// ── Kaizen ────────────────────────────────────────────────────────────
+// The audit, widened to EVERYTHING (founder's call): product placement
+// (the original type audit) plus the taxonomy's own health — synced
+// paths/genders, empty branches, duplicate names, and type strings no
+// node owns. A server twin runs every morning at 6 a.m. ET (kaizen edge
+// function via pg_cron) auto-applying only the safe sync fixes.
+
+export interface KaizenDrift {
+  productId: string;
+  name: string;
+  brand: string | null;
+  image: string | null;
+  nodeId: string;
+  toType: string;
+  toGender: string | null;
+  toPath: string;
+  fromGender: string | null;
+  fromPath: string | null;
+}
+
+export interface KaizenEmptyType { nodeId: string; name: string; path: string; subtreeIds: string[] }
+export interface KaizenDuplicate {
+  keepId: string; keepPath: string;
+  dropId: string; dropPath: string;
+  productCount: number;
+}
+export interface KaizenOrphan { typeName: string; productIds: string[] }
+
+export interface KaizenReport {
+  retypes: TypeAuditRecommendation[];
+  drift: KaizenDrift[];
+  emptyTypes: KaizenEmptyType[];
+  duplicateTypes: KaizenDuplicate[];
+  orphanTypes: KaizenOrphan[];
+}
+
+export function kaizenSweep(products: GovernanceProduct[], tree: TypeNode[]): KaizenReport {
+  const retypes = auditProductTypes(products, tree);
+  const retypeIds = new Set(retypes.map(r => r.productId));
+  const byId = new Map(tree.map(n => [n.id, n]));
+  const byNorm = new Map<string, TypeNode[]>();
+  for (const n of tree) {
+    const k = normalizeTypeName(n.name);
+    byNorm.set(k, [...(byNorm.get(k) ?? []), n]);
+  }
+  const paths = computeTypePaths(tree);
+  const genders = computeEffectiveGenders(tree);
+
+  // Drift: the product's node is right, but its denormalized columns
+  // (type casing / type_path / gender) lag the tree. Safe to auto-fix.
+  const drift: KaizenDrift[] = [];
+  const attachCount = new Map<string, number>();
+  const orphanBuckets = new Map<string, { typeName: string; productIds: string[] }>();
+  for (const p of products) {
+    if (!p.type) continue;
+    const norm = normalizeTypeName(p.type);
+    const node = byNorm.get(norm)?.[0];
+    if (!node) {
+      if (!retypeIds.has(p.id)) {
+        const b = orphanBuckets.get(norm) ?? { typeName: p.type, productIds: [] };
+        b.productIds.push(p.id);
+        orphanBuckets.set(norm, b);
+      }
+      continue;
+    }
+    attachCount.set(node.id, (attachCount.get(node.id) ?? 0) + 1);
+    if (retypeIds.has(p.id)) continue; // the re-type patch supersedes drift
+    const toPath = paths.get(node.id) ?? node.name;
+    const toGender = genders.get(node.id) ?? null;
+    if ((p.typePath ?? null) !== toPath || (toGender !== null && (p.gender ?? null) !== toGender)) {
+      drift.push({
+        productId: p.id, name: p.name, brand: p.brand, image: p.image,
+        nodeId: node.id, toType: node.name, toGender, toPath,
+        fromGender: p.gender, fromPath: p.typePath,
+      });
+    }
+  }
+
+  // Subtree product counts → empty branches (topmost only, so one row
+  // covers a whole dead branch; the freshly-added "new type" placeholder
+  // is exempt).
+  const children = new Map<string, string[]>();
+  for (const n of tree) {
+    if (n.parentId) children.set(n.parentId, [...(children.get(n.parentId) ?? []), n.id]);
+  }
+  const subtreeOf = (id: string): string[] => {
+    const out: string[] = [id];
+    for (const c of children.get(id) ?? []) out.push(...subtreeOf(c));
+    return out;
+  };
+  const subtreeCount = (id: string): number =>
+    subtreeOf(id).reduce((acc, sid) => acc + (attachCount.get(sid) ?? 0), 0);
+  const emptyTypes: KaizenEmptyType[] = [];
+  for (const n of tree) {
+    if (normalizeTypeName(n.name) === 'new type') continue;
+    if (subtreeCount(n.id) > 0) continue;
+    const parentEmpty = n.parentId ? subtreeCount(n.parentId) === 0
+      && normalizeTypeName(byId.get(n.parentId)?.name ?? '') !== 'new type' : false;
+    if (parentEmpty) continue; // the topmost empty ancestor reports instead
+    emptyTypes.push({ nodeId: n.id, name: n.name, path: paths.get(n.id) ?? n.name, subtreeIds: subtreeOf(n.id) });
+  }
+
+  // Duplicates: two nodes normalizing to the same name. Keep the busier
+  // one; only offer drops with no children (deleting cascades children).
+  const duplicateTypes: KaizenDuplicate[] = [];
+  for (const group of byNorm.values()) {
+    if (group.length < 2) continue;
+    const sorted = [...group].sort((a, b) => (attachCount.get(b.id) ?? 0) - (attachCount.get(a.id) ?? 0));
+    const keep = sorted[0];
+    for (const drop of sorted.slice(1)) {
+      if ((children.get(drop.id) ?? []).length > 0) continue;
+      duplicateTypes.push({
+        keepId: keep.id, keepPath: paths.get(keep.id) ?? keep.name,
+        dropId: drop.id, dropPath: paths.get(drop.id) ?? drop.name,
+        productCount: attachCount.get(drop.id) ?? 0,
+      });
+    }
+  }
+
+  const orphanTypes = [...orphanBuckets.values()]
+    .map(b => ({ typeName: b.typeName, productIds: b.productIds }))
+    .sort((a, b) => b.productIds.length - a.productIds.length);
+
+  return { retypes, drift, emptyTypes, duplicateTypes, orphanTypes };
+}

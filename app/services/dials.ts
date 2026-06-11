@@ -571,7 +571,7 @@ export const DEFAULT_FEED_RULES: FeedRules = {
   freshnessBoost:  { enabled: false, weight: 3 },
   seenDecay:       { enabled: true,  weight: 5 },
   diversityGuard:  { enabled: false, weight: 3 },
-  genderStrict:    { enabled: false, weight: 0 },
+  genderStrict:    { enabled: true,  weight: 0 },
   trendingBoost:   { enabled: false, weight: 4 },
   freshSlots:      { enabled: true,  weight: 6 },
 };
