@@ -645,9 +645,54 @@
   color: rgba(255, 255, 255, 0.6);
   margin: 0;
 }
-.look-creator-about-ai-mark {
-  margin-right: 6px;
-  opacity: 0.85;
+/* AI-written look commentary — centered editorial copy with a soft
+   lavender glow (the spark mark was retired; the glow IS the signal). */
+.look-creator-about-bio--ai {
+  text-align: center;
+  font-size: 14.5px;
+  line-height: 1.75;
+  font-style: italic;
+  letter-spacing: 0.01em;
+  color: #ece9fb;
+  padding: 2px 4px;
+  text-shadow:
+    0 0 14px rgba(167, 139, 250, 0.45),
+    0 0 36px rgba(167, 139, 250, 0.22),
+    0 0 70px rgba(167, 139, 250, 0.12);
+}
+
+/* The creator-catalog + Comments action row under the commentary. */
+.look-about-actions {
+  display: flex;
+  align-items: stretch;
+  gap: 10px;
+  margin: 4px 24px 24px;
+}
+.look-about-actions .look-creator-about-btn {
+  flex: 1;
+  justify-content: center;
+  border-radius: 999px;
+  padding: 11px 14px;
+  width: auto;
+  min-width: 0;
+}
+.look-about-actions .look-comments-labeled {
+  flex: 1;
+  margin: 0;
+  min-width: 0;
+}
+.look-about-btn-avatar {
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  object-fit: cover;
+  flex-shrink: 0;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+}
+.look-about-btn-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 /* "View more info" toggle (replaced the About tab). */
