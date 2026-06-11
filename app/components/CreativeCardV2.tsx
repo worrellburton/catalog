@@ -299,6 +299,7 @@ const CreativeCardV2 = memo(function CreativeCardV2({
       const directorEl = director.stealVideoElement(directorId);
       if (directorEl && trailMgr && playableUrl) {
         trailMgr.donate(lookTrailId(look.id), directorEl, playableUrl, posterUrl || undefined);
+        director.registerTrailReturn(lookTrailId(look.id), directorId);
       }
       onOpenLook?.(look);
       return;
@@ -320,6 +321,7 @@ const CreativeCardV2 = memo(function CreativeCardV2({
     const directorEl = director.stealVideoElement(directorId);
     if (directorEl && trailMgr && playableUrl) {
       trailMgr.donate(creative.id, directorEl, playableUrl, posterUrl || undefined);
+      director.registerTrailReturn(creative.id, directorId);
     }
     if (onOpenProduct) {
       onOpenProduct(creative);

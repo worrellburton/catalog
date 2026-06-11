@@ -166,6 +166,9 @@ interface PoolSlot {
 
 class VideoPlaybackDirector {
   private cards = new Map<string, CardEntry>();
+  /** trailId → cardId, registered when a card donates its element to an
+   *  overlay hero, so the CLOSE direction can hand the frame back. */
+  private trailReturn = new Map<string, string>();
   private pool: PoolSlot[] = [];
   private parkingDiv: HTMLDivElement | null = null;
   private rafId: number | null = null;
@@ -600,6 +603,44 @@ class VideoPlaybackDirector {
    * The director re-assigns a fresh pool element to the card on the next
    * rank cycle.
    */
+  /** Remember which card donated under a TrailVideoHost trail id, so the
+   *  overlay can sync the frame back on close (the open direction donates
+   *  the element; without this the card resumed at an arbitrary time). */
+  registerTrailReturn(trailId: string, cardId: string): void {
+    this.trailReturn.set(trailId, cardId);
+  }
+
+  /**
+   * Reverse handoff on overlay close: pin the overlay hero's EXACT current
+   * frame over the source card, seek the card's own element to the hero's
+   * time, and unfreeze once the seek lands — the card continues from the
+   * same frame the overlay was showing, no restart-from-zero jump.
+   */
+  syncFromTrailReturn(trailId: string, heroEl: HTMLVideoElement | null): void {
+    if (!heroEl) return;
+    const cardId = this.trailReturn.get(trailId);
+    const entry = cardId ? this.cards.get(cardId) : undefined;
+    if (!entry) return;
+    this.freezeCard(entry, heroEl);
+    const el = entry.videoEl;
+    if (!el) return; // not re-acquired yet — reveal path unfreezes later
+    const t = heroEl.currentTime;
+    if (!isFinite(t)) { this.unfreezeCard(entry); return; }
+    try {
+      el.currentTime = el.duration && isFinite(el.duration) ? t % el.duration : t;
+    } catch { this.unfreezeCard(entry); return; }
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      el.removeEventListener('seeked', finish);
+      this.unfreezeCard(entry);
+    };
+    el.addEventListener('seeked', finish, { once: true });
+    // Backstop: never leave the freeze up if 'seeked' doesn't fire.
+    window.setTimeout(finish, 600);
+  }
+
   stealVideoElement(cardId: string): HTMLVideoElement | null {
     const entry = this.cards.get(cardId);
     if (!entry || !entry.videoEl) return null;

@@ -911,6 +911,11 @@ export default function ProductPage({
   }, [navKey]);
 
   const handleClose = useCallback(() => {
+    // Reverse handoff — see LookOverlay.handleClose: the source card resumes
+    // at the hero's exact frame instead of restarting.
+    if (effectiveCreative?.id) {
+      director.syncFromTrailReturn(effectiveCreative.id, heroHostRef.current?.querySelector('video') ?? null);
+    }
     // Flag the scope exiting at gesture start (not on unmount 360 ms later) so
     // the background feed re-warms under cover of the slide-out and is already
     // playing when this page clears. The suspend effect still pops on unmount.
@@ -1103,11 +1108,16 @@ export default function ProductPage({
   // Prefer the HLS manifest (when the pipeline dial allows it) so the
   // full-screen hero ramps to a crisp rung; fall back to the progressive MP4
   // when no ladder exists for this clip or the pipeline is in 'mp4' mode.
-  const setHeroSlot = useTrailVideo(
+  const heroHostRef = useRef<HTMLElement | null>(null);
+  const setHeroSlotBase = useTrailVideo(
     effectiveCreative?.id,
     heroHlsUrl || effectiveCreative?.videoUrl,
     heroPoster || undefined,
   );
+  const setHeroSlot = useCallback((node: HTMLElement | null) => {
+    heroHostRef.current = node;
+    setHeroSlotBase(node);
+  }, [setHeroSlotBase]);
 
   // Phase 8 helper: kick off a high-res prefetch on hero mount in case
   // the card-side preload (only fires on mobile) didn't run. Idempotent
