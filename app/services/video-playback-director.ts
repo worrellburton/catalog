@@ -73,7 +73,14 @@ const POOL_MAX_MOBILE = 14;
  *  zero decode while covered) so returning is an instant paused→play resume.
  *  Bounded well under poolMax so the overlay's nested feed still gets slots. */
 const KEEP_WARM_UNDER_OVERLAY_DESKTOP = 8;
-const KEEP_WARM_UNDER_OVERLAY_MOBILE = 4;
+// Mobile shows ~8 cards/viewport (2 cols × ~4 rows). At 4, only half the
+// visible grid resumed instantly on back — the other half cold re-buffered,
+// which is the "feed dead for a beat" on return from a look/product. 6 covers
+// most of the visible grid while still leaving the overlay's nested feed
+// enough of the 14-slot pool (6 paused-but-retained + ~8 nested = pool cap),
+// so it isn't starved. Kept at 6 (not 8) to avoid crowding the nested feed and
+// to stay clear of iOS's simultaneous-decoder ceiling (POOL_MAX_MOBILE = 14).
+const KEEP_WARM_UNDER_OVERLAY_MOBILE = 6;
 /** px/s scroll speed above which we skip play() calls (poster only). */
 const SCROLL_VELOCITY_THRESHOLD = 2500;
 /** ms of scroll-quiet before we re-rank after a fast flick. */
@@ -108,7 +115,14 @@ const NEAR_BAND_ROOT_MARGIN = '200% 0%';
 //   • PREARM_ENABLED=false fully disables it (instant fall back to cold attach).
 const PREARM_ENABLED = true;
 const PREARM_MAX_DESKTOP = 3;
-const PREARM_MAX_MOBILE = 1;
+// This is the ONLY warm that actually decodes an upcoming clip's first frame
+// (into a spare pool element), so a promoted card reveals instantly instead of
+// holding its poster while it cold-buffers. At 1, only the single nearest
+// upcoming clip was ready on mobile; a 2-col grid scrolls two new cards in per
+// row, so the second always popped late. 3 keeps the next ~row-and-a-half warm.
+// Still bounded by poolMax (prearm only runs while assignedIds < cap and never
+// evicts a playing card), so total decoders stay under the same ceiling.
+const PREARM_MAX_MOBILE = 3;
 // Lookahead band for prebuffering. MUST sit between the play and release bands
 // (play < prearm < release < near-band) so prearmed cards are still tracked by
 // rank() and are never past the point where they'd be released.
@@ -152,6 +166,11 @@ interface CardEntry {
    *  the card never falls back to its frame-0 poster ("weird thumbnail"
    *  flash on return from an overlay). Cleared when a video reveals. */
   freezeEl: HTMLImageElement | null;
+  /** Clip aspect ratio (w/h) derived from the poster image's natural size.
+   *  The poster is transformed with resize:'contain' so it preserves the clip's
+   *  exact aspect — this lets applyCoverSize size the box correctly BEFORE the
+   *  video's own metadata loads, eliminating the stretched 100%×100% fallback. */
+  aspectHint?: number;
   retryCount: number;
   lastFailureAt: number;
   status: CardStatus;
@@ -166,6 +185,9 @@ interface PoolSlot {
 
 class VideoPlaybackDirector {
   private cards = new Map<string, CardEntry>();
+  /** trailId → cardId, registered when a card donates its element to an
+   *  overlay hero, so the CLOSE direction can hand the frame back. */
+  private trailReturn = new Map<string, string>();
   private pool: PoolSlot[] = [];
   private parkingDiv: HTMLDivElement | null = null;
   private rafId: number | null = null;
@@ -268,21 +290,11 @@ class VideoPlaybackDirector {
       else window.setTimeout(() => prefetchHlsModule(), 1200);
     }
 
-    // Track scroll velocity so we can skip play() during fast flicks.
-    window.addEventListener('scroll', () => {
-      const now = Date.now();
-      const dy = Math.abs(window.scrollY - this.lastScrollY);
-      const dt = Math.max(1, now - this.lastScrollTime);
-      const velocity = (dy / dt) * 1000; // px/s
-      this.lastScrollY = window.scrollY;
-      this.lastScrollTime = now;
-      this.isScrollFast = velocity > SCROLL_VELOCITY_THRESHOLD;
-      if (this.scrollRestTimer) clearTimeout(this.scrollRestTimer);
-      this.scrollRestTimer = setTimeout(() => {
-        this.isScrollFast = false;
-        this.scheduleRank();
-      }, SCROLL_REST_DELAY_MS);
-    }, { passive: true });
+    // Track scroll motion so we (a) skip prearm on fast flicks and (b) withhold
+    // fresh-clip reveals during ANY scroll. The window listener covers the main
+    // feed (document scroll); inner-container surfaces feed the same signal via
+    // notifyScroll(). markScroll() is the single source of truth for both.
+    window.addEventListener('scroll', () => this.markScroll(window.scrollY), { passive: true });
 
     // Pause everything when the tab is hidden; re-rank on return.
     document.addEventListener('visibilitychange', () => {
@@ -387,6 +399,27 @@ class VideoPlaybackDirector {
     el.setAttribute('autoplay', '');
     el.setAttribute('playsinline', '');
     el.preload = 'none';
+    // EXPLICIT COVER (no object-fit): when the intrinsic size resolves —
+    // loadedmetadata, or a native-HLS rung switch firing 'resize' — recompute
+    // the element's box to the exact cover dimensions for its tile. Persistent
+    // listeners added ONCE here (not per-acquire) so they can't leak as the
+    // pooled element is recycled; each calls whatever the CURRENT owner set as
+    // el.__coverApply. See applyCoverSize() for why object-fit is avoided:
+    // WebKit/iOS renders object-fit:cover AS contain on a freshly-attached
+    // <video> (confirmed on-device: box stays =TILE, content paints pillarboxed),
+    // and no hide/cover/timing trick fixes it because the mis-paint lands on the
+    // first VISIBLE composite. Sizing the box itself to the cover rect removes
+    // object-fit from the equation entirely.
+    // loadeddata/playing are included so applyCoverSize also drives the REVEAL
+    // (opacity 0→1) once a real frame exists at the cover dimensions — the
+    // element is held opacity:0 until then so the first VISIBLE frame is already
+    // correctly cover-framed, never the stretched 100%×100% pre-metadata fallback.
+    type CoverEl = HTMLVideoElement & { __coverApply?: () => void };
+    const reapply = () => { (el as CoverEl).__coverApply?.(); };
+    el.addEventListener('loadedmetadata', reapply);
+    el.addEventListener('resize', reapply);
+    el.addEventListener('loadeddata', reapply);
+    el.addEventListener('playing', reapply);
     this.parkingDiv!.appendChild(el);
     return el;
   }
@@ -427,6 +460,7 @@ class VideoPlaybackDirector {
         existing.videoUrl = videoUrl;
         existing.status = 'idle';
       }
+      if (existing.aspectHint === undefined) this.loadAspectHint(cardId, posterUrl);
       this.observeNear(cardId, slotEl);
       this.scheduleRank();
       return;
@@ -442,8 +476,31 @@ class VideoPlaybackDirector {
       lastFailureAt: 0,
       status: 'idle',
     });
+    this.loadAspectHint(cardId, posterUrl);
     this.observeNear(cardId, slotEl);
     this.scheduleRank();
+  }
+
+  /** Derive the clip's aspect ratio from the poster image (cached — the card's
+   *  own <img> already fetched it, so this resolves ~immediately) and stash it
+   *  on the entry so applyCoverSize can size the box correctly BEFORE the video's
+   *  metadata loads. The poster uses resize:'contain', so its natural aspect ==
+   *  the clip's aspect. Best-effort: on any failure the box just falls back to
+   *  100%×100% (hidden by opacity:0) until the video's own metadata arrives. */
+  private loadAspectHint(cardId: string, posterUrl: string): void {
+    if (!posterUrl || typeof Image === 'undefined') return;
+    const img = new Image();
+    img.onload = () => {
+      const entry = this.cards.get(cardId);
+      if (!entry || entry.posterUrl !== posterUrl) return;
+      if (img.naturalWidth > 0 && img.naturalHeight > 0) {
+        entry.aspectHint = img.naturalWidth / img.naturalHeight;
+        // If the video is already attached but still waiting on its own
+        // metadata, re-size it now from the hint.
+        if (entry.videoEl) this.applyCoverSize(entry, entry.videoEl);
+      }
+    };
+    img.src = posterUrl;
   }
 
   /** Start tracking a card's slot for near-viewport gating. Optimistically
@@ -480,11 +537,36 @@ class VideoPlaybackDirector {
   }
 
   /**
-   * Feed scroll events here (passive listener on the feed container).
-   * Computes velocity; suspends all play() calls during fast flicks
-   * and resumes after SCROLL_REST_DELAY_MS of quiet.
+   * Feed scroll events here (passive listener on the feed container). Drives the
+   * scroll-motion state so surfaces whose feed scrolls an INNER container
+   * (overlay rails, nested feeds) — where the director's own window listener
+   * never fires — still withhold fresh reveals during motion. Pass the
+   * container's scrollTop (or window.scrollY).
    */
-  notifyScroll(_scrollY: number): void {
+  notifyScroll(scrollY: number): void {
+    this.markScroll(scrollY);
+  }
+
+  /**
+   * Single source of truth for scroll-motion state. Computes velocity → sets
+   * isScrollFast (used only to skip prearm on fast flicks), arms the rest timer
+   * that clears it SCROLL_REST_DELAY_MS after the last event, and re-ranks.
+   * Idempotent; safe to call from multiple listeners. (The thumbnail fix no
+   * longer depends on scroll — see applyCoverSize.)
+   */
+  private markScroll(scrollY: number): void {
+    const now = Date.now();
+    const dy = Math.abs(scrollY - this.lastScrollY);
+    const dt = Math.max(1, now - this.lastScrollTime);
+    const velocity = (dy / dt) * 1000; // px/s
+    this.lastScrollY = scrollY;
+    this.lastScrollTime = now;
+    this.isScrollFast = velocity > SCROLL_VELOCITY_THRESHOLD;
+    if (this.scrollRestTimer) clearTimeout(this.scrollRestTimer);
+    this.scrollRestTimer = setTimeout(() => {
+      this.isScrollFast = false;
+      this.scheduleRank();
+    }, SCROLL_REST_DELAY_MS);
     this.scheduleRank();
   }
 
@@ -600,6 +682,102 @@ class VideoPlaybackDirector {
    * The director re-assigns a fresh pool element to the card on the next
    * rank cycle.
    */
+  /** Remember which card donated under a TrailVideoHost trail id, so the
+   *  overlay can sync the frame back on close (the open direction donates
+   *  the element; without this the card resumed at an arbitrary time). */
+  registerTrailReturn(trailId: string, cardId: string): void {
+    this.trailReturn.set(trailId, cardId);
+  }
+
+  /**
+   * Reverse handoff on overlay close: pin the overlay hero's EXACT current
+   * frame over the source card, seek the card's own element to the hero's
+   * time, and unfreeze once the seek lands — the card continues from the
+   * same frame the overlay was showing, no restart-from-zero jump.
+   */
+  syncFromTrailReturn(trailId: string, heroEl: HTMLVideoElement | null): void {
+    if (!heroEl) return;
+    const cardId = this.trailReturn.get(trailId);
+    const entry = cardId ? this.cards.get(cardId) : undefined;
+    if (!entry) return;
+    this.freezeCard(entry, heroEl);
+    const el = entry.videoEl;
+    if (!el) return; // not re-acquired yet — reveal path unfreezes later
+    const t = heroEl.currentTime;
+    if (!isFinite(t)) { this.unfreezeCard(entry); return; }
+    try {
+      el.currentTime = el.duration && isFinite(el.duration) ? t % el.duration : t;
+    } catch { this.unfreezeCard(entry); return; }
+    let done = false;
+    const finish = () => {
+      if (done) return;
+      done = true;
+      el.removeEventListener('seeked', finish);
+      this.unfreezeCard(entry);
+    };
+    el.addEventListener('seeked', finish, { once: true });
+    // Backstop: never leave the freeze up if 'seeked' doesn't fire.
+    window.setTimeout(finish, 600);
+  }
+
+  /**
+   * Reverse of stealVideoElement. On overlay close, take the WARM, still-playing
+   * hero element back and re-adopt it as the mapped card's pooled <video>, so the
+   * grid resumes INSTANTLY at the same frame instead of cold-re-acquiring + re-
+   * buffering a fresh element (the "that video stops for a beat on back" seam).
+   * The element keeps its src / hls.js instance / currentTime — no reload, no
+   * decode gap. Any cold element rank() grabbed under the slide-out is released
+   * back to the pool. Returns true if it adopted (so the caller can tell
+   * TrailVideoHost to forget the element); false to fall back to normal acquire.
+   *
+   * The caller MUST call this only once the hero is gone (overlay unmounting), or
+   * it would steal the element out from under the still-visible hero.
+   */
+  adoptReturnedElement(trailId: string, el: HTMLVideoElement | null): boolean {
+    // Consume the mapping unconditionally — this is the terminal consumer on
+    // close, so deleting here (even on the fallback paths below) prevents a
+    // stale trailId->cardId entry from accumulating when the card has unmounted.
+    const cardId = this.trailReturn.get(trailId);
+    this.trailReturn.delete(trailId);
+    if (!el || !cardId) return false;
+    const entry = this.cards.get(cardId);
+    if (!entry) return false; // card unmounted — let TrailVideoHost park it
+    // Release any cold element rank() acquired for this card during the close
+    // animation (it goes back to the pool; the warm element replaces it).
+    if (entry.videoEl && entry.videoEl !== el) {
+      this.releaseVideoEl(cardId, entry.videoEl);
+      entry.videoEl = null;
+    }
+    // Re-register el as a pool slot for this card (steal removed its old slot).
+    const existingSlot = this.pool.find(p => p.el === el);
+    if (existingSlot) existingSlot.assignedTo = cardId;
+    else this.pool.push({ el, assignedTo: cardId });
+    // Director styling; the element is warm (playing, has frames) so it reveals
+    // immediately (applyCoverSize flips opacity:1 at readyState>=2).
+    Object.assign(el.style, {
+      position: 'absolute', top: '50%', left: '50%', inset: 'auto',
+      transform: 'translate(-50%, -50%) translateZ(0)', objectFit: 'fill',
+      zIndex: '2', display: 'block', opacity: '1', transition: 'none',
+    });
+    (el as HTMLVideoElement & { __coverApply?: () => void }).__coverApply =
+      () => this.applyCoverSize(entry, el);
+    entry.slotEl.appendChild(el);
+    // Assign videoEl BEFORE applyCoverSize: applyCoverSize early-returns unless
+    // entry.videoEl === el, and a re-parented already-playing element never
+    // re-fires loadedmetadata/loadeddata/playing/resize — so if we sized after,
+    // the box would keep the HERO's aspect inside the (differently-shaped) grid
+    // tile (mis-sized/distorted card). Setting it first lets the guard pass so
+    // the warm element is re-cover-sized to THIS card's rect.
+    entry.videoEl = el;
+    entry.status = 'playing';
+    this.assignedIds.add(cardId);
+    this.applyCoverSize(entry, el);
+    this.unfreezeCard(entry);
+    this.emit(cardId, 'playing');
+    this.playEl(cardId, entry);
+    return true;
+  }
+
   stealVideoElement(cardId: string): HTMLVideoElement | null {
     const entry = this.cards.get(cardId);
     if (!entry || !entry.videoEl) return null;
@@ -774,60 +952,62 @@ class VideoPlaybackDirector {
       // uniform and lets the muted-autoplay heuristic re-evaluate on adopt.
       slot.el.autoplay = true;
 
-      // (Re-)configure the element. A recycled pooled <video> sits at z-index
-      // 2, above the card's poster <img> (z-index 1). It MUST stay transparent
-      // until it actually has a frame to paint, or it flashes black over the
-      // poster — revealVideoWhenReady enforces that for both branches below.
-      if (getVideoSource(slot.el) !== entry.videoUrl) {
-        // New clip: point the element at the src and start buffering. The
-        // poster (the clip's FRAME 0) covers the gap until the first decoded
-        // frame reveals the video. setVideoSource routes HLS manifests
-        // through hls.js (and progressive MP4 straight to el.src), so it
-        // also kicks off buffering — no explicit load() needed (and calling
-        // load() on an hls.js-managed element would reset its MSE pipeline).
-        slot.el.preload = 'auto';
+      // (Re-)configure the element. EXPLICIT COVER (no object-fit): the box is
+      // centered and sized to the exact cover rect (applyCoverSize, below + on
+      // loadedmetadata/resize), so the content fills the tile with the correct
+      // aspect crop and there is NO object-fit for WebKit to mis-render as
+      // contain (the "thumbnail" glitch). The element stays opacity:1/visible;
+      // before its first frame it's transparent (no poster attr) so the card's
+      // own cover poster <img> beneath shows — no black, no thumbnail.
+      const isNewClip = getVideoSource(slot.el) !== entry.videoUrl;
+      slot.el.preload = 'auto';
+      if (isNewClip) {
+        // Point the element at the src and start buffering. setVideoSource routes
+        // HLS via hls.js / native (and MP4 straight to el.src), kicking off
+        // buffering — no explicit load() needed (load() on an hls.js element
+        // resets its MSE pipeline).
         setVideoSource(slot.el, entry.videoUrl);
-        this.revealVideoWhenReady(slot.el, entry.videoUrl, entry);
-      } else {
-        // Same src (pool reuse). The element still points at the right clip,
-        // but its decoded surface may NOT have survived: while a detail
-        // overlay was open this element sat parked off-screen, and mobile
-        // browsers routinely drop the GPU surface of a parked <video>. The
-        // old code revealed it at opacity 1 unconditionally on the assumption
-        // it "already has frames" — which flashed BLACK over the poster on
-        // every return from a look/product. Gate the reveal on a real frame
-        // instead so the poster covers the gap when the surface was dropped.
-        slot.el.preload = 'auto';
-        this.revealVideoWhenReady(slot.el, entry.videoUrl, entry);
       }
-      // NO poster attribute on pooled elements. When iOS drops a parked
-      // element's decoded surface but still reports readyState>=2, the
-      // reveal shows the element before a real frame exists — and a video
-      // poster paints LETTERBOXED (not cover), flashing a shrunken
-      // thumbnail over the card. With no poster the frameless element is
-      // transparent, so the card's own cover-fit poster/freeze-frame
-      // underneath stays visible until real frames paint.
       Object.assign(slot.el.style, {
         position: 'absolute',
-        inset: '0',
-        width: '100%',
-        height: '100%',
-        objectFit: 'cover',
+        // Centered; width/height are set by applyCoverSize to the cover rect.
+        top: '50%',
+        left: '50%',
+        inset: 'auto',
+        transform: 'translate(-50%, -50%) translateZ(0)',
+        // object-fit:fill is a no-op here (the box is sized to the clip's exact
+        // aspect, so fill == cover with NO aspect computation for WebKit to get
+        // wrong). Never 'cover'/'contain' — those are the mis-rendered modes.
+        objectFit: 'fill',
         zIndex: '2',
         display: 'block',
-        transition: 'opacity 0.12s ease',
+        // Held transparent until applyCoverSize has applied real cover dims AND a
+        // frame exists, so the first VISIBLE frame is correctly cover-framed —
+        // never the stretched 100%×100% pre-metadata fallback. A frameless
+        // <video> (no poster attr) is transparent, so the card's poster <img>
+        // beneath shows during the gap — no black, no stretch.
+        opacity: '0',
+        transition: 'none',
       });
 
       slot.assignedTo = id;
       this.assignedIds.add(id);
       entry.videoEl = slot.el;
       entry.status = 'loading';
+      // Wire the persistent metadata/frame listeners (added in createVideoEl) to
+      // THIS owner, then size + (if a frame already exists) reveal now — the
+      // intrinsic size is often already known on a recycled/prebuffered element,
+      // giving an instant correct reveal (e.g. returning from an overlay).
+      (slot.el as HTMLVideoElement & { __coverApply?: () => void }).__coverApply =
+        () => this.applyCoverSize(entry, slot.el!, true);
+      // Fresh clip → size now but DON'T reveal on a possibly-stale readyState
+      // (hls.js reuse keeps the prior clip's frame); the frame listeners reveal
+      // once THIS clip paints. Same-src reclaim → the frame is this clip's, reveal now.
+      this.applyCoverSize(entry, slot.el, !isNewClip);
 
-      // Move the element into the card's slot div, then start playback.
-      // We always call play() here — the browser will queue against the
-      // in-flight network buffering, and the pool cap already bounds how
-      // many decodes run concurrently. Skipping play() here was leaving
-      // cards stuck in 'loading' on subsequent rank passes.
+      // Move the element into the card's slot div, then start playback. We always
+      // call play() here — the browser queues against the in-flight buffering and
+      // the pool cap bounds concurrent decodes.
       entry.slotEl.appendChild(slot.el);
       this.playEl(id, entry);
     }
@@ -874,40 +1054,70 @@ class VideoPlaybackDirector {
   }
 
   /**
-   * Reveal a (re)assigned pool element only once it actually has a frame to
-   * paint. The card's poster <img> sits beneath the pooled <video> (z-index
-   * 1 vs 2); revealing the video before its first frame is decoded flashes
-   * black over that poster — the "grid card goes black on return from a
-   * look/product" bug. If the element already holds a decoded current frame
-   * (readyState >= HAVE_CURRENT_DATA) it's shown at once (the seamless
-   * scroll-back / resume case); otherwise it stays transparent until
-   * `loadeddata`, with `playing` as a backstop. The target-URL guard stops a
-   * stale once-listener from a prior assignment revealing a recycled element.
-   */
-  private revealVideoWhenReady(el: HTMLVideoElement, targetUrl: string, entry?: CardEntry): void {
-    // Compare the LOGICAL source (manifest URL for HLS) — under hls.js
-    // el.src / el.currentSrc are MSE blobs that never equal targetUrl.
-    const matches = () => getVideoSource(el) === targetUrl;
-    // HAVE_CURRENT_DATA (2): the current frame is decoded and paintable.
-    if (el.readyState >= 2 && matches()) {
-      el.style.opacity = '1';
-      if (entry) this.unfreezeCard(entry);
+   * Size a pooled <video>'s BOX to the exact "cover" rectangle for its tile,
+   * instead of relying on object-fit:cover. WebKit/iOS renders object-fit:cover
+   * AS contain on a freshly-attached <video> — confirmed on-device with a live
+   * overlay: the element box stays = the tile, object-fit computes to `cover`,
+   * yet the content paints pillarboxed (small, centered) and stays that way well
+   * past any reveal/shield window, because the mis-paint lands on the first
+   * VISIBLE composite and no hide/cover/timing trick can pre-empt it.
+   *
+   * The cure: remove object-fit from the picture. The element is centered
+   * (translate -50%,-50%) and we set its width/height so the box is the smallest
+   * rect of the CLIP's aspect that still covers the tile (one axis 100%, the
+   * other > 100%, overflow clipped by .look-card). object-fit:fill then fills
+   * that box without distortion (box aspect == clip aspect), so there is no
+   * aspect computation for WebKit to get wrong — the first painted frame is
+   * already correctly cover-framed. Percentage-based, so it can never blow up to
+   * the video's intrinsic pixel size (the bug the auto/min-width approach had).
+   *
+   * Also owns the REVEAL: the element is held opacity:0 until the intrinsic size
+   * is known (so cover dims are applied) AND a real frame exists (readyState>=2),
+   * so the first VISIBLE frame is already correctly framed — never the stretched
+   * 100%×100% fallback that's active while the size is still unknown. Called on
+   * acquire and via persistent loadedmetadata/resize/loadeddata/playing listeners.
+   *
+   * `canReveal` is IDENTITY-SAFE gating: the immediate acquire call for a FRESH
+   * clip passes false, because on the hls.js reuse path (Chrome/Android)
+   * loadSource() does NOT reset readyState — so a recycled element can still
+   * report readyState>=2 with the PREVIOUS clip's decoded frame at acquire-time,
+   * and revealing then would flash the wrong clip. The persistent frame listeners
+   * pass true: they fire only once the NEW clip actually produces a frame, so the
+   * reveal is always of THIS clip. (On Safari/iOS native HLS, el.src=url resets
+   * readyState to 0 synchronously, so a fresh clip is readyState<2 at acquire and
+   * this gate is a no-op there — it only matters for the hls.js path.) */
+  private applyCoverSize(entry: CardEntry, el: HTMLVideoElement, canReveal = true): void {
+    if (entry.videoEl !== el) return;
+    const vw = el.videoWidth, vh = el.videoHeight;
+    const r = entry.getRect();
+    if (!r.width || !r.height) return;
+    // Prefer the video's own intrinsic aspect (exact); before metadata, fall back
+    // to the poster-derived aspectHint so the box is ALREADY cover-correct on the
+    // first paint (no stretched 100%×100% window). Only if BOTH are unknown do we
+    // use a plain fill box — and that's kept invisible by opacity:0 until a frame.
+    const vidAspect = (vw && vh) ? (vw / vh) : (entry.aspectHint || 0);
+    if (!vidAspect) {
+      el.style.width = '100%';
+      el.style.height = '100%';
       return;
     }
-    el.style.opacity = '0';
-    const revealT0 = this.now();
-    let revealed = false;
-    const reveal = (via: 'loadeddata' | 'playing') => {
-      if (!matches()) return;
+    const tileAspect = r.width / r.height;
+    if (vidAspect > tileAspect) {
+      // Clip is wider than the tile → fill height, overflow (crop) width.
+      el.style.height = '100%';
+      el.style.width = (vidAspect / tileAspect * 100).toFixed(3) + '%';
+    } else {
+      // Clip is taller/narrower → fill width, overflow (crop) height.
+      el.style.width = '100%';
+      el.style.height = (tileAspect / vidAspect * 100).toFixed(3) + '%';
+    }
+    // Cover dims are now applied. Reveal once a real frame of THIS clip exists so
+    // the first visible paint is correctly framed; until then the poster <img>
+    // covers. canReveal guards against revealing a stale prior-clip frame (see above).
+    if (canReveal && el.readyState >= 2) {
       el.style.opacity = '1';
-      if (entry) this.unfreezeCard(entry);
-      if (!revealed) {
-        revealed = true;
-        this.recordReveal(this.now() - revealT0, via);
-      }
-    };
-    el.addEventListener('loadeddata', () => reveal('loadeddata'), { once: true });
-    el.addEventListener('playing', () => reveal('playing'), { once: true });
+      this.unfreezeCard(entry);
+    }
   }
 
   /**

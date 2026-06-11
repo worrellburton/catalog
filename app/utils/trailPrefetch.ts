@@ -14,7 +14,7 @@ import type { ProductAd } from '~/services/product-creative';
 import type { Look } from '~/data/looks';
 import { withTransform } from './supabase-image';
 import { pickPlaybackSource, pickPosterUrl, prefetchHlsHead } from '~/services/video-loading';
-import { videoPipelineMode, videoPrewarmEnabled } from '~/services/video-pipeline';
+import { videoPipelineMode } from '~/services/video-pipeline';
 import { isHlsUrl } from './hlsAttach';
 import { lookPoster } from '~/services/media-resolver';
 
@@ -108,10 +108,10 @@ export function primeTrailAssets(rows: ProductAd[]): void {
     void decodeImage(poster);
   }
 
-  // Video warm: gated on network health AND the admin prewarm dial. Warm the
-  // SAME source the card will actually play (pickPlaybackSource is pipeline-
+  // Video warm: gated on network health only (prewarm is always on now). Warm
+  // the SAME source the card will actually play (pickPlaybackSource is pipeline-
   // aware): HLS manifests get a head-warm, progressive MP4s a preload link.
-  if (!networkLooksHealthy() || !videoPrewarmEnabled()) return;
+  if (!networkLooksHealthy()) return;
   let hlsHeads = 0;
   for (const row of rows.slice(0, VIDEOS_TO_WARM)) {
     const url = pickPlaybackSource(row);
@@ -145,7 +145,7 @@ export function primeLookAssets(rows: Look[]): void {
     void decodeImage(poster);
   }
 
-  if (!networkLooksHealthy() || !videoPrewarmEnabled()) return;
+  if (!networkLooksHealthy()) return;
   let hlsHeads = 0;
   for (const row of rows.slice(0, VIDEOS_TO_WARM)) {
     // HLS-aware: when the pipeline dial is on 'hls' and a look ships the

@@ -1,6 +1,6 @@
 import { useEffect, useState } from 'react';
 import {
-  getVideoPipelineConfig,
+  videoPipelineMode,
   hydrateVideoPipeline,
   subscribeVideoPipeline,
   type VideoPipelineMode,
@@ -17,13 +17,13 @@ import {
  * re-routes their <video> source instead of leaving a stale pipeline live.
  */
 export function useVideoPipelineMode(): VideoPipelineMode {
-  const [mode, setMode] = useState<VideoPipelineMode>(getVideoPipelineConfig().mode);
+  const [mode, setMode] = useState<VideoPipelineMode>(videoPipelineMode());
 
   useEffect(() => {
-    const unsub = subscribeVideoPipeline(cfg => setMode(cfg.mode));
+    const unsub = subscribeVideoPipeline(setMode);
     // Sync once on mount in case the cached mode changed between the lazy
     // initial state read and this effect firing.
-    setMode(getVideoPipelineConfig().mode);
+    setMode(videoPipelineMode());
     void hydrateVideoPipeline();
     return unsub;
   }, []);
