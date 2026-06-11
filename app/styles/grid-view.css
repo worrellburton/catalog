@@ -459,7 +459,6 @@
   z-index: 2;
 }
 
-.look-card video,
 .look-card img {
   width: 100%;
   height: 100%;
@@ -467,31 +466,26 @@
   object-position: center;
 }
 
-/* Any <video> inside a look-card MUST fill the tile (absolute, inset:0),
-   matching the inline styles the director and the declarative <video> both
-   set. Without this as the CSS default, a pooled element handed back into a
-   card carrying only TrailVideoHost's cssText (width/height/object-fit, but
-   NO position) lands in normal flow inside the flex-centered .card-inner and
-   shrinks to its intrinsic size — the "tiny thumbnail video floating inside
-   the tile" bug seen on the creator catalog grid after returning from a look
-   overlay. Pinning position here makes every video fill regardless of which
-   path placed it. z-index:2 keeps it above the poster <img> (z-index:1) and
-   below the bottom gradient (z-index:3). */
+/* EXPLICIT COVER — a <video> inside a look-card is NOT framed with
+   object-fit:cover, because WebKit/iOS mis-renders object-fit:cover AS contain
+   on a freshly-attached <video> (confirmed on-device: box stays = the tile,
+   computed object-fit = cover, yet the content paints pillarboxed — the
+   "thumbnail that zooms to fill" glitch — and lingers past any reveal/shield
+   window). Instead the director sizes the element's BOX to the exact cover rect
+   (width/height set inline from videoWidth/videoHeight — see applyCoverSize) and
+   centers it here; .look-card's overflow:hidden clips the overflow. object-fit:
+   fill is a no-op (the box already carries the clip's aspect → no distortion and
+   nothing for WebKit to mis-resolve). width/height are intentionally NOT set
+   here so the inline cover dimensions win. z-index:2 keeps it above the poster
+   <img> (z-index:1) and below the bottom gradient (z-index:3). */
 .look-card video {
-  position: absolute;
-  inset: 0;
-  z-index: 2;
-  /* Lock the video's framing to EXACTLY match the poster <img> above
-     (cover / center). Previously this deferred width/height/object-fit to
-     whatever inline cssText the director or TrailVideoHost set, so a path
-     that handed the element a different object-fit/position made the video
-     display at a different crop than the poster — the poster "loads
-     displayed incorrectly" then snaps when the video reveals. !important so
-     a stale inline cssText can't reintroduce the mismatch. */
-  width: 100% !important;
-  height: 100% !important;
-  object-fit: cover !important;
+  position: absolute !important;
+  top: 50% !important;
+  left: 50% !important;
+  transform: translate(-50%, -50%) translateZ(0) !important;
+  object-fit: fill !important;
   object-position: center !important;
+  z-index: 2;
 }
 
 /* Stagger shimmer animation across cards */

@@ -10,7 +10,7 @@ import { lookPoster, productPoster } from '~/services/media-resolver';
 import { emitSavedToast } from '~/utils/savedToast';
 import { useCommentsEnabled } from '~/hooks/useCommentsEnabled';
 import { useEscapeKey } from '~/hooks/useEscapeKey';
-import LookCard from './LookCard';
+import CreativeCardV2 from './CreativeCardV2';
 import { sortByGarmentRole } from '~/utils/garmentOrder';
 import ContinuousFeed from './ContinuousFeed';
 import { useActiveGenderFilter } from '~/hooks/useActiveGenderFilter';
@@ -230,6 +230,13 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   // path (pool element evicted between card unmount and hero attach) still
   // paints a real image.
   const setHeroSlot = useTrailVideo(trailId, heroVideoUrl, heroPoster || undefined);
+  // Container ref alongside the trail attach, so close can read the hero's
+  // <video> for the reverse frame handoff.
+  const heroHostRef = useRef<HTMLElement | null>(null);
+  const setHeroSlotRef = useCallback((node: HTMLElement | null) => {
+    heroHostRef.current = node;
+    setHeroSlot(node);
+  }, [setHeroSlot]);
 
   // Phase 8 — kick off a high-res prefetch on overlay mount in case the
   // card-side preload didn't run (e.g. user opened the overlay from a
@@ -563,14 +570,28 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   useEscapeKey(() => handleClose());
 
   const handleClose = useCallback(() => {
+    // Reverse handoff: pin the hero's exact frame onto the source card and
+    // seek the card's element to match, so the grid resumes where the
+    // overlay left off instead of restarting the clip.
+    director.syncFromTrailReturn(trailId, heroHostRef.current?.querySelector('video') ?? null);
     // Flag the scope exiting NOW (gesture start), not on unmount 360 ms later:
     // the background feed re-acquires + decodes its videos under cover of the
     // slide-out so it's already playing when the overlay clears — no dead feed
     // on back. The pushScope effect's cleanup still pops the scope on unmount.
     director.beginScopeExit(directorScope);
     setIsAnimatingOut(true);
-    setTimeout(onClose, 360);
-  }, [onClose, directorScope]);
+    setTimeout(() => {
+      // Hand the WARM, still-playing hero element back to the director so the
+      // source grid card resumes THAT element instantly (no cold re-acquire /
+      // re-buffer — the brief "video stops on back" stutter). Done at the end of
+      // the slide-out: the hero is unmounting this tick, so we don't steal it
+      // mid-display. release() tells TrailVideoHost to forget the now-director-
+      // owned element so a later reopen can't yank it back out of the grid.
+      const heroEl = heroHostRef.current?.querySelector('video') ?? null;
+      if (director.adoptReturnedElement(trailId, heroEl)) trailMgr?.release(trailId);
+      onClose();
+    }, 360);
+  }, [onClose, directorScope, trailId, trailMgr]);
 
   // Mobile drag-to-dismiss on the WHOLE overlay (not just the info
   // column). The existing onTouchStart/Move/End handlers below only
@@ -799,7 +820,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                     element on tap, so playback continues unbroken across
                     the navigation. */}
                 <div
-                  ref={setHeroSlot}
+                  ref={setHeroSlotRef}
                   className="look-media-video"
                   data-trail-id={trailId}
                   style={{ position: 'relative', zIndex: 1 }}
@@ -1043,14 +1064,15 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
               )}
             </h3>
             <div className="look-feed-grid">
-              {feedSections.looksLikeThis.slice(0, similarLimit).map(fl => (
-                <LookCard
+              {feedSections.looksLikeThis.slice(0, similarLimit).map((fl, i) => (
+                <CreativeCardV2
                   key={`like-${fl.id}`}
+                  slotId={`${directorScope}:like-${fl.id}`}
                   look={fl}
                   className="look-card"
                   onOpenLook={handleFeedLookClick}
                   onOpenCreator={onOpenCreator}
-                  onCreateCatalog={onCreateCatalog}
+                  priority={i < 2}
                 />
               ))}
             </div>
@@ -1069,13 +1091,13 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                 .filter(fl => fl.id !== look.id)
                 .slice(0, moreFromCreatorLimit)
                 .map(fl => (
-                  <LookCard
+                  <CreativeCardV2
                     key={`creator-more-${fl.id}`}
+                    slotId={`${directorScope}:creator-more-${fl.id}`}
                     look={fl}
                     className="look-card"
                     onOpenLook={handleFeedLookClick}
                     onOpenCreator={onOpenCreator}
-                    onCreateCatalog={onCreateCatalog}
                   />
                 ))}
             </div>

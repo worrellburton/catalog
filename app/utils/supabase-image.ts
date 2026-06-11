@@ -35,14 +35,23 @@ const SUPABASE_OBJECT_RE = /\/storage\/v1\/object\/public\//;
 export function withTransform(url: string | null | undefined, opts: TransformOpts): string | undefined {
   if (!url) return undefined;
   if (!SUPABASE_OBJECT_RE.test(url)) return url;
-  const transformed = url.replace(SUPABASE_OBJECT_RE, '/storage/v1/render/image/public/');
-  const params = new URLSearchParams();
+  const swapped = url.replace(SUPABASE_OBJECT_RE, '/storage/v1/render/image/public/');
+  // Preserve any query string already on the source URL (e.g. a `?v=2`
+  // cache-bust on a regenerated poster). The old code appended a second `?`
+  // unconditionally, so `poster.jpg?v=2` became `poster.jpg?v=2?width=…` —
+  // which the render endpoint reads as a single `v=2?width=…` param value and
+  // then IGNORES width/quality/resize, silently shipping the full-res original
+  // (that's how the 3:4 creative posters came through un-downscaled). Split the
+  // existing query off and merge the transform params into one `?`.
+  const qIndex = swapped.indexOf('?');
+  const base = qIndex === -1 ? swapped : swapped.slice(0, qIndex);
+  const params = new URLSearchParams(qIndex === -1 ? '' : swapped.slice(qIndex + 1));
   params.set('width', String(opts.width));
   if (opts.height) params.set('height', String(opts.height));
   params.set('quality', String(opts.quality ?? 75));
   params.set('resize', opts.resize ?? 'cover');
   if (opts.format) params.set('format', opts.format);
-  return `${transformed}?${params.toString()}`;
+  return `${base}?${params.toString()}`;
 }
 
 /** Build a `srcSet` string for retina. Caller passes the 1× width and

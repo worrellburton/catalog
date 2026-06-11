@@ -4,7 +4,7 @@ import { Product, Look, creators as staticCreators } from '~/data/looks';
 import ContinuousFeed from '~/components/ContinuousFeed';
 import { useActiveGenderFilter } from '~/hooks/useActiveGenderFilter';
 import { useEscapeKey } from '~/hooks/useEscapeKey';
-import CreativeCard from '~/components/CreativeCard';
+import CreativeCardV2 from '~/components/CreativeCardV2';
 import CreatorAvatarFollow from '~/components/CreatorAvatarFollow';
 import { useTrailVideo, useTrailVideoManager } from '~/components/TrailVideoHost';
 import { useInViewport } from '~/hooks/useInViewport';
@@ -451,7 +451,9 @@ function LookTile({
 }
 
 /** Pads `arr` to exactly `count` items by cycling duplicates, or trims.
- *  Safe for CreativeCard (own <video> per instance, no shared pool). */
+ *  Safe for CreativeCardV2: each rendered tile gets a per-index slotId
+ *  (`…:ymal-<id>-<i>`), so padded duplicates never collide on a shared
+ *  director pool slot. */
 function fillToExact<T>(arr: T[], count: number): T[] {
   if (arr.length === 0) return [];
   if (arr.length >= count) return arr.slice(0, count);
@@ -911,13 +913,29 @@ export default function ProductPage({
   }, [navKey]);
 
   const handleClose = useCallback(() => {
+    // Reverse handoff — see LookOverlay.handleClose: the source card resumes
+    // at the hero's exact frame instead of restarting.
+    if (effectiveCreative?.id) {
+      director.syncFromTrailReturn(effectiveCreative.id, heroHostRef.current?.querySelector('video') ?? null);
+    }
     // Flag the scope exiting at gesture start (not on unmount 360 ms later) so
     // the background feed re-warms under cover of the slide-out and is already
     // playing when this page clears. The suspend effect still pops on unmount.
     director.beginScopeExit(directorScope);
     setIsAnimatingOut(true);
-    setTimeout(onClose, 360);
-  }, [onClose, directorScope]);
+    setTimeout(() => {
+      // Hand the WARM hero element back to the director (see LookOverlay) so the
+      // source grid card resumes that exact element instantly — no cold
+      // re-buffer / brief stop. release() makes TrailVideoHost forget it.
+      const heroEl = heroHostRef.current?.querySelector('video') ?? null;
+      if (effectiveCreative?.id && director.adoptReturnedElement(effectiveCreative.id, heroEl)) {
+        trailMgr?.release(effectiveCreative.id);
+      }
+      onClose();
+    }, 360);
+    // effectiveCreative is captured by closure (declared below); matches the
+    // original deps which also referenced it without listing it.
+  }, [onClose, directorScope, trailMgr]);
 
   // Mobile drag-to-dismiss. Listens on the scroller; only engages while
   // scrollTop is at the top so users can scroll content normally without
@@ -1071,8 +1089,8 @@ export default function ProductPage({
   const heroHiResSrc = heroStill ? heroStill.replace('w=200&h=200', 'w=1200&h=1600') : '';
   const [heroHiResLoaded, setHeroHiResLoaded] = useState(false);
 
-  // Tap-handoff poster: when CreativeCard navigates here, it stashes a
-  // canvas snapshot of the playing card frame on window.__feedTapPosters.
+  // Tap-handoff poster: when a CreativeCardV2 tile navigates here, it stashes
+  // a canvas snapshot of the playing card frame on window.__feedTapPosters.
   // We pick it up synchronously so the hero can paint that exact frame
   // BEFORE the trail-host has had a chance to swap in the live element.
   // Cleared after read so the next tap doesn't reuse a stale snapshot.
@@ -1103,11 +1121,16 @@ export default function ProductPage({
   // Prefer the HLS manifest (when the pipeline dial allows it) so the
   // full-screen hero ramps to a crisp rung; fall back to the progressive MP4
   // when no ladder exists for this clip or the pipeline is in 'mp4' mode.
-  const setHeroSlot = useTrailVideo(
+  const heroHostRef = useRef<HTMLElement | null>(null);
+  const setHeroSlotBase = useTrailVideo(
     effectiveCreative?.id,
     heroHlsUrl || effectiveCreative?.videoUrl,
     heroPoster || undefined,
   );
+  const setHeroSlot = useCallback((node: HTMLElement | null) => {
+    heroHostRef.current = node;
+    setHeroSlotBase(node);
+  }, [setHeroSlotBase]);
 
   // Phase 8 helper: kick off a high-res prefetch on hero mount in case
   // the card-side preload (only fires on mobile) didn't run. Idempotent
@@ -1639,17 +1662,21 @@ export default function ProductPage({
               )}
             </h2>
             <div className="pd-similar-grid">
-              {/* CreativeCard handles the layoutId morph + shared video element
-                  so a tap here continues the trail with the same fluid handoff.
+              {/* CreativeCardV2 plays via the shared director pool (same as the
+                  feed) and donates its live <video> on tap, so the trail
+                  continues with the same fluid handoff. slotId is scoped to this
+                  overlay (`${directorScope}:…`) so the tiles actually play.
                   Render the unique matches only (capped at the limit) — never
                   pad with fillToExact, which cycles duplicates to reach the
                   count and put the same tile on screen twice. */}
               {moreLikeThis.slice(0, similarLimit).map((c, i) => (
-                <CreativeCard
+                <CreativeCardV2
                   key={`mlt-${c.id}-${i}`}
+                  slotId={`${directorScope}:mlt-${c.id}-${i}`}
                   creative={c}
                   className="look-card"
                   onOpenProduct={onOpenCreative}
+                  priority={i < 2}
                 />
               ))}
             </div>
@@ -1728,8 +1755,9 @@ export default function ProductPage({
               </h2>
               <div className="pd-similar-grid">
                 {fillToExact(popularFallback, ymalLimit).map((c, i) => (
-                  <CreativeCard
+                  <CreativeCardV2
                     key={`ymal-${c.id}-${i}`}
+                    slotId={`${directorScope}:ymal-${c.id}-${i}`}
                     creative={c}
                     className="look-card"
                     onOpenProduct={onOpenCreative}
