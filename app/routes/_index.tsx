@@ -1529,12 +1529,11 @@ export default function Home() {
       if (!onCreator && creatorFilterRef.current) {
         setCreatorFilter(null);
       }
-      // Back gesture that lands on the bare feed (no overlay left in the
-      // URL) should return to the TOP — not wherever the feed was scrolled
-      // when the overlay opened (which read as a mid-feed "stuck" position).
-      if (!onProduct && !onLook && !onBrand && !onCreator && !onComments) {
-        window.scrollTo({ top: 0, behavior: 'auto' });
-      }
+      // Back to the bare feed: do NOT touch scroll here (founder's call —
+      // back must land you exactly where you were in the feed). popstate is
+      // a discrete event, so the setState above flushes synchronously and
+      // the overlay-lock cleanup restores the saved scrollY before this
+      // handler returns; a scrollTo(0) here would clobber that restore.
     };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
