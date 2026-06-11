@@ -30,22 +30,6 @@ const PLACEHOLDER_HINTS = [
   'Try "off duty"',
 ];
 
-// localStorage key — once the user types (or explicitly dismisses)
-// we set this and never re-show the floating "Just start typing"
-// hint on this device. Persisted so a returning visitor isn't told
-// a thing they already learned.
-const TYPE_HINT_DISMISSED_KEY = 'catalog:type-anywhere-hint-dismissed:v1';
-
-function readHintDismissed(): boolean {
-  if (typeof window === 'undefined') return true;
-  try { return window.localStorage.getItem(TYPE_HINT_DISMISSED_KEY) === '1'; }
-  catch { return false; }
-}
-
-function persistHintDismissed(): void {
-  if (typeof window === 'undefined') return;
-  try { window.localStorage.setItem(TYPE_HINT_DISMISSED_KEY, '1'); } catch { /* quota */ }
-}
 
 interface Suggestion {
   text: string;
@@ -115,19 +99,6 @@ export default function TypeAnywhere() {
     // terms combined) rather than an overwhelming wall of options.
     return [...starts, ...contains].slice(0, 5);
   }, [text, allSuggestions]);
-
-  // Floating "Just start typing" tooltip above the bar. Shown once
-  // per device until the user types anything; then it fades out and
-  // never returns (persisted in localStorage). Desktop only — the
-  // bar itself already hides on mobile.
-  const [hintDismissed, setHintDismissed] = useState(true);
-  useEffect(() => { setHintDismissed(readHintDismissed()); }, []);
-  useEffect(() => {
-    if (text.length > 0 && !hintDismissed) {
-      setHintDismissed(true);
-      persistHintDismissed();
-    }
-  }, [text, hintDismissed]);
 
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -288,9 +259,6 @@ export default function TypeAnywhere() {
               <span className="ai-bar-ac-text">Make a catalog for “{text.trim()}”</span>
             </button>
           </div>
-        )}
-        {!hintDismissed && (
-          <div className="ai-bar-hint" aria-hidden="true">Just start typing</div>
         )}
         <div className="ai-bar">
           <button
