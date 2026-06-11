@@ -401,7 +401,14 @@ class VideoPlaybackDirector {
         // must NOT keep the heartbeat awake (that would defeat its idle-quiet).
         // No overlay open ⇒ activeScope() is null ⇒ inActiveScope() is always
         // true ⇒ behaviour is unchanged.
-        if (this.cards.get(id)?.status !== 'playing' && this.inActiveScope(id)) {
+        const e = this.cards.get(id);
+        // A card whose STATUS says playing but whose element is actually
+        // paused is a silent stall (browser paused it under memory/decoder
+        // pressure, or a pause raced a play) — treat it as not playing so
+        // the rank pass below kicks it. This is the "visible videos always
+        // play" guarantee's detection half.
+        const silentlyStalled = !!e?.videoEl && e.status === 'playing' && e.videoEl.paused;
+        if ((e?.status !== 'playing' || silentlyStalled) && this.inActiveScope(id)) {
           this.scheduleRank();
           break;
         }
@@ -1205,6 +1212,24 @@ class VideoPlaybackDirector {
     // batch, so a big return wave lights up over a few frames instead of one.
     // scheduleRank() self-coalesces (no-op if a rAF is already queued).
     if (deferredColdAttach) this.scheduleRank();
+
+    // 2.5 Watchdog resume: a card inside the play band that HOLDS an
+    //     element but isn't actually playing gets kicked back into
+    //     playback — covers silent browser pauses, play/pause races, and
+    //     post-overlay returns. keepWarm cards are deliberately paused
+    //     behind an overlay; failed elements back off briefly so a
+    //     genuinely unplayable clip can't hot-loop play() calls.
+    if (!this.isScrollFast) {
+      for (const r of ranked) {
+        if (r.distance > playMargin) continue;
+        const e = r.entry;
+        if (!e.videoEl || !e.videoEl.paused) continue;
+        if (!this.inActiveScope(r.id)) continue;
+        if (keepWarm.has(r.id)) continue;
+        if (e.retryCount > 2 && Date.now() - e.lastFailureAt < 5000) continue;
+        this.playEl(r.id, e);
+      }
+    }
 
     // 3. Pre-attach: prebuffer the nearest UPCOMING clips (just outside the
     //    play band) into spare pool elements so promotion is an instant adopt
