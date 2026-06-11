@@ -1078,3 +1078,17 @@ html.gov-void .tb-wrap {
    100vh page always clipped its bottom edge (worst on tall monitors —
    the drill's last card row vanished). Size to the remaining space. ── */
 html.gov-void .gov-page.gov-types { height: calc(100vh - 53px); }
+
+/* Kaizen section headers inside the report list */
+.gov-kaizen-section {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 4px 6px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+  margin-bottom: 4px;
+}
+.gov-kaizen-section h3 { margin: 0; font-size: 13.5px; }
+.gov-kaizen-section h3 em { font-style: normal; opacity: 0.55; font-weight: 500; }
+.gov-kaizen-section small { display: block; margin-top: 2px; font-size: 11px; opacity: 0.55; }
