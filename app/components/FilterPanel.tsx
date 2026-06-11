@@ -219,6 +219,7 @@ export default function FilterPanel({ activeFilters, onFiltersChange, onApply, o
             </div>
 
             <div className={`bcat-sub${showFashionSub ? ' is-open' : ''}`}>
+              <div className="bcat-sub-inner">
               <div className="bcat-sub-label">By occasion</div>
               <div className="bcat-chips">
                 {OCCASIONS.map(o => (
@@ -231,9 +232,11 @@ export default function FilterPanel({ activeFilters, onFiltersChange, onApply, o
                   <button key={o.val} className={`bcat-chip bcat-chip--sm${isActive('type', o.val) ? ' is-on' : ''}`} onClick={() => toggle('type', o.val)}>{o.label}</button>
                 ))}
               </div>
+              </div>
             </div>
 
             <div className={`bcat-sub${showHomeSub ? ' is-open' : ''}`}>
+              <div className="bcat-sub-inner">
               <div className="bcat-sub-label">By room</div>
               <div className="bcat-chips">
                 {ROOMS.map(o => (
@@ -245,6 +248,7 @@ export default function FilterPanel({ activeFilters, onFiltersChange, onApply, o
                 {VIBES.map(o => (
                   <button key={o.val} className={`bcat-chip bcat-chip--sm${isActive('vibe', o.val) ? ' is-on' : ''}`} onClick={() => toggle('vibe', o.val)}>{o.label}</button>
                 ))}
+              </div>
               </div>
             </div>
           </section>
