@@ -11,7 +11,7 @@
 // play() independently) and gives us a clean recovery path after
 // modal open/close and tab visibility changes.
 
-import { getPrefetchCount, isSlowConnection } from './video-loading';
+import { captureVideoFrame, getPrefetchCount, isSlowConnection } from './video-loading';
 import {
   setVideoSource,
   getVideoSource,
@@ -147,6 +147,11 @@ interface CardEntry {
   posterUrl: string;
   slotEl: HTMLDivElement;
   videoEl: HTMLVideoElement | null;
+  /** Freeze-frame <img> left in the slot when the video element is taken
+   *  away (eviction / steal). Shows the EXACT frame the card was on, so
+   *  the card never falls back to its frame-0 poster ("weird thumbnail"
+   *  flash on return from an overlay). Cleared when a video reveals. */
+  freezeEl: HTMLImageElement | null;
   retryCount: number;
   lastFailureAt: number;
   status: CardStatus;
@@ -400,15 +405,21 @@ class VideoPlaybackDirector {
     const existing = this.cards.get(cardId);
     if (existing) {
       // Update mutable fields (slot may have re-mounted into a different node)
-      if (existing.slotEl !== slotEl) this.unobserveNear(existing.slotEl);
+      if (existing.slotEl !== slotEl) {
+        this.unobserveNear(existing.slotEl);
+        this.unfreezeCard(existing);
+      }
       existing.getRect = getRect;
       existing.slotEl = slotEl;
       if (existing.videoUrl !== videoUrl) {
-        // URL changed — release current element so rank() re-assigns with new src
+        // URL changed — release current element so rank() re-assigns with new
+        // src. Drop any freeze frame too: it belongs to the PREVIOUS item and
+        // must never paint over the new item's poster.
         if (existing.videoEl) {
           this.releaseVideoEl(cardId, existing.videoEl);
           existing.videoEl = null;
         }
+        this.unfreezeCard(existing);
         existing.videoUrl = videoUrl;
         existing.status = 'idle';
       }
@@ -422,6 +433,7 @@ class VideoPlaybackDirector {
       posterUrl,
       slotEl,
       videoEl: null,
+      freezeEl: null,
       retryCount: 0,
       lastFailureAt: 0,
       status: 'idle',
@@ -456,6 +468,7 @@ class VideoPlaybackDirector {
       this.releaseVideoEl(cardId, entry.videoEl);
       entry.videoEl = null;
     }
+    this.unfreezeCard(entry);
     this.unobserveNear(entry.slotEl);
     this.nearIds.delete(cardId);
     this.cards.delete(cardId);
@@ -587,6 +600,9 @@ class VideoPlaybackDirector {
     const entry = this.cards.get(cardId);
     if (!entry || !entry.videoEl) return null;
     const el = entry.videoEl;
+    // The card keeps painting the stolen element's exact frame while the
+    // overlay owns it — on return, the re-attached video reveals over this.
+    this.freezeCard(entry, el);
     // Remove the slot from the pool entirely so rank() cannot reclaim this
     // element. If we only mark assignedTo=null the director's next RAF
     // immediately re-uses the "free" slot, stealing the element back from
@@ -767,7 +783,7 @@ class VideoPlaybackDirector {
         // load() on an hls.js-managed element would reset its MSE pipeline).
         slot.el.preload = 'auto';
         setVideoSource(slot.el, entry.videoUrl);
-        this.revealVideoWhenReady(slot.el, entry.videoUrl);
+        this.revealVideoWhenReady(slot.el, entry.videoUrl, entry);
       } else {
         // Same src (pool reuse). The element still points at the right clip,
         // but its decoded surface may NOT have survived: while a detail
@@ -778,7 +794,7 @@ class VideoPlaybackDirector {
         // every return from a look/product. Gate the reveal on a real frame
         // instead so the poster covers the gap when the surface was dropped.
         slot.el.preload = 'auto';
-        this.revealVideoWhenReady(slot.el, entry.videoUrl);
+        this.revealVideoWhenReady(slot.el, entry.videoUrl, entry);
       }
       const poster = entry.posterUrl;
       if (poster && slot.el.getAttribute('poster') !== poster) {
@@ -861,13 +877,14 @@ class VideoPlaybackDirector {
    * `loadeddata`, with `playing` as a backstop. The target-URL guard stops a
    * stale once-listener from a prior assignment revealing a recycled element.
    */
-  private revealVideoWhenReady(el: HTMLVideoElement, targetUrl: string): void {
+  private revealVideoWhenReady(el: HTMLVideoElement, targetUrl: string, entry?: CardEntry): void {
     // Compare the LOGICAL source (manifest URL for HLS) — under hls.js
     // el.src / el.currentSrc are MSE blobs that never equal targetUrl.
     const matches = () => getVideoSource(el) === targetUrl;
     // HAVE_CURRENT_DATA (2): the current frame is decoded and paintable.
     if (el.readyState >= 2 && matches()) {
       el.style.opacity = '1';
+      if (entry) this.unfreezeCard(entry);
       return;
     }
     el.style.opacity = '0';
@@ -876,6 +893,7 @@ class VideoPlaybackDirector {
     const reveal = (via: 'loadeddata' | 'playing') => {
       if (!matches()) return;
       el.style.opacity = '1';
+      if (entry) this.unfreezeCard(entry);
       if (!revealed) {
         revealed = true;
         this.recordReveal(this.now() - revealT0, via);
@@ -973,7 +991,50 @@ class VideoPlaybackDirector {
     });
   }
 
+  /** Pin the element's current decoded frame into the card's slot as an
+   *  <img> overlay. Best-effort: CORS-tainted canvases / frameless elements
+   *  simply leave the poster fallback in place. */
+  private freezeCard(entry: CardEntry, el: HTMLVideoElement): void {
+    try {
+      if (el.readyState < 2) return;
+      const frame = captureVideoFrame(el);
+      if (!frame) return;
+      let img = entry.freezeEl;
+      if (!img) {
+        img = document.createElement('img');
+        img.setAttribute('aria-hidden', 'true');
+        Object.assign(img.style, {
+          position: 'absolute',
+          inset: '0',
+          width: '100%',
+          height: '100%',
+          objectFit: 'cover',
+          zIndex: '2',
+          display: 'block',
+          pointerEvents: 'none',
+        });
+        entry.freezeEl = img;
+      }
+      img.src = frame;
+      // The (re)attached <video> is appended AFTER this img, so once it
+      // reveals it paints above; until then the freeze frame covers.
+      if (img.parentElement !== entry.slotEl) entry.slotEl.appendChild(img);
+    } catch { /* best-effort — poster remains the fallback */ }
+  }
+
+  private unfreezeCard(entry: CardEntry): void {
+    const img = entry.freezeEl;
+    if (!img) return;
+    entry.freezeEl = null;
+    try { img.remove(); } catch { /* already detached */ }
+  }
+
   private releaseVideoEl(cardId: string, el: HTMLVideoElement): void {
+    // Before the element leaves the slot, pin its current frame into the
+    // card so the poster never flashes underneath (the frame-0 thumbnail
+    // "pop" on return from a look/product overlay).
+    const entry = this.cards.get(cardId);
+    if (entry && entry.videoEl === el) this.freezeCard(entry, el);
     try { el.pause(); } catch { /* ignore */ }
     this.assignedIds.delete(cardId);
     const slot = this.pool.find(p => p.el === el);
