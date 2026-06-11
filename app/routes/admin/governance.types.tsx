@@ -764,6 +764,11 @@ export default function AdminGovernanceTypes() {
                   )}
                 </div>
               )}
+              {/* ONE scroll body for direct products + subtype sections.
+                  Before, only the grid scrolled (flex:1) and the subtype
+                  sections below it got squeezed past the drill's
+                  overflow:hidden — cards sliced mid-row on tall content. */}
+              <div className="gov-drill-body">
               {prods.length === 0 ? (
                 <p className="gov-drill-empty">No products attached directly to this type yet.</p>
               ) : (
@@ -806,6 +811,7 @@ export default function AdminGovernanceTypes() {
                   })}
                 </div>
               )}
+              </div>
             </div>
           );
         })()}

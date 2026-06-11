@@ -1559,6 +1559,18 @@
 /* Retailer drawer - collapsed by default, expands beneath the action row.
    Uses grid-template-rows 0fr → 1fr for a smooth height animation that
    doesn't require knowing the content height in advance. */
+
+/* The drawer now lives INSIDE .pd-actions (right after the Shop button in
+   the DOM). Without these it lands BESIDE Shop on one flex line, and
+   align-items:stretch balloons the gold pill to the drawer's height —
+   the giant-ellipse desktop bug. order pushes it visually below the
+   whole 2x2 button group; full basis gives it its own row. */
+.pd-actions > .pd-retailers-drawer {
+  order: 10;
+  flex-basis: 100%;
+  min-width: 0;
+}
+
 .pd-retailers-drawer {
   display: grid;
   grid-template-rows: 0fr;

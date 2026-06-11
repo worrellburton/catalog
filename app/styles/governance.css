@@ -672,10 +672,13 @@ html.gov-void .tb-wrap {
   letter-spacing: 0.04em;
 }
 .gov-drill-empty { padding: 32px 24px; font-size: 13px; color: #a1a1aa; }
-.gov-drill-grid {
+/* The ONE scroll container for everything below the drill header. */
+.gov-drill-body {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
+}
+.gov-drill-grid {
   /* Rows, not columns: cards take only the space they need and wrap. */
   display: flex;
   flex-wrap: wrap;
