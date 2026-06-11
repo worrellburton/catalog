@@ -995,16 +995,14 @@ class VideoPlaybackDirector {
       ranked.push({ id, entry, distance: this.distanceToViewport(rect) });
     }
 
-    // While an overlay scope is active, keep the background cards alive-but-
-    // paused instead of releasing them, so returning to the feed is an instant
-    // paused→play resume (decoded surface retained) rather than a cold re-buffer
-    // that shows posters for a beat ("feed dead on back"). The budget is the
-    // pool MINUS a reserve for the overlay's own nested rails (keepWarm =
-    // poolMax - NESTED_FEED_RESERVE), so the WHOLE visible grid stays warm while
-    // warm + nested ≤ poolMax keeps total decoders within the safe ceiling. The
-    // kept cards sit out of the active scope, so step 2 never re-plays them while
-    // the overlay is up; the moment beginScopeExit/close clears the scope they
-    // fall into wantsPlay and resume from their retained frame.
+    // While an overlay scope is active, keep the background cards ALIVE instead
+    // of releasing them, so returning to the feed never shows a cold re-buffer
+    // ("feed dead on back"). The budget is the pool MINUS a reserve for the
+    // overlay's own nested rails (keepWarm = poolMax - NESTED_FEED_RESERVE), so
+    // the WHOLE visible grid stays warm while warm + nested ≤ poolMax keeps total
+    // decoders within the safe ceiling. Desktop keeps them PLAYING (seamless,
+    // zero hitch on back); mobile PAUSES them (decoder-safe, instant resume from
+    // the retained surface) — see the device-split in the release step below.
     const keepWarm = new Set<string>();
     if (this.activeScope() !== null) {
       const reserve = isMobileViewport() ? NESTED_FEED_RESERVE_MOBILE : NESTED_FEED_RESERVE_DESKTOP;
@@ -1018,12 +1016,24 @@ class VideoPlaybackDirector {
 
     // 1. Release: anything past releaseMargin — OR outside the active overlay
     //    scope (e.g. the home feed behind an open overlay) — gives its slot
-    //    back so it stops decoding. EXCEPT the keep-warm set, which we pause in
-    //    place (element + surface retained) for an instant resume on return.
+    //    back so it stops decoding. EXCEPT the keep-warm set.
+    //
+    //    Keep-warm handling is DEVICE-SPLIT:
+    //    • Desktop — leave the card PLAYING under the overlay (do NOT pause it).
+    //      The overlay surface is opaque (#0a0a0a fully covers the feed — there's
+    //      no backdrop blur over it to re-rasterize), and desktop has decode
+    //      headroom with no iOS decoder ceiling, so the only cost is decoding a
+    //      covered clip. The payoff: returning to the feed is TRULY seamless —
+    //      the card never paused, so there's nothing to resume and no visible
+    //      "adjacent videos pause then resume on back" hitch.
+    //    • Mobile — PAUSE in place (element + decoded surface retained) to stay
+    //      under the iOS simultaneous-decoder ceiling; the retained surface still
+    //      makes the paused→play resume instant on return.
+    const pauseWarm = isMobileViewport();
     for (const { id, entry, distance } of ranked) {
       if (!entry.videoEl) continue;
       if (keepWarm.has(id)) {
-        if (!entry.videoEl.paused) {
+        if (pauseWarm && !entry.videoEl.paused) {
           try { entry.videoEl.pause(); } catch { /* ignore */ }
           entry.status = 'paused';
           this.emit(id, 'paused');
