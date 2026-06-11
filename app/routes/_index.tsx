@@ -1929,6 +1929,11 @@ export default function Home() {
           {selectedLook && (
             <Suspense fallback={null}>
               <LookOverlay
+                // Remount per look: tapping a look INSIDE the overlay used to
+                // reuse the mounted instance, which smooth-scrolled back to
+                // the top with stale content visible. A fresh mount shows the
+                // new look instantly, already at the top.
+                key={selectedLook.uuid || selectedLook.id}
                 look={selectedLook}
                 onClose={handleCloseLook}
                 onOpenCreator={handleOpenCreator}
