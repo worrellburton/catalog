@@ -374,6 +374,10 @@ class VideoPlaybackDirector {
 
   private createVideoEl(): HTMLVideoElement {
     const el = document.createElement('video');
+    // anonymous CORS so canvas captures (freeze-frames on evict/steal,
+    // tap-to-detail handoffs) aren't tainted — matches TrailVideoHost's
+    // elements. Supabase storage serves ACAO:*, so playback is unaffected.
+    el.crossOrigin = 'anonymous';
     el.muted = true;
     el.defaultMuted = true;
     el.autoplay = true;

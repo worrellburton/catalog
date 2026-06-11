@@ -1587,6 +1587,7 @@
 
 .pd-retailer-chip {
   display: grid;
+  width: 100%;
   grid-template-columns: 1fr auto auto auto;
   align-items: center;
   gap: 10px;
