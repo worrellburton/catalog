@@ -74,19 +74,28 @@ const POOL_MAX_MOBILE_CEILING = 20;
  *  off-screen (mobile drops their decoded surface) and freed for the overlay's
  *  own nested feed to repurpose. Returning then cold re-buffers, so the feed
  *  shows posters ("looks dead") for a beat — worst on HLS, whose re-attach
- *  overruns the ~360ms close animation. Instead we keep this many of the
- *  NEAREST background cards alive-but-PAUSED (element + decoded surface kept,
- *  zero decode while covered) so returning is an instant paused→play resume.
- *  Bounded well under poolMax so the overlay's nested feed still gets slots. */
-const KEEP_WARM_UNDER_OVERLAY_DESKTOP = 8;
-// Mobile shows ~8 cards/viewport (2 cols × ~4 rows). At 4, only half the
-// visible grid resumed instantly on back — the other half cold re-buffered,
-// which is the "feed dead for a beat" on return from a look/product. 6 covers
-// most of the visible grid while still leaving the overlay's nested feed
-// enough of the 14-slot pool (6 paused-but-retained + ~8 nested = pool cap),
-// so it isn't starved. Kept at 6 (not 8) to avoid crowding the nested feed and
-// to stay clear of iOS's simultaneous-decoder ceiling (POOL_MAX_MOBILE = 14).
-const KEEP_WARM_UNDER_OVERLAY_MOBILE = 6;
+ *  overruns the ~360ms close animation, so the cold attach can't beat the slide
+ *  and the user lands on posters. A cold attach is fundamentally not instant;
+ *  only a PAUSED-but-decoded element resumes instantly (play(), no re-buffer).
+ *
+ *  So instead of keeping a small fixed handful warm, we keep the WHOLE visible
+ *  grid warm and reserve only enough of the pool for the overlay's own nested
+ *  rails: keepWarm = poolMax() - NESTED_FEED_RESERVE. Because keep-warm cards
+ *  are PAUSED (hold a decoder instance but don't decode while covered) and
+ *  warm + nested <= poolMax <= the decoder-safe ceiling, this never exceeds the
+ *  simultaneous-decoder budget the pool cap already guarantees — it just shifts
+ *  it toward "feed resumes instantly on back" and away from "nested rail plays a
+ *  few more tiles". The rails are off-screen when an overlay first opens, so the
+ *  reserve sits free until you actually scroll to them. The kept cards are also
+ *  PROTECTED from the nested feed's eviction (see rank()) so they survive while
+ *  the overlay is open instead of being stolen the moment a rail tile needs a
+ *  slot — without that, raising the count alone is silently defeated. */
+const NESTED_FEED_RESERVE_DESKTOP = 8;
+// Mobile pool is 14 and bumps against the iOS simultaneous-HLS-decoder ceiling,
+// so the reserve is the tighter lever here: 6 leaves keepWarm = 14 - 6 = 8 =
+// a full mobile viewport (2 cols x ~4 rows), so the entire visible grid resumes
+// instantly on back while the nested rail still gets 6 concurrent tiles.
+const NESTED_FEED_RESERVE_MOBILE = 6;
 /** px/s scroll speed above which we skip play() calls (poster only). */
 const SCROLL_VELOCITY_THRESHOLD = 2500;
 /** ms of scroll-quiet before we re-rank after a fast flick. */
@@ -986,17 +995,20 @@ class VideoPlaybackDirector {
       ranked.push({ id, entry, distance: this.distanceToViewport(rect) });
     }
 
-    // While an overlay scope is active, keep the NEAREST few background cards
-    // alive-but-paused instead of releasing them, so returning to the feed is
-    // an instant paused→play resume (decoded surface retained) rather than a
-    // cold re-buffer that shows posters for a beat. Bounded by KEEP_WARM_* so
-    // the overlay's own nested feed still gets pool slots. The kept cards sit
-    // out of the active scope, so step 2 below never re-plays them while the
-    // overlay is up; the moment beginScopeExit/close clears the scope they
+    // While an overlay scope is active, keep the background cards alive-but-
+    // paused instead of releasing them, so returning to the feed is an instant
+    // paused→play resume (decoded surface retained) rather than a cold re-buffer
+    // that shows posters for a beat ("feed dead on back"). The budget is the
+    // pool MINUS a reserve for the overlay's own nested rails (keepWarm =
+    // poolMax - NESTED_FEED_RESERVE), so the WHOLE visible grid stays warm while
+    // warm + nested ≤ poolMax keeps total decoders within the safe ceiling. The
+    // kept cards sit out of the active scope, so step 2 never re-plays them while
+    // the overlay is up; the moment beginScopeExit/close clears the scope they
     // fall into wantsPlay and resume from their retained frame.
     const keepWarm = new Set<string>();
     if (this.activeScope() !== null) {
-      const warmBudget = isMobileViewport() ? KEEP_WARM_UNDER_OVERLAY_MOBILE : KEEP_WARM_UNDER_OVERLAY_DESKTOP;
+      const reserve = isMobileViewport() ? NESTED_FEED_RESERVE_MOBILE : NESTED_FEED_RESERVE_DESKTOP;
+      const warmBudget = Math.max(0, max - reserve);
       const warmCandidates = ranked
         .filter(r => r.entry.videoEl && !this.inActiveScope(r.id) && r.distance <= playMargin)
         .sort((a, b) => a.distance - b.distance)
@@ -1089,6 +1101,12 @@ class VideoPlaybackDirector {
         let victim: { slot: PoolSlot; entry: CardEntry; id: string } | null = null;
         for (const p of this.pool) {
           if (!p.assignedTo) continue;
+          // PROTECT keep-warm: a paused background card retained for an instant
+          // resume on back must NOT be stolen by the overlay's nested rail —
+          // evicting it cold-rebuffers the feed on return, exactly what keep-warm
+          // exists to prevent. The reserve guarantees the rail enough non-warm
+          // slots, so its acquires never need to reach for these.
+          if (keepWarm.has(p.assignedTo)) continue;
           const e = this.cards.get(p.assignedTo);
           if (!e || !e.videoEl) continue;
           const d = this.distanceToViewport(e.getRect());
