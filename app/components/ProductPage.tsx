@@ -923,8 +923,19 @@ export default function ProductPage({
     // playing when this page clears. The suspend effect still pops on unmount.
     director.beginScopeExit(directorScope);
     setIsAnimatingOut(true);
-    setTimeout(onClose, 360);
-  }, [onClose, directorScope]);
+    setTimeout(() => {
+      // Hand the WARM hero element back to the director (see LookOverlay) so the
+      // source grid card resumes that exact element instantly — no cold
+      // re-buffer / brief stop. release() makes TrailVideoHost forget it.
+      const heroEl = heroHostRef.current?.querySelector('video') ?? null;
+      if (effectiveCreative?.id && director.adoptReturnedElement(effectiveCreative.id, heroEl)) {
+        trailMgr?.release(effectiveCreative.id);
+      }
+      onClose();
+    }, 360);
+    // effectiveCreative is captured by closure (declared below); matches the
+    // original deps which also referenced it without listing it.
+  }, [onClose, directorScope, trailMgr]);
 
   // Mobile drag-to-dismiss. Listens on the scroller; only engages while
   // scrollTop is at the top so users can scroll content normally without

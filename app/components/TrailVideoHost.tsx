@@ -59,6 +59,62 @@ const POOL_MAX = typeof window !== 'undefined'
 
 type TrimmableVideo = HTMLVideoElement & { __trimCleanup?: () => void };
 
+type CoverVideo = HTMLVideoElement & { __coverWired?: boolean };
+
+/** EXPLICIT COVER (no object-fit:cover). WebKit/iOS renders object-fit:cover AS
+ *  contain on a freshly-attached <video> — the "thumbnail" glitch (confirmed
+ *  on-device) — and it shows the same way on the look/product HERO, which is
+ *  TrailVideoHost-managed (NOT the director). The cure is the same as the feed:
+ *  size the element BOX to the exact cover rect of its positioned ancestor (the
+ *  hero / tile box) so the content fills with the correct aspect crop and there
+ *  is no object-fit:cover for WebKit to mis-resolve. The video moves between
+ *  containers of different aspects (hero fullscreen, grid 3:4, brand strip), so
+ *  we read `offsetParent` (the live containing block) each time rather than
+ *  tracking a container. Before metadata we use object-fit:contain (safe: full
+ *  clip, never stretched) until the real dims arrive. */
+function applyCoverSize(el: HTMLVideoElement): void {
+  // Set the FULL explicit-cover styling on EVERY call, not just dims. The pool
+  // prewarm / idle-park paths reset el.style.cssText (to '1px') and a re-attached
+  // element (existing pool entry) never re-runs the creation cssText — so if we
+  // only touched width/height the element would land position:static or with
+  // left:50% but no centering transform, shifting it off-axis and leaving part
+  // of the tile uncovered (the top-left gap that exposed the poster on the hero).
+  el.style.position = 'absolute';
+  el.style.top = '50%';
+  el.style.left = '50%';
+  el.style.transform = 'translate(-50%, -50%) translateZ(0)';
+  el.style.display = 'block';
+  const cb = (el.offsetParent as HTMLElement | null) || el.parentElement;
+  const cr = cb ? cb.getBoundingClientRect() : null;
+  const vw = el.videoWidth, vh = el.videoHeight;
+  if (!cr || !cr.width || !cr.height || !vw || !vh) {
+    // Box or intrinsic size unknown yet — contain is safe (no stretch, no
+    // cover mis-render) until the real dims arrive.
+    el.style.objectFit = 'contain';
+    el.style.width = '100%';
+    el.style.height = '100%';
+    return;
+  }
+  const a = vw / vh, ca = cr.width / cr.height;
+  // Box sized to the clip's aspect → object-fit:fill fills it with NO distortion
+  // and no aspect math for WebKit to mis-resolve as contain.
+  el.style.objectFit = 'fill';
+  if (a > ca) { el.style.height = '100%'; el.style.width = (a / ca * 100).toFixed(3) + '%'; }
+  else { el.style.width = '100%'; el.style.height = (ca / a * 100).toFixed(3) + '%'; }
+}
+
+/** Attach the persistent metadata/resize listeners ONCE per element so the cover
+ *  box self-corrects when the clip's dimensions resolve or a native-HLS rung
+ *  switch changes them. Idempotent across pool reuse. */
+function wireCover(elRaw: HTMLVideoElement): void {
+  const el = elRaw as CoverVideo;
+  if (el.__coverWired) return;
+  el.__coverWired = true;
+  const f = () => applyCoverSize(el);
+  el.addEventListener('loadedmetadata', f);
+  el.addEventListener('resize', f);
+}
+
 /** Apply (or clear) the trim loop on a pooled element for the given src.
  *  Guarded: only touches elements whose src is registered with a window;
  *  everything else keeps the default el.loop=true. Idempotent — clears any
@@ -105,6 +161,11 @@ interface TrailVideoManager {
    *  full-screen overlay opens so the feed behind it stops holding GPU
    *  surfaces it can't show. */
   pruneIdle: () => void;
+  /** Forget a pooled element WITHOUT pausing/detaching it — used when the
+   *  director re-adopts the warm hero element on overlay close so the grid
+   *  resumes instantly. We must drop our pool entry + slot stack so a later
+   *  open of the same id doesn't yank the element back out of the grid. */
+  release: (id: string) => void;
 }
 
 const TrailVideoContext = createContext<TrailVideoManager | null>(null);
@@ -235,6 +296,16 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
     }
   }, [cancelIdleUnload, unloadEntry]);
 
+  // Drop a pooled element from our bookkeeping WITHOUT touching it — the
+  // director has re-adopted the warm element into a grid card on overlay close,
+  // so we must not park/evict/reuse it (a later open of the same id would yank
+  // it back out of the grid and leave the card blank). Cancels any idle timer.
+  const release = useCallback((id: string) => {
+    const entry = elementsRef.current.get(id);
+    if (entry) { cancelIdleUnload(entry); elementsRef.current.delete(id); }
+    slotStacksRef.current.delete(id);
+  }, [cancelIdleUnload]);
+
   const attach = useCallback((id: string, src: string, container: HTMLElement, poster?: string): (() => void) => {
     const pool = elementsRef.current;
     let entry = pool.get(id);
@@ -305,7 +376,13 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
         setVideoSource(el, src);
       }
       el.setAttribute('data-trail-id', id);
-      el.style.cssText = 'width:100%;height:100%;object-fit:cover;display:block;';
+      // EXPLICIT COVER base (centered, GPU-promoted). NOT object-fit:cover —
+      // WebKit mis-renders that as contain on a freshly-attached <video> (the
+      // hero "thumbnail" glitch). width/height are set by applyCoverSize to the
+      // cover rect of the current container; object-fit becomes 'fill' (no-op on
+      // the aspect-sized box) once dims are known. Donated director elements
+      // already carry equivalent inline styles; applyCoverSize re-sizes either.
+      el.style.cssText = 'position:absolute;top:50%;left:50%;transform:translate(-50%,-50%) translateZ(0);object-fit:contain;display:block;backface-visibility:hidden;';
       // Fallback retry: when the first frame arrives, attempt play() again.
       // This is the moment Chrome's autoplay heuristic actually evaluates,
       // so a play() called pre-loadeddata that "succeeded" but produced no
@@ -335,6 +412,13 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
     // Move into the slot. appendChild on an already-parented node detaches
     // first - the previous slot loses it automatically without remount.
     container.appendChild(e.el);
+    // Size the element to the cover rect of THIS container (the element moves
+    // between containers of different aspects — hero, grid, brand strip), and
+    // wire the metadata/resize listeners once so it self-corrects. Explicit
+    // cover (no object-fit:cover) is what keeps the hero from showing the
+    // WebKit "thumbnail" mis-paint. Runs after append so offsetParent is live.
+    wireCover(e.el);
+    applyCoverSize(e.el);
     // Resume playback. Errors here are routine on iOS before user gesture.
     // If play() rejects (autoplay policy), nudge currentTime to ~0.5 s so
     // the paused frame isn't frame 0 - for AI-gen videos that's the
@@ -368,6 +452,9 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
       const prevContainer = st && st.length > 0 ? st[st.length - 1] : null;
       if (prevContainer && prevContainer.isConnected && e.el.parentElement === container) {
         prevContainer.appendChild(e.el);
+        // Re-size to the PREVIOUS container's cover rect (e.g. the 3:4 grid card
+        // behind a closing hero) — it was last sized for the hero's aspect.
+        applyCoverSize(e.el);
         void e.el.play().catch(() => {});
       } else {
         // No previous slot or it is gone — park in the off-screen pool so
@@ -483,7 +570,7 @@ export function TrailVideoHost({ children }: { children: ReactNode }) {
     evictIfNeeded();
   }, [evictIfNeeded]);
 
-  const manager = useMemo<TrailVideoManager>(() => ({ attach, prewarm, suspendFeed, resumeFeed, donate, pruneIdle }), [attach, prewarm, suspendFeed, resumeFeed, donate, pruneIdle]);
+  const manager = useMemo<TrailVideoManager>(() => ({ attach, prewarm, suspendFeed, resumeFeed, donate, pruneIdle, release }), [attach, prewarm, suspendFeed, resumeFeed, donate, pruneIdle, release]);
 
   // Visibility + gesture playback recovery. Three sources of frozen-frame
   // bugs we have to handle:

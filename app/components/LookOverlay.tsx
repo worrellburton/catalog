@@ -580,8 +580,18 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
     // on back. The pushScope effect's cleanup still pops the scope on unmount.
     director.beginScopeExit(directorScope);
     setIsAnimatingOut(true);
-    setTimeout(onClose, 360);
-  }, [onClose, directorScope]);
+    setTimeout(() => {
+      // Hand the WARM, still-playing hero element back to the director so the
+      // source grid card resumes THAT element instantly (no cold re-acquire /
+      // re-buffer — the brief "video stops on back" stutter). Done at the end of
+      // the slide-out: the hero is unmounting this tick, so we don't steal it
+      // mid-display. release() tells TrailVideoHost to forget the now-director-
+      // owned element so a later reopen can't yank it back out of the grid.
+      const heroEl = heroHostRef.current?.querySelector('video') ?? null;
+      if (director.adoptReturnedElement(trailId, heroEl)) trailMgr?.release(trailId);
+      onClose();
+    }, 360);
+  }, [onClose, directorScope, trailId, trailMgr]);
 
   // Mobile drag-to-dismiss on the WHOLE overlay (not just the info
   // column). The existing onTouchStart/Move/End handlers below only

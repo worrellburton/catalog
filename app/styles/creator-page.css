@@ -713,25 +713,15 @@
   align-self: start;
 }
 
-/* iOS/WebKit held-scroll "thumbnail in the corner" fix.
-   The creator catalog scrolls an internal accelerated container (unlike the
-   document-scrolling feed) AND uses the director's bounded <video> pool, whose
-   elements get churned in/out of tiles as you scroll (a tile holds a fresh,
-   frame-less video ~40% of the time mid-scroll). In WebKit, such a freshly-
-   attached video paints its contents at intrinsic ("thumbnail") size for a
-   frame before it composites — flashing a small clip in the corner of the tile
-   during a held/fast scroll. The feed avoids it (synchronous document scroll);
-   the product page avoids it (stable per-tile <video>, no pool churn). Here we
-   simply don't PAINT the churning videos while the grid is in motion: the
-   `.is-scrolling` class is toggled on the scroller by CreatorPage during active
-   scroll, dropping the videos to opacity:0 so there's no half-attached layer to
-   flash. They keep playing/decoding, and crucially the layer stays COMPOSITED
-   (opacity:0, not visibility:hidden) — so when scrolling stops and they fade
-   back in they're already rasterized at the right size and don't flash on
-   reveal. Posters stay visible throughout. */
-.creator-page-scroll.is-scrolling .creator-grid .look-card video {
-  opacity: 0 !important;
-}
+/* iOS/WebKit "thumbnail then zooms to fill" first-paint artifact is now fixed
+   at the source for ALL surfaces by MANUAL COVER on `.look-card video`
+   (grid-view.css): the <video> box is sized to always be >= the tile, so the
+   freshly-attached element can never paint small regardless of how WebKit
+   resolves object-fit. The old mitigation here — hiding the churning videos
+   (`.is-scrolling` → opacity:0) while the grid was in motion — was therefore
+   removed: it traded the glitch for "posters, no video while scrolling", and
+   the manual-cover fix lets the video keep PLAYING during scroll without the
+   artifact. (CreatorPage still toggles `.is-scrolling`; it's now a no-op.) */
 
 /* The look poster/video FILLS the 3:4 tile (cover), matching the main feed.
    (The .card-poster-backdrop blurred-fill experiment was reverted — looks
