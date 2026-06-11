@@ -2071,10 +2071,14 @@ export default function GeneratePage() {
                           data-gen-card-id={p.id}
                           onClick={() => togglePick(p)}
                         >
-                          {p.primary_video_url ? (
-                            <AutoplayVideo className="gen-cloud-media" src={p.primary_video_url} poster={poster || undefined} preload="metadata" />
-                          ) : poster ? (
+                          {/* Poster only — the picker grid never streams
+                              videos; stills are instant and cheap. The video
+                              path survives only for the rare product with no
+                              poster at all. */}
+                          {poster ? (
                             <img className="gen-cloud-media" src={poster} alt="" loading="lazy" decoding="async" />
+                          ) : p.primary_video_url ? (
+                            <AutoplayVideo className="gen-cloud-media" src={p.primary_video_url} preload="metadata" />
                           ) : null}
                           <span className="gen-cloud-card-name">{p.name || 'Product'}</span>
                           <span className="gen-cloud-card-brand">{p.brand}</span>
