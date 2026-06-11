@@ -141,6 +141,22 @@ const PREARM_MAX_MOBILE = 4;
 const PREARM_MARGIN_VH_DESKTOP = 1.1;
 const PREARM_MARGIN_VH_MOBILE = 1.1;
 
+// ── Cold-attach budget (anti-burst) ──────────────────────────────────────
+// Max number of COLD attaches (a fresh setVideoSource → HLS manifest→playlist
+// →init→segment chain + first-frame decode) a single rank() pass may kick off.
+// When an overlay closes, the near-band re-balloons and one rank() pass would
+// otherwise cold-attach the whole visible grid AT ONCE — a synchronized decoder
+// burst that spikes the main thread and starves every clip's bytes, i.e. the
+// beat-long "feed freezes on poster then resumes" on back. Capping cold attaches
+// per pass and re-ranking next frame spreads the burst over a few rAF frames
+// (~16ms each), so the nearest cards light up first and the rest trail by a
+// frame or two (sub-100ms, covered by their poster/freeze-frame meanwhile).
+// FREE and never counted: keep-playing unpauses, same-src reclaims (a card
+// adopting its own parked element on return), and prearm adopts — only genuine
+// cold attaches cost budget, so the instant-resume paths are never throttled.
+const ATTACH_BUDGET_DESKTOP = 6;
+const ATTACH_BUDGET_MOBILE = 3;
+
 // Device tuning keys off the SAME mobile breakpoint as the video pipeline and
 // the feed grid (isMobileViewport, ≤768px, imported from video-loading.ts).
 // Previously the director used a local ≤600px cutoff, so a 601–768px viewport —
@@ -185,6 +201,9 @@ function prearmMarginPx(): number {
 }
 function prearmMax(): number {
   return isMobileViewport() ? PREARM_MAX_MOBILE : PREARM_MAX_DESKTOP;
+}
+function attachBudget(): number {
+  return isMobileViewport() ? ATTACH_BUDGET_MOBILE : ATTACH_BUDGET_DESKTOP;
 }
 
 // ── Types ──────────────────────────────────────────────────────────────
@@ -1014,6 +1033,13 @@ class VideoPlaybackDirector {
       .filter(r => r.distance <= playMargin && this.inActiveScope(r.id))
       .sort((a, b) => a.distance - b.distance);
 
+    // Anti-burst: bound the COLD attaches this pass; defer the rest to the next
+    // rAF so a return-from-overlay wave lights up progressively instead of
+    // freezing on a synchronized decoder burst. Resumes/same-src reclaims are
+    // free (handled before this is decremented). See ATTACH_BUDGET_* docs.
+    let coldBudget = attachBudget();
+    let deferredColdAttach = false;
+
     for (const { id, entry, distance } of wantsPlay) {
       if (entry.videoEl) {
         // Already assigned — keep it playing. If it's paused for any reason
@@ -1031,12 +1057,25 @@ class VideoPlaybackDirector {
       // Need a slot. Prefer a free slot that ALREADY holds this card's clip
       // — after a detail overlay released the feed, this lets a card reclaim
       // its own element (no src swap, no reload, no black flash, instant
-      // resume from where it paused). Then an EMPTY free slot — so an overlay's
-      // nested feed clobbers blank slots before the parked home-feed clips,
-      // leaving those reclaimable on return. Then any free slot; if none, grow
-      // up to poolMax(); if at cap, evict the most-distant assigned card.
+      // resume from where it paused). This reclaim is FREE (no cold-attach
+      // cost), so it's never throttled by the budget below.
+      const warmSlot = this.pool.find(
+        p => p.assignedTo === null && getVideoSource(p.el) === entry.videoUrl,
+      );
+      // No own-clip slot to reclaim → this would be a COLD attach. If the per-
+      // pass budget is spent, defer this card to the next rank() (it's still in
+      // the play band; its poster/freeze-frame covers until then). wantsPlay is
+      // nearest-first, so the closest cards spend the budget first.
+      if (!warmSlot && coldBudget <= 0) {
+        deferredColdAttach = true;
+        continue;
+      }
+      // Then an EMPTY free slot — so an overlay's nested feed clobbers blank
+      // slots before the parked home-feed clips, leaving those reclaimable on
+      // return. Then any free slot; if none, grow up to poolMax(); if at cap,
+      // evict the most-distant assigned card.
       let slot =
-        this.pool.find(p => p.assignedTo === null && getVideoSource(p.el) === entry.videoUrl) ||
+        warmSlot ||
         this.pool.find(p => p.assignedTo === null && !getVideoSource(p.el)) ||
         this.pool.find(p => p.assignedTo === null);
       if (!slot && this.pool.length < max) {
@@ -1085,8 +1124,9 @@ class VideoPlaybackDirector {
         // Point the element at the src and start buffering. setVideoSource routes
         // HLS via hls.js / native (and MP4 straight to el.src), kicking off
         // buffering — no explicit load() needed (load() on an hls.js element
-        // resets its MSE pipeline).
+        // resets its MSE pipeline). This is the COLD attach the budget bounds.
         setVideoSource(slot.el, entry.videoUrl);
+        coldBudget--;
       }
       Object.assign(slot.el.style, {
         position: 'absolute',
@@ -1132,12 +1172,20 @@ class VideoPlaybackDirector {
       this.playEl(id, entry);
     }
 
+    // Cold-attach budget was hit this pass — at least one in-band card still
+    // wants a fresh element. Re-rank next frame to promote the next nearest
+    // batch, so a big return wave lights up over a few frames instead of one.
+    // scheduleRank() self-coalesces (no-op if a rAF is already queued).
+    if (deferredColdAttach) this.scheduleRank();
+
     // 3. Pre-attach: prebuffer the nearest UPCOMING clips (just outside the
     //    play band) into spare pool elements so promotion is an instant adopt
     //    instead of a cold HLS chain. Best-effort + hard-bounded (see PREARM
     //    docs): never evicts a playing card, never exceeds poolMax, skipped on
-    //    fast flicks / save-data / when disabled.
-    if (PREARM_ENABLED && !this.isScrollFast && !isSlowConnection() && this.assignedIds.size < max) {
+    //    fast flicks / save-data / when disabled. Also skipped while a cold-
+    //    attach wave is still draining (deferredColdAttach) so the budget
+    //    promotes every VISIBLE card before we spend slots on lookahead.
+    if (PREARM_ENABLED && !this.isScrollFast && !isSlowConnection() && !deferredColdAttach && this.assignedIds.size < max) {
       const useNativeHls = browserSupportsNativeHls();
       // The nearest N upcoming cards we want kept warm. Slicing to prearmMax
       // FIRST bounds the ACTIVE prebuffer set to ~N regardless of how many rank
