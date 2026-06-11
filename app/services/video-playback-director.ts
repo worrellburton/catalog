@@ -374,6 +374,10 @@ class VideoPlaybackDirector {
 
   private createVideoEl(): HTMLVideoElement {
     const el = document.createElement('video');
+    // anonymous CORS so canvas captures (freeze-frames on evict/steal,
+    // tap-to-detail handoffs) aren't tainted — matches TrailVideoHost's
+    // elements. Supabase storage serves ACAO:*, so playback is unaffected.
+    el.crossOrigin = 'anonymous';
     el.muted = true;
     el.defaultMuted = true;
     el.autoplay = true;
@@ -796,10 +800,13 @@ class VideoPlaybackDirector {
         slot.el.preload = 'auto';
         this.revealVideoWhenReady(slot.el, entry.videoUrl, entry);
       }
-      const poster = entry.posterUrl;
-      if (poster && slot.el.getAttribute('poster') !== poster) {
-        slot.el.setAttribute('poster', poster);
-      }
+      // NO poster attribute on pooled elements. When iOS drops a parked
+      // element's decoded surface but still reports readyState>=2, the
+      // reveal shows the element before a real frame exists — and a video
+      // poster paints LETTERBOXED (not cover), flashing a shrunken
+      // thumbnail over the card. With no poster the frameless element is
+      // transparent, so the card's own cover-fit poster/freeze-frame
+      // underneath stays visible until real frames paint.
       Object.assign(slot.el.style, {
         position: 'absolute',
         inset: '0',
@@ -923,9 +930,6 @@ class VideoPlaybackDirector {
     // autoplay on adopt. Staying paused avoids currentTime drift so the adopted
     // clip still starts at frame 0 (matches the poster — no zoom pop).
     el.autoplay = false;
-    if (entry.posterUrl && el.getAttribute('poster') !== entry.posterUrl) {
-      el.setAttribute('poster', entry.posterUrl);
-    }
     if (getVideoSource(el) !== entry.videoUrl) {
       setVideoSource(el, entry.videoUrl);
     }
