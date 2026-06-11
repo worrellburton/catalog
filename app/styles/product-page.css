@@ -774,6 +774,17 @@
   background: #0a0a0a;
 }
 
+/* Playback-time sharpen for the product hero (and its handoff poster, so the
+   poster→video swap stays consistent). Counteracts the upscale-softness of the
+   ≤834px source clip filling the large hero — no new asset, no feed impact.
+   The pooled <video> is appended INTO .pd-hero-video-slot, so the filter on the
+   slot applies to it; the feed grid uses .card-video-slot and is untouched.
+   See --hero-video-enhance (base.css) for tuning / kill-switch. */
+.pd-hero-video-slot,
+.pd-hero-handoff-poster {
+  filter: var(--hero-video-enhance);
+}
+
 .pd-hero-placeholder {
   width: 100%;
   height: 100%;

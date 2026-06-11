@@ -23,6 +23,28 @@
   --card-bg: #1a1a1a;
   --header-height: 64px;
   --overlay-bg: rgba(10, 10, 10, 0.95);
+
+  /* ── Detail-hero video enhancement (ProductPage + LookOverlay only) ──
+     The generated clips top out at a ≤834px-wide source (the "1080" HLS
+     rung is upscaled, no real detail), so a full-screen hero is always
+     upscaling and reads slightly soft. The feed tiles are small enough
+     that the upscale is invisible, so we DON'T touch them. On the detail
+     heroes we counteract the upscale blur at PLAYBACK TIME — no new asset,
+     no feed impact — with a light unsharp mask (SVG #catalog-hero-sharpen,
+     defined in root.tsx) plus a small contrast/saturation lift for punch.
+     This is perceptual sharpening, not real resolution; it makes the soft
+     source read crisper without re-encoding.
+
+     Scoped to the hero slot containers, which are unique to the detail
+     views (.pd-hero-video-slot / .look-media-video) — the feed grid uses
+     .card-video-slot, so it never inherits this.
+
+     TUNING / KILL-SWITCH: set --hero-video-enhance to `none` to disable
+     entirely, or lower the contrast/saturate factors. If a low-end iPhone
+     drops frames on the hero (per-frame filters on <video> can fall off
+     WebKit's hardware path), drop the `url(...)` term and keep only the
+     GPU-cheap contrast/saturate, or set the whole thing to `none`. */
+  --hero-video-enhance: url(#catalog-hero-sharpen) contrast(1.045) saturate(1.06);
 }
 
 body {
