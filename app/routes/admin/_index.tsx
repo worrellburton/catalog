@@ -20,7 +20,7 @@ interface DayCount {
 }
 
 type RangeId = 'daily' | 'monthly' | 'yearly';
-type Audience = 'all' | 'users' | 'admins';
+type Audience = 'all' | 'users' | 'guests' | 'admins';
 
 // All-time-since labels for the toggle. "Daily" = last 24h, "Monthly"
 // = last 30d, "Yearly" = last 365d. The number rendered is computed
@@ -39,6 +39,9 @@ const RANGE_WINDOWS_MS: Record<RangeId, number> = {
 const AUDIENCE_LABELS: Record<Audience, string> = {
   all: 'Users + Admins',
   users: 'Users only',
+  // Guests = visitors who haven't signed in (no account): their events
+  // carry a null user_id and their actives come from guest_sessions.
+  guests: 'Guests',
   admins: 'Admins only',
 };
 
@@ -289,8 +292,9 @@ export default function AdminHome() {
 
       // 1) Resolve the user id set for the current audience filter.
       //    For "all" we skip the IN-list entirely (every user counts).
+      const guestsOnly = audience === 'guests';
       let userIdsForAudience: string[] | null = null;
-      if (audience !== 'all') {
+      if (audience !== 'all' && !guestsOnly) {
         const q = supabase.from('profiles').select('id').limit(10_000);
         const filtered = audience === 'admins'
           ? q.eq('is_admin', true)
@@ -307,7 +311,8 @@ export default function AdminHome() {
           .from('user_events')
           .select('*', { count: 'exact', head: true })
           .gte('created_at', startISO);
-        if (userIdsForAudience) q = q.in('user_id', userIdsForAudience);
+        if (guestsOnly) q = q.is('user_id', null);
+        else if (userIdsForAudience) q = q.in('user_id', userIdsForAudience);
         return q;
       };
 
@@ -328,13 +333,15 @@ export default function AdminHome() {
       ] = await Promise.all([
         // Active users — distinct user_id in window.
         (async () => {
+          if (guestsOnly) return 0; // guests have no user_id — see guestActiveRes
           let q = supabase!
             .from('user_events')
             .select('user_id')
             .gte('created_at', startISO)
             .not('user_id', 'is', null)
             .limit(50_000);
-          if (userIdsForAudience) q = q.in('user_id', userIdsForAudience);
+          if (guestsOnly) q = q.is('user_id', null);
+        else if (userIdsForAudience) q = q.in('user_id', userIdsForAudience);
           const { data } = await q;
           const distinct = new Set((data || []).map(r => r.user_id));
           return distinct.size;
@@ -347,17 +354,20 @@ export default function AdminHome() {
         // Looks uploaded — user_generations.created_at, scoped to audience.
         (async () => {
           let q = supabase!.from('user_generations').select('*', { count: 'exact', head: true }).gte('created_at', startISO);
-          if (userIdsForAudience) q = q.in('user_id', userIdsForAudience);
+          if (guestsOnly) q = q.is('user_id', null);
+        else if (userIdsForAudience) q = q.in('user_id', userIdsForAudience);
           return q;
         })(),
         // Creators followed — creator_follows in window, scoped to audience.
         (async () => {
           let q = supabase!.from('creator_follows').select('*', { count: 'exact', head: true }).gte('created_at', startISO);
-          if (userIdsForAudience) q = q.in('user_id', userIdsForAudience);
+          if (guestsOnly) q = q.is('user_id', null);
+        else if (userIdsForAudience) q = q.in('user_id', userIdsForAudience);
           return q;
         })(),
         // New signups — profiles.created_at, scoped to audience.
         (async () => {
+          if (guestsOnly) return { count: 0 }; // a guest with a profile isn't a guest
           let q = supabase!.from('profiles').select('*', { count: 'exact', head: true }).gte('created_at', startISO);
           if (audience === 'admins') q = q.eq('is_admin', true);
           if (audience === 'users') q = q.or('is_admin.is.null,is_admin.eq.false');
@@ -368,7 +378,8 @@ export default function AdminHome() {
         // AI generations — user_generations.created_at + status indicates a real generation.
         (async () => {
           let q = supabase!.from('user_generations').select('*', { count: 'exact', head: true }).gte('created_at', startISO);
-          if (userIdsForAudience) q = q.in('user_id', userIdsForAudience);
+          if (guestsOnly) q = q.is('user_id', null);
+        else if (userIdsForAudience) q = q.in('user_id', userIdsForAudience);
           return q;
         })(),
         // Session length + idle + active. Three numbers from the same
@@ -388,7 +399,8 @@ export default function AdminHome() {
             .not('session_id', 'is', null)
             .order('created_at', { ascending: true })
             .limit(20_000);
-          if (userIdsForAudience) q = q.in('user_id', userIdsForAudience);
+          if (guestsOnly) q = q.is('user_id', null);
+        else if (userIdsForAudience) q = q.in('user_id', userIdsForAudience);
           const { data } = await q;
           // Bucket timestamps per session_id, sorted asc (the query's
           // order:asc preserves global order, but we sort inside the
