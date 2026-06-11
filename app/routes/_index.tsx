@@ -798,6 +798,22 @@ export default function Home() {
     setBrandFilter(null);
   }, []);
 
+  // Brand tap FROM A PRODUCT PAGE opens the brand's catalog (BrandPage)
+  // instead of re-running the search ceremony — coming from search, the
+  // ceremony path just landed the shopper back on what looked like their
+  // old search results. Trail semantics match handleOpenLook: the product
+  // surface closes and the brand catalog takes its place.
+  const handleOpenBrandCatalog = useCallback((brandName: string) => {
+    if (!brandName) return;
+    setSelectedProduct(null);
+    setSelectedCreative(null);
+    setSelectedSimilar(null);
+    setSimilarCreatives(null);
+    setBrandCreatives(null);
+    setProductOpenedFromLook(null);
+    setBrandFilter(brandName);
+  }, []);
+
   // In-app browser state. Carries the optional product context so the
   // browser header can show a Save chip wired to bookmarks while the
   // shopper is on the retailer page.
@@ -2092,7 +2108,7 @@ export default function Home() {
                 onOpenProduct={handleOpenProduct}
                 onOpenCreator={handleOpenCreator}
                 onOpenCreative={handleOpenCreative}
-                onOpenBrand={handleOpenBrand}
+                onOpenBrand={handleOpenBrandCatalog}
                 onCreateCatalog={handleCreateCatalog}
                 onOpenComments={openComments}
                 creative={
