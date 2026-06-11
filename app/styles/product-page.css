@@ -341,15 +341,26 @@
 @media (min-width: 960px) {
   .pd-split {
     display: grid;
-    grid-template-columns: minmax(0, 1.35fr) minmax(0, 1fr);
+    /* Hero column SIZES TO the 3:4 hero (auto); the info column takes the
+       rest. Previously the hero column was 1.35fr and the video `cover`ed the
+       full 100vh × 1.35fr panel — a wide landscape crop. Now the hero is a
+       true 3:4 portrait like the feed tiles and the info panel fills whatever
+       horizontal space remains. */
+    grid-template-columns: auto minmax(0, 1fr);
     align-items: start;
     min-height: 100vh;
   }
   .pd-split .pd-hero {
     position: sticky;
     top: 0;
-    height: 100vh;
-    width: 100%;
+    /* 3:4 portrait, full viewport height. height drives the width via
+       aspect-ratio (100vh tall → 75vh wide = 3:4). The 73vw clamp keeps the
+       hero from eating the info column on tall/narrow desktop windows: when
+       73vw < 100vh the height caps so the width never exceeds ~55vw, and the
+       box stays exactly 3:4 either way. */
+    height: min(100vh, 73vw);
+    width: auto;
+    aspect-ratio: 3 / 4;
   }
   /* Image hero: contain so the entire product is visible - never crop
      a body part or the brand logo at the top of the asset. */
