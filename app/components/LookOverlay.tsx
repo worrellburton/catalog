@@ -1015,14 +1015,14 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                     {lookDescription ? (
                       // Unique, image-grounded description for THIS look.
                       <p className="look-creator-about-bio look-creator-about-bio--ai">
-                        <span className="look-creator-about-ai-mark" aria-hidden="true">✨</span>
+                        <span className="look-creator-about-ai-mark" aria-hidden="true"><svg viewBox="0 0 100 100" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M50 4 C54 30 70 46 96 50 C70 54 54 70 50 96 C46 70 30 54 4 50 C30 46 46 30 50 4 Z" /></svg></span>
                         {lookDescription}
                       </p>
                     ) : creatorData?.bio ? (
                       <p className="look-creator-about-bio">{creatorData.bio}</p>
                     ) : aboutSummary ? (
                       <p className="look-creator-about-bio look-creator-about-bio--ai">
-                        <span className="look-creator-about-ai-mark" aria-hidden="true">✨</span>
+                        <span className="look-creator-about-ai-mark" aria-hidden="true"><svg viewBox="0 0 100 100" width="13" height="13" fill="currentColor" aria-hidden="true"><path d="M50 4 C54 30 70 46 96 50 C70 54 54 70 50 96 C46 70 30 54 4 50 C30 46 46 30 50 4 Z" /></svg></span>
                         {aboutSummary}
                       </p>
                     ) : null}
