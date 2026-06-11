@@ -3,6 +3,7 @@ import { useNavigate } from '@remix-run/react';
 import CatalogLogo from '~/components/CatalogLogo';
 import ParticleBackground from '~/components/ParticleBackground';
 import AutoplayVideo from '~/components/AutoplayVideo';
+import { withTransform } from '~/utils/supabase-image';
 import { particleControls } from '~/services/particles';
 import { supabase } from '~/utils/supabase';
 import { useAuth } from '~/hooks/useAuth';
@@ -2058,7 +2059,10 @@ export default function GeneratePage() {
                   ) : (
                     cloudProducts.map(p => {
                       const isPicked = picked.some(x => x.id === p.id);
-                      const poster = p.primary_video_poster_url || p.primary_image_url || p.image_url;
+                      // Small rendition, not the multi-MB original — the
+                      // picker grid was cold-fetching full-res images.
+                      const rawPoster = p.primary_video_poster_url || p.primary_image_url || p.image_url;
+                      const poster = rawPoster ? (withTransform(rawPoster, { width: 360, quality: 70 }) ?? rawPoster) : rawPoster;
                       return (
                         <button
                           key={p.id}
@@ -2068,7 +2072,7 @@ export default function GeneratePage() {
                           onClick={() => togglePick(p)}
                         >
                           {p.primary_video_url ? (
-                            <AutoplayVideo className="gen-cloud-media" src={p.primary_video_url} poster={poster || undefined} />
+                            <AutoplayVideo className="gen-cloud-media" src={p.primary_video_url} poster={poster || undefined} preload="metadata" />
                           ) : poster ? (
                             <img className="gen-cloud-media" src={poster} alt="" loading="lazy" decoding="async" />
                           ) : null}

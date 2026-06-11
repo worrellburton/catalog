@@ -591,6 +591,12 @@ function GenProductCircles({ images }: { images: string[] }) {
 function GenTile({ gen, productImgs }: { gen: UserGeneration; productImgs: string[] }) {
   const navigate = useNavigate();
   const [loaded, setLoaded] = useState(false);
+  // Generations carry no poster column; the first product image (already
+  // fetched for the foot circles) paints the tile instantly while the
+  // clip streams in behind it.
+  const tilePoster = productImgs[0]
+    ? withTransform(productImgs[0], { width: 240, quality: 60, format: 'webp' })
+    : undefined;
   const inFlight = isGenerationInFlight(gen);
   const failed = gen.status === 'failed' || (!inFlight && gen.status !== 'done');
   const label = gen.display_name || gen.style || 'New look';
@@ -641,9 +647,10 @@ function GenTile({ gen, productImgs }: { gen: UserGeneration; productImgs: strin
     <button type="button" className="ap-gen ap-gen--done" title={label} onClick={openLook} aria-label={`Open ${label}`}>
       {gen.video_url ? (
         <>
-          <video className="ap-gen-media" src={gen.video_url} muted loop autoPlay playsInline preload="metadata" onLoadedData={() => setLoaded(true)} />
-          {/* Loading shimmer until the first frame paints — no black flash. */}
-          {!loaded && <div className="ap-gen-load" aria-hidden="true" />}
+          <video className="ap-gen-media" src={gen.video_url} poster={tilePoster} muted loop autoPlay playsInline preload="metadata" onLoadedData={() => setLoaded(true)} />
+          {/* Shimmer only when there's no poster to paint — with one, the
+              tile is visually complete from the first frame. */}
+          {!loaded && !tilePoster && <div className="ap-gen-load" aria-hidden="true" />}
         </>
       ) : <div className="ap-gen-media ap-gen-media--blank" />}
       <div className="ap-gen-foot">
