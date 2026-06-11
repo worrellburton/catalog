@@ -163,6 +163,25 @@ function applyFreshSlots(order: string[], seen: Set<string>, k: number): string[
   return out;
 }
 
+/** Hard rotation: cap how many of yesterday's top-12 may repeat in
+ *  today's top-12 — excess repeats demote past the window so the drop
+ *  always FEELS new (founder's call: at most half may carry over). */
+function applyRotationGuard(order: string[], prevTop: Set<string>, maxRepeats: number, window: number): string[] {
+  const head: string[] = [];
+  const demoted: string[] = [];
+  let repeats = 0;
+  let i = 0;
+  for (; i < order.length && head.length < window; i++) {
+    const id = order[i];
+    if (prevTop.has(id)) {
+      if (repeats >= maxRepeats) { demoted.push(id); continue; }
+      repeats++;
+    }
+    head.push(id);
+  }
+  return [...head, ...demoted, ...order.slice(i)];
+}
+
 interface RankedItem { type: 'product'; id: string }
 
 Deno.serve(async (req: Request) => {
@@ -398,6 +417,22 @@ Deno.serve(async (req: Request) => {
     if (rules.freshSlots.enabled) {
       const k = Math.max(0, Math.min(20, Math.round(rules.freshSlots.weight)));
       finalOrder = applyFreshSlots(finalOrder, seen, k);
+    }
+
+    // Hard rotation guarantee: at most 6 of yesterday's top 12 may repeat
+    // in today's top 12 (fresh arrivals and dark inventory rise instead).
+    const prevDay = new Date(Date.parse(`${feedDate}T00:00:00Z`) - 86_400_000).toISOString().slice(0, 10);
+    const { data: prevRow } = await supabase
+      .from('personalized_feeds')
+      .select('ranked_items')
+      .eq('user_id', userId)
+      .eq('feed_date', prevDay)
+      .maybeSingle();
+    const prevTop = new Set(
+      (((prevRow?.ranked_items ?? []) as RankedItem[]).slice(0, 12)).map(r => r.id));
+    if (prevTop.size > 0) {
+      finalOrder = applyRotationGuard(finalOrder, prevTop, 6, 12);
+      reason = { ...reason, rotated: true };
     }
 
     return await persistAndReturn(supabase, userId, feedDate, finalOrder, 'personalized', model, reason, preview);
