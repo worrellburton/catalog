@@ -2,7 +2,6 @@ import { useState } from 'react';
 import {
   lookupAmazonProduct,
   searchAmazonProducts,
-  ingestRainforestProduct,
   ingestRainforestProducts,
   type RainforestProduct,
 } from '~/services/rainforest';
@@ -38,7 +37,11 @@ export default function AmazonLookupModal({ onClose, onIngested, onIngestedIds, 
   const [error, setError] = useState<string | null>(null);
 
   // Lookup mode state
-  const [product, setProduct] = useState<RainforestProduct | null>(null);
+  // Lookup mode accumulates a BASKET: every successful lookup appends, so
+  // an admin can paste URL after URL and ingest them all in one go. (It
+  // used to hold ONE product — pasting a second URL silently replaced the
+  // first, which read as "each add overwrites the last".)
+  const [queued, setQueued] = useState<RainforestProduct[]>([]);
 
   // Search mode state
   const [results, setResults] = useState<RainforestProduct[]>([]);
@@ -51,7 +54,6 @@ export default function AmazonLookupModal({ onClose, onIngested, onIngestedIds, 
     if (!raw) return;
     setLoading(true);
     setError(null);
-    setProduct(null);
     setResults([]);
     setSelected(new Set());
 
@@ -64,7 +66,8 @@ export default function AmazonLookupModal({ onClose, onIngested, onIngestedIds, 
         const asin = extractAsin(raw);
         const payload = asin ? { asin } : { url: raw };
         const found = await lookupAmazonProduct(payload);
-        setProduct(found);
+        setQueued(prev => prev.some(q => q.url === found.url) ? prev : [...prev, found]);
+        setInput(''); // clear for the next paste — the basket keeps building
         setMode('lookup');
       } else {
         const found = await searchAmazonProducts(raw, 24);
@@ -91,16 +94,17 @@ export default function AmazonLookupModal({ onClose, onIngested, onIngestedIds, 
   const selectAll = () => setSelected(new Set(results.map(p => p.url!).filter(Boolean)));
   const selectNone = () => setSelected(new Set());
 
-  const handleIngestOne = async () => {
-    if (!product) return;
+  const handleIngestQueued = async () => {
+    if (queued.length === 0) return;
     setIngesting(true);
     setError(null);
     try {
-      if (product.url) onPending?.([product.url]);
-      const row = await ingestRainforestProduct(product);
-      if (!row) throw new Error('Failed to save product');
-      onIngestedIds?.([row.id]);
-      onIngested(1);
+      const urls = queued.map(q => q.url).filter((u): u is string => !!u);
+      if (urls.length) onPending?.(urls);
+      const { inserted, failed, ids } = await ingestRainforestProducts(queued);
+      if (inserted === 0) throw new Error(failed ? `All ${failed} ingests failed` : 'Failed to save');
+      if (ids.length) onIngestedIds?.(ids);
+      onIngested(inserted);
     } catch (err) {
       setError(err instanceof Error ? err.message : String(err));
     } finally {
@@ -130,8 +134,8 @@ export default function AmazonLookupModal({ onClose, onIngested, onIngestedIds, 
     }
   };
 
-  const hasResults = mode === 'search' ? results.length > 0 : !!product;
-  const canIngest = mode === 'search' ? selected.size > 0 : !!product;
+  const hasResults = mode === 'search' ? results.length > 0 : queued.length > 0;
+  const canIngest = mode === 'search' ? selected.size > 0 : queued.length > 0;
 
   return (
     <div className="admin-modal-overlay" onClick={onClose}>
@@ -150,7 +154,7 @@ export default function AmazonLookupModal({ onClose, onIngested, onIngestedIds, 
             <div style={{ display: 'inline-flex', borderRadius: 6, overflow: 'hidden', border: '1px solid #e5e7eb' }}>
               <button
                 className="admin-btn"
-                onClick={() => { setMode('search'); setProduct(null); setError(null); }}
+                onClick={() => { setMode('search'); setError(null); }}
                 style={{
                   padding: '6px 12px', fontSize: 12, borderRadius: 0, border: 'none',
                   background: mode === 'search' ? '#111' : '#fff',
@@ -207,26 +211,37 @@ export default function AmazonLookupModal({ onClose, onIngested, onIngestedIds, 
         )}
 
         <div style={{ flex: 1, overflow: 'auto', padding: '0 24px 8px' }}>
-          {mode === 'lookup' && product && (
-            <div style={{ border: '1px solid #eee', borderRadius: 8, padding: 14, marginBottom: 14, display: 'flex', gap: 14 }}>
-              {product.image_url && (
-                <img
-                  src={product.image_url}
-                  alt=""
-                  style={{ width: 140, height: 140, objectFit: 'contain', borderRadius: 6, background: '#fafafa', flexShrink: 0 }}
-                />
-              )}
-              <div style={{ flex: 1, minWidth: 0 }}>
-                <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 4 }}>{product.name}</div>
-                <div style={{ fontSize: 12, color: '#666', marginBottom: 4 }}>
-                  {product.brand || ' - '} {product.asin && <span style={{ fontFamily: 'monospace', marginLeft: 8, color: '#999' }}>{product.asin}</span>}
-                </div>
-                <div style={{ fontSize: 14, fontWeight: 700, color: '#111', marginBottom: 6 }}>{product.price || ' - '}</div>
-                {product.categories.length > 0 && (
-                  <div style={{ fontSize: 11, color: '#888' }}>{product.categories.slice(0, 3).join(' › ')}</div>
-                )}
+          {mode === 'lookup' && queued.length > 0 && (
+            <>
+              <div style={{ fontSize: 12, color: '#666', padding: '8px 0' }}>
+                {queued.length} queued — paste another ASIN/URL above to keep adding.
               </div>
-            </div>
+              {queued.map((q, i) => (
+                <div key={q.url ?? i} style={{ border: '1px solid #eee', borderRadius: 8, padding: 12, marginBottom: 10, display: 'flex', gap: 12, alignItems: 'center' }}>
+                  {q.image_url && (
+                    <img
+                      src={q.image_url}
+                      alt=""
+                      style={{ width: 64, height: 64, objectFit: 'contain', borderRadius: 6, background: '#fafafa', flexShrink: 0 }}
+                    />
+                  )}
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <div style={{ fontSize: 13, fontWeight: 600, marginBottom: 2, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{q.name}</div>
+                    <div style={{ fontSize: 12, color: '#666' }}>
+                      {q.brand || ' - '}
+                      {q.asin && <span style={{ fontFamily: 'monospace', marginLeft: 8, color: '#999' }}>{q.asin}</span>}
+                      <span style={{ marginLeft: 10, fontWeight: 700, color: '#111' }}>{q.price || ''}</span>
+                    </div>
+                  </div>
+                  <button
+                    className="admin-btn admin-btn-secondary"
+                    aria-label={`Remove ${q.name}`}
+                    onClick={() => setQueued(prev => prev.filter((_, j) => j !== i))}
+                    style={{ padding: '4px 10px', fontSize: 12, flexShrink: 0 }}
+                  >×</button>
+                </div>
+              ))}
+            </>
           )}
 
           {mode === 'search' && results.length > 0 && (
@@ -293,14 +308,14 @@ export default function AmazonLookupModal({ onClose, onIngested, onIngestedIds, 
           <button className="admin-btn admin-btn-secondary" onClick={onClose} disabled={ingesting}>Cancel</button>
           <button
             className="admin-btn admin-btn-primary"
-            onClick={mode === 'search' ? handleIngestSelected : handleIngestOne}
+            onClick={mode === 'search' ? handleIngestSelected : handleIngestQueued}
             disabled={!canIngest || ingesting}
           >
             {ingesting
               ? 'Saving…'
               : mode === 'search'
                 ? `Ingest ${selected.size} product${selected.size === 1 ? '' : 's'}`
-                : 'Ingest to catalog'}
+                : `Ingest ${queued.length} product${queued.length === 1 ? '' : 's'}`}
           </button>
         </div>
       </div>
