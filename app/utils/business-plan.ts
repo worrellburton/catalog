@@ -288,10 +288,10 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
   // the wall cycles if there are fewer images than cells so the page is
   // always fully covered.
   const feed = d.feedImages ?? [];
-  // ~3:4 tiles, cover-filled by the 3:4 primary product images (≈3% crop,
-  // invisible). Equal cols and rows on a portrait page give cells within a
-  // few percent of 3:4, and fractional rows always land flush on the page
-  // edge — no black bands, no letterboxed strips.
+  // ~3:4 cells showing the FULL primary image (contain on a white card,
+  // never zoomed/cropped). Equal cols and rows on a portrait page give
+  // cells within a few percent of the primaries' own 3:4, and fractional
+  // rows always land flush on the page edge — no bands, no strips.
   const coverCols = feed.length >= 64 ? 8 : feed.length >= 36 ? 6 : 4;
   const coverTiles = feed.length
     ? Array.from({ length: coverCols * coverCols }, (_, i) => `<img src="${esc(feed[i % feed.length])}" alt="" loading="eager" />`).join('')
@@ -405,8 +405,11 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
      is a fixed 3:4 card, cover-filled by its product image — uniform wall,
      no letterbox strips. Rows overflow the page and crop at the edge. */
   .cover-feed { position: absolute; inset: 0; display: grid; gap: 5px; padding: 5px; background: #000; }
+  /* contain, not cover: the full, un-zoomed product picture on a white
+     card. Print cells are ~3:4 (the primaries' own shape), so the fit is
+     near-exact there; any sliver is white-on-white and invisible. */
   .cover-feed img { width: 100%; height: 100%; min-width: 0; min-height: 0;
-    object-fit: cover; background: #111; display: block; }
+    object-fit: contain; background: #fff; padding: 4px; box-sizing: border-box; display: block; }
   .cover-scrim { position: absolute; inset: 0;
     background: linear-gradient(rgba(0,0,0,0.66), rgba(0,0,0,0.80)); }
   .cover-logo { position: relative; z-index: 1; width: clamp(240px, 38vw, 400px); height: auto; display: block;
