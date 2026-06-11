@@ -950,6 +950,31 @@ export async function getGenerationProductImages(
   return out;
 }
 
+/** Poster URL of the LOOK each generation landed as (its clip's own
+ *  poster frame), keyed by generation id. Lets rails paint the real
+ *  first frame instantly while the video streams in the background. */
+export async function getGenerationLookPosters(
+  genIds: string[],
+): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  if (!supabase || genIds.length === 0) return out;
+  const { data } = await supabase
+    .from('looks')
+    .select('source_generation_id, looks_creative(thumbnail_url, is_primary)')
+    .in('source_generation_id', genIds);
+  for (const row of (data || []) as unknown as Array<{
+    source_generation_id: string | null;
+    looks_creative: Array<{ thumbnail_url: string | null; is_primary: boolean }> | null;
+  }>) {
+    if (!row.source_generation_id || out[row.source_generation_id]) continue;
+    const creatives = row.looks_creative || [];
+    const url = (creatives.find(c => c.is_primary)?.thumbnail_url
+      || creatives.find(c => c.thumbnail_url)?.thumbnail_url) ?? null;
+    if (url) out[row.source_generation_id] = url;
+  }
+  return out;
+}
+
 /**
  * Hydrate a single generation with its linked uploads and picked products,
  * so the Generate page can pre-fill the wizard for "edit & regenerate".

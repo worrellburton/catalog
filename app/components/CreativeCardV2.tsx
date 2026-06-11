@@ -85,6 +85,12 @@ interface CreativeCardV2Props {
   hideCreator?: boolean;
 }
 
+/** Poster/still rendition width matches the VIDEO rendition the card
+ *  will actually play (the mobile variant encodes at 480w, desktop/full
+ *  at 720w), so the poster→first-frame swap is pixel-identical — no
+ *  sharpness pop when the clip takes over from the still. */
+const CARD_POSTER_WIDTH = typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches ? 480 : 720;
+
 const CreativeCardV2 = memo(function CreativeCardV2({
   creative,
   look,
@@ -154,8 +160,8 @@ const CreativeCardV2 = memo(function CreativeCardV2({
   // video. Since the poster is the clip's frame 0, the leftover compression
   // delta is what you see "pop" the instant the <video> cuts in over it. q82
   // closes that gap (still a ~25 KB WebP) so poster→playback reads as one image.
-  const posterUrl = withTransform(rawPosterUrl, { width: 540, quality: 82, resize: 'contain' }) || rawPosterUrl;
-  const stillImageUrl = withTransform(rawStillImageUrl, { width: 540, quality: 82, resize: 'contain' }) || rawStillImageUrl;
+  const posterUrl = withTransform(rawPosterUrl, { width: CARD_POSTER_WIDTH, quality: 82, resize: 'contain' }) || rawPosterUrl;
+  const stillImageUrl = withTransform(rawStillImageUrl, { width: CARD_POSTER_WIDTH, quality: 82, resize: 'contain' }) || rawStillImageUrl;
 
   // Dial: /admin/dials → video_still_ratio controls whether this card
   // renders as a still image or plays video. When the dial pushes the
