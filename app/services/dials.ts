@@ -554,6 +554,9 @@ export interface FeedRules {
   genderStrict: FeedRule;
   /** Boost what's trending platform-wide this week (clickout velocity). */
   trendingBoost: FeedRule;
+  /** Reserve N of the top-20 slots for items the user has never been
+   *  shown — the "new feed every morning" mechanic. */
+  freshSlots: FeedRule;
 }
 
 /** Defaults mirror today's live behavior — engaged brands/types and the
@@ -570,6 +573,7 @@ export const DEFAULT_FEED_RULES: FeedRules = {
   diversityGuard:  { enabled: false, weight: 3 },
   genderStrict:    { enabled: false, weight: 0 },
   trendingBoost:   { enabled: false, weight: 4 },
+  freshSlots:      { enabled: true,  weight: 6 },
 };
 
 function sanitizeFeedRules(raw: unknown): FeedRules {
@@ -602,3 +606,23 @@ export async function setFeedRules(rules: FeedRules): Promise<void> {
     .upsert({ key: FEED_RULES_KEY, value: JSON.stringify(sanitizeFeedRules(rules)) }, { onConflict: 'key' });
   if (error) throw error;
 }
+
+/** The daily-feed rules in founder-priority order — shared by the
+ *  Automatic Editor modal and the daily-feed lens. */
+// Rules listed in founder-priority order. `weight: false`
+// renders switch-only (the rule is binary).
+export const FEED_RULE_META: {
+  key: keyof FeedRules; label: string; hint: string; weight: boolean; min?: number; max?: number;
+}[] = [
+  { key: 'convertingBoost', label: 'Show the highest-converting products', hint: 'Boost products with the best clickout rate platform-wide', weight: true },
+  { key: 'clickedProducts', label: 'Resurface products they clicked before', hint: 'Their own click history pulls those exact items back up', weight: true },
+  { key: 'engagedBrands', label: 'Lean into brands they engage with', hint: 'Brands they click and buy from rank higher', weight: true },
+  { key: 'engagedTypes', label: 'Lean into categories they engage with', hint: 'Their most-tapped product types rank higher', weight: true },
+  { key: 'savedBrands', label: 'Boost brands they saved', hint: 'Brands from their saved items float up (applies on-device)', weight: true },
+  { key: 'freshnessBoost', label: 'Push the newest arrivals up', hint: 'Recently added products get a freshness lift', weight: true },
+  { key: 'seenDecay', label: 'Rest things they already saw', hint: 'Already-seen items sink so the feed feels new daily', weight: true },
+  { key: 'diversityGuard', label: 'Brand diversity guard', hint: 'Max items per brand in the top 20 (weight = the cap)', weight: true, min: 1, max: 5 },
+  { key: 'genderStrict', label: 'Strict gender matching', hint: 'Only their gender + unisex products appear', weight: false },
+  { key: 'trendingBoost', label: 'Show what is trending this week', hint: 'Platform-wide clickout velocity (last 7 days)', weight: true },
+  { key: 'freshSlots', label: 'Fresh finds up top, every day', hint: 'Reserve N of the top 20 slots for items they have never been shown', weight: true, min: 0, max: 20 },
+];

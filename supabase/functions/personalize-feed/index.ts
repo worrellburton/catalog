@@ -80,7 +80,8 @@ interface ProductRow {
 interface FeedRule { enabled: boolean; weight: number }
 type FeedRules = Record<
   'convertingBoost' | 'clickedProducts' | 'engagedBrands' | 'engagedTypes' | 'savedBrands'
-  | 'freshnessBoost' | 'seenDecay' | 'diversityGuard' | 'genderStrict' | 'trendingBoost',
+  | 'freshnessBoost' | 'seenDecay' | 'diversityGuard' | 'genderStrict' | 'trendingBoost'
+  | 'freshSlots',
   FeedRule
 >;
 
@@ -97,6 +98,10 @@ const DEFAULT_RULES: FeedRules = {
   diversityGuard:  { enabled: false, weight: 3 },
   genderStrict:    { enabled: false, weight: 0 },
   trendingBoost:   { enabled: false, weight: 4 },
+  // Fresh-slot quota: weight = how many of the TOP 20 slots are reserved
+  // for items this shopper has never been shown. THE "new feed every
+  // morning" mechanic — on by default (founder's call).
+  freshSlots:      { enabled: true,  weight: 6 },
 };
 
 function parseRules(raw: string | undefined): FeedRules {
@@ -142,6 +147,20 @@ function applyDiversityGuard(order: string[], brandById: Map<string, string | nu
   }
   // Demoted items re-enter right after the top window.
   return [...top.slice(0, 20), ...demoted, ...top.slice(20)];
+}
+
+function applyFreshSlots(order: string[], seen: Set<string>, k: number): string[] {
+  if (k === 0 || order.length === 0) return order;
+  const top = order.slice(0, 20);
+  const unseenInTop = top.filter(id => !seen.has(id)).length;
+  if (unseenInTop >= k) return order;
+  const promoted = order.slice(20).filter(id => !seen.has(id)).slice(0, k - unseenInTop);
+  if (promoted.length === 0) return order;
+  const promotedSet = new Set(promoted);
+  const rest = order.filter(id => !promotedSet.has(id));
+  const out = [...rest];
+  promoted.forEach((id, i) => out.splice(Math.min(1 + i * 3, out.length), 0, id));
+  return out;
 }
 
 interface RankedItem { type: 'product'; id: string }
@@ -198,7 +217,9 @@ Deno.serve(async (req: Request) => {
     const feedDate = editorDay(refreshHour);
 
     // ── Idempotency: today's feed already computed? ──────────────────────
-    const { data: existing } = await supabase
+    // Admin previews skip the cache: the lens must reflect rule-dial
+    // changes immediately, and preview never persists anyway.
+    const { data: existing } = preview ? { data: null } : await supabase
       .from('personalized_feeds')
       .select('ranked_items, variant, model, computed_at')
       .eq('user_id', userId)
@@ -369,6 +390,14 @@ Deno.serve(async (req: Request) => {
       const cap = Math.max(1, Math.min(5, Math.round(rules.diversityGuard.weight)));
       const brandById = new Map(candidates.map(c => [c.id, c.brand]));
       finalOrder = applyDiversityGuard(finalOrder, brandById, cap);
+    }
+
+    // Rule: fresh-slot quota — guarantee never-shown items hold K of the
+    // top 20, promoting the best-ranked unseen from below, interleaved so
+    // the feed leads with discovery without burying proven favourites.
+    if (rules.freshSlots.enabled) {
+      const k = Math.max(0, Math.min(20, Math.round(rules.freshSlots.weight)));
+      finalOrder = applyFreshSlots(finalOrder, seen, k);
     }
 
     return await persistAndReturn(supabase, userId, feedDate, finalOrder, 'personalized', model, reason, preview);
