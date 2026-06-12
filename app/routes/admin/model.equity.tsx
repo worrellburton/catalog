@@ -17,6 +17,7 @@ import { useSharedEquity } from '~/hooks/useSharedEquity';
 import ModelTabs from '~/components/model/ModelTabs';
 import AcctInput from '~/components/model/AcctInput';
 import EquityAdvisor from '~/components/model/EquityAdvisor';
+import EquityLedger from '~/components/model/EquityLedger';
 
 const pct = (v: number, dp = 2) => `${(v * 100).toFixed(dp)}%`;
 const shares = (n: number) => n.toLocaleString('en-US');
@@ -37,6 +38,15 @@ export default function EquityPage() {
     return () => document.documentElement.classList.remove('eq-page');
   }, []);
   const [kaizenSignal, setKaizenSignal] = useState(0);
+  // Rounds view (pricing events, full stage tables) vs Ledger view (one
+  // chronological line per check — the stock-ledger read). Sticky.
+  const [view, setView] = useState<'rounds' | 'ledger'>(() => {
+    try { return window.localStorage.getItem('catalog:equity:view') === 'ledger' ? 'ledger' : 'rounds'; } catch { return 'rounds'; }
+  });
+  const pickView = (v: 'rounds' | 'ledger') => {
+    setView(v);
+    try { window.localStorage.setItem('catalog:equity:view', v); } catch { /* quota */ }
+  };
 
   // Collapsed sections — a local view preference, not shared state.
   const [collapsed, setCollapsed] = useState<Set<string>>(() => new Set(typeof window === 'undefined' ? [] : readCollapsed()));
@@ -101,6 +111,10 @@ export default function EquityPage() {
 
       <div className="eq-toprow">
         <ModelTabs active="equity" />
+        <div className="eq-mode" role="group" aria-label="Equity view">
+          <button type="button" className={view === 'rounds' ? 'is-active' : ''} onClick={() => pickView('rounds')}>Rounds</button>
+          <button type="button" className={view === 'ledger' ? 'is-active' : ''} onClick={() => pickView('ledger')}>Ledger</button>
+        </div>
         <button
           type="button"
           className="eq-kaizen"
@@ -138,6 +152,17 @@ export default function EquityPage() {
         </div>
       </div>
 
+      {view === 'ledger' && (
+        <EquityLedger
+          equity={equity}
+          summary={summary}
+          onSafe={setSafe}
+          onInvestor={setInvestor}
+          onAddSafe={() => patch({ safes: [...equity.safes, { id: equityUid(), name: 'New investor', investment: 100_000, valCap: 5_000_000, discount: 0.2 }] })}
+        />
+      )}
+
+      {view === 'rounds' && (<>
       {/* ── Foundation: founders + early options only ── */}
       <div className="eq-section admin-card">
         <div className="eq-section-head">
@@ -334,6 +359,7 @@ export default function EquityPage() {
           + Add round
         </button>
       </div>
+      </>)}
 
       <p className="eq-foot">
         Post-money SAFE mode: each SAFE&rsquo;s ownership locks at investment ÷ cap against the company

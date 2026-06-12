@@ -1,0 +1,128 @@
+// The Ledger view — the cap table as the stock ledger reads: one line
+// per check, chronological, investor-first. Rounds still do the pricing
+// underneath (a SAFE's terms are its cap/discount; a priced check's
+// terms are its round's $/share) — this view just stops organising the
+// money by event and lists it the way it actually arrived.
+
+import { Link } from '@remix-run/react';
+import { fmtCurrency } from '~/services/projections';
+import {
+  type EquityState, type EquitySummary, type PricedRound, type RoundInvestor, type SafeNote,
+} from '~/services/equity';
+import AcctInput from '~/components/model/AcctInput';
+
+const pct = (v: number, dp = 2) => `${(v * 100).toFixed(dp)}%`;
+const shares = (n: number) => n.toLocaleString('en-US');
+
+interface LedgerLine {
+  id: string;
+  date: string;            // '' sorts to its structural order
+  name: string;
+  kind: 'safe' | 'round';
+  terms: string;
+  invested: number;
+  safe?: SafeNote;
+  round?: PricedRound;
+  investor?: RoundInvestor;
+  order: number;           // structural fallback order (SAFEs, then rounds)
+}
+
+export default function EquityLedger({ equity, summary, onSafe, onInvestor, onAddSafe }: {
+  equity: EquityState;
+  summary: EquitySummary;
+  onSafe: (id: string, p: Partial<SafeNote>) => void;
+  onInvestor: (roundId: string, invId: string, p: Partial<RoundInvestor>) => void;
+  onAddSafe: () => void;
+}) {
+  const lastStage = summary.stages[summary.stages.length - 1];
+  const rowNow = (id: string) => lastStage?.rows.find(r => r.id === id) ?? summary.foundationRows.find(r => r.id === id);
+
+  let order = 0;
+  const lines: LedgerLine[] = [
+    ...equity.safes.map(s => ({
+      id: s.id, date: s.date ?? '', name: s.name, kind: 'safe' as const,
+      terms: `SAFE · cap ${fmtCurrency(s.valCap, { compact: true })}${s.discount > 0 ? ` · ${Math.round(s.discount * 100)}% disc` : ''}`,
+      invested: s.investment, safe: s, order: order++,
+    })),
+    ...equity.rounds.flatMap(r => {
+      const stage = summary.stages.find(st => st.round.id === r.id);
+      return r.investors.map(i => ({
+        id: i.id, date: i.date ?? '', name: i.name, kind: 'round' as const,
+        terms: `${r.name} · ${stage ? `${fmtCurrency(stage.pricePerShare)} / share` : 'priced'}`,
+        invested: i.investment, round: r, investor: i, order: order++,
+      }));
+    }),
+  ].sort((a, b) => {
+    if (a.date && b.date) return a.date.localeCompare(b.date) || a.order - b.order;
+    if (a.date !== '' || b.date !== '') return a.date ? -1 : 1;
+    return a.order - b.order;
+  });
+
+  const totalIn = lines.reduce((a, l) => a + l.invested, 0);
+
+  return (
+    <div className="eq-section admin-card">
+      <div className="eq-section-head">
+        <h3>Ledger</h3>
+        <span>
+          every check, in the order it landed · {fmtCurrency(totalIn, { compact: true })} across {lines.length} entries ·
+          ownership marked at {lastStage ? `${lastStage.round.name} close` : 'today'}
+        </span>
+      </div>
+      <table className="eq-table">
+        <thead>
+          <tr><th>Date</th><th>Investor</th><th className="num">Check</th><th>Terms</th><th className="num">Shares</th><th className="num">Ownership now</th><th className="num">Value now</th><th className="num">Multiple</th></tr>
+        </thead>
+        <tbody>
+          {lines.map(l => {
+            const now = rowNow(l.id);
+            const value = now?.equityValue ?? 0;
+            const multiple = l.invested > 0 && value > 0 ? value / l.invested : null;
+            const setDate = (date: string) =>
+              l.kind === 'safe' ? onSafe(l.id, { date }) : onInvestor(l.round!.id, l.id, { date });
+            return (
+              <tr key={l.id}>
+                <td>
+                  <input
+                    className="eq-in eq-in-date"
+                    type="date"
+                    value={l.date}
+                    onChange={e => setDate(e.target.value)}
+                  />
+                </td>
+                <td className="eq-namecell">
+                  <input
+                    className="eq-in eq-in-name"
+                    value={l.name}
+                    onChange={e => l.kind === 'safe' ? onSafe(l.id, { name: e.target.value }) : onInvestor(l.round!.id, l.id, { name: e.target.value })}
+                  />
+                  <Link className="eq-open" to={`/admin/model/equity/holder/${l.id}`} title="Open this investor's page">↗</Link>
+                </td>
+                <td className="num">
+                  <AcctInput
+                    className="eq-in"
+                    value={l.invested}
+                    onChange={n => l.kind === 'safe' ? onSafe(l.id, { investment: n }) : onInvestor(l.round!.id, l.id, { investment: n })}
+                  />
+                </td>
+                <td className="eq-type">{l.terms}</td>
+                <td className="num">{shares(now?.shares ?? 0)}</td>
+                <td className="num">{pct(now?.pct ?? 0)}</td>
+                <td className="num">{fmtCurrency(value, { compact: true })}</td>
+                <td className="num eq-computed">{multiple != null ? `${multiple.toFixed(1)}×` : '—'}</td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+      <div className="eq-adders">
+        <button type="button" onClick={onAddSafe}>+ Check (SAFE)</button>
+      </div>
+      <p className="eq-foot" style={{ marginBottom: 0 }}>
+        New money between priced rounds is a SAFE — that&rsquo;s what &ldquo;getting in at a certain
+        time&rdquo; is, legally. Priced checks belong to their round&rsquo;s $/share; manage rounds in
+        the Rounds view.
+      </p>
+    </div>
+  );
+}
