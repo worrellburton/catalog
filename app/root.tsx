@@ -294,8 +294,8 @@ export default function App() {
   // set; we don't pay the SDK bundle cost on the cold path either,
   // because the SDK is dynamically imported inside initSentry().
   useEffect(() => { void initSentry(); }, []);
-  // Media-first scrolling (founder's call): on mobile, card chrome fades
-  // away while gliding and eases back in when the scroll settles.
+  // Media-first scrolling (founder's call): card chrome fades away while
+  // gliding and eases back in when the scroll settles — every viewport.
   useEffect(() => { initScrollIdleFade(); }, []);
 
   return (
