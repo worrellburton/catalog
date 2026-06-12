@@ -16,13 +16,18 @@ export default function SharedDocument() {
   const [busy, setBusy] = useState(false);
   const [html, setHtml] = useState<string | null>(null);
 
-  // Pinch-zoom like a PDF (same override the /business-plan viewer uses).
+  // PDF-page viewport (same override the /business-plan viewer uses):
+  // once unlocked, the document keeps its composed 920px layout — phones
+  // see the whole sheet scaled to fit and pinch-zoom in to read. The
+  // password screen stays at device width.
   useEffect(() => {
     const meta = document.querySelector('meta[name="viewport"]');
     const prev = meta?.getAttribute('content') ?? null;
-    meta?.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=6, user-scalable=yes');
+    meta?.setAttribute('content', html
+      ? 'width=920, user-scalable=yes'
+      : 'width=device-width, initial-scale=1, user-scalable=yes');
     return () => { if (prev !== null) meta?.setAttribute('content', prev); };
-  }, []);
+  }, [html]);
 
   const submit = async () => {
     if (!supabase || !slug || busy || !code.trim()) return;
