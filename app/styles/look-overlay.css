@@ -1125,17 +1125,22 @@ body:has(.look-overlay.look-overlay--in) {
   align-self: start;
 }
 
-/* GUARD — every poster/video inside the creator grid must FILL its 3:4
-   cell via cover, never stretch. All look posters are stored 9:16
-   (720×1280), so a 9:16 source dropped into a 3:4 cell should crop its
-   top/bottom and stay in proportion. This pins cover defensively so a
-   stray `fill`/`contain`/`100% 100%` placement can never squish a card
-   (which read as a "distorted" subject). */
+/* GUARD — every poster inside the feed grid must FILL its 3:4 cell via
+   cover, never stretch. All look posters are stored 9:16 (720×1280), so a
+   9:16 source dropped into a 3:4 cell should crop its top/bottom and stay in
+   proportion. This pins cover defensively on the poster <img> so a stray
+   `fill`/`contain`/`100% 100%` placement can never squish a card.
+
+   The <video> is DELIBERATELY excluded: a pooled <video> is framed by the
+   director's explicit-cover (it sizes the element box to the exact cover rect
+   and uses object-fit:fill — see .look-card video in grid-view.css and
+   applyCoverSize). Forcing object-fit:cover here overrode that with higher
+   specificity and revived the WebKit/iOS "video stretches/pillarboxes before
+   it plays" bug in the rails (the same glitch the home feed already fixed). */
 .look-feed-grid .look-card .card-video-slot {
   background-size: cover !important;
   background-position: center !important;
 }
-.look-feed-grid .look-card video,
 .look-feed-grid .look-card img {
   object-fit: cover !important;
 }
