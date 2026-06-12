@@ -25,6 +25,7 @@ import { useAuth } from '~/hooks/useAuth';
 import { useOverlayRouter } from '~/hooks/useOverlayRouter';
 import { lookSlug } from '~/utils/slug';
 import { markOverlayReturn } from '~/utils/overlay-scroll-stash';
+import { affiliateRedirect, setAffiliateContext } from '~/services/affiliate';
 import { useShellBridge } from '~/hooks/useShellBridge';
 import { useAppView } from '~/hooks/useAppView';
 import { useWaitlistMode, applyFlowOverrideFromUrl } from '~/hooks/useWaitlistMode';
@@ -853,10 +854,15 @@ export default function Home() {
     // lands directly on the product. Only the native Flutter shell keeps
     // the in-app browser overlay (window.open doesn't pop a real tab
     // inside the embedded webview, and the shell owns that flow).
+    // Monetize the clickout: wrap the merchant URL in the Shopnomix
+    // redirect (creator attribution rides along via the recorded cid).
+    // Analytics below keep the ORIGINAL url so per-merchant reporting
+    // is unchanged.
+    const outboundUrl = affiliateRedirect(url, product as { brand?: string | null; name?: string | null; id?: string | null });
     if (!inNativeShell) {
-      window.open(url, '_blank', 'noopener,noreferrer');
+      window.open(outboundUrl, '_blank', 'noopener,noreferrer');
     } else {
-      setBrowserState({ url, title, product });
+      setBrowserState({ url: outboundUrl, title, product });
     }
     // Every product clickout flows through this handler — feed tile,
     // look-overlay product chips, bookmarks page, ProductPage offers.
@@ -867,6 +873,24 @@ export default function Home() {
     // analytics undercounted by an order of magnitude.
     void trackProductClickout(url, product?.brand ?? null, product?.name ?? title);
   }, []);
+
+  // Keep the affiliate click-attribution context in sync with whatever
+  // surface is on screen: a look attributes to its creator, the creator
+  // catalog/profile to that creator, products opened FROM a look keep
+  // the look's creator, everything else is house traffic.
+  useEffect(() => {
+    const fromLook = selectedLook ?? productOpenedFromLook;
+    setAffiliateContext({
+      creatorHandle: fromLook?.creator ?? creatorFilter ?? null,
+      lookId: fromLook ? String(fromLook.uuid || fromLook.id || '') || null : null,
+      surface: selectedLook ? 'look'
+        : productOpenedFromLook ? 'look-product'
+        : creatorFilter ? 'creator-catalog'
+        : brandFilter ? 'brand'
+        : selectedProduct ? 'product'
+        : 'feed',
+    });
+  }, [selectedLook, productOpenedFromLook, creatorFilter, brandFilter, selectedProduct]);
 
   // Pull a "like-kinded" feed for the product page. Union of two signals:
   //   1. same brand
