@@ -593,6 +593,24 @@ function GenProductCircles({ images }: { images: string[] }) {
   );
 }
 
+// While a look renders, its products break out of the flat foot stack and
+// orbit in a small 3D ring (same motion language as the header's pending
+// pill) — the tile visibly "composes" instead of sitting static.
+function GenOrbit({ images }: { images: string[] }) {
+  const shown = images.slice(0, 6);
+  return (
+    <span className="ap-gen-orbit" aria-label={`${images.length} products rendering`}>
+      <span className="ap-gen-orbit-ring" style={{ ['--n' as string]: shown.length }}>
+        {shown.map((src, i) => (
+          <span key={`${src}-${i}`} className="ap-gen-orbit-item" style={{ ['--i' as string]: i }}>
+            <img src={withTransform(src, { width: 64, height: 64, resize: 'cover' })} alt="" loading="lazy" />
+          </span>
+        ))}
+      </span>
+    </span>
+  );
+}
+
 function GenTile({ gen, productImgs, lookPoster }: { gen: UserGeneration; productImgs: string[]; lookPoster?: string }) {
   const navigate = useNavigate();
   const [loaded, setLoaded] = useState(false);
@@ -631,8 +649,9 @@ function GenTile({ gen, productImgs, lookPoster }: { gen: UserGeneration; produc
         aria-label={`${label} — rendering, open progress`}
       >
         <div className="ap-gen-shimmer" />
+        {productImgs.length > 0 && <GenOrbit images={productImgs} />}
         <div className="ap-gen-foot">
-          {foot}
+          {productImgs.length > 0 ? null : foot}
           <span className="ap-gen-status">Rendering…</span>
           <span className="ap-gen-bar"><span className="ap-gen-bar-fill" /></span>
         </div>
