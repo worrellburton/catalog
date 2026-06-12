@@ -1,5 +1,6 @@
 import { useState, useMemo, useEffect, Fragment } from 'react';
 import { supabase } from '~/utils/supabase';
+import AffiliatePerformance from '~/components/admin/AffiliatePerformance';
 
 type NetworkType =
   | 'Network'           // multi-brand aggregator (Impact, CJ, Rakuten, ShareASale, Awin)
@@ -1180,7 +1181,7 @@ function NetworkDetailRow({ network, onConnect }: { network: AffiliateNetwork; o
   );
 }
 
-export default function AdminAffiliate() {
+function NetworksDirectory() {
   const [view, setView] = useState<ViewMode>('table');
   const [search, setSearch] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('all');
@@ -1285,14 +1286,7 @@ export default function AdminAffiliate() {
   ];
 
   return (
-    <div className="admin-page">
-      <div className="admin-page-header">
-        <div>
-          <h1>Affiliate Networks</h1>
-          <p className="admin-page-subtitle">Browse and connect affiliate link providers</p>
-        </div>
-      </div>
-
+    <div>
       <div className="admin-stats-grid">
         {stats.map(s => (
           <div key={s.label} className="admin-stat-card">
@@ -1684,6 +1678,45 @@ export default function AdminAffiliate() {
           </div>
         </div>
       )}
+    </div>
+  );
+}
+
+
+// /admin/affiliate — Performance (the live Shopnomix money: clicks,
+// conversions, creator payouts) leads; the network directory the page
+// started as lives behind the second tab.
+export default function AdminAffiliate() {
+  const [tab, setTab] = useState<'performance' | 'networks'>('performance');
+  return (
+    <div className="admin-page">
+      <div className="admin-page-header">
+        <div>
+          <h1>Affiliate</h1>
+          <p className="admin-page-subtitle">
+            {tab === 'performance'
+              ? 'Live Shopnomix earnings — every clickout wrapped, every creator attributed'
+              : 'Browse and connect affiliate link providers'}
+          </p>
+        </div>
+      </div>
+      <div style={{ display: 'flex', gap: 8, marginBottom: 20 }}>
+        {([['performance', 'Performance'], ['networks', 'Networks']] as const).map(([key, label]) => (
+          <button
+            key={key}
+            type="button"
+            onClick={() => setTab(key)}
+            style={{
+              padding: '7px 16px', borderRadius: 999, fontSize: 13, fontWeight: 600,
+              cursor: 'pointer', fontFamily: 'inherit',
+              border: `1px solid ${tab === key ? '#111' : '#e5e7eb'}`,
+              background: tab === key ? '#111' : '#fff',
+              color: tab === key ? '#fff' : '#6b7280',
+            }}
+          >{label}</button>
+        ))}
+      </div>
+      {tab === 'performance' ? <AffiliatePerformance /> : <NetworksDirectory />}
     </div>
   );
 }
