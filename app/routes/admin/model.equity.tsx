@@ -179,9 +179,9 @@ export default function EquityPage() {
               <tbody>
                 {equity.holders.map(h => (
                   <tr key={h.id}>
-                    <td className="eq-type">{h.kind === 'founders' ? 'Founders' : h.kind === 'advisory' ? 'Advisory' : 'Pool'}</td>
-                    <td className="eq-namecell"><input className="eq-in eq-in-name" value={h.name} onChange={e => setHolder(h.id, { name: e.target.value })} /><OpenHolder hid={h.id} /></td>
-                    <td className="num"><AcctInput className="eq-in" value={h.shares} onChange={n => setHolder(h.id, { shares: n })} /></td>
+                    <td className="eq-type" data-l="Type">{h.kind === 'founders' ? 'Founders' : h.kind === 'advisory' ? 'Advisory' : 'Pool'}</td>
+                    <td className="eq-namecell" data-l="Holder"><input className="eq-in eq-in-name" value={h.name} onChange={e => setHolder(h.id, { name: e.target.value })} /><OpenHolder hid={h.id} /></td>
+                    <td className="num" data-l="Shares"><AcctInput className="eq-in" value={h.shares} onChange={n => setHolder(h.id, { shares: n })} /></td>
                     <td>
                       {h.kind !== 'founders' && (
                         <button type="button" className="eq-x" title="Remove" onClick={() => patch({ holders: equity.holders.filter(x => x.id !== h.id) })}>×</button>
@@ -225,15 +225,15 @@ export default function EquityPage() {
                   const conv = s ? summary.safeConversions.find(c => c.safe.id === s.id) : null;
                   return (
                     <tr key={r.id} className={s ? 'eq-row-new' : ''}>
-                      <td className="eq-type">{r.type}</td>
-                      <td className="eq-namecell">
+                      <td className="eq-type" data-l="Type">{r.type}</td>
+                      <td className="eq-namecell" data-l="Holder">
                         {s
                           ? <><input className="eq-in eq-in-name" value={s.name} onChange={e => setSafe(s.id, { name: e.target.value })} /><OpenHolder hid={s.id} /></>
                           : <Link className="eq-namelink" to={`/admin/model/equity/holder/${r.id}`}>{r.name}</Link>}
                       </td>
-                      <td className="num">{s ? <AcctInput className="eq-in" value={s.investment} onChange={n => setSafe(s.id, { investment: n })} /> : '—'}</td>
-                      <td className="num">{s ? <AcctInput className="eq-in" value={s.valCap} onChange={n => setSafe(s.id, { valCap: n })} /> : '—'}</td>
-                      <td className="num">
+                      <td className="num" data-l="Investment">{s ? <AcctInput className="eq-in" value={s.investment} onChange={n => setSafe(s.id, { investment: n })} /> : '—'}</td>
+                      <td className="num" data-l="Val cap">{s ? <AcctInput className="eq-in" value={s.valCap} onChange={n => setSafe(s.id, { valCap: n })} /> : '—'}</td>
+                      <td className="num" data-l="Discount">
                         {s ? (
                           <span className="eq-pct">
                             <input className="eq-in" type="number" min={0} max={90} step={1}
@@ -243,11 +243,11 @@ export default function EquityPage() {
                           </span>
                         ) : '—'}
                       </td>
-                      <td className={`num${s ? ' eq-computed' : ''}`} title={conv ? `${fmtCurrency(conv.price)} / share · converts on the ${conv.basis === 'discount' ? 'discount' : 'cap'}` : ''}>
+                      <td className={`num${s ? ' eq-computed' : ''}`} data-l="Shares" title={conv ? `${fmtCurrency(conv.price)} / share · converts on the ${conv.basis === 'discount' ? 'discount' : 'cap'}` : ''}>
                         {shares(r.shares)}
                         {conv && equity.safeMode === 'postMoney' && <em className="eq-basis">{conv.basis}</em>}
                       </td>
-                      <td className="num">{pct(r.pct)}</td>
+                      <td className="num" data-l="Ownership">{pct(r.pct)}</td>
                       <td>{s && <button type="button" className="eq-x" title="Remove" onClick={() => patch({ safes: equity.safes.filter(x => x.id !== s.id) })}>×</button>}</td>
                     </tr>
                   );
@@ -317,20 +317,20 @@ export default function EquityPage() {
                     const inv = stage.round.investors.find(i => i.id === r.id);
                     return (
                       <tr key={r.id} className={inv ? 'eq-row-new' : ''}>
-                        <td className="eq-type">{r.type}</td>
-                        <td className="eq-namecell">
+                        <td className="eq-type" data-l="Type">{r.type}</td>
+                        <td className="eq-namecell" data-l="Holder">
                           {inv
                             ? <><input className="eq-in eq-in-name" value={inv.name} onChange={e => setInvestor(stage.round.id, inv.id, { name: e.target.value })} /><OpenHolder hid={inv.id} /></>
                             : <Link className="eq-namelink" to={`/admin/model/equity/holder/${r.id}`}>{r.name}</Link>}
                         </td>
-                        <td className="num">
+                        <td className="num" data-l="Investment">
                           {inv
                             ? <AcctInput className="eq-in" value={inv.investment} onChange={n => setInvestor(stage.round.id, inv.id, { investment: n })} />
                             : r.investment != null ? fmtCurrency(r.investment, { compact: true }) : '—'}
                         </td>
-                        <td className="num">{fmtCurrency(r.equityValue, { compact: true })}</td>
-                        <td className="num">{shares(r.shares)}</td>
-                        <td className="num">{pct(r.pct)}</td>
+                        <td className="num" data-l="Equity value">{fmtCurrency(r.equityValue, { compact: true })}</td>
+                        <td className="num" data-l="Shares">{shares(r.shares)}</td>
+                        <td className="num" data-l="Ownership">{pct(r.pct)}</td>
                         <td>
                           {inv && (
                             <button type="button" className="eq-x" title="Remove investor" onClick={() => removeInvestor(stage.round.id, inv.id)}>×</button>
