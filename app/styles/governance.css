@@ -1231,6 +1231,7 @@ html.gov-void .gov-page.gov-types { height: calc(100vh - 53px); }
 
 /* Mobile brain: full screen; controls fold behind a tiny C. */
 .gov-c-fab { display: none; }
+.gov-mobile-bar { display: none; }
 @media (max-width: 768px) {
   .gov-types .gov-canvas {
     position: fixed;
@@ -1269,6 +1270,38 @@ html.gov-void .gov-page.gov-types { height: calc(100vh - 53px); }
     padding: 10px;
   }
   .gov-types .gov-canvas-controls.is-open { display: flex; }
+
+  /* The view toggle + Kaizen sit in the open at the top (right of the C);
+     their twins inside the C menu retire so nothing shows twice. */
+  .gov-mobile-bar {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    position: fixed;
+    top: max(10px, env(safe-area-inset-top));
+    left: 54px;
+    right: 12px;
+    z-index: 58;
+  }
+  .gov-mobile-bar .gov-seg {
+    flex: 1;
+    display: flex;
+    background: rgba(10, 10, 14, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+  }
+  .gov-mobile-bar .gov-seg button { flex: 1; padding: 8px 0; }
+  .gov-mobile-bar .gov-ghost {
+    background: rgba(10, 10, 14, 0.8);
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    padding: 8px 12px;
+    white-space: nowrap;
+  }
+  .gov-types .gov-canvas-controls .gov-seg,
+  .gov-types .gov-canvas-controls .gov-kaizen-btn { display: none; }
+
+  /* The brain owns the whole screen here — the floating AI generation
+     FAB (lower right) would sit on top of the spheres, so it sits out. */
+  html.gov-void .gen-queue-host { display: none; }
 }
 
 /* Minimal mobile brain: legend + dials retire (camera controls live in
