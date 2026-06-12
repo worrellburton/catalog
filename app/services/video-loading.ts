@@ -12,7 +12,6 @@
 
 import type { ProductAd } from './product-creative';
 import { videoPipelineMode } from './video-pipeline';
-import { browserSupportsNativeHls, browserDecodesHevc } from '~/utils/hlsAttach';
 
 // ── AV1 desktop-decode probe (async, cached) ──────────────────────────
 // AV1 is a SIZE win on the desktop progressive path (~30-50% vs H.264 at equal
@@ -51,11 +50,16 @@ function av1Preferred(): boolean {
   return _av1Decode && !isMobileViewport() && !isSlowConnection();
 }
 
-/** True only when the HEVC ladder is the right pick: native-HLS device (iOS/
- *  Safari) that decodes HEVC in hardware. We never steer the hls.js/MSE path to
- *  HEVC. Sync + stable per session → tile and hero agree. */
+/** HEVC preference — currently DISABLED. Rationale: B-frames had to be dropped
+ *  to fix iOS HLS playback (B-frame composition delay wrote a leading empty edit
+ *  in the fMP4 init that iOS AVPlayer choked on). Without B-frames HEVC's
+ *  efficiency edge over H.264 shrinks sharply, so at matched bytes it looked
+ *  WORSE than H.264 on iOS in testing. We therefore serve the no-B-frame H.264
+ *  hls-v5 ladder everywhere (universally compatible, crisper). Re-enable by
+ *  returning `browserSupportsNativeHls() && browserDecodesHevc()` once a HEVC
+ *  ladder is re-encoded at a higher bitrate (~0.85× H.264) and device-verified. */
 function hevcPreferred(): boolean {
-  return browserSupportsNativeHls() && browserDecodesHevc();
+  return false;
 }
 
 // ── Phase 6: pick the right URL for this device ───────────────────────

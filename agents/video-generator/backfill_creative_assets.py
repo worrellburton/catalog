@@ -131,7 +131,7 @@ _HLS_PLAYLIST_CACHE = "public, max-age=300"
 # leading EMPTY edit (elst media_time=-1, the ~2-frame reorder delay), which iOS
 # native HLS chokes on → "stuck on poster". v4 has no B-frames → clean identity
 # edit list → plays on iOS. (See asset_encoder._run_hls_ladder.)
-_HLS_DIR = "hls-v4"
+_HLS_DIR = "hls-v5"
 # HEVC ladder lives in its own tree (separate master) so it never touches the
 # H.264 master; the client prefers it where supported and falls back to H.264.
 _HEVC_DIR = "hls-hevc-v4"

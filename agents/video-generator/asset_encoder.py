@@ -221,15 +221,23 @@ class _Rung(NamedTuple):
 # old fixed "1080" rung upscaled a ~720–834px source). When the source sits
 # between steps the ladder tops out at the native source width, so a full-screen
 # hero gets the source's full detail without ever upscaling.
+# Bitrates tuned for QUALITY at preset slow + NO B-frames (bf 0 is mandatory for
+# the iOS edit-list fix, and costs some efficiency). The 480 rung stays modest so
+# the cold-start segment is small and first-frame is instant; the 720 + native
+# top rung are fed generously so the hero (which capLevelToPlayerSize pins on a
+# high-DPR phone) is crisp. Raised from the v3 values (1100/2400/4500), which
+# under-fed the top rung and read as soft.
 _HLS_LADDER: List[_Rung] = [
-    _Rung("480", 480, "1100k", "1500k", "3000k"),
-    _Rung("720", 720, "2400k", "3000k", "6000k"),
-    _Rung("1080", 1080, "4500k", "5500k", "11000k"),
+    _Rung("480", 480, "1500k", "1900k", "3800k"),
+    _Rung("720", 720, "3800k", "4600k", "9200k"),
+    _Rung("1080", 1080, "7000k", "8400k", "16800k"),
 ]
 
-# HEVC bitrates ≈ 0.7× H.264 at equal quality (hardware HEVC decode is universal
-# on Apple devices, where native HLS picks the HEVC variant automatically).
-_HEVC_BITRATE_SCALE = 0.7
+# HEVC bitrate scale (only used if the HEVC ladder is re-enabled). Note: with
+# B-frames disabled HEVC's efficiency edge over H.264 shrinks a lot, so 0.7× made
+# HEVC look WORSE than H.264 on iOS — bump toward ~0.85× before re-enabling. The
+# client HEVC preference is currently OFF (see hevcPreferred in video-loading.ts).
+_HEVC_BITRATE_SCALE = 0.85
 
 
 def _kbps(rate: str) -> int:
