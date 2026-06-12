@@ -21,14 +21,19 @@ export default function PlanViewer() {
     try { if (sessionStorage.getItem(PASS_KEY) === '1') setOk(true); } catch { /* private mode */ }
   }, []);
 
-  // Pinch-zoom: the app's viewport meta may pin scaling — this document
-  // should zoom like a PDF, so allow it here and restore on leave.
+  // PDF-page viewport: once unlocked, the document keeps its composed
+  // 920px layout on every screen — phones see the whole sheet scaled to
+  // fit and pinch-zoom in to read (the iframe ignores its own viewport
+  // meta, so the PARENT page carries the fixed width). The passcode
+  // screen stays at device width; restored on leave.
   useEffect(() => {
     const meta = document.querySelector('meta[name="viewport"]');
     const prev = meta?.getAttribute('content') ?? null;
-    meta?.setAttribute('content', 'width=device-width, initial-scale=1, maximum-scale=6, user-scalable=yes');
+    meta?.setAttribute('content', html
+      ? 'width=920, user-scalable=yes'
+      : 'width=device-width, initial-scale=1, user-scalable=yes');
     return () => { if (prev !== null) meta?.setAttribute('content', prev); };
-  }, []);
+  }, [html]);
 
   useEffect(() => {
     if (!ok || !supabase) return;
