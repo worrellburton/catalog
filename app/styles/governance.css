@@ -1302,11 +1302,118 @@ html.gov-void .gov-page.gov-types { height: calc(100vh - 53px); }
   /* The brain owns the whole screen here — the floating AI generation
      FAB (lower right) would sit on top of the spheres, so it sits out. */
   html.gov-void .gen-queue-host { display: none; }
+
+  /* Selection bar drops BELOW the top bar (it used to share its row and
+     overlap) and wraps instead of overflowing. */
+  .gov-types .gov-genderbar {
+    top: max(56px, calc(env(safe-area-inset-top) + 48px));
+    width: calc(100% - 24px);
+    flex-wrap: wrap;
+    justify-content: center;
+    border-radius: 16px;
+    z-index: 54;
+  }
 }
 
-/* Minimal mobile brain: legend + dials retire (camera controls live in
-   the C menu); the space belongs to the spheres. */
+/* Minimal mobile brain: legend + dials retire — the camera and display
+   tools live in the bottom dock instead. */
 @media (max-width: 768px) {
   .gov-types .gov-legend,
   .gov-types .gov-ringdials { display: none; }
+}
+
+/* ── Mobile bottom dock: zoom slider + orbit joystick + display tools ── */
+.gov-dock { display: none; }
+@media (max-width: 768px) {
+  .gov-dock {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    position: fixed;
+    left: 12px;
+    right: 12px;
+    bottom: max(12px, env(safe-area-inset-bottom));
+    z-index: 58;
+  }
+  .gov-dock-zoom {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 9px 16px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 999px;
+    background: rgba(10, 10, 14, 0.85);
+    backdrop-filter: blur(8px);
+  }
+  .gov-dock-zoom span {
+    color: rgba(255, 255, 255, 0.6);
+    font-size: 16px;
+    font-weight: 700;
+    line-height: 1;
+  }
+  .gov-dock-zoom input {
+    flex: 1;
+    min-width: 0;
+    accent-color: #6366f1;
+    touch-action: none;
+  }
+  .gov-dock-row {
+    display: flex;
+    align-items: stretch;
+    gap: 8px;
+  }
+  .gov-joystick {
+    position: relative;
+    flex: 0 0 auto;
+    width: 96px;
+    height: 96px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: radial-gradient(circle at 50% 38%, rgba(255, 255, 255, 0.08), rgba(10, 10, 14, 0.88) 72%);
+    touch-action: none;
+  }
+  .gov-joystick::after {
+    content: 'orbit';
+    position: absolute;
+    left: 50%;
+    bottom: 8px;
+    transform: translateX(-50%);
+    font-size: 8px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: rgba(255, 255, 255, 0.4);
+    pointer-events: none;
+  }
+  .gov-joystick-knob {
+    position: absolute;
+    left: 50%;
+    top: 50%;
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    background: radial-gradient(circle at 35% 30%, rgba(255, 255, 255, 0.55), rgba(99, 102, 241, 0.6) 55%, rgba(20, 20, 30, 0.9));
+    box-shadow: 0 4px 14px rgba(0, 0, 0, 0.5);
+    transform: translate(-50%, -50%);
+    pointer-events: none;
+  }
+  .gov-dock-tools {
+    flex: 1;
+    min-width: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px 12px;
+    border: 1px solid rgba(255, 255, 255, 0.14);
+    border-radius: 16px;
+    background: rgba(10, 10, 14, 0.85);
+    backdrop-filter: blur(8px);
+  }
+  .gov-dock-tools .gov-dof {
+    margin-top: 0;
+    flex-wrap: wrap;
+    row-gap: 4px;
+  }
+  .gov-dock-tools .gov-showcase { align-self: flex-start; }
 }
