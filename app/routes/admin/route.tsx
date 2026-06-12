@@ -54,6 +54,7 @@ const navItems: NavItem[] = [
   { to: '/admin/decks', label: 'Decks', icon: 'M4 4h16v4H4zM4 10h16v4H4zM4 16h16v4H4z' },
   { to: '/admin/fundraising', label: 'Fundraising', icon: 'M12 1v22M17 5H9.5a3.5 3.5 0 1 0 0 7h5a3.5 3.5 0 1 1 0 7H6' },
   { to: '/admin/model', label: 'Model', icon: 'M3 3v18h18M7 17l5-5 4 4 5-7' },
+  { to: '/admin/model/equity', label: 'Equity', icon: 'M12 2a10 10 0 1 0 10 10H12V2zM16 2.5A10 10 0 0 1 21.5 8H16V2.5' },
   { to: '/admin/gtm', label: 'GTM', icon: 'M3 11l19-9-9 19-2-8-8-2z' },
   { to: '/admin/sharing', label: 'Sharing', icon: 'M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13' },
 ];
