@@ -86,6 +86,11 @@ interface LookOverlayProps {
 export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowser, onOpenProduct, onCreateCatalog, onOpenLook, bookmarks, allLooks, popularFallback, onOpenCreative, onOpenComments }: LookOverlayProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  // Commentary universe: scroll progress drives the text's 3D entrance
+  // (--about-p: 0 below the fold → 1 settled) and the particle field's
+  // parallax drift (--about-drift). Vars are written straight to the DOM
+  // each frame — no React state, no re-renders.
+  const aboutRef = useRef<HTMLDivElement>(null);
   const moreScrollRef = useRef<HTMLDivElement>(null);
   // Tracked separately so the nested feed re-binds its IntersectionObserver
   // root once the scroller mounts (refs alone don't trigger re-renders).
@@ -615,6 +620,29 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   // ProductPage approach exactly: attach native listeners to the
   // scroller root, only engage at scrollTop=0, slide the whole
   // overlay's transform, and fire handleClose at the same > 96 px /
+  useEffect(() => {
+    const scroller = scrollRef.current;
+    const el = aboutRef.current;
+    if (!scroller || !el) return;
+    if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+    let raf = 0;
+    const update = () => {
+      raf = 0;
+      const r = el.getBoundingClientRect();
+      const vh = window.innerHeight || 1;
+      const progress = Math.min(1, Math.max(0, (vh - r.top) / (vh * 0.7)));
+      el.style.setProperty('--about-p', progress.toFixed(3));
+      el.style.setProperty('--about-drift', (scroller.scrollTop * 0.06).toFixed(1));
+    };
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(update); };
+    update();
+    scroller.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      scroller.removeEventListener('scroll', onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [look]);
+
   // velocity > 0.6 thresholds. Bails on desktop and ignores any
   // touch starting from an interactive control (so taps still work).
   useEffect(() => {
@@ -1007,7 +1035,12 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                   was removed). */}
               <>
                 <>
-                  <div className="look-creator-about">
+                  <div className="look-creator-about" ref={aboutRef}>
+                    {(lookDescription || aboutSummary) && (
+                      <div className="look-about-universe" aria-hidden="true">
+                        <ParticleBackground speed={1.6} />
+                      </div>
+                    )}
                     {/* Creator avatar + name intentionally omitted here — the
                         floating top-left creator badge already shows the
                         identity, so this card stays slim (just the summary +
