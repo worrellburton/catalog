@@ -18,6 +18,14 @@
 // Exclusions: Shopnomix runs all brands EXCEPT Amazon and Booking —
 // those pass through unwrapped (still recorded, wrapped=false, so we
 // know the missed volume).
+//
+// LINK ROUTER (founder's waterfall): products carrying a DIRECT tracked
+// link (products.affiliate_url — affiliate.com ingests + the nightly
+// affiliate-enrich search) clickout through THAT link untouched (direct
+// programs out-pay the blanket rail, and wrapping a tracked link would
+// break its attribution). Everything else falls to the Shopnomix wrap,
+// then to direct for excluded brands. affiliate_clicks.rail records
+// which rail carried each click.
 
 import { supabase } from '~/utils/supabase';
 
@@ -44,6 +52,25 @@ let context: AffiliateContext = { creatorHandle: null, lookId: null, surface: 'f
  *  surface earned it without prop-drilling through every component. */
 export function setAffiliateContext(next: AffiliateContext): void {
   context = next;
+}
+
+// Routed tracked links: id → affiliate_url, loaded once per session
+// (small set — only products with a direct program link).
+const trackedByProduct = new Map<string, string>();
+let trackedLoaded = false;
+function loadTracked(): void {
+  if (trackedLoaded || !supabase) return;
+  trackedLoaded = true;
+  void supabase
+    .from('products')
+    .select('id, affiliate_url')
+    .not('affiliate_url', 'is', null)
+    .limit(2000)
+    .then(({ data }) => {
+      for (const r of (data ?? []) as Array<{ id: string; affiliate_url: string | null }>) {
+        if (r.affiliate_url) trackedByProduct.set(r.id, r.affiliate_url);
+      }
+    });
 }
 
 // Kill switch — read once per session from app_settings.
@@ -89,8 +116,12 @@ export function affiliateRedirect(
   product?: { brand?: string | null; name?: string | null; id?: string | null } | null,
 ): string {
   loadEnabled();
+  loadTracked();
   if (!url || !enabled) return url;
-  const wrappable = isWrappable(url);
+  // Rail 1: a direct tracked link for THIS product wins, untouched.
+  const tracked = product?.id ? trackedByProduct.get(product.id) ?? null : null;
+  const wrappable = !tracked && isWrappable(url);
+  const rail = tracked ? 'affiliate.com' : wrappable ? 'shopnomix' : 'direct';
   const cid = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : '';
 
   if (supabase && cid) {
@@ -109,11 +140,13 @@ export function affiliateRedirect(
           surface: context.surface,
           campaign_id: SHOPNOMIX_CONTENT_CAMPAIGN,
           wrapped: wrappable,
+          rail,
         });
       } catch { /* telemetry must never block a clickout */ }
     })();
   }
 
+  if (tracked) return tracked;
   if (!wrappable || !cid) return url;
   const params = new URLSearchParams({
     campaign_id: SHOPNOMIX_CONTENT_CAMPAIGN,

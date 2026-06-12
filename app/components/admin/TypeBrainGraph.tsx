@@ -63,6 +63,13 @@ interface Props {
   ringScale: number;
   /** Increment to run the tidy radial layout (the Organize button). */
   organizeSignal: number;
+  /** Depth-of-field f-stop (1.4 = razor-thin focus … 8 = deep); null = off.
+   *  Lower stops blur far/near globes harder, like a fast lens. */
+  dofStop?: number | null;
+  /** Showcase mode: the camera drifts itself between interesting orbits
+   *  with slow ease-in-out; any canvas touch hands control back. */
+  showcase?: boolean;
+  onShowcaseInterrupt?: () => void;
 }
 
 export const ROOT_ID = '__root__';
@@ -75,6 +82,17 @@ export default function TypeBrainGraph(p: Props) {
   // Zoom/pan view transform: screen = world * k + (tx, ty). Cmd/ctrl +
   // wheel zooms about the pointer (ctrlKey also covers trackpad pinch).
   const [view, setView] = useState({ k: 1, tx: 0, ty: 0 });
+  // 3D orbit (founder's call: the brain is a SPACE, not a sheet). The
+  // force layout stays planar (Z=0); rendering projects every point
+  // through tilt (ax) + spin (ay) with perspective. Cmd/Ctrl-drag orbits
+  // on desktop; three fingers orbit on touch (one pans, two pinch).
+  const [orbit, setOrbit] = useState({ ax: -0.38, ay: 0.0 });
+  const touches = useRef(new Map<number, { x: number; y: number }>());
+  const touchGesture = useRef<
+    | { kind: 'pinch'; d0: number; k0: number; mx: number; my: number; tx0: number; ty0: number }
+    | { kind: 'orbit3'; sx: number; sy: number; ax0: number; ay0: number }
+    | null
+  >(null);
   // Held spacebar arms hand-pan: pointer drags move the view transform
   // instead of selecting/dragging (standard design-tool behaviour).
   const [spaceHeld, setSpaceHeld] = useState(false);
@@ -159,6 +177,7 @@ export default function TypeBrainGraph(p: Props) {
     | { kind: 'node'; ids: string[]; grabId: string; moved: boolean }
     | { kind: 'marquee'; x0: number; y0: number }
     | { kind: 'pan'; sx: number; sy: number; tx0: number; ty0: number }
+    | { kind: 'orbit'; sx: number; sy: number; ax0: number; ay0: number }
     | null
   >(null);
   const [panning, setPanning] = useState(false);
@@ -177,6 +196,74 @@ export default function TypeBrainGraph(p: Props) {
     hoverTimer.current = window.setTimeout(() => setHovered(null), 160);
   };
 
+  // Plane → projected (pre-view-transform) space. FOCAL sets perspective
+  // strength; s is the per-point scale (also the depth cue).
+  const FOCAL = 1500;
+  const proj = (pos: { x: number; y: number }) => {
+    const cx = size.w / 2, cy = size.h / 2;
+    const X = pos.x - cx, Y = pos.y - cy;
+    const cosY = Math.cos(orbit.ay), sinY = Math.sin(orbit.ay);
+    const cosX = Math.cos(orbit.ax), sinX = Math.sin(orbit.ax);
+    const x1 = X * cosY;
+    const z1 = X * sinY;
+    const y2 = Y * cosX - z1 * sinX;
+    const z2 = Y * sinX + z1 * cosX;
+    const s = FOCAL / Math.max(200, FOCAL - z2);
+    return { x: cx + x1 * s, y: cy + y2 * s, s, z: z2 };
+  };
+  // Projected → plane, using a reference scale (the grabbed node's own s)
+  // — locally exact, which is all a drag needs.
+  const unproj = (px: number, py: number, sRef: number) => {
+    const cx = size.w / 2, cy = size.h / 2;
+    const cosY = Math.cos(orbit.ay), sinY = Math.sin(orbit.ay);
+    const cosX = Math.cos(orbit.ax), sinX = Math.sin(orbit.ax);
+    const u = (px - cx) / sRef, v = (py - cy) / sRef;
+    const X = Math.abs(cosY) > 0.2 ? u / cosY : u;
+    const Y = Math.abs(cosX) > 0.2 ? (v + X * sinY * sinX) / cosX : v;
+    return { x: cx + X, y: cy + Y };
+  };
+
+  // Depth of field: bucket nodes into shared blur filters by |z| versus
+  // the focal width the chosen stop allows.
+  const dofFilter = (z: number): string | undefined => {
+    if (!p.dofStop) return undefined;
+    const width = p.dofStop * 190;
+    const d = Math.abs(z) / width;
+    if (d < 0.55) return undefined;
+    if (d < 1.1) return 'url(#tb-dof-1)';
+    if (d < 1.9) return 'url(#tb-dof-2)';
+    return 'url(#tb-dof-3)';
+  };
+
+  // Showcase: a slow automatic camera. Each leg eases (smooth in-out)
+  // to a fresh orbit/zoom over ~5s, forever, until interrupted.
+  useEffect(() => {
+    if (!p.showcase) return;
+    let raf = 0;
+    let start = performance.now();
+    let from = { ax: orbit.ax, ay: orbit.ay, k: view.k };
+    const nextTarget = (prev: { ay: number }) => ({
+      ax: -(0.18 + Math.random() * 0.85),
+      ay: prev.ay + 0.45 + Math.random() * 1.1,
+      k: 0.8 + Math.random() * 0.55,
+    });
+    let to = nextTarget(from);
+    const DUR = 5200;
+    const ease = (u: number) => (u < 0.5 ? 2 * u * u : 1 - Math.pow(-2 * u + 2, 2) / 2);
+    const tick = (now: number) => {
+      const u = Math.min(1, (now - start) / DUR);
+      const e = ease(u);
+      setOrbit({ ax: from.ax + (to.ax - from.ax) * e, ay: from.ay + (to.ay - from.ay) * e });
+      setView(v => ({ ...v, k: from.k + (to.k - from.k) * e }));
+      if (u >= 1) { from = to; to = nextTarget(from); start = now; }
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+    // Reads live orbit/view only at (re)start — the loop owns them after.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [p.showcase]);
+
   const toLocal = (ev: { clientX: number; clientY: number }) => {
     const r = wrapRef.current?.getBoundingClientRect();
     return {
@@ -191,8 +278,9 @@ export default function TypeBrainGraph(p: Props) {
       if (exclude.has(n.id)) continue;
       const pos = positions.get(n.id);
       if (!pos) continue;
-      const d = Math.hypot(pos.x - x, pos.y - y);
-      if (d < nodeRadius(n) + 26 && d < bestD) { best = n.id; bestD = d; }
+      const pr = proj(pos);
+      const d = Math.hypot(pr.x - x, pr.y - y);
+      if (d < nodeRadius(n) * pr.s + 26 && d < bestD) { best = n.id; bestD = d; }
     }
     return best;
   };
@@ -208,6 +296,38 @@ export default function TypeBrainGraph(p: Props) {
     gesture.current = { kind: 'node', ids, grabId: id, moved: false };
   };
   const onCanvasDown = (ev: React.PointerEvent) => {
+    if (p.showcase) p.onShowcaseInterrupt?.();
+    if (ev.pointerType === 'touch') {
+      (ev.currentTarget as Element).setPointerCapture?.(ev.pointerId);
+      touches.current.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+      const pts = [...touches.current.values()];
+      if (pts.length === 1) {
+        // One finger moves around.
+        gesture.current = { kind: 'pan', sx: ev.clientX, sy: ev.clientY, tx0: view.tx, ty0: view.ty };
+        setPanning(true);
+      } else if (pts.length === 2) {
+        gesture.current = null;
+        setPanning(false);
+        touchGesture.current = {
+          kind: 'pinch',
+          d0: Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y),
+          k0: view.k,
+          mx: (pts[0].x + pts[1].x) / 2, my: (pts[0].y + pts[1].y) / 2,
+          tx0: view.tx, ty0: view.ty,
+        };
+      } else if (pts.length >= 3) {
+        const cxm = pts.reduce((a, q) => a + q.x, 0) / pts.length;
+        const cym = pts.reduce((a, q) => a + q.y, 0) / pts.length;
+        touchGesture.current = { kind: 'orbit3', sx: cxm, sy: cym, ax0: orbit.ax, ay0: orbit.ay };
+      }
+      return;
+    }
+    if (ev.metaKey || ev.ctrlKey) {
+      // Cmd-drag changes the orbit (founder's call).
+      (ev.currentTarget as Element).setPointerCapture?.(ev.pointerId);
+      gesture.current = { kind: 'orbit', sx: ev.clientX, sy: ev.clientY, ax0: orbit.ax, ay0: orbit.ay };
+      return;
+    }
     if (spaceHeld) {
       (ev.currentTarget as Element).setPointerCapture?.(ev.pointerId);
       gesture.current = { kind: 'pan', sx: ev.clientX, sy: ev.clientY, tx0: view.tx, ty0: view.ty };
@@ -219,8 +339,37 @@ export default function TypeBrainGraph(p: Props) {
     setMarquee({ x0: x, y0: y, x1: x, y1: y });
   };
   const onMove = (ev: React.PointerEvent) => {
+    if (ev.pointerType === 'touch' && touches.current.has(ev.pointerId)) {
+      touches.current.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
+      const tg = touchGesture.current;
+      const pts = [...touches.current.values()];
+      if (tg?.kind === 'pinch' && pts.length >= 2) {
+        const d = Math.hypot(pts[0].x - pts[1].x, pts[0].y - pts[1].y);
+        const k = Math.min(2.5, Math.max(0.35, tg.k0 * (d / Math.max(1, tg.d0))));
+        const mx = (pts[0].x + pts[1].x) / 2, my = (pts[0].y + pts[1].y) / 2;
+        setView({ k, tx: tg.tx0 + (mx - tg.mx) + ((tg.mx - tg.tx0) * (1 - k / tg.k0)), ty: tg.ty0 + (my - tg.my) + ((tg.my - tg.ty0) * (1 - k / tg.k0)) });
+        return;
+      }
+      if (tg?.kind === 'orbit3' && pts.length >= 3) {
+        const cxm = pts.reduce((a, q) => a + q.x, 0) / pts.length;
+        const cym = pts.reduce((a, q) => a + q.y, 0) / pts.length;
+        setOrbit({
+          ay: tg.ay0 + (cxm - tg.sx) * 0.006,
+          ax: Math.max(-1.35, Math.min(1.35, tg.ax0 + (cym - tg.sy) * 0.006)),
+        });
+        return;
+      }
+      // fall through for one-finger pan via gesture.current
+    }
     const g = gesture.current;
     if (!g) return;
+    if (g.kind === 'orbit') {
+      setOrbit({
+        ay: g.ay0 + (ev.clientX - g.sx) * 0.005,
+        ax: Math.max(-1.35, Math.min(1.35, g.ax0 + (ev.clientY - g.sy) * 0.005)),
+      });
+      return;
+    }
     if (g.kind === 'pan') {
       setView(v => ({ ...v, tx: g.tx0 + (ev.clientX - g.sx), ty: g.ty0 + (ev.clientY - g.sy) }));
       return;
@@ -229,11 +378,15 @@ export default function TypeBrainGraph(p: Props) {
     if (g.kind === 'node') {
       g.moved = true;
       const grab = positions.get(g.grabId);
-      const dx = grab ? x - grab.x : 0;
-      const dy = grab ? y - grab.y : 0;
+      // Pointer lives in PROJECTED space; map back onto the layout plane
+      // (reference scale = the grabbed node's own projection).
+      const sRef = grab ? proj(grab).s : 1;
+      const plane = unproj(x, y, sRef);
+      const dx = grab ? plane.x - grab.x : 0;
+      const dy = grab ? plane.y - grab.y : 0;
       for (const id of g.ids) {
         const pos = positions.get(id);
-        if (pos) dragTo(id, id === g.grabId ? x : pos.x + dx, id === g.grabId ? y : pos.y + dy);
+        if (pos) dragTo(id, id === g.grabId ? plane.x : pos.x + dx, id === g.grabId ? plane.y : pos.y + dy);
       }
       const excluded = new Set(g.ids);
       for (const id of g.ids) for (const d of descendants(id)) excluded.add(d);
@@ -243,9 +396,15 @@ export default function TypeBrainGraph(p: Props) {
     }
   };
   const onUp = (ev: React.PointerEvent) => {
+    if (ev.pointerType === 'touch') {
+      touches.current.delete(ev.pointerId);
+      if (touches.current.size < 2) touchGesture.current = null;
+      if (touches.current.size === 0) setPanning(false);
+    }
     const g = gesture.current;
     gesture.current = null;
     if (!g) return;
+    if (g.kind === 'orbit') return;
     if (g.kind === 'pan') {
       setPanning(false);
       return;
@@ -267,7 +426,9 @@ export default function TypeBrainGraph(p: Props) {
         const hit = new Set<string>();
         for (const n of p.nodes) {
           const pos = positions.get(n.id);
-          if (pos && pos.x >= lx && pos.x <= hx && pos.y >= ly && pos.y <= hy) hit.add(n.id);
+          if (!pos) continue;
+          const pr = proj(pos);
+          if (pr.x >= lx && pr.x <= hx && pr.y >= ly && pr.y <= hy) hit.add(n.id);
         }
         p.onSelect(ev.shiftKey ? new Set([...p.selection, ...hit]) : hit);
       }
@@ -315,9 +476,26 @@ export default function TypeBrainGraph(p: Props) {
 
   const productsOnly = p.viewMode === 'products';
   const showSatellites = p.viewMode !== 'types';
-  const rootPos = positions.get(ROOT_ID) ?? { x: size.w / 2, y: size.h / 2 };
+  const rootPlane = positions.get(ROOT_ID) ?? { x: size.w / 2, y: size.h / 2 };
+  const rootPos = proj(rootPlane);
   const singleSel = p.selection.size === 1 ? byId.get([...p.selection][0]) : null;
-  const singleSelPos = singleSel ? positions.get(singleSel.id) : null;
+  const singleSelPosPlane = singleSel ? positions.get(singleSel.id) : null;
+  const singleSelPos = singleSelPosPlane ? proj(singleSelPosPlane) : null;
+  // Painter's order: far nodes first so near globes overlap them.
+  const drawNodes = [...p.nodes]
+    .map(n => ({ n, pp: positions.get(n.id) ? proj(positions.get(n.id)!) : null }))
+    .filter((e): e is { n: BrainNode; pp: { x: number; y: number; s: number; z: number } } => !!e.pp)
+    .sort((a, b) => a.pp.z - b.pp.z);
+  const ringPath = (r: number) => {
+    const cx = size.w / 2, cy = size.h / 2;
+    const pts: string[] = [];
+    for (let i = 0; i <= 72; i++) {
+      const a = (i / 72) * Math.PI * 2;
+      const q = proj({ x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r });
+      pts.push(`${i === 0 ? 'M' : 'L'}${q.x.toFixed(1)} ${q.y.toFixed(1)}`);
+    }
+    return pts.join(' ');
+  };
 
   return (
     <div ref={wrapRef} className={`tb-wrap${p.pickMode ? ' is-picking' : ''}${spaceHeld ? ' is-pan' : ''}${panning ? ' is-panning' : ''}`}>
@@ -330,11 +508,31 @@ export default function TypeBrainGraph(p: Props) {
         onPointerUp={onUp}
       >
         <g transform={`translate(${view.tx} ${view.ty}) scale(${view.k})`}>
-        {/* Depth guide rings — layer N of the tree IS ring N */}
+        <defs>
+          {/* Globe shading: a white key-light + a rim shadow layered over
+              each node's flat color turn the discs into spheres. */}
+          <radialGradient id="tb-globe-hi" cx="0.34" cy="0.3" r="0.75">
+            <stop offset="0%" stopColor="#fff" stopOpacity="0.65" />
+            <stop offset="45%" stopColor="#fff" stopOpacity="0.12" />
+            <stop offset="100%" stopColor="#fff" stopOpacity="0" />
+          </radialGradient>
+          <radialGradient id="tb-globe-lo" cx="0.5" cy="0.5" r="0.5">
+            <stop offset="62%" stopColor="#000" stopOpacity="0" />
+            <stop offset="100%" stopColor="#000" stopOpacity="0.55" />
+          </radialGradient>
+          {/* Depth-of-field blur buckets (the f-stop dial picks how fast
+              |z| falls into them). */}
+          <filter id="tb-dof-1" x="-40%" y="-40%" width="180%" height="180%"><feGaussianBlur stdDeviation="1.3" /></filter>
+          <filter id="tb-dof-2" x="-60%" y="-60%" width="220%" height="220%"><feGaussianBlur stdDeviation="2.8" /></filter>
+          <filter id="tb-dof-3" x="-80%" y="-80%" width="260%" height="260%"><feGaussianBlur stdDeviation="5" /></filter>
+        </defs>
+        {/* Depth guide rings — projected through the orbit so they read as
+            orbital planes, not flat circles. */}
         {ringRadii.map((r, i) => (
-          <circle key={`ring-${i}`} className="tb-ring"
+          <path key={`ring-${i}`} className="tb-ring"
             style={{ strokeOpacity: p.ringOpacity }}
-            cx={size.w / 2} cy={size.h / 2} r={r} />
+            fill="none"
+            d={ringPath(r)} />
         ))}
 
         {/* Edges */}
@@ -342,8 +540,10 @@ export default function TypeBrainGraph(p: Props) {
           const a = positions.get(n.parentId ?? ROOT_ID);
           const b = positions.get(n.id);
           if (!a || !b) return null;
+          const pa = n.parentId ? proj(a) : rootPos;
+          const pb = proj(b);
           return (
-            <line key={`e-${n.id}`} x1={a.x} y1={a.y} x2={b.x} y2={b.y}
+            <line key={`e-${n.id}`} x1={pa.x} y1={pa.y} x2={pb.x} y2={pb.y}
               stroke={n.color} strokeOpacity={0.28} strokeWidth={1.2} />
           );
         })}
@@ -353,45 +553,53 @@ export default function TypeBrainGraph(p: Props) {
           onPointerEnter={() => hoverEnter(ROOT_ID)}
           onPointerLeave={hoverLeave}
         >
-          <circle cx={rootPos.x} cy={rootPos.y} r={34} />
+          <circle cx={rootPos.x} cy={rootPos.y} r={34 * rootPos.s} />
+          <circle cx={rootPos.x} cy={rootPos.y} r={34 * rootPos.s} fill="url(#tb-globe-hi)" pointerEvents="none" />
+          <circle cx={rootPos.x} cy={rootPos.y} r={34 * rootPos.s} fill="url(#tb-globe-lo)" pointerEvents="none" />
           <text x={rootPos.x} y={rootPos.y + 4}>catalog</text>
         </g>
 
         {/* Nodes */}
-        {p.nodes.map(n => {
-          const pos = positions.get(n.id);
-          if (!pos) return null;
-          const r = nodeRadius(n);
+        {drawNodes.map(({ n, pp }) => {
+          const r = nodeRadius(n) * pp.s;
           const selected = p.selection.has(n.id);
           const isDrop = dropTarget === n.id;
           return (
             <g
               key={n.id}
               className={`tb-node${selected ? ' is-selected' : ''}${isDrop ? ' is-drop' : ''}${n.locked ? ' is-locked' : ''}`}
+              opacity={0.45 + 0.55 * Math.min(1, pp.s)}
+              filter={dofFilter(pp.z)}
               onPointerDown={ev => onNodeDown(n.id, ev)}
-              onDoubleClick={() => p.onDrill(n.id, pos.x * view.k + view.tx, pos.y * view.k + view.ty)}
+              onDoubleClick={() => p.onDrill(n.id, pp.x * view.k + view.tx, pp.y * view.k + view.ty)}
               onPointerEnter={() => hoverEnter(n.id)}
               onPointerLeave={hoverLeave}
             >
-              <circle cx={pos.x} cy={pos.y} r={productsOnly ? Math.max(7, r * 0.4) : r}
-                fill={n.color} fillOpacity={productsOnly ? 0.1 : n.depth === 1 ? 0.22 : 0.16}
+              <circle cx={pp.x} cy={pp.y} r={productsOnly ? Math.max(7, r * 0.4) : r}
+                fill={n.color} fillOpacity={productsOnly ? 0.18 : n.depth === 1 ? 0.4 : 0.32}
                 stroke={n.color} strokeOpacity={productsOnly ? 0.4 : 1}
                 strokeWidth={selected || isDrop ? 2.5 : 1.4} />
+              {!productsOnly && (
+                <>
+                  <circle cx={pp.x} cy={pp.y} r={r} fill="url(#tb-globe-hi)" pointerEvents="none" />
+                  <circle cx={pp.x} cy={pp.y} r={r} fill="url(#tb-globe-lo)" pointerEvents="none" />
+                </>
+              )}
               {n.icon && !productsOnly && (() => {
-                const s = r * 1.15; // icon box inside the circle
+                const s = r * 1.15; // icon box inside the globe
                 return (
                   <path
                     className="tb-icon"
                     d={n.icon}
                     stroke={n.color}
-                    transform={`translate(${pos.x - s / 2}, ${pos.y - s / 2}) scale(${s / 24})`}
+                    transform={`translate(${pp.x - s / 2}, ${pp.y - s / 2}) scale(${s / 24})`}
                   />
                 );
               })()}
               {!productsOnly && (
                 <text
                   className="tb-label"
-                  x={pos.x} y={pos.y + r + 14} fill={n.color}
+                  x={pp.x} y={pp.y + r + 14} fill={n.color}
                   onPointerDown={ev => ev.stopPropagation()}
                   onClick={ev => { ev.stopPropagation(); if (!n.locked) setEditing(n.id); }}
                 >{n.name}</text>
@@ -417,9 +625,10 @@ export default function TypeBrainGraph(p: Props) {
       >
         {showSatellites && p.nodes.map(n => {
           const sat = p.satellites.get(n.id);
-          const pos = positions.get(n.id);
-          if (!sat || !pos || sat.items.length === 0) return null;
-          const r = nodeRadius(n);
+          const plane = positions.get(n.id);
+          if (!sat || !plane || sat.items.length === 0) return null;
+          const pos = proj(plane);
+          const r = nodeRadius(n) * pos.s;
           const overflow = sat.total - sat.items.length;
           return sat.items.map((prod, i) => {
             // Even orbit starting at 12 o'clock; overflow chip takes the
@@ -452,7 +661,7 @@ export default function TypeBrainGraph(p: Props) {
         {hovered === ROOT_ID && !p.pickMode && (
           <button
             className="tb-add"
-            style={{ left: rootPos.x + 34 + 16, top: rootPos.y }}
+            style={{ left: rootPos.x + 34 * rootPos.s + 16, top: rootPos.y }}
             title="Add a new top-level type"
             onPointerEnter={() => hoverEnter(ROOT_ID)}
             onPointerLeave={hoverLeave}
@@ -462,9 +671,10 @@ export default function TypeBrainGraph(p: Props) {
 
         {hovered && !p.pickMode && (() => {
           const n = byId.get(hovered);
-          const pos = positions.get(hovered);
-          if (!n || !pos) return null;
-          const r = nodeRadius(n);
+          const plane = positions.get(hovered);
+          if (!n || !plane) return null;
+          const pos = proj(plane);
+          const r = nodeRadius(n) * pos.s;
           return (
             <button
               className="tb-drill"
@@ -484,13 +694,14 @@ export default function TypeBrainGraph(p: Props) {
 
         {editing && (() => {
           const n = byId.get(editing);
-          const pos = positions.get(editing);
-          if (!n || !pos) return null;
+          const plane = positions.get(editing);
+          if (!n || !plane) return null;
+          const pos = proj(plane);
           return (
             <input
               key={editing}
               className="tb-rename"
-              style={{ left: pos.x, top: pos.y + nodeRadius(n) + 14 }}
+              style={{ left: pos.x, top: pos.y + nodeRadius(n) * pos.s + 14 }}
               defaultValue={n.name}
               autoFocus
               onFocus={ev => ev.currentTarget.select()}
@@ -510,7 +721,7 @@ export default function TypeBrainGraph(p: Props) {
         {singleSel && singleSelPos && (
           <button
             className="tb-add"
-            style={{ left: singleSelPos.x + nodeRadius(singleSel) + 16, top: singleSelPos.y }}
+            style={{ left: singleSelPos.x + nodeRadius(singleSel) * singleSelPos.s + 16, top: singleSelPos.y }}
             title={`Add a type under ${singleSel.name}`}
             onClick={() => p.onAddChild(singleSel.id)}
           >+</button>
