@@ -14,6 +14,7 @@ import { looks as seedLooks } from '~/data/looks';
 import { getLooks } from '~/services/looks';
 import { supabase } from '~/utils/supabase';
 import { getCreativesByProductIds, type ProductAd } from '~/services/product-creative';
+import { markOverlayReturn } from '~/utils/overlay-scroll-stash';
 
 /**
  * Fetch a product by its 8-char UUID prefix. UUID columns don't support ILIKE
@@ -174,6 +175,8 @@ export function useOverlayRouter({
     const finish = (open: () => void) => {
       if (resolvingRef.current === `p:${slug}`) resolvingRef.current = null;
       if (slugsRef.current.product === slug) return; // already showing it
+      // Popstate opens are returns — restore the page's saved scroll.
+      markOverlayReturn(slug);
       open();
     };
     const idPrefix = extractIdPrefix(slug);
@@ -250,6 +253,8 @@ export function useOverlayRouter({
       if (resolvingRef.current === `l:${slug}`) resolvingRef.current = null;
       if (!match) return;
       if (slugsRef.current.look === slug) return; // already showing it
+      // Popstate opens are returns — restore the look's saved scroll.
+      markOverlayReturn(slug);
       onOpenLook(match);
     });
   };
