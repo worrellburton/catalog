@@ -89,7 +89,7 @@ interface CreativeCardV2Props {
  *  will actually play (the mobile variant encodes at 480w, desktop/full
  *  at 720w), so the poster→first-frame swap is pixel-identical — no
  *  sharpness pop when the clip takes over from the still. */
-const CARD_POSTER_WIDTH = typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches ? 480 : 720;
+export const CARD_POSTER_WIDTH = typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches ? 480 : 720;
 
 const CreativeCardV2 = memo(function CreativeCardV2({
   creative,
