@@ -10,8 +10,8 @@
 //     projections are built on), then advertising, then direct brand
 //     partnerships. Later phases are explicitly NOT in the numbers.
 //   - Editorial magazine design: warm paper, serif display type, a
-//     single catalog-red accent, page folios. Cover collage is full color.
-//   - Cover: the live product feed as a dimmed collage, the wordmark
+//     single catalog-red accent, page folios.
+//   - Cover: clean type on the document's paper stock — the wordmark
 //     centered with no other text, "The AI for shopping" at the bottom.
 //   - Page order: cover · magazine sheet (centered exec summary, market,
 //     customer) · revenue phases + key assumptions · go-to-market ("this is
@@ -26,7 +26,6 @@ import { buildModel } from '~/services/model';
 import { niceCeiling, type Assumptions } from '~/services/projections';
 import type { GtmAssumptions } from '~/services/go-to-market';
 import { supabase } from '~/utils/supabase';
-import { withTransform } from '~/utils/supabase-image';
 
 export interface BusinessPlanData {
   generatedAt: string;
@@ -73,10 +72,6 @@ export interface BusinessPlanData {
     runwayMonths: number | null; // null = never runs out within the horizon
     avgBurn: number;
   };
-  /** Product-feed media for the cover/appendix collage (injected at open
-   *  time). Videos only — every primary product video is natively 3:4,
-   *  which is exactly the founder's spec for these walls. */
-  feedImages?: Array<{ video: string; poster: string }>;
 }
 
 const usd = (n: number, compact = false): string => {
@@ -304,18 +299,6 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
   const convHiVal = mRev.productConversion + 0.001;
   const base = revSeries(mRev, mAcq);
   const spendSeries = buildModel(mRev, mAcq, true).acquisition.map(m => m.spend);
-  // Cumulative commission stream for the aligned-incentives closer: the
-  // receivables that cross the investor's rails, against their cheque.
-  const cumCommission: number[] = [];
-  {
-    let acc = 0;
-    for (const v of base) { acc += v; cumCommission.push(acc); }
-  }
-  const investCrossIdx = cumCommission.findIndex(v => v >= c.cashRaised);
-  const receivablesChart = lineChart([
-    { values: base.map(() => c.cashRaised), label: `Your investment · ${usd(c.cashRaised, true)}`, variant: true },
-    { values: cumCommission, label: `Cumulative · ${usd(r.total16moRevenue, true)}` },
-  ], { height: 170, axisLabel: 'Commission routed through your rails, cumulative' });
   const rampChart = lineChart(
     [{ values: spendSeries, label: `${usd(spendSeries[spendSeries.length - 1] ?? 0, true)} / mo by M${d.horizonMonths}` }],
     { height: 150, area: true, axisLabel: 'Monthly ad spend' },
@@ -335,32 +318,6 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
     { values: base, label: `Conv ${pctTrim(mRev.productConversion)} (base) · ${arrOf(base)} ARR` },
     { values: convLo, label: `Conv ${pctTrim(convLoVal)} · ${arrOf(convLo)} ARR`, variant: true },
   ], { height: 148, axisLabel: 'Monthly commission revenue' });
-
-  // Cover collage: pack the page with as many product tiles as the feed
-  // can fill — grid density scales with how many images came back, and
-  // the wall cycles if there are fewer images than cells so the page is
-  // always fully covered.
-  const feed = d.feedImages ?? [];
-  // ~3:4 cells showing the FULL primary image (contain on a white card,
-  // never zoomed/cropped). Equal cols and rows on a portrait page give
-  // cells within a few percent of the primaries' own 3:4, and fractional
-  // rows always land flush on the page edge — no bands, no strips.
-  const coverCols = feed.length >= 64 ? 8 : feed.length >= 36 ? 6 : 4;
-  const coverTiles = feed.length
-    ? Array.from({ length: coverCols * 12 }, (_, i) => {
-        const m = feed[i % feed.length];
-        // Poster-first: a real <img> paints the moment its (320px webp)
-        // bytes land; the video sits ON TOP with no src — a script after
-        // load attaches sources a few at a time so a hundred videos never
-        // starve the posters on a phone connection.
-        return `<span class="cover-tile${i >= coverCols * coverCols ? ' cover-extra' : ''}">`
-          + (m.poster ? `<img src="${esc(m.poster)}" alt="" decoding="async" />` : '')
-          + `<video data-src="${esc(m.video)}" poster="${esc(m.poster)}" muted loop playsinline preload="none"></video>`
-          + `</span>`;
-      }).join('')
-    : '';
-  const coverGridStyle = `grid-template-columns: repeat(${coverCols}, minmax(0, 1fr)); grid-template-rows: repeat(${coverCols}, minmax(0, 1fr)); --cover-cols: ${coverCols};`;
-
 
   // Assumption rows kept to the load-bearing ten so the table fits the
   // one-page budget: label, value, the benchmark/why.
@@ -453,7 +410,7 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
     .page { padding: 26px 34px; max-width: none; margin: 0; box-shadow: none;
       background: var(--paper); }
     /* border-box so min-height:100vh INCLUDES the padding — sheet-exact. */
-    .page, .cover-page, .appendix-cover { box-sizing: border-box; }
+    .page, .cover-page { box-sizing: border-box; }
     .cover-page { min-height: 100vh; page-break-after: always; }
     /* A hair under the sheet so sub-pixel rounding can't overflow; and
        break-inside stays AUTO — an over-tall page flows onto the next
@@ -467,7 +424,6 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
     .solution p { font-size: 9.5px; }
     .folio { margin-bottom: 18px; }
     .divider { min-height: 82vh; }
-    .cover-feed .cover-extra { display: none; }
     .kicker { margin-bottom: 3px; }
     h2 { font-size: 15px; margin-bottom: 6px; }
     .display { font-size: 21px; }
@@ -482,47 +438,20 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
     .footer { margin-top: 14px; padding-top: 8px; }
   }
 
-  /* ── Cover: the product feed, full color, behind the wordmark. ── */
-  .cover-page { position: relative; overflow: hidden; background: #000; color: #fff; min-height: 100vh;
-    display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 26px;
-    -webkit-print-color-adjust: exact; print-color-adjust: exact; }
-  /* Columns arrive inline (density scales with image count). Every tile
-     is a fixed 3:4 card, cover-filled by its product image — uniform wall,
-     no letterbox strips. Rows overflow the page and crop at the edge. */
-  .cover-feed { position: absolute; inset: 0; display: grid; gap: 5px; padding: 5px; background: #000; }
-  /* Screen: literal 3:4 frames regardless of viewport shape (the inline
-     stretch rows are a print concern); extra rows render and the page
-     center-crops them. Print keeps the flush stretch grid and hides the
-     extras so the page edge stays clean. */
-  @media screen {
-    .cover-feed {
-      grid-template-rows: none !important;
-      grid-auto-rows: calc((100vw - (var(--cover-cols, 8) + 1) * 5px) / var(--cover-cols, 8) * 4 / 3);
-      align-content: center;
-    }
-  }
-  /* contain, not cover: the full, un-zoomed product picture on a white
-     card. Print cells are ~3:4 (the primaries' own shape), so the fit is
-     near-exact there; any sliver is white-on-white and invisible. */
-  .cover-tile { position: relative; overflow: hidden; min-width: 0; min-height: 0; background: #fff; }
-  /* img underneath paints first; the video layers over it once its bytes
-     arrive (transparent until then, so the poster img shows through). */
-  .cover-feed img, .cover-feed video { position: absolute; inset: 0; width: 100%; height: 100%;
-    object-fit: contain; box-sizing: border-box; display: block; }
-  .cover-feed img { background: #fff; }
-  .cover-scrim { position: absolute; inset: 0;
-    background: linear-gradient(rgba(0,0,0,0.82), rgba(0,0,0,0.92)); }
-  .appendix-cover { position: relative; overflow: hidden; background: #000; min-height: 100vh; }
-  .appendix-cover .divider { position: relative; z-index: 1; }
-  .appendix-cover .divider h2 { color: #fff; }
-  .cover-logo { position: relative; z-index: 1; width: clamp(240px, 38vw, 400px); height: auto; display: block;
-    filter: drop-shadow(0 4px 28px rgba(0,0,0,0.55)); }
-  .cover-tagline { position: relative; z-index: 1; margin: 0;
+  /* ── Cover: clean type on the same paper stock as every other sheet. ── */
+  .cover-page { background: var(--paper); color: var(--ink); min-height: 100vh;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    gap: 24px; text-align: center; }
+  .cover-kicker { margin: 0 0 6px; font-size: 10.5px; font-weight: 700;
+    letter-spacing: 0.34em; text-transform: uppercase; color: var(--muted); }
+  .cover-logo { width: clamp(240px, 38vw, 400px); height: auto; display: block; }
+  .cover-rule { width: 56px; border-top: 3px solid var(--ink); }
+  .cover-tagline { margin: 0;
     font-size: 15px; font-weight: 500; letter-spacing: 0.24em; text-transform: uppercase;
-    color: rgba(255,255,255,0.95); text-shadow: 0 2px 14px rgba(0,0,0,0.6); }
-  .cover-for { position: relative; z-index: 1; margin: 10px 0 0;
+    color: var(--ink); }
+  .cover-for { margin: 14px 0 0;
     font-size: 10.5px; font-weight: 700; letter-spacing: 0.3em; text-transform: uppercase;
-    color: rgba(255,255,255,0.62); text-shadow: 0 2px 14px rgba(0,0,0,0.6); }
+    color: var(--muted); }
 
   /* ── Page furniture: running head + page number, like a magazine folio. ── */
   .folio { display: flex; align-items: center; gap: 14px; font-size: 9.5px; font-weight: 700;
@@ -542,10 +471,20 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
   .display { font-weight: 700; font-size: 28px; line-height: 1.14; letter-spacing: -0.015em; }
 
   /* ── Magazine sheet ── */
-  .exec { text-align: center; margin-bottom: 40px; }
+  .exec { text-align: center; margin-bottom: 36px; }
   .mag-row { margin-bottom: 14px; }
   .exec .kicker::after { margin-inline: auto; }
-  .exec p { max-width: 58ch; margin-inline: auto; }
+  .exec .display { max-width: 30ch; margin-inline: auto; }
+  /* Body runs in two justified columns under the centered headline —
+     fills the sheet's width instead of a narrow centered ribbon with
+     dead margins (the founder's "make this space better"). */
+  .exec-cols { text-align: left; margin-top: 18px;
+    column-count: 2; column-gap: 44px; column-rule: 1px solid var(--line); }
+  .exec-cols p { margin: 0 0 12px; }
+  .exec-cols p:first-child::first-letter {
+    font-family: 'Iowan Old Style', 'Palatino Linotype', Palatino, Georgia, serif;
+    font-weight: 700; font-size: 44px; line-height: 0.85;
+    float: left; padding: 4px 8px 0 0; color: var(--ink); }
   .statband { display: grid; grid-template-columns: repeat(4, 1fr); gap: 14px;
     border-top: 3px solid var(--ink); border-bottom: 1px solid var(--ink);
     padding: 16px 0 14px; margin: 20px 0 6px; }
@@ -653,13 +592,13 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
     <button class="primary" onclick="window.print()">Save as PDF</button>
   </div>
 
-  <!-- Cover — the product feed behind the wordmark. No other copy. -->
+  <!-- Cover — clean type, same stock as the rest of the document. -->
   <div class="cover-page">
-    ${coverTiles ? `<div class="cover-feed" style="${coverGridStyle}">${coverTiles}</div>` : ''}
-    <div class="cover-scrim"></div>
-    <svg class="cover-logo" viewBox="${CATALOG_LOGO_VIEWBOX}" role="img" aria-label="Catalog"><path fill="#ffffff" d="${CATALOG_LOGO_PATH}" /></svg>
+    <p class="cover-kicker">Confidential business plan</p>
+    <svg class="cover-logo" viewBox="${CATALOG_LOGO_VIEWBOX}" role="img" aria-label="Catalog"><path fill="#141210" d="${CATALOG_LOGO_PATH}" /></svg>
     <p class="cover-tagline">The AI for shopping</p>
-    <p class="cover-for">Prepared for Shopnomix</p>
+    <div class="cover-rule"></div>
+    <p class="cover-for">Prepared for Shopnomix · ${esc(d.generatedAt)}</p>
   </div>
 
   <!-- Sheet 1 — magazine: centered summary, market, customer. -->
@@ -668,8 +607,10 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
     <section class="exec">
       <p class="kicker">Executive summary</p>
       <h2 class="display">AI shopping doesn't have a home yet. We're building it.</h2>
-      <p>Catalog is where you discover what to buy next: a daily feed of shoppable looks made by creators and indexed by AI, across every brand at once. Creators publish their taste, AI makes it searchable, and every product in every look is one tap from checkout. Discovery stops being something that interrupts you on a social app and becomes the product itself.</p>
-      <p>Search answers what you already know you want, and social buries shopping inside entertainment. There is no destination built for AI-native shopping; Catalog is built to be it. Revenue starts with affiliate commission on every sale we drive (the model these projections are built on); advertising and direct brand partnerships follow on the same rails, upside on top of every figure in this plan.</p>
+      <div class="exec-cols">
+        <p>Catalog is where you discover what to buy next: a daily feed of shoppable looks made by creators and indexed by AI, across every brand at once. Creators publish their taste, AI makes it searchable, and every product in every look is one tap from checkout. Discovery stops being something that interrupts you on a social app and becomes the product itself.</p>
+        <p>Search answers what you already know you want, and social buries shopping inside entertainment. There is no destination built for AI-native shopping; Catalog is built to be it. Revenue starts with affiliate commission on every sale we drive (the model these projections are built on); advertising and direct brand partnerships follow on the same rails, upside on top of every figure in this plan.</p>
+      </div>
     </section>
 
     <section>
@@ -853,10 +794,8 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
     </section>
   </div>
 
-  <!-- Sheet 4 — appendix divider: the word over the live product wall. -->
-  <div class="page appendix-cover">
-    <div class="cover-feed" style="${coverGridStyle}">${coverTiles}</div>
-    <div class="cover-scrim"></div>
+  <!-- Sheet 4 — appendix divider: the word, the stock, nothing else. -->
+  <div class="page">
     <div class="divider">
       <h2 class="display">Appendix</h2>
     </div>
@@ -1015,7 +954,7 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
     <section>
       <p class="kicker">Aligned incentives · To Shopnomix</p>
       <h2>An investment that pays you twice.</h2>
-      <p class="standfirst">You built the rails for AI commerce: CPA monetization across tens of thousands of merchants and, with Affiliate.com, a billion-product dataset made for AI surfaces. Catalog is the destination those rails have been missing. Your cheque funds a feed whose every order crosses your links, which makes you a different kind of investor here: one we pay back twice.</p>
+      <p class="standfirst">You built the rails for AI commerce: CPA monetization across tens of thousands of merchants and, with Affiliate.com, a billion-product dataset made for AI surfaces. Catalog is the destination those rails have been missing. Your ${usd(c.cashRaised, true)} cheque funds a feed whose every order crosses your links, which makes you a different kind of investor here: one we pay back twice.</p>
       <div class="solutions">
         <div class="solution">
           <span>Cash from the first order</span>
@@ -1031,9 +970,6 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
         </div>
       </div>
 
-      <h3>Your investment, diagrammed against the receivables</h3>
-      ${receivablesChart}
-      <p class="chart-caption">The solid line is the commission stream crossing your rails (cumulative, base case); the dashed line is the cheque.${investCrossIdx >= 0 ? ` The stream passes the size of the investment itself in month ${investCrossIdx + 1}, and your cut of it flows from the first order.` : ' Your cut of that stream flows from the first order.'}</p>
       <div class="flow">
         <div class="flow-step"><b>Your capital</b>Funds the growth plan</div>
         <div class="flow-arrow">→</div>
@@ -1049,79 +985,16 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
       <b>Catalog</b> · Confidential business plan · Generated ${esc(d.generatedAt)} · ${esc(d.scenario)} scenario, ${d.horizonMonths}-month horizon. Projections are illustrative and depend on the stated assumptions.
     </div>
   </div>
-  <script>
-    // Posters first (founder's call): videos carry no src until the page
-    // — i.e. the poster images — has loaded, then sources attach six at a
-    // time so the wall comes alive without ever starving the stills.
-    (function () {
-      var started = false;
-      function start() {
-        if (started) return; started = true;
-        var vids = Array.prototype.slice.call(document.querySelectorAll('video[data-src]'));
-        var i = 0;
-        function next() {
-          for (var n = 0; n < 6 && i < vids.length; n++, i++) {
-            var v = vids[i];
-            v.src = v.getAttribute('data-src');
-            v.load();
-            var p = v.play(); if (p && p.catch) p.catch(function () {});
-          }
-          if (i < vids.length) setTimeout(next, 400);
-        }
-        next();
-      }
-      if (document.readyState === 'complete') setTimeout(start, 300);
-      else window.addEventListener('load', function () { setTimeout(start, 300); });
-      // Safety: if 'load' hangs on a slow connection, start anyway.
-      setTimeout(start, 4000);
-    })();
-  </script>
 </body>
 </html>`;
 }
 
-// ── Cover collage feed ───────────────────────────────────────────────
-
-/** Pull the whole catalog's product images for the cover wall — every
-    active product, poster → primary → raw image fallback. Best-effort:
-    any failure (offline, RLS, empty table) falls back to the plain black
-    cover. Capped at 120 tiles so the document stays light. */
-async function fetchFeedImages(count = 120): Promise<Array<{ video: string; poster: string }>> {
-  try {
-    const { data, error } = await supabase
-      .from('products')
-      .select('primary_video_url, primary_video_poster_url, primary_image_url')
-      .eq('is_active', true)
-      .not('primary_video_url', 'is', null)
-      .limit(500);
-    if (error || !data) return [];
-    const seen = new Set<string>();
-    const media: Array<{ video: string; poster: string }> = [];
-    for (const row of data as Array<{ primary_video_url: string | null; primary_video_poster_url: string | null; primary_image_url: string | null }>) {
-      const video = row.primary_video_url;
-      if (!video || !/^https?:\/\//i.test(video) || seen.has(video)) continue;
-      seen.add(video);
-      const rawPoster = row.primary_video_poster_url || row.primary_image_url || '';
-      media.push({ video, poster: rawPoster ? (withTransform(rawPoster, { width: 320, quality: 60 }) ?? rawPoster) : '' });
-      if (media.length >= count) break;
-    }
-    return media;
-  } catch {
-    return [];
-  }
-}
-
-const withTimeout = <T,>(p: Promise<T>, ms: number, fallback: T): Promise<T> =>
-  Promise.race([p, new Promise<T>(resolve => setTimeout(() => resolve(fallback), ms))]);
-
 /** Open the business plan in a new tab (reader can Save as PDF from there). */
 export async function openBusinessPlan(d: BusinessPlanData): Promise<void> {
   if (typeof window === 'undefined') return;
-  // Open synchronously inside the click gesture so popup blockers allow it,
-  // then fill the document once the cover collage has been fetched.
+  // Open synchronously inside the click gesture so popup blockers allow it.
   const w = window.open('', '_blank');
-  const feedImages = await withTimeout(fetchFeedImages(), 5000, []);
-  const html = buildBusinessPlanHtml({ ...d, feedImages });
+  const html = buildBusinessPlanHtml(d);
   // Snapshot for the public passcode viewer (/business-plan): latest open wins.
   void supabase.from('documents').upsert(
     { key: 'business-plan', html, updated_at: new Date().toISOString() },
