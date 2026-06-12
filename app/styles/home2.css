@@ -20,7 +20,9 @@ html.home2-paper body {
   -webkit-font-smoothing: antialiased;
 }
 
-.h2-page button { font-family: inherit; cursor: pointer; }
+/* color:inherit — consumer globals tint bare buttons/links blue. */
+.h2-page button { font-family: inherit; cursor: pointer; color: inherit; }
+.h2-page a { color: inherit; }
 
 /* ── Masthead ──────────────────────────────────────────────────────── */
 .h2-masthead { padding-top: 26px; text-align: center; }
