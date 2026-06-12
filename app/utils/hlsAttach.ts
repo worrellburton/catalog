@@ -59,6 +59,26 @@ export function browserSupportsNativeHls(): boolean {
   return _nativeHlsSupport;
 }
 
+// Cached: can THIS browser decode HEVC (hvc1) in MP4? canPlayType is reliable
+// here because the only caller (pickPlaybackSource) ALSO gates on
+// browserSupportsNativeHls() — i.e. it only prefers the HEVC ladder on
+// Apple/native-HLS devices, which have hardware HEVC decode AND honest
+// canPlayType results. We never steer the hls.js/MSE path to HEVC (decode there
+// is rare/unreliable), so this stays a sync, allocation-free check.
+let _hevcSupport: boolean | null = null;
+export function browserDecodesHevc(): boolean {
+  if (_hevcSupport !== null) return _hevcSupport;
+  if (typeof document === 'undefined') return false;
+  try {
+    const v = document.createElement('video');
+    // hvc1.1.6.L93.B0 == Main profile, the tag (-tag:v hvc1) the encoder emits.
+    _hevcSupport = v.canPlayType('video/mp4; codecs="hvc1.1.6.L93.B0"') !== '';
+  } catch {
+    _hevcSupport = false;
+  }
+  return _hevcSupport;
+}
+
 // Phase 4 (opt-in, default OFF): route HLS through hls.js even where native HLS
 // is available, using Managed Media Source on iOS 17.1+. Native HLS stays the
 // default — it needs no library download and is battery-friendly — so this

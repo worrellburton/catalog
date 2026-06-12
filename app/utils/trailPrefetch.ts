@@ -12,7 +12,7 @@
 
 import type { ProductAd } from '~/services/product-creative';
 import type { Look } from '~/data/looks';
-import { withTransform } from './supabase-image';
+import { posterRendition } from './poster-prefetch';
 import { pickPlaybackSource, pickPosterUrl, prefetchHlsHead } from '~/services/video-loading';
 import { videoPipelineMode } from '~/services/video-pipeline';
 import { isHlsUrl } from './hlsAttach';
@@ -24,19 +24,19 @@ const POSTERS_TO_WARM = 16;
 // initial set before the in-page IntersectionObserver has time to trigger
 // the regular preload chain.
 const VIDEOS_TO_WARM = 18;
-// HLS heads route through prefetchHlsHead's small bounded queue (3 in-flight,
-// 8 pending — see video-loading.ts). Pushing all 18 synchronously would evict
-// the NEAREST below-fold cards before they warm, so cap the boot batch to what
-// fits the queue without eviction. Each card re-warms its own head when it
-// enters CreativeCardV2/LookCard's prewarm band anyway, so this is just the
-// head start. MP4 link-preloads are unbounded, so they keep the full 18.
-const HLS_HEADS_TO_WARM = 6;
+// HLS heads route through prefetchHlsHead's bounded queue (5 in-flight, 16
+// pending — see video-loading.ts). Each head now warms BOTH the low + high rung
+// (the rung native iOS ramps to), so the lead matters more: warm 10 ahead so a
+// card is a cache-hit well before you reach it, rather than stalling on HLS's
+// 4-round-trip startup. Cap stays under the queue's pending limit. Each card
+// also re-warms its own head when it enters the prewarm band.
+const HLS_HEADS_TO_WARM = 10;
 
-// Match CreativeCardV2's poster transform EXACTLY (same width/quality/resize
-// AND the pickPosterUrl source) so the warmed URL is a byte-for-byte cache hit
-// when the card mounts. A mismatch means the prefetch downloads one variant and
-// the card downloads another — double the bytes, zero benefit.
-const POSTER_TRANSFORM = { width: 540, quality: 72, resize: 'contain' as const };
+// Warm via posterRendition() — the SINGLE canonical poster transform the card
+// actually paints (CARD_POSTER_WIDTH / q82 / webp). Sharing the one helper keeps
+// the warmed URL a byte-for-byte cache hit when the card mounts; a hand-rolled
+// transform here previously drifted to 540/q72 and warmed a variant the card
+// never requested — double the bytes, zero benefit.
 
 const warmedPosters = new Set<string>();
 const warmedVideos = new Set<string>();
@@ -101,7 +101,7 @@ export function primeTrailAssets(rows: ProductAd[]): void {
   for (const row of rows.slice(0, POSTERS_TO_WARM)) {
     const rawPoster = pickPosterUrl(row);
     if (!rawPoster) continue;
-    const poster = withTransform(rawPoster, POSTER_TRANSFORM) || rawPoster;
+    const poster = posterRendition(rawPoster) || rawPoster;
     if (warmedPosters.has(poster)) continue;
     warmedPosters.add(poster);
     injectPreload(poster, 'image');
@@ -138,7 +138,7 @@ export function primeLookAssets(rows: Look[]): void {
     // return. Warming the product-image fallback makes them a cache hit.
     const rawPoster = lookPoster(row);
     if (!rawPoster) continue;
-    const poster = withTransform(rawPoster, POSTER_TRANSFORM) || rawPoster;
+    const poster = posterRendition(rawPoster) || rawPoster;
     if (warmedPosters.has(poster)) continue;
     warmedPosters.add(poster);
     injectPreload(poster, 'image');

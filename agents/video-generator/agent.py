@@ -136,7 +136,12 @@ def generate_video(
         ts = int(datetime.now(timezone.utc).timestamp())
         storage_path = f"generated/{product_id}/{style}_{ts}.mp4"
         supabase.storage.from_("look-media").upload(
-            storage_path, video_bytes, {"content-type": "video/mp4"}
+            storage_path, video_bytes,
+            # Timestamped key, never overwritten in place → safe to cache
+            # forever. Without this the SDK default is max-age=3600, and
+            # desktop ALWAYS plays this source MP4, so every replay/scroll-back
+            # paid a revalidation round-trip. Revert by dropping cache-control.
+            {"content-type": "video/mp4", "cache-control": "public, max-age=31536000, immutable"},
         )
         video_url = supabase.storage.from_("look-media").get_public_url(storage_path)
 
@@ -157,13 +162,15 @@ def generate_video(
                 with open(assets.poster_jpeg_path, "rb") as f:
                     supabase.storage.from_("look-media").upload(
                         poster_key, f.read(),
-                        {"content-type": "image/jpeg", "upsert": "true"},
+                        {"content-type": "image/jpeg", "upsert": "true",
+                         "cache-control": "public, max-age=31536000, immutable"},
                     )
                 thumbnail_url = supabase.storage.from_("look-media").get_public_url(poster_key)
                 with open(assets.mobile_mp4_path, "rb") as f:
                     supabase.storage.from_("look-media").upload(
                         mobile_key, f.read(),
-                        {"content-type": "video/mp4", "upsert": "true"},
+                        {"content-type": "video/mp4", "upsert": "true",
+                         "cache-control": "public, max-age=31536000, immutable"},
                     )
                 mobile_video_url = supabase.storage.from_("look-media").get_public_url(mobile_key)
             finally:

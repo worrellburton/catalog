@@ -36,7 +36,7 @@ import subprocess
 import tempfile
 import urllib.request
 from dataclasses import dataclass
-from typing import Optional
+from typing import List, NamedTuple, Optional
 
 # Poster = frame 0 (the very first frame). The generated clips do an
 # editorial zoom-in from a wide packshot, so frame 0 is the widest,
@@ -121,27 +121,22 @@ def encode_assets_from_url(
             workdir=workdir,
         )
 
-    # 3. Mobile variant: 480p H.264, 1.5 Mbps target. Earlier this
-    # ran at 600 kbps, which is borderline for 480p portrait at 24fps
-    # the moment there's real motion — model walking, hair, camera
-    # arc — and produced the "choppy" frame-drop look users reported
-    # on the feed. 1.5 Mbps gives the encoder enough budget to keep
-    # every frame without exploding the file size (still <500 KB for
-    # a 5 s clip).
+    # 3. Mobile variant: 480p H.264, capped CRF. Single fallback rung for the
+    # progressive-MP4 path (and slow connections). -crf 23 + a maxrate ceiling
+    # ("constrained quality") right-sizes bytes per clip — a static lookbook clip
+    # encodes well under the cap, a busy runway/hair clip rides it — instead of
+    # paying a flat bitrate on every clip. The maxrate (1.8 Mbps) keeps the
+    # earlier "no frame-drop" headroom; bufsize 2× maxrate lets busy clips breathe.
     #
-    # -preset medium (was veryfast) trades a few seconds of encode
-    # time for noticeably better compression efficiency at the same
-    # bitrate. Mobile feeds are batch-encoded so the wall-clock
-    # difference is invisible to the shopper.
+    # -preset slow (was medium): encode is offline/batch, so the extra seconds
+    # buy ~10-20% better compression efficiency (smaller at equal quality). The
+    # same argument that justified veryfast→medium, taken one step further.
+    # -tune film + aq-mode 3 bias bits toward faces / fabric / shadows — the
+    # detail that reads on a fashion clip — and redistribute WITHIN the rate
+    # ceiling, so they cost no extra bytes.
     #
-    # -r 24 locks framerate to the source-native 24 fps (matches Fal
-    # Seedance + Veo output). Without it, a re-encode could
-    # interpolate or drop frames inconsistently when the input has
-    # variable frame timing.
-    #
-    # -movflags +faststart is the single most important flag here
-    # for "first-frame on mobile" — without it the browser has to
-    # download the whole file before any frame plays.
+    # -r 24 matches the source-native 24 fps (Fal Seedance + Veo). -movflags
+    # +faststart keeps first-frame-on-mobile instant (moov atom up front).
     subprocess.run(
         [
             "ffmpeg", "-y",
@@ -150,10 +145,12 @@ def encode_assets_from_url(
             "-vf", "scale='min(480,iw)':-2",
             "-r", "24",
             "-c:v", "libx264",
-            "-preset", "medium",
-            "-b:v", "1500k",
-            "-maxrate", "2000k",
-            "-bufsize", "3000k",
+            "-preset", "slow",
+            "-tune", "film",
+            "-crf", "23",
+            "-maxrate", "1800k",
+            "-bufsize", "3600k",
+            "-x264-params", "aq-mode=3:aq-strength=0.9",
             "-profile:v", "high",
             "-level", "4.0",
             "-pix_fmt", "yuv420p",
@@ -190,108 +187,265 @@ def cleanup(assets: EncodedAssets) -> None:
 
 @dataclass
 class EncodedHls:
-    """Output of encode_hls_ladder_from_url. `out_dir` holds the full HLS tree
-    (master.m3u8 + v0/v1/v2 variant playlists + .ts segments); `master_name`
-    is the master playlist filename within it. The caller uploads the whole
-    tree preserving relative paths, then points hls_url at the master."""
+    """Output of an HLS ladder encode. `out_dir` holds the full HLS tree
+    (master.m3u8 + v0/v1/… variant playlists + per-variant init.mp4 + .m4s fMP4
+    segments); `master_name` is the master playlist filename within it. The
+    caller uploads the whole tree preserving relative paths, then points the
+    *_hls_url column at the master."""
     out_dir: str
     master_name: str
     workdir: str
 
 
-# Rendition ladder: (height-cap label, scale width, video bitrate, maxrate, bufsize).
-# Portrait 3:4 clips scale by WIDTH; height is derived with -2 (even). 480/720/1080
-# wide covers phone tile → phone hero → desktop/large hero. Bitrates are tuned for
-# clean motion (model walk, hair, camera arc) without bloating segment size.
-_HLS_LADDER = [
-    ("480", 480, "1400k", "1600k", "2100k"),
-    ("720", 720, "3000k", "3300k", "4500k"),
-    ("1080", 1080, "5500k", "6000k", "8000k"),
+@dataclass
+class EncodedAv1:
+    """Output of encode_av1_mp4_from_url — one progressive AV1 MP4 (file path on
+    disk) for the desktop progressive path. Caller uploads + removes workdir."""
+    path: str
+    workdir: str
+
+
+class _Rung(NamedTuple):
+    label: str
+    width: int
+    b: str        # target / average bitrate
+    maxrate: str  # VBV ceiling (also the master's BANDWIDTH attr)
+    bufsize: str  # VBV buffer — kept > maxrate so busy clips can breathe
+
+
+# H.264 rendition ladder. Bitrates are tuned for -preset slow (≈20% more
+# efficient than the former veryfast, so the targets dropped accordingly for
+# equal-or-better quality). The ladder is SOURCE-AWARE at encode time
+# (_source_aware_ladder): a rung is NEVER emitted wider than the true source —
+# an upscaled rung spends the most bits in the ladder for ZERO real detail (the
+# old fixed "1080" rung upscaled a ~720–834px source). When the source sits
+# between steps the ladder tops out at the native source width, so a full-screen
+# hero gets the source's full detail without ever upscaling.
+# Bitrates tuned for QUALITY at preset slow + NO B-frames (bf 0 is mandatory for
+# the iOS edit-list fix, and costs some efficiency). The 480 rung stays modest so
+# the cold-start segment is small and first-frame is instant; the 720 + native
+# top rung are fed generously so the hero (which capLevelToPlayerSize pins on a
+# high-DPR phone) is crisp. Raised from the v3 values (1100/2400/4500), which
+# under-fed the top rung and read as soft.
+_HLS_LADDER: List[_Rung] = [
+    _Rung("480", 480, "1500k", "1900k", "3800k"),
+    _Rung("720", 720, "3800k", "4600k", "9200k"),
+    _Rung("1080", 1080, "7000k", "8400k", "16800k"),
 ]
 
+# HEVC bitrate scale (only used if the HEVC ladder is re-enabled). Note: with
+# B-frames disabled HEVC's efficiency edge over H.264 shrinks a lot, so 0.7× made
+# HEVC look WORSE than H.264 on iOS — bump toward ~0.85× before re-enabling. The
+# client HEVC preference is currently OFF (see hevcPreferred in video-loading.ts).
+_HEVC_BITRATE_SCALE = 0.85
 
-def encode_hls_ladder_from_url(
-    video_url: str,
-    workdir: Optional[str] = None,
-) -> EncodedHls:
-    """Downloads the source MP4 and transcodes an HLS VOD ladder
-    (480p/720p/1080p, H.264, MPEG-TS segments) with a master playlist.
 
-    Audio is dropped (-an) — the consumer feed plays muted. Segments are 1s
-    with a matching 1s GOP (-g 24 at 24fps, fixed cadence) so every rendition
-    has aligned switch points (lets hls.js step quality up/down mid-playback
-    without a stall) AND the very first segment is small — the player can fetch
-    + decode the opening frame in roughly half the bytes of a 2s segment, which
-    shortens the cold-start "poster hold" on a cache miss. Short clips gain a
-    couple of extra segment requests; negligible for ~3-6 s feed loops.
+def _kbps(rate: str) -> int:
+    """'2400k' → 2400."""
+    return int(rate.lower().rstrip("k"))
+
+
+def _probe_width(path: str) -> Optional[int]:
+    """Source video pixel width via ffprobe, or None if it can't be read (the
+    caller then falls back to the full ladder)."""
+    if shutil.which("ffprobe") is None:
+        return None
+    try:
+        out = subprocess.run(
+            ["ffprobe", "-v", "error", "-select_streams", "v:0",
+             "-show_entries", "stream=width", "-of", "csv=p=0", path],
+            check=True, capture_output=True, text=True,
+        ).stdout.strip()
+        return int(out) if out else None
+    except Exception:
+        return None
+
+
+def _source_aware_ladder(width: Optional[int], scale: float = 1.0) -> List[_Rung]:
+    """The ladder filtered to the true source width — never wider than the
+    source. If the source sits ≥15% above the largest kept rung, append a
+    native-width top rung (interpolating its bitrate by pixel-area) so a
+    full-screen hero gets full source detail with no upscale. `scale` multiplies
+    every bitrate (HEVC passes <1)."""
+    def scaled(r: _Rung) -> _Rung:
+        if scale == 1.0:
+            return r
+        return _Rung(r.label, r.width,
+                     f"{int(_kbps(r.b) * scale)}k",
+                     f"{int(_kbps(r.maxrate) * scale)}k",
+                     f"{int(_kbps(r.bufsize) * scale)}k")
+
+    if not width or width <= 0:
+        return [scaled(r) for r in _HLS_LADDER]  # unknown source → full ladder
+    kept = [r for r in _HLS_LADDER if r.width <= width]
+    if not kept:
+        kept = [_HLS_LADDER[0]]
+    if width >= int(kept[-1].width * 1.15):
+        lower = kept[-1]
+        area = (width / lower.width) ** 2
+        b = int(_kbps(lower.b) * area)
+        kept = kept + [_Rung(str(width), width, f"{b}k", f"{int(b * 1.3)}k", f"{int(b * 2.6)}k")]
+    return [scaled(r) for r in kept]
+
+
+def _download(video_url: str, dst: str) -> None:
+    with urllib.request.urlopen(video_url) as resp, open(dst, "wb") as f:
+        shutil.copyfileobj(resp, f)
+
+
+def _run_hls_ladder(src_path: str, out_dir: str, rungs: List[_Rung], codec: str) -> None:
+    """One ffmpeg → a single-codec fMP4 HLS VOD ladder. `codec` is 'h264' or
+    'hevc'. ffmpeg generates the master playlist (with correct per-variant CODECS
+    attributes — load-bearing for native iOS HLS), mirroring the proven
+    split-filter / var_stream_map structure.
+
+    fMP4 (not MPEG-TS): ~6–10% less packaging overhead at these sub-1Mbps
+    bitrates, byte-range addressable, and MANDATORY for HEVC on Apple native HLS.
+    1s segments + 1s GOP (-g 24 @ 24fps, fixed cadence) keep rung switch points
+    aligned AND the first segment small for a fast cold start; the client warmer
+    already parses #EXT-X-MAP (the fMP4 init segment)."""
+    n = len(rungs)
+    for i in range(n):
+        os.makedirs(os.path.join(out_dir, f"v{i}"), exist_ok=True)
+
+    splits = "".join(f"[v{i}]" for i in range(n))
+    chain = [f"[0:v]split={n}{splits}"]
+    for i, r in enumerate(rungs):
+        chain.append(f"[v{i}]scale=w={r.width}:h=-2[v{i}out]")
+    filter_complex = "; ".join(chain)
+
+    # NO B-FRAMES (bf 0 / bframes=0). B-frame composition reordering makes the
+    # mov muxer write a 2-entry edit list into the fMP4 init whose FIRST entry is
+    # an empty edit (media_time=-1, a leading dwell of the ~2-frame reorder delay).
+    # iOS AVPlayer's native HLS chokes on a leading empty edit in fMP4 and never
+    # renders the first frame (poster-only / "stuck"). MPEG-TS has no edit lists,
+    # which is why the old TS ladder played on iOS and the fMP4 ladder didn't.
+    # Dropping B-frames removes the reorder delay → a clean identity edit list
+    # (media_time=0) → iOS plays. Costs a few % compression on these short clips;
+    # correctness on the dominant mobile platform wins. (negative_cts_offsets /
+    # avoid_negative_ts / setpts were all tried and did NOT remove the empty edit.)
+    if codec == "hevc":
+        vcodec = "libx265"
+        # -tag:v hvc1 is required for Apple to play HEVC in fMP4/HLS. libx265 has
+        # no 'film' tune, so AQ is set via -x265-params; bframes=0 (ffmpeg -bf
+        # doesn't reach libx265) for the edit-list reason above.
+        codec_opts = ["-tag:v", "hvc1", "-profile:v", "main",
+                      "-x265-params", "aq-mode=3:bframes=0"]
+    else:
+        vcodec = "libx264"
+        codec_opts = ["-tune", "film", "-profile:v", "high", "-bf", "0",
+                      "-x264-params", "aq-mode=3:aq-strength=0.9"]
+
+    cmd = ["ffmpeg", "-y", "-loglevel", "error", "-i", src_path,
+           "-filter_complex", filter_complex]
+    for i, r in enumerate(rungs):
+        cmd += ["-map", f"[v{i}out]",
+                f"-c:v:{i}", vcodec,
+                f"-b:v:{i}", r.b,
+                f"-maxrate:v:{i}", r.maxrate,
+                f"-bufsize:v:{i}", r.bufsize]
+    cmd += ["-preset", "slow"] + codec_opts + [
+        "-r", "24", "-g", "24", "-keyint_min", "24", "-sc_threshold", "0",
+        "-pix_fmt", "yuv420p", "-an",
+        "-f", "hls",
+        "-hls_time", "1",
+        "-hls_playlist_type", "vod",
+        "-hls_flags", "independent_segments",
+        "-hls_segment_type", "fmp4",
+        "-hls_fmp4_init_filename", "init.mp4",
+        "-hls_segment_filename", os.path.join("v%v", "seg_%03d.m4s"),
+        "-master_pl_name", "master.m3u8",
+        "-var_stream_map", " ".join(f"v:{i}" for i in range(n)),
+        os.path.join("v%v", "playlist.m3u8"),
+    ]
+    # Input absolute; OUTPUT paths relative with cwd=out_dir so -master_pl_name
+    # lands in out_dir referencing v0/playlist.m3u8 etc.
+    subprocess.run(cmd, check=True, cwd=out_dir)
+
+
+def encode_hls_ladder_from_url(video_url: str, workdir: Optional[str] = None) -> EncodedHls:
+    """Download the source MP4 and transcode the H.264 fMP4 HLS VOD ladder
+    (source-aware renditions, -preset slow, -tune film, capped VBR). Fills the
+    existing hls_url / primary_hls_url columns.
 
     Raises CalledProcessError on ffmpeg failure / HTTPError on a bad fetch.
-    Caller removes `result.workdir` once the tree is uploaded."""
+    Caller removes result.workdir once the tree is uploaded."""
     if shutil.which("ffmpeg") is None:
         raise RuntimeError(
             "ffmpeg not found on PATH. Install it (apt-get install ffmpeg) "
             "or run this inside the Modal image which already has it."
         )
-
     workdir = workdir or tempfile.mkdtemp(prefix="hls-ladder-")
     src_path = os.path.join(workdir, "source.mp4")
     out_dir = os.path.join(workdir, "hls")
     os.makedirs(out_dir, exist_ok=True)
-    for i in range(len(_HLS_LADDER)):
-        os.makedirs(os.path.join(out_dir, f"v{i}"), exist_ok=True)
-
-    with urllib.request.urlopen(video_url) as resp, open(src_path, "wb") as f:
-        shutil.copyfileobj(resp, f)
-
-    # Build the split + per-rendition scale filtergraph and the matching
-    # -map / bitrate args. var_stream_map groups each video output into its
-    # own variant stream (no audio groups — we strip audio).
-    n = len(_HLS_LADDER)
-    splits = "".join(f"[v{i}]" for i in range(n))
-    chain = [f"[0:v]split={n}{splits}"]
-    for i, (_, w, *_rest) in enumerate(_HLS_LADDER):
-        chain.append(f"[v{i}]scale=w={w}:h=-2[v{i}out]")
-    filter_complex = "; ".join(chain)
-
-    # Input is absolute; all OUTPUT paths are relative and ffmpeg runs with
-    # cwd=out_dir. This is the reliable way to get -master_pl_name to land in
-    # out_dir (out_dir/master.m3u8) referencing v0/playlist.m3u8 etc. — passing
-    # absolute output patterns makes the master's location version-dependent.
-    cmd = [
-        "ffmpeg", "-y", "-loglevel", "error",
-        "-i", src_path,
-        "-filter_complex", filter_complex,
-    ]
-    for i, (_, _w, brate, maxrate, bufsize) in enumerate(_HLS_LADDER):
-        cmd += [
-            "-map", f"[v{i}out]",
-            f"-c:v:{i}", "libx264",
-            f"-b:v:{i}", brate,
-            f"-maxrate:v:{i}", maxrate,
-            f"-bufsize:v:{i}", bufsize,
-        ]
-    cmd += [
-        "-preset", "veryfast",
-        "-r", "24",
-        "-g", "24", "-keyint_min", "24", "-sc_threshold", "0",
-        "-profile:v", "high", "-pix_fmt", "yuv420p",
-        "-an",
-        "-f", "hls",
-        "-hls_time", "1",
-        "-hls_playlist_type", "vod",
-        "-hls_flags", "independent_segments",
-        "-hls_segment_filename", os.path.join("v%v", "seg_%03d.ts"),
-        "-master_pl_name", "master.m3u8",
-        "-var_stream_map", " ".join(f"v:{i}" for i in range(n)),
-        os.path.join("v%v", "playlist.m3u8"),
-    ]
-    subprocess.run(cmd, check=True, cwd=out_dir)
-
+    _download(video_url, src_path)
+    rungs = _source_aware_ladder(_probe_width(src_path))
+    _run_hls_ladder(src_path, out_dir, rungs, "h264")
     return EncodedHls(out_dir=out_dir, master_name="master.m3u8", workdir=workdir)
 
 
+def encode_hls_hevc_ladder_from_url(video_url: str, workdir: Optional[str] = None) -> EncodedHls:
+    """Same as encode_hls_ladder_from_url but HEVC (libx265, hvc1). Produces a
+    SEPARATE master/tree so it never touches the proven H.264 master — fills the
+    additive hls_hevc_url / primary_hls_hevc_url columns. The client prefers it
+    where HEVC decode is available and ALWAYS keeps the H.264 ladder as fallback.
+    Saves ~15-25% bytes on these short low-res portrait clips."""
+    if shutil.which("ffmpeg") is None:
+        raise RuntimeError("ffmpeg not found on PATH.")
+    workdir = workdir or tempfile.mkdtemp(prefix="hls-hevc-")
+    src_path = os.path.join(workdir, "source.mp4")
+    out_dir = os.path.join(workdir, "hls-hevc")
+    os.makedirs(out_dir, exist_ok=True)
+    _download(video_url, src_path)
+    rungs = _source_aware_ladder(_probe_width(src_path), scale=_HEVC_BITRATE_SCALE)
+    _run_hls_ladder(src_path, out_dir, rungs, "hevc")
+    return EncodedHls(out_dir=out_dir, master_name="master.m3u8", workdir=workdir)
+
+
+def encode_av1_mp4_from_url(video_url: str, workdir: Optional[str] = None) -> EncodedAv1:
+    """One progressive AV1 MP4 (libsvtav1) at the source's native resolution for
+    the desktop progressive path — ~30-50% smaller than H.264 at equal quality.
+    Tile and hero share this ONE url (so the pooled-element handoff stays
+    seamless); the client gates on MediaCapabilities and ALWAYS keeps the H.264
+    source as fallback. Fills video_av1_url / primary_video_av1_url.
+
+    libsvtav1 -preset 6 is a sane speed/quality balance for 3-6s clips (encode is
+    offline). Raises on ffmpeg failure; caller removes workdir."""
+    if shutil.which("ffmpeg") is None:
+        raise RuntimeError("ffmpeg not found on PATH.")
+    workdir = workdir or tempfile.mkdtemp(prefix="av1-mp4-")
+    src_path = os.path.join(workdir, "source.mp4")
+    out_path = os.path.join(workdir, "desktop.av1.mp4")
+    _download(video_url, src_path)
+    subprocess.run(
+        [
+            "ffmpeg", "-y", "-loglevel", "error",
+            "-i", src_path,
+            "-c:v", "libsvtav1",
+            "-preset", "6",
+            "-crf", "30",
+            "-svtav1-params", "tune=0",
+            "-pix_fmt", "yuv420p",
+            "-an",
+            "-movflags", "+faststart",
+            out_path,
+        ],
+        check=True,
+    )
+    return EncodedAv1(path=out_path, workdir=workdir)
+
+
 def cleanup_hls(assets: EncodedHls) -> None:
-    """Removes the temp workdir created by encode_hls_ladder_from_url."""
+    """Removes the temp workdir created by an HLS ladder encode."""
+    try:
+        shutil.rmtree(assets.workdir, ignore_errors=True)
+    except Exception:
+        pass
+
+
+def cleanup_av1(assets: EncodedAv1) -> None:
+    """Removes the temp workdir created by encode_av1_mp4_from_url."""
     try:
         shutil.rmtree(assets.workdir, ignore_errors=True)
     except Exception:
