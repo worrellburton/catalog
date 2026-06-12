@@ -350,7 +350,23 @@ export default function AdminModelOpex() {
                         {OPEX_CATEGORIES.map(c => <option key={c.id} value={c.id}>{c.label}</option>)}
                       </select>
                     </td>
-                    <td><AcctInput className="opex-in opex-in-num" value={it.amount} onChange={n => update(it.id, { amount: n })} /></td>
+                    <td>
+                      {it.perMau && it.perMau > 0 ? (
+                        // Variable line: Monthly $ isn't an input — it's a
+                        // RESULT ($/MAU × that month's users). Show the range
+                        // the model implies so the scaling is visible.
+                        <span
+                          className="opex-var"
+                          title={`Variable — $${it.perMau}/MAU × the model's user curve. Clears back to a fixed line if you zero out $/MAU.`}
+                        >
+                          {fmtCurrency(opexItemMonthly(it, Math.max(0, Math.min(it.startMonth, MONTHS - 1)), mau), { compact: true })}
+                          {' → '}
+                          {fmtCurrency(opexItemMonthly(it, isContinuous(it.endMonth) ? MONTHS - 1 : Math.min(it.endMonth, MONTHS - 1), mau), { compact: true })}
+                        </span>
+                      ) : (
+                        <AcctInput className="opex-in opex-in-num" value={it.amount} onChange={n => update(it.id, { amount: n })} />
+                      )}
+                    </td>
                     <td>
                       <span className="opex-in-pct" title="Dollars per MAU per month. Above 0 = variable (cost = this × monthly active users).">
                         $<input
@@ -367,7 +383,11 @@ export default function AdminModelOpex() {
                       </select>
                     </td>
                     <td><EndSelect value={it.endMonth} onChange={n => update(it.id, { endMonth: n })} /></td>
-                    <td><span className="opex-in-pct"><input className="opex-in opex-in-sm" type="number" step={1} value={Math.round(it.growth * 100)} onChange={e => update(it.id, { growth: (Number(e.target.value) || 0) / 100 })} />%</span></td>
+                    <td>
+                      {it.perMau && it.perMau > 0
+                        ? <span className="opex-var" title="Variable lines ramp with the user curve — no manual ramp.">MAU</span>
+                        : <span className="opex-in-pct"><input className="opex-in opex-in-sm" type="number" step={1} value={Math.round(it.growth * 100)} onChange={e => update(it.id, { growth: (Number(e.target.value) || 0) / 100 })} />%</span>}
+                    </td>
                     <td><button className="opex-del" onClick={() => remove(it.id)} aria-label={`Remove ${it.name}`}>×</button></td>
                   </tr>
                 ))}
