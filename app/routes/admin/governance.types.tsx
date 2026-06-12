@@ -102,8 +102,13 @@ export default function AdminGovernanceTypes() {
   const [toast, setToast] = useState<{ label: string; key: number } | null>(null);
   // "Move to…" armed: the next node click re-parents the whole selection.
   const [pickMode, setPickMode] = useState(false);
-  // Organize button: each press re-runs the tidy radial layout.
-  const [organizeSignal, setOrganizeSignal] = useState(0);
+  // Organize signal retained for programmatic re-layout (the header
+  // button itself was retired — founder's call).
+  const [organizeSignal] = useState(0);
+  // Camera: depth-of-field f-stop (null = off) + showcase auto-orbit.
+  const [dofStop, setDofStop] = useState<number | null>(2.8);
+  const [mobileControlsOpen, setMobileControlsOpen] = useState(false);
+  const [showcase, setShowcase] = useState(false);
   // Ring dials — view preferences, sticky per admin via localStorage.
   const [ringOpacity, setRingOpacity] = useState(() =>
     Number(typeof localStorage !== 'undefined' && localStorage.getItem('gov-ring-opacity')) || 0.15);
@@ -533,6 +538,52 @@ export default function AdminGovernanceTypes() {
     return null;
   };
 
+  /** Drill "Kaizen N": sends ONLY the selected products (with their
+   *  Haiku image context) to kaizen-refine and opens the report with the
+   *  suggested placements — review + Apply as usual. */
+  const [kaizenSelBusy, setKaizenSelBusy] = useState(false);
+  const kaizenSelection = async () => {
+    if (!drill || !supabase || kaizenSelBusy) return;
+    const ids = [...drillSel];
+    const sel = products.filter(pr => ids.includes(pr.id));
+    if (sel.length === 0) return;
+    setKaizenSelBusy(true);
+    showToast(`Kaizen is looking at ${sel.length} product${sel.length === 1 ? '' : 's'}…`);
+    try {
+      const node = tree.find(n => n.id === drill.nodeId);
+      const here = node ? (paths.get(node.id) ?? node.name) : 'unassigned';
+      const { data, error } = await supabase.functions.invoke('kaizen-refine', {
+        body: {
+          instruction: `These ${sel.length} selected products currently sit in "${here}". Using each product's image description, give each one its best-fitting type path. Only include a product in moves when a different path clearly fits better than "${here}".`,
+          products: sel.map(pr => ({ id: pr.id, name: pr.name, brand: pr.brand, type: pr.type, context: pr.haikuContext })),
+          typePaths: [...new Set([...paths.values()])],
+        },
+      });
+      if (error) { showToast(`Kaizen failed: ${error.message}`); return; }
+      const resp = data as { success?: boolean; error?: string; moves?: Array<{ productId: string; toPath: string }>; note?: string | null };
+      if (!resp?.success) { showToast(resp?.error ?? 'Kaizen failed'); return; }
+      const moves = resp.moves ?? [];
+      if (moves.length === 0) { showToast(resp.note || 'Kaizen thinks they all belong here.'); return; }
+      const recs: TypeAuditRecommendation[] = [];
+      for (const mv of moves) {
+        const product = sel.find(pr => pr.id === mv.productId);
+        if (!product) continue;
+        const target = await resolveOrCreatePath(mv.toPath);
+        if (!target) continue;
+        recs.push({
+          productId: product.id, name: product.name, brand: product.brand, image: product.image,
+          fromType: product.type, toNodeId: target.id, toName: target.name, toPath: mv.toPath,
+          reason: 'image context (Haiku) read by kaizen',
+        });
+      }
+      if (recs.length === 0) { showToast('Could not resolve the suggested types.'); return; }
+      setDrill(null);
+      setAudit({ retypes: recs, drift: [], emptyTypes: [], duplicateTypes: [], orphanTypes: [] });
+    } finally {
+      setKaizenSelBusy(false);
+    }
+  };
+
   const applyKaizen = (picked: KaizenPicked) => {
     setAudit(null);
     const ops: GovernanceOp[] = [];
@@ -676,15 +727,13 @@ export default function AdminGovernanceTypes() {
       {/* No page heading (founder's call) — the brain IS the page; the
           controls float inside the canvas instead. */}
       <div className="gov-canvas">
-        <div className="gov-controls-row gov-canvas-controls">
-          <button
-            type="button"
-            className="gov-ghost"
-            title="Evenly space every ring and keep branches in their own sectors"
-            onClick={() => setOrganizeSignal(n => n + 1)}
-          >
-            ✦ Organize
-          </button>
+        <button
+          type="button"
+          className="gov-c-fab"
+          aria-label="Toggle controls"
+          onClick={() => setMobileControlsOpen(v => !v)}
+        >C</button>
+        <div className={`gov-controls-row gov-canvas-controls${mobileControlsOpen ? ' is-open' : ''}`}>
           <button
             type="button"
             className="gov-ghost"
@@ -718,6 +767,9 @@ export default function AdminGovernanceTypes() {
           onSelect={(ids) => { setPickMode(false); setSelection(ids); }}
           onDrill={(nodeId, ox, oy) => setDrill({ nodeId, ox, oy })}
           ringOpacity={ringOpacity}
+          dofStop={dofStop}
+          showcase={showcase}
+          onShowcaseInterrupt={() => setShowcase(false)}
           ringScale={ringScale}
           pickMode={pickMode}
           onPickTarget={(targetId) => {
@@ -892,6 +944,9 @@ export default function AdminGovernanceTypes() {
                   <button type="button" className="gov-moveto" onClick={() => setAssignOpen(v => !v)}>
                     Assign to type…
                   </button>
+                  <button type="button" className="gov-moveto" disabled={kaizenSelBusy} onClick={() => void kaizenSelection()}>
+                    {kaizenSelBusy ? 'Thinking…' : `改 Kaizen ${drillSel.size}`}
+                  </button>
                   <button type="button" className="gov-ghost gov-drill-delete-bulk" onClick={() => handleDeleteProducts([...drillSel])}>
                     Delete {drillSel.size}
                   </button>
@@ -1032,6 +1087,26 @@ export default function AdminGovernanceTypes() {
               <input type="range" min={50} max={200} value={Math.round(ringScale * 100)}
                 onChange={e => setRingScale(Number(e.target.value) / 100)} />
             </label>
+            {/* Camera: lens stop (depth of field) + showcase auto-orbit. */}
+            <div className="gov-dof">
+              <span>Lens</span>
+              {([null, 1.4, 2, 2.8, 4, 8] as const).map(stop => (
+                <button
+                  key={String(stop)}
+                  type="button"
+                  className={dofStop === stop ? 'is-active' : ''}
+                  onClick={() => setDofStop(stop)}
+                >{stop === null ? 'off' : `ƒ/${stop}`}</button>
+              ))}
+            </div>
+            <button
+              type="button"
+              className={`gov-showcase${showcase ? ' is-on' : ''}`}
+              onClick={() => setShowcase(v => !v)}
+              title="The camera drifts itself between angles — touch the canvas to take back control"
+            >
+              {showcase ? '◉ Showcase — touring' : '◉ Showcase'}
+            </button>
           </div>
         )}
 
