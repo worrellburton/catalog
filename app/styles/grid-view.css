@@ -537,28 +537,26 @@
   .creative-placeholder .card-skeleton-bar { animation: none; }
 }
 
-/* ── Media-first scrolling (mobile) ─────────────────────────────────────
-   While the finger glides (html.is-scroll-gliding, set by
+/* ── Media-first scrolling (every viewport) ─────────────────────────────
+   While the feed glides (html.is-scroll-gliding, set by
    utils/scroll-idle.ts) every card's chrome — gradient washes, creator
    chips, product text, admin buttons — fades away so the feed is pure
    imagery; when the scroll settles it breathes back in. Both directions
    are eased, never linear, and BOTH run a full two seconds (founder's
    call) — the chrome melts and resurfaces, it never snaps. */
-@media (max-width: 960px) {
-  .card-gradient,
-  .card-creator-tag,
-  .promo-product-info,
-  .trail-admin-menu-btn,
-  .creative-delete-btn {
-    transition: opacity 2s cubic-bezier(0.22, 1, 0.36, 1);
-  }
-  html.is-scroll-gliding .card-gradient,
-  html.is-scroll-gliding .card-creator-tag,
-  html.is-scroll-gliding .promo-product-info,
-  html.is-scroll-gliding .trail-admin-menu-btn,
-  html.is-scroll-gliding .creative-delete-btn {
-    opacity: 0 !important;
-    pointer-events: none;
-    transition: opacity 2s cubic-bezier(0.45, 0, 0.55, 1);
-  }
+.card-gradient,
+.card-creator-tag,
+.promo-product-info,
+.trail-admin-menu-btn,
+.creative-delete-btn {
+  transition: opacity 2s cubic-bezier(0.22, 1, 0.36, 1);
+}
+html.is-scroll-gliding .card-gradient,
+html.is-scroll-gliding .card-creator-tag,
+html.is-scroll-gliding .promo-product-info,
+html.is-scroll-gliding .trail-admin-menu-btn,
+html.is-scroll-gliding .creative-delete-btn {
+  opacity: 0 !important;
+  pointer-events: none;
+  transition: opacity 2s cubic-bezier(0.45, 0, 0.55, 1);
 }
