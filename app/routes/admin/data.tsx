@@ -1277,7 +1277,7 @@ export default function AdminData() {
       return p;
     }, { replace: false });
   }, [setSearchParams]);
-  const [productFilter, setProductFilter] = useState<'all' | 'no-creative' | 'active' | 'inactive' | 'untagged' | 'soft-deleted' | 'automatic'>('all');
+  const [productFilter, setProductFilter] = useState<'all' | 'no-creative' | 'active' | 'inactive' | 'untagged' | 'soft-deleted' | 'automatic' | 'affiliate' | 'no-affiliate'>('all');
 
   // Date-added filter for the Products table. 'all' lets every row
   // through. 'week' / 'month' use rolling-window cutoffs (created_at
@@ -2917,6 +2917,12 @@ export default function AdminData() {
       if (productFilter === 'active' && (p as any).is_active === false) return false;
       if (productFilter === 'inactive' && (p as any).is_active !== false) return false;
       if (productFilter === 'untagged' && p.gender != null) return false;
+      if (productFilter === 'affiliate' || productFilter === 'no-affiliate') {
+        const monetized = getProductAffiliateProviders(p as { brand: string | null; url: string | null })
+          .some(a => a.rateNumeric > 0 || a.connected);
+        if (productFilter === 'affiliate' && !monetized) return false;
+        if (productFilter === 'no-affiliate' && monetized) return false;
+      }
       // Automatic view: only products added by the autonomous pipeline.
       if (productFilter === 'automatic' && (p as { source?: string | null }).source !== AUTO_SOURCE) return false;
       // Hide soft-deleted from every other view.
@@ -5172,6 +5178,32 @@ export default function AdminData() {
                 {allProducts.filter(p =>
                   p.gender == null
                   && !deletedProductKeys.has(`${p.brand}-${p.name}`)
+                ).length}
+              </span>
+            </button>
+            <button
+              className={`admin-tab ${productFilter === 'affiliate' ? 'active' : ''}`}
+              onClick={() => setProductFilter('affiliate')}
+              title="Products whose link has a real affiliate program (tracked affiliate.com URL, known retailer, or brand program)"
+            >
+              Affiliate links
+              <span className="admin-tab-badge">
+                {allProducts.filter(p =>
+                  !deletedProductKeys.has(`${p.brand}-${p.name}`)
+                  && getProductAffiliateProviders(p as { brand: string | null; url: string | null }).some(a => a.rateNumeric > 0 || a.connected)
+                ).length}
+              </span>
+            </button>
+            <button
+              className={`admin-tab ${productFilter === 'no-affiliate' ? 'active' : ''}`}
+              onClick={() => setProductFilter('no-affiliate')}
+              title="Products with no detected affiliate program — clickouts still monetize through the Shopnomix wrapper, but there's no program-level link"
+            >
+              No affiliate links
+              <span className="admin-tab-badge">
+                {allProducts.filter(p =>
+                  !deletedProductKeys.has(`${p.brand}-${p.name}`)
+                  && !getProductAffiliateProviders(p as { brand: string | null; url: string | null }).some(a => a.rateNumeric > 0 || a.connected)
                 ).length}
               </span>
             </button>
