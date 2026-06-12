@@ -33,6 +33,17 @@ export function posterRendition(raw: string | null | undefined): string | null {
   return withTransform(raw, { width: CARD_POSTER_WIDTH, quality: 82, resize: 'contain', format: 'webp' }) || raw;
 }
 
+/** The GOVERNANCE rendition — a creative image type tuned for the type
+ *  brain, where hundreds of product thumbs paint at once inside 36–64px
+ *  circles. A 112px square cover crop (≈2× DPR of the largest circle)
+ *  at webp q70 is ~1–3 KB each, so the whole constellation loads in one
+ *  breath. One shared spec = one cache entry across satellites, drill
+ *  cards and kaizen report rows. */
+export function governanceRendition(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  return withTransform(raw, { width: 112, height: 112, quality: 70, resize: 'cover', format: 'webp' }) || raw;
+}
+
 const warmed = new Set<string>();
 const queue: string[] = [];
 let inflight = 0;

@@ -1,4 +1,4 @@
-// /plan — the public business-plan viewer. Passcode-gated (Shopmix),
+// /business-plan — the public business-plan viewer. Passcode-gated (Shopmix),
 // works on mobile and desktop, scrolls like a PDF and allows pinch-zoom
 // (this route re-enables user scaling). The document itself is the
 // latest snapshot the admin generated from /admin/model (documents

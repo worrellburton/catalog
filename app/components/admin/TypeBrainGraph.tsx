@@ -84,6 +84,9 @@ interface Props {
    *  move the zoom from inside the canvas. */
   controlRef?: React.MutableRefObject<BrainCameraHandle | null>;
   onZoomChange?: (k: number) => void;
+  /** Increment to fly the camera home: flat 2D plane, zoom 1, rings
+   *  level — everything eases back with an overshoot bounce. */
+  resetSignal?: number;
 }
 
 export const ROOT_ID = '__root__';
@@ -101,6 +104,12 @@ export default function TypeBrainGraph(p: Props) {
   // through tilt (ax) + spin (ay) with perspective. Cmd/Ctrl-drag orbits
   // on desktop; three fingers orbit on touch (one pans, two pinch).
   const [orbit, setOrbit] = useState({ ax: -0.38, ay: 0.0 });
+  // Ring planes: during showcase each guide ring drifts on its own
+  // orbital plane (theta advances, mix fades the effect in) so the
+  // space reads as a universe, not a sheet. Both ease home on reset.
+  const [ringTheta, setRingTheta] = useState(0);
+  const [ringMix, setRingMix] = useState(0);
+  const resetAnim = useRef(0);
   const touches = useRef(new Map<number, { x: number; y: number }>());
   const touchGesture = useRef<
     | { kind: 'pinch'; d0: number; k0: number; mx: number; my: number; tx0: number; ty0: number }
@@ -213,11 +222,11 @@ export default function TypeBrainGraph(p: Props) {
   // Plane → projected (pre-view-transform) space. FOCAL sets perspective
   // strength; s is the per-point scale (also the depth cue).
   const FOCAL = 1500;
-  const proj = (pos: { x: number; y: number }) => {
+  const projWith = (o: { ax: number; ay: number }, pos: { x: number; y: number }) => {
     const cx = size.w / 2, cy = size.h / 2;
     const X = pos.x - cx, Y = pos.y - cy;
-    const cosY = Math.cos(orbit.ay), sinY = Math.sin(orbit.ay);
-    const cosX = Math.cos(orbit.ax), sinX = Math.sin(orbit.ax);
+    const cosY = Math.cos(o.ay), sinY = Math.sin(o.ay);
+    const cosX = Math.cos(o.ax), sinX = Math.sin(o.ax);
     const x1 = X * cosY;
     const z1 = X * sinY;
     const y2 = Y * cosX - z1 * sinX;
@@ -225,6 +234,7 @@ export default function TypeBrainGraph(p: Props) {
     const s = FOCAL / Math.max(200, FOCAL - z2);
     return { x: cx + x1 * s, y: cy + y2 * s, s, z: z2 };
   };
+  const proj = (pos: { x: number; y: number }) => projWith(orbit, pos);
   // Projected → plane, using a reference scale (the grabbed node's own s)
   // — locally exact, which is all a drag needs.
   const unproj = (px: number, py: number, sRef: number) => {
@@ -269,6 +279,10 @@ export default function TypeBrainGraph(p: Props) {
       const e = ease(u);
       setOrbit({ ax: from.ax + (to.ax - from.ax) * e, ay: from.ay + (to.ay - from.ay) * e });
       setView(v => ({ ...v, k: from.k + (to.k - from.k) * e }));
+      // Ring planes drift while the camera tours — theta advances the
+      // per-ring orbits, mix ramps the effect in so they don't snap.
+      setRingTheta(t => t + 0.0042);
+      setRingMix(m => Math.min(1, m + 0.006));
       if (u >= 1) { from = to; to = nextTarget(from); start = now; }
       raf = requestAnimationFrame(tick);
     };
@@ -278,6 +292,40 @@ export default function TypeBrainGraph(p: Props) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [p.showcase]);
 
+  // Reset: fly the camera home — flat plane, zoom 1, centred, rings
+  // level — on an ease-out-back curve so everything overshoots its
+  // resting pose and bounces into place.
+  const resetRan = useRef(0);
+  useEffect(() => {
+    if (!p.resetSignal || p.resetSignal === resetRan.current) return;
+    resetRan.current = p.resetSignal;
+    cancelAnimationFrame(resetAnim.current);
+    const TWO_PI = Math.PI * 2;
+    const from = {
+      ax: orbit.ax,
+      // Nearest whole turn, so a long showcase spin unwinds in under a
+      // half-rotation instead of rewinding every lap.
+      ay: ((orbit.ay % TWO_PI) + TWO_PI + Math.PI) % TWO_PI - Math.PI,
+      k: view.k, tx: view.tx, ty: view.ty, mix: ringMix,
+    };
+    const start = performance.now();
+    const DUR = 900;
+    const c1 = 1.70158, c3 = c1 + 1;
+    const ease = (u: number) => 1 + c3 * Math.pow(u - 1, 3) + c1 * Math.pow(u - 1, 2);
+    const tick = (now: number) => {
+      const u = Math.min(1, (now - start) / DUR);
+      const e = ease(u);
+      setOrbit({ ax: from.ax * (1 - e), ay: from.ay * (1 - e) });
+      setView({ k: from.k + (1 - from.k) * e, tx: from.tx * (1 - e), ty: from.ty * (1 - e) });
+      setRingMix(Math.max(0, from.mix * (1 - e)));
+      if (u < 1) resetAnim.current = requestAnimationFrame(tick);
+    };
+    resetAnim.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(resetAnim.current);
+    // Snapshot of camera state at the moment the signal fires.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [p.resetSignal]);
+
   // Camera handle — re-registered every render so getZoom reads live state.
   useEffect(() => {
     const ref = p.controlRef;
@@ -285,11 +333,13 @@ export default function TypeBrainGraph(p: Props) {
     ref.current = {
       getZoom: () => view.k,
       zoomTo: (k: number) => {
+        cancelAnimationFrame(resetAnim.current);
         const kk = Math.min(2.5, Math.max(0.35, k));
         const cx = size.w / 2, cy = size.h / 2;
         setView(v => ({ k: kk, tx: cx - ((cx - v.tx) / v.k) * kk, ty: cy - ((cy - v.ty) / v.k) * kk }));
       },
       orbitBy: (dax: number, day: number) => {
+        cancelAnimationFrame(resetAnim.current);
         setOrbit(o => ({ ax: Math.max(-1.35, Math.min(1.35, o.ax + dax)), ay: o.ay + day }));
       },
     };
@@ -334,6 +384,7 @@ export default function TypeBrainGraph(p: Props) {
   };
   const onCanvasDown = (ev: React.PointerEvent) => {
     if (p.showcase) p.onShowcaseInterrupt?.();
+    cancelAnimationFrame(resetAnim.current); // a touch takes over from a reset-in-flight
     if (ev.pointerType === 'touch') {
       (ev.currentTarget as Element).setPointerCapture?.(ev.pointerId);
       touches.current.set(ev.pointerId, { x: ev.clientX, y: ev.clientY });
@@ -523,12 +574,21 @@ export default function TypeBrainGraph(p: Props) {
     .map(n => ({ n, pp: positions.get(n.id) ? proj(positions.get(n.id)!) : null }))
     .filter((e): e is { n: BrainNode; pp: { x: number; y: number; s: number; z: number } } => !!e.pp)
     .sort((a, b) => a.pp.z - b.pp.z);
-  const ringPath = (r: number) => {
+  // Each guide ring carries its own orbital plane: a per-index pair of
+  // slow sinusoids (deterministic, so re-renders agree) layered on the
+  // camera orbit, scaled by ringMix (0 = all rings flat on the layout
+  // plane, 1 = full universe drift during showcase).
+  const ringOrbit = (i: number) => ({
+    ax: orbit.ax + Math.sin(ringTheta * (0.5 + i * 0.17) + i * 1.9) * 0.38 * ringMix,
+    ay: orbit.ay + Math.sin(ringTheta * (0.33 + i * 0.11) + i * 0.7) * 0.55 * ringMix,
+  });
+  const ringPath = (r: number, idx: number) => {
+    const o = ringOrbit(idx);
     const cx = size.w / 2, cy = size.h / 2;
     const pts: string[] = [];
     for (let i = 0; i <= 72; i++) {
       const a = (i / 72) * Math.PI * 2;
-      const q = proj({ x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r });
+      const q = projWith(o, { x: cx + Math.cos(a) * r, y: cy + Math.sin(a) * r });
       pts.push(`${i === 0 ? 'M' : 'L'}${q.x.toFixed(1)} ${q.y.toFixed(1)}`);
     }
     return pts.join(' ');
@@ -569,7 +629,7 @@ export default function TypeBrainGraph(p: Props) {
           <path key={`ring-${i}`} className="tb-ring"
             style={{ strokeOpacity: p.ringOpacity }}
             fill="none"
-            d={ringPath(r)} />
+            d={ringPath(r, i)} />
         ))}
 
         {/* Edges */}

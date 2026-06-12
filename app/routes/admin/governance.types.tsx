@@ -113,6 +113,10 @@ export default function AdminGovernanceTypes() {
   // through this handle; zoomUi mirrors the live zoom back to the slider.
   const camRef = useRef<BrainCameraHandle | null>(null);
   const [zoomUi, setZoomUi] = useState(1);
+  // Reset: bumping the signal makes the graph fly home (flat 2D plane,
+  // zoom 1, rings level) with a bounce. Also drops out of showcase.
+  const [resetSignal, setResetSignal] = useState(0);
+  const fireReset = () => { setShowcase(false); setResetSignal(s => s + 1); };
   const joy = useRef<{ dx: number; dy: number; raf: number } | null>(null);
   const [joyKnob, setJoyKnob] = useState<{ x: number; y: number } | null>(null);
   // Ring dials — view preferences, sticky per admin via localStorage.
@@ -832,6 +836,7 @@ export default function AdminGovernanceTypes() {
           onShowcaseInterrupt={() => setShowcase(false)}
           controlRef={camRef}
           onZoomChange={setZoomUi}
+          resetSignal={resetSignal}
           ringScale={ringScale}
           pickMode={pickMode}
           onPickTarget={(targetId) => {
@@ -1169,6 +1174,14 @@ export default function AdminGovernanceTypes() {
             >
               {showcase ? '◉ Showcase — touring' : '◉ Showcase'}
             </button>
+            <button
+              type="button"
+              className="gov-showcase"
+              onClick={fireReset}
+              title="Fly home: flat 2D view, zoom 1, rings level — with a bounce"
+            >
+              ⟲ Reset
+            </button>
           </div>
         )}
 
@@ -1228,13 +1241,18 @@ export default function AdminGovernanceTypes() {
                     >{stop === null ? 'off' : `ƒ/${stop}`}</button>
                   ))}
                 </div>
-                <button
-                  type="button"
-                  className={`gov-showcase${showcase ? ' is-on' : ''}`}
-                  onClick={() => setShowcase(v => !v)}
-                >
-                  {showcase ? '◉ Showcase — touring' : '◉ Showcase'}
-                </button>
+                <div className="gov-dock-actions">
+                  <button
+                    type="button"
+                    className={`gov-showcase${showcase ? ' is-on' : ''}`}
+                    onClick={() => setShowcase(v => !v)}
+                  >
+                    {showcase ? '◉ Showcase — touring' : '◉ Showcase'}
+                  </button>
+                  <button type="button" className="gov-showcase" onClick={fireReset}>
+                    ⟲ Reset
+                  </button>
+                </div>
               </div>
             </div>
           </div>
