@@ -60,12 +60,18 @@ interface UseOverlayRouterArgs {
 
 // Two-way binding between the overlay state (product / look / brand) and
 // the URL path (/p/:slug, /l/:slug, /b/:slug). Push direction uses
-// replaceState (not navigate) so the SPA doesn't remount the feed - we
-// just update the address bar so copy-link / back / refresh work.
+// history pushState (not navigate) so the SPA doesn't remount the feed -
+// we just update the address bar so copy-link / back / refresh work.
 //
 // Initial consumption: on mount, if the user landed on /p/<slug> etc.,
 // look the entity up and call the matching onOpen* so the overlay opens
 // with the same effects (rails, prefetch) as an in-app tap.
+//
+// Back consumption: EVERY overlay open pushes a history entry — including
+// product → product and look → look (founder's call: back must return to
+// the previous screen, never skip the chain to home). The popstate
+// listener below re-resolves /p/ and /l/ URLs so backing into an earlier
+// product/look actually re-opens it.
 export function useOverlayRouter({
   selectedProduct,
   selectedLook,
@@ -77,60 +83,50 @@ export function useOverlayRouter({
   onOpenBrand,
   onOpenCreator,
 }: UseOverlayRouterArgs) {
-  // Push /p/<slug> when a product opens. We pushState (not replaceState)
-  // when transitioning FROM a different surface (so the browser back
-  // button pops back to the previous overlay), and replaceState when
-  // the URL is just being normalised on a same-product reload. The
-  // distinction is detected by comparing the existing path's overlay
-  // prefix to the one we're about to push.
+  // Latest open-entity slugs, readable from the (empty-dep) popstate
+  // listener without stale closures.
+  const currentProductSlug = selectedProduct
+    ? productSlug({
+        id: (selectedProduct as Product & { id?: string | null }).id ?? null,
+        brand: selectedProduct.brand ?? null,
+        name: selectedProduct.name ?? null,
+      })
+    : null;
+  const currentLookSlug = selectedLook
+    ? lookSlug({
+        id: selectedLook.id ?? null,
+        uuid: selectedLook.uuid ?? null,
+        creator: selectedLook.creator ?? null,
+        creatorDisplayName: selectedLook.creatorDisplayName ?? null,
+        title: selectedLook.title ?? null,
+      })
+    : null;
+  const slugsRef = useRef({ product: currentProductSlug, look: currentLookSlug });
+  slugsRef.current = { product: currentProductSlug, look: currentLookSlug };
+
+  // Push /p/<slug> when a product opens. Every distinct product gets its
+  // own history entry — product → product included — so the back button
+  // walks the exact trail the shopper browsed (founder's call; the old
+  // replaceState "don't peel through every product" rule made back from
+  // a similar-rail product skip to the home screen).
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (!selectedProduct) return;
-    const slug = productSlug({
-      id: (selectedProduct as Product & { id?: string | null }).id ?? null,
-      brand: selectedProduct.brand ?? null,
-      name: selectedProduct.name ?? null,
-    });
-    if (!slug) return;
-    const target = `/p/${slug}`;
-    const current = window.location.pathname;
-    if (current === target) return;
-    // If we're coming from a look / brand / feed (anywhere that ISN'T
-    // already /p/), push a new entry so back can pop us back to it.
-    // Navigating between two products keeps replaceState so the back
-    // button doesn't have to peel through every product the user
-    // browsed in a single session.
-    if (current.startsWith('/p/')) {
-      window.history.replaceState({ overlay: 'product' }, '', target);
-    } else {
-      window.history.pushState({ overlay: 'product' }, '', target);
-    }
-  }, [selectedProduct]);
+    if (!currentProductSlug) return;
+    const target = `/p/${currentProductSlug}`;
+    if (window.location.pathname === target) return;
+    window.history.pushState({ overlay: 'product' }, '', target);
+  }, [selectedProduct, currentProductSlug]);
 
-  // Push /l/<slug> when a look opens. Same push-vs-replace rule as
-  // product above: pushState when transitioning FROM a non-look
-  // surface so back goes back; replaceState when the URL is just
-  // being normalised on the same look.
+  // Push /l/<slug> when a look opens. Same rule: every look stacks.
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (!selectedLook) return;
-    const slug = lookSlug({
-      id: selectedLook.id ?? null,
-      uuid: selectedLook.uuid ?? null,
-      creator: selectedLook.creator ?? null,
-      creatorDisplayName: selectedLook.creatorDisplayName ?? null,
-      title: selectedLook.title ?? null,
-    });
-    if (!slug) return;
-    const target = `/l/${slug}`;
-    const current = window.location.pathname;
-    if (current === target) return;
-    if (current.startsWith('/l/')) {
-      window.history.replaceState({ overlay: 'look' }, '', target);
-    } else {
-      window.history.pushState({ overlay: 'look' }, '', target);
-    }
-  }, [selectedLook]);
+    if (!currentLookSlug) return;
+    const target = `/l/${currentLookSlug}`;
+    if (window.location.pathname === target) return;
+    window.history.pushState({ overlay: 'look' }, '', target);
+  }, [selectedLook, currentLookSlug]);
 
   // Push /b/<slug> when a brand overlay opens.
   useEffect(() => {
@@ -147,9 +143,7 @@ export function useOverlayRouter({
   // Push /c/<slug> when a creator catalog opens. pushState (not
   // replace) so the browser back button pops back to whatever the
   // shopper was on before — previously the URL stayed on /#app and
-  // back exited the site entirely. Same push-vs-replace rule as
-  // product/look: pushState when transitioning FROM a non-/c surface,
-  // replaceState when the URL is being normalised on the same handle.
+  // back exited the site entirely.
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (!creatorFilter) return;
@@ -165,14 +159,122 @@ export function useOverlayRouter({
     }
   }, [creatorFilter]);
 
-  // (Removed: the old "pop /l/ on close" and "pop /b/ on close" effects
-  // replaceState'd to '/' whenever the corresponding overlay's state
-  // cleared. With the new pushState-on-open model that was wrong — it
-  // overwrote the pushed history entry and broke the browser back
-  // button. State cleanup is now driven by the popstate listener in
-  // routes/_index.tsx, which fires when the URL changes from /l/ → /
-  // (or /p/ → /l/, etc.) and the in-app close handlers call
-  // history.back() to trigger that same pop path.)
+  // ── Slug → entity resolvers ────────────────────────────────────────────
+  // Shared by the fresh-load consumer (mount on /p/…) and the popstate
+  // listener (back/forward landing on /p/… or /l/…). Each resolver
+  // re-checks the live slug just before opening so a state-driven restore
+  // that already happened (e.g. _index's look-restore on product close)
+  // isn't double-opened by the async lookup finishing late.
+  const resolvingRef = useRef<string | null>(null);
+
+  const openProductFromSlug = (slug: string) => {
+    if (!supabase) return;
+    if (resolvingRef.current === `p:${slug}`) return;
+    resolvingRef.current = `p:${slug}`;
+    const finish = (open: () => void) => {
+      if (resolvingRef.current === `p:${slug}`) resolvingRef.current = null;
+      if (slugsRef.current.product === slug) return; // already showing it
+      open();
+    };
+    const idPrefix = extractIdPrefix(slug);
+    if (idPrefix) {
+      // UUID-suffixed slug: fetch product then its live creative so the
+      // experience matches an in-feed tap (video + rails).
+      void fetchProductByUuidPrefix(idPrefix).then(async product => {
+        if (!product || !product.id) { resolvingRef.current = null; return; }
+        const creatives = await getCreativesByProductIds([product.id]);
+        const creative = creatives[0];
+        finish(() => {
+          if (creative) onOpenCreative(creative);
+          else onOpenProduct(product);
+        });
+      });
+    } else {
+      // No UUID suffix (product opened from a look without a DB id).
+      // Fall back to a name-based search using the slug words.
+      const nameQuery = slug.replace(/-/g, '%');
+      void supabase
+        .from('products')
+        .select('id, name, brand, price, image_url, url')
+        .ilike('name', `%${nameQuery}%`)
+        .limit(1)
+        .then(({ data }) => {
+          const row = data?.[0];
+          if (!row) { resolvingRef.current = null; return; }
+          const product: Product & { id?: string } = {
+            id: row.id,
+            name: row.name || '',
+            brand: row.brand || '',
+            price: row.price || '',
+            url: row.url || '',
+            image: row.image_url || undefined,
+          };
+          finish(() => onOpenProduct(product));
+        });
+    }
+  };
+
+  const openLookFromSlug = (slug: string) => {
+    if (resolvingRef.current === `l:${slug}`) return;
+    resolvingRef.current = `l:${slug}`;
+    // Resolve against the SAME getLooks() set the feed renders, so the
+    // opened Look is fully-formed (creator name, video, products). It's
+    // cached — no extra cost.
+    const slugForLook = (l: Look) => lookSlug({
+      id: l.id ?? null, uuid: l.uuid ?? null, creator: l.creator ?? null,
+      creatorDisplayName: l.creatorDisplayName ?? null, title: l.title ?? null,
+    });
+    const uuidPfx = extractIdPrefix(slug);
+    // Human part of the requested slug (trailing uuid/numeric suffix
+    // removed) — rescues legacy links minted before uuid suffixes.
+    const wantHuman = slug.replace(/-([0-9a-f]{8}|\d+)$/i, '');
+    void getLooks().then(looks => {
+      let match: Look | undefined;
+      // 1. Exact slug match (covers current uuid- and numeric-suffixed links).
+      match = looks.find(l => slugForLook(l) === slug);
+      // 2. UUID-prefix match.
+      if (!match && uuidPfx) {
+        match = looks.find(l => !!l.uuid && l.uuid.toLowerCase().startsWith(uuidPfx.toLowerCase()));
+      }
+      // 3. Human-part match (creator+title, then title-only) for legacy links.
+      if (!match) {
+        match = looks.find(l => lookSlug({ creator: l.creator ?? null, title: l.title ?? null }) === wantHuman)
+          || looks.find(l => lookSlug({ creatorDisplayName: l.creatorDisplayName ?? null, title: l.title ?? null }) === wantHuman)
+          || looks.find(l => lookSlug({ title: l.title ?? null }) === wantHuman);
+      }
+      // 4. Seed fallback by numeric id (only if nothing above matched).
+      if (!match) {
+        const id = extractLookId(slug);
+        if (id != null) match = seedLooks.find(l => l.id === id);
+      }
+      if (resolvingRef.current === `l:${slug}`) resolvingRef.current = null;
+      if (!match) return;
+      if (slugsRef.current.look === slug) return; // already showing it
+      onOpenLook(match);
+    });
+  };
+
+  // Back/forward landing on an overlay URL re-opens that overlay. The exit
+  // paths (/p/ → /, /l/ → /, …) stay with the popstate listener in
+  // routes/_index.tsx — this one only ever OPENS.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onPop = () => {
+      const path = window.location.pathname;
+      if (path.startsWith('/p/')) {
+        const slug = decodeURIComponent(path.slice(3));
+        if (slug && slug !== slugsRef.current.product) openProductFromSlug(slug);
+      } else if (path.startsWith('/l/')) {
+        const slug = decodeURIComponent(path.slice(3));
+        if (slug && slug !== slugsRef.current.look) openLookFromSlug(slug);
+      }
+    };
+    window.addEventListener('popstate', onPop);
+    return () => window.removeEventListener('popstate', onPop);
+    // openProductFromSlug / openLookFromSlug close over stable onOpen*
+    // callbacks (useCallback in the caller) — safe with empty deps.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Fresh-load consumer: on mount, read the route param Remix gave us
   // and open the matching modal once. After this, in-app navigation
@@ -187,79 +289,9 @@ export function useOverlayRouter({
     initialSlugConsumed.current = true;
     const path = location.pathname;
     if (path.startsWith('/p/')) {
-      if (!supabase) return;
-      const idPrefix = extractIdPrefix(slugParam);
-      if (idPrefix) {
-        // UUID-suffixed slug: fetch product then its live creative so
-        // the reload experience matches an in-feed tap (video + rails).
-        fetchProductByUuidPrefix(idPrefix).then(async product => {
-          if (!product || !product.id) return;
-          const creatives = await getCreativesByProductIds([product.id]);
-          const creative = creatives[0];
-          if (creative) {
-            onOpenCreative(creative);
-          } else {
-            onOpenProduct(product);
-          }
-        });
-      } else {
-        // No UUID suffix (product opened from a look without a DB id).
-        // Fall back to a name-based search using the slug words.
-        const nameQuery = slugParam.replace(/-/g, '%');
-        supabase
-          .from('products')
-          .select('id, name, brand, price, image_url, url')
-          .ilike('name', `%${nameQuery}%`)
-          .limit(1)
-          .then(({ data }) => {
-            const row = data?.[0];
-            if (!row) return;
-            const product: Product & { id?: string } = {
-              id: row.id,
-              name: row.name || '',
-              brand: row.brand || '',
-              price: row.price || '',
-              url: row.url || '',
-              image: row.image_url || undefined,
-            };
-            onOpenProduct(product);
-          });
-      }
+      openProductFromSlug(slugParam);
     } else if (path.startsWith('/l/')) {
-      // Resolve against the SAME getLooks() set the feed renders, so the
-      // opened Look is fully-formed (creator name, video, products) and we
-      // don't depend on the looks_creative schema. getLooks() is cached, so
-      // this is the same fetch the feed makes — no extra cost on cold load.
-      const slugForLook = (l: Look) => lookSlug({
-        id: l.id ?? null, uuid: l.uuid ?? null, creator: l.creator ?? null,
-        creatorDisplayName: l.creatorDisplayName ?? null, title: l.title ?? null,
-      });
-      const uuidPfx = extractIdPrefix(slugParam);
-      // Human part of the requested slug (trailing uuid/numeric suffix removed)
-      // — rescues legacy links minted before the look carried a uuid suffix,
-      // e.g. `/l/robert-burton-...-look-1`.
-      const wantHuman = slugParam.replace(/-([0-9a-f]{8}|\d+)$/i, '');
-      getLooks().then(looks => {
-        let match: Look | undefined;
-        // 1. Exact slug match (covers current uuid- and numeric-suffixed links).
-        match = looks.find(l => slugForLook(l) === slugParam);
-        // 2. UUID-prefix match.
-        if (!match && uuidPfx) {
-          match = looks.find(l => !!l.uuid && l.uuid.toLowerCase().startsWith(uuidPfx.toLowerCase()));
-        }
-        // 3. Human-part match (creator+title, then title-only) for legacy links.
-        if (!match) {
-          match = looks.find(l => lookSlug({ creator: l.creator ?? null, title: l.title ?? null }) === wantHuman)
-            || looks.find(l => lookSlug({ creatorDisplayName: l.creatorDisplayName ?? null, title: l.title ?? null }) === wantHuman)
-            || looks.find(l => lookSlug({ title: l.title ?? null }) === wantHuman);
-        }
-        // 4. Seed fallback by numeric id (only if nothing above matched).
-        if (!match) {
-          const id = extractLookId(slugParam);
-          if (id != null) match = seedLooks.find(l => l.id === id);
-        }
-        if (match) onOpenLook(match);
-      });
+      openLookFromSlug(slugParam);
     } else if (path.startsWith('/b/')) {
       // Brand slug is the kebab brand name. Reverse-lookup against the
       // products table to find the canonical brand string (preserves
