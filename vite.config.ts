@@ -159,6 +159,7 @@ export default defineConfig({
           // to the user's prior in-app screen, not an external page.
           route("earnings", "routes/earnings.tsx");
           route("home2", "routes/home2.tsx");
+          route("plan", "routes/plan.tsx");
           // My Catalog deep-link. Re-exports _index; Index opens the My
           // Catalog overlay on cold load so refresh / direct hits work.
           route("my-looks", "routes/my-looks.tsx");

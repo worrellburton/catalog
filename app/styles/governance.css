@@ -1270,3 +1270,10 @@ html.gov-void .gov-page.gov-types { height: calc(100vh - 53px); }
   }
   .gov-types .gov-canvas-controls.is-open { display: flex; }
 }
+
+/* Minimal mobile brain: legend + dials retire (camera controls live in
+   the C menu); the space belongs to the spheres. */
+@media (max-width: 768px) {
+  .gov-types .gov-legend,
+  .gov-types .gov-ringdials { display: none; }
+}
