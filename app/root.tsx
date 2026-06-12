@@ -27,12 +27,12 @@ import { initSentry, captureException } from "~/utils/sentry";
 if (import.meta.env.DEV) void import("~/utils/perf-waterfall");
 
 /* ── Modular styles ──
- * Only stylesheets needed by the consumer feed (and the locked/landing
+ * Only stylesheets needed by the consumer feed (and the locked
  * surfaces every visitor sees) live here. Per-route stylesheets
  * (admin.css, generate.css, deck-view.css, deck-v6.css,
  * deck-selector.css) are imported from inside their respective route
  * files, and per-view sheets (product-page, creator-page, my-looks,
- * comments, profile-page, following-page, saved-screen, landing-page,
+ * comments, profile-page, following-page, saved-screen,
  * in-app-browser, share-page, import) are imported from inside their
  * lazy components so they ride along with the chunk instead of
  * render-blocking first paint. Before moving a sheet OUT of here,

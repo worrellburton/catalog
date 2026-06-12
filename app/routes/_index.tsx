@@ -3,7 +3,6 @@ import { useLocation, useNavigate } from '@remix-run/react';
 import { lazyWithReload } from '~/utils/lazyWithReload';
 import PasswordGate from '~/components/PasswordGate';
 import WaitlistScreen from '~/components/WaitlistScreen';
-import SplashScreen from '~/components/SplashScreen';
 import ShoppingForHero from '~/components/home/ShoppingForHero';
 import SearchCeremony from '~/components/home/SearchCeremony';
 import SplashHost from '~/components/splash/SplashHost';
@@ -60,7 +59,6 @@ import ActivityRealtimeToasts from '~/components/ActivityRealtimeToasts';
 // Importer fns are kept around so we can fire them again from an idle
 // callback after first paint - that way the bytes are already in the
 // browser cache by the time the user actually opens an overlay.
-const importLandingPage = () => import('~/components/LandingPage');
 const importCreatorPage = () => import('~/components/CreatorPage');
 const importBrandPage = () => import('~/components/BrandPage');
 const importBookmarksPage = () => import('~/components/BookmarksPage');
@@ -73,7 +71,6 @@ const importProfilePage = () => import('~/components/ProfilePage');
 const importFollowingPage = () => import('~/components/FollowingPage');
 const importCommentsPage = () => import('~/components/CommentsPage');
 
-const LandingPage = lazyWithReload(importLandingPage);
 const CreatorPage = lazyWithReload(importCreatorPage);
 const BrandPage = lazyWithReload(importBrandPage);
 const BookmarksPage = lazyWithReload(importBookmarksPage);
@@ -121,7 +118,6 @@ const IDLE_PREFETCH_ORDER: Array<() => Promise<unknown>> = [
   importInAppBrowser,
   importBookmarksPage,
   importCreatorPage,
-  importLandingPage,
   importMyLooks,
 ];
 
@@ -143,7 +139,7 @@ function prefetchOverlayChunks() {
   else window.setTimeout(tick, 800);
 }
 
-// Disable the browser's scroll restoration on the landing page. Default
+// Disable the browser's scroll restoration on the home screen. Default
 // 'auto' restores the previous scroll position on F5 / pull-to-refresh
 // — which lands the user mid-hero on the home screen. The search bar
 // is pinned at bottom: 38vh from the viewport, but every fixed/sticky
@@ -175,15 +171,13 @@ export default function Home() {
   useState(() => { applyFlowOverrideFromUrl(); return null; });
   const { waitlistMode, loading: waitlistLoading } = useWaitlistMode();
 
-  // Top-level view state machine (locked / splash / landing / app /
-  // waitlisted) + the two splash overlays (first-visit branded splash
-  // and the auth-resolving fade). See useAppView.
+  // Top-level view state machine (locked / app / waitlisted) + the two
+  // splash overlays (first-visit branded splash and the auth-resolving
+  // fade). See useAppView.
   const {
     view,
     setView,
     firstVisit,
-    showSplash,
-    setShowSplash,
     authSplashMounted,
     authSplashLeaving,
   } = useAppView({ user, authLoading, waitlistMode, waitlistLoading });
@@ -229,9 +223,9 @@ export default function Home() {
   const [showWallet, setShowWallet] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
   const [showFollowing, setShowFollowing] = useState(false);
-  // Sign-in gate overlay. Shown when a signed-out visitor tries to enter
-  // the app from the landing — the app is sign-in-only. Cleared the moment
-  // a session resolves (the auto-route effect then takes them in).
+  // Sign-in gate overlay. Shown when a guest hits a sign-in-only surface.
+  // Cleared the moment a session resolves (the auto-route effect then
+  // takes them in).
   const [showSignIn, setShowSignIn] = useState(false);
   useEffect(() => { if (user) setShowSignIn(false); }, [user]);
   // Guest freemium gate. The signup scrim that dissolves over a look teaser
@@ -632,20 +626,6 @@ export default function Home() {
     setCreatorFilter(null);
     setBrandFilter(null);
   }, []);
-
-  const handleLandingToApp = useCallback(() => {
-    // The app is sign-in-only. A signed-out visitor tapping "Open the feed"
-    // gets the sign-in screen, not free access — closing the landing's old
-    // "no signup" hole. Once signed in, the auto-route effect takes them in.
-    if (!user) { setShowSignIn(true); return; }
-    // Fixed 2000ms beat so the splash feels the same regardless of entry.
-    setShowSplash(true);
-    setView('splash');
-    setTimeout(() => {
-      setView('app');
-      setShowSplash(false);
-    }, 2000);
-  }, [user]);
 
   const handleOpenLook = useCallback((look: Look, opts?: { bypassGate?: boolean }) => {
     // Trail navigation - when the user opens a look from inside a
@@ -1318,7 +1298,7 @@ export default function Home() {
   // searches on /?q=<query>. Read the param on every URL change,
   // apply it, then strip it so refresh / share doesn't re-fire.
   // Also forces view='app' so the user lands on the grid even if
-  // they were on the landing page or password gate.
+  // they were on the password gate.
   const location = useLocation();
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -1854,12 +1834,6 @@ export default function Home() {
           cinematic auto-dismiss effect a few lines down — it fires
           'catalog:splash-done' for any listeners waiting on splash
           end so nothing hangs. */}
-
-      {view === 'landing' && (
-        <Suspense fallback={null}>
-          <LandingPage onStartBrowsing={handleLandingToApp} />
-        </Suspense>
-      )}
 
       {isAppVisible && (
         <>
