@@ -114,3 +114,8 @@ grant execute on function public.run_affiliate_sync() to service_role;
 select cron.unschedule('affiliate-sync-daily')
 where exists (select 1 from cron.job where jobname = 'affiliate-sync-daily');
 select cron.schedule('affiliate-sync-daily', '0 11 * * *', 'select public.run_affiliate_sync();');
+
+-- (Appended same-day) Haiku context: see haiku_context migration applied
+-- separately — products.haiku_context/_at + products_haiku_context trigger
+-- + self-terminating haiku-backfill cron live in the database; the repo
+-- copy of those statements is in 20260612010000_haiku_context.sql.

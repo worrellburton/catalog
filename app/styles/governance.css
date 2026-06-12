@@ -1163,3 +1163,25 @@ html.gov-void .gov-page.gov-types { height: calc(100vh - 53px); }
   font-size: 12px;
   color: #fbbf24;
 }
+
+/* Drill-card delete chip (mirrors .gov-drill-open, top-left, red intent) */
+.gov-drill-delete {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  width: 22px;
+  height: 22px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: rgba(10, 10, 12, 0.75);
+  color: #d4d4d8;
+  font-size: 11px;
+  opacity: 0;
+  transition: opacity 0.15s, background 0.15s;
+  cursor: pointer;
+}
+.gov-drill-card:hover .gov-drill-delete { opacity: 1; }
+.gov-drill-delete:hover { background: #dc2626; color: #fff; }
+.gov-drill-delete-bulk:hover:not(:disabled) { border-color: #dc2626; color: #f87171; }

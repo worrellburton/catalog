@@ -496,7 +496,7 @@ export default function AdminGovernanceTypes() {
     const { data, error } = await supabase.functions.invoke('kaizen-refine', {
       body: {
         instruction,
-        products: products.map(pr => ({ id: pr.id, name: pr.name, brand: pr.brand, type: pr.type })),
+        products: products.map(pr => ({ id: pr.id, name: pr.name, brand: pr.brand, type: pr.type, context: pr.haikuContext })),
         typePaths: [...new Set([...paths.values()])],
       },
     });
@@ -624,6 +624,24 @@ export default function AdminGovernanceTypes() {
         if (groups.length) applyGroupsLocal(groups);
       },
     );
+  };
+
+  /** Drill delete: deactivates the products (gone from the consumer feed
+   *  AND the brain — fetchGovernanceProducts is is_active-scoped). One
+   *  undoable gesture; Undo reactivates. */
+  const handleDeleteProducts = (ids: string[]) => {
+    const matched = products.filter(p => ids.includes(p.id));
+    if (matched.length === 0) return;
+    const idSet = new Set(ids);
+    commit(
+      matched.length === 1
+        ? `Deleted ${matched[0].name}`
+        : `Deleted ${matched.length} products`,
+      [{ op: 'products-update', groups: [{ ids, patch: { is_active: false } }] }],
+      [{ op: 'products-update', groups: [{ ids, patch: { is_active: true } }] }],
+      () => setProducts(prev => prev.filter(p => !idSet.has(p.id))),
+    );
+    setDrillSel(new Set());
   };
 
   const handleOpenProduct = (productId: string) => {
@@ -759,6 +777,12 @@ export default function AdminGovernanceTypes() {
                     title="Open product page"
                     onClick={ev => { ev.stopPropagation(); handleOpenProduct(prod.id); }}
                   >↗</span>
+                  <span
+                    className="gov-drill-delete"
+                    role="button"
+                    title="Delete product (hides it from the catalog — undoable)"
+                    onClick={ev => { ev.stopPropagation(); handleDeleteProducts([prod.id]); }}
+                  >✕</span>
                 </div>
                 {prod.brand && <em>{prod.brand}</em>}
                 <strong>{prod.name}</strong>
@@ -867,6 +891,9 @@ export default function AdminGovernanceTypes() {
                   <span>{drillSel.size} selected</span>
                   <button type="button" className="gov-moveto" onClick={() => setAssignOpen(v => !v)}>
                     Assign to type…
+                  </button>
+                  <button type="button" className="gov-ghost gov-drill-delete-bulk" onClick={() => handleDeleteProducts([...drillSel])}>
+                    Delete {drillSel.size}
                   </button>
                   <button type="button" className="gov-ghost" onClick={() => { setDrillSel(new Set()); setAssignOpen(false); }}>
                     Clear

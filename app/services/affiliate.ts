@@ -62,6 +62,15 @@ function loadEnabled(): void {
     });
 }
 
+/** The canonical Shopnomix redirect for a URL (no cid — shopper clicks
+ *  mint their own), or null when the brand is network-excluded. Used by
+ *  admin surfaces to SHOW the actual shoppable link. */
+export function shopnomixRedirectFor(url: string, source = 'admin'): string | null {
+  if (!url || !isWrappable(url)) return null;
+  const params = new URLSearchParams({ campaign_id: SHOPNOMIX_CONTENT_CAMPAIGN, url, source });
+  return `${REDIRECT_BASE}?${params.toString()}`;
+}
+
 function isWrappable(url: string): boolean {
   try {
     const host = new URL(url).hostname;
