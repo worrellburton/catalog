@@ -73,8 +73,10 @@ export interface BusinessPlanData {
     runwayMonths: number | null; // null = never runs out within the horizon
     avgBurn: number;
   };
-  /** Product-feed poster URLs for the cover collage (injected at open time). */
-  feedImages?: string[];
+  /** Product-feed media for the cover/appendix collage (injected at open
+   *  time). Videos only — every primary product video is natively 3:4,
+   *  which is exactly the founder's spec for these walls. */
+  feedImages?: Array<{ video: string; poster: string }>;
 }
 
 const usd = (n: number, compact = false): string => {
@@ -345,8 +347,10 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
   // rows always land flush on the page edge — no bands, no strips.
   const coverCols = feed.length >= 64 ? 8 : feed.length >= 36 ? 6 : 4;
   const coverTiles = feed.length
-    ? Array.from({ length: coverCols * 12 }, (_, i) =>
-        `<img src="${esc(feed[i % feed.length])}" alt="" loading="eager"${i >= coverCols * coverCols ? ' class="cover-extra"' : ''} />`).join('')
+    ? Array.from({ length: coverCols * 12 }, (_, i) => {
+        const m = feed[i % feed.length];
+        return `<video src="${esc(m.video)}" poster="${esc(m.poster)}" autoplay muted loop playsinline preload="metadata"${i >= coverCols * coverCols ? ' class="cover-extra"' : ''}></video>`;
+      }).join('')
     : '';
   const coverGridStyle = `grid-template-columns: repeat(${coverCols}, minmax(0, 1fr)); grid-template-rows: repeat(${coverCols}, minmax(0, 1fr)); --cover-cols: ${coverCols};`;
 
@@ -431,6 +435,7 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
     .page { padding: 26px 34px; max-width: none; margin: 0; box-shadow: none;
       page-break-before: always; background: var(--paper); }
     .cover-page { min-height: 100vh; page-break-after: always; }
+    .page { min-height: 100vh; page-break-after: always; page-break-inside: avoid; }
     section { page-break-inside: avoid; break-inside: avoid; margin-bottom: 18px; }
     .statband, .phases, .lens-grid, .lens, .feature-band, .chart, .flow,
     .features, .solutions, table.ltv-chain { page-break-inside: avoid; break-inside: avoid; }
@@ -438,7 +443,7 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
     .solution p { font-size: 9.5px; }
     .folio { margin-bottom: 18px; }
     .divider { min-height: 82vh; }
-    .cover-feed img.cover-extra { display: none; }
+    .cover-feed img.cover-extra, .cover-feed video.cover-extra { display: none; }
     .kicker { margin-bottom: 3px; }
     h2 { font-size: 15px; margin-bottom: 6px; }
     .display { font-size: 21px; }
@@ -475,10 +480,13 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
   /* contain, not cover: the full, un-zoomed product picture on a white
      card. Print cells are ~3:4 (the primaries' own shape), so the fit is
      near-exact there; any sliver is white-on-white and invisible. */
-  .cover-feed img { width: 100%; height: 100%; min-width: 0; min-height: 0;
-    object-fit: contain; background: #fff; padding: 4px; box-sizing: border-box; display: block; }
+  .cover-feed img, .cover-feed video { width: 100%; height: 100%; min-width: 0; min-height: 0;
+    object-fit: cover; background: #111; box-sizing: border-box; display: block; }
   .cover-scrim { position: absolute; inset: 0;
-    background: linear-gradient(rgba(0,0,0,0.66), rgba(0,0,0,0.80)); }
+    background: linear-gradient(rgba(0,0,0,0.82), rgba(0,0,0,0.92)); }
+  .appendix-cover { position: relative; overflow: hidden; background: #000; min-height: 100vh; }
+  .appendix-cover .divider { position: relative; z-index: 1; }
+  .appendix-cover .divider h2 { color: #fff; }
   .cover-logo { position: relative; z-index: 1; width: clamp(240px, 38vw, 400px); height: auto; display: block;
     filter: drop-shadow(0 4px 28px rgba(0,0,0,0.55)); }
   .cover-tagline { position: relative; z-index: 1; margin: 0;
@@ -817,9 +825,10 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
     </section>
   </div>
 
-  <!-- Sheet 4 — appendix divider: just the word, centered. -->
-  <div class="page">
-    <div class="folio"><svg class="folio-logo" viewBox="${CATALOG_LOGO_VIEWBOX}" role="img" aria-label="Catalog"><path fill="#141210" d="${CATALOG_LOGO_PATH}" /></svg><span>Business Plan</span></div>
+  <!-- Sheet 4 — appendix divider: the word over the live product wall. -->
+  <div class="page appendix-cover">
+    <div class="cover-feed" style="${coverGridStyle}">${coverTiles}</div>
+    <div class="cover-scrim"></div>
     <div class="divider">
       <h2 class="display">Appendix</h2>
     </div>
@@ -990,7 +999,7 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
         </div>
         <div class="solution">
           <span>Exclusive rights</span>
-          <p>You hold exclusive rights over the links you carry on Catalog. As the catalog and its AI surfaces grow, that exclusivity appreciates with them.</p>
+          <p>You hold exclusive rights over the links you carry on Catalog for as long as there isn&rsquo;t a better deal on the table. As the catalog and its AI surfaces grow, that exclusivity appreciates with them.</p>
         </div>
       </div>
 
@@ -1022,21 +1031,26 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
     active product, poster → primary → raw image fallback. Best-effort:
     any failure (offline, RLS, empty table) falls back to the plain black
     cover. Capped at 120 tiles so the document stays light. */
-async function fetchFeedImages(count = 120): Promise<string[]> {
+async function fetchFeedImages(count = 120): Promise<Array<{ video: string; poster: string }>> {
   try {
     const { data, error } = await supabase
       .from('products')
-      .select('primary_image_url')
+      .select('primary_video_url, primary_video_poster_url, primary_image_url')
       .eq('is_active', true)
-      .not('primary_image_url', 'is', null)
+      .not('primary_video_url', 'is', null)
       .limit(500);
     if (error || !data) return [];
-    const urls = data
-      .map(p => p.primary_image_url)
-      .filter((u): u is string => typeof u === 'string' && /^https?:\/\//i.test(u));
-    return [...new Set(urls)]
-      .slice(0, count)
-      .map(u => withTransform(u, { width: 320, quality: 60 }) ?? u);
+    const seen = new Set<string>();
+    const media: Array<{ video: string; poster: string }> = [];
+    for (const row of data as Array<{ primary_video_url: string | null; primary_video_poster_url: string | null; primary_image_url: string | null }>) {
+      const video = row.primary_video_url;
+      if (!video || !/^https?:\/\//i.test(video) || seen.has(video)) continue;
+      seen.add(video);
+      const rawPoster = row.primary_video_poster_url || row.primary_image_url || '';
+      media.push({ video, poster: rawPoster ? (withTransform(rawPoster, { width: 320, quality: 60 }) ?? rawPoster) : '' });
+      if (media.length >= count) break;
+    }
+    return media;
   } catch {
     return [];
   }
@@ -1053,6 +1067,11 @@ export async function openBusinessPlan(d: BusinessPlanData): Promise<void> {
   const w = window.open('', '_blank');
   const feedImages = await withTimeout(fetchFeedImages(), 5000, []);
   const html = buildBusinessPlanHtml({ ...d, feedImages });
+  // Snapshot for the public passcode viewer (/plan): latest open wins.
+  void supabase.from('documents').upsert(
+    { key: 'business-plan', html, updated_at: new Date().toISOString() },
+    { onConflict: 'key' },
+  );
   if (!w) {
     // Popup blocked — fall back to a download.
     const blob = new Blob([html], { type: 'text/html;charset=utf-8' });

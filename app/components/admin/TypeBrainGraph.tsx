@@ -512,13 +512,13 @@ export default function TypeBrainGraph(p: Props) {
           {/* Globe shading: a white key-light + a rim shadow layered over
               each node's flat color turn the discs into spheres. */}
           <radialGradient id="tb-globe-hi" cx="0.34" cy="0.3" r="0.75">
-            <stop offset="0%" stopColor="#fff" stopOpacity="0.65" />
-            <stop offset="45%" stopColor="#fff" stopOpacity="0.12" />
+            <stop offset="0%" stopColor="#fff" stopOpacity="0.9" />
+            <stop offset="42%" stopColor="#fff" stopOpacity="0.22" />
             <stop offset="100%" stopColor="#fff" stopOpacity="0" />
           </radialGradient>
           <radialGradient id="tb-globe-lo" cx="0.5" cy="0.5" r="0.5">
-            <stop offset="62%" stopColor="#000" stopOpacity="0" />
-            <stop offset="100%" stopColor="#000" stopOpacity="0.55" />
+            <stop offset="55%" stopColor="#000" stopOpacity="0" />
+            <stop offset="100%" stopColor="#000" stopOpacity="0.78" />
           </radialGradient>
           {/* Depth-of-field blur buckets (the f-stop dial picks how fast
               |z| falls into them). */}
