@@ -23,6 +23,7 @@ import {
 } from '~/services/opex';
 import { useSharedOpex, useSharedPayroll, useSharedCreatorPayout } from '~/hooks/useSharedOpex';
 import ModelTabs from '~/components/model/ModelTabs';
+import AcctInput from '~/components/model/AcctInput';
 import DragCard from '~/components/model/DragCard';
 import AssumptionCard, { type FieldDef } from '~/components/model/AssumptionCard';
 
@@ -57,28 +58,7 @@ function EndSelect({ value, onChange }: { value: number; onChange: (n: number) =
   );
 }
 
-// Accounting-formatted dollar input: shows thousands separators at rest
-// (e.g. 100,000), shows the raw number while editing, and parses digits.
-function AcctInput({ value, onChange, className }: { value: number; onChange: (n: number) => void; className?: string }) {
-  const [local, setLocal] = useState(() => value.toLocaleString('en-US'));
-  const [focused, setFocused] = useState(false);
-  useEffect(() => { if (!focused) setLocal(value.toLocaleString('en-US')); }, [value, focused]);
-  return (
-    <input
-      className={className}
-      type="text"
-      inputMode="numeric"
-      value={local}
-      onFocus={() => { setFocused(true); setLocal(value ? String(value) : ''); }}
-      onBlur={() => { setFocused(false); setLocal(value.toLocaleString('en-US')); }}
-      onChange={(e) => {
-        setLocal(e.target.value);
-        const n = Number(e.target.value.replace(/[^0-9.]/g, ''));
-        if (!Number.isNaN(n)) onChange(n);
-      }}
-    />
-  );
-}
+// AcctInput moved to components/model/AcctInput (Equity uses it too).
 
 const PAYOUT_COLOR = '#ec4899'; // creator payout — part of OpEx
 
