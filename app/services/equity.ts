@@ -67,6 +67,29 @@ export interface PricedRound {
 export const roundSize = (r: PricedRound): number =>
   r.investors.reduce((a, i) => a + i.investment, 0);
 
+/** "+ Investor" thinks before it adds: rounds are usually built to
+ *  ~20% post-money dilution (target ≈ pre ÷ 4), the lead takes the
+ *  biggest bite, and later checks fill what's left. The suggestion
+ *  sizes the check against that target and names the role — every
+ *  check in a priced round shares the round's terms ($/share) by
+ *  definition, so terms come from the round itself. */
+export function suggestRoundInvestor(round: PricedRound): RoundInvestor {
+  const nice = (n: number) => Math.max(50_000, Math.round(n / 50_000) * 50_000);
+  const target = round.preMoney / 4;
+  const current = roundSize(round);
+  const gap = target - current;
+  const n = round.investors.length;
+  const role =
+    n === 0 ? `${round.name} Lead`
+    : n === 1 ? 'Co-lead'
+    : ['Angel syndicate', 'Strategic investor', 'Follow-on fund', 'Operator angels'][(n - 2) % 4];
+  const investment =
+    n === 0 ? nice(target * 0.6)            // the lead anchors ~60% of the round
+    : gap > target * 0.1 ? nice(gap)        // fill the round to its target size
+    : nice(target * 0.1);                   // round's full — a smaller follower
+  return { id: equityUid(), name: role, investment };
+}
+
 export type SafeMode = 'sheet' | 'postMoney';
 
 export interface EquityState {

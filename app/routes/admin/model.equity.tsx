@@ -6,11 +6,11 @@
 // section collapses. Two SAFE math modes: YC post-money (standard) and
 // Sheet (reproduces the founder's spreadsheet). Shared live across admins.
 
-import { useEffect, useMemo, useState } from 'react';
+import { Fragment, useEffect, useMemo, useState } from 'react';
 import { Link } from '@remix-run/react';
 import { fmtCurrency } from '~/services/projections';
 import {
-  computeEquity, equityUid, roundSize, EQUITY_DEFAULTS,
+  computeEquity, equityUid, roundSize, suggestRoundInvestor, EQUITY_DEFAULTS,
   type CapHolder, type EquityState, type PricedRound, type SafeNote,
 } from '~/services/equity';
 import { useSharedEquity } from '~/hooks/useSharedEquity';
@@ -79,7 +79,11 @@ export default function EquityPage() {
   const removeInvestor = (roundId: string, invId: string) =>
     patch({ rounds: equity.rounds.map(r => r.id === roundId ? { ...r, investors: r.investors.filter(i => i.id !== invId) } : r) });
   const addInvestor = (roundId: string) =>
-    patch({ rounds: equity.rounds.map(r => r.id === roundId ? { ...r, investors: [...r.investors, { id: equityUid(), name: 'New investor', investment: 500_000 }] } : r) });
+    patch({
+      rounds: equity.rounds.map(r => r.id === roundId
+        ? { ...r, investors: [...r.investors, suggestRoundInvestor(r)] }
+        : r),
+    });
 
   const addRoundName = () => {
     const letters = ['Seed', 'Series A', 'Series B', 'Series C', 'Series D', 'Series E'];
@@ -313,10 +317,20 @@ export default function EquityPage() {
                   <tr><th>Type</th><th>Holder</th><th className="num">Investment</th><th className="num">Equity value</th><th className="num">Shares</th><th className="num">Ownership</th><th /></tr>
                 </thead>
                 <tbody>
-                  {stage.rows.map(r => {
+                  {stage.rows.map((r, idx) => {
                     const inv = stage.round.investors.find(i => i.id === r.id);
+                    // The round's own checks read as one labeled group at
+                    // the bottom of the table (founder's call) — a divider
+                    // marks where existing holders end and new money begins.
+                    const firstOwn = !!inv && !stage.rows.slice(0, idx).some(p => stage.round.investors.some(i => i.id === p.id));
                     return (
-                      <tr key={r.id} className={inv ? 'eq-row-new' : ''}>
+                      <Fragment key={r.id}>
+                      {firstOwn && (
+                        <tr className="eq-group-row">
+                          <td colSpan={7}>{stage.round.name} investors — new money this round</td>
+                        </tr>
+                      )}
+                      <tr className={inv ? 'eq-row-new' : ''}>
                         <td className="eq-type" data-l="Type">{r.type}</td>
                         <td className="eq-namecell" data-l="Holder">
                           {inv
@@ -337,6 +351,7 @@ export default function EquityPage() {
                           )}
                         </td>
                       </tr>
+                      </Fragment>
                     );
                   })}
                 </tbody>
@@ -355,7 +370,13 @@ export default function EquityPage() {
               </table>
 
               <div className="eq-adders">
-                <button type="button" onClick={() => addInvestor(stage.round.id)}>+ Investor</button>
+                <button
+                  type="button"
+                  title="Adds a check with thought-out terms: rounds build to ~20% dilution, the lead anchors ~60%, later checks fill the gap — name and size come pre-fit, everything stays editable"
+                  onClick={() => addInvestor(stage.round.id)}
+                >
+                  + Investor
+                </button>
               </div>
 
               <div className="eq-bar" title="Ownership after this round closes">
