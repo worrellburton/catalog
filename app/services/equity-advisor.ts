@@ -35,16 +35,24 @@ export async function askEquityAdvisor(messages: AdvisorTurn[], equity: EquitySt
     })),
   };
   const model = { rev: readStored(), acq: readGtmStored(), econ: readEconStored() };
-  const { data, error } = await supabase.functions.invoke('equity-advisor', {
-    body: { messages, equity, computed, model },
-  });
-  if (error) throw new Error(error.message ?? 'advisor unreachable');
-  const out = data as { success?: boolean; error?: string; reply?: string; proposal?: unknown };
-  if (!out?.success || !out.reply) throw new Error(out?.error ?? 'advisor returned nothing');
-  return {
-    reply: out.reply,
-    proposal: out.proposal ? mergeEquity(out.proposal) : null,
-  };
+  // One automatic retry: long generations occasionally hit the edge
+  // runtime's upstream window — the second attempt almost always lands
+  // (and the function now keeps answers inside the budget).
+  let lastErr = 'advisor unreachable';
+  for (let attempt = 0; attempt < 2; attempt++) {
+    const { data, error } = await supabase.functions.invoke('equity-advisor', {
+      body: { messages, equity, computed, model },
+    });
+    const out = data as { success?: boolean; error?: string; reply?: string; proposal?: unknown } | null;
+    if (!error && out?.success && out.reply) {
+      return {
+        reply: out.reply,
+        proposal: out.proposal ? mergeEquity(out.proposal) : null,
+      };
+    }
+    lastErr = out?.error ?? error?.message ?? lastErr;
+  }
+  throw new Error(lastErr);
 }
 
 /** The Kaizen pass — one canned, hard-hitting audit prompt. */

@@ -34,9 +34,9 @@ You will receive:
 
 How to answer:
 - Be direct and numerate. Cite the actual numbers (ownership %, $/share, post-money). Benchmark against current market norms when relevant. Flag risks (excess dilution, tiny pools, cap/discount interactions, signaling).
-- Keep replies tight: a few short paragraphs or a list, not an essay.
+- HARD LIMIT: keep the reply under 200 words — your strongest points only, as a tight list. You are generating inside a strict time budget; long answers get cut off and fail.
 - When your advice implies a concrete change to the plan (round size, valuation, pool top-up, adding/removing a round or SAFE), include a complete updated equity state as "proposal". Otherwise set "proposal" to null.
-- A proposal must be the FULL state in exactly the input schema (same field names; keep existing ids for rows you keep; short random strings for new ids; safeMode unchanged unless asked). Change only what your advice requires.
+- A proposal must be the FULL state in exactly the input schema (same field names; keep existing ids for rows you keep; short random strings for new ids; safeMode unchanged unless asked). Change only what your advice requires. Emit it as compact JSON — no whitespace.
 
 Output ONLY JSON, no prose outside it:
 {"reply":"<your answer — plain text, no markdown headers>","proposal":null}`;
@@ -87,7 +87,10 @@ ${JSON.stringify(body.model ?? {}).slice(0, 4000)}`;
     const res = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: MODEL, max_tokens: 3000, system: SYSTEM, messages }),
+      // 1700 output tokens keeps generation safely inside the edge
+      // runtime's ~60s upstream window (3000 ran the Kaizen audit into
+      // the wall — 63s, dead, "halp").
+      body: JSON.stringify({ model: MODEL, max_tokens: 1700, system: SYSTEM, messages }),
     });
     if (!res.ok) return json({ success: false, error: `anthropic ${res.status}: ${(await res.text()).slice(0, 200)}` }, 502);
     const out = await res.json() as { content?: Array<{ type: string; text?: string }> };
