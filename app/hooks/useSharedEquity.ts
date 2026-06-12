@@ -6,7 +6,7 @@ import { type EquityState, EQUITY_STORAGE_KEY, mergeEquity, readEquityStored } f
 // app_settings row, every admin reads/writes the same numbers, edits
 // broadcast over Realtime, localStorage is the offline cache.
 
-const EQUITY_KEY = 'equity:state:v1';
+const EQUITY_KEY = 'equity:state:v2';
 
 export function useSharedEquity(): {
   equity: EquityState;
