@@ -150,6 +150,11 @@ export interface EquitySummary {
   safeShares: number;
   /** founders + SAFE shares — the sheet's "Company's Capitalization". */
   foundationCap: number;
+  /** The Friends & Family round: the cap table once the SAFEs convert,
+   *  before any priced money (equityValue stays 0 — nothing has priced
+   *  the company yet). */
+  foundationRows: CapRow[];
+  foundationGroups: StageOutcome['groups'];
   stages: StageOutcome[];
 }
 
@@ -246,6 +251,34 @@ export function computeEquity(state: EquityState): EquitySummary {
   let poolExtra = 0; // cumulative pool top-up shares (kept as one synthetic row)
   let sharesOutstanding = baseRows.reduce((a, r) => a + r.shares, 0);
 
+  // The Friends & Family round IS the SAFE block — its own stage view:
+  // who owns what once the notes convert, before any priced money. No
+  // dollar values yet (nothing has priced the company), so equityValue
+  // stays 0 and the page hides that column for this stage.
+  const baseTotal = sharesOutstanding;
+  const foundationRows: CapRow[] = baseRows.map(r => ({
+    ...r,
+    pct: baseTotal > 0 ? r.shares / baseTotal : 0,
+    equityValue: 0,
+  }));
+  const groupTotals = (rows: CapRow[]) => {
+    const sum = (filter: (r: CapRow) => boolean) => {
+      const sel = rows.filter(filter);
+      return {
+        shares: sel.reduce((a, r) => a + r.shares, 0),
+        pct: sel.reduce((a, r) => a + r.pct, 0),
+        equityValue: sel.reduce((a, r) => a + r.equityValue, 0),
+      };
+    };
+    return [
+      { label: 'Founders', color: EQUITY_GROUP_COLORS.founders, ...sum(r => r.group === 'founders') },
+      { label: 'Advisory', color: EQUITY_GROUP_COLORS.advisory, ...sum(r => r.group === 'advisory') },
+      { label: 'Option pools', color: EQUITY_GROUP_COLORS.pool, ...sum(r => r.group === 'pool') },
+      { label: 'Investors', color: EQUITY_GROUP_COLORS.investors, ...sum(r => r.group === 'safe' || r.group === 'round') },
+    ];
+  };
+  const foundationGroups = groupTotals(foundationRows);
+
   for (const round of state.rounds) {
     const target = Math.max(0, Math.min(0.5, round.poolTopUp));
     // Solve pool top-up + pricing together (both move the denominator).
@@ -293,14 +326,6 @@ export function computeEquity(state: EquityState): EquitySummary {
       equityValue: r.shares * pps,
     }));
 
-    const sum = (filter: (r: CapRow) => boolean) => {
-      const sel = rows.filter(filter);
-      return {
-        shares: sel.reduce((a, r) => a + r.shares, 0),
-        pct: sel.reduce((a, r) => a + r.pct, 0),
-        equityValue: sel.reduce((a, r) => a + r.equityValue, 0),
-      };
-    };
     stages.push({
       round,
       pricePerShare: pps,
@@ -310,12 +335,7 @@ export function computeEquity(state: EquityState): EquitySummary {
       poolAdded,
       sharesAfter,
       rows,
-      groups: [
-        { label: 'Founders', color: EQUITY_GROUP_COLORS.founders, ...sum(r => r.group === 'founders') },
-        { label: 'Advisory', color: EQUITY_GROUP_COLORS.advisory, ...sum(r => r.group === 'advisory') },
-        { label: 'Option pools', color: EQUITY_GROUP_COLORS.pool, ...sum(r => r.group === 'pool') },
-        { label: 'Investors', color: EQUITY_GROUP_COLORS.investors, ...sum(r => r.group === 'safe' || r.group === 'round') },
-      ],
+      groups: groupTotals(rows),
     });
   }
 
@@ -325,6 +345,8 @@ export function computeEquity(state: EquityState): EquitySummary {
     safeConversions,
     safeShares,
     foundationCap: foundersShares + safeShares,
+    foundationRows,
+    foundationGroups,
     stages,
   };
 }

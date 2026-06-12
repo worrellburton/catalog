@@ -143,6 +143,53 @@ export default function EquityPage() {
         </div>
       </div>
 
+      {/* ── Friends & Family — the SAFE block as its own round ── */}
+      {equity.safes.length > 0 && (
+        <div className="eq-section admin-card">
+          <div className="eq-section-head">
+            <h3>Friends &amp; Family</h3>
+            <span>
+              {fmtCurrency(equity.safes.reduce((a, s) => a + s.investment, 0), { compact: true })} raised
+              across {equity.safes.length} SAFE{equity.safes.length === 1 ? '' : 's'} ·
+              converts at the first priced round · no price per share yet
+            </span>
+          </div>
+          <table className="eq-table">
+            <thead>
+              <tr><th>Type</th><th>Holder</th><th className="num">Investment</th><th className="num">Val cap</th><th className="num">Shares</th><th className="num">Ownership</th></tr>
+            </thead>
+            <tbody>
+              {summary.foundationRows.map(r => (
+                <tr key={r.id} className={r.group === 'safe' ? 'eq-row-new' : ''}>
+                  <td className="eq-type">{r.type}</td>
+                  <td>{r.name}</td>
+                  <td className="num">{r.investment != null ? fmtCurrency(r.investment, { compact: true }) : '—'}</td>
+                  <td className="num">{r.valCap != null ? fmtCurrency(r.valCap, { compact: true }) : '—'}</td>
+                  <td className="num">{shares(r.shares)}</td>
+                  <td className="num">{pct(r.pct)}</td>
+                </tr>
+              ))}
+            </tbody>
+            <tfoot>
+              {summary.foundationGroups.map(g => (
+                <tr key={g.label}>
+                  <td className="eq-type" colSpan={2}><i className="eq-dot" style={{ background: g.color }} />{g.label}</td>
+                  <td className="num" />
+                  <td className="num" />
+                  <td className="num">{shares(g.shares)}</td>
+                  <td className="num">{pct(g.pct)}</td>
+                </tr>
+              ))}
+            </tfoot>
+          </table>
+          <div className="eq-bar" title="Ownership once the SAFEs convert, before any priced round">
+            {summary.foundationGroups.map(g => (
+              <span key={g.label} style={{ width: `${Math.max(0.4, g.pct * 100)}%`, background: g.color }} />
+            ))}
+          </div>
+        </div>
+      )}
+
       {/* ── Priced rounds ── */}
       {summary.stages.map(stage => (
         <div key={stage.round.id} className="eq-section admin-card">
