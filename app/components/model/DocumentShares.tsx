@@ -18,7 +18,12 @@ interface ShareRow {
 
 const slugify = (s: string) => s.toLowerCase().trim().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '');
 
-export default function DocumentShares({ onClose }: { onClose: () => void }) {
+export default function DocumentShares({ onClose, onPublish }: {
+  onClose: () => void;
+  /** Opens the business plan (which also snapshots it into `documents`)
+   *  — the panel offers it when no snapshot is published yet. */
+  onPublish?: () => void;
+}) {
   const [rows, setRows] = useState<ShareRow[]>([]);
   const [hasSnapshot, setHasSnapshot] = useState(true);
   const [name, setName] = useState('');
@@ -98,7 +103,20 @@ export default function DocumentShares({ onClose }: { onClose: () => void }) {
 
         {!hasSnapshot && (
           <p className="docshare-warn">
-            No plan published yet — open <b>Share → Business plan</b> once and the latest snapshot lands here automatically.
+            No plan published yet — links will say &ldquo;not published&rdquo; until the first snapshot lands.
+            {onPublish && (
+              <button
+                type="button"
+                className="docshare-publish"
+                onClick={() => {
+                  onPublish();
+                  // The snapshot upsert trails the new tab; re-check shortly.
+                  window.setTimeout(load, 6000);
+                }}
+              >
+                Publish the plan now
+              </button>
+            )}
           </p>
         )}
 

@@ -12,7 +12,7 @@ import { supabase } from '~/utils/supabase';
 export default function SharedDocument() {
   const { slug } = useParams();
   const [code, setCode] = useState('');
-  const [err, setErr] = useState(false);
+  const [err, setErr] = useState<null | 'pass' | 'nodoc'>(null);
   const [busy, setBusy] = useState(false);
   const [html, setHtml] = useState<string | null>(null);
 
@@ -29,8 +29,11 @@ export default function SharedDocument() {
     setBusy(true);
     const { data } = await supabase.rpc('open_document_share', { p_slug: slug, p_pass: code });
     setBusy(false);
-    if (typeof data === 'string' && data) setHtml(data);
-    else setErr(true);
+    // '__NO_DOC__' = the password was RIGHT but nothing is published yet
+    // — saying "wrong password" here sent the founder chasing a typo.
+    if (data === '__NO_DOC__') setErr('nodoc');
+    else if (typeof data === 'string' && data) setHtml(data);
+    else setErr('pass');
   };
 
   if (html) {
@@ -54,7 +57,7 @@ export default function SharedDocument() {
           value={code}
           autoFocus
           placeholder="Password"
-          onChange={e => { setCode(e.target.value); setErr(false); }}
+          onChange={e => { setCode(e.target.value); setErr(null); }}
           onKeyDown={e => { if (e.key === 'Enter') void submit(); }}
           style={{
             width: '100%', boxSizing: 'border-box', padding: '13px 16px', borderRadius: 10,
@@ -63,7 +66,8 @@ export default function SharedDocument() {
             textAlign: 'center', letterSpacing: '0.2em', outline: 'none', fontFamily: 'inherit',
           }}
         />
-        {err && <p style={{ color: '#f87171', fontSize: 12, marginTop: 8 }}>That&rsquo;s not it — or this link was closed.</p>}
+        {err === 'pass' && <p style={{ color: '#f87171', fontSize: 12, marginTop: 8 }}>That&rsquo;s not it — or this link was closed.</p>}
+        {err === 'nodoc' && <p style={{ color: '#fbbf24', fontSize: 12, marginTop: 8 }}>Password&rsquo;s right — the document just hasn&rsquo;t been published yet. Try again in a bit.</p>}
         <button
           type="button"
           onClick={() => void submit()}
