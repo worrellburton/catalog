@@ -160,6 +160,9 @@ export default defineConfig({
           route("earnings", "routes/earnings.tsx");
           route("home2", "routes/home2.tsx");
           route("business-plan", "routes/business-plan.tsx");
+          // Admin-minted share links: /d/<slug>, each with its own
+          // passcode (document_shares table; managed from /admin/model).
+          route("d/:slug", "routes/d.$slug.tsx");
           // My Catalog deep-link. Re-exports _index; Index opens the My
           // Catalog overlay on cold load so refresh / direct hits work.
           route("my-looks", "routes/my-looks.tsx");
