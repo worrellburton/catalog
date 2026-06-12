@@ -406,7 +406,10 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
 <html lang="en">
 <head>
 <meta charset="utf-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1" />
+<!-- Fixed-width viewport: the document is a composed PDF page, not a
+     responsive site. Phones render the full 920px composition scaled to
+     fit and pinch-zoom into it — same integrity as the printed sheet. -->
+<meta name="viewport" content="width=920, user-scalable=yes" />
 <title>Catalog Business Plan</title>
 <style>
   :root { --ink:#141210; --muted:#7a746c; --line:#e7e2da; --paper:#fffdf8; --accent:${ACCENT}; }
@@ -495,7 +498,7 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
      card. Print cells are ~3:4 (the primaries' own shape), so the fit is
      near-exact there; any sliver is white-on-white and invisible. */
   .cover-feed img, .cover-feed video { width: 100%; height: 100%; min-width: 0; min-height: 0;
-    object-fit: cover; background: #111; box-sizing: border-box; display: block; }
+    object-fit: contain; background: #fff; box-sizing: border-box; display: block; }
   .cover-scrim { position: absolute; inset: 0;
     background: linear-gradient(rgba(0,0,0,0.82), rgba(0,0,0,0.92)); }
   .appendix-cover { position: relative; overflow: hidden; background: #000; min-height: 100vh; }
