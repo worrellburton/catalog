@@ -1108,6 +1108,15 @@ body:has(.look-overlay.look-overlay--in) {
   letter-spacing: -0.01em;
 }
 
+/* Zero-footprint marker for the daily-feed reach detector (LookOverlay's
+   IntersectionObserver). Has a measurable box but takes no visual space. */
+.look-daily-feed-sentinel {
+  width: 100%;
+  height: 1px;
+  margin: 0;
+  pointer-events: none;
+}
+
 .look-feed-grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));

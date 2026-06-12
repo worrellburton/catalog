@@ -331,6 +331,13 @@ export default function Home() {
   // the bar's position never moves across the round-trip.
   const overlayScrollLockRef = useRef(false);
 
+  // True once the shopper scrolls down to the "Your daily feed" section inside
+  // an open LookOverlay. Pops the Catalog search bar to the top (mirroring the
+  // home feed) — see the `looks-feed-bar` class below. Reset on every look
+  // change so a fresh open never flashes the bar before the shopper scrolls.
+  const [dailyFeedReached, setDailyFeedReached] = useState(false);
+  useEffect(() => { setDailyFeedReached(false); }, [selectedLook?.id, selectedLook?.uuid]);
+
   // Referral capture: stash any ?ref=<handle> from the landing URL ASAP
   // (before OAuth can strip it), then redeem it once the user is signed in
   // (attribute the signup + skip the waitlist + reward the creator $0.25).
@@ -1777,7 +1784,7 @@ export default function Home() {
   return (
     <TrailRoot>
     <TrailVideoHost>
-    <div className={`app-root ${isLightMode ? 'light-mode' : ''}${overlayOpen ? ' has-overlay' : ''}${heroMode ? ' home-hero' : ''}${heroScrolled ? ' hero-scrolled' : ''}${heroBarFaded ? ' hero-bar-faded' : ''}${chromeHidden ? ' chrome-hidden' : ''}`}>
+    <div className={`app-root ${isLightMode ? 'light-mode' : ''}${overlayOpen ? ' has-overlay' : ''}${heroMode ? ' home-hero' : ''}${heroScrolled ? ' hero-scrolled' : ''}${heroBarFaded ? ' hero-bar-faded' : ''}${chromeHidden ? ' chrome-hidden' : ''}${selectedLook && dailyFeedReached && !inShell ? ' looks-feed-bar' : ''}`}>
       {/* Singleton particle world — one canvas mounted at the app root,
           always visible. Splash, hero, search-ceremony, empty-catalog all
           render above this so the field stays continuous across every
@@ -1965,6 +1972,7 @@ export default function Home() {
                 popularFallback={popularFallback}
                 onOpenCreative={handleOpenCreative}
                 onOpenComments={openComments}
+                onDailyFeedVisible={setDailyFeedReached}
               />
             </Suspense>
           )}
