@@ -15,6 +15,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ParticleBackground from '~/components/ParticleBackground';
+import { supabase } from '~/utils/supabase';
 import TypeBrainGraph, { ROOT_ID, type BrainNode, type BrainProduct, type BrainViewMode } from '~/components/admin/TypeBrainGraph';
 import {
   computeEffectiveGenders,
@@ -30,6 +31,7 @@ import {
   type GovernanceProduct,
   type KaizenReport,
   type ProductGroup,
+  type TypeAuditRecommendation,
   type TypeNode,
 } from '~/services/type-governance';
 import DrillAddProducts, { type DrillAddSource } from '~/components/admin/DrillAddProducts';
@@ -461,6 +463,76 @@ export default function AdminGovernanceTypes() {
   /** Apply the checked kaizen improvements as one undoable gesture.
    *  Op order: create nodes → product patches → delete nodes, so product
    *  moves never reference a node mid-delete. */
+  /** Resolve a "a / b / c" path to a node id, creating missing segments
+   *  (parents first). Returns null only when a create fails. */
+  const resolveOrCreatePath = async (path: string): Promise<{ id: string; name: string } | null> => {
+    const segments = path.split('/').map(s => s.trim()).filter(Boolean);
+    if (segments.length === 0) return null;
+    let parentId: string | null = null;
+    let node: TypeNode | null = null;
+    let liveTree = tree;
+    for (const seg of segments) {
+      const existing = liveTree.find(n =>
+        (n.parentId ?? null) === parentId && normalizeTypeName(n.name) === normalizeTypeName(seg));
+      if (existing) {
+        node = existing;
+      } else {
+        const created = await createTypeNode(seg, parentId);
+        if (!created) return null;
+        liveTree = [...liveTree, created];
+        setTree(prev => [...prev, created]);
+        node = created;
+      }
+      parentId = node.id;
+    }
+    return node ? { id: node.id, name: node.name } : null;
+  };
+
+  /** "I think the glasses should go into dishware instead of art" →
+   *  kaizen-refine (Claude) maps the note onto real products + paths;
+   *  the open report's suggestions update in place for review. */
+  const refineKaizen = async (instruction: string): Promise<string | null> => {
+    if (!audit || !supabase) return 'No report open';
+    const { data, error } = await supabase.functions.invoke('kaizen-refine', {
+      body: {
+        instruction,
+        products: products.map(pr => ({ id: pr.id, name: pr.name, brand: pr.brand, type: pr.type })),
+        typePaths: [...new Set([...paths.values()])],
+      },
+    });
+    if (error) return error.message;
+    const resp = data as { success?: boolean; error?: string; moves?: Array<{ productId: string; toPath: string }>; note?: string | null };
+    if (!resp?.success) return resp?.error ?? 'Refine failed';
+    const moves = resp.moves ?? [];
+    if (moves.length === 0) return resp.note || 'Nothing in the catalog matched that note.';
+
+    const updates: TypeAuditRecommendation[] = [];
+    for (const mv of moves) {
+      const product = products.find(pr => pr.id === mv.productId);
+      if (!product) continue;
+      const target = await resolveOrCreatePath(mv.toPath);
+      if (!target) continue;
+      updates.push({
+        productId: product.id,
+        name: product.name,
+        brand: product.brand,
+        image: product.image,
+        fromType: product.type,
+        toNodeId: target.id,
+        toName: target.name,
+        toPath: mv.toPath,
+        reason: `your note: “${instruction.slice(0, 80)}”`,
+      });
+    }
+    if (updates.length === 0) return 'Could not resolve the destination type.';
+    setAudit(prev => {
+      if (!prev) return prev;
+      const updatedIds = new Set(updates.map(u => u.productId));
+      return { ...prev, retypes: [...updates, ...prev.retypes.filter(r => !updatedIds.has(r.productId))] };
+    });
+    return null;
+  };
+
   const applyKaizen = (picked: KaizenPicked) => {
     setAudit(null);
     const ops: GovernanceOp[] = [];
@@ -963,6 +1035,7 @@ export default function AdminGovernanceTypes() {
       {audit && (
         <KaizenPanel
           report={audit}
+          onRefine={refineKaizen}
           onApply={applyKaizen}
           onClose={() => setAudit(null)}
         />

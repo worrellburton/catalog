@@ -24,6 +24,10 @@ interface Props {
   report: KaizenReport;
   onApply: (picked: KaizenPicked) => void;
   onClose: () => void;
+  /** Natural-language steering: "the glasses should go into dishware
+   *  instead of art" → the route maps it onto real moves and updates the
+   *  open report. Resolves null on success, else a message to show. */
+  onRefine?: (instruction: string) => Promise<string | null>;
 }
 
 const SECTIONS = [
@@ -36,7 +40,25 @@ const SECTIONS = [
 
 type SectionKey = typeof SECTIONS[number]['key'];
 
-export default function KaizenPanel({ report, onApply, onClose }: Props) {
+export default function KaizenPanel({ report, onApply, onClose, onRefine }: Props) {
+  const [refineText, setRefineText] = useState('');
+  const [refining, setRefining] = useState(false);
+  const [refineNote, setRefineNote] = useState<string | null>(null);
+  const submitRefine = async () => {
+    const note = refineText.trim();
+    if (!note || !onRefine || refining) return;
+    setRefining(true);
+    setRefineNote(null);
+    try {
+      const result = await onRefine(note);
+      setRefineNote(result); // null = applied silently into the list above
+      if (!result) setRefineText('');
+    } catch (err) {
+      setRefineNote(err instanceof Error ? err.message : 'Refine failed');
+    } finally {
+      setRefining(false);
+    }
+  };
   const keyOf: Record<SectionKey, (r: never) => string> = {
     retypes: (r: TypeAuditRecommendation) => r.productId,
     drift: (r: KaizenDrift) => r.productId,
@@ -53,6 +75,18 @@ export default function KaizenPanel({ report, onApply, onClose }: Props) {
     emptyTypes: allKeys('emptyTypes'),
   }));
   const [lastRun, setLastRun] = useState<string | null>(null);
+  // A refine swaps new suggestions into the report — re-seed the checks so
+  // the fresh rows arrive selected.
+  useEffect(() => {
+    setChecked({
+      retypes: allKeys('retypes'),
+      drift: allKeys('drift'),
+      duplicateTypes: allKeys('duplicateTypes'),
+      orphanTypes: allKeys('orphanTypes'),
+      emptyTypes: allKeys('emptyTypes'),
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [report]);
 
   // The morning twin's last pass, for the header.
   useEffect(() => {
@@ -189,6 +223,21 @@ export default function KaizenPanel({ report, onApply, onClose }: Props) {
               </span>
             )))}
           </div>
+          {onRefine && (
+            <div className="gov-kaizen-refine">
+              <input
+                value={refineText}
+                onChange={e => setRefineText(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') void submitRefine(); }}
+                placeholder='Steer these suggestions — e.g. "the glasses should go into dishware instead of art"'
+                disabled={refining}
+              />
+              <button type="button" className="gov-audit-apply" disabled={refining || !refineText.trim()} onClick={() => void submitRefine()}>
+                {refining ? 'Thinking…' : '✦ Refine'}
+              </button>
+              {refineNote && <span className="gov-kaizen-refine-note">{refineNote}</span>}
+            </div>
+          )}
           <div className="gov-audit-foot">
             <span style={{ marginRight: 'auto', fontSize: 12, opacity: 0.7 }}>{pickedCount} of {total} selected</span>
             <button type="button" className="gov-ghost" onClick={onClose}>Cancel</button>
