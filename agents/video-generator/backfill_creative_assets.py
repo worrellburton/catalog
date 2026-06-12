@@ -103,7 +103,11 @@ def public_url_for(supabase_url: str, key: str) -> str:
 _HLS_CONTENT_TYPES = {
     ".m3u8": "application/vnd.apple.mpegurl",
     ".ts": "video/mp2t",
-    ".m4s": "video/iso.segment",
+    # fMP4/CMAF segments + init are served as video/mp4 — the canonical, widely
+    # accepted type for fMP4 HLS (Apple's own examples use it) AND the only one
+    # in the look-media bucket's allowed_mime_types (video/iso.segment is
+    # rejected with 415). Players key off the playlist, not the segment subtype.
+    ".m4s": "video/mp4",
     ".mp4": "video/mp4",
 }
 # Segments are content-stable → cache hard. Playlists get a short TTL so a
