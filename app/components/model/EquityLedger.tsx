@@ -19,11 +19,15 @@ interface LedgerLine {
   date: string;            // '' sorts to its structural order
   name: string;
   kind: 'safe' | 'round';
-  terms: string;
+  type: string;            // 'SAFE' or the round's name
   invested: number;
+  /** $/share this check converts/buys at (SAFE conversion or round price). */
+  price: number | null;
   safe?: SafeNote;
   round?: PricedRound;
   investor?: RoundInvestor;
+  /** Round entries carry their round's post-money as the entry valuation. */
+  roundPost?: number;
   order: number;           // structural fallback order (SAFEs, then rounds)
 }
 
@@ -39,17 +43,20 @@ export default function EquityLedger({ equity, summary, onSafe, onInvestor, onAd
 
   let order = 0;
   const lines: LedgerLine[] = [
-    ...equity.safes.map(s => ({
-      id: s.id, date: s.date ?? '', name: s.name, kind: 'safe' as const,
-      terms: `SAFE · cap ${fmtCurrency(s.valCap, { compact: true })}${s.discount > 0 ? ` · ${Math.round(s.discount * 100)}% disc` : ''}`,
-      invested: s.investment, safe: s, order: order++,
-    })),
+    ...equity.safes.map(s => {
+      const conv = summary.safeConversions.find(c => c.safe.id === s.id);
+      return {
+        id: s.id, date: s.date ?? '', name: s.name, kind: 'safe' as const, type: 'SAFE',
+        invested: s.investment, price: conv && conv.price > 0 ? conv.price : null,
+        safe: s, order: order++,
+      };
+    }),
     ...equity.rounds.flatMap(r => {
       const stage = summary.stages.find(st => st.round.id === r.id);
       return r.investors.map(i => ({
-        id: i.id, date: i.date ?? '', name: i.name, kind: 'round' as const,
-        terms: `${r.name} · ${stage ? `${fmtCurrency(stage.pricePerShare)} / share` : 'priced'}`,
-        invested: i.investment, round: r, investor: i, order: order++,
+        id: i.id, date: i.date ?? '', name: i.name, kind: 'round' as const, type: r.name,
+        invested: i.investment, price: stage ? stage.pricePerShare : null,
+        round: r, investor: i, roundPost: stage?.postMoney, order: order++,
       }));
     }),
   ].sort((a, b) => {
@@ -71,7 +78,11 @@ export default function EquityLedger({ equity, summary, onSafe, onInvestor, onAd
       </div>
       <table className="eq-table">
         <thead>
-          <tr><th>Date</th><th>Investor</th><th className="num">Check</th><th>Terms</th><th className="num">Shares</th><th className="num">Ownership now</th><th className="num">Value now</th><th className="num">Multiple</th></tr>
+          <tr>
+            <th>Date</th><th>Type</th><th>Investor</th><th className="num">Check</th>
+            <th className="num">Valuation in at</th><th className="num">Discount</th><th className="num">$ / share</th>
+            <th className="num">Shares</th><th className="num">Ownership now</th><th className="num">Value now</th><th className="num">Multiple</th>
+          </tr>
         </thead>
         <tbody>
           {lines.map(l => {
@@ -90,6 +101,7 @@ export default function EquityLedger({ equity, summary, onSafe, onInvestor, onAd
                     onChange={e => setDate(e.target.value)}
                   />
                 </td>
+                <td className="eq-type">{l.type}</td>
                 <td className="eq-namecell">
                   <input
                     className="eq-in eq-in-name"
@@ -105,7 +117,24 @@ export default function EquityLedger({ equity, summary, onSafe, onInvestor, onAd
                     onChange={n => l.kind === 'safe' ? onSafe(l.id, { investment: n }) : onInvestor(l.round!.id, l.id, { investment: n })}
                   />
                 </td>
-                <td className="eq-type">{l.terms}</td>
+                {/* Self-contained terms: a SAFE's entry valuation is its cap
+                    (editable); a priced check's is its round's post-money. */}
+                <td className="num">
+                  {l.kind === 'safe'
+                    ? <AcctInput className="eq-in" value={l.safe!.valCap} onChange={n => onSafe(l.id, { valCap: n })} />
+                    : l.roundPost != null ? `${fmtCurrency(l.roundPost, { compact: true })} post` : '—'}
+                </td>
+                <td className="num">
+                  {l.kind === 'safe' ? (
+                    <span className="eq-pct">
+                      <input className="eq-in" type="number" min={0} max={90} step={1}
+                        value={Math.round(l.safe!.discount * 100)}
+                        onChange={e => onSafe(l.id, { discount: Math.max(0, Math.min(90, Number(e.target.value))) / 100 })} />
+                      <em>%</em>
+                    </span>
+                  ) : '—'}
+                </td>
+                <td className="num">{l.price != null ? fmtCurrency(l.price) : '—'}</td>
                 <td className="num">{shares(now?.shares ?? 0)}</td>
                 <td className="num">{pct(now?.pct ?? 0)}</td>
                 <td className="num">{fmtCurrency(value, { compact: true })}</td>
