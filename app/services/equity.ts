@@ -38,12 +38,16 @@ export interface SafeNote {
   valCap: number;
   /** 0–1; 0 = converts at the cap only. */
   discount: number;
+  /** When the check landed (ISO date) — drives the Ledger view's order. */
+  date?: string;
 }
 
 export interface RoundInvestor {
   id: string;
   name: string;
   investment: number;
+  /** When the check landed (ISO date) — drives the Ledger view's order. */
+  date?: string;
 }
 
 export interface PricedRound {
