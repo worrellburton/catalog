@@ -67,6 +67,8 @@ interface SupabaseLook {
     thumbnail_url: string | null;
     mobile_video_url: string | null;
     hls_url: string | null;
+    hls_hevc_url: string | null;
+    video_av1_url: string | null;
     is_primary: boolean;
     trim_start: number | null;
     trim_end: number | null;
@@ -82,6 +84,8 @@ interface SupabaseLook {
       primary_image_url: string | null;
       primary_video_url: string | null;
       primary_hls_url: string | null;
+      primary_hls_hevc_url: string | null;
+      primary_video_av1_url: string | null;
       primary_video_poster_url: string | null;
       type: string | null;
       subtype: string | null;
@@ -169,6 +173,8 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
         thumbnail_url,
         mobile_video_url,
         hls_url,
+        hls_hevc_url,
+        video_av1_url,
         is_primary,
         trim_start,
         trim_end
@@ -184,6 +190,8 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
           primary_image_url,
           primary_video_url,
           primary_hls_url,
+          primary_hls_hevc_url,
+          primary_video_av1_url,
           primary_video_poster_url,
           type,
           subtype
@@ -354,6 +362,8 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
       thumbnail_url: primary.thumbnail_url || undefined,
       mobile_video_url: primary.mobile_video_url || undefined,
       hls_url: primary.hls_url || undefined,
+      hls_hevc_url: primary.hls_hevc_url || undefined,
+      video_av1_url: primary.video_av1_url || undefined,
       trimStart: primary.trim_start ?? undefined,
       trimEnd: primary.trim_end ?? undefined,
       gender: (row.gender as 'men' | 'women') || 'women',
@@ -398,6 +408,8 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
           url: lp.products?.url || '',
           image: lp.products?.primary_image_url || lp.products?.image_url,
           primary_hls_url: lp.products?.primary_hls_url || undefined,
+          primary_hls_hevc_url: lp.products?.primary_hls_hevc_url || undefined,
+          primary_video_av1_url: lp.products?.primary_video_av1_url || undefined,
           // Surfacing the product's own polished video on the look-overlay
           // product list. LookOverlay renders ProductMiniMedia which starts
           // with the poster (image) and swaps to the muted+looping video
@@ -441,8 +453,8 @@ export async function getLookByUuid(uuid: string): Promise<Look | null> {
     .from('looks')
     .select(`
       id, legacy_id, title, gender, creator_handle, user_id, description, color, status, feed_rank,
-      looks_creative ( video_url, thumbnail_url, mobile_video_url, hls_url, is_primary, trim_start, trim_end ),
-      look_products ( sort_order, products ( name, brand, price, url, image_url, primary_image_url, primary_video_url, primary_hls_url, primary_video_poster_url, type, subtype ) )
+      looks_creative ( video_url, thumbnail_url, mobile_video_url, hls_url, hls_hevc_url, video_av1_url, is_primary, trim_start, trim_end ),
+      look_products ( sort_order, products ( name, brand, price, url, image_url, primary_image_url, primary_video_url, primary_hls_url, primary_hls_hevc_url, primary_video_av1_url, primary_video_poster_url, type, subtype ) )
     `)
     .eq('id', uuid)
     .limit(1)

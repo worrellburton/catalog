@@ -43,6 +43,10 @@ export interface Product {
   /** HLS master playlist for the product's primary video (adaptive ladder).
    *  Preferred over video_url when present; falls back to MP4 otherwise. */
   primary_hls_url?: string;
+  /** HEVC HLS + AV1 MP4 variants — preferred where the device decodes them,
+   *  fall back to primary_hls_url / video_url. Null until backfilled. */
+  primary_hls_hevc_url?: string;
+  primary_video_av1_url?: string;
   thumbnail_url?: string;
   creative_id?: string;
   /** Broad category (Shoes / Top / Pants / etc.). Sourced from
@@ -109,6 +113,12 @@ export interface Look {
    *  the detail hero is crisp without a re-buffer. Falls back to
    *  video / mobile_video_url when absent. */
   hls_url?: string;
+  /** HEVC fMP4 HLS master — preferred on native-HLS devices that decode HEVC.
+   *  Falls back to hls_url when null. */
+  hls_hevc_url?: string;
+  /** AV1 progressive MP4 — preferred on the desktop path where a smooth AV1
+   *  decoder is confirmed. Falls back to video / mobile_video_url when null. */
+  video_av1_url?: string;
   /** Trimmer in/out window (seconds). When set, look video players loop
    *  [trimStart, trimEnd] instead of the whole clip. */
   trimStart?: number;

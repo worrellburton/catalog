@@ -126,6 +126,8 @@ const CreativeCardV2 = memo(function CreativeCardV2({
   const playableUrl = isLook
     ? pickPlaybackSource({
         hls_url: look!.hls_url ?? null,
+        hls_hevc_url: look!.hls_hevc_url ?? null,
+        video_av1_url: look!.video_av1_url ?? null,
         video_url: normalizeLookVideoUrl(look!.video, basePath),
         mobile_video_url: look!.mobile_video_url ?? null,
       })

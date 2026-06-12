@@ -12,6 +12,51 @@
 
 import type { ProductAd } from './product-creative';
 import { videoPipelineMode } from './video-pipeline';
+import { browserSupportsNativeHls, browserDecodesHevc } from '~/utils/hlsAttach';
+
+// ── AV1 desktop-decode probe (async, cached) ──────────────────────────
+// AV1 is a SIZE win on the desktop progressive path (~30-50% vs H.264 at equal
+// quality). We MUST gate on MediaCapabilities.decodingInfo (NOT canPlayType):
+// M1/M2 Safari reports nominal AV1 support via canPlayType but has no working
+// decoder, so a canPlayType gate would black out those heroes. We probe once at
+// module load and cache a boolean; pickVideoUrl reads it synchronously and
+// defaults to FALSE (→ H.264) until the probe resolves, so nothing regresses.
+let _av1Decode = false;
+function probeAv1Decode(): void {
+  if (typeof navigator === 'undefined') return;
+  const mc = (navigator as Navigator & {
+    mediaCapabilities?: { decodingInfo?: (c: unknown) => Promise<{ supported: boolean; smooth: boolean; powerEfficient: boolean }> };
+  }).mediaCapabilities;
+  if (!mc?.decodingInfo) return; // no API → stay on H.264
+  mc.decodingInfo({
+    type: 'file',
+    video: {
+      contentType: 'video/mp4; codecs="av01.0.05M.08"',
+      width: 1080, height: 1440, bitrate: 3_000_000, framerate: 24,
+    },
+  })
+    .then((r) => { _av1Decode = !!(r && r.supported && r.smooth && r.powerEfficient); })
+    .catch(() => { /* leave false — H.264 stays */ });
+}
+// Kick the probe once at module init (guarded for SSR). Idempotent enough — the
+// module is a singleton, so this runs a single decodingInfo call per session.
+probeAv1Decode();
+
+/** True only when AV1 is the right pick for THIS surface: the device has a
+ *  confirmed-smooth AV1 decoder AND we're on the desktop/wifi path (AV1 is the
+ *  desktop progressive-MP4 lever; mobile rides HLS). Sync + stable per session,
+ *  so a card and its hero always agree → the pooled-element handoff never has to
+ *  swap the source. */
+function av1Preferred(): boolean {
+  return _av1Decode && !isMobileViewport() && !isSlowConnection();
+}
+
+/** True only when the HEVC ladder is the right pick: native-HLS device (iOS/
+ *  Safari) that decodes HEVC in hardware. We never steer the hls.js/MSE path to
+ *  HEVC. Sync + stable per session → tile and hero agree. */
+function hevcPreferred(): boolean {
+  return browserSupportsNativeHls() && browserDecodesHevc();
+}
 
 // ── Phase 6: pick the right URL for this device ───────────────────────
 
@@ -50,12 +95,21 @@ export function isSlowConnection(): boolean {
 export function pickVideoUrl(creative: {
   video_url?: string | null;
   mobile_video_url?: string | null;
-  product?: { primary_video_url?: string | null } | null;
+  video_av1_url?: string | null;
+  product?: { primary_video_url?: string | null; primary_video_av1_url?: string | null } | null;
 }): string | null {
+  // AV1 desktop preference (gated on a confirmed-smooth decoder; null falls
+  // through to H.264). Decided per device, so a tile and its hero resolve to the
+  // SAME url and the pooled-element handoff never swaps source.
+  const av1 = av1Preferred();
   const primary = creative.product?.primary_video_url;
-  if (primary) return primary;
+  if (primary) {
+    if (av1 && creative.product?.primary_video_av1_url) return creative.product.primary_video_av1_url;
+    return primary;
+  }
   const wantMobile = isMobileViewport() || isSlowConnection();
   if (wantMobile && creative.mobile_video_url) return creative.mobile_video_url;
+  if (av1 && creative.video_av1_url) return creative.video_av1_url;
   return creative.video_url ?? creative.mobile_video_url ?? null;
 }
 
@@ -73,16 +127,35 @@ export function pickVideoUrl(creative: {
  *  Product preference mirrors pickVideoUrl: a product's own HLS ladder
  *  (primary_hls_url) wins for product cards.
  *
+ *  HEVC preference: on native-HLS devices that decode HEVC (iOS/Safari) the
+ *  HEVC ladder (hls_hevc_url / primary_hls_hevc_url) is preferred for ~15-25%
+ *  fewer bytes; AVPlayer auto-picks the rung. We never steer the hls.js path to
+ *  HEVC. Null HEVC columns fall straight through to the H.264 ladder, so this is
+ *  identical to today's behaviour until clips are backfilled.
+ *
  *  Pipeline dial (/admin/dials → video_pipeline_mode): in 'mp4' mode the
  *  HLS columns are ignored entirely and every surface gets the legacy
  *  progressive path — byte-identical to pre-HLS behaviour. */
 export function pickPlaybackSource(creative: {
   hls_url?: string | null;
+  hls_hevc_url?: string | null;
   video_url?: string | null;
   mobile_video_url?: string | null;
-  product?: { primary_hls_url?: string | null; primary_video_url?: string | null } | null;
+  video_av1_url?: string | null;
+  product?: {
+    primary_hls_url?: string | null;
+    primary_hls_hevc_url?: string | null;
+    primary_video_url?: string | null;
+    primary_video_av1_url?: string | null;
+  } | null;
 }): string | null {
   if (videoPipelineMode() === 'mp4') return pickVideoUrl(creative);
+  // HEVC ladder preferred where decodable (product-level first, mirroring the
+  // H.264 precedence below). Null → fall through to H.264.
+  if (hevcPreferred()) {
+    if (creative.product?.primary_hls_hevc_url) return creative.product.primary_hls_hevc_url;
+    if (creative.hls_hevc_url) return creative.hls_hevc_url;
+  }
   const productHls = creative.product?.primary_hls_url;
   if (productHls) return productHls;
   if (creative.hls_url) return creative.hls_url;
