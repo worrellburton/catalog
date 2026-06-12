@@ -733,10 +733,31 @@ export default function AdminGovernanceTypes() {
           aria-label="Toggle controls"
           onClick={() => setMobileControlsOpen(v => !v)}
         >C</button>
-        <div className={`gov-controls-row gov-canvas-controls${mobileControlsOpen ? ' is-open' : ''}`}>
+        {/* Mobile-only top bar: the view toggle + Kaizen live in the open,
+            not behind the C menu (founder's call). */}
+        <div className="gov-mobile-bar">
+          <div className="gov-seg" role="group" aria-label="View mode">
+            {(['types', 'products', 'all'] as const).map(m => (
+              <button
+                key={m}
+                type="button"
+                className={viewMode === m ? 'is-active' : ''}
+                onClick={() => setViewMode(m)}
+              >{m}</button>
+            ))}
+          </div>
           <button
             type="button"
             className="gov-ghost"
+            onClick={() => setAudit(kaizenSweep(products, tree))}
+          >
+            改 Kaizen
+          </button>
+        </div>
+        <div className={`gov-controls-row gov-canvas-controls${mobileControlsOpen ? ' is-open' : ''}`}>
+          <button
+            type="button"
+            className="gov-ghost gov-kaizen-btn"
             title="Continuous improvement: sweep everything — product placement, drifted columns, duplicate / empty / unowned types — and apply the fixes. Also runs every morning at 6 a.m. ET."
             onClick={() => setAudit(kaizenSweep(products, tree))}
           >
