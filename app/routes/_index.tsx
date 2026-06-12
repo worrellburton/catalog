@@ -25,6 +25,7 @@ import { useAuth } from '~/hooks/useAuth';
 import { useOverlayRouter } from '~/hooks/useOverlayRouter';
 import { lookSlug } from '~/utils/slug';
 import { markOverlayReturn } from '~/utils/overlay-scroll-stash';
+import { affiliateRedirect, setAffiliateContext } from '~/services/affiliate';
 import { useShellBridge } from '~/hooks/useShellBridge';
 import { useAppView } from '~/hooks/useAppView';
 import { useWaitlistMode, applyFlowOverrideFromUrl } from '~/hooks/useWaitlistMode';
@@ -330,6 +331,23 @@ export default function Home() {
   // overlay is open and through the close-restore (cleared a frame later), so
   // the bar's position never moves across the round-trip.
   const overlayScrollLockRef = useRef(false);
+
+  // True once the shopper scrolls down to the "Your daily feed" section inside
+  // an open LookOverlay. Pops the Catalog search bar to the top (mirroring the
+  // home feed) — see the `looks-feed-bar` class below. Reset on every look
+  // change so a fresh open never flashes the bar before the shopper scrolls.
+  const [dailyFeedReached, setDailyFeedReached] = useState(false);
+  // Mirrors the home feed's chrome auto-hide, but driven by the overlay's own
+  // scroller: hidden while scrolling down within the daily feed, shown on up.
+  const [dailyFeedBarHidden, setDailyFeedBarHidden] = useState(false);
+  const handleDailyFeedBar = useCallback((reached: boolean, hidden: boolean) => {
+    setDailyFeedReached(reached);
+    setDailyFeedBarHidden(hidden);
+  }, []);
+  useEffect(() => {
+    setDailyFeedReached(false);
+    setDailyFeedBarHidden(false);
+  }, [selectedLook?.id, selectedLook?.uuid]);
 
   // Referral capture: stash any ?ref=<handle> from the landing URL ASAP
   // (before OAuth can strip it), then redeem it once the user is signed in
@@ -836,10 +854,15 @@ export default function Home() {
     // lands directly on the product. Only the native Flutter shell keeps
     // the in-app browser overlay (window.open doesn't pop a real tab
     // inside the embedded webview, and the shell owns that flow).
+    // Monetize the clickout: wrap the merchant URL in the Shopnomix
+    // redirect (creator attribution rides along via the recorded cid).
+    // Analytics below keep the ORIGINAL url so per-merchant reporting
+    // is unchanged.
+    const outboundUrl = affiliateRedirect(url, product as { brand?: string | null; name?: string | null; id?: string | null });
     if (!inNativeShell) {
-      window.open(url, '_blank', 'noopener,noreferrer');
+      window.open(outboundUrl, '_blank', 'noopener,noreferrer');
     } else {
-      setBrowserState({ url, title, product });
+      setBrowserState({ url: outboundUrl, title, product });
     }
     // Every product clickout flows through this handler — feed tile,
     // look-overlay product chips, bookmarks page, ProductPage offers.
@@ -850,6 +873,24 @@ export default function Home() {
     // analytics undercounted by an order of magnitude.
     void trackProductClickout(url, product?.brand ?? null, product?.name ?? title);
   }, []);
+
+  // Keep the affiliate click-attribution context in sync with whatever
+  // surface is on screen: a look attributes to its creator, the creator
+  // catalog/profile to that creator, products opened FROM a look keep
+  // the look's creator, everything else is house traffic.
+  useEffect(() => {
+    const fromLook = selectedLook ?? productOpenedFromLook;
+    setAffiliateContext({
+      creatorHandle: fromLook?.creator ?? creatorFilter ?? null,
+      lookId: fromLook ? String(fromLook.uuid || fromLook.id || '') || null : null,
+      surface: selectedLook ? 'look'
+        : productOpenedFromLook ? 'look-product'
+        : creatorFilter ? 'creator-catalog'
+        : brandFilter ? 'brand'
+        : selectedProduct ? 'product'
+        : 'feed',
+    });
+  }, [selectedLook, productOpenedFromLook, creatorFilter, brandFilter, selectedProduct]);
 
   // Pull a "like-kinded" feed for the product page. Union of two signals:
   //   1. same brand
@@ -1777,7 +1818,7 @@ export default function Home() {
   return (
     <TrailRoot>
     <TrailVideoHost>
-    <div className={`app-root ${isLightMode ? 'light-mode' : ''}${overlayOpen ? ' has-overlay' : ''}${heroMode ? ' home-hero' : ''}${heroScrolled ? ' hero-scrolled' : ''}${heroBarFaded ? ' hero-bar-faded' : ''}${chromeHidden ? ' chrome-hidden' : ''}`}>
+    <div className={`app-root ${isLightMode ? 'light-mode' : ''}${overlayOpen ? ' has-overlay' : ''}${heroMode ? ' home-hero' : ''}${heroScrolled ? ' hero-scrolled' : ''}${heroBarFaded ? ' hero-bar-faded' : ''}${chromeHidden ? ' chrome-hidden' : ''}${selectedLook && dailyFeedReached && !inShell ? ' looks-feed-bar' : ''}${selectedLook && dailyFeedReached && dailyFeedBarHidden && !inShell ? ' looks-feed-bar-hidden' : ''}`}>
       {/* Singleton particle world — one canvas mounted at the app root,
           always visible. Splash, hero, search-ceremony, empty-catalog all
           render above this so the field stays continuous across every
@@ -1965,6 +2006,7 @@ export default function Home() {
                 popularFallback={popularFallback}
                 onOpenCreative={handleOpenCreative}
                 onOpenComments={openComments}
+                onDailyFeedBar={handleDailyFeedBar}
               />
             </Suspense>
           )}

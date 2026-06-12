@@ -470,7 +470,10 @@ def generate_ad_video(ad_id: str) -> dict:
         ts = int(datetime.now(timezone.utc).timestamp())
         storage_path = f"ads/{product_id}/{style}_{method}_{ts}.mp4"
         supabase.storage.from_("look-media").upload(
-            storage_path, video_bytes, {"content-type": "video/mp4"}
+            storage_path, video_bytes,
+            # Timestamped key, never overwritten → cache forever (desktop plays
+            # this source MP4 directly). Revert by dropping cache-control.
+            {"content-type": "video/mp4", "cache-control": "public, max-age=31536000, immutable"},
         )
         video_url = supabase.storage.from_("look-media").get_public_url(storage_path)
 
@@ -491,13 +494,15 @@ def generate_ad_video(ad_id: str) -> dict:
                 with open(assets.poster_jpeg_path, "rb") as f:
                     supabase.storage.from_("look-media").upload(
                         poster_key, f.read(),
-                        {"content-type": "image/jpeg", "upsert": "true"},
+                        {"content-type": "image/jpeg", "upsert": "true",
+                         "cache-control": "public, max-age=31536000, immutable"},
                     )
                 thumbnail_url = supabase.storage.from_("look-media").get_public_url(poster_key)
                 with open(assets.mobile_mp4_path, "rb") as f:
                     supabase.storage.from_("look-media").upload(
                         mobile_key, f.read(),
-                        {"content-type": "video/mp4", "upsert": "true"},
+                        {"content-type": "video/mp4", "upsert": "true",
+                         "cache-control": "public, max-age=31536000, immutable"},
                     )
                 mobile_video_url = supabase.storage.from_("look-media").get_public_url(mobile_key)
             finally:

@@ -13,6 +13,55 @@
 import type { ProductAd } from './product-creative';
 import { videoPipelineMode } from './video-pipeline';
 
+// ── AV1 desktop-decode probe (async, cached) ──────────────────────────
+// AV1 is a SIZE win on the desktop progressive path (~30-50% vs H.264 at equal
+// quality). We MUST gate on MediaCapabilities.decodingInfo (NOT canPlayType):
+// M1/M2 Safari reports nominal AV1 support via canPlayType but has no working
+// decoder, so a canPlayType gate would black out those heroes. We probe once at
+// module load and cache a boolean; pickVideoUrl reads it synchronously and
+// defaults to FALSE (→ H.264) until the probe resolves, so nothing regresses.
+let _av1Decode = false;
+function probeAv1Decode(): void {
+  if (typeof navigator === 'undefined') return;
+  const mc = (navigator as Navigator & {
+    mediaCapabilities?: { decodingInfo?: (c: unknown) => Promise<{ supported: boolean; smooth: boolean; powerEfficient: boolean }> };
+  }).mediaCapabilities;
+  if (!mc?.decodingInfo) return; // no API → stay on H.264
+  mc.decodingInfo({
+    type: 'file',
+    video: {
+      contentType: 'video/mp4; codecs="av01.0.05M.08"',
+      width: 1080, height: 1440, bitrate: 3_000_000, framerate: 24,
+    },
+  })
+    .then((r) => { _av1Decode = !!(r && r.supported && r.smooth && r.powerEfficient); })
+    .catch(() => { /* leave false — H.264 stays */ });
+}
+// Kick the probe once at module init (guarded for SSR). Idempotent enough — the
+// module is a singleton, so this runs a single decodingInfo call per session.
+probeAv1Decode();
+
+/** True only when AV1 is the right pick for THIS surface: the device has a
+ *  confirmed-smooth AV1 decoder AND we're on the desktop/wifi path (AV1 is the
+ *  desktop progressive-MP4 lever; mobile rides HLS). Sync + stable per session,
+ *  so a card and its hero always agree → the pooled-element handoff never has to
+ *  swap the source. */
+function av1Preferred(): boolean {
+  return _av1Decode && !isMobileViewport() && !isSlowConnection();
+}
+
+/** HEVC preference — currently DISABLED. Rationale: B-frames had to be dropped
+ *  to fix iOS HLS playback (B-frame composition delay wrote a leading empty edit
+ *  in the fMP4 init that iOS AVPlayer choked on). Without B-frames HEVC's
+ *  efficiency edge over H.264 shrinks sharply, so at matched bytes it looked
+ *  WORSE than H.264 on iOS in testing. We therefore serve the no-B-frame H.264
+ *  hls-v5 ladder everywhere (universally compatible, crisper). Re-enable by
+ *  returning `browserSupportsNativeHls() && browserDecodesHevc()` once a HEVC
+ *  ladder is re-encoded at a higher bitrate (~0.85× H.264) and device-verified. */
+function hevcPreferred(): boolean {
+  return false;
+}
+
 // ── Phase 6: pick the right URL for this device ───────────────────────
 
 /** True if we should serve the small mobile variant. We treat anything
@@ -50,12 +99,21 @@ export function isSlowConnection(): boolean {
 export function pickVideoUrl(creative: {
   video_url?: string | null;
   mobile_video_url?: string | null;
-  product?: { primary_video_url?: string | null } | null;
+  video_av1_url?: string | null;
+  product?: { primary_video_url?: string | null; primary_video_av1_url?: string | null } | null;
 }): string | null {
+  // AV1 desktop preference (gated on a confirmed-smooth decoder; null falls
+  // through to H.264). Decided per device, so a tile and its hero resolve to the
+  // SAME url and the pooled-element handoff never swaps source.
+  const av1 = av1Preferred();
   const primary = creative.product?.primary_video_url;
-  if (primary) return primary;
+  if (primary) {
+    if (av1 && creative.product?.primary_video_av1_url) return creative.product.primary_video_av1_url;
+    return primary;
+  }
   const wantMobile = isMobileViewport() || isSlowConnection();
   if (wantMobile && creative.mobile_video_url) return creative.mobile_video_url;
+  if (av1 && creative.video_av1_url) return creative.video_av1_url;
   return creative.video_url ?? creative.mobile_video_url ?? null;
 }
 
@@ -73,16 +131,35 @@ export function pickVideoUrl(creative: {
  *  Product preference mirrors pickVideoUrl: a product's own HLS ladder
  *  (primary_hls_url) wins for product cards.
  *
+ *  HEVC preference: on native-HLS devices that decode HEVC (iOS/Safari) the
+ *  HEVC ladder (hls_hevc_url / primary_hls_hevc_url) is preferred for ~15-25%
+ *  fewer bytes; AVPlayer auto-picks the rung. We never steer the hls.js path to
+ *  HEVC. Null HEVC columns fall straight through to the H.264 ladder, so this is
+ *  identical to today's behaviour until clips are backfilled.
+ *
  *  Pipeline dial (/admin/dials → video_pipeline_mode): in 'mp4' mode the
  *  HLS columns are ignored entirely and every surface gets the legacy
  *  progressive path — byte-identical to pre-HLS behaviour. */
 export function pickPlaybackSource(creative: {
   hls_url?: string | null;
+  hls_hevc_url?: string | null;
   video_url?: string | null;
   mobile_video_url?: string | null;
-  product?: { primary_hls_url?: string | null; primary_video_url?: string | null } | null;
+  video_av1_url?: string | null;
+  product?: {
+    primary_hls_url?: string | null;
+    primary_hls_hevc_url?: string | null;
+    primary_video_url?: string | null;
+    primary_video_av1_url?: string | null;
+  } | null;
 }): string | null {
   if (videoPipelineMode() === 'mp4') return pickVideoUrl(creative);
+  // HEVC ladder preferred where decodable (product-level first, mirroring the
+  // H.264 precedence below). Null → fall through to H.264.
+  if (hevcPreferred()) {
+    if (creative.product?.primary_hls_hevc_url) return creative.product.primary_hls_hevc_url;
+    if (creative.hls_hevc_url) return creative.hls_hevc_url;
+  }
   const productHls = creative.product?.primary_hls_url;
   if (productHls) return productHls;
   if (creative.hls_url) return creative.hls_url;
@@ -284,8 +361,8 @@ export function getPrefetchCount(): number {
 // a fast flick can't open a flood of segment fetches.
 
 const warmedHlsManifests = new Set<string>();
-const MAX_HLS_WARM_CONCURRENCY = 3;
-const MAX_PENDING_HLS_WARM = 8;
+const MAX_HLS_WARM_CONCURRENCY = 5;
+const MAX_PENDING_HLS_WARM = 16;
 let hlsWarmInFlight = 0;
 const hlsWarmQueue: string[] = [];
 
@@ -375,6 +452,26 @@ function pickLowestVariant(masterText: string): string | null {
   return bestUri;
 }
 
+/** From a master playlist, pick the highest-BANDWIDTH variant URI. Native iOS
+ *  HLS (and hls.js capLevelToPlayerSize) ramps to this rung on a high-DPR phone,
+ *  so warming it too means the rung the player actually settles on is a cache
+ *  hit — not just the low cold-start rung. Returns null if not a master. */
+function pickHighestVariant(masterText: string): string | null {
+  const lines = masterText.split(/\r?\n/);
+  let bestUri: string | null = null;
+  let bestBw = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (!lines[i].trim().startsWith('#EXT-X-STREAM-INF')) continue;
+    const m = lines[i].match(/BANDWIDTH=(\d+)/i);
+    const bw = m ? parseInt(m[1], 10) : 0;
+    let j = i + 1;
+    while (j < lines.length && lines[j].trim() === '') j++;
+    const uri = lines[j]?.trim();
+    if (uri && !uri.startsWith('#') && bw > bestBw) { bestBw = bw; bestUri = uri; }
+  }
+  return bestUri;
+}
+
 /** From a media playlist, return the init segment URI (fMP4 #EXT-X-MAP) and
  *  the first `max` media-segment URIs (max 0 → init/manifest warm only). */
 function parseFirstSegments(mediaText: string, max: number): { initUri: string | null; segUris: string[] } {
@@ -400,20 +497,31 @@ async function runHlsWarm(manifestUrl: string): Promise<void> {
   try {
     const masterText = await fetchManifestText(manifestUrl);
     if (!masterText) return;
-    let mediaUrl = manifestUrl;
-    let mediaText = masterText;
-    // Master playlist → resolve the lowest-bitrate media playlist first.
-    if (masterText.includes('#EXT-X-STREAM-INF')) {
-      const variant = pickLowestVariant(masterText);
-      if (!variant) return;
-      mediaUrl = new URL(variant, manifestUrl).href;
-      const t = await fetchManifestText(mediaUrl);
-      if (!t) return;
-      mediaText = t;
+    // Warm BOTH the lowest rung (fast first frame / cold-start) AND the highest
+    // rung (what native iOS HLS / capLevelToPlayerSize ramps to on a high-DPR
+    // phone). Warming only the lowest left the actually-played rung's first
+    // segment cold → every clip stalled on start. Deduped if the source has a
+    // single rung.
+    const isMaster = masterText.includes('#EXT-X-STREAM-INF');
+    const variants = isMaster
+      ? [pickLowestVariant(masterText), pickHighestVariant(masterText)]
+      : [null]; // already a media playlist
+    const warmed = new Set<string>();
+    for (let idx = 0; idx < variants.length; idx++) {
+      const variant = variants[idx];
+      const mediaUrl = variant ? new URL(variant, manifestUrl).href : manifestUrl;
+      if (warmed.has(mediaUrl)) continue;
+      warmed.add(mediaUrl);
+      const mediaText = variant ? await fetchManifestText(mediaUrl) : masterText;
+      if (!mediaText) continue;
+      // Low/cold-start rung (idx 0) gets HLS_WARM_SEGMENTS for a smooth opening;
+      // the high rung (idx 1) gets just its first segment — enough to make the
+      // ramp-to frame a cache hit without warming its big segments wholesale.
+      const segCount = idx === 0 ? HLS_WARM_SEGMENTS : 1;
+      const { initUri, segUris } = parseFirstSegments(mediaText, segCount);
+      if (initUri) await warmSegmentBytes(new URL(initUri, mediaUrl).href);
+      for (const s of segUris) await warmSegmentBytes(new URL(s, mediaUrl).href);
     }
-    const { initUri, segUris } = parseFirstSegments(mediaText, HLS_WARM_SEGMENTS);
-    if (initUri) await warmSegmentBytes(new URL(initUri, mediaUrl).href);
-    for (const s of segUris) await warmSegmentBytes(new URL(s, mediaUrl).href);
   } finally {
     hlsWarmInFlight--;
     pumpHlsWarmQueue();

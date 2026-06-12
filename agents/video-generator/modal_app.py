@@ -346,6 +346,22 @@ def generate_pending():
     else:
         print("No missing primary-video posters.")
 
+    # ── 4. Self-heal new content: fill MISSING hls-v3 / HEVC / AV1 ─────
+    # New looks/creatives/products land with hls_url / hls_hevc_url /
+    # video_av1_url null (inline generation only makes poster + mobile MP4).
+    # SPAWN bounded fill-missing backfills (non-blocking, so this cron stays
+    # responsive for the Veo retries above) — additive only, never reencodes,
+    # and a spawn that finds nothing missing exits in seconds. New content gets
+    # the same adaptive + codec coverage as the rest; any backlog drains over
+    # successive runs. Folded into THIS cron (not a new scheduled fn) to stay
+    # under the workspace's scheduled-function cap. Big catch-ups / the
+    # deliberate hls-v2→v3 reencode use the one-shot `hls_backfill` entrypoint.
+    heal_statuses = ["live", "pending", "paused", "done"]
+    for t in ["products", "product_creative", "looks_creative"]:
+        for m in ["hls", "hevc", "av1"]:
+            hls_backfill_job.spawn(t, 6, 1, False, heal_statuses, False, m)
+    print("Spawned self-heal backfills (hls/hevc/av1) for missing rows.")
+
 
 # ─── HLS adaptive-bitrate ladder backfill ─────────────────────────────
 # Encodes a 480/720/1080 HLS ladder per clip, uploads the tree to
@@ -367,18 +383,27 @@ def hls_backfill_job(
     dry_run: bool = False,
     statuses: list[str] | None = None,
     reencode: bool = False,
+    mode: str = "hls",
 ):
-    """Run the HLS ladder backfill for one table. Re-runnable: by default only
-    touches rows where hls_url (products: primary_hls_url) is still null.
+    """Run an adaptive-asset backfill for one table. Re-runnable: by default only
+    touches rows MISSING the target column.
+
+    mode='hls'  → H.264 fMP4 ladder  → hls_url / primary_hls_url
+    mode='hevc' → HEVC fMP4 ladder   → hls_hevc_url / primary_hls_hevc_url
+    mode='av1'  → AV1 progressive MP4 → video_av1_url / primary_video_av1_url
 
     `statuses` gates product_creative (default: live-only). `reencode=True`
-    also re-processes rows that ALREADY have a ladder (for an encoder change)."""
+    re-processes rows that ALREADY have the asset (for an encoder change) —
+    only meaningful for the 'hls' column repoint; hevc/av1 are additive."""
     import sys
     sys.path.insert(0, "/root")
-    from backfill_creative_assets import run_hls
+    from backfill_creative_assets import run_hls, run_av1
 
-    rc = run_hls(table, limit, dry_run, concurrency, statuses, reencode)
-    return {"table": table, "rc": rc}
+    if mode == "av1":
+        rc = run_av1(table, limit, dry_run, concurrency, statuses, reencode)
+    else:
+        rc = run_hls(table, limit, dry_run, concurrency, statuses, reencode, mode=mode)
+    return {"table": table, "mode": mode, "rc": rc}
 
 
 @app.local_entrypoint()
@@ -389,23 +414,25 @@ def hls_backfill(
     dry_run: bool = False,
     statuses: str = "live",
     reencode: bool = False,
+    mode: str = "hls",
 ):
-    """One-shot HLS ladder backfill on Modal.
+    """One-shot adaptive-asset backfill on Modal.
 
         # smoke-test a single look end-to-end:
         modal run modal_app.py::hls_backfill --table looks_creative --limit 1
-        # then the rest, and the product surfaces:
+        # H.264 fMP4 ladder (fill-missing) across surfaces:
         modal run modal_app.py::hls_backfill --table looks_creative
         modal run modal_app.py::hls_backfill --table products
-        modal run modal_app.py::hls_backfill --table product_creative
-        # include non-live product_creative (done/paused) creatives:
         modal run modal_app.py::hls_backfill --table product_creative --statuses live,done,paused
-        # RE-ENCODE existing ladders after an encoder change (e.g. 1s segments):
-        modal run modal_app.py::hls_backfill --table product_creative --statuses live,done,paused --reencode
+        # HEVC ladder (additive) + AV1 (additive):
+        modal run modal_app.py::hls_backfill --mode hevc --table products
+        modal run modal_app.py::hls_backfill --mode av1  --table products
+        # RE-ENCODE existing H.264 ladders into hls-v3 (repoints hls_url):
+        modal run modal_app.py::hls_backfill --table products --reencode
 
     limit=0 → all eligible rows. `statuses` only gates product_creative;
-    `reencode` re-processes rows that already have a ladder."""
+    `reencode` re-processes rows that already have the asset (hls mode)."""
     status_list = [s.strip() for s in statuses.split(",") if s.strip()] or None
-    res = hls_backfill_job.remote(table, (limit or None), concurrency, dry_run, status_list, reencode)
+    res = hls_backfill_job.remote(table, (limit or None), concurrency, dry_run, status_list, reencode, mode)
     print(res)
 

@@ -17,12 +17,20 @@ import { withTransform } from '~/utils/supabase-image';
 /** The ONE poster rendition every surface requests (feed cards, look
  *  product rows, overlay heroes, rails, prefetch). Identical URL ⇒
  *  identical cache entry ⇒ a poster seen anywhere paints instantly
- *  everywhere else. Width matches the card's device-pixel budget. */
+ *  everywhere else. Width matches the card's device-pixel budget.
+ *
+ *  format:'webp' — posters are the first paint on every card, so the
+ *  ~25–35% byte saving over JPEG (at visually-identical quality through
+ *  the render CDN) directly speeds up perceived feed load. The render
+ *  endpoint re-encodes on the fly, so this is a pure URL-param flip with
+ *  no source re-encode; revert by dropping the `format` key. All warmers
+ *  route through THIS helper, so the warmed URL stays a byte-for-byte
+ *  match with what the card paints. */
 export const CARD_POSTER_WIDTH = typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches ? 480 : 720;
 
 export function posterRendition(raw: string | null | undefined): string | null {
   if (!raw) return null;
-  return withTransform(raw, { width: CARD_POSTER_WIDTH, quality: 82, resize: 'contain' }) || raw;
+  return withTransform(raw, { width: CARD_POSTER_WIDTH, quality: 82, resize: 'contain', format: 'webp' }) || raw;
 }
 
 const warmed = new Set<string>();

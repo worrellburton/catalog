@@ -104,7 +104,13 @@ def generate_primary_poster(
             supabase.storage.from_(BUCKET).upload(
                 key,
                 f.read(),
-                {"content-type": "image/jpeg", "upsert": "true"},
+                # STABLE key, overwritten in place on regen (no ?v cache-bust),
+                # so this must stay revalidatable — NOT immutable, or a
+                # regenerated primary-video poster would be pinned stale for a
+                # year. 1-day TTL kills the per-request revalidation while still
+                # self-healing a regen within a day.
+                {"content-type": "image/jpeg", "upsert": "true",
+                 "cache-control": "public, max-age=86400"},
             )
         poster_url = public_url_for(supabase_url, key)
         supabase.table("products").update(

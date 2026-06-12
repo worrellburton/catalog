@@ -2059,3 +2059,39 @@ body:has(.bottom-bar.search-open) {
     transition: bottom 0.28s cubic-bezier(0.16, 1, 0.3, 1);
   }
 }
+
+/* ══════════════════════════════════════════════════════════════════════
+   LOOKS-PAGE DAILY-FEED SEARCH BAR
+   ══════════════════════════════════════════════════════════════════════
+   When the shopper scrolls down to "Your daily feed" inside an open look
+   overlay, _index.tsx adds `.looks-feed-bar` to `.app-root`. The Catalog
+   search bar then appears at the BOTTOM of the screen, above the overlay
+   (z 200) — exactly like the home feed. Within the feed it behaves like the
+   home chrome: `.looks-feed-bar-hidden` (scroll-down) slides it off the
+   bottom, removed on scroll-up. Above the feed the class is absent so the bar
+   stays hidden (it sits behind the overlay at its base z-index).
+
+   SUPPRESSED inside the Flutter shell: the native header owns the chrome, and
+   `.bottom-bar { display:none }` already hides the pill there — the
+   `html:not([data-shell="catalog-app"])` guard keeps this rule from fighting
+   that. Desktop keeps the bar hidden too (base `display:none` ≥769px); the
+   search pill is mobile-only, same as the home feed.
+
+   Horizontal centering (left/right/margin-inline/width) and the bottom dock
+   stay owned by the base `.bottom-bar` anchor — this rule only changes
+   stacking, pointer-events, and the show/hide slide. Higher specificity +
+   !important so it beats the `.chrome-hidden` translateY(140%) the
+   overlay-open path leaves set. */
+html:not([data-shell="catalog-app"]) .app-root.looks-feed-bar .bottom-bar {
+  transform: translateY(0) !important;
+  z-index: 240 !important;          /* above .look-overlay (200) */
+  pointer-events: auto !important;  /* override .has-overlay > .bottom-bar */
+  opacity: 1;
+  transition:
+    transform 320ms cubic-bezier(0.32, 0.72, 0, 1),
+    opacity 200ms ease;
+}
+html:not([data-shell="catalog-app"]) .app-root.looks-feed-bar.looks-feed-bar-hidden .bottom-bar {
+  transform: translateY(160%) !important;  /* slide off the bottom on scroll-down */
+  pointer-events: none !important;
+}
