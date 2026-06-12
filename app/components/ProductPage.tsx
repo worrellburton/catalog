@@ -30,6 +30,8 @@ import { useRecentProducts } from '~/hooks/useRecentProducts';
 import { getRecentSearches } from '~/services/recent-searches';
 import SizeMatchBadge from '~/components/SizeMatchBadge';
 import { director } from '~/services/video-playback-director';
+import { CARD_POSTER_WIDTH } from './CreativeCardV2';
+import { withTransform } from '~/utils/supabase-image';
 import ParticleBackground from '~/components/ParticleBackground';
 import { productSlug } from '~/utils/slug';
 import { useCommentsEnabled } from '~/hooks/useCommentsEnabled';
@@ -1122,8 +1124,16 @@ export default function ProductPage({
   // poster from the feed card hasn't been stashed), fall back to the
   // product.image (which itself is primary_image_url → image_url →
   // first photo) so the hero never paints as a black void while waiting
-  // for the trail-video host to attach.
-  const heroPoster = tapHandoffPoster || effectiveCreative?.thumbnailUrl || heroStill;
+  // for the trail-video host to attach. The thumbnail goes through the
+  // CARD rendition (same width/quality/resize → same cache entry the feed
+  // already fetched) so the underlay paints from memory instead of
+  // re-downloading the full-res original — the residual 'black spot'.
+  const rawHeroThumb = effectiveCreative?.thumbnailUrl || '';
+  const heroPoster = tapHandoffPoster
+    || (rawHeroThumb
+      ? (withTransform(rawHeroThumb, { width: CARD_POSTER_WIDTH, quality: 82, resize: 'contain' }) || rawHeroThumb)
+      : '')
+    || heroStill;
 
   // Take ownership of the shared <video> element keyed by creative.id. The
   // TrailVideoHost moves the running DOM node from the card slot into this
