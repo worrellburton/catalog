@@ -6663,3 +6663,6 @@ html.eq-page .gen-queue-host { display: none; }
 @media (max-width: 768px) {
   .eq-mark { flex-basis: 100%; order: 10; margin-left: 24px; }
 }
+/* Overflow armor: even an absurd value can't blow the cards apart. */
+.eq-table tbody td { min-width: 0; overflow-wrap: anywhere; }
+.eq-table tbody tr { min-width: 0; }
