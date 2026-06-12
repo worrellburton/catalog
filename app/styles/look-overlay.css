@@ -610,6 +610,27 @@
   display: flex;
   flex-direction: column;
   gap: 16px;
+  /* Stage for the commentary's particle universe + 3D text entrance. */
+  position: relative;
+  overflow: hidden;
+  perspective: 700px;
+}
+
+/* The home particle field, reprised behind the commentary — oversized so
+   the scroll parallax (--about-drift) never exposes an edge, and fading
+   up with the text's entrance progress. */
+.look-about-universe {
+  position: absolute;
+  inset: -60px;
+  z-index: 0;
+  pointer-events: none;
+  opacity: calc(0.35 + var(--about-p, 1) * 0.65);
+  transform: translateY(calc(var(--about-drift, 0) * -1px)) scale(1.12);
+  will-change: transform, opacity;
+}
+.look-creator-about > *:not(.look-about-universe) {
+  position: relative;
+  z-index: 1;
 }
 
 .look-creator-about-header {
@@ -645,20 +666,33 @@
   color: rgba(255, 255, 255, 0.6);
   margin: 0;
 }
-/* AI-written look commentary — centered editorial copy with a soft
-   lavender glow (the spark mark was retired; the glow IS the signal). */
+/* AI-written look commentary — centered editorial copy with a lavender
+   glow (the spark mark was retired; the glow IS the signal). Scroll
+   drives a 3D entrance: below the fold the text lies tilted back and
+   deeper in Z (over-glowing slightly), and it rotates up into place as
+   it scrolls into view (--about-p 0→1, written by LookOverlay). Reduced
+   motion never writes the var, so the default (1) renders it settled. */
 .look-creator-about-bio--ai {
   text-align: center;
   font-size: 14.5px;
   line-height: 1.75;
   font-style: italic;
   letter-spacing: 0.01em;
-  color: #ece9fb;
+  color: #f0edff;
   padding: 2px 4px;
   text-shadow:
-    0 0 14px rgba(167, 139, 250, 0.45),
-    0 0 36px rgba(167, 139, 250, 0.22),
-    0 0 70px rgba(167, 139, 250, 0.12);
+    0 0 10px rgba(196, 181, 253, 0.55),
+    0 0 22px rgba(167, 139, 250, 0.45),
+    0 0 48px rgba(167, 139, 250, 0.28),
+    0 0 90px rgba(167, 139, 250, 0.15);
+  transform-origin: 50% 100%;
+  transform:
+    rotateX(calc((1 - var(--about-p, 1)) * 38deg))
+    translateY(calc((1 - var(--about-p, 1)) * 26px))
+    translateZ(calc((var(--about-p, 1) - 1) * 90px));
+  opacity: calc(0.25 + var(--about-p, 1) * 0.75);
+  filter: brightness(calc(1 + (1 - var(--about-p, 1)) * 0.7));
+  will-change: transform, opacity;
 }
 
 /* The creator-catalog + Comments action row under the commentary. */
