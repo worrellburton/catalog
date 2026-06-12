@@ -1828,7 +1828,7 @@ export default function Home() {
                 onOpenSelf={openMyLooks}
               />
             </div>
-            <PendingLookPill onOpen={() => navigate('/generate')} />
+            <PendingLookPill onOpen={(genId) => navigate(genId ? `/generate?gen=${genId}` : '/generate')} />
             <div className="header-right">
               {/* Earnings stays in its original slot. The activity pill
                   moved to the RIGHT of it per the latest spec — earnings
