@@ -1185,3 +1185,88 @@ html.gov-void .gov-page.gov-types { height: calc(100vh - 53px); }
 .gov-drill-card:hover .gov-drill-delete { opacity: 1; }
 .gov-drill-delete:hover { background: #dc2626; color: #fff; }
 .gov-drill-delete-bulk:hover:not(:disabled) { border-color: #dc2626; color: #f87171; }
+
+/* Camera controls (lower-left, with the ring dials) */
+.gov-dof {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  margin-top: 8px;
+}
+.gov-dof span {
+  font-size: 9px;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.45);
+  margin-right: 4px;
+}
+.gov-dof button {
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.6);
+  border-radius: 6px;
+  font-size: 10px;
+  padding: 3px 7px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.gov-dof button.is-active { background: #6366f1; border-color: #6366f1; color: #fff; }
+.gov-showcase {
+  margin-top: 8px;
+  width: 100%;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.04);
+  color: rgba(255, 255, 255, 0.75);
+  border-radius: 8px;
+  font-size: 11px;
+  padding: 7px 10px;
+  cursor: pointer;
+  font-family: inherit;
+}
+.gov-showcase.is-on {
+  background: rgba(99, 102, 241, 0.25);
+  border-color: #6366f1;
+  color: #fff;
+}
+
+/* Mobile brain: full screen; controls fold behind a tiny C. */
+.gov-c-fab { display: none; }
+@media (max-width: 768px) {
+  .gov-types .gov-canvas {
+    position: fixed;
+    inset: 0;
+    z-index: 40;
+  }
+  .gov-c-fab {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    position: fixed;
+    top: max(10px, env(safe-area-inset-top));
+    left: 12px;
+    z-index: 60;
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    border: 1px solid rgba(255, 255, 255, 0.25);
+    background: rgba(10, 10, 14, 0.8);
+    color: #fff;
+    font-size: 15px;
+    font-weight: 700;
+    font-family: inherit;
+  }
+  .gov-types .gov-canvas-controls {
+    display: none;
+    position: fixed;
+    top: max(52px, calc(env(safe-area-inset-top) + 44px));
+    left: 12px;
+    right: 12px;
+    z-index: 55;
+    flex-wrap: wrap;
+    background: rgba(10, 10, 14, 0.92);
+    border: 1px solid rgba(255, 255, 255, 0.12);
+    border-radius: 14px;
+    padding: 10px;
+  }
+  .gov-types .gov-canvas-controls.is-open { display: flex; }
+}
