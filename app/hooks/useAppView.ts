@@ -3,15 +3,16 @@ import { prefetchHomeFeed } from '~/services/product-creative';
 import { getWaitlistStatus } from '~/services/waitlist';
 import type { useAuth } from '~/hooks/useAuth';
 
-export type AppView = 'locked' | 'splash' | 'landing' | 'app' | 'waitlisted';
+export type AppView = 'locked' | 'app' | 'waitlisted';
 
 type AuthUser = ReturnType<typeof useAuth>['user'];
 
 interface UseAppViewArgs {
   user: AuthUser;
   authLoading: boolean;
-  /** Launch master switch. true = old waitlist/sign-in-only flow;
-   *  false = open flow (guests in the feed). */
+  /** Launch master switch. true = waitlist flow (signing UP queues new
+   *  accounts behind approval); false = open flow. Either way guests
+   *  land in the feed — the marketing landing page was retired. */
   waitlistMode: boolean;
   /** True while the waitlist_mode dial is still resolving — routing for
    *  signed-out visitors waits on it so we don't flash the wrong flow. */
@@ -22,14 +23,12 @@ interface UseAppViewResult {
   view: AppView;
   setView: Dispatch<SetStateAction<AppView>>;
   firstVisit: boolean;
-  showSplash: boolean;
-  setShowSplash: Dispatch<SetStateAction<boolean>>;
   authSplashMounted: boolean;
   authSplashLeaving: boolean;
 }
 
 // Owns the top-level view state machine for the consumer app:
-//   locked → splash → landing | app | waitlisted
+//   locked → app | waitlisted
 // plus the two splash overlays that wrap it:
 //   - firstVisit: branded SplashScreen on a user's first ever visit
 //   - authSplash: the gate-side fade while supabase auth is resolving
@@ -63,7 +62,7 @@ export function useAppView({ user, authLoading, waitlistMode, waitlistLoading }:
   }, [view]);
 
   // First-visit splash: if the user has never been to catalog on this
-  // device, show a branded splash before surfacing the gate / landing.
+  // device, show a branded splash before surfacing the gate / feed.
   // Splash timing is data-aware: hold for at least 800ms (so the brand
   // moment doesn't flash by) and at most 2500ms (so a slow network
   // never hangs the user). In between, dismiss as soon as the feed
@@ -137,11 +136,9 @@ export function useAppView({ user, authLoading, waitlistMode, waitlistLoading }:
     };
   }, [firstVisit]);
 
-  const [showSplash, setShowSplash] = useState(false);
-
   // Intro brand beat. The auth splash holds for at least this long on a
   // cold open so the wordmark + particle field read as a deliberate moment
-  // before we hand off to the landing page — even when auth resolves
+  // before we hand off to the feed — even when auth resolves
   // instantly (signed-out visitors). Without it the splash would flash by.
   const [beatDone, setBeatDone] = useState(booted);
   useEffect(() => {
@@ -201,29 +198,20 @@ export function useAppView({ user, authLoading, waitlistMode, waitlistLoading }:
     }
   }, [showAuthSplash, authSplashMounted]);
 
-  // Post-splash entry for signed-OUT visitors. Governed by the launch
-  // switch: OPEN flow drops them straight into the feed (products
-  // browsable; looks/creators gate in _index); WAITLIST flow hands them to
-  // the marketing landing (sign-in-only). Waits on waitlistLoading so we
-  // never flash the wrong flow. Deep links / hashes have already moved
-  // `view` off 'locked', so this only fires for a plain cold open at "/".
+  // Post-splash entry for signed-OUT visitors: straight into the feed.
+  // (The marketing landing was retired — catalog.shop IS the home
+  // screen now, in both launch flows. Products are browsable as guest;
+  // looks/creators gate in _index.) Waits on waitlistLoading only so a
+  // late dial flip can't race the first route. Deep links / hashes have
+  // already moved `view` off 'locked', so this only fires for a plain
+  // cold open at "/".
   useEffect(() => {
     if (authLoading || waitlistLoading) return;
     if (user) return;
     if (!beatDone) return;
     if (view !== 'locked') return;
-    setView(waitlistMode ? 'landing' : 'app');
-  }, [authLoading, waitlistLoading, user, beatDone, view, waitlistMode]);
-
-  // Access gate (WAITLIST flow only): the app is sign-in-only, so a
-  // signed-out visitor who lands on 'app' (deep link, #app hash, stale
-  // restored view) is bounced back to the public landing. In OPEN flow
-  // guests belong in the app, so this is a no-op.
-  useEffect(() => {
-    if (authLoading || waitlistLoading) return;
-    if (user) return;
-    if (waitlistMode && view === 'app') setView('landing');
-  }, [authLoading, waitlistLoading, user, view, waitlistMode]);
+    setView('app');
+  }, [authLoading, waitlistLoading, user, beatDone, view]);
 
   // Auto-route on sign-in. OPEN flow: every signed-in user enters the app
   // directly (signing up grants access immediately). WAITLIST flow:
@@ -271,13 +259,13 @@ export function useAppView({ user, authLoading, waitlistMode, waitlistLoading }:
     // the password gate. Honor it by entering the app view, then strip the
     // hash so the URL stays clean (/p/slug not /p/slug#app).
     const isDeepLink = path.startsWith('/p/') || path.startsWith('/l/') || path.startsWith('/b/');
-    if (hash === 'app') {
+    if (hash === 'app' || hash === 'landing') {
+      // #landing is a retired hash (old marketing page) — old links and
+      // bookmarks still resolve, into the feed.
       setView('app');
       if (isDeepLink) {
         window.history.replaceState(null, '', path);
       }
-    } else if (hash === 'landing') {
-      setView('landing');
     }
   }, []);
 
@@ -305,7 +293,6 @@ export function useAppView({ user, authLoading, waitlistMode, waitlistLoading }:
 
     let hash = '';
     if (view === 'app') hash = 'app';
-    else if (view === 'landing') hash = 'landing';
     else if (view === 'locked') hash = '';
 
     if (hash) {
@@ -319,8 +306,6 @@ export function useAppView({ user, authLoading, waitlistMode, waitlistLoading }:
     view,
     setView,
     firstVisit,
-    showSplash,
-    setShowSplash,
     authSplashMounted,
     authSplashLeaving,
   };
