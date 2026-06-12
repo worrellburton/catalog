@@ -162,7 +162,11 @@ export default function EquityLedger({ equity, summary, onSafe, onInvestor, onAd
                   ) : '—'}
                 </td>
                 <td className="num" data-l="$ / share">{l.price != null ? fmtCurrency(l.price) : '—'}</td>
-                <td className="num" data-l="Shares">{shares(now?.shares ?? 0)}</td>
+                <td className="num" data-l="Shares">
+                  {l.kind === 'safe' && summary.safeConversions.find(c => c.safe.id === l.id)?.invalid
+                    ? <em className="eq-invalid" title="The cap is below the check — fix the cap (tip: type 10M).">cap &lt; check</em>
+                    : shares(now?.shares ?? 0)}
+                </td>
                 <td className="num" data-l={`Own. at ${markLabel}`}>{pct(now?.pct ?? 0)}</td>
                 <td className="num" data-l={`Value at ${markLabel}`}>{markIsFF ? '—' : fmtCurrency(value, { compact: true })}</td>
                 <td className="num eq-computed" data-l="Multiple">{markIsFF || multiple == null ? '—' : `${multiple.toFixed(1)}×`}</td>
