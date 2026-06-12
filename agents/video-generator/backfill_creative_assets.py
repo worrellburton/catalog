@@ -127,10 +127,14 @@ _HLS_PLAYLIST_CACHE = "public, max-age=300"
 # The container + segment ext changed (.ts → .m4s + init.mp4), so this bump is
 # mandatory. After backfilling, bump the client cache keys (looks.ts LOOKS_LS_KEY,
 # product-creative.ts HOME_FEED_LS_KEY) so returning users pick up the new URLs.
-_HLS_DIR = "hls-v3"
+# hls-v4 = hls-v3 + B-frames disabled. B-frames made the fMP4 init carry a
+# leading EMPTY edit (elst media_time=-1, the ~2-frame reorder delay), which iOS
+# native HLS chokes on → "stuck on poster". v4 has no B-frames → clean identity
+# edit list → plays on iOS. (See asset_encoder._run_hls_ladder.)
+_HLS_DIR = "hls-v4"
 # HEVC ladder lives in its own tree (separate master) so it never touches the
 # H.264 master; the client prefers it where supported and falls back to H.264.
-_HEVC_DIR = "hls-hevc-v3"
+_HEVC_DIR = "hls-hevc-v4"
 # AV1 progressive MP4 for the desktop path. Versioned filename so a future
 # re-encode lands on a fresh immutable URL.
 AV1_SUFFIX = ".av1-v1.mp4"

@@ -306,14 +306,26 @@ def _run_hls_ladder(src_path: str, out_dir: str, rungs: List[_Rung], codec: str)
         chain.append(f"[v{i}]scale=w={r.width}:h=-2[v{i}out]")
     filter_complex = "; ".join(chain)
 
+    # NO B-FRAMES (bf 0 / bframes=0). B-frame composition reordering makes the
+    # mov muxer write a 2-entry edit list into the fMP4 init whose FIRST entry is
+    # an empty edit (media_time=-1, a leading dwell of the ~2-frame reorder delay).
+    # iOS AVPlayer's native HLS chokes on a leading empty edit in fMP4 and never
+    # renders the first frame (poster-only / "stuck"). MPEG-TS has no edit lists,
+    # which is why the old TS ladder played on iOS and the fMP4 ladder didn't.
+    # Dropping B-frames removes the reorder delay → a clean identity edit list
+    # (media_time=0) → iOS plays. Costs a few % compression on these short clips;
+    # correctness on the dominant mobile platform wins. (negative_cts_offsets /
+    # avoid_negative_ts / setpts were all tried and did NOT remove the empty edit.)
     if codec == "hevc":
         vcodec = "libx265"
         # -tag:v hvc1 is required for Apple to play HEVC in fMP4/HLS. libx265 has
-        # no 'film' tune, so AQ is set via -x265-params instead.
-        codec_opts = ["-tag:v", "hvc1", "-profile:v", "main", "-x265-params", "aq-mode=3"]
+        # no 'film' tune, so AQ is set via -x265-params; bframes=0 (ffmpeg -bf
+        # doesn't reach libx265) for the edit-list reason above.
+        codec_opts = ["-tag:v", "hvc1", "-profile:v", "main",
+                      "-x265-params", "aq-mode=3:bframes=0"]
     else:
         vcodec = "libx264"
-        codec_opts = ["-tune", "film", "-profile:v", "high",
+        codec_opts = ["-tune", "film", "-profile:v", "high", "-bf", "0",
                       "-x264-params", "aq-mode=3:aq-strength=0.9"]
 
     cmd = ["ffmpeg", "-y", "-loglevel", "error", "-i", src_path,
