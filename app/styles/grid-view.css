@@ -556,7 +556,23 @@ html.is-scroll-gliding .card-creator-tag,
 html.is-scroll-gliding .promo-product-info,
 html.is-scroll-gliding .trail-admin-menu-btn,
 html.is-scroll-gliding .creative-delete-btn {
+  /* Hover targets stay LIVE while hidden (founder's call) — no
+     pointer-events:none; an intentional hover below brings the chrome
+     back. */
   opacity: 0 !important;
-  pointer-events: none;
   transition: opacity 2s cubic-bezier(0.45, 0, 0.55, 1);
+}
+
+/* Intentional hover beats the glide: when the mouse has GENUINELY moved
+   (html.is-pointing — cleared by scrolling, so content sliding under a
+   stationary cursor can't trigger this), the hovered card's chrome
+   resurfaces quickly. `:hover >` matches each chrome element's own
+   hovered parent, so only the card under the cursor lights up. */
+html.is-scroll-gliding.is-pointing :hover > .card-gradient,
+html.is-scroll-gliding.is-pointing :hover > .card-creator-tag,
+html.is-scroll-gliding.is-pointing :hover > .promo-product-info,
+html.is-scroll-gliding.is-pointing :hover > .trail-admin-menu-btn,
+html.is-scroll-gliding.is-pointing :hover > .creative-delete-btn {
+  opacity: 1 !important;
+  transition: opacity 0.45s cubic-bezier(0.22, 1, 0.36, 1);
 }
