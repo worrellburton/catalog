@@ -6310,3 +6310,87 @@ tr:hover .admin-stats-col { background: rgba(99, 102, 241, 0.10); }
     margin: 0 auto !important;
   }
 }
+
+/* ── Share with a link (model → Share menu) ─────────────────────────── */
+.docshare-scrim {
+  position: fixed; inset: 0; z-index: 120;
+  background: rgba(8, 8, 12, 0.55);
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px;
+}
+.docshare-panel {
+  width: min(620px, 100%);
+  max-height: 84vh; overflow-y: auto;
+  background: #17171b; color: #f4f4f5;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 16px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
+  padding: 20px 22px;
+}
+.docshare-head { display: flex; align-items: flex-start; gap: 12px; }
+.docshare-head h3 { margin: 0 0 4px; font-size: 16px; }
+.docshare-head p { margin: 0; font-size: 12px; color: rgba(255, 255, 255, 0.55); }
+.docshare-x {
+  margin-left: auto; border: none; background: transparent; color: rgba(255, 255, 255, 0.5);
+  font-size: 22px; line-height: 1; cursor: pointer; padding: 0 2px;
+}
+.docshare-warn {
+  margin: 14px 0 0; padding: 10px 12px; border-radius: 10px;
+  background: rgba(245, 158, 11, 0.12); border: 1px solid rgba(245, 158, 11, 0.3);
+  color: #fbbf24; font-size: 12px;
+}
+.docshare-create {
+  display: grid; grid-template-columns: 1fr 1fr auto; gap: 10px;
+  align-items: end; margin-top: 16px;
+}
+.docshare-create label { display: flex; flex-direction: column; gap: 5px; min-width: 0; }
+.docshare-create label > span {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.45);
+}
+.docshare-create input {
+  font: inherit; font-size: 13px; color: #fff; min-width: 0; width: 100%;
+  background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 9px; padding: 9px 11px; outline: none; box-sizing: border-box;
+}
+.docshare-url {
+  display: flex; align-items: center; gap: 0;
+  background: rgba(255, 255, 255, 0.06); border: 1px solid rgba(255, 255, 255, 0.14);
+  border-radius: 9px; padding-left: 11px;
+}
+.docshare-url em { font-style: normal; font-size: 13px; color: rgba(255, 255, 255, 0.45); }
+.docshare-url input { background: transparent; border: none; padding-left: 2px; }
+.docshare-mint {
+  font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+  background: #fff; color: #0a0a0c; border: none; border-radius: 9px;
+  padding: 10px 16px; white-space: nowrap;
+}
+.docshare-mint:disabled { opacity: 0.6; cursor: default; }
+.docshare-error { margin: 10px 0 0; font-size: 12px; color: #f87171; }
+.docshare-list { margin-top: 18px; }
+.docshare-list-label {
+  margin: 0 0 8px; font-size: 10px; font-weight: 700; letter-spacing: 0.1em;
+  text-transform: uppercase; color: rgba(255, 255, 255, 0.45);
+}
+.docshare-row {
+  display: flex; align-items: center; gap: 10px;
+  padding: 10px 12px; border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 10px; margin-bottom: 8px; background: rgba(255, 255, 255, 0.03);
+}
+.docshare-row-main { min-width: 0; flex: 1; }
+.docshare-row-main code {
+  display: block; font-size: 12px; color: #c4b5fd;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.docshare-meta { font-size: 11px; color: rgba(255, 255, 255, 0.5); }
+.docshare-meta b { color: rgba(255, 255, 255, 0.85); }
+.docshare-row > button {
+  font: inherit; font-size: 12px; font-weight: 600; cursor: pointer;
+  background: rgba(255, 255, 255, 0.08); color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 8px; padding: 6px 12px;
+  flex: 0 0 auto;
+}
+.docshare-row > button.docshare-close { color: #fca5a5; border-color: rgba(252, 165, 165, 0.3); }
+@media (max-width: 640px) {
+  .docshare-create { grid-template-columns: 1fr; }
+}
