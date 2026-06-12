@@ -37,13 +37,12 @@ import {
   prefetchHlsHead,
 } from '~/services/video-loading';
 import { lookPoster } from '~/services/media-resolver';
-import { CARD_POSTER_WIDTH } from '~/utils/poster-prefetch';
+import { posterRendition } from '~/utils/poster-prefetch';
 import { isHlsUrl } from '~/utils/hlsAttach';
 import { director } from '~/services/video-playback-director';
 import { useAuth } from '~/hooks/useAuth';
 import { useDirectorSlot } from '~/hooks/useDirectorSlot';
 import { useTrailVideoManager } from '~/components/TrailVideoHost';
-import { withTransform } from '~/utils/supabase-image';
 import { useInViewport } from '~/hooks/useInViewport';
 import { useVideoStillRatio } from '~/hooks/useVideoStillRatio';
 import { useVideoPipelineMode } from '~/hooks/useVideoPipeline';
@@ -161,8 +160,8 @@ const CreativeCardV2 = memo(function CreativeCardV2({
   // video. Since the poster is the clip's frame 0, the leftover compression
   // delta is what you see "pop" the instant the <video> cuts in over it. q82
   // closes that gap (still a ~25 KB WebP) so poster→playback reads as one image.
-  const posterUrl = withTransform(rawPosterUrl, { width: CARD_POSTER_WIDTH, quality: 82, resize: 'contain' }) || rawPosterUrl;
-  const stillImageUrl = withTransform(rawStillImageUrl, { width: CARD_POSTER_WIDTH, quality: 82, resize: 'contain' }) || rawStillImageUrl;
+  const posterUrl = posterRendition(rawPosterUrl) || rawPosterUrl;
+  const stillImageUrl = posterRendition(rawStillImageUrl) || rawStillImageUrl;
 
   // Dial: /admin/dials → video_still_ratio controls whether this card
   // renders as a still image or plays video. When the dial pushes the

@@ -1,5 +1,5 @@
 import { supabase } from '~/utils/supabase';
-import { withTransform } from '~/utils/supabase-image';
+import { posterRendition } from '~/utils/poster-prefetch';
 import {
   getProductSimilarityThreshold,
   subscribeProductSimilarityThreshold,
@@ -597,11 +597,12 @@ function warmAboveTheFoldAssets(rows: ProductAd[]): void {
     // Image cache hit for the poster - the <img loading=eager> on the
     // card immediately reuses this without a fresh round-trip.
     const posterRaw = ad.thumbnail_url || ad.product?.primary_image_url || ad.product?.image_url;
-    // Warm the SAME 540px transform the card actually paints (CreativeCardV2 /
-    // primeTrailAssets) — NOT the raw full-res original. Warming the raw URL
-    // fetched a 1–3 MB original the card never displays AND still cache-missed
-    // the 540px variant it does, so the top tiles paid a double download.
-    const poster = withTransform(posterRaw, { width: 540, quality: 72, resize: 'contain' }) || posterRaw;
+    // Warm the SAME rendition the card actually paints — posterRendition() is
+    // the single canonical transform (CARD_POSTER_WIDTH / q82 / webp), NOT the
+    // raw full-res original. Warming the raw URL fetched a 1–3 MB original the
+    // card never displays AND still cache-missed the variant it does, so the top
+    // tiles paid a double download.
+    const poster = posterRendition(posterRaw) || posterRaw;
     if (poster) {
       try {
         const img = new Image();

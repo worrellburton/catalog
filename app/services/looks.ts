@@ -1,6 +1,6 @@
 import { supabase } from '~/utils/supabase';
 import { registerLookTrim } from '~/utils/lookTrim';
-import { withTransform } from '~/utils/supabase-image';
+import { posterRendition } from '~/utils/poster-prefetch';
 import { lookPoster } from '~/services/media-resolver';
 import type { Look, Product, Creator } from '~/data/looks';
 import { looks as staticLooks, creators as staticCreators, searchSuggestions as staticSuggestions } from '~/data/looks';
@@ -702,7 +702,7 @@ function warmAboveTheFoldLookAssets(rows: Look[]): void {
   for (const row of rows.slice(0, 6)) {
     const rawPoster = lookPoster(row);
     if (!rawPoster) continue;
-    const poster = withTransform(rawPoster, { width: 540, quality: 72, resize: 'contain' }) || rawPoster;
+    const poster = posterRendition(rawPoster) || rawPoster;
     if (warmedLookAssets.has(poster)) continue;
     warmedLookAssets.add(poster);
     try {

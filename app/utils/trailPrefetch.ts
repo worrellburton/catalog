@@ -12,7 +12,7 @@
 
 import type { ProductAd } from '~/services/product-creative';
 import type { Look } from '~/data/looks';
-import { withTransform } from './supabase-image';
+import { posterRendition } from './poster-prefetch';
 import { pickPlaybackSource, pickPosterUrl, prefetchHlsHead } from '~/services/video-loading';
 import { videoPipelineMode } from '~/services/video-pipeline';
 import { isHlsUrl } from './hlsAttach';
@@ -32,11 +32,11 @@ const VIDEOS_TO_WARM = 18;
 // head start. MP4 link-preloads are unbounded, so they keep the full 18.
 const HLS_HEADS_TO_WARM = 6;
 
-// Match CreativeCardV2's poster transform EXACTLY (same width/quality/resize
-// AND the pickPosterUrl source) so the warmed URL is a byte-for-byte cache hit
-// when the card mounts. A mismatch means the prefetch downloads one variant and
-// the card downloads another — double the bytes, zero benefit.
-const POSTER_TRANSFORM = { width: 540, quality: 72, resize: 'contain' as const };
+// Warm via posterRendition() — the SINGLE canonical poster transform the card
+// actually paints (CARD_POSTER_WIDTH / q82 / webp). Sharing the one helper keeps
+// the warmed URL a byte-for-byte cache hit when the card mounts; a hand-rolled
+// transform here previously drifted to 540/q72 and warmed a variant the card
+// never requested — double the bytes, zero benefit.
 
 const warmedPosters = new Set<string>();
 const warmedVideos = new Set<string>();
@@ -101,7 +101,7 @@ export function primeTrailAssets(rows: ProductAd[]): void {
   for (const row of rows.slice(0, POSTERS_TO_WARM)) {
     const rawPoster = pickPosterUrl(row);
     if (!rawPoster) continue;
-    const poster = withTransform(rawPoster, POSTER_TRANSFORM) || rawPoster;
+    const poster = posterRendition(rawPoster) || rawPoster;
     if (warmedPosters.has(poster)) continue;
     warmedPosters.add(poster);
     injectPreload(poster, 'image');
@@ -138,7 +138,7 @@ export function primeLookAssets(rows: Look[]): void {
     // return. Warming the product-image fallback makes them a cache hit.
     const rawPoster = lookPoster(row);
     if (!rawPoster) continue;
-    const poster = withTransform(rawPoster, POSTER_TRANSFORM) || rawPoster;
+    const poster = posterRendition(rawPoster) || rawPoster;
     if (warmedPosters.has(poster)) continue;
     warmedPosters.add(poster);
     injectPreload(poster, 'image');
