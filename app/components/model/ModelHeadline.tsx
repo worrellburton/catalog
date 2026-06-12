@@ -26,7 +26,7 @@ const ORDER: { id: ScenarioId; label: string }[] = [
   { id: 'bull', label: 'Bull' },
 ];
 
-// Toolbar above the model: scenario switcher (centered) + export. Only
+// Toolbar above the model: scenario switcher (centered) + share. Only
 // Base is editable; Bear/Bull are derived views.
 export default function ModelHeadline({
   scenario,
@@ -34,6 +34,7 @@ export default function ModelHeadline({
   onExportCsv,
   onPrint,
   onBusinessPlan,
+  onShareLink,
   onRate,
 }: {
   scenario: ScenarioId;
@@ -41,21 +42,23 @@ export default function ModelHeadline({
   onExportCsv: () => void;
   onPrint: () => void;
   onBusinessPlan: () => void;
+  /** Opens the share-link manager (mint /d/<slug> URLs with passwords). */
+  onShareLink: () => void;
   onRate: () => void;
 }) {
-  // Download dropdown: CSV / PDF / Business plan.
-  const [downloadOpen, setDownloadOpen] = useState(false);
-  const downloadRef = useRef<HTMLDivElement>(null);
+  // Share dropdown: link / CSV / PDF / Business plan.
+  const [shareOpen, setShareOpen] = useState(false);
+  const shareRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (!downloadOpen) return;
+    if (!shareOpen) return;
     const handler = (e: MouseEvent) => {
-      if (downloadRef.current && !downloadRef.current.contains(e.target as Node)) setDownloadOpen(false);
+      if (shareRef.current && !shareRef.current.contains(e.target as Node)) setShareOpen(false);
     };
     document.addEventListener('mousedown', handler);
     return () => document.removeEventListener('mousedown', handler);
-  }, [downloadOpen]);
+  }, [shareOpen]);
 
-  const pick = (fn: () => void) => { setDownloadOpen(false); fn(); };
+  const pick = (fn: () => void) => { setShareOpen(false); fn(); };
 
   return (
     <div className="model-headline">
@@ -83,23 +86,23 @@ export default function ModelHeadline({
               <path d="M50 4 C54 30 70 46 96 50 C70 54 54 70 50 96 C46 70 30 54 4 50 C30 46 46 30 50 4 Z" />
             </svg>
           </button>
-          <div ref={downloadRef} className="model-download" style={{ position: 'relative' }}>
+          <div ref={shareRef} className="model-download" style={{ position: 'relative' }}>
             <button
               className="admin-btn admin-btn-secondary"
-              onClick={() => setDownloadOpen(o => !o)}
+              onClick={() => setShareOpen(o => !o)}
               aria-haspopup="menu"
-              aria-expanded={downloadOpen}
+              aria-expanded={shareOpen}
               style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}
             >
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" /><polyline points="7 10 12 15 17 10" /><line x1="12" y1="15" x2="12" y2="3" />
+                <path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8" /><polyline points="16 6 12 2 8 6" /><line x1="12" y1="2" x2="12" y2="15" />
               </svg>
-              Download
+              Share
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
                 <polyline points="6 9 12 15 18 9" />
               </svg>
             </button>
-            {downloadOpen && (
+            {shareOpen && (
               <div
                 role="menu"
                 style={{
@@ -116,6 +119,7 @@ export default function ModelHeadline({
                 }}
               >
                 {[
+                  { label: 'Share with a link', sub: 'Password-protected URL · manage open links', onClick: onShareLink },
                   { label: 'CSV', sub: 'Raw model data', onClick: onExportCsv },
                   { label: 'PDF', sub: 'Print the model', onClick: onPrint },
                   { label: 'Business plan', sub: 'Full Catalog-branded plan', onClick: onBusinessPlan },

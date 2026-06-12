@@ -30,6 +30,7 @@ import AssumptionCard, { type FieldDef } from '~/components/model/AssumptionCard
 import ModelRow from '~/components/model/ModelRow';
 import UnifiedModelChart from '~/components/model/UnifiedModelChart';
 import ModelHeadline from '~/components/model/ModelHeadline';
+import DocumentShares from '~/components/model/DocumentShares';
 import ModelMetrics from '~/components/model/ModelMetrics';
 import ModelTabs from '~/components/model/ModelTabs';
 import { openBusinessPlan } from '~/utils/business-plan';
@@ -154,6 +155,7 @@ export default function AdminModel() {
 
   // "Rate my assumptions" — compact model snapshot sent to Claude + Gemini.
   const [showRate, setShowRate] = useState(false);
+  const [showShares, setShowShares] = useState(false);
   const ratePayload = useMemo(() => ({
     business: 'One consumer shopping app — a single platform across web + iOS/Android with one unified user base — earning affiliate commission on the sales it drives. A broad shopping destination (think Amazon / Pinterest / TikTok), not a fashion-only app.',
     horizonMonths: MONTHS,
@@ -416,8 +418,9 @@ export default function AdminModel() {
 
       <ModelTabs active="model" />
 
-      <ModelHeadline scenario={ui.scenario} onScenario={setScenario} onExportCsv={exportCsv} onPrint={printModel} onBusinessPlan={downloadBusinessPlan} onRate={() => setShowRate(true)} />
+      <ModelHeadline scenario={ui.scenario} onScenario={setScenario} onExportCsv={exportCsv} onPrint={printModel} onBusinessPlan={downloadBusinessPlan} onShareLink={() => setShowShares(true)} onRate={() => setShowRate(true)} />
       <RateAssumptionsModal open={showRate} onClose={() => setShowRate(false)} payload={ratePayload} />
+      {showShares && <DocumentShares onClose={() => setShowShares(false)} />}
 
       {readOnly && (
         <div className="model-locked-banner">
