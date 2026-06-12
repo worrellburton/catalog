@@ -6666,3 +6666,16 @@ html.eq-page .gen-queue-host { display: none; }
 /* Overflow armor: even an absurd value can't blow the cards apart. */
 .eq-table tbody td { min-width: 0; overflow-wrap: anywhere; }
 .eq-table tbody tr { min-width: 0; }
+.eq-group-row td {
+  padding: 12px 8px 5px;
+  font-size: 9.5px; font-weight: 800; letter-spacing: 0.1em;
+  text-transform: uppercase; color: #16a34a;
+  border-bottom: 1px solid #bbf7d0;
+}
+@media (max-width: 768px) {
+  .eq-table tbody tr.eq-group-row {
+    display: block; border: none; background: transparent;
+    padding: 4px 2px 0; margin-bottom: 8px;
+  }
+  .eq-table tbody tr.eq-group-row td { position: static; border: none; padding: 0; }
+}
