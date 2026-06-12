@@ -18,6 +18,7 @@ import ModelTabs from '~/components/model/ModelTabs';
 import AcctInput from '~/components/model/AcctInput';
 import EquityAdvisor from '~/components/model/EquityAdvisor';
 import EquityLedger from '~/components/model/EquityLedger';
+import EquityJourney from '~/components/model/EquityJourney';
 
 const pct = (v: number, dp = 2) => `${(v * 100).toFixed(dp)}%`;
 const shares = (n: number) => n.toLocaleString('en-US');
@@ -56,6 +57,19 @@ export default function EquityPage() {
     try { window.localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...next])); } catch { /* quota */ }
     return next;
   });
+  // Journey rows jump to (and expand) their section card.
+  const jumpTo = (id: string) => {
+    setCollapsed(prev => {
+      if (!prev.has(id)) return prev;
+      const next = new Set(prev);
+      next.delete(id);
+      try { window.localStorage.setItem(COLLAPSED_KEY, JSON.stringify([...next])); } catch { /* quota */ }
+      return next;
+    });
+    requestAnimationFrame(() => {
+      document.getElementById(`eq-sec-${id}`)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    });
+  };
   const Chevron = ({ id }: { id: string }) => (
     <button type="button" className={`eq-collapse${collapsed.has(id) ? ' is-closed' : ''}`}
       aria-label={collapsed.has(id) ? 'Expand' : 'Collapse'} onClick={() => toggle(id)}>
@@ -156,6 +170,9 @@ export default function EquityPage() {
         </div>
       </div>
 
+      {/* The establishing shot: every stage's ownership, aligned. */}
+      <EquityJourney summary={summary} onJump={jumpTo} />
+
       {view === 'ledger' && (
         <EquityLedger
           equity={equity}
@@ -204,7 +221,7 @@ export default function EquityPage() {
       </div>
 
       {/* ── Friends & Family: the SAFE notes ── */}
-      <div className="eq-section admin-card">
+      <div className="eq-section admin-card" id="eq-sec-ff">
         <div className="eq-section-head">
           <Chevron id="ff" />
           <h3>Friends &amp; Family</h3>
@@ -289,7 +306,7 @@ export default function EquityPage() {
 
       {/* ── Priced rounds ── */}
       {summary.stages.map(stage => (
-        <div key={stage.round.id} className="eq-section admin-card">
+        <div key={stage.round.id} className="eq-section admin-card" id={`eq-sec-${stage.round.id}`}>
           <div className="eq-section-head">
             <Chevron id={stage.round.id} />
             <input className="eq-in eq-in-round" value={stage.round.name} onChange={e => setRound(stage.round.id, { name: e.target.value })} />
@@ -298,6 +315,9 @@ export default function EquityPage() {
               post-money {fmtCurrency(stage.postMoney, { compact: true })}
               {stage.poolAdded > 0 ? ` · pool +${shares(stage.poolAdded)}` : ''}
             </span>
+            <b className="eq-found-chip" title="Founders' stake after this round closes">
+              Founders {pct(stage.groups.find(g => g.label === 'Founders')?.pct ?? 0, 1)}
+            </b>
             <button type="button" className="eq-x" title="Remove round" onClick={() => patch({ rounds: equity.rounds.filter(r => r.id !== stage.round.id) })}>×</button>
           </div>
 
