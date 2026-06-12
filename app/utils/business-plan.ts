@@ -349,7 +349,14 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
   const coverTiles = feed.length
     ? Array.from({ length: coverCols * 12 }, (_, i) => {
         const m = feed[i % feed.length];
-        return `<video src="${esc(m.video)}" poster="${esc(m.poster)}" autoplay muted loop playsinline preload="metadata"${i >= coverCols * coverCols ? ' class="cover-extra"' : ''}></video>`;
+        // Poster-first: a real <img> paints the moment its (320px webp)
+        // bytes land; the video sits ON TOP with no src — a script after
+        // load attaches sources a few at a time so a hundred videos never
+        // starve the posters on a phone connection.
+        return `<span class="cover-tile${i >= coverCols * coverCols ? ' cover-extra' : ''}">`
+          + (m.poster ? `<img src="${esc(m.poster)}" alt="" decoding="async" />` : '')
+          + `<video data-src="${esc(m.video)}" poster="${esc(m.poster)}" muted loop playsinline preload="none"></video>`
+          + `</span>`;
       }).join('')
     : '';
   const coverGridStyle = `grid-template-columns: repeat(${coverCols}, minmax(0, 1fr)); grid-template-rows: repeat(${coverCols}, minmax(0, 1fr)); --cover-cols: ${coverCols};`;
@@ -460,7 +467,7 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
     .solution p { font-size: 9.5px; }
     .folio { margin-bottom: 18px; }
     .divider { min-height: 82vh; }
-    .cover-feed img.cover-extra, .cover-feed video.cover-extra { display: none; }
+    .cover-feed .cover-extra { display: none; }
     .kicker { margin-bottom: 3px; }
     h2 { font-size: 15px; margin-bottom: 6px; }
     .display { font-size: 21px; }
@@ -497,8 +504,12 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
   /* contain, not cover: the full, un-zoomed product picture on a white
      card. Print cells are ~3:4 (the primaries' own shape), so the fit is
      near-exact there; any sliver is white-on-white and invisible. */
-  .cover-feed img, .cover-feed video { width: 100%; height: 100%; min-width: 0; min-height: 0;
-    object-fit: contain; background: #fff; box-sizing: border-box; display: block; }
+  .cover-tile { position: relative; overflow: hidden; min-width: 0; min-height: 0; background: #fff; }
+  /* img underneath paints first; the video layers over it once its bytes
+     arrive (transparent until then, so the poster img shows through). */
+  .cover-feed img, .cover-feed video { position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: contain; box-sizing: border-box; display: block; }
+  .cover-feed img { background: #fff; }
   .cover-scrim { position: absolute; inset: 0;
     background: linear-gradient(rgba(0,0,0,0.82), rgba(0,0,0,0.92)); }
   .appendix-cover { position: relative; overflow: hidden; background: #000; min-height: 100vh; }
@@ -1038,6 +1049,33 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
       <b>Catalog</b> · Confidential business plan · Generated ${esc(d.generatedAt)} · ${esc(d.scenario)} scenario, ${d.horizonMonths}-month horizon. Projections are illustrative and depend on the stated assumptions.
     </div>
   </div>
+  <script>
+    // Posters first (founder's call): videos carry no src until the page
+    // — i.e. the poster images — has loaded, then sources attach six at a
+    // time so the wall comes alive without ever starving the stills.
+    (function () {
+      var started = false;
+      function start() {
+        if (started) return; started = true;
+        var vids = Array.prototype.slice.call(document.querySelectorAll('video[data-src]'));
+        var i = 0;
+        function next() {
+          for (var n = 0; n < 6 && i < vids.length; n++, i++) {
+            var v = vids[i];
+            v.src = v.getAttribute('data-src');
+            v.load();
+            var p = v.play(); if (p && p.catch) p.catch(function () {});
+          }
+          if (i < vids.length) setTimeout(next, 400);
+        }
+        next();
+      }
+      if (document.readyState === 'complete') setTimeout(start, 300);
+      else window.addEventListener('load', function () { setTimeout(start, 300); });
+      // Safety: if 'load' hangs on a slow connection, start anyway.
+      setTimeout(start, 4000);
+    })();
+  </script>
 </body>
 </html>`;
 }
