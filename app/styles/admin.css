@@ -6745,3 +6745,10 @@ html.eq-page .gen-queue-host { display: none; }
   .eqj-legend { display: none; }
   .eq-found-chip { order: 8; }
 }
+/* Variable OpEx lines: Monthly $ is a computed range, not an input. */
+.opex-var {
+  display: inline-block; font-size: 11.5px; font-weight: 700;
+  color: #4f46e5; background: #eef2ff; border: 1px solid #c7d2fe;
+  border-radius: 8px; padding: 6px 9px; white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
