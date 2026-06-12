@@ -16,7 +16,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import ParticleBackground from '~/components/ParticleBackground';
 import { supabase } from '~/utils/supabase';
-import TypeBrainGraph, { ROOT_ID, type BrainNode, type BrainProduct, type BrainViewMode } from '~/components/admin/TypeBrainGraph';
+import TypeBrainGraph, { ROOT_ID, type BrainCameraHandle, type BrainNode, type BrainProduct, type BrainViewMode } from '~/components/admin/TypeBrainGraph';
 import {
   computeEffectiveGenders,
   computeTypePaths,
@@ -109,6 +109,12 @@ export default function AdminGovernanceTypes() {
   const [dofStop, setDofStop] = useState<number | null>(2.8);
   const [mobileControlsOpen, setMobileControlsOpen] = useState(false);
   const [showcase, setShowcase] = useState(false);
+  // Mobile camera dock: the slider/joystick drive the graph's view
+  // through this handle; zoomUi mirrors the live zoom back to the slider.
+  const camRef = useRef<BrainCameraHandle | null>(null);
+  const [zoomUi, setZoomUi] = useState(1);
+  const joy = useRef<{ dx: number; dy: number; raf: number } | null>(null);
+  const [joyKnob, setJoyKnob] = useState<{ x: number; y: number } | null>(null);
   // Ring dials — view preferences, sticky per admin via localStorage.
   const [ringOpacity, setRingOpacity] = useState(() =>
     Number(typeof localStorage !== 'undefined' && localStorage.getItem('gov-ring-opacity')) || 0.15);
@@ -713,6 +719,39 @@ export default function AdminGovernanceTypes() {
     return () => window.removeEventListener('keydown', onKey);
   }, [pickMode, drill]);
 
+  // Orbit joystick (mobile dock): deflection = orbit RATE, applied per
+  // frame while held — a real flight-stick, not a position map.
+  const joySet = (ev: React.PointerEvent) => {
+    const rect = (ev.currentTarget as Element).getBoundingClientRect();
+    const limit = rect.width / 2 - 16;
+    let dx = ev.clientX - (rect.left + rect.width / 2);
+    let dy = ev.clientY - (rect.top + rect.height / 2);
+    const d = Math.hypot(dx, dy);
+    if (d > limit) { dx = (dx / d) * limit; dy = (dy / d) * limit; }
+    if (joy.current) { joy.current.dx = dx; joy.current.dy = dy; }
+    setJoyKnob({ x: dx, y: dy });
+  };
+  const joyDown = (ev: React.PointerEvent) => {
+    ev.preventDefault();
+    (ev.currentTarget as Element).setPointerCapture?.(ev.pointerId);
+    setShowcase(false);
+    joy.current = { dx: 0, dy: 0, raf: 0 };
+    joySet(ev);
+    const tick = () => {
+      const j = joy.current;
+      if (!j) return;
+      camRef.current?.orbitBy(j.dy * 0.0011, j.dx * 0.0011);
+      j.raf = requestAnimationFrame(tick);
+    };
+    joy.current.raf = requestAnimationFrame(tick);
+  };
+  const joyEnd = () => {
+    if (joy.current) cancelAnimationFrame(joy.current.raf);
+    joy.current = null;
+    setJoyKnob(null);
+  };
+  useEffect(() => () => { if (joy.current) cancelAnimationFrame(joy.current.raf); }, []);
+
   const canUndo = history.some(h => !h.undone);
   const editableSelection = [...selection].filter(id => id !== UNASSIGNED_ID);
 
@@ -791,6 +830,8 @@ export default function AdminGovernanceTypes() {
           dofStop={dofStop}
           showcase={showcase}
           onShowcaseInterrupt={() => setShowcase(false)}
+          controlRef={camRef}
+          onZoomChange={setZoomUi}
           ringScale={ringScale}
           pickMode={pickMode}
           onPickTarget={(targetId) => {
@@ -1137,6 +1178,67 @@ export default function AdminGovernanceTypes() {
           <span style={{ ['--c' as string]: GENDER_COLORS.unisex }}>unisex</span>
           <span style={{ ['--c' as string]: '#f59e0b' }}>unassigned</span>
         </div>
+
+        {/* Mobile-only bottom dock: camera controls (zoom slider + orbit
+            joystick) and the display tools (lens, showcase) — everything
+            that has no room at the top. Hidden while a drill is open. */}
+        {!drill && (
+          <div className="gov-dock">
+            <label className="gov-dock-zoom">
+              <span aria-hidden="true">−</span>
+              <input
+                type="range"
+                min={35}
+                max={250}
+                value={Math.round(zoomUi * 100)}
+                aria-label="Zoom"
+                onChange={e => {
+                  const k = Number(e.target.value) / 100;
+                  setShowcase(false);
+                  setZoomUi(k);
+                  camRef.current?.zoomTo(k);
+                }}
+              />
+              <span aria-hidden="true">+</span>
+            </label>
+            <div className="gov-dock-row">
+              <div
+                className="gov-joystick"
+                role="application"
+                aria-label="Orbit joystick"
+                onPointerDown={joyDown}
+                onPointerMove={ev => { if (joy.current) joySet(ev); }}
+                onPointerUp={joyEnd}
+                onPointerCancel={joyEnd}
+              >
+                <i
+                  className="gov-joystick-knob"
+                  style={joyKnob ? { transform: `translate(calc(-50% + ${joyKnob.x}px), calc(-50% + ${joyKnob.y}px))` } : undefined}
+                />
+              </div>
+              <div className="gov-dock-tools">
+                <div className="gov-dof">
+                  <span>Lens</span>
+                  {([null, 1.4, 2, 2.8, 4, 8] as const).map(stop => (
+                    <button
+                      key={String(stop)}
+                      type="button"
+                      className={dofStop === stop ? 'is-active' : ''}
+                      onClick={() => setDofStop(stop)}
+                    >{stop === null ? 'off' : `ƒ/${stop}`}</button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  className={`gov-showcase${showcase ? ' is-on' : ''}`}
+                  onClick={() => setShowcase(v => !v)}
+                >
+                  {showcase ? '◉ Showcase — touring' : '◉ Showcase'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
       </div>
 
       {logOpen && (
