@@ -32,6 +32,7 @@ import SizeMatchBadge from '~/components/SizeMatchBadge';
 import { director } from '~/services/video-playback-director';
 import { CARD_POSTER_WIDTH } from './CreativeCardV2';
 import { withTransform } from '~/utils/supabase-image';
+import { warmPosters } from '~/utils/poster-prefetch';
 import ParticleBackground from '~/components/ParticleBackground';
 import { productSlug } from '~/utils/slug';
 import { useCommentsEnabled } from '~/hooks/useCommentsEnabled';
@@ -691,6 +692,20 @@ export default function ProductPage({
     () => pickFrom(similarCreatives),
     [similarCreatives, pickFrom],
   );
+
+  // Warm the rails' posters the moment their data resolves — the Similar
+  // grid and look tiles otherwise start downloading at mount and read as
+  // black boxes while the bytes arrive. Same rendition math as the cards,
+  // so the warmed URL IS the cache entry the tile requests.
+  useEffect(() => {
+    const rendition = (raw: string | null | undefined) =>
+      raw ? (withTransform(raw, { width: CARD_POSTER_WIDTH, quality: 82, resize: 'contain' }) || raw) : null;
+    warmPosters([
+      ...moreLikeThis.map(c => rendition(pickPosterUrl(c))),
+      ...(lookCreatives ?? []).map(l => rendition(lookPoster(l))),
+      ...(popularFallback ?? []).map(c => rendition(pickPosterUrl(c))),
+    ]);
+  }, [moreLikeThis, lookCreatives, popularFallback]);
 
   // Super-admin "why this rail?" debug. Lazily computes the full diagnostics
   // (gender gate, relative band, sparse widen, per-candidate distances) only
