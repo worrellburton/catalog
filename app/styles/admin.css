@@ -6685,3 +6685,63 @@ html.eq-page .gen-queue-host { display: none; }
   color: #b91c1c; background: #fef2f2; border: 1px solid #fecaca;
   border-radius: 6px; padding: 3px 7px; white-space: nowrap;
 }
+
+/* ── Dilution journey + Equity polish pass ─────────────────────────── */
+.eqj {
+  background: #fff; border: 1px solid #e2e8f0; border-radius: 14px;
+  padding: 14px 16px; margin-bottom: 16px;
+}
+.eqj-head { display: flex; align-items: baseline; gap: 12px; margin-bottom: 10px; }
+.eqj-title {
+  font-size: 10px; font-weight: 800; letter-spacing: 0.1em;
+  text-transform: uppercase; color: #64748b;
+}
+.eqj-legend { margin-left: auto; display: inline-flex; gap: 12px; font-size: 10.5px; color: #64748b; }
+.eqj-legend i {
+  display: inline-block; width: 8px; height: 8px; border-radius: 2px;
+  margin-right: 4px;
+}
+.eqj-row {
+  display: grid; grid-template-columns: 150px 1fr 64px;
+  align-items: center; gap: 12px; width: 100%;
+  font: inherit; cursor: pointer; text-align: left;
+  border: none; background: transparent; border-radius: 10px;
+  padding: 6px 8px; margin: 0 -8px; box-sizing: content-box;
+}
+.eqj-row:hover { background: #f8fafc; }
+.eqj-label { display: flex; flex-direction: column; min-width: 0; }
+.eqj-label { font-size: 12.5px; font-weight: 700; color: #0f172a; }
+.eqj-label em { font-style: normal; font-size: 10.5px; font-weight: 500; color: #94a3b8; }
+.eqj-bar {
+  display: flex; height: 18px; border-radius: 9px; overflow: hidden;
+  background: #f1f5f9; min-width: 0;
+}
+.eqj-bar i { display: block; height: 100%; transition: width 0.45s cubic-bezier(0.16, 1, 0.3, 1); }
+.eqj-founders {
+  font-size: 12.5px; font-weight: 800; color: #0f172a; text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.eq-found-chip {
+  font-size: 11px; font-weight: 800; white-space: nowrap;
+  color: #312e81; background: #eef2ff; border: 1px solid #c7d2fe;
+  border-radius: 999px; padding: 4px 10px;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Numbers line up; rows answer the cursor; cards lift gently. */
+.eq-table, .eq-stat b, .eq-derived, .eqj { font-variant-numeric: tabular-nums; }
+.eq-section { transition: box-shadow 0.25s ease; }
+.eq-section:hover { box-shadow: 0 6px 24px rgba(15, 23, 42, 0.06); }
+@media (min-width: 769px) {
+  .eq-table tbody tr { transition: background 0.15s ease; }
+  .eq-table tbody tr:hover td { background: #fafbff; }
+  .eq-table tbody tr.eq-row-new:hover td { background: #e9fbef; }
+}
+
+@media (max-width: 768px) {
+  .eqj { padding: 12px; }
+  .eqj-row { grid-template-columns: 96px 1fr 52px; gap: 8px; padding: 6px 4px; margin: 0 -4px; }
+  .eqj-label { font-size: 11.5px; }
+  .eqj-legend { display: none; }
+  .eq-found-chip { order: 8; }
+}
