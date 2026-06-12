@@ -18,6 +18,13 @@ const PENDING_QUIPS = [
   'Consulting the style oracle…',
   'Removing the awkward blink…',
   'Steaming out the wrinkles…',
+  // Future-Polaroid jokes (founder's call): the render IS an instant
+  // photo from tomorrow — shake accordingly.
+  'Shaking it like a Polaroid from 2080…',
+  'No peeking — the future is still developing…',
+  'Instant film, slightly less instant…',
+  'Do not shake the hologram while it develops…',
+  'Waiting for the Polaroid to fade in… in 4K…',
 ];
 
 /**
