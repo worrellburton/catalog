@@ -4,6 +4,7 @@
 // terms are its round's $/share) — this view just stops organising the
 // money by event and lists it the way it actually arrived.
 
+import { useState } from 'react';
 import { Link } from '@remix-run/react';
 import { fmtCurrency } from '~/services/projections';
 import {
@@ -38,8 +39,24 @@ export default function EquityLedger({ equity, summary, onSafe, onInvestor, onAd
   onInvestor: (roundId: string, invId: string, p: Partial<RoundInvestor>) => void;
   onAddSafe: () => void;
 }) {
+  // The MARK: which stage the ownership/value columns are priced at.
+  // "Now" was a lie — before any round closes, nothing is worth the
+  // Series B mark. So the reader picks the stage and the columns say so.
   const lastStage = summary.stages[summary.stages.length - 1];
-  const rowNow = (id: string) => lastStage?.rows.find(r => r.id === id) ?? summary.foundationRows.find(r => r.id === id);
+  const [markId, setMarkId] = useState<string>(() => {
+    try { return window.localStorage.getItem('catalog:equity:ledger-mark') ?? (lastStage?.round.id ?? 'ff'); }
+    catch { return lastStage?.round.id ?? 'ff'; }
+  });
+  const markStage = summary.stages.find(s => s.round.id === markId) ?? lastStage ?? null;
+  const markIsFF = markId === 'ff' || !markStage;
+  const markLabel = markIsFF ? 'F&F (unpriced)' : markStage!.round.name;
+  const pickMark = (v: string) => {
+    setMarkId(v);
+    try { window.localStorage.setItem('catalog:equity:ledger-mark', v); } catch { /* quota */ }
+  };
+  const rowNow = (id: string) => markIsFF
+    ? summary.foundationRows.find(r => r.id === id)
+    : markStage!.rows.find(r => r.id === id) ?? summary.foundationRows.find(r => r.id === id);
 
   let order = 0;
   const lines: LedgerLine[] = [
@@ -72,16 +89,26 @@ export default function EquityLedger({ equity, summary, onSafe, onInvestor, onAd
       <div className="eq-section-head">
         <h3>Ledger</h3>
         <span>
-          every check, in the order it landed · {fmtCurrency(totalIn, { compact: true })} across {lines.length} entries ·
-          ownership marked at {lastStage ? `${lastStage.round.name} close` : 'today'}
+          every check, in the order it landed · {fmtCurrency(totalIn, { compact: true })} across {lines.length} entries
         </span>
+        <label className="eq-mark">
+          <em>Marked at</em>
+          <select value={markIsFF ? 'ff' : markStage!.round.id} onChange={e => pickMark(e.target.value)}>
+            <option value="ff">Friends &amp; Family (unpriced)</option>
+            {summary.stages.map(s => (
+              <option key={s.round.id} value={s.round.id}>
+                {s.round.name} close · {fmtCurrency(s.postMoney, { compact: true })} post
+              </option>
+            ))}
+          </select>
+        </label>
       </div>
       <table className="eq-table">
         <thead>
           <tr>
             <th>Date</th><th>Type</th><th>Investor</th><th className="num">Check</th>
             <th className="num">Valuation in at</th><th className="num">Discount</th><th className="num">$ / share</th>
-            <th className="num">Shares</th><th className="num">Ownership now</th><th className="num">Value now</th><th className="num">Multiple</th>
+            <th className="num">Shares</th><th className="num">Own. at {markLabel}</th><th className="num">Value at {markLabel}</th><th className="num">Multiple</th>
           </tr>
         </thead>
         <tbody>
@@ -93,7 +120,7 @@ export default function EquityLedger({ equity, summary, onSafe, onInvestor, onAd
               l.kind === 'safe' ? onSafe(l.id, { date }) : onInvestor(l.round!.id, l.id, { date });
             return (
               <tr key={l.id}>
-                <td>
+                <td data-l="Date">
                   <input
                     className="eq-in eq-in-date"
                     type="date"
@@ -101,8 +128,8 @@ export default function EquityLedger({ equity, summary, onSafe, onInvestor, onAd
                     onChange={e => setDate(e.target.value)}
                   />
                 </td>
-                <td className="eq-type">{l.type}</td>
-                <td className="eq-namecell">
+                <td className="eq-type" data-l="Type">{l.type}</td>
+                <td className="eq-namecell" data-l="Investor">
                   <input
                     className="eq-in eq-in-name"
                     value={l.name}
@@ -110,7 +137,7 @@ export default function EquityLedger({ equity, summary, onSafe, onInvestor, onAd
                   />
                   <Link className="eq-open" to={`/admin/model/equity/holder/${l.id}`} title="Open this investor's page">↗</Link>
                 </td>
-                <td className="num">
+                <td className="num" data-l="Check">
                   <AcctInput
                     className="eq-in"
                     value={l.invested}
@@ -119,12 +146,12 @@ export default function EquityLedger({ equity, summary, onSafe, onInvestor, onAd
                 </td>
                 {/* Self-contained terms: a SAFE's entry valuation is its cap
                     (editable); a priced check's is its round's post-money. */}
-                <td className="num">
+                <td className="num" data-l="Valuation in at">
                   {l.kind === 'safe'
                     ? <AcctInput className="eq-in" value={l.safe!.valCap} onChange={n => onSafe(l.id, { valCap: n })} />
                     : l.roundPost != null ? `${fmtCurrency(l.roundPost, { compact: true })} post` : '—'}
                 </td>
-                <td className="num">
+                <td className="num" data-l="Discount">
                   {l.kind === 'safe' ? (
                     <span className="eq-pct">
                       <input className="eq-in" type="number" min={0} max={90} step={1}
@@ -134,11 +161,11 @@ export default function EquityLedger({ equity, summary, onSafe, onInvestor, onAd
                     </span>
                   ) : '—'}
                 </td>
-                <td className="num">{l.price != null ? fmtCurrency(l.price) : '—'}</td>
-                <td className="num">{shares(now?.shares ?? 0)}</td>
-                <td className="num">{pct(now?.pct ?? 0)}</td>
-                <td className="num">{fmtCurrency(value, { compact: true })}</td>
-                <td className="num eq-computed">{multiple != null ? `${multiple.toFixed(1)}×` : '—'}</td>
+                <td className="num" data-l="$ / share">{l.price != null ? fmtCurrency(l.price) : '—'}</td>
+                <td className="num" data-l="Shares">{shares(now?.shares ?? 0)}</td>
+                <td className="num" data-l={`Own. at ${markLabel}`}>{pct(now?.pct ?? 0)}</td>
+                <td className="num" data-l={`Value at ${markLabel}`}>{markIsFF ? '—' : fmtCurrency(value, { compact: true })}</td>
+                <td className="num eq-computed" data-l="Multiple">{markIsFF || multiple == null ? '—' : `${multiple.toFixed(1)}×`}</td>
               </tr>
             );
           })}
@@ -148,9 +175,9 @@ export default function EquityLedger({ equity, summary, onSafe, onInvestor, onAd
         <button type="button" onClick={onAddSafe}>+ Check (SAFE)</button>
       </div>
       <p className="eq-foot" style={{ marginBottom: 0 }}>
-        New money between priced rounds is a SAFE — that&rsquo;s what &ldquo;getting in at a certain
-        time&rdquo; is, legally. Priced checks belong to their round&rsquo;s $/share; manage rounds in
-        the Rounds view.
+        Ownership and value are PROJECTED at the marked stage&rsquo;s price — nothing is worth that
+        until the round actually closes. New money between priced rounds is a SAFE — that&rsquo;s what
+        &ldquo;getting in at a certain time&rdquo; is, legally; manage rounds in the Rounds view.
       </p>
     </div>
   );

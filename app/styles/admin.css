@@ -6581,3 +6581,85 @@ html.eq-page .gen-queue-host { display: none; }
    at the far right) off-screen entirely. */
 .eq-section { overflow-x: auto; }
 .eq-section-head .eq-collapse { margin-right: 2px; }
+
+/* ── Equity / Ledger mobile pass ───────────────────────────────────── */
+@media (max-width: 768px) {
+  .eq-band { grid-template-columns: 1fr 1fr; gap: 8px; margin: 12px 0 14px; }
+  .eq-stat { padding: 11px 12px; border-radius: 10px; }
+  .eq-stat b { font-size: 17px; }
+  .eq-stat i { font-size: 10px; }
+  .eq-toprow { flex-wrap: wrap; row-gap: 8px; }
+  .eq-section { padding: 12px; border-radius: 14px; }
+  .eq-section-head { flex-wrap: wrap; row-gap: 2px; }
+  .eq-section-head > span { flex-basis: 100%; order: 9; margin: 2px 0 0 24px; font-size: 11px; }
+
+  /* Tables become stacked check-cards: header row hides, every row is a
+     bordered card, every labelled cell shows its own caption. */
+  .eq-table, .eq-table tbody { display: block; }
+  .eq-table thead { display: none; }
+  .eq-table tbody tr {
+    position: relative;
+    display: grid; grid-template-columns: 1fr 1fr; gap: 10px 14px;
+    border: 1px solid #e2e8f0; border-radius: 12px;
+    padding: 12px; margin-bottom: 10px; background: #fff;
+  }
+  .eq-table tbody tr.eq-row-new { border-color: #86efac; background: #f0fdf4; }
+  .eq-table tbody td {
+    display: flex; flex-direction: column; gap: 3px;
+    padding: 0; border: none; text-align: left;
+  }
+  .eq-table tbody td.num { text-align: left; }
+  .eq-table tbody td[data-l]::before {
+    content: attr(data-l);
+    font-size: 9px; font-weight: 700; letter-spacing: 0.08em;
+    text-transform: uppercase; color: #94a3b8;
+  }
+  .eq-table tbody td[data-l="Holder"],
+  .eq-table tbody td[data-l="Investor"] { grid-column: 1 / -1; }
+  .eq-table tbody td.eq-namecell {
+    display: grid; grid-template-columns: 1fr auto; align-items: center; column-gap: 6px;
+  }
+  .eq-table tbody td.eq-namecell::before { grid-column: 1 / -1; }
+  /* The unlabeled cell is the remove × — pin it to the card's corner. */
+  .eq-table tbody td:not([data-l]) { position: absolute; top: 6px; right: 8px; }
+  .eq-table tbody td:not([data-l]):empty { display: none; }
+
+  /* Group totals: one tidy summary row each. */
+  .eq-table tfoot { display: block; margin-top: 2px; }
+  .eq-table tfoot tr {
+    display: flex; align-items: baseline; gap: 10px;
+    padding: 7px 2px; border-top: 1px solid #f1f5f9;
+  }
+  .eq-table tfoot td { display: block; border: none; padding: 0; }
+  .eq-table tfoot td:empty { display: none; }
+  .eq-table tfoot td:first-child { margin-right: auto; }
+
+  .eq-section .eq-in { width: 100%; text-align: left; }
+  .eq-section .eq-pct { justify-content: flex-start; }
+  .eq-section .eq-pct .eq-in { width: 72px; }
+  .eq-in-round { width: 130px; }
+  .eq-round-vars { gap: 10px; }
+  .eq-round-vars label { width: 100%; justify-content: space-between; }
+  .eq-round-vars .eq-in { width: 150px; }
+
+  /* Advisor: bottom sheet + reachable FAB. */
+  .eqa-fab { right: 12px; bottom: calc(12px + env(safe-area-inset-bottom)); }
+  .eqa-panel {
+    left: 8px; right: 8px; width: auto;
+    bottom: calc(64px + env(safe-area-inset-bottom));
+    height: min(68vh, 560px);
+  }
+}
+.eq-mark { display: inline-flex; align-items: center; gap: 6px; }
+.eq-mark em {
+  font-style: normal; font-size: 10px; font-weight: 700;
+  letter-spacing: 0.08em; text-transform: uppercase; color: #94a3b8;
+}
+.eq-mark select {
+  font: inherit; font-size: 12px; font-weight: 600; color: #0f172a;
+  border: 1px solid #e2e8f0; border-radius: 8px; padding: 6px 8px;
+  background: #fff; outline: none;
+}
+@media (max-width: 768px) {
+  .eq-mark { flex-basis: 100%; order: 10; margin-left: 24px; }
+}
