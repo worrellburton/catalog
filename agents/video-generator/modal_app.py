@@ -346,6 +346,22 @@ def generate_pending():
     else:
         print("No missing primary-video posters.")
 
+    # ── 4. Self-heal new content: fill MISSING hls-v3 / HEVC / AV1 ─────
+    # New looks/creatives/products land with hls_url / hls_hevc_url /
+    # video_av1_url null (inline generation only makes poster + mobile MP4).
+    # SPAWN bounded fill-missing backfills (non-blocking, so this cron stays
+    # responsive for the Veo retries above) — additive only, never reencodes,
+    # and a spawn that finds nothing missing exits in seconds. New content gets
+    # the same adaptive + codec coverage as the rest; any backlog drains over
+    # successive runs. Folded into THIS cron (not a new scheduled fn) to stay
+    # under the workspace's scheduled-function cap. Big catch-ups / the
+    # deliberate hls-v2→v3 reencode use the one-shot `hls_backfill` entrypoint.
+    heal_statuses = ["live", "pending", "paused", "done"]
+    for t in ["products", "product_creative", "looks_creative"]:
+        for m in ["hls", "hevc", "av1"]:
+            hls_backfill_job.spawn(t, 6, 1, False, heal_statuses, False, m)
+    print("Spawned self-heal backfills (hls/hevc/av1) for missing rows.")
+
 
 # ─── HLS adaptive-bitrate ladder backfill ─────────────────────────────
 # Encodes a 480/720/1080 HLS ladder per clip, uploads the tree to
@@ -419,38 +435,4 @@ def hls_backfill(
     status_list = [s.strip() for s in statuses.split(",") if s.strip()] or None
     res = hls_backfill_job.remote(table, (limit or None), concurrency, dry_run, status_list, reencode, mode)
     print(res)
-
-
-# ─── Cron: self-heal NEW content with hls-v3 / HEVC / AV1 ──────────────
-# New looks/creatives/products land with hls_url / hls_hevc_url / video_av1_url
-# null (the inline generation only makes poster + mobile MP4). This cron fills
-# those MISSING columns in bounded batches so every new clip gets the same
-# adaptive ladder + HEVC + AV1 coverage as the rest — and any existing backlog
-# drains over successive runs. ADDITIVE ONLY: it never passes reencode=True, so
-# it can't repoint/overwrite a working ladder. The one-shot `hls_backfill`
-# entrypoint handles big catch-ups and the deliberate hls-v2→v3 reencode.
-
-@app.function(
-    image=generator_image,
-    secrets=secrets,
-    schedule=modal.Cron("17 */2 * * *"),  # every 2h, offset off the :00/:30 retry cron
-    timeout=7200,
-)
-def backfill_missing_assets():
-    import sys
-    sys.path.insert(0, "/root")
-    from backfill_creative_assets import run_hls, run_av1
-
-    PER_RUN = 12  # bounded per table×mode so a run can't run away
-    statuses = ["live", "pending", "paused", "done"]
-    for table in ["products", "product_creative", "looks_creative"]:
-        for mode in ["hls", "hevc"]:
-            try:
-                run_hls(table, PER_RUN, False, 1, statuses, False, mode=mode)
-            except Exception as e:
-                print(f"[self-heal] {table}/{mode} failed: {e}")
-        try:
-            run_av1(table, PER_RUN, False, 1, statuses, False)
-        except Exception as e:
-            print(f"[self-heal] {table}/av1 failed: {e}")
 
