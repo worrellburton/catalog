@@ -1897,7 +1897,7 @@ export default function Home() {
                 onOpenCreator={handleOpenCreator}
                 activeFilter={activeFilter}
                 onChangeCatalogGender={handleGenderFilterChange}
-                onGuestSignup={!waitlistMode ? () => setGuestGate({ variant: 'feed' }) : undefined}
+                onGuestSignup={() => setGuestGate({ variant: 'feed' })}
               />
             </div>
           </header>

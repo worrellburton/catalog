@@ -14,6 +14,7 @@
 
 import { supabase } from '~/utils/supabase';
 import { inferProductTypeAndSubtype } from '~/services/product-types';
+import { governanceRendition, warmPosters } from '~/utils/poster-prefetch';
 
 export interface TypeNode {
   id: string;
@@ -89,12 +90,20 @@ export async function fetchGovernanceProducts(): Promise<GovernanceProduct[]> {
     .eq('is_active', true)
     .limit(2000);
   if (error || !data) return [];
+  // Warm every thumb into the HTTP cache immediately — by the time the
+  // force layout settles, the satellites paint from cache in one frame.
+  warmPosters((data as Array<{ primary_image_url: string | null; image_url: string | null }>)
+    .map(r => governanceRendition(r.primary_image_url || r.image_url)));
   return (data as { id: string; name: string; brand: string | null; type: string | null;
     gender: string | null; type_path: string | null;
     primary_image_url: string | null; image_url: string | null }[])
     .map(r => ({
       id: r.id, name: r.name, brand: r.brand, type: r.type, gender: r.gender,
-      typePath: r.type_path, image: r.primary_image_url || r.image_url,
+      typePath: r.type_path,
+      // The governance rendition (tiny square webp) — the brain paints
+      // hundreds of these at once, so the poster image goes through the
+      // brain-tuned creative spec instead of shipping full-res.
+      image: governanceRendition(r.primary_image_url || r.image_url),
       haikuContext: (r as unknown as { haiku_context?: string | null }).haiku_context ?? null,
     }));
 }

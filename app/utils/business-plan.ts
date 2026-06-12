@@ -1067,7 +1067,7 @@ export async function openBusinessPlan(d: BusinessPlanData): Promise<void> {
   const w = window.open('', '_blank');
   const feedImages = await withTimeout(fetchFeedImages(), 5000, []);
   const html = buildBusinessPlanHtml({ ...d, feedImages });
-  // Snapshot for the public passcode viewer (/plan): latest open wins.
+  // Snapshot for the public passcode viewer (/business-plan): latest open wins.
   void supabase.from('documents').upsert(
     { key: 'business-plan', html, updated_at: new Date().toISOString() },
     { onConflict: 'key' },

@@ -1415,5 +1415,6 @@ html.gov-void .gov-page.gov-types { height: calc(100vh - 53px); }
     flex-wrap: wrap;
     row-gap: 4px;
   }
-  .gov-dock-tools .gov-showcase { align-self: flex-start; }
+  .gov-dock-actions { display: flex; gap: 8px; }
+  .gov-dock-actions .gov-showcase { flex: 0 0 auto; }
 }
