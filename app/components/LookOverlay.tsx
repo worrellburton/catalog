@@ -160,38 +160,57 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   //   • hidden  — within the feed, mirror the home chrome: hide on scroll-down,
   //     show on scroll-up (small dead-zone so jitter doesn't flicker it).
   // Above the feed (or on close) both are false → the bar stays away.
+  //
+  // PERF: reach is detected with an IntersectionObserver (fires only at the
+  // boundary, deep below the hero) and direction from cheap scrollTop deltas —
+  // NO per-frame getBoundingClientRect, so this adds zero layout work to the
+  // hero↔rails scroll where every forced reflow shows up as jank.
   useEffect(() => {
     const scroller = scrollEl;
     const sentinel = dailyFeedSentinelRef.current;
     if (!scroller || !sentinel || !onDailyFeedBar) return;
     const THRESHOLD = 8; // px of continuous direction before reacting
-    let raf = 0;
-    let lastY = scroller.scrollTop;
-    let accum = 0;
     let reached = false;
     let hidden = false;
+    let accum = 0;
+    let lastY = scroller.scrollTop;
+    let raf = 0;
+    const emit = () => onDailyFeedBar(reached, hidden);
+
+    // Reach: cheap, event-driven — no work while scrolling the hero/rails.
+    const io = new IntersectionObserver(
+      (entries) => {
+        const e = entries[entries.length - 1];
+        const rootTop = e.rootBounds?.top ?? scroller.getBoundingClientRect().top;
+        const nowReached = e.boundingClientRect.top <= rootTop + 1;
+        if (nowReached === reached) return;
+        reached = nowReached;
+        if (!reached) { hidden = false; accum = 0; }
+        emit();
+      },
+      { root: scroller, threshold: [0, 1] },
+    );
+    io.observe(sentinel);
+
+    // Direction: scrollTop delta only (no layout read). Only meaningful once
+    // the daily feed is reached; otherwise the bar is hidden via class anyway.
     const measure = () => {
       raf = 0;
       const y = scroller.scrollTop;
-      const nowReached =
-        sentinel.getBoundingClientRect().top <= scroller.getBoundingClientRect().top + 1;
       const dy = y - lastY;
       lastY = y;
+      if (!reached) { accum = 0; return; }
       if ((dy > 0 && accum >= 0) || (dy < 0 && accum <= 0)) accum += dy;
       else accum = dy;
       let nowHidden = hidden;
-      if (!nowReached) { nowHidden = false; accum = 0; }
-      else if (accum > THRESHOLD) nowHidden = true;
+      if (accum > THRESHOLD) nowHidden = true;
       else if (accum < -THRESHOLD) nowHidden = false;
-      if (nowReached !== reached || nowHidden !== hidden) {
-        reached = nowReached; hidden = nowHidden;
-        onDailyFeedBar(reached, hidden);
-      }
+      if (nowHidden !== hidden) { hidden = nowHidden; emit(); }
     };
     const onScroll = () => { if (!raf) raf = requestAnimationFrame(measure); };
-    measure();
     scroller.addEventListener('scroll', onScroll, { passive: true });
     return () => {
+      io.disconnect();
       scroller.removeEventListener('scroll', onScroll);
       if (raf) cancelAnimationFrame(raf);
       onDailyFeedBar(false, false);
