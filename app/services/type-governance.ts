@@ -41,6 +41,9 @@ export interface GovernanceProduct {
    *  Governance gestures keep it in sync. */
   typePath: string | null;
   image: string | null;
+  /** Haiku's read of the primary image — what the item ACTUALLY is.
+   *  Names lie; the matchers below weigh this alongside the name. */
+  haikuContext: string | null;
 }
 
 /** Low-level mutations. A gesture is a list of these; its undo is another. */
@@ -52,7 +55,7 @@ export type GovernanceOp =
 
 export interface ProductGroup {
   ids: string[];
-  patch: { type?: string | null; gender?: string | null; type_path?: string | null };
+  patch: { type?: string | null; gender?: string | null; type_path?: string | null; is_active?: boolean };
 }
 
 /** Lower-case + de-pluralize so 'dresses' ≡ 'Dress', 'phone cases' ≡
@@ -82,7 +85,7 @@ export async function fetchGovernanceProducts(): Promise<GovernanceProduct[]> {
   if (!supabase) return [];
   const { data, error } = await supabase
     .from('products')
-    .select('id, name, brand, type, gender, type_path, primary_image_url, image_url')
+    .select('id, name, brand, type, gender, type_path, primary_image_url, image_url, haiku_context')
     .eq('is_active', true)
     .limit(2000);
   if (error || !data) return [];
@@ -92,6 +95,7 @@ export async function fetchGovernanceProducts(): Promise<GovernanceProduct[]> {
     .map(r => ({
       id: r.id, name: r.name, brand: r.brand, type: r.type, gender: r.gender,
       typePath: r.type_path, image: r.primary_image_url || r.image_url,
+      haikuContext: (r as unknown as { haiku_context?: string | null }).haiku_context ?? null,
     }));
 }
 
@@ -223,6 +227,9 @@ export function auditProductTypes(
     };
     for (const m of matchers) {
       if (m.rx.test(p.name)) consider(m.node, `name contains “${m.node.name}”`);
+      else if (p.haikuContext && m.rx.test(p.haikuContext)) {
+        consider(m.node, `image shows ${m.node.name} (Haiku)`);
+      }
     }
     const inferred = inferProductTypeAndSubtype(p.name, p.brand);
     for (const cand of [inferred?.subtype, inferred?.type]) {

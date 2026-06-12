@@ -32,6 +32,7 @@ import { inferProductGenderFromName, auditAllProductGenders } from '~/services/g
 import { addProductUrl, triggerScrape, triggerScrapeFlush } from '~/services/scrape-product';
 import { isLikelyProductUrl } from '~/utils/productUrl';
 import { supabase } from '~/utils/supabase';
+import { shopnomixRedirectFor } from '~/services/affiliate';
 import { VIDEO_MODELS, DEFAULT_VIDEO_MODEL } from '~/constants/video-models';
 import { useAdminSearch } from '~/hooks/useAdminSearch';
 import { createBatchAds, promoteQueuedAds } from '~/services/product-creative';
@@ -293,6 +294,10 @@ interface AffiliateProvider {
   connected?: boolean;
   /** Sub-label (e.g. merchant name) shown under the network name. */
   merchantName?: string;
+  /** Render the outbound URL itself (monospace + Copy) inside the row —
+   *  used for the live Shopnomix redirect so the admin can grab the
+   *  actual shoppable link. */
+  showUrl?: boolean;
 }
 
 const BRAND_AFFILIATES: Record<string, AffiliateProvider[]> = {
@@ -380,6 +385,24 @@ function urlHost(url: string | null | undefined): string | null {
  *    3. brand is in BRAND_AFFILIATES → the curated brand programs.
  *    4. nothing relevant → only the brand site (no fake provider grid). */
 function getProductAffiliateProviders(p: { brand: string | null; url: string | null; source?: string | null; raw_data?: Record<string, unknown> | null }): AffiliateProvider[] {
+  // The LIVE Shopnomix redirect always leads when the brand is in-network:
+  // it's the exact link every shopper clickout travels through.
+  const shopnomix = p.url ? shopnomixRedirectFor(p.url) : null;
+  const live: AffiliateProvider[] = shopnomix ? [{
+    network: 'Shopnomix',
+    rate: 'Live',
+    rateNumeric: 100,
+    signupUrl: 'https://docs.shpnmx.com/redirect-link-generator.html',
+    outboundUrl: shopnomix,
+    connected: true,
+    merchantName: urlHost(p.url) ?? undefined,
+    note: 'every shopper clickout routes through this redirect',
+    showUrl: true,
+  }] : [];
+  return [...live, ...getProductAffiliateProvidersBase(p)];
+}
+
+function getProductAffiliateProvidersBase(p: { brand: string | null; url: string | null; source?: string | null; raw_data?: Record<string, unknown> | null }): AffiliateProvider[] {
   // (1) affiliate.com source — surface the actual affiliate URL from raw_data.
   const source = (p as unknown as { source?: string | null }).source ?? null;
   if (source === 'affiliate.com') {
@@ -963,7 +986,7 @@ function AddProductsModal({ onClose, onIngested, showToast, onPending }: AddProd
     const { data: inserted, error } = await supabase
       .from('products')
       .insert(rows)
-      .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, primary_video_poster_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, subtype, gender, created_at, source, size_fit, materials_care');
+      .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, primary_video_poster_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, subtype, gender, created_at, source, size_fit, materials_care, haiku_context');
     setIngesting(false);
     if (!error) {
       showToast(`Ingested ${rows.length} product${rows.length === 1 ? '' : 's'}`);
@@ -2169,7 +2192,7 @@ export default function AdminData() {
       // Reload products in the table
       const { data: reloaded } = await supabase
         .from('products')
-        .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, primary_video_poster_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, subtype, gender, created_at, source, size_fit, materials_care')
+        .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, primary_video_poster_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, subtype, gender, created_at, source, size_fit, materials_care, haiku_context')
         .order('scraped_at', { ascending: false });
       if (reloaded) {
         setCrawledProducts((reloaded || []).map(p => ({
@@ -2617,7 +2640,7 @@ export default function AdminData() {
       if (!supabase) { setProductsLoading(false); return; }
       const { data, error } = await supabase
         .from('products')
-        .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, primary_video_poster_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, subtype, gender, created_at, source, size_fit, materials_care')
+        .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, primary_video_poster_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, subtype, gender, created_at, source, size_fit, materials_care, haiku_context')
         .order('scraped_at', { ascending: false });
       if (error) {
         console.error('Failed to load crawled products:', error);
@@ -4033,7 +4056,7 @@ export default function AdminData() {
                   // without a manual page reload.
                   const { data } = await supabase!
                     .from('products')
-                    .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, primary_video_poster_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, subtype, gender, created_at, source, size_fit, materials_care')
+                    .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, primary_video_poster_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, subtype, gender, created_at, source, size_fit, materials_care, haiku_context')
                     .order('created_at', { ascending: false });
                   if (data) {
                     setCrawledProducts(data.map((p) => ({
@@ -4064,7 +4087,7 @@ export default function AdminData() {
                 if (result.updated > 0) {
                   const { data } = await supabase!
                     .from('products')
-                    .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, primary_video_poster_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, subtype, gender, created_at, source, size_fit, materials_care')
+                    .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, primary_video_poster_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, subtype, gender, created_at, source, size_fit, materials_care, haiku_context')
                     .order('created_at', { ascending: false });
                   if (data) {
                     setCrawledProducts(data.map((p) => ({
@@ -6013,6 +6036,7 @@ export default function AdminData() {
                 <SortableTh label="Subtype" sortKey="subtype" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <SortableTh label="Gender" sortKey="gender" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <th style={{ minWidth: 140 }}>Fabric</th>
+                <th style={{ minWidth: 200 }} title="Claude Haiku's read of the primary image — what the item actually is. Feeds type governance.">Haiku Context</th>
                 <SortableTh label="Product" sortKey="name" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <th style={{ textAlign: 'center' }} title="When on, this product is live — shown on the home feed AND in search / catalog listings. When off, it's fully hidden from the platform (but stays in this admin table).">Active</th>
                 <th style={{ textAlign: 'center' }} title="Flagged elite in /admin/creative - curated onto the feed and the deck v1.1 background">Elite</th>
@@ -6482,6 +6506,15 @@ export default function AdminData() {
                       composition string. */}
                   <td style={{ fontSize: 12, maxWidth: 200, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }} title={p.materials_care ?? undefined}>
                     {extractFabric(p.materials_care) ?? <span style={{ color: '#cbd5e1' }}>—</span>}
+                  </td>
+                  {/* Haiku context — the vision model's read of the primary
+                      image, regenerated whenever a new primary is picked
+                      (products_haiku_context trigger → haiku-context fn).
+                      Full text on hover. */}
+                  <td style={{ fontSize: 11.5, color: '#52525b', maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                    title={(p as { haiku_context?: string | null }).haiku_context ?? undefined}>
+                    {(p as { haiku_context?: string | null }).haiku_context
+                      ?? <span style={{ color: '#cbd5e1' }}>pending…</span>}
                   </td>
                   <td style={{ textAlign: 'left' }} onClick={(e) => e.stopPropagation()}>
                     {p.url ? (
@@ -7869,6 +7902,20 @@ export default function AdminData() {
                                     )}
                                     {a.note && (
                                       <div style={{ fontSize: 10, color: '#888', marginTop: 1 }}>{a.note}</div>
+                                    )}
+                                    {a.showUrl && a.outboundUrl && (
+                                      <div style={{ display: 'flex', alignItems: 'center', gap: 6, marginTop: 4, minWidth: 0 }}>
+                                        <code style={{ fontSize: 10, color: '#3730a3', background: '#eef2ff', padding: '2px 6px', borderRadius: 4, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', maxWidth: 520 }}>
+                                          {a.outboundUrl}
+                                        </code>
+                                        <button
+                                          className="admin-btn"
+                                          style={{ fontSize: 10, padding: '3px 8px', flexShrink: 0 }}
+                                          onClick={(e) => { e.stopPropagation(); void navigator.clipboard?.writeText(a.outboundUrl!); }}
+                                        >
+                                          Copy
+                                        </button>
+                                      </div>
                                     )}
                                   </div>
                                   <div style={{ fontSize: 12, fontWeight: 700, color: isMonetized ? '#16a34a' : '#475569' }}>
