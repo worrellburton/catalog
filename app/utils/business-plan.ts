@@ -426,6 +426,14 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
 
   /* Print: cover + one sheet per .page; nothing splits across pages. */
   @media print {
+    /* Zero @page margins do two jobs at once: the browser's injected
+       header/footer (date, title, "about:blank", page N/M) only renders
+       inside the margin band, so it vanishes; and 100vh becomes exactly
+       one sheet, so a full-height page can't spill a few pixels onto a
+       ghost sheet (the blank pages 5–6 were 100vh boxes whose PADDING
+       sat outside the box, overflowing every sheet by ~50px). */
+    @page { size: auto; margin: 0; }
+    html, body { margin: 0; }
     .toolbar { display: none; }
     /* The whole printed sheet is paper-colored — without this the page
        background only covered the content box, leaving the rest of the
@@ -433,9 +441,15 @@ export function buildBusinessPlanHtml(d: BusinessPlanData): string {
     body { background: var(--paper); font-size: 9px; line-height: 1.5;
       -webkit-print-color-adjust: exact; print-color-adjust: exact; }
     .page { padding: 26px 34px; max-width: none; margin: 0; box-shadow: none;
-      page-break-before: always; background: var(--paper); }
+      background: var(--paper); }
+    /* border-box so min-height:100vh INCLUDES the padding — sheet-exact. */
+    .page, .cover-page, .appendix-cover { box-sizing: border-box; }
     .cover-page { min-height: 100vh; page-break-after: always; }
-    .page { min-height: 100vh; page-break-after: always; page-break-inside: avoid; }
+    /* A hair under the sheet so sub-pixel rounding can't overflow; and
+       break-inside stays AUTO — an over-tall page flows onto the next
+       sheet instead of leaving a folio-only ghost page behind it. */
+    .page { min-height: calc(100vh - 2px); page-break-after: always; }
+    .page:last-child { page-break-after: auto; }
     section { page-break-inside: avoid; break-inside: avoid; margin-bottom: 18px; }
     .statband, .phases, .lens-grid, .lens, .feature-band, .chart, .flow,
     .features, .solutions, table.ltv-chain { page-break-inside: avoid; break-inside: avoid; }
