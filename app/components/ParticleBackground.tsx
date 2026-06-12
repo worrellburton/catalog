@@ -16,6 +16,11 @@ interface ParticleBackgroundProps {
    *  one-off, non-singleton mounts (e.g. the wallet's tinted variant).
    *  The site singleton omits this and reads from `particleControls` live. */
   speed?: number;
+  /** Opt-in external pause. When true the GL draw loop fully stops (zero GPU)
+   *  and resumes when it flips back to false. Used to suspend the decorative
+   *  field while a host is actively scrolling (the draw is the per-frame cost).
+   *  Omitted by every existing caller, so default behaviour is unchanged. */
+  paused?: boolean;
 }
 
 // ── Particle intensity knob ─────────────────────────────────────────
@@ -108,12 +113,21 @@ function compile(gl: WebGLRenderingContext, type: number, src: string): WebGLSha
   return sh;
 }
 
-export default function ParticleBackground({ speed }: ParticleBackgroundProps = {}) {
+export default function ParticleBackground({ speed, paused }: ParticleBackgroundProps = {}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   // When a one-off mount sets `speed`, use that locally; otherwise read the
   // shared `particleControls.speed` live on every frame so the singleton
   // can be retuned by any consumer.
   const localSpeed = speed;
+  // Reactive mirror of the `paused` prop + a restart hook the resume effect
+  // calls. Kept in refs so the draw loop (a []-deps effect) reads the live
+  // value without re-subscribing the GL context.
+  const pausedRef = useRef(!!paused);
+  const restartRef = useRef<() => void>(() => {});
+  useEffect(() => {
+    pausedRef.current = !!paused;
+    if (!paused) restartRef.current();
+  }, [paused]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -200,6 +214,13 @@ export default function ParticleBackground({ speed }: ParticleBackgroundProps = 
     let last = performance.now();
     const frame = () => {
       if (!running) return;
+      // External pause (host is actively scrolling): fully stop the loop so the
+      // additive-blend fill spends zero GPU mid-scroll. The resume effect calls
+      // restartRef when `paused` flips back to false.
+      if (pausedRef.current) {
+        running = false;
+        return;
+      }
       // Site singleton (no explicit speed prop) skips the GL draw while the
       // feed covers it — keeps the loop alive to resume instantly, but
       // spends zero GPU on a hidden canvas. One-off mounts (ceremony, which
@@ -224,6 +245,16 @@ export default function ParticleBackground({ speed }: ParticleBackgroundProps = 
     };
     frame();
     void start;
+
+    // Resume hook for the external-pause path: the paused effect calls this
+    // when `paused` flips false, reviving the loop the same way visibility does.
+    restartRef.current = () => {
+      if (!running && !document.hidden && !reduced && !pausedRef.current) {
+        running = true;
+        last = performance.now();
+        frame();
+      }
+    };
 
     const onVisibility = () => {
       if (document.hidden) {
