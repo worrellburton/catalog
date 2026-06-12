@@ -40,15 +40,28 @@ export interface SafeNote {
   discount: number;
 }
 
+export interface RoundInvestor {
+  id: string;
+  name: string;
+  investment: number;
+}
+
 export interface PricedRound {
   id: string;
   name: string;
   preMoney: number;
-  investment: number;
+  /** Legacy single-check field — superseded by `investors`; kept so
+   *  states saved before named investors still merge cleanly. */
+  investment?: number;
+  /** The round's checks, named. The round's size is their sum. */
+  investors: RoundInvestor[];
   /** Target option pool as a share of POST-money (0–1), topped up
    *  pre-money. 0 = no top-up (the sheet's behaviour). */
   poolTopUp: number;
 }
+
+export const roundSize = (r: PricedRound): number =>
+  r.investors.reduce((a, i) => a + i.investment, 0);
 
 export type SafeMode = 'sheet' | 'postMoney';
 
@@ -74,9 +87,9 @@ export const EQUITY_DEFAULTS: EquityState = {
     { id: 'safe-dane', name: 'Dane Hagy', investment: 25_000, valCap: 5_000_000, discount: 0 },
   ],
   rounds: [
-    { id: 'seed', name: 'Seed', preMoney: 12_500_000, investment: 2_500_000, poolTopUp: 0 },
-    { id: 'series-a', name: 'Series A', preMoney: 50_000_000, investment: 7_500_000, poolTopUp: 0 },
-    { id: 'series-b', name: 'Series B', preMoney: 150_000_000, investment: 15_000_000, poolTopUp: 0 },
+    { id: 'seed', name: 'Seed', preMoney: 12_500_000, poolTopUp: 0, investors: [{ id: 'seed-inv', name: 'Seed Investor', investment: 2_500_000 }] },
+    { id: 'series-a', name: 'Series A', preMoney: 50_000_000, poolTopUp: 0, investors: [{ id: 'series-a-inv', name: 'Series A Investor', investment: 7_500_000 }] },
+    { id: 'series-b', name: 'Series B', preMoney: 150_000_000, poolTopUp: 0, investors: [{ id: 'series-b-inv', name: 'Series B Investor', investment: 15_000_000 }] },
   ],
 };
 
@@ -101,7 +114,15 @@ export function mergeEquity(p: unknown): EquityState {
     safeMode: parsed.safeMode === 'sheet' ? 'sheet' : 'postMoney',
     holders: list(parsed.holders, EQUITY_DEFAULTS.holders),
     safes: list(parsed.safes, EQUITY_DEFAULTS.safes),
-    rounds: list(parsed.rounds, EQUITY_DEFAULTS.rounds).map(r => ({ ...r, poolTopUp: r.poolTopUp ?? 0 })),
+    rounds: list(parsed.rounds, EQUITY_DEFAULTS.rounds).map(r => ({
+      ...r,
+      poolTopUp: r.poolTopUp ?? 0,
+      // Pre-named-investor states carried a single `investment` — fold it
+      // into a one-investor list so old saves keep their numbers.
+      investors: Array.isArray(r.investors) && r.investors.length > 0
+        ? r.investors
+        : [{ id: `${r.id}-inv`, name: `${r.name} Investor`, investment: r.investment ?? 0 }],
+    })),
   };
 }
 
@@ -280,6 +301,7 @@ export function computeEquity(state: EquityState): EquitySummary {
   const foundationGroups = groupTotals(foundationRows);
 
   for (const round of state.rounds) {
+    const investment = roundSize(round);
     const target = Math.max(0, Math.min(0.5, round.poolTopUp));
     // Solve pool top-up + pricing together (both move the denominator).
     let poolAdded = 0;
@@ -288,7 +310,7 @@ export function computeEquity(state: EquityState): EquitySummary {
     for (let pass = 0; pass < 24; pass++) {
       const preShares = sharesOutstanding + poolAdded;
       pps = preShares > 0 ? round.preMoney / preShares : 0;
-      newShares = pps > 0 ? round.investment / pps : 0;
+      newShares = pps > 0 ? investment / pps : 0;
       const after = preShares + newShares;
       const poolNow = optionShares + poolExtra + poolAdded;
       const wanted = Math.max(0, target * after - poolNow);
@@ -296,22 +318,25 @@ export function computeEquity(state: EquityState): EquitySummary {
       poolAdded = wanted;
     }
     poolAdded = Math.round(poolAdded);
-    newShares = Math.round(newShares);
+    // One row per named check; the stage's new shares are their sum so
+    // the table always reconciles with its own rounding.
+    const investorRows = round.investors.map(inv => ({
+      id: inv.id,
+      group: 'round' as const,
+      type: round.name,
+      name: inv.name,
+      investment: inv.investment,
+      valCap: null,
+      shares: pps > 0 ? Math.round(inv.investment / pps) : 0,
+    }));
+    newShares = investorRows.reduce((a, r) => a + r.shares, 0);
     const sharesBefore = sharesOutstanding + poolAdded;
     const sharesAfter = sharesBefore + newShares;
-    const post = round.preMoney + round.investment;
+    const post = round.preMoney + investment;
     poolExtra += poolAdded;
     sharesOutstanding = sharesAfter;
 
-    laterRows.push({
-      id: round.id,
-      group: 'round',
-      type: round.name,
-      name: `${round.name} Investor`,
-      investment: round.investment,
-      valCap: null,
-      shares: newShares,
-    });
+    laterRows.push(...investorRows);
 
     const all = [
       ...baseRows,

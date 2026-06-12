@@ -792,10 +792,11 @@
   bottom: var(--hero-bar-bottom, 36svh);
   /* The bar holds its opacity through the early scroll while the
      spark + headline fade out fast (see .sfh-stage rule below).
-     Once they're gone, the bar itself fades — multiplier 1.8 means
-     bar opacity hits 0 around ratio 0.56, just before .hero-scrolled
-     fires and the docked-position bar takes over. */
-  opacity: clamp(0, calc(1.2 - var(--hero-scroll-progress, 0) * 1.8), 1);
+     Once they're gone, the bar itself fades — multiplier 2.4 means
+     bar opacity hits 0 at ratio 0.5, exactly when .hero-scrolled
+     fires (quarter-screen) and the docked-position bar takes over —
+     it never lingers mid-screen over the peeking product cards. */
+  opacity: clamp(0, calc(1.2 - var(--hero-scroll-progress, 0) * 2.4), 1);
   transition: opacity 0.18s linear,
               bottom 0.55s cubic-bezier(0.16, 1, 0.3, 1),
               transform 0.55s cubic-bezier(0.16, 1, 0.3, 1),

@@ -414,12 +414,15 @@ export default function Home() {
         raf = 0;
         const ratio = Math.min(1, Math.max(0, window.scrollY / (window.innerHeight * 0.5)));
         document.documentElement.style.setProperty('--hero-scroll-progress', String(ratio));
-        // Same 0.625 cutoff as the CSS opacity formula (1 - r*1.6 ≤ 0)
+        // Same 0.5 cutoff as the CSS opacity formula (1.2 - r*2.4 ≤ 0)
         // so pointer-events flip off the moment the bar is visually
         // invisible. Without this hook the faded bar still ate taps
         // meant for the product tiles below it.
-        setHeroBarFaded(ratio >= 0.625);
-        setHeroScrolled(window.scrollY > window.innerHeight * 0.5);
+        setHeroBarFaded(ratio >= 0.5);
+        // Dock early: by a quarter-screen of scroll the feed peek owns
+        // the viewport — the bar belongs at the bottom, not floating
+        // mid-screen over product cards (the founder's screenshot).
+        setHeroScrolled(window.scrollY > window.innerHeight * 0.25);
       });
     };
     window.addEventListener('scroll', onScroll, { passive: true });
@@ -440,10 +443,16 @@ export default function Home() {
     let lastY = window.scrollY;
     const THRESHOLD = 8; // px of continuous direction before reacting
     let accum = 0;
+    let idle = 0;
     const onScroll = () => {
       // Frozen while an overlay is open — see overlayScrollLockRef. Leaving
       // lastY untouched keeps the delta continuous when scrolling resumes.
       if (overlayScrollLockRef.current) return;
+      // Rest return: 2s after the last real scroll the chrome eases back
+      // (same rhythm as the card chrome) — "the search bar is missing"
+      // should never outlive the scroll that hid it.
+      window.clearTimeout(idle);
+      idle = window.setTimeout(() => setChromeHidden(false), 2000);
       const y = window.scrollY;
       const dy = y - lastY;
       lastY = y;
@@ -456,7 +465,10 @@ export default function Home() {
       else if (accum < -THRESHOLD) setChromeHidden(false);
     };
     window.addEventListener('scroll', onScroll, { passive: true });
-    return () => window.removeEventListener('scroll', onScroll);
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      window.clearTimeout(idle);
+    };
   }, [heroScrolled]);
 
   // Any committed search while on the hero (bottom bar Enter, a catalog
