@@ -6576,3 +6576,8 @@ html.eq-page .gen-queue-host { display: none; }
 .eq-namelink { color: inherit; text-decoration: none; border-bottom: 1px dotted #cbd5e1; }
 .eq-namelink:hover { color: #4f46e5; border-bottom-color: #4f46e5; }
 .eq-in-date { width: 138px; text-align: left; font-weight: 500; color: #475569; }
+/* Wide stage tables scroll INSIDE their card — they were stretching the
+   page wider than the viewport, which shoved the collapse chevrons (then
+   at the far right) off-screen entirely. */
+.eq-section { overflow-x: auto; }
+.eq-section-head .eq-collapse { margin-right: 2px; }

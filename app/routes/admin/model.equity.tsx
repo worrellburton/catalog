@@ -166,9 +166,9 @@ export default function EquityPage() {
       {/* ── Foundation: founders + early options only ── */}
       <div className="eq-section admin-card">
         <div className="eq-section-head">
+          <Chevron id="foundation" />
           <h3>Foundation</h3>
           <span>{shares(summary.foundersShares)} founder shares · {shares(summary.optionShares)} option shares</span>
-          <Chevron id="foundation" />
         </div>
         {!collapsed.has('foundation') && (
           <>
@@ -202,42 +202,53 @@ export default function EquityPage() {
       {/* ── Friends & Family: the SAFE notes ── */}
       <div className="eq-section admin-card">
         <div className="eq-section-head">
+          <Chevron id="ff" />
           <h3>Friends &amp; Family</h3>
           <span>
             {fmtCurrency(ffTotal, { compact: true })} raised across {equity.safes.length} SAFE{equity.safes.length === 1 ? '' : 's'} ·
             converts at the first priced round
           </span>
-          <Chevron id="ff" />
         </div>
         {!collapsed.has('ff') && (
           <>
+            {/* Same format as the priced rounds: the FULL table with the
+                round's new money (the SAFEs) highlighted and editable;
+                founders/pools read as context rows, exactly like later
+                rounds show earlier holders. */}
             <table className="eq-table">
               <thead>
-                <tr><th>Holder</th><th className="num">Investment</th><th className="num">Val cap</th><th className="num">Discount</th><th className="num">Shares</th><th className="num">Ownership</th><th /></tr>
+                <tr><th>Type</th><th>Holder</th><th className="num">Investment</th><th className="num">Val cap</th><th className="num">Discount</th><th className="num">Shares</th><th className="num">Ownership</th><th /></tr>
               </thead>
               <tbody>
-                {equity.safes.map(s => {
-                  const conv = summary.safeConversions.find(c => c.safe.id === s.id);
-                  const row = summary.foundationRows.find(r => r.id === s.id);
+                {summary.foundationRows.map(r => {
+                  const s = equity.safes.find(x => x.id === r.id);
+                  const conv = s ? summary.safeConversions.find(c => c.safe.id === s.id) : null;
                   return (
-                    <tr key={s.id}>
-                      <td className="eq-namecell"><input className="eq-in eq-in-name" value={s.name} onChange={e => setSafe(s.id, { name: e.target.value })} /><OpenHolder hid={s.id} /></td>
-                      <td className="num"><AcctInput className="eq-in" value={s.investment} onChange={n => setSafe(s.id, { investment: n })} /></td>
-                      <td className="num"><AcctInput className="eq-in" value={s.valCap} onChange={n => setSafe(s.id, { valCap: n })} /></td>
-                      <td className="num">
-                        <span className="eq-pct">
-                          <input className="eq-in" type="number" min={0} max={90} step={1}
-                            value={Math.round(s.discount * 100)}
-                            onChange={e => setSafe(s.id, { discount: Math.max(0, Math.min(90, Number(e.target.value))) / 100 })} />
-                          <em>%</em>
-                        </span>
+                    <tr key={r.id} className={s ? 'eq-row-new' : ''}>
+                      <td className="eq-type">{r.type}</td>
+                      <td className="eq-namecell">
+                        {s
+                          ? <><input className="eq-in eq-in-name" value={s.name} onChange={e => setSafe(s.id, { name: e.target.value })} /><OpenHolder hid={s.id} /></>
+                          : <Link className="eq-namelink" to={`/admin/model/equity/holder/${r.id}`}>{r.name}</Link>}
                       </td>
-                      <td className="num eq-computed" title={conv ? `${fmtCurrency(conv.price)} / share · converts on the ${conv.basis === 'discount' ? 'discount' : 'cap'}` : ''}>
-                        {shares(conv?.shares ?? 0)}
+                      <td className="num">{s ? <AcctInput className="eq-in" value={s.investment} onChange={n => setSafe(s.id, { investment: n })} /> : '—'}</td>
+                      <td className="num">{s ? <AcctInput className="eq-in" value={s.valCap} onChange={n => setSafe(s.id, { valCap: n })} /> : '—'}</td>
+                      <td className="num">
+                        {s ? (
+                          <span className="eq-pct">
+                            <input className="eq-in" type="number" min={0} max={90} step={1}
+                              value={Math.round(s.discount * 100)}
+                              onChange={e => setSafe(s.id, { discount: Math.max(0, Math.min(90, Number(e.target.value))) / 100 })} />
+                            <em>%</em>
+                          </span>
+                        ) : '—'}
+                      </td>
+                      <td className={`num${s ? ' eq-computed' : ''}`} title={conv ? `${fmtCurrency(conv.price)} / share · converts on the ${conv.basis === 'discount' ? 'discount' : 'cap'}` : ''}>
+                        {shares(r.shares)}
                         {conv && equity.safeMode === 'postMoney' && <em className="eq-basis">{conv.basis}</em>}
                       </td>
-                      <td className="num">{pct(row?.pct ?? 0)}</td>
-                      <td><button type="button" className="eq-x" title="Remove" onClick={() => patch({ safes: equity.safes.filter(x => x.id !== s.id) })}>×</button></td>
+                      <td className="num">{pct(r.pct)}</td>
+                      <td>{s && <button type="button" className="eq-x" title="Remove" onClick={() => patch({ safes: equity.safes.filter(x => x.id !== s.id) })}>×</button>}</td>
                     </tr>
                   );
                 })}
@@ -245,7 +256,10 @@ export default function EquityPage() {
               <tfoot>
                 {summary.foundationGroups.map(g => (
                   <tr key={g.label}>
-                    <td className="eq-type" colSpan={4}><i className="eq-dot" style={{ background: g.color }} />{g.label}</td>
+                    <td className="eq-type" colSpan={2}><i className="eq-dot" style={{ background: g.color }} />{g.label}</td>
+                    <td className="num" />
+                    <td className="num" />
+                    <td className="num" />
                     <td className="num">{shares(g.shares)}</td>
                     <td className="num">{pct(g.pct)}</td>
                     <td />
@@ -269,6 +283,7 @@ export default function EquityPage() {
       {summary.stages.map(stage => (
         <div key={stage.round.id} className="eq-section admin-card">
           <div className="eq-section-head">
+            <Chevron id={stage.round.id} />
             <input className="eq-in eq-in-round" value={stage.round.name} onChange={e => setRound(stage.round.id, { name: e.target.value })} />
             <span>
               {fmtCurrency(roundSize(stage.round), { compact: true })} raised · {fmtCurrency(stage.pricePerShare)} / share ·
@@ -276,7 +291,6 @@ export default function EquityPage() {
               {stage.poolAdded > 0 ? ` · pool +${shares(stage.poolAdded)}` : ''}
             </span>
             <button type="button" className="eq-x" title="Remove round" onClick={() => patch({ rounds: equity.rounds.filter(r => r.id !== stage.round.id) })}>×</button>
-            <Chevron id={stage.round.id} />
           </div>
 
           {!collapsed.has(stage.round.id) && (
