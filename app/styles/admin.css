@@ -6567,3 +6567,11 @@ html.eq-page .gen-queue-host { display: none; }
   background: #0f172a; color: #fff;
 }
 .eqa-input button:disabled { opacity: 0.35; cursor: default; }
+.eq-namecell { display: flex; align-items: center; gap: 6px; }
+.eq-open {
+  flex: 0 0 auto; font-size: 12px; font-weight: 700; text-decoration: none;
+  color: #94a3b8; padding: 2px 4px; border-radius: 6px;
+}
+.eq-open:hover { color: #4f46e5; background: #eef2ff; }
+.eq-namelink { color: inherit; text-decoration: none; border-bottom: 1px dotted #cbd5e1; }
+.eq-namelink:hover { color: #4f46e5; border-bottom-color: #4f46e5; }
