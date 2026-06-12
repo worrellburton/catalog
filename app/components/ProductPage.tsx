@@ -30,9 +30,8 @@ import { useRecentProducts } from '~/hooks/useRecentProducts';
 import { getRecentSearches } from '~/services/recent-searches';
 import SizeMatchBadge from '~/components/SizeMatchBadge';
 import { director } from '~/services/video-playback-director';
-import { CARD_POSTER_WIDTH } from './CreativeCardV2';
-import { withTransform } from '~/utils/supabase-image';
-import { warmPosters } from '~/utils/poster-prefetch';
+import { warmPosters, posterRendition } from '~/utils/poster-prefetch';
+import { recordOverlayScroll, consumeReturnScroll } from '~/utils/overlay-scroll-stash';
 import ParticleBackground from '~/components/ParticleBackground';
 import { productSlug } from '~/utils/slug';
 import { useCommentsEnabled } from '~/hooks/useCommentsEnabled';
@@ -698,12 +697,10 @@ export default function ProductPage({
   // black boxes while the bytes arrive. Same rendition math as the cards,
   // so the warmed URL IS the cache entry the tile requests.
   useEffect(() => {
-    const rendition = (raw: string | null | undefined) =>
-      raw ? (withTransform(raw, { width: CARD_POSTER_WIDTH, quality: 82, resize: 'contain' }) || raw) : null;
     warmPosters([
-      ...moreLikeThis.map(c => rendition(pickPosterUrl(c))),
-      ...(lookCreatives ?? []).map(l => rendition(lookPoster(l))),
-      ...(popularFallback ?? []).map(c => rendition(pickPosterUrl(c))),
+      ...moreLikeThis.map(c => posterRendition(pickPosterUrl(c))),
+      ...(lookCreatives ?? []).map(l => posterRendition(lookPoster(l))),
+      ...(popularFallback ?? []).map(c => posterRendition(pickPosterUrl(c))),
     ]);
   }, [moreLikeThis, lookCreatives, popularFallback]);
 
@@ -943,6 +940,38 @@ export default function ProductPage({
     scrollerRef.current?.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
   }, [navKey]);
 
+  // Back-restore: when this mount is a RETURN (browser back onto /p/…),
+  // jump to where the shopper left this page — never the top (founder's
+  // call). Runs after the snap-to-top layout effect above; fresh opens
+  // consume nothing and stay at the top. The same effect keeps recording
+  // the live offset so a future return knows where to land.
+  const scrollStashKey = productSlug({
+    id: (product as Product & { id?: string | null }).id ?? null,
+    brand: product.brand ?? null,
+    name: product.name ?? null,
+  });
+  useEffect(() => {
+    const scroller = scrollerRef.current;
+    if (!scroller || !scrollStashKey) return;
+    const returnTop = consumeReturnScroll(scrollStashKey);
+    if (returnTop != null) {
+      requestAnimationFrame(() => scroller.scrollTo({ top: returnTop, behavior: 'instant' as ScrollBehavior }));
+    }
+    let raf = 0;
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        recordOverlayScroll(scrollStashKey, scroller.scrollTop);
+      });
+    };
+    scroller.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      scroller.removeEventListener('scroll', onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [scrollStashKey]);
+
   const handleClose = useCallback(() => {
     // Reverse handoff — see LookOverlay.handleClose: the source card resumes
     // at the hero's exact frame instead of restarting.
@@ -1143,11 +1172,8 @@ export default function ProductPage({
   // CARD rendition (same width/quality/resize → same cache entry the feed
   // already fetched) so the underlay paints from memory instead of
   // re-downloading the full-res original — the residual 'black spot'.
-  const rawHeroThumb = effectiveCreative?.thumbnailUrl || '';
   const heroPoster = tapHandoffPoster
-    || (rawHeroThumb
-      ? (withTransform(rawHeroThumb, { width: CARD_POSTER_WIDTH, quality: 82, resize: 'contain' }) || rawHeroThumb)
-      : '')
+    || posterRendition(effectiveCreative?.thumbnailUrl)
     || heroStill;
 
   // Take ownership of the shared <video> element keyed by creative.id. The

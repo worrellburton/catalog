@@ -18,8 +18,8 @@ import { useTrailVideo, useTrailVideoManager } from './TrailVideoHost';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
 import ProductMiniMedia from './ProductMiniMedia';
 import ParticleBackground from './ParticleBackground';
-import { CARD_POSTER_WIDTH } from './CreativeCardV2';
-import { withTransform } from '~/utils/supabase-image';
+import { posterRendition } from '~/utils/poster-prefetch';
+import { recordOverlayScroll, consumeReturnScroll } from '~/utils/overlay-scroll-stash';
 import { director } from '~/services/video-playback-director';
 import CreatorAvatarFollow from './CreatorAvatarFollow';
 import { getLookSaveCount, recordLookSave, recordLookUnsave } from '~/services/look-saves';
@@ -246,11 +246,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   // in the open frame instead of fetching the multi-MB original (which read
   // as a black window while it downloaded). tapHandoffPoster is the exact
   // frame captured on tap and still wins when present.
-  const rawHeroPoster = lookPoster(look);
-  const heroPoster = tapHandoffPoster
-    || (rawHeroPoster
-      ? (withTransform(rawHeroPoster, { width: CARD_POSTER_WIDTH, quality: 82, resize: 'contain' }) || rawHeroPoster)
-      : '');
+  const heroPoster = tapHandoffPoster || posterRendition(lookPoster(look)) || '';
 
   // Take ownership of the same shared <video> element the originating
   // LookCard was playing. appendChild moves the DOM node - currentTime,
@@ -629,6 +625,36 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   // ProductPage approach exactly: attach native listeners to the
   // scroller root, only engage at scrollTop=0, slide the whole
   // overlay's transform, and fire handleClose at the same > 96 px /
+  // Back-restore: a RETURN to this look (back from a product it opened)
+  // lands where the shopper left off — never the top (founder's call).
+  // Fresh opens consume nothing. The listener keeps recording the live
+  // offset for the next return.
+  useEffect(() => {
+    const scroller = scrollRef.current;
+    const key = lookSlug({
+      id: look.id ?? null, uuid: look.uuid ?? null, creator: look.creator ?? null,
+      creatorDisplayName: look.creatorDisplayName ?? null, title: look.title ?? null,
+    });
+    if (!scroller || !key) return;
+    const returnTop = consumeReturnScroll(key);
+    if (returnTop != null) {
+      requestAnimationFrame(() => scroller.scrollTo({ top: returnTop, behavior: 'instant' as ScrollBehavior }));
+    }
+    let raf = 0;
+    const onScroll = () => {
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        recordOverlayScroll(key, scroller.scrollTop);
+      });
+    };
+    scroller.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      scroller.removeEventListener('scroll', onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, [look]);
+
   useEffect(() => {
     const scroller = scrollRef.current;
     const el = aboutRef.current;
