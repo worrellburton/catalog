@@ -239,13 +239,13 @@
   inset: 0;
   background: linear-gradient(
     105deg,
-    #161616 0%,
-    #161616 28%,
-    #262626 40%,
-    #383838 46%,
-    #262626 52%,
-    #161616 64%,
-    #161616 100%
+    #1c1c1f 0%,
+    #1c1c1f 28%,
+    #2c2c31 40%,
+    #41414a 46%,
+    #2c2c31 52%,
+    #1c1c1f 64%,
+    #1c1c1f 100%
   );
   background-size: 200% 100%;
   animation: shimmer 1.6s ease-in-out infinite, shimmerPulse 2.4s ease-in-out infinite;

@@ -1,5 +1,9 @@
 import { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
-import CreativeCardV2 from './CreativeCardV2';
+import CreativeCardV2, { CARD_POSTER_WIDTH } from './CreativeCardV2';
+import { pickPosterUrl } from '~/services/video-loading';
+import { lookPoster } from '~/services/media-resolver';
+import { withTransform } from '~/utils/supabase-image';
+import { warmPosters } from '~/utils/poster-prefetch';
 import type { Look } from '~/data/looks';
 import type { ProductAd } from '~/services/product-creative';
 import { seededShuffle, hashSeed } from '~/utils/seededShuffle';
@@ -71,6 +75,10 @@ const SUB_BATCH = 8;
 // always re-mounts and re-warms before it scrolls back into view. Desktop and
 // the pre-measurement state keep windowStart = 0 → identical to before.
 const MAX_WINDOW = 160;
+// Fetch-ahead depth: posters for this many items BEYOND the mounted set
+// are warmed into the HTTP cache (utils/poster-prefetch) so a hard flick
+// lands on cards whose posters paint from cache instead of black shimmer.
+const PREFETCH_AHEAD = 36;
 
 // (Math.random shuffle removed - seeded shuffle below means the same
 // inputs always produce the same output, which is what useMemo needs to
@@ -324,6 +332,19 @@ function FeedSection({
 
   const displayItems = useMemo(() => pool.slice(windowStart, visibleCount), [pool, windowStart, visibleCount]);
 
+  // Warm the NEXT screens' posters before their cards exist — network is
+  // decoupled from mounting, so mount-time paints come from cache. Uses
+  // the exact rendition math the card uses (same URL = same cache entry).
+  useEffect(() => {
+    const ahead = pool.slice(visibleCount, visibleCount + PREFETCH_AHEAD);
+    warmPosters(ahead.map(item => {
+      const raw = item.type === 'look'
+        ? lookPoster(item.look)
+        : item.type === 'creative' ? pickPosterUrl(item.creative) : null;
+      return raw ? (withTransform(raw, { width: CARD_POSTER_WIDTH, quality: 82, resize: 'contain' }) || raw) : null;
+    }));
+  }, [pool, visibleCount]);
+
   const padTop = windowStart > 0 && rowMetrics
     ? (windowStart / rowMetrics.cols) * rowMetrics.rowH
     : 0;
@@ -396,7 +417,7 @@ function FeedSection({
       // Wide lookahead: start filling well before the sentinel is on screen so
       // rows are already mounted (and warming/playing) by the time they scroll
       // into view.
-      { root: scrollRoot ?? null, rootMargin: '1600px' }
+      { root: scrollRoot ?? null, rootMargin: '2800px' }
     );
     observer.observe(sentinel);
     return () => observer.disconnect();
