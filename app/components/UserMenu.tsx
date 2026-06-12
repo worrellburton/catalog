@@ -648,7 +648,11 @@ function UserMenu({
                 <span>Decks</span>
               </button>
             )}
-            {onLogout && (
+            {/* Log out only renders for a real session — a guest seeing
+                "Log out" reads as "my account lost its menu items" (it
+                did, to the founder, after a signing-key rotation logged
+                everyone out). */}
+            {onLogout && user && (
               <>
                 <div className="user-menu-divider" />
                 <button className="user-menu-item" onClick={runItem(onLogout)}>
@@ -805,7 +809,7 @@ function UserMenu({
                   </button>
                 )}
 
-                {onLogout && (
+                {onLogout && user && (
                   <PageRow icon="logout" label="Log out" onClick={runPageItem(onLogout)} variant="danger" />
                 )}
 
