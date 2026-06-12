@@ -370,6 +370,9 @@ export async function uploadLookMedia(
     .upload(storagePath, file, {
       contentType: file.type,
       upsert: false,
+      // UUID key, upsert:false → never overwritten in place, safe to cache
+      // forever (SDK default is max-age=3600). Revert by dropping cacheControl.
+      cacheControl: 'public, max-age=31536000, immutable',
     });
 
   if (uploadError) throw new Error(`Upload failed: ${uploadError.message}`);
@@ -414,7 +417,7 @@ export async function uploadLookMedia(
         const posterPath = `${userId}/${lookId}/posters/${crypto.randomUUID()}.jpg`;
         const { error: pErr } = await supabase.storage
           .from('look-media')
-          .upload(posterPath, blob, { contentType: 'image/jpeg', upsert: false });
+          .upload(posterPath, blob, { contentType: 'image/jpeg', upsert: false, cacheControl: 'public, max-age=31536000, immutable' });
         if (!pErr) {
           posterUrl = supabase.storage.from('look-media').getPublicUrl(posterPath).data.publicUrl;
         }
