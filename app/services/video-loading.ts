@@ -361,8 +361,8 @@ export function getPrefetchCount(): number {
 // a fast flick can't open a flood of segment fetches.
 
 const warmedHlsManifests = new Set<string>();
-const MAX_HLS_WARM_CONCURRENCY = 3;
-const MAX_PENDING_HLS_WARM = 8;
+const MAX_HLS_WARM_CONCURRENCY = 5;
+const MAX_PENDING_HLS_WARM = 16;
 let hlsWarmInFlight = 0;
 const hlsWarmQueue: string[] = [];
 
@@ -452,6 +452,26 @@ function pickLowestVariant(masterText: string): string | null {
   return bestUri;
 }
 
+/** From a master playlist, pick the highest-BANDWIDTH variant URI. Native iOS
+ *  HLS (and hls.js capLevelToPlayerSize) ramps to this rung on a high-DPR phone,
+ *  so warming it too means the rung the player actually settles on is a cache
+ *  hit — not just the low cold-start rung. Returns null if not a master. */
+function pickHighestVariant(masterText: string): string | null {
+  const lines = masterText.split(/\r?\n/);
+  let bestUri: string | null = null;
+  let bestBw = -1;
+  for (let i = 0; i < lines.length; i++) {
+    if (!lines[i].trim().startsWith('#EXT-X-STREAM-INF')) continue;
+    const m = lines[i].match(/BANDWIDTH=(\d+)/i);
+    const bw = m ? parseInt(m[1], 10) : 0;
+    let j = i + 1;
+    while (j < lines.length && lines[j].trim() === '') j++;
+    const uri = lines[j]?.trim();
+    if (uri && !uri.startsWith('#') && bw > bestBw) { bestBw = bw; bestUri = uri; }
+  }
+  return bestUri;
+}
+
 /** From a media playlist, return the init segment URI (fMP4 #EXT-X-MAP) and
  *  the first `max` media-segment URIs (max 0 → init/manifest warm only). */
 function parseFirstSegments(mediaText: string, max: number): { initUri: string | null; segUris: string[] } {
@@ -477,20 +497,31 @@ async function runHlsWarm(manifestUrl: string): Promise<void> {
   try {
     const masterText = await fetchManifestText(manifestUrl);
     if (!masterText) return;
-    let mediaUrl = manifestUrl;
-    let mediaText = masterText;
-    // Master playlist → resolve the lowest-bitrate media playlist first.
-    if (masterText.includes('#EXT-X-STREAM-INF')) {
-      const variant = pickLowestVariant(masterText);
-      if (!variant) return;
-      mediaUrl = new URL(variant, manifestUrl).href;
-      const t = await fetchManifestText(mediaUrl);
-      if (!t) return;
-      mediaText = t;
+    // Warm BOTH the lowest rung (fast first frame / cold-start) AND the highest
+    // rung (what native iOS HLS / capLevelToPlayerSize ramps to on a high-DPR
+    // phone). Warming only the lowest left the actually-played rung's first
+    // segment cold → every clip stalled on start. Deduped if the source has a
+    // single rung.
+    const isMaster = masterText.includes('#EXT-X-STREAM-INF');
+    const variants = isMaster
+      ? [pickLowestVariant(masterText), pickHighestVariant(masterText)]
+      : [null]; // already a media playlist
+    const warmed = new Set<string>();
+    for (let idx = 0; idx < variants.length; idx++) {
+      const variant = variants[idx];
+      const mediaUrl = variant ? new URL(variant, manifestUrl).href : manifestUrl;
+      if (warmed.has(mediaUrl)) continue;
+      warmed.add(mediaUrl);
+      const mediaText = variant ? await fetchManifestText(mediaUrl) : masterText;
+      if (!mediaText) continue;
+      // Low/cold-start rung (idx 0) gets HLS_WARM_SEGMENTS for a smooth opening;
+      // the high rung (idx 1) gets just its first segment — enough to make the
+      // ramp-to frame a cache hit without warming its big segments wholesale.
+      const segCount = idx === 0 ? HLS_WARM_SEGMENTS : 1;
+      const { initUri, segUris } = parseFirstSegments(mediaText, segCount);
+      if (initUri) await warmSegmentBytes(new URL(initUri, mediaUrl).href);
+      for (const s of segUris) await warmSegmentBytes(new URL(s, mediaUrl).href);
     }
-    const { initUri, segUris } = parseFirstSegments(mediaText, HLS_WARM_SEGMENTS);
-    if (initUri) await warmSegmentBytes(new URL(initUri, mediaUrl).href);
-    for (const s of segUris) await warmSegmentBytes(new URL(s, mediaUrl).href);
   } finally {
     hlsWarmInFlight--;
     pumpHlsWarmQueue();

@@ -24,13 +24,13 @@ const POSTERS_TO_WARM = 16;
 // initial set before the in-page IntersectionObserver has time to trigger
 // the regular preload chain.
 const VIDEOS_TO_WARM = 18;
-// HLS heads route through prefetchHlsHead's small bounded queue (3 in-flight,
-// 8 pending — see video-loading.ts). Pushing all 18 synchronously would evict
-// the NEAREST below-fold cards before they warm, so cap the boot batch to what
-// fits the queue without eviction. Each card re-warms its own head when it
-// enters CreativeCardV2/LookCard's prewarm band anyway, so this is just the
-// head start. MP4 link-preloads are unbounded, so they keep the full 18.
-const HLS_HEADS_TO_WARM = 6;
+// HLS heads route through prefetchHlsHead's bounded queue (5 in-flight, 16
+// pending — see video-loading.ts). Each head now warms BOTH the low + high rung
+// (the rung native iOS ramps to), so the lead matters more: warm 10 ahead so a
+// card is a cache-hit well before you reach it, rather than stalling on HLS's
+// 4-round-trip startup. Cap stays under the queue's pending limit. Each card
+// also re-warms its own head when it enters the prewarm band.
+const HLS_HEADS_TO_WARM = 10;
 
 // Warm via posterRendition() — the SINGLE canonical poster transform the card
 // actually paints (CARD_POSTER_WIDTH / q82 / webp). Sharing the one helper keeps
