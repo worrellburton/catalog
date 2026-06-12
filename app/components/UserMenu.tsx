@@ -47,6 +47,10 @@ interface UserMenuProps {
   /** Guests have no account menu — tapping the avatar surfaces the signup
    *  gate instead. When set AND there's no user, the trigger calls this. */
   onGuestSignup?: () => void;
+  /** Plain sign-in entry for a signed-out visitor: the trigger falls back
+   *  to this when onGuestSignup is absent, and the popout shows a
+   *  "Log in" item instead of "Log out". */
+  onSignIn?: () => void;
 }
 
 const STRIP_LIMIT = 8;
@@ -82,6 +86,7 @@ function UserMenu({
   activeFilter,
   onChangeCatalogGender,
   onGuestSignup,
+  onSignIn,
 }: UserMenuProps) {
   const [open, setOpen] = useState(false);
   // Mobile-only: opens a full-screen Account page instead of the popout.
@@ -108,8 +113,9 @@ function UserMenu({
   // the classic popout on desktop. Capture the avatar's center at click
   // time so the page can reveal outward from that exact point.
   const handleTriggerClick = useCallback(() => {
-    // Guests have no account — the avatar is a "Sign up / Log in" entry point.
-    if (!user && onGuestSignup) { onGuestSignup(); return; }
+    // Guests have no account — the avatar is a "Sign up / Log in" entry
+    // point. Prefer the signup gate; fall back to the plain sign-in.
+    if (!user && (onGuestSignup || onSignIn)) { (onGuestSignup ?? onSignIn)!(); return; }
     if (typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches) {
       const rect = triggerRef.current?.getBoundingClientRect();
       if (rect) setPageOrigin({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
@@ -118,7 +124,7 @@ function UserMenu({
     } else {
       setOpen(o => !o);
     }
-  }, [user, onGuestSignup]);
+  }, [user, onGuestSignup, onSignIn]);
 
   // External open via the global swipe-left gesture (SwipeMenuGesture
   // mounted at app root). Treat it as a tap on the trigger but reveal
@@ -128,7 +134,7 @@ function UserMenu({
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const onOpen = () => {
-      if (!user && onGuestSignup) { onGuestSignup(); return; }
+      if (!user && (onGuestSignup || onSignIn)) { (onGuestSignup ?? onSignIn)!(); return; }
       const rect = triggerRef.current?.getBoundingClientRect();
       if (rect) setPageOrigin({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 2 });
       else setPageOrigin({ x: window.innerWidth - 30, y: 50 });
@@ -658,6 +664,18 @@ function UserMenu({
                 <button className="user-menu-item" onClick={runItem(onLogout)}>
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
                   <span>Log out</span>
+                </button>
+              </>
+            )}
+            {/* Signed out → a way IN. (The trigger normally routes guests
+                straight to the gate, so this is the fallback for any path
+                that still lands in the popout without a session.) */}
+            {!user && (onSignIn || onGuestSignup) && (
+              <>
+                <div className="user-menu-divider" />
+                <button className="user-menu-item" onClick={runItem(() => (onGuestSignup ?? onSignIn)!())}>
+                  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+                  <span>Log in</span>
                 </button>
               </>
             )}

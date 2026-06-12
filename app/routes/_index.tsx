@@ -1898,6 +1898,7 @@ export default function Home() {
                 activeFilter={activeFilter}
                 onChangeCatalogGender={handleGenderFilterChange}
                 onGuestSignup={() => setGuestGate({ variant: 'feed' })}
+                onSignIn={() => setShowSignIn(true)}
               />
             </div>
           </header>
@@ -1989,7 +1990,12 @@ export default function Home() {
               a creator catalog ('creator'), or the feed scroll nudge
               ('feed'). Looks gate after the first free one; creator
               catalogs always gate; products stay open. */}
-          {guestGate && !waitlistMode && !authLoading && !user && (
+          {/* Renders in BOTH launch flows: with the landing retired this
+              gate is the only door a signed-out visitor has to sign-in
+              (in waitlist flow a fresh signup still routes to the
+              waitlist screen after auth). Gating it on !waitlistMode
+              made the account button a dead click for guests. */}
+          {guestGate && !authLoading && !user && (
             <GuestSignupGate
               variant={guestGate.variant}
               onClose={
