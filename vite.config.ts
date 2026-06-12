@@ -204,6 +204,7 @@ export default defineConfig({
             route("model", "routes/admin/model.tsx");
             route("model/opex", "routes/admin/model.opex.tsx");
             route("model/equity", "routes/admin/model.equity.tsx");
+            route("model/equity/holder/:id", "routes/admin/model.equity.holder.$id.tsx");
             route("gtm", "routes/admin/gtm.tsx");
             route("metrics/:id", "routes/admin/metrics.$id.tsx");
             route("projections", "routes/admin/projections.tsx");

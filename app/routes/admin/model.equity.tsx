@@ -7,6 +7,7 @@
 // Sheet (reproduces the founder's spreadsheet). Shared live across admins.
 
 import { useEffect, useMemo, useState } from 'react';
+import { Link } from '@remix-run/react';
 import { fmtCurrency } from '~/services/projections';
 import {
   computeEquity, equityUid, roundSize, EQUITY_DEFAULTS,
@@ -76,6 +77,11 @@ export default function EquityPage() {
   };
 
   const ffTotal = equity.safes.reduce((a, s) => a + s.investment, 0);
+
+  // Every participant has their own page — ↗ next to a name opens it.
+  const OpenHolder = ({ hid }: { hid: string }) => (
+    <Link className="eq-open" to={`/admin/model/equity/holder/${hid}`} title="Open this holder's page">↗</Link>
+  );
 
   return (
     <div className="admin-page model-page">
@@ -149,7 +155,7 @@ export default function EquityPage() {
                 {equity.holders.map(h => (
                   <tr key={h.id}>
                     <td className="eq-type">{h.kind === 'founders' ? 'Founders' : h.kind === 'advisory' ? 'Advisory' : 'Pool'}</td>
-                    <td><input className="eq-in eq-in-name" value={h.name} onChange={e => setHolder(h.id, { name: e.target.value })} /></td>
+                    <td className="eq-namecell"><input className="eq-in eq-in-name" value={h.name} onChange={e => setHolder(h.id, { name: e.target.value })} /><OpenHolder hid={h.id} /></td>
                     <td className="num"><AcctInput className="eq-in" value={h.shares} onChange={n => setHolder(h.id, { shares: n })} /></td>
                     <td>
                       {h.kind !== 'founders' && (
@@ -190,7 +196,7 @@ export default function EquityPage() {
                   const row = summary.foundationRows.find(r => r.id === s.id);
                   return (
                     <tr key={s.id}>
-                      <td><input className="eq-in eq-in-name" value={s.name} onChange={e => setSafe(s.id, { name: e.target.value })} /></td>
+                      <td className="eq-namecell"><input className="eq-in eq-in-name" value={s.name} onChange={e => setSafe(s.id, { name: e.target.value })} /><OpenHolder hid={s.id} /></td>
                       <td className="num"><AcctInput className="eq-in" value={s.investment} onChange={n => setSafe(s.id, { investment: n })} /></td>
                       <td className="num"><AcctInput className="eq-in" value={s.valCap} onChange={n => setSafe(s.id, { valCap: n })} /></td>
                       <td className="num">
@@ -273,10 +279,10 @@ export default function EquityPage() {
                     return (
                       <tr key={r.id} className={inv ? 'eq-row-new' : ''}>
                         <td className="eq-type">{r.type}</td>
-                        <td>
+                        <td className="eq-namecell">
                           {inv
-                            ? <input className="eq-in eq-in-name" value={inv.name} onChange={e => setInvestor(stage.round.id, inv.id, { name: e.target.value })} />
-                            : r.name}
+                            ? <><input className="eq-in eq-in-name" value={inv.name} onChange={e => setInvestor(stage.round.id, inv.id, { name: e.target.value })} /><OpenHolder hid={inv.id} /></>
+                            : <Link className="eq-namelink" to={`/admin/model/equity/holder/${r.id}`}>{r.name}</Link>}
                         </td>
                         <td className="num">
                           {inv
