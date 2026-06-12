@@ -248,8 +248,12 @@ export default function EquityPage() {
                         ) : '—'}
                       </td>
                       <td className={`num${s ? ' eq-computed' : ''}`} data-l="Shares" title={conv ? `${fmtCurrency(conv.price)} / share · converts on the ${conv.basis === 'discount' ? 'discount' : 'cap'}` : ''}>
-                        {shares(r.shares)}
-                        {conv && equity.safeMode === 'postMoney' && <em className="eq-basis">{conv.basis}</em>}
+                        {conv?.invalid
+                          ? <em className="eq-invalid" title="The cap is below the check — this note would buy more than the whole company. Fix the cap (tip: type 10M).">cap &lt; check</em>
+                          : <>
+                              {shares(r.shares)}
+                              {conv && equity.safeMode === 'postMoney' && <em className="eq-basis">{conv.basis}</em>}
+                            </>}
                       </td>
                       <td className="num" data-l="Ownership">{pct(r.pct)}</td>
                       <td>{s && <button type="button" className="eq-x" title="Remove" onClick={() => patch({ safes: equity.safes.filter(x => x.id !== s.id) })}>×</button>}</td>

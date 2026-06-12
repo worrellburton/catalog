@@ -208,6 +208,10 @@ export interface SafeConversion {
   price: number;
   /** Which leg won the investor's election ('postMoney' mode only). */
   basis: 'cap' | 'discount' | 'sheet';
+  /** cap < check: an impossible note (it would buy >100% of the
+   *  company). Excluded from conversion math until the cap is fixed —
+   *  usually a mid-typing or missing-zeros state. */
+  invalid?: boolean;
 }
 
 export interface EquitySummary {
@@ -234,9 +238,13 @@ export const EQUITY_GROUP_COLORS = {
 
 const clampDiscount = (d: number) => Math.max(0, Math.min(0.9, d));
 
+/** cap below the check = the note would buy more than the whole company. */
+const isBrokenSafe = (s: SafeNote) => s.valCap <= 0 || s.valCap < s.investment;
+
 /** 'sheet' mode SAFE price: cap × (1 − discount) ÷ founders' shares. */
 function sheetConversions(safes: SafeNote[], foundersShares: number): SafeConversion[] {
   return safes.map(safe => {
+    if (isBrokenSafe(safe)) return { safe, price: 0, shares: 0, basis: 'sheet' as const, invalid: true };
     const price = foundersShares > 0 ? (safe.valCap * (1 - clampDiscount(safe.discount))) / foundersShares : 0;
     return { safe, price, shares: price > 0 ? Math.round(safe.investment / price) : 0, basis: 'sheet' as const };
   });
@@ -255,9 +263,14 @@ function postMoneyConversions(
   // Without this ceiling the fixed point DIVERGES (~80× per pass →
   // 1e45 shares — the founder's broken ledger screenshot).
   const CEILING = baseShares * 19; // SAFE block ≤ 95% of company cap
+  // Broken notes (cap < check — usually a mid-typing state) sit out of
+  // the math entirely instead of starving every other note via the
+  // ceiling's proportional crush.
+  const broken = safes.map(isBrokenSafe);
   if (!firstRound) {
     // No priced round yet — show the cap-implied ownership on today's base.
-    return safes.map(safe => {
+    return safes.map((safe, i) => {
+      if (broken[i]) return { safe, shares: 0, price: 0, basis: 'cap' as const, invalid: true };
       const own = Math.min(safe.valCap > 0 ? safe.investment / safe.valCap : 0, 0.95);
       const shares = own < 1 ? Math.round((baseShares * own) / (1 - own)) : 0;
       return { safe, shares, price: shares > 0 ? safe.investment / shares : 0, basis: 'cap' as const };
@@ -269,6 +282,7 @@ function postMoneyConversions(
     const companyCap = baseShares + safeShares.reduce((a, b) => a + b, 0); // incl. converting SAFEs, excl. new money
     const roundPps = companyCap > 0 ? firstRound.preMoney / companyCap : 0;
     const next = safes.map((safe, i) => {
+      if (broken[i]) return 0;
       const capPrice = safe.valCap > 0 && companyCap > 0 ? safe.valCap / companyCap : Infinity;
       const discPrice = safe.discount > 0 && roundPps > 0 ? roundPps * (1 - clampDiscount(safe.discount)) : Infinity;
       const price = Math.min(capPrice, discPrice);
@@ -286,6 +300,7 @@ function postMoneyConversions(
     shares: Math.round(safeShares[i]),
     price: safeShares[i] > 0 ? safe.investment / safeShares[i] : 0,
     basis: basis[i],
+    invalid: broken[i] || undefined,
   }));
 }
 

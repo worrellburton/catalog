@@ -6679,3 +6679,9 @@ html.eq-page .gen-queue-host { display: none; }
   }
   .eq-table tbody tr.eq-group-row td { position: static; border: none; padding: 0; }
 }
+.eq-invalid {
+  font-style: normal; font-size: 10px; font-weight: 800;
+  letter-spacing: 0.04em; text-transform: uppercase;
+  color: #b91c1c; background: #fef2f2; border: 1px solid #fecaca;
+  border-radius: 6px; padding: 3px 7px; white-space: nowrap;
+}
