@@ -18,6 +18,8 @@ import { useTrailVideo, useTrailVideoManager } from './TrailVideoHost';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
 import ProductMiniMedia from './ProductMiniMedia';
 import ParticleBackground from './ParticleBackground';
+import { CARD_POSTER_WIDTH } from './CreativeCardV2';
+import { withTransform } from '~/utils/supabase-image';
 import { director } from '~/services/video-playback-director';
 import CreatorAvatarFollow from './CreatorAvatarFollow';
 import { getLookSaveCount, recordLookSave, recordLookUnsave } from '~/services/look-saves';
@@ -239,9 +241,16 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
     return url || '';
   })();
   // Canonical look poster (services/media-resolver) — same chain the feed card
-  // uses, so the hero never opens to a different (or black) still than the card
-  // that launched it. tapHandoffPoster is the exact frame captured on tap.
-  const heroPoster = tapHandoffPoster || lookPoster(look);
+  // uses, AND the same rendition (width/quality/resize), so this URL is the
+  // one the feed already pulled into cache: the hero paints it from memory
+  // in the open frame instead of fetching the multi-MB original (which read
+  // as a black window while it downloaded). tapHandoffPoster is the exact
+  // frame captured on tap and still wins when present.
+  const rawHeroPoster = lookPoster(look);
+  const heroPoster = tapHandoffPoster
+    || (rawHeroPoster
+      ? (withTransform(rawHeroPoster, { width: CARD_POSTER_WIDTH, quality: 82, resize: 'contain' }) || rawHeroPoster)
+      : '');
 
   // Take ownership of the same shared <video> element the originating
   // LookCard was playing. appendChild moves the DOM node - currentTime,
