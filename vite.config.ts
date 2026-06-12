@@ -205,6 +205,7 @@ export default defineConfig({
             route("catalogs", "routes/admin/catalogs.tsx");
             route("governance", "routes/admin/governance.tsx");
             route("governance/types", "routes/admin/governance.types.tsx");
+            route("governance/users", "routes/admin/governance.users.tsx");
             route("catalogs/:slug", "routes/admin/catalogs.$slug.tsx");
             route("branding", "routes/admin/branding.tsx");
             route("ui", "routes/admin/ui.tsx", () => {
