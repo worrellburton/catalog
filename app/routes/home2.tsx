@@ -98,7 +98,10 @@ export default function HomeTwo() {
   return (
     <div className="h2-page">
       {/* ── Masthead ─────────────────────────────────────────────────── */}
-      <header className="h2-masthead">
+      {/* div, not <header> — the consumer header.css styles the header
+          ELEMENT globally (position:fixed) and would pin the masthead
+          over the page (it did, on the founder's phone). */}
+      <div className="h2-masthead">
         <div className="h2-topline">
           <span>The shoppable catalog</span>
           <span>Issue No. {ISSUE_NO}</span>
@@ -110,7 +113,7 @@ export default function HomeTwo() {
           Tap anything — it&rsquo;s yours in two clicks.
         </p>
         <div className="h2-rule h2-rule--double" />
-      </header>
+      </div>
 
       {/* ── Hero spread ──────────────────────────────────────────────── */}
       {hero && (
@@ -218,12 +221,12 @@ export default function HomeTwo() {
         </div>
       </section>
 
-      <footer className="h2-foot">
+      <div className="h2-foot">
         <div className="h2-rule h2-rule--double" />
         <h1 className="h2-wordmark h2-wordmark--foot">Catalog</h1>
         <p>AI shopping doesn&rsquo;t have a home yet. You&rsquo;re standing in it.</p>
         <button type="button" className="h2-foot-cta" onClick={() => navigate('/')}>Enter the feed →</button>
-      </footer>
+      </div>
     </div>
   );
 }
