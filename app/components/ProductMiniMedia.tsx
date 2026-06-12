@@ -18,7 +18,7 @@
 // future surface that wants the same poster-then-video pattern.
 
 import { useEffect, useRef, useState } from 'react';
-import { withTransform } from '~/utils/supabase-image';
+import { posterRendition } from '~/utils/poster-prefetch';
 
 interface Props {
   /** Static poster — product photo (primary_image_url) or the video's
@@ -60,13 +60,12 @@ export default function ProductMiniMedia({ posterSrc, videoSrc, alt = '', fallba
     );
   }
 
-  // Bumped to 480 px wide @ q=80 so the poster carries enough detail
-  // to read at the 72 px display box on retina screens (288 px effective
-  // resolution at 4× DPR) without falling back to the source URL's
-  // possibly-huge dimensions. The user asked for "full resolution"
-  // poster — 480 px is the sweet spot where every screen renders crisp
-  // without burning bandwidth on a 2000 px-wide product hero.
-  const resolvedPoster = withTransform(posterSrc, { width: 480, quality: 80, format: 'webp' }) ?? '';
+  // SHARED rendition (utils/poster-prefetch): this exact URL is what the
+  // feed cards and the product hero request, so the row thumb both paints
+  // from any earlier sighting AND pre-seeds the hero for the tap-through —
+  // a private 480/q80/webp variant here meant the hero cache-missed and
+  // opened black.
+  const resolvedPoster = posterRendition(posterSrc) ?? '';
 
   return (
     <>

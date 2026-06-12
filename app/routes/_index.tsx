@@ -23,6 +23,8 @@ import { useBookmarks } from '~/hooks/useBookmarks';
 import { useRecentProducts } from '~/hooks/useRecentProducts';
 import { useAuth } from '~/hooks/useAuth';
 import { useOverlayRouter } from '~/hooks/useOverlayRouter';
+import { lookSlug } from '~/utils/slug';
+import { markOverlayReturn } from '~/utils/overlay-scroll-stash';
 import { useShellBridge } from '~/hooks/useShellBridge';
 import { useAppView } from '~/hooks/useAppView';
 import { useWaitlistMode, applyFlowOverrideFromUrl } from '~/hooks/useWaitlistMode';
@@ -1508,6 +1510,12 @@ export default function Home() {
         setGraphPairs(null);
         const fromLook = productOpenedFromLookRef.current;
         if (fromLook && onLook) {
+          // This re-open is a RETURN: the remounting overlay restores the
+          // scroll position the shopper left it at (overlay-scroll-stash).
+          markOverlayReturn(lookSlug({
+            id: fromLook.id ?? null, uuid: fromLook.uuid ?? null, creator: fromLook.creator ?? null,
+            creatorDisplayName: fromLook.creatorDisplayName ?? null, title: fromLook.title ?? null,
+          }));
           setSelectedLook(fromLook);
           setProductOpenedFromLook(null);
         }

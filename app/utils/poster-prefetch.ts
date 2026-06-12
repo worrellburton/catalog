@@ -12,6 +12,19 @@
 // - A small concurrency cap keeps the warm queue from competing with
 //   the posters the user is actually looking at.
 
+import { withTransform } from '~/utils/supabase-image';
+
+/** The ONE poster rendition every surface requests (feed cards, look
+ *  product rows, overlay heroes, rails, prefetch). Identical URL ⇒
+ *  identical cache entry ⇒ a poster seen anywhere paints instantly
+ *  everywhere else. Width matches the card's device-pixel budget. */
+export const CARD_POSTER_WIDTH = typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches ? 480 : 720;
+
+export function posterRendition(raw: string | null | undefined): string | null {
+  if (!raw) return null;
+  return withTransform(raw, { width: CARD_POSTER_WIDTH, quality: 82, resize: 'contain' }) || raw;
+}
+
 const warmed = new Set<string>();
 const queue: string[] = [];
 let inflight = 0;

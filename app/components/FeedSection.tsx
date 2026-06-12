@@ -1,9 +1,8 @@
 import { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
-import CreativeCardV2, { CARD_POSTER_WIDTH } from './CreativeCardV2';
+import CreativeCardV2 from './CreativeCardV2';
 import { pickPosterUrl } from '~/services/video-loading';
 import { lookPoster } from '~/services/media-resolver';
-import { withTransform } from '~/utils/supabase-image';
-import { warmPosters } from '~/utils/poster-prefetch';
+import { warmPosters, posterRendition } from '~/utils/poster-prefetch';
 import type { Look } from '~/data/looks';
 import type { ProductAd } from '~/services/product-creative';
 import { seededShuffle, hashSeed } from '~/utils/seededShuffle';
@@ -341,7 +340,7 @@ function FeedSection({
       const raw = item.type === 'look'
         ? lookPoster(item.look)
         : item.type === 'creative' ? pickPosterUrl(item.creative) : null;
-      return raw ? (withTransform(raw, { width: CARD_POSTER_WIDTH, quality: 82, resize: 'contain' }) || raw) : null;
+      return posterRendition(raw);
     }));
   }, [pool, visibleCount]);
 
