@@ -533,7 +533,7 @@ const HOME_FEED_TTL_MS = 60_000;
 // posters were stale — taken from an older, more-zoomed clip). Cached v9
 // rows still hold the stale -v3 thumbnail_url and keep rendering the
 // zoomed poster, so evict them.
-const HOME_FEED_LS_KEY = 'catalog:home-feed-cache:v12'; // v12: hls-v3 fMP4 ladders + HEVC + AV1 backfilled
+const HOME_FEED_LS_KEY = 'catalog:home-feed-cache:v13'; // v13: hls-v5 ladders (no B-frames, iOS-safe edit list, ~5Mbps top rung)
 const HOME_FEED_LS_MAX_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
 // Seed the in-memory promise from localStorage on import so the feed

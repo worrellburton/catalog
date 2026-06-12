@@ -12,7 +12,7 @@ const USE_SUPABASE = true;
 // ============================================
 // localStorage SWR cache (mirrors product-creative pattern)
 // ============================================
-const LOOKS_LS_KEY = 'catalog:looks-cache:v3'; // v3: hls-v3 fMP4 ladders + HEVC + AV1 backfilled
+const LOOKS_LS_KEY = 'catalog:looks-cache:v4'; // v4: hls-v5 ladders (no B-frames, iOS-safe edit list, ~5Mbps top rung)
 const LOOKS_LS_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 function readLooksFromStorage(): Look[] | null {
