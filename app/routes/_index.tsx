@@ -1502,27 +1502,39 @@ export default function Home() {
       // product + its rails, and if it was opened from a look,
       // restore that look so the underlying surface reappears.
       if (!onProduct && selectedProductRef.current) {
-        setSelectedProduct(null);
-        setSelectedCreative(null);
-        setSelectedSimilar(null);
-        setSimilarCreatives(null);
-        setBrandCreatives(null);
-        setGraphPairs(null);
         const fromLook = productOpenedFromLookRef.current;
-        if (fromLook && onLook) {
-          // This re-open is a RETURN: the remounting overlay restores the
-          // scroll position the shopper left it at (overlay-scroll-stash).
-          markOverlayReturn(lookSlug({
-            id: fromLook.id ?? null, uuid: fromLook.uuid ?? null, creator: fromLook.creator ?? null,
-            creatorDisplayName: fromLook.creatorDisplayName ?? null, title: fromLook.title ?? null,
-          }));
-          setSelectedLook(fromLook);
-          setProductOpenedFromLook(null);
+        if (onLook && !fromLook) {
+          // Destination is a look the overlay router is resolving async —
+          // keep this product on screen as the bridge (handleOpenLook
+          // clears it when the look swaps in). Clearing now flashed the
+          // bare home feed between the two screens (the founder's "warped
+          // through a few weird screens").
+        } else {
+          setSelectedProduct(null);
+          setSelectedCreative(null);
+          setSelectedSimilar(null);
+          setSimilarCreatives(null);
+          setBrandCreatives(null);
+          setGraphPairs(null);
+          if (fromLook && onLook) {
+            // This re-open is a RETURN: the remounting overlay restores the
+            // scroll position the shopper left it at (overlay-scroll-stash).
+            markOverlayReturn(lookSlug({
+              id: fromLook.id ?? null, uuid: fromLook.uuid ?? null, creator: fromLook.creator ?? null,
+              creatorDisplayName: fromLook.creatorDisplayName ?? null, title: fromLook.title ?? null,
+            }));
+            setSelectedLook(fromLook);
+            setProductOpenedFromLook(null);
+          }
         }
       }
       // Look overlay exit: URL is no longer /l/ but a look is still
-      // open → user backed out of the look overlay too.
-      if (!onLook && selectedLookRef.current) {
+      // open → user backed out of the look overlay too. EXCEPT when the
+      // destination is a product (/p/): the router is re-opening it async,
+      // and handleProductClick clears the look on swap — keeping it
+      // mounted until then bridges the gap with the screen the shopper
+      // was just on instead of a flash of the bare feed.
+      if (!onLook && selectedLookRef.current && !onProduct) {
         setSelectedLook(null);
       }
       // Brand overlay exit.
