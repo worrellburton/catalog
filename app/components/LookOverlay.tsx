@@ -83,14 +83,15 @@ interface LookOverlayProps {
   onOpenCreative?: (creative: ProductAd) => void;
   /** Opens the comment thread as an in-app overlay. */
   onOpenComments?: (type: 'product' | 'look', slug: string) => void;
-  /** Fires true once the shopper scrolls down to the "Your daily feed"
-   *  section, false when they scroll back above it (or the overlay closes).
-   *  The parent uses this to pop the Catalog search bar to the top, mirroring
-   *  the home feed — see the `looks-feed-bar` class on `.app-root`. */
-  onDailyFeedVisible?: (visible: boolean) => void;
+  /** Drives the Catalog search bar while the look is open. `reached` is true
+   *  once the shopper scrolls down to "Your daily feed" (the bar appears at the
+   *  bottom, like the home feed); `hidden` mirrors the main feed's chrome — true
+   *  while scrolling down within the feed, false on scroll-up. Both false above
+   *  the feed / on close. See `looks-feed-bar` / `looks-feed-bar-hidden`. */
+  onDailyFeedBar?: (reached: boolean, hidden: boolean) => void;
 }
 
-export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowser, onOpenProduct, onCreateCatalog, onOpenLook, bookmarks, allLooks, popularFallback, onOpenCreative, onOpenComments, onDailyFeedVisible }: LookOverlayProps) {
+export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowser, onOpenProduct, onCreateCatalog, onOpenLook, bookmarks, allLooks, popularFallback, onOpenCreative, onOpenComments, onDailyFeedBar }: LookOverlayProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   // Commentary universe: scroll progress drives the text's 3D entrance
@@ -104,8 +105,6 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   // parent can pop the Catalog search bar exactly when the shopper reaches
   // the daily feed — and hide it again when they scroll back above.
   const dailyFeedSentinelRef = useRef<HTMLDivElement | null>(null);
-  // Last value pushed to onDailyFeedVisible — dedupes redundant calls.
-  const dailyReachedRef = useRef(false);
   // Tracked separately so the nested feed re-binds its IntersectionObserver
   // root once the scroller mounts (refs alone don't trigger re-renders).
   const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
@@ -153,33 +152,51 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
     return () => scroller.removeEventListener('scroll', onScroll);
   }, [scrollEl]);
 
-  // Daily-feed reach detector. Pops the Catalog search bar to the top once the
-  // shopper scrolls down into "Your daily feed" (and only then) — the bar is
-  // hidden through the rest of the overlay. Rooted on the INNER scroller, so the
-  // body-lock's synthetic window scroll (which freezes the home trackers via
-  // overlayScrollLockRef) can never trip it. Direction is read from the marker's
-  // top vs the viewport top, so the bar STAYS shown while scrolling deeper and
-  // only hides when the marker comes back below the top edge.
+  // Catalog search bar while the look is open. Reports two things off the INNER
+  // scroller (so the body-lock's synthetic window scroll can't trip it):
+  //   • reached — the daily-feed marker has scrolled to/above the top edge, so
+  //     the shopper is now in "Your daily feed". The bar appears at the BOTTOM,
+  //     exactly like the home feed.
+  //   • hidden  — within the feed, mirror the home chrome: hide on scroll-down,
+  //     show on scroll-up (small dead-zone so jitter doesn't flicker it).
+  // Above the feed (or on close) both are false → the bar stays away.
   useEffect(() => {
-    const root = scrollEl;
+    const scroller = scrollEl;
     const sentinel = dailyFeedSentinelRef.current;
-    if (!root || !sentinel || !onDailyFeedVisible) return;
-    const emit = (v: boolean) => {
-      if (dailyReachedRef.current === v) return;
-      dailyReachedRef.current = v;
-      onDailyFeedVisible(v);
+    if (!scroller || !sentinel || !onDailyFeedBar) return;
+    const THRESHOLD = 8; // px of continuous direction before reacting
+    let raf = 0;
+    let lastY = scroller.scrollTop;
+    let accum = 0;
+    let reached = false;
+    let hidden = false;
+    const measure = () => {
+      raf = 0;
+      const y = scroller.scrollTop;
+      const nowReached =
+        sentinel.getBoundingClientRect().top <= scroller.getBoundingClientRect().top + 1;
+      const dy = y - lastY;
+      lastY = y;
+      if ((dy > 0 && accum >= 0) || (dy < 0 && accum <= 0)) accum += dy;
+      else accum = dy;
+      let nowHidden = hidden;
+      if (!nowReached) { nowHidden = false; accum = 0; }
+      else if (accum > THRESHOLD) nowHidden = true;
+      else if (accum < -THRESHOLD) nowHidden = false;
+      if (nowReached !== reached || nowHidden !== hidden) {
+        reached = nowReached; hidden = nowHidden;
+        onDailyFeedBar(reached, hidden);
+      }
     };
-    const obs = new IntersectionObserver(
-      (entries) => {
-        const entry = entries[entries.length - 1];
-        const rootTop = entry.rootBounds?.top ?? root.getBoundingClientRect().top;
-        emit(entry.boundingClientRect.top <= rootTop + 1);
-      },
-      { root, threshold: [0, 1] },
-    );
-    obs.observe(sentinel);
-    return () => { obs.disconnect(); emit(false); };
-  }, [scrollEl, onDailyFeedVisible]);
+    const onScroll = () => { if (!raf) raf = requestAnimationFrame(measure); };
+    measure();
+    scroller.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      scroller.removeEventListener('scroll', onScroll);
+      if (raf) cancelAnimationFrame(raf);
+      onDailyFeedBar(false, false);
+    };
+  }, [scrollEl, onDailyFeedBar]);
 
   const [isAnimatingOut, setIsAnimatingOut] = useState(false);
   const [lookBookmarked, setLookBookmarked] = useState(bookmarks.isLookBookmarked(look.id));
@@ -553,22 +570,36 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   // active filter, like the daily feed.
   const popularLooks = useMemo(() => {
     if (!popularLooksEnabled) return [] as Look[];
+    // `allLooks || allLooksData` is wrong: an empty array is truthy, so a
+    // not-yet-loaded [] would shadow the static fallback. Guard on length.
+    const source = allLooks && allLooks.length > 0 ? allLooks : allLooksData;
     const SEED_CREATORS = new Set(['@lilywittman', '@garrett']);
     const shown = new Set<number>([look.id]);
     feedSections.looksLikeThis.forEach(l => { if (l.id > 0) shown.add(l.id); });
-    const genderOk = (g: 'men' | 'women' | 'unisex') =>
-      ymalGenderFilter === 'all' || g === 'unisex' || g === ymalGenderFilter;
+    // Gender follows the shopper's active filter; unisex/unknown always pass.
+    const genderOk = (g?: 'men' | 'women' | 'unisex') =>
+      ymalGenderFilter === 'all' || !g || g === 'unisex' || g === ymalGenderFilter;
     const sameCreator = (l: Look) =>
       l.creator === look.creator &&
       (l.creatorDisplayName || '') === (look.creatorDisplayName || '');
-    return (allLooks || allLooksData)
+    const byRank = (a: Look, b: Look) =>
+      (a.feed_rank ?? Number.POSITIVE_INFINITY) - (b.feed_rank ?? Number.POSITIVE_INFINITY);
+    const primary = source
       .filter(l => l.id > 0 && !shown.has(l.id))
       .filter(l => !SEED_CREATORS.has(l.creator))
       .filter(l => !sameCreator(l))
       .filter(l => genderOk(l.gender))
-      .sort((a, b) =>
-        (a.feed_rank ?? Number.POSITIVE_INFINITY) - (b.feed_rank ?? Number.POSITIVE_INFINITY))
-      .slice(0, Math.max(1, popularLooksLimit));
+      .sort(byRank);
+    // Fallback so the rail never silently vanishes on a tiny / single-creator
+    // dataset: drop the creator + similar exclusions, keep only seed + gender.
+    const list = primary.length > 0
+      ? primary
+      : source
+          .filter(l => l.id > 0 && l.id !== look.id)
+          .filter(l => !SEED_CREATORS.has(l.creator))
+          .filter(l => genderOk(l.gender))
+          .sort(byRank);
+    return list.slice(0, Math.max(1, popularLooksLimit));
   }, [popularLooksEnabled, look.id, look.creator, look.creatorDisplayName, allLooks, feedSections.looksLikeThis, ymalGenderFilter, popularLooksLimit]);
 
   // "Popular products" rail — bounded slice of the home-feed product roster

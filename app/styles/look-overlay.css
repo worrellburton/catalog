@@ -1123,11 +1123,25 @@ body:has(.look-overlay.look-overlay--in) {
   gap: 2px;
   background: #111;
 }
-@media (min-width: 768px) {
-  .look-feed-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+/* Unify the three rails (Similar / Popular looks / Popular products) AND the
+   in-overlay "Your daily feed" to ONE responsive grid so every section reads
+   at the same card size: 2 per row on mobile → 4 → 6 per row on large screens.
+   The daily-feed override is SCOPED to .look-overlay-scroll so the HOME feed
+   grid (also .feed-section-grid) is untouched. */
+.look-overlay-scroll .feed-section-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
 }
-@media (min-width: 1200px) {
-  .look-feed-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (min-width: 768px) {
+  .look-feed-grid,
+  .look-overlay-scroll .feed-section-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr)) !important;
+  }
+}
+@media (min-width: 1280px) {
+  .look-feed-grid,
+  .look-overlay-scroll .feed-section-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr)) !important;
+  }
 }
 
 .look-feed-grid .look-card {

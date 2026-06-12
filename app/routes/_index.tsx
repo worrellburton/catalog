@@ -336,7 +336,17 @@ export default function Home() {
   // home feed) — see the `looks-feed-bar` class below. Reset on every look
   // change so a fresh open never flashes the bar before the shopper scrolls.
   const [dailyFeedReached, setDailyFeedReached] = useState(false);
-  useEffect(() => { setDailyFeedReached(false); }, [selectedLook?.id, selectedLook?.uuid]);
+  // Mirrors the home feed's chrome auto-hide, but driven by the overlay's own
+  // scroller: hidden while scrolling down within the daily feed, shown on up.
+  const [dailyFeedBarHidden, setDailyFeedBarHidden] = useState(false);
+  const handleDailyFeedBar = useCallback((reached: boolean, hidden: boolean) => {
+    setDailyFeedReached(reached);
+    setDailyFeedBarHidden(hidden);
+  }, []);
+  useEffect(() => {
+    setDailyFeedReached(false);
+    setDailyFeedBarHidden(false);
+  }, [selectedLook?.id, selectedLook?.uuid]);
 
   // Referral capture: stash any ?ref=<handle> from the landing URL ASAP
   // (before OAuth can strip it), then redeem it once the user is signed in
@@ -1784,7 +1794,7 @@ export default function Home() {
   return (
     <TrailRoot>
     <TrailVideoHost>
-    <div className={`app-root ${isLightMode ? 'light-mode' : ''}${overlayOpen ? ' has-overlay' : ''}${heroMode ? ' home-hero' : ''}${heroScrolled ? ' hero-scrolled' : ''}${heroBarFaded ? ' hero-bar-faded' : ''}${chromeHidden ? ' chrome-hidden' : ''}${selectedLook && dailyFeedReached && !inShell ? ' looks-feed-bar' : ''}`}>
+    <div className={`app-root ${isLightMode ? 'light-mode' : ''}${overlayOpen ? ' has-overlay' : ''}${heroMode ? ' home-hero' : ''}${heroScrolled ? ' hero-scrolled' : ''}${heroBarFaded ? ' hero-bar-faded' : ''}${chromeHidden ? ' chrome-hidden' : ''}${selectedLook && dailyFeedReached && !inShell ? ' looks-feed-bar' : ''}${selectedLook && dailyFeedReached && dailyFeedBarHidden && !inShell ? ' looks-feed-bar-hidden' : ''}`}>
       {/* Singleton particle world — one canvas mounted at the app root,
           always visible. Splash, hero, search-ceremony, empty-catalog all
           render above this so the field stays continuous across every
@@ -1972,7 +1982,7 @@ export default function Home() {
                 popularFallback={popularFallback}
                 onOpenCreative={handleOpenCreative}
                 onOpenComments={openComments}
-                onDailyFeedVisible={setDailyFeedReached}
+                onDailyFeedBar={handleDailyFeedBar}
               />
             </Suspense>
           )}
