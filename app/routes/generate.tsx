@@ -2752,6 +2752,13 @@ const BUILD_JOKES = [
   'Tailoring at the speed of light…',
   'Asking the AI to “make it pop”…',
   'Polishing every last thread…',
+  // Future-Polaroid jokes (founder's call): the render IS an instant
+  // photo from tomorrow — shake accordingly.
+  'Shaking it like a Polaroid from 2080…',
+  'No peeking — the future is still developing…',
+  'Instant film, slightly less instant…',
+  'Do not shake the hologram while it develops…',
+  'Waiting for the Polaroid to fade in… in 4K…',
 ];
 
 // Friendly summary for known Fal/Seedance failure shapes. Returns a

@@ -20,7 +20,9 @@ import {
 } from '~/services/comments';
 import CommentParticles from './CommentParticles';
 import ParticleBackground from './ParticleBackground';
-import { isMobileViewport } from '~/services/video-loading';
+import { isMobileViewport, pickVideoUrl } from '~/services/video-loading';
+import { getCreativesByProductIds } from '~/services/product-creative';
+import { useTrailVideo } from '~/components/TrailVideoHost';
 import { useCommentTyping } from '~/hooks/useCommentTyping';
 import '~/styles/comments.css';
 
@@ -58,9 +60,14 @@ interface ResolvedTarget {
   title: string;
   subtitle: string;
   image: string | null;
-  /** Look targets carry their clip so the thread header plays the video
-   *  (poster falls back to `image`). Null for products. */
+  /** The target's clip — looks AND products play in the thread header
+   *  (poster paints first, the video fades over it). */
   video: string | null;
+  /** product_creatives.id when the product has a live creative: the header
+   *  registers a trail-video slot under this id, the SAME id the product
+   *  page hero uses, so clicking through hands the playing element over
+   *  and the clip never restarts. */
+  trailId: string | null;
   href: string;
 }
 
@@ -83,11 +90,12 @@ async function resolveProduct(slug: string): Promise<ResolvedTarget | null> {
   if (!supabase) return null;
   const prefix = extractIdPrefix(slug);
   let row: Record<string, unknown> | null = null;
+  const FIELDS = 'id, name, brand, price, image_url, primary_image_url, primary_video_url, primary_video_poster_url';
   if (prefix) {
     const next = nextHexPrefix(prefix);
     let q = supabase
       .from('products')
-      .select('id, name, brand, price, image_url')
+      .select(FIELDS)
       .gte('id', `${prefix}-0000-0000-0000-000000000000`);
     if (next) q = q.lt('id', `${next}-0000-0000-0000-000000000000`);
     const { data } = await q.limit(1);
@@ -97,17 +105,25 @@ async function resolveProduct(slug: string): Promise<ResolvedTarget | null> {
     const nameQuery = slug.replace(/-[0-9a-f]{8}$/i, '').replace(/-/g, '%');
     const { data } = await supabase
       .from('products')
-      .select('id, name, brand, price, image_url')
+      .select(FIELDS)
       .ilike('name', `%${nameQuery}%`)
       .limit(1);
     row = data?.[0] ?? null;
   }
   if (!row) return null;
+  // The product's live creative — same id + source the product page hero
+  // keys its trail-video slot with, so the header's playing element is
+  // handed over on click-through instead of restarting.
+  const creatives = await getCreativesByProductIds([row.id as string]).catch(() => []);
+  const creative = creatives[0] ?? null;
   return {
     title: (row.name as string) || 'Product',
     subtitle: [(row.brand as string) || '', (row.price as string) || ''].filter(Boolean).join(' · '),
-    image: (row.image_url as string) || null,
-    video: null,
+    image: (row.primary_video_poster_url as string)
+      || (row.primary_image_url as string)
+      || (row.image_url as string) || null,
+    video: creative ? pickVideoUrl(creative) : (row.primary_video_url as string) || null,
+    trailId: creative?.id ?? null,
     href: `/p/${slug}`,
   };
 }
@@ -125,6 +141,7 @@ async function resolveLook(slug: string): Promise<ResolvedTarget | null> {
         // so the comments header matches the feed card, then creator avatar.
         image: lookPoster(look) || look.creatorAvatar || null,
         video: look.video || null,
+        trailId: null,
         href: `/l/${slug}`,
       };
     }
@@ -171,6 +188,7 @@ async function resolveLook(slug: string): Promise<ResolvedTarget | null> {
     subtitle: (row.creator_handle as string) || '',
     image: poster,
     video: creative?.video_url || null,
+    trailId: null,
     href: `/l/${slug}`,
   };
 }
@@ -179,6 +197,14 @@ export default function CommentsPage({ targetType, slug, onClose, onOpenCreator,
   const navigate = useNavigate();
   const { user } = useAuth();
   const [target, setTarget] = useState<ResolvedTarget | null>(null);
+  // Product header clip lives in the shared trail-video pool under the
+  // product page hero's id — click-through adopts the SAME element, so
+  // playback continues instead of restarting.
+  const setTrailSlot = useTrailVideo(
+    target?.trailId ?? undefined,
+    target?.trailId ? target?.video ?? undefined : undefined,
+    target?.image ?? undefined,
+  );
   const [comments, setComments] = useState<CommentRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [draft, setDraft] = useState('');
@@ -454,21 +480,35 @@ export default function CommentsPage({ targetType, slug, onClose, onOpenCreator,
           </div>
         )}
 
-        {/* The product / look this thread is about, pinned at the top. */}
-        <a className="comments-target" href={target?.href ?? `/${targetType === 'product' ? 'p' : 'l'}/${slug}`}>
-          {targetType === 'look' && target?.video
-            ? <video
-                className="comments-target-img"
-                src={target.video}
-                poster={target.image ?? undefined}
-                autoPlay
-                muted
-                loop
-                playsInline
-              />
-            : target?.image
-              ? <img className="comments-target-img" src={target.image} alt="" />
-              : <span className="comments-target-img comments-target-img--blank" aria-hidden="true" />}
+        {/* The product / look this thread is about, pinned at the top.
+            SPA-navigated (raw href reloads the app through the splash). */}
+        <a
+          className="comments-target"
+          href={target?.href ?? `/${targetType === 'product' ? 'p' : 'l'}/${slug}`}
+          onClick={(e) => {
+            e.preventDefault();
+            navigate(target?.href ?? `/${targetType === 'product' ? 'p' : 'l'}/${slug}`);
+          }}
+        >
+          {target?.video && target.trailId
+            // Poster paints instantly underneath; the pooled trail video
+            // mounts into the slot and fades over it once frames decode.
+            ? <span className="comments-target-img comments-target-live" ref={setTrailSlot}>
+                {target.image && <img className="comments-target-poster" src={target.image} alt="" />}
+              </span>
+            : target?.video
+              ? <video
+                  className="comments-target-img"
+                  src={target.video}
+                  poster={target.image ?? undefined}
+                  autoPlay
+                  muted
+                  loop
+                  playsInline
+                />
+              : target?.image
+                ? <img className="comments-target-img" src={target.image} alt="" />
+                : <span className="comments-target-img comments-target-img--blank" aria-hidden="true" />}
           <span className="comments-target-text">
             <span className="comments-target-kind">{targetType === 'product' ? 'Product' : 'Look'}</span>
             {/* Looks don't get a title line here — it's noisy and often just

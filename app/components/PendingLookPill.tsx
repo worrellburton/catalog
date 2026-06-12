@@ -18,20 +18,27 @@ const PENDING_QUIPS = [
   'Consulting the style oracle…',
   'Removing the awkward blink…',
   'Steaming out the wrinkles…',
+  // Future-Polaroid jokes (founder's call): the render IS an instant
+  // photo from tomorrow — shake accordingly.
+  'Shaking it like a Polaroid from 2080…',
+  'No peeking — the future is still developing…',
+  'Instant film, slightly less instant…',
+  'Do not shake the hologram while it develops…',
+  'Waiting for the Polaroid to fade in… in 4K…',
 ];
 
 /**
  * Header indicator that surfaces when the signed-in user has a look
  * still rendering after they've left the /generate screen via "Keep
- * discovering". Tapping the pill returns to /generate so they can
- * watch progress or run another action against the in-flight job.
+ * discovering". Tapping the pill opens the rendering page for THAT
+ * look (/generate?gen=<id> resumes its progress screen directly).
  *
  * Shows the look's face photos + chosen products orbiting in a small 3D
  * ring (mirrors the full "Vision composes…" screen). Only visible at the
  * very top of the feed — it hides once the shopper scrolls into the grid.
  * Polls listUserGenerations every 6s while at least one row is unfinished.
  */
-export default function PendingLookPill({ onOpen }: { onOpen: () => void }) {
+export default function PendingLookPill({ onOpen }: { onOpen: (generationId?: string) => void }) {
   const { user } = useAuth();
   const [pending, setPending] = useState<{ id: string; status: string; style: string | null } | null>(null);
   const [images, setImages] = useState<string[]>([]);
@@ -113,7 +120,7 @@ export default function PendingLookPill({ onOpen }: { onOpen: () => void }) {
   return (
     <button
       type="button"
-      onClick={onOpen}
+      onClick={() => onOpen(pending?.id)}
       className="pending-look-pill"
       aria-label={ariaLabel}
       title={ariaLabel}

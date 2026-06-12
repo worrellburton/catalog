@@ -563,3 +563,21 @@
 
 .comment-typing-dots { background: rgba(0,0,0,0.06); }
 .comment-typing-label { color: #71717a; }
+
+/* Live (trail-pooled) clip in the thread header: the poster paints as the
+   base layer, the pooled <video> is parented inside and covers it once
+   frames decode — and the same element is handed to the product page hero
+   on click-through, so the clip never restarts. */
+.comments-target-live {
+  position: relative;
+  display: inline-block;
+  overflow: hidden;
+}
+.comments-target-live .comments-target-poster,
+.comments-target-live video {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
