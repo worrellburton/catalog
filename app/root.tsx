@@ -252,13 +252,15 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-se
       <body>
         {/* Detail-hero video sharpen filter — referenced by
             --hero-video-enhance (base.css) on the ProductPage + LookOverlay
-            heroes ONLY. A light unsharp mask (out = src·(1+a) − blur·a, a≈0.5)
+            heroes ONLY. A light unsharp mask (out = src·(1+a) − blur·a, a≈0.7)
             that counteracts the upscale-softness of the ≤834px source clips
             when they fill a full-screen hero. color-interpolation-filters=sRGB
-            keeps the overshoot from darkening edges; the small stdDeviation
-            keeps it subtle (no crunchy halos on AI footage). Hidden, zero-size,
-            no layout/paint cost until something references the filter. The feed
-            never references it, so feed playback is untouched. */}
+            keeps the overshoot from darkening edges; the stdDeviation (0.9) is
+            tuned to the blur radius a large hero upscale actually introduces
+            while staying subtle (no crunchy halos on AI footage — back off k2/k3
+            toward 1.5/−0.5 or stdDeviation toward 0.8 if any clip shows ringing).
+            Hidden, zero-size, no layout/paint cost until something references the
+            filter. The feed never references it, so feed playback is untouched. */}
         <svg
           aria-hidden="true"
           focusable="false"
@@ -267,14 +269,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-se
           style={{ position: 'absolute', width: 0, height: 0, pointerEvents: 'none' }}
         >
           <filter id="catalog-hero-sharpen" colorInterpolationFilters="sRGB">
-            <feGaussianBlur in="SourceGraphic" stdDeviation="0.8" result="heroBlur" />
+            <feGaussianBlur in="SourceGraphic" stdDeviation="0.9" result="heroBlur" />
             <feComposite
               in="SourceGraphic"
               in2="heroBlur"
               operator="arithmetic"
               k1="0"
-              k2="1.5"
-              k3="-0.5"
+              k2="1.7"
+              k3="-0.7"
               k4="0"
             />
           </filter>
