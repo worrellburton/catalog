@@ -10,6 +10,7 @@ import { SpeedInsights } from "@vercel/speed-insights/remix";
 import { isRouteErrorResponse, useRouteError } from "@remix-run/react";
 import { useEffect, useState } from "react";
 import TypeAnywhere from "~/components/TypeAnywhere";
+import { initScrollIdleFade } from "~/utils/scroll-idle";
 import SessionTrackerHost from "~/components/SessionTrackerHost";
 import PresenceHost from "~/components/PresenceHost";
 import GenerationQueueHost from "~/components/GenerationQueueHost";
@@ -293,6 +294,9 @@ export default function App() {
   // set; we don't pay the SDK bundle cost on the cold path either,
   // because the SDK is dynamically imported inside initSentry().
   useEffect(() => { void initSentry(); }, []);
+  // Media-first scrolling (founder's call): on mobile, card chrome fades
+  // away while gliding and eases back in when the scroll settles.
+  useEffect(() => { initScrollIdleFade(); }, []);
 
   return (
     <>
