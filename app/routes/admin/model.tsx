@@ -420,7 +420,7 @@ export default function AdminModel() {
 
       <ModelHeadline scenario={ui.scenario} onScenario={setScenario} onExportCsv={exportCsv} onPrint={printModel} onBusinessPlan={downloadBusinessPlan} onShareLink={() => setShowShares(true)} onRate={() => setShowRate(true)} />
       <RateAssumptionsModal open={showRate} onClose={() => setShowRate(false)} payload={ratePayload} />
-      {showShares && <DocumentShares onClose={() => setShowShares(false)} />}
+      {showShares && <DocumentShares onClose={() => setShowShares(false)} onPublish={downloadBusinessPlan} />}
 
       {readOnly && (
         <div className="model-locked-banner">
