@@ -35,6 +35,15 @@ export interface BrainProduct { id: string; name: string; image: string | null; 
 
 export type BrainViewMode = 'types' | 'products' | 'all';
 
+/** Imperative camera access for the page's mobile dock: the zoom slider
+ *  and orbit joystick drive the view from outside the canvas. */
+export interface BrainCameraHandle {
+  getZoom(): number;
+  /** Zoom about the canvas centre (clamped like wheel/pinch). */
+  zoomTo(k: number): void;
+  orbitBy(dax: number, day: number): void;
+}
+
 interface Props {
   nodes: BrainNode[];        // excludes the synthetic root
   /** Per-node orbiting thumbnails (already capped) + the true total. */
@@ -70,6 +79,11 @@ interface Props {
    *  with slow ease-in-out; any canvas touch hands control back. */
   showcase?: boolean;
   onShowcaseInterrupt?: () => void;
+  /** Mobile dock wiring: the handle drives zoom/orbit from the page;
+   *  onZoomChange keeps the dock's slider honest when pinch/showcase
+   *  move the zoom from inside the canvas. */
+  controlRef?: React.MutableRefObject<BrainCameraHandle | null>;
+  onZoomChange?: (k: number) => void;
 }
 
 export const ROOT_ID = '__root__';
@@ -263,6 +277,29 @@ export default function TypeBrainGraph(p: Props) {
     // Reads live orbit/view only at (re)start — the loop owns them after.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [p.showcase]);
+
+  // Camera handle — re-registered every render so getZoom reads live state.
+  useEffect(() => {
+    const ref = p.controlRef;
+    if (!ref) return;
+    ref.current = {
+      getZoom: () => view.k,
+      zoomTo: (k: number) => {
+        const kk = Math.min(2.5, Math.max(0.35, k));
+        const cx = size.w / 2, cy = size.h / 2;
+        setView(v => ({ k: kk, tx: cx - ((cx - v.tx) / v.k) * kk, ty: cy - ((cy - v.ty) / v.k) * kk }));
+      },
+      orbitBy: (dax: number, day: number) => {
+        setOrbit(o => ({ ax: Math.max(-1.35, Math.min(1.35, o.ax + dax)), ay: o.ay + day }));
+      },
+    };
+    return () => { ref.current = null; };
+  });
+  useEffect(() => {
+    p.onZoomChange?.(view.k);
+    // p is a fresh object every render; only the zoom matters here.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [view.k]);
 
   const toLocal = (ev: { clientX: number; clientY: number }) => {
     const r = wrapRef.current?.getBoundingClientRect();
