@@ -6401,14 +6401,14 @@ tr:hover .admin-stats-col { background: rgba(99, 102, 241, 0.10); }
   padding: 7px 12px;
 }
 
-/* ── Equity (fundraise calculator) ─────────────────────────────────── */
+/* ── Equity (cap table) ────────────────────────────────────────────── */
 .eq-band {
   display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px;
   margin: 14px 0 18px;
 }
 .eq-stat {
   background: #fff; border: 1px solid #e2e8f0; border-radius: 12px;
-  padding: 14px 16px; display: flex; flex-direction: column; gap: 2px;
+  padding: 14px 16px; display: flex; flex-direction: column; gap: 3px;
 }
 .eq-stat-label {
   font-size: 10px; font-weight: 700; letter-spacing: 0.08em;
@@ -6416,51 +6416,75 @@ tr:hover .admin-stats-col { background: rgba(99, 102, 241, 0.10); }
 }
 .eq-stat b { font-size: 22px; font-weight: 800; color: #0f172a; }
 .eq-stat i { font-style: normal; font-size: 11px; color: #94a3b8; }
-.eq-rounds { display: grid; grid-template-columns: repeat(3, 1fr); gap: 14px; }
-.eq-round { padding: 16px; }
-.eq-round-head { display: flex; align-items: baseline; justify-content: space-between; margin-bottom: 10px; }
-.eq-round-head h3 { margin: 0; font-size: 15px; }
-.eq-round-runway {
-  font-size: 11px; font-weight: 700; color: #6366f1;
-  background: #eef2ff; border-radius: 999px; padding: 3px 9px;
+.eq-mode { display: inline-flex; gap: 4px; padding: 3px; background: #f1f5f9; border-radius: 999px; width: fit-content; }
+.eq-mode button {
+  font: inherit; font-size: 11.5px; font-weight: 700; cursor: pointer;
+  border: none; border-radius: 999px; padding: 5px 10px;
+  background: transparent; color: #64748b;
 }
-.eq-field { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-bottom: 8px; }
-.eq-field > span:first-child { font-size: 12px; color: #64748b; }
+.eq-mode button.is-active { background: #0f172a; color: #fff; }
+.eq-section { padding: 16px; margin-bottom: 14px; }
+.eq-section-head { display: flex; align-items: center; gap: 12px; margin-bottom: 12px; }
+.eq-section-head h3 { margin: 0; font-size: 15px; }
+.eq-section-head > span { font-size: 12px; color: #64748b; margin-right: auto; }
 .eq-in {
   font: inherit; font-size: 13px; font-weight: 600; color: #0f172a;
-  border: 1px solid #e2e8f0; border-radius: 8px; padding: 7px 10px;
-  width: 120px; text-align: right; outline: none; box-sizing: border-box;
+  border: 1px solid #e2e8f0; border-radius: 8px; padding: 6px 9px;
+  width: 110px; text-align: right; outline: none; box-sizing: border-box;
+  background: #fff;
 }
 .eq-in:focus { border-color: #818cf8; }
-.eq-in-burn { width: 130px; font-size: 16px; font-weight: 800; margin: 2px 0; }
-.eq-pct { display: inline-flex; align-items: center; gap: 6px; }
-.eq-pct .eq-in { width: 70px; }
+.eq-in-name { width: 100%; min-width: 160px; text-align: left; font-weight: 600; }
+.eq-in-round { width: 140px; text-align: left; font-size: 15px; font-weight: 800; border-color: transparent; padding-left: 0; }
+.eq-in-round:hover, .eq-in-round:focus { border-color: #e2e8f0; padding-left: 9px; }
+.eq-pct { display: inline-flex; align-items: center; gap: 4px; justify-content: flex-end; }
+.eq-pct .eq-in { width: 62px; }
 .eq-pct em { font-style: normal; font-size: 12px; color: #94a3b8; }
-.eq-derived {
-  border-top: 1px dashed #e2e8f0; margin-top: 10px; padding-top: 10px;
-  display: flex; flex-direction: column; gap: 5px;
+.eq-table { width: 100%; border-collapse: collapse; font-size: 12.5px; }
+.eq-table th {
+  text-align: left; font-size: 10px; font-weight: 700; letter-spacing: 0.07em;
+  text-transform: uppercase; color: #94a3b8; padding: 6px 8px;
+  border-bottom: 1px solid #e2e8f0;
 }
-.eq-derived div { display: flex; justify-content: space-between; font-size: 12px; }
-.eq-derived span { color: #64748b; }
-.eq-derived b { color: #0f172a; }
-.eq-derived-founders b { color: #6366f1; font-size: 13px; }
+.eq-table td { padding: 6px 8px; border-bottom: 1px solid #f1f5f9; color: #0f172a; }
+.eq-table th.num, .eq-table td.num { text-align: right; }
+.eq-table .eq-type { font-size: 11px; font-weight: 700; color: #64748b; white-space: nowrap; }
+.eq-na { color: #cbd5e1; }
+.eq-computed { font-weight: 700; }
+.eq-basis {
+  font-style: normal; font-size: 9px; font-weight: 800; letter-spacing: 0.06em;
+  text-transform: uppercase; color: #6366f1; margin-left: 6px;
+}
+.eq-row-new td { background: #f0fdf4; }
+.eq-table tfoot td { border-bottom: none; border-top: 2px solid #e2e8f0; font-weight: 700; }
+.eq-dot { display: inline-block; width: 8px; height: 8px; border-radius: 2px; margin-right: 6px; }
+.eq-x {
+  font: inherit; font-size: 15px; line-height: 1; cursor: pointer;
+  border: none; background: transparent; color: #cbd5e1; padding: 2px 6px;
+}
+.eq-x:hover { color: #ef4444; }
+.eq-adders { display: flex; gap: 8px; margin-top: 12px; }
+.eq-adders-rounds { margin: 0 0 16px; }
+.eq-adders button {
+  font: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+  border: 1px dashed #cbd5e1; background: #fff; color: #475569;
+  border-radius: 8px; padding: 7px 12px;
+}
+.eq-adders button:hover { border-color: #818cf8; color: #4f46e5; }
+.eq-round-vars { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 12px; }
+.eq-round-vars label { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #64748b; }
 .eq-bar {
   display: flex; height: 14px; border-radius: 7px; overflow: hidden;
   margin-top: 12px; background: #f1f5f9;
 }
 .eq-bar span { display: block; height: 100%; }
-.eq-bar-legend {
-  display: flex; flex-wrap: wrap; gap: 8px 12px; margin-top: 8px;
-  font-size: 10.5px; color: #64748b;
-}
-.eq-bar-legend i {
-  display: inline-block; width: 8px; height: 8px; border-radius: 2px;
-  margin-right: 4px; vertical-align: baseline;
-}
-.eq-foot { margin-top: 18px; font-size: 11.5px; color: #94a3b8; max-width: 720px; }
+.eq-foot { margin: 4px 0 24px; font-size: 11.5px; color: #94a3b8; max-width: 780px; }
 .eq-reset {
   font: inherit; font-size: 11.5px; font-weight: 700; cursor: pointer;
   border: none; background: transparent; color: #6366f1; padding: 0; margin-left: 6px;
   text-decoration: underline;
 }
-@media (max-width: 1000px) { .eq-rounds { grid-template-columns: 1fr; } .eq-band { grid-template-columns: repeat(2, 1fr); } }
+@media (max-width: 1000px) {
+  .eq-band { grid-template-columns: repeat(2, 1fr); }
+  .eq-table { display: block; overflow-x: auto; }
+}
