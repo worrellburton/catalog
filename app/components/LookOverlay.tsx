@@ -105,12 +105,6 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   // parent can pop the Catalog search bar exactly when the shopper reaches
   // the daily feed — and hide it again when they scroll back above.
   const dailyFeedSentinelRef = useRef<HTMLDivElement | null>(null);
-  // While the inner scroller is actively moving, suspend the decorative WebGL
-  // particle fields (their additive-blend fill is the dominant per-frame cost
-  // on desktop). scrollingRef dedupes the setState to the start/stop edges so
-  // it isn't a per-event render; the idle timer resumes ~180ms after scroll end.
-  const scrollingRef = useRef(false);
-  const scrollIdleRef = useRef(0);
   // Tracked separately so the nested feed re-binds its IntersectionObserver
   // root once the scroller mounts (refs alone don't trigger re-renders).
   const [scrollEl, setScrollEl] = useState<HTMLDivElement | null>(null);
@@ -119,9 +113,6 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
     setScrollEl(el);
   }, []);
   const [mounted, setMounted] = useState(false);
-  // Drives `paused` on the two overlay ParticleBackground fields — true only
-  // while the scroller is in motion.
-  const [particlesScrollPaused, setParticlesScrollPaused] = useState(false);
   const [activeTab, setActiveTab] = useState<TabId>('products');
   // "View more info" disclosure (replaced the old About tab).
   const [showLookInfo, setShowLookInfo] = useState(false);
@@ -137,14 +128,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
     let raf = 0;
     const onScroll = () => {
       cancelAnimationFrame(raf);
-      raf = requestAnimationFrame(() => {
-        // Hysteresis (show >240 / hide <200) so momentum scroll oscillating
-        // around one threshold can't thrash this setState — which sits right
-        // in the hero→Similar zone — into repeated re-renders. The functional
-        // updater also lets React bail out when the value is unchanged.
-        const y = scroller.scrollTop;
-        setShowSideBack(prev => (y > 240 ? true : y < 200 ? false : prev));
-      });
+      raf = requestAnimationFrame(() => setShowSideBack(scroller.scrollTop > 220));
     };
     onScroll();
     scroller.addEventListener('scroll', onScroll, { passive: true });
@@ -163,23 +147,9 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   useEffect(() => {
     const scroller = scrollEl;
     if (!scroller) return;
-    const onScroll = () => {
-      director.notifyScroll(scroller.scrollTop);
-      // Suspend the decorative particle fields while in motion (resume on idle).
-      // Edge-triggered via scrollingRef so this is 2 renders per gesture, not
-      // one per scroll event.
-      if (!scrollingRef.current) { scrollingRef.current = true; setParticlesScrollPaused(true); }
-      clearTimeout(scrollIdleRef.current);
-      scrollIdleRef.current = window.setTimeout(() => {
-        scrollingRef.current = false;
-        setParticlesScrollPaused(false);
-      }, 180);
-    };
+    const onScroll = () => director.notifyScroll(scroller.scrollTop);
     scroller.addEventListener('scroll', onScroll, { passive: true });
-    return () => {
-      scroller.removeEventListener('scroll', onScroll);
-      clearTimeout(scrollIdleRef.current);
-    };
+    return () => scroller.removeEventListener('scroll', onScroll);
   }, [scrollEl]);
 
   // Catalog search bar while the look is open. Reports two things off the INNER
@@ -828,14 +798,8 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
     if (!scroller || !el) return;
     if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
     let raf = 0;
-    // Gate the per-frame getBoundingClientRect to when the about block is near
-    // the viewport. Once it scrolls away (the shopper is down in the rails) the
-    // measurement is wasted forced layout every frame — exactly the kind of
-    // read that compounds into scroll jank.
-    let visible = true;
     const update = () => {
       raf = 0;
-      if (!visible) return;
       const r = el.getBoundingClientRect();
       const vh = window.innerHeight || 1;
       const progress = Math.min(1, Math.max(0, (vh - r.top) / (vh * 0.7)));
@@ -843,18 +807,9 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
       el.style.setProperty('--about-drift', (scroller.scrollTop * 0.06).toFixed(1));
     };
     const onScroll = () => { if (!raf) raf = requestAnimationFrame(update); };
-    const io = new IntersectionObserver(
-      (entries) => {
-        visible = entries[entries.length - 1].isIntersecting;
-        if (visible) update();
-      },
-      { root: scroller, rootMargin: '40% 0%' },
-    );
-    io.observe(el);
     update();
     scroller.addEventListener('scroll', onScroll, { passive: true });
     return () => {
-      io.disconnect();
       scroller.removeEventListener('scroll', onScroll);
       if (raf) cancelAnimationFrame(raf);
     };
@@ -992,7 +947,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
           it. A1 already stops this field drawing when opened over the feed
           (paused), so this just spares mobile the context + any hero-opened draw. */}
       <div className="look-overlay-particles" aria-hidden="true">
-        {!isMobileViewport() && <ParticleBackground paused={particlesScrollPaused} />}
+        {!isMobileViewport() && <ParticleBackground />}
       </div>
       <div className="look-overlay-scroll" ref={setScrollRef}>
         {/* ═══ HERO: 60/40 split (first viewport) ═══ */}
@@ -1255,7 +1210,7 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                   <div className="look-creator-about" ref={aboutRef}>
                     {(lookDescription || aboutSummary) && (
                       <div className="look-about-universe" aria-hidden="true">
-                        <ParticleBackground speed={1.6} paused={particlesScrollPaused} />
+                        <ParticleBackground speed={1.6} />
                       </div>
                     )}
                     {/* Creator avatar + name intentionally omitted here — the
