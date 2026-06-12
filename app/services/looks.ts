@@ -12,7 +12,7 @@ const USE_SUPABASE = true;
 // ============================================
 // localStorage SWR cache (mirrors product-creative pattern)
 // ============================================
-const LOOKS_LS_KEY = 'catalog:looks-cache:v2'; // v2: HLS ladders repointed to hls-v2 (1s segments)
+const LOOKS_LS_KEY = 'catalog:looks-cache:v3'; // v3: hls-v3 fMP4 ladders + HEVC + AV1 backfilled
 const LOOKS_LS_MAX_AGE_MS = 24 * 60 * 60 * 1000; // 24 hours
 
 function readLooksFromStorage(): Look[] | null {
