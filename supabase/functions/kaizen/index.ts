@@ -17,7 +17,7 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 interface Node { id: string; name: string; parent_id: string | null; sort: number; color: string | null; gender: string | null }
-interface Product { id: string; name: string; brand: string | null; type: string | null; gender: string | null; type_path: string | null }
+interface Product { id: string; name: string; brand: string | null; type: string | null; gender: string | null; type_path: string | null; haiku_context: string | null }
 
 function normalize(s: string): string {
   const n = s.toLowerCase().trim();
@@ -54,7 +54,7 @@ Deno.serve(async (req: Request) => {
       .from('product_types').select('id, name, parent_id, sort, color, gender');
     const tree = (treeRows ?? []) as Node[];
     const { data: prodRows } = await supabase
-      .from('products').select('id, name, brand, type, gender, type_path')
+      .from('products').select('id, name, brand, type, gender, type_path, haiku_context')
       .eq('is_active', true).limit(5000);
     const products = (prodRows ?? []) as Product[];
 
@@ -89,7 +89,8 @@ Deno.serve(async (req: Request) => {
       const currentNode = p.type ? byNorm.get(normalize(p.type))?.[0] ?? null : null;
       let best: Node | null = null;
       for (const m of matchers) {
-        if (m.rx.test(p.name) && (!best || depth(m.node) > depth(best))) best = m.node;
+        const hit = m.rx.test(p.name) || (p.haiku_context ? m.rx.test(p.haiku_context) : false);
+        if (hit && (!best || depth(m.node) > depth(best))) best = m.node;
       }
       if (best && (!currentNode || (currentNode.id !== best.id && !inBranch(currentNode, best)))) {
         retypes.push({ productId: p.id, name: p.name, fromType: p.type, toPath: path(best) });

@@ -13,7 +13,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
-const MODEL = 'claude-opus-4-8';
+const MODEL = 'claude-sonnet-4-6';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -26,7 +26,7 @@ function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 }
 
-interface ProductIn { id: string; name: string; brand?: string | null; type?: string | null }
+interface ProductIn { id: string; name: string; brand?: string | null; type?: string | null; context?: string | null }
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
@@ -60,8 +60,8 @@ ADMIN'S NOTE: "${instruction}"
 EXISTING TYPE PATHS (segments joined by " / "):
 ${typePaths.join('\n')}
 
-PRODUCTS (id | name | brand | current type):
-${products.map(p => `${p.id} | ${(p.name || '').slice(0, 90)} | ${p.brand ?? ''} | ${p.type ?? ''}`).join('\n')}
+PRODUCTS (id | name | brand | current type | what the image shows):
+${products.map(p => `${p.id} | ${(p.name || '').slice(0, 90)} | ${p.brand ?? ''} | ${p.type ?? ''} | ${(p.context ?? '').slice(0, 140)}`).join('\n')}
 
 Translate the note into concrete moves. Rules:
 - Only move products the note clearly refers to (match by name/brand/type semantics, e.g. "the glasses" → products whose names are glasses/cups). When the note is about a KIND of product, include every product of that kind.

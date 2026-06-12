@@ -1,0 +1,298 @@
+/* Home 2.0 — the catalog as a CATALOG. White paper, ink type, hairline
+   rules, dotted leaders: a print issue you can shop. The html flag
+   (home2-paper) lifts the app's dark chrome for this route only. */
+
+html.home2-paper,
+html.home2-paper body {
+  background: #fcfcfa;
+}
+
+.h2-page {
+  --ink: #111110;
+  --ink-soft: #6f6f68;
+  --hairline: #e3e2da;
+  --paper: #fcfcfa;
+  background: var(--paper);
+  color: var(--ink);
+  min-height: 100vh;
+  padding: 0 clamp(18px, 5vw, 72px) 0;
+  font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+}
+
+.h2-page button { font-family: inherit; cursor: pointer; }
+
+/* ── Masthead ──────────────────────────────────────────────────────── */
+.h2-masthead { padding-top: 26px; text-align: center; }
+.h2-topline {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  border-top: 1px solid var(--ink);
+  border-bottom: 1px solid var(--hairline);
+  padding: 8px 2px;
+}
+.h2-wordmark {
+  font-family: Didot, 'Bodoni MT', Georgia, 'Times New Roman', serif;
+  font-size: clamp(64px, 14vw, 184px);
+  font-weight: 400;
+  letter-spacing: -0.02em;
+  line-height: 1;
+  margin: 26px 0 10px;
+}
+.h2-dek {
+  max-width: 560px;
+  margin: 0 auto 26px;
+  font-size: 15px;
+  line-height: 1.65;
+  color: var(--ink-soft);
+}
+.h2-rule { border-top: 1px solid var(--ink); }
+.h2-rule--double { border-bottom: 3px solid var(--ink); height: 3px; }
+
+/* ── Hero spread ───────────────────────────────────────────────────── */
+.h2-hero {
+  display: grid;
+  grid-template-columns: minmax(0, 7fr) minmax(0, 5fr);
+  gap: clamp(20px, 4vw, 56px);
+  align-items: center;
+  padding: clamp(28px, 5vw, 64px) 0;
+  border-bottom: 1px solid var(--hairline);
+}
+@media (max-width: 760px) { .h2-hero { grid-template-columns: 1fr; } }
+.h2-hero-media {
+  position: relative;
+  border: 1px solid var(--hairline);
+  background: #fff;
+  padding: clamp(16px, 3vw, 40px);
+  display: block;
+}
+.h2-hero-media img {
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  object-fit: contain;
+  display: block;
+  transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.h2-hero-media:hover img { transform: scale(1.03); }
+.h2-hero-tag {
+  position: absolute;
+  top: 14px;
+  left: 14px;
+  font-size: 10.5px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  background: var(--ink);
+  color: var(--paper);
+  padding: 5px 10px;
+}
+.h2-kicker {
+  font-size: 11px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  margin: 0 0 14px;
+}
+.h2-hero-copy h2 {
+  font-family: Didot, 'Bodoni MT', Georgia, serif;
+  font-size: clamp(30px, 4vw, 48px);
+  font-weight: 400;
+  line-height: 1.12;
+  margin: 0 0 18px;
+}
+.h2-hero-copy h2 em { font-style: italic; }
+.h2-hero-body { font-size: 14.5px; line-height: 1.7; color: var(--ink-soft); margin: 0 0 22px; }
+.h2-hero-cta {
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+  text-align: left;
+  border: 1px solid var(--ink);
+  background: #fff;
+  padding: 14px 18px;
+  transition: background 0.2s, color 0.2s;
+  max-width: 380px;
+}
+.h2-hero-cta:hover { background: var(--ink); color: var(--paper); }
+.h2-hero-brand { font-size: 10.5px; letter-spacing: 0.14em; text-transform: uppercase; }
+.h2-hero-name {
+  font-size: 14px;
+  font-weight: 600;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.h2-hero-price { font-size: 13px; margin-top: 4px; }
+
+/* ── Index ─────────────────────────────────────────────────────────── */
+.h2-index { padding: clamp(26px, 4vw, 48px) 0; border-bottom: 1px solid var(--hairline); }
+.h2-index-row {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding: 10px 0;
+  text-decoration: none;
+  color: var(--ink);
+  border-bottom: 1px solid transparent;
+}
+.h2-index-row:hover .h2-index-name { font-style: italic; }
+.h2-index-no { font-size: 11px; letter-spacing: 0.12em; color: var(--ink-soft); width: 56px; flex-shrink: 0; }
+.h2-index-name {
+  font-family: Didot, 'Bodoni MT', Georgia, serif;
+  font-size: clamp(22px, 3vw, 34px);
+  text-transform: capitalize;
+}
+.h2-index-leader { flex: 1; border-bottom: 1.5px dotted #b9b8ae; transform: translateY(-6px); }
+.h2-index-count { font-size: 12px; color: var(--ink-soft); flex-shrink: 0; }
+
+/* ── Spreads ───────────────────────────────────────────────────────── */
+.h2-spread { padding: clamp(30px, 5vw, 60px) 0; border-bottom: 1px solid var(--hairline); }
+.h2-spread-head {
+  display: flex;
+  align-items: baseline;
+  gap: 16px;
+  margin-bottom: clamp(18px, 3vw, 30px);
+}
+.h2-spread-no { font-size: 11px; letter-spacing: 0.12em; color: var(--ink-soft); }
+.h2-spread-head h3 {
+  font-family: Didot, 'Bodoni MT', Georgia, serif;
+  font-size: clamp(26px, 4vw, 44px);
+  font-weight: 400;
+  margin: 0;
+  text-transform: capitalize;
+}
+.h2-spread-count { font-size: 12px; color: var(--ink-soft); margin-left: auto; }
+
+.h2-grid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 1px;
+  background: var(--hairline);
+  border: 1px solid var(--hairline);
+}
+@media (max-width: 1020px) { .h2-grid { grid-template-columns: repeat(2, 1fr); } }
+.h2-card {
+  background: #fff;
+  border: none;
+  padding: 18px 18px 16px;
+  text-align: left;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+.h2-card-media { display: block; overflow: hidden; margin-bottom: 10px; }
+.h2-card-media img {
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  object-fit: contain;
+  display: block;
+  transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
+}
+.h2-card:hover .h2-card-media img { transform: scale(1.05); }
+.h2-card em {
+  font-style: normal;
+  font-size: 10px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+}
+.h2-card strong {
+  font-size: 13px;
+  font-weight: 600;
+  line-height: 1.35;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+.h2-card-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  margin-top: 6px;
+}
+.h2-card-foot b { font-size: 13px; font-weight: 600; }
+.h2-card-foot i {
+  font-style: normal;
+  font-size: 11.5px;
+  letter-spacing: 0.04em;
+  opacity: 0;
+  transform: translateX(-4px);
+  transition: opacity 0.25s, transform 0.25s;
+}
+.h2-card:hover .h2-card-foot i { opacity: 1; transform: none; }
+
+/* ── Looks band ────────────────────────────────────────────────────── */
+.h2-looks-band {
+  display: flex;
+  gap: 14px;
+  overflow-x: auto;
+  padding-bottom: 10px;
+  scrollbar-width: thin;
+}
+.h2-look {
+  flex: 0 0 168px;
+  border: 1px solid var(--hairline);
+  background: #fff;
+  padding: 8px 8px 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.h2-look img {
+  width: 100%;
+  aspect-ratio: 9 / 14;
+  object-fit: cover;
+  display: block;
+  filter: saturate(0.96);
+  transition: filter 0.3s;
+}
+.h2-look:hover img { filter: saturate(1.1); }
+.h2-look span {
+  font-size: 10.5px;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--ink-soft);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* ── Brand index ───────────────────────────────────────────────────── */
+.h2-brands { padding: clamp(30px, 5vw, 56px) 0; }
+.h2-brands-grid {
+  columns: 4 180px;
+  column-gap: 36px;
+}
+.h2-brands-grid button {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: none;
+  border: none;
+  border-bottom: 1px solid var(--hairline);
+  padding: 8px 0;
+  font-size: 13.5px;
+  color: var(--ink);
+}
+.h2-brands-grid button:hover { font-style: italic; padding-left: 4px; }
+
+/* ── Footer ────────────────────────────────────────────────────────── */
+.h2-foot { text-align: center; padding: 30px 0 70px; }
+.h2-wordmark--foot { font-size: clamp(40px, 7vw, 84px); margin: 30px 0 8px; }
+.h2-foot p { color: var(--ink-soft); font-size: 14px; margin: 0 0 22px; }
+.h2-foot-cta {
+  border: 1px solid var(--ink);
+  background: var(--ink);
+  color: var(--paper);
+  padding: 13px 28px;
+  font-size: 14px;
+  letter-spacing: 0.04em;
+  transition: background 0.2s, color 0.2s;
+}
+.h2-foot-cta:hover { background: var(--paper); color: var(--ink); }
