@@ -108,24 +108,43 @@ export function readEquityStored(): EquityState {
   } catch { return EQUITY_DEFAULTS; }
 }
 
+/** Coerce any value (number, "1,000,000" string, garbage from an AI
+ *  proposal) into a bounded non-negative number. */
+const num = (v: unknown, fallback = 0, max = 1e15): number => {
+  const n = typeof v === 'number' ? v : Number(String(v ?? '').replace(/[^0-9.eE+-]/g, ''));
+  if (!Number.isFinite(n)) return fallback;
+  return Math.max(0, Math.min(max, n));
+};
+
 /** Tolerant merge: any list that parses as a non-empty array wins;
- *  anything missing/malformed falls back to the defaults. */
+ *  anything missing/malformed falls back to the defaults. Every numeric
+ *  field is coerced and bounded — advisor proposals and hand edits can't
+ *  smuggle strings or absurd magnitudes into the math. */
 export function mergeEquity(p: unknown): EquityState {
   const parsed = (p ?? {}) as Partial<EquityState>;
   const list = <T,>(v: T[] | undefined, fallback: T[]): T[] =>
     Array.isArray(v) && v.length > 0 ? v : fallback;
   return {
     safeMode: parsed.safeMode === 'sheet' ? 'sheet' : 'postMoney',
-    holders: list(parsed.holders, EQUITY_DEFAULTS.holders),
-    safes: list(parsed.safes, EQUITY_DEFAULTS.safes),
+    holders: list(parsed.holders, EQUITY_DEFAULTS.holders).map(h => ({
+      ...h, shares: num(h.shares, 0, 1e12),
+    })),
+    safes: list(parsed.safes, EQUITY_DEFAULTS.safes).map(s => ({
+      ...s,
+      investment: num(s.investment),
+      valCap: num(s.valCap),
+      discount: Math.min(0.9, num(s.discount, 0, 0.9)),
+    })),
     rounds: list(parsed.rounds, EQUITY_DEFAULTS.rounds).map(r => ({
       ...r,
-      poolTopUp: r.poolTopUp ?? 0,
+      preMoney: num(r.preMoney),
+      poolTopUp: Math.min(0.5, num(r.poolTopUp, 0, 0.5)),
       // Pre-named-investor states carried a single `investment` — fold it
       // into a one-investor list so old saves keep their numbers.
-      investors: Array.isArray(r.investors) && r.investors.length > 0
+      investors: (Array.isArray(r.investors) && r.investors.length > 0
         ? r.investors
-        : [{ id: `${r.id}-inv`, name: `${r.name} Investor`, investment: r.investment ?? 0 }],
+        : [{ id: `${r.id}-inv`, name: `${r.name} Investor`, investment: r.investment ?? 0 }]
+      ).map(i => ({ ...i, investment: num(i.investment) })),
     })),
   };
 }
@@ -207,10 +226,16 @@ function postMoneyConversions(
   baseShares: number,            // founders + advisory + pools before the round
   firstRound: PricedRound | undefined,
 ): SafeConversion[] {
+  // A SAFE block whose cap-implied ownerships sum to ≥100% is an
+  // impossible structure (the notes would own more than the company) —
+  // it only happens on typo'd caps (e.g. $12,500 instead of $12.5M).
+  // Without this ceiling the fixed point DIVERGES (~80× per pass →
+  // 1e45 shares — the founder's broken ledger screenshot).
+  const CEILING = baseShares * 19; // SAFE block ≤ 95% of company cap
   if (!firstRound) {
     // No priced round yet — show the cap-implied ownership on today's base.
     return safes.map(safe => {
-      const own = safe.valCap > 0 ? safe.investment / safe.valCap : 0;
+      const own = Math.min(safe.valCap > 0 ? safe.investment / safe.valCap : 0, 0.95);
       const shares = own < 1 ? Math.round((baseShares * own) / (1 - own)) : 0;
       return { safe, shares, price: shares > 0 ? safe.investment / shares : 0, basis: 'cap' as const };
     });
@@ -227,8 +252,10 @@ function postMoneyConversions(
       basis[i] = capPrice <= discPrice ? 'cap' : 'discount';
       return price > 0 && Number.isFinite(price) ? safe.investment / price : 0;
     });
-    const drift = next.reduce((a, v, i) => a + Math.abs(v - safeShares[i]), 0);
-    safeShares = next;
+    const total = next.reduce((a, b) => a + b, 0);
+    const bounded = total > CEILING ? next.map(v => (v * CEILING) / total) : next;
+    const drift = bounded.reduce((a, v, i) => a + Math.abs(v - safeShares[i]), 0);
+    safeShares = bounded;
     if (drift < 0.5) break;
   }
   return safes.map((safe, i) => ({

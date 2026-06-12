@@ -22,7 +22,9 @@ export default function AcctInput({ value, onChange, className }: {
       onChange={(e) => {
         setLocal(e.target.value);
         const n = Number(e.target.value.replace(/[^0-9.]/g, ''));
-        if (!Number.isNaN(n)) onChange(n);
+        // Bounded — a runaway paste can't push the shared model into
+        // magnitudes the math (and the layout) can't survive.
+        if (!Number.isNaN(n)) onChange(Math.min(n, 1e15));
       }}
     />
   );
