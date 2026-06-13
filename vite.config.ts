@@ -97,6 +97,18 @@ export default defineConfig({
               || id.includes('node_modules/react-router')
               || id.includes('node_modules/turbo-stream')) return 'router-vendor';
           if (id.includes('node_modules/@supabase/')) return 'supabase-vendor';
+          // Carve genuinely admin/creator-only modules OUT of the
+          // app-core catch-all below — without these they fall into the
+          // catch-all and ride on EVERY consumer first paint. Verified
+          // (importer graph) to have no consumer importers, so routing
+          // them to their feature chunk can't re-bury that chunk as a
+          // consumer dependency:
+          //   business-plan  — investor-deck generator, admin/model only
+          //   type-governance — admin governance components only
+          //   downloadLookVideo — MyLooks (creator studio) only
+          if (id.includes('/app/utils/business-plan')
+              || id.includes('/app/services/type-governance')) return 'admin';
+          if (id.includes('/app/utils/downloadLookVideo')) return 'creator-studio';
           // Shared app layers (services, utils, hooks, data,
           // constants) get one deterministic chunk. Same burial risk
           // as the vendors above: any module shared by consumer code
