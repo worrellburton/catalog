@@ -109,6 +109,11 @@ export default defineConfig({
           if (id.includes('/app/utils/business-plan')
               || id.includes('/app/services/type-governance')) return 'admin';
           if (id.includes('/app/utils/downloadLookVideo')) return 'creator-studio';
+          // Super-admin feed "why" explainer is dynamically imported only
+          // when an admin taps the debug button — keep it OUT of app-core
+          // (the catch-all below would otherwise force it onto every
+          // consumer load) so it splits into its own on-demand chunk.
+          if (id.includes('/app/services/feed-why')) return undefined;
           // Shared app layers (services, utils, hooks, data,
           // constants) get one deterministic chunk. Same burial risk
           // as the vendors above: any module shared by consumer code
