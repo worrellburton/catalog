@@ -36,6 +36,7 @@ import {
   prefetchVideoBytes,
   prefetchHlsHead,
 } from '~/services/video-loading';
+import FeedWhyButton from '~/components/feed/FeedWhyButton';
 import { lookPoster } from '~/services/media-resolver';
 import { posterRendition } from '~/utils/poster-prefetch';
 import { isHlsUrl } from '~/utils/hlsAttach';
@@ -447,6 +448,11 @@ const CreativeCardV2 = memo(function CreativeCardV2({
     >
       <div className="card-inner">
         {!loaded && <div className="card-shimmer" />}
+
+        {/* Super-admin-only "why did this show up?" affordance (center-left).
+            Self-gates on role; renders nothing for shoppers. */}
+        <FeedWhyButton creative={creative} look={look} />
+
 
         {/* Poster <img> — identical path for looks and products. The
             browser's preparser discovers <img> tags and schedules fetches
