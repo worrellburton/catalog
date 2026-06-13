@@ -5,6 +5,8 @@ import { getLooks, getCachedLooks, subscribeToLooksChange, fetchSeenLookIds, reo
 import { trackImpression } from '~/services/session-tracker';
 import { getSimilarLooks } from '~/utils/similarity';
 import FeedSection from './FeedSection';
+import { FeedWhyProvider } from './feed/FeedWhyContext';
+import type { FeedWhyContextData } from '~/services/feed-why';
 import InlineLookDetail from './InlineLookDetail';
 import EmptyCatalogState from './EmptyCatalogState';
 import { prefetchHomeFeed, getCachedHomeFeed, getHomeFeed, getCreativesByCatalogTag, getCreativesByBrandQuery, resolveBrandFromQuerySync, creativeMatchesCatalogQuery, resolveCatalogTypes, resolveMaterialKeywords, deleteProductAd, deleteProduct, subscribeToShopperGender, getShopperGender, type ProductAd } from '~/services/product-creative';
@@ -1160,7 +1162,38 @@ function ContinuousFeed({
   // Title-case the query so "hair care" reads as "Hair Care" in the headline.
   const emptyCatalogName = trimmedQuery.replace(/\b\w/g, c => c.toUpperCase());
 
+  // Snapshot of the live composition for the super-admin "why?" buttons.
+  // Memoized on the same inputs that drive renderedCreatives so it never
+  // churns on unrelated re-renders; read lazily (on tap), never at render.
+  const feedWhyData = useMemo<FeedWhyContextData>(() => {
+    const q = committedQuery.trim().toLowerCase();
+    const semanticRank = new Map<string, number>();
+    semanticallyOrderedCreatives.forEach((c, i) => semanticRank.set(c.id, i));
+    const personalizedRank = new Map<string, number>();
+    (personalizedOrder ?? []).forEach((pid, i) => personalizedRank.set(pid, i));
+    const seenProductIds = new Set<string>();
+    seenKeys.forEach(k => { if (k.startsWith('product:')) seenProductIds.add(k.slice('product:'.length)); });
+    const lookSearchUuids = new Set<string>();
+    for (const l of searchMatchedLooks) {
+      if (l.uuid) lookSearchUuids.add(l.uuid);
+      if (l.id != null) lookSearchUuids.add(String(l.id));
+    }
+    return {
+      committedQuery,
+      brandActive: brandMatchedCreatives.length > 0 && brandQueryRef.current === q,
+      tagIds: new Set(tagMatchedCreatives.map(c => c.id)),
+      semanticRank,
+      affinityTopTypes: affinity.topTypes.map(t => t.toLowerCase()),
+      personalizedRank,
+      savedBrands: savedBrandBoost?.brands ?? new Set<string>(),
+      seenProductIds,
+      lookSearchUuids,
+      lookAffinityTopTypes: affinity.topTypes.map(t => t.toLowerCase()),
+    };
+  }, [committedQuery, semanticallyOrderedCreatives, personalizedOrder, seenKeys, searchMatchedLooks, brandMatchedCreatives, tagMatchedCreatives, affinity, savedBrandBoost]);
+
   return (
+    <FeedWhyProvider value={feedWhyData}>
     <div className="continuous-feed" id={nested ? undefined : 'grid-viewport'}>
       {/* Top overlay loader - appears above existing content during search. */}
       {isSearching && (
@@ -1221,6 +1254,7 @@ function ContinuousFeed({
         })}
       </div>
     </div>
+    </FeedWhyProvider>
   );
 }
 
