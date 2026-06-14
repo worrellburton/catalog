@@ -192,6 +192,7 @@ export default defineConfig({
           route("admin", "routes/admin/route.tsx", () => {
             route("", "routes/admin/_index.tsx", { index: true });
             route("activities", "routes/admin/activities.tsx");
+            route("live-ledger", "routes/admin/live-ledger.tsx");
             route("administrators", "routes/admin/administrators.tsx");
             route("advertisements", "routes/admin/advertisements.tsx");
             route("agents", "routes/admin/agents.tsx");

@@ -93,6 +93,8 @@ const allSearchItems: SearchItem[] = [
   { label: 'Finance', type: 'Page', to: '/admin/finance' },
   { label: 'Creative', type: 'Page', to: '/admin/creative' },
   { label: 'Activities', type: 'Page', to: '/admin/activities' },
+  { label: 'Live Ledger', type: 'Page', to: '/admin/live-ledger' },
+  { label: 'Activity feed', type: 'Page', to: '/admin/live-ledger' },
   { label: 'AI Models', type: 'Page', to: '/admin/ai-models' },
   { label: 'Video Generation', type: 'Page', to: '/admin/agents?tab=video-gen&sub=look-videos' },
   { label: 'Product Ads', type: 'Page', to: '/admin/agents?tab=video-gen&sub=product-ads' },
