@@ -753,7 +753,13 @@
   position: absolute;
   bottom: 10px;
   left: 10px;
-  right: 10px;
+  /* Hug the avatar+name — NOT the full card width. A full-width strip
+     turned the whole card bottom into a creator-link dead-zone, and
+     (with the 2px mobile grid gap) a tap aimed at one look's lower
+     half could land on the neighbour card's creator chip and open the
+     WRONG creator's catalog. Constrain it to its content. */
+  right: auto;
+  max-width: calc(100% - 20px);
   z-index: 4;
   display: flex;
   align-items: center;
