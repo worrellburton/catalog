@@ -290,7 +290,7 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
           e.stopPropagation();
           return;
         }
-        if (!(e.target as HTMLElement).closest('.card-creator-row')) {
+        if (!(e.target as HTMLElement).closest('.card-creator-tag')) {
           // Phase 9 — snapshot the currently-playing frame so LookOverlay
           // can paint it as an instant poster behind its hero <video> slot.
           // Eliminates the black flash between card → overlay even when

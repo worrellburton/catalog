@@ -420,7 +420,7 @@ const CreativeCardV2 = memo(function CreativeCardV2({
           return;
         }
         // Don't fire the card click when the user tapped the creator row.
-        if (isLook && (e.target as HTMLElement).closest('.card-creator-row')) return;
+        if (isLook && (e.target as HTMLElement).closest('.card-creator-tag')) return;
         handleClick();
       }}
       onMouseEnter={() => {
