@@ -564,6 +564,14 @@ html.is-scroll-gliding .creative-delete-btn {
   opacity: 0 !important;
   transition: opacity 2s cubic-bezier(0.45, 0, 0.55, 1);
 }
+/* EXCEPTION: the creator chip must NOT eat taps while it's invisible.
+   It's an absolutely-positioned strip over the card bottom, so a tap on
+   a settled-but-gliding feed (chrome faded to 0) was hitting the unseen
+   chip and opening a creator catalog instead of the look — the
+   "tapped a look, got the wrong creator" bug. Hidden = pass taps
+   through to the card (opens the look); a deliberate hover restores it. */
+html.is-scroll-gliding .card-creator-tag { pointer-events: none; }
+html.is-scroll-gliding.is-pointing :hover > .card-creator-tag { pointer-events: auto; }
 
 /* Intentional hover beats the glide: when the mouse has GENUINELY moved
    (html.is-pointing — cleared by scrolling, so content sliding under a
