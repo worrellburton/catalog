@@ -802,11 +802,13 @@
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
   cursor: pointer;
-  opacity: 0.35;
+  opacity: 0;
   transition: opacity 0.15s ease, transform 0.15s ease, background 0.15s ease;
 }
 .feed-why-btn:hover { opacity: 1; background: rgba(99, 102, 241, 0.85); transform: translateY(-50%) scale(1.08); }
-.look-card:hover .feed-why-btn { opacity: 0.9; }
+.promo-card:hover .feed-why-btn,
+.look-card:hover .feed-why-btn,
+.feed-why-btn:focus-visible { opacity: 0.9; }
 
 .feed-why-scrim {
   position: fixed; inset: 0; z-index: 4000;
