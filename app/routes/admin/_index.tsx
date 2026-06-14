@@ -835,7 +835,7 @@ export default function AdminHome() {
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
               Recent Activity
             </h3>
-            <Link to="/admin/activities" className="admin-home-card-link">Live ledger →</Link>
+            <Link to="/admin/live-ledger" className="admin-home-card-link">Live ledger →</Link>
           </div>
           <div className="admin-activity-list">
             {recentActivity.length === 0 ? (
@@ -844,7 +844,7 @@ export default function AdminHome() {
               recentActivity.map((log) => {
                 const name = log.user_handle || 'Anonymous';
                 return (
-                  <Link key={log.id} to="/admin/activities" className="admin-activity-item admin-activity-item--link">
+                  <Link key={log.id} to="/admin/live-ledger" className="admin-activity-item admin-activity-item--link">
                     <span className="admin-activity-avatar">{initials(name)}</span>
                     <div className="admin-activity-content">
                       <span>
