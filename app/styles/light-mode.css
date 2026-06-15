@@ -180,6 +180,19 @@
   background: rgba(240, 240, 240, 0.96);
 }
 
+/* Product/look "Make a catalog for anything" pill — match the feed bar in
+   light mode (it had no light variant, so it stayed dark glass while the
+   feed bar went white). */
+.light-mode .ovl-chrome-search {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.08);
+  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.08), inset 0 1px 0 rgba(255, 255, 255, 0.5);
+}
+.light-mode .ovl-chrome-search-input { color: var(--text); }
+.light-mode .ovl-chrome-search-input::placeholder { color: rgba(0, 0, 0, 0.45); }
+.light-mode .ovl-chrome-search-icon { color: rgba(0, 0, 0, 0.45); }
+.light-mode .ovl-chrome-search-go { background: #111; color: #fff; }
+
 .light-mode .filter-chip {
   background: rgba(0, 0, 0, 0.04);
   border-color: rgba(0, 0, 0, 0.1);
