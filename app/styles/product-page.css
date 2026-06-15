@@ -217,7 +217,10 @@
   transition: background 0.2s, color 0.2s, transform 0.18s;
   padding: 0;
 }
-.pd-share-floating { top: 16px; right: 16px; }
+/* Share sits bottom-left (paired with Save bottom-right) so it's clear of
+   the top chrome and always visible — the old top-right spot hid under the
+   overlay chrome / status bar. */
+.pd-share-floating { bottom: 16px; left: 16px; }
 .pd-save-floating  { bottom: 16px; right: 16px; }
 .pd-share-floating:hover,
 .pd-save-floating:hover {

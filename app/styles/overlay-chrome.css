@@ -24,7 +24,8 @@
     align-items: center;
     gap: 10px;
     padding: max(8px, env(safe-area-inset-top)) 14px 10px;
-    background: linear-gradient(180deg, rgba(10, 10, 12, 0.92) 30%, rgba(10, 10, 12, 0));
+    /* No dark scrim — the back button keeps its own glass background, so the
+       top chrome floats cleanly over the hero without a gradient. */
   }
   .ovl-chrome-back {
     flex: 0 0 auto;
@@ -84,5 +85,5 @@
   /* The overlays' own mobile corner back buttons would now duplicate the
      chrome's back — retire them on phones. */
   .look-back-btn-mobile,
-  .pd-back-mobile { display: none !important; }
+  .pd-back { display: none !important; }
 }
