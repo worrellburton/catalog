@@ -36,13 +36,15 @@ const escapeRx = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 // first sentence for legacy single-blob rows.
 function haikuIdentity(text: string | null): string {
   if (!text) return '';
+  // Take the FIRST real line as the identity — it may be a single word
+  // ("Sneaker"); skipping single-word lines falls through to the detail
+  // sentence ("…and heel…", "…for the home…") and causes false matches.
+  const LABEL = /^(description|summary|overview|identity|category|product|item|details?|note)$/i;
   const lines = text.split('\n')
     .map(l => l.replace(/^[#>\-*\s]+/, '').replace(/[*_`]/g, '').trim())
-    .filter(Boolean);
-  // First real content line — skip bare titles/labels ("Description").
-  const line = lines.find(l => l.includes(' ') && !l.endsWith(':')) ?? lines[0] ?? text;
-  const firstSentence = line.split(/(?<=[.!?])\s/)[0] ?? line;
-  return firstSentence.trim();
+    .filter(l => l && !l.endsWith(':') && !LABEL.test(l));
+  const line = lines[0] ?? text;
+  return (line.split(/(?<=[.!?])\s/)[0] ?? line).trim();
 }
 
 Deno.serve(async (req: Request) => {
