@@ -411,11 +411,17 @@ export function kaizenSweep(products: GovernanceProduct[], tree: TypeNode[]): Ka
     attachCount.set(node.id, (attachCount.get(node.id) ?? 0) + 1);
     if (retypeIds.has(p.id)) continue; // the re-type patch supersedes drift
     const toPath = paths.get(node.id) ?? node.name;
-    const toGender = genders.get(node.id) ?? null;
-    if ((p.typePath ?? null) !== toPath || (toGender !== null && (p.gender ?? null) !== toGender)) {
+    const nodeGender = genders.get(node.id) ?? null;
+    // A node's gender only constrains products when it's male/female;
+    // 'unisex'/null is permissive, so product-level gender (name/photo)
+    // wins and a female heel under the unisex "shoes" node stays female.
+    const forceGender = nodeGender === 'male' || nodeGender === 'female' ? nodeGender : null;
+    const pathLag = (p.typePath ?? null) !== toPath;
+    const genderLag = forceGender !== null && (p.gender ?? null) !== forceGender;
+    if (pathLag || genderLag) {
       drift.push({
         productId: p.id, name: p.name, brand: p.brand, image: p.image,
-        nodeId: node.id, toType: node.name, toGender, toPath,
+        nodeId: node.id, toType: node.name, toGender: forceGender, toPath,
         fromGender: p.gender, fromPath: p.typePath,
       });
     }

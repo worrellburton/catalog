@@ -438,16 +438,25 @@ export default function AdminGovernanceTypes() {
     showToast('Added "new type" — double-click it to rename');
   };
 
+  // A type node's gender only CONSTRAINS its products when it is male or
+  // female. 'unisex'/null is permissive — products keep their own gender,
+  // so a female pair of heels dropped into the unisex "shoes" node stays
+  // female instead of being flattened back to unisex.
+  const forcedGender = (nodeId: string): 'male' | 'female' | null => {
+    const g = genders.get(nodeId) ?? null;
+    return g === 'male' || g === 'female' ? g : null;
+  };
+
   const handleAssign = (productIds: string[], nodeId: string) => {
     if (nodeId === UNASSIGNED_ID) return;
     const node = tree.find(n => n.id === nodeId);
     if (!node) return;
     const idSet = new Set(productIds);
     const matched = products.filter(p => idSet.has(p.id));
-    const eff = genders.get(nodeId) ?? null;
+    const fg = forcedGender(nodeId);
     const groups: ProductGroup[] = [{
       ids: productIds,
-      patch: { type: node.name, gender: eff, type_path: paths.get(nodeId) ?? null },
+      patch: { type: node.name, type_path: paths.get(nodeId) ?? null, ...(fg ? { gender: fg } : {}) },
     }];
     commit(
       `Re-typed ${matched.length} product${matched.length === 1 ? '' : 's'} → ${node.name}`,
@@ -655,18 +664,19 @@ export default function AdminGovernanceTypes() {
     const byNode = new Map<string, string[]>();
     for (const r of picked.retypes) byNode.set(r.toNodeId, [...(byNode.get(r.toNodeId) ?? []), r.productId]);
     for (const [nodeId, ids] of byNode) {
+      const fg = forcedGender(nodeId);
       groups.push({
         ids,
         patch: {
           type: tree.find(n => n.id === nodeId)?.name ?? null,
-          gender: genders.get(nodeId) ?? null,
           type_path: paths.get(nodeId) ?? null,
+          ...(fg ? { gender: fg } : {}),
         },
       });
     }
     if (picked.retypes.length) labels.push(`${picked.retypes.length} re-typed`);
     for (const d of picked.drift) {
-      groups.push({ ids: [d.productId], patch: { type: d.toType, gender: d.toGender, type_path: d.toPath } });
+      groups.push({ ids: [d.productId], patch: { type: d.toType, type_path: d.toPath, ...(d.toGender ? { gender: d.toGender } : {}) } });
     }
     if (picked.drift.length) labels.push(`${picked.drift.length} synced`);
 

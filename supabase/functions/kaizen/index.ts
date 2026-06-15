@@ -127,8 +127,11 @@ Deno.serve(async (req: Request) => {
       attachCount.set(currentNode.id, (attachCount.get(currentNode.id) ?? 0) + 1);
       if (retypeIds.has(p.id)) continue;
       const toPath = path(currentNode);
-      const toGender = effGender(currentNode);
-      if ((p.type_path ?? null) !== toPath || (toGender !== null && (p.gender ?? null) !== toGender)) {
+      const nodeGender = effGender(currentNode);
+      // A node's gender only constrains products when it's male/female;
+      // 'unisex'/null is permissive so product-level gender (name/photo) wins.
+      const forceGender = nodeGender === 'male' || nodeGender === 'female' ? nodeGender : null;
+      if ((p.type_path ?? null) !== toPath || (forceGender !== null && (p.gender ?? null) !== forceGender)) {
         drift.push({ product: p, node: currentNode });
       }
     }
@@ -154,7 +157,13 @@ Deno.serve(async (req: Request) => {
     let autoFixed = 0;
     const buckets = new Map<string, { patch: Record<string, string | null>; ids: string[] }>();
     for (const d of drift) {
-      const patch = { type: d.node.name, gender: effGender(d.node), type_path: path(d.node) };
+      // Only male/female nodes write gender; a unisex node leaves the
+      // product's own gender alone (permissive — see drift detection above).
+      const ng = effGender(d.node);
+      const fg = ng === 'male' || ng === 'female' ? ng : null;
+      const patch: Record<string, string | null> = fg
+        ? { type: d.node.name, gender: fg, type_path: path(d.node) }
+        : { type: d.node.name, type_path: path(d.node) };
       const key = JSON.stringify(patch);
       const b = buckets.get(key) ?? { patch, ids: [] };
       b.ids.push(d.product.id);
