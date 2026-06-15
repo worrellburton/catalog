@@ -733,6 +733,14 @@
   .app-root.home-hero:not(.hero-scrolled) .home-feed-wrap {
     margin-top: -10svh;
   }
+  /* Keep the "Your daily feed" hint clear of that -10svh peek. The base
+     rule pins it at a fixed 104px from the bottom, but on tall desktop
+     windows 10svh > 104px, so the hint landed INSIDE the peek and the
+     label overlapped the first row of cards. Track the peek + a 32px gap
+     so the hint always sits just above the cards. */
+  .app-root.home-hero:not(.hero-scrolled) .sfh-scroll-hint {
+    bottom: calc(10svh + 32px + env(safe-area-inset-bottom));
+  }
 }
 
 /* Results reveal — classic chatbot answer: once the ceremony bows out the
