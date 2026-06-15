@@ -34,7 +34,7 @@ interface Props {
 const SECTIONS = [
   { key: 'retypes', title: 'Better placements', hint: 'products that belong in a more specific type' },
   { key: 'drift', title: 'Type improvements', hint: 'type / path lagging the tree — applies to the type column only' },
-  { key: 'genderChanges', title: 'Gender improvements', hint: 'gender set by a male/female type — applies to the gender column only' },
+  { key: 'genderChanges', title: 'Gender improvements', hint: 're-derived from name / photo / brand — heels → female, a book → unisex; applies to the gender column only' },
   { key: 'duplicateTypes', title: 'Duplicate types', hint: 'two nodes with the same name — merge into the busier one' },
   { key: 'orphanTypes', title: 'Unowned type names', hint: 'products typed with a name no node owns — create the node' },
   { key: 'emptyTypes', title: 'Empty branches', hint: 'no products anywhere inside — delete' },

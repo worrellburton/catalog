@@ -14,6 +14,7 @@
 
 import { supabase } from '~/utils/supabase';
 import { haikuIdentity } from '~/utils/haiku';
+import { proposeProductGenders, type ProductGender } from '~/services/genders';
 import { inferProductTypeAndSubtype } from '~/services/product-types';
 import { governanceRendition, warmPosters } from '~/utils/poster-prefetch';
 
@@ -109,6 +110,33 @@ export async function fetchGovernanceProducts(): Promise<GovernanceProduct[]> {
     }));
 }
 
+// product_types has a unique (parent_id, name) — two siblings can't share a
+// name. Rather than let a reparent/rename/insert blow up with a 23505, pick
+// the next free "name", "name 2", "name 3"… under the target parent. Keeps
+// every gesture succeeding instead of erroring out + reloading.
+// deno-lint-ignore no-explicit-any
+async function uniqueSiblingName(
+  sb: any,
+  parentId: string | null,
+  desired: string,
+  excludeId: string | null,
+  alsoTaken: Set<string>,
+): Promise<string> {
+  let q = sb.from('product_types').select('id, name');
+  q = parentId === null ? q.is('parent_id', null) : q.eq('parent_id', parentId);
+  const { data } = await q;
+  const taken = new Set<string>(alsoTaken);
+  for (const r of (data ?? []) as { id: string; name: string }[]) {
+    if (r.id !== excludeId) taken.add(r.name);
+  }
+  if (!taken.has(desired)) return desired;
+  for (let i = 2; i < 200; i++) {
+    const candidate = `${desired} ${i}`;
+    if (!taken.has(candidate)) return candidate;
+  }
+  return `${desired} ${Date.now()}`;
+}
+
 /** Executes a gesture's ops in order. Node writes precede product
  *  cascades within a gesture (the callers order them that way), so a
  *  mid-flight failure can't leave products pointing at type names the
@@ -119,10 +147,32 @@ export async function executeGovernanceOps(ops: GovernanceOp[]): Promise<string 
   const touch = { updated_at: new Date().toISOString() };
   for (const o of ops) {
     if (o.op === 'node-update') {
-      const { error } = await sb.from('product_types').update({ ...o.patch, ...touch }).eq('id', o.id);
+      const patch = { ...o.patch };
+      // A name or parent change can collide with a sibling — dedupe so the
+      // gesture never 23505s. Resolve the node's final parent + name first.
+      if (patch.name !== undefined || patch.parent_id !== undefined) {
+        const { data: cur } = await sb.from('product_types')
+          .select('parent_id, name').eq('id', o.id).maybeSingle();
+        const parentId = patch.parent_id !== undefined ? patch.parent_id : (cur?.parent_id ?? null);
+        const name = patch.name !== undefined ? patch.name : (cur?.name ?? '');
+        const unique = await uniqueSiblingName(sb, parentId, name, o.id, new Set());
+        if (unique !== name) patch.name = unique;
+      }
+      const { error } = await sb.from('product_types').update({ ...patch, ...touch }).eq('id', o.id);
       if (error) return error.message;
     } else if (o.op === 'node-insert') {
-      const { error } = await sb.from('product_types').insert(o.rows);
+      // Dedupe each row against existing siblings AND the others in this
+      // batch (per parent) before inserting.
+      const batchTaken = new Map<string | null, Set<string>>();
+      const rows = [];
+      for (const row of o.rows) {
+        const seen = batchTaken.get(row.parent_id) ?? new Set<string>();
+        const name = await uniqueSiblingName(sb, row.parent_id, row.name, row.id, seen);
+        seen.add(name);
+        batchTaken.set(row.parent_id, seen);
+        rows.push({ ...row, name });
+      }
+      const { error } = await sb.from('product_types').insert(rows);
       if (error) return error.message;
     } else if (o.op === 'node-delete') {
       // Children cascade in the DB; matched products keep their type text
@@ -353,7 +403,7 @@ export interface KaizenGenderChange {
   brand: string | null;
   image: string | null;
   fromGender: string | null;
-  toGender: 'male' | 'female';
+  toGender: 'male' | 'female' | 'unisex';
   path: string;
 }
 
@@ -474,4 +524,28 @@ export function kaizenSweep(products: GovernanceProduct[], tree: TypeNode[]): Ka
     .sort((a, b) => b.productIds.length - a.productIds.length);
 
   return { retypes, drift, genderChanges, emptyTypes, duplicateTypes, orphanTypes };
+}
+
+/** Kaizen "garments" — re-derive every product's gender from its name,
+ *  photo (Haiku) and brand, and flag the ones that disagree with the
+ *  current value. Women's heels mis-tagged unisex/male → female; a book
+ *  with a stray gender → unisex. Product-level (not the tree-gender drift
+ *  in kaizenSweep), reviewed/applied gender-only in the Kaizen panel. */
+export function genderAudit(products: GovernanceProduct[]): KaizenGenderChange[] {
+  const proposed = proposeProductGenders(products.map(p => ({
+    id: p.id, name: p.name, brand: p.brand, type: p.type,
+    gender: (p.gender ?? null) as ProductGender, haiku_context: p.haikuContext,
+  })));
+  const out: KaizenGenderChange[] = [];
+  for (const p of products) {
+    const to = proposed.get(p.id);
+    if (!to) continue;
+    const from = p.gender ?? null;
+    if (from === to) continue;
+    out.push({
+      productId: p.id, name: p.name, brand: p.brand, image: p.image,
+      fromGender: from, toGender: to, path: p.typePath ?? p.type ?? '',
+    });
+  }
+  return out;
 }
