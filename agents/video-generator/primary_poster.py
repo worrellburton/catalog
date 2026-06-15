@@ -18,6 +18,7 @@ Single source of truth for both callers:
 """
 from __future__ import annotations
 
+import hashlib
 import urllib.request
 
 from asset_encoder import encode_assets_from_url, cleanup
@@ -113,6 +114,13 @@ def generate_primary_poster(
                  "cache-control": "public, max-age=86400"},
             )
         poster_url = public_url_for(supabase_url, key)
+        # Cache-bust by the SOURCE video so a regenerated video yields a fresh
+        # poster URL. The storage key is stable (overwritten in place), but the
+        # render-CDN keys on the full URL incl. query — without this, a
+        # regenerated video's new frame-0 poster stayed pinned to the old bytes
+        # until the 1-day TTL. A per-video ?v= makes the new poster show at once.
+        vhash = hashlib.sha1((video_url or "").encode("utf-8")).hexdigest()[:10]
+        poster_url = f"{poster_url}?v={vhash}"
         supabase.table("products").update(
             {"primary_video_poster_url": poster_url}
         ).eq("id", product_id).execute()
