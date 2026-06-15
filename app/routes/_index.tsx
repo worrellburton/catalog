@@ -168,6 +168,17 @@ export type NavFrame =
   | { key: number; kind: 'product'; slug: string; product: Product; creative: ProductAd | null }
   | { key: number; kind: 'look'; slug: string; look: Look };
 
+// How many trail frames stay MOUNTED at once. The full trail lives in navStack
+// (as data) so the back history is never lossy, but only the last N frames
+// render as overlays: 1 visible top + (N-1) warm-hidden behind it. Frames
+// deeper than this are data-only and re-mount — hidden, behind the current top,
+// from memory (no network, scroll restored via the overlay-scroll-stash) — the
+// moment a Back brings them back into the window. This bounds mounted DOM +
+// <video> elements no matter how deep the shopper drills, while keeping Back
+// instant (the destination is always a pre-warmed layer). 3 = top + 2 warm,
+// which covers a rapid double-Back without the second one hitting a cold mount.
+const NAV_MOUNT_WINDOW = 3;
+
 const navSlugForProduct = (p: Product): string =>
   productSlug({
     id: (p as Product & { id?: string | null }).id ?? null,
@@ -1045,11 +1056,12 @@ export default function Home() {
     // Close the saved overlay if it's open so the product page isn't hidden
     // behind it (the look path already does this via handleBookmarksOpenLook).
     setShowBookmarks(false);
-    // Pause every currently-playing <video> before the nav lands so
-    // we don't briefly have two heroes + a rail of cards all decoding
-    // at once. The TrailVideoHost pool resumes whichever video the
-    // new page actually shows on mount.
-    pauseAllVideos();
+    // Pause every currently-playing <video> before a FRESH nav lands so we
+    // don't briefly have two heroes + a rail of cards all decoding at once.
+    // Skip on a Back-restore (nav!=='push'): the revealed surface's videos are
+    // already attached/paused, and brute-pausing them here leaves the hero
+    // frozen because nothing re-plays it (see the top-layer resume effect).
+    if (nav === 'push') pauseAllVideos();
     // Remember the look the user came from (if any) so the back button
     // on ProductPage returns to that look instead of the empty feed. On a
     // memory restore (nav:'none') the caller sets this from the frame below.
@@ -1273,7 +1285,7 @@ export default function Home() {
       thumbnail_url: creativePoster(creative) || undefined,
     };
     if (nav === 'push') pushRecent(mapped);
-    pauseAllVideos();
+    if (nav === 'push') pauseAllVideos(); // skip on Back-restore — see handleOpenProduct
     // On a memory restore (nav:'none') the caller sets this from the frame
     // below; a fresh open records the look the shopper came from.
     if (nav === 'push') setProductOpenedFromLook(selectedLook);
@@ -2029,6 +2041,28 @@ export default function Home() {
     };
   }, [overlayOpen]);
 
+  // Resume the hero video of whatever detail layer is now on top. On a Back the
+  // revealed layer's hero is left PAUSED — the forward open's pauseAllVideos()
+  // (and, on mobile, the browser pausing a visibility:hidden <video>) stopped
+  // it, and nothing re-plays it: TrailVideoHost only .play()s on a fresh attach,
+  // not on re-reveal of an already-mounted layer. Keyed on the top frame so it
+  // fires on every open AND every Back/forward; two rAFs let the layer's
+  // visibility flip to visible before we call play() (so WebKit actually paints).
+  const topFrameKey = navStack.length ? navStack[navStack.length - 1].key : null;
+  useEffect(() => {
+    if (topFrameKey == null || typeof window === 'undefined') return;
+    let r2 = 0;
+    const r1 = requestAnimationFrame(() => {
+      r2 = requestAnimationFrame(() => {
+        const layers = document.querySelectorAll<HTMLElement>('.nav-layer');
+        const top = layers[layers.length - 1];
+        const hero = top?.querySelector<HTMLVideoElement>('video');
+        if (hero && hero.paused) void hero.play().catch(() => { /* autoplay race — director/watchdog retries */ });
+      });
+    });
+    return () => { cancelAnimationFrame(r1); cancelAnimationFrame(r2); };
+  }, [topFrameKey]);
+
   return (
     <TrailRoot>
     <TrailVideoHost>
@@ -2205,10 +2239,17 @@ export default function Home() {
               from a product still sits ABOVE that product despite the product
               overlay's higher intrinsic z-index. The top keeps its type's
               natural z (look 200 / product 250) to preserve the chrome
-              relationships (bottom-bar at 240, etc.). */}
-          {navStack.map((frame, i) => {
+              relationships (bottom-bar at 240, etc.).
+
+              Only the last NAV_MOUNT_WINDOW frames render (1 visible + warm
+              behind); deeper frames are data-only and re-mount hidden when a
+              Back slides them back into the window. Warm layers are
+              visibility:hidden so their z-order among themselves is moot — only
+              the visible top needs its natural z. */}
+          {navStack.slice(Math.max(0, navStack.length - NAV_MOUNT_WINDOW)).map((frame, j) => {
+            const i = Math.max(0, navStack.length - NAV_MOUNT_WINDOW) + j;
             const isTop = i === navStack.length - 1;
-            const z = isTop ? (frame.kind === 'product' ? 250 : 200) : 150 + i;
+            const z = isTop ? (frame.kind === 'product' ? 250 : 200) : 100 + j;
             const layerStyle: React.CSSProperties = {
               position: 'fixed',
               inset: 0,
