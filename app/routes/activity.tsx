@@ -39,6 +39,7 @@ import {
 import type { CommentTargetType } from '~/services/comments';
 import { listUserGenerations, isGenerationInFlight, getLookUuidForGeneration, getGenerationProductImages,
   getGenerationLookPosters, type UserGeneration } from '~/services/user-generations';
+import { BUILD_JOKES, generationProgress } from '~/services/generation-progress';
 import CountUp from '~/components/CountUp';
 import SiteParticleHost from '~/components/SiteParticleHost';
 import ConsumerAvatar from '~/components/ConsumerAvatar';
@@ -168,6 +169,41 @@ function ConvThumb({ targetType, targetId }: { targetType: CommentTargetType; ta
   );
 }
 
+// In-progress generation row — a horizontal progress bar + the same rotating
+// jokes ticker as the Generate "building your look" screen, pinned at the top
+// of Activity while a look is rendering.
+function ActivityGenProgress({ generations }: { generations: UserGeneration[] | null }) {
+  const inFlight = (generations ?? []).filter(isGenerationInFlight);
+  const [, force] = useState(0);
+  const [jokeIdx, setJokeIdx] = useState(() => Math.floor(Math.random() * BUILD_JOKES.length));
+  useEffect(() => {
+    if (inFlight.length === 0) return;
+    const tick = window.setInterval(() => force(t => t + 1), 250);
+    const joke = window.setInterval(() => setJokeIdx(i => (i + 1) % BUILD_JOKES.length), 3400);
+    return () => { window.clearInterval(tick); window.clearInterval(joke); };
+  }, [inFlight.length]);
+
+  if (inFlight.length === 0) return null;
+  const gen = inFlight[0];
+  const { pct, phase } = generationProgress(gen.created_at, gen.duration_seconds);
+  const label = gen.display_name || gen.style || 'New look';
+  return (
+    <section className="ap-genprogress" role="status" aria-label={`Generating ${label}`}>
+      <div className="ap-genprogress-head">
+        <span className="ap-genprogress-label">{label}</span>
+        <span className="ap-genprogress-phase">{phase}</span>
+      </div>
+      <div className="ap-genprogress-track">
+        <div className="ap-genprogress-fill" style={{ width: `${pct}%` }} />
+      </div>
+      <div className="ap-genprogress-joke">{BUILD_JOKES[jokeIdx]}</div>
+      {inFlight.length > 1 && (
+        <div className="ap-genprogress-more">+{inFlight.length - 1} more rendering</div>
+      )}
+    </section>
+  );
+}
+
 export default function ActivityRoute() {
   const navigate = useNavigate();
   const { user, loading: authLoading } = useAuth();
@@ -281,6 +317,9 @@ export default function ActivityRoute() {
       </header>
 
       <main className="ap-content">
+        {/* ── In-progress generation — progress bar + jokes ticker ──── */}
+        <ActivityGenProgress generations={myGenerations} />
+
         {/* ── 🔥 milestone banner — a comment of yours hit 5 fires ──── */}
         {commentActivity?.some(c => c.kind === 'fire' && c.milestone) && (
           <div className="ap-milestone" role="status">

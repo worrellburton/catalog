@@ -533,6 +533,37 @@ button.ap-gen--rendering:active { transform: scale(0.97); }
 .light-mode .ap-chip-count { background: rgba(34, 197, 94, 0.14); color: #15803d; }
 
 /* ── Conversations (comments + 🔥) ─────────────────────────────────── */
+/* In-progress generation row — bar + jokes ticker, pinned at the top. */
+.ap-genprogress {
+  margin-bottom: 14px;
+  padding: 14px 16px;
+  border-radius: 16px;
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03));
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  -webkit-backdrop-filter: blur(18px); backdrop-filter: blur(18px);
+}
+.ap-genprogress-head {
+  display: flex; align-items: baseline; justify-content: space-between; gap: 12px;
+  margin-bottom: 10px;
+}
+.ap-genprogress-label { font-size: 14px; font-weight: 700; color: #fff; }
+.ap-genprogress-phase { font-size: 12px; color: rgba(255, 255, 255, 0.6); }
+.ap-genprogress-track {
+  height: 6px; border-radius: 999px; overflow: hidden;
+  background: rgba(255, 255, 255, 0.12);
+}
+.ap-genprogress-fill {
+  height: 100%; border-radius: 999px;
+  background: linear-gradient(90deg, #818cf8, #c084fc);
+  box-shadow: 0 0 12px rgba(192, 132, 252, 0.6);
+  transition: width 0.3s ease;
+}
+.ap-genprogress-joke {
+  margin-top: 9px; font-size: 12.5px; color: rgba(255, 255, 255, 0.62);
+  font-style: italic;
+}
+.ap-genprogress-more { margin-top: 4px; font-size: 11px; color: rgba(255, 255, 255, 0.45); }
+
 .ap-milestone {
   display: flex;
   align-items: center;
