@@ -24,6 +24,10 @@ interface Props {
 
 export default function OverlayChrome({ scrollEl, onBack, onHome, onSearch, showSearch = true }: Props) {
   const [hidden, setHidden] = useState(false);
+  // The "Make a catalog for anything" pill stays stowed at the top and
+  // reveals once the shopper scrolls down past the hero — it shouldn't sit
+  // over the product the moment the page opens.
+  const [searchShown, setSearchShown] = useState(false);
   const [q, setQ] = useState('');
   const accum = useRef(0);
   const lastY = useRef(0);
@@ -42,7 +46,9 @@ export default function OverlayChrome({ scrollEl, onBack, onHome, onSearch, show
         const y = el.scrollTop;
         const dy = y - lastY.current;
         lastY.current = y;
-        // Always reveal near the very top.
+        // Reveal the catalog pill once past ~60% of the first screen.
+        setSearchShown(y > Math.max(el.clientHeight * 0.6, 280));
+        // Always reveal the top bar near the very top.
         if (y < 72) { setHidden(false); accum.current = 0; return; }
         if ((dy > 0 && accum.current >= 0) || (dy < 0 && accum.current <= 0)) accum.current += dy;
         else accum.current = dy;
@@ -68,7 +74,7 @@ export default function OverlayChrome({ scrollEl, onBack, onHome, onSearch, show
         <span className="ovl-chrome-spacer" aria-hidden="true" />
       </div>
       {showSearch && (
-        <div className="ovl-chrome-search">
+        <div className={`ovl-chrome-search${searchShown ? ' is-shown' : ''}`}>
           <svg className="ovl-chrome-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
           <input
             className="ovl-chrome-search-input"

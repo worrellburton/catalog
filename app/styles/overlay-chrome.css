@@ -10,14 +10,10 @@
     inset: 0 0 auto 0;
     z-index: 30;
     pointer-events: none; /* children re-enable; gaps pass through to content */
-    transition: transform 0.42s cubic-bezier(0.22, 1, 0.36, 1),
-                opacity 0.42s cubic-bezier(0.22, 1, 0.36, 1);
   }
-  .ovl-chrome.is-hidden {
-    transform: translateY(-100%);
-    opacity: 0;
-  }
-
+  /* Only the TOP bar hides on scroll — the bottom search pill is controlled
+     separately (it reveals as you scroll DOWN, see .is-shown below), so the
+     container itself must not transform or it'd drag the fixed pill with it. */
   .ovl-chrome-top {
     pointer-events: auto;
     display: flex;
@@ -26,6 +22,12 @@
     padding: max(8px, env(safe-area-inset-top)) 14px 10px;
     /* No dark scrim — the back button keeps its own glass background, so the
        top chrome floats cleanly over the hero without a gradient. */
+    transition: transform 0.42s cubic-bezier(0.22, 1, 0.36, 1),
+                opacity 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .ovl-chrome.is-hidden .ovl-chrome-top {
+    transform: translateY(-100%);
+    opacity: 0;
   }
   .ovl-chrome-back {
     flex: 0 0 auto;
@@ -46,9 +48,10 @@
   .ovl-chrome-logo-mark { height: 22px; width: auto; color: #fff; }
   .ovl-chrome-spacer { flex: 1; }
 
-  /* Bottom search pill — mirrors the home BottomBar treatment. */
+  /* Bottom search pill — matches the home feed's BottomBar: light frosted
+     glass + glow (no dark base). Stowed at the top, slides up into view once
+     the shopper scrolls down past the hero (.is-shown). */
   .ovl-chrome-search {
-    pointer-events: auto;
     position: fixed;
     left: 0; right: 0;
     bottom: max(14px, env(safe-area-inset-bottom));
@@ -57,15 +60,23 @@
     display: flex; align-items: center; gap: 8px;
     padding: 12px 14px;
     border-radius: 999px;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.04)), rgba(15, 18, 24, 0.72);
-    border: 1px solid rgba(255, 255, 255, 0.14);
-    -webkit-backdrop-filter: blur(22px) saturate(1.5); backdrop-filter: blur(22px) saturate(1.5);
-    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
-    transition: transform 0.42s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.42s cubic-bezier(0.22, 1, 0.36, 1);
-  }
-  .ovl-chrome.is-hidden .ovl-chrome-search {
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.04));
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    -webkit-backdrop-filter: blur(28px) saturate(1.5); backdrop-filter: blur(28px) saturate(1.5);
+    box-shadow:
+      0 12px 36px rgba(0, 0, 0, 0.36),
+      0 0 26px rgba(255, 255, 255, 0.10),
+      inset 0 1px 0 rgba(255, 255, 255, 0.16),
+      inset 0 -1px 0 rgba(0, 0, 0, 0.18);
     transform: translateY(calc(100% + 24px));
     opacity: 0;
+    pointer-events: none;
+    transition: transform 0.42s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  .ovl-chrome-search.is-shown {
+    transform: translateY(0);
+    opacity: 1;
+    pointer-events: auto;
   }
   .ovl-chrome-search-icon { flex: 0 0 auto; color: rgba(255, 255, 255, 0.55); }
   .ovl-chrome-search-input {
