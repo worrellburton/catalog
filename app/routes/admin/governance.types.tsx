@@ -743,9 +743,9 @@ export default function AdminGovernanceTypes() {
    *  drift, duplicate/empty/unowned types); "garments" sweeps only the
    *  gender dimension. Each opens the panel showing just its findings, so a
    *  type pass never silently touches gender and vice-versa. */
-  const runKaizen = (mode: 'types' | 'garments') => {
+  const runKaizen = (mode: 'types' | 'gender') => {
     setKaizenMenuOpen(false);
-    if (mode === 'garments') {
+    if (mode === 'gender') {
       // Product-level gender audit — re-derive each product's gender from
       // name/photo/brand and surface the mismatches for review.
       setAudit({ retypes: [], drift: [], genderChanges: genderAudit(products), emptyTypes: [], duplicateTypes: [], orphanTypes: [] });
@@ -870,7 +870,7 @@ export default function AdminGovernanceTypes() {
             {kaizenMenuOpen && (
               <div className="gov-kaizen-menu" role="menu">
                 <button type="button" role="menuitem" onClick={() => runKaizen('types')}>改 Kaizen types</button>
-                <button type="button" role="menuitem" onClick={() => runKaizen('garments')}>改 Kaizen garments</button>
+                <button type="button" role="menuitem" onClick={() => runKaizen('gender')}>改 Kaizen gender</button>
               </div>
             )}
           </div>
@@ -880,7 +880,7 @@ export default function AdminGovernanceTypes() {
             <button
               type="button"
               className="gov-ghost gov-kaizen-btn"
-              title="Continuous improvement: choose a focused sweep — Kaizen types (product placement, drifted columns, duplicate / empty / unowned types) or Kaizen garments (gender). Also runs every morning at 6 a.m. ET."
+              title="Continuous improvement: choose a focused sweep — Kaizen types (placement, drifted columns, duplicate / empty / unowned types) or Kaizen gender (re-derive each product's gender). Also runs every morning at 6 a.m. ET."
               aria-haspopup="menu"
               aria-expanded={kaizenMenuOpen}
               onClick={() => setKaizenMenuOpen(v => !v)}
@@ -890,7 +890,7 @@ export default function AdminGovernanceTypes() {
             {kaizenMenuOpen && (
               <div className="gov-kaizen-menu" role="menu">
                 <button type="button" role="menuitem" onClick={() => runKaizen('types')}>改 Kaizen types</button>
-                <button type="button" role="menuitem" onClick={() => runKaizen('garments')}>改 Kaizen garments</button>
+                <button type="button" role="menuitem" onClick={() => runKaizen('gender')}>改 Kaizen gender</button>
               </div>
             )}
           </div>
