@@ -320,16 +320,27 @@ export function computeEffectiveGenders(nodes: TypeNode[]): Map<string, string |
 
 export async function createTypeNode(name: string, parentId: string | null): Promise<TypeNode | null> {
   if (!supabase) return null;
-  const { data, error } = await supabase
-    .from('product_types')
-    .insert({ name, parent_id: parentId, sort: 999 })
-    .select('id, name, parent_id, sort, color, gender, icon_path')
-    .single();
-  if (error || !data) return null;
-  const r = data as { id: string; name: string; parent_id: string | null; sort: number; color: string | null;
-    gender: TypeNode['gender']; icon_path: string | null };
-  return { id: r.id, name: r.name, parentId: r.parent_id, sort: r.sort, color: r.color, gender: r.gender,
-    iconPath: r.icon_path };
+  // (parent_id, name) is unique — siblings can't share a name. "Add child"
+  // always seeds "new type", so on a collision (an un-renamed placeholder
+  // already sits at this level) retry with a numeric suffix instead of
+  // failing the whole gesture.
+  for (let attempt = 0; attempt < 50; attempt++) {
+    const candidate = attempt === 0 ? name : `${name} ${attempt + 1}`;
+    const { data, error } = await supabase
+      .from('product_types')
+      .insert({ name: candidate, parent_id: parentId, sort: 999 })
+      .select('id, name, parent_id, sort, color, gender, icon_path')
+      .single();
+    if (!error && data) {
+      const r = data as { id: string; name: string; parent_id: string | null; sort: number; color: string | null;
+        gender: TypeNode['gender']; icon_path: string | null };
+      return { id: r.id, name: r.name, parentId: r.parent_id, sort: r.sort, color: r.color, gender: r.gender,
+        iconPath: r.icon_path };
+    }
+    // 23505 = unique_violation → bump the suffix and retry; anything else is fatal.
+    if (!error || (error as { code?: string }).code !== '23505') return null;
+  }
+  return null;
 }
 
 // ── Kaizen ────────────────────────────────────────────────────────────
