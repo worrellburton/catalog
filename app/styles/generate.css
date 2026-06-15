@@ -1074,15 +1074,14 @@ html[data-shell="catalog-app"] .gen-page {
   flex-direction: column;
   align-items: center;
   justify-content: flex-start;
-  gap: 4px;
-  padding: 10px 8px;
+  gap: 6px;
+  padding: 14px 10px;
   border-radius: 12px;
   border: 1.5px solid rgba(255, 255, 255, 0.1);
   background: rgba(255, 255, 255, 0.03);
   color: #fff;
   cursor: pointer;
   text-align: center;
-  overflow: hidden;
   transition: border-color 0.2s ease, background 0.2s ease, transform 0.15s ease;
 }
 .gen-stylecard.is-picked {
@@ -1121,21 +1120,14 @@ html[data-shell="catalog-app"] .gen-page {
 .gen-stylecard-label {
   font-size: 13px;
   font-weight: 700;
-  margin-top: auto;
+  margin-top: 8px;
 }
-/* Description stays hidden until the card is tapped (picked), then reveals. */
+/* Description shows on every card, always — selection is just the white
+   outline (.is-picked), never a reveal. Wraps freely so nothing clips. */
 .gen-stylecard-blurb {
   font-size: 11px;
   line-height: 1.35;
   color: rgba(255, 255, 255, 0.62);
-  max-height: 0;
-  opacity: 0;
-  overflow: hidden;
-  transition: max-height 0.3s ease, opacity 0.3s ease, margin-top 0.3s ease;
-}
-.gen-stylecard.is-picked .gen-stylecard-blurb {
-  max-height: 90px;
-  opacity: 1;
   margin-top: 4px;
 }
 
@@ -1149,7 +1141,9 @@ html[data-shell="catalog-app"] .gen-page {
   /* One row — swipe horizontally through the presets. Show ~3.3 cards so the
      next one peeks at the right edge, signalling the row scrolls sideways. */
   grid-template-rows: auto;
-  grid-auto-columns: calc((100% - 26px) / 3.3);
+  /* A little bigger — ~2.5 cards visible so the next peeks and the blurb
+     wraps without clipping. */
+  grid-auto-columns: calc((100% - 20px) / 2.5);
   gap: 8px;
   overflow-x: auto;
   overflow-y: hidden;
@@ -1163,7 +1157,6 @@ html[data-shell="catalog-app"] .gen-page {
 .gen-styleswiper::-webkit-scrollbar { display: none; }
 .gen-styleswiper > .gen-stylecard {
   width: auto;
-  aspect-ratio: 1 / 1;
   scroll-snap-align: start;
 }
 
