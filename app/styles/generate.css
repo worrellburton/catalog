@@ -1131,25 +1131,14 @@ html[data-shell="catalog-app"] .gen-page {
   margin-top: 4px;
 }
 
-/* Style picker as a contained, wrapping grid — every preset fits within the
-   viewport with no horizontal bleed (was a sideways-scrolling rail that ran
-   off the right edge on mobile). auto-fill keeps it responsive: ~3 columns on
-   a phone, more on wider screens. */
+/* Style picker — a wrapping grid that matches the "Pick your products"
+   cloud (repeat(auto-fill, minmax)) so the two steps share one visual
+   language: cards wrap into rows and the step scrolls vertically, instead
+   of a sideways-scrolling rail. */
 .gen-styleswiper {
   display: grid;
-  grid-auto-flow: column;
-  /* One row — swipe horizontally through the presets. Show ~3.3 cards so the
-     next one peeks at the right edge, signalling the row scrolls sideways. */
-  grid-template-rows: auto;
-  /* A little bigger — ~2.5 cards visible so the next peeks and the blurb
-     wraps without clipping. */
-  grid-auto-columns: calc((100% - 20px) / 2.5);
-  gap: 8px;
-  overflow-x: auto;
-  overflow-y: hidden;
-  scroll-snap-type: x proximity;
-  -webkit-overflow-scrolling: touch;
-  scrollbar-width: none;
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  gap: 10px;
   max-width: 100%;
   min-width: 0;
   padding-bottom: 4px;
@@ -1157,7 +1146,6 @@ html[data-shell="catalog-app"] .gen-page {
 .gen-styleswiper::-webkit-scrollbar { display: none; }
 .gen-styleswiper > .gen-stylecard {
   width: auto;
-  scroll-snap-align: start;
 }
 
 /* Mobile fit: the style step and its free-text textarea never exceed the
