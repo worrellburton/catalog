@@ -782,7 +782,7 @@ export default function AdminLayout() {
             />
             <span className="admin-search-shortcut">&#8984;K</span>
           </div>
-          {searchOpen && searchResults.length > 0 && (
+          {searchOpen && (searchResults.length > 0 || searchQuery.trim()) && (
             <div className="admin-search-results">
               {searchResults.map(item => (
                 <button
@@ -794,6 +794,21 @@ export default function AdminLayout() {
                   <span>{item.label}</span>
                 </button>
               ))}
+              {/* Searching a brand (or product name) jumps to the Products
+                  tab filtered by the query — the products list matches on
+                  brand + name. Keeps the query so ?q= filters the view. */}
+              {searchQuery.trim() && (
+                <button
+                  className="admin-search-result"
+                  onClick={() => {
+                    navigate(`/admin/data?tab=products&q=${encodeURIComponent(searchQuery.trim())}`);
+                    setSearchOpen(false);
+                  }}
+                >
+                  <span className="admin-search-result-type">Products</span>
+                  <span>Products matching “{searchQuery.trim()}”</span>
+                </button>
+              )}
             </div>
           )}
 
