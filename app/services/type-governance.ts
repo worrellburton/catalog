@@ -13,6 +13,7 @@
 // casing it has.
 
 import { supabase } from '~/utils/supabase';
+import { haikuIdentity } from '~/utils/haiku';
 import { inferProductTypeAndSubtype } from '~/services/product-types';
 import { governanceRendition, warmPosters } from '~/utils/poster-prefetch';
 
@@ -67,26 +68,6 @@ export function normalizeTypeName(s: string): string {
   if (n.endsWith('ss')) return n;
   if (n.endsWith('s') && n.length > 2) return n.slice(0, -1);
   return n;
-}
-
-/**
- * The "identity" half of a Haiku context string — what the item IS, not
- * where it sits. The haiku-context prompt now leads with a one-line
- * object identity ("houseplant", "high heels") and follows with a
- * detail sentence that can mention the room/setting. Type matching must
- * only read the identity, or a plant photographed in a living room gets
- * mis-placed under "home". Falls back to the first sentence for legacy
- * single-blob rows written before the two-line format.
- */
-export function haikuIdentity(text: string | null | undefined): string {
-  if (!text) return '';
-  const lines = text.split('\n')
-    .map(l => l.replace(/^[#>\-*\s]+/, '').replace(/[*_`]/g, '').trim())
-    .filter(Boolean);
-  // First real content line — skip bare titles/labels ("Description").
-  const line = lines.find(l => l.includes(' ') && !l.endsWith(':')) ?? lines[0] ?? text;
-  const firstSentence = line.split(/(?<=[.!?])\s/)[0] ?? line;
-  return firstSentence.trim();
 }
 
 export async function fetchTypeTree(): Promise<TypeNode[]> {
