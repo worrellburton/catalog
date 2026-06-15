@@ -80,9 +80,12 @@ export function normalizeTypeName(s: string): string {
  */
 export function haikuIdentity(text: string | null | undefined): string {
   if (!text) return '';
-  const firstLine = text.split('\n')[0]?.trim() ?? '';
-  const base = firstLine || text;
-  const firstSentence = base.split(/(?<=[.!?])\s/)[0] ?? base;
+  const lines = text.split('\n')
+    .map(l => l.replace(/^[#>\-*\s]+/, '').replace(/[*_`]/g, '').trim())
+    .filter(Boolean);
+  // First real content line — skip bare titles/labels ("Description").
+  const line = lines.find(l => l.includes(' ') && !l.endsWith(':')) ?? lines[0] ?? text;
+  const firstSentence = line.split(/(?<=[.!?])\s/)[0] ?? line;
   return firstSentence.trim();
 }
 
