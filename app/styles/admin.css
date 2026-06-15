@@ -6822,3 +6822,57 @@ html.eq-page .gen-queue-host { display: none; }
   .ledger-controls { gap: 8px; }
   .ledger-search { min-width: 0; flex-basis: 100%; }
 }
+
+/* ═══════════════════════════════════════════════════════════════════
+   GLOBAL ADMIN MOBILE PASS
+   Shared shell + common patterns, so every admin page benefits at once.
+   Page-specific mobile rules above still win (later source order only
+   beats equal specificity). Phones: ≤768px.
+   ═══════════════════════════════════════════════════════════════════ */
+@media (max-width: 768px) {
+  .admin-page { padding: 16px 14px; }
+  .admin-page-header { flex-wrap: wrap; gap: 8px; margin-bottom: 16px; }
+  .admin-page-header h1 { font-size: 18px; }
+  .admin-page-subtitle { font-size: 12px; }
+
+  /* Wide data tables: scroll horizontally inside their wrap instead of
+     crushing columns into unreadable slivers or shoving the whole page
+     sideways. A min-width keeps columns legible; the wrap owns the
+     scroll. (The users page card-ifies its table instead — exempt it so
+     it stays full-width cards, not a 600px scroller.) */
+  .admin-table-wrap { overflow-x: auto; -webkit-overflow-scrolling: touch; border-radius: 10px; }
+  .admin-table-wrap .admin-table { min-width: 620px; }
+  .admin-users-grid .admin-table { min-width: 0 !important; }
+
+  /* Tab strips with many tabs scroll instead of overflowing the edge. */
+  .admin-tabs {
+    width: 100%;
+    max-width: 100%;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+    flex-wrap: nowrap;
+    box-sizing: border-box;
+  }
+  .admin-tabs::-webkit-scrollbar { display: none; }
+  .admin-tabs { scrollbar-width: none; }
+
+  /* Tighten stat cards so two fit comfortably; values don't overflow. */
+  .admin-stats-grid { gap: 10px; margin-bottom: 24px; }
+  .admin-stat-card { padding: 14px; }
+  .admin-stat-value { font-size: 22px; }
+
+  /* Modals: near-full-width, scroll their own body. */
+  .admin-modal,
+  .admin-modal-wide { width: calc(100vw - 24px); max-width: calc(100vw - 24px); max-height: 86vh; overflow-y: auto; }
+
+  /* Stat/detail grids that pack tight columns drop to one. (auto-fill
+     grids already collapse; this catches fixed multi-column ones.) */
+  .admin-detail-grid { grid-template-columns: 1fr; gap: 14px; }
+
+  /* Filter / action rows wrap rather than clip. */
+  .admin-detail-row { flex-wrap: wrap; }
+}
+
+@media (max-width: 420px) {
+  .admin-stats-grid { grid-template-columns: 1fr; }
+}
