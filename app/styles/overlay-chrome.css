@@ -15,15 +15,34 @@
      separately (it reveals as you scroll DOWN, see .is-shown below), so the
      container itself must not transform or it'd drag the fixed pill with it. */
   .ovl-chrome-top {
+    position: relative;
     pointer-events: auto;
     display: flex;
     align-items: center;
     gap: 10px;
     padding: max(8px, env(safe-area-inset-top)) 14px 10px;
-    /* No dark scrim — the back button keeps its own glass background, so the
-       top chrome floats cleanly over the hero without a gradient. */
     transition: transform 0.42s cubic-bezier(0.22, 1, 0.36, 1),
                 opacity 0.42s cubic-bezier(0.22, 1, 0.36, 1);
+  }
+  /* Same dark top scrim as the main feed (header::before) so the back +
+     logo read over bright product/look hero media. Fades to transparent and
+     rides with the top bar (hides on scroll-down with it). */
+  .ovl-chrome-top::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    height: 150px;
+    background: linear-gradient(
+      to bottom,
+      rgba(0, 0, 0, 0.85) 0%,
+      rgba(0, 0, 0, 0.5) 42%,
+      rgba(0, 0, 0, 0.18) 72%,
+      transparent 100%
+    );
+    pointer-events: none;
+    z-index: -1;
   }
   .ovl-chrome.is-hidden .ovl-chrome-top {
     transform: translateY(-100%);
@@ -96,5 +115,7 @@
   /* The overlays' own mobile corner back buttons would now duplicate the
      chrome's back — retire them on phones. */
   .look-back-btn-mobile,
+  .look-video-close,
+  .look-video-share,
   .pd-back { display: none !important; }
 }
