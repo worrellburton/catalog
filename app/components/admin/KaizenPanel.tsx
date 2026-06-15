@@ -8,13 +8,14 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { supabase } from '~/utils/supabase';
 import type {
-  KaizenDrift, KaizenDuplicate, KaizenEmptyType, KaizenOrphan, KaizenReport,
+  KaizenDrift, KaizenDuplicate, KaizenEmptyType, KaizenGenderChange, KaizenOrphan, KaizenReport,
   TypeAuditRecommendation,
 } from '~/services/type-governance';
 
 export interface KaizenPicked {
   retypes: TypeAuditRecommendation[];
   drift: KaizenDrift[];
+  genderChanges: KaizenGenderChange[];
   emptyTypes: KaizenEmptyType[];
   duplicateTypes: KaizenDuplicate[];
   orphanTypes: KaizenOrphan[];
@@ -32,7 +33,8 @@ interface Props {
 
 const SECTIONS = [
   { key: 'retypes', title: 'Better placements', hint: 'products that belong in a more specific type' },
-  { key: 'drift', title: 'Out-of-sync columns', hint: 'type path / gender lagging the tree — the morning run auto-fixes these' },
+  { key: 'drift', title: 'Type improvements', hint: 'type / path lagging the tree — applies to the type column only' },
+  { key: 'genderChanges', title: 'Gender improvements', hint: 'gender set by a male/female type — applies to the gender column only' },
   { key: 'duplicateTypes', title: 'Duplicate types', hint: 'two nodes with the same name — merge into the busier one' },
   { key: 'orphanTypes', title: 'Unowned type names', hint: 'products typed with a name no node owns — create the node' },
   { key: 'emptyTypes', title: 'Empty branches', hint: 'no products anywhere inside — delete' },
@@ -62,6 +64,7 @@ export default function KaizenPanel({ report, onApply, onClose, onRefine }: Prop
   const keyOf: Record<SectionKey, (r: never) => string> = {
     retypes: (r: TypeAuditRecommendation) => r.productId,
     drift: (r: KaizenDrift) => r.productId,
+    genderChanges: (r: KaizenGenderChange) => r.productId,
     duplicateTypes: (r: KaizenDuplicate) => r.dropId,
     orphanTypes: (r: KaizenOrphan) => r.typeName,
     emptyTypes: (r: KaizenEmptyType) => r.nodeId,
@@ -70,6 +73,7 @@ export default function KaizenPanel({ report, onApply, onClose, onRefine }: Prop
   const [checked, setChecked] = useState<Record<SectionKey, Set<string>>>(() => ({
     retypes: allKeys('retypes'),
     drift: allKeys('drift'),
+    genderChanges: allKeys('genderChanges'),
     duplicateTypes: allKeys('duplicateTypes'),
     orphanTypes: allKeys('orphanTypes'),
     emptyTypes: allKeys('emptyTypes'),
@@ -81,6 +85,7 @@ export default function KaizenPanel({ report, onApply, onClose, onRefine }: Prop
     setChecked({
       retypes: allKeys('retypes'),
       drift: allKeys('drift'),
+      genderChanges: allKeys('genderChanges'),
       duplicateTypes: allKeys('duplicateTypes'),
       orphanTypes: allKeys('orphanTypes'),
       emptyTypes: allKeys('emptyTypes'),
@@ -119,6 +124,7 @@ export default function KaizenPanel({ report, onApply, onClose, onRefine }: Prop
   const picked: KaizenPicked = {
     retypes: report.retypes.filter(r => checked.retypes.has(r.productId)),
     drift: report.drift.filter(r => checked.drift.has(r.productId)),
+    genderChanges: report.genderChanges.filter(r => checked.genderChanges.has(r.productId)),
     duplicateTypes: report.duplicateTypes.filter(r => checked.duplicateTypes.has(r.dropId)),
     orphanTypes: report.orphanTypes.filter(r => checked.orphanTypes.has(r.typeName)),
     emptyTypes: report.emptyTypes.filter(r => checked.emptyTypes.has(r.nodeId)),
@@ -189,17 +195,34 @@ export default function KaizenPanel({ report, onApply, onClose, onRefine }: Prop
                 <span className="gov-audit-prod">
                   {r.brand && <em>{r.brand}</em>}
                   <strong>{r.name}</strong>
-                  <small>path/gender out of sync with the tree</small>
+                  <small>type path out of sync with the tree</small>
                 </span>
                 <span className="gov-audit-change">
-                  <s>{r.fromPath ?? 'no path'}{r.fromGender ? ` · ${r.fromGender}` : ''}</s>
+                  <s>{r.fromPath ?? 'no path'}</s>
                   <i aria-hidden="true">→</i>
-                  <b>{r.toPath}{r.toGender ? ` · ${r.toGender}` : ''}</b>
+                  <b>{r.toPath}</b>
                 </span>
               </>
             )))}
 
-            {report.duplicateTypes.length > 0 && sectionHead(SECTIONS[2], report.duplicateTypes.length)}
+            {report.genderChanges.length > 0 && sectionHead(SECTIONS[2], report.genderChanges.length)}
+            {report.genderChanges.map(r => row(r.productId, 'genderChanges', (
+              <>
+                {prodCells(r)}
+                <span className="gov-audit-prod">
+                  {r.brand && <em>{r.brand}</em>}
+                  <strong>{r.name}</strong>
+                  <small>{r.path} — gender only</small>
+                </span>
+                <span className="gov-audit-change">
+                  <s>{r.fromGender ?? 'unset'}</s>
+                  <i aria-hidden="true">→</i>
+                  <b>{r.toGender}</b>
+                </span>
+              </>
+            )))}
+
+            {report.duplicateTypes.length > 0 && sectionHead(SECTIONS[3], report.duplicateTypes.length)}
             {report.duplicateTypes.map(r => row(r.dropId, 'duplicateTypes', (
               <span className="gov-audit-change" style={{ flex: 1 }}>
                 <s>{r.dropPath}</s><i aria-hidden="true">→</i><b>{r.keepPath}</b>
@@ -207,7 +230,7 @@ export default function KaizenPanel({ report, onApply, onClose, onRefine }: Prop
               </span>
             )))}
 
-            {report.orphanTypes.length > 0 && sectionHead(SECTIONS[3], report.orphanTypes.length)}
+            {report.orphanTypes.length > 0 && sectionHead(SECTIONS[4], report.orphanTypes.length)}
             {report.orphanTypes.map(r => row(r.typeName, 'orphanTypes', (
               <span className="gov-audit-change" style={{ flex: 1 }}>
                 <b>“{r.typeName}”</b>
@@ -215,7 +238,7 @@ export default function KaizenPanel({ report, onApply, onClose, onRefine }: Prop
               </span>
             )))}
 
-            {report.emptyTypes.length > 0 && sectionHead(SECTIONS[4], report.emptyTypes.length)}
+            {report.emptyTypes.length > 0 && sectionHead(SECTIONS[5], report.emptyTypes.length)}
             {report.emptyTypes.map(r => row(r.nodeId, 'emptyTypes', (
               <span className="gov-audit-change" style={{ flex: 1 }}>
                 <s>{r.path}</s>

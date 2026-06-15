@@ -630,7 +630,7 @@ export default function AdminGovernanceTypes() {
       }
       if (recs.length === 0) { showToast('Could not resolve the suggested types.'); return; }
       setDrill(null);
-      setAudit({ retypes: recs, drift: [], emptyTypes: [], duplicateTypes: [], orphanTypes: [] });
+      setAudit({ retypes: recs, drift: [], genderChanges: [], emptyTypes: [], duplicateTypes: [], orphanTypes: [] });
     } finally {
       setKaizenSelBusy(false);
     }
@@ -675,10 +675,16 @@ export default function AdminGovernanceTypes() {
       });
     }
     if (picked.retypes.length) labels.push(`${picked.retypes.length} re-typed`);
+    // Type improvements: type/type_path only — never touch gender.
     for (const d of picked.drift) {
-      groups.push({ ids: [d.productId], patch: { type: d.toType, type_path: d.toPath, ...(d.toGender ? { gender: d.toGender } : {}) } });
+      groups.push({ ids: [d.productId], patch: { type: d.toType, type_path: d.toPath } });
     }
-    if (picked.drift.length) labels.push(`${picked.drift.length} synced`);
+    if (picked.drift.length) labels.push(`${picked.drift.length} type${picked.drift.length === 1 ? '' : 's'} synced`);
+    // Gender improvements: gender only — never touch type/path.
+    for (const g of picked.genderChanges) {
+      groups.push({ ids: [g.productId], patch: { gender: g.toGender } });
+    }
+    if (picked.genderChanges.length) labels.push(`${picked.genderChanges.length} gender${picked.genderChanges.length === 1 ? '' : 's'} set`);
 
     // Duplicate types: move the drop node's products to the keeper, delete it.
     for (const d of picked.duplicateTypes) {
