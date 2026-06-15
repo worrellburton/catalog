@@ -916,6 +916,35 @@ html.gov-void .tb-wrap {
 }
 .gov-drill-addmenu button:hover { background: rgba(129, 140, 248, 0.12); color: #fff; }
 
+/* 改 Kaizen split menu — "Kaizen types" / "Kaizen garments". */
+.gov-kaizen-wrap { position: relative; display: inline-flex; }
+.gov-kaizen-menu {
+  position: absolute;
+  top: calc(100% + 6px);
+  right: 0;
+  z-index: 14;
+  min-width: 180px;
+  border: 1px solid #27272a;
+  border-radius: 12px;
+  background: rgba(17, 17, 19, 0.98);
+  padding: 4px;
+}
+.gov-kaizen-menu button {
+  display: block;
+  width: 100%;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  color: #d4d4d8;
+  background: transparent;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 12px;
+  cursor: pointer;
+  white-space: nowrap;
+}
+.gov-kaizen-menu button:hover { background: rgba(129, 140, 248, 0.12); color: #fff; }
+
 /* ── Drill: collapsible subtype rows pinned at the bottom ── */
 .gov-drill-subs {
   flex-shrink: 0;
@@ -1314,7 +1343,7 @@ html.gov-void .gov-page.gov-types { height: calc(100vh - 53px); }
     white-space: nowrap;
   }
   .gov-types .gov-canvas-controls .gov-seg,
-  .gov-types .gov-canvas-controls .gov-kaizen-btn { display: none; }
+  .gov-types .gov-canvas-controls .gov-kaizen-wrap { display: none; }
 
   /* The brain owns the whole screen here — the floating AI generation
      FAB (lower right) would sit on top of the spheres, so it sits out. */
