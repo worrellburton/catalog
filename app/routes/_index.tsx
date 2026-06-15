@@ -1640,6 +1640,27 @@ export default function Home() {
     // The searchTrigger effect plays the ceremony when on the hero.
   }, []);
   const handleOpenLilyCreator = useCallback(() => setCreatorFilter('@lilywittman'), []);
+  // Overlay chrome search: close every overlay and run the query on the
+  // feed (same destination the home search lands on).
+  const handleOverlaySearch = useCallback((q: string) => {
+    const query = q.trim();
+    if (!query) return;
+    setSelectedProduct(null);
+    setSelectedCreative(null);
+    setSelectedLook(null);
+    setBrandFilter(null);
+    setCreatorFilter(null);
+    setShowBookmarks(false);
+    setShowMyLooks(false);
+    if (!inShell) setHeroMode(false);
+    if (typeof window !== 'undefined') {
+      if (window.location.pathname !== '/') window.history.replaceState({}, '', '/');
+      window.scrollTo({ top: 0, behavior: 'auto' });
+    }
+    setSearchQuery(query);
+    bumpSearchTrigger();
+  }, [inShell, setSearchQuery, bumpSearchTrigger]);
+
   const handleProductClose = useCallback(() => {
     // Prefer history.back() when the product page was pushed via the
     // overlay router (i.e. the URL is currently /p/<slug>). That pops
@@ -1994,6 +2015,8 @@ export default function Home() {
                 onOpenCreative={handleOpenCreative}
                 onOpenComments={openComments}
                 onDailyFeedBar={handleDailyFeedBar}
+                onHome={handleLogoClick}
+                onSearch={handleOverlaySearch}
               />
             </Suspense>
           )}
@@ -2215,6 +2238,8 @@ export default function Home() {
                 fromLook={productOpenedFromLook}
                 bookmarks={bookmarks}
                 navKey={productNavCount}
+                onHome={handleLogoClick}
+                onSearch={handleOverlaySearch}
               />
             </Suspense>
           )}
