@@ -33,6 +33,7 @@ import { director } from '~/services/video-playback-director';
 import { warmPosters, posterRendition } from '~/utils/poster-prefetch';
 import { recordOverlayScroll, consumeReturnScroll } from '~/utils/overlay-scroll-stash';
 import ParticleBackground from '~/components/ParticleBackground';
+import OverlayChrome from '~/components/OverlayChrome';
 import { productSlug } from '~/utils/slug';
 import { useCommentsEnabled } from '~/hooks/useCommentsEnabled';
 import { getCommentCount } from '~/services/comments';
@@ -114,6 +115,10 @@ interface ProductPageProps {
    *  effect depends on this so it fires reliably even when the new
    *  product happens to share brand+name with the prior one. */
   navKey?: number;
+  /** Logo → home (reset to feed). Powers the scroll-reactive top chrome. */
+  onHome?: () => void;
+  /** Run a search on the feed (closes the overlay first). */
+  onSearch?: (q: string) => void;
 }
 
 // Stable hash of any string → unsigned integer. Used to derive a consistent
@@ -507,6 +512,8 @@ export default function ProductPage({
   fromLook,
   bookmarks,
   navKey = 0,
+  onHome,
+  onSearch,
 }: ProductPageProps) {
   const navigate = useNavigate();
   const [mounted, setMounted] = useState(false);
@@ -1302,6 +1309,14 @@ export default function ProductPage({
       <div className="product-page-particles" aria-hidden="true">
         {!isMobileViewport() && <ParticleBackground />}
       </div>
+      {/* Scroll-reactive top chrome (mobile): back → previous page, logo
+          → home, search → run on the feed. */}
+      <OverlayChrome
+        scrollEl={scrollerEl}
+        onBack={handleClose}
+        onHome={onHome ?? handleClose}
+        onSearch={onSearch ?? (() => {})}
+      />
       <div className="product-page" ref={setScrollerRef}>
         <button
           className="pd-back"

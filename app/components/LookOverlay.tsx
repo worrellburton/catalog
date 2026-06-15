@@ -18,6 +18,7 @@ import { useTrailVideo, useTrailVideoManager } from './TrailVideoHost';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
 import ProductMiniMedia from './ProductMiniMedia';
 import ParticleBackground from './ParticleBackground';
+import OverlayChrome from './OverlayChrome';
 import { posterRendition } from '~/utils/poster-prefetch';
 import { recordOverlayScroll, consumeReturnScroll } from '~/utils/overlay-scroll-stash';
 import { director } from '~/services/video-playback-director';
@@ -89,9 +90,13 @@ interface LookOverlayProps {
    *  while scrolling down within the feed, false on scroll-up. Both false above
    *  the feed / on close. See `looks-feed-bar` / `looks-feed-bar-hidden`. */
   onDailyFeedBar?: (reached: boolean, hidden: boolean) => void;
+  /** Logo → home (reset to feed). Powers the scroll-reactive top chrome. */
+  onHome?: () => void;
+  /** Run a search on the feed (closes the overlay first). */
+  onSearch?: (q: string) => void;
 }
 
-export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowser, onOpenProduct, onCreateCatalog, onOpenLook, bookmarks, allLooks, popularFallback, onOpenCreative, onOpenComments, onDailyFeedBar }: LookOverlayProps) {
+export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowser, onOpenProduct, onCreateCatalog, onOpenLook, bookmarks, allLooks, popularFallback, onOpenCreative, onOpenComments, onDailyFeedBar, onHome, onSearch }: LookOverlayProps) {
   const overlayRef = useRef<HTMLDivElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const moreScrollRef = useRef<HTMLDivElement>(null);
@@ -921,6 +926,16 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
       <div className="look-overlay-particles" aria-hidden="true">
         {!isMobileViewport() && <ParticleBackground />}
       </div>
+      {/* Scroll-reactive top chrome (mobile): back → previous page, logo
+          → home. Search pill omitted — the daily-feed bar already serves
+          search deeper in the look. */}
+      <OverlayChrome
+        scrollEl={scrollEl}
+        onBack={handleClose}
+        onHome={onHome ?? handleClose}
+        onSearch={onSearch ?? (() => {})}
+        showSearch={false}
+      />
       <div className="look-overlay-scroll" ref={setScrollRef}>
         {/* ═══ HERO: 60/40 split (first viewport) ═══ */}
         <div className="look-hero-section">
