@@ -69,6 +69,23 @@ export function normalizeTypeName(s: string): string {
   return n;
 }
 
+/**
+ * The "identity" half of a Haiku context string — what the item IS, not
+ * where it sits. The haiku-context prompt now leads with a one-line
+ * object identity ("houseplant", "high heels") and follows with a
+ * detail sentence that can mention the room/setting. Type matching must
+ * only read the identity, or a plant photographed in a living room gets
+ * mis-placed under "home". Falls back to the first sentence for legacy
+ * single-blob rows written before the two-line format.
+ */
+export function haikuIdentity(text: string | null | undefined): string {
+  if (!text) return '';
+  const firstLine = text.split('\n')[0]?.trim() ?? '';
+  const base = firstLine || text;
+  const firstSentence = base.split(/(?<=[.!?])\s/)[0] ?? base;
+  return firstSentence.trim();
+}
+
 export async function fetchTypeTree(): Promise<TypeNode[]> {
   if (!supabase) return [];
   const { data, error } = await supabase
@@ -234,9 +251,10 @@ export function auditProductTypes(
       const score = depth(node) * 100 + normalizeTypeName(node.name).length;
       if (score > bestScore) { best = node; bestScore = score; bestReason = reason; }
     };
+    const hctx = haikuIdentity(p.haikuContext);
     for (const m of matchers) {
       if (m.rx.test(p.name)) consider(m.node, `name contains “${m.node.name}”`);
-      else if (p.haikuContext && m.rx.test(p.haikuContext)) {
+      else if (hctx && m.rx.test(hctx)) {
         consider(m.node, `image shows ${m.node.name} (Haiku)`);
       }
     }

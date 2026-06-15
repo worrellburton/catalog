@@ -28,6 +28,20 @@ function normalize(s: string): string {
 }
 const escapeRx = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+// The "identity" half of a Haiku context string — what the item IS, not
+// where it sits. haiku-context leads with a one-line object identity
+// ("houseplant", "high heels") and follows with a detail sentence that may
+// mention the room/setting. Placement matching reads only the identity, or a
+// plant shot in a living room gets mis-placed under "home". Falls back to the
+// first sentence for legacy single-blob rows.
+function haikuIdentity(text: string | null): string {
+  if (!text) return '';
+  const firstLine = text.split('\n')[0]?.trim() ?? '';
+  const base = firstLine || text;
+  const firstSentence = base.split(/(?<=[.!?])\s/)[0] ?? base;
+  return firstSentence.trim();
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method !== 'POST') return new Response('method not allowed', { status: 405 });
   const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
@@ -87,9 +101,10 @@ Deno.serve(async (req: Request) => {
 
     for (const p of products) {
       const currentNode = p.type ? byNorm.get(normalize(p.type))?.[0] ?? null : null;
+      const hctx = haikuIdentity(p.haiku_context);
       let best: Node | null = null;
       for (const m of matchers) {
-        const hit = m.rx.test(p.name) || (p.haiku_context ? m.rx.test(p.haiku_context) : false);
+        const hit = m.rx.test(p.name) || (hctx ? m.rx.test(hctx) : false);
         if (hit && (!best || depth(m.node) > depth(best))) best = m.node;
       }
       if (best && (!currentNode || (currentNode.id !== best.id && !inBranch(currentNode, best)))) {
