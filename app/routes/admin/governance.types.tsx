@@ -24,6 +24,7 @@ import {
   executeGovernanceOps,
   fetchGovernanceProducts,
   fetchTypeTree,
+  genderAudit,
   kaizenSweep,
   normalizeTypeName,
   snapshotGroups,
@@ -744,10 +745,14 @@ export default function AdminGovernanceTypes() {
    *  type pass never silently touches gender and vice-versa. */
   const runKaizen = (mode: 'types' | 'garments') => {
     setKaizenMenuOpen(false);
+    if (mode === 'garments') {
+      // Product-level gender audit — re-derive each product's gender from
+      // name/photo/brand and surface the mismatches for review.
+      setAudit({ retypes: [], drift: [], genderChanges: genderAudit(products), emptyTypes: [], duplicateTypes: [], orphanTypes: [] });
+      return;
+    }
     const full = kaizenSweep(products, tree);
-    setAudit(mode === 'garments'
-      ? { retypes: [], drift: [], genderChanges: full.genderChanges, emptyTypes: [], duplicateTypes: [], orphanTypes: [] }
-      : { ...full, genderChanges: [] });
+    setAudit({ ...full, genderChanges: [] });
   };
 
   /** Drill delete: deactivates the products (gone from the consumer feed
@@ -1089,6 +1094,25 @@ export default function AdminGovernanceTypes() {
                       </div>
                     )}
                   </div>
+                )}
+                {node && (
+                  <button
+                    type="button"
+                    className="gov-ghost gov-drill-delete-type"
+                    title="Delete this type. Subtypes are removed and its products become unassigned. Undoable."
+                    onClick={() => {
+                      const sub = subtreeIds(node.id);
+                      const childCount = sub.size - 1;
+                      const prodCount = [...sub].reduce((acc, sid) => acc + (attach.get(sid)?.length ?? 0), 0);
+                      const msg = `Delete "${node.name}"?`
+                        + (childCount ? `\n• ${childCount} subtype${childCount === 1 ? '' : 's'} removed` : '')
+                        + (prodCount ? `\n• ${prodCount} product${prodCount === 1 ? '' : 's'} become unassigned` : '')
+                        + `\n\nYou can undo this.`;
+                      if (window.confirm(msg)) { handleDelete([node.id]); setDrill(null); }
+                    }}
+                  >
+                    Delete type
+                  </button>
                 )}
               </div>
               {drillSel.size > 0 && (
