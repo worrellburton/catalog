@@ -194,43 +194,39 @@ export async function auditAllUserGenders(): Promise<AuditCounts> {
   return result;
 }
 
+export interface GenderAuditRow {
+  id: string;
+  name: string | null;
+  brand: string | null;
+  type: string | null;
+  subtype?: string | null;
+  gender: ProductGender;
+  haiku_context?: string | null;
+}
+
 /**
- * Walk every product and re-derive its gender, strongest signal first so
- * an "Untagged" filter ends up empty after a single pass:
+ * Pure: best-guess gender for every product, strongest signal first.
  *   1. Explicit gender tokens in the product name ("Men's", "Women's").
  *   2. Explicit gender tokens in the Haiku read of the photo.
- *   3. A gendered category word in the name / type / subtype / Haiku
- *      identity ("heels" → female, "tie" → male) — this is what rescues
- *      heels that are typed "shoes" and would otherwise read as unisex.
- *   4. Brand history - if the brand's other rows skew strongly to one
- *      gender, inherit that.
- *   5. Final fallback - 'unisex' so the column is never left blank.
- *
- * Existing values are overwritten when a stronger signal disagrees, so
- * an admin-curated "Men's"/"Women's" name and the photo always win over
- * a stale tag.
+ *   3. A gendered category word across name / type / subtype / Haiku
+ *      identity ("heels" → female, "tie" → male) — rescues heels typed
+ *      "shoes" that would otherwise read as unisex.
+ *   4. Brand history - if the brand's other rows skew ≥60% one way.
+ *   5. Final fallback - 'unisex' (a book, a monitor: no gender).
+ * Returns id → proposed gender. Shared by the admin gender audit and the
+ * Kaizen "garments" sweep so both agree.
  */
-export async function auditAllProductGenders(): Promise<AuditCounts> {
-  const result: AuditCounts = { scanned: 0, updated: 0, skipped: 0, errors: 0 };
-  if (!supabase) return result;
-  const { data } = await supabase
-    .from('products')
-    .select('id, name, brand, type, subtype, gender, haiku_context');
-  const rows = data || [];
-
-  // Pre-compute per-brand gender histograms so we can vote on rows that
-  // have no name/type signal. Only count rows that are already tagged;
-  // unknowns can't vote for themselves.
+export function proposeProductGenders(rows: GenderAuditRow[]): Map<string, ProductGender> {
+  // Per-brand histograms from already-tagged rows; unknowns can't vote.
   const brandHist = new Map<string, { male: number; female: number; unisex: number }>();
   for (const r of rows) {
-    const brand = (r.brand as string | null)?.trim().toLowerCase();
-    const g = r.gender as ProductGender;
+    const brand = r.brand?.trim().toLowerCase();
+    const g = r.gender;
     if (!brand || !g) continue;
     const h = brandHist.get(brand) ?? { male: 0, female: 0, unisex: 0 };
     if (g === 'male' || g === 'female' || g === 'unisex') h[g]++;
     brandHist.set(brand, h);
   }
-
   const brandGuess = (brand: string | null | undefined): ProductGender => {
     const key = brand?.trim().toLowerCase();
     if (!key) return null;
@@ -238,27 +234,45 @@ export async function auditAllProductGenders(): Promise<AuditCounts> {
     if (!h) return null;
     const total = h.male + h.female + h.unisex;
     if (total < 3) return null; // not enough signal to vote
-    // Need a clear majority (>= 60 %) before we let the brand drive a
-    // single product's gender. Otherwise fall through to 'unisex'.
     if (h.female / total >= 0.6) return 'female';
     if (h.male / total >= 0.6) return 'male';
     if (h.unisex / total >= 0.6) return 'unisex';
     return null;
   };
 
+  const out = new Map<string, ProductGender>();
+  for (const r of rows) {
+    const haiku = r.haiku_context ?? null;
+    const blob = [r.name, r.type, r.subtype, haikuIdentity(haiku)].filter(Boolean).join(' ');
+    out.set(
+      r.id,
+      inferProductGenderFromName(r.name)
+        ?? inferProductGenderFromName(haiku)
+        ?? inferProductGenderFromKeywords(blob)
+        ?? brandGuess(r.brand)
+        ?? 'unisex',
+    );
+  }
+  return out;
+}
+
+/**
+ * Walk every product and re-derive its gender (see proposeProductGenders),
+ * writing any that disagree. Existing values are overwritten when a
+ * stronger signal disagrees, so an "Untagged" filter ends up empty.
+ */
+export async function auditAllProductGenders(): Promise<AuditCounts> {
+  const result: AuditCounts = { scanned: 0, updated: 0, skipped: 0, errors: 0 };
+  if (!supabase) return result;
+  const { data } = await supabase
+    .from('products')
+    .select('id, name, brand, type, subtype, gender, haiku_context');
+  const rows = (data || []) as GenderAuditRow[];
+  const proposed = proposeProductGenders(rows);
+
   for (const row of rows) {
     result.scanned++;
-    const haiku = (row as { haiku_context?: string | null }).haiku_context ?? null;
-    const subtype = (row as { subtype?: string | null }).subtype ?? null;
-    const fromName = inferProductGenderFromName(row.name);
-    const fromHaikuTokens = inferProductGenderFromName(haiku);
-    const blob = [row.name, row.type as string | null, subtype, haikuIdentity(haiku)]
-      .filter(Boolean).join(' ');
-    const fromCategory = inferProductGenderFromKeywords(blob);
-    const fromBrand = brandGuess(row.brand as string | null);
-    const inferred: ProductGender =
-      fromName ?? fromHaikuTokens ?? fromCategory ?? fromBrand ?? 'unisex';
-
+    const inferred = proposed.get(row.id) ?? 'unisex';
     if (row.gender === inferred) { result.skipped++; continue; }
     const { error } = await supabase
       .from('products')
