@@ -91,6 +91,8 @@ export default function AdminGovernanceTypes() {
   const [openSubs, setOpenSubs] = useState<Set<string>>(new Set());
   // Kaizen report (null = closed).
   const [audit, setAudit] = useState<KaizenReport | null>(null);
+  // 改 Kaizen splits into two focused sweeps — pick types or garments first.
+  const [kaizenMenuOpen, setKaizenMenuOpen] = useState(false);
   useEffect(() => {
     setDrillSel(new Set());
     setAssignOpen(false);
@@ -736,6 +738,18 @@ export default function AdminGovernanceTypes() {
     );
   };
 
+  /** 改 Kaizen, scoped. "types" sweeps the taxonomy (placements, type/path
+   *  drift, duplicate/empty/unowned types); "garments" sweeps only the
+   *  gender dimension. Each opens the panel showing just its findings, so a
+   *  type pass never silently touches gender and vice-versa. */
+  const runKaizen = (mode: 'types' | 'garments') => {
+    setKaizenMenuOpen(false);
+    const full = kaizenSweep(products, tree);
+    setAudit(mode === 'garments'
+      ? { retypes: [], drift: [], genderChanges: full.genderChanges, emptyTypes: [], duplicateTypes: [], orphanTypes: [] }
+      : { ...full, genderChanges: [] });
+  };
+
   /** Drill delete: deactivates the products (gone from the consumer feed
    *  AND the brain — fetchGovernanceProducts is is_active-scoped). One
    *  undoable gesture; Undo reactivates. */
@@ -838,23 +852,43 @@ export default function AdminGovernanceTypes() {
               >{m}</button>
             ))}
           </div>
-          <button
-            type="button"
-            className="gov-ghost"
-            onClick={() => setAudit(kaizenSweep(products, tree))}
-          >
-            改 Kaizen
-          </button>
+          <div className="gov-kaizen-wrap">
+            <button
+              type="button"
+              className="gov-ghost gov-kaizen-btn"
+              aria-haspopup="menu"
+              aria-expanded={kaizenMenuOpen}
+              onClick={() => setKaizenMenuOpen(v => !v)}
+            >
+              改 Kaizen
+            </button>
+            {kaizenMenuOpen && (
+              <div className="gov-kaizen-menu" role="menu">
+                <button type="button" role="menuitem" onClick={() => runKaizen('types')}>改 Kaizen types</button>
+                <button type="button" role="menuitem" onClick={() => runKaizen('garments')}>改 Kaizen garments</button>
+              </div>
+            )}
+          </div>
         </div>
         <div className={`gov-controls-row gov-canvas-controls${mobileControlsOpen ? ' is-open' : ''}`}>
-          <button
-            type="button"
-            className="gov-ghost gov-kaizen-btn"
-            title="Continuous improvement: sweep everything — product placement, drifted columns, duplicate / empty / unowned types — and apply the fixes. Also runs every morning at 6 a.m. ET."
-            onClick={() => setAudit(kaizenSweep(products, tree))}
-          >
-            改 Kaizen
-          </button>
+          <div className="gov-kaizen-wrap">
+            <button
+              type="button"
+              className="gov-ghost gov-kaizen-btn"
+              title="Continuous improvement: choose a focused sweep — Kaizen types (product placement, drifted columns, duplicate / empty / unowned types) or Kaizen garments (gender). Also runs every morning at 6 a.m. ET."
+              aria-haspopup="menu"
+              aria-expanded={kaizenMenuOpen}
+              onClick={() => setKaizenMenuOpen(v => !v)}
+            >
+              改 Kaizen
+            </button>
+            {kaizenMenuOpen && (
+              <div className="gov-kaizen-menu" role="menu">
+                <button type="button" role="menuitem" onClick={() => runKaizen('types')}>改 Kaizen types</button>
+                <button type="button" role="menuitem" onClick={() => runKaizen('garments')}>改 Kaizen garments</button>
+              </div>
+            )}
+          </div>
           <button type="button" className="gov-ghost" disabled={!canUndo} onClick={handleUndo}>
             ↩ Undo
           </button>
