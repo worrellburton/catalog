@@ -8,6 +8,7 @@ import { particleControls } from '~/services/particles';
 import { supabase } from '~/utils/supabase';
 import { useAuth } from '~/hooks/useAuth';
 import { startGenerationJob } from '~/services/generation-queue';
+import { BUILD_JOKES, BUILD_PHASES, typicalSecondsFor } from '~/services/generation-progress';
 import { playExplosion } from '~/utils/explode';
 
 // /generate-only styles. Used to be in root.tsx where the consumer paid
@@ -116,20 +117,6 @@ const MAX_PRODUCTS = 5;
 // runs that timed out client-side. We now use Fal webhooks (no
 // internal poller cap), so budget 180s for the user-facing progress
 // bar; it eases past 95% so it never sits flat on slow jobs.
-// Typical wall-clock generation time keyed by the requested clip
-// length. 5s jobs route to Seedance 2 /fast (~180s); 10s jobs route
-// to /pro which is materially slower (~360s). The progress bar eases
-// past 95% of whichever estimate applies so it never sits at 100%
-// while we're still polling.
-const TYPICAL_GENERATION_SECONDS_BY_DURATION: Record<number, number> = {
-  5: 180,
-  10: 360,
-};
-const TYPICAL_GENERATION_SECONDS_DEFAULT = 180;
-const typicalSecondsFor = (durationSeconds?: number | null) =>
-  TYPICAL_GENERATION_SECONDS_BY_DURATION[durationSeconds ?? 0]
-  ?? TYPICAL_GENERATION_SECONDS_DEFAULT;
-
 type Step = 'photos' | 'products' | 'style' | 'review' | 'result';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
@@ -2724,43 +2711,6 @@ function goPrev(current: Step, set: (s: Step) => void) {
 // anticipation and gives the wait a sense of motion. Each phase owns
 // 10% of the typical budget; we mark prior phases as done as we cross
 // the boundary into the next one.
-const BUILD_PHASES = [
-  'Queueing your look',
-  'Reading reference photos',
-  'Mapping facial features',
-  'Locking in proportions',
-  'Pulling product details',
-  'Composing the outfit',
-  'Lighting the scene',
-  'Rendering motion frames',
-  'Color grading',
-  'Final pass',
-];
-
-// Rotating "analyzing" one-liners shown on the build screen — a words
-// ticker that keeps the wait playful. Cosmetic only; cycles independently
-// of the BUILD_PHASES label so there's always something moving.
-const BUILD_JOKES = [
-  'Analyzing your impeccable taste…',
-  'Consulting the fashion oracle…',
-  'Steaming the pixels…',
-  'Negotiating with the lighting…',
-  'Teaching the fabric to drape…',
-  'Auditioning camera angles…',
-  'Convincing the shoes to behave…',
-  'Whispering to the color grade…',
-  'Removing the awkward blink…',
-  'Tailoring at the speed of light…',
-  'Asking the AI to “make it pop”…',
-  'Polishing every last thread…',
-  // Future-Polaroid jokes (founder's call): the render IS an instant
-  // photo from tomorrow — shake accordingly.
-  'Shaking it like a Polaroid from 2080…',
-  'No peeking — the future is still developing…',
-  'Instant film, slightly less instant…',
-  'Do not shake the hologram while it develops…',
-  'Waiting for the Polaroid to fade in… in 4K…',
-];
 
 // Friendly summary for known Fal/Seedance failure shapes. Returns a
 // short headline (rendered as the red banner) and a hint that helps the
