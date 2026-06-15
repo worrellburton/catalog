@@ -159,30 +159,34 @@ export default defineConfig({
       ignoredRouteFiles: ["routes/admin/**"],
       routes(defineRoutes) {
         return defineRoutes((route) => {
-          // Root index
-          route("", "routes/_index.tsx", { index: true });
+          // Persistent consumer-app shell. _index (Home) mounts ONCE as a
+          // pathless PARENT layout and stays mounted across the index + every
+          // shareable deep-link below — so back-navigation between them never
+          // remounts the shell. That's what lets the in-memory detail stack +
+          // the layered product/look overlays survive a Back (the deep-links
+          // are separate Remix routes; previously crossing /p/ ↔ /l/ ↔ / on a
+          // popstate remounted Home and wiped the trail, causing the
+          // feed-flash → white → re-mount the user saw).
+          //
+          // Each child is a null stub (routes/_app-stub.tsx); Home reads
+          // location.pathname to decide which overlay to open. On a fresh load
+          // / paste / external link the matching child still resolves the same
+          // mounted parent, so cold deep-links keep working.
+          route("", "routes/_index.tsx", () => {
+            route("", "routes/_app-stub.tsx", { index: true });
+            route("p/:slug", "routes/_app-stub.tsx", { id: "deeplink-p" });
+            route("l/:slug", "routes/_app-stub.tsx", { id: "deeplink-l" });
+            route("b/:slug", "routes/_app-stub.tsx", { id: "deeplink-b" });
+            route("comments/:type/:slug", "routes/_app-stub.tsx", { id: "deeplink-comments" });
+            route("earnings", "routes/_app-stub.tsx", { id: "deeplink-earnings" });
+            route("my-looks", "routes/_app-stub.tsx", { id: "deeplink-my-looks" });
+          });
 
-          // Shareable deep-links. All three re-export _index so the
-          // home component mounts; Index reads useParams() to decide
-          // whether to open a product / look / brand modal on top.
-          route("p/:slug", "routes/p.$slug.tsx");
-          route("l/:slug", "routes/l.$slug.tsx");
-          route("b/:slug", "routes/b.$slug.tsx");
-          // Comment thread page: /comments/p/<slug> or /comments/l/<slug>.
-          route("comments/:type/:slug", "routes/comments.$type.$slug.tsx");
-          // Insights / earnings deep-link. Re-exports _index so the
-          // home feed mounts; _index detects /earnings and opens the
-          // wallet overlay. Real history entry → browser back returns
-          // to the user's prior in-app screen, not an external page.
-          route("earnings", "routes/earnings.tsx");
           route("home2", "routes/home2.tsx");
           route("business-plan", "routes/business-plan.tsx");
           // Admin-minted share links: /d/<slug>, each with its own
           // passcode (document_shares table; managed from /admin/model).
           route("d/:slug", "routes/d.$slug.tsx");
-          // My Catalog deep-link. Re-exports _index; Index opens the My
-          // Catalog overlay on cold load so refresh / direct hits work.
-          route("my-looks", "routes/my-looks.tsx");
 
           // Public, unguessable share link for the short deck (deck is lazy;
           // React is pinned to react-vendor so this can't re-split React).
