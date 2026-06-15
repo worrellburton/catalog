@@ -571,52 +571,52 @@
 }
 
 /* ── Media-first scrolling (every viewport) ─────────────────────────────
-   While the feed glides (html.is-scroll-gliding, set by
-   utils/scroll-idle.ts) every card's chrome — gradient washes, creator
-   chips, product text, admin buttons — fades away so the feed is pure
-   imagery; when the scroll settles it breathes back in. Both directions
-   are eased, never linear, and BOTH run a full two seconds (founder's
-   call) — the chrome melts and resurfaces, it never snaps. */
+   The card chrome — gradient washes, creator chips, product text, admin
+   buttons — hides IN SYNC with the top/bottom app chrome. When the shopper
+   scrolls down, the header + bottom bar slide away (.app-root.chrome-hidden)
+   and every card's overlay fades out with them so the feed becomes pure
+   imagery; when they stop or scroll up the whole UI breathes back in
+   together (founder's call — unify the fade in/out with the top + bottom
+   chrome). Driven by the SAME .chrome-hidden signal the header + bottom bar
+   use, so nothing animates on its own rhythm. Eased, never linear — it
+   melts and resurfaces, it never snaps. */
 .card-gradient,
 .card-creator-tag,
 .promo-product-info,
 .trail-admin-menu-btn,
 .feed-why-btn,
 .creative-delete-btn {
-  transition: opacity 2s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: opacity 0.6s cubic-bezier(0.22, 1, 0.36, 1);
 }
-html.is-scroll-gliding .card-gradient,
-html.is-scroll-gliding .card-creator-tag,
-html.is-scroll-gliding .promo-product-info,
-html.is-scroll-gliding .trail-admin-menu-btn,
-html.is-scroll-gliding .feed-why-btn,
-html.is-scroll-gliding .creative-delete-btn {
-  /* Hover targets stay LIVE while hidden (founder's call) — no
-     pointer-events:none; an intentional hover below brings the chrome
-     back. */
+.app-root.chrome-hidden .card-gradient,
+.app-root.chrome-hidden .card-creator-tag,
+.app-root.chrome-hidden .promo-product-info,
+.app-root.chrome-hidden .trail-admin-menu-btn,
+.app-root.chrome-hidden .feed-why-btn,
+.app-root.chrome-hidden .creative-delete-btn {
   opacity: 0 !important;
-  transition: opacity 2s cubic-bezier(0.45, 0, 0.55, 1);
+  transition: opacity 0.6s cubic-bezier(0.45, 0, 0.55, 1);
 }
 /* EXCEPTION: the creator chip must NOT eat taps while it's invisible.
-   It's an absolutely-positioned strip over the card bottom, so a tap on
-   a settled-but-gliding feed (chrome faded to 0) was hitting the unseen
-   chip and opening a creator catalog instead of the look — the
-   "tapped a look, got the wrong creator" bug. Hidden = pass taps
-   through to the card (opens the look); a deliberate hover restores it. */
-html.is-scroll-gliding .card-creator-tag { pointer-events: none; }
-html.is-scroll-gliding.is-pointing :hover > .card-creator-tag { pointer-events: auto; }
+   It's an absolutely-positioned strip over the card bottom, so a tap on a
+   faded feed (chrome at 0) was hitting the unseen chip and opening a
+   creator catalog instead of the look — the "tapped a look, got the wrong
+   creator" bug. Hidden = pass taps through to the card (opens the look); a
+   deliberate hover restores it. */
+.app-root.chrome-hidden .card-creator-tag { pointer-events: none; }
+html.is-pointing .app-root.chrome-hidden :hover > .card-creator-tag { pointer-events: auto; }
 
-/* Intentional hover beats the glide: when the mouse has GENUINELY moved
+/* Intentional hover beats the hide: when the mouse has GENUINELY moved
    (html.is-pointing — cleared by scrolling, so content sliding under a
    stationary cursor can't trigger this), the hovered card's chrome
    resurfaces quickly. `:hover >` matches each chrome element's own
    hovered parent, so only the card under the cursor lights up. */
-html.is-scroll-gliding.is-pointing :hover > .card-gradient,
-html.is-scroll-gliding.is-pointing :hover > .card-creator-tag,
-html.is-scroll-gliding.is-pointing :hover > .promo-product-info,
-html.is-scroll-gliding.is-pointing :hover > .trail-admin-menu-btn,
-html.is-scroll-gliding.is-pointing :hover > .feed-why-btn,
-html.is-scroll-gliding.is-pointing :hover > .creative-delete-btn {
+html.is-pointing .app-root.chrome-hidden :hover > .card-gradient,
+html.is-pointing .app-root.chrome-hidden :hover > .card-creator-tag,
+html.is-pointing .app-root.chrome-hidden :hover > .promo-product-info,
+html.is-pointing .app-root.chrome-hidden :hover > .trail-admin-menu-btn,
+html.is-pointing .app-root.chrome-hidden :hover > .feed-why-btn,
+html.is-pointing .app-root.chrome-hidden :hover > .creative-delete-btn {
   opacity: 1 !important;
   transition: opacity 0.45s cubic-bezier(0.22, 1, 0.36, 1);
 }
