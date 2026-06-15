@@ -268,6 +268,27 @@
   opacity: 1;
 }
 
+/* Card overlays — gradient + product/creator info — fade in WITH the media
+   instead of snapping into place. Cards should always dissolve in, never
+   pop content on. Mirrors the poster/video opacity transition above. */
+.look-card .card-gradient,
+.look-card .promo-product-info,
+.look-card .card-creator-tag,
+.promo-card .card-gradient,
+.promo-card .promo-product-info,
+.promo-card .card-creator-tag {
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+.look-card.loaded .card-gradient,
+.look-card.loaded .promo-product-info,
+.look-card.loaded .card-creator-tag,
+.promo-card.loaded .card-gradient,
+.promo-card.loaded .promo-product-info,
+.promo-card.loaded .card-creator-tag {
+  opacity: 1;
+}
+
 .look-card .card-gradient {
   position: absolute;
   bottom: 0;
