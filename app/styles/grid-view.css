@@ -488,6 +488,18 @@
   z-index: 2;
 }
 
+/* Feed-card media never captures taps — the whole card opens on tap, and an
+   inline <video> on iOS otherwise swallows the first tap(s) with its native
+   touch handling (the "had to tap a few times" bug). The card's interactive
+   bits (creator tag, save/share, why-button) are separate elements that set
+   their own pointer-events, so they keep working. */
+.look-card video,
+.look-card .card-poster,
+.promo-card video,
+.promo-card .card-poster {
+  pointer-events: none;
+}
+
 /* Stagger shimmer animation across cards */
 .look-card:nth-child(4n+1) .card-shimmer { animation-delay: 0s, 0s; }
 .look-card:nth-child(4n+2) .card-shimmer { animation-delay: 0.3s, 0.4s; }
