@@ -2214,6 +2214,16 @@ export default function Home() {
               inset: 0,
               zIndex: z,
               pointerEvents: isTop ? undefined : 'none',
+              // Covered layers stay MOUNTED (preserved scroll + React state, so
+              // Back reveals them instantly) but are hidden from PAINT — the
+              // browser stops compositing/painting the stacked overlays beneath
+              // the top, which on mobile were rendering dozens of images +
+              // <video>s invisibly behind the opaque top surface. visibility
+              // (not display:none / content-visibility) keeps layout intact, so
+              // revealing the layer on Back is a repaint with no relayout hitch.
+              // Safe because overlays open/close instantly — no entrance slide
+              // that would momentarily reveal a hidden layer behind the top.
+              visibility: isTop ? undefined : 'hidden',
             };
             if (frame.kind === 'look') {
               return (
