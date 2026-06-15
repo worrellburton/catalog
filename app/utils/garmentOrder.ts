@@ -27,24 +27,35 @@ export const ROLE_PRIORITY: Record<string, number> = {
   jewelry: 90,
 };
 
-/** Light name-based role inference — mirrors user-generations.ts. */
+/**
+ * Light name-based role inference. Each stem tolerates a regular plural
+ * suffix — `(?:e?s)?` matches "", "s" or "es" — because catalog product
+ * names are overwhelmingly plural ("Sneakers", "Jeans", "Sunglasses",
+ * "Earrings"). A bare `\bstem\b` has no word boundary between e.g. the
+ * "t" and "s" of "shorts", so it would silently miss the plural form and
+ * drop the item to the bottom of the head-to-toe sort.
+ *
+ * NOTE: user-generations.ts carries a near-identical private copy of this
+ * vocabulary for generation zone assignment — keep them in sync (or
+ * dedupe onto this one) if you touch the role list.
+ */
 export function inferRoleFromName(name: string | null | undefined): string | null {
   if (!name) return null;
   const lower = name.toLowerCase();
-  if (/\b(hat|cap|beanie|fedora|visor|bucket\s*hat)\b/.test(lower)) return 'hat';
-  if (/\b(sunglass|shades|aviator|eyewear)\b/.test(lower)) return 'sunglasses';
-  if (/\b(scarf|stole|wrap|shawl)\b/.test(lower)) return 'scarf';
-  if (/\b(jacket|coat|parka|blazer|bomber|puffer|trench)\b/.test(lower)) return 'jacket';
-  if (/\b(dress|gown)\b/.test(lower)) return 'dress';
-  if (/\b(skirt)\b/.test(lower)) return 'skirt';
-  if (/\b(short|bermuda)\b/.test(lower)) return 'shorts';
-  if (/\b(pant|trouser|chino|jean|denim|legging|jogger)\b/.test(lower)) return 'pants';
-  if (/\b(belt)\b/.test(lower)) return 'belt';
-  if (/\b(sneaker|trainer|shoe|boot|heel|loafer|sandal)\b/.test(lower)) return 'shoes';
-  if (/\b(bag|tote|clutch|purse|backpack|handbag)\b/.test(lower)) return 'bag';
-  if (/\b(watch|wristwatch)\b/.test(lower)) return 'watch';
-  if (/\b(necklace|ring|earring|bracelet|chain|pendant)\b/.test(lower)) return 'jewelry';
-  if (/\b(shirt|tee|top|sweater|hoodie|polo|henley|tank|sweatshirt|knit|cardigan)\b/.test(lower)) return 'top';
+  if (/\b(hat|cap|beanie|fedora|visor|bucket\s*hat)(?:e?s)?\b/.test(lower)) return 'hat';
+  if (/\b(sunglass|shades|aviator|eyewear)(?:e?s)?\b/.test(lower)) return 'sunglasses';
+  if (/\b(scarf|stole|wrap|shawl)(?:e?s)?\b/.test(lower)) return 'scarf';
+  if (/\b(jacket|coat|parka|blazer|bomber|puffer|trench)(?:e?s)?\b/.test(lower)) return 'jacket';
+  if (/\b(dress|gown)(?:e?s)?\b/.test(lower)) return 'dress';
+  if (/\b(skirt)(?:e?s)?\b/.test(lower)) return 'skirt';
+  if (/\b(short|bermuda)(?:e?s)?\b/.test(lower)) return 'shorts';
+  if (/\b(pant|trouser|chino|jean|denim|legging|jogger)(?:e?s)?\b/.test(lower)) return 'pants';
+  if (/\b(belt)(?:e?s)?\b/.test(lower)) return 'belt';
+  if (/\b(sneaker|trainer|shoe|boot|heel|loafer|sandal)(?:e?s)?\b/.test(lower)) return 'shoes';
+  if (/\b(bag|tote|clutch|purse|backpack|handbag)(?:e?s)?\b/.test(lower)) return 'bag';
+  if (/\b(watch|wristwatch)(?:e?s)?\b/.test(lower)) return 'watch';
+  if (/\b(necklace|ring|earring|bracelet|chain|pendant)(?:e?s)?\b/.test(lower)) return 'jewelry';
+  if (/\b(shirt|tee|top|sweater|hoodie|polo|henley|tank|sweatshirt|knit|cardigan)(?:e?s)?\b/.test(lower)) return 'top';
   return null;
 }
 
