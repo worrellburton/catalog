@@ -1,5 +1,5 @@
 import { supabase } from '~/utils/supabase';
-import { haikuIdentity } from '~/services/type-governance';
+import { haikuIdentity } from '~/utils/haiku';
 
 /**
  * Curated first-name corpus -- the 300-ish most common male / female
