@@ -4,7 +4,24 @@ import {
   Outlet,
   Scripts,
   ScrollRestoration,
+  useLocation,
 } from "@remix-run/react";
+
+// The consumer-app shell (/, /p/, /l/, /b/, /comments/, /earnings, /my-looks)
+// owns its OWN scroll: the feed body-lock in _index saves the feed position on
+// overlay-open and restores it on close. In-app detail nav uses raw pushState
+// (Remix never sees it, so it never saves a real position), and the body-lock
+// zeroes window.scrollY while an overlay is open — so Remix's <ScrollRestoration>
+// would save 0 and then reset the feed to the top on the Back popstate, fighting
+// (and clobbering) the body-lock restore. We therefore SKIP ScrollRestoration on
+// the shell paths and let the body-lock be the sole authority. Every other route
+// keeps Remix's normal per-location scroll restoration.
+const SHELL_PATH = /^\/($|p\/|l\/|b\/|comments\/|earnings|my-looks)/;
+function GatedScrollRestoration() {
+  const { pathname } = useLocation();
+  if (SHELL_PATH.test(pathname)) return null;
+  return <ScrollRestoration />;
+}
 import { Analytics } from "@vercel/analytics/remix";
 import { SpeedInsights } from "@vercel/speed-insights/remix";
 import { isRouteErrorResponse, useRouteError } from "@remix-run/react";
@@ -282,7 +299,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-se
           </filter>
         </svg>
         {children}
-        <ScrollRestoration />
+        <GatedScrollRestoration />
         <Scripts />
         <Analytics />
         <SpeedInsights />

@@ -13,7 +13,7 @@
 // values. Writes run through a sequential queue so rapid gestures land in
 // order.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type DragEvent as ReactDragEvent } from 'react';
 import ParticleBackground from '~/components/ParticleBackground';
 import { supabase } from '~/utils/supabase';
 import TypeBrainGraph, { ROOT_ID, type BrainCameraHandle, type BrainNode, type BrainProduct, type BrainViewMode } from '~/components/admin/TypeBrainGraph';
@@ -73,6 +73,11 @@ export default function AdminGovernanceTypes() {
   // start so shift-drags extend instead of replace.
   const drillMarquee = useRef<{ x0: number; y0: number; base: Set<string> } | null>(null);
   const [drillRect, setDrillRect] = useState<{ x: number; y: number; w: number; h: number } | null>(null);
+  // Drag-to-recategorize: hold the product ids being dragged (the whole
+  // selection when the grabbed card is part of it, else just that card) and
+  // the node currently hovered as a drop target for the highlight.
+  const dragIds = useRef<string[]>([]);
+  const [dropTarget, setDropTarget] = useState<string | null>(null);
   const [assignOpen, setAssignOpen] = useState(false);
   const [assignQuery, setAssignQuery] = useState('');
   // Double-click the drill title to rename the type (the canvas double-click
@@ -433,16 +438,25 @@ export default function AdminGovernanceTypes() {
     showToast('Added "new type" — double-click it to rename');
   };
 
+  // A type node's gender only CONSTRAINS its products when it is male or
+  // female. 'unisex'/null is permissive — products keep their own gender,
+  // so a female pair of heels dropped into the unisex "shoes" node stays
+  // female instead of being flattened back to unisex.
+  const forcedGender = (nodeId: string): 'male' | 'female' | null => {
+    const g = genders.get(nodeId) ?? null;
+    return g === 'male' || g === 'female' ? g : null;
+  };
+
   const handleAssign = (productIds: string[], nodeId: string) => {
     if (nodeId === UNASSIGNED_ID) return;
     const node = tree.find(n => n.id === nodeId);
     if (!node) return;
     const idSet = new Set(productIds);
     const matched = products.filter(p => idSet.has(p.id));
-    const eff = genders.get(nodeId) ?? null;
+    const fg = forcedGender(nodeId);
     const groups: ProductGroup[] = [{
       ids: productIds,
-      patch: { type: node.name, gender: eff, type_path: paths.get(nodeId) ?? null },
+      patch: { type: node.name, type_path: paths.get(nodeId) ?? null, ...(fg ? { gender: fg } : {}) },
     }];
     commit(
       `Re-typed ${matched.length} product${matched.length === 1 ? '' : 's'} → ${node.name}`,
@@ -455,6 +469,34 @@ export default function AdminGovernanceTypes() {
       () => applyGroupsLocal(groups),
     );
   };
+
+  // ── Drag-to-recategorize (drill view) ────────────────────────────
+  // Grab a product card and drop it on a subtype row (or the type's own
+  // direct-products area) to re-type it. Reuses handleAssign so the move
+  // is a single undoable gesture. Dragging a card that's part of the
+  // current selection moves the whole selection with it.
+  const startCardDrag = (prodId: string, ev: ReactDragEvent) => {
+    const ids = drillSel.has(prodId) && drillSel.size > 0 ? [...drillSel] : [prodId];
+    dragIds.current = ids;
+    ev.dataTransfer.effectAllowed = 'move';
+    ev.dataTransfer.setData('text/plain', ids.join(','));
+  };
+  const overDropTarget = (nodeId: string, ev: ReactDragEvent) => {
+    if (dragIds.current.length === 0) return;
+    ev.preventDefault();
+    ev.dataTransfer.dropEffect = 'move';
+    if (dropTarget !== nodeId) setDropTarget(nodeId);
+  };
+  const dropOnNode = (nodeId: string, ev: ReactDragEvent) => {
+    ev.preventDefault();
+    const ids = dragIds.current;
+    dragIds.current = [];
+    setDropTarget(null);
+    if (ids.length === 0) return;
+    handleAssign(ids, nodeId);
+    setDrillSel(new Set());
+  };
+  const endCardDrag = () => { dragIds.current = []; setDropTarget(null); };
 
   /** Products created from the drill's "Add products" flows → the drilled
    *  type. The new rows aren't in local state yet, so the groups are built
@@ -622,18 +664,19 @@ export default function AdminGovernanceTypes() {
     const byNode = new Map<string, string[]>();
     for (const r of picked.retypes) byNode.set(r.toNodeId, [...(byNode.get(r.toNodeId) ?? []), r.productId]);
     for (const [nodeId, ids] of byNode) {
+      const fg = forcedGender(nodeId);
       groups.push({
         ids,
         patch: {
           type: tree.find(n => n.id === nodeId)?.name ?? null,
-          gender: genders.get(nodeId) ?? null,
           type_path: paths.get(nodeId) ?? null,
+          ...(fg ? { gender: fg } : {}),
         },
       });
     }
     if (picked.retypes.length) labels.push(`${picked.retypes.length} re-typed`);
     for (const d of picked.drift) {
-      groups.push({ ids: [d.productId], patch: { type: d.toType, gender: d.toGender, type_path: d.toPath } });
+      groups.push({ ids: [d.productId], patch: { type: d.toType, type_path: d.toPath, ...(d.toGender ? { gender: d.toGender } : {}) } });
     }
     if (picked.drift.length) labels.push(`${picked.drift.length} synced`);
 
@@ -877,7 +920,10 @@ export default function AdminGovernanceTypes() {
                 type="button"
                 data-prod-id={prod.id}
                 className={`gov-drill-card${isSel ? ' is-selected' : ''}`}
-                title={`${prod.name} — click to select`}
+                title={`${prod.name} — click to select, drag onto a subtype to recategorize`}
+                draggable
+                onDragStart={ev => startCardDrag(prod.id, ev)}
+                onDragEnd={endCardDrag}
                 onClick={() => setDrillSel(prev => {
                   const next = new Set(prev);
                   if (next.has(prod.id)) next.delete(prod.id);
@@ -1060,22 +1106,33 @@ export default function AdminGovernanceTypes() {
                   sections below it got squeezed past the drill's
                   overflow:hidden — cards sliced mid-row on tall content. */}
               <div className="gov-drill-body">
+              <div
+                className={`gov-drill-direct${dropTarget === drill.nodeId ? ' is-drop' : ''}`}
+                onDragOver={ev => overDropTarget(drill.nodeId, ev)}
+                onDrop={ev => dropOnNode(drill.nodeId, ev)}
+              >
               {prods.length === 0 ? (
-                <p className="gov-drill-empty">No products attached directly to this type yet.</p>
+                <p className="gov-drill-empty">No products attached directly to this type yet. Drag cards here to move them up to this type.</p>
               ) : (
                 <div className="gov-drill-grid">
                   {prods.map(renderCard)}
                 </div>
               )}
+              </div>
 
               {children.length > 0 && (
                 <div className="gov-drill-subs">
-                  <h3>Subtypes</h3>
+                  <h3>Subtypes<span className="gov-drill-subs-hint">drag a product onto a row to recategorize it</span></h3>
                   {children.map(child => {
                     const list = subProducts(child.id);
                     const open = openSubs.has(child.id);
                     return (
-                      <div key={child.id} className={`gov-drill-sub${open ? ' is-open' : ''}`}>
+                      <div
+                        key={child.id}
+                        className={`gov-drill-sub${open ? ' is-open' : ''}${dropTarget === child.id ? ' is-drop' : ''}`}
+                        onDragOver={ev => overDropTarget(child.id, ev)}
+                        onDrop={ev => dropOnNode(child.id, ev)}
+                      >
                         <button
                           type="button"
                           className="gov-drill-sub-head"

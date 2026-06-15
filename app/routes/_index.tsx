@@ -1,5 +1,5 @@
 import { useState, useCallback, useEffect, useRef, useMemo, Suspense } from 'react';
-import { useLocation, useNavigate } from '@remix-run/react';
+import { useLocation, useNavigate, Outlet } from '@remix-run/react';
 import { lazyWithReload } from '~/utils/lazyWithReload';
 import PasswordGate from '~/components/PasswordGate';
 import WaitlistScreen from '~/components/WaitlistScreen';
@@ -22,7 +22,7 @@ import { useBookmarks } from '~/hooks/useBookmarks';
 import { useRecentProducts } from '~/hooks/useRecentProducts';
 import { useAuth } from '~/hooks/useAuth';
 import { useOverlayRouter } from '~/hooks/useOverlayRouter';
-import { lookSlug } from '~/utils/slug';
+import { lookSlug, productSlug } from '~/utils/slug';
 import { markOverlayReturn } from '~/utils/overlay-scroll-stash';
 import { affiliateRedirect, setAffiliateContext } from '~/services/affiliate';
 import { useShellBridge } from '~/hooks/useShellBridge';
@@ -150,6 +150,61 @@ if (typeof window !== 'undefined' && 'scrollRestoration' in window.history) {
   try { window.history.scrollRestoration = 'manual'; } catch { /* Safari edge */ }
 }
 
+// ── In-memory detail navigation ─────────────────────────────────────────
+// How a detail surface (product/look) records itself onto the nav stack.
+//   'push' — a fresh in-app open: append a frame AND push a history entry.
+//   'seed' — a cold/deep-link or forward-nav re-resolve: append a frame, but
+//            the history entry already exists (the browser put us there) so
+//            don't push another one.
+//   'none' — a back/restore from memory: the frame is already in the stack
+//            and the browser already popped to its entry; just re-render +
+//            reload the (below-the-fold) rails, no frame push, no history op.
+export type NavMode = 'push' | 'seed' | 'none';
+
+// One entry in the detail trail. Holds the FULL entity (and, for a product,
+// its creative) so Back restores the surface straight from memory — no slug
+// re-resolve, no network refetch, no clear-to-feed flash.
+export type NavFrame =
+  | { key: number; kind: 'product'; slug: string; product: Product; creative: ProductAd | null }
+  | { key: number; kind: 'look'; slug: string; look: Look };
+
+const navSlugForProduct = (p: Product): string =>
+  productSlug({
+    id: (p as Product & { id?: string | null }).id ?? null,
+    brand: p.brand ?? null,
+    name: p.name ?? null,
+  });
+
+const navSlugForLook = (l: Look): string =>
+  lookSlug({
+    id: l.id ?? null,
+    uuid: l.uuid ?? null,
+    creator: l.creator ?? null,
+    creatorDisplayName: l.creatorDisplayName ?? null,
+    title: l.title ?? null,
+  });
+
+// Map a frame's stored creative to ProductPage's `creative` prop. Mirrors the
+// pickPlaybackSource chain CreativeCardV2 donated on tap so the detail hero
+// reuses the exact same source/poster (no reload). Returns undefined when the
+// product has no playable video → ProductPage falls back to the still poster.
+function mapCreativeForPage(creative: ProductAd | null) {
+  if (!creative || !pickPlaybackSource(creative)) return undefined;
+  return {
+    id: creative.id,
+    videoUrl: pickVideoUrl(creative) || creative.video_url || '',
+    hlsUrl:
+      videoPipelineMode() === 'hls'
+        ? (creative.product?.primary_hls_url || creative.hls_url || null)
+        : null,
+    thumbnailUrl:
+      creative.product?.primary_image_url
+      || creative.thumbnail_url
+      || creative.product?.image_url
+      || null,
+  };
+}
+
 export default function Home() {
   // Hard scroll-to-top on every Home mount. Pairs with the
   // scrollRestoration='manual' above to neutralise both the browser's
@@ -267,12 +322,35 @@ export default function Home() {
   // Editorial looks pulled from looks_creative; fed into the "You might also
   // like" grid on ProductPage. Loaded once at mount and reused.
   const [liveLooks, setLiveLooks] = useState<Look[]>([]);
-  // Nav counter - incremented on every product/creative open. ProductPage
-  // useLayoutEffect's on it (not on brand+name) so the scroll-to-top is
-  // guaranteed to fire on every trail step, even if two consecutive
-  // products share a brand+name or React batches the re-render in a way
-  // that makes the field-comparison deps appear unchanged.
-  const [productNavCount, setProductNavCount] = useState(0);
+  // In-memory detail trail (product/look). The source of truth for Back AND
+  // for what renders: each frame is a LAYER — they're all kept mounted, the
+  // top one visible/active, the ones beneath warm behind it (see the layered
+  // map in the JSX). Back pops a frame and the layer beneath — already mounted
+  // — is revealed instantly with no remount, no clear-to-feed gap, no refetch.
+  // selectedProduct/selectedLook below mirror the top frame for the many
+  // readers (has-overlay, guest gate, …). navStackRef mirrors the state so the
+  // empty-dep popstate listener reads the latest at fire time.
+  const [navStack, setNavStack] = useState<NavFrame[]>([]);
+  const navStackRef = useRef<NavFrame[]>(navStack);
+  const navSeqRef = useRef(0);
+  // Single writer for the trail: keeps the render-state and the ref in lockstep.
+  const setNav = useCallback((updater: (prev: NavFrame[]) => NavFrame[]) => {
+    setNavStack(prev => {
+      const next = updater(prev);
+      navStackRef.current = next;
+      return next;
+    });
+  }, []);
+  // No-op close for layers that aren't on top: only the top layer's overlay
+  // should react to Escape / a close gesture, so lower (covered) layers get
+  // this instead of the real close handler.
+  const noop = useCallback(() => {}, []);
+  // Async slug→entity resolvers, surfaced from useOverlayRouter. Used ONLY as
+  // the cold/forward-nav fallback when a popped /p/ or /l/ slug isn't in the
+  // in-memory stack. Stashed in refs so the empty-dep popstate listener reads
+  // the latest without re-subscribing.
+  const openProductFromSlugRef = useRef<((slug: string) => void) | null>(null);
+  const openLookFromSlugRef = useRef<((slug: string) => void) | null>(null);
   // Gender filter ('all' | 'men' | 'women') + profile-driven auto-sync.
   // changeFilter locks the user-override flag so the auto-sync never
   // clobbers an explicit toggle. lockOverride() lets handleOpenBrand
@@ -583,6 +661,7 @@ export default function Home() {
     resetGenderFilter();
     setCreatorFilter(null);
     setBrandFilter(null);
+    setNav(() => []); // logo = home: abandon the detail trail
     setSelectedProduct(null);
     setSelectedCreative(null);
     setSelectedLook(null);
@@ -639,7 +718,8 @@ export default function Home() {
     setBrandFilter(null);
   }, []);
 
-  const handleOpenLook = useCallback((look: Look, opts?: { bypassGate?: boolean }) => {
+  const handleOpenLook = useCallback((look: Look, opts?: { bypassGate?: boolean; nav?: NavMode }) => {
+    const nav = opts?.nav ?? 'push';
     // Trail navigation - when the user opens a look from inside a
     // ProductPage (or any other product overlay), close the product
     // surface so LookOverlay takes its place cleanly. Without this,
@@ -664,6 +744,17 @@ export default function Home() {
     // after that plays for ~1s then dissolves into the signup scrim.
     if (lookTeaseTimer.current) { window.clearTimeout(lookTeaseTimer.current); lookTeaseTimer.current = null; }
     setSelectedLook(look);
+    // Record the look as a new LAYER on the trail + mirror the URL. A fresh
+    // open from the bare feed (no surface up) starts a new trail.
+    if (nav !== 'none') {
+      const slug = navSlugForLook(look);
+      const fresh = nav === 'push' && !selectedProductRef.current && !selectedLookRef.current;
+      const frame: NavFrame = { key: ++navSeqRef.current, kind: 'look', slug, look };
+      setNav(s => [...(fresh ? [] : s), frame]);
+      if (nav === 'push' && slug && window.location.pathname !== `/l/${slug}`) {
+        window.history.pushState({}, '', `/l/${slug}`);
+      }
+    }
     if (!waitlistMode && isGuest(user) && !opts?.bypassGate) {
       if (hasUsedFreeLook()) {
         // Stash the look so we can drop them right back into it post-signup.
@@ -700,8 +791,9 @@ export default function Home() {
     if (typeof window !== 'undefined' && window.location.pathname !== '/') {
       window.history.replaceState({}, '', '/');
     }
+    setNav(() => []);
     setSelectedLook(null);
-  }, []);
+  }, [setNav]);
 
   const handleOpenCreator = useCallback((creatorName: string, opts?: { bypassGate?: boolean }) => {
     // Close every higher-stacked overlay so the creator catalog comes to
@@ -710,6 +802,7 @@ export default function Home() {
     // would update the catalog *underneath* the still-visible product
     // page and the click would look like a no-op. Mirrors the close
     // pattern in handleOpenBrand.
+    setNav(() => []); // the catalog replaces the detail trail
     setSelectedProduct(null);
     setSelectedCreative(null);
     setSelectedLook(null);
@@ -793,6 +886,7 @@ export default function Home() {
     // let handleCeremonyDone reveal the feed once the loading
     // narrative has played out. Without this, the brand tap just
     // snapped to the filtered feed with no transition.
+    setNav(() => []); // the brand catalog replaces the detail trail
     setSelectedProduct(null);
     setSelectedCreative(null);
     setSelectedLook(null);
@@ -804,7 +898,7 @@ export default function Home() {
     setHeroMode(true);
     setCeremonyImages([]);
     setCeremony({ active: true, query: brandName, kind: 'brand' });
-  }, [bumpSearchTrigger, lockGenderOverride]);
+  }, [bumpSearchTrigger, lockGenderOverride, setNav]);
 
   const handleCloseBrand = useCallback(() => {
     setBrandFilter(null);
@@ -817,6 +911,7 @@ export default function Home() {
   // surface closes and the brand catalog takes its place.
   const handleOpenBrandCatalog = useCallback((brandName: string) => {
     if (!brandName) return;
+    setNav(() => []); // the brand catalog replaces the detail trail
     setSelectedProduct(null);
     setSelectedCreative(null);
     setSelectedSimilar(null);
@@ -824,7 +919,7 @@ export default function Home() {
     setBrandCreatives(null);
     setProductOpenedFromLook(null);
     setBrandFilter(brandName);
-  }, []);
+  }, [setNav]);
 
   // In-app browser state. Carries the optional product context so the
   // browser header can show a Save chip wired to bookmarks while the
@@ -944,8 +1039,9 @@ export default function Home() {
     return merged.slice(0, 24);
   }, []);
 
-  const handleOpenProduct = useCallback(async (product: Product) => {
-    pushRecent(product);
+  const handleOpenProduct = useCallback(async (product: Product, opts?: { nav?: NavMode }) => {
+    const nav = opts?.nav ?? 'push';
+    if (nav === 'push') pushRecent(product);
     // Close the saved overlay if it's open so the product page isn't hidden
     // behind it (the look path already does this via handleBookmarksOpenLook).
     setShowBookmarks(false);
@@ -954,10 +1050,10 @@ export default function Home() {
     // at once. The TrailVideoHost pool resumes whichever video the
     // new page actually shows on mount.
     pauseAllVideos();
-    setProductNavCount(c => c + 1);
     // Remember the look the user came from (if any) so the back button
-    // on ProductPage returns to that look instead of the empty feed.
-    setProductOpenedFromLook(selectedLook);
+    // on ProductPage returns to that look instead of the empty feed. On a
+    // memory restore (nav:'none') the caller sets this from the frame below.
+    if (nav === 'push') setProductOpenedFromLook(selectedLook);
     setSelectedLook(null);
     // Unify the two product-page surfaces. Opening from a CreativeCard
     // used to set selectedCreative (so the page rendered with the video
@@ -971,8 +1067,9 @@ export default function Home() {
     // falls back to the still poster — same as before.
     const productVideoUrl = (product as Product & { video_url?: string }).video_url;
     const productThumb = (product as Product & { thumbnail_url?: string }).thumbnail_url;
+    let frameCreative: ProductAd | null = null;
     if (productVideoUrl) {
-      setSelectedCreative({
+      frameCreative = {
         // Stable, non-empty id so the hero's TrailVideoHost slot keys correctly.
         // An empty id ('') left the pooled <video> unkeyed — on desktop (large
         // pool) it attached a posterless black element over the poster image
@@ -1018,7 +1115,8 @@ export default function Home() {
           catalog_tags: null,
           gender: null,
         },
-      });
+      };
+      setSelectedCreative(frameCreative);
     } else {
       setSelectedCreative(null);
     }
@@ -1027,6 +1125,18 @@ export default function Home() {
     setSimilarCreatives(null);
     setBrandCreatives(null);
     setGraphPairs(null);
+
+    // Record the product as a new LAYER on the trail + mirror the URL. A fresh
+    // open from the bare feed (no surface up) starts a new trail.
+    if (nav !== 'none') {
+      const slug = navSlugForProduct(product);
+      const fresh = nav === 'push' && !selectedProductRef.current && !selectedLookRef.current;
+      const frame: NavFrame = { key: ++navSeqRef.current, kind: 'product', slug, product, creative: frameCreative };
+      setNav(s => [...(fresh ? [] : s), frame]);
+      if (nav === 'push' && slug && window.location.pathname !== `/p/${slug}`) {
+        window.history.pushState({}, '', `/p/${slug}`);
+      }
+    }
 
     // Resolve the product's DB id once. Products opened from a Look, search,
     // or recents arrive WITHOUT an `id` but carry a `url`, so fall back to a
@@ -1042,8 +1152,9 @@ export default function Home() {
 
     void productIdP.then(productId => {
       // Impression ping (matches prior behaviour: fired whenever we had a
-      // direct id or a url to resolve from).
-      if (directId || product.url) void trackCreativeImpressions(productId, null, context);
+      // direct id or a url to resolve from). Skipped on a back/restore so
+      // re-showing a product from memory doesn't double-count impressions.
+      if (nav === 'push' && (directId || product.url)) void trackCreativeImpressions(productId, null, context);
       if (!productId) return;
       getGraphPairs([productId]).then(setGraphPairs).catch(() => {});
       // "Similar" rail: description-embedding similarity, seeded by product id
@@ -1074,11 +1185,18 @@ export default function Home() {
               || product.image
               || (product as Product & { thumbnail_url?: string }).thumbnail_url
               || null) as string | null;
-            setSelectedProduct(prev =>
-              prev && prev.url === product.url && prev.name === product.name
-                ? { ...prev, video_url: vurl, thumbnail_url: poster ?? prev.thumbnail_url }
-                : prev,
-            );
+            const patch = (p: Product): Product =>
+              p.url === product.url && p.name === product.name
+                ? { ...p, video_url: vurl, thumbnail_url: poster ?? (p as Product & { thumbnail_url?: string }).thumbnail_url }
+                : p;
+            setSelectedProduct(prev => (prev ? patch(prev) : prev));
+            // The layered render reads frame.product, so patch the matching
+            // frame too — otherwise the upgraded video never reaches the hero.
+            setNav(s => s.map(f =>
+              f.kind === 'product' && f.product.url === product.url && f.product.name === product.name
+                ? { ...f, product: patch(f.product) }
+                : f,
+            ));
           });
       }
     }).catch(() => {});
@@ -1099,17 +1217,21 @@ export default function Home() {
   }, [fetchSimilarProducts, pushRecent, selectedLook]);
 
   const lastOpenAtRef = useRef(0);
-  const handleOpenCreative = useCallback(async (creative: ProductAd) => {
+  const handleOpenCreative = useCallback(async (creative: ProductAd, opts?: { nav?: NavMode }) => {
     if (!creative.product) return;
+    const nav = opts?.nav ?? 'push';
     // Close the saved overlay if open so the product page isn't hidden behind it.
     setShowBookmarks(false);
     // Debounce: while the morph is still in flight (~360ms), ignore extra
     // taps. Without this, a user double-tapping a card double-fires
     // setSelectedCreative which races the layoutId animation and produces a
-    // jitter. 240ms gives a 100ms head-start grace beyond morph end.
+    // jitter. 240ms gives a 100ms head-start grace beyond morph end. Only
+    // guards genuine in-app taps — a back/restore must never be swallowed.
     const now = performance.now();
-    if (now - lastOpenAtRef.current < 240) return;
-    lastOpenAtRef.current = now;
+    if (nav === 'push') {
+      if (now - lastOpenAtRef.current < 240) return;
+      lastOpenAtRef.current = now;
+    }
 
     // Product→product (a product page is already open, e.g. tapping a
     // "More like this" tile): drop the PREVIOUS product's rails immediately
@@ -1127,8 +1249,9 @@ export default function Home() {
 
     // Fire impressions for the primary product + every other product in the
     // associated look (if any). Fire-and-forget — don't await so navigation
-    // is never blocked by the look_products query.
-    void trackCreativeImpressions(
+    // is never blocked by the look_products query. Skipped on a back/restore
+    // so re-showing from memory doesn't double-count.
+    if (nav === 'push') void trackCreativeImpressions(
       creative.product.id || null,
       creative.look_id || null,
       [creative.product.brand, creative.product.name].filter(Boolean).join(' · ').slice(0, 200),
@@ -1149,13 +1272,25 @@ export default function Home() {
       // Secondary poster slot the hero falls back to (heroStill chain).
       thumbnail_url: creativePoster(creative) || undefined,
     };
-    pushRecent(mapped);
+    if (nav === 'push') pushRecent(mapped);
     pauseAllVideos();
-    setProductNavCount(c => c + 1);
-    setProductOpenedFromLook(selectedLook);
+    // On a memory restore (nav:'none') the caller sets this from the frame
+    // below; a fresh open records the look the shopper came from.
+    if (nav === 'push') setProductOpenedFromLook(selectedLook);
     setSelectedLook(null);
     setSelectedProduct(mapped);
     setSelectedCreative(creative);
+    // Record the product as a new LAYER on the trail + mirror the URL. A fresh
+    // open from the bare feed (no surface up) starts a new trail.
+    if (nav !== 'none') {
+      const slug = navSlugForProduct(mapped);
+      const fresh = nav === 'push' && !selectedProductRef.current && !selectedLookRef.current;
+      const frame: NavFrame = { key: ++navSeqRef.current, kind: 'product', slug, product: mapped, creative };
+      setNav(s => [...(fresh ? [] : s), frame]);
+      if (nav === 'push' && slug && window.location.pathname !== `/p/${slug}`) {
+        window.history.pushState({}, '', `/p/${slug}`);
+      }
+    }
     // Don't blank the rail state here - that would unmount the tapped rail
     // card the very moment Framer Motion is reading its layoutId for the
     // morph, which produces a glitched/jumping transition. Keep the old
@@ -1489,19 +1624,19 @@ export default function Home() {
     return () => window.removeEventListener('popstate', sync);
   }, []);
 
-  // Overlay-stack popstate listener. The user's complaint: "click the
-  // fig tree, hit back, it should take me back to THIS look, not
-  // somewhere else." useOverlayRouter pushes /p/<slug> when a product
-  // opens — pressing browser back pops that history entry and fires
-  // popstate here. We detect that selectedProduct is set but the URL
-  // is no longer /p/, fire the same close handler the X button uses
-  // (which restores productOpenedFromLook if it was set), and the
-  // look re-renders underneath. Same logic for /l/: if the URL is
-  // off /l/ but selectedLook is set, clear it.
+  // Single Back owner for the detail trail. Every product/look open records a
+  // frame in navStackRef (the full entity, in memory) and mirrors the URL.
+  // Pressing browser Back (or the X button, which calls history.back()) pops
+  // a history entry and fires popstate here; we pop the matching frame and
+  // restore the previous surface FROM MEMORY — synchronously, no network
+  // re-resolve and no clear-to-feed gap. (This replaced the old design where
+  // a second popstate listener in useOverlayRouter async-refetched the slug,
+  // which caused the back-nav lag, the feed/white flash, and the stuck-on-A
+  // loop.) The listener never pushes history — only the open handlers do —
+  // so the stack can't accumulate duplicate entries.
   //
-  // We use refs so the listener doesn't reattach on every state
-  // change — it reads the current state through .current at fire
-  // time. This makes the listener stable across re-renders.
+  // We use refs so the listener doesn't reattach on every state change — it
+  // reads the live state through .current at fire time, staying stable.
   const productOpenedFromLookRef = useRef(productOpenedFromLook);
   productOpenedFromLookRef.current = productOpenedFromLook;
   const selectedProductRef = useRef(selectedProduct);
@@ -1516,6 +1651,40 @@ export default function Home() {
   commentsTargetRef.current = commentsTarget;
   useEffect(() => {
     if (typeof window === 'undefined') return;
+
+    // Clear the product + look detail surfaces (the whole in-memory trail)
+    // back to the bare feed. Shared by the "left the trail" and "landed on a
+    // catalog" branches.
+    const clearTrail = () => {
+      setSelectedProduct(null);
+      setSelectedCreative(null);
+      setSelectedSimilar(null);
+      setSimilarCreatives(null);
+      setBrandCreatives(null);
+      setGraphPairs(null);
+      setSelectedLook(null);
+      setProductOpenedFromLook(null);
+    };
+
+    // Re-show a product/look detail surface straight FROM MEMORY: no slug
+    // re-resolve, no network refetch, no clear-to-feed flash. nav:'none'
+    // tells the open handler to set state + reload the (below-the-fold) rails
+    // WITHOUT pushing a fresh history entry or stack frame — the browser
+    // already popped to this entry and the frame is already in the stack. All
+    // the setState calls below batch into a single commit inside this one
+    // discrete popstate event, so the destination paints in one frame.
+    const restoreFrame = (frame: NavFrame, under: NavFrame | undefined) => {
+      markOverlayReturn(frame.slug); // restore the surface's saved scroll
+      if (frame.kind === 'product') {
+        const underLook = under && under.kind === 'look' ? under.look : null;
+        setProductOpenedFromLook(underLook);
+        if (frame.creative) handleOpenCreative(frame.creative, { nav: 'none' });
+        else handleOpenProduct(frame.product, { nav: 'none' });
+      } else {
+        handleOpenLook(frame.look, { nav: 'none', bypassGate: true });
+      }
+    };
+
     const onPop = () => {
       const path = window.location.pathname;
       const onProduct = path.startsWith('/p/');
@@ -1523,74 +1692,90 @@ export default function Home() {
       const onBrand   = path.startsWith('/b/');
       const onCreator = path.startsWith('/c/');
       const onComments = path.startsWith('/comments/');
+
       // Comments overlay exit: URL left /comments/ but the overlay is still
-      // open → user pressed back out of the thread. Clear it; the product /
-      // look it sat on top of is still mounted underneath, untouched.
-      if (!onComments && commentsTargetRef.current) {
-        setCommentsTarget(null);
+      // open → user backed out of the thread. Clear it; the product/look it
+      // sat on top of stays mounted underneath, untouched.
+      if (!onComments && commentsTargetRef.current) setCommentsTarget(null);
+      // Brand / creator catalog exits — URL left /b/ or /c/.
+      if (!onBrand && brandFilterRef.current) setBrandFilter(null);
+      if (!onCreator && creatorFilterRef.current) setCreatorFilter(null);
+
+      // Landed back ON a brand/creator catalog: close any product/look surface
+      // stacked above it (keep the catalog itself). Their own URL sync lives
+      // in useOverlayRouter, so don't let the detail-trail reconcile fight it.
+      if (onBrand || onCreator) {
+        setNav(() => []);
+        if (selectedProductRef.current || selectedLookRef.current) clearTrail();
+        return;
       }
-      // Product overlay exit: URL is no longer /p/ but a product is
-      // still open in state → user just pressed back out of the
-      // product page. Mirror what the X close button does: clear the
-      // product + its rails, and if it was opened from a look,
-      // restore that look so the underlying surface reappears.
-      if (!onProduct && selectedProductRef.current) {
-        const fromLook = productOpenedFromLookRef.current;
-        if (onLook && !fromLook) {
-          // Destination is a look the overlay router is resolving async —
-          // keep this product on screen as the bridge (handleOpenLook
-          // clears it when the look swaps in). Clearing now flashed the
-          // bare home feed between the two screens (the founder's "warped
-          // through a few weird screens").
-        } else {
-          setSelectedProduct(null);
-          setSelectedCreative(null);
-          setSelectedSimilar(null);
-          setSimilarCreatives(null);
-          setBrandCreatives(null);
-          setGraphPairs(null);
-          if (fromLook && onLook) {
-            // This re-open is a RETURN: the remounting overlay restores the
-            // scroll position the shopper left it at (overlay-scroll-stash).
-            markOverlayReturn(lookSlug({
-              id: fromLook.id ?? null, uuid: fromLook.uuid ?? null, creator: fromLook.creator ?? null,
-              creatorDisplayName: fromLook.creatorDisplayName ?? null, title: fromLook.title ?? null,
-            }));
-            setSelectedLook(fromLook);
-            setProductOpenedFromLook(null);
-          }
+
+      // ── Detail trail (product / look): restore the destination from MEMORY ──
+      if (onProduct || onLook) {
+        const slug = decodeURIComponent(path.slice(3));
+        // Already showing exactly this surface (e.g. backing out of a comments
+        // overlay that sat on top of it) → no-op, so we never needlessly
+        // remount the page we're already on.
+        const showingProduct = !!selectedProductRef.current && !selectedLookRef.current;
+        const showingLook = !!selectedLookRef.current && !selectedProductRef.current;
+        if (onProduct && showingProduct && navSlugForProduct(selectedProductRef.current!) === slug) return;
+        if (onLook && showingLook && navSlugForLook(selectedLookRef.current!) === slug) return;
+
+        // Find the destination frame in the stack (walk from the top down).
+        const stack = navStackRef.current;
+        let idx = -1;
+        for (let i = stack.length - 1; i >= 0; i--) {
+          const f = stack[i];
+          if (f.slug !== slug) continue;
+          if ((onProduct && f.kind === 'product') || (onLook && f.kind === 'look')) { idx = i; break; }
         }
+        if (idx >= 0) {
+          const sliced = stack.slice(0, idx + 1);
+          setNav(() => sliced);
+          restoreFrame(sliced[idx], sliced[idx - 1]);
+        } else {
+          // Not in memory (forward nav, a back after the trail was reset, or a
+          // cold/shared link) → re-resolve off the URL asynchronously. The
+          // resolver seeds a fresh frame (nav:'seed'); no history push.
+          setNav(() => []);
+          if (onProduct) openProductFromSlugRef.current?.(slug);
+          else openLookFromSlugRef.current?.(slug);
+        }
+        return;
       }
-      // Look overlay exit: URL is no longer /l/ but a look is still
-      // open → user backed out of the look overlay too. EXCEPT when the
-      // destination is a product (/p/): the router is re-opening it async,
-      // and handleProductClick clears the look on swap — keeping it
-      // mounted until then bridges the gap with the screen the shopper
-      // was just on instead of a flash of the bare feed.
-      if (!onLook && selectedLookRef.current && !onProduct) {
-        setSelectedLook(null);
-      }
-      // Brand overlay exit.
-      if (!onBrand && brandFilterRef.current) {
-        setBrandFilter(null);
-      }
-      // Creator catalog exit — URL is no longer /c/ but a creator is
-      // still open in state → user pressed back out of the creator
-      // catalog. Without this clear, back would pop the URL but the
-      // CreatorPage would stay mounted on top, and a second back
-      // would leave the site entirely (the original complaint).
-      if (!onCreator && creatorFilterRef.current) {
-        setCreatorFilter(null);
-      }
-      // Back to the bare feed: do NOT touch scroll here (founder's call —
-      // back must land you exactly where you were in the feed). popstate is
-      // a discrete event, so the setState above flushes synchronously and
-      // the overlay-lock cleanup restores the saved scrollY before this
-      // handler returns; a scrollTo(0) here would clobber that restore.
+
+      // ── Left the detail trail entirely (path '/', '/?q=', …) → close it. ──
+      // Do NOT touch scroll here (founder's call — back must land you exactly
+      // where you were in the feed); the overlay-lock cleanup restores the
+      // saved scrollY, and a scrollTo here would clobber it.
+      setNav(() => []);
+      if (selectedProductRef.current || selectedLookRef.current) clearTrail();
     };
     window.addEventListener('popstate', onPop);
     return () => window.removeEventListener('popstate', onPop);
+    // handle* are stable useCallbacks; the refs above carry the live state.
+    // Deliberately empty deps so the listener attaches exactly once.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Address-bar safety net. The trail normally cleans its own URL via the
+  // browser pop, but if every detail/catalog surface closes while the bar is
+  // still stranded on a /p/ or /l/ URL — e.g. a late async resolve that got
+  // superseded, or any state-only clear — normalize it back to '/'. Gated on
+  // having actually HAD a surface open (hadDetailRef) so a cold-load /p/ deep
+  // link isn't wiped before its resolver opens it.
+  const hadDetailRef = useRef(false);
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const anyOverlay = !!selectedProduct || !!selectedLook || !!creatorFilter || !!brandFilter;
+    if (anyOverlay) { hadDetailRef.current = true; return; }
+    if (!hadDetailRef.current) return;
+    const p = window.location.pathname;
+    if (p.startsWith('/p/') || p.startsWith('/l/')) {
+      window.history.replaceState({}, '', '/');
+    }
+  }, [selectedProduct, selectedLook, creatorFilter, brandFilter]);
+
   const closeProfile = useCallback(() => {
     history.replaceState({}, '', '/#app');
     setShowProfile(false);
@@ -1645,6 +1830,7 @@ export default function Home() {
   const handleOverlaySearch = useCallback((q: string) => {
     const query = q.trim();
     if (!query) return;
+    setNav(() => []); // search is a fresh start — abandon the trail
     setSelectedProduct(null);
     setSelectedCreative(null);
     setSelectedLook(null);
@@ -1680,6 +1866,7 @@ export default function Home() {
       return;
     }
     // Cold-load / no pushed entry: just clear state directly.
+    setNav(() => []);
     setSelectedProduct(null);
     setSelectedCreative(null);
     setSelectedSimilar(null);
@@ -1687,6 +1874,12 @@ export default function Home() {
     setBrandCreatives(null);
     setGraphPairs(null);
     if (productOpenedFromLook) {
+      setNav(() => [{
+        key: ++navSeqRef.current,
+        kind: 'look',
+        slug: navSlugForLook(productOpenedFromLook),
+        look: productOpenedFromLook,
+      }]);
       setSelectedLook(productOpenedFromLook);
       setProductOpenedFromLook(null);
       return;
@@ -1696,16 +1889,21 @@ export default function Home() {
     }
   }, [productOpenedFromLook]);
 
-  // URL ↔ overlay state binding: push /p/<slug>, /l/<slug>, /b/<slug>
-  // when an overlay opens, and consume the slug on fresh load. See
-  // useOverlayRouter for the full sync contract.
-  // Deep-link opens (a shared /l/ or /c/ URL, or browser back/forward to
-  // one) bypass the guest gate so shared links always play — only in-app
-  // taps gate. The overlay router only calls these when reconciling the
-  // URL to state, never for an in-app tap (which sets state first).
-  const handleOpenLookDeepLink = useCallback((look: Look) => handleOpenLook(look, { bypassGate: true }), [handleOpenLook]);
+  // URL ↔ overlay state binding. The router now owns ONLY: the /b/ and /c/
+  // URL mirror (brand/creator catalogs), the cold-load deep-link consumer
+  // (open the entity a shared /p//l//b//c/ URL points at), and the async
+  // slug→entity resolvers. The product/look push + the Back reconcile moved
+  // in-house (the open handlers push frames + URL; the popstate listener
+  // above restores from memory). The resolvers are the fallback for a popped
+  // slug that isn't in the in-memory stack.
+  // Deep-link opens (a shared /l/ or /c/ URL, or forward-nav to one) bypass
+  // the guest gate so shared links always play — only in-app taps gate.
+  const handleOpenLookDeepLink = useCallback(
+    (look: Look, opts?: { nav?: NavMode }) => handleOpenLook(look, { bypassGate: true, ...opts }),
+    [handleOpenLook],
+  );
   const handleOpenCreatorDeepLink = useCallback((handle: string) => handleOpenCreator(handle, { bypassGate: true }), [handleOpenCreator]);
-  useOverlayRouter({
+  const { openProductFromSlug, openLookFromSlug } = useOverlayRouter({
     selectedProduct,
     selectedLook,
     brandFilter,
@@ -1716,6 +1914,9 @@ export default function Home() {
     onOpenBrand: handleOpenBrand,
     onOpenCreator: handleOpenCreatorDeepLink,
   });
+  // Surface the resolvers to the (empty-dep) popstate listener above.
+  openProductFromSlugRef.current = openProductFromSlug;
+  openLookFromSlugRef.current = openLookFromSlug;
 
   const handleBookmarksOpenLook = useCallback((look: Look) => {
     setShowBookmarks(false);
@@ -1993,33 +2194,95 @@ export default function Home() {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
           </button>
 
-          {/* LookOverlay for grid look taps */}
-          {selectedLook && (
-            <Suspense fallback={null}>
-              <LookOverlay
-                // Remount per look: tapping a look INSIDE the overlay used to
-                // reuse the mounted instance, which smooth-scrolled back to
-                // the top with stale content visible. A fresh mount shows the
-                // new look instantly, already at the top.
-                key={selectedLook.uuid || selectedLook.id}
-                look={selectedLook}
-                onClose={handleCloseLook}
-                onOpenCreator={handleOpenCreator}
-                onOpenBrowser={handleOpenBrowser}
-                onOpenProduct={handleOpenProduct}
-                onCreateCatalog={handleCreateCatalog}
-                onOpenLook={handleOpenLook}
-                bookmarks={bookmarks}
-                allLooks={liveLooks}
-                popularFallback={popularFallback}
-                onOpenCreative={handleOpenCreative}
-                onOpenComments={openComments}
-                onDailyFeedBar={handleDailyFeedBar}
-                onHome={handleLogoClick}
-                onSearch={handleOverlaySearch}
-              />
-            </Suspense>
-          )}
+          {/* ── Detail trail, rendered as LAYERS ──────────────────────────
+              Every product/look the shopper opened is a frame in navStack and
+              stays MOUNTED here, stacked. The top frame is interactive; the
+              ones beneath are warm behind it (covered, pointer-inert, video
+              paused by the director's scope stack). Back pops a frame and the
+              layer beneath — already mounted — is revealed instantly, with no
+              remount, no clear-to-feed gap, no refetch. Each wrapper makes its
+              own stacking context (z-index by stack position) so a look opened
+              from a product still sits ABOVE that product despite the product
+              overlay's higher intrinsic z-index. The top keeps its type's
+              natural z (look 200 / product 250) to preserve the chrome
+              relationships (bottom-bar at 240, etc.). */}
+          {navStack.map((frame, i) => {
+            const isTop = i === navStack.length - 1;
+            const z = isTop ? (frame.kind === 'product' ? 250 : 200) : 150 + i;
+            const layerStyle: React.CSSProperties = {
+              position: 'fixed',
+              inset: 0,
+              zIndex: z,
+              pointerEvents: isTop ? undefined : 'none',
+              // Covered layers stay MOUNTED (preserved scroll + React state, so
+              // Back reveals them instantly) but are hidden from PAINT — the
+              // browser stops compositing/painting the stacked overlays beneath
+              // the top, which on mobile were rendering dozens of images +
+              // <video>s invisibly behind the opaque top surface. visibility
+              // (not display:none / content-visibility) keeps layout intact, so
+              // revealing the layer on Back is a repaint with no relayout hitch.
+              // Safe because overlays open/close instantly — no entrance slide
+              // that would momentarily reveal a hidden layer behind the top.
+              visibility: isTop ? undefined : 'hidden',
+            };
+            if (frame.kind === 'look') {
+              return (
+                <div key={frame.key} className="nav-layer" style={layerStyle} aria-hidden={!isTop || undefined}>
+                  <Suspense fallback={null}>
+                    <LookOverlay
+                      look={frame.look}
+                      onClose={isTop ? handleCloseLook : noop}
+                      onOpenCreator={handleOpenCreator}
+                      onOpenBrowser={handleOpenBrowser}
+                      onOpenProduct={handleOpenProduct}
+                      onCreateCatalog={handleCreateCatalog}
+                      onOpenLook={handleOpenLook}
+                      bookmarks={bookmarks}
+                      allLooks={liveLooks}
+                      popularFallback={popularFallback}
+                      onOpenCreative={handleOpenCreative}
+                      onOpenComments={openComments}
+                      onDailyFeedBar={isTop ? handleDailyFeedBar : noop}
+                      onHome={handleLogoClick}
+                      onSearch={handleOverlaySearch}
+                    />
+                  </Suspense>
+                </div>
+              );
+            }
+            const under = navStack[i - 1];
+            const fromLook = under && under.kind === 'look' ? under.look : null;
+            return (
+              <div key={frame.key} className="nav-layer" style={layerStyle} aria-hidden={!isTop || undefined}>
+                <Suspense fallback={null}>
+                  <ProductPage
+                    product={frame.product}
+                    onClose={isTop ? handleProductClose : noop}
+                    onOpenLook={handleOpenLook}
+                    onOpenBrowser={handleOpenBrowser}
+                    onOpenProduct={handleOpenProduct}
+                    onOpenCreator={handleOpenCreator}
+                    onOpenCreative={handleOpenCreative}
+                    onOpenBrand={handleOpenBrandCatalog}
+                    onCreateCatalog={handleCreateCatalog}
+                    onOpenComments={openComments}
+                    creative={mapCreativeForPage(frame.creative)}
+                    similarCreatives={isTop ? (similarCreatives ?? undefined) : undefined}
+                    brandCreatives={isTop ? (brandCreatives ?? undefined) : undefined}
+                    graphPairs={isTop ? (graphPairs ?? undefined) : undefined}
+                    popularFallback={popularFallback}
+                    lookCreatives={isTop ? lookCreativesForProduct : undefined}
+                    allLooks={liveLooks}
+                    fromLook={fromLook}
+                    bookmarks={bookmarks}
+                    navKey={frame.key}
+                    onHome={handleLogoClick}
+                    onSearch={handleOverlaySearch}
+                  />
+                </Suspense>
+              </div>
+            );
+          })}
 
           {/* Guest freemium gate — dissolves over a look teaser ('look'),
               a creator catalog ('creator'), or the feed scroll nudge
@@ -2172,77 +2435,8 @@ export default function Home() {
             </div>
           )}
 
-          {selectedProduct && (
-            <Suspense fallback={null}>
-              <ProductPage
-                // Remount per navigation (trail taps included): a reused
-                // instance kept painting the PREVIOUS product's hero for a
-                // beat before its effects swapped media. A fresh mount
-                // paints the tapped tile's own (already-cached) poster on
-                // the very first frame, so the user instantly sees the
-                // product they picked.
-                key={productNavCount}
-                product={selectedProduct}
-                onClose={handleProductClose}
-                onOpenLook={handleOpenLook}
-                onOpenBrowser={handleOpenBrowser}
-                onOpenProduct={handleOpenProduct}
-                onOpenCreator={handleOpenCreator}
-                onOpenCreative={handleOpenCreative}
-                onOpenBrand={handleOpenBrandCatalog}
-                onCreateCatalog={handleCreateCatalog}
-                onOpenComments={openComments}
-                creative={
-                  selectedCreative && pickPlaybackSource(selectedCreative)
-                    ? {
-                        id: selectedCreative.id,
-                        // Must resolve to the SAME source CreativeCardV2
-                        // donated on tap (pickPlaybackSource → pickVideoUrl:
-                        // product.primary_video_url, then the mobile variant on
-                        // a mobile viewport, then full video_url). Passing the
-                        // raw video_url here made the detail hero request a
-                        // different src than the donated element carried, so
-                        // TrailVideoHost.attach() reset the src and RELOADED a
-                        // perfectly-good playing element — the multi-second
-                        // black hero on mobile. hlsUrl below still wins when an
-                        // HLS ladder exists (matches pickPlaybackSource order).
-                        videoUrl: pickVideoUrl(selectedCreative) || selectedCreative.video_url || '',
-                        // Prefer the product's HLS ladder, then the creative's,
-                        // so the hero plays one adaptive source and ramps to a
-                        // crisp rung full-screen. Null → falls back to MP4 —
-                        // always null when the pipeline dial is on 'mp4'.
-                        hlsUrl:
-                          videoPipelineMode() === 'hls'
-                            ? (selectedCreative.product?.primary_hls_url
-                              || selectedCreative.hls_url
-                              || null)
-                            : null,
-                        // Prefer the polished primary image so the hero
-                        // poster matches the catalog tile exactly — same
-                        // first frame the video animates from. Falls back
-                        // to thumbnail/image when polish hasn't run.
-                        thumbnailUrl:
-                          selectedCreative.product?.primary_image_url
-                          || selectedCreative.thumbnail_url
-                          || selectedCreative.product?.image_url
-                          || null,
-                      }
-                    : undefined
-                }
-                similarCreatives={similarCreatives ?? undefined}
-                brandCreatives={brandCreatives ?? undefined}
-                graphPairs={graphPairs ?? undefined}
-                popularFallback={popularFallback}
-                lookCreatives={lookCreativesForProduct}
-                allLooks={liveLooks}
-                fromLook={productOpenedFromLook}
-                bookmarks={bookmarks}
-                navKey={productNavCount}
-                onHome={handleLogoClick}
-                onSearch={handleOverlaySearch}
-              />
-            </Suspense>
-          )}
+          {/* (Product detail surfaces render in the layered detail trail above,
+              alongside looks — see the navStack.map.) */}
 
         </>
       )}
@@ -2264,6 +2458,10 @@ export default function Home() {
           />
         </Suspense>
       )}
+      {/* Persistent-shell child route (null stub — see routes/_app-stub.tsx).
+          Rendered so the deep-link URLs resolve to THIS mounted parent without
+          remounting it. */}
+      <Outlet />
     </div>
     </TrailVideoHost>
     </TrailRoot>

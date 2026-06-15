@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import { useParams, useLocation } from '@remix-run/react';
+import { useLocation } from '@remix-run/react';
 import type { Look, Product } from '~/data/looks';
 import {
   productSlug,
@@ -52,9 +52,9 @@ interface UseOverlayRouterArgs {
    *  browser back returns to the previous surface instead of exiting
    *  the site. */
   creatorFilter: string | null;
-  onOpenProduct: (product: Product) => void;
-  onOpenCreative: (creative: ProductAd) => void;
-  onOpenLook: (look: Look) => void;
+  onOpenProduct: (product: Product, opts?: { nav?: 'push' | 'seed' | 'none' }) => void;
+  onOpenCreative: (creative: ProductAd, opts?: { nav?: 'push' | 'seed' | 'none' }) => void;
+  onOpenLook: (look: Look, opts?: { nav?: 'push' | 'seed' | 'none' }) => void;
   onOpenBrand: (brandName: string) => void;
   onOpenCreator: (creatorName: string) => void;
 }
@@ -105,29 +105,14 @@ export function useOverlayRouter({
   const slugsRef = useRef({ product: currentProductSlug, look: currentLookSlug });
   slugsRef.current = { product: currentProductSlug, look: currentLookSlug };
 
-  // Push /p/<slug> when a product opens. Every distinct product gets its
-  // own history entry — product → product included — so the back button
-  // walks the exact trail the shopper browsed (founder's call; the old
-  // replaceState "don't peel through every product" rule made back from
-  // a similar-rail product skip to the home screen).
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (!selectedProduct) return;
-    if (!currentProductSlug) return;
-    const target = `/p/${currentProductSlug}`;
-    if (window.location.pathname === target) return;
-    window.history.pushState({ overlay: 'product' }, '', target);
-  }, [selectedProduct, currentProductSlug]);
-
-  // Push /l/<slug> when a look opens. Same rule: every look stacks.
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    if (!selectedLook) return;
-    if (!currentLookSlug) return;
-    const target = `/l/${currentLookSlug}`;
-    if (window.location.pathname === target) return;
-    window.history.pushState({ overlay: 'look' }, '', target);
-  }, [selectedLook, currentLookSlug]);
+  // NOTE: the /p/ and /l/ history pushes used to live here (one useEffect
+  // each, firing when selectedProduct/selectedLook changed). They moved into
+  // the open handlers in routes/_index.tsx so the URL push happens in the same
+  // synchronous tick as the in-memory stack-frame push — deterministically,
+  // not via an effect that could re-fire during an async back-restore and
+  // stack duplicate entries (the old "Back keeps landing on the same page"
+  // loop). currentProductSlug / currentLookSlug below are still consumed by
+  // the resolver guards (slugsRef).
 
   // Push /b/<slug> when a brand overlay opens.
   useEffect(() => {
@@ -175,6 +160,10 @@ export function useOverlayRouter({
     const finish = (open: () => void) => {
       if (resolvingRef.current === `p:${slug}`) resolvingRef.current = null;
       if (slugsRef.current.product === slug) return; // already showing it
+      // The address bar may have moved on while we were resolving (slow cold
+      // fetch + a fast Back/forward). Applying now would clobber whatever
+      // surface the shopper is actually on. Only open if we're still on /p/slug.
+      if (typeof window !== 'undefined' && window.location.pathname !== `/p/${slug}`) return;
       // Popstate opens are returns — restore the page's saved scroll.
       markOverlayReturn(slug);
       open();
@@ -188,8 +177,11 @@ export function useOverlayRouter({
         const creatives = await getCreativesByProductIds([product.id]);
         const creative = creatives[0];
         finish(() => {
-          if (creative) onOpenCreative(creative);
-          else onOpenProduct(product);
+          // 'seed': the entity is opened to match an existing history entry
+          // (cold/shared link or a forward-nav slug not in the stack), so the
+          // open handler records a frame but doesn't push another URL.
+          if (creative) onOpenCreative(creative, { nav: 'seed' });
+          else onOpenProduct(product, { nav: 'seed' });
         });
       });
     } else {
@@ -212,7 +204,7 @@ export function useOverlayRouter({
             url: row.url || '',
             image: row.image_url || undefined,
           };
-          finish(() => onOpenProduct(product));
+          finish(() => onOpenProduct(product, { nav: 'seed' }));
         });
     }
   };
@@ -253,40 +245,30 @@ export function useOverlayRouter({
       if (resolvingRef.current === `l:${slug}`) resolvingRef.current = null;
       if (!match) return;
       if (slugsRef.current.look === slug) return; // already showing it
+      // Don't clobber the current surface if the bar moved on while getLooks()
+      // resolved (slow first load + a fast Back). Only open if still on /l/slug.
+      if (typeof window !== 'undefined' && window.location.pathname !== `/l/${slug}`) return;
       // Popstate opens are returns — restore the look's saved scroll.
       markOverlayReturn(slug);
-      onOpenLook(match);
+      onOpenLook(match, { nav: 'seed' });
     });
   };
 
-  // Back/forward landing on an overlay URL re-opens that overlay. The exit
-  // paths (/p/ → /, /l/ → /, …) stay with the popstate listener in
-  // routes/_index.tsx — this one only ever OPENS.
-  useEffect(() => {
-    if (typeof window === 'undefined') return;
-    const onPop = () => {
-      const path = window.location.pathname;
-      if (path.startsWith('/p/')) {
-        const slug = decodeURIComponent(path.slice(3));
-        if (slug && slug !== slugsRef.current.product) openProductFromSlug(slug);
-      } else if (path.startsWith('/l/')) {
-        const slug = decodeURIComponent(path.slice(3));
-        if (slug && slug !== slugsRef.current.look) openLookFromSlug(slug);
-      }
-    };
-    window.addEventListener('popstate', onPop);
-    return () => window.removeEventListener('popstate', onPop);
-    // openProductFromSlug / openLookFromSlug close over stable onOpen*
-    // callbacks (useCallback in the caller) — safe with empty deps.
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  // NOTE: the product/look re-open popstate listener that used to live here
+  // was REMOVED. Back is now owned by a single listener in routes/_index.tsx
+  // that restores the destination surface from the in-memory nav stack, and
+  // only falls back to these async resolvers (returned below) when a popped
+  // slug isn't in memory. Two listeners racing on the same popstate event was
+  // the source of the feed/white flash; there is exactly one now.
 
-  // Fresh-load consumer: on mount, read the route param Remix gave us
-  // and open the matching modal once. After this, in-app navigation
-  // drives state and the URL syncs back via the push effects above.
-  const params = useParams();
+  // Fresh-load consumer: on mount, read the deep-link slug and open the
+  // matching modal once. After this, in-app navigation drives state and the
+  // URL syncs back via the push effects above. Home is now a persistent PARENT
+  // layout (see vite.config.ts), so the child route's :slug isn't reliably on
+  // useParams() here — derive it from the path, which is always present.
   const location = useLocation();
-  const slugParam = params.slug;
+  const detailMatch = location.pathname.match(/^\/(?:p|l|b|c)\/(.+)$/);
+  const slugParam = detailMatch ? decodeURIComponent(detailMatch[1]) : undefined;
   const initialSlugConsumed = useRef(false);
   useEffect(() => {
     if (initialSlugConsumed.current) return;
@@ -350,4 +332,9 @@ export function useOverlayRouter({
     // guards re-runs.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [slugParam]);
+
+  // Surfaced for the Back reconcile in routes/_index.tsx: when a popped /p/
+  // or /l/ slug isn't in the in-memory stack (forward-nav, post-reset back,
+  // or a cold/shared link), it calls these to async-resolve + seed a frame.
+  return { openProductFromSlug, openLookFromSlug };
 }

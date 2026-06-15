@@ -1,10 +1,14 @@
 // haiku-context — Claude Haiku looks at a product's primary image and
-// writes a dense one-to-two-sentence description (what the item IS:
-// kind, material, color, use). Stored on products.haiku_context.
+// writes a two-line description, stored on products.haiku_context:
+//   Line 1 — the object's identity in a few plain words ("houseplant",
+//            "high heels"), naming only the item, never the setting.
+//   Line 2 — one dense detail sentence (materials, colors, notable bits).
 //
 // This context exists for TYPE GOVERNANCE: product names lie ("Latte
 // Art – Woodland" reads as art; the photo shows glassware), so kaizen's
-// placement matching and the kaizen-refine prompt both read it.
+// placement matching and the kaizen-refine prompt both read it. Matching
+// uses ONLY line 1 (see haikuIdentity) so a plant shot in a living room
+// isn't dragged under "home" by the detail sentence.
 //
 // Invoked by the products_haiku_context trigger whenever a primary
 // image is picked (body {productId}), or with {backfill: N} to process
@@ -69,7 +73,7 @@ async function describeOne(supabase: any, apiKey: string, productId: string): Pr
         role: 'user',
         content: [
           { type: 'image', source: { type: 'base64', media_type: image.media_type, data: image.data } },
-          { type: 'text', text: `Product title: "${p.name}"${p.brand ? ` by ${p.brand}` : ''}.\n\nIn 1–2 dense sentences, describe what this item ACTUALLY is from the photo: the kind of object, materials, colors, and what it's used for. Titles often mislead — trust the image. No marketing language. Return only the sentences.` },
+          { type: 'text', text: `Product title: "${p.name}"${p.brand ? ` by ${p.brand}` : ''}.\n\nIdentify what this item ACTUALLY is from the photo — titles often mislead, so trust the image.\n\nReply in EXACTLY two lines, nothing else. Plain text only — no markdown, no "#" headings, no labels, no blank line, no bullets:\nLine 1 — the item's category in 1-4 plain words, using the most common everyday noun for it (e.g. "potted plant", "high heels", "computer monitor", "wristwatch", "denim jacket", "table lamp"). Name only the object itself. Do NOT mention the room, background, setting, surroundings, or where it sits.\nLine 2 — one dense sentence: materials, colors, and any notable detail.\n\nNo marketing language.` },
         ],
       }],
     }),

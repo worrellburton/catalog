@@ -28,6 +28,23 @@ function normalize(s: string): string {
 }
 const escapeRx = (s: string) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 
+// The "identity" half of a Haiku context string — what the item IS, not
+// where it sits. haiku-context leads with a one-line object identity
+// ("houseplant", "high heels") and follows with a detail sentence that may
+// mention the room/setting. Placement matching reads only the identity, or a
+// plant shot in a living room gets mis-placed under "home". Falls back to the
+// first sentence for legacy single-blob rows.
+function haikuIdentity(text: string | null): string {
+  if (!text) return '';
+  const lines = text.split('\n')
+    .map(l => l.replace(/^[#>\-*\s]+/, '').replace(/[*_`]/g, '').trim())
+    .filter(Boolean);
+  // First real content line — skip bare titles/labels ("Description").
+  const line = lines.find(l => l.includes(' ') && !l.endsWith(':')) ?? lines[0] ?? text;
+  const firstSentence = line.split(/(?<=[.!?])\s/)[0] ?? line;
+  return firstSentence.trim();
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method !== 'POST') return new Response('method not allowed', { status: 405 });
   const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
@@ -87,9 +104,10 @@ Deno.serve(async (req: Request) => {
 
     for (const p of products) {
       const currentNode = p.type ? byNorm.get(normalize(p.type))?.[0] ?? null : null;
+      const hctx = haikuIdentity(p.haiku_context);
       let best: Node | null = null;
       for (const m of matchers) {
-        const hit = m.rx.test(p.name) || (p.haiku_context ? m.rx.test(p.haiku_context) : false);
+        const hit = m.rx.test(p.name) || (hctx ? m.rx.test(hctx) : false);
         if (hit && (!best || depth(m.node) > depth(best))) best = m.node;
       }
       if (best && (!currentNode || (currentNode.id !== best.id && !inBranch(currentNode, best)))) {
@@ -109,8 +127,11 @@ Deno.serve(async (req: Request) => {
       attachCount.set(currentNode.id, (attachCount.get(currentNode.id) ?? 0) + 1);
       if (retypeIds.has(p.id)) continue;
       const toPath = path(currentNode);
-      const toGender = effGender(currentNode);
-      if ((p.type_path ?? null) !== toPath || (toGender !== null && (p.gender ?? null) !== toGender)) {
+      const nodeGender = effGender(currentNode);
+      // A node's gender only constrains products when it's male/female;
+      // 'unisex'/null is permissive so product-level gender (name/photo) wins.
+      const forceGender = nodeGender === 'male' || nodeGender === 'female' ? nodeGender : null;
+      if ((p.type_path ?? null) !== toPath || (forceGender !== null && (p.gender ?? null) !== forceGender)) {
         drift.push({ product: p, node: currentNode });
       }
     }
@@ -136,7 +157,13 @@ Deno.serve(async (req: Request) => {
     let autoFixed = 0;
     const buckets = new Map<string, { patch: Record<string, string | null>; ids: string[] }>();
     for (const d of drift) {
-      const patch = { type: d.node.name, gender: effGender(d.node), type_path: path(d.node) };
+      // Only male/female nodes write gender; a unisex node leaves the
+      // product's own gender alone (permissive — see drift detection above).
+      const ng = effGender(d.node);
+      const fg = ng === 'male' || ng === 'female' ? ng : null;
+      const patch: Record<string, string | null> = fg
+        ? { type: d.node.name, gender: fg, type_path: path(d.node) }
+        : { type: d.node.name, type_path: path(d.node) };
       const key = JSON.stringify(patch);
       const b = buckets.get(key) ?? { patch, ids: [] };
       b.ids.push(d.product.id);
