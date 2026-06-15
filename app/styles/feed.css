@@ -789,6 +789,10 @@
 .card-creator-tag-name:hover { color: rgba(255, 255, 255, 0.82); }
 
 /* ── Super-admin "why did this show up?" affordance ─────────────────── */
+/* Super-admin "why did this show up?" — kept fully functional but PURELY
+   INVISIBLE (founder's call): no purple disc, no glyph, no hover reveal
+   (which stuck visible on mobile after a tap). A transparent tappable circle
+   on the card's left edge; the explainer panel still opens on tap. */
 .feed-why-btn {
   position: absolute;
   left: 8px;
@@ -797,24 +801,12 @@
   z-index: 6;
   width: 26px;
   height: 26px;
-  border-radius: 50%;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font: 700 14px/1 ui-sans-serif, system-ui, sans-serif;
-  color: rgba(255, 255, 255, 0.92);
-  background: rgba(99, 102, 241, 0.55);
-  border: 1px solid rgba(255, 255, 255, 0.5);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  border: none;
+  background: transparent;
+  color: transparent;
+  padding: 0;
   cursor: pointer;
-  opacity: 0;
-  transition: opacity 0.15s ease, transform 0.15s ease, background 0.15s ease;
 }
-.feed-why-btn:hover { opacity: 1; background: rgba(99, 102, 241, 0.85); transform: translateY(-50%) scale(1.08); }
-.promo-card:hover .feed-why-btn,
-.look-card:hover .feed-why-btn,
-.feed-why-btn:focus-visible { opacity: 0.9; }
 
 .feed-why-scrim {
   position: fixed; inset: 0; z-index: 4000;
