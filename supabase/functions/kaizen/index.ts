@@ -4,11 +4,11 @@
 // adds the regex taxonomy on top).
 //
 // Runs daily at 6 a.m. ET via pg_cron (public.run_kaizen → net.http_post,
-// migration 20260611000000). AUTO-APPLIES only the safe sync fixes —
-// products whose type casing / type_path / gender lag the tree — and
-// records everything else (better placements, duplicate / empty /
-// unowned types) in kaizen_runs for review in the type brain's Kaizen
-// panel.
+// migration 20260611000000). AUTO-APPLIES only the safe type/type_path
+// sync, and records everything else — better placements, GENDER changes
+// (kept separate so they're reviewed, never auto-written), duplicate /
+// empty / unowned types — in kaizen_runs for review in the type brain's
+// Kaizen panel.
 //
 // Auth: bearer must be the service-role key (the cron passes it from
 // vault); admins review results through RLS on kaizen_runs instead of
@@ -97,7 +97,8 @@ Deno.serve(async (req: Request) => {
 
     // ── Findings ─────────────────────────────────────────────────────
     const retypes: Record<string, unknown>[] = [];
-    const drift: { product: Product; node: Node }[] = [];
+    const drift: { product: Product; node: Node }[] = [];        // type/path only
+    const genderChanges: Record<string, unknown>[] = [];          // gender only (review)
     const orphans = new Map<string, { typeName: string; count: number }>();
     const attachCount = new Map<string, number>();
     const retypeIds = new Set<string>();
@@ -131,8 +132,11 @@ Deno.serve(async (req: Request) => {
       // A node's gender only constrains products when it's male/female;
       // 'unisex'/null is permissive so product-level gender (name/photo) wins.
       const forceGender = nodeGender === 'male' || nodeGender === 'female' ? nodeGender : null;
-      if ((p.type_path ?? null) !== toPath || (forceGender !== null && (p.gender ?? null) !== forceGender)) {
+      if ((p.type_path ?? null) !== toPath) {
         drift.push({ product: p, node: currentNode });
+      }
+      if (forceGender !== null && (p.gender ?? null) !== forceGender) {
+        genderChanges.push({ productId: p.id, name: p.name, brand: p.brand, fromGender: p.gender, toGender: forceGender, path: toPath });
       }
     }
 
@@ -157,13 +161,9 @@ Deno.serve(async (req: Request) => {
     let autoFixed = 0;
     const buckets = new Map<string, { patch: Record<string, string | null>; ids: string[] }>();
     for (const d of drift) {
-      // Only male/female nodes write gender; a unisex node leaves the
-      // product's own gender alone (permissive — see drift detection above).
-      const ng = effGender(d.node);
-      const fg = ng === 'male' || ng === 'female' ? ng : null;
-      const patch: Record<string, string | null> = fg
-        ? { type: d.node.name, gender: fg, type_path: path(d.node) }
-        : { type: d.node.name, type_path: path(d.node) };
+      // Auto-apply type/path sync only. Gender changes are recorded in the
+      // report for review in the Kaizen panel — never auto-written.
+      const patch: Record<string, string | null> = { type: d.node.name, type_path: path(d.node) };
       const key = JSON.stringify(patch);
       const b = buckets.get(key) ?? { patch, ids: [] };
       b.ids.push(d.product.id);
@@ -178,11 +178,12 @@ Deno.serve(async (req: Request) => {
     const report = {
       retypes: trim(retypes),
       driftFixed: drift.length,
+      genderChanges: trim(genderChanges),
       emptyTypes: trim(emptyTypes),
       duplicateTypes: trim(duplicateTypes),
       orphanTypes: trim([...orphans.values()]),
     };
-    const findingCount = retypes.length + drift.length + emptyTypes.length
+    const findingCount = retypes.length + drift.length + genderChanges.length + emptyTypes.length
       + duplicateTypes.length + orphans.size;
     await supabase.from('kaizen_runs').insert({
       source, finding_count: findingCount, auto_fixed: autoFixed, report,

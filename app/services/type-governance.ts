@@ -350,6 +350,9 @@ export async function createTypeNode(name: string, parentId: string | null): Pro
 // node owns. A server twin runs every morning at 6 a.m. ET (kaizen edge
 // function via pg_cron) auto-applying only the safe sync fixes.
 
+// Type/path sync only — the product's node is right but its denormalized
+// type/type_path columns lag the tree. Gender lives in KaizenGenderChange
+// so the two kinds of fix stay delineated in the UI and the data.
 export interface KaizenDrift {
   productId: string;
   name: string;
@@ -357,10 +360,20 @@ export interface KaizenDrift {
   image: string | null;
   nodeId: string;
   toType: string;
-  toGender: string | null;
   toPath: string;
-  fromGender: string | null;
   fromPath: string | null;
+}
+
+// Gender sync only — a male/female type node wants its products to carry
+// that gender. Applied as a gender-only patch (never touches type/path).
+export interface KaizenGenderChange {
+  productId: string;
+  name: string;
+  brand: string | null;
+  image: string | null;
+  fromGender: string | null;
+  toGender: 'male' | 'female';
+  path: string;
 }
 
 export interface KaizenEmptyType { nodeId: string; name: string; path: string; subtreeIds: string[] }
@@ -374,6 +387,7 @@ export interface KaizenOrphan { typeName: string; productIds: string[] }
 export interface KaizenReport {
   retypes: TypeAuditRecommendation[];
   drift: KaizenDrift[];
+  genderChanges: KaizenGenderChange[];
   emptyTypes: KaizenEmptyType[];
   duplicateTypes: KaizenDuplicate[];
   orphanTypes: KaizenOrphan[];
@@ -391,9 +405,12 @@ export function kaizenSweep(products: GovernanceProduct[], tree: TypeNode[]): Ka
   const paths = computeTypePaths(tree);
   const genders = computeEffectiveGenders(tree);
 
-  // Drift: the product's node is right, but its denormalized columns
-  // (type casing / type_path / gender) lag the tree. Safe to auto-fix.
+  // Drift: the product's node is right, but its denormalized columns lag
+  // the tree. Split by kind so the UI/data delineate them: `drift` is
+  // type/path-only; `genderChanges` is gender-only (and only when the node
+  // is male/female — unisex is permissive).
   const drift: KaizenDrift[] = [];
+  const genderChanges: KaizenGenderChange[] = [];
   const attachCount = new Map<string, number>();
   const orphanBuckets = new Map<string, { typeName: string; productIds: string[] }>();
   for (const p of products) {
@@ -416,13 +433,16 @@ export function kaizenSweep(products: GovernanceProduct[], tree: TypeNode[]): Ka
     // 'unisex'/null is permissive, so product-level gender (name/photo)
     // wins and a female heel under the unisex "shoes" node stays female.
     const forceGender = nodeGender === 'male' || nodeGender === 'female' ? nodeGender : null;
-    const pathLag = (p.typePath ?? null) !== toPath;
-    const genderLag = forceGender !== null && (p.gender ?? null) !== forceGender;
-    if (pathLag || genderLag) {
+    if ((p.typePath ?? null) !== toPath) {
       drift.push({
         productId: p.id, name: p.name, brand: p.brand, image: p.image,
-        nodeId: node.id, toType: node.name, toGender: forceGender, toPath,
-        fromGender: p.gender, fromPath: p.typePath,
+        nodeId: node.id, toType: node.name, toPath, fromPath: p.typePath,
+      });
+    }
+    if (forceGender !== null && (p.gender ?? null) !== forceGender) {
+      genderChanges.push({
+        productId: p.id, name: p.name, brand: p.brand, image: p.image,
+        fromGender: p.gender, toGender: forceGender, path: toPath,
       });
     }
   }
@@ -472,5 +492,5 @@ export function kaizenSweep(products: GovernanceProduct[], tree: TypeNode[]): Ka
     .map(b => ({ typeName: b.typeName, productIds: b.productIds }))
     .sort((a, b) => b.productIds.length - a.productIds.length);
 
-  return { retypes, drift, emptyTypes, duplicateTypes, orphanTypes };
+  return { retypes, drift, genderChanges, emptyTypes, duplicateTypes, orphanTypes };
 }
