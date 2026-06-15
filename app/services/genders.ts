@@ -93,6 +93,8 @@ const PRODUCT_FEMALE_PATTERNS: RegExp[] = [
   /\bladys?\b/i,
   /\bgirls'?\b/i,
   /\bfemale\b/i,
+  /\bfemme\b/i,
+  /\bfeminine\b/i,
   /\bfor\s*women\b/i,
   /\bfor\s*her\b/i,
   /\bmiss\b/i,
@@ -244,14 +246,21 @@ export function proposeProductGenders(rows: GenderAuditRow[]): Map<string, Produ
   for (const r of rows) {
     const haiku = r.haiku_context ?? null;
     const blob = [r.name, r.type, r.subtype, haikuIdentity(haiku)].filter(Boolean).join(' ');
-    out.set(
-      r.id,
+    // A STRONG signal = an explicit gender token (name or photo) or a
+    // gendered product category. Brand history / the unisex default are weak.
+    const strong =
       inferProductGenderFromName(r.name)
-        ?? inferProductGenderFromName(haiku)
-        ?? inferProductGenderFromKeywords(blob)
-        ?? brandGuess(r.brand)
-        ?? 'unisex',
-    );
+      ?? inferProductGenderFromName(haiku)
+      ?? inferProductGenderFromKeywords(blob);
+    let g: ProductGender;
+    if (strong) {
+      g = strong; // strong signal always wins (corrects wrong tags)
+    } else if (r.gender === 'male' || r.gender === 'female') {
+      g = r.gender; // never downgrade a curated male/female to unisex on a weak guess
+    } else {
+      g = brandGuess(r.brand) ?? 'unisex'; // unisex / untagged: brand history, else unisex
+    }
+    out.set(r.id, g);
   }
   return out;
 }
