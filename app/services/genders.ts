@@ -1,4 +1,5 @@
 import { supabase } from '~/utils/supabase';
+import { haikuIdentity } from '~/services/type-governance';
 
 /**
  * Curated first-name corpus -- the 300-ish most common male / female
@@ -133,24 +134,37 @@ export function inferProductGenderFromName(name: string | null | undefined): Pro
   return null;
 }
 
-// Type-column → gender. Only the truly gendered categories appear here;
-// every other type (shoes, jacket, sweater, etc.) is treated as unisex
-// in the fallback below.
-const FEMALE_TYPES = new Set<string>([
+// Gendered product categories. Only truly gendered categories appear
+// here; every other type (shoes, jacket, sweater, etc.) stays unisex via
+// the fallback below. These are scanned as whole words across a product's
+// name, type, subtype AND Haiku read — not just the exact type column —
+// because heels are usually typed "shoes" with "heels" living only in the
+// subtype or the photo's Haiku identity, which left them stuck on unisex.
+const FEMALE_TYPES = [
   'dress', 'gown', 'skirt', 'blouse', 'bra', 'lingerie', 'leggings',
   'jumpsuit', 'romper', 'bikini', 'swimsuit', 'heels', 'pumps', 'wedge',
-  'wedges', 'maternity',
-]);
-const MALE_TYPES = new Set<string>([
+  'wedges', 'stilettos', 'maternity',
+];
+const MALE_TYPES = [
   'tie', 'bowtie', 'tuxedo', 'suit', 'boxers', 'briefs',
-]);
+];
 
-export function inferProductGenderFromType(type: string | null | undefined): ProductGender {
-  if (!type) return null;
-  const t = type.trim().toLowerCase();
-  if (!t) return null;
-  if (FEMALE_TYPES.has(t)) return 'female';
-  if (MALE_TYPES.has(t)) return 'male';
+function keywordRx(words: string[]): RegExp {
+  const alts = words.map(w => w.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+  return new RegExp(`\\b(?:${alts})\\b`, 'i');
+}
+const FEMALE_TYPE_RX = keywordRx(FEMALE_TYPES);
+const MALE_TYPE_RX = keywordRx(MALE_TYPES);
+
+/**
+ * Pick a gender from any product text (name, type, subtype, Haiku read)
+ * by scanning for a gendered product category as a whole word. Female is
+ * checked first; returns null when no gendered category word is present.
+ */
+export function inferProductGenderFromKeywords(text: string | null | undefined): ProductGender {
+  if (!text) return null;
+  if (FEMALE_TYPE_RX.test(text)) return 'female';
+  if (MALE_TYPE_RX.test(text)) return 'male';
   return null;
 }
 
@@ -181,24 +195,27 @@ export async function auditAllUserGenders(): Promise<AuditCounts> {
 }
 
 /**
- * Walk every product and write a gender to any row that doesn't have
- * one yet. Uses the strongest signal first, then falls back through
- * weaker ones so an "Untagged" filter ends up empty after a single
- * audit pass:
+ * Walk every product and re-derive its gender, strongest signal first so
+ * an "Untagged" filter ends up empty after a single pass:
  *   1. Explicit gender tokens in the product name ("Men's", "Women's").
- *   2. The type column ("dress" → female, "tie" → male).
- *   3. Brand history - if the brand's other rows skew strongly to one
+ *   2. Explicit gender tokens in the Haiku read of the photo.
+ *   3. A gendered category word in the name / type / subtype / Haiku
+ *      identity ("heels" → female, "tie" → male) — this is what rescues
+ *      heels that are typed "shoes" and would otherwise read as unisex.
+ *   4. Brand history - if the brand's other rows skew strongly to one
  *      gender, inherit that.
- *   4. Final fallback - 'unisex' so the column is never left blank.
+ *   5. Final fallback - 'unisex' so the column is never left blank.
  *
- * Existing values are preserved unless the strongest signal (name)
- * disagrees, in which case the name wins (the admin explicitly typed
- * "Men's"/"Women's" - that's authoritative).
+ * Existing values are overwritten when a stronger signal disagrees, so
+ * an admin-curated "Men's"/"Women's" name and the photo always win over
+ * a stale tag.
  */
 export async function auditAllProductGenders(): Promise<AuditCounts> {
   const result: AuditCounts = { scanned: 0, updated: 0, skipped: 0, errors: 0 };
   if (!supabase) return result;
-  const { data } = await supabase.from('products').select('id, name, brand, type, gender');
+  const { data } = await supabase
+    .from('products')
+    .select('id, name, brand, type, subtype, gender, haiku_context');
   const rows = data || [];
 
   // Pre-compute per-brand gender histograms so we can vote on rows that
@@ -231,11 +248,16 @@ export async function auditAllProductGenders(): Promise<AuditCounts> {
 
   for (const row of rows) {
     result.scanned++;
+    const haiku = (row as { haiku_context?: string | null }).haiku_context ?? null;
+    const subtype = (row as { subtype?: string | null }).subtype ?? null;
     const fromName = inferProductGenderFromName(row.name);
-    const fromType = inferProductGenderFromType(row.type as string | null);
+    const fromHaikuTokens = inferProductGenderFromName(haiku);
+    const blob = [row.name, row.type as string | null, subtype, haikuIdentity(haiku)]
+      .filter(Boolean).join(' ');
+    const fromCategory = inferProductGenderFromKeywords(blob);
     const fromBrand = brandGuess(row.brand as string | null);
     const inferred: ProductGender =
-      fromName ?? fromType ?? fromBrand ?? 'unisex';
+      fromName ?? fromHaikuTokens ?? fromCategory ?? fromBrand ?? 'unisex';
 
     if (row.gender === inferred) { result.skipped++; continue; }
     const { error } = await supabase

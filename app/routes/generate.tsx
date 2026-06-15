@@ -949,14 +949,15 @@ export default function GeneratePage() {
     setProductsLoading(true);
     const q = productQuery.trim();
     const run = async () => {
-      // Show every product the catalog has, not just the ones live on
-      // the consumer feed -- the shopper picking products for their
-      // own generation should see the same set the admin sees in
-      // /admin/content -> Products. Image is still required since the
-      // generation pipeline needs a visual reference per product.
+      // Only surface products that are active in data > products
+      // (products.is_active = true). A product the admin has switched off
+      // must not appear on "Pick your products" — it isn't part of the
+      // live catalog. Image is still required since the generation
+      // pipeline needs a visual reference per product.
       let query = supabase!
         .from('products')
         .select('id, name, brand, price, image_url, primary_image_url, primary_video_url, primary_video_poster_url')
+        .eq('is_active', true)
         .not('image_url', 'is', null)
         .order('created_at', { ascending: false })
         .limit(1000);

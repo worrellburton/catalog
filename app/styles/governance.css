@@ -698,11 +698,12 @@ html.gov-void .tb-wrap {
   border-radius: 12px;
   padding: 0 0 10px;
   overflow: hidden;
-  cursor: pointer;
+  cursor: grab;
   transition: border-color 140ms, transform 140ms;
   animation: gov-drill-card-in 300ms cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 .gov-drill-card:hover { border-color: #6366f1; transform: translateY(-2px); }
+.gov-drill-card:active { cursor: grabbing; }
 @keyframes gov-drill-card-in {
   from { opacity: 0; transform: translateY(10px); }
   to   { opacity: 1; transform: translateY(0); }
@@ -933,6 +934,22 @@ html.gov-void .tb-wrap {
 }
 .gov-drill-sub { border-bottom: 1px solid rgba(255, 255, 255, 0.05); }
 .gov-drill-sub:last-child { border-bottom: none; }
+/* Drag-to-recategorize drop targets: a subtype row, or the type's own
+   direct-products area. Highlighted while a dragged card is hovering. */
+.gov-drill-subs-hint {
+  margin-left: 8px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: none;
+  color: #52525b;
+}
+.gov-drill-direct { border-radius: 12px; transition: background 120ms, box-shadow 120ms; }
+.gov-drill-sub.is-drop,
+.gov-drill-direct.is-drop {
+  background: rgba(99, 102, 241, 0.12);
+  box-shadow: inset 0 0 0 2px #6366f1;
+  border-radius: 12px;
+}
 .gov-drill-sub-head {
   display: flex;
   align-items: center;

@@ -69,6 +69,26 @@ export function normalizeTypeName(s: string): string {
   return n;
 }
 
+/**
+ * The "identity" half of a Haiku context string — what the item IS, not
+ * where it sits. The haiku-context prompt now leads with a one-line
+ * object identity ("houseplant", "high heels") and follows with a
+ * detail sentence that can mention the room/setting. Type matching must
+ * only read the identity, or a plant photographed in a living room gets
+ * mis-placed under "home". Falls back to the first sentence for legacy
+ * single-blob rows written before the two-line format.
+ */
+export function haikuIdentity(text: string | null | undefined): string {
+  if (!text) return '';
+  const lines = text.split('\n')
+    .map(l => l.replace(/^[#>\-*\s]+/, '').replace(/[*_`]/g, '').trim())
+    .filter(Boolean);
+  // First real content line — skip bare titles/labels ("Description").
+  const line = lines.find(l => l.includes(' ') && !l.endsWith(':')) ?? lines[0] ?? text;
+  const firstSentence = line.split(/(?<=[.!?])\s/)[0] ?? line;
+  return firstSentence.trim();
+}
+
 export async function fetchTypeTree(): Promise<TypeNode[]> {
   if (!supabase) return [];
   const { data, error } = await supabase
@@ -234,9 +254,10 @@ export function auditProductTypes(
       const score = depth(node) * 100 + normalizeTypeName(node.name).length;
       if (score > bestScore) { best = node; bestScore = score; bestReason = reason; }
     };
+    const hctx = haikuIdentity(p.haikuContext);
     for (const m of matchers) {
       if (m.rx.test(p.name)) consider(m.node, `name contains “${m.node.name}”`);
-      else if (p.haikuContext && m.rx.test(p.haikuContext)) {
+      else if (hctx && m.rx.test(hctx)) {
         consider(m.node, `image shows ${m.node.name} (Haiku)`);
       }
     }
@@ -299,16 +320,27 @@ export function computeEffectiveGenders(nodes: TypeNode[]): Map<string, string |
 
 export async function createTypeNode(name: string, parentId: string | null): Promise<TypeNode | null> {
   if (!supabase) return null;
-  const { data, error } = await supabase
-    .from('product_types')
-    .insert({ name, parent_id: parentId, sort: 999 })
-    .select('id, name, parent_id, sort, color, gender, icon_path')
-    .single();
-  if (error || !data) return null;
-  const r = data as { id: string; name: string; parent_id: string | null; sort: number; color: string | null;
-    gender: TypeNode['gender']; icon_path: string | null };
-  return { id: r.id, name: r.name, parentId: r.parent_id, sort: r.sort, color: r.color, gender: r.gender,
-    iconPath: r.icon_path };
+  // (parent_id, name) is unique — siblings can't share a name. "Add child"
+  // always seeds "new type", so on a collision (an un-renamed placeholder
+  // already sits at this level) retry with a numeric suffix instead of
+  // failing the whole gesture.
+  for (let attempt = 0; attempt < 50; attempt++) {
+    const candidate = attempt === 0 ? name : `${name} ${attempt + 1}`;
+    const { data, error } = await supabase
+      .from('product_types')
+      .insert({ name: candidate, parent_id: parentId, sort: 999 })
+      .select('id, name, parent_id, sort, color, gender, icon_path')
+      .single();
+    if (!error && data) {
+      const r = data as { id: string; name: string; parent_id: string | null; sort: number; color: string | null;
+        gender: TypeNode['gender']; icon_path: string | null };
+      return { id: r.id, name: r.name, parentId: r.parent_id, sort: r.sort, color: r.color, gender: r.gender,
+        iconPath: r.icon_path };
+    }
+    // 23505 = unique_violation → bump the suffix and retry; anything else is fatal.
+    if (!error || (error as { code?: string }).code !== '23505') return null;
+  }
+  return null;
 }
 
 // ── Kaizen ────────────────────────────────────────────────────────────
@@ -379,11 +411,17 @@ export function kaizenSweep(products: GovernanceProduct[], tree: TypeNode[]): Ka
     attachCount.set(node.id, (attachCount.get(node.id) ?? 0) + 1);
     if (retypeIds.has(p.id)) continue; // the re-type patch supersedes drift
     const toPath = paths.get(node.id) ?? node.name;
-    const toGender = genders.get(node.id) ?? null;
-    if ((p.typePath ?? null) !== toPath || (toGender !== null && (p.gender ?? null) !== toGender)) {
+    const nodeGender = genders.get(node.id) ?? null;
+    // A node's gender only constrains products when it's male/female;
+    // 'unisex'/null is permissive, so product-level gender (name/photo)
+    // wins and a female heel under the unisex "shoes" node stays female.
+    const forceGender = nodeGender === 'male' || nodeGender === 'female' ? nodeGender : null;
+    const pathLag = (p.typePath ?? null) !== toPath;
+    const genderLag = forceGender !== null && (p.gender ?? null) !== forceGender;
+    if (pathLag || genderLag) {
       drift.push({
         productId: p.id, name: p.name, brand: p.brand, image: p.image,
-        nodeId: node.id, toType: node.name, toGender, toPath,
+        nodeId: node.id, toType: node.name, toGender: forceGender, toPath,
         fromGender: p.gender, fromPath: p.typePath,
       });
     }
