@@ -560,6 +560,19 @@
   -webkit-overflow-scrolling: touch;
 }
 
+/* Desktop: the right panel is full-height, so a short summary (a few products
+   + blurb + buttons) left a big void below. Center the summary vertically so
+   it reads balanced. `safe center` falls back to top-alignment when the
+   content is taller than the panel, so a long product list still scrolls from
+   the top instead of clipping. Mobile keeps the bottom-sheet top-alignment. */
+@media (min-width: 769px) {
+  .look-tab-content {
+    display: flex;
+    flex-direction: column;
+    justify-content: safe center;
+  }
+}
+
 /* Product cards list */
 .look-products-list {
   padding: 4px 24px 24px;
