@@ -7,15 +7,17 @@
   width: 100%;
 }
 
-/* Mobile: edge-to-edge feed (founder's call — "cards fill to the bottom; the
-   pill floats over them"). Reserve ONLY the iOS browser-toolbar height
-   (--ios-bottom-chrome, set live by BottomBar) + safe area + a little
-   breathing room — NOT the old +96px pill reservation / 140px floor, which
-   left a dark strip between the last cards and the browser bar. The
-   translucent search pill now floats OVER the last cards. */
+/* Mobile: TRUE edge-to-edge feed (founder's call — "no solid color at the
+   bottom; see-through under the URL bar"). The cards must run UNDER the iOS
+   Safari toolbar, because that bar is a frosted blur of whatever's behind it:
+   with content under it, the frost blurs the CARDS (the see-through look);
+   reserving the toolbar height instead left an empty dark gap behind the
+   frost, which read as a flat solid band. So we reserve NOTHING at the bottom
+   — cards fill to the very edge and the browser bar + the app's own floating
+   search pill (which auto-hides on scroll) ride over the last row. */
 @media (max-width: 768px) {
   .continuous-feed {
-    padding-bottom: calc(var(--ios-bottom-chrome, 0px) + env(safe-area-inset-bottom) + 12px);
+    padding-bottom: 0;
   }
 }
 
