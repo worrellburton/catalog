@@ -7,17 +7,15 @@
   width: 100%;
 }
 
-/* Mobile: the floating search bar lifts above the iOS URL chrome via
-   --ios-bottom-chrome (set live by BottomBar). The feed itself has to
-   reserve at least that much room PLUS the bar height + breathing
-   space, otherwise the last row of cards gets hidden behind the bar
-   when the URL toolbar is expanded. */
+/* Mobile: edge-to-edge feed (founder's call — "cards fill to the bottom; the
+   pill floats over them"). Reserve ONLY the iOS browser-toolbar height
+   (--ios-bottom-chrome, set live by BottomBar) + safe area + a little
+   breathing room — NOT the old +96px pill reservation / 140px floor, which
+   left a dark strip between the last cards and the browser bar. The
+   translucent search pill now floats OVER the last cards. */
 @media (max-width: 768px) {
   .continuous-feed {
-    padding-bottom: max(
-      140px,
-      calc(var(--ios-bottom-chrome, 0px) + env(safe-area-inset-bottom) + 96px)
-    );
+    padding-bottom: calc(var(--ios-bottom-chrome, 0px) + env(safe-area-inset-bottom) + 12px);
   }
 }
 
