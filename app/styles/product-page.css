@@ -68,28 +68,29 @@
   inset: 0;
   z-index: 250;
   background: #0a0a0a;
-  /* Fade in on open instead of snapping into place (founder's call — "have
-     it fade in instead of appear"). The shared <video> hero is appendChild'd
-     inside and keeps playing; only the panel's opacity eases, so the handoff
-     is unaffected. Close (--out) and drag keep their own transition:none so
-     they stay instant. */
-  opacity: 0;
-  transition: opacity 0.26s ease;
-  transform: none;
-  will-change: transform, opacity;
+  /* Instant-opaque OPEN, slide-DOWN CLOSE. The overlay mounts ON-SCREEN at
+     translateY(0) and fully OPAQUE, so (a) there's no opacity window for the
+     home feed to flash through, and (b) the cold hero <video> paints its first
+     frame in the same cycle as the poster — mounting OFF-SCREEN (an enter
+     slide) delayed that paint and left the hero black until it slid in. Only
+     the CLOSE animates: --out slides the (already-painted) overlay down to
+     reveal the layer beneath. transform-only so the shared <video> hero
+     (appendChild'd inside) rides along; 360ms matches handleClose's unmount
+     delay so the slide-out finishes exactly as the frame pops. */
+  transform: translateY(0);
+  transition: transform 360ms cubic-bezier(0.32, 0.72, 0, 1);
+  will-change: transform;
 }
 
-/* Settled / open — fade up to full opacity. */
+/* Open is instant — no enter animation (mount == settled at translateY(0)). */
 .product-page-overlay--in {
-  transform: none;
-  opacity: 1;
+  transform: translateY(0);
 }
 
-/* Close — hide instantly (no slide-down). The overlay still unmounts after
-   the JS close timeout; pointer-events off so the feed is usable at once. */
+/* Close — slide down off-screen, then the JS close timeout unmounts.
+   pointer-events off so the revealed surface/feed is usable at once. */
 .product-page-overlay--out {
-  opacity: 0;
-  transition: none;
+  transform: translateY(100%);
   pointer-events: none;
 }
 

@@ -2266,6 +2266,12 @@ export default function Home() {
           {navStack.slice(Math.max(0, navStack.length - NAV_MOUNT_WINDOW)).map((frame, j) => {
             const i = Math.max(0, navStack.length - NAV_MOUNT_WINDOW) + j;
             const isTop = i === navStack.length - 1;
+            // The layer DIRECTLY beneath the top. It must stay painted so the
+            // top's bottom-sheet slide (see product-page.css / look-overlay.css)
+            // reveals the PREVIOUS surface as it rides up on open / down on
+            // close — a same-type step (look A → look B, product A → product B)
+            // then reads as a clean push, not a flash of the home feed.
+            const isUnder = i === navStack.length - 2;
             const z = isTop ? (frame.kind === 'product' ? 250 : 200) : 100 + j;
             const layerStyle: React.CSSProperties = {
               position: 'fixed',
@@ -2273,15 +2279,16 @@ export default function Home() {
               zIndex: z,
               pointerEvents: isTop ? undefined : 'none',
               // Covered layers stay MOUNTED (preserved scroll + React state, so
-              // Back reveals them instantly) but are hidden from PAINT — the
-              // browser stops compositing/painting the stacked overlays beneath
-              // the top, which on mobile were rendering dozens of images +
-              // <video>s invisibly behind the opaque top surface. visibility
-              // (not display:none / content-visibility) keeps layout intact, so
-              // revealing the layer on Back is a repaint with no relayout hitch.
-              // Safe because overlays open/close instantly — no entrance slide
-              // that would momentarily reveal a hidden layer behind the top.
-              visibility: isTop ? undefined : 'hidden',
+              // Back reveals them instantly). Layers TWO+ deep are hidden from
+              // PAINT — the browser stops compositing/painting them, which on
+              // mobile were rendering dozens of images + <video>s invisibly
+              // behind the opaque top surface. The IMMEDIATE under-layer stays
+              // painted (it's the one a slide uncovers); its hero <video> is
+              // already paused by the director's scope stack, so the cost is a
+              // single occluded poster layer. visibility (not display:none /
+              // content-visibility) keeps layout intact, so revealing a deeper
+              // layer on Back is a repaint with no relayout hitch.
+              visibility: (isTop || isUnder) ? undefined : 'hidden',
             };
             if (frame.kind === 'look') {
               return (
