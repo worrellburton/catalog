@@ -440,11 +440,21 @@
   .look-info-topbar .look-comment-btn {
     display: none;
   }
+  /* Save + Share live on the video here, so the topbar is empty on desktop.
+     Collapse it so it doesn't push the centered info group below off-axis
+     with a phantom strip of top spacing. */
+  .look-info-topbar {
+    padding: 0;
+  }
   /* Proper breathing room on the right info column — content sat flush to
      the right edge. Pad the column so every block (tabs, products, about,
-     comments) gets symmetric left/right inset on top of its own padding. */
+     comments) gets symmetric left/right inset on top of its own padding.
+     Also center the WHOLE info group vertically (save count + tabs + summary)
+     as one block — see .look-tab-content below — so a short look reads
+     balanced instead of stranding the Products tab at the top above a big gap. */
   .look-info-col {
     padding-inline: 12px;
+    justify-content: safe center;
   }
 }
 
@@ -578,15 +588,18 @@
 }
 
 /* Desktop: the right panel is full-height, so a short summary (a few products
-   + blurb + buttons) left a big void below. Center the summary vertically so
-   it reads balanced. `safe center` falls back to top-alignment when the
-   content is taller than the panel, so a long product list still scrolls from
-   the top instead of clipping. Mobile keeps the bottom-sheet top-alignment. */
+   + blurb + buttons) left a big void. The whole info group is centered as one
+   block via .look-info-col's `justify-content: safe center` above, so the
+   Products tab and save count ride WITH their content instead of being
+   stranded at the top. For that centering to have free space to distribute,
+   tab-content must size to its content (not flex:1); min-height:0 + its own
+   overflow-y:auto keep a long product list scrolling from the top instead of
+   clipping (safe center then falls back to top alignment). Mobile keeps the
+   bottom-sheet top-alignment + flex:1 fill. */
 @media (min-width: 769px) {
   .look-tab-content {
-    display: flex;
-    flex-direction: column;
-    justify-content: safe center;
+    flex: 0 1 auto;
+    min-height: 0;
   }
 }
 
