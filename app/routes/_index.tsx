@@ -34,6 +34,7 @@ import { toCatalogName, getRandomCatalogName } from '~/utils/catalogName';
 import { prefetchSimilarProducts, prefetchCreativesByBrand, prefetchHomeFeed, type ProductAd } from '~/services/product-creative';
 import { getGraphPairs, type GraphPair } from '~/services/graph-pairs';
 import { getLooks, getLookByUuid } from '~/services/looks';
+import { suggestCatalogs } from '~/services/catalog-suggest';
 import { creativeStill, creativePoster, productPoster } from '~/services/media-resolver';
 import { pickVideoUrl, pickPlaybackSource } from '~/services/video-loading';
 import { emitSavedToast } from '~/utils/savedToast';
@@ -400,6 +401,12 @@ export default function Home() {
   // floated in the particle field behind the search ceremony.
   const [ceremonyImages, setCeremonyImages] = useState<string[]>([]);
   const [revealResults, setRevealResults] = useState(false);
+  // Demographic-aware catalog names shown at the END of the search ceremony.
+  // suppressCeremonyRef lets a recommended-catalog pick re-run the search
+  // WITHOUT replaying the ceremony; the seq ref drops stale async results.
+  const [ceremonyRecs, setCeremonyRecs] = useState<string[]>([]);
+  const suppressCeremonyRef = useRef(false);
+  const ceremonyRecSeqRef = useRef(0);
   // Chrome auto-hide on scroll-down once you're past the hero. Header
   // slides up offscreen, bottom search bar slides down — full-screen feed.
   // Scrolling up brings them back; stopping preserves the current state.
@@ -586,12 +593,24 @@ export default function Home() {
     // but must NOT replay the ceremony — coming back from a product should
     // land on the results catalog, not the loading animation again.
     if (triggerSource.current === 'pop') return;
+    // A recommended-catalog pick re-runs the search; it sets this so the bump
+    // doesn't replay the ceremony (it goes straight to results).
+    if (suppressCeremonyRef.current) { suppressCeremonyRef.current = false; return; }
     // Play the ceremony on EVERY committed search (Enter / suggestion tap /
     // brand) — whether from the hero or the bottom search bar in the feed.
     // Live typing doesn't bump the trigger, so it never fires mid-type.
     if (searchQuery.trim() && !ceremony.active) {
+      const q = searchQuery.trim();
       setCeremonyImages([]);
-      setCeremony({ active: true, query: searchQuery, kind: 'search' });
+      setCeremony({ active: true, query: q, kind: 'search' });
+      // Kick off demographic-aware catalog suggestions for the END of the
+      // ceremony (resolves to [] on failure → ceremony just reveals results).
+      // Seq-guarded so a slow call from a previous search can't bleed in.
+      setCeremonyRecs([]);
+      const seq = ++ceremonyRecSeqRef.current;
+      void suggestCatalogs(q, { gender: activeFilter }).then(recs => {
+        if (ceremonyRecSeqRef.current === seq) setCeremonyRecs(recs);
+      });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [searchTrigger]);
@@ -603,6 +622,23 @@ export default function Home() {
     setRevealResults(true);
     window.setTimeout(() => setRevealResults(false), 950);
   }, []);
+
+  // Shopper tapped a recommended catalog at the end of the ceremony — run THAT
+  // catalog straight away, with no second ceremony (suppressCeremonyRef gates
+  // the searchTrigger bump below).
+  const handlePickRecommendedCatalog = useCallback((name: string) => {
+    const q = name.trim();
+    if (!q) return;
+    suppressCeremonyRef.current = true;
+    setCeremony({ active: false, query: '', kind: 'search' });
+    setCeremonyRecs([]);
+    if (!inShell) setHeroMode(false);
+    setSearchQuery(q);
+    bumpSearchTrigger();
+    setRevealResults(true);
+    window.setTimeout(() => setRevealResults(false), 950);
+    if (typeof window !== 'undefined') window.scrollTo({ top: 0, behavior: 'auto' });
+  }, [inShell, setSearchQuery, bumpSearchTrigger]);
 
   const handleRevealFeed = useCallback(() => {
     window.scrollTo({ top: window.innerHeight, behavior: 'smooth' });
@@ -2253,9 +2289,19 @@ export default function Home() {
             onOpenCreative={handleOpenCreative}
           />
 
-          {/* Magical loading screen between a hero search and its results. */}
+          {/* Magical loading screen between a hero search and its results.
+              Search ceremonies end on demographic-aware catalog picks; brand
+              ceremonies don't (no recs fetched for them). */}
           {ceremony.active && (
-            <SearchCeremony query={ceremony.query} kind={ceremony.kind} ready={!searchLoading} onDone={handleCeremonyDone} floatingImages={ceremonyImages} />
+            <SearchCeremony
+              query={ceremony.query}
+              kind={ceremony.kind}
+              ready={!searchLoading}
+              onDone={handleCeremonyDone}
+              floatingImages={ceremonyImages}
+              recommendations={ceremony.kind === 'search' ? ceremonyRecs : []}
+              onPickCatalog={handlePickRecommendedCatalog}
+            />
           )}
 
           <button className="remix-btn-fixed" onClick={handleRemix} onContextMenu={handleRemixReset} title="Click to remix · Right-click to reset layout" aria-label="Remix">
