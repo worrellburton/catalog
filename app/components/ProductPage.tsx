@@ -943,27 +943,36 @@ export default function ProductPage({
   // tap position. The dep is the parent's nav counter (not brand+name)
   // so the effect fires on every trail step regardless of whether the
   // products happen to share fields.
-  useLayoutEffect(() => {
-    scrollerRef.current?.scrollTo({ top: 0, behavior: 'instant' as ScrollBehavior });
-  }, [navKey]);
-
-  // Back-restore: when this mount is a RETURN (browser back onto /p/…),
-  // jump to where the shopper left this page — never the top (founder's
-  // call). Runs after the snap-to-top layout effect above; fresh opens
-  // consume nothing and stay at the top. The same effect keeps recording
-  // the live offset so a future return knows where to land.
+  // Back-restore key: the product's stable slug. Recorded continuously (the
+  // listener effect below) and consumed on a RETURN so Back lands where the
+  // shopper left off.
   const scrollStashKey = productSlug({
     id: (product as Product & { id?: string | null }).id ?? null,
     brand: product.brand ?? null,
     name: product.name ?? null,
   });
+
+  // Initial scroll position for each nav step, set SYNCHRONOUSLY before paint:
+  // a RETURN (browser Back onto /p/…) lands at the saved offset, a fresh open
+  // snaps to the top. Combining the snap-to-top and the return-restore into
+  // ONE layout effect means the page paints AT its destination — it kills the
+  // "jolt" where Back used to paint the page at the top and then (an rAF
+  // later) jump down to where the shopper had left it.
+  useLayoutEffect(() => {
+    const scroller = scrollerRef.current;
+    if (!scroller) return;
+    const returnTop = scrollStashKey ? consumeReturnScroll(scrollStashKey) : null;
+    scroller.scrollTo({ top: returnTop ?? 0, behavior: 'instant' as ScrollBehavior });
+    // Keyed on navKey (changes on every trail step / fresh mount), NOT on
+    // scrollStashKey, so we consume the saved offset exactly once per step.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [navKey]);
+
+  // Keep recording the live scroll offset so a future return knows where to
+  // land.
   useEffect(() => {
     const scroller = scrollerRef.current;
     if (!scroller || !scrollStashKey) return;
-    const returnTop = consumeReturnScroll(scrollStashKey);
-    if (returnTop != null) {
-      requestAnimationFrame(() => scroller.scrollTo({ top: returnTop, behavior: 'instant' as ScrollBehavior }));
-    }
     let raf = 0;
     const onScroll = () => {
       if (raf) return;

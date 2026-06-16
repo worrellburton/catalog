@@ -1,5 +1,5 @@
 
-import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
+import { useRef, useState, useCallback, useEffect, useLayoutEffect, useMemo } from 'react';
 import { Look, creators, Product, looks as allLooksData } from '~/data/looks';
 import { lookSlug } from '~/utils/slug';
 import { shareLink } from '~/utils/shareLink';
@@ -764,9 +764,10 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   // overlay's transform, and fire handleClose at the same > 96 px /
   // Back-restore: a RETURN to this look (back from a product it opened)
   // lands where the shopper left off — never the top (founder's call).
-  // Fresh opens consume nothing. The listener keeps recording the live
-  // offset for the next return.
-  useEffect(() => {
+  // Done SYNCHRONOUSLY before paint so a re-mounted look paints AT the saved
+  // offset instead of painting at the top and then jumping down to it (the
+  // "jolt" on Back). Fresh opens consume nothing and stay at the top.
+  useLayoutEffect(() => {
     const scroller = scrollRef.current;
     const key = lookSlug({
       id: look.id ?? null, uuid: look.uuid ?? null, creator: look.creator ?? null,
@@ -774,9 +775,17 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
     });
     if (!scroller || !key) return;
     const returnTop = consumeReturnScroll(key);
-    if (returnTop != null) {
-      requestAnimationFrame(() => scroller.scrollTo({ top: returnTop, behavior: 'instant' as ScrollBehavior }));
-    }
+    if (returnTop != null) scroller.scrollTo({ top: returnTop, behavior: 'instant' as ScrollBehavior });
+  }, [look]);
+
+  // The listener keeps recording the live offset for the next return.
+  useEffect(() => {
+    const scroller = scrollRef.current;
+    const key = lookSlug({
+      id: look.id ?? null, uuid: look.uuid ?? null, creator: look.creator ?? null,
+      creatorDisplayName: look.creatorDisplayName ?? null, title: look.title ?? null,
+    });
+    if (!scroller || !key) return;
     let raf = 0;
     const onScroll = () => {
       if (raf) return;
