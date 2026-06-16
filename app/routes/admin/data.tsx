@@ -7714,8 +7714,25 @@ export default function AdminData() {
                                         primary_image_polished: false,
                                       })
                                       .eq('id', p.id);
-                                    if (error) showToast(`Failed: ${error.message}`);
-                                    else        showToast('Primary image updated');
+                                    if (error) { showToast(`Failed: ${error.message}`); return; }
+                                    showToast('Primary image updated');
+                                    // Offer to run the whole creative pipeline off the
+                                    // freshly-picked primary: polish → primary video →
+                                    // primary poster (the poster auto-extracts from the
+                                    // new primary_video_url via the Modal trigger). Opt-in
+                                    // confirm because the video step spends a generation.
+                                    const runFlow = typeof window !== 'undefined' && window.confirm(
+                                      'Run the full creative flow on this product now?\n\n'
+                                      + 'Polish photo  →  Primary video  →  Primary poster',
+                                    );
+                                    if (runFlow && p.id) {
+                                      try {
+                                        await polishPrimaryImage(p.id);
+                                        await generatePrimaryVideo(p.id);
+                                        // primary_video_poster_url regenerates automatically
+                                        // once the new primary_video_url lands (Modal trigger).
+                                      } catch { /* per-call toasts surface any failure */ }
+                                    }
                                   };
                                   return (
                                     <div
