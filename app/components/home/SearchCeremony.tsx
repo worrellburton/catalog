@@ -35,6 +35,11 @@ interface SearchCeremonyProps {
   /** Result product images to float in the particle field behind the stage
    *  (the searched products drifting in space). Populated once results land. */
   floatingImages?: string[];
+  /** 2-3 demographic-aware catalog names. When present, the ceremony ends on a
+   *  "or try one of these" picker instead of auto-revealing the raw results. */
+  recommendations?: string[];
+  /** Tapping a recommended catalog — runs THAT catalog with no second ceremony. */
+  onPickCatalog?: (name: string) => void;
 }
 
 const MIN_DURATION_MS = 2400;
@@ -175,10 +180,15 @@ function buildSteps(query: string, kind: 'search' | 'brand'): string[] {
   ];
 }
 
-export default function SearchCeremony({ query, kind = 'search', ready, onDone, floatingImages = [] }: SearchCeremonyProps) {
+export default function SearchCeremony({ query, kind = 'search', ready, onDone, floatingImages = [], recommendations = [], onPickCatalog }: SearchCeremonyProps) {
   const steps = useRef(buildSteps(query, kind)).current;
   // How many steps are currently visible (they stream in over time).
   const [revealed, setRevealed] = useState(1);
+  // When the narration finishes, if we have demographic-aware catalog picks we
+  // present them here instead of auto-revealing the raw results.
+  const [showRecs, setShowRecs] = useState(false);
+  const showRecsRef = useRef(false);
+  showRecsRef.current = showRecs;
   const [progress, setProgress] = useState(6);
   const startedAt = useRef(Date.now());
   const reduced = typeof window !== 'undefined'
@@ -306,14 +316,20 @@ export default function SearchCeremony({ query, kind = 'search', ready, onDone, 
     // products dive down toward where the results rise from, so the ceremony
     // hands off INTO the reveal instead of just stopping before it.
     const wait = Math.max(0, MIN_DURATION_MS - elapsed) + GATHER_MS;
-    const t = window.setTimeout(onDone, wait);
+    const t = window.setTimeout(() => {
+      // End of the ceremony: if demographic-aware catalogs are ready, present
+      // the picker; otherwise hand off straight to the raw results.
+      if (recommendations.length > 0) setShowRecs(true);
+      else onDone();
+    }, wait);
     return () => window.clearTimeout(t);
-  }, [ready, allRevealed, onDone]);
+  }, [ready, allRevealed, onDone, recommendations.length]);
 
   // Hard safety: always reveal results within MAX_DURATION even if `ready`
   // never flips (e.g. a cached/instant query whose loading flag never trips).
+  // Skip if the recommendations picker is up — the shopper is choosing.
   useEffect(() => {
-    const t = window.setTimeout(onDone, MAX_DURATION_MS);
+    const t = window.setTimeout(() => { if (!showRecsRef.current) onDone(); }, MAX_DURATION_MS);
     return () => window.clearTimeout(t);
   }, [onDone]);
 
@@ -413,35 +429,63 @@ export default function SearchCeremony({ query, kind = 'search', ready, onDone, 
           </span>
         </div>
 
-        <div className="sc-steps">
-          {steps.map((s, i) => {
-            if (i >= revealed) return null;
-            const isDone = i < activeIndex || finalDone;
-            const isActive = i === activeIndex && !finalDone;
-            return (
-              <div key={s} className={`sc-step${isDone ? ' is-done' : ''}${isActive ? ' is-active' : ''}`}>
-                <span className="sc-step-icon" aria-hidden="true">
-                  {isDone ? (
-                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
-                      <polyline points="20 6 9 17 4 12" />
-                    </svg>
-                  ) : (
-                    <svg className="sc-step-spinner" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
-                      <circle cx="12" cy="12" r="9" strokeOpacity="0.25" />
-                      <path d="M12 3a9 9 0 0 1 9 9" />
-                    </svg>
-                  )}
-                </span>
-                <span className="sc-step-label">{s}</span>
-              </div>
-            );
-          })}
-        </div>
+        {showRecs ? (
+          /* End of ceremony: demographic-aware catalog picks. Tap one to run
+             it (no second ceremony), or continue with the raw search. */
+          <div className="sc-recs">
+            <div className="sc-recs-hint">Made for you — tap one, or keep your search</div>
+            <div className="sc-recs-list">
+              {recommendations.map((name) => (
+                <button
+                  key={name}
+                  type="button"
+                  className="sc-rec"
+                  onClick={() => onPickCatalog?.(name)}
+                >
+                  <span className="sc-rec-spark" aria-hidden="true">
+                    <svg viewBox="0 0 100 100" width="15" height="15"><path d="M50 4 C54 30 70 46 96 50 C70 54 54 70 50 96 C46 70 30 54 4 50 C30 46 46 30 50 4 Z" fill="currentColor" /></svg>
+                  </span>
+                  <span className="sc-rec-name">{name}</span>
+                </button>
+              ))}
+            </div>
+            <button type="button" className="sc-recs-continue" onClick={onDone}>
+              Continue with &ldquo;{query}&rdquo;
+            </button>
+          </div>
+        ) : (
+          <>
+            <div className="sc-steps">
+              {steps.map((s, i) => {
+                if (i >= revealed) return null;
+                const isDone = i < activeIndex || finalDone;
+                const isActive = i === activeIndex && !finalDone;
+                return (
+                  <div key={s} className={`sc-step${isDone ? ' is-done' : ''}${isActive ? ' is-active' : ''}`}>
+                    <span className="sc-step-icon" aria-hidden="true">
+                      {isDone ? (
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="20 6 9 17 4 12" />
+                        </svg>
+                      ) : (
+                        <svg className="sc-step-spinner" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round">
+                          <circle cx="12" cy="12" r="9" strokeOpacity="0.25" />
+                          <path d="M12 3a9 9 0 0 1 9 9" />
+                        </svg>
+                      )}
+                    </span>
+                    <span className="sc-step-label">{s}</span>
+                  </div>
+                );
+              })}
+            </div>
 
-        {/* 3 — Progress thread feeding into the reveal. */}
-        <div className="sc-bar" aria-hidden="true">
-          <div className="sc-bar-fill" style={{ width: `${progress}%` }} />
-        </div>
+            {/* 3 — Progress thread feeding into the reveal. */}
+            <div className="sc-bar" aria-hidden="true">
+              <div className="sc-bar-fill" style={{ width: `${progress}%` }} />
+            </div>
+          </>
+        )}
       </div>
     </div>
   );
