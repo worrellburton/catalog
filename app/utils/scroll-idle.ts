@@ -21,9 +21,19 @@ export function initScrollIdleFade(): void {
   started = true;
   if (window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
   const desktop = window.matchMedia('(min-width: 961px)');
+  // How long after the last scroll event hover effects come back on their own
+  // (even if the cursor never moves) — founder's call: hover OFF while
+  // scrolling, back ON ~1s after the browser pauses.
+  const HOVER_RESUME_MS = 1000;
   let timer = 0;
+  let hoverTimer = 0;
   let gliding = false;
   let pointing = false;
+  const setPointing = (on: boolean) => {
+    if (on === pointing) return;
+    pointing = on;
+    document.documentElement.classList.toggle('is-pointing', on);
+  };
   const settle = () => {
     gliding = false;
     document.documentElement.classList.remove('is-scroll-gliding');
@@ -33,19 +43,22 @@ export function initScrollIdleFade(): void {
       gliding = true;
       document.documentElement.classList.add('is-scroll-gliding');
     }
-    // Scrolling moves content under a stationary cursor — those :hover
-    // flips are incidental, so pointing lifts until the mouse truly moves.
-    if (pointing) {
-      pointing = false;
-      document.documentElement.classList.remove('is-pointing');
-    }
+    // Scrolling moves content under a stationary cursor — those :hover flips
+    // are incidental, so hover lifts for the duration of the scroll.
+    setPointing(false);
     window.clearTimeout(timer);
     timer = window.setTimeout(settle, desktop.matches ? 2000 : 320);
+    // Bring hover back a beat after scrolling STOPS, without needing a mouse
+    // move — so a cursor resting over a card lights it up once the feed
+    // settles.
+    window.clearTimeout(hoverTimer);
+    hoverTimer = window.setTimeout(() => setPointing(true), HOVER_RESUME_MS);
   };
   const onMouseMove = () => {
-    if (pointing) return;
-    pointing = true;
-    document.documentElement.classList.add('is-pointing');
+    // A genuine mouse move while the feed is settled re-enables hover at once;
+    // moves DURING a scroll are ignored so hover stays off until it stops.
+    if (gliding) return;
+    setPointing(true);
   };
   document.addEventListener('scroll', onScroll, { capture: true, passive: true });
   document.addEventListener('mousemove', onMouseMove, { passive: true });

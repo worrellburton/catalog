@@ -198,10 +198,14 @@
   .look-card {
     transition: opacity 1.2s cubic-bezier(0.42, 0, 0.58, 1);
   }
-  #grid-container:hover .look-card {
+  /* Gated on html.is-pointing so the sibling-dim only kicks in when the mouse
+     is genuinely pointing — NOT while scrolling content slides under a
+     stationary cursor. scroll-idle.ts drops is-pointing during a scroll and
+     restores it ~1s after it stops. */
+  html.is-pointing #grid-container:hover .look-card {
     opacity: 0.5;
   }
-  #grid-container .look-card:hover {
+  html.is-pointing #grid-container .look-card:hover {
     opacity: 1;
   }
 }
