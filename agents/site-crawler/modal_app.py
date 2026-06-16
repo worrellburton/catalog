@@ -590,9 +590,11 @@ def weekly_recrawl_sites():
     """
     Weekly scheduled job — runs every Monday at 6am UTC.
 
-    Re-queues a fresh crawl job for every unique site that has previously
-    been crawled successfully (status = 'done').  Skips sites that already
-    have a pending/crawling job to avoid double-runs.
+    Selection rule: a site is auto re-crawled only when its LATEST crawl
+    FAILED — done / cancelled / anything else is left alone (no pointless
+    churn, and a deliberately-cancelled site stays cancelled). The admin UI
+    can override this per site via the `weekly_recrawl_site_overrides` map.
+    Skips sites that already have a pending/crawling job to avoid double-runs.
     """
     import os
     from datetime import datetime, timezone
@@ -615,20 +617,45 @@ def weekly_recrawl_sites():
         print("Weekly re-crawl is paused (app_settings.weekly_recrawl_enabled != 'true') — skipping.")
         return
 
-    # 1. Find all unique site_urls with at least one 'done' job
-    done_rows = (
+    # 1. Latest job per site (newest first → first seen wins).
+    jobs_res = (
         supabase.table("crawl_jobs")
-        .select("site_url, site_name")
-        .eq("status", "done")
+        .select("site_url, site_name, status, created_at")
+        .eq("job_type", "site")
+        .order("created_at", desc=True)
         .execute()
     )
-    done_sites = {row["site_url"]: row["site_name"] for row in (done_rows.data or [])}
+    latest = {}
+    for row in (jobs_res.data or []):
+        latest.setdefault(row["site_url"], row)
 
-    if not done_sites:
-        print("No completed crawl jobs found — nothing to re-crawl.")
+    if not latest:
+        print("No crawled sites found — nothing to re-crawl.")
         return
 
-    # 2. Find sites that already have an in-flight job (don't re-queue them)
+    # 2. Per-site overrides (JSON map site_url -> bool). Default rule: a site
+    #    is scheduled only when its latest crawl FAILED; everything else is off
+    #    unless an explicit override turns it on.
+    import json
+    ov = (
+        supabase.table("app_settings")
+        .select("value")
+        .eq("key", "weekly_recrawl_site_overrides")
+        .limit(1)
+        .execute()
+    )
+    ov_rows = ov.data or []
+    try:
+        overrides = json.loads(ov_rows[0]["value"]) if ov_rows and ov_rows[0].get("value") else {}
+    except Exception:
+        overrides = {}
+
+    def is_scheduled(url, status):
+        if url in overrides:
+            return bool(overrides[url])
+        return status == "failed"
+
+    # 3. Skip sites that already have an in-flight job (don't re-queue them).
     active_rows = (
         supabase.table("crawl_jobs")
         .select("site_url")
@@ -637,10 +664,14 @@ def weekly_recrawl_sites():
     )
     active_sites = {row["site_url"] for row in (active_rows.data or [])}
 
-    to_crawl = {url: name for url, name in done_sites.items() if url not in active_sites}
+    to_crawl = {
+        url: row["site_name"]
+        for url, row in latest.items()
+        if is_scheduled(url, row["status"]) and url not in active_sites
+    }
 
     if not to_crawl:
-        print("All registered sites already have an active crawl job — skipping.")
+        print("No sites scheduled for weekly re-crawl (rule: failed-only + overrides) — skipping.")
         return
 
     print(f"Weekly re-crawl: queuing {len(to_crawl)} site(s)...")
