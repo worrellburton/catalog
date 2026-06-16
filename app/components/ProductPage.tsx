@@ -435,24 +435,19 @@ function LookTile({
           via the looks fetcher (see services/looks.ts), so once the
           admin uploads a profile pic via AvatarUpload it lights up
           here automatically. */}
-      <span className="pd-look-tile-meta" onClick={(e) => e.stopPropagation()}>
+      {/* Display-only: tapping the tile opens the look (only the +/− follow
+          badge is interactive) — never the wrong creator catalog. */}
+      <span className="pd-look-tile-meta">
         <CreatorAvatarFollow
           handle={look.creator}
           avatarUrl={avatarUrl}
           displayName={displayName}
           size={22}
           onOpenCreator={(h) => onOpenCreator?.(h)}
-          avatarOpensCreator
+          avatarOpensCreator={false}
         />
         {displayName && (
-          <span
-            className="card-creator-tag-name"
-            role="button"
-            tabIndex={0}
-            onClick={(e) => { e.stopPropagation(); onOpenCreator?.(look.creator); }}
-          >
-            {displayName}
-          </span>
+          <span className="card-creator-tag-name">{displayName}</span>
         )}
       </span>
     </button>
