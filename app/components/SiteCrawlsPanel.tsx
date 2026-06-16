@@ -1,4 +1,4 @@
-import { Fragment, useState, useEffect, useCallback } from 'react';
+import { Fragment, useState, useEffect, useCallback, useMemo } from 'react';
 import { catalogConfirm } from '~/components/CatalogDialog';
 import {
   listCrawlJobs,
@@ -10,10 +10,14 @@ import {
   listDiscoveredUrls,
   getWeeklyRecrawlEnabled,
   setWeeklyRecrawlEnabled,
+  getWeeklyRecrawlOverrides,
+  setSiteRecrawlOverride,
+  isSiteScheduled,
   getNextWeeklyRecrawl,
   WEEKLY_RECRAWL_LABEL,
   type CrawlJob,
   type CrawlDiscoveredUrl,
+  type WeeklyRecrawlOverrides,
 } from '~/services/site-crawls';
 import JobProgress from '~/components/JobProgress';
 import RerunAllStuckButton from '~/components/RerunAllStuckButton';
@@ -288,63 +292,144 @@ function relativeFromNow(d: Date): string {
   return `in ${days} days`;
 }
 
-// Global control + status for the weekly Modal re-crawl cron. The schedule
-// is fixed in agents/site-crawler/modal_app.py; this card pauses/resumes it
-// via an app_settings flag the cron honors (fail-closed) and shows when it
-// will next run.
+interface ScheduleSite {
+  siteUrl: string;
+  siteName: string | null;
+  latestStatus: string;
+  lastRunIso: string | null;
+  scheduled: boolean;
+  /** true when `scheduled` comes from the failed-only rule, not an override. */
+  isDefault: boolean;
+}
+
+// Global control + status for the weekly Modal re-crawl cron. The schedule is
+// fixed in agents/site-crawler/modal_app.py; this card pauses/resumes it via
+// an app_settings flag the cron honors (fail-closed), shows when it next runs,
+// and exposes a per-site on/off list (failed sites are scheduled by default).
 function WeeklyRecrawlBanner({
   enabled,
   saving,
   onToggle,
   lastRunIso,
+  sites,
+  scheduledCount,
+  onToggleSite,
+  savingSite,
 }: {
   enabled: boolean;
   saving: boolean;
   onToggle: () => void;
   lastRunIso: string | null;
+  sites: ScheduleSite[];
+  scheduledCount: number;
+  onToggleSite: (siteUrl: string, enabled: boolean) => void;
+  savingSite: string | null;
 }) {
+  const [expanded, setExpanded] = useState(false);
   const nextRun = getNextWeeklyRecrawl();
+
+  const nextRunText = !enabled
+    ? 'Paused — won’t run'
+    : scheduledCount === 0
+      ? 'No sites scheduled'
+      : `${formatUtcRun(nextRun)} (${relativeFromNow(nextRun)})`;
+
   return (
     <div className={`admin-recrawl-banner ${enabled ? 'is-on' : 'is-off'}`}>
-      <div className="admin-recrawl-main">
-        <div className="admin-recrawl-icon" aria-hidden="true">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <circle cx="12" cy="12" r="9" /><polyline points="12 7 12 12 15 14" />
-          </svg>
+      <div className="admin-recrawl-top">
+        <div className="admin-recrawl-main">
+          <div className="admin-recrawl-icon" aria-hidden="true">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <circle cx="12" cy="12" r="9" /><polyline points="12 7 12 12 15 14" />
+            </svg>
+          </div>
+          <div className="admin-recrawl-body">
+            <div className="admin-recrawl-title">
+              Weekly auto re-crawl
+              <span className={`admin-recrawl-pill ${enabled ? 'on' : 'off'}`}>
+                {enabled ? 'Active' : 'Paused'}
+              </span>
+            </div>
+            <div className="admin-recrawl-sub">
+              Retries any site whose last crawl <strong>failed</strong>, every week.
+              Done and cancelled sites are left alone — toggle a site below to force it
+              on or off.
+            </div>
+            <div className="admin-recrawl-meta">
+              <span><strong>Schedule:</strong> {WEEKLY_RECRAWL_LABEL}</span>
+              <span><strong>Next run:</strong> {nextRunText}</span>
+              <span><strong>Last run:</strong> {lastRunIso ? timeAgo(lastRunIso) : '—'}</span>
+            </div>
+          </div>
         </div>
-        <div className="admin-recrawl-body">
-          <div className="admin-recrawl-title">
-            Weekly auto re-crawl
-            <span className={`admin-recrawl-pill ${enabled ? 'on' : 'off'}`}>
-              {enabled ? 'Active' : 'Paused'}
-            </span>
-          </div>
-          <div className="admin-recrawl-sub">
-            Automatically re-crawls every previously-crawled site to catch new product
-            URLs. URLs already in the catalog are skipped.
-          </div>
-          <div className="admin-recrawl-meta">
-            <span><strong>Schedule:</strong> {WEEKLY_RECRAWL_LABEL}</span>
-            <span>
-              <strong>Next run:</strong>{' '}
-              {enabled ? `${formatUtcRun(nextRun)} (${relativeFromNow(nextRun)})` : 'Paused — won’t run'}
-            </span>
-            <span><strong>Last run:</strong> {lastRunIso ? timeAgo(lastRunIso) : '—'}</span>
-          </div>
-        </div>
+        <button
+          type="button"
+          className={`admin-toggle-btn ${enabled ? 'on' : 'off'}`}
+          onClick={onToggle}
+          disabled={saving}
+          aria-label={enabled ? 'Pause weekly auto re-crawl' : 'Resume weekly auto re-crawl'}
+          title={enabled ? 'Pause weekly auto re-crawl' : 'Resume weekly auto re-crawl'}
+        >
+          <span className="admin-toggle-track">
+            <span className="admin-toggle-thumb" />
+          </span>
+        </button>
       </div>
-      <button
-        type="button"
-        className={`admin-toggle-btn ${enabled ? 'on' : 'off'}`}
-        onClick={onToggle}
-        disabled={saving}
-        aria-label={enabled ? 'Pause weekly auto re-crawl' : 'Resume weekly auto re-crawl'}
-        title={enabled ? 'Pause weekly auto re-crawl' : 'Resume weekly auto re-crawl'}
-      >
-        <span className="admin-toggle-track">
-          <span className="admin-toggle-thumb" />
-        </span>
-      </button>
+
+      {sites.length > 0 && (
+        <div className="admin-recrawl-sites">
+          <button
+            type="button"
+            className="admin-recrawl-expand"
+            onClick={() => setExpanded((v) => !v)}
+            aria-expanded={expanded}
+          >
+            <svg
+              width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+              strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+              style={{ transform: expanded ? 'rotate(90deg)' : 'none', transition: 'transform 0.15s ease' }}
+            >
+              <polyline points="9 18 15 12 9 6" />
+            </svg>
+            {scheduledCount} of {sites.length} {sites.length === 1 ? 'site' : 'sites'} scheduled
+          </button>
+
+          {expanded && (
+            <ul className="admin-recrawl-site-list">
+              {sites.map((s) => (
+                <li key={s.siteUrl} className="admin-recrawl-site-row">
+                  <div className="admin-recrawl-site-info">
+                    <div className="admin-recrawl-site-name">
+                      <span>{s.siteName || s.siteUrl}</span>
+                      <StatusBadge status={s.latestStatus} />
+                      {s.scheduled && s.isDefault && (
+                        <span className="admin-recrawl-auto-tag" title="Scheduled automatically because its last crawl failed">
+                          auto · failed
+                        </span>
+                      )}
+                    </div>
+                    <div className="admin-recrawl-site-meta">
+                      {s.siteUrl} · last crawl {s.lastRunIso ? timeAgo(s.lastRunIso) : '—'}
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    className={`admin-toggle-btn ${s.scheduled ? 'on' : 'off'}`}
+                    onClick={() => onToggleSite(s.siteUrl, !s.scheduled)}
+                    disabled={savingSite === s.siteUrl}
+                    aria-label={`${s.scheduled ? 'Exclude' : 'Include'} ${s.siteName || s.siteUrl} from weekly re-crawl`}
+                    title={s.scheduled ? 'Scheduled — click to exclude' : 'Not scheduled — click to include'}
+                  >
+                    <span className="admin-toggle-track">
+                      <span className="admin-toggle-thumb" />
+                    </span>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -510,11 +595,14 @@ export default function SiteCrawlsPanel({ embedded = false }: SiteCrawlsPanelPro
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [weeklyEnabled, setWeeklyEnabled] = useState(false);
   const [weeklySaving, setWeeklySaving] = useState(false);
+  const [overrides, setOverrides] = useState<WeeklyRecrawlOverrides>({});
+  const [savingSite, setSavingSite] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [crawlError, setCrawlError] = useState<string | null>(null);
 
   useEffect(() => {
     getWeeklyRecrawlEnabled().then(setWeeklyEnabled).catch(() => {});
+    getWeeklyRecrawlOverrides().then(setOverrides).catch(() => {});
   }, []);
 
   const handleToggleWeekly = useCallback(async () => {
@@ -528,6 +616,45 @@ export default function SiteCrawlsPanel({ embedded = false }: SiteCrawlsPanelPro
     }
     setWeeklySaving(false);
   }, [weeklyEnabled]);
+
+  // One row per unique site (jobs are newest-first, so the first occurrence
+  // is the latest crawl). Effective schedule = override, else failed-only rule.
+  const scheduleSites = useMemo<ScheduleSite[]>(() => {
+    const seen = new Map<string, ScheduleSite>();
+    for (const j of jobs) {
+      if (seen.has(j.site_url)) continue;
+      const override = overrides[j.site_url];
+      seen.set(j.site_url, {
+        siteUrl: j.site_url,
+        siteName: j.site_name,
+        latestStatus: j.status,
+        lastRunIso: j.created_at,
+        scheduled: isSiteScheduled(j.status, override),
+        isDefault: override === undefined,
+      });
+    }
+    return [...seen.values()];
+  }, [jobs, overrides]);
+
+  const scheduledCount = useMemo(
+    () => scheduleSites.filter((s) => s.scheduled).length,
+    [scheduleSites],
+  );
+
+  const handleToggleSite = useCallback(
+    async (siteUrl: string, enabled: boolean) => {
+      setSavingSite(siteUrl);
+      setOverrides((prev) => ({ ...prev, [siteUrl]: enabled })); // optimistic
+      const { error } = await setSiteRecrawlOverride(siteUrl, enabled);
+      if (error) {
+        // Reload authoritative state on failure.
+        getWeeklyRecrawlOverrides().then(setOverrides).catch(() => {});
+        setCrawlError(`Could not update schedule for ${siteUrl}: ${error}`);
+      }
+      setSavingSite(null);
+    },
+    [],
+  );
 
   const loadJobs = useCallback(async () => {
     try {
@@ -690,6 +817,10 @@ export default function SiteCrawlsPanel({ embedded = false }: SiteCrawlsPanelPro
         saving={weeklySaving}
         onToggle={handleToggleWeekly}
         lastRunIso={jobs[0]?.created_at ?? null}
+        sites={scheduleSites}
+        scheduledCount={scheduledCount}
+        onToggleSite={handleToggleSite}
+        savingSite={savingSite}
       />
 
       <div className="admin-stats-grid">
