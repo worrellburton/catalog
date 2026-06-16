@@ -198,6 +198,31 @@
   background: rgba(0, 0, 0, 0.65);
 }
 
+/* Desktop Catalog → home button beside the back button (upper-left), mirroring
+   the mobile OverlayChrome's back + logo set. Same glass treatment as .pd-back
+   so the two read as one cluster. Hidden on mobile (OverlayChrome owns it). */
+.pd-home {
+  position: absolute;
+  top: 16px;
+  left: 64px;
+  z-index: 5;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 14px;
+  background: rgba(0, 0, 0, 0.45);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: background 0.2s;
+}
+.pd-home:hover { background: rgba(0, 0, 0, 0.65); }
+.pd-home-mark { height: 20px; width: auto; color: #fff; display: block; }
+@media (max-width: 768px) { .pd-home { display: none !important; } }
+
 /* Share + Save overlay the hero media itself. Share mirrors .pd-back at
    top-right; Save sits in the bottom-right corner of the hero — far
    enough from the action row beneath the media that it doesn't read

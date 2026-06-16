@@ -19,6 +19,7 @@ import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
 import ProductMiniMedia from './ProductMiniMedia';
 import ParticleBackground from './ParticleBackground';
 import OverlayChrome from './OverlayChrome';
+import CatalogLogo from '~/components/CatalogLogo';
 import { posterRendition } from '~/utils/poster-prefetch';
 import { recordOverlayScroll, consumeReturnScroll } from '~/utils/overlay-scroll-stash';
 import { director } from '~/services/video-playback-director';
@@ -955,6 +956,11 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="15 18 9 12 15 6"/>
               </svg>
+            </button>
+            {/* Desktop Catalog → home button beside the back button, mirroring
+                the mobile OverlayChrome's back + logo. Hidden on mobile. */}
+            <button className="look-home" onClick={onHome ?? handleClose} aria-label="Home">
+              <CatalogLogo className="look-home-mark" />
             </button>
 
             {/* Side-rail back button — vertically centered on the left edge

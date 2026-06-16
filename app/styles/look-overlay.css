@@ -83,6 +83,31 @@
   color: #fff;
 }
 
+/* Desktop Catalog → home button beside the back button (upper-left), mirroring
+   the mobile OverlayChrome's back + logo. Hidden on mobile (OverlayChrome owns
+   it there). Same glass as .look-back-btn so they read as one cluster. */
+.look-home {
+  position: absolute;
+  top: 20px;
+  left: 68px;
+  z-index: 10;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.look-home:hover { background: rgba(255, 255, 255, 0.2); color: #fff; }
+.look-home-mark { height: 20px; width: auto; color: currentColor; display: block; }
+@media (max-width: 768px) { .look-home { display: none !important; } }
+
 /* Side-rail back button — desktop only. Fixed on the left edge of the
    viewport, vertically centered. Mirrors .pd-back-rail on the product
    page so the two surfaces share an identical "scroll-back" affordance. */

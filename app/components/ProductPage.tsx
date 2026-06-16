@@ -34,6 +34,7 @@ import { warmPosters, posterRendition } from '~/utils/poster-prefetch';
 import { recordOverlayScroll, consumeReturnScroll } from '~/utils/overlay-scroll-stash';
 import ParticleBackground from '~/components/ParticleBackground';
 import OverlayChrome from '~/components/OverlayChrome';
+import CatalogLogo from '~/components/CatalogLogo';
 import { productSlug } from '~/utils/slug';
 import { useCommentsEnabled } from '~/hooks/useCommentsEnabled';
 import { getCommentCount } from '~/services/comments';
@@ -1335,6 +1336,16 @@ export default function ProductPage({
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="15 18 9 12 15 6" />
           </svg>
+        </button>
+        {/* Desktop-only Catalog → home button, sitting beside the back button
+            in the upper-left (mirrors the mobile OverlayChrome's back + logo).
+            Mobile hides this — the OverlayChrome top bar carries it there. */}
+        <button
+          className="pd-home"
+          onClick={onHome ?? handleClose}
+          aria-label="Home"
+        >
+          <CatalogLogo className="pd-home-mark" />
         </button>
         {/* Side-rail back button — vertically centered on the left edge of
             the browser, desktop only. Fades + slides in once the user has
