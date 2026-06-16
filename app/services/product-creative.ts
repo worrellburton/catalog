@@ -42,6 +42,11 @@ export function getShopperGender(): ShopperGender {
   return shopperGender;
 }
 
+// Per-key cache for the description-embedding "Similar" rail (keyed by product
+// id). Declared up here — before setShopperGender clears it — so it's never a
+// forward-ref (TDZ chunk-order safety; see scripts/check-tdz-forward-refs).
+const similarProductCache = new Map<string, Promise<ProductAd[]>>();
+
 export function setShopperGender(g: ShopperGender) {
   if (g === shopperGender) return;
   shopperGender = g;
@@ -1607,8 +1612,6 @@ export async function getSimilarProductsDiagnostics(
     candidates,
   };
 }
-
-const similarProductCache = new Map<string, Promise<ProductAd[]>>();
 
 /** Idempotent prefetch for the description-embedding "Similar" rail, keyed by
  *  PRODUCT id (not creative id). Safe to call from hover, tap, or open. */

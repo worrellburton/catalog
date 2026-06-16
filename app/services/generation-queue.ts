@@ -108,11 +108,13 @@ function loadAvgs(): Record<GenerationKind, number> {
     return { ...DEFAULT_AVGS, ...parsed };
   } catch { return { ...DEFAULT_AVGS }; }
 }
+// Live running averages — declared right after loadAvgs (and before saveAvgs)
+// so it's never a forward-ref (TDZ chunk-order safety).
+const avgs = loadAvgs();
 function saveAvgs(avgs: Record<GenerationKind, number>) {
   if (typeof window === 'undefined') return;
   try { window.localStorage.setItem(AVG_LS_KEY, JSON.stringify(avgs)); } catch { /* quota */ }
 }
-const avgs = loadAvgs();
 
 function emit() {
   for (const l of listeners) { try { l(); } catch { /* ignore one bad subscriber */ } }
