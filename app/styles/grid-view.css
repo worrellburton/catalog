@@ -587,14 +587,20 @@
    together (founder's call — unify the fade in/out with the top + bottom
    chrome). Driven by the SAME .chrome-hidden signal the header + bottom bar
    use, so nothing animates on its own rhythm. Eased, never linear — it
-   melts and resurfaces, it never snaps. */
+   melts and resurfaces, it never snaps.
+
+   ASYMMETRIC by design (founder's call): the fade-OUT is brisk (0.6s, below)
+   so the chrome clears fast the instant you start scrolling and the media
+   takes over; the fade-IN — this base rule, which applies when .chrome-hidden
+   lifts on scroll-STOP — is deliberately SLOW so the product/look detail
+   breathes back in gently rather than popping. */
 .card-gradient,
 .card-creator-tag,
 .promo-product-info,
 .trail-admin-menu-btn,
 .feed-why-btn,
 .creative-delete-btn {
-  transition: opacity 0.6s cubic-bezier(0.22, 1, 0.36, 1);
+  transition: opacity 1.3s cubic-bezier(0.22, 1, 0.36, 1);
 }
 .app-root.chrome-hidden .card-gradient,
 .app-root.chrome-hidden .card-creator-tag,
