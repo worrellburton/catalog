@@ -696,6 +696,16 @@ export default function ProductPage({
     [similarCreatives, pickFrom],
   );
 
+  // The Similar rail is a 2-col grid on mobile (3/4/5/6 cols from 768px up).
+  // An odd count there leaves a blank trailing slot, so trim the lone orphan
+  // on mobile only — desktop keeps every match. A single mobile match trims to
+  // none, which hides the section (see its render guard) rather than parking one
+  // tile beside a gap. Recomputed each render so it tracks viewport changes.
+  const similarShown = (() => {
+    const items = moreLikeThis.slice(0, similarLimit);
+    return isMobileViewport() && items.length % 2 === 1 ? items.slice(0, -1) : items;
+  })();
+
   // Warm the rails' posters the moment their data resolves — the Similar
   // grid and look tiles otherwise start downloading at mount and read as
   // black boxes while the bytes arrive. Same rendition math as the cards,
@@ -1788,7 +1798,7 @@ export default function ProductPage({
             card so the next-best matches always appear first. The
             infinite "You might also like" feed lives at the bottom
             for open-ended exploration. */}
-        {similarEnabled && moreLikeThis.length > 0 && (
+        {similarEnabled && similarShown.length > 0 && (
           <section className="pd-similar-feed">
             <h2 className="pd-feed-title">
               Similar
@@ -1812,7 +1822,7 @@ export default function ProductPage({
                   Render the unique matches only (capped at the limit) — never
                   pad with fillToExact, which cycles duplicates to reach the
                   count and put the same tile on screen twice. */}
-              {moreLikeThis.slice(0, similarLimit).map((c, i) => (
+              {similarShown.map((c, i) => (
                 <CreativeCardV2
                   key={`mlt-${c.id}-${i}`}
                   slotId={`${directorScope}:mlt-${c.id}-${i}`}
