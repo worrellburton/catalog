@@ -3366,6 +3366,12 @@ html[data-shell="catalog-app"] .gen-page {
   color: #0a0a0a;
   border-color: rgba(255, 255, 255, 0.95);
 }
+/* Disabled (e.g. 10s while on Fast) — present for a stable footprint but
+   clearly inert, so Fast ↔ Pro doesn't shift the layout. */
+.gen-review-toggle-btn:disabled {
+  opacity: 0.32;
+  cursor: not-allowed;
+}
 
 /* "How did I do?" feedback bar - sits below the result video on the
    done state. Three primary options expand inline into sub-actions
