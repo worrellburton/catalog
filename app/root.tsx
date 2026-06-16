@@ -103,16 +103,17 @@ export function Layout({ children }: { children: React.ReactNode }) {
             the visual-viewport gap/shrink hacks on supporting browsers;
             iOS Safari still falls back to the visualViewport JS in BottomBar. */}
         <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content" />
-        {/* Theme-color drives the iOS Safari toolbar background. Without
-            it, Safari paints a default-white bar at the bottom — visible
-            as a white strip under our matte-black landing. Setting it
-            to the page's own matte black makes the toolbar blend into
-            the page so the bottom edge reads as one continuous surface.
-            We also set apple-mobile-web-app-status-bar-style so the
-            top status zone matches when the page is added to the home
-            screen as a PWA. */}
-        <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />
-        <meta name="theme-color" content="#000000" />
+        {/* NO theme-color: iOS Safari paints the bottom URL bar as a SOLID
+            fill of whatever theme-color is set to — we had #000000, which
+            read as a hard black bar instead of the translucent, content-
+            blurring toolbar other sites get. Omitting theme-color lets
+            Safari fall back to its adaptive translucent toolbar material,
+            which blurs the page (the feed cards, now edge-to-edge) behind
+            it — the "see-through URL bar" look. The old white-strip concern
+            that justified setting it is moot now that the feed runs to the
+            bottom edge (no dark reserved gap for the bar to expose).
+            apple-mobile-web-app-status-bar-style still styles the PWA
+            status zone. */}
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <title>catalog</title>
