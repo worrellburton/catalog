@@ -9,6 +9,11 @@ import { useEffect, useMemo, useState } from 'react';
 import { useParams, useSearchParams, Link } from '@remix-run/react';
 import { supabase } from '~/utils/supabase';
 
+// Idle gap (ms) that splits a session's active time from a pause. Declared at
+// module top so the earlier userStats roll-up can reference it without a
+// forward-ref (Rollup chunk-order safety — see scripts/check-tdz-forward-refs).
+const IDLE_THRESHOLD_MS = 30_000;
+
 // ── Toggles (mirror the home page) ──────────────────────────────
 type RangeId = 'daily' | 'monthly' | 'yearly';
 type Audience = 'all' | 'users' | 'admins';
@@ -307,7 +312,7 @@ const METRICS: Record<string, MetricDef> = {
 };
 
 // ── Session stats — shared by avg-session / avg-idle / avg-active ─
-const IDLE_THRESHOLD_MS = 30_000;
+// (IDLE_THRESHOLD_MS is declared at module top — see note there.)
 async function sessionStats(
   buckets: { startISO: string; endISO: string; label: string }[],
   userIdSet: string[] | null,

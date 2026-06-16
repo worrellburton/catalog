@@ -87,6 +87,11 @@ interface Props {
   /** Increment to fly the camera home: flat 2D plane, zoom 1, rings
    *  level — everything eases back with an overshoot bounce. */
   resetSignal?: number;
+  /** "Moving rings": each type's product-satellite ring slowly rotates on its
+   *  own (different rate + direction per node) and the guide rings drift on
+   *  their own orbital planes — the whole brain churns like a gyratory planet.
+   *  Very slow; purely cosmetic. */
+  movingRings?: boolean;
 }
 
 export const ROOT_ID = '__root__';
@@ -109,6 +114,10 @@ export default function TypeBrainGraph(p: Props) {
   // space reads as a universe, not a sheet. Both ease home on reset.
   const [ringTheta, setRingTheta] = useState(0);
   const [ringMix, setRingMix] = useState(0);
+  // "Moving rings": a single slowly-advancing angle. Each type's satellite ring
+  // multiplies it by its own signed rate so they rotate at different speeds and
+  // directions ("a different clockwise or a different way").
+  const [spin, setSpin] = useState(0);
   const resetAnim = useRef(0);
   const touches = useRef(new Map<number, { x: number; y: number }>());
   const touchGesture = useRef<
@@ -291,6 +300,31 @@ export default function TypeBrainGraph(p: Props) {
     // Reads live orbit/view only at (re)start — the loop owns them after.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [p.showcase]);
+
+  // Moving rings: one slow rAF advances `spin` (and the guide-ring plane
+  // drift) forever while on. Very slow — a premium, barely-there churn. When
+  // off, the guide rings ease flat again; satellite rings snap back to rest
+  // (spinFor below zeroes out).
+  useEffect(() => {
+    if (!p.movingRings) {
+      if (ringMix === 0) return;
+      let raf = 0;
+      const ease = () => { setRingMix(m => { const n = Math.max(0, m - 0.02); if (n > 0) raf = requestAnimationFrame(ease); return n; }); };
+      raf = requestAnimationFrame(ease);
+      return () => cancelAnimationFrame(raf);
+    }
+    let raf = 0;
+    const tick = () => {
+      setSpin(s => s + 0.0030);
+      setRingTheta(t => t + 0.0030);
+      setRingMix(m => Math.min(1, m + 0.01));
+      raf = requestAnimationFrame(tick);
+    };
+    raf = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(raf);
+    // ringMix read only to decide whether the off-branch needs to ease.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [p.movingRings]);
 
   // Reset: fly the camera home — flat plane, zoom 1, centred, rings
   // level — on an ease-out-back curve so everything overshoots its
@@ -727,10 +761,13 @@ export default function TypeBrainGraph(p: Props) {
           const pos = proj(plane);
           const r = nodeRadius(n) * pos.s;
           const overflow = sat.total - sat.items.length;
+          // Moving-rings: this type's whole satellite ring rotates by its own
+          // signed rate, so neighbours spin at different speeds + directions.
+          const ringSpin = p.movingRings ? spin * ringRate(n.id) : 0;
           return sat.items.map((prod, i) => {
             // Even orbit starting at 12 o'clock; overflow chip takes the
             // 6 o'clock spot below the label.
-            const angle = (i / sat.items.length) * Math.PI * 2 - Math.PI / 2;
+            const angle = (i / sat.items.length) * Math.PI * 2 - Math.PI / 2 + ringSpin;
             const dragging = prodDrag?.id === prod.id;
             const x = dragging ? prodDrag.x : pos.x + Math.cos(angle) * (r + 28);
             const y = dragging ? prodDrag.y : pos.y + Math.sin(angle) * (r + 28);
@@ -831,4 +868,14 @@ export default function TypeBrainGraph(p: Props) {
 function nodeRadius(n: BrainNode): number {
   const base = n.depth === 1 ? 24 : n.depth === 2 ? 19 : 14;
   return base + Math.min(6, Math.sqrt(n.count) * 1.5);
+}
+
+// Deterministic per-node angular rate for "moving rings": a stable hash of the
+// id gives each type ring its own speed (0.6..1.5×) and direction (± by parity),
+// so the rings churn independently rather than in lockstep.
+function ringRate(id: string): number {
+  let h = 0;
+  for (let i = 0; i < id.length; i++) h = (h * 31 + id.charCodeAt(i)) >>> 0;
+  const mag = 0.6 + ((h % 1000) / 1000) * 0.9;
+  return (h & 1) ? mag : -mag;
 }

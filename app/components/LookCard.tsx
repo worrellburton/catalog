@@ -290,22 +290,22 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
           e.stopPropagation();
           return;
         }
-        if (!(e.target as HTMLElement).closest('.card-creator-tag')) {
-          // Phase 9 — snapshot the currently-playing frame so LookOverlay
-          // can paint it as an instant poster behind its hero <video> slot.
-          // Eliminates the black flash between card → overlay even when
-          // the trail-host hasn't yet swapped the live element across.
-          try {
-            const video = slotRef.current?.querySelector('video') as HTMLVideoElement | null;
-            const frame = captureVideoFrame(video);
-            if (frame) {
-              const w = window as Window & { __feedTapPosters?: Record<string, string> };
-              w.__feedTapPosters = w.__feedTapPosters || {};
-              w.__feedTapPosters[trailId] = frame;
-            }
-          } catch { /* ignore — overlay falls back to thumbnail_url */ }
-          onOpenLook(look);
-        }
+        // A card tap ALWAYS opens the look — the creator chip is display-only
+        // (only its +/− follow badge is interactive), so nothing can hijack the
+        // tap into the wrong creator's catalog.
+        // Phase 9 — snapshot the currently-playing frame so LookOverlay can
+        // paint it as an instant poster behind its hero <video> slot, killing
+        // the black flash between card → overlay.
+        try {
+          const video = slotRef.current?.querySelector('video') as HTMLVideoElement | null;
+          const frame = captureVideoFrame(video);
+          if (frame) {
+            const w = window as Window & { __feedTapPosters?: Record<string, string> };
+            w.__feedTapPosters = w.__feedTapPosters || {};
+            w.__feedTapPosters[trailId] = frame;
+          }
+        } catch { /* ignore — overlay falls back to thumbnail_url */ }
+        onOpenLook(look);
       }}
       onTouchStart={beginLongPress}
       onTouchEnd={cancelLongPress}
@@ -446,25 +446,21 @@ function LookCardCreatorChip({
   const name = creatorData?.displayName
     || look.creatorDisplayName
     || (look.creator?.startsWith('user:') ? '' : look.creator || '');
+  // Display-only: a tap anywhere on the card opens the look. The avatar falls
+  // through (avatarOpensCreator=false); only the small +/− follow badge is
+  // interactive. Creator catalog is reachable from the look page.
   return (
-    <div className="card-creator-tag" onClick={(e) => e.stopPropagation()}>
+    <div className="card-creator-tag">
       <CreatorAvatarFollow
         handle={look.creator}
         avatarUrl={avatar}
         displayName={name}
         size={20}
         onOpenCreator={onOpenCreator}
-        avatarOpensCreator
+        avatarOpensCreator={false}
       />
       {name && (
-        <button
-          type="button"
-          className="card-creator-tag-name"
-          onClick={(e) => { e.stopPropagation(); onOpenCreator(look.creator); }}
-          aria-label={`Open ${name}'s catalog`}
-        >
-          {name}
-        </button>
+        <span className="card-creator-tag-name">{name}</span>
       )}
     </div>
   );

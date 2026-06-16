@@ -19,6 +19,8 @@ import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
 import ProductMiniMedia from './ProductMiniMedia';
 import ParticleBackground from './ParticleBackground';
 import OverlayChrome from './OverlayChrome';
+import CatalogLogo from '~/components/CatalogLogo';
+import AdminContextPanel from '~/components/AdminContextPanel';
 import { posterRendition } from '~/utils/poster-prefetch';
 import { recordOverlayScroll, consumeReturnScroll } from '~/utils/overlay-scroll-stash';
 import { director } from '~/services/video-playback-director';
@@ -462,6 +464,9 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   // Unlike the product rail (embedding cosine), looks are matched by exact
   // shared product names + gender, so the report recomputes that math here.
   const isSuperAdmin = user?.role === 'super_admin';
+  // Super-admin context panel (look-level gender + Kaizen chat), opened by the
+  // invisible middle-LEFT tap zone on the look hero.
+  const [contextOpen, setContextOpen] = useState(false);
   const [simDebug, setSimDebug] = useState<{ open: boolean; report: SimilarDebugReport | null }>(
     { open: false, report: null },
   );
@@ -945,6 +950,15 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
         onSearch={onSearch ?? (() => {})}
         showSearch={false}
       />
+      {contextOpen && look.uuid && (
+        <AdminContextPanel
+          kind="look"
+          id={look.uuid}
+          title={look.title || 'Look'}
+          subtitle={look.creatorDisplayName || look.creator || null}
+          onClose={() => setContextOpen(false)}
+        />
+      )}
       <div className="look-overlay-scroll" ref={setScrollRef}>
         {/* ═══ HERO: 60/40 split (first viewport) ═══ */}
         <div className="look-hero-section">
@@ -955,6 +969,11 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="15 18 9 12 15 6"/>
               </svg>
+            </button>
+            {/* Desktop Catalog → home button beside the back button, mirroring
+                the mobile OverlayChrome's back + logo. Hidden on mobile. */}
+            <button className="look-home" onClick={onHome ?? handleClose} aria-label="Home">
+              <CatalogLogo className="look-home-mark" />
             </button>
 
             {/* Side-rail back button — vertically centered on the left edge
@@ -1006,6 +1025,18 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                 </svg>
               </button>
             </div>
+
+            {/* Super-admin only: INVISIBLE middle-LEFT tap zone opening the
+                context panel (look-level gender + Kaizen chat). Mirrors the
+                product page's middle-left context affordance. */}
+            {isSuperAdmin && look.uuid && (
+              <button
+                type="button"
+                className="look-admin-context"
+                aria-label="Look context (super admin)"
+                onClick={() => setContextOpen(true)}
+              />
+            )}
 
             {/* Centered video with overlays */}
             {videoEnabled && (

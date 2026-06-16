@@ -34,6 +34,8 @@ import { warmPosters, posterRendition } from '~/utils/poster-prefetch';
 import { recordOverlayScroll, consumeReturnScroll } from '~/utils/overlay-scroll-stash';
 import ParticleBackground from '~/components/ParticleBackground';
 import OverlayChrome from '~/components/OverlayChrome';
+import CatalogLogo from '~/components/CatalogLogo';
+import AdminContextPanel from '~/components/AdminContextPanel';
 import { productSlug } from '~/utils/slug';
 import { useCommentsEnabled } from '~/hooks/useCommentsEnabled';
 import { getCommentCount } from '~/services/comments';
@@ -433,24 +435,19 @@ function LookTile({
           via the looks fetcher (see services/looks.ts), so once the
           admin uploads a profile pic via AvatarUpload it lights up
           here automatically. */}
-      <span className="pd-look-tile-meta" onClick={(e) => e.stopPropagation()}>
+      {/* Display-only: tapping the tile opens the look (only the +/− follow
+          badge is interactive) — never the wrong creator catalog. */}
+      <span className="pd-look-tile-meta">
         <CreatorAvatarFollow
           handle={look.creator}
           avatarUrl={avatarUrl}
           displayName={displayName}
           size={22}
           onOpenCreator={(h) => onOpenCreator?.(h)}
-          avatarOpensCreator
+          avatarOpensCreator={false}
         />
         {displayName && (
-          <span
-            className="card-creator-tag-name"
-            role="button"
-            tabIndex={0}
-            onClick={(e) => { e.stopPropagation(); onOpenCreator?.(look.creator); }}
-          >
-            {displayName}
-          </span>
+          <span className="card-creator-tag-name">{displayName}</span>
         )}
       </span>
     </button>
@@ -722,6 +719,9 @@ export default function ProductPage({
   // would otherwise fire on release. Invisible to everyone else.
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  // Super-admin context panel (metadata + Kaizen chat), opened by the invisible
+  // middle-LEFT tap zone (mirrors the middle-right delete zone).
+  const [contextOpen, setContextOpen] = useState(false);
   const pressTimer = useRef<number | null>(null);
   const pressStart = useRef<{ x: number; y: number } | null>(null);
   const longPressFired = useRef(false);
@@ -1326,6 +1326,15 @@ export default function ProductPage({
         onHome={onHome ?? handleClose}
         onSearch={onSearch ?? (() => {})}
       />
+      {contextOpen && ownProductId && (
+        <AdminContextPanel
+          kind="product"
+          id={ownProductId}
+          title={product.name}
+          subtitle={product.brand}
+          onClose={() => setContextOpen(false)}
+        />
+      )}
       <div className="product-page" ref={setScrollerRef}>
         <button
           className="pd-back"
@@ -1335,6 +1344,16 @@ export default function ProductPage({
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
             <polyline points="15 18 9 12 15 6" />
           </svg>
+        </button>
+        {/* Desktop-only Catalog → home button, sitting beside the back button
+            in the upper-left (mirrors the mobile OverlayChrome's back + logo).
+            Mobile hides this — the OverlayChrome top bar carries it there. */}
+        <button
+          className="pd-home"
+          onClick={onHome ?? handleClose}
+          aria-label="Home"
+        >
+          <CatalogLogo className="pd-home-mark" />
         </button>
         {/* Side-rail back button — vertically centered on the left edge of
             the browser, desktop only. Fades + slides in once the user has
@@ -1353,6 +1372,12 @@ export default function ProductPage({
         {heroEnabled && (
         <div className="pd-split">
           <section className={heroClassName}>
+            {/* Animated loading backdrop — sits at the very bottom of the hero
+                so while the poster/video/image is still loading the shopper
+                sees a moving shimmer instead of a flat black box. The media
+                layers paint on top (higher z-index / later in DOM) and cover
+                it the instant they're ready. */}
+            <div className="card-shimmer pd-hero-shimmer" aria-hidden="true" />
             {effectiveCreative ? (
               <>
                 {/* Phase 9 instant poster: paints synchronously on mount
@@ -1433,6 +1458,17 @@ export default function ProductPage({
                   }
                   handleClose();
                 }}
+              />
+            )}
+            {/* Super-admin only: an INVISIBLE tap target on the middle-LEFT of
+                the hero that opens the context panel (editable gender/type +
+                Kaizen chat). Mirror of the middle-right delete zone. */}
+            {isSuperAdmin && ownProductId && (
+              <button
+                type="button"
+                className="pd-admin-context"
+                aria-label="Product context (super admin)"
+                onClick={() => setContextOpen(true)}
               />
             )}
             {/* Top-right share + bottom-right save, both overlaying the

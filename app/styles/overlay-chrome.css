@@ -64,7 +64,10 @@
     border: none; background: none; padding: 4px 6px; cursor: pointer;
     display: inline-flex; align-items: center;
   }
-  .ovl-chrome-logo-mark { height: 22px; width: auto; color: #fff; }
+  /* Optical centering: the font wordmark's line box centers a hair high next
+     to the geometrically-centered back chevron (caps sit in the upper half of
+     the em box). Nudge it down ~1px so the two read level. */
+  .ovl-chrome-logo-mark { height: 22px; width: auto; color: #fff; transform: translateY(1px); }
   .ovl-chrome-spacer { flex: 1; }
 
   /* Bottom search pill — matches the home feed's BottomBar: light frosted
