@@ -33,13 +33,14 @@ const subscribers = new Map<string, Set<(v: FollowState) => void>>();
 // the header to refetch its list when a follow happens elsewhere
 // (CreatorPage CTA, in-feed icon toggle). Without this the rail
 // would stay frozen on its mount-time snapshot.
-const listListeners = new Set<() => void>();
-function notifyListChanged() {
+export interface FollowingChange { handle: string; following: boolean }
+const listListeners = new Set<(change?: FollowingChange) => void>();
+function notifyListChanged(change?: FollowingChange) {
   for (const cb of listListeners) {
-    try { cb(); } catch { /* noop */ }
+    try { cb(change); } catch { /* noop */ }
   }
 }
-export function subscribeFollowingChanges(cb: () => void): () => void {
+export function subscribeFollowingChanges(cb: (change?: FollowingChange) => void): () => void {
   listListeners.add(cb);
   return () => { listListeners.delete(cb); };
 }
@@ -113,17 +114,19 @@ export async function toggleFollowShared(handle: string): Promise<boolean> {
   const optimistic = !prev;
   cache.set(key, optimistic);
   notify(key, optimistic);
-  notifyListChanged();
+  // Tell the header rail immediately (with the handle + new state) so an
+  // unfollow drops the creator at once, without waiting on the DB round-trip.
+  notifyListChanged({ handle, following: optimistic });
   try {
     const { following } = await serviceToggleFollow(handle);
     cache.set(key, following);
     notify(key, following);
-    notifyListChanged();
+    notifyListChanged({ handle, following });
     return following;
   } catch (err) {
     cache.set(key, prev);
     notify(key, prev);
-    notifyListChanged();
+    notifyListChanged({ handle, following: prev });
     throw err;
   }
 }
