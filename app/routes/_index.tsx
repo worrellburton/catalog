@@ -759,7 +759,12 @@ export default function Home() {
     // open from the bare feed (no surface up) starts a new trail.
     if (nav !== 'none') {
       const slug = navSlugForLook(look);
-      const fresh = nav === 'push' && !selectedProductRef.current && !selectedLookRef.current;
+      // 'seed' (a URL-driven rebuild from the resolver) REPLACES the trail
+      // with this single frame — there's no meaningful in-memory trail to
+      // append to, and replacing (instead of clear-then-append) lets the
+      // Back fallback skip the bare-feed flash. 'push' from the bare feed
+      // also starts fresh.
+      const fresh = nav === 'seed' || (nav === 'push' && !selectedProductRef.current && !selectedLookRef.current);
       const frame: NavFrame = { key: ++navSeqRef.current, kind: 'look', slug, look };
       setNav(s => [...(fresh ? [] : s), frame]);
       if (nav === 'push' && slug && window.location.pathname !== `/l/${slug}`) {
@@ -1142,7 +1147,12 @@ export default function Home() {
     // open from the bare feed (no surface up) starts a new trail.
     if (nav !== 'none') {
       const slug = navSlugForProduct(product);
-      const fresh = nav === 'push' && !selectedProductRef.current && !selectedLookRef.current;
+      // 'seed' (a URL-driven rebuild from the resolver) REPLACES the trail
+      // with this single frame — there's no meaningful in-memory trail to
+      // append to, and replacing (instead of clear-then-append) lets the
+      // Back fallback skip the bare-feed flash. 'push' from the bare feed
+      // also starts fresh.
+      const fresh = nav === 'seed' || (nav === 'push' && !selectedProductRef.current && !selectedLookRef.current);
       const frame: NavFrame = { key: ++navSeqRef.current, kind: 'product', slug, product, creative: frameCreative };
       setNav(s => [...(fresh ? [] : s), frame]);
       if (nav === 'push' && slug && window.location.pathname !== `/p/${slug}`) {
@@ -1296,7 +1306,12 @@ export default function Home() {
     // open from the bare feed (no surface up) starts a new trail.
     if (nav !== 'none') {
       const slug = navSlugForProduct(mapped);
-      const fresh = nav === 'push' && !selectedProductRef.current && !selectedLookRef.current;
+      // 'seed' (a URL-driven rebuild from the resolver) REPLACES the trail
+      // with this single frame — there's no meaningful in-memory trail to
+      // append to, and replacing (instead of clear-then-append) lets the
+      // Back fallback skip the bare-feed flash. 'push' from the bare feed
+      // also starts fresh.
+      const fresh = nav === 'seed' || (nav === 'push' && !selectedProductRef.current && !selectedLookRef.current);
       const frame: NavFrame = { key: ++navSeqRef.current, kind: 'product', slug, product: mapped, creative };
       setNav(s => [...(fresh ? [] : s), frame]);
       if (nav === 'push' && slug && window.location.pathname !== `/p/${slug}`) {
@@ -1748,8 +1763,10 @@ export default function Home() {
         } else {
           // Not in memory (forward nav, a back after the trail was reset, or a
           // cold/shared link) → re-resolve off the URL asynchronously. The
-          // resolver seeds a fresh frame (nav:'seed'); no history push.
-          setNav(() => []);
+          // resolver seeds a single fresh frame (nav:'seed' now REPLACES the
+          // trail), so we deliberately DON'T clear here first — keeping the
+          // outgoing layer mounted until the seed lands avoids the flash of
+          // bare feed underneath ("jumps to the feed then back to the page").
           if (onProduct) openProductFromSlugRef.current?.(slug);
           else openLookFromSlugRef.current?.(slug);
         }
