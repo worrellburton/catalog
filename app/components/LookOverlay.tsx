@@ -20,6 +20,7 @@ import ProductMiniMedia from './ProductMiniMedia';
 import ParticleBackground from './ParticleBackground';
 import OverlayChrome from './OverlayChrome';
 import CatalogLogo from '~/components/CatalogLogo';
+import AdminContextPanel from '~/components/AdminContextPanel';
 import { posterRendition } from '~/utils/poster-prefetch';
 import { recordOverlayScroll, consumeReturnScroll } from '~/utils/overlay-scroll-stash';
 import { director } from '~/services/video-playback-director';
@@ -463,6 +464,9 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   // Unlike the product rail (embedding cosine), looks are matched by exact
   // shared product names + gender, so the report recomputes that math here.
   const isSuperAdmin = user?.role === 'super_admin';
+  // Super-admin context panel (look-level gender + Kaizen chat), opened by the
+  // invisible middle-LEFT tap zone on the look hero.
+  const [contextOpen, setContextOpen] = useState(false);
   const [simDebug, setSimDebug] = useState<{ open: boolean; report: SimilarDebugReport | null }>(
     { open: false, report: null },
   );
@@ -946,6 +950,15 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
         onSearch={onSearch ?? (() => {})}
         showSearch={false}
       />
+      {contextOpen && look.uuid && (
+        <AdminContextPanel
+          kind="look"
+          id={look.uuid}
+          title={look.title || 'Look'}
+          subtitle={look.creatorDisplayName || look.creator || null}
+          onClose={() => setContextOpen(false)}
+        />
+      )}
       <div className="look-overlay-scroll" ref={setScrollRef}>
         {/* ═══ HERO: 60/40 split (first viewport) ═══ */}
         <div className="look-hero-section">
@@ -1012,6 +1025,18 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                 </svg>
               </button>
             </div>
+
+            {/* Super-admin only: INVISIBLE middle-LEFT tap zone opening the
+                context panel (look-level gender + Kaizen chat). Mirrors the
+                product page's middle-left context affordance. */}
+            {isSuperAdmin && look.uuid && (
+              <button
+                type="button"
+                className="look-admin-context"
+                aria-label="Look context (super admin)"
+                onClick={() => setContextOpen(true)}
+              />
+            )}
 
             {/* Centered video with overlays */}
             {videoEnabled && (

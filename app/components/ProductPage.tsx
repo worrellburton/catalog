@@ -35,6 +35,7 @@ import { recordOverlayScroll, consumeReturnScroll } from '~/utils/overlay-scroll
 import ParticleBackground from '~/components/ParticleBackground';
 import OverlayChrome from '~/components/OverlayChrome';
 import CatalogLogo from '~/components/CatalogLogo';
+import AdminContextPanel from '~/components/AdminContextPanel';
 import { productSlug } from '~/utils/slug';
 import { useCommentsEnabled } from '~/hooks/useCommentsEnabled';
 import { getCommentCount } from '~/services/comments';
@@ -723,6 +724,9 @@ export default function ProductPage({
   // would otherwise fire on release. Invisible to everyone else.
   const [deleteOpen, setDeleteOpen] = useState(false);
   const [deleting, setDeleting] = useState(false);
+  // Super-admin context panel (metadata + Kaizen chat), opened by the invisible
+  // middle-LEFT tap zone (mirrors the middle-right delete zone).
+  const [contextOpen, setContextOpen] = useState(false);
   const pressTimer = useRef<number | null>(null);
   const pressStart = useRef<{ x: number; y: number } | null>(null);
   const longPressFired = useRef(false);
@@ -1327,6 +1331,15 @@ export default function ProductPage({
         onHome={onHome ?? handleClose}
         onSearch={onSearch ?? (() => {})}
       />
+      {contextOpen && ownProductId && (
+        <AdminContextPanel
+          kind="product"
+          id={ownProductId}
+          title={product.name}
+          subtitle={product.brand}
+          onClose={() => setContextOpen(false)}
+        />
+      )}
       <div className="product-page" ref={setScrollerRef}>
         <button
           className="pd-back"
@@ -1450,6 +1463,17 @@ export default function ProductPage({
                   }
                   handleClose();
                 }}
+              />
+            )}
+            {/* Super-admin only: an INVISIBLE tap target on the middle-LEFT of
+                the hero that opens the context panel (editable gender/type +
+                Kaizen chat). Mirror of the middle-right delete zone. */}
+            {isSuperAdmin && ownProductId && (
+              <button
+                type="button"
+                className="pd-admin-context"
+                aria-label="Product context (super admin)"
+                onClick={() => setContextOpen(true)}
               />
             )}
             {/* Top-right share + bottom-right save, both overlaying the

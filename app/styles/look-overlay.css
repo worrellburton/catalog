@@ -83,6 +83,23 @@
   color: #fff;
 }
 
+/* Super-admin INVISIBLE middle-left tap zone — opens the context panel
+   (look-level gender + Kaizen chat). Mirrors the product page. Sits over the
+   hero media, clear of the top/bottom controls. */
+.look-admin-context {
+  position: absolute;
+  left: 0;
+  top: calc(50% - 36px);
+  width: 56px;
+  height: 72px;
+  background: transparent;
+  border: none;
+  padding: 0;
+  z-index: 6;
+  cursor: default;
+  -webkit-tap-highlight-color: transparent;
+}
+
 /* Desktop Catalog → home button beside the back button (upper-left), mirroring
    the mobile OverlayChrome's back + logo. Hidden on mobile (OverlayChrome owns
    it there). Same glass as .look-back-btn so they read as one cluster. */

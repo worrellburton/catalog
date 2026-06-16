@@ -2075,6 +2075,22 @@
   -webkit-tap-highlight-color: transparent;
 }
 
+/* Mirror of .pd-admin-delete on the middle-LEFT — opens the super-admin
+   context panel (gender/type editor + Kaizen chat). Invisible stealth zone. */
+.pd-admin-context {
+  position: absolute;
+  left: 0;
+  top: calc(50% - 36px);
+  width: 56px;
+  height: 72px;
+  background: transparent;
+  border: none;
+  padding: 0;
+  z-index: 3;
+  cursor: default;
+  -webkit-tap-highlight-color: transparent;
+}
+
 /* The retailers drawer lives INSIDE the .pd-actions grid now — span the
    full row so offers open edge-to-edge directly under the Shop button. */
 .pd-actions > .pd-retailers-drawer { grid-column: 1 / -1; }
