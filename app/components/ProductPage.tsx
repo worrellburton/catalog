@@ -1530,7 +1530,7 @@ export default function ProductPage({
                 className={`pd-retailers-drawer${showRetailers ? ' is-open' : ''}`}
                 role="region"
                 aria-label="Where to buy"
-                hidden={!showRetailers}
+                aria-hidden={!showRetailers}
               >
                 <div className="pd-retailers" role="list">
                   {retailerOffers.map(offer => (

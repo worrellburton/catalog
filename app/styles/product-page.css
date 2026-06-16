@@ -1609,6 +1609,14 @@
 .pd-retailers-drawer > .pd-retailers {
   overflow: hidden;
   min-height: 0;
+  /* Fade the offers in WITH the height expand so the drawer dissolves open
+     as smoothly as the comments sheet (the `hidden` attr used to display:none
+     it, which killed the grid-rows transition and made it snap). */
+  opacity: 0;
+  transition: opacity 0.26s ease 0.04s;
+}
+.pd-retailers-drawer.is-open > .pd-retailers {
+  opacity: 1;
 }
 
 /* Retailer comparison strip - list of pill-shaped buttons, one per
