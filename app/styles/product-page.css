@@ -68,17 +68,21 @@
   inset: 0;
   z-index: 250;
   background: #0a0a0a;
-  opacity: 1;
-  /* No slide-up/down page transition — the product page opens and closes
-     instantly (only the comments sheet keeps its glide). The drag-to-dismiss
-     handler still sets an inline transform 1:1 while the finger is down. */
+  /* Fade in on open instead of snapping into place (founder's call — "have
+     it fade in instead of appear"). The shared <video> hero is appendChild'd
+     inside and keeps playing; only the panel's opacity eases, so the handoff
+     is unaffected. Close (--out) and drag keep their own transition:none so
+     they stay instant. */
+  opacity: 0;
+  transition: opacity 0.26s ease;
   transform: none;
-  will-change: transform;
+  will-change: transform, opacity;
 }
 
-/* Settled / open — no-op now that there's no enter slide. */
+/* Settled / open — fade up to full opacity. */
 .product-page-overlay--in {
   transform: none;
+  opacity: 1;
 }
 
 /* Close — hide instantly (no slide-down). The overlay still unmounts after
