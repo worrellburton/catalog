@@ -1,4 +1,76 @@
 import { supabase } from '~/utils/supabase';
+import { getAppSetting, setAppSetting } from '~/services/app-settings';
+
+// ─── Weekly auto re-crawl schedule (Modal cron) ──────────────────────
+// The actual job lives in agents/site-crawler/modal_app.py as
+// `weekly_recrawl_sites` (cron "0 6 * * 1"). It re-crawls every site that
+// has ever completed a crawl. These mirror that schedule for display and
+// gate it via an app_settings flag the cron reads (fail-closed).
+
+export const WEEKLY_RECRAWL_ENABLED_KEY = 'weekly_recrawl_enabled';
+export const WEEKLY_RECRAWL_OVERRIDES_KEY = 'weekly_recrawl_site_overrides';
+export const WEEKLY_RECRAWL_LABEL = 'Every Monday · 6:00 AM UTC';
+
+/** Whether the Modal weekly re-crawl cron is allowed to run. Defaults to off. */
+export async function getWeeklyRecrawlEnabled(): Promise<boolean> {
+  const v = await getAppSetting(WEEKLY_RECRAWL_ENABLED_KEY);
+  return (v ?? '').trim().toLowerCase() === 'true';
+}
+
+export async function setWeeklyRecrawlEnabled(enabled: boolean): Promise<{ error: string | null }> {
+  return setAppSetting(WEEKLY_RECRAWL_ENABLED_KEY, enabled ? 'true' : 'false');
+}
+
+// Per-site overrides for the weekly re-crawl. The cron's default rule only
+// schedules a site whose LATEST crawl failed; an entry here forces a site
+// on (true) or off (false) regardless of status. Keyed by site_url.
+export type WeeklyRecrawlOverrides = Record<string, boolean>;
+
+/** Default rule when a site has no explicit override: failed → on, else off. */
+export function isScheduledByDefault(latestStatus: string): boolean {
+  return latestStatus === 'failed';
+}
+
+/** Effective scheduled state: explicit override wins over the status rule. */
+export function isSiteScheduled(
+  latestStatus: string,
+  override: boolean | undefined,
+): boolean {
+  return override ?? isScheduledByDefault(latestStatus);
+}
+
+export async function getWeeklyRecrawlOverrides(): Promise<WeeklyRecrawlOverrides> {
+  const raw = await getAppSetting(WEEKLY_RECRAWL_OVERRIDES_KEY);
+  if (!raw) return {};
+  try {
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? (parsed as WeeklyRecrawlOverrides) : {};
+  } catch {
+    return {};
+  }
+}
+
+export async function setSiteRecrawlOverride(
+  siteUrl: string,
+  enabled: boolean,
+): Promise<{ error: string | null }> {
+  const map = await getWeeklyRecrawlOverrides();
+  map[siteUrl] = enabled;
+  return setAppSetting(WEEKLY_RECRAWL_OVERRIDES_KEY, JSON.stringify(map));
+}
+
+/** Next Monday at 06:00 UTC strictly after `from` (matches cron "0 6 * * 1"). */
+export function getNextWeeklyRecrawl(from: Date = new Date()): Date {
+  const next = new Date(Date.UTC(
+    from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate(), 6, 0, 0, 0,
+  ));
+  // Advance day-by-day until we land on a Monday strictly in the future.
+  while (next.getUTCDay() !== 1 || next.getTime() <= from.getTime()) {
+    next.setUTCDate(next.getUTCDate() + 1);
+    next.setUTCHours(6, 0, 0, 0);
+  }
+  return next;
+}
 
 // ─── Types ───────────────────────────────────────────────────────────
 

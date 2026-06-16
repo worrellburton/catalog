@@ -533,15 +533,15 @@ export default function Home() {
     const THRESHOLD = 8; // px of continuous direction before reacting
     let accum = 0;
     let idle = 0;
-    const onScroll = () => {
-      // Frozen while an overlay is open — see overlayScrollLockRef. Leaving
-      // lastY untouched keeps the delta continuous when scrolling resumes.
-      if (overlayScrollLockRef.current) return;
-      // Rest return: 2s after the last real scroll the chrome eases back
-      // (same rhythm as the card chrome) — "the search bar is missing"
-      // should never outlive the scroll that hid it.
-      window.clearTimeout(idle);
-      idle = window.setTimeout(() => setChromeHidden(false), 2000);
+    let raf = 0;
+    // The direction math + setChromeHidden run at most ONCE per frame. iOS fires
+    // scroll at up to ~60Hz during momentum; calling setState off every raw
+    // event re-rendered the whole feed per event and contended with the video
+    // director's per-frame rank() — a primary cause of the on-device scroll
+    // jank. Sampling scrollY once per rAF gives the same telescoped accumulation
+    // (deltas still sum across the gesture) at a fraction of the work.
+    const apply = () => {
+      raf = 0;
       const y = window.scrollY;
       const dy = y - lastY;
       lastY = y;
@@ -553,10 +553,23 @@ export default function Home() {
       if (accum > THRESHOLD)       setChromeHidden(true);
       else if (accum < -THRESHOLD) setChromeHidden(false);
     };
+    const onScroll = () => {
+      // Frozen while an overlay is open — see overlayScrollLockRef. Leaving
+      // lastY untouched keeps the delta continuous when scrolling resumes.
+      if (overlayScrollLockRef.current) return;
+      // Rest return: 2s after the last real scroll the chrome eases back
+      // (same rhythm as the card chrome) — "the search bar is missing"
+      // should never outlive the scroll that hid it.
+      window.clearTimeout(idle);
+      idle = window.setTimeout(() => setChromeHidden(false), 2000);
+      if (raf) return;
+      raf = requestAnimationFrame(apply);
+    };
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => {
       window.removeEventListener('scroll', onScroll);
       window.clearTimeout(idle);
+      if (raf) cancelAnimationFrame(raf);
     };
   }, [heroScrolled]);
 
@@ -759,7 +772,12 @@ export default function Home() {
     // open from the bare feed (no surface up) starts a new trail.
     if (nav !== 'none') {
       const slug = navSlugForLook(look);
-      const fresh = nav === 'push' && !selectedProductRef.current && !selectedLookRef.current;
+      // 'seed' (a URL-driven rebuild from the resolver) REPLACES the trail
+      // with this single frame — there's no meaningful in-memory trail to
+      // append to, and replacing (instead of clear-then-append) lets the
+      // Back fallback skip the bare-feed flash. 'push' from the bare feed
+      // also starts fresh.
+      const fresh = nav === 'seed' || (nav === 'push' && !selectedProductRef.current && !selectedLookRef.current);
       const frame: NavFrame = { key: ++navSeqRef.current, kind: 'look', slug, look };
       setNav(s => [...(fresh ? [] : s), frame]);
       if (nav === 'push' && slug && window.location.pathname !== `/l/${slug}`) {
@@ -1142,7 +1160,12 @@ export default function Home() {
     // open from the bare feed (no surface up) starts a new trail.
     if (nav !== 'none') {
       const slug = navSlugForProduct(product);
-      const fresh = nav === 'push' && !selectedProductRef.current && !selectedLookRef.current;
+      // 'seed' (a URL-driven rebuild from the resolver) REPLACES the trail
+      // with this single frame — there's no meaningful in-memory trail to
+      // append to, and replacing (instead of clear-then-append) lets the
+      // Back fallback skip the bare-feed flash. 'push' from the bare feed
+      // also starts fresh.
+      const fresh = nav === 'seed' || (nav === 'push' && !selectedProductRef.current && !selectedLookRef.current);
       const frame: NavFrame = { key: ++navSeqRef.current, kind: 'product', slug, product, creative: frameCreative };
       setNav(s => [...(fresh ? [] : s), frame]);
       if (nav === 'push' && slug && window.location.pathname !== `/p/${slug}`) {
@@ -1296,7 +1319,12 @@ export default function Home() {
     // open from the bare feed (no surface up) starts a new trail.
     if (nav !== 'none') {
       const slug = navSlugForProduct(mapped);
-      const fresh = nav === 'push' && !selectedProductRef.current && !selectedLookRef.current;
+      // 'seed' (a URL-driven rebuild from the resolver) REPLACES the trail
+      // with this single frame — there's no meaningful in-memory trail to
+      // append to, and replacing (instead of clear-then-append) lets the
+      // Back fallback skip the bare-feed flash. 'push' from the bare feed
+      // also starts fresh.
+      const fresh = nav === 'seed' || (nav === 'push' && !selectedProductRef.current && !selectedLookRef.current);
       const frame: NavFrame = { key: ++navSeqRef.current, kind: 'product', slug, product: mapped, creative };
       setNav(s => [...(fresh ? [] : s), frame]);
       if (nav === 'push' && slug && window.location.pathname !== `/p/${slug}`) {
@@ -1748,8 +1776,10 @@ export default function Home() {
         } else {
           // Not in memory (forward nav, a back after the trail was reset, or a
           // cold/shared link) → re-resolve off the URL asynchronously. The
-          // resolver seeds a fresh frame (nav:'seed'); no history push.
-          setNav(() => []);
+          // resolver seeds a single fresh frame (nav:'seed' now REPLACES the
+          // trail), so we deliberately DON'T clear here first — keeping the
+          // outgoing layer mounted until the seed lands avoids the flash of
+          // bare feed underneath ("jumps to the feed then back to the page").
           if (onProduct) openProductFromSlugRef.current?.(slug);
           else openLookFromSlugRef.current?.(slug);
         }
@@ -2249,6 +2279,12 @@ export default function Home() {
           {navStack.slice(Math.max(0, navStack.length - NAV_MOUNT_WINDOW)).map((frame, j) => {
             const i = Math.max(0, navStack.length - NAV_MOUNT_WINDOW) + j;
             const isTop = i === navStack.length - 1;
+            // The layer DIRECTLY beneath the top. It must stay painted so the
+            // top's bottom-sheet slide (see product-page.css / look-overlay.css)
+            // reveals the PREVIOUS surface as it rides up on open / down on
+            // close — a same-type step (look A → look B, product A → product B)
+            // then reads as a clean push, not a flash of the home feed.
+            const isUnder = i === navStack.length - 2;
             const z = isTop ? (frame.kind === 'product' ? 250 : 200) : 100 + j;
             const layerStyle: React.CSSProperties = {
               position: 'fixed',
@@ -2256,15 +2292,16 @@ export default function Home() {
               zIndex: z,
               pointerEvents: isTop ? undefined : 'none',
               // Covered layers stay MOUNTED (preserved scroll + React state, so
-              // Back reveals them instantly) but are hidden from PAINT — the
-              // browser stops compositing/painting the stacked overlays beneath
-              // the top, which on mobile were rendering dozens of images +
-              // <video>s invisibly behind the opaque top surface. visibility
-              // (not display:none / content-visibility) keeps layout intact, so
-              // revealing the layer on Back is a repaint with no relayout hitch.
-              // Safe because overlays open/close instantly — no entrance slide
-              // that would momentarily reveal a hidden layer behind the top.
-              visibility: isTop ? undefined : 'hidden',
+              // Back reveals them instantly). Layers TWO+ deep are hidden from
+              // PAINT — the browser stops compositing/painting them, which on
+              // mobile were rendering dozens of images + <video>s invisibly
+              // behind the opaque top surface. The IMMEDIATE under-layer stays
+              // painted (it's the one a slide uncovers); its hero <video> is
+              // already paused by the director's scope stack, so the cost is a
+              // single occluded poster layer. visibility (not display:none /
+              // content-visibility) keeps layout intact, so revealing a deeper
+              // layer on Back is a repaint with no relayout hitch.
+              visibility: (isTop || isUnder) ? undefined : 'hidden',
             };
             if (frame.kind === 'look') {
               return (

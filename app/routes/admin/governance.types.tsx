@@ -117,6 +117,9 @@ export default function AdminGovernanceTypes() {
   const [dofStop, setDofStop] = useState<number | null>(2.8);
   const [mobileControlsOpen, setMobileControlsOpen] = useState(false);
   const [showcase, setShowcase] = useState(false);
+  // "Moving rings": each type's satellite ring slowly churns on its own + the
+  // guide rings drift on their own planes (gyratory-planet effect).
+  const [movingRings, setMovingRings] = useState(false);
   // Mobile camera dock: the slider/joystick drive the graph's view
   // through this handle; zoomUi mirrors the live zoom back to the slider.
   const camRef = useRef<BrainCameraHandle | null>(null);
@@ -922,6 +925,7 @@ export default function AdminGovernanceTypes() {
           dofStop={dofStop}
           showcase={showcase}
           onShowcaseInterrupt={() => setShowcase(false)}
+          movingRings={movingRings}
           controlRef={camRef}
           onZoomChange={setZoomUi}
           resetSignal={resetSignal}
@@ -1297,6 +1301,14 @@ export default function AdminGovernanceTypes() {
             </button>
             <button
               type="button"
+              className={`gov-showcase${movingRings ? ' is-on' : ''}`}
+              onClick={() => setMovingRings(v => !v)}
+              title="Each type's ring slowly turns on its own — the whole brain churns like a planet"
+            >
+              {movingRings ? '◍ Moving rings — on' : '◍ Moving rings'}
+            </button>
+            <button
+              type="button"
               className="gov-showcase"
               onClick={fireReset}
               title="Fly home: flat 2D view, zoom 1, rings level — with a bounce"
@@ -1369,6 +1381,13 @@ export default function AdminGovernanceTypes() {
                     onClick={() => setShowcase(v => !v)}
                   >
                     {showcase ? '◉ Showcase — touring' : '◉ Showcase'}
+                  </button>
+                  <button
+                    type="button"
+                    className={`gov-showcase${movingRings ? ' is-on' : ''}`}
+                    onClick={() => setMovingRings(v => !v)}
+                  >
+                    {movingRings ? '◍ Moving rings — on' : '◍ Moving rings'}
                   </button>
                   <button type="button" className="gov-showcase" onClick={fireReset}>
                     ⟲ Reset

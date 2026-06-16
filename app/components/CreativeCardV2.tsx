@@ -419,8 +419,10 @@ const CreativeCardV2 = memo(function CreativeCardV2({
           e.stopPropagation();
           return;
         }
-        // Don't fire the card click when the user tapped the creator row.
-        if (isLook && (e.target as HTMLElement).closest('.card-creator-tag')) return;
+        // A card tap ALWAYS opens the look/product — the creator chip is
+        // display-only now (only its +/− follow badge is interactive, and that
+        // stops propagation itself), so there's no creator-row exception that
+        // could hijack the tap into the wrong creator's catalog.
         handleClick();
       }}
       onMouseEnter={() => {
@@ -628,25 +630,23 @@ function CreatorChip({
 }) {
   // stopPropagation on the row so a tap on the avatar/name opens the creator
   // catalog instead of falling through to open the look underneath.
+  // Display-only on the feed: tapping ANYWHERE on the card opens the look
+  // (founder's call — a card tap must NEVER open the creator catalog). The
+  // avatar falls through (avatarOpensCreator=false); only the small +/− follow
+  // badge stays interactive (it stops propagation itself). The creator's
+  // catalog is reachable from inside the look page.
   return (
-    <div className="card-creator-tag" onClick={(e) => e.stopPropagation()}>
+    <div className="card-creator-tag">
       <CreatorAvatarFollow
         handle={look.creator}
         avatarUrl={creatorAvatar}
         displayName={creatorName}
         size={20}
         onOpenCreator={onOpenCreator}
-        avatarOpensCreator
+        avatarOpensCreator={false}
       />
       {creatorName && (
-        <button
-          type="button"
-          className="card-creator-tag-name"
-          onClick={(e) => { e.stopPropagation(); onOpenCreator?.(look.creator); }}
-          aria-label={`Open ${creatorName}'s catalog`}
-        >
-          {creatorName}
-        </button>
+        <span className="card-creator-tag-name">{creatorName}</span>
       )}
     </div>
   );

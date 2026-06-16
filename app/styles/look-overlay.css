@@ -12,26 +12,28 @@
   inset: 0;
   z-index: 200;
   background: #0a0a0a;
-  opacity: 1;
-  /* No slide-up/down page transition — the look opens and closes instantly
-     (only the comments sheet keeps its glide). The drag-to-dismiss handler
-     still sets an inline transform 1:1 while the finger is down. */
-  transform: none;
+  /* Instant-opaque OPEN, slide-DOWN CLOSE (mirrors product-page.css). Mounts
+     ON-SCREEN at translateY(0) and OPAQUE so there's no feed-flash window AND
+     the cold hero <video> paints immediately (an enter slide mounted it
+     off-screen and left the hero black until it slid in). Only --out animates:
+     the look slides down to reveal the layer beneath; 360ms matches
+     handleClose's unmount delay (the feed re-warms "under cover of the
+     slide-out"). The shared <video> hero appendChild'd inside rides along. */
+  transform: translateY(0);
+  transition: transform 360ms cubic-bezier(0.32, 0.72, 0, 1);
   overflow: hidden;
   will-change: transform;
 }
 
-/* Settled / open — no-op now that there's no enter slide. */
+/* Open is instant — no enter animation (mount == settled at translateY(0)). */
 .look-overlay--in {
-  opacity: 1;
-  transform: none;
+  transform: translateY(0);
 }
 
-/* Close — hide instantly (no slide-down). The overlay still unmounts after
-   the JS close timeout; pointer-events off so the feed is usable at once. */
+/* Close — slide down off-screen; the JS close timeout then unmounts.
+   pointer-events off so the revealed surface/feed is usable at once. */
 .look-overlay--out {
-  opacity: 0;
-  transition: none;
+  transform: translateY(100%);
   pointer-events: none;
 }
 
@@ -80,6 +82,48 @@
   background: rgba(255, 255, 255, 0.2);
   color: #fff;
 }
+
+/* Super-admin INVISIBLE middle-left tap zone — opens the context panel
+   (look-level gender + Kaizen chat). Mirrors the product page. Sits over the
+   hero media, clear of the top/bottom controls. */
+.look-admin-context {
+  position: absolute;
+  left: 0;
+  top: calc(50% - 36px);
+  width: 56px;
+  height: 72px;
+  background: transparent;
+  border: none;
+  padding: 0;
+  z-index: 6;
+  cursor: default;
+  -webkit-tap-highlight-color: transparent;
+}
+
+/* Desktop Catalog → home button beside the back button (upper-left), mirroring
+   the mobile OverlayChrome's back + logo. Hidden on mobile (OverlayChrome owns
+   it there). Same glass as .look-back-btn so they read as one cluster. */
+.look-home {
+  position: absolute;
+  top: 20px;
+  left: 68px;
+  z-index: 10;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  padding: 0 14px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.8);
+  cursor: pointer;
+  transition: background 0.18s, color 0.18s;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+}
+.look-home:hover { background: rgba(255, 255, 255, 0.2); color: #fff; }
+.look-home-mark { height: 20px; width: auto; color: currentColor; display: block; }
+@media (max-width: 768px) { .look-home { display: none !important; } }
 
 /* Side-rail back button — desktop only. Fixed on the left edge of the
    viewport, vertically centered. Mirrors .pd-back-rail on the product
@@ -531,6 +575,19 @@
   flex: 1;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
+}
+
+/* Desktop: the right panel is full-height, so a short summary (a few products
+   + blurb + buttons) left a big void below. Center the summary vertically so
+   it reads balanced. `safe center` falls back to top-alignment when the
+   content is taller than the panel, so a long product list still scrolls from
+   the top instead of clipping. Mobile keeps the bottom-sheet top-alignment. */
+@media (min-width: 769px) {
+  .look-tab-content {
+    display: flex;
+    flex-direction: column;
+    justify-content: safe center;
+  }
 }
 
 /* Product cards list */

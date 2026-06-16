@@ -40,7 +40,17 @@ export function useAppView({ user, authLoading, waitlistMode, waitlistLoading }:
   // ?look=; this skips the auth-splash too.)
   const [view, setView] = useState<AppView>(() => {
     try {
-      if (typeof window !== 'undefined' && /[?&]look=/.test(window.location.search)) return 'app';
+      if (typeof window !== 'undefined') {
+        if (/[?&]look=/.test(window.location.search)) return 'app';
+        // Warm remount heading straight to the feed (e.g. bailing back from
+        // /generate via "Keep discovering", or Back from /activity): if this
+        // tab already booted the app this session AND we're explicitly going
+        // to #app, start in 'app' so the auth-splash never replays over the
+        // feed. The shopper lands on the feed immediately with the pending-
+        // look notification visible, instead of watching a splash first.
+        const warm = window.sessionStorage.getItem('catalog:booted') === '1';
+        if (warm && window.location.hash.replace('#', '') === 'app') return 'app';
+      }
     } catch { /* ignore */ }
     return 'locked';
   });

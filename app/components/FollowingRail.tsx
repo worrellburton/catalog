@@ -157,7 +157,24 @@ function FollowingRail({ onOpenCreator, mode = 'both', onCreateFollowingCatalog:
   const wrapperRef = useRef<HTMLDivElement | null>(null);
   const prevFollowerHandlesRef = useRef<Set<string> | null>(null);
 
-  useEffect(() => subscribeFollowingChanges(() => setRefreshKey(k => k + 1)), []);
+  // Handles (lower-cased) the viewer just unfollowed — filtered out of the
+  // rail immediately AND out of any in-flight refetch, so a stale read that
+  // resolves before the DB delete commits can't momentarily re-add them.
+  // Cleared for a handle the moment it's followed again.
+  const suppressedHandles = useRef<Set<string>>(new Set());
+  useEffect(() => subscribeFollowingChanges((change) => {
+    if (change) {
+      const h = change.handle.toLowerCase();
+      if (change.following === false) {
+        suppressedHandles.current.add(h);
+        // Instant removal from whatever the rail is currently showing.
+        setFollowingEntries(prev => prev ? prev.filter(e => e.handle.toLowerCase() !== h) : prev);
+      } else {
+        suppressedHandles.current.delete(h);
+      }
+    }
+    setRefreshKey(k => k + 1);
+  }), []);
 
   // Live updates when a followed creator posts. The looks realtime channel
   // (looks-live-sync in services/looks) busts the cache and fires this on
@@ -219,6 +236,11 @@ function FollowingRail({ onOpenCreator, mode = 'both', onCreateFollowingCatalog:
       let handles: string[] = [];
       try { handles = await getMyFollowing(); } catch { handles = []; }
       if (cancelled) return;
+      // Drop any just-unfollowed handles whose DB delete may not have committed
+      // yet, so a stale read can't flash the creator back into the rail.
+      if (suppressedHandles.current.size > 0) {
+        handles = handles.filter(h => !suppressedHandles.current.has(h.toLowerCase()));
+      }
       if (handles.length === 0) {
         // Cold-start fallback: pick popular creators matching the
         // shopper's gender. Three-tier retry inside getPopularCreators

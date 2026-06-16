@@ -1,5 +1,5 @@
 
-import { useRef, useState, useCallback, useEffect, useMemo } from 'react';
+import { useRef, useState, useCallback, useEffect, useLayoutEffect, useMemo } from 'react';
 import { Look, creators, Product, looks as allLooksData } from '~/data/looks';
 import { lookSlug } from '~/utils/slug';
 import { shareLink } from '~/utils/shareLink';
@@ -19,6 +19,8 @@ import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
 import ProductMiniMedia from './ProductMiniMedia';
 import ParticleBackground from './ParticleBackground';
 import OverlayChrome from './OverlayChrome';
+import CatalogLogo from '~/components/CatalogLogo';
+import AdminContextPanel from '~/components/AdminContextPanel';
 import { posterRendition } from '~/utils/poster-prefetch';
 import { recordOverlayScroll, consumeReturnScroll } from '~/utils/overlay-scroll-stash';
 import { director } from '~/services/video-playback-director';
@@ -462,6 +464,9 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   // Unlike the product rail (embedding cosine), looks are matched by exact
   // shared product names + gender, so the report recomputes that math here.
   const isSuperAdmin = user?.role === 'super_admin';
+  // Super-admin context panel (look-level gender + Kaizen chat), opened by the
+  // invisible middle-LEFT tap zone on the look hero.
+  const [contextOpen, setContextOpen] = useState(false);
   const [simDebug, setSimDebug] = useState<{ open: boolean; report: SimilarDebugReport | null }>(
     { open: false, report: null },
   );
@@ -764,9 +769,10 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   // overlay's transform, and fire handleClose at the same > 96 px /
   // Back-restore: a RETURN to this look (back from a product it opened)
   // lands where the shopper left off — never the top (founder's call).
-  // Fresh opens consume nothing. The listener keeps recording the live
-  // offset for the next return.
-  useEffect(() => {
+  // Done SYNCHRONOUSLY before paint so a re-mounted look paints AT the saved
+  // offset instead of painting at the top and then jumping down to it (the
+  // "jolt" on Back). Fresh opens consume nothing and stay at the top.
+  useLayoutEffect(() => {
     const scroller = scrollRef.current;
     const key = lookSlug({
       id: look.id ?? null, uuid: look.uuid ?? null, creator: look.creator ?? null,
@@ -774,9 +780,17 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
     });
     if (!scroller || !key) return;
     const returnTop = consumeReturnScroll(key);
-    if (returnTop != null) {
-      requestAnimationFrame(() => scroller.scrollTo({ top: returnTop, behavior: 'instant' as ScrollBehavior }));
-    }
+    if (returnTop != null) scroller.scrollTo({ top: returnTop, behavior: 'instant' as ScrollBehavior });
+  }, [look]);
+
+  // The listener keeps recording the live offset for the next return.
+  useEffect(() => {
+    const scroller = scrollRef.current;
+    const key = lookSlug({
+      id: look.id ?? null, uuid: look.uuid ?? null, creator: look.creator ?? null,
+      creatorDisplayName: look.creatorDisplayName ?? null, title: look.title ?? null,
+    });
+    if (!scroller || !key) return;
     let raf = 0;
     const onScroll = () => {
       if (raf) return;
@@ -936,6 +950,15 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
         onSearch={onSearch ?? (() => {})}
         showSearch={false}
       />
+      {contextOpen && look.uuid && (
+        <AdminContextPanel
+          kind="look"
+          id={look.uuid}
+          title={look.title || 'Look'}
+          subtitle={look.creatorDisplayName || look.creator || null}
+          onClose={() => setContextOpen(false)}
+        />
+      )}
       <div className="look-overlay-scroll" ref={setScrollRef}>
         {/* ═══ HERO: 60/40 split (first viewport) ═══ */}
         <div className="look-hero-section">
@@ -946,6 +969,11 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
                 <polyline points="15 18 9 12 15 6"/>
               </svg>
+            </button>
+            {/* Desktop Catalog → home button beside the back button, mirroring
+                the mobile OverlayChrome's back + logo. Hidden on mobile. */}
+            <button className="look-home" onClick={onHome ?? handleClose} aria-label="Home">
+              <CatalogLogo className="look-home-mark" />
             </button>
 
             {/* Side-rail back button — vertically centered on the left edge
@@ -997,6 +1025,18 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                 </svg>
               </button>
             </div>
+
+            {/* Super-admin only: INVISIBLE middle-LEFT tap zone opening the
+                context panel (look-level gender + Kaizen chat). Mirrors the
+                product page's middle-left context affordance. */}
+            {isSuperAdmin && look.uuid && (
+              <button
+                type="button"
+                className="look-admin-context"
+                aria-label="Look context (super admin)"
+                onClick={() => setContextOpen(true)}
+              />
+            )}
 
             {/* Centered video with overlays */}
             {videoEnabled && (

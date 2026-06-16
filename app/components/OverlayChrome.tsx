@@ -31,6 +31,7 @@ export default function OverlayChrome({ scrollEl, onBack, onHome, onSearch, show
   const [q, setQ] = useState('');
   const accum = useRef(0);
   const lastY = useRef(0);
+  const idle = useRef(0);
 
   useEffect(() => {
     const el = scrollEl;
@@ -48,6 +49,11 @@ export default function OverlayChrome({ scrollEl, onBack, onHome, onSearch, show
         lastY.current = y;
         // Reveal the catalog pill once past ~60% of the first screen.
         setSearchShown(y > Math.max(el.clientHeight * 0.6, 280));
+        // Rest return: a short idle after the last scroll eases the chrome
+        // (top bar + search pill) back, matching the home feed — so they
+        // never stay gone once the shopper stops scrolling.
+        window.clearTimeout(idle.current);
+        idle.current = window.setTimeout(() => setHidden(false), 2000);
         // Always reveal the top bar near the very top.
         if (y < 72) { setHidden(false); accum.current = 0; return; }
         if ((dy > 0 && accum.current >= 0) || (dy < 0 && accum.current <= 0)) accum.current += dy;
@@ -57,7 +63,11 @@ export default function OverlayChrome({ scrollEl, onBack, onHome, onSearch, show
       });
     };
     el.addEventListener('scroll', onScroll, { passive: true });
-    return () => { el.removeEventListener('scroll', onScroll); if (raf) cancelAnimationFrame(raf); };
+    return () => {
+      el.removeEventListener('scroll', onScroll);
+      if (raf) cancelAnimationFrame(raf);
+      window.clearTimeout(idle.current);
+    };
   }, [scrollEl]);
 
   const submit = () => { const v = q.trim(); if (v) onSearch(v); };
@@ -74,8 +84,10 @@ export default function OverlayChrome({ scrollEl, onBack, onHome, onSearch, show
         <span className="ovl-chrome-spacer" aria-hidden="true" />
       </div>
       {showSearch && (
-        <div className={`ovl-chrome-search${searchShown ? ' is-shown' : ''}`}>
-          <svg className="ovl-chrome-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="11" cy="11" r="7"/><path d="M21 21l-4.3-4.3"/></svg>
+        <div className={`ovl-chrome-search${searchShown && !hidden ? ' is-shown' : ''}`}>
+          {/* Filter/sliders icon — matches the main feed's BottomBar leading
+              icon so the search bar reads identically everywhere. */}
+          <svg className="ovl-chrome-search-icon" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="4" y1="6" x2="20" y2="6"/><line x1="7" y1="12" x2="17" y2="12"/><line x1="10" y1="18" x2="14" y2="18"/></svg>
           <input
             className="ovl-chrome-search-input"
             value={q}
@@ -84,9 +96,6 @@ export default function OverlayChrome({ scrollEl, onBack, onHome, onSearch, show
             onKeyDown={e => { if (e.key === 'Enter') submit(); }}
             enterKeyHint="search"
           />
-          {q.trim() && (
-            <button type="button" className="ovl-chrome-search-go" onClick={submit} aria-label="Search">↑</button>
-          )}
         </div>
       )}
     </div>

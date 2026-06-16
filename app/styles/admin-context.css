@@ -1,0 +1,115 @@
+/* Super-admin context panel (AdminContextPanel) — a centered sheet over the
+   product/look detail with editable taxonomy metadata + a Kaizen chat. Dark,
+   compact, stealth-admin styling. */
+.adminctx-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 9400;
+  background: rgba(0, 0, 0, 0.6);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+.adminctx-panel {
+  width: min(440px, 100%);
+  max-height: min(82vh, 720px);
+  display: flex;
+  flex-direction: column;
+  background: #15161a;
+  color: #f3f4f6;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.6);
+  overflow: hidden;
+  font-family: inherit;
+}
+.adminctx-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.adminctx-titles { display: flex; flex-direction: column; min-width: 0; }
+.adminctx-sub { font-size: 11px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase; color: rgba(255, 255, 255, 0.45); }
+.adminctx-title { font-size: 15px; font-weight: 700; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.adminctx-close {
+  flex-shrink: 0; width: 30px; height: 30px; border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.14); background: rgba(255, 255, 255, 0.06);
+  color: #fff; font-size: 18px; line-height: 1; cursor: pointer;
+}
+.adminctx-close:hover { background: rgba(255, 255, 255, 0.12); }
+
+.adminctx-meta {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 14px 16px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+}
+.adminctx-field { display: flex; align-items: center; gap: 10px; }
+.adminctx-field > span { flex: 0 0 64px; font-size: 12px; color: rgba(255, 255, 255, 0.6); }
+.adminctx-field select,
+.adminctx-field input {
+  flex: 1; min-width: 0;
+  background: #0f1014; color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 8px;
+  padding: 8px 10px; font: inherit; font-size: 13px; outline: none;
+}
+.adminctx-field select:focus,
+.adminctx-field input:focus { border-color: rgba(255, 255, 255, 0.34); }
+.adminctx-path { font-size: 11px; color: rgba(255, 255, 255, 0.4); padding-left: 74px; }
+.adminctx-saverow { display: flex; align-items: center; gap: 10px; margin-top: 2px; }
+.adminctx-save {
+  background: #fff; color: #0a0a0c; border: none; border-radius: 8px;
+  padding: 8px 18px; font: inherit; font-size: 13px; font-weight: 700; cursor: pointer;
+}
+.adminctx-save:disabled { opacity: 0.5; cursor: default; }
+.adminctx-savemsg { font-size: 12px; color: #4ade80; }
+
+.adminctx-kaizen { display: flex; flex-direction: column; min-height: 0; flex: 1; }
+.adminctx-kaizen-head {
+  padding: 10px 16px 6px; font-size: 13px; font-weight: 700; color: rgba(255, 255, 255, 0.8);
+}
+.adminctx-msgs {
+  flex: 1; min-height: 120px; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 6px 16px 10px;
+}
+.adminctx-hint { font-size: 12px; line-height: 1.5; color: rgba(255, 255, 255, 0.4); }
+.adminctx-msg { display: flex; flex-direction: column; gap: 6px; max-width: 92%; }
+.adminctx-msg--user { align-self: flex-end; align-items: flex-end; }
+.adminctx-msg--assistant { align-self: flex-start; align-items: flex-start; }
+.adminctx-msg-body {
+  font-size: 13px; line-height: 1.5; white-space: pre-wrap;
+  padding: 9px 12px; border-radius: 12px;
+}
+.adminctx-msg--user .adminctx-msg-body { background: #2563eb; color: #fff; border-bottom-right-radius: 4px; }
+.adminctx-msg--assistant .adminctx-msg-body { background: rgba(255, 255, 255, 0.07); color: #e8eaed; border-bottom-left-radius: 4px; }
+.adminctx-typing { color: rgba(255, 255, 255, 0.5); font-style: italic; }
+.adminctx-apply {
+  align-self: flex-start;
+  background: #16a34a; color: #fff; border: none; border-radius: 8px;
+  padding: 7px 12px; font: inherit; font-size: 12px; font-weight: 700; cursor: pointer;
+}
+.adminctx-apply:hover { background: #15803d; }
+
+.adminctx-compose {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 16px 14px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.adminctx-compose input {
+  flex: 1; min-width: 0;
+  background: #0f1014; color: #fff;
+  border: 1px solid rgba(255, 255, 255, 0.14); border-radius: 999px;
+  padding: 10px 14px; font: inherit; font-size: 13px; outline: none;
+}
+.adminctx-compose input:focus { border-color: rgba(255, 255, 255, 0.34); }
+.adminctx-compose button {
+  flex: 0 0 auto; width: 36px; height: 36px; border-radius: 50%;
+  border: none; background: #fff; color: #0a0a0c; font-size: 16px; font-weight: 700; cursor: pointer;
+}
+.adminctx-compose button:disabled { opacity: 0.4; cursor: default; }

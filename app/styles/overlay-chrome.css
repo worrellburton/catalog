@@ -64,7 +64,10 @@
     border: none; background: none; padding: 4px 6px; cursor: pointer;
     display: inline-flex; align-items: center;
   }
-  .ovl-chrome-logo-mark { height: 22px; width: auto; color: #fff; }
+  /* Optical centering: the font wordmark's line box centers a hair high next
+     to the geometrically-centered back chevron (caps sit in the upper half of
+     the em box). Nudge it down ~1px so the two read level. */
+  .ovl-chrome-logo-mark { height: 22px; width: auto; color: #fff; transform: translateY(1px); }
   .ovl-chrome-spacer { flex: 1; }
 
   /* Bottom search pill — matches the home feed's BottomBar: light frosted
@@ -75,18 +78,24 @@
     left: 0; right: 0;
     bottom: max(14px, env(safe-area-inset-bottom));
     margin-inline: auto;
-    width: min(560px, calc(100% - 28px));
+    width: min(560px, calc(100% - 48px)); /* match the feed BottomBar width */
     display: flex; align-items: center; gap: 8px;
     padding: 12px 14px;
     border-radius: 999px;
-    background: linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.04));
-    border: 1px solid rgba(255, 255, 255, 0.18);
-    -webkit-backdrop-filter: blur(28px) saturate(1.5); backdrop-filter: blur(28px) saturate(1.5);
+    /* White pill — the feed's bottom bar reads white over light card media;
+       on the dark product/look hero the same translucent glass read dark, so
+       give it a solid white fill that stays white over any background
+       (founder's call — "the white search bar from the main feed"). */
+    background: rgba(255, 255, 255, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.7);
+    /* No backdrop-filter: the fill is 95% opaque white, so a blur behind it is
+       invisible — it was pure per-frame GPU cost on a fixed element that stays
+       on-screen while the overlay's feed scrolls behind it. Removing it is a
+       zero-visual-change scroll win. (The translucent home-feed BottomBar keeps
+       its blur — there the glass actually shows.) */
     box-shadow:
-      0 12px 36px rgba(0, 0, 0, 0.36),
-      0 0 26px rgba(255, 255, 255, 0.10),
-      inset 0 1px 0 rgba(255, 255, 255, 0.16),
-      inset 0 -1px 0 rgba(0, 0, 0, 0.18);
+      0 12px 36px rgba(0, 0, 0, 0.34),
+      inset 0 1px 0 rgba(255, 255, 255, 0.8);
     transform: translateY(calc(100% + 24px));
     opacity: 0;
     pointer-events: none;
@@ -97,17 +106,17 @@
     opacity: 1;
     pointer-events: auto;
   }
-  .ovl-chrome-search-icon { flex: 0 0 auto; color: rgba(255, 255, 255, 0.55); }
+  .ovl-chrome-search-icon { flex: 0 0 auto; color: rgba(0, 0, 0, 0.45); }
   .ovl-chrome-search-input {
     flex: 1; min-width: 0;
     background: none; border: none; outline: none;
-    color: #fff; font: inherit; font-size: 15px;
+    color: #111; font: inherit; font-size: 15px;
   }
-  .ovl-chrome-search-input::placeholder { color: rgba(255, 255, 255, 0.5); }
+  .ovl-chrome-search-input::placeholder { color: rgba(0, 0, 0, 0.5); }
   .ovl-chrome-search-go {
     flex: 0 0 auto;
     width: 30px; height: 30px; border-radius: 50%;
-    border: none; background: #fff; color: #0a0a0c;
+    border: none; background: #111; color: #fff;
     font-size: 15px; font-weight: 700; cursor: pointer;
     display: inline-flex; align-items: center; justify-content: center;
   }
@@ -116,6 +125,16 @@
      chrome's back — retire them on phones. */
   .look-back-btn-mobile,
   .look-video-close,
-  .look-video-share,
   .pd-back { display: none !important; }
+
+  /* Share moves OUT of the top-right corner and into the bottom-right
+     column, directly above the Save button, so the two read as one stacked
+     control (founder's call — "share right above the saved button"). */
+  .look-video-share {
+    display: inline-flex !important;
+    top: auto !important;
+    bottom: 68px !important; /* 16px base + 40px Save + 12px gap */
+    right: 16px !important;
+    left: auto !important;
+  }
 }

@@ -103,18 +103,24 @@ export function Layout({ children }: { children: React.ReactNode }) {
             the visual-viewport gap/shrink hacks on supporting browsers;
             iOS Safari still falls back to the visualViewport JS in BottomBar. */}
         <meta name="viewport" content="width=device-width, initial-scale=1, minimum-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover, interactive-widget=resizes-content" />
-        {/* Theme-color drives the iOS Safari toolbar background. Without
-            it, Safari paints a default-white bar at the bottom — visible
-            as a white strip under our matte-black landing. Setting it
-            to the page's own matte black makes the toolbar blend into
-            the page so the bottom edge reads as one continuous surface.
-            We also set apple-mobile-web-app-status-bar-style so the
-            top status zone matches when the page is added to the home
-            screen as a PWA. */}
-        <meta name="theme-color" content="#000000" media="(prefers-color-scheme: dark)" />
-        <meta name="theme-color" content="#000000" />
+        {/* NO theme-color: iOS Safari paints the bottom URL bar as a SOLID
+            fill of whatever theme-color is set to — we had #000000, which
+            read as a hard black bar instead of the translucent, content-
+            blurring toolbar other sites get. Omitting theme-color lets
+            Safari fall back to its adaptive translucent toolbar material,
+            which blurs the page (the feed cards, now edge-to-edge) behind
+            it — the "see-through URL bar" look. The old white-strip concern
+            that justified setting it is moot now that the feed runs to the
+            bottom edge (no dark reserved gap for the bar to expose).
+            apple-mobile-web-app-status-bar-style still styles the PWA
+            status zone. */}
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
+        {/* Declare the app dark so iOS Safari renders its OWN chrome (the
+            bottom URL bar) as a dark, translucent material that blurs the
+            page behind it — instead of the solid WHITE pill it paints when
+            it assumes a light page. Pairs with the removed theme-color above. */}
+        <meta name="color-scheme" content="dark" />
         <title>catalog</title>
         <meta
           name="description"
@@ -176,7 +182,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
 *{scrollbar-width:none;-ms-overflow-style:none}
 *::-webkit-scrollbar{display:none}
-:root{--bg:#0a0a0a;--text:#fff;--card-bg:#1a1a1a;--header-height:64px;--overlay-bg:rgba(10,10,10,.95)}
+:root{color-scheme:dark;--bg:#0a0a0a;--text:#fff;--card-bg:#1a1a1a;--header-height:64px;--overlay-bg:rgba(10,10,10,.95)}
 html,body{touch-action:manipulation;-webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent}
 body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overscroll-behavior:none}
 .app-root{min-height:100vh}
