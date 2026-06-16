@@ -116,6 +116,11 @@ export function Layout({ children }: { children: React.ReactNode }) {
             status zone. */}
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
+        {/* Declare the app dark so iOS Safari renders its OWN chrome (the
+            bottom URL bar) as a dark, translucent material that blurs the
+            page behind it — instead of the solid WHITE pill it paints when
+            it assumes a light page. Pairs with the removed theme-color above. */}
+        <meta name="color-scheme" content="dark" />
         <title>catalog</title>
         <meta
           name="description"
@@ -177,7 +182,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
 *,*::before,*::after{margin:0;padding:0;box-sizing:border-box}
 *{scrollbar-width:none;-ms-overflow-style:none}
 *::-webkit-scrollbar{display:none}
-:root{--bg:#0a0a0a;--text:#fff;--card-bg:#1a1a1a;--header-height:64px;--overlay-bg:rgba(10,10,10,.95)}
+:root{color-scheme:dark;--bg:#0a0a0a;--text:#fff;--card-bg:#1a1a1a;--header-height:64px;--overlay-bg:rgba(10,10,10,.95)}
 html,body{touch-action:manipulation;-webkit-text-size-adjust:100%;-webkit-tap-highlight-color:transparent}
 body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-serif;background:var(--bg);color:var(--text);min-height:100vh;overscroll-behavior:none}
 .app-root{min-height:100vh}
