@@ -670,6 +670,12 @@ export function reorderBySeen(looks: Look[], seenLookIds: Set<string>): Look[] {
   return [...unseen, ...seen];
 }
 
+// Subscribers notified when the looks cache is invalidated. Declared above
+// invalidateLooksCache so its broadcast loop isn't a forward-ref (TDZ
+// chunk-order safety — see scripts/check-tdz-forward-refs).
+type LooksChangeListener = () => void;
+const looksChangeListeners = new Set<LooksChangeListener>();
+
 // Admin surfaces (Content page, etc.) call this after a mutation so the next
 // consumer fetch returns fresh data instead of a stale cached promise.
 export function invalidateLooksCache() {
@@ -690,8 +696,6 @@ export function invalidateLooksCache() {
 // the Supabase realtime channel below (cross-tab / cross-user
 // propagation). Listeners typically respond by calling getLooks()
 // again and setting state — no per-row diffing.
-type LooksChangeListener = () => void;
-const looksChangeListeners = new Set<LooksChangeListener>();
 export function subscribeToLooksChange(cb: LooksChangeListener): () => void {
   looksChangeListeners.add(cb);
   return () => { looksChangeListeners.delete(cb); };
