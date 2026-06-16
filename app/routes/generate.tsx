@@ -2211,20 +2211,21 @@ export default function GeneratePage() {
                 </div>
                 <div className="gen-rv-control">
                   <span className="gen-rv-control-label">Length</span>
-                  {model === 'pro' ? (
-                    <div className="gen-review-toggle">
-                      {[5, 10].map(sec => (
-                        <button
-                          key={sec}
-                          type="button"
-                          className={`gen-review-toggle-btn${clipSeconds === sec ? ' is-picked' : ''}`}
-                          onClick={() => setClipSeconds(sec as 5 | 10)}
-                        >{sec}s</button>
-                      ))}
-                    </div>
-                  ) : (
-                    <span className="gen-rv-control-value">{clipSeconds}s</span>
-                  )}
+                  {/* Always render the toggle (10s disabled on Fast, which is
+                      5s-only) so switching Fast ↔ Pro never changes the
+                      control's footprint — no layout shift. */}
+                  <div className="gen-review-toggle">
+                    {[5, 10].map(sec => (
+                      <button
+                        key={sec}
+                        type="button"
+                        className={`gen-review-toggle-btn${clipSeconds === sec ? ' is-picked' : ''}`}
+                        onClick={() => { if (model === 'pro') setClipSeconds(sec as 5 | 10); }}
+                        disabled={model === 'fast' && sec === 10}
+                        title={model === 'fast' && sec === 10 ? 'Pro only' : undefined}
+                      >{sec}s</button>
+                    ))}
+                  </div>
                 </div>
               </div>
             </div>
