@@ -198,6 +198,17 @@
   background: rgba(0, 0, 0, 0.65);
 }
 
+/* Hero loading backdrop — an animated shimmer behind the poster/video/image
+   so a product never opens to a flat black box while its media loads (worst
+   on cold loads where there's no card frame to hand off). The .card-shimmer
+   class supplies the moving gradient; this just pins it to the hero floor. */
+.pd-hero-shimmer {
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  border-radius: 0;
+}
+
 /* Desktop Catalog → home button beside the back button (upper-left), mirroring
    the mobile OverlayChrome's back + logo set. Same glass treatment as .pd-back
    so the two read as one cluster. Hidden on mobile (OverlayChrome owns it). */

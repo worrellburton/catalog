@@ -1364,6 +1364,12 @@ export default function ProductPage({
         {heroEnabled && (
         <div className="pd-split">
           <section className={heroClassName}>
+            {/* Animated loading backdrop — sits at the very bottom of the hero
+                so while the poster/video/image is still loading the shopper
+                sees a moving shimmer instead of a flat black box. The media
+                layers paint on top (higher z-index / later in DOM) and cover
+                it the instant they're ready. */}
+            <div className="card-shimmer pd-hero-shimmer" aria-hidden="true" />
             {effectiveCreative ? (
               <>
                 {/* Phase 9 instant poster: paints synchronously on mount
