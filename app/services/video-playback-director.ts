@@ -80,12 +80,14 @@ const POOL_MAX_MOBILE_CEILING = 20;
  *
  *  So instead of keeping a small fixed handful warm, we keep the WHOLE visible
  *  grid warm and reserve only enough of the pool for the overlay's own nested
- *  rails: keepWarm = poolMax() - NESTED_FEED_RESERVE. Because keep-warm cards
- *  are PAUSED (hold a decoder instance but don't decode while covered) and
- *  warm + nested <= poolMax <= the decoder-safe ceiling, this never exceeds the
- *  simultaneous-decoder budget the pool cap already guarantees — it just shifts
- *  it toward "feed resumes instantly on back" and away from "nested rail plays a
- *  few more tiles". The rails are off-screen when an overlay first opens, so the
+ *  rails: keepWarm = poolMax() - NESTED_FEED_RESERVE. Because warm + nested <=
+ *  poolMax <= the decoder-safe ceiling, this never exceeds the simultaneous-
+ *  decoder budget the pool cap already guarantees — it just shifts it toward
+ *  "feed never stops" and away from "nested rail plays a few more tiles". The
+ *  warm grid is held PLAYING under the overlay (not paused), so returning has
+ *  nothing to resume — see the release step in rank(). The normal grid already
+ *  sustains poolMax decoding tiles, so the warm grid playing while covered stays
+ *  within that proven count. The rails are off-screen when an overlay first opens, so the
  *  reserve sits free until you actually scroll to them. The kept cards are also
  *  PROTECTED from the nested feed's eviction (see rank()) so they survive while
  *  the overlay is open instead of being stolen the moment a rail tile needs a
@@ -96,10 +98,28 @@ const NESTED_FEED_RESERVE_DESKTOP = 8;
 // a full mobile viewport (2 cols x ~4 rows), so the entire visible grid resumes
 // instantly on back while the nested rail still gets 6 concurrent tiles.
 const NESTED_FEED_RESERVE_MOBILE = 6;
-/** px/s scroll speed above which we skip play() calls (poster only). */
-const SCROLL_VELOCITY_THRESHOLD = 2500;
-/** ms of scroll-quiet before we re-rank after a fast flick. */
-const SCROLL_REST_DELAY_MS = 150;
+/** px/s scroll speed above which the gesture is treated as a violent fling and
+ *  the two SPECULATIVE rank steps are skipped — prearm (pre-buffering upcoming
+ *  clips) and the paused-card resume watchdog. BELOW this, both keep running so
+ *  video stays warm and resuming THROUGHOUT a scroll, not just once it stops.
+ *
+ *  Why 5000 and not the old 2500: iOS momentum/inertial scrolling peaks around
+ *  3000–5000 px/s and stays elevated through its 1–2 s deceleration. At 2500,
+ *  ordinary momentum read as "fast" almost the entire way down — so prearm
+ *  stayed OFF and every newly-visible card cold-attached its HLS chain
+ *  (manifest→playlist→init→segment) only AFTER the scroll settled. That is the
+ *  "videos don't play until I stop scrolling" report. Raising the cutoff keeps
+ *  prearm + the watchdog live through normal momentum, so upcoming clips are
+ *  pre-decoded into spare pool elements and adopt INSTANTLY on promotion (a re-
+ *  parent + play(), no cold buffer) while the feed is still moving. We only bail
+ *  on a genuine hard fling (>5000), where cards fly past before they'd reach the
+ *  play band and pre-buffering them is wasted decode competing with the scroll. */
+const SCROLL_VELOCITY_THRESHOLD = 5000;
+/** ms of scroll-quiet before the fling gate clears. 260 (was 150) so the gate
+ *  doesn't flap on/off as iOS momentum decays in bursts — it re-enables prearm
+ *  once in a single step when the gesture actually rests, rather than strobing
+ *  speculative work during the tail of a flick. */
+const SCROLL_REST_DELAY_MS = 260;
 /** Max play() retries per card before marking it degraded. */
 const MAX_RETRIES = 2;
 /** rootMargin for the "near viewport" observer that gates which cards rank()
@@ -782,10 +802,35 @@ class VideoPlaybackDirector {
     return null;
   }
 
+  /** True if a card `id` lives under overlay `prefix`. Every scoped slotId is
+   *  built as `${prefix}:…` (see FeedSection / LookOverlay / ProductPage /
+   *  CreatorPage), so the match MUST include the trailing ':' delimiter — a bare
+   *  startsWith(prefix) would let `look:42` falsely swallow `look:420:…` (look
+   *  ids are numeric) or `product:Nike:Air` swallow `product:Nike:Air Force:…`
+   *  (brand/name are free strings). Root home-feed tiles are hyphen-delimited
+   *  (`look-…`, `creative-…`) so they never match any colon-prefixed scope. */
+  private idInScope(id: string, prefix: string): boolean {
+    return id.startsWith(prefix + ':');
+  }
+
   /** A card is eligible to play only if it belongs to the active scope. */
   private inActiveScope(id: string): boolean {
     const scope = this.activeScope();
-    return scope === null ? true : id.startsWith(scope);
+    return scope === null ? true : this.idInScope(id, scope);
+  }
+
+  /** True if `id` belongs to ANY overlay scope on the stack (the active one OR a
+   *  parent still mounted beneath it) — i.e. it's an overlay's nested-feed / rail
+   *  tile, not a ROOT home-feed card. Root feed tiles carry no scope prefix
+   *  (`creative-…`, `look-…`); overlay tiles are prefixed (`look:42:…`,
+   *  `product:…:…`). keep-warm uses this so the root feed — the eventual
+   *  "back-back to feed" target — keeps its warm slots ahead of intermediate
+   *  overlay rails when a nested stack contends for the fixed warm budget. */
+  private belongsToAnyScope(id: string): boolean {
+    for (const prefix of this.scopeStack) {
+      if (this.idInScope(id, prefix)) return true;
+    }
+    return false;
   }
 
   /**
@@ -979,7 +1024,19 @@ class VideoPlaybackDirector {
     const playMargin = playMarginPx();
     const releaseMargin = releaseMarginPx();
     const prearmMargin = prearmMarginPx();
-    const max = poolMax();
+    // Effective pool cap, with decode headroom reserved for the overlay HERO(es).
+    // On open a feed card donates its <video> to the overlay hero — stealVideoElement
+    // splices it OUT of this.pool, then the pool regrows toward poolMax, so the
+    // hero decodes ON TOP of a full pool (pool + heroes can reach poolMax + N).
+    // Now that the covered feed KEEPS PLAYING (not paused), that surplus can breach
+    // the iOS simultaneous-decoder ceiling and stall the FOREGROUND hero/rails —
+    // worse than the resume seam we removed. So shrink the cap by the number of
+    // off-pool heroes currently out (trailReturn tracks exactly those), keeping
+    // pool + heroes within the budget the normal grid already sustains. Mobile only
+    // (desktop has the headroom and no ceiling); the reserve is capped at 3 so a
+    // deep stack can't starve the visible grid. Desktop: heroReserve = 0, unchanged.
+    const heroReserve = isMobileViewport() ? Math.min(this.trailReturn.size, 3) : 0;
+    const max = poolMax() - heroReserve;
 
     // Snapshot every card with its current distance. We classify into
     // three bands using hysteresis:
@@ -1007,43 +1064,64 @@ class VideoPlaybackDirector {
     // ("feed dead on back"). The budget is the pool MINUS a reserve for the
     // overlay's own nested rails (keepWarm = poolMax - NESTED_FEED_RESERVE), so
     // the WHOLE visible grid stays warm while warm + nested ≤ poolMax keeps total
-    // decoders within the safe ceiling. Desktop keeps them PLAYING (seamless,
-    // zero hitch on back); mobile PAUSES them (decoder-safe, instant resume from
-    // the retained surface) — see the device-split in the release step below.
+    // decoders within the safe ceiling. The warm grid is held PLAYING on every
+    // device (see the release step below) so returning has nothing to resume —
+    // no "feed pauses a beat then plays again" seam on Back, single or stacked.
     const keepWarm = new Set<string>();
     if (this.activeScope() !== null) {
       const reserve = isMobileViewport() ? NESTED_FEED_RESERVE_MOBILE : NESTED_FEED_RESERVE_DESKTOP;
       const warmBudget = Math.max(0, max - reserve);
-      const warmCandidates = ranked
+      const candidates = ranked
         .filter(r => r.entry.videoEl && !this.inActiveScope(r.id) && r.distance <= playMargin)
-        .sort((a, b) => a.distance - b.distance)
-        .slice(0, warmBudget);
-      for (const { id } of warmCandidates) keepWarm.add(id);
+        .sort((a, b) => a.distance - b.distance);
+      // Stack-depth priority. With ONE overlay the only out-of-scope candidates
+      // are root home-feed cards, so the whole visible grid stays warm. But with
+      // STACKED overlays (look → product) the parent overlay is still mounted, so
+      // its rail tiles are ALSO out of the active scope and at distance ~0 — they
+      // compete with the home feed for the same fixed budget (8 on mobile). A pure
+      // distance sort then let parent rails evict feed cards, so the feed
+      // cold-rebuffered on the final Back: the "feed pauses a beat then resumes"
+      // on back-back. Fix: the ROOT feed (no scope prefix) is the eventual
+      // back-to-feed target — give it the slots first, then let the nearest parent
+      // rails take whatever budget is left. Same total decoders (just a different
+      // pick within the budget), and a no-op for the single-overlay case where
+      // parentRails is empty (identical to the old distance sort).
+      const rootFeed = candidates.filter(r => !this.belongsToAnyScope(r.id));
+      const parentRails = candidates.filter(r => this.belongsToAnyScope(r.id));
+      for (const { id } of [...rootFeed, ...parentRails].slice(0, warmBudget)) keepWarm.add(id);
     }
 
     // 1. Release: anything past releaseMargin — OR outside the active overlay
     //    scope (e.g. the home feed behind an open overlay) — gives its slot
-    //    back so it stops decoding. EXCEPT the keep-warm set.
+    //    back so it stops decoding. EXCEPT the keep-warm set, which is held
+    //    PLAYING under the overlay on ALL devices.
     //
-    //    Keep-warm handling is DEVICE-SPLIT:
-    //    • Desktop — leave the card PLAYING under the overlay (do NOT pause it).
-    //      The overlay surface is opaque (#0a0a0a fully covers the feed — there's
-    //      no backdrop blur over it to re-rasterize), and desktop has decode
-    //      headroom with no iOS decoder ceiling, so the only cost is decoding a
-    //      covered clip. The payoff: returning to the feed is TRULY seamless —
-    //      the card never paused, so there's nothing to resume and no visible
-    //      "adjacent videos pause then resume on back" hitch.
-    //    • Mobile — PAUSE in place (element + decoded surface retained) to stay
-    //      under the iOS simultaneous-decoder ceiling; the retained surface still
-    //      makes the paused→play resume instant on return.
-    const pauseWarm = isMobileViewport();
+    //    The background feed KEEPS PLAYING while an overlay is open (it used to
+    //    PAUSE on mobile under the iOS-decoder-ceiling assumption). Two reasons
+    //    this is safe and is the behaviour we want:
+    //      • "Always playing" = nothing to resume on Back. A paused→play resume
+    //        across the visible grid as the close animation settles is
+    //        perceptible — that's the "feed pauses a beat then plays again" on
+    //        return (single OR multi-layer). Never pausing removes the seam
+    //        outright instead of racing to hide it under the slide.
+    //      • Decoder budget is UNCHANGED. keepWarm + reserve ≤ poolMax, and the
+    //        normal grid already sustains poolMax simultaneously-decoding tiles
+    //        while scrolling — so the warm grid playing under an overlay stays
+    //        within that same proven count. The overlay's own foreground (hero +
+    //        its nested rails) still gets the reserve slots. (Revert lever: if a
+    //        device ever stalls the foreground, re-introduce a mobile pause here.)
     for (const { id, entry, distance } of ranked) {
       if (!entry.videoEl) continue;
       if (keepWarm.has(id)) {
-        if (pauseWarm && !entry.videoEl.paused) {
-          try { entry.videoEl.pause(); } catch { /* ignore */ }
-          entry.status = 'paused';
-          this.emit(id, 'paused');
+        // Hold it live. It was playing in the feed before the overlay covered it,
+        // so this is normally a no-op. Re-kick a stray pause/race, but RESPECT the
+        // play() backoff (don't reset retryCount) — a clip iOS genuinely won't
+        // decode under load must not hot-loop play() every rank pass. Same guard
+        // the watchdog uses: skip once retries are exhausted and a failure was
+        // recent; playEl's own success path resets the counter when it recovers.
+        const recentlyExhausted = entry.retryCount > MAX_RETRIES && Date.now() - entry.lastFailureAt < 5000;
+        if (entry.videoEl.paused && entry.status !== 'loading' && !recentlyExhausted) {
+          this.playEl(id, entry);
         }
         continue;
       }
