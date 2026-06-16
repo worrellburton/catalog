@@ -8,6 +8,10 @@ import {
   retryCrawlJob,
   triggerCrawl,
   listDiscoveredUrls,
+  getWeeklyRecrawlEnabled,
+  setWeeklyRecrawlEnabled,
+  getNextWeeklyRecrawl,
+  WEEKLY_RECRAWL_LABEL,
   type CrawlJob,
   type CrawlDiscoveredUrl,
 } from '~/services/site-crawls';
@@ -269,112 +273,79 @@ function DiscoveredUrlsPanel({
   );
 }
 
-type AutomationFrequency = 'off' | 'hourly' | 'daily' | 'weekly' | 'monthly';
-
-interface AutomationSettings {
-  enabled: boolean;
-  frequency: AutomationFrequency;
+function formatUtcRun(d: Date): string {
+  const date = d.toLocaleDateString('en-US', {
+    weekday: 'short', month: 'short', day: 'numeric', timeZone: 'UTC',
+  });
+  return `${date} · 6:00 AM UTC`;
 }
 
-const AUTOMATION_STORAGE_KEY = 'catalog-crawl-automations';
-
-function loadAutomations(): Record<string, AutomationSettings> {
-  if (typeof window === 'undefined') return {};
-  try {
-    return JSON.parse(localStorage.getItem(AUTOMATION_STORAGE_KEY) || '{}');
-  } catch {
-    return {};
-  }
+function relativeFromNow(d: Date): string {
+  const diff = d.getTime() - Date.now();
+  const days = Math.round(diff / 86_400_000);
+  if (days <= 0) return `in ${Math.max(1, Math.round(diff / 3_600_000))}h`;
+  if (days === 1) return 'tomorrow';
+  return `in ${days} days`;
 }
 
-function saveAutomation(jobId: string, settings: AutomationSettings) {
-  if (typeof window === 'undefined') return;
-  const all = loadAutomations();
-  all[jobId] = settings;
-  localStorage.setItem(AUTOMATION_STORAGE_KEY, JSON.stringify(all));
-}
-
-function AutomationRow({
-  current,
-  colSpan,
-  onSave,
-  onClose,
+// Global control + status for the weekly Modal re-crawl cron. The schedule
+// is fixed in agents/site-crawler/modal_app.py; this card pauses/resumes it
+// via an app_settings flag the cron honors (fail-closed) and shows when it
+// will next run.
+function WeeklyRecrawlBanner({
+  enabled,
+  saving,
+  onToggle,
+  lastRunIso,
 }: {
-  current: AutomationSettings;
-  colSpan: number;
-  onSave: (settings: AutomationSettings) => void;
-  onClose: () => void;
+  enabled: boolean;
+  saving: boolean;
+  onToggle: () => void;
+  lastRunIso: string | null;
 }) {
-  const [enabled, setEnabled] = useState(current.enabled);
-  const [frequency, setFrequency] = useState<AutomationFrequency>(
-    current.frequency === 'off' ? 'daily' : current.frequency
-  );
-
-  const handleSave = () => {
-    onSave({ enabled, frequency: enabled ? frequency : 'off' });
-    onClose();
-  };
-
-  const frequencyOptions: { value: AutomationFrequency; label: string; desc: string }[] = [
-    { value: 'hourly', label: 'Hourly', desc: 'Every hour' },
-    { value: 'daily', label: 'Daily', desc: 'Once a day' },
-    { value: 'weekly', label: 'Weekly', desc: 'Every Monday' },
-    { value: 'monthly', label: 'Monthly', desc: 'On the 1st' },
-  ];
-
+  const nextRun = getNextWeeklyRecrawl();
   return (
-    <tr className="admin-automation-row" onClick={(e) => e.stopPropagation()}>
-      <td colSpan={colSpan} style={{ padding: 0, background: '#fafafa' }}>
-        <div className="admin-automation-panel">
-          <div className="admin-automation-header">
-            <div>
-              <div style={{ fontSize: 13, fontWeight: 600, color: '#1a1a1a' }}>Automated re-crawl</div>
-              <div style={{ fontSize: 11, color: '#888', marginTop: 2 }}>
-                Periodically re-run this crawl to keep data fresh
-              </div>
-            </div>
-            <button
-              type="button"
-              className={`admin-toggle-btn ${enabled ? 'on' : 'off'}`}
-              onClick={() => setEnabled(!enabled)}
-              aria-label="Toggle automation"
-            >
-              <span className="admin-toggle-track">
-                <span className="admin-toggle-thumb" />
-              </span>
-            </button>
+    <div className={`admin-recrawl-banner ${enabled ? 'is-on' : 'is-off'}`}>
+      <div className="admin-recrawl-main">
+        <div className="admin-recrawl-icon" aria-hidden="true">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+            <circle cx="12" cy="12" r="9" /><polyline points="12 7 12 12 15 14" />
+          </svg>
+        </div>
+        <div className="admin-recrawl-body">
+          <div className="admin-recrawl-title">
+            Weekly auto re-crawl
+            <span className={`admin-recrawl-pill ${enabled ? 'on' : 'off'}`}>
+              {enabled ? 'Active' : 'Paused'}
+            </span>
           </div>
-
-          {enabled && (
-            <div className="admin-automation-freq">
-              {frequencyOptions.map((opt) => (
-                <label
-                  key={opt.value}
-                  className={`admin-automation-opt ${frequency === opt.value ? 'is-active' : ''}`}
-                >
-                  <input
-                    type="radio"
-                    name="frequency-inline"
-                    value={opt.value}
-                    checked={frequency === opt.value}
-                    onChange={() => setFrequency(opt.value)}
-                  />
-                  <div>
-                    <div style={{ fontSize: 13, fontWeight: 500 }}>{opt.label}</div>
-                    <div style={{ fontSize: 11, color: '#888' }}>{opt.desc}</div>
-                  </div>
-                </label>
-              ))}
-            </div>
-          )}
-
-          <div className="admin-automation-actions">
-            <button className="admin-btn admin-btn-secondary" onClick={onClose}>Cancel</button>
-            <button className="admin-btn admin-btn-primary" onClick={handleSave}>Save</button>
+          <div className="admin-recrawl-sub">
+            Automatically re-crawls every previously-crawled site to catch new product
+            URLs. URLs already in the catalog are skipped.
+          </div>
+          <div className="admin-recrawl-meta">
+            <span><strong>Schedule:</strong> {WEEKLY_RECRAWL_LABEL}</span>
+            <span>
+              <strong>Next run:</strong>{' '}
+              {enabled ? `${formatUtcRun(nextRun)} (${relativeFromNow(nextRun)})` : 'Paused — won’t run'}
+            </span>
+            <span><strong>Last run:</strong> {lastRunIso ? timeAgo(lastRunIso) : '—'}</span>
           </div>
         </div>
-      </td>
-    </tr>
+      </div>
+      <button
+        type="button"
+        className={`admin-toggle-btn ${enabled ? 'on' : 'off'}`}
+        onClick={onToggle}
+        disabled={saving}
+        aria-label={enabled ? 'Pause weekly auto re-crawl' : 'Resume weekly auto re-crawl'}
+        title={enabled ? 'Pause weekly auto re-crawl' : 'Resume weekly auto re-crawl'}
+      >
+        <span className="admin-toggle-track">
+          <span className="admin-toggle-thumb" />
+        </span>
+      </button>
+    </div>
   );
 }
 
@@ -536,15 +507,27 @@ export default function SiteCrawlsPanel({ embedded = false }: SiteCrawlsPanelPro
   const [jobs, setJobs] = useState<CrawlJob[]>([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
-  const [expandedAutomationId, setExpandedAutomationId] = useState<string | null>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
-  const [automations, setAutomations] = useState<Record<string, AutomationSettings>>({});
+  const [weeklyEnabled, setWeeklyEnabled] = useState(false);
+  const [weeklySaving, setWeeklySaving] = useState(false);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
   const [crawlError, setCrawlError] = useState<string | null>(null);
 
   useEffect(() => {
-    setAutomations(loadAutomations());
+    getWeeklyRecrawlEnabled().then(setWeeklyEnabled).catch(() => {});
   }, []);
+
+  const handleToggleWeekly = useCallback(async () => {
+    const next = !weeklyEnabled;
+    setWeeklySaving(true);
+    setWeeklyEnabled(next); // optimistic
+    const { error } = await setWeeklyRecrawlEnabled(next);
+    if (error) {
+      setWeeklyEnabled(!next); // revert
+      setCrawlError(`Could not ${next ? 'resume' : 'pause'} the weekly re-crawl: ${error}`);
+    }
+    setWeeklySaving(false);
+  }, [weeklyEnabled]);
 
   const loadJobs = useCallback(async () => {
     try {
@@ -702,6 +685,13 @@ export default function SiteCrawlsPanel({ embedded = false }: SiteCrawlsPanelPro
         </div>
       )}
 
+      <WeeklyRecrawlBanner
+        enabled={weeklyEnabled}
+        saving={weeklySaving}
+        onToggle={handleToggleWeekly}
+        lastRunIso={jobs[0]?.created_at ?? null}
+      />
+
       <div className="admin-stats-grid">
         <div className="admin-stat-card">
           <div className="admin-stat-value">{stats.total}</div>
@@ -732,7 +722,6 @@ export default function SiteCrawlsPanel({ embedded = false }: SiteCrawlsPanelPro
           <table className="admin-table admin-table-clickable">
             <thead>
               <tr>
-                <th style={{ width: 48 }}></th>
                 <th>Site</th>
                 <th>Status</th>
                 <th>URLs Found</th>
@@ -754,7 +743,6 @@ export default function SiteCrawlsPanel({ embedded = false }: SiteCrawlsPanelPro
                 const lastSynced = job.completed_at || (isActive ? null : job.updated_at);
                 const costPerUrl = 0.05;
                 const totalCost = (job.scraped_urls || 0) * costPerUrl;
-                const autoSettings = automations[job.id] || { enabled: false, frequency: 'off' as AutomationFrequency };
 
                 return (
                   <Fragment key={job.id}>
@@ -765,28 +753,6 @@ export default function SiteCrawlsPanel({ embedded = false }: SiteCrawlsPanelPro
                     }
                     style={{ cursor: 'pointer' }}
                   >
-                    <td onClick={(e) => e.stopPropagation()} style={{ width: 48 }}>
-                      <button
-                        className="admin-icon-btn"
-                        title={autoSettings.enabled ? `Automation: ${autoSettings.frequency}` : 'Set automation'}
-                        onClick={() =>
-                          setExpandedAutomationId((prev) => (prev === job.id ? null : job.id))
-                        }
-                        style={{
-                          color: autoSettings.enabled ? '#3b82f6' : 'rgba(0,0,0,0.35)',
-                        }}
-                      >
-                        {autoSettings.enabled ? (
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor" stroke="currentColor" strokeWidth="1" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z" />
-                          </svg>
-                        ) : (
-                          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                            <path d="M13 2L3 14h7l-1 8 10-12h-7l1-8z" />
-                          </svg>
-                        )}
-                      </button>
-                    </td>
                     <td>
                       <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
                         <span style={{ fontWeight: 500 }}>{job.site_name || ' - '}</span>
@@ -892,19 +858,8 @@ export default function SiteCrawlsPanel({ embedded = false }: SiteCrawlsPanelPro
                       </div>
                     </td>
                   </tr>
-                  {expandedAutomationId === job.id && (
-                    <AutomationRow
-                      current={autoSettings}
-                      colSpan={10}
-                      onClose={() => setExpandedAutomationId(null)}
-                      onSave={(settings) => {
-                        saveAutomation(job.id, settings);
-                        setAutomations((prev) => ({ ...prev, [job.id]: settings }));
-                      }}
-                    />
-                  )}
                   {expandedId === job.id && (
-                    <SitemapExpandedRow crawlId={job.id} colSpan={10} />
+                    <SitemapExpandedRow crawlId={job.id} colSpan={9} />
                   )}
                   </Fragment>
                 );

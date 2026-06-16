@@ -600,6 +600,21 @@ def weekly_recrawl_sites():
 
     supabase = create_client(os.environ["SUPABASE_URL"], os.environ["SUPABASE_SERVICE_ROLE_KEY"])
 
+    # 0. Honor the admin kill-switch (Indexers → Full Site UI writes this).
+    #    Fail CLOSED: only run when explicitly enabled. Missing row = paused.
+    flag = (
+        supabase.table("app_settings")
+        .select("value")
+        .eq("key", "weekly_recrawl_enabled")
+        .limit(1)
+        .execute()
+    )
+    flag_rows = flag.data or []
+    enabled = bool(flag_rows) and str(flag_rows[0].get("value", "")).strip().lower() == "true"
+    if not enabled:
+        print("Weekly re-crawl is paused (app_settings.weekly_recrawl_enabled != 'true') — skipping.")
+        return
+
     # 1. Find all unique site_urls with at least one 'done' job
     done_rows = (
         supabase.table("crawl_jobs")

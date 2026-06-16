@@ -1,4 +1,37 @@
 import { supabase } from '~/utils/supabase';
+import { getAppSetting, setAppSetting } from '~/services/app-settings';
+
+// ─── Weekly auto re-crawl schedule (Modal cron) ──────────────────────
+// The actual job lives in agents/site-crawler/modal_app.py as
+// `weekly_recrawl_sites` (cron "0 6 * * 1"). It re-crawls every site that
+// has ever completed a crawl. These mirror that schedule for display and
+// gate it via an app_settings flag the cron reads (fail-closed).
+
+export const WEEKLY_RECRAWL_ENABLED_KEY = 'weekly_recrawl_enabled';
+export const WEEKLY_RECRAWL_LABEL = 'Every Monday · 6:00 AM UTC';
+
+/** Whether the Modal weekly re-crawl cron is allowed to run. Defaults to off. */
+export async function getWeeklyRecrawlEnabled(): Promise<boolean> {
+  const v = await getAppSetting(WEEKLY_RECRAWL_ENABLED_KEY);
+  return (v ?? '').trim().toLowerCase() === 'true';
+}
+
+export async function setWeeklyRecrawlEnabled(enabled: boolean): Promise<{ error: string | null }> {
+  return setAppSetting(WEEKLY_RECRAWL_ENABLED_KEY, enabled ? 'true' : 'false');
+}
+
+/** Next Monday at 06:00 UTC strictly after `from` (matches cron "0 6 * * 1"). */
+export function getNextWeeklyRecrawl(from: Date = new Date()): Date {
+  const next = new Date(Date.UTC(
+    from.getUTCFullYear(), from.getUTCMonth(), from.getUTCDate(), 6, 0, 0, 0,
+  ));
+  // Advance day-by-day until we land on a Monday strictly in the future.
+  while (next.getUTCDay() !== 1 || next.getTime() <= from.getTime()) {
+    next.setUTCDate(next.getUTCDate() + 1);
+    next.setUTCHours(6, 0, 0, 0);
+  }
+  return next;
+}
 
 // ─── Types ───────────────────────────────────────────────────────────
 
