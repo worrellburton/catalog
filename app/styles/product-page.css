@@ -1379,12 +1379,12 @@
   bottom: 10px;
   display: inline-flex;
   align-items: center;
-  gap: 8px;
-  padding: 6px 12px 6px 6px;
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.55);
-  backdrop-filter: blur(6px);
-  -webkit-backdrop-filter: blur(6px);
+  /* Clean avatar + name, NO dark pill — matches the home-feed creator chip
+     (.card-creator-tag) so creator attribution reads identically everywhere
+     (founder's call — "the feed's creator-name style, everywhere").
+     Legibility comes from the name's text-shadow + the avatar's own ring,
+     exactly like the feed. */
+  gap: 6px;
   color: #fff;
   text-decoration: none;
   cursor: pointer;
@@ -1395,10 +1395,6 @@
   /* Override the inherited pointer-events:none used elsewhere — the
      chip IS the click target for "open creator catalog". */
   pointer-events: auto;
-  transition: background 0.18s ease;
-}
-.pd-look-tile-meta:hover {
-  background: rgba(0, 0, 0, 0.75);
 }
 /* Keep the look-tile creator avatar + name WHITE, like the home feed —
    not the gold "following" accent. The shared CreatorAvatarFollow turns the
