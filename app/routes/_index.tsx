@@ -533,15 +533,15 @@ export default function Home() {
     const THRESHOLD = 8; // px of continuous direction before reacting
     let accum = 0;
     let idle = 0;
-    const onScroll = () => {
-      // Frozen while an overlay is open — see overlayScrollLockRef. Leaving
-      // lastY untouched keeps the delta continuous when scrolling resumes.
-      if (overlayScrollLockRef.current) return;
-      // Rest return: 2s after the last real scroll the chrome eases back
-      // (same rhythm as the card chrome) — "the search bar is missing"
-      // should never outlive the scroll that hid it.
-      window.clearTimeout(idle);
-      idle = window.setTimeout(() => setChromeHidden(false), 2000);
+    let raf = 0;
+    // The direction math + setChromeHidden run at most ONCE per frame. iOS fires
+    // scroll at up to ~60Hz during momentum; calling setState off every raw
+    // event re-rendered the whole feed per event and contended with the video
+    // director's per-frame rank() — a primary cause of the on-device scroll
+    // jank. Sampling scrollY once per rAF gives the same telescoped accumulation
+    // (deltas still sum across the gesture) at a fraction of the work.
+    const apply = () => {
+      raf = 0;
       const y = window.scrollY;
       const dy = y - lastY;
       lastY = y;
@@ -553,10 +553,23 @@ export default function Home() {
       if (accum > THRESHOLD)       setChromeHidden(true);
       else if (accum < -THRESHOLD) setChromeHidden(false);
     };
+    const onScroll = () => {
+      // Frozen while an overlay is open — see overlayScrollLockRef. Leaving
+      // lastY untouched keeps the delta continuous when scrolling resumes.
+      if (overlayScrollLockRef.current) return;
+      // Rest return: 2s after the last real scroll the chrome eases back
+      // (same rhythm as the card chrome) — "the search bar is missing"
+      // should never outlive the scroll that hid it.
+      window.clearTimeout(idle);
+      idle = window.setTimeout(() => setChromeHidden(false), 2000);
+      if (raf) return;
+      raf = requestAnimationFrame(apply);
+    };
     window.addEventListener('scroll', onScroll, { passive: true });
     return () => {
       window.removeEventListener('scroll', onScroll);
       window.clearTimeout(idle);
+      if (raf) cancelAnimationFrame(raf);
     };
   }, [heroScrolled]);
 

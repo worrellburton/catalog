@@ -98,10 +98,28 @@ const NESTED_FEED_RESERVE_DESKTOP = 8;
 // a full mobile viewport (2 cols x ~4 rows), so the entire visible grid resumes
 // instantly on back while the nested rail still gets 6 concurrent tiles.
 const NESTED_FEED_RESERVE_MOBILE = 6;
-/** px/s scroll speed above which we skip play() calls (poster only). */
-const SCROLL_VELOCITY_THRESHOLD = 2500;
-/** ms of scroll-quiet before we re-rank after a fast flick. */
-const SCROLL_REST_DELAY_MS = 150;
+/** px/s scroll speed above which the gesture is treated as a violent fling and
+ *  the two SPECULATIVE rank steps are skipped — prearm (pre-buffering upcoming
+ *  clips) and the paused-card resume watchdog. BELOW this, both keep running so
+ *  video stays warm and resuming THROUGHOUT a scroll, not just once it stops.
+ *
+ *  Why 5000 and not the old 2500: iOS momentum/inertial scrolling peaks around
+ *  3000–5000 px/s and stays elevated through its 1–2 s deceleration. At 2500,
+ *  ordinary momentum read as "fast" almost the entire way down — so prearm
+ *  stayed OFF and every newly-visible card cold-attached its HLS chain
+ *  (manifest→playlist→init→segment) only AFTER the scroll settled. That is the
+ *  "videos don't play until I stop scrolling" report. Raising the cutoff keeps
+ *  prearm + the watchdog live through normal momentum, so upcoming clips are
+ *  pre-decoded into spare pool elements and adopt INSTANTLY on promotion (a re-
+ *  parent + play(), no cold buffer) while the feed is still moving. We only bail
+ *  on a genuine hard fling (>5000), where cards fly past before they'd reach the
+ *  play band and pre-buffering them is wasted decode competing with the scroll. */
+const SCROLL_VELOCITY_THRESHOLD = 5000;
+/** ms of scroll-quiet before the fling gate clears. 260 (was 150) so the gate
+ *  doesn't flap on/off as iOS momentum decays in bursts — it re-enables prearm
+ *  once in a single step when the gesture actually rests, rather than strobing
+ *  speculative work during the tail of a flick. */
+const SCROLL_REST_DELAY_MS = 260;
 /** Max play() retries per card before marking it degraded. */
 const MAX_RETRIES = 2;
 /** rootMargin for the "near viewport" observer that gates which cards rank()

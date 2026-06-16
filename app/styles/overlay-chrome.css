@@ -85,7 +85,11 @@
        (founder's call — "the white search bar from the main feed"). */
     background: rgba(255, 255, 255, 0.95);
     border: 1px solid rgba(255, 255, 255, 0.7);
-    -webkit-backdrop-filter: blur(28px) saturate(1.5); backdrop-filter: blur(28px) saturate(1.5);
+    /* No backdrop-filter: the fill is 95% opaque white, so a blur behind it is
+       invisible — it was pure per-frame GPU cost on a fixed element that stays
+       on-screen while the overlay's feed scrolls behind it. Removing it is a
+       zero-visual-change scroll win. (The translucent home-feed BottomBar keeps
+       its blur — there the glass actually shows.) */
     box-shadow:
       0 12px 36px rgba(0, 0, 0, 0.34),
       inset 0 1px 0 rgba(255, 255, 255, 0.8);

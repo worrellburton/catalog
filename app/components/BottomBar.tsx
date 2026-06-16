@@ -190,7 +190,9 @@ function BottomBar({
     if (typeof window === 'undefined' || !window.visualViewport) return;
     const vv = window.visualViewport;
     const root = document.documentElement;
-    const update = () => {
+    let raf = 0;
+    const apply = () => {
+      raf = 0;
       const offset = window.innerHeight - vv.height - vv.offsetTop;
       const inset = Math.max(offset, 0);
       root.style.setProperty('--ios-bottom-chrome', `${inset}px`);
@@ -206,12 +208,18 @@ function BottomBar({
       // the visual viewport doesn't shrink).
       setKbInset(inset > 120 ? inset : 0);
     };
-    update();
-    vv.addEventListener('resize', update);
-    vv.addEventListener('scroll', update);
+    // Coalesce to one write per frame. iOS fires visualViewport 'scroll' rapidly
+    // as the URL bar collapses during a feed scroll; writing three CSS custom
+    // properties + a setState off every raw event added avoidable main-thread
+    // work mid-scroll. apply() runs immediately on mount for the first measure.
+    const schedule = () => { if (!raf) raf = requestAnimationFrame(apply); };
+    apply();
+    vv.addEventListener('resize', schedule);
+    vv.addEventListener('scroll', schedule);
     return () => {
-      vv.removeEventListener('resize', update);
-      vv.removeEventListener('scroll', update);
+      vv.removeEventListener('resize', schedule);
+      vv.removeEventListener('scroll', schedule);
+      if (raf) cancelAnimationFrame(raf);
     };
   }, []);
 
