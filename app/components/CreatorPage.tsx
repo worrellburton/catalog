@@ -8,7 +8,8 @@ import CreativeCardV2 from './CreativeCardV2';
 import type { ProductAd } from '~/services/product-creative';
 import { primeLookAssets } from '~/utils/trailPrefetch';
 import { director } from '~/services/video-playback-director';
-import { toggleFollow, isFollowing as fetchIsFollowing, getFollowerCount, getFollowingCount, getFollowers, getFollowing, type FollowUser } from '~/services/follows';
+import { isFollowing as fetchIsFollowing, getFollowerCount, getFollowingCount, getFollowers, getFollowing, type FollowUser } from '~/services/follows';
+import { toggleFollowShared } from '~/hooks/useFollowState';
 import { subscribeToLooksChange, fetchSeenLookIds, reorderBySeen, stableLookId } from '~/services/looks';
 import ParticleBackground from './ParticleBackground';
 import { getCreatorAppearance, getCreatorAppearanceById, type CatalogAppearance, DEFAULT_CATALOG_APPEARANCE } from '~/services/catalog-theme';
@@ -778,7 +779,11 @@ export default function CreatorPage({
     setFollowing(!prev);
     setFollowerCount(n => (n ?? 0) + (prev ? -1 : 1));
     try {
-      const { following: next } = await toggleFollow(followHandle);
+      // Use the SHARED toggle so the header following rail (and every
+      // in-feed follow button for this creator) hears the change via
+      // notifyListChanged — otherwise unfollowing here left the creator
+      // stuck in the top rail until a full reload.
+      const next = await toggleFollowShared(followHandle);
       setFollowing(next);
       // Mirror the feed avatar's behaviour: celebrate a NEW follow with the
       // global follow toast (FollowToastHost listens for catalog:followed).
