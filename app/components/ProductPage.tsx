@@ -722,6 +722,14 @@ export default function ProductPage({
   // Super-admin context panel (metadata + Kaizen chat), opened by the invisible
   // middle-LEFT tap zone (mirrors the middle-right delete zone).
   const [contextOpen, setContextOpen] = useState(false);
+  // Full-screen loader shown until the hero media paints — replaces the flat
+  // black the (mobile) product overlay showed on a cold open. Cleared on the
+  // first hero image/video load, with a safety timeout so it never sticks.
+  const [heroLoaded, setHeroLoaded] = useState(false);
+  useEffect(() => {
+    const t = window.setTimeout(() => setHeroLoaded(true), 1600);
+    return () => window.clearTimeout(t);
+  }, []);
   const pressTimer = useRef<number | null>(null);
   const pressStart = useRef<{ x: number; y: number } | null>(null);
   const longPressFired = useRef(false);
@@ -1318,6 +1326,14 @@ export default function ProductPage({
       <div className="product-page-particles" aria-hidden="true">
         {!isMobileViewport() && <ParticleBackground />}
       </div>
+      {/* Full-screen loader over the black base until the hero paints. Fades
+          out (CSS) once heroLoaded flips; sits below the chrome so Back still
+          works mid-load. */}
+      <div className={`pd-loading${heroLoaded ? ' is-done' : ''}`} aria-hidden="true">
+        <span className="pd-loading-spark">
+          <svg viewBox="0 0 100 100" width="34" height="34"><path d="M50 4 C54 30 70 46 96 50 C70 54 54 70 50 96 C46 70 30 54 4 50 C30 46 46 30 50 4 Z" fill="currentColor" /></svg>
+        </span>
+      </div>
       {/* Scroll-reactive top chrome (mobile): back → previous page, logo
           → home, search → run on the feed. */}
       <OverlayChrome
@@ -1393,6 +1409,7 @@ export default function ProductPage({
                     aria-hidden="true"
                     className="pd-hero-media pd-hero-handoff-poster"
                     style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 0 }}
+                    onLoad={() => setHeroLoaded(true)}
                   />
                 )}
                 <div
@@ -1416,6 +1433,7 @@ export default function ProductPage({
                   aria-hidden="true"
                   className="pd-hero-media"
                   style={{ position: 'absolute', inset: 0, width: '100%', height: '100%' }}
+                  onLoad={() => setHeroLoaded(true)}
                 />
                 {heroHiResSrc !== heroStill && (
                   <img
