@@ -375,7 +375,7 @@ export default function Home() {
   // Search query + ?q= URL sync, including the bump-trigger that lets
   // Enter/suggestion-click bypass the in-feed typing debounce. See
   // useSearchUrlSync.
-  const { searchQuery, setSearchQuery, searchTrigger, bumpSearchTrigger } = useSearchUrlSync();
+  const { searchQuery, setSearchQuery, searchTrigger, bumpSearchTrigger, triggerSource } = useSearchUrlSync();
   const [searchLoading, setSearchLoading] = useState(false);
   const handleSearchLoadingChange = useCallback((loading: boolean) => {
     setSearchLoading(loading);
@@ -582,6 +582,10 @@ export default function Home() {
   useEffect(() => {
     if (searchTrigger === prevTriggerRef.current) return;
     prevTriggerRef.current = searchTrigger;
+    // Back/forward restore (popstate) re-runs the search to repaint results,
+    // but must NOT replay the ceremony — coming back from a product should
+    // land on the results catalog, not the loading animation again.
+    if (triggerSource.current === 'pop') return;
     // Play the ceremony on EVERY committed search (Enter / suggestion tap /
     // brand) — whether from the hero or the bottom search bar in the feed.
     // Live typing doesn't bump the trigger, so it never fires mid-type.
