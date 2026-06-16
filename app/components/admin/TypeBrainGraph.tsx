@@ -318,6 +318,15 @@ export default function TypeBrainGraph(p: Props) {
       setSpin(s => s + 0.0030);
       setRingTheta(t => t + 0.0030);
       setRingMix(m => Math.min(1, m + 0.01));
+      // Slowly orbit the WHOLE constellation so the type nodes travel too —
+      // each node carries its product satellites (they're positioned off the
+      // node's projection), so type + products stay connected and move as one
+      // while the rings drift. Paused during an active drag so interaction
+      // isn't fought. proj/unproj already handle the camera orbit, so taps
+      // stay accurate.
+      if (!gesture.current && !touchGesture.current) {
+        setOrbit(o => ({ ...o, ay: o.ay + 0.0016 }));
+      }
       raf = requestAnimationFrame(tick);
     };
     raf = requestAnimationFrame(tick);

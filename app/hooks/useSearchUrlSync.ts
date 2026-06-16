@@ -1,10 +1,14 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState, type MutableRefObject } from 'react';
 
 interface UseSearchUrlSyncResult {
   searchQuery: string;
   setSearchQuery: (q: string) => void;
   searchTrigger: number;
   bumpSearchTrigger: () => void;
+  /** Why searchTrigger last changed: 'user' = an explicit commit (Enter /
+   *  suggestion / brand) → play the search ceremony; 'pop' = a back/forward
+   *  restore → re-run the search silently (NO ceremony). Read at trigger time. */
+  triggerSource: MutableRefObject<'user' | 'pop'>;
 }
 
 // Two-way binding between the ?q= URL param and a local searchQuery
@@ -38,11 +42,13 @@ export function useSearchUrlSync(): UseSearchUrlSyncResult {
   // for typing.
   const [searchTrigger, setSearchTrigger] = useState(initialUrlQuery ? 1 : 0);
   const isApplyingUrlChange = useRef(false);
+  const triggerSource = useRef<'user' | 'pop'>('user');
 
   const setSearchQuery = useCallback((q: string) => {
     setSearchQueryState(q);
   }, []);
   const bumpSearchTrigger = useCallback(() => {
+    triggerSource.current = 'user';
     setSearchTrigger(t => t + 1);
   }, []);
 
@@ -71,6 +77,9 @@ export function useSearchUrlSync(): UseSearchUrlSyncResult {
         const q = new URLSearchParams(window.location.search).get('q') ?? '';
         if (q !== searchQuery) {
           isApplyingUrlChange.current = true;
+          // Back/forward restore — re-run the search to repaint results, but
+          // mark it so consumers DON'T replay the search ceremony.
+          triggerSource.current = 'pop';
           setSearchQueryState(q);
           setSearchTrigger(t => t + 1);
         }
@@ -80,5 +89,5 @@ export function useSearchUrlSync(): UseSearchUrlSyncResult {
     return () => window.removeEventListener('popstate', onPop);
   }, [searchQuery]);
 
-  return { searchQuery, setSearchQuery, searchTrigger, bumpSearchTrigger };
+  return { searchQuery, setSearchQuery, searchTrigger, bumpSearchTrigger, triggerSource };
 }

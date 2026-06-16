@@ -198,6 +198,42 @@
   background: rgba(0, 0, 0, 0.65);
 }
 
+/* Full-screen product loader — replaces the flat black the mobile overlay
+   showed on a cold open with an animated sweep + pulsing Catalog spark. Sits
+   below the corner controls (z 5) so Back stays usable mid-load; fades out the
+   moment the hero paints (.is-done). */
+.pd-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 4;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: radial-gradient(120% 80% at 50% 40%, #17191f 0%, #0a0a0c 72%);
+  overflow: hidden;
+  opacity: 1;
+  transition: opacity 0.45s ease;
+  pointer-events: none;
+}
+.pd-loading.is-done { opacity: 0; }
+.pd-loading::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, 0.06) 50%, transparent 60%);
+  background-size: 250% 100%;
+  animation: pd-loading-sweep 1.5s ease-in-out infinite;
+}
+.pd-loading-spark {
+  position: relative;
+  color: rgba(255, 255, 255, 0.9);
+  animation: pd-loading-pulse 1.6s ease-in-out infinite;
+  filter: drop-shadow(0 0 16px rgba(255, 255, 255, 0.35));
+}
+@keyframes pd-loading-sweep { 0% { background-position: 200% 0; } 100% { background-position: -60% 0; } }
+@keyframes pd-loading-pulse { 0%, 100% { transform: scale(0.88); opacity: 0.55; } 50% { transform: scale(1.12); opacity: 1; } }
+@media (prefers-reduced-motion: reduce) { .pd-loading::before, .pd-loading-spark { animation: none; } }
+
 /* Hero loading backdrop — an animated shimmer behind the poster/video/image
    so a product never opens to a flat black box while its media loads (worst
    on cold loads where there's no card frame to hand off). The .card-shimmer
