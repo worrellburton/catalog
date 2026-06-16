@@ -2095,3 +2095,21 @@ html:not([data-shell="catalog-app"]) .app-root.looks-feed-bar.looks-feed-bar-hid
   transform: translateY(160%) !important;  /* slide off the bottom on scroll-down */
   pointer-events: none !important;
 }
+
+/* The look daily-feed search bar should read WHITE, matching the product
+   page's .ovl-chrome-search pill (founder's call — "the right search style at
+   the bottom"). Only the RESTING bar gets the white fill; the immersive
+   .search-open sheet keeps its dark glass. White fill + dark contents so it's
+   legible over the dark look hero behind it. */
+html:not([data-shell="catalog-app"]) .app-root.looks-feed-bar .bottom-bar:not(.search-open) {
+  background: rgba(255, 255, 255, 0.95) !important;
+  border-color: rgba(255, 255, 255, 0.7) !important;
+  box-shadow:
+    0 12px 36px rgba(0, 0, 0, 0.34),
+    inset 0 1px 0 rgba(255, 255, 255, 0.8) !important;
+}
+.app-root.looks-feed-bar .bottom-bar:not(.search-open) .bottom-search-input { color: #111; }
+.app-root.looks-feed-bar .bottom-bar:not(.search-open) .bottom-search-input::placeholder { color: rgba(0, 0, 0, 0.5); }
+.app-root.looks-feed-bar .bottom-bar:not(.search-open) .filter-btn.inline { color: rgba(0, 0, 0, 0.55); }
+.app-root.looks-feed-bar .bottom-bar:not(.search-open) .filter-btn.inline.has-filters { background: #111; color: #fff; border-color: #111; }
+.app-root.looks-feed-bar .bottom-bar:not(.search-open) .bottom-search-spinner { color: rgba(0, 0, 0, 0.45); }

@@ -1131,21 +1131,30 @@ html[data-shell="catalog-app"] .gen-page {
   margin-top: 4px;
 }
 
-/* Style picker — a wrapping grid that matches the "Pick your products"
-   cloud (repeat(auto-fill, minmax)) so the two steps share one visual
-   language: cards wrap into rows and the step scrolls vertically, instead
-   of a sideways-scrolling rail. */
+/* Style picker — a single horizontal rail (one row, scrolls sideways) so it
+   keeps its natural one-row height (see .gen-page--style .gen-styleswiper:
+   flex 0 0 auto) and leaves the rest of the viewport for the "direct your
+   own video" notes below. A wrapping grid stacked into many rows and pushed
+   that field off-screen ("can't see the custom box"). Cards keep their
+   bigger size, always-on blurb, and white-outline selection. */
 .gen-styleswiper {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+  display: flex;
+  flex-wrap: nowrap;
   gap: 10px;
   max-width: 100%;
   min-width: 0;
-  padding-bottom: 4px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding-bottom: 6px;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  scroll-snap-type: x proximity;
 }
 .gen-styleswiper::-webkit-scrollbar { display: none; }
 .gen-styleswiper > .gen-stylecard {
-  width: auto;
+  flex: 0 0 auto;
+  width: 150px;
+  scroll-snap-align: start;
 }
 
 /* Mobile fit: the style step and its free-text textarea never exceed the

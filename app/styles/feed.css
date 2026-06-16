@@ -7,17 +7,17 @@
   width: 100%;
 }
 
-/* Mobile: the floating search bar lifts above the iOS URL chrome via
-   --ios-bottom-chrome (set live by BottomBar). The feed itself has to
-   reserve at least that much room PLUS the bar height + breathing
-   space, otherwise the last row of cards gets hidden behind the bar
-   when the URL toolbar is expanded. */
+/* Mobile: TRUE edge-to-edge feed (founder's call — "no solid color at the
+   bottom; see-through under the URL bar"). The cards must run UNDER the iOS
+   Safari toolbar, because that bar is a frosted blur of whatever's behind it:
+   with content under it, the frost blurs the CARDS (the see-through look);
+   reserving the toolbar height instead left an empty dark gap behind the
+   frost, which read as a flat solid band. So we reserve NOTHING at the bottom
+   — cards fill to the very edge and the browser bar + the app's own floating
+   search pill (which auto-hides on scroll) ride over the last row. */
 @media (max-width: 768px) {
   .continuous-feed {
-    padding-bottom: max(
-      140px,
-      calc(var(--ios-bottom-chrome, 0px) + env(safe-area-inset-bottom) + 96px)
-    );
+    padding-bottom: 0;
   }
 }
 
