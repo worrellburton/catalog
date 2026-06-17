@@ -213,15 +213,30 @@ function releaseMarginPx(): number {
  *  never past the decoder-safe ceiling. The cap is a CEILING, not a target —
  *  the steady-state decode count is whatever falls inside the (tight) play band.
  *  Desktop keeps its flat cap. */
-function poolMax(): number {
+function poolMax(tileW = 0, tileH = 0): number {
   if (!isMobileViewport()) return POOL_MAX_DESKTOP;
   if (typeof window === 'undefined') return POOL_MAX_MOBILE;
-  const COLS = 2, GAP = 2; // mobile feed grid: repeat(2, 1fr), 2px gap (feed.css)
-  const cardW = (window.innerWidth - GAP) / COLS;
-  const rowPitch = cardW * (4 / 3) + GAP; // 3:4 cards
+  const GAP = 2;
+  // In-band card count = (rows in band + 1) × columns, so the cap must track the
+  // grid's REAL geometry. The home feed is a fixed 2-col grid, but the creator
+  // catalog renders 1/2/3 cols via its density dial — at 3 cols the tiles are
+  // ~half as wide and the band holds far more of them. Hardcoding 2 cols here
+  // under-sized the pool for the 3-col catalog, so the farthest in-band tiles had
+  // no slot and froze on their poster. When rank() has measured a live tile we
+  // derive cols + row pitch from it (covers any density); before the first
+  // measurement we fall back to the 2-col feed layout.
+  let cols: number, rowPitch: number;
+  if (tileW > 0 && tileH > 0) {
+    cols = Math.max(1, Math.round((window.innerWidth + GAP) / (tileW + GAP)));
+    rowPitch = tileH + GAP;
+  } else {
+    cols = 2; // mobile feed grid: repeat(2, 1fr), 2px gap (feed.css)
+    const cardW = (window.innerWidth - GAP) / cols;
+    rowPitch = cardW * (4 / 3) + GAP; // 3:4 cards
+  }
   const bandPx = window.innerHeight * (1 + 2 * PLAY_MARGIN_VH_MOBILE);
   // +1 row of headroom covers the partial-row overlap at both band ends.
-  const needed = (Math.ceil(bandPx / rowPitch) + 1) * COLS;
+  const needed = (Math.ceil(bandPx / rowPitch) + 1) * cols;
   return Math.min(POOL_MAX_MOBILE_CEILING, Math.max(POOL_MAX_MOBILE, needed));
 }
 function prearmMarginPx(): number {
@@ -317,6 +332,12 @@ class VideoPlaybackDirector {
   private assignedIds = new Set<string>();
   private nearObserver: IntersectionObserver | null = null;
   private elToId = new WeakMap<Element, string>();
+  // Tile geometry of the nearest on-screen card, refreshed each rank() pass and
+  // fed to poolMax() so the pool cap sizes to the grid actually on screen — the
+  // creator catalog's 1/2/3-col density dial, not just the 2-col home feed. 0
+  // until the first measurement, where poolMax() falls back to the feed layout.
+  private observedTileW = 0;
+  private observedTileH = 0;
 
   // Lazy init — safe to import on the server; DOM access only when the
   // first card registers (always in the browser).
@@ -1036,7 +1057,10 @@ class VideoPlaybackDirector {
     // (desktop has the headroom and no ceiling); the reserve is capped at 3 so a
     // deep stack can't starve the visible grid. Desktop: heroReserve = 0, unchanged.
     const heroReserve = isMobileViewport() ? Math.min(this.trailReturn.size, 3) : 0;
-    const max = poolMax() - heroReserve;
+    // observedTile* is from the previous pass (measured in the loop below). A
+    // one-frame lag is harmless — rank() runs on scroll + rAF, and the very first
+    // pass falls back to the 2-col feed layout until a tile is measured.
+    const max = poolMax(this.observedTileW, this.observedTileH) - heroReserve;
 
     // Snapshot every card with its current distance. We classify into
     // three bands using hysteresis:
@@ -1049,6 +1073,7 @@ class VideoPlaybackDirector {
     // what keeps rank() cheap on a long-scrolled feed: getRect() (a forced
     // sync layout) runs for ~the cards on/near screen, never for the thousands
     // that have scrolled out of the band.
+    let nearTileW = 0, nearTileH = 0, nearTileDist = Infinity;
     for (const id of this.nearIds) {
       const entry = this.cards.get(id);
       if (!entry) { this.nearIds.delete(id); continue; }
@@ -1056,8 +1081,13 @@ class VideoPlaybackDirector {
       // Skip cards that haven't laid out yet (0×0 rect) — happens briefly
       // on mount; the next rank() pass picks them up.
       if (rect.width === 0 && rect.height === 0) continue;
-      ranked.push({ id, entry, distance: this.distanceToViewport(rect) });
+      const distance = this.distanceToViewport(rect);
+      // Remember the nearest on-screen tile's size so the next pass's poolMax()
+      // can size the pool to whatever grid (1/2/3-col catalog) is live.
+      if (distance < nearTileDist) { nearTileDist = distance; nearTileW = rect.width; nearTileH = rect.height; }
+      ranked.push({ id, entry, distance });
     }
+    if (nearTileW > 0) { this.observedTileW = nearTileW; this.observedTileH = nearTileH; }
 
     // While an overlay scope is active, keep the background cards ALIVE instead
     // of releasing them, so returning to the feed never shows a cold re-buffer

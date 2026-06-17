@@ -696,6 +696,16 @@ export default function ProductPage({
     [similarCreatives, pickFrom],
   );
 
+  // The Similar rail is a 2-col grid on mobile (3/4/5/6 cols from 768px up).
+  // An odd count there leaves a blank trailing slot, so trim the lone orphan
+  // on mobile only — desktop keeps every match. A single mobile match trims to
+  // none, which hides the section (see its render guard) rather than parking one
+  // tile beside a gap. Recomputed each render so it tracks viewport changes.
+  const similarShown = (() => {
+    const items = moreLikeThis.slice(0, similarLimit);
+    return isMobileViewport() && items.length % 2 === 1 ? items.slice(0, -1) : items;
+  })();
+
   // Warm the rails' posters the moment their data resolves — the Similar
   // grid and look tiles otherwise start downloading at mount and read as
   // black boxes while the bytes arrive. Same rendition math as the cards,
@@ -1326,13 +1336,22 @@ export default function ProductPage({
       <div className="product-page-particles" aria-hidden="true">
         {!isMobileViewport() && <ParticleBackground />}
       </div>
-      {/* Full-screen loader over the black base until the hero paints. Fades
-          out (CSS) once heroLoaded flips; sits below the chrome so Back still
-          works mid-load. */}
+      {/* Loading state shaped like the page itself — a hero skeleton beside
+          the info skeleton (product card, copy lines, action buttons), mirroring
+          .pd-split (stacked on mobile, hero-left/info-right on desktop). Reads as
+          the page assembling in place rather than a generic full-screen spark.
+          Fades out (CSS) once heroLoaded flips; below the chrome so Back works. */}
       <div className={`pd-loading${heroLoaded ? ' is-done' : ''}`} aria-hidden="true">
-        <span className="pd-loading-spark">
-          <svg viewBox="0 0 100 100" width="34" height="34"><path d="M50 4 C54 30 70 46 96 50 C70 54 54 70 50 96 C46 70 30 54 4 50 C30 46 46 30 50 4 Z" fill="currentColor" /></svg>
-        </span>
+        <div className="pd-skel-hero" />
+        <div className="pd-skel-info">
+          <div className="pd-skel-card" />
+          <div className="pd-skel-lines">
+            <span /><span /><span /><span />
+          </div>
+          <div className="pd-skel-actions">
+            <span /><span />
+          </div>
+        </div>
       </div>
       {/* Scroll-reactive top chrome (mobile): back → previous page, logo
           → home, search → run on the feed. */}
@@ -1788,7 +1807,7 @@ export default function ProductPage({
             card so the next-best matches always appear first. The
             infinite "You might also like" feed lives at the bottom
             for open-ended exploration. */}
-        {similarEnabled && moreLikeThis.length > 0 && (
+        {similarEnabled && similarShown.length > 0 && (
           <section className="pd-similar-feed">
             <h2 className="pd-feed-title">
               Similar
@@ -1812,7 +1831,7 @@ export default function ProductPage({
                   Render the unique matches only (capped at the limit) — never
                   pad with fillToExact, which cycles duplicates to reach the
                   count and put the same tile on screen twice. */}
-              {moreLikeThis.slice(0, similarLimit).map((c, i) => (
+              {similarShown.map((c, i) => (
                 <CreativeCardV2
                   key={`mlt-${c.id}-${i}`}
                   slotId={`${directorScope}:mlt-${c.id}-${i}`}

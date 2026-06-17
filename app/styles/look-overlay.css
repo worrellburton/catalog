@@ -440,11 +440,21 @@
   .look-info-topbar .look-comment-btn {
     display: none;
   }
+  /* Save + Share live on the video here, so the topbar is empty on desktop.
+     Collapse it so it doesn't push the centered info group below off-axis
+     with a phantom strip of top spacing. */
+  .look-info-topbar {
+    padding: 0;
+  }
   /* Proper breathing room on the right info column — content sat flush to
      the right edge. Pad the column so every block (tabs, products, about,
-     comments) gets symmetric left/right inset on top of its own padding. */
+     comments) gets symmetric left/right inset on top of its own padding.
+     Also center the WHOLE info group vertically (save count + tabs + summary)
+     as one block — see .look-tab-content below — so a short look reads
+     balanced instead of stranding the Products tab at the top above a big gap. */
   .look-info-col {
     padding-inline: 12px;
+    justify-content: safe center;
   }
 }
 
@@ -578,15 +588,18 @@
 }
 
 /* Desktop: the right panel is full-height, so a short summary (a few products
-   + blurb + buttons) left a big void below. Center the summary vertically so
-   it reads balanced. `safe center` falls back to top-alignment when the
-   content is taller than the panel, so a long product list still scrolls from
-   the top instead of clipping. Mobile keeps the bottom-sheet top-alignment. */
+   + blurb + buttons) left a big void. The whole info group is centered as one
+   block via .look-info-col's `justify-content: safe center` above, so the
+   Products tab and save count ride WITH their content instead of being
+   stranded at the top. For that centering to have free space to distribute,
+   tab-content must size to its content (not flex:1); min-height:0 + its own
+   overflow-y:auto keep a long product list scrolling from the top instead of
+   clipping (safe center then falls back to top alignment). Mobile keeps the
+   bottom-sheet top-alignment + flex:1 fill. */
 @media (min-width: 769px) {
   .look-tab-content {
-    display: flex;
-    flex-direction: column;
-    justify-content: safe center;
+    flex: 0 1 auto;
+    min-height: 0;
   }
 }
 
@@ -1901,3 +1914,86 @@ body:has(.look-overlay.look-overlay--in) {
 .lsg-google:hover { transform: translateY(-1px); }
 .lsg-google:disabled { opacity: 0.6; cursor: default; }
 .lsg-error { color: #f87171; font-size: 13px; margin: 12px 0 0; }
+
+/* ── Cold-open loading skeleton ──
+   Mirrors .look-hero-section's architecture (media + info: meta line, tab,
+   product card, copy lines, two actions) so a cold / deep-link open reads as
+   the look assembling in place. Only rendered when there's no warm tap-handoff
+   frame (see LookOverlay) — warm feed opens morph the hero in instantly and
+   never mount this. Fades out (.is-done) once the hero is ready. */
+.look-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  background: #0a0a0a;
+  overflow: hidden;
+  opacity: 1;
+  transition: opacity 0.45s ease;
+  pointer-events: none;
+}
+.look-loading.is-done { opacity: 0; }
+
+.look-skel-media,
+.look-skel-meta,
+.look-skel-tab,
+.look-skel-card,
+.look-skel-lines span,
+.look-skel-actions span {
+  position: relative;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+}
+.look-skel-media::after,
+.look-skel-meta::after,
+.look-skel-tab::after,
+.look-skel-card::after,
+.look-skel-lines span::after,
+.look-skel-actions span::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, 0.08) 50%, transparent 60%);
+  background-size: 250% 100%;
+  animation: look-skel-sweep 1.5s ease-in-out infinite;
+}
+
+.look-skel-media { flex: 1 1 auto; min-height: 0; border-radius: 16px; }
+.look-skel-info { display: flex; flex-direction: column; gap: 12px; flex: 0 0 auto; }
+.look-skel-meta { width: 64px; height: 12px; }
+.look-skel-tab { width: 104px; height: 28px; border-radius: 8px; }
+.look-skel-card { height: 84px; border-radius: 14px; }
+.look-skel-lines { display: flex; flex-direction: column; gap: 8px; }
+.look-skel-lines span { height: 12px; }
+.look-skel-lines span:nth-child(1) { width: 92%; }
+.look-skel-lines span:nth-child(2) { width: 100%; }
+.look-skel-lines span:nth-child(3) { width: 70%; }
+.look-skel-actions { display: flex; gap: 10px; }
+.look-skel-actions span { flex: 1; height: 46px; border-radius: 999px; }
+
+/* Desktop: mirror the 42% media / 58% info split, pinned to the hero's 85vh. */
+@media (min-width: 769px) {
+  .look-loading {
+    flex-direction: row;
+    gap: 0;
+    padding: 0;
+    bottom: auto;
+    height: 85vh;
+  }
+  .look-skel-media { flex: 0 0 42%; border-radius: 0; }
+  .look-skel-info { flex: 0 0 58%; justify-content: center; padding: 0 60px; }
+  .look-skel-card { height: 92px; }
+}
+@keyframes look-skel-sweep { 0% { background-position: 200% 0; } 100% { background-position: -60% 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .look-skel-media::after,
+  .look-skel-meta::after,
+  .look-skel-tab::after,
+  .look-skel-card::after,
+  .look-skel-lines span::after,
+  .look-skel-actions span::after { animation: none; }
+}

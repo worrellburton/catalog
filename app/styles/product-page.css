@@ -198,17 +198,19 @@
   background: rgba(0, 0, 0, 0.65);
 }
 
-/* Full-screen product loader — replaces the flat black the mobile overlay
-   showed on a cold open with an animated sweep + pulsing Catalog spark. Sits
-   below the corner controls (z 5) so Back stays usable mid-load; fades out the
-   moment the hero paints (.is-done). */
+/* Loading skeleton — mirrors the page's architecture instead of a centered
+   spark: a hero placeholder plus an info column (product card, copy lines,
+   action buttons), laid out exactly like .pd-split — stacked on mobile,
+   hero-left / info-right on desktop. Sits below the corner controls (z 4) so
+   Back stays usable mid-load; fades out the moment the hero paints (.is-done). */
 .pd-loading {
   position: absolute;
   inset: 0;
   z-index: 4;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
   background: radial-gradient(120% 80% at 50% 40%, #17191f 0%, #0a0a0c 72%);
   overflow: hidden;
   opacity: 1;
@@ -216,23 +218,73 @@
   pointer-events: none;
 }
 .pd-loading.is-done { opacity: 0; }
-.pd-loading::before {
+
+/* Shared shimmer surface for every skeleton block. */
+.pd-skel-hero,
+.pd-skel-card,
+.pd-skel-lines span,
+.pd-skel-actions span {
+  position: relative;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+}
+.pd-skel-hero::after,
+.pd-skel-card::after,
+.pd-skel-lines span::after,
+.pd-skel-actions span::after {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, 0.06) 50%, transparent 60%);
+  background: linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, 0.08) 50%, transparent 60%);
   background-size: 250% 100%;
   animation: pd-loading-sweep 1.5s ease-in-out infinite;
 }
-.pd-loading-spark {
-  position: relative;
-  color: rgba(255, 255, 255, 0.9);
-  animation: pd-loading-pulse 1.6s ease-in-out infinite;
-  filter: drop-shadow(0 0 16px rgba(255, 255, 255, 0.35));
+
+.pd-skel-hero { flex: 1 1 auto; min-height: 0; border-radius: 16px; }
+.pd-skel-info { display: flex; flex-direction: column; gap: 12px; flex: 0 0 auto; }
+.pd-skel-card { height: 92px; border-radius: 14px; }
+.pd-skel-lines { display: flex; flex-direction: column; gap: 9px; }
+.pd-skel-lines span { height: 12px; }
+.pd-skel-lines span:nth-child(1) { width: 88%; }
+.pd-skel-lines span:nth-child(2) { width: 100%; }
+.pd-skel-lines span:nth-child(3) { width: 94%; }
+.pd-skel-lines span:nth-child(4) { width: 56%; }
+.pd-skel-actions { display: flex; gap: 10px; }
+.pd-skel-actions span { flex: 1; height: 46px; border-radius: 999px; }
+
+/* Desktop: mirror .pd-split — 3:4 hero on the left, info centered on the right. */
+@media (min-width: 960px) {
+  .pd-loading {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: stretch;
+    gap: 0;
+    padding: 0;
+  }
+  .pd-skel-hero {
+    height: min(100vh, 73vw);
+    aspect-ratio: 3 / 4;
+    align-self: center;
+    justify-self: start;
+    border-radius: 0;
+  }
+  .pd-skel-info {
+    align-self: center;
+    justify-content: center;
+    width: 100%;
+    max-width: 520px;
+    margin-inline: auto;
+    padding: 48px;
+  }
 }
 @keyframes pd-loading-sweep { 0% { background-position: 200% 0; } 100% { background-position: -60% 0; } }
-@keyframes pd-loading-pulse { 0%, 100% { transform: scale(0.88); opacity: 0.55; } 50% { transform: scale(1.12); opacity: 1; } }
-@media (prefers-reduced-motion: reduce) { .pd-loading::before, .pd-loading-spark { animation: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .pd-skel-hero::after,
+  .pd-skel-card::after,
+  .pd-skel-lines span::after,
+  .pd-skel-actions span::after { animation: none; }
+}
 
 /* Hero loading backdrop — an animated shimmer behind the poster/video/image
    so a product never opens to a flat black box while its media loads (worst
