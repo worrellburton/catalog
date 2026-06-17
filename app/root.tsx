@@ -36,6 +36,7 @@ import PullDownActivityGesture from "~/components/PullDownActivityGesture";
 import CreatorLoginToastHost from "~/components/CreatorLoginToastHost";
 import FollowToastHost from "~/components/FollowToastHost";
 import { CatalogDialogProvider } from "~/components/CatalogDialog";
+import ClerkGate from "~/components/ClerkGate";
 import { initSentry, captureException } from "~/utils/sentry";
 
 // Dev-only data-stream waterfall probe. Installs window.__waterfall() and
@@ -324,7 +325,7 @@ export default function App() {
   useEffect(() => { initScrollIdleFade(); }, []);
 
   return (
-    <>
+    <ClerkGate>
       {/* Type-anywhere search lives at the app root so a stray
           keystroke on any page (admin, generate, import, brand
           page, anywhere) bounces back to the home grid with the
@@ -367,7 +368,7 @@ export default function App() {
       <CatalogDialogProvider>
         <Outlet />
       </CatalogDialogProvider>
-    </>
+    </ClerkGate>
   );
 }
 
