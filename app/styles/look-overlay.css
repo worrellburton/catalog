@@ -1914,3 +1914,86 @@ body:has(.look-overlay.look-overlay--in) {
 .lsg-google:hover { transform: translateY(-1px); }
 .lsg-google:disabled { opacity: 0.6; cursor: default; }
 .lsg-error { color: #f87171; font-size: 13px; margin: 12px 0 0; }
+
+/* ── Cold-open loading skeleton ──
+   Mirrors .look-hero-section's architecture (media + info: meta line, tab,
+   product card, copy lines, two actions) so a cold / deep-link open reads as
+   the look assembling in place. Only rendered when there's no warm tap-handoff
+   frame (see LookOverlay) — warm feed opens morph the hero in instantly and
+   never mount this. Fades out (.is-done) once the hero is ready. */
+.look-loading {
+  position: absolute;
+  inset: 0;
+  z-index: 5;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
+  background: #0a0a0a;
+  overflow: hidden;
+  opacity: 1;
+  transition: opacity 0.45s ease;
+  pointer-events: none;
+}
+.look-loading.is-done { opacity: 0; }
+
+.look-skel-media,
+.look-skel-meta,
+.look-skel-tab,
+.look-skel-card,
+.look-skel-lines span,
+.look-skel-actions span {
+  position: relative;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+}
+.look-skel-media::after,
+.look-skel-meta::after,
+.look-skel-tab::after,
+.look-skel-card::after,
+.look-skel-lines span::after,
+.look-skel-actions span::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, 0.08) 50%, transparent 60%);
+  background-size: 250% 100%;
+  animation: look-skel-sweep 1.5s ease-in-out infinite;
+}
+
+.look-skel-media { flex: 1 1 auto; min-height: 0; border-radius: 16px; }
+.look-skel-info { display: flex; flex-direction: column; gap: 12px; flex: 0 0 auto; }
+.look-skel-meta { width: 64px; height: 12px; }
+.look-skel-tab { width: 104px; height: 28px; border-radius: 8px; }
+.look-skel-card { height: 84px; border-radius: 14px; }
+.look-skel-lines { display: flex; flex-direction: column; gap: 8px; }
+.look-skel-lines span { height: 12px; }
+.look-skel-lines span:nth-child(1) { width: 92%; }
+.look-skel-lines span:nth-child(2) { width: 100%; }
+.look-skel-lines span:nth-child(3) { width: 70%; }
+.look-skel-actions { display: flex; gap: 10px; }
+.look-skel-actions span { flex: 1; height: 46px; border-radius: 999px; }
+
+/* Desktop: mirror the 42% media / 58% info split, pinned to the hero's 85vh. */
+@media (min-width: 769px) {
+  .look-loading {
+    flex-direction: row;
+    gap: 0;
+    padding: 0;
+    bottom: auto;
+    height: 85vh;
+  }
+  .look-skel-media { flex: 0 0 42%; border-radius: 0; }
+  .look-skel-info { flex: 0 0 58%; justify-content: center; padding: 0 60px; }
+  .look-skel-card { height: 92px; }
+}
+@keyframes look-skel-sweep { 0% { background-position: 200% 0; } 100% { background-position: -60% 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .look-skel-media::after,
+  .look-skel-meta::after,
+  .look-skel-tab::after,
+  .look-skel-card::after,
+  .look-skel-lines span::after,
+  .look-skel-actions span::after { animation: none; }
+}

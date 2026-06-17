@@ -333,6 +333,18 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
   // frame captured on tap and still wins when present.
   const heroPoster = tapHandoffPoster || posterRendition(lookPoster(look)) || '';
 
+  // Cold-open loading skeleton (mirrors the look's architecture). Warm feed
+  // opens hand off the exact tapped frame (tapHandoffPoster) and morph the hero
+  // in instantly, so the skeleton is SKIPPED there — it must never dull that
+  // open. It renders only on cold / deep-link opens (no handoff frame) to fill
+  // the genuine gap, fading out once the hero is ready (paint or safety timeout).
+  const [heroReady, setHeroReady] = useState<boolean>(() => !!tapHandoffPoster);
+  useEffect(() => {
+    if (heroReady) return;
+    const t = window.setTimeout(() => setHeroReady(true), 1400);
+    return () => window.clearTimeout(t);
+  }, [heroReady]);
+
   // Take ownership of the same shared <video> element the originating
   // LookCard was playing. appendChild moves the DOM node - currentTime,
   // decoded frames, and audio context all survive, so the morph from card
@@ -940,6 +952,21 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
       <div className="look-overlay-particles" aria-hidden="true">
         {!isMobileViewport() && <ParticleBackground />}
       </div>
+      {/* Cold-open architecture skeleton (media + info: meta, tab, product card,
+          copy, actions), mirroring .look-hero-section. Only on cold/deep-link
+          opens — warm feed opens morph the tapped frame in and skip this. */}
+      {!tapHandoffPoster && (
+        <div className={`look-loading${heroReady ? ' is-done' : ''}`} aria-hidden="true">
+          <div className="look-skel-media" />
+          <div className="look-skel-info">
+            <div className="look-skel-meta" />
+            <div className="look-skel-tab" />
+            <div className="look-skel-card" />
+            <div className="look-skel-lines"><span /><span /><span /></div>
+            <div className="look-skel-actions"><span /><span /></div>
+          </div>
+        </div>
+      )}
       {/* Scroll-reactive top chrome (mobile): back → previous page, logo
           → home. Search pill omitted — the daily-feed bar already serves
           search deeper in the look. */}
