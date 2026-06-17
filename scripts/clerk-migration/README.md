@@ -73,8 +73,18 @@ node scripts/clerk-migration/02-import-to-clerk.mjs              # the rest
 - **Phase 2 — Supabase third-party auth:** make Supabase accept Clerk's JWT (so
   the `external_id`→`auth.uid()` mapping is live). Without it the imported
   `external_id` isn't yet wired to RLS.
-- **Phase 4 — admin stays current:** a Clerk webhook → edge function upserts
-  `profiles` on `user.created/updated/deleted` so *new* signups appear in admin
-  too. Set `profiles.id` = `external_id` there to preserve the same key.
+- **Phase 4 — admin stays current (built):**
+  [`supabase/functions/clerk-webhook`](../../supabase/functions/clerk-webhook/index.ts)
+  upserts `profiles` on `user.created/updated/deleted` (so new signups appear in
+  admin), keyed by `id` = `external_id`. Its schema prep is
+  [`20260617000000_clerk_auth_profiles.sql`](../../supabase/migrations/20260617000000_clerk_auth_profiles.sql)
+  (drops the `profiles.id → auth.users` FK, adds `clerk_user_id`). Deploy the
+  function with `--no-verify-jwt` and set `CLERK_WEBHOOK_SECRET` +
+  `CLERK_SECRET_KEY`.
+- **Phase 2 — Supabase third-party auth (not built):** add the custom
+  `app_uid = {{user.external_id}}` + `role: "authenticated"` session-token
+  claims in Clerk, register Clerk as a Supabase third-party provider, and swap
+  RLS from `auth.uid()` to `auth.jwt()->>'app_uid'`. Ships **at cutover** —
+  changing RLS earlier breaks live Supabase sessions.
 - **Phases 5–6:** catalog-server (Auth0/JWT → Clerk verify) and the Flutter
   shell session bridge live in other repos.
