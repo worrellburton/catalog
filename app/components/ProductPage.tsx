@@ -1336,13 +1336,22 @@ export default function ProductPage({
       <div className="product-page-particles" aria-hidden="true">
         {!isMobileViewport() && <ParticleBackground />}
       </div>
-      {/* Full-screen loader over the black base until the hero paints. Fades
-          out (CSS) once heroLoaded flips; sits below the chrome so Back still
-          works mid-load. */}
+      {/* Loading state shaped like the page itself — a hero skeleton beside
+          the info skeleton (product card, copy lines, action buttons), mirroring
+          .pd-split (stacked on mobile, hero-left/info-right on desktop). Reads as
+          the page assembling in place rather than a generic full-screen spark.
+          Fades out (CSS) once heroLoaded flips; below the chrome so Back works. */}
       <div className={`pd-loading${heroLoaded ? ' is-done' : ''}`} aria-hidden="true">
-        <span className="pd-loading-spark">
-          <svg viewBox="0 0 100 100" width="34" height="34"><path d="M50 4 C54 30 70 46 96 50 C70 54 54 70 50 96 C46 70 30 54 4 50 C30 46 46 30 50 4 Z" fill="currentColor" /></svg>
-        </span>
+        <div className="pd-skel-hero" />
+        <div className="pd-skel-info">
+          <div className="pd-skel-card" />
+          <div className="pd-skel-lines">
+            <span /><span /><span /><span />
+          </div>
+          <div className="pd-skel-actions">
+            <span /><span />
+          </div>
+        </div>
       </div>
       {/* Scroll-reactive top chrome (mobile): back → previous page, logo
           → home, search → run on the feed. */}
