@@ -597,9 +597,8 @@ export default function ProductPage({
   const heroEnabled     = isSectionEnabled(productSections, 'hero');
   const similarEnabled  = isSectionEnabled(productSections, 'similar');
   const ymalEnabled     = isSectionEnabled(productSections, 'you-might-also-like');
-  // Per-section caps. Default 8 keeps the historic bounded-grid feel
+  // Per-section caps. Default keeps the historic bounded-grid feel
   // until an admin tunes them in /admin/pages.
-  const similarLimit  = getSectionLimit(productSections, 'similar', 8);
   const ymalLimit     = getSectionLimit(productSections, 'you-might-also-like', 16);
   // YMAL defaults to infinite (seeded in the migration); the toggle
   // lets an admin flip it back to a bounded grid using popularFallback.
@@ -696,15 +695,20 @@ export default function ProductPage({
     [similarCreatives, pickFrom],
   );
 
-  // The Similar rail is a 2-col grid on mobile (3/4/5/6 cols from 768px up).
-  // An odd count there leaves a blank trailing slot, so trim the lone orphan
-  // on mobile only — desktop keeps every match. A single mobile match trims to
-  // none, which hides the section (see its render guard) rather than parking one
-  // tile beside a gap. Recomputed each render so it tracks viewport changes.
-  const similarShown = (() => {
-    const items = moreLikeThis.slice(0, similarLimit);
-    return isMobileViewport() && items.length % 2 === 1 ? items.slice(0, -1) : items;
-  })();
+  // Similar must read as a full, intentional grid — exactly 8 when we have that
+  // many unique matches, otherwise 6 (both land cleanly on the 2-col mobile grid;
+  // never a dangling 5th/7th tile). A sparse similarity RPC is topped up with
+  // DISTINCT popular items (pickFrom de-dupes and drops the current product) so
+  // the grid still reaches 6/8 instead of collapsing to a sparse rail. An empty
+  // RPC yields nothing — we don't fabricate "Similar" out of pure popular.
+  const similarShown = useMemo(() => {
+    if (moreLikeThis.length === 0) return [] as ProductAd[];
+    const target = moreLikeThis.length >= 8 ? 8 : 6;
+    if (moreLikeThis.length >= target) return moreLikeThis.slice(0, target);
+    const seen = new Set(moreLikeThis.map(c => c.product_id));
+    const fillers = pickFrom(popularFallback, target).filter(c => !seen.has(c.product_id));
+    return [...moreLikeThis, ...fillers].slice(0, target);
+  }, [moreLikeThis, popularFallback, pickFrom]);
 
   // Warm the rails' posters the moment their data resolves — the Similar
   // grid and look tiles otherwise start downloading at mount and read as
