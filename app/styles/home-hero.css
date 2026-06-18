@@ -746,21 +746,19 @@
 .sc-rec:active { transform: scale(0.985); }
 .sc-rec-spark { flex: 0 0 auto; display: inline-flex; color: rgba(255, 255, 255, 0.85); filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.4)); }
 .sc-rec-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sc-recs-continue {
-  margin-top: 4px;
-  align-self: center;
-  background: none;
-  border: none;
-  color: rgba(255, 255, 255, 0.55);
-  font-family: inherit;
-  font-size: 13px;
-  font-weight: 600;
-  cursor: pointer;
-  padding: 6px 10px;
-  border-radius: 999px;
-  transition: color 0.15s ease;
+/* Ceremony Option 1: the catalog picks render as an in-flow strip ABOVE the
+   results feed (SearchCatalogStrip). It reuses .sc-recs / .sc-rec; this just
+   sizes + centers it in the feed column — margin-inline auto + an explicit %
+   width, never transform/vw (centering convention). */
+.search-catalog-strip {
+  width: min(560px, calc(100% - 32px));
+  margin: 0 auto;
+  padding: 16px 0 20px;
 }
-.sc-recs-continue:hover { color: rgba(255, 255, 255, 0.9); }
+/* The "keep my search" option — same pill format as the picks, just a touch
+   quieter so it reads as the secondary choice. */
+.sc-rec--continue { opacity: 0.78; }
+.sc-rec--continue:hover { opacity: 1; }
 
 /* Peek-on-landing: the feed wrapper is pulled up under the hero by a
    small amount ONLY while the hero is showing, so just the very top
