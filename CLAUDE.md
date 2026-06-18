@@ -204,6 +204,62 @@ rule (both have already caused production regressions):
 See `.bottom-bar` in `app/styles/bottom-bar.css` for the reference
 implementation (it carries a GUARD comment to the same effect).
 
+### iOS Safari bottom-toolbar "strip" — overlay document-scroll fix
+
+On iOS 26 Safari the bottom URL toolbar applies a **backdrop-frost** over
+whatever the page paints behind it. Where **textured media** (video/photo)
+sits behind it the frost reads see-through; where a **flat color** sits behind
+it the frost renders a visible **strip** (the red/dark/white bar behind the
+`localhost`/URL pill). Setting the overlay background transparent does **not**
+help — Safari just frosts the next flat layer down (`body{background:#0a0a0a}`).
+
+The **home feed** has no strip because it scrolls the **window** (document
+scroll), which makes Safari **collapse the toolbar away entirely**. The detail
+**overlays** (`LookOverlay`, `ProductPage`, …) historically scrolled an **inner
+div** with the body locked (`overflow:hidden`), so the toolbar never collapsed
+and permanently frosted the flat overlay base into a strip.
+
+**The fix (shipped on the look overlay, mobile + non-shell):** make the overlay
+scroll the **document** so the gesture collapses the toolbar like home. Gated by
+a `.look-doc-scroll` class on `.app-root` (set when a *look* — not product — is
+open and `!inShell`). Pieces:
+
+- **CSS** (`look-overlay.css`, `@media (max-width:768px)`): pull the feed +
+  home chrome out of flow — `display:none` on `.app-root.look-doc-scroll`'s
+  `> header, > .home-feed-wrap, > .bottom-bar, > .remix-btn-fixed` **and
+  `.sfh`** (the `ShoppingForHero` home ceremony — it's a *sibling* of
+  `.home-feed-wrap`, NOT inside it). Set `.nav-layer / .look-overlay /
+  .look-overlay-scroll` to `position:static; overflow:visible; height:auto`,
+  and **re-enable `overflow:visible` on html/body** (the body-lock `:has()`
+  rule would otherwise block the document scroll).
+- **JS** (`_index.tsx` body-lock effect): in doc-scroll mode DON'T lock the
+  body — save the feed scroll, park the document at top so the hero shows,
+  restore on close.
+- **JS** (`LookOverlay.tsx`): disable the whole-overlay drag-dismiss in
+  doc-scroll (inner `scrollTop` is always 0 there, so it can't tell top from
+  mid-scroll).
+
+**Gotchas that cost real debugging — read before applying to another page:**
+
+1. The hero `<video>` attaches **UNCONDITIONALLY** on ref-mount
+   (`TrailVideoHost.attach()`), NOT gated on scroll/visibility; the playback
+   director's `notifyScroll` only drives the **rail tiles**. So a **black hero**
+   in doc-scroll is *not* a director/cover bug — it's an in-flow sibling (the
+   `.sfh` ceremony) flowing **above** the overlay and pushing the hero ~1 screen
+   down. Hide the offending sibling.
+2. The **iOS Simulator does NOT render the frost** (it draws a solid bar), so
+   the strip's final appearance is **device-only**; the toolbar *collapse*
+   itself IS sim-visible (`innerHeight` grows on scroll — 714→754 on a 402×874
+   device).
+3. The hero **top** (scrollTop=0) always has the toolbar expanded → a brief
+   strip until you scroll; only the **scrolled** state collapses it.
+
+**To apply to `ProductPage` / other overlays:** replicate the same gating, hide
+whatever in-flow siblings push the overlay down, keep the body unlocked so the
+document scrolls, and disable any at-top drag-dismiss. Verify the hero video
+still renders (sim) and the toolbar collapse (sim); confirm the strip itself on
+a real device.
+
 ---
 
 # SECTION 2 — Admin Panel (Frontend)
