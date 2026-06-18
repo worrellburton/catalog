@@ -38,10 +38,11 @@ export const PARTICLE_INTENSITY = 1.4;
 const PARTICLE_COUNT = Math.round(180 * PARTICLE_INTENSITY);
 
 const VS = /* glsl */ `
-  attribute vec3 aSeed;        // x = phase, y = drift speed, z = base size
+  attribute vec4 aSeed;        // x = phase, y = drift speed, z = base size, w = depth seed
   uniform   float uTime;
   uniform   vec2  uViewport;
   uniform   float uIntensity;  // mirrors PARTICLE_INTENSITY in JS
+  uniform   float uFade;       // 0..1 load fade-in
   varying   float vAlpha;
 
   // Cheap pseudo-noise from a hash - enough texture for drift.
@@ -50,25 +51,35 @@ const VS = /* glsl */ `
   void main() {
     float t = uTime * aSeed.y;
 
+    // DEPTH: each particle lives at a depth in [0,1] (0 = far, 1 = near) that
+    // slowly oscillates, so the cloud reads as living 3D layers rather than a
+    // flat sheet. persp is the perspective factor — near particles are
+    // larger, drift across a wider arc (parallax), and read brighter; far ones
+    // shrink, move less, and dim out (depth fog).
+    float depth = 0.5 + 0.5 * sin(aSeed.w * 6.2831 + t * 0.6);
+    float persp = mix(0.45, 1.55, depth);
+
     // Each particle drifts on a Lissajous-ish path so motion stays smooth
-    // and never repeats exactly within a session.
-    float x = cos(t + aSeed.x * 6.283) * (0.55 + 0.4 * hash(aSeed.x));
-    float y = sin(t * 0.83 + aSeed.x * 4.1) * (0.55 + 0.4 * hash(aSeed.x + 1.7));
+    // and never repeats exactly within a session — amplitude scaled by depth
+    // so near layers parallax past far ones.
+    float x = cos(t + aSeed.x * 6.283) * (0.55 + 0.4 * hash(aSeed.x)) * persp;
+    float y = sin(t * 0.83 + aSeed.x * 4.1) * (0.55 + 0.4 * hash(aSeed.x + 1.7)) * persp;
 
     // Bias slightly upward so the cloud feels like it's rising.
     y += 0.05 * sin(t * 0.4);
 
     gl_Position = vec4(x, y, 0.0, 1.0);
 
-    // Size scales with viewport height so points stay visually consistent.
+    // Size scales with viewport height AND depth so near sparks loom larger.
     float pixelRatio = min(uViewport.y / 800.0, 1.5);
-    gl_PointSize = aSeed.z * pixelRatio;
+    gl_PointSize = aSeed.z * pixelRatio * persp;
 
-    // Pulse opacity per-particle, offset by phase. Multiplied by uIntensity
-    // (clamped to 1.0 in the fragment so glow doesn't blow out) so the
-    // single PARTICLE_INTENSITY knob in JS controls visible brightness too,
-    // not just count.
-    vAlpha = (0.25 + 0.55 * (0.5 + 0.5 * sin(t * 1.7 + aSeed.x * 12.0))) * uIntensity;
+    // Pulse opacity per-particle, offset by phase. Multiplied by depth fog
+    // (far = dimmer), uIntensity (the brightness knob), and uFade (the
+    // load-in ramp). Clamped to 1.0 in the fragment so glow doesn't blow out.
+    float pulse = 0.25 + 0.55 * (0.5 + 0.5 * sin(t * 1.7 + aSeed.x * 12.0));
+    float fog   = mix(0.30, 1.0, depth);
+    vAlpha = pulse * fog * uIntensity * uFade;
   }
 `;
 
@@ -145,15 +156,16 @@ export default function ParticleBackground({ speed }: ParticleBackgroundProps = 
     // Same intensity ratio on mobile, halved baseline (additive-blend fill
     // is the cost on phones).
     const count = isMobile ? Math.round(90 * PARTICLE_INTENSITY) : PARTICLE_COUNT;
-    const seeds = new Float32Array(count * 3);
+    const seeds = new Float32Array(count * 4);
     // Size baseline scales with intensity too so a higher intensity is
     // also a slightly bigger spark, not just more of them.
     const sizeMin = 1.5 * PARTICLE_INTENSITY;
     const sizeMax = 6.0 * PARTICLE_INTENSITY;
     for (let i = 0; i < count; i++) {
-      seeds[i * 3 + 0] = Math.random();                       // phase 0..1
-      seeds[i * 3 + 1] = 0.04 + Math.random() * 0.10;         // very slow drift
-      seeds[i * 3 + 2] = sizeMin + Math.random() * (sizeMax - sizeMin);
+      seeds[i * 4 + 0] = Math.random();                       // phase 0..1
+      seeds[i * 4 + 1] = 0.04 + Math.random() * 0.10;         // very slow drift
+      seeds[i * 4 + 2] = sizeMin + Math.random() * (sizeMax - sizeMin);
+      seeds[i * 4 + 3] = Math.random();                       // depth seed 0..1
     }
 
     const buf = gl.createBuffer();
@@ -162,11 +174,12 @@ export default function ParticleBackground({ speed }: ParticleBackgroundProps = 
 
     const aSeed = gl.getAttribLocation(program, 'aSeed');
     gl.enableVertexAttribArray(aSeed);
-    gl.vertexAttribPointer(aSeed, 3, gl.FLOAT, false, 0, 0);
+    gl.vertexAttribPointer(aSeed, 4, gl.FLOAT, false, 0, 0);
 
     const uTime = gl.getUniformLocation(program, 'uTime');
     const uViewport = gl.getUniformLocation(program, 'uViewport');
     const uIntensity = gl.getUniformLocation(program, 'uIntensity');
+    const uFade = gl.getUniformLocation(program, 'uFade');
     gl.uniform1f(uIntensity, PARTICLE_INTENSITY);
 
     gl.enable(gl.BLEND);
@@ -219,11 +232,16 @@ export default function ParticleBackground({ speed }: ParticleBackgroundProps = 
       last = now;
       gl.clear(gl.COLOR_BUFFER_BIT);
       gl.uniform1f(uTime, reduced ? 0 : accum);
+      // Fade the whole field in over ~900ms when the screen first loads
+      // (reduced-motion users get it fully on at once, no ramp).
+      const fade = reduced ? 1 : Math.min(1, (now - start) / 900);
+      gl.uniform1f(uFade, fade);
       gl.drawArrays(gl.POINTS, 0, count);
-      if (!reduced) raf = requestAnimationFrame(frame);
+      // Keep animating while the field is still fading in even if motion is
+      // otherwise reduced, so the fade itself always completes.
+      if (!reduced || fade < 1) raf = requestAnimationFrame(frame);
     };
     frame();
-    void start;
 
     const onVisibility = () => {
       if (document.hidden) {
