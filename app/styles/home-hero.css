@@ -1409,10 +1409,15 @@
     min-height: 100vh;
     justify-content: flex-end;
     padding-top: calc(env(safe-area-inset-top, 0px) + 96px);
-    /* Headline bottom lands ~54vh from top; bar at 32vh-from-bottom
-       (~62vh from top) sits ~8vh under it — a tight, vertically-centered
-       trio with balanced empty space above and below. */
+    /* Headline bottom lands ~54vh from top; the bar (36vh-from-bottom below)
+       sits ~4vh under it, with a matching spark→headline gap — an evenly
+       spaced, vertically-centered trio. */
     padding-bottom: 46vh;
+  }
+  /* Even, balanced spacing for the desktop hero trio: a comfortable gap
+     between the spark and the headline that matches the headline→bar gap. */
+  .sfh-stage {
+    gap: 36px;
   }
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar,
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar.search-open {
@@ -1442,7 +1447,7 @@
        When the bar gains focus (recommended-options panel about to appear
        above), the trio rises 18vh (32vh → 50vh) so the panel has room
        without colliding with the feed peek; .sfh matches with -18vh. */
-    bottom: 40vh;
+    bottom: 36vh;
     /* MUST re-list transform here: this rule overrides the base
        .ai-bar-wrap transition, and without transform the chrome auto-hide
        slide-back would snap instead of animate. */
@@ -1451,7 +1456,7 @@
       transform 0.4s cubic-bezier(0.32, 0.72, 0, 1);
   }
   body:has(.app-root.home-hero) .ai-bar-wrap:focus-within {
-    bottom: 52vh;
+    bottom: 48vh;
   }
   /* The desktop bar (.ai-bar-wrap) is a SIBLING of .app-root under <body>,
      NOT a descendant — so this MUST be reached from the shared <body>
