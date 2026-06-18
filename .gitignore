@@ -62,3 +62,7 @@ supabase/.temp/
 residential-proxies.txt
 agents/product-scraper/residential-proxies.txt
 agents/video-generator/.venv-backfill/
+
+# Clerk migration artifacts — contain user PII + bcrypt password digests
+scripts/clerk-migration/users-export.json
+scripts/clerk-migration/import-results.json

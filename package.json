@@ -19,6 +19,7 @@
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.93.0",
+    "@clerk/clerk-react": "^5.61.8",
     "@remix-run/node": "^2.17.4",
     "@remix-run/react": "^2.17.4",
     "@sentry/remix": "^8.46.0",

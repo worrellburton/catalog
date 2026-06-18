@@ -75,6 +75,7 @@ interface Sprite {
   driftY: number;
   size: number;
   alpha: number;
+  depth: number;   // 0 (far) .. 1 (near)
 }
 
 export default function CommentParticles({ avatars, className }: CommentParticlesProps) {
@@ -188,14 +189,20 @@ export default function CommentParticles({ avatars, className }: CommentParticle
         driftY: 0.05 + Math.random() * 0.07,
         size: sizeBase * (0.85 + Math.random() * 0.4),
         alpha: 0.55 + Math.random() * 0.35,
+        depth: Math.random(),
       });
     });
+
+    // Painter's order for the depth field: draw far faces first so near ones
+    // (drawn last) overlap them correctly.
+    sprites.sort((a, b) => a.depth - b.depth);
 
     const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
     let raf = 0;
     let running = true;
     let accum = 0;
     let last = performance.now();
+    const start = performance.now();
 
     const frame = () => {
       if (!running) return;
@@ -203,21 +210,28 @@ export default function CommentParticles({ avatars, className }: CommentParticle
       accum += (now - last) / 1000;
       last = now;
       const t = reduced ? 0 : accum;
+      // Whole field fades in over ~900ms on load.
+      const fade = reduced ? 1 : Math.min(1, (now - start) / 900);
       gl.clear(gl.COLOR_BUFFER_BIT);
       gl.uniform1f(uAspect, aspect);
       for (const s of sprites) {
-        const cx = s.baseX + Math.cos(t * s.speed + s.phase) * s.driftX;
-        const cy = s.baseY + Math.sin(t * s.speed * 0.8 + s.phase * 1.3) * s.driftY
+        // Depth: near faces loom larger, drift across a wider arc (parallax),
+        // and read brighter; far ones shrink, move less, and dim (depth fog).
+        const persp = 0.6 + 0.8 * s.depth;
+        const fog = 0.5 + 0.5 * s.depth;
+        const cx = s.baseX + Math.cos(t * s.speed + s.phase) * s.driftX * persp;
+        const cy = s.baseY + Math.sin(t * s.speed * 0.8 + s.phase * 1.3) * s.driftY * persp
           + 0.02 * Math.sin(t * 0.3 + s.phase);
         const pulse = 0.92 + 0.08 * Math.sin(t * 0.9 + s.phase * 2.0);
         gl.activeTexture(gl.TEXTURE0);
         gl.bindTexture(gl.TEXTURE_2D, s.tex);
         gl.uniform2f(uCenter, cx, cy);
-        gl.uniform1f(uSize, s.size * pulse);
-        gl.uniform1f(uAlpha, s.alpha);
+        gl.uniform1f(uSize, s.size * pulse * persp);
+        gl.uniform1f(uAlpha, s.alpha * fog * fade);
         gl.drawArrays(gl.TRIANGLES, 0, 6);
       }
-      if (!reduced) raf = requestAnimationFrame(frame);
+      // Keep looping while motion is on, or until the fade-in completes.
+      if (!reduced || fade < 1) raf = requestAnimationFrame(frame);
     };
     frame();
 

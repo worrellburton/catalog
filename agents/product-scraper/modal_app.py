@@ -136,6 +136,16 @@ Return ONLY the enhanced description, nothing else."""
 # ─── Shared: materials parsing (no AI) ────────────────────────────────
 
 
+def _asin_from_url(u: str | None) -> str | None:
+    """Pull an Amazon ASIN out of a product URL (/dp/XXXX, /gp/product/XXXX, …).
+    ASINs are 10-char uppercase alphanumerics. Returns None for non-Amazon URLs."""
+    if not u:
+        return None
+    import re
+    m = re.search(r"/(?:dp|gp/product|gp/aw/d|product)/([A-Z0-9]{10})(?:[/?]|$)", u, re.I)
+    return m.group(1).upper() if m else None
+
+
 def parse_materials(materials_care: str | None) -> list[dict] | None:
     """Parse material composition text into structured [{fiber, percentage}] array.
 
@@ -837,6 +847,15 @@ def scrape_and_update(product_id: str, url: str, is_fallback: bool = False):
         import json as _json
         raw_data = {k: v for k, v in product.items() if k != "images" or v}
 
+        # Barcode: prefer the identifier the agent read off the page / JSON-LD;
+        # fall back to the Amazon ASIN embedded in the URL (/dp/XXXX, /gp/product/XXXX).
+        barcode = product.get("barcode")
+        barcode_type = product.get("barcode_type")
+        if not barcode:
+            asin = _asin_from_url(product.get("url") or url)
+            if asin:
+                barcode, barcode_type = asin, "asin"
+
         update_payload = {
             "scrape_status": "done",
             "scraped_at": datetime.now(timezone.utc).isoformat(),
@@ -854,6 +873,8 @@ def scrape_and_update(product_id: str, url: str, is_fallback: bool = False):
             "gender": product.get("gender"),
             "size_fit": product.get("size_fit"),
             "materials_care": product.get("materials_care"),
+            "barcode": barcode,
+            "barcode_type": barcode_type,
             # New enrichment columns
             "raw_data": raw_data,
             "variants": product.get("variants"),

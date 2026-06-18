@@ -5,6 +5,7 @@ import PasswordGate from '~/components/PasswordGate';
 import WaitlistScreen from '~/components/WaitlistScreen';
 import ShoppingForHero from '~/components/home/ShoppingForHero';
 import SearchCeremony from '~/components/home/SearchCeremony';
+import SearchCatalogStrip from '~/components/home/SearchCatalogStrip';
 import SplashHost from '~/components/splash/SplashHost';
 import { getSplashConfig, DEFAULT_SPLASH_CONFIG, type SplashConfig } from '~/services/splash-config';
 import ContinuousFeed from '~/components/ContinuousFeed';
@@ -92,6 +93,14 @@ const SavedScreen = lazyWithReload(() => import('~/components/SavedScreen'));
 // triggered a full-page reload (auth-splash → home → comment deep-link),
 // which is the "splash then home then comments" jump we're killing here.
 const CommentsPage = lazyWithReload(importCommentsPage);
+
+// Phase 1 gate cutover. When VITE_CLERK_PUBLISHABLE_KEY is set, the Clerk
+// session gate (ClerkSignInGate) replaces the access-code PasswordGate. Both the
+// constant and the lazy import are dead/untriggered when the key is unset, so
+// prod and the Flutter shell keep the exact current PasswordGate + Supabase path
+// and the Clerk SDK stays out of the feed bundle.
+const CLERK_AUTH_ENABLED = !!import.meta.env.VITE_CLERK_PUBLISHABLE_KEY;
+const ClerkSignInGate = lazyWithReload(() => import('~/components/ClerkSignInGate'));
 
 /** Pause every currently-playing <video> in the document. Called on
  *  every product → product navigation so the old hero + rail cards
@@ -2159,7 +2168,9 @@ export default function Home() {
           <CatalogLogo className="auth-splash-logo" />
         </div>
       )}
-      {(view === 'locked' || showSignIn) && !authLoading && !user && <PasswordGate />}
+      {CLERK_AUTH_ENABLED
+        ? <Suspense fallback={null}><ClerkSignInGate /></Suspense>
+        : ((view === 'locked' || showSignIn) && !authLoading && !user && <PasswordGate />)}
       {view === 'waitlisted' && user && (
         <WaitlistScreen user={user} onApproved={handleWaitlistApproved} />
       )}
@@ -2254,6 +2265,18 @@ export default function Home() {
           )}
 
           <div className={`home-feed-wrap${revealResults ? ' home-results-reveal' : ''}`}>
+          {/* Ceremony Option 1: demographic-aware catalog picks ride as an
+              in-flow strip ABOVE the results — the shopper scrolls straight from
+              these into the continuous feed below (no blocking picker). Only on a
+              resolved search (not the hero, not mid-ceremony). */}
+          {!heroMode && !ceremony.active && searchQuery.trim() !== '' && ceremonyRecs.length > 0 && (
+            <SearchCatalogStrip
+              query={searchQuery}
+              recommendations={ceremonyRecs}
+              onPick={handlePickRecommendedCatalog}
+              onContinue={() => setCeremonyRecs([])}
+            />
+          )}
           <ContinuousFeed
             activeFilter={activeFilter}
             searchQuery={searchQuery}
@@ -2299,8 +2322,6 @@ export default function Home() {
               ready={!searchLoading}
               onDone={handleCeremonyDone}
               floatingImages={ceremonyImages}
-              recommendations={ceremony.kind === 'search' ? ceremonyRecs : []}
-              onPickCatalog={handlePickRecommendedCatalog}
             />
           )}
 
