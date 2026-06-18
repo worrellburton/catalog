@@ -35,7 +35,10 @@ interface ParticleBackgroundProps {
 // count baseline so additive-blend fill doesn't melt phones.
 export const PARTICLE_INTENSITY = 1.4;
 
-const PARTICLE_COUNT = Math.round(180 * PARTICLE_INTENSITY);
+// Dense, fine star-dust field (Mercury-style): many small points rather than a
+// few large sparks. Most are tiny far stars (size skewed small + depth fog),
+// with a handful of larger, brighter near ones for the depth read.
+const PARTICLE_COUNT = Math.round(340 * PARTICLE_INTENSITY);
 
 const VS = /* glsl */ `
   attribute vec4 aSeed;        // x = phase, y = drift speed, z = base size, w = depth seed
@@ -155,16 +158,18 @@ export default function ParticleBackground({ speed }: ParticleBackgroundProps = 
     const isMobile = typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches;
     // Same intensity ratio on mobile, halved baseline (additive-blend fill
     // is the cost on phones).
-    const count = isMobile ? Math.round(90 * PARTICLE_INTENSITY) : PARTICLE_COUNT;
+    const count = isMobile ? Math.round(190 * PARTICLE_INTENSITY) : PARTICLE_COUNT;
     const seeds = new Float32Array(count * 4);
-    // Size baseline scales with intensity too so a higher intensity is
-    // also a slightly bigger spark, not just more of them.
-    const sizeMin = 1.5 * PARTICLE_INTENSITY;
-    const sizeMax = 6.0 * PARTICLE_INTENSITY;
+    // Finer baseline than the old sparks — a star-dust look. Sizes are skewed
+    // toward the minimum (pow below) so most points are tiny far stars and only
+    // a few are larger; depth (persp) then scales near ones up further.
+    const sizeMin = 0.7 * PARTICLE_INTENSITY;
+    const sizeMax = 4.0 * PARTICLE_INTENSITY;
     for (let i = 0; i < count; i++) {
       seeds[i * 4 + 0] = Math.random();                       // phase 0..1
       seeds[i * 4 + 1] = 0.04 + Math.random() * 0.10;         // very slow drift
-      seeds[i * 4 + 2] = sizeMin + Math.random() * (sizeMax - sizeMin);
+      // pow(2.2) bunches sizes near the minimum → mostly fine dust, few big.
+      seeds[i * 4 + 2] = sizeMin + Math.pow(Math.random(), 2.2) * (sizeMax - sizeMin);
       seeds[i * 4 + 3] = Math.random();                       // depth seed 0..1
     }
 
