@@ -943,6 +943,46 @@ body:has(.look-overlay.look-overlay--in) {
   overscroll-behavior: none;
 }
 
+/* ── Look overlay DOCUMENT-SCROLL on mobile (toolbar-collapse fix) ──
+   Normally the look overlay scrolls an INNER div with the body locked, so iOS
+   26 Safari's bottom toolbar never collapses (it only collapses on ROOT-scroller
+   scroll) and permanently frosts the bottom band into the strip. Here we pull
+   the feed + home chrome out of the document flow and let the overlay flow in
+   the body so the SCROLL GESTURE drives the WINDOW → Safari collapses the
+   toolbar (no bar = no frost), like the home feed. Gated by .look-doc-scroll
+   (set in _index.tsx, look-only + non-shell) + mobile-only.
+   The hero <video> attaches UNCONDITIONALLY on mount (TrailVideoHost), so no
+   director change is needed — the ONLY thing that made the hero go black before
+   was .sfh (the home ShoppingForHero ceremony, min-height:100svh, a sibling of
+   .home-feed-wrap) flowing ABOVE the look and pushing the hero ~1 screen down.
+   Hiding it puts the hero back at the top, in view. */
+@media (max-width: 768px) {
+  html:has(.app-root.look-doc-scroll .look-overlay),
+  body:has(.app-root.look-doc-scroll .look-overlay) {
+    overflow: visible !important;
+    overscroll-behavior: auto;
+  }
+  .app-root.look-doc-scroll > header,
+  .app-root.look-doc-scroll > .home-feed-wrap,
+  .app-root.look-doc-scroll > .bottom-bar,
+  .app-root.look-doc-scroll > .remix-btn-fixed,
+  .app-root.look-doc-scroll .sfh {
+    display: none !important;
+  }
+  .app-root.look-doc-scroll .nav-layer,
+  .app-root.look-doc-scroll .look-overlay {
+    position: static !important;
+    transform: none !important;
+    overflow: visible !important;
+    height: auto !important;
+    will-change: auto !important;
+  }
+  .app-root.look-doc-scroll .look-overlay-scroll {
+    overflow: visible !important;
+    height: auto !important;
+  }
+}
+
 .look-overlay-scroll::-webkit-scrollbar {
   width: 6px;
 }

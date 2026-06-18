@@ -430,22 +430,6 @@ export default function Home() {
   // the bar's position never moves across the round-trip.
   const overlayScrollLockRef = useRef(false);
 
-  // True once the shopper scrolls down to the "Your daily feed" section inside
-  // an open LookOverlay. Pops the Catalog search bar to the top (mirroring the
-  // home feed) — see the `looks-feed-bar` class below. Reset on every look
-  // change so a fresh open never flashes the bar before the shopper scrolls.
-  const [dailyFeedReached, setDailyFeedReached] = useState(false);
-  // Mirrors the home feed's chrome auto-hide, but driven by the overlay's own
-  // scroller: hidden while scrolling down within the daily feed, shown on up.
-  const [dailyFeedBarHidden, setDailyFeedBarHidden] = useState(false);
-  const handleDailyFeedBar = useCallback((reached: boolean, hidden: boolean) => {
-    setDailyFeedReached(reached);
-    setDailyFeedBarHidden(hidden);
-  }, []);
-  useEffect(() => {
-    setDailyFeedReached(false);
-    setDailyFeedBarHidden(false);
-  }, [selectedLook?.id, selectedLook?.uuid]);
 
   // Referral capture: stash any ?ref=<handle> from the landing URL ASAP
   // (before OAuth can strip it), then redeem it once the user is signed in
@@ -2081,6 +2065,27 @@ export default function Home() {
   useEffect(() => {
     if (!overlayOpen) return;
     if (typeof window === 'undefined') return;
+    // Look overlay DOCUMENT-SCROLL mode (mobile, non-shell): let the overlay
+    // flow in the document (.look-doc-scroll CSS) so the scroll gesture drives
+    // the window and iOS Safari collapses its bottom toolbar (no bar = no frost
+    // strip), like home. We DON'T lock the body; we park the document at top so
+    // the hero shows and restore the feed scroll on close. The hero <video>
+    // attaches unconditionally on mount, and .sfh (the home ceremony) is hidden
+    // by the CSS so the hero sits at the top in view. Gated tight.
+    const docScroll = !!selectedLook && !selectedProduct && !inShell &&
+      window.matchMedia('(max-width: 768px)').matches;
+    if (docScroll) {
+      overlayScrollLockRef.current = true;
+      const feedScrollY = window.scrollY;
+      const r1 = requestAnimationFrame(() => window.scrollTo(0, 0));
+      return () => {
+        cancelAnimationFrame(r1);
+        requestAnimationFrame(() => {
+          window.scrollTo(0, feedScrollY);
+          overlayScrollLockRef.current = false;
+        });
+      };
+    }
     const scrollY = window.scrollY;
     // Freeze the chrome/hero scroll-trackers for the whole overlay lifecycle so
     // the position:fixed jump (and the close-time restore) can't reposition the
@@ -2173,7 +2178,7 @@ export default function Home() {
   return (
     <TrailRoot>
     <TrailVideoHost>
-    <div className={`app-root ${isLightMode ? 'light-mode' : ''}${overlayOpen ? ' has-overlay' : ''}${heroMode ? ' home-hero' : ''}${heroScrolled ? ' hero-scrolled' : ''}${heroBarFaded ? ' hero-bar-faded' : ''}${chromeHidden ? ' chrome-hidden' : ''}${selectedLook && dailyFeedReached && !inShell ? ' looks-feed-bar' : ''}${selectedLook && dailyFeedReached && dailyFeedBarHidden && !inShell ? ' looks-feed-bar-hidden' : ''}`}>
+    <div className={`app-root ${isLightMode ? 'light-mode' : ''}${overlayOpen ? ' has-overlay' : ''}${heroMode ? ' home-hero' : ''}${heroScrolled ? ' hero-scrolled' : ''}${heroBarFaded ? ' hero-bar-faded' : ''}${chromeHidden ? ' chrome-hidden' : ''}${selectedLook && !selectedProduct && !inShell ? ' look-doc-scroll' : ''}`}>
       {/* Singleton particle world — one canvas mounted at the app root,
           always visible. Splash, hero, search-ceremony, empty-catalog all
           render above this so the field stays continuous across every
@@ -2409,7 +2414,7 @@ export default function Home() {
                       popularFallback={popularFallback}
                       onOpenCreative={handleOpenCreative}
                       onOpenComments={openComments}
-                      onDailyFeedBar={isTop ? handleDailyFeedBar : noop}
+                      onDailyFeedBar={noop}
                       onHome={handleLogoClick}
                       onSearch={handleOverlaySearch}
                     />
