@@ -753,8 +753,70 @@
 .search-catalog-strip {
   width: min(560px, calc(100% - 32px));
   margin: 0 auto;
-  padding: 16px 0 20px;
+  /* Top buffer CLEARS the fixed header so the intro never tucks under the
+     wordmark / icons row. The feed grid clears the header via its own
+     padding-top, but the strip rides ABOVE the grid so it needs its own. */
+  padding: clamp(72px, 9vh, 100px) 0 14px;
 }
+@media (max-width: 768px) {
+  .search-catalog-strip { padding-top: calc(env(safe-area-inset-top) + 88px); }
+}
+
+/* Intro — the current catalog name as a big, centered title card: the "really
+   good top of the screen". Sized to echo the Mercury hero heading. */
+.sc-intro { text-align: center; margin-bottom: 22px; }
+.sc-intro-eyebrow {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.42);
+  margin-bottom: 6px;
+}
+.sc-intro-name {
+  margin: 0;
+  font-size: clamp(34px, 10.5vw, 50px);
+  line-height: 1.04;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  color: #fff;
+  text-wrap: balance;
+}
+
+/* "Other catalogs you might like" — a quiet centered heading above the picks. */
+.search-catalog-strip .sc-recs-hint {
+  text-transform: none;
+  letter-spacing: -0.01em;
+  font-size: 13px;
+  font-weight: 600;
+  color: rgba(255, 255, 255, 0.55);
+  text-align: center;
+  margin-bottom: 10px;
+}
+
+/* Big tappable catalog buttons (scoped to the strip so the ceremony end-state
+   keeps its own sizing). */
+.search-catalog-strip .sc-recs-list { gap: 10px; }
+.search-catalog-strip .sc-rec {
+  padding: 17px 18px;
+  border-radius: 16px;
+  font-size: 16px;
+  gap: 12px;
+}
+.search-catalog-strip .sc-rec-spark svg { width: 18px; height: 18px; }
+.sc-rec-arrow {
+  flex: 0 0 auto;
+  margin-left: auto;
+  color: rgba(255, 255, 255, 0.4);
+  transition: transform 0.16s ease, color 0.16s ease;
+}
+.search-catalog-strip .sc-rec:hover .sc-rec-arrow { color: rgba(255, 255, 255, 0.8); transform: translateX(2px); }
+
+/* The strip provides the header clearance, so the feed grid below mustn't also
+   add its full 100px top padding (would leave a big gap under the picks). */
+.home-feed-wrap.has-catalog-strip #grid-container { padding-top: 12px; }
+
 /* The "keep my search" option — same pill format as the picks, just a touch
    quieter so it reads as the secondary choice. */
 .sc-rec--continue { opacity: 0.78; }

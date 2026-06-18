@@ -2264,7 +2264,7 @@ export default function Home() {
             <ShoppingForHero onRevealFeed={handleRevealFeed} />
           )}
 
-          <div className={`home-feed-wrap${revealResults ? ' home-results-reveal' : ''}`}>
+          <div className={`home-feed-wrap${revealResults ? ' home-results-reveal' : ''}${(!heroMode && !ceremony.active && searchQuery.trim() !== '' && ceremonyRecs.length > 0) ? ' has-catalog-strip' : ''}`}>
           {/* Ceremony Option 1: demographic-aware catalog picks ride as an
               in-flow strip ABOVE the results — the shopper scrolls straight from
               these into the continuous feed below (no blocking picker). Only on a

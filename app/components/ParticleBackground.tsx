@@ -1,10 +1,11 @@
 import { useEffect, useRef } from 'react';
 import { particleControls } from '~/services/particles';
 
-// Vanilla WebGL particle drift - no dependencies. Renders a soft cloud of
-// glowing points with additive blending and slow noise-driven motion. Sized
-// so it reads as ambient texture, not a focal effect. Auto-pauses when the
-// tab is hidden and honours prefers-reduced-motion (renders one static frame).
+// Vanilla WebGL star sphere - no dependencies. Renders a rotating 3D globe of
+// glowing points in perspective with additive blending: you look THROUGH a
+// spinning "universe of data" with a shallow depth of field (near stars loom
+// large + crisp, far ones shrink + defocus). Auto-pauses when the tab is
+// hidden and honours prefers-reduced-motion (renders one static frame).
 //
 // Speed is read every frame from `particleControls.speed` (singleton config
 // in services/particles.ts). The site mounts one of these at the app root
@@ -43,74 +44,80 @@ const PARTICLE_COUNT = Math.round(340 * PARTICLE_INTENSITY);   // desktop
 // energy conservation below (out-of-focus discs are dimmer).
 const MOBILE_PARTICLE_COUNT = 8700;
 
-// ── Depth of field (shallow, f/1.2) ─────────────────────────────────
-// Photographic DoF. APERTURE_FSTOP is the literal f-number: lower = wider
-// aperture = shallower focus, so more sparks bloom into soft, dim bokeh discs
-// while only those near FOCAL_DEPTH stay crisp. Each particle's depth slowly
-// oscillates, so sparks breathe in and out of focus over time.
+// ── 3D universe + depth of field ────────────────────────────────────
+// The field is a rotating SPHERE of stars in perspective — you look THROUGH a
+// globe of "data" spinning on a tilted axis: front stars loom large and crisp,
+// back stars shrink and show through via additive blending. Photographic DoF
+// rides on top: APERTURE_FSTOP is the literal f-number (lower = wider aperture
+// = shallower focus), and FOCAL_DISTANCE is the camera-distance plane that
+// stays sharp; everything else blooms into soft, dim bokeh. As the globe turns,
+// each star sweeps through the focal plane, breathing in and out of focus.
 export const APERTURE_FSTOP = 1.2;
-const FOCAL_DEPTH = 0.62;
+const FOCAL_DISTANCE = 1.55;
 
 const VS = /* glsl */ `
-  attribute vec4 aSeed;        // x = phase, y = drift speed, z = base size, w = depth seed
+  attribute vec4 aSeed;        // xyz = static position inside the sphere, w = base size
   uniform   float uTime;
   uniform   vec2  uViewport;
   uniform   float uIntensity;  // mirrors PARTICLE_INTENSITY in JS
   uniform   float uFade;       // 0..1 load fade-in
-  uniform   float uFocus;      // focal-plane depth in [0,1] that stays crisp
+  uniform   float uFocus;      // camera-distance plane that stays crisp
   uniform   float uFStop;      // aperture f-number (1.2 = very shallow DoF)
   varying   float vAlpha;
   varying   float vBlur;       // 0 = in focus (diamond) .. 1 = full bokeh disc
 
   // How fast the circle of confusion opens per unit of defocus, BEFORE the
   // 1/f-stop scaling. Higher = a shallower-looking field overall.
-  const float DOF_BASE = 3.0;
+  const float DOF_BASE = 2.2;
+  // Camera sits just outside the globe looking in; FOCAL sets the field of view
+  // (perspective strength + how much of the sphere fills the frame). Tune these
+  // two to dial how immersive / how strong the near-far size falloff reads.
+  const float CAM_DIST = 2.15;
+  const float FOCAL    = 1.25;
 
-  // Cheap pseudo-noise from a hash - enough texture for drift.
+  // Cheap pseudo-noise from a hash - enough texture for twinkle.
   float hash(float n) { return fract(sin(n) * 43758.5453123); }
 
   void main() {
-    float t = uTime * aSeed.y;
+    vec3 p = aSeed.xyz;
 
-    // DEPTH: each particle lives at a depth in [0,1] (0 = far, 1 = near) that
-    // slowly oscillates, so the cloud reads as living 3D layers rather than a
-    // flat sheet. persp is the perspective factor — near particles are
-    // larger, drift across a wider arc (parallax), and read brighter; far ones
-    // shrink, move less, and dim out (depth fog).
-    float depth = 0.5 + 0.5 * sin(aSeed.w * 6.2831 + t * 0.6);
-    float persp = mix(0.45, 1.55, depth);
+    // Spin the globe on a TILTED axis: yaw around Y over time, then a fixed
+    // tilt so it reads as a 3D sphere turning (like a planet), not a flat disc.
+    // uTime already carries the live speed multiplier, so the search "warp"
+    // spins the whole universe up.
+    float ang = uTime * 0.06;
+    float ca = cos(ang), sa = sin(ang);
+    p = vec3(ca * p.x + sa * p.z, p.y, -sa * p.x + ca * p.z);
+    float tc = cos(0.32), ts = sin(0.32);
+    p = vec3(p.x, tc * p.y - ts * p.z, ts * p.y + tc * p.z);
 
-    // DEPTH OF FIELD: the circle of confusion grows with distance from the
-    // focal plane and inversely with the f-number (wide aperture = shallow
-    // DoF). Out-of-focus sparks bloom into bigger, softer, dimmer bokeh discs;
-    // because depth oscillates, each spark drifts in and out of focus.
-    float coc = abs(depth - uFocus) * (DOF_BASE / uFStop);
+    // PERSPECTIVE: distance from the camera (front of the globe is closer →
+    // bigger; back is farther → smaller, and seen THROUGH the front via the
+    // additive blend). Aspect-correct x so the sphere stays round on any
+    // viewport.
+    float dist   = CAM_DIST - p.z;
+    float proj   = FOCAL / dist;
+    float aspect = uViewport.y / uViewport.x;
+    gl_Position = vec4(p.x * proj * aspect, p.y * proj, 0.0, 1.0);
+
+    // DEPTH OF FIELD on the true camera distance: the circle of confusion grows
+    // with distance from the focal plane and inversely with the f-number.
+    float coc = abs(dist - uFocus) * (DOF_BASE / uFStop);
     vBlur = clamp(coc, 0.0, 1.0);
 
-    // Each particle drifts on a Lissajous-ish path so motion stays smooth
-    // and never repeats exactly within a session — amplitude scaled by depth
-    // so near layers parallax past far ones.
-    float x = cos(t + aSeed.x * 6.283) * (0.55 + 0.4 * hash(aSeed.x)) * persp;
-    float y = sin(t * 0.83 + aSeed.x * 4.1) * (0.55 + 0.4 * hash(aSeed.x + 1.7)) * persp;
-
-    // Bias slightly upward so the cloud feels like it's rising.
-    y += 0.05 * sin(t * 0.4);
-
-    gl_Position = vec4(x, y, 0.0, 1.0);
-
-    // Size scales with viewport height AND depth so near sparks loom larger,
-    // then blooms further with the circle of confusion when out of focus.
+    // SIZE changes with depth: perspective shrink for far stars, then a capped
+    // bloom as they defocus (cap keeps the additive fill sane).
     float pixelRatio = min(uViewport.y / 800.0, 1.5);
-    gl_PointSize = aSeed.z * pixelRatio * persp * (1.0 + coc * 1.6);
+    gl_PointSize = aSeed.w * proj * pixelRatio * (1.0 + min(coc, 1.6) * 1.4);
 
-    // Pulse opacity per-particle, offset by phase. Multiplied by depth fog
-    // (far = dimmer), uIntensity (the brightness knob), and uFade (the
-    // load-in ramp), then divided by the CoC so a bigger bokeh disc is dimmer
-    // — the same light spread over more area (energy conservation). Clamped to
-    // 1.0 in the fragment so glow doesn't blow out.
-    float pulse = 0.25 + 0.55 * (0.5 + 0.5 * sin(t * 1.7 + aSeed.x * 12.0));
-    float fog   = mix(0.30, 1.0, depth);
-    vAlpha = pulse * fog * uIntensity * uFade / (1.0 + coc * 1.4);
+    // Twinkle (per-star phase) × depth fog (far = dimmer) × brightness knob ×
+    // load fade, then divided by the CoC so a bigger bokeh disc is dimmer — the
+    // same light spread over more area (energy conservation). Clamped to 1.0 in
+    // the fragment so glow doesn't blow out.
+    float ph    = hash(aSeed.x * 12.9 + aSeed.y * 78.2 + aSeed.z * 37.7);
+    float pulse = 0.35 + 0.45 * (0.5 + 0.5 * sin(uTime * 1.4 + ph * 6.2831));
+    float fog   = clamp((3.4 - dist) / 2.4, 0.22, 1.0);
+    vAlpha = pulse * fog * uIntensity * uFade / (1.0 + coc * 1.3);
   }
 `;
 
@@ -190,7 +197,7 @@ export default function ParticleBackground({ speed }: ParticleBackgroundProps = 
     }
     gl.useProgram(program);
 
-    // Per-particle seed: (phase, drift speed, base size, depth).
+    // Per-particle seed: (x, y, z position inside the sphere, base size).
     // Cap DPR harder on phones — additive-blend fill is the real cost, not the
     // point count. Mobile runs the dense MOBILE_PARTICLE_COUNT field; the DoF
     // energy-conservation (dimmer bokeh) keeps the additive fill in check.
@@ -199,15 +206,22 @@ export default function ParticleBackground({ speed }: ParticleBackgroundProps = 
     const seeds = new Float32Array(count * 4);
     // Finer baseline than the old sparks — a star-dust look. Sizes are skewed
     // toward the minimum (pow below) so most points are tiny far stars and only
-    // a few are larger; depth (persp) then scales near ones up further.
+    // a few are larger; perspective then scales near ones up further.
     const sizeMin = 0.7 * PARTICLE_INTENSITY;
     const sizeMax = 4.0 * PARTICLE_INTENSITY;
     for (let i = 0; i < count; i++) {
-      seeds[i * 4 + 0] = Math.random();                       // phase 0..1
-      seeds[i * 4 + 1] = 0.04 + Math.random() * 0.10;         // very slow drift
+      // Uniform direction on the unit sphere (z = cosφ trick), then a radius
+      // biased toward the outer shell so it reads as a dense-rimmed globe, not
+      // a solid ball. xyz = the star's static position inside the sphere.
+      const theta = 2 * Math.PI * Math.random();
+      const z = 2 * Math.random() - 1;
+      const rxy = Math.sqrt(Math.max(0, 1 - z * z));
+      const radius = 0.32 + 0.68 * Math.pow(Math.random(), 0.45);
+      seeds[i * 4 + 0] = rxy * Math.cos(theta) * radius;       // x
+      seeds[i * 4 + 1] = rxy * Math.sin(theta) * radius;       // y
+      seeds[i * 4 + 2] = z * radius;                           // z
       // pow(2.2) bunches sizes near the minimum → mostly fine dust, few big.
-      seeds[i * 4 + 2] = sizeMin + Math.pow(Math.random(), 2.2) * (sizeMax - sizeMin);
-      seeds[i * 4 + 3] = Math.random();                       // depth seed 0..1
+      seeds[i * 4 + 3] = sizeMin + Math.pow(Math.random(), 2.2) * (sizeMax - sizeMin);
     }
 
     const buf = gl.createBuffer();
@@ -225,7 +239,7 @@ export default function ParticleBackground({ speed }: ParticleBackgroundProps = 
     const uFocus = gl.getUniformLocation(program, 'uFocus');
     const uFStop = gl.getUniformLocation(program, 'uFStop');
     gl.uniform1f(uIntensity, PARTICLE_INTENSITY);
-    gl.uniform1f(uFocus, FOCAL_DEPTH);
+    gl.uniform1f(uFocus, FOCAL_DISTANCE);
     gl.uniform1f(uFStop, APERTURE_FSTOP);
 
     gl.enable(gl.BLEND);
