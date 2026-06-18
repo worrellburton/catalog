@@ -254,11 +254,46 @@ open and `!inShell`). Pieces:
 3. The hero **top** (scrollTop=0) always has the toolbar expanded → a brief
    strip until you scroll; only the **scrolled** state collapses it.
 
-**To apply to `ProductPage` / other overlays:** replicate the same gating, hide
-whatever in-flow siblings push the overlay down, keep the body unlocked so the
-document scrolls, and disable any at-top drag-dismiss. Verify the hero video
-still renders (sim) and the toolbar collapse (sim); confirm the strip itself on
-a real device.
+#### Where this is applied (surface by surface)
+
+The same root cause — Safari frosting a flat element behind the bar — shows up
+on several surfaces. Each needs a different treatment because the structure
+differs:
+
+- **Look overlay** (`LookOverlay` / `look-overlay.css`, `.look-doc-scroll`):
+  document-scroll so the toolbar collapses. Hide `.sfh` (else black hero).
+  Shipped + verified.
+- **Product overlay** (`ProductPage` / `product-page.css`, `.product-doc-scroll`):
+  same document-scroll. Scroller is `.product-page` (direct child of
+  `.product-page-overlay`, no inner wrapper). Nav-stack: a product can sit ON
+  TOP of a look, so hide the under layer with
+  `.nav-layer:not(:has(.product-page-overlay))` and flow ONLY the product's
+  layer. Also drops the hero search pill (`showSearch={false}`). Shipped.
+- **Search sheet** (`BottomBar` / `bottom-bar.css`): doc-scroll does NOT apply —
+  the input is focused (keyboard up), so the toolbar can't collapse. Instead
+  make it a true full-screen page: `.search-backdrop` is opaque `#0a0a0a` (was
+  `rgba(0,0,0,.72)` + blur), AND hide the feed while open with
+  `html:has(.bottom-bar.search-open) .home-feed-wrap, .sfh { visibility:hidden }`.
+  Use **`visibility:hidden`, NOT `display:none`** — `display:none` collapses the
+  document, clamps scroll to 0, and unloads the feed's virtualized cards, which
+  on return leaves the feed short → a gap/strip behind the toolbar. Shipped +
+  verified (sim: solid black sheet + clean return).
+- **Home feed (the very top, `scrollY=0`):** KNOWN LIMITATION, not fixed. The
+  home already document-scrolls (toolbar collapses the moment you scroll), but
+  at the very top the toolbar is expanded and the dark `.sfh` hero sits behind
+  it (feed cards peek on the sides of the 2-col grid; the hero fills the
+  middle). Unlike the look/product heroes there's no *video* to bleed to the
+  edge — it's a dark ceremony + a scrolling feed — so fully killing the
+  top-state strip is diminishing-returns. It self-clears on scroll. Same class
+  as the brief top-state strip on every hero (Safari always shows the toolbar
+  expanded at `scrollY=0`).
+
+**To apply to another overlay:** replicate the gating, hide whatever in-flow
+siblings push the overlay down (and any warm under-layers in the nav stack),
+keep the body unlocked so the document scrolls, and disable any at-top
+drag-dismiss. Verify the hero video renders (sim) and the toolbar collapse
+(sim — `innerHeight` grows 714→754 on scroll); confirm the frost itself on a
+**real device** — the simulator draws a solid bar and never renders the frost.
 
 ---
 
