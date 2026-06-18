@@ -826,6 +826,11 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
     if (!overlay || !scroller) return;
     if (typeof window === 'undefined') return;
     if (window.matchMedia('(min-width: 960px)').matches) return;
+    // Doc-scroll mode: the overlay scrolls the DOCUMENT, so the inner scroller's
+    // scrollTop is always 0 and the "engage only at top" guard can't tell top
+    // from mid-scroll — every downward drag would dismiss. The back button +
+    // document scroll cover navigation, so disable whole-overlay drag here.
+    if (overlay.closest('.app-root')?.classList.contains('look-doc-scroll')) return;
     const drag = { startY: 0, startTime: 0, active: false };
     const onStart = (e: TouchEvent) => {
       if (scroller.scrollTop > 0) return;

@@ -24,10 +24,12 @@ interface Props {
 
 export default function OverlayChrome({ scrollEl, onBack, onHome, onSearch, showSearch = true }: Props) {
   const [hidden, setHidden] = useState(false);
-  // The "Make a catalog for anything" pill stays stowed at the top and
-  // reveals once the shopper scrolls down past the hero — it shouldn't sit
-  // over the product the moment the page opens.
-  const [searchShown, setSearchShown] = useState(false);
+  // The "Make a catalog for anything" pill is HERO-ONLY (mirrors the home
+  // BottomBar): it shows near the TOP of the page and LEAVES once the shopper
+  // scrolls into the feed, so it never sits in the bottom pill zone behind iOS
+  // Safari's translucent URL pill (where a white bar read as a dark band). The
+  // page opens at the top, so start shown.
+  const [searchShown, setSearchShown] = useState(true);
   const [q, setQ] = useState('');
   const accum = useRef(0);
   const lastY = useRef(0);
@@ -47,8 +49,12 @@ export default function OverlayChrome({ scrollEl, onBack, onHome, onSearch, show
         const y = el.scrollTop;
         const dy = y - lastY.current;
         lastY.current = y;
-        // Reveal the catalog pill once past ~60% of the first screen.
-        setSearchShown(y > Math.max(el.clientHeight * 0.6, 280));
+        // Hero-only: show the catalog pill near the TOP and hide it once the
+        // shopper scrolls past ~60% of the first screen into the feed — so the
+        // strip behind iOS Safari's collapsed URL pill is pure feed cards, not
+        // a white bar reading as a dark band. (Mirrors the home BottomBar; was
+        // reveal-on-scroll-down, which put the bar exactly in the pill zone.)
+        setSearchShown(y < Math.max(el.clientHeight * 0.6, 280));
         // Rest return: a short idle after the last scroll eases the chrome
         // (top bar + search pill) back, matching the home feed — so they
         // never stay gone once the shopper stops scrolling.

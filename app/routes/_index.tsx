@@ -431,22 +431,6 @@ export default function Home() {
   // the bar's position never moves across the round-trip.
   const overlayScrollLockRef = useRef(false);
 
-  // True once the shopper scrolls down to the "Your daily feed" section inside
-  // an open LookOverlay. Pops the Catalog search bar to the top (mirroring the
-  // home feed) — see the `looks-feed-bar` class below. Reset on every look
-  // change so a fresh open never flashes the bar before the shopper scrolls.
-  const [dailyFeedReached, setDailyFeedReached] = useState(false);
-  // Mirrors the home feed's chrome auto-hide, but driven by the overlay's own
-  // scroller: hidden while scrolling down within the daily feed, shown on up.
-  const [dailyFeedBarHidden, setDailyFeedBarHidden] = useState(false);
-  const handleDailyFeedBar = useCallback((reached: boolean, hidden: boolean) => {
-    setDailyFeedReached(reached);
-    setDailyFeedBarHidden(hidden);
-  }, []);
-  useEffect(() => {
-    setDailyFeedReached(false);
-    setDailyFeedBarHidden(false);
-  }, [selectedLook?.id, selectedLook?.uuid]);
 
   // Referral capture: stash any ?ref=<handle> from the landing URL ASAP
   // (before OAuth can strip it), then redeem it once the user is signed in
@@ -2082,6 +2066,28 @@ export default function Home() {
   useEffect(() => {
     if (!overlayOpen) return;
     if (typeof window === 'undefined') return;
+    // Look/product overlay DOCUMENT-SCROLL mode (mobile, non-shell): let the
+    // overlay flow in the document (.look-doc-scroll / .product-doc-scroll CSS)
+    // so the scroll gesture drives the window and iOS Safari collapses its
+    // bottom toolbar (no bar = no frost strip), like home. We DON'T lock the
+    // body; we park the document at top so the hero shows and restore the feed
+    // scroll on close. The hero <video> attaches unconditionally on mount, and
+    // .sfh (the home ceremony) is hidden by the CSS so the hero sits at the top
+    // in view. Same behaviour for both overlay types; gated tight.
+    const docScroll = (!!selectedLook || !!selectedProduct) && !inShell &&
+      window.matchMedia('(max-width: 768px)').matches;
+    if (docScroll) {
+      overlayScrollLockRef.current = true;
+      const feedScrollY = window.scrollY;
+      const r1 = requestAnimationFrame(() => window.scrollTo(0, 0));
+      return () => {
+        cancelAnimationFrame(r1);
+        requestAnimationFrame(() => {
+          window.scrollTo(0, feedScrollY);
+          overlayScrollLockRef.current = false;
+        });
+      };
+    }
     const scrollY = window.scrollY;
     // Freeze the chrome/hero scroll-trackers for the whole overlay lifecycle so
     // the position:fixed jump (and the close-time restore) can't reposition the
@@ -2101,9 +2107,21 @@ export default function Home() {
       bodyOverflow: body.style.overflow,
       htmlOverflow: html.style.overflow,
     };
-    body.style.position = 'fixed';
-    body.style.top = `-${scrollY}px`;
-    body.style.width = '100%';
+    // Two lock strategies. On MOBILE we lock with overflow:hidden only and
+    // KEEP window.scrollY where it is — this is what lets iOS 26 Safari hold
+    // its collapsed (floating-pill) toolbar while the overlay is open. The
+    // older position:fixed lock collapses the document to viewport height and
+    // snaps scrollY→0, which Safari reads as "scrolled to top" and re-expands
+    // its toolbar into the solid dark bar the shopper complained about. The
+    // inner scrollers (.product-page / .look-overlay-scroll) carry
+    // overscroll-behavior:contain so the held body never scroll-chains.
+    // Desktop has no such toolbar; keep the proven position:fixed lock there.
+    const lockIsFixed = window.matchMedia('(min-width: 960px)').matches;
+    if (lockIsFixed) {
+      body.style.position = 'fixed';
+      body.style.top = `-${scrollY}px`;
+      body.style.width = '100%';
+    }
     body.style.overflow = 'hidden';
     html.style.overflow = 'hidden';
     return () => {
@@ -2112,11 +2130,28 @@ export default function Home() {
       body.style.width = prev.bodyWidth;
       body.style.overflow = prev.bodyOverflow;
       html.style.overflow = prev.htmlOverflow;
-      window.scrollTo(0, scrollY);
-      // Keep the trackers frozen through the restore scroll above (it fires
-      // asynchronously), then release a frame later so the next genuine scroll
-      // is read normally.
-      requestAnimationFrame(() => { overlayScrollLockRef.current = false; });
+      if (lockIsFixed) {
+        // The fixed lock parked the document at top; restore the saved position.
+        window.scrollTo(0, scrollY);
+        requestAnimationFrame(() => { overlayScrollLockRef.current = false; });
+        return;
+      }
+      // Overflow lock (mobile): the document never moved WHILE open, but a
+      // drag-to-dismiss FLING can carry into the now-unlocked body after the
+      // overlay unmounts (overflow:hidden doesn't fully stop an iOS fling),
+      // scrolling the revealed feed UP — which re-expands Safari's toolbar into
+      // the dark bar and lands the shopper away from where they were. Pin the
+      // saved position for a short window until the fling dies, then release.
+      let frames = 0;
+      const pin = () => {
+        window.scrollTo(0, scrollY);
+        if (++frames < 20) {
+          requestAnimationFrame(pin);
+        } else {
+          overlayScrollLockRef.current = false;
+        }
+      };
+      requestAnimationFrame(pin);
     };
   }, [overlayOpen]);
 
@@ -2145,7 +2180,7 @@ export default function Home() {
   return (
     <TrailRoot>
     <TrailVideoHost>
-    <div className={`app-root ${isLightMode ? 'light-mode' : ''}${overlayOpen ? ' has-overlay' : ''}${heroMode ? ' home-hero' : ''}${heroScrolled ? ' hero-scrolled' : ''}${heroBarFaded ? ' hero-bar-faded' : ''}${chromeHidden ? ' chrome-hidden' : ''}${selectedLook && dailyFeedReached && !inShell ? ' looks-feed-bar' : ''}${selectedLook && dailyFeedReached && dailyFeedBarHidden && !inShell ? ' looks-feed-bar-hidden' : ''}`}>
+    <div className={`app-root ${isLightMode ? 'light-mode' : ''}${overlayOpen ? ' has-overlay' : ''}${heroMode ? ' home-hero' : ''}${heroScrolled ? ' hero-scrolled' : ''}${heroBarFaded ? ' hero-bar-faded' : ''}${chromeHidden ? ' chrome-hidden' : ''}${selectedLook && !selectedProduct && !inShell ? ' look-doc-scroll' : ''}${selectedProduct && !inShell ? ' product-doc-scroll' : ''}`}>
       {/* Singleton particle world — one canvas mounted at the app root,
           always visible. Splash, hero, search-ceremony, empty-catalog all
           render above this so the field stays continuous across every
@@ -2391,7 +2426,7 @@ export default function Home() {
                       popularFallback={popularFallback}
                       onOpenCreative={handleOpenCreative}
                       onOpenComments={openComments}
-                      onDailyFeedBar={isTop ? handleDailyFeedBar : noop}
+                      onDailyFeedBar={noop}
                       onHome={handleLogoClick}
                       onSearch={handleOverlaySearch}
                     />

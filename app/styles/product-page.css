@@ -65,6 +65,12 @@
    video riding along with it — no desync. */
 .product-page-overlay {
   position: fixed;
+  /* inset:0 fills the full layout viewport INCLUDING the safe areas (we ship
+     viewport-fit=cover), so the overlay bleeds behind the status bar at the top
+     AND lets Safari collapse its bottom toolbar normally. (Tried height:100lvh
+     to also cover the ~40px bottom toolbar-inset — but lvh broke BOTH the
+     top status-bar bleed and the toolbar collapse, and the strip it was after
+     is Safari's own native pill tray anyway. Don't reintroduce lvh here.) */
   inset: 0;
   z-index: 250;
   background: #0a0a0a;
@@ -100,6 +106,46 @@
    panel eases back to translateY(0)). */
 .product-page-overlay.is-dragging {
   transition: none;
+}
+
+/* ── Product overlay DOCUMENT-SCROLL on mobile (toolbar-collapse fix) ──
+   Mirrors the look-overlay fix (CLAUDE.md §1 "iOS Safari bottom-toolbar
+   strip"). The product overlay normally scrolls an inner `.product-page` with
+   the body locked, so iOS 26 Safari's bottom toolbar never collapses and frosts
+   the flat base into a strip. Here the overlay flows in the document so the
+   scroll gesture collapses the toolbar like home. Gated by `.product-doc-scroll`
+   (set in _index.tsx, product-on-top + non-shell) + mobile.
+   NAV-STACK: a product can sit ON TOP of a look, so we hide the warm layer(s)
+   beneath (`.nav-layer:not(:has(.product-page-overlay))`) and flow ONLY the
+   product's layer — else the under-look adds a screen of height below it.
+   The hero <video> attaches unconditionally (TrailVideoHost), so no director
+   change is needed; `.sfh` (home ceremony) is hidden so the hero stays at top. */
+@media (max-width: 768px) {
+  html:has(.app-root.product-doc-scroll .product-page-overlay),
+  body:has(.app-root.product-doc-scroll .product-page-overlay) {
+    overflow: visible !important;
+    overscroll-behavior: auto;
+  }
+  .app-root.product-doc-scroll > header,
+  .app-root.product-doc-scroll > .home-feed-wrap,
+  .app-root.product-doc-scroll > .bottom-bar,
+  .app-root.product-doc-scroll > .remix-btn-fixed,
+  .app-root.product-doc-scroll .sfh,
+  .app-root.product-doc-scroll .nav-layer:not(:has(.product-page-overlay)) {
+    display: none !important;
+  }
+  .app-root.product-doc-scroll .nav-layer:has(.product-page-overlay),
+  .app-root.product-doc-scroll .product-page-overlay {
+    position: static !important;
+    transform: none !important;
+    overflow: visible !important;
+    height: auto !important;
+    will-change: auto !important;
+  }
+  .app-root.product-doc-scroll .product-page {
+    overflow: visible !important;
+    height: auto !important;
+  }
 }
 
 /* Mobile: rounded top corners + a grab handle sell the sheet affordance.
@@ -151,6 +197,12 @@
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
+  /* Stop scroll-chaining: when this inner scroller hits its top/bottom the
+     leftover touch delta must NOT bubble to the body. On mobile the overlay
+     locks the page with overflow:hidden (not position:fixed) so the iOS Safari
+     toolbar stays collapsed; `contain` is what keeps that held body from
+     scrolling. Mirrors .look-overlay-scroll. */
+  overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: rgba(255,255,255,0.15) transparent;
   /* Transparent — the opaque black comes from .product-page-overlay so
@@ -1174,7 +1226,10 @@
 
 @media (max-width: 600px) {
   .pd-similar-feed {
-    padding: 16px 0 8px;
+    /* No bottom padding: let the grid/feed cards bleed to the bottom edge so
+       the iOS Safari pill frosts cards, not the flat #0a0a0a base. Mirrors the
+       home feed's edge-to-edge bottom. */
+    padding: 16px 0 0;
   }
   .pd-feed-title {
     font-size: 14px;
