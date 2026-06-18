@@ -247,10 +247,16 @@ open and `!inShell`). Pieces:
    in doc-scroll is *not* a director/cover bug — it's an in-flow sibling (the
    `.sfh` ceremony) flowing **above** the overlay and pushing the hero ~1 screen
    down. Hide the offending sibling.
-2. The **iOS Simulator does NOT render the frost** (it draws a solid bar), so
-   the strip's final appearance is **device-only**; the toolbar *collapse*
-   itself IS sim-visible (`innerHeight` grows on scroll — 714→754 on a 402×874
-   device).
+2. Simulator frost rendering is **version-dependent**: older sims drew a plain
+   solid bar (frost device-only), but the **iOS 26.2 simulator DOES render the
+   frost** — the cold-boot dark strip and the warm/scrolled see-through frost
+   both reproduce on the iPhone 17 Pro sim (this is how the auth-splash fix was
+   verified). Drive it via `xcrun simctl openurl booted <url>` + `idb ui swipe`,
+   screenshot with `xcrun simctl io booted screenshot`. To force the cold-boot
+   (splash) state, `xcrun simctl terminate booted com.apple.mobilesafari` first
+   — that clears the per-session `catalog:booted` flag. The toolbar *collapse*
+   is also sim-visible (`innerHeight` grows on scroll). Still confirm final
+   appearance on a real device when in doubt.
 3. The hero **top** (scrollTop=0) always has the toolbar expanded → a brief
    strip until you scroll; only the **scrolled** state collapses it.
 
@@ -278,6 +284,25 @@ differs:
   document, clamps scroll to 0, and unloads the feed's virtualized cards, which
   on return leaves the feed short → a gap/strip behind the toolbar. Shipped +
   verified (sim: solid black sheet + clean return).
+- **Cold-boot auth splash** (`.auth-splash` / `password-gate.css`): the
+  "dark strip on FIRST open, gone after reload" bug. The opaque `.auth-splash`
+  (radial near-black, `z-index:600`, `inset:0`) is the layer behind the bar at
+  the moment Safari FIRST samples the toolbar's frost material, so the toolbar
+  commits a SOLID DARK strip. Safari samples ONCE at `scrollY=0` and CACHES it
+  — it only re-samples on a **real** scroll (**programmatic `window.scrollTo`
+  is ignored**, verified on-sim — so a post-splash scroll-kick does NOT work).
+  A reload skips the splash (sessionStorage `catalog:booted`), so Safari samples
+  the textured feed peek and frosts see-through — that's why "reload makes it go
+  away". FIX: a mobile-only CSS mask punches the bottom toolbar zone of the
+  splash transparent (`-webkit-mask` linear-gradient, transparent for the bottom
+  `env(safe-area-inset-bottom) + 100px`), so the first sample reads the feed
+  peek behind it (light frost), identical to reload. The masked band sits under
+  the toolbar glass → no feed sliver / no hero-text ghosting during the splash
+  (the centered wordmark + opaque upper region are untouched). Shipped +
+  sim-verified (cold open now frosts like reload). Covers both signed-in and
+  signed-out cold boots (both pass through `.auth-splash`). The `.password-gate`
+  itself is NOT masked — the user dwells/interacts there, and it isn't part of
+  the auto-dismissing "load → strip → reload-clears" symptom.
 - **Home feed (the very top, `scrollY=0`):** KNOWN LIMITATION, not fixed. The
   home already document-scrolls (toolbar collapses the moment you scroll), but
   at the very top the toolbar is expanded and the dark `.sfh` hero sits behind
@@ -286,7 +311,9 @@ differs:
   edge — it's a dark ceremony + a scrolling feed — so fully killing the
   top-state strip is diminishing-returns. It self-clears on scroll. Same class
   as the brief top-state strip on every hero (Safari always shows the toolbar
-  expanded at `scrollY=0`).
+  expanded at `scrollY=0`). NOTE: with the feed peek warm-cached, the very-top
+  bar now frosts light (cards peek) even on cold boot, since the splash no
+  longer poisons it — the residual strip is only on a truly cold feed.
 
 **To apply to another overlay:** replicate the gating, hide whatever in-flow
 siblings push the overlay down (and any warm under-layers in the nav stack),
