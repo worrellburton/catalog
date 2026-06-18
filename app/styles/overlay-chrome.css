@@ -24,21 +24,25 @@
     transition: transform 0.42s cubic-bezier(0.22, 1, 0.36, 1),
                 opacity 0.42s cubic-bezier(0.22, 1, 0.36, 1);
   }
-  /* Same dark top scrim as the main feed (header::before) so the back +
-     logo read over bright product/look hero media. Fades to transparent and
-     rides with the top bar (hides on scroll-down with it). */
+  /* Dark scrim behind the back + logo so they read over bright hero media.
+     STARTS BELOW the status bar (top: safe-area-inset-top) so the hero/feed
+     bleeds behind iOS Safari's translucent status bar instead of being
+     darkened into a strip there — the status bar zone has no buttons to
+     protect, only the system clock/wifi (white, readable over anything). The
+     scrim still covers the button row below. Rides with the top bar (hides on
+     scroll-down). */
   .ovl-chrome-top::before {
     content: '';
     position: absolute;
-    top: 0;
+    top: env(safe-area-inset-top, 0px);
     left: 0;
     right: 0;
-    height: 150px;
+    height: 120px;
     background: linear-gradient(
       to bottom,
-      rgba(0, 0, 0, 0.85) 0%,
-      rgba(0, 0, 0, 0.5) 42%,
-      rgba(0, 0, 0, 0.18) 72%,
+      rgba(0, 0, 0, 0.72) 0%,
+      rgba(0, 0, 0, 0.42) 46%,
+      rgba(0, 0, 0, 0.14) 74%,
       transparent 100%
     );
     pointer-events: none;
@@ -93,8 +97,13 @@
        on-screen while the overlay's feed scrolls behind it. Removing it is a
        zero-visual-change scroll win. (The translucent home-feed BottomBar keeps
        its blur — there the glass actually shows.) */
+    /* Keep the shadow tight and light. The old 0 12px 36px / 0.34 spread cast a
+       dark halo ~48px DOWN — straight into the bottom inset where iOS 26 Safari's
+       translucent URL pill sits, so the pill frosted that halo and read as a
+       solid dark band (home hides its bar when scrolled, so it never does this).
+       A small, low-alpha shadow keeps the float without bleeding into the pill. */
     box-shadow:
-      0 12px 36px rgba(0, 0, 0, 0.34),
+      0 4px 14px rgba(0, 0, 0, 0.16),
       inset 0 1px 0 rgba(255, 255, 255, 0.8);
     transform: translateY(calc(100% + 24px));
     opacity: 0;

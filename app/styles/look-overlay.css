@@ -9,6 +9,10 @@
    bottom and closes by sliding back DOWN, matching the comments sheet. */
 .look-overlay {
   position: fixed;
+  /* inset:0 — fills the full layout viewport incl. safe areas (viewport-fit=
+     cover) so the hero bleeds behind the status bar and Safari collapses its
+     bottom toolbar normally. (height:100lvh was tried for the bottom toolbar
+     inset but broke the top bleed + the collapse; see .product-page-overlay.) */
   inset: 0;
   z-index: 200;
   background: #0a0a0a;
@@ -1139,6 +1143,13 @@ body:has(.look-overlay.look-overlay--in) {
 }
 .look-feed-section:not(:last-child) {
   padding-bottom: 32px;
+}
+/* Mobile: bleed the last section's cards to the bottom edge so the iOS Safari
+   pill frosts cards, not the flat base. */
+@media (max-width: 600px) {
+  .look-feed-section:last-child {
+    padding-bottom: 0;
+  }
 }
 
 .look-feed-heading {

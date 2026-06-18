@@ -65,6 +65,12 @@
    video riding along with it — no desync. */
 .product-page-overlay {
   position: fixed;
+  /* inset:0 fills the full layout viewport INCLUDING the safe areas (we ship
+     viewport-fit=cover), so the overlay bleeds behind the status bar at the top
+     AND lets Safari collapse its bottom toolbar normally. (Tried height:100lvh
+     to also cover the ~40px bottom toolbar-inset — but lvh broke BOTH the
+     top status-bar bleed and the toolbar collapse, and the strip it was after
+     is Safari's own native pill tray anyway. Don't reintroduce lvh here.) */
   inset: 0;
   z-index: 250;
   background: #0a0a0a;
@@ -151,6 +157,12 @@
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
+  /* Stop scroll-chaining: when this inner scroller hits its top/bottom the
+     leftover touch delta must NOT bubble to the body. On mobile the overlay
+     locks the page with overflow:hidden (not position:fixed) so the iOS Safari
+     toolbar stays collapsed; `contain` is what keeps that held body from
+     scrolling. Mirrors .look-overlay-scroll. */
+  overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: rgba(255,255,255,0.15) transparent;
   /* Transparent — the opaque black comes from .product-page-overlay so
@@ -1174,7 +1186,10 @@
 
 @media (max-width: 600px) {
   .pd-similar-feed {
-    padding: 16px 0 8px;
+    /* No bottom padding: let the grid/feed cards bleed to the bottom edge so
+       the iOS Safari pill frosts cards, not the flat #0a0a0a base. Mirrors the
+       home feed's edge-to-edge bottom. */
+    padding: 16px 0 0;
   }
   .pd-feed-title {
     font-size: 14px;
