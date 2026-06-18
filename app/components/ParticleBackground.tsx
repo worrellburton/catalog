@@ -19,26 +19,37 @@ interface ParticleBackgroundProps {
 }
 
 // ── Particle intensity knob ─────────────────────────────────────────
-// One number you can dial to make the field more / less visible. It
-// scales the particle COUNT, the maximum per-particle ALPHA, and the
-// base SIZE in tandem so the relative look stays consistent (just more
-// or fewer of the same sparks).
+// One number you can dial to make the field more / less visible. On DESKTOP it
+// scales the particle COUNT (× the 340 baseline below), the maximum per-particle
+// ALPHA, and the base SIZE in tandem so the relative look stays consistent. On
+// MOBILE the count is decoupled — a fixed MOBILE_PARTICLE_COUNT (see below) —
+// so intensity only moves alpha/size there, not the point count.
 //
-//   0.5 = whisper (90 desktop / 45 mobile, ~50% alpha)
-//   1.0 = subtle (180 / 90, ~80% alpha)            ← old default
-//   1.4 = present (252 / 126, ~100% alpha)         ← current default
-//   1.8 = lively  (324 / 162, alpha clamped to 1)
-//   2.5 = busy    (450 / 225, very prominent)
+//   1.0 = subtle  (340 desktop, ~80% alpha)
+//   1.4 = present (476 desktop, ~100% alpha)   ← current default
+//   1.8 = lively  (612 desktop, alpha clamped to 1)
 //
-// Anything above ~2.5 starts to cost GPU on phones; stay at 1.4–1.8 for
-// production. Mobile still gets the same intensity ratio, just a halved
-// count baseline so additive-blend fill doesn't melt phones.
+// Above ~1.8 starts to cost GPU; the brightness clamps in the fragment so the
+// look mostly stops changing past there.
 export const PARTICLE_INTENSITY = 1.4;
 
 // Dense, fine star-dust field (Mercury-style): many small points rather than a
 // few large sparks. Most are tiny far stars (size skewed small + depth fog),
 // with a handful of larger, brighter near ones for the depth read.
-const PARTICLE_COUNT = Math.round(340 * PARTICLE_INTENSITY);
+const PARTICLE_COUNT = Math.round(340 * PARTICLE_INTENSITY);   // desktop
+// Mobile is dialed way up to a dense star-dust storm (explicit count, not the
+// old intensity ratio). gl.POINTS scales fine to this many points; the real
+// cost is additive fill, kept in check by the small skewed sizes + the DoF
+// energy conservation below (out-of-focus discs are dimmer).
+const MOBILE_PARTICLE_COUNT = 8700;
+
+// ── Depth of field (shallow, f/1.2) ─────────────────────────────────
+// Photographic DoF. APERTURE_FSTOP is the literal f-number: lower = wider
+// aperture = shallower focus, so more sparks bloom into soft, dim bokeh discs
+// while only those near FOCAL_DEPTH stay crisp. Each particle's depth slowly
+// oscillates, so sparks breathe in and out of focus over time.
+export const APERTURE_FSTOP = 1.2;
+const FOCAL_DEPTH = 0.62;
 
 const VS = /* glsl */ `
   attribute vec4 aSeed;        // x = phase, y = drift speed, z = base size, w = depth seed
@@ -46,7 +57,14 @@ const VS = /* glsl */ `
   uniform   vec2  uViewport;
   uniform   float uIntensity;  // mirrors PARTICLE_INTENSITY in JS
   uniform   float uFade;       // 0..1 load fade-in
+  uniform   float uFocus;      // focal-plane depth in [0,1] that stays crisp
+  uniform   float uFStop;      // aperture f-number (1.2 = very shallow DoF)
   varying   float vAlpha;
+  varying   float vBlur;       // 0 = in focus (diamond) .. 1 = full bokeh disc
+
+  // How fast the circle of confusion opens per unit of defocus, BEFORE the
+  // 1/f-stop scaling. Higher = a shallower-looking field overall.
+  const float DOF_BASE = 3.0;
 
   // Cheap pseudo-noise from a hash - enough texture for drift.
   float hash(float n) { return fract(sin(n) * 43758.5453123); }
@@ -62,6 +80,13 @@ const VS = /* glsl */ `
     float depth = 0.5 + 0.5 * sin(aSeed.w * 6.2831 + t * 0.6);
     float persp = mix(0.45, 1.55, depth);
 
+    // DEPTH OF FIELD: the circle of confusion grows with distance from the
+    // focal plane and inversely with the f-number (wide aperture = shallow
+    // DoF). Out-of-focus sparks bloom into bigger, softer, dimmer bokeh discs;
+    // because depth oscillates, each spark drifts in and out of focus.
+    float coc = abs(depth - uFocus) * (DOF_BASE / uFStop);
+    vBlur = clamp(coc, 0.0, 1.0);
+
     // Each particle drifts on a Lissajous-ish path so motion stays smooth
     // and never repeats exactly within a session — amplitude scaled by depth
     // so near layers parallax past far ones.
@@ -73,39 +98,53 @@ const VS = /* glsl */ `
 
     gl_Position = vec4(x, y, 0.0, 1.0);
 
-    // Size scales with viewport height AND depth so near sparks loom larger.
+    // Size scales with viewport height AND depth so near sparks loom larger,
+    // then blooms further with the circle of confusion when out of focus.
     float pixelRatio = min(uViewport.y / 800.0, 1.5);
-    gl_PointSize = aSeed.z * pixelRatio * persp;
+    gl_PointSize = aSeed.z * pixelRatio * persp * (1.0 + coc * 1.6);
 
     // Pulse opacity per-particle, offset by phase. Multiplied by depth fog
     // (far = dimmer), uIntensity (the brightness knob), and uFade (the
-    // load-in ramp). Clamped to 1.0 in the fragment so glow doesn't blow out.
+    // load-in ramp), then divided by the CoC so a bigger bokeh disc is dimmer
+    // — the same light spread over more area (energy conservation). Clamped to
+    // 1.0 in the fragment so glow doesn't blow out.
     float pulse = 0.25 + 0.55 * (0.5 + 0.5 * sin(t * 1.7 + aSeed.x * 12.0));
     float fog   = mix(0.30, 1.0, depth);
-    vAlpha = pulse * fog * uIntensity * uFade;
+    vAlpha = pulse * fog * uIntensity * uFade / (1.0 + coc * 1.4);
   }
 `;
 
 const FS = /* glsl */ `
   precision mediump float;
   varying float vAlpha;
+  varying float vBlur;
 
   void main() {
-    // 4-point AI spark / diamond. gl_PointCoord is [0,1] sprite coords;
-    // we distance from center, then use a sub-unit superellipse exponent
-    // so the shape becomes a concave diamond (pinched waist along the
-    // cardinal axes — the classic Claude/Gemini "spark" silhouette, but
-    // here it's the catalog AI mark in particle form).
+    // IN FOCUS — 4-point AI spark / diamond. gl_PointCoord is [0,1] sprite
+    // coords; distance from center through a sub-unit superellipse exponent
+    // makes a concave diamond (pinched waist along the cardinal axes — the
+    // classic Claude/Gemini "spark" silhouette, the catalog AI mark in
+    // particle form).
     vec2  d  = abs(gl_PointCoord - 0.5) * 2.0;       // 0..1 per axis
     float r  = pow(d.x, 0.55) + pow(d.y, 0.55);       // concave diamond
     // Soft inner glow that brightens at the very center so each diamond
     // also reads as a luminous point at small sizes.
     float c  = exp(-dot(d, d) * 6.0);
-    float a  = (smoothstep(1.05, 0.0, r) * 0.85 + c * 0.4) * vAlpha;
+    float diamond = smoothstep(1.05, 0.0, r) * 0.85 + c * 0.4;
+
+    // OUT OF FOCUS — a soft round bokeh disc with a faint brighter rim (the
+    // classic defocused-highlight look). vBlur (circle of confusion) crossfades
+    // the crisp diamond into the disc as the spark leaves the focal plane.
+    float rr   = length(gl_PointCoord - 0.5) * 2.0;   // 0 center .. 1 edge
+    float disc = smoothstep(1.0, 0.45, rr);            // soft-edged circle
+    float rim  = smoothstep(0.6, 0.95, rr) * smoothstep(1.0, 0.92, rr);
+    float bokeh = disc * 0.6 + rim * 0.55;
+
+    float shape = mix(diamond, bokeh, vBlur);
 
     // Cool silver-white tint so the field reads on matte black without
     // looking warm/cream.
-    gl_FragColor = vec4(0.95, 0.96, 1.0, a);
+    gl_FragColor = vec4(0.95, 0.96, 1.0, shape * vAlpha);
   }
 `;
 
@@ -151,14 +190,12 @@ export default function ParticleBackground({ speed }: ParticleBackgroundProps = 
     }
     gl.useProgram(program);
 
-    // Per-particle seed: (phase, drift speed, base size).
-    // Halve the field + cap DPR harder on phones — additive-blend fill is
-    // the cost, and 180 points at dpr 2 is overkill for ambient texture on
-    // a small screen.
+    // Per-particle seed: (phase, drift speed, base size, depth).
+    // Cap DPR harder on phones — additive-blend fill is the real cost, not the
+    // point count. Mobile runs the dense MOBILE_PARTICLE_COUNT field; the DoF
+    // energy-conservation (dimmer bokeh) keeps the additive fill in check.
     const isMobile = typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches;
-    // Same intensity ratio on mobile, halved baseline (additive-blend fill
-    // is the cost on phones).
-    const count = isMobile ? Math.round(190 * PARTICLE_INTENSITY) : PARTICLE_COUNT;
+    const count = isMobile ? MOBILE_PARTICLE_COUNT : PARTICLE_COUNT;
     const seeds = new Float32Array(count * 4);
     // Finer baseline than the old sparks — a star-dust look. Sizes are skewed
     // toward the minimum (pow below) so most points are tiny far stars and only
@@ -185,7 +222,11 @@ export default function ParticleBackground({ speed }: ParticleBackgroundProps = 
     const uViewport = gl.getUniformLocation(program, 'uViewport');
     const uIntensity = gl.getUniformLocation(program, 'uIntensity');
     const uFade = gl.getUniformLocation(program, 'uFade');
+    const uFocus = gl.getUniformLocation(program, 'uFocus');
+    const uFStop = gl.getUniformLocation(program, 'uFStop');
     gl.uniform1f(uIntensity, PARTICLE_INTENSITY);
+    gl.uniform1f(uFocus, FOCAL_DEPTH);
+    gl.uniform1f(uFStop, APERTURE_FSTOP);
 
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE); // additive for glow
