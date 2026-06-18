@@ -53,7 +53,7 @@ const MOBILE_PARTICLE_COUNT = 8700;
 // stays sharp; everything else blooms into soft, dim bokeh. As the globe turns,
 // each star sweeps through the focal plane, breathing in and out of focus.
 export const APERTURE_FSTOP = 1.2;
-const FOCAL_DISTANCE = 1.55;
+const FOCAL_DISTANCE = 0.95;
 
 const VS = /* glsl */ `
   attribute vec4 aSeed;        // xyz = static position inside the sphere, w = base size
@@ -69,11 +69,13 @@ const VS = /* glsl */ `
   // How fast the circle of confusion opens per unit of defocus, BEFORE the
   // 1/f-stop scaling. Higher = a shallower-looking field overall.
   const float DOF_BASE = 2.2;
-  // Camera sits just outside the globe looking in; FOCAL sets the field of view
-  // (perspective strength + how much of the sphere fills the frame). Tune these
-  // two to dial how immersive / how strong the near-far size falloff reads.
-  const float CAM_DIST = 2.15;
-  const float FOCAL    = 1.25;
+  // Camera sits CLOSE — just off the globe's near surface — so the sphere fills
+  // and overflows the frame: a dark scene you're inside, not a ball floating in
+  // empty margins. FOCAL sets the field of view; together they dial how
+  // immersive it reads and how hard the near→far size falloff hits. The dist
+  // clamp below stops near-pole stars from blowing up to infinity.
+  const float CAM_DIST = 1.3;
+  const float FOCAL    = 1.5;
 
   // Cheap pseudo-noise from a hash - enough texture for twinkle.
   float hash(float n) { return fract(sin(n) * 43758.5453123); }
@@ -85,7 +87,7 @@ const VS = /* glsl */ `
     // tilt so it reads as a 3D sphere turning (like a planet), not a flat disc.
     // uTime already carries the live speed multiplier, so the search "warp"
     // spins the whole universe up.
-    float ang = uTime * 0.06;
+    float ang = uTime * 0.045;
     float ca = cos(ang), sa = sin(ang);
     p = vec3(ca * p.x + sa * p.z, p.y, -sa * p.x + ca * p.z);
     float tc = cos(0.32), ts = sin(0.32);
@@ -95,7 +97,9 @@ const VS = /* glsl */ `
     // bigger; back is farther → smaller, and seen THROUGH the front via the
     // additive blend). Aspect-correct x so the sphere stays round on any
     // viewport.
-    float dist   = CAM_DIST - p.z;
+    // Clamp the near distance so stars right in front of the camera (near pole)
+    // bloom into huge foreground bokeh instead of dividing toward infinity.
+    float dist   = max(CAM_DIST - p.z, 0.4);
     float proj   = FOCAL / dist;
     float aspect = uViewport.y / uViewport.x;
     gl_Position = vec4(p.x * proj * aspect, p.y * proj, 0.0, 1.0);
@@ -116,7 +120,7 @@ const VS = /* glsl */ `
     // the fragment so glow doesn't blow out.
     float ph    = hash(aSeed.x * 12.9 + aSeed.y * 78.2 + aSeed.z * 37.7);
     float pulse = 0.35 + 0.45 * (0.5 + 0.5 * sin(uTime * 1.4 + ph * 6.2831));
-    float fog   = clamp((3.4 - dist) / 2.4, 0.22, 1.0);
+    float fog   = clamp((2.7 - dist) / 2.1, 0.20, 1.0);
     vAlpha = pulse * fog * uIntensity * uFade / (1.0 + coc * 1.3);
   }
 `;
@@ -211,12 +215,14 @@ export default function ParticleBackground({ speed }: ParticleBackgroundProps = 
     const sizeMax = 4.0 * PARTICLE_INTENSITY;
     for (let i = 0; i < count; i++) {
       // Uniform direction on the unit sphere (z = cosφ trick), then a radius
-      // biased toward the outer shell so it reads as a dense-rimmed globe, not
-      // a solid ball. xyz = the star's static position inside the sphere.
+      // with UNIFORM VOLUME density (cbrt) so the cloud is evenly filled — with
+      // the camera close, the long line of sight through the middle reads as a
+      // dense glowing core fading to the edges (a dark scene you look through),
+      // not a hollow ball. xyz = the star's static position inside the sphere.
       const theta = 2 * Math.PI * Math.random();
       const z = 2 * Math.random() - 1;
       const rxy = Math.sqrt(Math.max(0, 1 - z * z));
-      const radius = 0.32 + 0.68 * Math.pow(Math.random(), 0.45);
+      const radius = Math.cbrt(Math.random());
       seeds[i * 4 + 0] = rxy * Math.cos(theta) * radius;       // x
       seeds[i * 4 + 1] = rxy * Math.sin(theta) * radius;       // y
       seeds[i * 4 + 2] = z * radius;                           // z
