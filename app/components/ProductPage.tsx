@@ -1046,6 +1046,11 @@ export default function ProductPage({
     if (!overlay || !scroller) return;
     if (typeof window === 'undefined') return;
     if (window.matchMedia('(min-width: 960px)').matches) return;
+    // Doc-scroll mode: the overlay scrolls the DOCUMENT, so the inner scroller's
+    // scrollTop is always 0 and the "engage only at top" guard can't tell top
+    // from mid-scroll — every downward drag would dismiss. The back button +
+    // document scroll cover navigation, so disable whole-overlay drag here.
+    if (overlay.closest('.app-root')?.classList.contains('product-doc-scroll')) return;
 
     const onStart = (e: TouchEvent) => {
       if (scroller.scrollTop > 0) return;
@@ -1360,6 +1365,7 @@ export default function ProductPage({
         onBack={handleClose}
         onHome={onHome ?? handleClose}
         onSearch={onSearch ?? (() => {})}
+        showSearch={false}
       />
       {contextOpen && ownProductId && (
         <AdminContextPanel

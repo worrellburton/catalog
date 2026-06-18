@@ -2065,14 +2065,15 @@ export default function Home() {
   useEffect(() => {
     if (!overlayOpen) return;
     if (typeof window === 'undefined') return;
-    // Look overlay DOCUMENT-SCROLL mode (mobile, non-shell): let the overlay
-    // flow in the document (.look-doc-scroll CSS) so the scroll gesture drives
-    // the window and iOS Safari collapses its bottom toolbar (no bar = no frost
-    // strip), like home. We DON'T lock the body; we park the document at top so
-    // the hero shows and restore the feed scroll on close. The hero <video>
-    // attaches unconditionally on mount, and .sfh (the home ceremony) is hidden
-    // by the CSS so the hero sits at the top in view. Gated tight.
-    const docScroll = !!selectedLook && !selectedProduct && !inShell &&
+    // Look/product overlay DOCUMENT-SCROLL mode (mobile, non-shell): let the
+    // overlay flow in the document (.look-doc-scroll / .product-doc-scroll CSS)
+    // so the scroll gesture drives the window and iOS Safari collapses its
+    // bottom toolbar (no bar = no frost strip), like home. We DON'T lock the
+    // body; we park the document at top so the hero shows and restore the feed
+    // scroll on close. The hero <video> attaches unconditionally on mount, and
+    // .sfh (the home ceremony) is hidden by the CSS so the hero sits at the top
+    // in view. Same behaviour for both overlay types; gated tight.
+    const docScroll = (!!selectedLook || !!selectedProduct) && !inShell &&
       window.matchMedia('(max-width: 768px)').matches;
     if (docScroll) {
       overlayScrollLockRef.current = true;
@@ -2178,7 +2179,7 @@ export default function Home() {
   return (
     <TrailRoot>
     <TrailVideoHost>
-    <div className={`app-root ${isLightMode ? 'light-mode' : ''}${overlayOpen ? ' has-overlay' : ''}${heroMode ? ' home-hero' : ''}${heroScrolled ? ' hero-scrolled' : ''}${heroBarFaded ? ' hero-bar-faded' : ''}${chromeHidden ? ' chrome-hidden' : ''}${selectedLook && !selectedProduct && !inShell ? ' look-doc-scroll' : ''}`}>
+    <div className={`app-root ${isLightMode ? 'light-mode' : ''}${overlayOpen ? ' has-overlay' : ''}${heroMode ? ' home-hero' : ''}${heroScrolled ? ' hero-scrolled' : ''}${heroBarFaded ? ' hero-bar-faded' : ''}${chromeHidden ? ' chrome-hidden' : ''}${selectedLook && !selectedProduct && !inShell ? ' look-doc-scroll' : ''}${selectedProduct && !inShell ? ' product-doc-scroll' : ''}`}>
       {/* Singleton particle world — one canvas mounted at the app root,
           always visible. Splash, hero, search-ceremony, empty-catalog all
           render above this so the field stays continuous across every

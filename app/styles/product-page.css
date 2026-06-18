@@ -108,6 +108,46 @@
   transition: none;
 }
 
+/* ── Product overlay DOCUMENT-SCROLL on mobile (toolbar-collapse fix) ──
+   Mirrors the look-overlay fix (CLAUDE.md §1 "iOS Safari bottom-toolbar
+   strip"). The product overlay normally scrolls an inner `.product-page` with
+   the body locked, so iOS 26 Safari's bottom toolbar never collapses and frosts
+   the flat base into a strip. Here the overlay flows in the document so the
+   scroll gesture collapses the toolbar like home. Gated by `.product-doc-scroll`
+   (set in _index.tsx, product-on-top + non-shell) + mobile.
+   NAV-STACK: a product can sit ON TOP of a look, so we hide the warm layer(s)
+   beneath (`.nav-layer:not(:has(.product-page-overlay))`) and flow ONLY the
+   product's layer — else the under-look adds a screen of height below it.
+   The hero <video> attaches unconditionally (TrailVideoHost), so no director
+   change is needed; `.sfh` (home ceremony) is hidden so the hero stays at top. */
+@media (max-width: 768px) {
+  html:has(.app-root.product-doc-scroll .product-page-overlay),
+  body:has(.app-root.product-doc-scroll .product-page-overlay) {
+    overflow: visible !important;
+    overscroll-behavior: auto;
+  }
+  .app-root.product-doc-scroll > header,
+  .app-root.product-doc-scroll > .home-feed-wrap,
+  .app-root.product-doc-scroll > .bottom-bar,
+  .app-root.product-doc-scroll > .remix-btn-fixed,
+  .app-root.product-doc-scroll .sfh,
+  .app-root.product-doc-scroll .nav-layer:not(:has(.product-page-overlay)) {
+    display: none !important;
+  }
+  .app-root.product-doc-scroll .nav-layer:has(.product-page-overlay),
+  .app-root.product-doc-scroll .product-page-overlay {
+    position: static !important;
+    transform: none !important;
+    overflow: visible !important;
+    height: auto !important;
+    will-change: auto !important;
+  }
+  .app-root.product-doc-scroll .product-page {
+    overflow: visible !important;
+    height: auto !important;
+  }
+}
+
 /* Mobile: rounded top corners + a grab handle sell the sheet affordance.
    The slide itself is global (above). */
 @media (max-width: 959px) {
