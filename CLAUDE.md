@@ -284,6 +284,22 @@ differs:
   document, clamps scroll to 0, and unloads the feed's virtualized cards, which
   on return leaves the feed short → a gap/strip behind the toolbar. Shipped +
   verified (sim: solid black sheet + clean return).
+  **UPDATE — the opaque-sheet styling above did NOT fix the "open search, come
+  back → dark strip" case.** Root cause is the **keyboard**, not the sheet:
+  focusing the input flips Safari's bottom toolbar into its opaque mode and it
+  STAYS opaque at `scrollY=0` after close (Safari re-frosts only on a REAL
+  scroll). Tested + ruled out (don't retry): masking the backdrop (keyboard
+  shrinks the viewport so the mask mislands), un-hiding the feed, removing the
+  body-lock, translucent backdrop, programmatic scroll (no re-frost AND no
+  collapse), a `theme-color` toggle, delayed sheet-removal, dropping
+  `interactive-widget=resizes-content`. The **real fix (`BottomBar.tsx`)**: on
+  touch the closed pill is `readOnly={isTouch && !searchOpen}` so the opening
+  tap opens the sheet WITHOUT raising the keyboard (no keyboard = no opaque
+  strip); a second tap on the now-editable field raises it to type. Desktop
+  keeps the editable type-immediately pill. The **typing→close** path's strip is
+  an inherent iOS limit that clears on the first scroll. SIM CAVEAT: the
+  search-case frost is NOT reliably sim-verifiable (the bar's darkness is partly
+  the dark feed cards behind it, not the toolbar) — device-confirm.
 - **Cold-boot auth splash** (`.auth-splash` / `password-gate.css`): the
   "dark strip on FIRST open, gone after reload" bug. The opaque `.auth-splash`
   (radial near-black, `z-index:600`, `inset:0`) is the layer behind the bar at
