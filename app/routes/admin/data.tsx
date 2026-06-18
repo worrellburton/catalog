@@ -999,7 +999,7 @@ function AddProductsModal({ onClose, onIngested, showToast, onPending }: AddProd
     const { data: inserted, error } = await supabase
       .from('products')
       .insert(rows)
-      .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, primary_video_poster_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, subtype, gender, created_at, source, size_fit, materials_care, haiku_context, affiliate_url');
+      .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, primary_video_poster_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, subtype, gender, created_at, source, size_fit, materials_care, haiku_context, affiliate_url, barcode, barcode_type');
     setIngesting(false);
     if (!error) {
       showToast(`Ingested ${rows.length} product${rows.length === 1 ? '' : 's'}`);
@@ -2205,7 +2205,7 @@ export default function AdminData() {
       // Reload products in the table
       const { data: reloaded } = await supabase
         .from('products')
-        .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, primary_video_poster_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, subtype, gender, created_at, source, size_fit, materials_care, haiku_context, affiliate_url')
+        .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, primary_video_poster_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, subtype, gender, created_at, source, size_fit, materials_care, haiku_context, affiliate_url, barcode, barcode_type')
         .order('scraped_at', { ascending: false });
       if (reloaded) {
         setCrawledProducts((reloaded || []).map(p => ({
@@ -2653,7 +2653,7 @@ export default function AdminData() {
       if (!supabase) { setProductsLoading(false); return; }
       const { data, error } = await supabase
         .from('products')
-        .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, primary_video_poster_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, subtype, gender, created_at, source, size_fit, materials_care, haiku_context, affiliate_url')
+        .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, primary_video_poster_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, subtype, gender, created_at, source, size_fit, materials_care, haiku_context, affiliate_url, barcode, barcode_type')
         .order('scraped_at', { ascending: false });
       if (error) {
         console.error('Failed to load crawled products:', error);
@@ -4069,7 +4069,7 @@ export default function AdminData() {
                   // without a manual page reload.
                   const { data } = await supabase!
                     .from('products')
-                    .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, primary_video_poster_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, subtype, gender, created_at, source, size_fit, materials_care, haiku_context, affiliate_url')
+                    .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, primary_video_poster_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, subtype, gender, created_at, source, size_fit, materials_care, haiku_context, affiliate_url, barcode, barcode_type')
                     .order('created_at', { ascending: false });
                   if (data) {
                     setCrawledProducts(data.map((p) => ({
@@ -4100,7 +4100,7 @@ export default function AdminData() {
                 if (result.updated > 0) {
                   const { data } = await supabase!
                     .from('products')
-                    .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, primary_video_poster_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, subtype, gender, created_at, source, size_fit, materials_care, haiku_context, affiliate_url')
+                    .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, primary_video_poster_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, subtype, gender, created_at, source, size_fit, materials_care, haiku_context, affiliate_url, barcode, barcode_type')
                     .order('created_at', { ascending: false });
                   if (data) {
                     setCrawledProducts(data.map((p) => ({
@@ -6051,6 +6051,7 @@ export default function AdminData() {
                 <th style={{ minWidth: 140 }}>Fabric</th>
                 <th style={{ minWidth: 200 }} title="Claude Haiku's read of the primary image — what the item actually is. Feeds type governance.">Haiku Context</th>
                 <SortableTh label="Product" sortKey="name" currentSort={productTable.sort} onSort={productTable.handleSort} />
+                <th style={{ minWidth: 110 }} title="ASIN (Amazon) or UPC/EAN/GTIN — captured from the page or JSON-LD when available; blank when the site doesn't expose one.">Barcode</th>
                 <th style={{ textAlign: 'center' }} title="When on, this product is live — shown on the home feed AND in search / catalog listings. When off, it's fully hidden from the platform (but stays in this admin table).">Active</th>
                 <th style={{ textAlign: 'center' }} title="Flagged elite in /admin/creative - curated onto the feed and the deck v1.1 background">Elite</th>
                 <SortableTh label="Price" sortKey="price" currentSort={productTable.sort} onSort={productTable.handleSort} />
@@ -6558,6 +6559,13 @@ export default function AdminData() {
                     ) : (
                       <div style={{ fontWeight: 600, fontSize: 12 }}>{p.name}</div>
                     )}
+                  </td>
+                  {/* Barcode — ASIN / UPC / EAN / GTIN captured by the scraper when
+                      the site exposes it (most DTC/brand sites don't). Monospace;
+                      type shown on hover. */}
+                  <td style={{ fontSize: 11.5, color: '#52525b', fontFamily: 'ui-monospace, SFMono-Regular, Menlo, monospace', whiteSpace: 'nowrap' }}
+                    title={(p as { barcode_type?: string | null }).barcode_type ?? undefined}>
+                    {(p as { barcode?: string | null }).barcode ?? <span style={{ color: '#cbd5e1' }}>—</span>}
                   </td>
                   <td style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
                     {p.id ? (
