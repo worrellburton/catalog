@@ -51,16 +51,22 @@
      that gives the bar a single liquid-glass surface, and stripped the
      inner pill chrome below so the filter button + send button read as
      icons sitting on top of the same surface, not as separate pills. */
+  /* Glass recipe mirrors the desktop hero bar (.ai-bar in type-anywhere.css):
+     a brighter top sheen layered over a tinted dark base so the frosted pill
+     reads as liquid glass even over a bright feed, a deeper blur + saturate,
+     and a deeper drop shadow with a brighter top rim. Still ONE surface —
+     gradient + flat tint with the icons sitting on top (see note above). */
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.04));
-  backdrop-filter: blur(28px) saturate(1.5);
-  -webkit-backdrop-filter: blur(28px) saturate(1.5);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.04)),
+    rgba(15, 18, 24, 0.45);
+  backdrop-filter: blur(30px) saturate(1.8);
+  -webkit-backdrop-filter: blur(30px) saturate(1.8);
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.16);
   box-shadow:
-    0 12px 36px rgba(0, 0, 0, 0.36),
-    0 0 26px rgba(255, 255, 255, 0.10),
-    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 16px 44px rgba(0, 0, 0, 0.42),
+    0 0 24px rgba(255, 255, 255, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
     inset 0 -1px 0 rgba(0, 0, 0, 0.18);
   overflow: hidden;
   transition: box-shadow 0.3s ease, border-color 0.3s ease, background 0.3s ease;
@@ -69,9 +75,9 @@
 .bottom-bar:focus-within {
   border-color: rgba(255, 255, 255, 0.34);
   box-shadow:
-    0 12px 40px rgba(0, 0, 0, 0.4),
+    0 16px 48px rgba(0, 0, 0, 0.46),
     0 0 40px rgba(255, 255, 255, 0.22),
-    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.26),
     inset 0 -1px 0 rgba(0, 0, 0, 0.18);
 }
 /* The query text glows as you type (placeholder hidden = field has content). */

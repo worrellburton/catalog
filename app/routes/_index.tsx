@@ -5,6 +5,7 @@ import PasswordGate from '~/components/PasswordGate';
 import WaitlistScreen from '~/components/WaitlistScreen';
 import ShoppingForHero from '~/components/home/ShoppingForHero';
 import SearchCeremony from '~/components/home/SearchCeremony';
+import SearchCatalogStrip from '~/components/home/SearchCatalogStrip';
 import SplashHost from '~/components/splash/SplashHost';
 import { getSplashConfig, DEFAULT_SPLASH_CONFIG, type SplashConfig } from '~/services/splash-config';
 import ContinuousFeed from '~/components/ContinuousFeed';
@@ -2298,7 +2299,19 @@ export default function Home() {
             <ShoppingForHero onRevealFeed={handleRevealFeed} />
           )}
 
-          <div className={`home-feed-wrap${revealResults ? ' home-results-reveal' : ''}`}>
+          <div className={`home-feed-wrap${revealResults ? ' home-results-reveal' : ''}${(!heroMode && !ceremony.active && searchQuery.trim() !== '' && ceremonyRecs.length > 0) ? ' has-catalog-strip' : ''}`}>
+          {/* Ceremony Option 1: demographic-aware catalog picks ride as an
+              in-flow strip ABOVE the results — the shopper scrolls straight from
+              these into the continuous feed below (no blocking picker). Only on a
+              resolved search (not the hero, not mid-ceremony). */}
+          {!heroMode && !ceremony.active && searchQuery.trim() !== '' && ceremonyRecs.length > 0 && (
+            <SearchCatalogStrip
+              query={searchQuery}
+              recommendations={ceremonyRecs}
+              onPick={handlePickRecommendedCatalog}
+              onContinue={() => setCeremonyRecs([])}
+            />
+          )}
           <ContinuousFeed
             activeFilter={activeFilter}
             searchQuery={searchQuery}
@@ -2344,8 +2357,6 @@ export default function Home() {
               ready={!searchLoading}
               onDone={handleCeremonyDone}
               floatingImages={ceremonyImages}
-              recommendations={ceremony.kind === 'search' ? ceremonyRecs : []}
-              onPickCatalog={handlePickRecommendedCatalog}
             />
           )}
 

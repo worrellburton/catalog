@@ -119,16 +119,20 @@
      toned bar (icon disc, input slot, white send disc). One surface now,
      icons sit on top instead of as separate pills. */
   border-radius: 999px;
+  /* Liquid glass: a more translucent base so the dark hero + particles bleed
+     through, a stronger top→bottom sheen, a brighter rim, deeper blur, and a
+     faint outer glow — reads as frosted glass rather than a flat dark pill. */
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.08), rgba(255, 255, 255, 0.03)),
-    rgba(15, 18, 24, 0.6);
-  border: 1px solid rgba(255, 255, 255, 0.10);
-  backdrop-filter: blur(22px) saturate(1.5);
-  -webkit-backdrop-filter: blur(22px) saturate(1.5);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.04)),
+    rgba(15, 18, 24, 0.45);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  backdrop-filter: blur(30px) saturate(1.8);
+  -webkit-backdrop-filter: blur(30px) saturate(1.8);
   box-shadow:
-    0 14px 40px rgba(0, 0, 0, 0.36),
-    inset 0 1px 0 rgba(255, 255, 255, 0.10),
-    inset 0 -1px 0 rgba(0, 0, 0, 0.16);
+    0 16px 44px rgba(0, 0, 0, 0.42),
+    0 0 24px rgba(255, 255, 255, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.18);
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
   color: #f5f5f7;
   transition: border-color 180ms ease, box-shadow 180ms ease;
@@ -137,6 +141,15 @@
      or chrome auto-hides), so together the bar animates both into and out
      of position instead of appearing/disappearing instantly. */
   animation: ai-bar-enter 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+/* Glow intensifies + rim brightens while the shopper is in the bar. */
+.ai-bar:focus-within {
+  border-color: rgba(255, 255, 255, 0.28);
+  box-shadow:
+    0 16px 48px rgba(0, 0, 0, 0.46),
+    0 0 36px rgba(255, 255, 255, 0.12),
+    inset 0 1px 0 rgba(255, 255, 255, 0.26),
+    inset 0 -1px 0 rgba(0, 0, 0, 0.18);
 }
 @keyframes ai-bar-enter {
   from { opacity: 0; transform: translateY(22px) scale(0.97); }

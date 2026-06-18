@@ -181,6 +181,20 @@ TOOLS = [
                     "type": ["string", "null"],
                     "description": "ISO currency code, e.g. 'USD', 'EUR', 'GBP'",
                 },
+                "barcode": {
+                    "type": ["string", "null"],
+                    "description": (
+                        "Product barcode / external identifier if present on the page or in "
+                        "JSON-LD: an Amazon ASIN, or a UPC/EAN/GTIN "
+                        "(schema.org Product.gtin13 / gtin12 / gtin). Digits only for "
+                        "UPC/EAN/GTIN; the 10-char code for an ASIN. null if none is shown."
+                    ),
+                },
+                "barcode_type": {
+                    "type": ["string", "null"],
+                    "enum": ["asin", "upc", "ean", "gtin", None],
+                    "description": "Which kind of identifier `barcode` is, or null.",
+                },
                 "images": {
                     "type": "array",
                     "items": {"type": "string"},
@@ -1822,6 +1836,8 @@ def _run_agent_attempt(
                         "price": tool_input.get("price"),
                         "discounted_price": tool_input.get("discounted_price"),
                         "currency": tool_input.get("currency"),
+                        "barcode": tool_input.get("barcode"),
+                        "barcode_type": tool_input.get("barcode_type"),
                         "images": public_images,
                         "image_missing_reason": image_missing_reason,
                         "availability": tool_input.get("availability"),
