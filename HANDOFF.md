@@ -44,11 +44,16 @@
     (`scripts/clerk-migration/PHASE-5-catalog-server.md`).
 
 ## OUTSTANDING (needs the user / not doable from the agent sandbox)
-1. **Apply 2 migrations** via Supabase Dashboard → SQL Editor:
-   `supabase/migrations/20260618010000_products_barcode.sql` and
-   `20260618000000_haiku_context_backfill_cron.sql`.
-   **Do NOT apply `20260617000000_clerk_auth_profiles.sql`** yet (Clerk-cutover-
-   gated). Avoid a blanket `supabase db push` — it would sweep in that Clerk one.
+1. **Apply 2 migrations** — ✅ DONE (2026-06-18) via the pre-authed
+   `Supabase_Catalog` MCP `apply_migration` (the OAuth `supabase` server still
+   doesn't persist here, but `Supabase_Catalog` is token-authed). Applied +
+   verified live: `20260618010000_products_barcode.sql` (products.barcode /
+   barcode_type / products_barcode_idx) and `20260618000000_haiku_context_
+   backfill_cron.sql` (run_haiku_context_backfill + cron `*/10 * * * *`).
+   `20260617000000_clerk_auth_profiles.sql` was correctly NOT applied (still
+   Clerk-cutover-gated). NOTE: the haiku cron now spends Haiku-vision $ every
+   10 min while products lack context — throttle the cadence/batch in that
+   migration if spend is a concern.
 2. **Redeploy the Modal scraper** (`agents/product-scraper`) so barcodes populate.
 3. **Clerk Phase 2** (Supabase third-party auth + RLS): enable Clerk as a
    Supabase third-party provider; add session-token claims
@@ -80,4 +85,8 @@
 ## Possible next polish
 - Verify particles on dev; may want milky-way **clustering** to match the Mercury
   reference more closely.
-- Optionally bump the mobile BottomBar glass to match the desktop bar.
+- ~~Optionally bump the mobile BottomBar glass to match the desktop bar.~~
+  ✅ DONE (2026-06-18) — `.bottom-bar` now mirrors the desktop `.ai-bar` glass
+  recipe (sheen over tinted dark base, blur(30) saturate(1.8), deeper shadow +
+  brighter top rim); `:focus-within` bumped to stay an escalation. Centering
+  GUARD block untouched. Verify the look on dev/mobile.
