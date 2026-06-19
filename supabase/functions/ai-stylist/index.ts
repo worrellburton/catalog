@@ -8,8 +8,6 @@
 // Required Supabase secret (degrades to a heuristic outfit if unset):
 //   supabase secrets set ANTHROPIC_API_KEY=sk-ant-xxxxxxxx
 
-import { logAiUsage } from '../_shared/ai-usage.ts';
-
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
@@ -185,9 +183,7 @@ Deno.serve(async (req: Request) => {
     }
 
     try {
-      const { outfit, rationale, inputTokens, outputTokens } = await styleWithClaude(occasion, gender, candidates, apiKey);
-      // Best-effort usage logging (never blocks the response).
-      try { await logAiUsage({ platform: 'anthropic', operation: 'ai-stylist', model: STYLIST_MODEL, input_tokens: inputTokens, output_tokens: outputTokens }); } catch { /* ignore */ }
+      const { outfit, rationale } = await styleWithClaude(occasion, gender, candidates, apiKey);
       return jsonRes({ success: true, outfit, rationale, source: 'claude' });
     } catch (err) {
       console.warn('[ai-stylist] Claude failed, falling back:', err);
