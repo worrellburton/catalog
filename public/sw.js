@@ -1,61 +1,30 @@
-// Catalog service worker — small, cautious, single-purpose.
+// Catalog service worker — RETIRED (self-destructing).
 //
-// Goal: cache content-hashed assets aggressively so returning visitors
-// don't re-download Vite-built JS/CSS chunks. GitHub Pages serves these
-// with Cache-Control: max-age=600, which is fine but means a 10-minute
-// gap loses the cache. With this SW, /catalog/assets/* lives forever
-// (the URL itself contains a content hash, so a "wrong" cache is
-// impossible — different content = different URL).
+// This previously cached content-hashed /assets/* "forever". On Vercel those
+// assets are already served `Cache-Control: immutable` (max-age=1y) by the
+// browser HTTP cache, so the SW added ~no benefit while creating a real
+// footgun: a stale app shell could request lazy chunk hashes a newer deploy
+// had removed, hanging navigation (tap a product/look → its chunk 404s).
 //
-// Everything else (HTML, Supabase requests, videos, fonts) falls through
-// to the network untouched.
-//
-// Kill-switch: if this file is replaced with one that calls
-// self.registration.unregister() in install/activate, the SW removes
-// itself on next page load. Bumping CACHE_VERSION purges all caches.
+// The SPA no longer registers a service worker. This file remains only so that
+// returning visitors who still have the old SW installed get it cleanly
+// removed: the browser byte-checks sw.js on its next SW update, installs this
+// version, and it purges every cache and unregisters itself.
 
-const CACHE_VERSION = 'catalog-assets-v1';
-const ASSET_PATH_RE = /\/assets\/[^/?#]+\.(?:js|css|woff2?|png|svg|webp|jpg|jpeg)$/;
-
-self.addEventListener('install', (event) => {
-  // skipWaiting on install means a new SW takes effect on the very next
-  // navigation, instead of waiting for every tab to close. Safe here
-  // because we only cache content-hashed URLs.
-  self.skipWaiting();
-});
+self.addEventListener('install', () => self.skipWaiting());
 
 self.addEventListener('activate', (event) => {
   event.waitUntil((async () => {
-    // Claim open clients so they start using this SW immediately.
-    await self.clients.claim();
-    // Drop any caches whose names don't match the current version.
-    const names = await caches.keys();
-    await Promise.all(names.filter(n => n !== CACHE_VERSION).map(n => caches.delete(n)));
-  })());
-});
-
-self.addEventListener('fetch', (event) => {
-  const req = event.request;
-  if (req.method !== 'GET') return;
-
-  const url = new URL(req.url);
-  // Same-origin only — never touch Supabase, fonts.googleapis, etc.
-  if (url.origin !== self.location.origin) return;
-  if (!ASSET_PATH_RE.test(url.pathname)) return;
-
-  event.respondWith((async () => {
-    const cache = await caches.open(CACHE_VERSION);
-    const cached = await cache.match(req);
-    if (cached) return cached;
-
     try {
-      const fresh = await fetch(req);
-      // Only cache successful responses. 404/500 must not poison.
-      if (fresh.ok) cache.put(req, fresh.clone());
-      return fresh;
-    } catch (err) {
-      // Offline + nothing cached — let the browser show its native error.
-      return Response.error();
+      const names = await caches.keys();
+      await Promise.all(names.map((n) => caches.delete(n)));
+    } catch (_) {
+      /* best-effort */
+    }
+    try {
+      await self.registration.unregister();
+    } catch (_) {
+      /* best-effort */
     }
   })());
 });
