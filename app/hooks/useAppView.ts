@@ -10,9 +10,10 @@ type AuthUser = ReturnType<typeof useAuth>['user'];
 interface UseAppViewArgs {
   user: AuthUser;
   authLoading: boolean;
-  /** Launch master switch. true = waitlist flow (signing UP queues new
-   *  accounts behind approval); false = open flow. Either way guests
-   *  land in the feed — the marketing landing page was retired. */
+  /** Launch master switch. true = waitlist flow: sign-in-only — signed-out
+   *  visitors are kept on the gate (no catalog access at all), and signing UP
+   *  queues new accounts behind approval. false = open flow: guests browse the
+   *  feed and signing up grants access right away. */
   waitlistMode: boolean;
   /** True while the waitlist_mode dial is still resolving — routing for
    *  signed-out visitors waits on it so we don't flash the wrong flow. */
@@ -208,20 +209,38 @@ export function useAppView({ user, authLoading, waitlistMode, waitlistLoading }:
     }
   }, [showAuthSplash, authSplashMounted]);
 
-  // Post-splash entry for signed-OUT visitors: straight into the feed.
-  // (The marketing landing was retired — catalog.shop IS the home
-  // screen now, in both launch flows. Products are browsable as guest;
-  // looks/creators gate in _index.) Waits on waitlistLoading only so a
-  // late dial flip can't race the first route. Deep links / hashes have
-  // already moved `view` off 'locked', so this only fires for a plain
-  // cold open at "/".
+  // Post-splash entry for signed-OUT visitors.
+  //   OPEN flow (waitlistMode = false): straight into the feed — guests browse
+  //     products; looks/creators gate at signup in _index.
+  //   WAITLIST flow (waitlistMode = true): sign-in-only — stay on the gate
+  //     ('locked' → PasswordGate / ClerkSignInGate) so guests can't reach the
+  //     catalog at all; signing up then queues them on the waitlist.
+  // Waits on waitlistLoading so a late dial flip can't race the first route.
+  // Deep links / hashes have already moved `view` off 'locked', so this only
+  // fires for a plain cold open at "/".
   useEffect(() => {
     if (authLoading || waitlistLoading) return;
     if (user) return;
     if (!beatDone) return;
     if (view !== 'locked') return;
+    if (waitlistMode) return;   // sign-in-only: keep guests on the gate
     setView('app');
-  }, [authLoading, waitlistLoading, user, beatDone, view]);
+  }, [authLoading, waitlistLoading, user, beatDone, view, waitlistMode]);
+
+  // Hard lock for the WAITLIST flow: a signed-out visitor must never sit on the
+  // feed — catch the back doors the cold-entry effect can't (a stale #app
+  // bookmark, a warm remount that starts in 'app', or signing out while on the
+  // feed) and bounce them back to the gate. Share deep-links (/p/ /l/ /b/) and
+  // the native shell manage their own access, so leave those alone.
+  useEffect(() => {
+    if (authLoading || waitlistLoading) return;
+    if (!waitlistMode || user) return;
+    if (view !== 'app') return;
+    const path = window.location.pathname;
+    if (path.startsWith('/p/') || path.startsWith('/l/') || path.startsWith('/b/')) return;
+    if (document.documentElement.dataset.shell === 'catalog-app') return;
+    setView('locked');
+  }, [waitlistMode, user, authLoading, waitlistLoading, view]);
 
   // Auto-route on sign-in. OPEN flow: every signed-in user enters the app
   // directly (signing up grants access immediately). WAITLIST flow:

@@ -8,6 +8,8 @@ import { particleControls } from '~/services/particles';
 import { supabase } from '~/utils/supabase';
 import { useAuth } from '~/hooks/useAuth';
 import { startGenerationJob } from '~/services/generation-queue';
+import { type PickedProduct, ROLE_TAGS, roleTagFromName } from '~/services/product-roles';
+import AIStylist, { type StylistComplete } from '~/components/AIStylist';
 import { BUILD_JOKES, BUILD_PHASES, typicalSecondsFor } from '~/services/generation-progress';
 import { playExplosion } from '~/utils/explode';
 
@@ -117,7 +119,10 @@ const MAX_PRODUCTS = 5;
 // runs that timed out client-side. We now use Fal webhooks (no
 // internal poller cap), so budget 180s for the user-facing progress
 // bar; it eases past 95% so it never sits flat on slow jobs.
-type Step = 'photos' | 'products' | 'style' | 'review' | 'result';
+// 'mode' = the entry chooser (manual product pick vs AI Stylist); 'stylist' =
+// the AI Stylist sub-flow (occasion → outfit → activity), which on finish drops
+// the user into 'photos' with products + occasion already set.
+type Step = 'mode' | 'stylist' | 'photos' | 'products' | 'style' | 'review' | 'result';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -134,21 +139,6 @@ const AGE_PRESETS: { label: string }[] = [
   { label: '50s' },
   { label: '60s+' },
 ];
-
-interface PickedProduct {
-  id: string;
-  name: string | null;
-  brand: string | null;
-  price: string | null;
-  image_url: string | null;
-  role_tag: string | null;
-  // Optional richer media for the unified field cards (poster + product video).
-  primary_image_url?: string | null;
-  primary_video_url?: string | null;
-  primary_video_poster_url?: string | null;
-}
-
-const ROLE_TAGS = ['Hat', 'Top', 'Jacket', 'Dress', 'Pants', 'Shoes', 'Bag', 'Jewelry', 'Sunglasses', 'Accessory'];
 
 // User-facing category buckets for the products picker. Each row in the
 // product picker maps to one of these. `tags: null` is the Objects
@@ -192,30 +182,16 @@ const HEIGHT_OPTIONS = (() => {
   return out;
 })();
 
-function roleTagFromName(name: string | null): string | null {
-  if (!name) return null;
-  const lower = name.toLowerCase();
-  if (/\b(hat|cap|beanie)\b/.test(lower)) return 'Hat';
-  if (/\b(sunglass|shades|eyewear)\b/.test(lower)) return 'Sunglasses';
-  if (/\b(jacket|coat|parka|blazer)\b/.test(lower)) return 'Jacket';
-  if (/\b(dress|gown)\b/.test(lower)) return 'Dress';
-  if (/\b(pant|trouser|chino|jean|denim|short|skirt|legging)\b/.test(lower)) return 'Pants';
-  if (/\b(sneaker|trainer|shoe|boot|heel|loafer|sandal)\b/.test(lower)) return 'Shoes';
-  if (/\b(bag|tote|clutch|purse|backpack)\b/.test(lower)) return 'Bag';
-  if (/\b(necklace|ring|earring|bracelet|watch|chain|pendant)\b/.test(lower)) return 'Jewelry';
-  if (/\b(shirt|tee|top|sweater|hoodie|polo|henley|tank)\b/.test(lower)) return 'Top';
-  return null;
-}
 
-const STEP_VALUES: readonly Step[] = ['photos', 'products', 'style', 'review', 'result'];
+const STEP_VALUES: readonly Step[] = ['mode', 'stylist', 'photos', 'products', 'style', 'review', 'result'];
 
 function readStepFromUrl(): Step {
-  if (typeof window === 'undefined') return 'photos';
+  if (typeof window === 'undefined') return 'mode';
   try {
     const q = new URLSearchParams(window.location.search).get('step');
     if (q && (STEP_VALUES as readonly string[]).includes(q)) return q as Step;
   } catch { /* ignore */ }
-  return 'photos';
+  return 'mode';
 }
 
 // Per-style glyph for the style cards. Animated (float / pop) via CSS so
@@ -323,10 +299,10 @@ export default function GeneratePage() {
     }
     if (typeof window === 'undefined') return;
     const url = new URL(window.location.href);
-    const current = url.searchParams.get('step') ?? 'photos';
+    const current = url.searchParams.get('step') ?? 'mode';
     if (current === step) return;
-    if (step === 'photos') url.searchParams.delete('step');
-    else                   url.searchParams.set('step', step);
+    if (step === 'mode') url.searchParams.delete('step');
+    else                 url.searchParams.set('step', step);
     window.history.pushState({ step }, '', url.toString());
   }, [step]);
 
@@ -632,6 +608,11 @@ export default function GeneratePage() {
   const productUrlPrefilled = useRef(false);
   const [prefilledProductId, setPrefilledProductId] = useState<string | null>(null);
   const [occasionHint, setOccasionHint] = useState<string>('');
+  // Which way the user is building this look: 'manual' (pick products by hand)
+  // or 'stylist' (AI Stylist assembled it). Set on the 'mode' chooser. In the
+  // stylist flow the products are already chosen, so photos skips straight to
+  // the style step (no manual product picker).
+  const [flowMode, setFlowMode] = useState<'manual' | 'stylist'>('manual');
   // The user's saved "your style" descriptor (Style page). Threaded into
   // the Seedance prompt so generations reflect their personal aesthetic.
   const [customStyle, setCustomStyle] = useState<string>('');
@@ -1654,6 +1635,60 @@ export default function GeneratePage() {
     return <div className="gen-page"><div className="gen-empty">Resolving impersonation target…</div></div>;
   }
 
+  // The AI Stylist finished: take its products + occasion, then drop into the
+  // normal flow at photos (products are already set, so photos → style, skipping
+  // the manual picker). The single occasion text becomes the scene context.
+  const handleStylistComplete = (r: StylistComplete) => {
+    setPicked(r.products);
+    setOccasionHint(r.occasion);
+    setFlowMode('stylist');
+    setStep('photos');
+  };
+
+  // Entry chooser — two ways to build the AI look.
+  if (step === 'mode') {
+    return (
+      <div className="gen-page gen-page--mode">
+        <button className="gen-back" onClick={() => navigate('/#app')} aria-label="Back to catalog">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+          Back to catalog
+        </button>
+        <div className="gen-mode-body">
+          <h1 className="gen-mode-title">How do you want to build it?</h1>
+          <p className="gen-mode-sub">Pick your own products, or let the AI Stylist put a look together for you.</p>
+          <div className="gen-mode-cards">
+            <button type="button" className="gen-mode-card" onClick={() => { setFlowMode('manual'); setStep('photos'); }}>
+              <span className="gen-mode-card-icon" aria-hidden="true">
+                <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+              </span>
+              <span className="gen-mode-card-title">Select products manually</span>
+              <span className="gen-mode-card-sub">Browse the catalog and pick each piece yourself.</span>
+            </button>
+            <button type="button" className="gen-mode-card gen-mode-card--ai" onClick={() => { setFlowMode('stylist'); setStep('stylist'); }}>
+              <span className="gen-mode-card-icon" aria-hidden="true">
+                <svg width="26" height="26" viewBox="0 0 100 100" fill="currentColor"><path d="M50 6 C55 34 66 45 94 50 C66 55 55 66 50 94 C45 66 34 55 6 50 C34 45 45 34 50 6 Z"/></svg>
+              </span>
+              <span className="gen-mode-card-title">AI Stylist</span>
+              <span className="gen-mode-card-sub">Tell us the occasion — AI builds the outfit.</span>
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // AI Stylist sub-flow (self-contained ask → outfit → activity).
+  if (step === 'stylist') {
+    return (
+      <div className="gen-page gen-page--stylist">
+        <div className="gen-products-particles" aria-hidden="true">
+          <ParticleBackground />
+        </div>
+        <AIStylist gender={userGender} onBack={() => setStep('mode')} onComplete={handleStylistComplete} />
+      </div>
+    );
+  }
+
   return (
     <div className={`gen-page${isGeneratingView ? ' gen-page--generating' : ''}${step === 'review' ? ' gen-page--review' : ''}${step === 'style' ? ' gen-page--style' : ''}`}>
       {/* Pick + Review: a live WebGL particle field sits behind the screen so
@@ -1730,7 +1765,9 @@ export default function GeneratePage() {
           // catalog/your-looks exits.
           const PREV_LABEL: Partial<Record<Step, string>> = {
             review: 'Back to style',
-            style: 'Back to products',
+            // In the stylist flow the manual product picker is skipped, so
+            // Style steps back to Photos instead of Products.
+            style: flowMode === 'stylist' ? 'Back to photos' : 'Back to products',
           };
           const prevLabel = PREV_LABEL[step];
           const label =
@@ -1748,7 +1785,9 @@ export default function GeneratePage() {
                 }
                 // Style / review step back to the previous wizard screen.
                 if (prevLabel) {
-                  goPrev(step, setStep);
+                  // Stylist flow skips Products: Style → Photos.
+                  if (step === 'style' && flowMode === 'stylist') setStep('photos');
+                  else goPrev(step, setStep);
                   return;
                 }
                 navigate('/#app');
@@ -2663,7 +2702,8 @@ export default function GeneratePage() {
               type="button"
               className="gen-btn-primary"
               onClick={() => {
-                if (canAdvance) goNext(step, setStep);
+                // Stylist flow already chose products → skip the manual picker.
+                if (canAdvance) setStep(flowMode === 'stylist' ? 'style' : 'products');
                 else window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
             >
