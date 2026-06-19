@@ -2078,6 +2078,48 @@ body:has(.bottom-bar.search-open) {
   }
 }
 
+/* ══════════════════════════════════════════════════════════════════════
+   SEARCHED-FEED: no resting search pill on mobile (search lives in the header)
+   ══════════════════════════════════════════════════════════════════════
+   On the search-results feed the bottom search pill is removed on mobile — the
+   header SEARCH button (HeaderSearchButton, mobile-only) is the search entry
+   point there now. Only the RESTING pill is hidden; `:not(.search-open)` keeps
+   the full-screen search SHEET working (the header button dispatches
+   `catalog:open-search`, which flips `.search-open` on and this element becomes
+   the sheet's input).
+
+   This also SUPERSEDES the old "white strip behind the iOS Safari toolbar" fix:
+   that strip came from the white `#fff` pill transiting the toolbar zone as it
+   auto-hid; with no resting pill on the searched feed there's no white surface
+   to frost, so the workaround is gone (the home hero bar is dark glass, not
+   white, and is excluded below).
+
+   SCOPE:
+   • `:not(.home-hero)` — keep the centred hero search bar on the home feed
+     (heroMode on → `.home-hero`); only the searched feed (heroMode off) loses
+     the pill.
+   • `:not(.looks-feed-bar)` — the look daily-feed bar is a separate surface
+     with its own show/hide track; untouched.
+   • `html:not([data-shell="catalog-app"])` — inside the Flutter shell heroMode
+     is off (no `.home-hero`) AND the native header (with no search button) is
+     drawn over the webview, so the bottom pill is the only search entry there —
+     keep it. This change is web/Safari-only.
+
+   NOTE: hidden via opacity/pointer-events, NOT `display:none`. The header
+   search button raises the keyboard by SYNCHRONOUSLY focusing this same input
+   (#bottom-search-input) inside its tap handler, and a `display:none` element
+   can't be focused. opacity:0 keeps it laid out + focusable (and invisible, so
+   nothing flat-white paints behind the toolbar → no strip), and it morphs into
+   the visible search-page bar the instant `.search-open` flips on. */
+@media (max-width: 768px) {
+  html:not([data-shell="catalog-app"])
+    .app-root:not(.home-hero):not(.looks-feed-bar)
+    .bottom-bar:not(.search-open) {
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
+}
+
 /* When the keyboard is up (search input focused on mobile), the bar pins
    flush to the keyboard's top edge — Gemini-style. BottomBar sets the exact
    bottom inline from window.visualViewport (so it rides the keyboard 1:1 as

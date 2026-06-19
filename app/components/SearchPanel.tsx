@@ -27,7 +27,7 @@ function composeFilterQuery(f: ActiveFilters): string {
   return tokens.map(t => FILTER_TOKEN_HUMANIZE[t] || t).join(' ').trim();
 }
 
-interface BottomBarProps {
+interface SearchPanelProps {
   activeFilter: 'all' | 'men' | 'women';
   onFilterChange: (filter: 'all' | 'men' | 'women') => void;
   searchQuery: string;
@@ -53,9 +53,9 @@ interface SearchSuggestion {
   avatar?: string;
 }
 
-function BottomBar({
+function SearchPanel({
   activeFilter, onFilterChange, searchQuery, onSearchChange, onSelectSuggestion, onOpenCreators, catalogName, searchLoading = false, mySizeOnly = false, onMySizeChange, onOpenCreative,
-}: BottomBarProps) {
+}: SearchPanelProps) {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
   const shopperBody = useShopperBody(user?.id);
@@ -63,13 +63,6 @@ function BottomBar({
   const { beam } = useSearchBeam();
   const [searchOpen, setSearchOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  // Touch device? The "open search without raising the keyboard" path (readOnly
-  // closed pill) is for iOS Safari, where the keyboard poisons the bottom URL
-  // toolbar into a sticky dark strip. Desktop has no such toolbar and benefits
-  // from type-immediately, so it keeps the editable pill there.
-  const [isTouch] = useState(
-    () => typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: coarse)').matches,
-  );
   const [localSearch, setLocalSearch] = useState(searchQuery);
   const [activeFilters, setActiveFilters] = useState<ActiveFilters>(getEmptyFilters());
   // Type-ahead suggestion pool (catalog/search suggestions), loaded once.
@@ -101,7 +94,6 @@ function BottomBar({
   // The feed itself only commits once nl-search resolves, so the spinner
   // appears immediately and the grid stays frozen until results are ready.
   const emitSearch = onSearchChange;
-  const emitSearchImmediate = onSearchChange;
 
   // Lift the bar above iOS Safari's bottom URL toolbar. The toolbar is
   // part of the layout viewport (not the visual viewport) and isn't
@@ -234,14 +226,15 @@ function BottomBar({
     setSearchOpen(true);
     setFiltersOpen(false);
     dismissingRef.current = false;
-    // Intentionally NO auto-focus. The closed pill is readOnly (see the input
-    // below), so the opening tap can't raise the iOS keyboard — which is what
-    // flips Safari's bottom URL toolbar into its sticky opaque "dark strip"
-    // mode that lingers after the sheet closes (verified: the strip only
-    // appears when the keyboard was up, and iOS only re-frosts the toolbar on a
-    // real scroll — no programmatic re-frost works). The shopper taps the field
-    // to type, which raises the keyboard then. See CLAUDE.md §1 "iOS Safari
-    // bottom-toolbar strip".
+    // Raise the keyboard right away — search is a full-screen page now and the
+    // resting pill is gone from the searched feed, so there's no flat-white bar
+    // sitting behind the iOS Safari toolbar to frost into a strip (the old
+    // reason this was deferred). Focusing in the SAME tick as the opening tap
+    // (the pill's onClick or the header button's synchronous event dispatch)
+    // preserves iOS transient activation, so the keyboard actually appears.
+    // Focusing an already-focused input is a no-op, so the pill's native
+    // tap-focus + onFocus path doesn't double-fire.
+    searchInputRef.current?.focus();
   }, []);
 
   const closeSearch = useCallback(() => {
@@ -362,7 +355,7 @@ function BottomBar({
 
   // Listen for the 'catalog:close-search' event _index.tsx fires
   // when the Catalog logo is tapped. The logo handler can't reach
-  // into BottomBar's local searchOpen / filtersOpen state directly,
+  // into SearchPanel's local searchOpen / filtersOpen state directly,
   // so the event is the cheapest cross-component bridge.
   useEffect(() => {
     if (typeof window === 'undefined') return;
@@ -375,6 +368,20 @@ function BottomBar({
     window.addEventListener('catalog:close-search', onClose);
     return () => window.removeEventListener('catalog:close-search', onClose);
   }, []);
+
+  // The mobile header search button (HeaderSearchButton) opens the page via
+  // this event — on the searched feed the resting pill is hidden, so the header
+  // is the search entry point. The button dispatches synchronously inside its
+  // tap handler, so this listener (→ openSearch → input.focus()) runs while
+  // iOS transient activation is still live and the keyboard comes up. The
+  // resting pill is opacity-hidden (not display:none) on the searched feed
+  // precisely so the input stays focusable for this path. Mirrors 'close-search'.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onOpen = () => openSearch();
+    window.addEventListener('catalog:open-search', onOpen);
+    return () => window.removeEventListener('catalog:open-search', onOpen);
+  }, [openSearch]);
 
   // Shared submit path for both the Enter keydown and the in-app
   // send button. Mobile users on iOS often miss that the keyboard's
@@ -640,23 +647,15 @@ function BottomBar({
             className="bottom-search-input"
             id="bottom-search-input"
             placeholder="Make a catalog for anything"
-            // TOUCH (iOS): closed pill is readOnly so the opening tap opens the
-            // sheet WITHOUT raising the keyboard — the keyboard is what poisons
-            // Safari's bottom URL toolbar into the sticky dark strip on close
-            // (verified: no programmatic re-frost works; only a real scroll, or
-            // never raising the keyboard, avoids it). Editable once open, so a
-            // second tap on the field raises the keyboard to type. DESKTOP keeps
-            // the editable pill (no toolbar issue, type-immediately preserved).
-            readOnly={isTouch && !searchOpen}
+            // Always editable now. Tapping the pill (or focusing it from the
+            // header button) raises the keyboard immediately and opens the
+            // full-screen search page via onFocus — the search-as-a-page UX the
+            // founder asked for. (The old readOnly-on-touch trick that withheld
+            // the keyboard to dodge the Safari toolbar strip is gone; the
+            // resting pill no longer sits behind the toolbar on the searched
+            // feed, so there's nothing left to frost.)
             value={localSearch}
-            onClick={(e) => {
-              if (!searchOpen) {
-                openSearch();
-                // Drop the readOnly focus so the readOnly→editable flip can't
-                // pop the keyboard; the shopper taps the field again to type.
-                if (isTouch) e.currentTarget.blur();
-              }
-            }}
+            onClick={() => { if (!searchOpen) openSearch(); }}
             onChange={handleSearchInput}
             onFocus={() => { if (!searchOpen) openSearch(); }}
             onBlur={() => {
@@ -726,4 +725,4 @@ function BottomBar({
 
 // Memoized - _index.tsx renders this on every state tick; without memo,
 // every keystroke / overlay open re-rendered the whole search bar.
-export default memo(BottomBar);
+export default memo(SearchPanel);
