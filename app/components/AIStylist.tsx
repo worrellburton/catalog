@@ -1,19 +1,20 @@
 // AIStylist — the "AI Stylist" path of the /generate AI-look flow. The shopper
-// describes an occasion, a reasoning model assembles ONE outfit from the live
-// catalog (Tops · Dresses · Bottoms · Shoes, stacked top→bottom), they can swap
-// any single piece (manual-picker style) or accept it, then answer what they'll
-// be doing in the look. On finish it hands the chosen products + occasion +
-// activity back to the generate flow, which picks up at the photos step.
+// describes an occasion ONCE; a reasoning model assembles an outfit from the
+// live catalog (Hat · Tops · Dresses · Bottoms · Shoes). Each slot shows a
+// centered row of options that animates into place on the styled pick; tapping
+// a product selects it and reveals its description + a Change button (full
+// picker). On "Yes" it hands the chosen products + the original occasion (reused
+// as the scene context) back to the generate flow, which continues at photos.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { supabase } from '~/utils/supabase';
 import { type PickedProduct, roleTagFromName } from '~/services/product-roles';
 import { suggestOutfit, STYLIST_SLOTS, type StylistOutfit, type StylistSlot } from '~/services/ai-stylist';
 
 export interface StylistComplete {
   products: PickedProduct[];
+  /** The occasion text — reused as the generation's scene context. */
   occasion: string;
-  activity: string;
 }
 
 interface Props {
@@ -22,11 +23,11 @@ interface Props {
   onBack: () => void;
 }
 
-type StylistStep = 'ask' | 'result' | 'activity';
+type StylistStep = 'ask' | 'result';
 
 const EMPTY_OUTFIT: StylistOutfit = { hats: null, tops: null, dresses: null, bottoms: null, shoes: null };
 
-// Which role tags fill each slot (for swap filtering).
+// Which role tags fill each slot.
 const SLOT_ROLES: Record<StylistSlot, (role: string | null) => boolean> = {
   hats: r => r === 'Hat',
   tops: r => r === 'Top' || r === 'Jacket',
@@ -35,39 +36,32 @@ const SLOT_ROLES: Record<StylistSlot, (role: string | null) => boolean> = {
   shoes: r => r === 'Shoes',
 };
 
+// Order a slot's options so the styled pick sits in the MIDDLE (so a centered,
+// non-scrolling row keeps the selection visible), with a few neighbours each side.
+function centeredWindow(all: PickedProduct[], selectedId: string | null): PickedProduct[] {
+  if (all.length === 0) return [];
+  if (!selectedId) return all.slice(0, 9);
+  const idx = all.findIndex(a => a.id === selectedId);
+  if (idx < 0) return all.slice(0, 9);
+  return [...all.slice(Math.max(0, idx - 4), idx), all[idx], ...all.slice(idx + 1, idx + 5)];
+}
+
 export default function AIStylist({ gender, onComplete, onBack }: Props) {
   const [step, setStep] = useState<StylistStep>('ask');
   const [occasion, setOccasion] = useState('');
-  const [activity, setActivity] = useState('');
   const [candidates, setCandidates] = useState<PickedProduct[]>([]);
+  // aiOutfit = the model's original pick (drives the centered rows, stays stable);
+  // outfit = the user's current selection (drives the highlight).
+  const [aiOutfit, setAiOutfit] = useState<StylistOutfit>(EMPTY_OUTFIT);
   const [outfit, setOutfit] = useState<StylistOutfit>(EMPTY_OUTFIT);
   const [rationale, setRationale] = useState('');
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [swapSlot, setSwapSlot] = useState<StylistSlot | null>(null);
-  const [refining, setRefining] = useState(false);
-  // Slots whose description the user has tapped open (image-only until then).
+  // Slots the user has tapped — reveals the description + Change button.
   const [revealedSlots, setRevealedSlots] = useState<Set<StylistSlot>>(new Set());
-  const askRef = useRef<HTMLTextAreaElement>(null);
 
-  const toggleReveal = (slot: StylistSlot) => setRevealedSlots(prev => {
-    const next = new Set(prev);
-    if (next.has(slot)) next.delete(slot); else next.add(slot);
-    return next;
-  });
-
-  // Visible slots: hide Dresses for men (and only show a slot if the catalog
-  // actually has something for it, so empty rows don't clutter the look).
-  const visibleSlots = useMemo(
-    () => STYLIST_SLOTS.filter(s => {
-      if (s.key === 'dresses' && gender === 'male') return false;
-      return candidates.some(c => SLOT_ROLES[s.key](c.role_tag)) || !!outfit[s.key];
-    }),
-    [gender, candidates, outfit],
-  );
-
-  // Load the candidate catalog once (same active + gender-filtered set the
-  // manual picker uses). Powers both the reasoning call and the swap sheet.
+  // Load the candidate catalog once (active + gender-filtered, like the picker).
   useEffect(() => {
     if (!supabase) return;
     let cancelled = false;
@@ -93,7 +87,6 @@ export default function AIStylist({ gender, onComplete, onBack }: Props) {
     return () => { cancelled = true; };
   }, [gender]);
 
-  // Quick id → product lookup.
   const byId = useMemo(() => {
     const m = new Map<string, PickedProduct & { haiku_context?: string | null }>();
     for (const c of candidates) m.set(c.id, c);
@@ -114,9 +107,10 @@ export default function AIStylist({ gender, onComplete, onBack }: Props) {
         context: (c as { haiku_context?: string | null }).haiku_context ?? null,
       }));
       const result = await suggestOutfit(occasion, gender, payload);
+      setAiOutfit(result.outfit);
       setOutfit(result.outfit);
       setRationale(result.rationale);
-      setRefining(false);
+      setRevealedSlots(new Set());
       setStep('result');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Could not style a look — try again.');
@@ -125,22 +119,44 @@ export default function AIStylist({ gender, onComplete, onBack }: Props) {
     }
   }, [occasion, candidates, gender]);
 
-  // Swap a single slot to the chosen product (manual-picker style).
-  const swapItems = useMemo(() => {
-    if (!swapSlot) return [];
-    return candidates.filter(c => SLOT_ROLES[swapSlot](c.role_tag));
-  }, [swapSlot, candidates]);
+  // Visible slots: hide Dresses for men; only show slots the catalog can fill.
+  const visibleSlots = useMemo(
+    () => STYLIST_SLOTS.filter(s => {
+      if (s.key === 'dresses' && gender === 'male') return false;
+      return candidates.some(c => SLOT_ROLES[s.key](c.role_tag)) || !!outfit[s.key];
+    }),
+    [gender, candidates, outfit],
+  );
 
-  const pickSwap = (slot: StylistSlot, id: string) => {
+  // Stable per-slot row, centered on the model's original pick.
+  const slotRows = useMemo(() => {
+    const map = new Map<StylistSlot, PickedProduct[]>();
+    for (const s of visibleSlots) {
+      const all = candidates.filter(c => SLOT_ROLES[s.key](c.role_tag));
+      map.set(s.key, centeredWindow(all, aiOutfit[s.key]));
+    }
+    return map;
+  }, [visibleSlots, candidates, aiOutfit]);
+
+  const selectItem = (slot: StylistSlot, id: string) => {
     setOutfit(prev => {
       const next = { ...prev, [slot]: id };
-      // A dress replaces top+bottom and vice-versa, mirroring the model's rule.
       if (slot === 'dresses') { next.tops = null; next.bottoms = null; }
       else if (slot === 'tops' || slot === 'bottoms') { next.dresses = null; }
       return next;
     });
+    setRevealedSlots(prev => new Set(prev).add(slot));
+  };
+
+  const pickSwap = (slot: StylistSlot, id: string) => {
+    selectItem(slot, id);
     setSwapSlot(null);
   };
+
+  const swapItems = useMemo(
+    () => (swapSlot ? candidates.filter(c => SLOT_ROLES[swapSlot](c.role_tag)) : []),
+    [swapSlot, candidates],
+  );
 
   const chosenProducts = useMemo(
     () => STYLIST_SLOTS
@@ -158,137 +174,112 @@ export default function AIStylist({ gender, onComplete, onBack }: Props) {
         <button type="button" className="gen-stylist-back" onClick={onBack} aria-label="Back">← Back</button>
         <div className="gen-stylist-askbody">
           <h1 className="gen-stylist-title">What do you want to wear?</h1>
-          <p className="gen-stylist-sub">Tell me the occasion or the vibe — I&apos;ll style a look from the catalog.</p>
+          <p className="gen-stylist-sub">Tell me the occasion or the vibe — I&apos;ll style a whole look from the catalog.</p>
           <textarea
-            ref={askRef}
             className="gen-stylist-input"
             value={occasion}
             onChange={e => setOccasion(e.target.value)}
-            placeholder="e.g. rooftop dinner in LA, first day at a new job, beach weekend…"
+            placeholder="e.g. a look for date night, first day at a new job, beach weekend…"
             rows={3}
             autoFocus
           />
           {error && <div className="gen-error">{error}</div>}
-        </div>
-        <div className="gen-stylist-foot">
-          <button
-            type="button"
-            className="gen-btn-primary gen-stylist-cta"
-            disabled={!occasion.trim() || loading || candidates.length === 0}
-            onClick={runStylist}
-          >
-            {loading ? 'Styling…' : 'Style my look'}
-          </button>
+          {/* CTA only appears once they've described something. */}
+          {occasion.trim().length > 0 && (
+            <button
+              type="button"
+              className="gen-btn-primary gen-stylist-cta gen-stylist-cta--pop"
+              disabled={loading || candidates.length === 0}
+              onClick={runStylist}
+            >
+              {loading ? 'Styling…' : 'Style my look'}
+            </button>
+          )}
         </div>
         {loading && <StylistLoading />}
       </div>
     );
   }
 
-  // ── RESULT ──────────────────────────────────────────────────────────
-  if (step === 'result') {
-    return (
-      <div className="gen-stylist gen-stylist--result">
-        <button type="button" className="gen-stylist-back" onClick={() => setStep('ask')} aria-label="Back">← Back</button>
-        <div className="gen-stylist-resultbody">
-          <h1 className="gen-stylist-title">Here&apos;s your look</h1>
-          {rationale && <p className="gen-stylist-sub">{rationale}</p>}
-          {refining && <p className="gen-stylist-hint">Tap a piece to see what it is, or Change to swap it.</p>}
-
-          <div className="gen-stylist-stack">
-            {visibleSlots.map(slot => {
-              const id = outfit[slot.key];
-              const p = id ? byId.get(id) : null;
-              const revealed = revealedSlots.has(slot.key);
-              return (
-                <div key={slot.key} className="gen-stylist-row">
-                  <div className="gen-stylist-row-head">
-                    <span className="gen-stylist-row-label">{slot.label}</span>
-                    <button type="button" className="gen-stylist-row-change" onClick={() => setSwapSlot(slot.key)}>
-                      {p ? 'Change' : 'Add'}
-                    </button>
-                  </div>
-                  {p ? (
-                    <button type="button" className="gen-stylist-thumb" onClick={() => toggleReveal(slot.key)} aria-label={p.name || 'Product'}>
-                      {p.image_url
-                        ? <img src={p.image_url} alt="" loading="lazy" />
-                        : <span className="gen-stylist-thumb-empty" />}
-                    </button>
-                  ) : (
-                    <button type="button" className="gen-stylist-thumb gen-stylist-thumb--add" onClick={() => setSwapSlot(slot.key)} aria-label={`Add ${slot.label}`}>+</button>
-                  )}
-                  {p && revealed && (
-                    <div className="gen-stylist-desc">
-                      {p.brand && <span className="gen-stylist-desc-brand">{p.brand}</span>}
-                      <span className="gen-stylist-desc-name">{p.name || 'Product'}</span>
-                      {p.price && <span className="gen-stylist-desc-price">{p.price}</span>}
-                    </div>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        <div className="gen-stylist-foot gen-stylist-foot--choice">
-          <button type="button" className="gen-btn-secondary" onClick={() => setRefining(true)}>No, change it</button>
-          <button
-            type="button"
-            className="gen-btn-primary"
-            disabled={chosenProducts.length === 0}
-            onClick={() => setStep('activity')}
-          >
-            Yes, I like it
-          </button>
-        </div>
-
-        {swapSlot && (
-          <div className="gen-stylist-swap" role="dialog" aria-label={`Swap ${swapSlot}`}>
-            <div className="gen-stylist-swap-head">
-              <span>Choose {STYLIST_SLOTS.find(s => s.key === swapSlot)?.label.toLowerCase()}</span>
-              <button type="button" className="gen-stylist-swap-close" onClick={() => setSwapSlot(null)} aria-label="Close">×</button>
-            </div>
-            <div className="gen-stylist-swap-grid">
-              {swapItems.length === 0 && <div className="gen-empty">No options in the catalog yet.</div>}
-              {swapItems.map(item => (
-                <button key={item.id} type="button" className="gen-stylist-swap-card" onClick={() => pickSwap(swapSlot, item.id)} aria-label={item.name || 'Product'}>
-                  {item.image_url
-                    ? <img src={item.image_url} alt="" loading="lazy" />
-                    : <span className="gen-stylist-swap-card-empty" />}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
-      </div>
-    );
-  }
-
-  // ── ACTIVITY ────────────────────────────────────────────────────────
+  // ── RESULT ── one viewport, centered animated rows, tap to select ─────
   return (
-    <div className="gen-stylist gen-stylist--activity">
-      <button type="button" className="gen-stylist-back" onClick={() => setStep('result')} aria-label="Back">← Back</button>
-      <div className="gen-stylist-askbody">
-        <h1 className="gen-stylist-title">What do you want to be doing while wearing your look?</h1>
-        <p className="gen-stylist-sub">We&apos;ll set the scene around it.</p>
-        <textarea
-          className="gen-stylist-input"
-          value={activity}
-          onChange={e => setActivity(e.target.value)}
-          placeholder="e.g. walking through the city at golden hour, dancing at a wedding…"
-          rows={3}
-          autoFocus
-        />
+    <div className="gen-stylist gen-stylist--result">
+      <button type="button" className="gen-stylist-back" onClick={() => setStep('ask')} aria-label="Back">← Back</button>
+      <div className="gen-stylist-resulthead">
+        <h1 className="gen-stylist-title gen-stylist-title--sm">Here&apos;s your look</h1>
+        {rationale && <p className="gen-stylist-rationale">{rationale}</p>}
       </div>
+
+      <div className="gen-stylist-reels">
+        {visibleSlots.map((slot, i) => {
+          const items = slotRows.get(slot.key) || [];
+          const selId = outfit[slot.key];
+          const sel = selId ? byId.get(selId) : null;
+          const revealed = revealedSlots.has(slot.key);
+          return (
+            <div key={slot.key} className="gen-stylist-reel">
+              <div className="gen-stylist-reel-head">
+                {revealed && sel ? (
+                  <>
+                    <span className="gen-stylist-reel-desc">
+                      {[sel.brand, sel.name].filter(Boolean).join(' · ') || 'Product'}{sel.price ? ` — ${sel.price}` : ''}
+                    </span>
+                    <button type="button" className="gen-stylist-reel-change" onClick={() => setSwapSlot(slot.key)}>Change</button>
+                  </>
+                ) : (
+                  <span className="gen-stylist-reel-label">{slot.label}</span>
+                )}
+              </div>
+              <div className="gen-stylist-reel-track" style={{ animationDelay: `${i * 90}ms` }}>
+                {items.length === 0 && <span className="gen-stylist-reel-none">Nothing here yet</span>}
+                {items.map(item => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className={`gen-stylist-chip${item.id === selId ? ' is-selected' : ''}`}
+                    onClick={() => selectItem(slot.key, item.id)}
+                    aria-label={item.name || 'Product'}
+                  >
+                    {item.image_url
+                      ? <img src={item.image_url} alt="" loading="lazy" />
+                      : <span className="gen-stylist-chip-empty" />}
+                  </button>
+                ))}
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
       <div className="gen-stylist-foot">
         <button
           type="button"
           className="gen-btn-primary gen-stylist-cta"
-          onClick={() => onComplete({ products: chosenProducts, occasion: occasion.trim(), activity: activity.trim() })}
+          disabled={chosenProducts.length === 0}
+          onClick={() => onComplete({ products: chosenProducts, occasion: occasion.trim() })}
         >
-          Next
+          Yes, I like it
         </button>
       </div>
+
+      {swapSlot && (
+        <div className="gen-stylist-swap" role="dialog" aria-label={`Choose ${swapSlot}`}>
+          <div className="gen-stylist-swap-head">
+            <span>Choose {STYLIST_SLOTS.find(s => s.key === swapSlot)?.label.toLowerCase()}</span>
+            <button type="button" className="gen-stylist-swap-close" onClick={() => setSwapSlot(null)} aria-label="Close">×</button>
+          </div>
+          <div className="gen-stylist-swap-grid">
+            {swapItems.length === 0 && <div className="gen-empty">No options in the catalog yet.</div>}
+            {swapItems.map(item => (
+              <button key={item.id} type="button" className="gen-stylist-swap-card" onClick={() => pickSwap(swapSlot, item.id)} aria-label={item.name || 'Product'}>
+                {item.image_url
+                  ? <img src={item.image_url} alt="" loading="lazy" />
+                  : <span className="gen-stylist-swap-card-empty" />}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

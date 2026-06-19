@@ -1635,13 +1635,12 @@ export default function GeneratePage() {
     return <div className="gen-page"><div className="gen-empty">Resolving impersonation target…</div></div>;
   }
 
-  // The AI Stylist finished: take its products + occasion/activity, then drop
-  // into the normal flow at photos (products are already set, so photos →
-  // style, skipping the manual picker). Activity layers onto the prompt via the
-  // occasion hint; the preset Style step still applies on top.
+  // The AI Stylist finished: take its products + occasion, then drop into the
+  // normal flow at photos (products are already set, so photos → style, skipping
+  // the manual picker). The single occasion text becomes the scene context.
   const handleStylistComplete = (r: StylistComplete) => {
     setPicked(r.products);
-    setOccasionHint([r.occasion, r.activity].filter(Boolean).join('. '));
+    setOccasionHint(r.occasion);
     setFlowMode('stylist');
     setStep('photos');
   };
@@ -1682,6 +1681,9 @@ export default function GeneratePage() {
   if (step === 'stylist') {
     return (
       <div className="gen-page gen-page--stylist">
+        <div className="gen-products-particles" aria-hidden="true">
+          <ParticleBackground />
+        </div>
         <AIStylist gender={userGender} onBack={() => setStep('mode')} onComplete={handleStylistComplete} />
       </div>
     );
