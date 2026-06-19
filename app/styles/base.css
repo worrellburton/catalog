@@ -47,6 +47,19 @@
   --hero-video-enhance: url(#catalog-hero-sharpen) contrast(1.045) saturate(1.06);
 }
 
+/* iOS perf: an SVG reference filter (url(#...)) over a PLAYING <video> falls
+   off WebKit's hardware compositing path and re-renders the frame in software
+   every tick — it drops the whole detail page to ~10fps on iPhone. On phones
+   drop the SVG sharpen term and keep only the GPU-cheap contrast/saturate, so
+   the product/look hero video plays at full frame rate. Desktop keeps the full
+   perceptual sharpen (no per-frame cost on that hardware). See the kill-switch
+   note on --hero-video-enhance above. */
+@media (max-width: 768px) {
+  :root {
+    --hero-video-enhance: contrast(1.045) saturate(1.06);
+  }
+}
+
 body {
   font-family: -apple-system, BlinkMacSystemFont, 'Helvetica Neue', Arial, sans-serif;
   background: var(--bg);
