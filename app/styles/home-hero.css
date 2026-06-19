@@ -746,21 +746,81 @@
 .sc-rec:active { transform: scale(0.985); }
 .sc-rec-spark { flex: 0 0 auto; display: inline-flex; color: rgba(255, 255, 255, 0.85); filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.4)); }
 .sc-rec-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.sc-recs-continue {
-  margin-top: 4px;
-  align-self: center;
-  background: none;
-  border: none;
-  color: rgba(255, 255, 255, 0.55);
-  font-family: inherit;
+/* Ceremony Option 1: the catalog picks render as an in-flow strip ABOVE the
+   results feed (SearchCatalogStrip). It reuses .sc-recs / .sc-rec; this just
+   sizes + centers it in the feed column — margin-inline auto + an explicit %
+   width, never transform/vw (centering convention). */
+.search-catalog-strip {
+  width: min(560px, calc(100% - 32px));
+  margin: 0 auto;
+  /* Top buffer CLEARS the fixed header so the intro never tucks under the
+     wordmark / icons row. The feed grid clears the header via its own
+     padding-top, but the strip rides ABOVE the grid so it needs its own. */
+  padding: clamp(72px, 9vh, 100px) 0 14px;
+}
+@media (max-width: 768px) {
+  .search-catalog-strip { padding-top: calc(env(safe-area-inset-top) + 88px); }
+}
+
+/* Intro — the current catalog name as a big, centered title card: the "really
+   good top of the screen". Sized to echo the Mercury hero heading. */
+.sc-intro { text-align: center; margin-bottom: 22px; }
+.sc-intro-eyebrow {
+  display: block;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.42);
+  margin-bottom: 6px;
+}
+.sc-intro-name {
+  margin: 0;
+  font-size: clamp(34px, 10.5vw, 50px);
+  line-height: 1.04;
+  font-weight: 700;
+  letter-spacing: -0.025em;
+  color: #fff;
+  text-wrap: balance;
+}
+
+/* "Other catalogs you might like" — a quiet centered heading above the picks. */
+.search-catalog-strip .sc-recs-hint {
+  text-transform: none;
+  letter-spacing: -0.01em;
   font-size: 13px;
   font-weight: 600;
-  cursor: pointer;
-  padding: 6px 10px;
-  border-radius: 999px;
-  transition: color 0.15s ease;
+  color: rgba(255, 255, 255, 0.55);
+  text-align: center;
+  margin-bottom: 10px;
 }
-.sc-recs-continue:hover { color: rgba(255, 255, 255, 0.9); }
+
+/* Big tappable catalog buttons (scoped to the strip so the ceremony end-state
+   keeps its own sizing). */
+.search-catalog-strip .sc-recs-list { gap: 10px; }
+.search-catalog-strip .sc-rec {
+  padding: 17px 18px;
+  border-radius: 16px;
+  font-size: 16px;
+  gap: 12px;
+}
+.search-catalog-strip .sc-rec-spark svg { width: 18px; height: 18px; }
+.sc-rec-arrow {
+  flex: 0 0 auto;
+  margin-left: auto;
+  color: rgba(255, 255, 255, 0.4);
+  transition: transform 0.16s ease, color 0.16s ease;
+}
+.search-catalog-strip .sc-rec:hover .sc-rec-arrow { color: rgba(255, 255, 255, 0.8); transform: translateX(2px); }
+
+/* The strip provides the header clearance, so the feed grid below mustn't also
+   add its full 100px top padding (would leave a big gap under the picks). */
+.home-feed-wrap.has-catalog-strip #grid-container { padding-top: 12px; }
+
+/* The "keep my search" option — same pill format as the picks, just a touch
+   quieter so it reads as the secondary choice. */
+.sc-rec--continue { opacity: 0.78; }
+.sc-rec--continue:hover { opacity: 1; }
 
 /* Peek-on-landing: the feed wrapper is pulled up under the hero by a
    small amount ONLY while the hero is showing, so just the very top
@@ -850,13 +910,23 @@
   --hero-bar-bottom: 36svh;
 }
 .app-root.home-hero .bottom-bar {
+  /* The hero → docked glide animates TRANSFORM (translateY), never `bottom`.
+     Animating `bottom` (a layout property) forced iOS Safari to re-rasterize
+     the bar's backdrop-filter every frame, and at the end of the glide the
+     frost flashed a SOLID average (black over dark cards, white over light)
+     — the "solid strip behind the bar when it settles" bug. transform is
+     compositor-only, so the frost stays live. will-change keeps it on its
+     own layer so the blur never re-rasterizes mid-glide. */
+  will-change: transform;
   transition:
-    bottom 0.55s cubic-bezier(0.16, 1, 0.3, 1),
     transform 0.55s cubic-bezier(0.16, 1, 0.3, 1),
     background 0.45s ease, border-color 0.45s ease, box-shadow 0.45s ease;
 }
 .app-root.home-hero:not(.hero-scrolled) .bottom-bar {
-  bottom: var(--hero-bar-bottom, 36svh);
+  /* `bottom` is NOT set here anymore — the bar stays pinned at its docked
+     `bottom` (base .bottom-bar rule) and is lifted to the hero position via
+     transform in the :not(.search-open) rule below. See the transform note
+     on `.app-root.home-hero .bottom-bar` above for why. */
   /* The bar holds its opacity through the early scroll while the
      spark + headline fade out fast (see .sfh-stage rule below).
      Once they're gone, the bar itself fades — multiplier 2.4 means
@@ -865,7 +935,6 @@
      it never lingers mid-screen over the peeking product cards. */
   opacity: clamp(0, calc(1.2 - var(--hero-scroll-progress, 0) * 2.4), 1);
   transition: opacity 0.18s linear,
-              bottom 0.55s cubic-bezier(0.16, 1, 0.3, 1),
               transform 0.55s cubic-bezier(0.16, 1, 0.3, 1),
               background 0.45s ease, border-color 0.45s ease, box-shadow 0.45s ease;
 }
@@ -875,6 +944,27 @@
    the bar invisible we let taps fall through to whatever product
    tile sits underneath. */
 .app-root.home-hero.hero-bar-faded:not(.hero-scrolled) .bottom-bar {
+  pointer-events: none;
+}
+
+/* ── Hero-only search bar (no docked feed bar) ───────────────────────────
+   The search bar lives on the hero ONLY. Once the shopper scrolls into the
+   home feed (.hero-scrolled), the bar leaves the screen entirely and STAYS
+   gone — it does not dock at the bottom and does not reappear on scroll-up or
+   rest. This keeps the feed truly edge-to-edge: only iOS Safari's own URL
+   pill floats over the cards. The bar's frosted glass therefore never sits
+   over a feed card, so it can no longer read as a solid white (over bright
+   cards) or black (over dark cards) strip behind the pill — the long-running
+   "white/black solid strip at the bottom" bug. To search again, scroll back
+   to the top (the hero). The bar's opacity has already faded to 0 via the
+   scroll-progress rule above by the time .hero-scrolled fires, so this is a
+   clean exit; translateY keeps it off-screen and untappable.
+
+   Scoped to .home-hero so it ONLY affects the home feed — search-results
+   (heroMode off) and the Flutter shell keep their docked search bar. */
+.app-root.home-hero.hero-scrolled .bottom-bar {
+  transform: translateY(140%);
+  opacity: 0;
   pointer-events: none;
 }
 
@@ -1051,14 +1141,17 @@
     padding-bottom: calc(var(--hero-bar-bottom, 36svh) + 12svh);
   }
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar:not(.search-open) {
-    /* Single source of truth for the bar's RESTING hero position. .sfh's
-       padding-bottom is derived from this same var so the two move
-       together — change this one number and the whole trio re-centres
-       without the headline ever colliding with the bar. The search-open
-       bar is intentionally excluded: it docks to the bottom of the screen
-       (see the mobile search-open rule above) so the keyboard rides it
-       down and the catalog tags sit above it. */
-    bottom: var(--hero-bar-bottom, 36svh);
+    /* RESTING hero position — lifted via TRANSFORM, not `bottom`, so the
+       backdrop-filter never re-rasterizes during the glide (see the
+       transform note above; the old `bottom: var(--hero-bar-bottom)` was the
+       "solid strip on settle" bug). The bar is pinned at its docked `bottom`
+       (12px + safe-area) and translated UP to --hero-bar-bottom. On scroll
+       the :not(.hero-scrolled) selector drops, transform eases back to 0, and
+       the bar glides down to its docked spot — compositor-only, no flash.
+       .sfh's padding-bottom still derives from --hero-bar-bottom so the trio
+       stays in sync. search-open is excluded (it docks to the keyboard via
+       `bottom` above). */
+    transform: translateY(calc(12px + env(safe-area-inset-bottom) - var(--hero-bar-bottom, 36svh)));
   }
 }
 
@@ -1378,10 +1471,15 @@
     min-height: 100vh;
     justify-content: flex-end;
     padding-top: calc(env(safe-area-inset-top, 0px) + 96px);
-    /* Headline bottom lands ~54vh from top; bar at 32vh-from-bottom
-       (~62vh from top) sits ~8vh under it — a tight, vertically-centered
-       trio with balanced empty space above and below. */
+    /* Headline bottom lands ~54vh from top; the bar (36vh-from-bottom below)
+       sits ~4vh under it, with a matching spark→headline gap — an evenly
+       spaced, vertically-centered trio. */
     padding-bottom: 46vh;
+  }
+  /* Even, balanced spacing for the desktop hero trio: a comfortable gap
+     between the spark and the headline that matches the headline→bar gap. */
+  .sfh-stage {
+    gap: 36px;
   }
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar,
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar.search-open {
@@ -1411,7 +1509,7 @@
        When the bar gains focus (recommended-options panel about to appear
        above), the trio rises 18vh (32vh → 50vh) so the panel has room
        without colliding with the feed peek; .sfh matches with -18vh. */
-    bottom: 40vh;
+    bottom: 36vh;
     /* MUST re-list transform here: this rule overrides the base
        .ai-bar-wrap transition, and without transform the chrome auto-hide
        slide-back would snap instead of animate. */
@@ -1420,7 +1518,7 @@
       transform 0.4s cubic-bezier(0.32, 0.72, 0, 1);
   }
   body:has(.app-root.home-hero) .ai-bar-wrap:focus-within {
-    bottom: 52vh;
+    bottom: 48vh;
   }
   /* The desktop bar (.ai-bar-wrap) is a SIBLING of .app-root under <body>,
      NOT a descendant — so this MUST be reached from the shared <body>

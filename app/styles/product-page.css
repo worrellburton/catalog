@@ -65,6 +65,12 @@
    video riding along with it — no desync. */
 .product-page-overlay {
   position: fixed;
+  /* inset:0 fills the full layout viewport INCLUDING the safe areas (we ship
+     viewport-fit=cover), so the overlay bleeds behind the status bar at the top
+     AND lets Safari collapse its bottom toolbar normally. (Tried height:100lvh
+     to also cover the ~40px bottom toolbar-inset — but lvh broke BOTH the
+     top status-bar bleed and the toolbar collapse, and the strip it was after
+     is Safari's own native pill tray anyway. Don't reintroduce lvh here.) */
   inset: 0;
   z-index: 250;
   background: #0a0a0a;
@@ -100,6 +106,46 @@
    panel eases back to translateY(0)). */
 .product-page-overlay.is-dragging {
   transition: none;
+}
+
+/* ── Product overlay DOCUMENT-SCROLL on mobile (toolbar-collapse fix) ──
+   Mirrors the look-overlay fix (CLAUDE.md §1 "iOS Safari bottom-toolbar
+   strip"). The product overlay normally scrolls an inner `.product-page` with
+   the body locked, so iOS 26 Safari's bottom toolbar never collapses and frosts
+   the flat base into a strip. Here the overlay flows in the document so the
+   scroll gesture collapses the toolbar like home. Gated by `.product-doc-scroll`
+   (set in _index.tsx, product-on-top + non-shell) + mobile.
+   NAV-STACK: a product can sit ON TOP of a look, so we hide the warm layer(s)
+   beneath (`.nav-layer:not(:has(.product-page-overlay))`) and flow ONLY the
+   product's layer — else the under-look adds a screen of height below it.
+   The hero <video> attaches unconditionally (TrailVideoHost), so no director
+   change is needed; `.sfh` (home ceremony) is hidden so the hero stays at top. */
+@media (max-width: 768px) {
+  html:has(.app-root.product-doc-scroll .product-page-overlay),
+  body:has(.app-root.product-doc-scroll .product-page-overlay) {
+    overflow: visible !important;
+    overscroll-behavior: auto;
+  }
+  .app-root.product-doc-scroll > header,
+  .app-root.product-doc-scroll > .home-feed-wrap,
+  .app-root.product-doc-scroll > .bottom-bar,
+  .app-root.product-doc-scroll > .remix-btn-fixed,
+  .app-root.product-doc-scroll .sfh,
+  .app-root.product-doc-scroll .nav-layer:not(:has(.product-page-overlay)) {
+    display: none !important;
+  }
+  .app-root.product-doc-scroll .nav-layer:has(.product-page-overlay),
+  .app-root.product-doc-scroll .product-page-overlay {
+    position: static !important;
+    transform: none !important;
+    overflow: visible !important;
+    height: auto !important;
+    will-change: auto !important;
+  }
+  .app-root.product-doc-scroll .product-page {
+    overflow: visible !important;
+    height: auto !important;
+  }
 }
 
 /* Mobile: rounded top corners + a grab handle sell the sheet affordance.
@@ -151,6 +197,12 @@
   overflow-y: auto;
   overflow-x: hidden;
   -webkit-overflow-scrolling: touch;
+  /* Stop scroll-chaining: when this inner scroller hits its top/bottom the
+     leftover touch delta must NOT bubble to the body. On mobile the overlay
+     locks the page with overflow:hidden (not position:fixed) so the iOS Safari
+     toolbar stays collapsed; `contain` is what keeps that held body from
+     scrolling. Mirrors .look-overlay-scroll. */
+  overscroll-behavior: contain;
   scrollbar-width: thin;
   scrollbar-color: rgba(255,255,255,0.15) transparent;
   /* Transparent — the opaque black comes from .product-page-overlay so
@@ -198,17 +250,19 @@
   background: rgba(0, 0, 0, 0.65);
 }
 
-/* Full-screen product loader — replaces the flat black the mobile overlay
-   showed on a cold open with an animated sweep + pulsing Catalog spark. Sits
-   below the corner controls (z 5) so Back stays usable mid-load; fades out the
-   moment the hero paints (.is-done). */
+/* Loading skeleton — mirrors the page's architecture instead of a centered
+   spark: a hero placeholder plus an info column (product card, copy lines,
+   action buttons), laid out exactly like .pd-split — stacked on mobile,
+   hero-left / info-right on desktop. Sits below the corner controls (z 4) so
+   Back stays usable mid-load; fades out the moment the hero paints (.is-done). */
 .pd-loading {
   position: absolute;
   inset: 0;
   z-index: 4;
   display: flex;
-  align-items: center;
-  justify-content: center;
+  flex-direction: column;
+  gap: 14px;
+  padding: 16px;
   background: radial-gradient(120% 80% at 50% 40%, #17191f 0%, #0a0a0c 72%);
   overflow: hidden;
   opacity: 1;
@@ -216,23 +270,73 @@
   pointer-events: none;
 }
 .pd-loading.is-done { opacity: 0; }
-.pd-loading::before {
+
+/* Shared shimmer surface for every skeleton block. */
+.pd-skel-hero,
+.pd-skel-card,
+.pd-skel-lines span,
+.pd-skel-actions span {
+  position: relative;
+  overflow: hidden;
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 12px;
+}
+.pd-skel-hero::after,
+.pd-skel-card::after,
+.pd-skel-lines span::after,
+.pd-skel-actions span::after {
   content: '';
   position: absolute;
   inset: 0;
-  background: linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, 0.06) 50%, transparent 60%);
+  background: linear-gradient(105deg, transparent 40%, rgba(255, 255, 255, 0.08) 50%, transparent 60%);
   background-size: 250% 100%;
   animation: pd-loading-sweep 1.5s ease-in-out infinite;
 }
-.pd-loading-spark {
-  position: relative;
-  color: rgba(255, 255, 255, 0.9);
-  animation: pd-loading-pulse 1.6s ease-in-out infinite;
-  filter: drop-shadow(0 0 16px rgba(255, 255, 255, 0.35));
+
+.pd-skel-hero { flex: 1 1 auto; min-height: 0; border-radius: 16px; }
+.pd-skel-info { display: flex; flex-direction: column; gap: 12px; flex: 0 0 auto; }
+.pd-skel-card { height: 92px; border-radius: 14px; }
+.pd-skel-lines { display: flex; flex-direction: column; gap: 9px; }
+.pd-skel-lines span { height: 12px; }
+.pd-skel-lines span:nth-child(1) { width: 88%; }
+.pd-skel-lines span:nth-child(2) { width: 100%; }
+.pd-skel-lines span:nth-child(3) { width: 94%; }
+.pd-skel-lines span:nth-child(4) { width: 56%; }
+.pd-skel-actions { display: flex; gap: 10px; }
+.pd-skel-actions span { flex: 1; height: 46px; border-radius: 999px; }
+
+/* Desktop: mirror .pd-split — 3:4 hero on the left, info centered on the right. */
+@media (min-width: 960px) {
+  .pd-loading {
+    display: grid;
+    grid-template-columns: auto minmax(0, 1fr);
+    align-items: stretch;
+    gap: 0;
+    padding: 0;
+  }
+  .pd-skel-hero {
+    height: min(100vh, 73vw);
+    aspect-ratio: 3 / 4;
+    align-self: center;
+    justify-self: start;
+    border-radius: 0;
+  }
+  .pd-skel-info {
+    align-self: center;
+    justify-content: center;
+    width: 100%;
+    max-width: 520px;
+    margin-inline: auto;
+    padding: 48px;
+  }
 }
 @keyframes pd-loading-sweep { 0% { background-position: 200% 0; } 100% { background-position: -60% 0; } }
-@keyframes pd-loading-pulse { 0%, 100% { transform: scale(0.88); opacity: 0.55; } 50% { transform: scale(1.12); opacity: 1; } }
-@media (prefers-reduced-motion: reduce) { .pd-loading::before, .pd-loading-spark { animation: none; } }
+@media (prefers-reduced-motion: reduce) {
+  .pd-skel-hero::after,
+  .pd-skel-card::after,
+  .pd-skel-lines span::after,
+  .pd-skel-actions span::after { animation: none; }
+}
 
 /* Hero loading backdrop — an animated shimmer behind the poster/video/image
    so a product never opens to a flat black box while its media loads (worst
@@ -1122,7 +1226,10 @@
 
 @media (max-width: 600px) {
   .pd-similar-feed {
-    padding: 16px 0 8px;
+    /* No bottom padding: let the grid/feed cards bleed to the bottom edge so
+       the iOS Safari pill frosts cards, not the flat #0a0a0a base. Mirrors the
+       home feed's edge-to-edge bottom. */
+    padding: 16px 0 0;
   }
   .pd-feed-title {
     font-size: 14px;

@@ -597,9 +597,8 @@ export default function ProductPage({
   const heroEnabled     = isSectionEnabled(productSections, 'hero');
   const similarEnabled  = isSectionEnabled(productSections, 'similar');
   const ymalEnabled     = isSectionEnabled(productSections, 'you-might-also-like');
-  // Per-section caps. Default 8 keeps the historic bounded-grid feel
+  // Per-section caps. Default keeps the historic bounded-grid feel
   // until an admin tunes them in /admin/pages.
-  const similarLimit  = getSectionLimit(productSections, 'similar', 8);
   const ymalLimit     = getSectionLimit(productSections, 'you-might-also-like', 16);
   // YMAL defaults to infinite (seeded in the migration); the toggle
   // lets an admin flip it back to a bounded grid using popularFallback.
@@ -695,6 +694,21 @@ export default function ProductPage({
     () => pickFrom(similarCreatives),
     [similarCreatives, pickFrom],
   );
+
+  // Similar must read as a full, intentional grid — exactly 8 when we have that
+  // many unique matches, otherwise 6 (both land cleanly on the 2-col mobile grid;
+  // never a dangling 5th/7th tile). A sparse similarity RPC is topped up with
+  // DISTINCT popular items (pickFrom de-dupes and drops the current product) so
+  // the grid still reaches 6/8 instead of collapsing to a sparse rail. An empty
+  // RPC yields nothing — we don't fabricate "Similar" out of pure popular.
+  const similarShown = useMemo(() => {
+    if (moreLikeThis.length === 0) return [] as ProductAd[];
+    const target = moreLikeThis.length >= 8 ? 8 : 6;
+    if (moreLikeThis.length >= target) return moreLikeThis.slice(0, target);
+    const seen = new Set(moreLikeThis.map(c => c.product_id));
+    const fillers = pickFrom(popularFallback, target).filter(c => !seen.has(c.product_id));
+    return [...moreLikeThis, ...fillers].slice(0, target);
+  }, [moreLikeThis, popularFallback, pickFrom]);
 
   // Warm the rails' posters the moment their data resolves — the Similar
   // grid and look tiles otherwise start downloading at mount and read as
@@ -1036,6 +1050,11 @@ export default function ProductPage({
     if (!overlay || !scroller) return;
     if (typeof window === 'undefined') return;
     if (window.matchMedia('(min-width: 960px)').matches) return;
+    // Doc-scroll mode: the overlay scrolls the DOCUMENT, so the inner scroller's
+    // scrollTop is always 0 and the "engage only at top" guard can't tell top
+    // from mid-scroll — every downward drag would dismiss. The back button +
+    // document scroll cover navigation, so disable whole-overlay drag here.
+    if (overlay.closest('.app-root')?.classList.contains('product-doc-scroll')) return;
 
     const onStart = (e: TouchEvent) => {
       if (scroller.scrollTop > 0) return;
@@ -1326,13 +1345,22 @@ export default function ProductPage({
       <div className="product-page-particles" aria-hidden="true">
         {!isMobileViewport() && <ParticleBackground />}
       </div>
-      {/* Full-screen loader over the black base until the hero paints. Fades
-          out (CSS) once heroLoaded flips; sits below the chrome so Back still
-          works mid-load. */}
+      {/* Loading state shaped like the page itself — a hero skeleton beside
+          the info skeleton (product card, copy lines, action buttons), mirroring
+          .pd-split (stacked on mobile, hero-left/info-right on desktop). Reads as
+          the page assembling in place rather than a generic full-screen spark.
+          Fades out (CSS) once heroLoaded flips; below the chrome so Back works. */}
       <div className={`pd-loading${heroLoaded ? ' is-done' : ''}`} aria-hidden="true">
-        <span className="pd-loading-spark">
-          <svg viewBox="0 0 100 100" width="34" height="34"><path d="M50 4 C54 30 70 46 96 50 C70 54 54 70 50 96 C46 70 30 54 4 50 C30 46 46 30 50 4 Z" fill="currentColor" /></svg>
-        </span>
+        <div className="pd-skel-hero" />
+        <div className="pd-skel-info">
+          <div className="pd-skel-card" />
+          <div className="pd-skel-lines">
+            <span /><span /><span /><span />
+          </div>
+          <div className="pd-skel-actions">
+            <span /><span />
+          </div>
+        </div>
       </div>
       {/* Scroll-reactive top chrome (mobile): back → previous page, logo
           → home, search → run on the feed. */}
@@ -1341,6 +1369,7 @@ export default function ProductPage({
         onBack={handleClose}
         onHome={onHome ?? handleClose}
         onSearch={onSearch ?? (() => {})}
+        showSearch={false}
       />
       {contextOpen && ownProductId && (
         <AdminContextPanel
@@ -1788,7 +1817,7 @@ export default function ProductPage({
             card so the next-best matches always appear first. The
             infinite "You might also like" feed lives at the bottom
             for open-ended exploration. */}
-        {similarEnabled && moreLikeThis.length > 0 && (
+        {similarEnabled && similarShown.length > 0 && (
           <section className="pd-similar-feed">
             <h2 className="pd-feed-title">
               Similar
@@ -1812,7 +1841,7 @@ export default function ProductPage({
                   Render the unique matches only (capped at the limit) — never
                   pad with fillToExact, which cycles duplicates to reach the
                   count and put the same tile on screen twice. */}
-              {moreLikeThis.slice(0, similarLimit).map((c, i) => (
+              {similarShown.map((c, i) => (
                 <CreativeCardV2
                   key={`mlt-${c.id}-${i}`}
                   slotId={`${directorScope}:mlt-${c.id}-${i}`}

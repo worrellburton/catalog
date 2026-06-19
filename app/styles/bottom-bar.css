@@ -51,16 +51,22 @@
      that gives the bar a single liquid-glass surface, and stripped the
      inner pill chrome below so the filter button + send button read as
      icons sitting on top of the same surface, not as separate pills. */
+  /* Glass recipe mirrors the desktop hero bar (.ai-bar in type-anywhere.css):
+     a brighter top sheen layered over a tinted dark base so the frosted pill
+     reads as liquid glass even over a bright feed, a deeper blur + saturate,
+     and a deeper drop shadow with a brighter top rim. Still ONE surface —
+     gradient + flat tint with the icons sitting on top (see note above). */
   background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.04));
-  backdrop-filter: blur(28px) saturate(1.5);
-  -webkit-backdrop-filter: blur(28px) saturate(1.5);
+    linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.04)),
+    rgba(15, 18, 24, 0.45);
+  backdrop-filter: blur(30px) saturate(1.8);
+  -webkit-backdrop-filter: blur(30px) saturate(1.8);
   border-radius: 999px;
-  border: 1px solid rgba(255, 255, 255, 0.18);
+  border: 1px solid rgba(255, 255, 255, 0.16);
   box-shadow:
-    0 12px 36px rgba(0, 0, 0, 0.36),
-    0 0 26px rgba(255, 255, 255, 0.10),
-    inset 0 1px 0 rgba(255, 255, 255, 0.16),
+    0 16px 44px rgba(0, 0, 0, 0.42),
+    0 0 24px rgba(255, 255, 255, 0.06),
+    inset 0 1px 0 rgba(255, 255, 255, 0.22),
     inset 0 -1px 0 rgba(0, 0, 0, 0.18);
   overflow: hidden;
   transition: box-shadow 0.3s ease, border-color 0.3s ease, background 0.3s ease;
@@ -69,9 +75,9 @@
 .bottom-bar:focus-within {
   border-color: rgba(255, 255, 255, 0.34);
   box-shadow:
-    0 12px 40px rgba(0, 0, 0, 0.4),
+    0 16px 48px rgba(0, 0, 0, 0.46),
     0 0 40px rgba(255, 255, 255, 0.22),
-    inset 0 1px 0 rgba(255, 255, 255, 0.22),
+    inset 0 1px 0 rgba(255, 255, 255, 0.26),
     inset 0 -1px 0 rgba(0, 0, 0, 0.18);
 }
 /* The query text glows as you type (placeholder hidden = field has content). */
@@ -1053,6 +1059,27 @@ body:has(.bottom-bar.search-open) {
   overscroll-behavior: none;
 }
 
+/* SOLID full-screen search sheet: hide the feed + home ceremony behind it so
+   the sheet reads as one solid black page, not a translucent scrim over the
+   live feed. The fixed .search-backdrop is inset:0 = the LAYOUT viewport, which
+   iOS shrinks to above the keyboard when the input is focused — so its bottom
+   region (the keyboard-vacated band + behind the URL pill) isn't covered and
+   the feed bled through there. Hiding the feed lets the black body (#0a0a0a)
+   show in any such gap, so nothing bleeds at the bottom or behind the pill.
+   Scoped to mobile + non-shell (the only place this sheet is the full screen). */
+@media (max-width: 768px) {
+  html:not([data-shell="catalog-app"]):has(.bottom-bar.search-open) .home-feed-wrap,
+  html:not([data-shell="catalog-app"]):has(.bottom-bar.search-open) .sfh {
+    /* visibility, NOT display:none — display:none collapses the document
+       height (so scroll clamps to 0 and the feed's virtualized cards unload),
+       which on return left the feed briefly short → a black gap/strip behind
+       the toolbar. visibility:hidden keeps the feed laid out + its cards warm
+       (invisible, so the black body still shows in any region the backdrop
+       doesn't cover), and returns intact with no reflow. */
+    visibility: hidden !important;
+  }
+}
+
 /* Full-viewport scrim. Pinned to the viewport edges (inset: 0) so the
    dim covers the entire screen — including the area under the input
    bar — instead of laying out inline at static position. The
@@ -1062,9 +1089,14 @@ body:has(.bottom-bar.search-open) {
   position: fixed;
   inset: 0;
   z-index: 99;
-  background: rgba(0, 0, 0, 0.72);
-  backdrop-filter: blur(14px) saturate(1.2);
-  -webkit-backdrop-filter: blur(14px) saturate(1.2);
+  /* OPAQUE (was rgba(0,0,0,0.72) + blur): the search sheet is a full-screen
+     page, not a translucent scrim over the live feed. Opaque means (a) the
+     main feed is NOT visible behind it, (b) any iOS rubber-band of the
+     locked feed can't be seen "scrolling" through the dim, and (c) the iOS
+     Safari bottom toolbar frosts a uniform dark surface (#0a0a0a) instead of
+     the feed bleeding through behind the URL pill. No backdrop-filter needed
+     now that nothing shows through — saves the GPU blur layer too. */
+  background: #0a0a0a;
   opacity: 0;
   visibility: hidden;
   transition: opacity 0.18s ease, visibility 0.18s ease;

@@ -204,6 +204,140 @@ rule (both have already caused production regressions):
 See `.bottom-bar` in `app/styles/bottom-bar.css` for the reference
 implementation (it carries a GUARD comment to the same effect).
 
+### iOS Safari bottom-toolbar "strip" — overlay document-scroll fix
+
+On iOS 26 Safari the bottom URL toolbar applies a **backdrop-frost** over
+whatever the page paints behind it. Where **textured media** (video/photo)
+sits behind it the frost reads see-through; where a **flat color** sits behind
+it the frost renders a visible **strip** (the red/dark/white bar behind the
+`localhost`/URL pill). Setting the overlay background transparent does **not**
+help — Safari just frosts the next flat layer down (`body{background:#0a0a0a}`).
+
+The **home feed** has no strip because it scrolls the **window** (document
+scroll), which makes Safari **collapse the toolbar away entirely**. The detail
+**overlays** (`LookOverlay`, `ProductPage`, …) historically scrolled an **inner
+div** with the body locked (`overflow:hidden`), so the toolbar never collapsed
+and permanently frosted the flat overlay base into a strip.
+
+**The fix (shipped on the look overlay, mobile + non-shell):** make the overlay
+scroll the **document** so the gesture collapses the toolbar like home. Gated by
+a `.look-doc-scroll` class on `.app-root` (set when a *look* — not product — is
+open and `!inShell`). Pieces:
+
+- **CSS** (`look-overlay.css`, `@media (max-width:768px)`): pull the feed +
+  home chrome out of flow — `display:none` on `.app-root.look-doc-scroll`'s
+  `> header, > .home-feed-wrap, > .bottom-bar, > .remix-btn-fixed` **and
+  `.sfh`** (the `ShoppingForHero` home ceremony — it's a *sibling* of
+  `.home-feed-wrap`, NOT inside it). Set `.nav-layer / .look-overlay /
+  .look-overlay-scroll` to `position:static; overflow:visible; height:auto`,
+  and **re-enable `overflow:visible` on html/body** (the body-lock `:has()`
+  rule would otherwise block the document scroll).
+- **JS** (`_index.tsx` body-lock effect): in doc-scroll mode DON'T lock the
+  body — save the feed scroll, park the document at top so the hero shows,
+  restore on close.
+- **JS** (`LookOverlay.tsx`): disable the whole-overlay drag-dismiss in
+  doc-scroll (inner `scrollTop` is always 0 there, so it can't tell top from
+  mid-scroll).
+
+**Gotchas that cost real debugging — read before applying to another page:**
+
+1. The hero `<video>` attaches **UNCONDITIONALLY** on ref-mount
+   (`TrailVideoHost.attach()`), NOT gated on scroll/visibility; the playback
+   director's `notifyScroll` only drives the **rail tiles**. So a **black hero**
+   in doc-scroll is *not* a director/cover bug — it's an in-flow sibling (the
+   `.sfh` ceremony) flowing **above** the overlay and pushing the hero ~1 screen
+   down. Hide the offending sibling.
+2. Simulator frost rendering is **version-dependent**: older sims drew a plain
+   solid bar (frost device-only), but the **iOS 26.2 simulator DOES render the
+   frost** — the cold-boot dark strip and the warm/scrolled see-through frost
+   both reproduce on the iPhone 17 Pro sim (this is how the auth-splash fix was
+   verified). Drive it via `xcrun simctl openurl booted <url>` + `idb ui swipe`,
+   screenshot with `xcrun simctl io booted screenshot`. To force the cold-boot
+   (splash) state, `xcrun simctl terminate booted com.apple.mobilesafari` first
+   — that clears the per-session `catalog:booted` flag. The toolbar *collapse*
+   is also sim-visible (`innerHeight` grows on scroll). Still confirm final
+   appearance on a real device when in doubt.
+3. The hero **top** (scrollTop=0) always has the toolbar expanded → a brief
+   strip until you scroll; only the **scrolled** state collapses it.
+
+#### Where this is applied (surface by surface)
+
+The same root cause — Safari frosting a flat element behind the bar — shows up
+on several surfaces. Each needs a different treatment because the structure
+differs:
+
+- **Look overlay** (`LookOverlay` / `look-overlay.css`, `.look-doc-scroll`):
+  document-scroll so the toolbar collapses. Hide `.sfh` (else black hero).
+  Shipped + verified.
+- **Product overlay** (`ProductPage` / `product-page.css`, `.product-doc-scroll`):
+  same document-scroll. Scroller is `.product-page` (direct child of
+  `.product-page-overlay`, no inner wrapper). Nav-stack: a product can sit ON
+  TOP of a look, so hide the under layer with
+  `.nav-layer:not(:has(.product-page-overlay))` and flow ONLY the product's
+  layer. Also drops the hero search pill (`showSearch={false}`). Shipped.
+- **Search sheet** (`BottomBar` / `bottom-bar.css`): doc-scroll does NOT apply —
+  the input is focused (keyboard up), so the toolbar can't collapse. Instead
+  make it a true full-screen page: `.search-backdrop` is opaque `#0a0a0a` (was
+  `rgba(0,0,0,.72)` + blur), AND hide the feed while open with
+  `html:has(.bottom-bar.search-open) .home-feed-wrap, .sfh { visibility:hidden }`.
+  Use **`visibility:hidden`, NOT `display:none`** — `display:none` collapses the
+  document, clamps scroll to 0, and unloads the feed's virtualized cards, which
+  on return leaves the feed short → a gap/strip behind the toolbar. Shipped +
+  verified (sim: solid black sheet + clean return).
+  **UPDATE — the opaque-sheet styling above did NOT fix the "open search, come
+  back → dark strip" case.** Root cause is the **keyboard**, not the sheet:
+  focusing the input flips Safari's bottom toolbar into its opaque mode and it
+  STAYS opaque at `scrollY=0` after close (Safari re-frosts only on a REAL
+  scroll). Tested + ruled out (don't retry): masking the backdrop (keyboard
+  shrinks the viewport so the mask mislands), un-hiding the feed, removing the
+  body-lock, translucent backdrop, programmatic scroll (no re-frost AND no
+  collapse), a `theme-color` toggle, delayed sheet-removal, dropping
+  `interactive-widget=resizes-content`. The **real fix (`BottomBar.tsx`)**: on
+  touch the closed pill is `readOnly={isTouch && !searchOpen}` so the opening
+  tap opens the sheet WITHOUT raising the keyboard (no keyboard = no opaque
+  strip); a second tap on the now-editable field raises it to type. Desktop
+  keeps the editable type-immediately pill. The **typing→close** path's strip is
+  an inherent iOS limit that clears on the first scroll. SIM CAVEAT: the
+  search-case frost is NOT reliably sim-verifiable (the bar's darkness is partly
+  the dark feed cards behind it, not the toolbar) — device-confirm.
+- **Cold-boot auth splash** (`.auth-splash` / `password-gate.css`): the
+  "dark strip on FIRST open, gone after reload" bug. The opaque `.auth-splash`
+  (radial near-black, `z-index:600`, `inset:0`) is the layer behind the bar at
+  the moment Safari FIRST samples the toolbar's frost material, so the toolbar
+  commits a SOLID DARK strip. Safari samples ONCE at `scrollY=0` and CACHES it
+  — it only re-samples on a **real** scroll (**programmatic `window.scrollTo`
+  is ignored**, verified on-sim — so a post-splash scroll-kick does NOT work).
+  A reload skips the splash (sessionStorage `catalog:booted`), so Safari samples
+  the textured feed peek and frosts see-through — that's why "reload makes it go
+  away". FIX: a mobile-only CSS mask punches the bottom toolbar zone of the
+  splash transparent (`-webkit-mask` linear-gradient, transparent for the bottom
+  `env(safe-area-inset-bottom) + 100px`), so the first sample reads the feed
+  peek behind it (light frost), identical to reload. The masked band sits under
+  the toolbar glass → no feed sliver / no hero-text ghosting during the splash
+  (the centered wordmark + opaque upper region are untouched). Shipped +
+  sim-verified (cold open now frosts like reload). Covers both signed-in and
+  signed-out cold boots (both pass through `.auth-splash`). The `.password-gate`
+  itself is NOT masked — the user dwells/interacts there, and it isn't part of
+  the auto-dismissing "load → strip → reload-clears" symptom.
+- **Home feed (the very top, `scrollY=0`):** KNOWN LIMITATION, not fixed. The
+  home already document-scrolls (toolbar collapses the moment you scroll), but
+  at the very top the toolbar is expanded and the dark `.sfh` hero sits behind
+  it (feed cards peek on the sides of the 2-col grid; the hero fills the
+  middle). Unlike the look/product heroes there's no *video* to bleed to the
+  edge — it's a dark ceremony + a scrolling feed — so fully killing the
+  top-state strip is diminishing-returns. It self-clears on scroll. Same class
+  as the brief top-state strip on every hero (Safari always shows the toolbar
+  expanded at `scrollY=0`). NOTE: with the feed peek warm-cached, the very-top
+  bar now frosts light (cards peek) even on cold boot, since the splash no
+  longer poisons it — the residual strip is only on a truly cold feed.
+
+**To apply to another overlay:** replicate the gating, hide whatever in-flow
+siblings push the overlay down (and any warm under-layers in the nav stack),
+keep the body unlocked so the document scrolls, and disable any at-top
+drag-dismiss. Verify the hero video renders (sim) and the toolbar collapse
+(sim — `innerHeight` grows 714→754 on scroll); confirm the frost itself on a
+**real device** — the simulator draws a solid bar and never renders the frost.
+
 ---
 
 # SECTION 2 — Admin Panel (Frontend)

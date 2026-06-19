@@ -36,6 +36,7 @@ import PullDownActivityGesture from "~/components/PullDownActivityGesture";
 import CreatorLoginToastHost from "~/components/CreatorLoginToastHost";
 import FollowToastHost from "~/components/FollowToastHost";
 import { CatalogDialogProvider } from "~/components/CatalogDialog";
+import ClerkGate from "~/components/ClerkGate";
 import { initSentry, captureException } from "~/utils/sentry";
 
 // Dev-only data-stream waterfall probe. Installs window.__waterfall() and
@@ -224,7 +225,13 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-se
 (function(){
   try{
     if(typeof localStorage==='undefined'||typeof document==='undefined')return;
-    var ks=['catalog:home-feed-cache:v8','catalog:home-feed-cache:v8:male','catalog:home-feed-cache:v8:female'];
+    // Must match HOME_FEED_LS_KEY in services/product-creative.ts (currently
+    // v13) + its gender suffixes. A stale key here = the cache is never found,
+    // so the above-the-fold images don't preload and the first open of a
+    // session renders the cached feed with un-cached (dark) images for a beat
+    // ("black at the bottom on first open, gone after reload"). Keep in sync
+    // whenever HOME_FEED_LS_KEY is bumped.
+    var ks=['catalog:home-feed-cache:v13','catalog:home-feed-cache:v13:male','catalog:home-feed-cache:v13:female'];
     var best=null;
     for(var i=0;i<ks.length;i++){
       var raw=localStorage.getItem(ks[i]);
@@ -324,7 +331,7 @@ export default function App() {
   useEffect(() => { initScrollIdleFade(); }, []);
 
   return (
-    <>
+    <ClerkGate>
       {/* Type-anywhere search lives at the app root so a stray
           keystroke on any page (admin, generate, import, brand
           page, anywhere) bounces back to the home grid with the
@@ -367,7 +374,7 @@ export default function App() {
       <CatalogDialogProvider>
         <Outlet />
       </CatalogDialogProvider>
-    </>
+    </ClerkGate>
   );
 }
 
