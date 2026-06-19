@@ -194,6 +194,13 @@ function SearchPanel({
   }, []);
 
   useEffect(() => {
+    // Only measure the keyboard inset while the search sheet is OPEN. The
+    // --ios-bottom-chrome / --vv-height vars and kbInset are consumed only in
+    // .search-open layouts, yet iOS fires visualViewport 'scroll' continuously
+    // as the URL bar collapses during a NORMAL feed scroll — so leaving this
+    // attached re-ran apply() (CSS-var writes + style recalc) every frame
+    // behind the feed. Gating on searchOpen keeps the feed scroll clean.
+    if (!searchOpen) return;
     if (typeof window === 'undefined' || !window.visualViewport) return;
     const vv = window.visualViewport;
     const root = document.documentElement;
@@ -228,7 +235,7 @@ function SearchPanel({
       vv.removeEventListener('scroll', schedule);
       if (raf) cancelAnimationFrame(raf);
     };
-  }, []);
+  }, [searchOpen]);
 
   const openSearch = useCallback(() => {
     setSearchOpen(true);
