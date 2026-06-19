@@ -234,3 +234,13 @@ html {
   text-overflow: ellipsis;
   min-width: 0;
 }
+
+/* ── Lenis smooth scroll (desktop only) ───────────────────────────────
+   The `lenis` class is added to <html> by initSmoothScroll, which only runs
+   on fine-pointer (mouse/trackpad) devices — so none of this applies on
+   touch. Scroll-snap / independent scrollers opt out with [data-lenis-prevent]. */
+html.lenis, html.lenis body { height: auto; }
+.lenis.lenis-smooth { scroll-behavior: auto !important; }
+.lenis.lenis-smooth [data-lenis-prevent] { overscroll-behavior: contain; }
+.lenis.lenis-stopped { overflow: hidden; }
+.lenis.lenis-scrolling iframe { pointer-events: none; }
