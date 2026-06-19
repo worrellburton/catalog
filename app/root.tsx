@@ -28,7 +28,6 @@ import { isRouteErrorResponse, useRouteError } from "@remix-run/react";
 import { useEffect, useState } from "react";
 import TypeAnywhere from "~/components/TypeAnywhere";
 import { initScrollIdleFade } from "~/utils/scroll-idle";
-import { initSmoothScroll } from "~/utils/smooth-scroll";
 import SessionTrackerHost from "~/components/SessionTrackerHost";
 import PresenceHost from "~/components/PresenceHost";
 import GenerationQueueHost from "~/components/GenerationQueueHost";
@@ -330,9 +329,6 @@ export default function App() {
   // Media-first scrolling (founder's call): card chrome fades away while
   // gliding and eases back in when the scroll settles — every viewport.
   useEffect(() => { initScrollIdleFade(); }, []);
-  // Lenis smooth wheel scrolling (desktop only; mobile stays native). See
-  // utils/smooth-scroll for why it's gated.
-  useEffect(() => { initSmoothScroll(); }, []);
 
   return (
     <ClerkGate>
