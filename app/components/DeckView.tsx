@@ -62,7 +62,8 @@ const DeckView: React.FC<DeckViewProps> = ({
   }, []);
 
   return (
-    <div className="deck-view active" ref={containerRef}>
+    <div className="deck-view active" ref={containerRef} data-lenis-prevent>
+      {/* data-lenis-prevent: scroll-snap surface — native scroll, not Lenis. */}
       {/* Back to deck selector */}
       <button className="deck-back-btn" onClick={onBack} aria-label="Back to decks">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
