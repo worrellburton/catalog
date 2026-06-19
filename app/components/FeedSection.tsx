@@ -371,9 +371,22 @@ function FeedSection({
       setRowMetrics(prev =>
         prev && prev.cols === cols && Math.abs(prev.rowH - rowH) < 1 ? prev : { cols, rowH });
     };
+    // The grid-density dial dispatches a `resize` after changing --feed-cols.
+    // Defer the read to the next frame so the browser has COMMITTED the grid
+    // relayout for the new column count — reading synchronously can capture the
+    // pre-change cols/rowH and leave windowStart/padTop stale (blank gaps or a
+    // jump when switching to 1 or 3 columns).
+    let raf = 0;
+    const onResize = () => {
+      if (raf) cancelAnimationFrame(raf);
+      raf = requestAnimationFrame(() => { raf = 0; measure(); });
+    };
     if (!rowMetrics) measure();
-    window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
+    window.addEventListener('resize', onResize);
+    return () => {
+      window.removeEventListener('resize', onResize);
+      if (raf) cancelAnimationFrame(raf);
+    };
   }, [mobileWindowing, visibleCount, rowMetrics]);
 
   useEffect(() => {

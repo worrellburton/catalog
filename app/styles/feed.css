@@ -927,6 +927,17 @@
   height: 12px;
   opacity: 0.38;
   transition: opacity 0.15s ease, transform 0.15s ease;
+  /* Each segment is a real <button> now (direct column select). Strip the
+     native chrome so it renders identically to the old <span>; the dial
+     container owns the pill background/border. */
+  padding: 0;
+  border: 0;
+  background: none;
+  cursor: pointer;
+  font: inherit;
+  color: inherit;
+  -webkit-appearance: none;
+  appearance: none;
 }
 .feed-view-dial-dot.is-active {
   opacity: 1;
