@@ -822,6 +822,81 @@
 .sc-rec--continue { opacity: 0.78; }
 .sc-rec--continue:hover { opacity: 1; }
 
+/* ── Persistent catalog-name pill (searched feed only) ───────────────────
+   Rises from the bottom of the screen once the big intro has scrolled away,
+   echoing the catalog name you're browsing ("Candles"). Tapping it reopens
+   the search sheet (focuses #bottom-search-input → BottomBar openSearch).
+   It rides just ABOVE the resting search bar (which docks at
+   max(safe-area, --ios-bottom-chrome) + 20px), so it never overlaps it.
+
+   Centered with margin-inline:auto + an explicit width (NOT translateX), so
+   the entrance/exit animation can own `transform` cleanly — this is the
+   project's hard centering rule for fixed pills. Cheap to animate: only
+   transform + opacity move on show/hide; the backdrop-filter is static. */
+.sc-name-pill {
+  position: fixed;
+  left: 0;
+  right: 0;
+  margin-inline: auto;
+  width: max-content;
+  max-width: calc(100% - 48px);
+  /* Sit above the docked search bar: its bottom + a generous bar-height gap. */
+  bottom: calc(max(env(safe-area-inset-bottom, 0px), var(--ios-bottom-chrome, 0px)) + 78px);
+  z-index: 96;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 18px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.12), rgba(255, 255, 255, 0.05)),
+    rgba(15, 18, 24, 0.62);
+  backdrop-filter: blur(24px) saturate(1.6);
+  -webkit-backdrop-filter: blur(24px) saturate(1.6);
+  box-shadow:
+    0 12px 32px rgba(0, 0, 0, 0.45),
+    inset 0 1px 0 rgba(255, 255, 255, 0.14);
+  color: #fff;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  /* Hidden state: parked below the bottom edge, transparent, untappable. */
+  opacity: 0;
+  transform: translateY(140%);
+  pointer-events: none;
+  transition: transform 0.34s cubic-bezier(0.16, 1, 0.3, 1), opacity 0.24s ease;
+}
+.sc-name-pill.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+.sc-name-pill:active { transform: translateY(0) scale(0.96); }
+.sc-name-pill-text {
+  max-width: 60vw;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.sc-name-pill-search { flex: 0 0 auto; color: rgba(255, 255, 255, 0.6); }
+.sc-name-pill .sc-rec-spark { color: rgba(255, 255, 255, 0.9); }
+.light-mode .sc-name-pill {
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.96), rgba(255, 255, 255, 0.86));
+  border-color: rgba(15, 23, 42, 0.08);
+  color: #0f172a;
+  box-shadow: 0 12px 32px rgba(0, 0, 0, 0.14);
+}
+.light-mode .sc-name-pill-search { color: rgba(15, 23, 42, 0.5); }
+.light-mode .sc-name-pill .sc-rec-spark { color: rgba(15, 23, 42, 0.8); }
+/* Hide the pill while the search sheet is open (the sheet owns the screen)
+   and on desktop (no mobile bottom bar there — desktop uses TypeAnywhere). */
+html:has(.bottom-bar.search-open) .sc-name-pill { opacity: 0; pointer-events: none; }
+@media (min-width: 769px) { .sc-name-pill { display: none; } }
+
 /* Peek-on-landing: the feed wrapper is pulled up under the hero by a
    small amount ONLY while the hero is showing, so just the very top
    edge of the first row's cards noses above the fold under the
