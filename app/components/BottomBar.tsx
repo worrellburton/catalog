@@ -63,13 +63,6 @@ function BottomBar({
   const { beam } = useSearchBeam();
   const [searchOpen, setSearchOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
-  // Touch device? The "open search without raising the keyboard" path (readOnly
-  // closed pill) is for iOS Safari, where the keyboard poisons the bottom URL
-  // toolbar into a sticky dark strip. Desktop has no such toolbar and benefits
-  // from type-immediately, so it keeps the editable pill there.
-  const [isTouch] = useState(
-    () => typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: coarse)').matches,
-  );
   const [localSearch, setLocalSearch] = useState(searchQuery);
   const [activeFilters, setActiveFilters] = useState<ActiveFilters>(getEmptyFilters());
   // Type-ahead suggestion pool (catalog/search suggestions), loaded once.
@@ -241,14 +234,11 @@ function BottomBar({
     setSearchOpen(true);
     setFiltersOpen(false);
     dismissingRef.current = false;
-    // Intentionally NO auto-focus. The closed pill is readOnly (see the input
-    // below), so the opening tap can't raise the iOS keyboard — which is what
-    // flips Safari's bottom URL toolbar into its sticky opaque "dark strip"
-    // mode that lingers after the sheet closes (verified: the strip only
-    // appears when the keyboard was up, and iOS only re-frosts the toolbar on a
-    // real scroll — no programmatic re-frost works). The shopper taps the field
-    // to type, which raises the keyboard then. See CLAUDE.md §1 "iOS Safari
-    // bottom-toolbar strip".
+    // Raise the keyboard on open so the shopper can type immediately (founder's
+    // call — reverses Samir's dca5b7c readOnly "open without keyboard" trick).
+    // The pill is editable again, so tapping it focuses directly; this re-focus
+    // also covers programmatic opens (e.g. the home hero search bar).
+    setTimeout(() => searchInputRef.current?.focus(), 100);
   }, []);
 
   const closeSearch = useCallback(() => {
@@ -647,25 +637,13 @@ function BottomBar({
             className="bottom-search-input"
             id="bottom-search-input"
             placeholder="Make a catalog for anything"
-            // TOUCH (iOS): closed pill is readOnly so the opening tap opens the
-            // sheet WITHOUT raising the keyboard — the keyboard is what poisons
-            // Safari's bottom URL toolbar into the sticky dark strip on close
-            // (verified: no programmatic re-frost works; only a real scroll, or
-            // never raising the keyboard, avoids it). Editable once open, so a
-            // second tap on the field raises the keyboard to type. DESKTOP keeps
-            // the editable pill (no toolbar issue, type-immediately preserved).
-            readOnly={isTouch && !searchOpen}
+            // Editable pill: tapping it focuses the field, which raises the
+            // keyboard AND (via onFocus) opens the sheet, so the shopper can type
+            // immediately. Reverses Samir's dca5b7c readOnly "open without
+            // keyboard" trick (founder wants the keyboard up on tap).
             value={localSearch}
-            onClick={(e) => {
-              if (!searchOpen) {
-                openSearch();
-                // Drop the readOnly focus so the readOnly→editable flip can't
-                // pop the keyboard; the shopper taps the field again to type.
-                if (isTouch) e.currentTarget.blur();
-              }
-            }}
             onChange={handleSearchInput}
-            onFocus={() => { if (!searchOpen) openSearch(); }}
+            onFocus={openSearch}
             onBlur={() => {
               // The iOS keyboard's "Done"/tick blurs the field with the sheet
               // still open — treat that as "run the search". Dismiss paths set
