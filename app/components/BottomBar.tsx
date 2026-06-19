@@ -227,6 +227,16 @@ function BottomBar({
       vv.removeEventListener('resize', schedule);
       vv.removeEventListener('scroll', schedule);
       if (raf) cancelAnimationFrame(raf);
+      // Reset the keyboard-inset vars to 0 when the search sheet closes. This
+      // effect only RAN while searchOpen + a keyboard was up, so --ios-bottom-
+      // chrome / --vv-height held the last keyboard height. Nothing ever zeroed
+      // them, so the RESTING .bottom-bar (whose `bottom` reads max(safe-area,
+      // --ios-bottom-chrome) + 20px) stayed stranded ~a-keyboard's-height up
+      // the screen on the search-results feed (overlapping the catalog picks).
+      // Zeroing on close drops the bar back to its normal bottom dock.
+      root.style.setProperty('--ios-bottom-chrome', '0px');
+      root.style.setProperty('--vv-height', `${Math.round(window.innerHeight)}px`);
+      setKbInset(0);
     };
   }, [searchOpen]);
 
