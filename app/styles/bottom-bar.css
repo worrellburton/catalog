@@ -1089,18 +1089,31 @@ body:has(.bottom-bar.search-open) {
   position: fixed;
   inset: 0;
   z-index: 99;
-  /* OPAQUE (was rgba(0,0,0,0.72) + blur): the search sheet is a full-screen
-     page, not a translucent scrim over the live feed. Opaque means (a) the
-     main feed is NOT visible behind it, (b) any iOS rubber-band of the
-     locked feed can't be seen "scrolling" through the dim, and (c) the iOS
-     Safari bottom toolbar frosts a uniform dark surface (#0a0a0a) instead of
-     the feed bleeding through behind the URL pill. No backdrop-filter needed
-     now that nothing shows through — saves the GPU blur layer too. */
-  background: #0a0a0a;
+  /* iOS 26 SAFARI TOOLBAR TINT — load-bearing.
+     Safari 26 dropped `theme-color`; it now computes the bottom-toolbar tint
+     from the `background-color` of `position:fixed`/`sticky` elements near the
+     viewport edge (falling back to <body>). A fixed full-screen `#0a0a0a`
+     backdrop is therefore sampled as the toolbar colour → a SOLID BLACK band
+     behind the URL pill that LINGERS after close (Safari computes it at render
+     time and doesn't re-evaluate when the element unmounts). This is the real
+     cause of the "black strip" — NOT the keyboard.
+     Fix: keep the FIXED layer transparent (so Safari doesn't sample it) and
+     paint the opaque fill on the `::before` ABSOLUTE child — Safari ignores
+     `position:absolute`. The sheet still reads fully opaque (feed hidden), but
+     opening search no longer darkens the toolbar, so nothing lingers on close.
+     (Ref: Safari 26 "Liquid Glass" tinting — fixed-element sampling.) */
+  background: transparent;
   opacity: 0;
   visibility: hidden;
   transition: opacity 0.18s ease, visibility 0.18s ease;
   pointer-events: none;
+}
+/* The opaque fill lives here (absolute → NOT sampled for the toolbar tint). */
+.search-backdrop::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: #0a0a0a;
 }
 .search-backdrop.visible {
   opacity: 1;
@@ -1725,11 +1738,11 @@ body:has(.bottom-bar.search-open) {
 
   /* Auto-scroll (rAF) is now active on mobile too — no touch-scroll
      override needed. The rAF drives translateY, so overflow stays hidden. */
-  /* Slightly more opaque dim on mobile so the page doesn't bleed
-     through the gap between the bar and the keyboard. */
-  .search-backdrop {
-    background: rgba(0, 0, 0, 0.88);
-  }
+  /* NOTE: deliberately NO mobile background override. The opaque fill lives on
+     .search-backdrop::before (absolute), so the FIXED layer stays transparent
+     at every width and iOS 26 Safari never samples it for the bottom-toolbar
+     tint. A non-transparent background here (was rgba(0,0,0,0.88)) re-triggered
+     the dark toolbar "strip" on phones — don't reintroduce it. */
 }
 }
 
@@ -2105,18 +2118,14 @@ body:has(.bottom-bar.search-open) {
      drawn over the webview, so the bottom pill is the only search entry there —
      keep it. This change is web/Safari-only.
 
-   NOTE: hidden via opacity/pointer-events, NOT `display:none`. The header
-   search button raises the keyboard by SYNCHRONOUSLY focusing this same input
-   (#bottom-search-input) inside its tap handler, and a `display:none` element
-   can't be focused. opacity:0 keeps it laid out + focusable (and invisible, so
-   nothing flat-white paints behind the toolbar → no strip), and it morphs into
-   the visible search-page bar the instant `.search-open` flips on. */
+   Only the RESTING pill is hidden; `:not(.search-open)` keeps the full-screen
+   search sheet (the header button dispatches `catalog:open-search`, which flips
+   `.search-open` on and this element becomes the sheet's input). */
 @media (max-width: 768px) {
   html:not([data-shell="catalog-app"])
     .app-root:not(.home-hero):not(.looks-feed-bar)
     .bottom-bar:not(.search-open) {
-    opacity: 0 !important;
-    pointer-events: none !important;
+    display: none !important;
   }
 }
 
