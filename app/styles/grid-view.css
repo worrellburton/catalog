@@ -634,3 +634,20 @@ html.is-pointing .app-root.chrome-hidden :hover > .creative-delete-btn {
   opacity: 1 !important;
   transition: opacity 0.45s cubic-bezier(0.22, 1, 0.36, 1);
 }
+
+/* ── Scroll-jank fix: suspend backdrop blurs while the feed glides ─────────
+   Recomputing backdrop-filter blur every frame as media scrolls behind the
+   per-card chrome (creator chip, catalog button) AND the fixed bars (search
+   pill, remix button) is the dominant iOS feed scroll-jank source. Drop the
+   blur for the duration of a scroll glide; scroll-idle lifts is-scroll-gliding
+   ~0.3s after the scroll settles, so the frosted look eases right back. */
+html.is-scroll-gliding .look-card .card-creator-row,
+html.is-scroll-gliding .look-card .card-catalog-btn,
+html.is-scroll-gliding .inline-look-catalog-btn,
+html.is-scroll-gliding .inline-look-detail .hotspot-indicator,
+html.is-scroll-gliding .promo-chip,
+html.is-scroll-gliding .bottom-bar,
+html.is-scroll-gliding .remix-btn-fixed {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
