@@ -46,7 +46,7 @@ import { prefetchBrandLogos } from '~/hooks/useBrandLogoLookup';
 import { primeTrailAssets } from '~/utils/trailPrefetch';
 import { supabase } from '~/utils/supabase';
 import { trackClick, trackCreativeImpressions, resolveProductIdByUrl, trackProductClickout } from '~/services/session-tracker';
-import { registerAssetCache, maybeUnregisterSW } from '~/utils/registerSW';
+import { retireServiceWorker } from '~/utils/registerSW';
 import HeaderWalletPill from '~/components/HeaderWalletPill';
 import HeaderActivityPill from '~/components/HeaderActivityPill';
 import FollowingRail from '~/components/FollowingRail';
@@ -2023,11 +2023,11 @@ export default function Home() {
     prefetchOverlayChunks();
   }, [isAppVisible]);
 
-  // One-shot service-worker registration. Skipped on localhost (dev), and
-  // honors a ?sw-off escape hatch in case the cache ever needs purging.
+  // The SPA no longer uses a service worker (Vercel already serves hashed
+  // assets `immutable`). Proactively retire any SW a returning visitor still
+  // has registered and purge its caches, so stale chunk hashes can't hang nav.
   useEffect(() => {
-    maybeUnregisterSW();
-    registerAssetCache();
+    retireServiceWorker();
   }, []);
 
   // Trail depth: while the product/look overlay is open, the under-layer
