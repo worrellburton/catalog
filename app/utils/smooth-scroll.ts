@@ -1,15 +1,16 @@
 import Lenis from 'lenis';
 
-// Desktop-only smooth wheel scrolling (Lenis).
+// Site-wide smooth scrolling (Lenis) — desktop wheel AND mobile touch.
 //
-// Deliberately DESKTOP-ONLY: touch / coarse pointers are left fully native so
-// the documented iOS Safari toolbar-collapse fixes, the video-playback
-// director, lazy-video IntersectionObservers, and the body-locked overlays all
-// behave exactly as before — Lenis never even initializes on phones/tablets.
 // Honors prefers-reduced-motion, and pauses while the app body-locks for an
-// overlay/modal so that surface's own scroller handles the wheel. Scroll-snap
+// overlay/modal so that surface's own scroller handles the gesture. Scroll-snap
 // surfaces (the deck) and any independent scroller opt out via
 // [data-lenis-prevent].
+//
+// NOTE (mobile): syncTouch routes touch through Lenis, which can fight the iOS
+// Safari toolbar-collapse behavior the feed relies on (see CLAUDE.md). Enabled
+// per request; if the frosted toolbar strip returns on iOS, flip syncTouch back
+// off (desktop-only) here.
 
 let lenis: Lenis | null = null;
 
@@ -17,14 +18,12 @@ export function initSmoothScroll(): void {
   if (typeof window === 'undefined' || lenis) return;
   // Reduced motion → native scroll, no smoothing.
   if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
-  // Mouse/trackpad only — keep mobile 100% native (preserves the iOS fixes).
-  if (!window.matchMedia?.('(pointer: fine)').matches) return;
 
   lenis = new Lenis({
     duration: 1.05,
     easing: (t: number) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
     smoothWheel: true,
-    syncTouch: false,
+    syncTouch: true,
     autoRaf: false,
   });
 
