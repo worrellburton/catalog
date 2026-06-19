@@ -3792,6 +3792,21 @@ html[data-shell="catalog-app"] .gen-page {
   padding: max(env(safe-area-inset-top), 16px) clamp(16px, 5vw, 32px) 0;
 }
 .gen-stylist--result { min-height: 0; }
+
+/* RESULT = ONE viewport, no page scroll. The wrapping .gen-page normally
+   scrolls (tall padding + min-height:100dvh), which let the user drag up past
+   the top of the styled look. When the stylist result is mounted, pin the page
+   to exactly one screen and kill its scroll + bottom padding so the slots and
+   the "Yes, I like it" CTA all sit inside a single mobile viewport. The ask /
+   types steps keep the normal keyboard-aware scrolling. */
+.gen-page--stylist:has(.gen-stylist--result) {
+  height: 100svh;
+  min-height: 0;
+  overflow: hidden;
+  padding-top: 0;
+  padding-bottom: 0;
+  overscroll-behavior: none;
+}
 .gen-stylist-back {
   align-self: flex-start;
   display: inline-flex;
@@ -3818,8 +3833,24 @@ html[data-shell="catalog-app"] .gen-page {
   gap: 10px;
   justify-content: center;
 }
-/* Result is locked to one viewport — header stays compact. */
-.gen-stylist--result { height: 100svh; overflow: hidden; }
+/* Result is locked to one viewport — header stays compact. Inside the pinned
+   .gen-page--stylist it flexes to fill exactly the available height (no fixed
+   100svh, which would overflow past the safe-area padding), with the reels
+   flexing between a compact header and the CTA so it all fits — no page scroll. */
+.gen-page--stylist:has(.gen-stylist--result) .gen-stylist--result {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+  max-height: 100%;
+  overflow: hidden;
+  padding-bottom: 0;
+}
+/* Fallback for browsers without :has() — still cap to the viewport. */
+.gen-stylist--result {
+  max-height: 100svh;
+  overflow: hidden;
+  padding-bottom: 0;
+}
 .gen-stylist-resulthead { padding-top: 2px; }
 .gen-stylist-title--sm { font-size: clamp(20px, 5.5vw, 26px); }
 .gen-stylist-rationale {
@@ -3857,6 +3888,52 @@ html[data-shell="catalog-app"] .gen-page {
 }
 .gen-stylist-input::placeholder { color: rgba(255, 255, 255, 0.35); }
 .gen-stylist-input:focus { outline: none; border-color: rgba(255, 255, 255, 0.4); }
+
+/* Garment-type chooser — multi-select chips on the 'types' step. */
+.gen-stylist-types {
+  margin-top: 10px;
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+.gen-stylist-type {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.85);
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.16s ease, background 0.16s ease, color 0.16s ease;
+}
+.gen-stylist-type:active { transform: scale(0.98); }
+.gen-stylist-type.is-on {
+  border-color: #fff;
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+.gen-stylist-type-check {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+  border-radius: 6px;
+  border: 1.5px solid rgba(255, 255, 255, 0.3);
+  color: #050505;
+  transition: background 0.16s ease, border-color 0.16s ease;
+}
+.gen-stylist-type.is-on .gen-stylist-type-check {
+  background: #fff;
+  border-color: #fff;
+}
 .gen-stylist-foot {
   padding: 12px 0 calc(14px + env(safe-area-inset-bottom));
 }
