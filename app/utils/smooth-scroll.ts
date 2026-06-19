@@ -1,16 +1,14 @@
 import Lenis from 'lenis';
 
-// Site-wide smooth scrolling (Lenis) — desktop wheel AND mobile touch.
+// Desktop-only smooth wheel scrolling (Lenis).
 //
-// Honors prefers-reduced-motion, and pauses while the app body-locks for an
-// overlay/modal so that surface's own scroller handles the gesture. Scroll-snap
-// surfaces (the deck) and any independent scroller opt out via
-// [data-lenis-prevent].
-//
-// NOTE (mobile): syncTouch routes touch through Lenis, which can fight the iOS
-// Safari toolbar-collapse behavior the feed relies on (see CLAUDE.md). Enabled
-// per request; if the frosted toolbar strip returns on iOS, flip syncTouch back
-// off (desktop-only) here.
+// Touch is left fully native — syncTouch felt choppy on phones and also fights
+// the iOS Safari toolbar-collapse behavior the feed relies on (see CLAUDE.md).
+// So Lenis only initializes on fine pointers (mouse/trackpad); mobile keeps
+// native momentum scrolling. Honors prefers-reduced-motion, and pauses while
+// the app body-locks for an overlay/modal so that surface's own scroller
+// handles the wheel. Scroll-snap surfaces (the deck) and any independent
+// scroller opt out via [data-lenis-prevent].
 
 let lenis: Lenis | null = null;
 
@@ -18,12 +16,15 @@ export function initSmoothScroll(): void {
   if (typeof window === 'undefined' || lenis) return;
   // Reduced motion → native scroll, no smoothing.
   if (window.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;
+  // Mouse/trackpad only — keep mobile 100% native (no choppy touch smoothing,
+  // and the iOS scroll fixes stay intact).
+  if (!window.matchMedia?.('(pointer: fine)').matches) return;
 
   lenis = new Lenis({
     duration: 1.05,
     easing: (t: number) => Math.min(1, 1.001 - Math.pow(2, -10 * t)),
     smoothWheel: true,
-    syncTouch: true,
+    syncTouch: false,
     autoRaf: false,
   });
 

@@ -3968,19 +3968,12 @@ html[data-shell="catalog-app"] .gen-page {
   inset: 0;
   z-index: 60;
   display: flex;
-  flex-direction: column;
   align-items: center;
   justify-content: center;
-  gap: 22px;
   background: rgba(10, 10, 10, 0.92);
   backdrop-filter: blur(6px);
   -webkit-backdrop-filter: blur(6px);
 }
-.gen-stylist-loading-orb {
-  width: 64px; height: 64px; border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #fff, rgba(150, 180, 255, 0.5) 55%, transparent 72%);
-  box-shadow: 0 0 40px rgba(150, 180, 255, 0.55);
-  animation: gen-stylist-orb 1.4s ease-in-out infinite;
-}
-@keyframes gen-stylist-orb { 0%, 100% { transform: scale(0.85); opacity: 0.8; } 50% { transform: scale(1.1); opacity: 1; } }
-.gen-stylist-loading-text { color: rgba(255, 255, 255, 0.8); font-size: 15px; font-weight: 600; }
+/* Text-only loader (the sphere orb was removed). */
+.gen-stylist-loading-text { color: rgba(255, 255, 255, 0.8); font-size: 15px; font-weight: 600; animation: gen-stylist-loading-pulse 1.6s ease-in-out infinite; }
+@keyframes gen-stylist-loading-pulse { 0%, 100% { opacity: 0.55; } 50% { opacity: 1; } }
