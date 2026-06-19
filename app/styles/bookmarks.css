@@ -564,13 +564,23 @@ html[data-shell="catalog-app"] .bookmarks-page {
   }
 }
 
-/* Search backdrop styling lives in bottom-bar.css — SearchPanel is the ONLY
-   renderer of .search-backdrop. The duplicate rules that used to live here set
-   a non-transparent background on the FIXED layer, which iOS 26 Safari samples
-   for its bottom-toolbar tint (re-introducing the dark "strip"). They were
-   orphaned but load-bearing: bookmarks.css imports AFTER bottom-bar.css, so at
-   equal specificity they silently overrode the transparent-backdrop fix.
-   Removed — do NOT add a .search-backdrop background here. */
+/* Search backdrop */
+.search-backdrop {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.6);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  z-index: 99;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+}
+
+.search-backdrop.visible {
+  opacity: 1;
+  pointer-events: all;
+}
 
 /* No results state */
 .no-results-container {
@@ -668,6 +678,10 @@ html[data-shell="catalog-app"] .bookmarks-page {
 
 .light-mode .bottom-search-input {
   animation: glowPulseLight 3s ease-in-out infinite;
+}
+
+.light-mode .search-backdrop {
+  background: rgba(255, 255, 255, 0.7);
 }
 
 
