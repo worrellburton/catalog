@@ -419,10 +419,9 @@ const CreativeCardV2 = memo(function CreativeCardV2({
           e.stopPropagation();
           return;
         }
-        // A card tap ALWAYS opens the look/product — the creator chip is
-        // display-only now (only its +/− follow badge is interactive, and that
-        // stops propagation itself), so there's no creator-row exception that
-        // could hijack the tap into the wrong creator's catalog.
+        // A card tap opens the look/product. The lower-left creator chip is the
+        // one exception — it's a hotspot that opens that creator's catalog and
+        // stops propagation, so its taps never reach here.
         handleClick();
       }}
       onMouseEnter={() => {
@@ -628,15 +627,24 @@ function CreatorChip({
   creatorName: string;
   onOpenCreator?: (name: string) => void;
 }) {
-  // stopPropagation on the row so a tap on the avatar/name opens the creator
-  // catalog instead of falling through to open the look underneath.
-  // Display-only on the feed: tapping ANYWHERE on the card opens the look
-  // (founder's call — a card tap must NEVER open the creator catalog). The
-  // avatar falls through (avatarOpensCreator=false); only the small +/− follow
-  // badge stays interactive (it stops propagation itself). The creator's
-  // catalog is reachable from inside the look page.
+  // The creator chip is a tappable hotspot (the lower-left rounded rectangle —
+  // see .card-creator-tag in feed.css): tapping the avatar OR the username
+  // opens that creator's catalog. stopPropagation keeps the tap from falling
+  // through to the card (which opens the look). The small +/− follow badge
+  // stays its own control (it stops propagation itself), so follow still works.
+  const openCreator = (e: React.MouseEvent | React.KeyboardEvent) => {
+    e.stopPropagation();
+    if (look.creator) onOpenCreator?.(look.creator);
+  };
   return (
-    <div className="card-creator-tag">
+    <div
+      className="card-creator-tag"
+      role="button"
+      tabIndex={0}
+      aria-label={creatorName ? `Open ${creatorName}'s catalog` : 'Open creator catalog'}
+      onClick={openCreator}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openCreator(e); } }}
+    >
       <CreatorAvatarFollow
         handle={look.creator}
         avatarUrl={creatorAvatar}

@@ -764,7 +764,23 @@
   display: flex;
   align-items: center;
   gap: 6px;
+  /* Tappable creator hotspot: a rounded rectangle behind the avatar+name so
+     the lower-left zone clearly reads as "open this creator's catalog". Hugs
+     the content (NOT full width) to avoid the wrong-creator dead-zone noted
+     above. Plain rgba (no backdrop-filter) to stay cheap during feed scroll. */
+  padding: 5px 10px 5px 5px;
+  border-radius: 12px;
+  background: rgba(10, 10, 10, 0.42);
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.18s ease, border-color 0.18s ease;
 }
+.look-card .card-creator-tag:hover {
+  background: rgba(10, 10, 10, 0.58);
+  border-color: rgba(255, 255, 255, 0.28);
+}
+.look-card .card-creator-tag:active { background: rgba(10, 10, 10, 0.66); }
 .look-card .card-creator-tag .creator-avatar-follow { flex-shrink: 0; }
 .card-creator-tag-name {
   min-width: 0;
