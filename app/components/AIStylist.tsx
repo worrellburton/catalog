@@ -25,21 +25,44 @@ interface Props {
   onBack: () => void;
 }
 
-type StylistStep = 'ask' | 'result';
+type StylistStep = 'ask' | 'types' | 'result';
 
-const EMPTY_OUTFIT: StylistOutfit = { hats: null, tops: null, dresses: null, bottoms: null, shoes: null };
+const EMPTY_OUTFIT: StylistOutfit = { hats: null, tops: null, jackets: null, dresses: null, bottoms: null, shoes: null };
 
 const SLOT_ROLES: Record<StylistSlot, (role: string | null) => boolean> = {
   hats: r => r === 'Hat',
-  tops: r => r === 'Top' || r === 'Jacket',
+  tops: r => r === 'Top',
+  jackets: r => r === 'Jacket',
   dresses: r => r === 'Dress',
   bottoms: r => r === 'Pants',
   shoes: r => r === 'Shoes',
 };
 
-// Keep a product for a male shopper? (drop female-tagged + dresses)
+// The garment-type chooser the shopper sees after the occasion ask. Each maps
+// to the stylist slot(s) it fills. "Pants" == the bottoms slot.
+const GARMENT_TYPES: { key: StylistSlot; label: string }[] = [
+  { key: 'hats', label: 'Hat' },
+  { key: 'tops', label: 'Tops' },
+  { key: 'jackets', label: 'Jackets' },
+  { key: 'bottoms', label: 'Pants' },
+  { key: 'dresses', label: 'Dresses' },
+  { key: 'shoes', label: 'Shoes' },
+];
+
+// Women-only garment classes a male shopper must never see — belt-and-
+// suspenders for rows mis-tagged unisex/null whose NAME gives them away
+// (e.g. "Femme LA Tokyo Thong Sandal" heels).
+const WOMEN_ONLY_NAME_RE = /\b(heel|heels|stiletto|pump|pumps|gown|skirt|blouse|camisole|cami|bodysuit|slingback|wedge|wedges|espadrille|thong sandal|peep[\s-]?toe|bralette|bustier|corset|romper|jumpsuit|maxi|midi dress|mini dress)\b/i;
+
+// Keep a product for the shopper's gender. Drops opposite-sex-tagged rows AND,
+// for men, anything reading women-only by name even when tagged unisex/null.
 function allowedForGender(p: PickedProduct & { gender?: string | null }, gender: string): boolean {
-  if (gender === 'male') return p.gender !== 'female' && p.role_tag !== 'Dress';
+  if (gender === 'male') {
+    if (p.gender === 'female') return false;
+    if (p.role_tag === 'Dress') return false;
+    if (WOMEN_ONLY_NAME_RE.test(p.name || '')) return false;
+    return true;
+  }
   if (gender === 'female') return p.gender !== 'male';
   return true;
 }
@@ -47,6 +70,9 @@ function allowedForGender(p: PickedProduct & { gender?: string | null }, gender:
 export default function AIStylist({ gender, onComplete, onBack }: Props) {
   const [step, setStep] = useState<StylistStep>('ask');
   const [occasion, setOccasion] = useState('');
+  // Garment types the shopper asked for — dictates which slots get assembled
+  // and shown. Defaults to a sensible everyday fit (tops + bottoms + shoes).
+  const [wantedTypes, setWantedTypes] = useState<StylistSlot[]>(['tops', 'bottoms', 'shoes']);
   const [baseCandidates, setBaseCandidates] = useState<PickedProduct[]>([]);
   const [candidates, setCandidates] = useState<PickedProduct[]>([]);
   const [aiOutfit, setAiOutfit] = useState<StylistOutfit>(EMPTY_OUTFIT);
@@ -126,8 +152,11 @@ export default function AIStylist({ gender, onComplete, onBack }: Props) {
       const payload = merged.slice(0, 150).map(c => ({
         id: c.id, name: c.name || '', brand: c.brand, price: c.price,
         role: c.role_tag, context: (c as { haiku_context?: string | null }).haiku_context ?? null,
+        gender: (c as { gender?: string | null }).gender ?? null,
       }));
-      const result = await suggestOutfit(occasion, gender, payload);
+      // A male shopper never gets the dresses slot, whatever was requested.
+      const slots = wantedTypes.filter(s => !(s === 'dresses' && gender === 'male'));
+      const result = await suggestOutfit(occasion, gender, payload, slots);
       setAiOutfit(result.outfit);
       setOutfit(result.outfit);
       setRationale(result.rationale);
@@ -137,22 +166,40 @@ export default function AIStylist({ gender, onComplete, onBack }: Props) {
     } finally {
       setLoading(false);
     }
-  }, [occasion, baseCandidates, gender]);
+  }, [occasion, baseCandidates, gender, wantedTypes]);
 
+  // Only the requested garment types become slots. A male shopper never gets
+  // dresses. A slot still needs at least one matching candidate (or an existing
+  // pick) to render a row.
   const visibleSlots = useMemo(
     () => STYLIST_SLOTS.filter(s => {
+      if (!wantedTypes.includes(s.key)) return false;
       if (s.key === 'dresses' && gender === 'male') return false;
       return candidates.some(c => SLOT_ROLES[s.key](c.role_tag)) || !!outfit[s.key];
     }),
-    [gender, candidates, outfit],
+    [gender, candidates, outfit, wantedTypes],
   );
 
-  // Per-slot options, relevant-first (candidates are already merged that way).
+  // Per-slot options, relevant-first (candidates are already merged that way),
+  // then re-centered so the stylist's INITIAL pick sits in the MIDDLE of the
+  // row with alternatives split to flank it on both sides. Keyed off aiOutfit
+  // (not the live outfit) so manually scrolling/tapping doesn't re-shuffle.
   const slotItems = useMemo(() => {
     const map = new Map<StylistSlot, PickedProduct[]>();
-    for (const s of visibleSlots) map.set(s.key, candidates.filter(c => SLOT_ROLES[s.key](c.role_tag)).slice(0, 40));
+    for (const s of visibleSlots) {
+      const items = candidates.filter(c => SLOT_ROLES[s.key](c.role_tag)).slice(0, 40);
+      const pickId = aiOutfit[s.key];
+      const pickIdx = pickId ? items.findIndex(i => i.id === pickId) : -1;
+      if (pickIdx <= 0) { map.set(s.key, items); continue; }
+      // Split the rest around the pick: half to the left, half to the right, so
+      // the selection lands dead-center with alternatives flanking it.
+      const pick = items[pickIdx];
+      const rest = items.filter((_, i) => i !== pickIdx);
+      const mid = Math.floor(rest.length / 2);
+      map.set(s.key, [...rest.slice(0, mid), pick, ...rest.slice(mid)]);
+    }
     return map;
-  }, [visibleSlots, candidates]);
+  }, [visibleSlots, candidates, aiOutfit]);
 
   const select = (slot: StylistSlot, id: string) => setOutfit(prev => {
     const next = { ...prev, [slot]: id };
@@ -160,6 +207,14 @@ export default function AIStylist({ gender, onComplete, onBack }: Props) {
     else if (slot === 'tops' || slot === 'bottoms') { next.dresses = null; }
     return next;
   });
+
+  // Toggle a garment type in/out of the requested set (multi-select). Keep the
+  // STYLIST_SLOTS order so the chosen set always reads top → bottom.
+  const toggleType = (key: StylistSlot) => setWantedTypes(prev => (
+    prev.includes(key)
+      ? prev.filter(k => k !== key)
+      : STYLIST_SLOTS.map(s => s.key).filter(k => k === key || prev.includes(k))
+  ));
 
   const chosenProducts = useMemo(
     () => STYLIST_SLOTS
@@ -204,11 +259,58 @@ export default function AIStylist({ gender, onComplete, onBack }: Props) {
               type="button"
               className="gen-btn-primary gen-stylist-cta gen-stylist-cta--pop gen-stylist-console-go"
               disabled={loading || baseCandidates.length === 0}
-              onClick={runStylist}
+              onClick={() => setStep('types')}
             >
-              {loading ? 'Styling…' : 'Style my look'}
+              Next
             </button>
           )}
+        </div>
+      </div>
+    );
+  }
+
+  // ── TYPES ── pick which garment types to include in the fit ───────────
+  if (step === 'types') {
+    const opts = GARMENT_TYPES.filter(t => !(t.key === 'dresses' && gender === 'male'));
+    return (
+      <div className="gen-stylist gen-stylist--ask">
+        <div className="gen-stylist-askbody">
+          <h1 className="gen-stylist-title">What should the look include?</h1>
+          <p className="gen-stylist-sub">Pick the pieces you want me to style. A dress stands in for a top + pants.</p>
+          <div className="gen-stylist-types">
+            {opts.map(t => {
+              const on = wantedTypes.includes(t.key);
+              return (
+                <button
+                  key={t.key}
+                  type="button"
+                  className={`gen-stylist-type${on ? ' is-on' : ''}`}
+                  aria-pressed={on}
+                  onClick={() => toggleType(t.key)}
+                >
+                  <span className="gen-stylist-type-check" aria-hidden="true">
+                    {on && <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round"><polyline points="20 6 9 17 4 12"/></svg>}
+                  </span>
+                  <span>{t.label}</span>
+                </button>
+              );
+            })}
+          </div>
+          {error && <div className="gen-error">{error}</div>}
+        </div>
+        <div className="gen-stylist-foot gen-stylist-console">
+          <button type="button" className="gen-stylist-console-back" onClick={() => setStep('ask')} aria-label="Back">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+            <span>Back</span>
+          </button>
+          <button
+            type="button"
+            className="gen-btn-primary gen-stylist-cta gen-stylist-console-go"
+            disabled={loading || wantedTypes.length === 0 || baseCandidates.length === 0}
+            onClick={runStylist}
+          >
+            {loading ? 'Styling…' : 'Style my look'}
+          </button>
         </div>
         {loading && <StylistLoading />}
       </div>
@@ -218,7 +320,7 @@ export default function AIStylist({ gender, onComplete, onBack }: Props) {
   // ── RESULT ── one viewport, horizontal reels (scroll to pick) ─────────
   return (
     <div className="gen-stylist gen-stylist--result">
-      <button type="button" className="gen-stylist-back" onClick={() => setStep('ask')} aria-label="Back">← Back</button>
+      <button type="button" className="gen-stylist-back" onClick={() => setStep('types')} aria-label="Back">← Back</button>
       <div className="gen-stylist-resulthead">
         <h1 className="gen-stylist-title gen-stylist-title--sm">Here&apos;s your look</h1>
         {rationale && <p className="gen-stylist-rationale">{rationale}</p>}
@@ -265,23 +367,34 @@ export default function AIStylist({ gender, onComplete, onBack }: Props) {
 function Reel({ items, selectedId, onSelect, delay = 0 }: { items: PickedProduct[]; selectedId: string | null; onSelect: (id: string) => void; delay?: number }) {
   const trackRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef(0);
+  // True while the GSAP entrance is running, so the scroll listener doesn't
+  // hijack the stylist's pick as the row glides past intermediate items.
+  const animatingRef = useRef(false);
 
-  // GSAP entrance: glide the reel from the start and settle, eased, onto the
-  // styled pick — staggered per row so the look assembles slot by slot.
+  // GSAP entrance: the row starts shifted off to the left, then glides and
+  // settles — eased — onto the styled pick, which sits dead-center. Staggered
+  // per row so the look visibly assembles slot by slot.
   useEffect(() => {
     const track = trackRef.current;
     if (!track || !selectedId) return;
     const el = track.querySelector<HTMLElement>(`[data-id="${selectedId}"]`);
     if (!el) return;
     const target = Math.max(0, el.offsetLeft - (track.clientWidth - el.clientWidth) / 2);
-    const tween = gsap.fromTo(track, { scrollLeft: 0 }, { scrollLeft: target, duration: 0.95, ease: 'power3.out', delay });
-    return () => { tween.kill(); };
+    animatingRef.current = true;
+    // Fade + lift the whole row in alongside the scroll-into-place glide.
+    gsap.fromTo(track, { autoAlpha: 0, y: 10 }, { autoAlpha: 1, y: 0, duration: 0.5, ease: 'power2.out', delay });
+    const tween = gsap.fromTo(
+      track,
+      { scrollLeft: 0 },
+      { scrollLeft: target, duration: 0.95, ease: 'power3.out', delay, onComplete: () => { animatingRef.current = false; } },
+    );
+    return () => { tween.kill(); animatingRef.current = false; };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const onScroll = () => {
     const track = trackRef.current;
-    if (!track) return;
+    if (!track || animatingRef.current) return;
     cancelAnimationFrame(rafRef.current);
     rafRef.current = requestAnimationFrame(() => {
       const center = track.scrollLeft + track.clientWidth / 2;

@@ -17,17 +17,26 @@ export interface PickedProduct {
 
 export const ROLE_TAGS = ['Hat', 'Top', 'Jacket', 'Dress', 'Pants', 'Shoes', 'Bag', 'Jewelry', 'Sunglasses', 'Accessory'];
 
+// Order matters: the FIRST pattern that matches wins, so the most specific /
+// least ambiguous garment classes are tested first. Footwear is checked BEFORE
+// tops so a "track shoe" or "boot" can never fall through to the Top bucket
+// (that was the "shoes under Tops" bug); outerwear is checked before tops so a
+// "shirt jacket"/"shacket" lands in Jacket, not Top.
 export function roleTagFromName(name: string | null): string | null {
   if (!name) return null;
   const lower = name.toLowerCase();
-  if (/\b(hat|cap|beanie)\b/.test(lower)) return 'Hat';
-  if (/\b(sunglass|shades|eyewear)\b/.test(lower)) return 'Sunglasses';
-  if (/\b(jacket|coat|parka|blazer)\b/.test(lower)) return 'Jacket';
-  if (/\b(dress|gown)\b/.test(lower)) return 'Dress';
-  if (/\b(pant|trouser|chino|jean|denim|short|skirt|legging)\b/.test(lower)) return 'Pants';
-  if (/\b(sneaker|trainer|shoe|boot|heel|loafer|sandal)\b/.test(lower)) return 'Shoes';
-  if (/\b(bag|tote|clutch|purse|backpack)\b/.test(lower)) return 'Bag';
-  if (/\b(necklace|ring|earring|bracelet|watch|chain|pendant)\b/.test(lower)) return 'Jewelry';
-  if (/\b(shirt|tee|top|sweater|hoodie|polo|henley|tank)\b/.test(lower)) return 'Top';
+  if (/\b(hat|cap|beanie|visor|fedora|bucket\s*hat)\b/.test(lower)) return 'Hat';
+  if (/\b(sunglass|shades|eyewear|goggles)\b/.test(lower)) return 'Sunglasses';
+  // Footwear — checked early so it never leaks into Top/Jacket. Covers the
+  // women's-heel family that previously slipped through (pump, stiletto, mule,
+  // wedge, slingback) plus thong/flip-flop sandals.
+  if (/\b(sneaker|trainer|shoe|boot|bootie|heel|heels|loafer|sandal|slide|mule|pump|stiletto|wedge|espadrille|flip[\s-]?flop|moccasin|oxford|derby|brogue|clog|slingback|flat|flats|thong)\b/.test(lower)) return 'Shoes';
+  // Outerwear — before tops so "shirt jacket"/"shacket" reads as a Jacket.
+  if (/\b(jacket|shacket|coat|parka|blazer|hoodie|cardigan|overshirt|windbreaker|anorak|vest|gilet|bomber|trench|puffer|raincoat)\b/.test(lower)) return 'Jacket';
+  if (/\b(dress|gown|frock)\b/.test(lower)) return 'Dress';
+  if (/\b(pant|pants|trouser|trousers|chino|chinos|jean|jeans|denim|short|shorts|skirt|legging|leggings|joggers|sweatpant|sweatpants|cargo|cargos|slacks|culotte|culottes)\b/.test(lower)) return 'Pants';
+  if (/\b(bag|tote|clutch|purse|backpack|handbag|crossbody|satchel|duffel|duffle)\b/.test(lower)) return 'Bag';
+  if (/\b(necklace|ring|earring|earrings|bracelet|watch|chain|pendant|anklet|brooch|cufflink|cufflinks)\b/.test(lower)) return 'Jewelry';
+  if (/\b(shirt|tee|t-shirt|tshirt|top|sweater|jumper|knit|polo|henley|tank|camisole|cami|blouse|bodysuit|turtleneck|crewneck|crew|pullover|sweatshirt)\b/.test(lower)) return 'Top';
   return null;
 }
