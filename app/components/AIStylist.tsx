@@ -325,7 +325,6 @@ function StylistLoading() {
   }, []);
   return (
     <div className="gen-stylist-loading" aria-live="polite">
-      <div className="gen-stylist-loading-orb" aria-hidden="true" />
       <div className="gen-stylist-loading-text">{lines[i]}</div>
     </div>
   );
