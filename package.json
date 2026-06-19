@@ -26,7 +26,6 @@
     "@supabase/supabase-js": "^2.100.1",
     "@vercel/analytics": "^2.0.1",
     "@vercel/speed-insights": "^1.0.12",
-    "gsap": "^3.15.0",
     "heic2any": "^0.0.4",
     "hls.js": "^1.6.16",
     "isbot": "^5.1.36",

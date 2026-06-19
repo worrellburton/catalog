@@ -846,17 +846,19 @@
   }
 }
 @media (min-width: 769px) {
-  /* Desktop feed peek — nose the feed up so more of the first rows of cards
-     show below the hero ("there's more below" reads stronger on the wide
-     viewport). Bumped 10svh → 18svh to reposition the hero higher / reveal
-     more grid above the fold. */
+  /* Desktop feed peek — nose the feed up ~10svh so the top of the first
+     row of cards shows below the hero, signalling "there's more below".
+     Previously desktop had no peek (margin-top: 0). */
   .app-root.home-hero:not(.hero-scrolled) .home-feed-wrap {
-    margin-top: -18svh;
+    margin-top: -10svh;
   }
-  /* Keep the "Your daily feed" hint clear of the peek — track it (+ a 32px
-     gap) so the label always sits just above the first row of cards. */
+  /* Keep the "Your daily feed" hint clear of that -10svh peek. The base
+     rule pins it at a fixed 104px from the bottom, but on tall desktop
+     windows 10svh > 104px, so the hint landed INSIDE the peek and the
+     label overlapped the first row of cards. Track the peek + a 32px gap
+     so the hint always sits just above the cards. */
   .app-root.home-hero:not(.hero-scrolled) .sfh-scroll-hint {
-    bottom: calc(18svh + 32px + env(safe-area-inset-bottom));
+    bottom: calc(10svh + 32px + env(safe-area-inset-bottom));
   }
 }
 
