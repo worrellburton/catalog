@@ -345,14 +345,24 @@ export default function CreateLookV2({ onPublished, onCancel, look: existingLook
   );
   const canPreview = (mediaItems.length > 0 || isEdit) && confirmedProducts.length > 0;
 
-  // Fallback poster for edit mode when no fresh media was picked.
-  const editPoster = useMemo(() => {
+  // Existing media for edit mode (shown when no fresh upload replaces it).
+  // AI-generated looks store their clip in looks_creative.video_url with a
+  // (sometimes null) thumbnail — so we must know whether the existing media is
+  // a VIDEO or a PHOTO and render the right element. Rendering an .mp4 in an
+  // <img> was the "broken-image ?" tile on AI looks.
+  const editMedia = useMemo((): { url: string; kind: 'video' | 'photo'; poster: string | null } | null => {
     if (!existingLook) return null;
-    return existingLook.looks_creative?.[0]?.thumbnail_url
-      || existingLook.looks_creative?.[0]?.video_url
-      || existingLook.look_photos?.[0]?.url
-      || existingLook.look_videos?.[0]?.poster_url
-      || null;
+    const creative = existingLook.looks_creative?.find(c => c.is_primary) || existingLook.looks_creative?.[0];
+    if (creative?.video_url) {
+      return { url: creative.mobile_video_url || creative.video_url, kind: 'video', poster: creative.thumbnail_url || null };
+    }
+    const vid = existingLook.look_videos?.[0];
+    if (vid?.url) return { url: vid.url, kind: 'video', poster: vid.poster_url || null };
+    const photo = existingLook.look_photos?.[0];
+    if (photo?.url) return { url: photo.url, kind: 'photo', poster: null };
+    // Poster/thumbnail only — safe to show as an image.
+    const posterOnly = creative?.thumbnail_url || existingLook.look_videos?.[0]?.poster_url || null;
+    return posterOnly ? { url: posterOnly, kind: 'photo', poster: null } : null;
   }, [existingLook]);
 
   // ── Phase 6: publish ─────────────────────────────────────────────
@@ -411,7 +421,7 @@ export default function CreateLookV2({ onPublished, onCancel, look: existingLook
   // upload card that springs in. Once the user actually picks a file
   // (or we're in edit mode with an existing poster), we shift to the
   // working surface with the thumbnail row + sections below.
-  const showHero = phase === 'empty' && mediaItems.length === 0 && !editPoster;
+  const showHero = phase === 'empty' && mediaItems.length === 0 && !editMedia;
 
   // ── Render ───────────────────────────────────────────────────────
   return (
@@ -464,9 +474,13 @@ export default function CreateLookV2({ onPublished, onCancel, look: existingLook
            first thumbnail. */
         <div className="cl-v2-stage">
           <div className="cl-v2-thumb-row">
-            {mediaItems.length === 0 && editPoster && (
+            {mediaItems.length === 0 && editMedia && (
               <div className="cl-v2-thumb">
-                <img src={editPoster} alt="Existing look" />
+                {editMedia.kind === 'video' ? (
+                  <video src={editMedia.url} poster={editMedia.poster || undefined} muted loop autoPlay playsInline />
+                ) : (
+                  <img src={editMedia.url} alt="Existing look" />
+                )}
               </div>
             )}
             {mediaItems.map(m => (
@@ -661,8 +675,12 @@ export default function CreateLookV2({ onPublished, onCancel, look: existingLook
               ) : (
                 <img src={mediaItems[0].previewUrl} alt="" />
               )
-            ) : editPoster ? (
-              <img src={editPoster} alt="" />
+            ) : editMedia ? (
+              editMedia.kind === 'video' ? (
+                <video src={editMedia.url} poster={editMedia.poster || undefined} muted loop autoPlay playsInline />
+              ) : (
+                <img src={editMedia.url} alt="" />
+              )
             ) : null}
             <div className="cl-v2-preview-products">
               {confirmedProducts.map(p => (

@@ -63,6 +63,14 @@ function SearchPanel({
   const { beam } = useSearchBeam();
   const [searchOpen, setSearchOpen] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
+  // Touch device? On iOS Safari the closed pill stays readOnly so the opening
+  // tap opens the sheet WITHOUT raising the keyboard — the keyboard is what
+  // flips Safari's bottom URL toolbar into its sticky opaque "strip" mode. The
+  // shopper taps the field to type (raising the keyboard then). Desktop has no
+  // such toolbar, so it keeps the editable type-immediately pill.
+  const [isTouch] = useState(
+    () => typeof window !== 'undefined' && !!window.matchMedia?.('(pointer: coarse)').matches,
+  );
   const [localSearch, setLocalSearch] = useState(searchQuery);
   const [activeFilters, setActiveFilters] = useState<ActiveFilters>(getEmptyFilters());
   // Type-ahead suggestion pool (catalog/search suggestions), loaded once.
@@ -226,15 +234,12 @@ function SearchPanel({
     setSearchOpen(true);
     setFiltersOpen(false);
     dismissingRef.current = false;
-    // Raise the keyboard right away — search is a full-screen page now and the
-    // resting pill is gone from the searched feed, so there's no flat-white bar
-    // sitting behind the iOS Safari toolbar to frost into a strip (the old
-    // reason this was deferred). Focusing in the SAME tick as the opening tap
-    // (the pill's onClick or the header button's synchronous event dispatch)
-    // preserves iOS transient activation, so the keyboard actually appears.
-    // Focusing an already-focused input is a no-op, so the pill's native
-    // tap-focus + onFocus path doesn't double-fire.
-    searchInputRef.current?.focus();
+    // Intentionally NO auto-focus. Raising the keyboard on open flips iOS
+    // Safari's bottom URL toolbar into its opaque "strip" mode, which then
+    // lingers (it only re-frosts on a REAL scroll, and at the flat dark home
+    // top a re-frost still reads dark, so the strip doesn't clear). Keeping the
+    // keyboard down means open→close-without-a-query leaves no strip. The
+    // shopper taps the field to type, which raises the keyboard then.
   }, []);
 
   const closeSearch = useCallback(() => {
@@ -371,11 +376,9 @@ function SearchPanel({
 
   // The mobile header search button (HeaderSearchButton) opens the page via
   // this event — on the searched feed the resting pill is hidden, so the header
-  // is the search entry point. The button dispatches synchronously inside its
-  // tap handler, so this listener (→ openSearch → input.focus()) runs while
-  // iOS transient activation is still live and the keyboard comes up. The
-  // resting pill is opacity-hidden (not display:none) on the searched feed
-  // precisely so the input stays focusable for this path. Mirrors 'close-search'.
+  // is the search entry point. openSearch() deliberately does NOT focus, so the
+  // sheet opens with the keyboard DOWN (no opaque-toolbar strip); the shopper
+  // taps the field to type. Mirrors 'catalog:close-search'.
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const onOpen = () => openSearch();
@@ -647,15 +650,21 @@ function SearchPanel({
             className="bottom-search-input"
             id="bottom-search-input"
             placeholder="Make a catalog for anything"
-            // Always editable now. Tapping the pill (or focusing it from the
-            // header button) raises the keyboard immediately and opens the
-            // full-screen search page via onFocus — the search-as-a-page UX the
-            // founder asked for. (The old readOnly-on-touch trick that withheld
-            // the keyboard to dodge the Safari toolbar strip is gone; the
-            // resting pill no longer sits behind the toolbar on the searched
-            // feed, so there's nothing left to frost.)
+            // TOUCH (iOS): the closed pill is readOnly so the opening tap opens
+            // the sheet WITHOUT raising the keyboard — the keyboard is what
+            // poisons Safari's bottom URL toolbar into the sticky opaque strip.
+            // Editable once open, so a tap on the now-editable field raises the
+            // keyboard to type. DESKTOP keeps the editable type-immediately pill.
+            readOnly={isTouch && !searchOpen}
             value={localSearch}
-            onClick={() => { if (!searchOpen) openSearch(); }}
+            onClick={(e) => {
+              if (!searchOpen) {
+                openSearch();
+                // Drop the readOnly focus so the readOnly→editable flip can't
+                // pop the keyboard; the shopper taps the field again to type.
+                if (isTouch) e.currentTarget.blur();
+              }
+            }}
             onChange={handleSearchInput}
             onFocus={() => { if (!searchOpen) openSearch(); }}
             onBlur={() => {
