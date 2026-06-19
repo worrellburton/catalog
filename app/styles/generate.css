@@ -3861,6 +3861,32 @@ html[data-shell="catalog-app"] .gen-page {
   padding: 12px 0 calc(14px + env(safe-area-inset-bottom));
 }
 .gen-stylist-cta { width: 100%; }
+/* Ask-page console — Back + submit on a single row above the keyboard. */
+.gen-stylist-console {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+.gen-stylist-console-back {
+  flex: 0 0 auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 48px;
+  padding: 0 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.78);
+  font-family: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.gen-stylist-console-back:active { background: rgba(255, 255, 255, 0.1); }
+/* In the console the submit shares the row with Back, so it flexes to fill
+   the remaining width instead of spanning 100%. */
+.gen-stylist-console .gen-stylist-console-go { width: auto; flex: 1 1 auto; margin-top: 0; }
 /* CTA pops in once the shopper has described something. */
 .gen-stylist-cta--pop { margin-top: 14px; animation: gen-stylist-pop 0.24s cubic-bezier(0.34, 1.56, 0.64, 1) both; }
 @keyframes gen-stylist-pop { from { opacity: 0; transform: scale(0.92) translateY(6px); } to { opacity: 1; transform: scale(1) translateY(0); } }

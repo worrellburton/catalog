@@ -421,6 +421,41 @@ export default function Home() {
   // slides up offscreen, bottom search bar slides down — full-screen feed.
   // Scrolling up brings them back; stopping preserves the current state.
   const [chromeHidden, setChromeHidden] = useState(false);
+
+  // ── Home-feed grid-density dial (mobile) ──────────────────────────────
+  // A minimal wheel pinned to the right edge that cycles the MOBILE home feed
+  // grid between 1, 2 (default), and 3 columns. Tap cycles; scroll/drag steps.
+  // Persisted under its OWN key (NOT the creator key) so the two surfaces keep
+  // independent densities. The value drives --feed-cols on .home-feed-wrap,
+  // which the mobile .feed-section-grid reads (feed.css). Mirrors the creator
+  // catalog dial (CreatorPage.tsx) but the auto-hide is INVERTED: hidden at the
+  // top of the feed, fades in once the shopper starts scrolling.
+  const FEED_GRID_COLS = [1, 2, 3] as const;
+  const [feedColsIndex, setFeedColsIndex] = useState<number>(() => {
+    try {
+      const v = Number(window.localStorage.getItem('catalog:feed-grid-cols'));
+      const i = FEED_GRID_COLS.indexOf(v as 1 | 2 | 3);
+      return i >= 0 ? i : 1; // default = 2 columns
+    } catch { return 1; }
+  });
+  const feedGridCols = FEED_GRID_COLS[feedColsIndex];
+  useEffect(() => {
+    try { window.localStorage.setItem('catalog:feed-grid-cols', String(feedGridCols)); } catch { /* quota */ }
+    // FeedSection's mobile DOM-windowing measures (cols, rowH) from the DOM and
+    // only re-measures on a `resize` event; it derives padTop from
+    // windowStart/cols. Changing the column count without forcing a re-measure
+    // leaves padTop stale → the feed can blank out or jump. Dispatch a resize so
+    // every mounted FeedSection re-measures against the new column count. rAF so
+    // the new --feed-cols has applied to the grid before we measure.
+    if (typeof window !== 'undefined') {
+      requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
+    }
+  }, [feedGridCols]);
+  const feedDialRef = useRef<HTMLDivElement | null>(null);
+  const feedDialDraggedRef = useRef(false);
+  // Appear-on-scroll: hidden at the top of the feed, fades in once scrolling
+  // begins. Inverts the creator dial (which shows at top, hides on scroll).
+  const [feedDialVisible, setFeedDialVisible] = useState(false);
   // Opening a look/product overlay locks the body with position:fixed, which
   // snaps document scroll to 0 (and fires a synthetic scroll); closing
   // restores the scroll (another synthetic scroll). Both scroll-trackers
@@ -573,6 +608,73 @@ export default function Home() {
       if (raf) cancelAnimationFrame(raf);
     };
   }, [heroScrolled]);
+
+  // Grid-density dial appear-on-scroll. The home feed document-scrolls, so we
+  // read window.scrollY: hidden at the very top, faded in once the shopper has
+  // scrolled past a small threshold (a deliberate inversion of the creator
+  // dial). Frozen while an overlay is open (overlayScrollLockRef) so the
+  // body-lock's synthetic scroll jumps don't flip it. Sampled once per rAF.
+  useEffect(() => {
+    let raf = 0;
+    const SHOW_AT = 120; // px of scroll before the dial fades in
+    const onScroll = () => {
+      if (overlayScrollLockRef.current) return;
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        setFeedDialVisible(window.scrollY > SHOW_AT);
+      });
+    };
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, []);
+
+  // Tap the dial → cycle column count. Suppressed right after a drag so the
+  // touchend-synthesized click doesn't double-step.
+  const cycleFeedCols = useCallback(() => {
+    if (feedDialDraggedRef.current) { feedDialDraggedRef.current = false; return; }
+    setFeedColsIndex(i => (i + 1) % FEED_GRID_COLS.length);
+  }, []);
+  // Wheel + vertical-drag stepping on the dial. Attached non-passive so the
+  // gesture on the dial doesn't scroll the feed behind it.
+  useEffect(() => {
+    const el = feedDialRef.current;
+    if (!el) return;
+    const clamp = (i: number) => Math.min(FEED_GRID_COLS.length - 1, Math.max(0, i));
+    let accum = 0;
+    let touchY: number | null = null;
+    const onWheel = (e: WheelEvent) => {
+      e.preventDefault();
+      accum += e.deltaY;
+      if (Math.abs(accum) > 22) { setFeedColsIndex(i => clamp(i + (accum > 0 ? 1 : -1))); accum = 0; }
+    };
+    const onTouchStart = (e: TouchEvent) => { touchY = e.touches[0].clientY; feedDialDraggedRef.current = false; };
+    const onTouchMove = (e: TouchEvent) => {
+      if (touchY == null) return;
+      e.preventDefault();
+      const dy = e.touches[0].clientY - touchY;
+      if (Math.abs(dy) > 24) {
+        setFeedColsIndex(i => clamp(i + (dy > 0 ? 1 : -1)));
+        touchY = e.touches[0].clientY;
+        feedDialDraggedRef.current = true;
+      }
+    };
+    const onTouchEnd = () => { touchY = null; };
+    el.addEventListener('wheel', onWheel, { passive: false });
+    el.addEventListener('touchstart', onTouchStart, { passive: true });
+    el.addEventListener('touchmove', onTouchMove, { passive: false });
+    el.addEventListener('touchend', onTouchEnd, { passive: true });
+    return () => {
+      el.removeEventListener('wheel', onWheel);
+      el.removeEventListener('touchstart', onTouchStart);
+      el.removeEventListener('touchmove', onTouchMove);
+      el.removeEventListener('touchend', onTouchEnd);
+    };
+  }, []);
 
   // Any committed search while on the hero (bottom bar Enter, a catalog
   // pill, the type-anywhere overlay, or a deep-linked ?q=) bumps
@@ -2291,7 +2393,10 @@ export default function Home() {
             <ShoppingForHero onRevealFeed={handleRevealFeed} />
           )}
 
-          <div className={`home-feed-wrap${revealResults ? ' home-results-reveal' : ''}${(!heroMode && !ceremony.active && searchQuery.trim() !== '' && ceremonyRecs.length > 0) ? ' has-catalog-strip' : ''}`}>
+          <div
+            className={`home-feed-wrap${revealResults ? ' home-results-reveal' : ''}${(!heroMode && !ceremony.active && searchQuery.trim() !== '' && ceremonyRecs.length > 0) ? ' has-catalog-strip' : ''}`}
+            style={{ ['--feed-cols' as string]: feedGridCols } as React.CSSProperties}
+          >
           {/* Ceremony Option 1: demographic-aware catalog picks ride as an
               in-flow strip ABOVE the results — the shopper scrolls straight from
               these into the continuous feed below (no blocking picker). Only on a
@@ -2324,6 +2429,34 @@ export default function Home() {
             mySizeOnly={mySizeOnly}
           />
           </div>
+
+          {/* Grid-density dial — mobile-only minimal wheel on the right edge of
+              the home feed. CSS (feed.css) gates display to <=768px; we only
+              MOUNT it on the home feed (no overlay open) so it never sits over a
+              look/product. Hidden at the top, fades in once the shopper scrolls
+              (feedDialVisible). Tap cycles 1→2→3 columns; scroll/drag steps. */}
+          {navStack.length === 0 && (
+            <div
+              ref={feedDialRef}
+              className={`feed-view-dial${feedDialVisible ? ' is-visible' : ''}`}
+              role="group"
+              aria-label="Feed grid columns"
+              onClick={cycleFeedCols}
+            >
+              {FEED_GRID_COLS.map((c, i) => (
+                <span
+                  key={c}
+                  className={`feed-view-dial-dot${i === feedColsIndex ? ' is-active' : ''}`}
+                  aria-label={`${c} column${c > 1 ? 's' : ''}`}
+                  aria-current={i === feedColsIndex}
+                >
+                  <span className="feed-view-dial-bars">
+                    {Array.from({ length: c }).map((_, b) => <i key={b} />)}
+                  </span>
+                </span>
+              ))}
+            </div>
+          )}
 
           <SearchPanel
             activeFilter={activeFilter}
