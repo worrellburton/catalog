@@ -147,7 +147,8 @@ This project uses **three long-lived branches**. All AI tools (Claude Code, GitH
 | `app/components/GridView.tsx` | Main grid of look cards with filtering, search, and shuffle |
 | `app/components/LookCard.tsx` | Individual video card with lazy loading via IntersectionObserver |
 | `app/components/LookOverlay.tsx` | Detail overlay with video, product list, bookmarking |
-| `app/components/BottomBar.tsx` | Search, filter chips, bookmarks button |
+| `app/components/SearchPanel.tsx` | The mobile search experience — the resting pill (home hero bar), the full-screen search page (suggestions, catalog pills, autocomplete), filters. Opened by the header search button (`HeaderSearchButton`) or by tapping the pill; raises the keyboard on open. (Was `BottomBar.tsx`.) |
+| `app/components/HeaderSearchButton.tsx` | Mobile header search button — replaces the activity pill on phones; dispatches `catalog:open-search` to open `SearchPanel`. |
 | `app/components/LandingPage.tsx` | Marketing landing page with hero, features, creator/product sections |
 | `app/components/DeckView.tsx` | Investor deck with scroll-snap slides |
 | `app/components/PasswordGate.tsx` | Access code gate (123=app, 321=landing, deck=investor deck) |
@@ -300,6 +301,19 @@ differs:
   an inherent iOS limit that clears on the first scroll. SIM CAVEAT: the
   search-case frost is NOT reliably sim-verifiable (the bar's darkness is partly
   the dark feed cards behind it, not the toolbar) — device-confirm.
+  **UPDATE 2026-06-19 — the readOnly-no-keyboard trick above is GONE.** The
+  search moved to a dedicated full-screen page (`SearchPanel`, renamed from
+  `BottomBar`) opened from a header search button (`HeaderSearchButton`,
+  mobile), and the founder asked for the keyboard to come up on open. So the
+  input is editable again and `openSearch()` focuses it (synchronously, inside
+  the opening tap, so iOS transient activation raises the keyboard). The
+  toolbar-strip risk that motivated readOnly is moot now: the resting search
+  pill is REMOVED from the searched feed (only the header search button enters
+  search there), so no flat-white bar sits behind the toolbar to frost. The
+  resting pill is hidden on the searched feed via `opacity:0 + pointer-events:
+  none` (NOT `display:none`) precisely so the header button can still focus the
+  same `#bottom-search-input` to raise the keyboard. The typing→close residual
+  strip note still holds (device-confirm).
 - **Cold-boot auth splash** (`.auth-splash` / `password-gate.css`): the
   "dark strip on FIRST open, gone after reload" bug. The opaque `.auth-splash`
   (radial near-black, `z-index:600`, `inset:0`) is the layer behind the bar at
