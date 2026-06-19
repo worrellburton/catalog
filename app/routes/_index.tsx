@@ -406,6 +406,16 @@ export default function Home() {
   const inShell = typeof document !== 'undefined' && document.documentElement.dataset.shell === 'catalog-app';
   const [heroMode, setHeroMode] = useState(() => !inShell);
   const [heroScrolled, setHeroScrolled] = useState(false);
+  // The followed-creators rail is pinned (position:fixed) at the top of the
+  // hero while the page is at rest, but it lives in the high-z-index header so
+  // it floats ABOVE the in-flow hero (the spark, the "Your daily feed" cue +
+  // its "?" button) and the feed peek. The instant the shopper scrolls, that
+  // hero content slides UP under the still-clickable rail — so a tap aimed at
+  // the "?" (or a peeking card) landed on whichever rail avatar shared that
+  // column and wrongly opened that creator's catalog. Deactivating the rail on
+  // the FIRST bit of scroll (not at the quarter-viewport hero-scrolled
+  // threshold) closes that window: it fades + goes pointer-events:none together.
+  const [heroRailInert, setHeroRailInert] = useState(false);
   const [ceremony, setCeremony] = useState<{ active: boolean; query: string; kind: 'search' | 'brand' }>({ active: false, query: '', kind: 'search' });
   // Result product images surfaced by ContinuousFeed once a search resolves —
   // floated in the particle field behind the search ceremony.
@@ -483,6 +493,7 @@ export default function Home() {
     if (!heroMode) {
       setHeroScrolled(true);
       setHeroBarFaded(false);
+      setHeroRailInert(false);
       if (typeof document !== 'undefined') {
         document.documentElement.style.setProperty('--hero-scroll-progress', '1');
       }
@@ -490,6 +501,7 @@ export default function Home() {
     }
     setHeroScrolled(false);
     setHeroBarFaded(false);
+    setHeroRailInert(false);
     if (typeof document !== 'undefined') {
       document.documentElement.style.setProperty('--hero-scroll-progress', '0');
     }
@@ -509,6 +521,12 @@ export default function Home() {
         // invisible. Without this hook the faded bar still ate taps
         // meant for the product tiles below it.
         setHeroBarFaded(ratio >= 0.5);
+        // Kill the followed-creators rail's taps the moment we leave the
+        // pristine top (it's a fixed, header-z-index row that floats over the
+        // scrolling hero "?" + feed peek). A few px of deliberate scroll is the
+        // signal; below that we keep it live so a resting tap on an avatar
+        // still opens that creator.
+        setHeroRailInert(window.scrollY > 8);
         // Dock early: by a quarter-screen of scroll the feed peek owns
         // the viewport — the bar belongs at the bottom, not floating
         // mid-screen over product cards (the founder's screenshot).
@@ -2167,7 +2185,7 @@ export default function Home() {
   return (
     <TrailRoot>
     <TrailVideoHost>
-    <div className={`app-root ${isLightMode ? 'light-mode' : ''}${overlayOpen ? ' has-overlay' : ''}${heroMode ? ' home-hero' : ''}${heroScrolled ? ' hero-scrolled' : ''}${heroBarFaded ? ' hero-bar-faded' : ''}${chromeHidden ? ' chrome-hidden' : ''}`}>
+    <div className={`app-root ${isLightMode ? 'light-mode' : ''}${overlayOpen ? ' has-overlay' : ''}${heroMode ? ' home-hero' : ''}${heroScrolled ? ' hero-scrolled' : ''}${heroRailInert ? ' hero-rail-inert' : ''}${heroBarFaded ? ' hero-bar-faded' : ''}${chromeHidden ? ' chrome-hidden' : ''}`}>
       {/* Singleton particle world — one canvas mounted at the app root,
           always visible. Splash, hero, search-ceremony, empty-catalog all
           render above this so the field stays continuous across every
