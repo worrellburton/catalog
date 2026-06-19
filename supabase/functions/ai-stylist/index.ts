@@ -1,9 +1,8 @@
 // AI Stylist — turns a free-text occasion ("dinner in Tulum", "first day at a
 // startup") into a single cohesive outfit assembled from the live product
 // catalog. Used by the /generate "AI Stylist" path: the client sends the
-// shopper's occasion + a gender-filtered candidate set (semantic prefilter
-// happens client-side by capping to the active catalog), and Claude reasons
-// over it to pick ONE item per slot — Tops · Dresses · Bottoms · Shoes.
+// shopper's occasion + a gender-filtered candidate set, and Claude reasons over
+// it to pick items per slot — Hat (optional) · Tops · Dresses · Bottoms · Shoes.
 //
 // Required Supabase secret (degrades to a heuristic outfit if unset):
 //   supabase secrets set ANTHROPIC_API_KEY=sk-ant-xxxxxxxx
@@ -32,15 +31,14 @@ interface Candidate {
   name: string;
   brand?: string | null;
   price?: string | null;
-  /** Top | Dress | Pants | Shoes | Hat | Bag | … (client roleTagFromName). */
   role?: string | null;
-  /** Optional short AI description (products.haiku_context) for richer reasoning. */
   context?: string | null;
 }
 
-type Slot = 'tops' | 'dresses' | 'bottoms' | 'shoes';
+type Slot = 'hats' | 'tops' | 'dresses' | 'bottoms' | 'shoes';
 
 interface Outfit {
+  hats: string | null;
   tops: string | null;
   dresses: string | null;
   bottoms: string | null;
@@ -53,9 +51,9 @@ interface ClaudeResponse {
   error?: { message?: string };
 }
 
-// Map a client role tag to the outfit slot it fills.
 function slotForRole(role?: string | null): Slot | null {
   const r = (role || '').toLowerCase();
+  if (r === 'hat') return 'hats';
   if (r === 'dress') return 'dresses';
   if (r === 'top' || r === 'jacket') return 'tops';
   if (r === 'pants' || r === 'bottoms' || r === 'skirt') return 'bottoms';
@@ -63,12 +61,11 @@ function slotForRole(role?: string | null): Slot | null {
   return null;
 }
 
-// Deterministic fallback when there's no API key or Claude fails: one item per
-// slot, first available. Keeps the feature usable (the shopper can still swap).
 function heuristicOutfit(candidates: Candidate[]): Outfit {
   const pick = (slot: Slot) => candidates.find(c => slotForRole(c.role) === slot)?.id ?? null;
   const dresses = pick('dresses');
   return {
+    hats: null, // hats are optional — don't force one
     tops: dresses ? null : pick('tops'),
     dresses,
     bottoms: dresses ? null : pick('bottoms'),
@@ -81,15 +78,23 @@ async function styleWithClaude(
   gender: string,
   candidates: Candidate[],
   apiKey: string,
-): Promise<{ outfit: Outfit; rationale: string; inputTokens: number | null; outputTokens: number | null }> {
+): Promise<{ outfit: Outfit; rationale: string }> {
   const list = candidates
     .map(c => `${c.id} | ${c.role || 'item'} | ${[c.brand, c.name].filter(Boolean).join(' ')}${c.price ? ` | ${c.price}` : ''}${c.context ? ` — ${c.context}` : ''}`)
     .join('\n');
+
+  // Strong gender guidance — never put a man in women's pieces (or vice-versa).
+  const genderRule = gender === 'male'
+    ? 'The shopper is a MAN. Choose only menswear or genuinely unisex pieces. NEVER pick dresses, skirts, or women\'s-cut garments — leave "dresses" null.'
+    : gender === 'female'
+      ? 'The shopper is a WOMAN. Choose only womenswear or genuinely unisex pieces. NEVER pick men\'s-specific garments.'
+      : 'The shopper\'s gender is unspecified — favor unisex pieces.';
 
   const prompt = `You are a sharp personal stylist assembling ONE cohesive outfit for a real shopper.
 
 OCCASION (what they want to wear / be doing): "${occasion}"
 SHOPPER GENDER: ${gender}
+GENDER RULE: ${genderRule}
 
 STEP 1 — Read the occasion. In your head, infer formality, season, setting and a
 coherent palette/aesthetic.
@@ -97,9 +102,11 @@ coherent palette/aesthetic.
 STEP 2 — Assemble ONE outfit from the AVAILABLE PRODUCTS below (and ONLY these).
 Each line is: id | role | brand name | price | description.
 Rules:
-  • Pick AT MOST ONE item per slot: a Top, a Bottom, and Shoes — OR a Dress
-    INSTEAD of a top+bottom (if you pick a dress, leave tops and bottoms null).
+  • Pick ONE Top, ONE Bottom, and ONE pair of Shoes — OR a Dress INSTEAD of a
+    top+bottom (if you pick a dress, leave tops and bottoms null).
+  • A Hat is OPTIONAL: add one only if it genuinely suits the occasion, else null.
   • Everything must work together — color, formality, and season coherent.
+  • Obey the GENDER RULE above without exception.
   • Choose only ids that appear in the list. Never invent an id.
   • If a slot has no good option, set it to null rather than forcing a bad pick.
 
@@ -107,7 +114,7 @@ AVAILABLE PRODUCTS:
 ${list}
 
 Return ONLY JSON, no prose or code fences:
-{"tops": "<id|null>", "dresses": "<id|null>", "bottoms": "<id|null>", "shoes": "<id|null>", "rationale": "<one short sentence on why this works for the occasion>"}`;
+{"hats": "<id|null>", "tops": "<id|null>", "dresses": "<id|null>", "bottoms": "<id|null>", "shoes": "<id|null>", "rationale": "<one short sentence on why this works for the occasion>"}`;
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -139,27 +146,29 @@ Return ONLY JSON, no prose or code fences:
   if (start < 0 || end <= start) throw new Error(`No JSON object in Claude response: ${cleaned.slice(0, 200)}`);
   const parsed = JSON.parse(cleaned.slice(start, end + 1)) as Record<string, unknown>;
 
-  // Validate every chosen id against the candidate set — never trust a
-  // hallucinated id through to the client.
-  const valid = new Set(candidates.map(c => c.id));
-  const norm = (v: unknown): string | null => {
+  // Validate every chosen id against the candidate set AND its role, so a
+  // hallucinated id — or a dress slipped to a man — never reaches the client.
+  const byId = new Map(candidates.map(c => [c.id, c]));
+  const pick = (v: unknown, slot: Slot): string | null => {
     const s = typeof v === 'string' ? v.trim() : '';
-    return s && s !== 'null' && valid.has(s) ? s : null;
+    if (!s || s === 'null') return null;
+    const c = byId.get(s);
+    if (!c) return null;
+    if (slotForRole(c.role) !== slot) return null;
+    return s;
   };
   const outfit: Outfit = {
-    tops: norm(parsed.tops),
-    dresses: norm(parsed.dresses),
-    bottoms: norm(parsed.bottoms),
-    shoes: norm(parsed.shoes),
+    hats: pick(parsed.hats, 'hats'),
+    tops: pick(parsed.tops, 'tops'),
+    dresses: gender === 'male' ? null : pick(parsed.dresses, 'dresses'),
+    bottoms: pick(parsed.bottoms, 'bottoms'),
+    shoes: pick(parsed.shoes, 'shoes'),
   };
-  // A dress replaces top+bottom.
   if (outfit.dresses) { outfit.tops = null; outfit.bottoms = null; }
 
   return {
     outfit,
     rationale: typeof parsed.rationale === 'string' ? parsed.rationale.trim() : '',
-    inputTokens: json.usage?.input_tokens ?? null,
-    outputTokens: json.usage?.output_tokens ?? null,
   };
 }
 

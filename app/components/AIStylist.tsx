@@ -24,10 +24,11 @@ interface Props {
 
 type StylistStep = 'ask' | 'result' | 'activity';
 
-const EMPTY_OUTFIT: StylistOutfit = { tops: null, dresses: null, bottoms: null, shoes: null };
+const EMPTY_OUTFIT: StylistOutfit = { hats: null, tops: null, dresses: null, bottoms: null, shoes: null };
 
 // Which role tags fill each slot (for swap filtering).
 const SLOT_ROLES: Record<StylistSlot, (role: string | null) => boolean> = {
+  hats: r => r === 'Hat',
   tops: r => r === 'Top' || r === 'Jacket',
   dresses: r => r === 'Dress',
   bottoms: r => r === 'Pants',
@@ -45,7 +46,25 @@ export default function AIStylist({ gender, onComplete, onBack }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [swapSlot, setSwapSlot] = useState<StylistSlot | null>(null);
   const [refining, setRefining] = useState(false);
+  // Slots whose description the user has tapped open (image-only until then).
+  const [revealedSlots, setRevealedSlots] = useState<Set<StylistSlot>>(new Set());
   const askRef = useRef<HTMLTextAreaElement>(null);
+
+  const toggleReveal = (slot: StylistSlot) => setRevealedSlots(prev => {
+    const next = new Set(prev);
+    if (next.has(slot)) next.delete(slot); else next.add(slot);
+    return next;
+  });
+
+  // Visible slots: hide Dresses for men (and only show a slot if the catalog
+  // actually has something for it, so empty rows don't clutter the look).
+  const visibleSlots = useMemo(
+    () => STYLIST_SLOTS.filter(s => {
+      if (s.key === 'dresses' && gender === 'male') return false;
+      return candidates.some(c => SLOT_ROLES[s.key](c.role_tag)) || !!outfit[s.key];
+    }),
+    [gender, candidates, outfit],
+  );
 
   // Load the candidate catalog once (same active + gender-filtered set the
   // manual picker uses). Powers both the reasoning call and the swap sheet.
@@ -174,31 +193,36 @@ export default function AIStylist({ gender, onComplete, onBack }: Props) {
         <div className="gen-stylist-resultbody">
           <h1 className="gen-stylist-title">Here&apos;s your look</h1>
           {rationale && <p className="gen-stylist-sub">{rationale}</p>}
-          {refining && <p className="gen-stylist-hint">Tap any piece to swap it for something else.</p>}
+          {refining && <p className="gen-stylist-hint">Tap a piece to see what it is, or Change to swap it.</p>}
 
           <div className="gen-stylist-stack">
-            {STYLIST_SLOTS.map(slot => {
+            {visibleSlots.map(slot => {
               const id = outfit[slot.key];
               const p = id ? byId.get(id) : null;
+              const revealed = revealedSlots.has(slot.key);
               return (
-                <div key={slot.key} className="gen-stylist-slot">
-                  <span className="gen-stylist-slot-label">{slot.label}</span>
+                <div key={slot.key} className="gen-stylist-row">
+                  <div className="gen-stylist-row-head">
+                    <span className="gen-stylist-row-label">{slot.label}</span>
+                    <button type="button" className="gen-stylist-row-change" onClick={() => setSwapSlot(slot.key)}>
+                      {p ? 'Change' : 'Add'}
+                    </button>
+                  </div>
                   {p ? (
-                    <button type="button" className="gen-stylist-card" onClick={() => setSwapSlot(slot.key)}>
+                    <button type="button" className="gen-stylist-thumb" onClick={() => toggleReveal(slot.key)} aria-label={p.name || 'Product'}>
                       {p.image_url
-                        ? <img className="gen-stylist-card-img" src={p.image_url} alt="" loading="lazy" />
-                        : <span className="gen-stylist-card-img gen-stylist-card-img--empty" />}
-                      <span className="gen-stylist-card-text">
-                        {p.brand && <span className="gen-stylist-card-brand">{p.brand}</span>}
-                        <span className="gen-stylist-card-name">{p.name || 'Product'}</span>
-                        {p.price && <span className="gen-stylist-card-price">{p.price}</span>}
-                      </span>
-                      <span className="gen-stylist-card-swap">Swap</span>
+                        ? <img src={p.image_url} alt="" loading="lazy" />
+                        : <span className="gen-stylist-thumb-empty" />}
                     </button>
                   ) : (
-                    <button type="button" className="gen-stylist-card gen-stylist-card--empty" onClick={() => setSwapSlot(slot.key)}>
-                      <span className="gen-stylist-card-add">+ Add {slot.label.toLowerCase()}</span>
-                    </button>
+                    <button type="button" className="gen-stylist-thumb gen-stylist-thumb--add" onClick={() => setSwapSlot(slot.key)} aria-label={`Add ${slot.label}`}>+</button>
+                  )}
+                  {p && revealed && (
+                    <div className="gen-stylist-desc">
+                      {p.brand && <span className="gen-stylist-desc-brand">{p.brand}</span>}
+                      <span className="gen-stylist-desc-name">{p.name || 'Product'}</span>
+                      {p.price && <span className="gen-stylist-desc-price">{p.price}</span>}
+                    </div>
                   )}
                 </div>
               );
@@ -227,12 +251,10 @@ export default function AIStylist({ gender, onComplete, onBack }: Props) {
             <div className="gen-stylist-swap-grid">
               {swapItems.length === 0 && <div className="gen-empty">No options in the catalog yet.</div>}
               {swapItems.map(item => (
-                <button key={item.id} type="button" className="gen-stylist-swap-card" onClick={() => pickSwap(swapSlot, item.id)}>
+                <button key={item.id} type="button" className="gen-stylist-swap-card" onClick={() => pickSwap(swapSlot, item.id)} aria-label={item.name || 'Product'}>
                   {item.image_url
                     ? <img src={item.image_url} alt="" loading="lazy" />
                     : <span className="gen-stylist-swap-card-empty" />}
-                  <span className="gen-stylist-swap-card-name">{item.name || 'Product'}</span>
-                  {item.brand && <span className="gen-stylist-swap-card-brand">{item.brand}</span>}
                 </button>
               ))}
             </div>

@@ -3849,35 +3849,39 @@ html[data-shell="catalog-app"] .gen-page {
 .gen-stylist-foot--choice .gen-btn-secondary { flex: 1; }
 
 /* Outfit stack — Tops · Dresses · Bottoms · Shoes, top → bottom. */
+/* Outfit stack — Hat · Tops · Dresses · Bottoms · Shoes, small image-only
+   thumbnails (tap to reveal the description). Pure vertical scroll. */
 .gen-stylist-stack { display: flex; flex-direction: column; gap: 14px; margin-top: 10px; }
-.gen-stylist-slot { display: flex; flex-direction: column; gap: 6px; }
-.gen-stylist-slot-label { font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255, 255, 255, 0.45); }
-.gen-stylist-card {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  width: 100%;
-  text-align: left;
-  padding: 12px;
-  border-radius: 16px;
+.gen-stylist-row { display: flex; flex-direction: column; gap: 6px; }
+.gen-stylist-row-head { display: flex; align-items: center; justify-content: space-between; }
+.gen-stylist-row-label { font-size: 12px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: rgba(255, 255, 255, 0.45); }
+.gen-stylist-row-change { background: none; border: none; font-family: inherit; font-size: 12px; font-weight: 700; color: rgba(150, 180, 255, 0.9); cursor: pointer; padding: 2px 0; }
+/* The product thumbnail — small, image only. */
+.gen-stylist-thumb {
+  width: 84px; height: 84px;
+  flex: 0 0 auto;
+  padding: 0;
+  border-radius: 14px;
+  overflow: hidden;
   border: 1px solid rgba(255, 255, 255, 0.14);
-  background: linear-gradient(180deg, rgba(255, 255, 255, 0.07), rgba(255, 255, 255, 0.03));
-  color: #fff;
+  background: rgba(255, 255, 255, 0.06);
   cursor: pointer;
-  font-family: inherit;
-  transition: border-color 0.16s ease;
+  transition: border-color 0.16s ease, transform 0.12s ease;
 }
-.gen-stylist-card:hover { border-color: rgba(255, 255, 255, 0.3); }
-.gen-stylist-card-img { width: 64px; height: 64px; border-radius: 12px; object-fit: cover; flex: 0 0 auto; background: rgba(255, 255, 255, 0.06); }
-.gen-stylist-card-img--empty { display: inline-block; }
-.gen-stylist-card-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
-.gen-stylist-card-brand { font-size: 12px; color: rgba(255, 255, 255, 0.55); }
-.gen-stylist-card-name { font-size: 15px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.gen-stylist-card-price { font-size: 13px; color: rgba(255, 255, 255, 0.7); }
-.gen-stylist-card-swap { margin-left: auto; flex: 0 0 auto; font-size: 12px; font-weight: 700; color: rgba(150, 180, 255, 0.9); }
-.gen-stylist-card--empty { justify-content: center; border-style: dashed; min-height: 64px; }
-.gen-stylist-card-add { color: rgba(255, 255, 255, 0.55); font-weight: 600; }
+.gen-stylist-thumb:active { transform: scale(0.97); }
+.gen-stylist-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.gen-stylist-thumb-empty { display: block; width: 100%; height: 100%; }
+.gen-stylist-thumb--add {
+  display: flex; align-items: center; justify-content: center;
+  color: rgba(255, 255, 255, 0.5); font-size: 26px; font-weight: 300;
+  border-style: dashed;
+}
+/* Description revealed on tap. */
+.gen-stylist-desc { display: flex; flex-direction: column; gap: 1px; padding-top: 2px; animation: gen-stylist-desc-in 0.18s ease both; }
+@keyframes gen-stylist-desc-in { from { opacity: 0; transform: translateY(-2px); } to { opacity: 1; transform: translateY(0); } }
+.gen-stylist-desc-brand { font-size: 12px; color: rgba(255, 255, 255, 0.55); }
+.gen-stylist-desc-name { font-size: 14px; font-weight: 600; color: #fff; }
+.gen-stylist-desc-price { font-size: 13px; color: rgba(255, 255, 255, 0.7); }
 
 /* Swap sheet — choose a replacement for one slot. */
 .gen-stylist-swap {
@@ -3900,22 +3904,23 @@ html[data-shell="catalog-app"] .gen-page {
   font-weight: 700; color: #fff; font-size: 16px;
 }
 .gen-stylist-swap-close { background: none; border: none; color: rgba(255, 255, 255, 0.6); font-size: 26px; line-height: 1; cursor: pointer; }
+/* Small image-only thumbnails, VERTICAL scroll only — never horizontal. */
 .gen-stylist-swap-grid {
   overflow-y: auto;
-  padding: 4px 16px calc(20px + env(safe-area-inset-bottom));
+  overflow-x: hidden;
+  padding: 4px 14px calc(20px + env(safe-area-inset-bottom));
   display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 10px;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
 }
 .gen-stylist-swap-card {
-  display: flex; flex-direction: column; gap: 4px;
-  background: none; border: none; padding: 0; cursor: pointer;
-  color: #fff; font-family: inherit; text-align: left;
+  background: none; border: 1px solid rgba(255, 255, 255, 0.12); padding: 0; cursor: pointer;
+  border-radius: 10px; overflow: hidden;
+  transition: border-color 0.14s ease, transform 0.1s ease;
 }
+.gen-stylist-swap-card:active { transform: scale(0.96); }
 .gen-stylist-swap-card img,
-.gen-stylist-swap-card-empty { width: 100%; aspect-ratio: 1; border-radius: 12px; object-fit: cover; background: rgba(255, 255, 255, 0.06); }
-.gen-stylist-swap-card-name { font-size: 12px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.gen-stylist-swap-card-brand { font-size: 11px; color: rgba(255, 255, 255, 0.5); }
+.gen-stylist-swap-card-empty { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; background: rgba(255, 255, 255, 0.06); }
 
 /* "Styling your look…" loading moment. */
 .gen-stylist-loading {
