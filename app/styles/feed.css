@@ -41,7 +41,13 @@
 
 .feed-section-grid {
   display: grid;
-  grid-template-columns: repeat(2, 1fr);
+  /* Mobile column count is driven by the home-feed grid-density dial via the
+     --feed-cols custom prop set on .home-feed-wrap (1 / 2 / 3). Defaults to 2
+     so every other surface (and the pre-mount state) is byte-identical to
+     before. Desktop overrides this with an inline gridTemplateColumns from
+     FeedSection's gridStyle; nested overlay feeds use their own !important
+     rules — neither inherits --feed-cols (set only on .home-feed-wrap). */
+  grid-template-columns: repeat(var(--feed-cols, 2), 1fr);
   gap: 2px;
   padding: 0;
   grid-auto-flow: dense;
@@ -865,3 +871,79 @@
 .feed-why-facts > div { display: flex; gap: 10px; font-size: 12px; border-top: 1px solid rgba(255, 255, 255, 0.07); padding-top: 6px; }
 .feed-why-facts dt { margin: 0; flex: 0 0 96px; color: rgba(255, 255, 255, 0.45); text-transform: uppercase; font-size: 9.5px; letter-spacing: 0.08em; padding-top: 1px; }
 .feed-why-facts dd { margin: 0; flex: 1; color: #f4f4f5; font-weight: 600; }
+
+/* ── Home-feed grid-density dial ────────────────────────────────────────
+   Same minimal scroll wheel as the creator catalog (.cat-view-dial), pinned
+   to the right edge of the MOBILE home feed. Each segment previews a column
+   count (1 / 2 / 3 vertical bars); the active one lights up. Tap to cycle,
+   scroll/drag to step. Drives --feed-cols on .home-feed-wrap.
+
+   BEHAVIOUR DIFFERS from the creator dial: it is HIDDEN at the top of the
+   feed and FADES IN once the shopper starts scrolling the daily feed
+   (the creator dial shows at top and hides on scroll-down — this inverts
+   that). Visibility is toggled by the .is-visible class from _index.tsx. */
+.feed-view-dial {
+  position: fixed;
+  right: 8px;
+  top: 50%;
+  /* Centred via transform; the hidden/visible states re-chain translateY so
+     the slide-in keeps the vertical centring. */
+  transform: translateY(-50%) translateX(150%);
+  z-index: 90;
+  /* Mobile only — flipped to flex inside the max-width:768px block below.
+     Desktop keeps its inline column layout and shows no dial. */
+  display: none;
+  flex-direction: column;
+  gap: 9px;
+  padding: 9px 7px;
+  border-radius: 999px;
+  background: rgba(20, 20, 22, 0.55);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(8px);
+  -webkit-backdrop-filter: blur(8px);
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.35);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.28s ease, transform 0.3s ease;
+  cursor: pointer;
+  user-select: none;
+  -webkit-user-select: none;
+  touch-action: none;
+}
+/* Visible (scrolling) state: slide in from the right edge and fade up. */
+.feed-view-dial.is-visible {
+  transform: translateY(-50%) translateX(0);
+  opacity: 0.6;
+  pointer-events: auto;
+}
+.feed-view-dial.is-visible:hover,
+.feed-view-dial.is-visible:active { opacity: 0.9; }
+
+.feed-view-dial-dot {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 12px;
+  opacity: 0.38;
+  transition: opacity 0.15s ease, transform 0.15s ease;
+}
+.feed-view-dial-dot.is-active {
+  opacity: 1;
+  transform: scale(1.08);
+}
+.feed-view-dial-bars {
+  display: flex;
+  gap: 2px;
+  width: 14px;
+  height: 11px;
+}
+.feed-view-dial-bars i {
+  flex: 1;
+  background: #fff;
+  border-radius: 1px;
+}
+/* Show the dial on mobile only. */
+@media (max-width: 768px) {
+  .feed-view-dial { display: flex; }
+}

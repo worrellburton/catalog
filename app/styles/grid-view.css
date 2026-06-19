@@ -635,6 +635,30 @@ html.is-pointing .app-root.chrome-hidden :hover > .creative-delete-btn {
   transition: opacity 0.45s cubic-bezier(0.22, 1, 0.36, 1);
 }
 
+/* ── Top chrome (header + the creator stories/orbit rail it holds) DISSOLVES
+   on scroll, never snaps ──────────────────────────────────────────────────
+   The header (header.css) only transitions `background`, and home-hero.css's
+   .chrome-hidden rule applies `transform: translateY(-130%)` with no transform
+   transition — so on scroll-down the whole top bar (and the FollowingRail
+   creator avatars inside .header-center) jumped offscreen in one frame. This
+   loads AFTER header.css + home-hero.css, so it wins the cascade: give the
+   header a transform + opacity transition so it glides up AND fades, and drop
+   its opacity to 0 in the hidden state so the creator bar melts away rather
+   than snapping. ~260ms ease; we DON'T change WHEN it hides (that's still the
+   chromeHidden scroll logic in _index.tsx) — only how. Kept cheap: no
+   backdrop-filter is animated, just transform + opacity (both compositor-
+   friendly). The header keeps its existing `background` transition too. */
+header {
+  transition:
+    transform 0.26s cubic-bezier(0.22, 1, 0.36, 1),
+    opacity 0.26s cubic-bezier(0.22, 1, 0.36, 1),
+    background 200ms ease;
+  will-change: transform, opacity;
+}
+.app-root.chrome-hidden header {
+  opacity: 0;
+}
+
 /* ── Scroll-jank fix: suspend backdrop blurs while the feed glides ─────────
    Recomputing backdrop-filter blur every frame as media scrolls behind the
    per-card chrome (creator chip, catalog button) AND the fixed bars (search
