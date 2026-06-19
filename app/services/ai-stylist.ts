@@ -5,7 +5,7 @@
 
 import { supabase } from '~/utils/supabase';
 
-export type StylistSlot = 'tops' | 'dresses' | 'bottoms' | 'shoes';
+export type StylistSlot = 'hats' | 'tops' | 'dresses' | 'bottoms' | 'shoes';
 
 /** The minimal product shape the stylist reasons over. */
 export interface StylistCandidate {
@@ -19,6 +19,7 @@ export interface StylistCandidate {
 
 /** One chosen product id per slot (null = nothing picked for that slot). */
 export interface StylistOutfit {
+  hats: string | null;
   tops: string | null;
   dresses: string | null;
   bottoms: string | null;
@@ -32,10 +33,11 @@ export interface StylistResult {
   source: 'claude' | 'heuristic';
 }
 
-const EMPTY_OUTFIT: StylistOutfit = { tops: null, dresses: null, bottoms: null, shoes: null };
+const EMPTY_OUTFIT: StylistOutfit = { hats: null, tops: null, dresses: null, bottoms: null, shoes: null };
 
-/** The slots shown in the stylist result, top → bottom (per spec). */
+/** The slots shown in the stylist result, top → bottom (anatomical order). */
 export const STYLIST_SLOTS: { key: StylistSlot; label: string }[] = [
+  { key: 'hats', label: 'Hat' },
   { key: 'tops', label: 'Tops' },
   { key: 'dresses', label: 'Dresses' },
   { key: 'bottoms', label: 'Bottoms' },
