@@ -1,11 +1,10 @@
 import { useEffect, useRef } from 'react';
 import { particleControls } from '~/services/particles';
 
-// Vanilla WebGL star vortex - no dependencies. Renders a 3D sphere of tiny,
-// crisp star-dust in perspective with additive blending, swirling into a
-// whirlpool at its core (inner stars spin faster + a funnel dip) while the
-// camera orbits the opposite way. Auto-pauses when the tab is hidden and
-// honours prefers-reduced-motion (renders one static frame).
+// Vanilla WebGL particle drift - no dependencies. Renders a soft cloud of
+// glowing points with additive blending and slow noise-driven motion. Sized
+// so it reads as ambient texture, not a focal effect. Auto-pauses when the
+// tab is hidden and honours prefers-reduced-motion (renders one static frame).
 //
 // Speed is read every frame from `particleControls.speed` (singleton config
 // in services/particles.ts). The site mounts one of these at the app root
@@ -20,94 +19,69 @@ interface ParticleBackgroundProps {
 }
 
 // ── Particle intensity knob ─────────────────────────────────────────
-// One number you can dial to make the field more / less visible. On DESKTOP it
-// scales the particle COUNT (× the 340 baseline below), the maximum per-particle
-// ALPHA, and the base SIZE in tandem so the relative look stays consistent. On
-// MOBILE the count is decoupled — a fixed MOBILE_PARTICLE_COUNT (see below) —
-// so intensity only moves alpha/size there, not the point count.
+// One number you can dial to make the field more / less visible. It
+// scales the particle COUNT, the maximum per-particle ALPHA, and the
+// base SIZE in tandem so the relative look stays consistent (just more
+// or fewer of the same sparks).
 //
-//   1.0 = subtle  (340 desktop, ~80% alpha)
-//   1.4 = present (476 desktop, ~100% alpha)   ← current default
-//   1.8 = lively  (612 desktop, alpha clamped to 1)
+//   0.5 = whisper (90 desktop / 45 mobile, ~50% alpha)
+//   1.0 = subtle (180 / 90, ~80% alpha)            ← old default
+//   1.4 = present (252 / 126, ~100% alpha)         ← current default
+//   1.8 = lively  (324 / 162, alpha clamped to 1)
+//   2.5 = busy    (450 / 225, very prominent)
 //
-// Above ~1.8 starts to cost GPU; the brightness clamps in the fragment so the
-// look mostly stops changing past there.
+// Anything above ~2.5 starts to cost GPU on phones; stay at 1.4–1.8 for
+// production. Mobile still gets the same intensity ratio, just a halved
+// count baseline so additive-blend fill doesn't melt phones.
 export const PARTICLE_INTENSITY = 1.4;
 
 // Dense, fine star-dust field (Mercury-style): many small points rather than a
 // few large sparks. Most are tiny far stars (size skewed small + depth fog),
 // with a handful of larger, brighter near ones for the depth read.
-const PARTICLE_COUNT = Math.round(340 * PARTICLE_INTENSITY);   // desktop
-// Mobile is dialed way up to a dense star-dust storm (explicit count, not the
-// old intensity ratio). gl.POINTS scales fine to this many points; the real
-// cost is additive fill, kept in check by the hard pixel-size clamp in the
-// vertex shader (every star stays tiny).
-const MOBILE_PARTICLE_COUNT = 8700;
-
-// ── Rotating vortex of tiny stars ───────────────────────────────────
-// The field is a sphere of FINE star-dust with a whirlpool in its core: the
-// swirl spins faster toward the central axis (differential rotation → spiral
-// arms wind in, like water draining down a drain), the core dips into a funnel,
-// and the camera orbits the OPPOSITE way so the outer field and inner vortex
-// shear against each other. Tiny + crisp on purpose — no bokeh blur. All the
-// tuning knobs live as consts at the top of the vertex shader below.
+const PARTICLE_COUNT = Math.round(340 * PARTICLE_INTENSITY);
 
 const VS = /* glsl */ `
-  attribute vec4 aSeed;        // xyz = static position in the sphere, w = base size
+  attribute vec4 aSeed;        // x = phase, y = drift speed, z = base size, w = depth seed
   uniform   float uTime;
   uniform   vec2  uViewport;
   uniform   float uIntensity;  // mirrors PARTICLE_INTENSITY in JS
   uniform   float uFade;       // 0..1 load fade-in
   varying   float vAlpha;
 
-  // ── Vortex / camera tuning ──
-  const float CAM_DIST   = 1.3;   // camera close → the field fills the frame
-  const float FOCAL      = 1.5;   // field of view
-  const float FIELD_SPIN = 0.04;  // base swirl of the whole field
-  const float SWIRL_GAIN = 0.05;  // EXTRA angular speed toward the axis (the drain)
-  const float CAM_SPIN   = 0.10;  // camera orbits the OPPOSITE way (counter-rotate)
-  const float FUNNEL     = 0.35;  // how far the core dips toward the drain
-  const float TILT       = 0.5;   // view the whirlpool at an angle, not top-down
-
-  // Cheap pseudo-noise from a hash - enough texture for twinkle.
+  // Cheap pseudo-noise from a hash - enough texture for drift.
   float hash(float n) { return fract(sin(n) * 43758.5453123); }
 
   void main() {
-    vec3 p = aSeed.xyz;
+    float t = uTime * aSeed.y;
 
-    // VORTEX: spin around the Y axis with an angular speed that RISES toward the
-    // axis (differential rotation → the inner stars lap the outer ones and wind
-    // into spiral arms, like a drain). The camera adds a uniform orbit the
-    // OPPOSITE way, so the outer field appears to turn against the inner swirl.
-    float rho   = length(p.xz);
-    float theta = atan(p.z, p.x);
-    theta += uTime * (FIELD_SPIN + SWIRL_GAIN / (rho + 0.15));   // field swirl, inner faster
-    theta -= uTime * CAM_SPIN;                                    // camera, opposite direction
-    // Funnel the core downward so it reads as a whirlpool dimple, not a flat disc.
-    p.y -= FUNNEL * exp(-rho * rho * 4.0);
-    p.x = rho * cos(theta);
-    p.z = rho * sin(theta);
+    // DEPTH: each particle lives at a depth in [0,1] (0 = far, 1 = near) that
+    // slowly oscillates, so the cloud reads as living 3D layers rather than a
+    // flat sheet. persp is the perspective factor — near particles are
+    // larger, drift across a wider arc (parallax), and read brighter; far ones
+    // shrink, move less, and dim out (depth fog).
+    float depth = 0.5 + 0.5 * sin(aSeed.w * 6.2831 + t * 0.6);
+    float persp = mix(0.45, 1.55, depth);
 
-    // Tilt the whole whirlpool so we look INTO it at an angle.
-    float tc = cos(TILT), ts = sin(TILT);
-    p = vec3(p.x, tc * p.y - ts * p.z, ts * p.y + tc * p.z);
+    // Each particle drifts on a Lissajous-ish path so motion stays smooth
+    // and never repeats exactly within a session — amplitude scaled by depth
+    // so near layers parallax past far ones.
+    float x = cos(t + aSeed.x * 6.283) * (0.55 + 0.4 * hash(aSeed.x)) * persp;
+    float y = sin(t * 0.83 + aSeed.x * 4.1) * (0.55 + 0.4 * hash(aSeed.x + 1.7)) * persp;
 
-    // PERSPECTIVE: near stars a touch bigger, far ones smaller and seen through
-    // the front via the additive blend. Aspect-correct x so it stays round.
-    float dist   = max(CAM_DIST - p.z, 0.4);
-    float proj   = FOCAL / dist;
-    float aspect = uViewport.y / uViewport.x;
-    gl_Position = vec4(p.x * proj * aspect, p.y * proj, 0.0, 1.0);
+    // Bias slightly upward so the cloud feels like it's rising.
+    y += 0.05 * sin(t * 0.4);
 
-    // TINY + CRISP: hard-clamp to a few pixels so nothing ever reads as a big
-    // or blurry blob — it stays fine star-dust at every depth.
+    gl_Position = vec4(x, y, 0.0, 1.0);
+
+    // Size scales with viewport height AND depth so near sparks loom larger.
     float pixelRatio = min(uViewport.y / 800.0, 1.5);
-    gl_PointSize = clamp(aSeed.w * proj * pixelRatio, 0.7, 2.6);
+    gl_PointSize = aSeed.z * pixelRatio * persp;
 
-    // Twinkle (per-star phase) × depth fog (far = dimmer) × brightness × fade.
-    float ph    = hash(aSeed.x * 12.9 + aSeed.y * 78.2 + aSeed.z * 37.7);
-    float pulse = 0.40 + 0.45 * (0.5 + 0.5 * sin(uTime * 1.4 + ph * 6.2831));
-    float fog   = clamp((2.7 - dist) / 2.1, 0.25, 1.0);
+    // Pulse opacity per-particle, offset by phase. Multiplied by depth fog
+    // (far = dimmer), uIntensity (the brightness knob), and uFade (the
+    // load-in ramp). Clamped to 1.0 in the fragment so glow doesn't blow out.
+    float pulse = 0.25 + 0.55 * (0.5 + 0.5 * sin(t * 1.7 + aSeed.x * 12.0));
+    float fog   = mix(0.30, 1.0, depth);
     vAlpha = pulse * fog * uIntensity * uFade;
   }
 `;
@@ -117,14 +91,20 @@ const FS = /* glsl */ `
   varying float vAlpha;
 
   void main() {
-    // A tiny crisp 4-point AI spark (the catalog mark). At a few pixels it just
-    // reads as a fine star — no bokeh, no blur.
-    vec2  d    = abs(gl_PointCoord - 0.5) * 2.0;        // 0..1 per axis
-    float r    = pow(d.x, 0.55) + pow(d.y, 0.55);        // concave diamond
-    float core = exp(-dot(d, d) * 6.0);                  // luminous center
-    float a    = (smoothstep(1.05, 0.0, r) * 0.85 + core * 0.45) * vAlpha;
+    // 4-point AI spark / diamond. gl_PointCoord is [0,1] sprite coords;
+    // we distance from center, then use a sub-unit superellipse exponent
+    // so the shape becomes a concave diamond (pinched waist along the
+    // cardinal axes — the classic Claude/Gemini "spark" silhouette, but
+    // here it's the catalog AI mark in particle form).
+    vec2  d  = abs(gl_PointCoord - 0.5) * 2.0;       // 0..1 per axis
+    float r  = pow(d.x, 0.55) + pow(d.y, 0.55);       // concave diamond
+    // Soft inner glow that brightens at the very center so each diamond
+    // also reads as a luminous point at small sizes.
+    float c  = exp(-dot(d, d) * 6.0);
+    float a  = (smoothstep(1.05, 0.0, r) * 0.85 + c * 0.4) * vAlpha;
 
-    // Cool silver-white tint so the field reads on matte black.
+    // Cool silver-white tint so the field reads on matte black without
+    // looking warm/cream.
     gl_FragColor = vec4(0.95, 0.96, 1.0, a);
   }
 `;
@@ -171,33 +151,26 @@ export default function ParticleBackground({ speed }: ParticleBackgroundProps = 
     }
     gl.useProgram(program);
 
-    // Per-particle seed: (x, y, z position inside the sphere, base size).
-    // Cap DPR harder on phones — additive-blend fill is the real cost, not the
-    // point count. Mobile runs the dense MOBILE_PARTICLE_COUNT field; the DoF
-    // energy-conservation (dimmer bokeh) keeps the additive fill in check.
+    // Per-particle seed: (phase, drift speed, base size).
+    // Halve the field + cap DPR harder on phones — additive-blend fill is
+    // the cost, and 180 points at dpr 2 is overkill for ambient texture on
+    // a small screen.
     const isMobile = typeof window !== 'undefined' && window.matchMedia('(max-width: 768px)').matches;
-    const count = isMobile ? MOBILE_PARTICLE_COUNT : PARTICLE_COUNT;
+    // Same intensity ratio on mobile, halved baseline (additive-blend fill
+    // is the cost on phones).
+    const count = isMobile ? Math.round(190 * PARTICLE_INTENSITY) : PARTICLE_COUNT;
     const seeds = new Float32Array(count * 4);
-    // Tiny star-dust: small base sizes, skewed toward the minimum (pow below)
-    // so most points are the finest dust and a few are slightly larger. The
-    // vertex shader hard-clamps the final pixel size, so nothing ever blooms big.
-    const sizeMin = 0.55;
-    const sizeMax = 1.9;
+    // Finer baseline than the old sparks — a star-dust look. Sizes are skewed
+    // toward the minimum (pow below) so most points are tiny far stars and only
+    // a few are larger; depth (persp) then scales near ones up further.
+    const sizeMin = 0.7 * PARTICLE_INTENSITY;
+    const sizeMax = 4.0 * PARTICLE_INTENSITY;
     for (let i = 0; i < count; i++) {
-      // Uniform direction on the unit sphere (z = cosφ trick), then a radius
-      // with UNIFORM VOLUME density (cbrt) so the cloud is evenly filled — with
-      // the camera close, the long line of sight through the middle reads as a
-      // dense glowing core fading to the edges (a dark scene you look through),
-      // not a hollow ball. xyz = the star's static position inside the sphere.
-      const theta = 2 * Math.PI * Math.random();
-      const z = 2 * Math.random() - 1;
-      const rxy = Math.sqrt(Math.max(0, 1 - z * z));
-      const radius = Math.cbrt(Math.random());
-      seeds[i * 4 + 0] = rxy * Math.cos(theta) * radius;       // x
-      seeds[i * 4 + 1] = rxy * Math.sin(theta) * radius;       // y
-      seeds[i * 4 + 2] = z * radius;                           // z
+      seeds[i * 4 + 0] = Math.random();                       // phase 0..1
+      seeds[i * 4 + 1] = 0.04 + Math.random() * 0.10;         // very slow drift
       // pow(2.2) bunches sizes near the minimum → mostly fine dust, few big.
-      seeds[i * 4 + 3] = sizeMin + Math.pow(Math.random(), 2.2) * (sizeMax - sizeMin);
+      seeds[i * 4 + 2] = sizeMin + Math.pow(Math.random(), 2.2) * (sizeMax - sizeMin);
+      seeds[i * 4 + 3] = Math.random();                       // depth seed 0..1
     }
 
     const buf = gl.createBuffer();

@@ -422,6 +422,49 @@ header > .pending-look-pill {
 .light-mode .header-activity-pill:hover { background: rgba(0, 0, 0, 0.08); color: #0f172a; }
 .light-mode .header-activity-pill-count { background: #16a34a; color: #fff; box-shadow: 0 0 0 2px #fff; }
 
+/* Mobile-only header SEARCH button. Takes the Activity pill's slot on phones,
+   where the bottom search pill is removed from the searched feed — so the
+   header becomes the search entry point. Same 30px circular chrome as
+   .header-activity-pill so the header cluster stays visually consistent.
+   Hidden on desktop (≥769px keeps the Activity pill + the type-anywhere search);
+   the `@media (max-width:768px)` block below flips the two. */
+.header-search-btn {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  cursor: pointer;
+  padding: 0;
+  font-family: inherit;
+  flex-shrink: 0;
+  transition: background 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+.header-search-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+  transform: translateY(-1px);
+}
+.header-search-btn:active { transform: scale(0.94); }
+.light-mode .header-search-btn {
+  background: rgba(0, 0, 0, 0.04);
+  border-color: rgba(0, 0, 0, 0.08);
+  color: rgba(15, 23, 42, 0.7);
+}
+.light-mode .header-search-btn:hover { background: rgba(0, 0, 0, 0.08); color: #0f172a; }
+
+/* Mobile: swap Activity → Search in the header. The Activity pill is hidden
+   (the realtime/catch-up pipeline still runs for badges elsewhere); the search
+   button takes its place as the phone search affordance. */
+@media (max-width: 768px) {
+  .header-activity-pill { display: none !important; }
+  .header-search-btn { display: inline-flex; }
+}
+
 
 .logo {
   height: 36px;

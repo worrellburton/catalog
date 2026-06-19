@@ -11,7 +11,7 @@ import { getSplashConfig, DEFAULT_SPLASH_CONFIG, type SplashConfig } from '~/ser
 import ContinuousFeed from '~/components/ContinuousFeed';
 import SiteParticleHost from '~/components/SiteParticleHost';
 import ParticleBackground from '~/components/ParticleBackground';
-import BottomBar from '~/components/BottomBar';
+import SearchPanel from '~/components/SearchPanel';
 import GuestSignupGate, { type GuestGateVariant } from '~/components/GuestSignupGate';
 import { isGuest, hasUsedFreeLook, markFreeLookUsed, setGuestIntent, takeGuestIntent, getNudgeCount, bumpNudgeCount, REQUIRE_SIGNUP_EVENT } from '~/services/guest';
 import { TrailVideoHost } from '~/components/TrailVideoHost';
@@ -49,6 +49,7 @@ import { trackClick, trackCreativeImpressions, resolveProductIdByUrl, trackProdu
 import { retireServiceWorker } from '~/utils/registerSW';
 import HeaderWalletPill from '~/components/HeaderWalletPill';
 import HeaderActivityPill from '~/components/HeaderActivityPill';
+import HeaderSearchButton from '~/components/HeaderSearchButton';
 import FollowingRail from '~/components/FollowingRail';
 import PendingLookPill from '~/components/PendingLookPill';
 import ActivityRealtimeToasts from '~/components/ActivityRealtimeToasts';
@@ -2256,7 +2257,12 @@ export default function Home() {
                   desktop keeps the centered toast stack. Tap routes to
                   /activity (a dedicated screen, not the wallet). */}
               <HeaderWalletPill onOpenWallet={openWallet} />
+              {/* Activity (desktop) ↔ Search (mobile) share this slot. On
+                  phones the bottom search pill is gone from the searched feed,
+                  so the header is the search entry point; CSS hides whichever
+                  one doesn't belong to the current viewport (header.css). */}
               <HeaderActivityPill />
+              <HeaderSearchButton />
               {/* Super-admin entry lives under the profile picture now (the
                   Admin quicklink directly below the avatar in UserMenu's
                   popout, and the Super Admin section in the mobile Account
@@ -2333,7 +2339,7 @@ export default function Home() {
           />
           </div>
 
-          <BottomBar
+          <SearchPanel
             activeFilter={activeFilter}
             onFilterChange={handleGenderFilterChange}
             searchQuery={searchQuery}
