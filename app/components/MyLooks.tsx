@@ -14,6 +14,8 @@ import {
 import { useSavedLayout } from '~/services/saved-layout';
 import { ensureGenerationsInCatalog } from '~/services/promote-generation';
 import { listUserGenerations, isGenerationInFlight, type UserGeneration } from '~/services/user-generations';
+import { consumeCatalogHandoff } from '~/services/catalog-handoff';
+import CatalogHandoffLoader from './CatalogHandoffLoader';
 import ParticleBackground from './ParticleBackground';
 import { getMyCatalogAppearance, setMyCatalogAppearance, type CatalogAppearance, DEFAULT_CATALOG_APPEARANCE } from '~/services/catalog-theme';
 import { withTransform } from '~/utils/supabase-image';
@@ -60,6 +62,29 @@ export default function MyLooks({ onClose }: MyLooksProps) {
   const [looks, setLooks] = useState<ManagedLook[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  // ── Handoff loader ────────────────────────────────────────────────
+  // When the user arrives here straight from /generate (it arms a one-shot
+  // sessionStorage flag before navigating away), cover the screen with a
+  // branded full-screen loader so the empty/skeleton grid never flashes the
+  // feed underneath while the looks load. We read-and-consume the flag once
+  // on mount. The loader stays up until the first looks fetch resolves AND a
+  // short minimum-visible window has elapsed (so it never flickers), then
+  // fades itself out.
+  const [handoffActive, setHandoffActive] = useState(() => consumeCatalogHandoff());
+  useEffect(() => {
+    if (!handoffActive) return;
+    // First-load "ready" = the looks list has finished its initial fetch.
+    if (loading) return;
+    // Keep it on screen for a beat so the handoff reads as deliberate, not a
+    // flicker, even when the data was already warm in cache.
+    const MIN_VISIBLE_MS = 550;
+    const t = window.setTimeout(() => setHandoffActive(false), MIN_VISIBLE_MS);
+    return () => window.clearTimeout(t);
+    // Intentionally keyed on `loading` only — once it goes false we start the
+    // minimum-visible timer; handoffActive guards re-entry.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [loading]);
   const [statusFilter, setStatusFilter] = useState<'live' | 'inactive' | 'products'>('live');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -599,6 +624,10 @@ export default function MyLooks({ onClose }: MyLooksProps) {
       className="my-cat-page"
       style={appearance.hue != null ? { background: `hsl(${appearance.hue}, 28%, 6%)` } : undefined}
     >
+      {/* Branded handoff cover — only when we arrived straight from /generate.
+          Keeps the empty/skeleton grid from flashing the feed underneath until
+          the looks have loaded, then fades out. */}
+      <CatalogHandoffLoader active={handoffActive} label="Opening your catalog…" />
       {/* Creator-chosen appearance: particle field behind content (z-index:-1
           so it floats over the page bg without covering anything) + the hue
           tint applied to the page background above. */}
