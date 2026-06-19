@@ -11,7 +11,7 @@ import { getSplashConfig, DEFAULT_SPLASH_CONFIG, type SplashConfig } from '~/ser
 import ContinuousFeed from '~/components/ContinuousFeed';
 import SiteParticleHost from '~/components/SiteParticleHost';
 import ParticleBackground from '~/components/ParticleBackground';
-import SearchPanel from '~/components/SearchPanel';
+import BottomBar from '~/components/BottomBar';
 import GuestSignupGate, { type GuestGateVariant } from '~/components/GuestSignupGate';
 import { isGuest, hasUsedFreeLook, markFreeLookUsed, setGuestIntent, takeGuestIntent, getNudgeCount, bumpNudgeCount, REQUIRE_SIGNUP_EVENT } from '~/services/guest';
 import { TrailVideoHost } from '~/components/TrailVideoHost';
@@ -49,7 +49,6 @@ import { trackClick, trackCreativeImpressions, resolveProductIdByUrl, trackProdu
 import { retireServiceWorker } from '~/utils/registerSW';
 import HeaderWalletPill from '~/components/HeaderWalletPill';
 import HeaderActivityPill from '~/components/HeaderActivityPill';
-import HeaderSearchButton from '~/components/HeaderSearchButton';
 import FollowingRail from '~/components/FollowingRail';
 import PendingLookPill from '~/components/PendingLookPill';
 import ActivityRealtimeToasts from '~/components/ActivityRealtimeToasts';
@@ -452,13 +451,18 @@ export default function Home() {
   useEffect(() => {
     try { window.localStorage.setItem('catalog:feed-grid-cols', String(feedGridCols)); } catch { /* quota */ }
     // FeedSection's mobile DOM-windowing measures (cols, rowH) from the DOM and
-    // only re-measures on a `resize` event; it derives padTop from
-    // windowStart/cols. Changing the column count without forcing a re-measure
-    // leaves padTop stale → the feed can blank out or jump. Dispatch a resize so
-    // every mounted FeedSection re-measures against the new column count. rAF so
-    // the new --feed-cols has applied to the grid before we measure.
+    // re-measures on a `resize` event; it derives padTop from windowStart/cols.
+    // Changing the column count without forcing a re-measure leaves padTop stale
+    // → the feed blanks out or jumps (the bug: the dial moved but the grid never
+    // relaid out for the new cols). Dispatch a resize so every mounted
+    // FeedSection re-measures against the new column count. DOUBLE rAF: the first
+    // frame lets React commit the new --feed-cols inline style, the second lets
+    // the browser COMMIT the grid relayout, so measure() reads the new cols/rowH
+    // (not the pre-change layout) — otherwise it captures stale metrics.
     if (typeof window !== 'undefined') {
-      requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
+      requestAnimationFrame(() => {
+        requestAnimationFrame(() => window.dispatchEvent(new Event('resize')));
+      });
     }
   }, [feedGridCols]);
   const feedDialRef = useRef<HTMLDivElement | null>(null);
@@ -651,11 +655,13 @@ export default function Home() {
     };
   }, []);
 
-  // Tap the dial → cycle column count. Suppressed right after a drag so the
-  // touchend-synthesized click doesn't double-step.
-  const cycleFeedCols = useCallback(() => {
+  // Tap a dial segment → DIRECTLY select that column count (1 / 2 / 3) — the
+  // founder wants the segments to be a direct picker, not a 1→2→3 cycle.
+  // Suppressed right after a drag so the touchend-synthesized click doesn't
+  // fight a vertical-drag step. The wheel/drag handlers below still STEP.
+  const selectFeedCols = useCallback((index: number) => {
     if (feedDialDraggedRef.current) { feedDialDraggedRef.current = false; return; }
-    setFeedColsIndex(i => (i + 1) % FEED_GRID_COLS.length);
+    setFeedColsIndex(index);
   }, []);
   // Wheel + vertical-drag stepping on the dial. Attached non-passive so the
   // gesture on the dial doesn't scroll the feed behind it.
@@ -2363,12 +2369,7 @@ export default function Home() {
                   desktop keeps the centered toast stack. Tap routes to
                   /activity (a dedicated screen, not the wallet). */}
               <HeaderWalletPill onOpenWallet={openWallet} />
-              {/* Activity (desktop) ↔ Search (mobile) share this slot. On
-                  phones the bottom search pill is gone from the searched feed,
-                  so the header is the search entry point; CSS hides whichever
-                  one doesn't belong to the current viewport (header.css). */}
               <HeaderActivityPill />
-              <HeaderSearchButton />
               {/* Super-admin entry lives under the profile picture now (the
                   Admin quicklink directly below the avatar in UserMenu's
                   popout, and the Super Admin section in the mobile Account
@@ -2452,31 +2453,33 @@ export default function Home() {
               the home feed. CSS (feed.css) gates display to <=768px; we only
               MOUNT it on the home feed (no overlay open) so it never sits over a
               look/product. Hidden at the top, fades in once the shopper scrolls
-              (feedDialVisible). Tap cycles 1→2→3 columns; scroll/drag steps. */}
+              (feedDialVisible). Each segment DIRECTLY selects its column count
+              (tap "1"/"2"/"3"); scroll/drag still steps. */}
           {navStack.length === 0 && (
             <div
               ref={feedDialRef}
               className={`feed-view-dial${feedDialVisible ? ' is-visible' : ''}`}
               role="group"
               aria-label="Feed grid columns"
-              onClick={cycleFeedCols}
             >
               {FEED_GRID_COLS.map((c, i) => (
-                <span
+                <button
                   key={c}
+                  type="button"
                   className={`feed-view-dial-dot${i === feedColsIndex ? ' is-active' : ''}`}
                   aria-label={`${c} column${c > 1 ? 's' : ''}`}
-                  aria-current={i === feedColsIndex}
+                  aria-pressed={i === feedColsIndex}
+                  onClick={() => selectFeedCols(i)}
                 >
                   <span className="feed-view-dial-bars">
                     {Array.from({ length: c }).map((_, b) => <i key={b} />)}
                   </span>
-                </span>
+                </button>
               ))}
             </div>
           )}
 
-          <SearchPanel
+          <BottomBar
             activeFilter={activeFilter}
             onFilterChange={handleGenderFilterChange}
             searchQuery={searchQuery}

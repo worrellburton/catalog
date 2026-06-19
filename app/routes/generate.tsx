@@ -40,6 +40,7 @@ import {
   type GenerationProductDetail,
 } from '~/services/user-generations';
 import { promoteGenerationToLook } from '~/services/promote-generation';
+import { armCatalogHandoff } from '~/services/catalog-handoff';
 import { getUserGender, type UserGender } from '~/services/genders';
 import {
   getUserHeightAge,
@@ -2476,7 +2477,23 @@ export default function GeneratePage() {
 
             {generation && (
               <div className="gen-result-actions">
-                <button className="gen-btn-primary" onClick={startNewLook}>
+                {/* Once the look is done it has been auto-archived to My
+                    Catalog — offer a one-tap jump there. Arm the branded
+                    handoff loader first so My Catalog covers its load with a
+                    full-screen animation instead of flashing an empty grid. */}
+                {generation.status === 'done' && (
+                  <button
+                    className="gen-btn-primary"
+                    onClick={() => {
+                      try { sessionStorage.setItem('catalog:cold-open-done', '1'); } catch { /* ignore */ }
+                      armCatalogHandoff();
+                      navigate('/my-looks');
+                    }}
+                  >
+                    See it in My Catalog
+                  </button>
+                )}
+                <button className={`gen-btn-${generation.status === 'done' ? 'secondary' : 'primary'}`} onClick={startNewLook}>
                   Get a new look going
                 </button>
                 {/* "Keep discovering" lets the shopper bail off the

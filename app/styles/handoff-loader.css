@@ -1,0 +1,104 @@
+/* Catalog handoff loader.
+   Full-screen branded cover for a screen-to-screen handoff (e.g.
+   /generate → My Catalog). Opaque #0a0a0a base so the destination's
+   empty/skeleton state never flashes underneath while its data loads.
+   Visual language mirrors the cold-open splash: a faint counter-rotating
+   ring sweep behind the centered CATALOG wordmark, kept lightweight
+   (GPU-only transforms). */
+.handoff-loader {
+  position: fixed;
+  inset: 0;
+  z-index: 700; /* above the My Catalog overlay chrome */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  overflow: hidden;
+  background: radial-gradient(120% 120% at 50% 42%, #14141a 0%, #0a0a0a 72%);
+  opacity: 1;
+  transition: opacity 360ms cubic-bezier(0.4, 0, 0.2, 1);
+}
+.handoff-loader.is-leaving {
+  opacity: 0;
+  pointer-events: none;
+}
+
+/* Counterclockwise gradient sweep masked to a soft ring — reads as light
+   passing through, not a paint disc spinning. Same recipe as .splash-sweep. */
+.handoff-loader-sweep {
+  position: absolute;
+  inset: -15%;
+  z-index: 0;
+  pointer-events: none;
+  background:
+    conic-gradient(from 0deg,
+      rgba(255, 255, 255, 0.0) 0deg,
+      rgba(255, 255, 255, 0.04) 70deg,
+      rgba(255, 255, 255, 0.16) 88deg,
+      rgba(255, 255, 255, 0.32) 96deg,
+      rgba(255, 255, 255, 0.16) 104deg,
+      rgba(255, 255, 255, 0.04) 122deg,
+      rgba(255, 255, 255, 0.0) 200deg,
+      rgba(255, 255, 255, 0.0) 360deg);
+  -webkit-mask: radial-gradient(circle at 50% 50%, transparent 16%, #000 30%, #000 76%, transparent 100%);
+          mask: radial-gradient(circle at 50% 50%, transparent 16%, #000 30%, #000 76%, transparent 100%);
+  animation: handoff-sweep-rotate 9000ms cubic-bezier(0.42, 0, 0.58, 1) infinite reverse;
+  opacity: 0.9;
+}
+@keyframes handoff-sweep-rotate {
+  from { transform: rotate(0deg); }
+  to   { transform: rotate(360deg); }
+}
+
+.handoff-loader-content {
+  position: relative;
+  z-index: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.handoff-loader-logo {
+  height: clamp(30px, 6vw, 48px);
+  width: auto;
+  color: #fff;
+  filter: drop-shadow(0 4px 26px rgba(0, 0, 0, 0.7));
+  opacity: 0;
+  animation: handoff-logo-in 0.7s cubic-bezier(0.16, 1, 0.3, 1) 0.05s forwards;
+}
+.handoff-loader-logo path { fill: currentColor; }
+@keyframes handoff-logo-in {
+  0%   { opacity: 0; transform: translateY(8px) scale(0.96); }
+  100% { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+/* Three breathing dots under the wordmark — quiet progress cue. */
+.handoff-loader-dots {
+  display: flex;
+  gap: 7px;
+}
+.handoff-loader-dots i {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.85);
+  animation: handoff-dot 1200ms ease-in-out infinite;
+}
+.handoff-loader-dots i:nth-child(2) { animation-delay: 160ms; }
+.handoff-loader-dots i:nth-child(3) { animation-delay: 320ms; }
+@keyframes handoff-dot {
+  0%, 100% { opacity: 0.3; transform: scale(0.8); }
+  50%      { opacity: 1;   transform: scale(1); }
+}
+
+.handoff-loader-label {
+  font-size: 13px;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.62);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .handoff-loader-sweep { animation: none; opacity: 0.3; }
+  .handoff-loader-logo { animation: none; opacity: 1; transform: none; }
+  .handoff-loader-dots i { animation: none; opacity: 0.8; }
+}
