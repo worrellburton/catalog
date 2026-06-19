@@ -1664,7 +1664,7 @@ export default function GeneratePage() {
               <span className="gen-mode-card-title">Select products manually</span>
               <span className="gen-mode-card-sub">Browse the catalog and pick each piece yourself.</span>
             </button>
-            <button type="button" className="gen-mode-card gen-mode-card--ai" onClick={() => { setFlowMode('stylist'); setStep('stylist'); }}>
+            <button type="button" className="gen-mode-card gen-mode-card--ai" onClick={() => { setFlowMode('stylist'); setStep('style'); }}>
               <span className="gen-mode-card-icon" aria-hidden="true">
                 <svg width="26" height="26" viewBox="0 0 100 100" fill="currentColor"><path d="M50 6 C55 34 66 45 94 50 C66 55 55 66 50 94 C45 66 34 55 6 50 C34 45 45 34 50 6 Z"/></svg>
               </span>
@@ -1684,7 +1684,7 @@ export default function GeneratePage() {
         <div className="gen-products-particles" aria-hidden="true">
           <ParticleBackground />
         </div>
-        <AIStylist gender={userGender} onBack={() => setStep('mode')} onComplete={handleStylistComplete} />
+        <AIStylist gender={userGender} onBack={() => setStep('style')} onComplete={handleStylistComplete} />
       </div>
     );
   }
@@ -1764,10 +1764,13 @@ export default function GeneratePage() {
           // Style → "Back to products". Everything else keeps the
           // catalog/your-looks exits.
           const PREV_LABEL: Partial<Record<Step, string>> = {
-            review: 'Back to style',
-            // In the stylist flow the manual product picker is skipped, so
-            // Style steps back to Photos instead of Products.
-            style: flowMode === 'stylist' ? 'Back to photos' : 'Back to products',
+            // Manual: Review ← Style ← Products. Stylist: Review ← Photos
+            // (Style/context + the occasion ask already happened up front).
+            review: flowMode === 'stylist' ? 'Back to photos' : 'Back to style',
+            // Manual flow: Style steps back to Products. Stylist flow: the
+            // Style step is the OPENING "context" page (before the occasion
+            // ask), so it exits to the mode chooser instead — handled below.
+            ...(flowMode === 'stylist' ? {} : { style: 'Back to products' }),
           };
           const prevLabel = PREV_LABEL[step];
           const label =
@@ -1783,11 +1786,21 @@ export default function GeneratePage() {
                   setStep('photos');
                   return;
                 }
+                // Stylist flow: the Style step is the opening "context" page, so
+                // its back returns to the mode chooser.
+                if (step === 'style' && flowMode === 'stylist') {
+                  setStep('mode');
+                  return;
+                }
+                // Stylist flow skips the manual picker, so Review steps back to
+                // Photos rather than Style (which ran before the occasion ask).
+                if (step === 'review' && flowMode === 'stylist') {
+                  setStep('photos');
+                  return;
+                }
                 // Style / review step back to the previous wizard screen.
                 if (prevLabel) {
-                  // Stylist flow skips Products: Style → Photos.
-                  if (step === 'style' && flowMode === 'stylist') setStep('photos');
-                  else goPrev(step, setStep);
+                  goPrev(step, setStep);
                   return;
                 }
                 navigate('/#app');
@@ -2663,7 +2676,17 @@ export default function GeneratePage() {
           )}
 
           <div className="gen-dock-actions">
-            <button className="gen-btn-secondary" onClick={() => goPrev(step, setStep)}>
+            <button
+              className="gen-btn-secondary"
+              onClick={() => {
+                // Stylist flow: the Style step is the opening "context" page, so
+                // its Back exits to the mode chooser rather than a prior step.
+                if (step === 'style' && flowMode === 'stylist') { setStep('mode'); return; }
+                // Stylist flow skips the manual picker, so Review ← Photos.
+                if (step === 'review' && flowMode === 'stylist') { setStep('photos'); return; }
+                goPrev(step, setStep);
+              }}
+            >
               Back
             </button>
             {step === 'review' ? (
@@ -2682,7 +2705,13 @@ export default function GeneratePage() {
               <button
                 className="gen-btn-primary"
                 disabled={!canAdvance}
-                onClick={() => (step === 'products' ? launchToNext() : goNext(step, setStep))}
+                onClick={() => {
+                  if (step === 'products') { launchToNext(); return; }
+                  // Stylist flow: the Style step is the opening "context" page —
+                  // its Next hands off to the AI Stylist occasion ask, not Review.
+                  if (step === 'style' && flowMode === 'stylist') { setStep('stylist'); return; }
+                  goNext(step, setStep);
+                }}
               >
                 Next
               </button>
@@ -2702,8 +2731,10 @@ export default function GeneratePage() {
               type="button"
               className="gen-btn-primary"
               onClick={() => {
-                // Stylist flow already chose products → skip the manual picker.
-                if (canAdvance) setStep(flowMode === 'stylist' ? 'style' : 'products');
+                // Stylist flow already chose products AND collected the Style
+                // "context" page up front → skip straight to Review. Manual
+                // flow continues to the product picker.
+                if (canAdvance) setStep(flowMode === 'stylist' ? 'review' : 'products');
                 else window.scrollTo({ top: 0, behavior: 'smooth' });
               }}
             >

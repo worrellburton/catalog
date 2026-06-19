@@ -170,11 +170,11 @@ export default function AIStylist({ gender, onComplete, onBack }: Props) {
     [outfit, byId],
   );
 
-  // ── ASK ── centered above the keyboard; CTA pops in after typing ──────
+  // ── ASK ── centered above the keyboard; the bottom console keeps Back +
+  // submit together on one row, all visible with the keyboard up ──────────
   if (step === 'ask') {
     return (
       <div className="gen-stylist gen-stylist--ask">
-        <button type="button" className="gen-stylist-back" onClick={onBack} aria-label="Back">← Back</button>
         <div className="gen-stylist-askbody">
           <h1 className="gen-stylist-title">What do you want to wear?</h1>
           <p className="gen-stylist-sub">Tell me the occasion or the vibe — I&apos;ll style a whole look from the catalog.</p>
@@ -187,10 +187,22 @@ export default function AIStylist({ gender, onComplete, onBack }: Props) {
             autoFocus
           />
           {error && <div className="gen-error">{error}</div>}
+        </div>
+        {/* Bottom console — Back + submit on one row, pinned above the keyboard. */}
+        <div className="gen-stylist-foot gen-stylist-console">
+          <button
+            type="button"
+            className="gen-stylist-console-back"
+            onClick={onBack}
+            aria-label="Back"
+          >
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="19" y1="12" x2="5" y2="12"/><polyline points="12 19 5 12 12 5"/></svg>
+            <span>Back</span>
+          </button>
           {occasion.trim().length > 0 && (
             <button
               type="button"
-              className="gen-btn-primary gen-stylist-cta gen-stylist-cta--pop"
+              className="gen-btn-primary gen-stylist-cta gen-stylist-cta--pop gen-stylist-console-go"
               disabled={loading || baseCandidates.length === 0}
               onClick={runStylist}
             >
