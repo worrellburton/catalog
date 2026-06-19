@@ -1112,6 +1112,17 @@
     opacity: 0 !important;
     pointer-events: none !important;
   }
+  /* Deactivate the rail the instant the shopper scrolls off the pristine top —
+     well before the quarter-viewport hero-scrolled threshold. The rail is a
+     fixed, header-z-index row that floats ABOVE the in-flow hero; once the page
+     scrolls, the "?" cue and the peeking feed cards slide up underneath it, and
+     a tap aimed at them would otherwise land on whichever rail avatar shares
+     that column and open the wrong creator's catalog. Fading + pointer-events
+     flip together so there's never an invisible-but-clickable rail. */
+  .app-root.home-hero.hero-rail-inert .follow-rail-wrap--center {
+    opacity: 0 !important;
+    pointer-events: none !important;
+  }
 
   /* Center the spark + headline in the band BETWEEN the stories rail (top
      ~25%) and the fixed search bar (22vh-from-bottom, ~28% reserved).
