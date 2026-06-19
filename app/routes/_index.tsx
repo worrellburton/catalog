@@ -2067,28 +2067,14 @@ export default function Home() {
   useEffect(() => {
     if (!overlayOpen) return;
     if (typeof window === 'undefined') return;
-    // Look/product overlay DOCUMENT-SCROLL mode (mobile, non-shell): let the
-    // overlay flow in the document (.look-doc-scroll / .product-doc-scroll CSS)
-    // so the scroll gesture drives the window and iOS Safari collapses its
-    // bottom toolbar (no bar = no frost strip), like home. We DON'T lock the
-    // body; we park the document at top so the hero shows and restore the feed
-    // scroll on close. The hero <video> attaches unconditionally on mount, and
-    // .sfh (the home ceremony) is hidden by the CSS so the hero sits at the top
-    // in view. Same behaviour for both overlay types; gated tight.
-    const docScroll = (!!selectedLook || !!selectedProduct) && !inShell &&
-      window.matchMedia('(max-width: 768px)').matches;
-    if (docScroll) {
-      overlayScrollLockRef.current = true;
-      const feedScrollY = window.scrollY;
-      const r1 = requestAnimationFrame(() => window.scrollTo(0, 0));
-      return () => {
-        cancelAnimationFrame(r1);
-        requestAnimationFrame(() => {
-          window.scrollTo(0, feedScrollY);
-          overlayScrollLockRef.current = false;
-        });
-      };
-    }
+    // NOTE: the mobile document-scroll overlay mode (.look-doc-scroll /
+    // .product-doc-scroll) was removed — it forced the overlay to
+    // position:static (nullifying its z-index, so product/look pages opened
+    // UNDER the feed) and made .product-page overflow:visible (which broke the
+    // nested "Popular" feed's IntersectionObserver into a runaway that pushed
+    // its cards off-screen). Overlays now always use the inner-scroll +
+    // body-lock path below, where z-index stacking is intact. The only cost is
+    // iOS Safari's cosmetic toolbar-frost strip on detail pages.
     const scrollY = window.scrollY;
     // Freeze the chrome/hero scroll-trackers for the whole overlay lifecycle so
     // the position:fixed jump (and the close-time restore) can't reposition the
@@ -2181,7 +2167,7 @@ export default function Home() {
   return (
     <TrailRoot>
     <TrailVideoHost>
-    <div className={`app-root ${isLightMode ? 'light-mode' : ''}${overlayOpen ? ' has-overlay' : ''}${heroMode ? ' home-hero' : ''}${heroScrolled ? ' hero-scrolled' : ''}${heroBarFaded ? ' hero-bar-faded' : ''}${chromeHidden ? ' chrome-hidden' : ''}${selectedLook && !selectedProduct && !inShell ? ' look-doc-scroll' : ''}${selectedProduct && !inShell ? ' product-doc-scroll' : ''}`}>
+    <div className={`app-root ${isLightMode ? 'light-mode' : ''}${overlayOpen ? ' has-overlay' : ''}${heroMode ? ' home-hero' : ''}${heroScrolled ? ' hero-scrolled' : ''}${heroBarFaded ? ' hero-bar-faded' : ''}${chromeHidden ? ' chrome-hidden' : ''}`}>
       {/* Singleton particle world — one canvas mounted at the app root,
           always visible. Splash, hero, search-ceremony, empty-catalog all
           render above this so the field stays continuous across every
