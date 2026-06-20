@@ -5,7 +5,7 @@ import AddProductV2 from './AddProductV2';
 import { useAuth } from '~/hooks/useAuth';
 import { downloadLookVideo, type DownloadVariant } from '~/utils/downloadLookVideo';
 import type { ManagedLook, LookStatus } from '~/services/manage-looks';
-import { getMyLooks, deleteLook, reorderLooks, setLookLive } from '~/services/manage-looks';
+import { getMyLooks, getMyLookCounts, deleteLook, reorderLooks, setLookLive } from '~/services/manage-looks';
 import {
   getMyCatalogProducts, reorderMyCatalogProducts,
   setCatalogProductActive,
@@ -184,15 +184,12 @@ export default function MyLooks({ onClose }: MyLooksProps) {
 
   const refreshCounts = useCallback(async () => {
     try {
-      const res = await getMyLooks({ page: 1, limit: 200 });
-      const ls = res.data;
-      // Published === live; everything else === inactive (the new rule).
-      const live = ls.filter(l => l.status === 'live').length;
-      setCounts({
-        all: ls.length,
-        live,
-        archived: ls.length - live,
-      });
+      // Exact server-side counts so the "X inactive" badge ALWAYS equals the
+      // Inactive tab's total. (The old approach fetched 200 rows and
+      // subtracted — it broke past 200 looks and could disagree with the
+      // list's NULL-safe filter, which is how 27-counted-but-9-shown happened.)
+      const c = await getMyLookCounts();
+      setCounts({ all: c.all, live: c.live, archived: c.inactive });
     } catch { /* keep prior counts */ }
   }, []);
 
