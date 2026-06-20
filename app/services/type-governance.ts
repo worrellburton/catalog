@@ -335,7 +335,10 @@ export function auditProductTypes(
 
     if (!target) continue;
     if (currentNode && (currentNode.id === target.id || inBranch(currentNode, target))) continue;
-    if (imageNode && currentNode && sameBranch(currentNode, imageNode)) continue; // image confirms where it already is
+    // Image confirms the product is already AT or DEEPER than its category
+    // match → leave it (never downgrade). A shallower current node still gets
+    // deepened toward the image match.
+    if (imageNode && currentNode && inBranch(currentNode, imageNode)) continue;
     recs.push({
       productId: p.id,
       name: p.name,
