@@ -853,6 +853,15 @@ export default function Home() {
     setShowMyLooks(false);
     setShuffleKey(k => k + 1);
     setCatalogName('all');
+    // Fully tear down the searched-feed state. Clearing searchQuery alone left
+    // the SearchCatalogStrip data (ceremonyRecs) + the ceremony/reveal flags
+    // live, so a searched/browsing feed (the `.has-catalog-strip` state, e.g.
+    // "Pizza") didn't fully return to the home hero on a logo tap. Reset them
+    // all so the logo reliably lands on the hero from ANY searched state.
+    setCeremonyRecs([]);
+    setCeremonyImages([]);
+    setCeremony({ active: false, query: '', kind: 'search' });
+    setRevealResults(false);
     if (typeof window !== 'undefined') {
       window.dispatchEvent(new Event('catalog:close-search'));
       // Push the URL bar back to "/" so clicking the logo from a
@@ -2446,6 +2455,7 @@ export default function Home() {
             searchTrigger={searchTrigger}
             followedHandles={followingCatalog}
             mySizeOnly={mySizeOnly}
+            feedCols={feedGridCols}
           />
           </div>
 
