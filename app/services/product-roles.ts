@@ -17,6 +17,73 @@ export interface PickedProduct {
 
 export const ROLE_TAGS = ['Hat', 'Top', 'Jacket', 'Dress', 'Pants', 'Shoes', 'Bag', 'Jewelry', 'Sunglasses', 'Accessory'];
 
+// Governed `products.type` → picker/stylist role. The stored type is the
+// curated value (set + corrected in /admin/governance), so when a product
+// HAS one we trust it over the name-guess — that's what stops a skincare
+// item ("type: skincare") landing in the Tops slot just because its name
+// happens to contain a clothing word.
+//
+//   • a ROLE_TAG string → goes to that garment/accessory bucket
+//   • null              → a KNOWN non-garment (beauty, home, tech, food…)
+//                         or a wearable that isn't an outfit slot (underwear,
+//                         loungewear, swimwear) → the picker's "Objects"
+//                         bucket, never a clothing slot
+//   • undefined         → type unrecognised → defer to the name heuristic
+const TYPE_TO_ROLE: Record<string, string | null> = {
+  // ── worn → a real slot ──
+  shoes: 'Shoes',
+  top: 'Top',
+  outerwear: 'Jacket',
+  suit: 'Jacket',
+  dress: 'Dress',
+  bottoms: 'Pants',
+  hat: 'Hat',
+  bag: 'Bag',
+  wallet: 'Accessory',
+  belt: 'Accessory',
+  scarf: 'Accessory',
+  gloves: 'Accessory',
+  socks: 'Accessory',
+  jewelry: 'Jewelry',
+  watch: 'Jewelry',
+  eyewear: 'Sunglasses',
+  // ── wearable, but NOT an outfit slot → keep out of garment reels ──
+  underwear: null,
+  loungewear: null,
+  swimwear: null,
+  activewear: null,
+  // ── non-garment → Objects ──
+  skincare: null, fragrance: null, makeup: null, haircare: null, bodycare: null,
+  book: null, magazine: null, stationery: null, toy: null, puzzle: null, game: null,
+  phone: null, 'phone case': null, tablet: null, laptop: null, headphones: null,
+  speaker: null, camera: null, tech: null,
+  lighting: null, bedding: null, kitchenware: null, glassware: null, tableware: null,
+  decor: null, furniture: null,
+  coffee: null, tea: null, wine: null, spirits: null, drink: null, food: null, pet: null,
+  yoga: null, fitness: null, bike: null, outdoor: null, camping: null,
+};
+
+/** Map a governed `products.type` to a role. Returns `undefined` (not
+ *  `null`) when the type is unknown so the caller can fall back to the
+ *  name heuristic; `null` means a known non-garment / non-slot item. */
+export function roleTagFromType(type: string | null | undefined): string | null | undefined {
+  if (!type) return undefined;
+  const key = type.toLowerCase().trim();
+  return key in TYPE_TO_ROLE ? TYPE_TO_ROLE[key] : undefined;
+}
+
+/** Resolve a product's role: the governed type wins (including a deliberate
+ *  null for non-garments); only when there's no usable type do we guess
+ *  from the name. */
+export function roleForProduct(
+  type: string | null | undefined,
+  name: string | null | undefined,
+): string | null {
+  const fromType = roleTagFromType(type);
+  if (fromType !== undefined) return fromType;
+  return roleTagFromName(name ?? null);
+}
+
 // Order matters: the FIRST pattern that matches wins, so the most specific /
 // least ambiguous garment classes are tested first. Footwear is checked BEFORE
 // tops so a "track shoe" or "boot" can never fall through to the Top bucket

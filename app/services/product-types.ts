@@ -45,7 +45,7 @@ const RULES: TaxonomyRule[] = [
   { type: 'Hat',         subtype: null,          patterns: [/\bhat\b/i] },
 
   // ── Footwear (type = Shoes) ──
-  { type: 'Shoes',       subtype: 'Sneakers',    patterns: [/\b(sneaker|trainer|runner|kicks|hi[-\s]?top)\b/i] },
+  { type: 'Shoes',       subtype: 'Sneakers',    patterns: [/\b(sneaker|trainer|runner|kicks|(?:hi|high|low)[-\s]?top)\b/i] },
   { type: 'Shoes',       subtype: 'Boots',       patterns: [/\b(boot|chelsea|combat\s*boot|hiking\s*boot|ugg|chukka)\b/i] },
   { type: 'Shoes',       subtype: 'Heels',       patterns: [/\b(heel|stiletto|pump|high-?heel)\b/i] },
   { type: 'Shoes',       subtype: 'Sandals',     patterns: [/\b(sandal|flip[-\s]?flop|slide|espadrille|thong|birkenstock)\b/i] },

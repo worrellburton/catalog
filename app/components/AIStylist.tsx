@@ -9,7 +9,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { gsap } from 'gsap';
 import { supabase } from '~/utils/supabase';
-import { type PickedProduct, roleTagFromName } from '~/services/product-roles';
+import { type PickedProduct, roleForProduct } from '~/services/product-roles';
 import { getFeedSearchResults } from '~/services/feed-search';
 import { suggestOutfit, STYLIST_SLOTS, type StylistOutfit, type StylistSlot } from '~/services/ai-stylist';
 
@@ -88,7 +88,7 @@ export default function AIStylist({ gender, onComplete, onBack }: Props) {
     (async () => {
       let query = supabase!
         .from('products')
-        .select('id, name, brand, price, image_url, primary_image_url, primary_video_url, primary_video_poster_url, haiku_context, gender')
+        .select('id, name, brand, price, image_url, primary_image_url, primary_video_url, primary_video_poster_url, haiku_context, gender, type')
         .eq('is_active', true)
         .not('image_url', 'is', null)
         .order('created_at', { ascending: false })
@@ -97,8 +97,8 @@ export default function AIStylist({ gender, onComplete, onBack }: Props) {
       else if (gender === 'female') query = query.or('gender.eq.female,gender.eq.unisex');
       const { data } = await query;
       if (cancelled) return;
-      const mapped: PickedProduct[] = ((data || []) as Array<PickedProduct & { haiku_context?: string | null; gender?: string | null }>)
-        .map(p => ({ ...p, role_tag: roleTagFromName(p.name) }))
+      const mapped: PickedProduct[] = ((data || []) as Array<PickedProduct & { haiku_context?: string | null; gender?: string | null; type?: string | null }>)
+        .map(p => ({ ...p, role_tag: roleForProduct(p.type, p.name) }))
         .filter(p => allowedForGender(p as PickedProduct & { gender?: string | null }, gender));
       setBaseCandidates(mapped);
     })();
@@ -131,7 +131,7 @@ export default function AIStylist({ gender, onComplete, onBack }: Props) {
             id: p.id, name: p.name, brand: p.brand, price: p.price,
             image_url: p.image_url, primary_image_url: p.primary_image_url ?? null,
             primary_video_url: p.primary_video_url ?? null, primary_video_poster_url: p.primary_video_poster_url ?? null,
-            role_tag: roleTagFromName(p.name), gender: p.gender ?? null,
+            role_tag: roleForProduct(p.type, p.name), gender: p.gender ?? null,
           };
           if (allowedForGender(cand, gender)) relevant.push(cand);
         }
