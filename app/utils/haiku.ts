@@ -24,3 +24,20 @@ export function haikuIdentity(text: string | null | undefined): string {
   const line = lines[0] ?? text;
   return (line.split(/(?<=[.!?])\s/)[0] ?? line).trim();
 }
+
+// haikuCategory — the EXPLICIT category Haiku reports for a product, when the
+// context carries one (the richer prompt emits a "Category:" field, e.g.
+// "**Category:** Footwear / Casual Shoes"). Type placement should trust this
+// over the title line: a title like "Men's Low-Top Sneaker" contains the word
+// "top", which mis-matches the Tops node — the Category ("Footwear / Casual
+// Shoes") is the unambiguous signal. Returns '' for the older two-line format
+// (callers fall back to haikuIdentity).
+export function haikuCategory(text: string | null | undefined): string {
+  if (!text) return '';
+  for (const raw of text.split('\n')) {
+    const line = raw.replace(/[*_`>#]/g, '').trim();
+    const m = line.match(/^category\s*:?\s*(.+)$/i);
+    if (m && m[1]) return m[1].trim();
+  }
+  return '';
+}
