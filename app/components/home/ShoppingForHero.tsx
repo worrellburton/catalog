@@ -4,7 +4,6 @@
 // catalog feed lives directly below; scrolling reveals the best sellers.
 
 import { useEffect, useRef, useMemo, useState } from 'react';
-import CatalogLogo from '~/components/CatalogLogo';
 import { getAutoEditorConfig } from '~/services/dials';
 
 // Headline rotation. First HEADLINE_BASELINE_VISITS the user sees the
@@ -154,16 +153,13 @@ interface ShoppingForHeroProps {
 }
 
 export default function ShoppingForHero({ onRevealFeed }: ShoppingForHeroProps) {
-  // "How your daily feed works" popup — opened from the ? next to the cue.
-  const [showFeedInfo, setShowFeedInfo] = useState(false);
-  useEffect(() => {
-    if (!showFeedInfo) return;
-    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setShowFeedInfo(false); };
-    window.addEventListener('keydown', onKey);
-    return () => window.removeEventListener('keydown', onKey);
-  }, [showFeedInfo]);
-
-  // Countdown to the next daily-feed drop (the configured UTC refresh hour).
+  // Live countdown to the next daily-feed drop. The daily feed rolls over at
+  // a configured UTC refresh hour (the "Automatic Editor" boundary — see
+  // services/dials.ts → AutoEditorConfig.refreshHour, 0..23). We count down
+  // to that exact boundary so the hero subtitle matches when the feed
+  // actually refreshes. Ticks every second; the interval is cleared on
+  // unmount and the target is recomputed each tick (so it rolls to the next
+  // day the instant it passes zero).
   const [refreshHour, setRefreshHour] = useState(0);
   const [nowTick, setNowTick] = useState(() => Date.now());
   useEffect(() => {
@@ -172,10 +168,9 @@ export default function ShoppingForHero({ onRevealFeed }: ShoppingForHeroProps) 
     return () => { alive = false; };
   }, []);
   useEffect(() => {
-    if (!showFeedInfo) return;
     const t = setInterval(() => setNowTick(Date.now()), 1000);
     return () => clearInterval(t);
-  }, [showFeedInfo]);
+  }, []);
   const dropCountdown = (() => {
     const now = new Date(nowTick);
     const next = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), refreshHour, 0, 0, 0));
@@ -284,21 +279,16 @@ export default function ShoppingForHero({ onRevealFeed }: ShoppingForHeroProps) 
         </h1>
       </div>
 
-      {/* Scroll-to-your-daily-feed affordance: an animated mouse + label
-          (tap to reveal the feed), a one-line tagline with a ? that opens
-          the full explanation, and a bobbing chevron. */}
+      {/* Scroll-to-your-daily-feed affordance: the "Your daily feed" label
+          (tap to reveal the feed), a live countdown to the next daily-feed
+          drop, and a bobbing chevron. */}
       <div className="sfh-scroll-hint">
         <button type="button" className="sfh-scroll-cta" onClick={onRevealFeed} aria-label="Open your daily feed">
           Your daily feed
         </button>
-        <span className="sfh-scroll-sub">
-          A fresh feed, tuned to you, every day.
-          <button
-            type="button"
-            className="sfh-scroll-info"
-            onClick={() => setShowFeedInfo(true)}
-            aria-label="How your daily feed works"
-          >?</button>
+        <span className="sfh-scroll-sub" aria-label={`Your next feed drops in ${dropCountdown}`}>
+          Your next feed drops in{' '}
+          <span className="sfh-scroll-countdown">{dropCountdown}</span>
         </span>
         <button type="button" className="sfh-scroll-chev-btn" onClick={onRevealFeed} aria-label="Scroll to your feed">
           <svg className="sfh-scroll-chev" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -306,37 +296,6 @@ export default function ShoppingForHero({ onRevealFeed }: ShoppingForHeroProps) 
           </svg>
         </button>
       </div>
-
-      {/* "How your daily feed works" popup. */}
-      {showFeedInfo && (
-        <div className="sfh-feed-info" role="dialog" aria-modal="true" aria-label="How your daily feed works" onClick={() => setShowFeedInfo(false)}>
-          <div className="sfh-feed-info-card sfh-feed-info-card--magic" onClick={e => e.stopPropagation()}>
-            <div className="sfh-feed-info-content">
-              <button type="button" className="sfh-feed-info-close" onClick={() => setShowFeedInfo(false)} aria-label="Close">
-                <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round" strokeLinejoin="round">
-                  <line x1="18" y1="6" x2="6" y2="18" /><line x1="6" y1="6" x2="18" y2="18" />
-                </svg>
-              </button>
-              <CatalogLogo className="sfh-feed-info-logo" />
-              <h3 className="sfh-feed-info-title">Your daily feed</h3>
-              <p className="sfh-feed-info-body">
-                A brand-new lineup, hand-tuned to you, every single day. The more you tap,
-                save, and shop, the sharper it gets.
-              </p>
-              <ul className="sfh-feed-info-points">
-                <li>A personal stylist who never sleeps, and never judges your 2&nbsp;a.m. browsing.</li>
-                <li>Gets smarter with every tap, save, and shop.</li>
-                <li>A fresh, fully-loaded lineup waiting for you every morning.</li>
-              </ul>
-              {/* Countdown hero — the big animated centerpiece. */}
-              <div className="sfh-feed-info-countdown" aria-label="Time until your next feed">
-                <span className="sfh-feed-info-countdown-label">New feed drops in</span>
-                <span className="sfh-feed-info-countdown-time">{dropCountdown}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
     </section>
   );
 }
