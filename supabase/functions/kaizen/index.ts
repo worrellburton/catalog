@@ -105,15 +105,29 @@ Deno.serve(async (req: Request) => {
     const attachCount = new Map<string, number>();
     const retypeIds = new Set<string>();
 
+    const sameBranch = (a: Node | null, b: Node | null): boolean =>
+      !!a && !!b && (inBranch(a, b) || inBranch(b, a));
+
     for (const p of products) {
       const currentNode = p.type ? byNorm.get(normalize(p.type))?.[0] ?? null : null;
       const hctx = haikuIdentity(p.haiku_context);
-      let best: Node | null = null;
+      // The IMAGE (haiku identity) is authoritative; the NAME only refines
+      // within the branch the image confirms. A confident image read that
+      // matches no node suppresses any name-only match — that's the
+      // "Twist-Top Lid → tops" false positive (the photo shows a jar).
+      let imageBest: Node | null = null, nameBest: Node | null = null;
       for (const m of matchers) {
-        const hit = m.rx.test(p.name) || (hctx ? m.rx.test(hctx) : false);
-        if (hit && (!best || depth(m.node) > depth(best))) best = m.node;
+        if (hctx && m.rx.test(hctx) && (!imageBest || depth(m.node) > depth(imageBest))) imageBest = m.node;
+        if (m.rx.test(p.name) && (!nameBest || depth(m.node) > depth(nameBest))) nameBest = m.node;
       }
-      if (best && (!currentNode || (currentNode.id !== best.id && !inBranch(currentNode, best)))) {
+      let best: Node | null = null;
+      if (imageBest) {
+        best = (sameBranch(imageBest, nameBest) && depth(nameBest!) > depth(imageBest)) ? nameBest : imageBest;
+      } else if (!hctx) {
+        best = nameBest; // pre-image set only; no image read to corroborate
+      }
+      const imgConfirmsCurrent = !!imageBest && !!currentNode && sameBranch(imageBest, currentNode);
+      if (best && !imgConfirmsCurrent && (!currentNode || (currentNode.id !== best.id && !inBranch(currentNode, best)))) {
         retypes.push({ productId: p.id, name: p.name, fromType: p.type, toPath: path(best) });
         retypeIds.add(p.id);
       }
