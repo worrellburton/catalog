@@ -778,6 +778,16 @@
   -webkit-tap-highlight-color: transparent;
 }
 .look-card .card-creator-tag .creator-avatar-follow { flex-shrink: 0; }
+
+/* 3-column (densest) feed: simplify the card chrome so the small tiles aren't
+   crowded (founder's call, ONLY at 3 cols — data-cols is set by the feed
+   dial via FeedSection). Look cards: just the creator avatar — drop the name
+   and the +/− follow badge. Product cards: just brand + price — drop the name. */
+.feed-section-grid[data-cols="3"] .card-creator-tag-name,
+.feed-section-grid[data-cols="3"] .creator-avatar-follow__badge,
+.feed-section-grid[data-cols="3"] .promo-product-name {
+  display: none !important;
+}
 .card-creator-tag-name {
   min-width: 0;
   max-width: 100%;
