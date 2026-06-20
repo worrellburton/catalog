@@ -2775,7 +2775,7 @@ export default function AdminData() {
   }, [genJobs, loadAdProductIds]);
 
   const allProducts = useMemo(() => {
-    const productMap = new Map<string, { id?: string; brand: string; name: string; price: string; url: string; image_url?: string | null; images?: string[]; primary_image_url?: string | null; primary_image_polished?: boolean | null; primary_video_url?: string | null; primary_video_poster_url?: string | null; video_urls: string[]; looks: Set<string>; creators: Set<string>; saves: number; clicks: number; impressions: number; connection: 'Look' | 'Crawl' | 'Ad'; is_active?: boolean; is_elite?: boolean; is_platform?: boolean; type?: string | null; subtype?: string | null; gender?: 'male' | 'female' | 'unisex' | null; created_at?: string | null; source?: string | null; size_fit?: string | null; materials_care?: string | null }>();
+    const productMap = new Map<string, { id?: string; brand: string; name: string; price: string; url: string; image_url?: string | null; images?: string[]; primary_image_url?: string | null; primary_image_polished?: boolean | null; primary_video_url?: string | null; primary_video_poster_url?: string | null; video_urls: string[]; looks: Set<string>; creators: Set<string>; saves: number; clicks: number; impressions: number; connection: 'Look' | 'Crawl' | 'Ad'; is_active?: boolean; is_elite?: boolean; is_platform?: boolean; type?: string | null; subtype?: string | null; gender?: 'male' | 'female' | 'unisex' | null; created_at?: string | null; source?: string | null; size_fit?: string | null; materials_care?: string | null; haiku_context?: string | null }>();
     looks.forEach(look => {
       const c = creators[look.creator];
       look.products.forEach(p => {
@@ -2821,6 +2821,7 @@ export default function AdminData() {
         entry.source = cp.source ?? null;
         entry.size_fit = cp.size_fit ?? null;
         entry.materials_care = cp.materials_care ?? null;
+        entry.haiku_context = (cp as { haiku_context?: string | null }).haiku_context ?? null;
         if (adProductIds.has(cp.id)) {
           entry.connection = 'Ad';
         } else if (cp.is_crawled) {
@@ -2858,6 +2859,7 @@ export default function AdminData() {
           source: cp.source ?? null,
           size_fit: cp.size_fit ?? null,
           materials_care: cp.materials_care ?? null,
+          haiku_context: (cp as { haiku_context?: string | null }).haiku_context ?? null,
         });
       }
     });
@@ -6045,8 +6047,7 @@ export default function AdminData() {
                 <th style={{ textAlign: 'left', minWidth: 56 }} title="Vision-picked solo-product image. Click any photo in the expanded row to override.">Primary</th>
                 <th style={{ textAlign: 'left' }}>Primary Video</th>
                 <SortableTh label="Brand" sortKey="brand" currentSort={productTable.sort} onSort={productTable.handleSort} />
-                <SortableTh label="Type" sortKey="type" currentSort={productTable.sort} onSort={productTable.handleSort} />
-                <SortableTh label="Subtype" sortKey="subtype" currentSort={productTable.sort} onSort={productTable.handleSort} />
+                <SortableTh label="Type · Subtype" sortKey="type" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <SortableTh label="Gender" sortKey="gender" currentSort={productTable.sort} onSort={productTable.handleSort} />
                 <th style={{ minWidth: 140 }}>Fabric</th>
                 <th style={{ minWidth: 200 }} title="Claude Haiku's read of the primary image — what the item actually is. Feeds type governance.">Haiku Context</th>
@@ -6471,37 +6472,28 @@ export default function AdminData() {
                     )}
                   </td>
                   <td style={{ textAlign: 'left', fontSize: 12 }} onClick={e => e.stopPropagation()}>
-                    {/* Governed type cell — the live connection to
-                        /admin/governance/types. Assigning writes the same
-                        type/gender/type_path cascade the brain writes. */}
+                    {/* Consolidated Type · Subtype cell — the live connection
+                        to /admin/governance/types. Click for the derivation
+                        map (what's stored vs. what the name / image infer) and
+                        to change the type/subtype. Assigning a type writes the
+                        same type/gender/type_path cascade the brain writes. */}
                     <GovernanceTypeCell
                       productId={p.id ?? ''}
                       type={p.type ?? null}
+                      subtype={p.subtype ?? null}
+                      name={p.name ?? null}
+                      gender={p.gender ?? null}
+                      haikuContext={(p as { haiku_context?: string | null }).haiku_context ?? null}
                       showToast={showToast}
                       onAssigned={(patch) => {
                         setCrawledProducts(prev => prev.map(r =>
                           r.id === p.id ? { ...r, type: patch.type, gender: patch.gender } : r));
                       }}
+                      onAssignedSubtype={(st) => {
+                        setCrawledProducts(prev => prev.map(r =>
+                          r.id === p.id ? { ...r, subtype: st } : r));
+                      }}
                     />
-                  </td>
-                  {/* Subtype: a finer-grained classifier under type.
-                      Shoes → Sneakers/Sandals/Boots/Heels/Loafers/Flats.
-                      Empty for types we haven't split yet — those will
-                      pick up subtype as backfill in a later pass. */}
-                  <td style={{ textAlign: 'left', fontSize: 12 }}>
-                    {p.subtype ? (
-                      <span style={{
-                        display: 'inline-block',
-                        padding: '2px 8px',
-                        borderRadius: 999,
-                        background: '#ecfeff',
-                        color: '#0e7490',
-                        fontWeight: 500,
-                        fontSize: 11,
-                      }}>{p.subtype}</span>
-                    ) : (
-                      <span style={{ color: '#cbd5e1' }}> - </span>
-                    )}
                   </td>
                   <td style={{ textAlign: 'left', fontSize: 12 }}>
                     {p.gender === 'male' ? (

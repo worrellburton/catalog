@@ -10,6 +10,7 @@
 
 export const PROMPT_POLISH_PRIMARY_KEY = 'prompt_polish_primary';
 export const PROMPT_PRIMARY_VIDEO_KEY = 'prompt_primary_video';
+export const PROMPT_HAIKU_CONTEXT_KEY = 'prompt_haiku_context';
 
 // Gemini 2.5 Flash Image (nano-banana) reframe packshot prompt
 // (polish-primary-image). "Add padding" framing is much stricter than
@@ -39,6 +40,23 @@ export const DEFAULT_PRIMARY_VIDEO_PROMPT = [
   'Portrait 3:4 composition.',
 ].join(' ');
 
+// Claude Haiku vision read of a product's primary image (haiku-context
+// edge function). The function ALWAYS prepends a metadata block built from
+// the row — title, brand, price, materials — then sends the primary image
+// and appends THIS instruction. The picture is the main reference; the
+// metadata is supporting context only. The two-line shape is a hard
+// contract: type governance reads ONLY line 1 (haikuIdentity), so keep
+// "Line 1 = bare category, Line 2 = colour-first detail" if you edit it.
+export const DEFAULT_HAIKU_CONTEXT_PROMPT = [
+  'Identify what this item ACTUALLY is. Use the PHOTO as your main reference — product titles and metadata often mislead, so trust the image first and treat the title, brand, price, and materials as supporting hints only.',
+  '',
+  'Reply in EXACTLY two lines, nothing else. Plain text only — no markdown, no "#" headings, no labels, no blank line, no bullets:',
+  'Line 1 — the item\'s category in 1-4 plain words, using the most common everyday noun for it (e.g. "potted plant", "high heels", "denim jacket", "table lamp"). Name only the object itself. Do NOT mention the room, background, setting, or surroundings.',
+  'Line 2 — one dense sentence that STARTS with the item\'s main colour(s), then its materials and any notable detail.',
+  '',
+  'No marketing language.',
+].join('\n');
+
 export interface PromptSetting {
   key: string;
   label: string;
@@ -60,5 +78,11 @@ export const EDITABLE_PROMPTS: PromptSetting[] = [
     label: 'Primary Video',
     description: 'Sent to Seedance 2.0 when generating a primary video from the primary image.',
     defaultValue: DEFAULT_PRIMARY_VIDEO_PROMPT,
+  },
+  {
+    key: PROMPT_HAIKU_CONTEXT_KEY,
+    label: 'Haiku Context',
+    description: 'Sent to Claude Haiku (with the primary image + the product title, brand, price and materials) to read what each product actually is. Feeds the type/gender governance. The metadata block is added automatically — this is the instruction that follows it.',
+    defaultValue: DEFAULT_HAIKU_CONTEXT_PROMPT,
   },
 ];
