@@ -1145,14 +1145,14 @@ html:has(.bottom-bar.search-open) .sc-name-pill { opacity: 0; pointer-events: no
   .follow-rail-wrap--center .follow-rail-separator {
     display: none !important;
   }
-  /* The 3D orbit carousel is built and ready (.follow-orbit), but we're
-     back on the flat horizontal stories scroll for now. Flip these two to
-     re-enable the orbit. */
+  /* The shallow creator ARC replaces the flat stories scroll on mobile: a
+     gently-bowed wheel of profile pictures (no names) that drifts very slowly
+     and can be flicked to spin, arcing across the top of the screen. */
   .follow-rail-wrap--center .follow-stories-rail {
-    display: flex;
+    display: none;
   }
   .follow-rail-wrap--center .follow-orbit {
-    display: none;
+    display: block;
   }
 
   /* Reposition the center rail to a full-width row pinned at the top, BELOW
@@ -1401,16 +1401,20 @@ html:has(.bottom-bar.search-open) .sc-name-pill { opacity: 0; pointer-events: no
 .follow-orbit {
   display: none;
   width: 100%;
-  touch-action: pan-y;
+  touch-action: pan-y; /* vertical scroll/pull still belongs to the page */
   -webkit-user-select: none;
   user-select: none;
+  animation: follow-orbit-in 0.7s cubic-bezier(0.22, 0.61, 0.36, 1) both;
 }
+/* The arc dissolves into the screen edges so it reads as a continuous wheel
+   curving off-canvas rather than a row that hard-stops. */
 .follow-orbit-viewport {
   position: relative;
   width: 100%;
-  height: 50px;
-  perspective: 440px;
-  perspective-origin: 50% 50%;
+  height: 88px;
+  overflow: visible;
+  -webkit-mask: linear-gradient(to right, transparent 0, #000 13%, #000 87%, transparent 100%);
+          mask: linear-gradient(to right, transparent 0, #000 13%, #000 87%, transparent 100%);
 }
 .follow-orbit-stage {
   position: absolute;
@@ -1418,7 +1422,6 @@ html:has(.bottom-bar.search-open) .sc-name-pill { opacity: 0; pointer-events: no
   top: 50%;
   width: 0;
   height: 0;
-  transform-style: preserve-3d;
   will-change: transform;
 }
 .follow-orbit-item {
@@ -1427,7 +1430,7 @@ html:has(.bottom-bar.search-open) .sc-name-pill { opacity: 0; pointer-events: no
   top: 0;
   width: 36px;
   height: 36px;
-  margin: -18px 0 0 -18px; /* centre on the stage origin before its 3D seat */
+  margin: -18px 0 0 -18px; /* centre each avatar on the stage origin */
   background: none;
   border: none;
   padding: 0;
@@ -1435,6 +1438,13 @@ html:has(.bottom-bar.search-open) .sc-name-pill { opacity: 0; pointer-events: no
   -webkit-tap-highlight-color: transparent;
   transform-origin: 50% 50%;
   will-change: transform, opacity;
+}
+@keyframes follow-orbit-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.96); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .follow-orbit { animation: none; }
 }
 .follow-orbit-ring {
   position: relative;
