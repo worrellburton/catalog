@@ -49,6 +49,17 @@ interface FeedSectionProps {
    * that card permanently.
    */
   slotPrefix?: string;
+  /**
+   * Mobile column count (1 / 2 / 3) selected by the home-feed grid-density
+   * dial. When provided on a mobile viewport, the grid renders an INLINE
+   * `gridTemplateColumns: repeat(N, 1fr)` — inline style is the top of the
+   * cascade, so the column change can't be overridden or fail to inherit
+   * (the prior `--feed-cols` CSS-var approach did, at runtime). Only the
+   * main home feed threads this; nested/overlay feeds leave it undefined
+   * and fall back to the 2-column default. Desktop ignores it (keeps the
+   * layout-driven column count).
+   */
+  feedCols?: number;
 }
 
 // When we know creatives are still fetching, reserve roughly this share of
@@ -102,6 +113,7 @@ function FeedSection({
   onLoadMore,
   scrollRoot = null,
   slotPrefix,
+  feedCols,
 }: FeedSectionProps) {
   const batch = batchSize ?? (isInitial ? DEFAULT_BATCH : SUB_BATCH);
   const [visibleCount, setVisibleCount] = useState(batch);
@@ -121,10 +133,19 @@ function FeedSection({
 
   const gridStyle = useMemo(() => {
     if (typeof window !== 'undefined' && window.innerWidth <= 768) {
-      return {};
+      // BULLETPROOF mobile column count: drive it with an INLINE
+      // gridTemplateColumns straight off the dial's selected count. Inline
+      // style sits at the top of the cascade, so unlike the old
+      // `--feed-cols` custom-prop (which had to inherit down to
+      // .feed-section-grid and was beaten/never inherited at runtime), this
+      // can't be overridden. Default 2 when no dial value is threaded
+      // (nested/overlay feeds, pre-mount). `1` ⇒ one full-width card per
+      // row (true single-column scroll).
+      const cols = feedCols && feedCols >= 1 ? feedCols : 2;
+      return { gridTemplateColumns: `repeat(${cols}, 1fr)` };
     }
     return { gridTemplateColumns: `repeat(${layout.columns}, 1fr)` };
-  }, [layout.columns]);
+  }, [layout.columns, feedCols]);
 
   // Pick a tile size variant deterministically from (layoutMode, index).
   // layoutMode steps the seed so the Remix button visibly rearranges the
@@ -383,11 +404,22 @@ function FeedSection({
     };
     if (!rowMetrics) measure();
     window.addEventListener('resize', onResize);
+    // Re-measure on a feedCols change too (double-rAF so the browser has
+    // committed the new inline gridTemplateColumns before we read cols/rowH).
+    // The parent ALSO dispatches a resize, but driving the re-measure off the
+    // effect dep makes it robust even if that event is coalesced/missed — so
+    // windowStart/padTop never go stale (no blank gaps switching to 1 or 3).
+    let measureRaf1 = 0, measureRaf2 = 0;
+    measureRaf1 = requestAnimationFrame(() => {
+      measureRaf2 = requestAnimationFrame(() => measure());
+    });
     return () => {
       window.removeEventListener('resize', onResize);
       if (raf) cancelAnimationFrame(raf);
+      if (measureRaf1) cancelAnimationFrame(measureRaf1);
+      if (measureRaf2) cancelAnimationFrame(measureRaf2);
     };
-  }, [mobileWindowing, visibleCount, rowMetrics]);
+  }, [mobileWindowing, visibleCount, rowMetrics, feedCols]);
 
   useEffect(() => {
     const sentinel = sentinelRef.current;
