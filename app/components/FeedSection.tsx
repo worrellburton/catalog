@@ -483,6 +483,7 @@ function FeedSection({
         ref={gridRef}
         className="feed-section-grid"
         id={isInitial ? 'grid-container' : undefined}
+        data-cols={feedCols || undefined}
         style={padTop ? { ...gridStyle, paddingTop: padTop } : gridStyle}
       >
         {displayItems.map((item, idx) => {
