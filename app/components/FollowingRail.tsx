@@ -704,7 +704,12 @@ function FollowingOrbitRail({ entries, onlineHandles, unseenByHandle, onOpenCrea
       && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
     let raf = 0;
     let last = performance.now();
+    let visible = true;
     const tick = (now: number) => {
+      // Suspended while the rail is scrolled off-screen (IntersectionObserver
+      // below) so the per-frame avatar restyles don't compete with the feed
+      // scroll on the main thread.
+      if (!visible) { raf = 0; return; }
       raf = requestAnimationFrame(tick);
       const stage = stageRef.current;
       const root = rootRef.current;
@@ -748,8 +753,18 @@ function FollowingOrbitRail({ entries, onlineHandles, unseenByHandle, onOpenCrea
         el.style.pointerEvents = op > 0.45 ? 'auto' : 'none';
       }
     };
+    const start = () => { if (!raf) { last = performance.now(); raf = requestAnimationFrame(tick); } };
+    const rootEl = rootRef.current;
+    let io: IntersectionObserver | null = null;
+    if (rootEl && typeof IntersectionObserver !== 'undefined') {
+      io = new IntersectionObserver((entries) => {
+        visible = entries.some(e => e.isIntersecting);
+        if (visible) start();
+      });
+      io.observe(rootEl);
+    }
     raf = requestAnimationFrame(tick);
-    return () => cancelAnimationFrame(raf);
+    return () => { if (raf) cancelAnimationFrame(raf); io?.disconnect(); };
   }, [count]);
 
   const onPointerDown = (e: React.PointerEvent) => {
