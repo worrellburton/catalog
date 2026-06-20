@@ -157,8 +157,15 @@ Rules:
 AVAILABLE PRODUCTS:
 ${list}
 
+For "rationale", write a short, warm narrative paragraph (about 2 to 4
+sentences) explaining why THIS specific outfit was chosen for THIS shopper.
+Reference the occasion and vibe, and name the actual pieces you picked and how
+they work together (palette, formality, season). Speak to the shopper directly,
+like a stylist who is excited about the look. Keep it concise and readable. Do
+not use em dashes.
+
 Return ONLY JSON, no prose or code fences:
-{"hats": "<id|null>", "jackets": "<id|null>", "tops": "<id|null>", "dresses": "<id|null>", "bottoms": "<id|null>", "shoes": "<id|null>", "rationale": "<one short sentence on why this works for the occasion>"}`;
+{"hats": "<id|null>", "jackets": "<id|null>", "tops": "<id|null>", "dresses": "<id|null>", "bottoms": "<id|null>", "shoes": "<id|null>", "rationale": "<a short, warm 2 to 4 sentence paragraph on why this specific look was chosen for the occasion, naming the chosen pieces>"}`;
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
