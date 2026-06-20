@@ -4,6 +4,7 @@
 
 export type SearchBeamId =
   | 'none'
+  | 'portal'
   | 'apple'
   | 'mirrored'
   | 'aurora'
@@ -18,6 +19,7 @@ export interface SearchBeamVariant {
 
 export const SEARCH_BEAMS: SearchBeamVariant[] = [
   { id: 'none',     label: 'Off',                blurb: 'No animated border. Default static pill.' },
+  { id: 'portal',   label: 'Portal',             blurb: 'Soft glow with slow light rays radiating from behind the pill. Subtle, premium.' },
   { id: 'apple',    label: 'Single beam',        blurb: 'White hot spot orbits ~6 s. Apple Intelligence vibe.' },
   { id: 'mirrored', label: 'Mirrored beams',     blurb: 'Two opposing beams spin together. Sci-fi.' },
   { id: 'aurora',   label: 'Aurora',             blurb: 'Continuous iridescent wash, ~12 s rotation.' },
@@ -25,7 +27,7 @@ export const SEARCH_BEAMS: SearchBeamVariant[] = [
   { id: 'pulse',    label: 'Glow + beam',        blurb: 'Outer halo pulse plus a rotating beam.' },
 ];
 
-export const DEFAULT_SEARCH_BEAM: SearchBeamId = 'none';
+export const DEFAULT_SEARCH_BEAM: SearchBeamId = 'portal';
 
 export function getSearchBeam(id: string | null | undefined): SearchBeamVariant {
   if (!id) return SEARCH_BEAMS[0];
