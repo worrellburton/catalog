@@ -153,6 +153,16 @@ interface ShoppingForHeroProps {
 }
 
 export default function ShoppingForHero({ onRevealFeed }: ShoppingForHeroProps) {
+  // "What is the daily feed?" centered info modal — opened by tapping the
+  // "Your daily feed" heading. Escape / backdrop tap / X all close it.
+  const [infoOpen, setInfoOpen] = useState(false);
+  useEffect(() => {
+    if (!infoOpen) return;
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') setInfoOpen(false); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [infoOpen]);
+
   // Live countdown to the next daily-feed drop. The daily feed rolls over at
   // a configured UTC refresh hour (the "Automatic Editor" boundary — see
   // services/dials.ts → AutoEditorConfig.refreshHour, 0..23). We count down
@@ -279,12 +289,24 @@ export default function ShoppingForHero({ onRevealFeed }: ShoppingForHeroProps) 
         </h1>
       </div>
 
-      {/* Scroll-to-your-daily-feed affordance: the "Your daily feed" label
-          (tap to reveal the feed), a live countdown to the next daily-feed
-          drop, and a bobbing chevron. */}
+      {/* Scroll-to-your-daily-feed affordance: the "Your daily feed" heading
+          (tap to learn what the daily feed is), a live countdown to the next
+          daily-feed drop, and a bobbing chevron (tap to reveal the feed). */}
       <div className="sfh-scroll-hint">
-        <button type="button" className="sfh-scroll-cta" onClick={onRevealFeed} aria-label="Open your daily feed">
+        <button
+          type="button"
+          className="sfh-scroll-cta"
+          onClick={() => setInfoOpen(true)}
+          aria-haspopup="dialog"
+          aria-expanded={infoOpen}
+          aria-label="What is the daily feed?"
+        >
           Your daily feed
+          <svg className="sfh-scroll-cta-info" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+            <circle cx="12" cy="12" r="10" />
+            <line x1="12" y1="16" x2="12" y2="12" />
+            <line x1="12" y1="8" x2="12.01" y2="8" />
+          </svg>
         </button>
         <span className="sfh-scroll-sub" aria-label={`Your next feed drops in ${dropCountdown}`}>
           Your next feed drops in{' '}
@@ -296,6 +318,83 @@ export default function ShoppingForHero({ onRevealFeed }: ShoppingForHeroProps) 
           </svg>
         </button>
       </div>
+
+      {infoOpen && (
+        <div
+          className="sfh-info-scrim"
+          role="presentation"
+          onClick={() => setInfoOpen(false)}
+        >
+          <div
+            className="sfh-info-card"
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="sfh-info-title"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              className="sfh-info-close"
+              onClick={() => setInfoOpen(false)}
+              aria-label="Close"
+            >
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+            </button>
+
+            <h2 id="sfh-info-title" className="sfh-info-title">Your daily feed</h2>
+
+            <p className="sfh-info-lead">
+              A fresh, personalized mix of looks and products, hand-tuned to
+              you and rebuilt once a day. Every morning it reshuffles so the
+              top of your feed feels new — the items you already scrolled past
+              rest, and things you haven&apos;t seen rise up.
+            </p>
+
+            <h3 className="sfh-info-subhead">What shapes it</h3>
+            <ul className="sfh-info-list">
+              <li>
+                <strong>What you view &amp; click.</strong> The categories and
+                brands you tap into get leaned into, so the feed drifts toward
+                what you actually engage with.
+              </li>
+              <li>
+                <strong>Brands &amp; creators you follow and save.</strong>
+                {' '}Saved items and followed creators float their brands and
+                looks higher up.
+              </li>
+              <li>
+                <strong>Your size &amp; gender prefs.</strong> Looks with
+                products in your size are nudged up, and your profile gender
+                (plus unisex) is matched so you mostly see things made for you.
+              </li>
+              <li>
+                <strong>Freshness.</strong> New arrivals and items you&apos;ve
+                never been shown get reserved spots near the top — the
+                &ldquo;new finds every morning&rdquo; part.
+              </li>
+              <li>
+                <strong>A daily reshuffle.</strong> Once you&apos;ve seen
+                everything, the whole feed re-orders so it doesn&apos;t feel
+                frozen.
+              </li>
+            </ul>
+
+            <h3 className="sfh-info-subhead">When it refreshes</h3>
+            <p className="sfh-info-lead">
+              It resets once a day, rolling over to a new feed at the same time
+              each day. The countdown above shows exactly how long until the
+              next drop.
+            </p>
+
+            <button type="button" className="sfh-info-done" onClick={() => setInfoOpen(false)}>
+              Got it
+            </button>
+          </div>
+        </div>
+      )}
     </section>
   );
 }
