@@ -50,6 +50,7 @@ import { retireServiceWorker } from '~/utils/registerSW';
 import HeaderWalletPill from '~/components/HeaderWalletPill';
 import HeaderActivityPill from '~/components/HeaderActivityPill';
 import FollowingRail from '~/components/FollowingRail';
+import CreatorConstellation from '~/components/CreatorConstellation';
 import PendingLookPill from '~/components/PendingLookPill';
 import ActivityRealtimeToasts from '~/components/ActivityRealtimeToasts';
 
@@ -304,6 +305,9 @@ export default function Home() {
   // takes them in).
   const [showSignIn, setShowSignIn] = useState(false);
   useEffect(() => { if (user) setShowSignIn(false); }, [user]);
+  // The pull-down "people & brands" page (CreatorConstellation). Opened by the
+  // home top-edge pull gesture (PullDownActivityGesture → 'catalog:open-people').
+  const [peopleOpen, setPeopleOpen] = useState(false);
   // Guest freemium gate. The signup scrim that dissolves over a look teaser
   // ('look'), a creator catalog ('creator'), or the feed scroll nudge
   // ('feed'). null = no gate showing. Cleared the moment a session resolves.
@@ -2194,6 +2198,20 @@ export default function Home() {
   // that signals "what you tapped is now the focus" without feeling theatrical.
   const overlayOpen = !!selectedProduct || !!selectedLook;
 
+  // Home top-edge pull → open the people & brands page. Honour it only when
+  // the home feed is the active surface (no look/product/creator/brand/gate
+  // already up), so the global gesture can't fire over another screen.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const onOpenPeople = () => {
+      if (view !== 'app') return;
+      if (overlayOpen || creatorFilter || brandFilter || guestGate || showBookmarks || showMyLooks) return;
+      setPeopleOpen(true);
+    };
+    window.addEventListener('catalog:open-people', onOpenPeople);
+    return () => window.removeEventListener('catalog:open-people', onOpenPeople);
+  }, [view, overlayOpen, creatorFilter, brandFilter, guestGate, showBookmarks, showMyLooks]);
+
   // Guest scroll nudge — once a guest has scrolled a few screens of feed,
   // dissolve in the soft "register for your daily feed" popup. Cadence
   // (services/guest): show once at ~3 screens, re-nudge once deeper at ~8,
@@ -2752,6 +2770,17 @@ export default function Home() {
               />
             </Suspense>
           )}
+
+          {/* Pull-down "people & brands" page — opened by the home top-edge
+              pull. Continuation of the top creator arc; the avatars ease into
+              an orbit of who you follow + the brands you save. */}
+          <CreatorConstellation
+            open={peopleOpen}
+            onClose={() => setPeopleOpen(false)}
+            onOpenCreator={(h) => { setPeopleOpen(false); handleOpenCreator(h); }}
+            onOpenBrand={(b) => { setPeopleOpen(false); handleOpenBrand(b); }}
+            savedProducts={bookmarks.bookmarkedProducts as unknown as { brand?: string | null; name?: string | null; image?: string | null }[]}
+          />
 
           {showProfile && user && (
             <Suspense fallback={null}>
