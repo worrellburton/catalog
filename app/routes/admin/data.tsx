@@ -1950,6 +1950,7 @@ export default function AdminData() {
   // image read is being re-run so the cell shows a "regenerating…" hint.
   const [haikuWrap, setHaikuWrap] = useState(false);
   const [regeneratingHaiku, setRegeneratingHaiku] = useState<Set<string>>(new Set());
+  const [bulkHaikuBusy, setBulkHaikuBusy] = useState(false);
   const addMenuRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!addMenuOpen) return;
@@ -5903,6 +5904,48 @@ export default function AdminData() {
               {bulkVideoGenerating && bulkVideoProgress
                 ? `Generating ${bulkVideoProgress.done}/${bulkVideoProgress.total}…`
                 : 'Generate primary video'}
+            </button>
+            {/* Bulk Generate Haiku — re-run the vision read on each selected
+                product's primary image (regen_haiku_context RPC → haiku-context
+                edge fn). Cells show "regenerating…" and update via realtime. */}
+            <button
+              className="bulk-pill"
+              title="Re-read each selected product's image with Haiku (overwrites the Haiku Context column)."
+              disabled={bulkHaikuBusy}
+              onClick={async () => {
+                if (bulkHaikuBusy || !supabase) return;
+                const ids: string[] = [];
+                for (const k of selectedProductKeys) {
+                  const match = crawledProducts.find(cp => `${cp.brand}-${cp.name}` === k);
+                  const img = match && ((match as { primary_image_url?: string | null }).primary_image_url || match.image_url);
+                  if (match?.id && img) ids.push(match.id);
+                }
+                if (ids.length === 0) {
+                  showToast('No selected products have an image to read yet.');
+                  return;
+                }
+                setBulkHaikuBusy(true);
+                setRegeneratingHaiku(prev => { const n = new Set(prev); ids.forEach(id => n.add(id)); return n; });
+                let i = 0;
+                const CONCURRENCY = 6;
+                const worker = async () => {
+                  while (true) {
+                    const idx = i++;
+                    if (idx >= ids.length) return;
+                    const { error } = await supabase!.rpc('regen_haiku_context', { p_product_id: ids[idx] });
+                    if (error) setRegeneratingHaiku(prev => { const n = new Set(prev); n.delete(ids[idx]); return n; });
+                  }
+                };
+                await Promise.all(Array.from({ length: Math.min(CONCURRENCY, ids.length) }, worker));
+                setBulkHaikuBusy(false);
+                showToast(`Regenerating Haiku for ${ids.length} product${ids.length === 1 ? '' : 's'}…`);
+                // Safety: drop any spinners the realtime update didn't clear.
+                window.setTimeout(() => setRegeneratingHaiku(prev => {
+                  const n = new Set(prev); ids.forEach(id => n.delete(id)); return n;
+                }), 30000);
+              }}
+            >
+              {bulkHaikuBusy ? 'Queuing…' : 'Generate Haiku'}
             </button>
             <button
               className="bulk-pill bulk-pill--danger"
