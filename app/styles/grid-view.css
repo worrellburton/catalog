@@ -578,62 +578,71 @@
   .creative-placeholder .card-skeleton-bar { animation: none; }
 }
 
-/* ── Media-first scrolling (every viewport) ─────────────────────────────
-   The card chrome — gradient washes, creator chips, product text, admin
-   buttons — hides IN SYNC with the top/bottom app chrome. When the shopper
-   scrolls down, the header + bottom bar slide away (.app-root.chrome-hidden)
-   and every card's overlay fades out with them so the feed becomes pure
-   imagery; when they stop or scroll up the whole UI breathes back in
-   together (founder's call — unify the fade in/out with the top + bottom
-   chrome). Driven by the SAME .chrome-hidden signal the header + bottom bar
-   use, so nothing animates on its own rhythm. Eased, never linear — it
-   melts and resurfaces, it never snaps.
+/* ── UNIFIED card-overlay fade (every surface, one mechanism) ────────────
+   The chrome layered on top of look/product CARDS — gradient washes, creator
+   chips, product/price text, the catalog button, super-admin affordances,
+   hotspot indicators — fades OUT while ANY scroller is gliding and fades back
+   IN the moment it settles. ONE principle drives it everywhere: the home feed
+   grid, the look overlay (.look-overlay) and the product page (.product-page)
+   all share THIS rule, keyed off `html.is-scroll-gliding`.
 
-   ASYMMETRIC by design (founder's call): the fade-OUT is brisk (0.6s, below)
-   so the chrome clears fast the instant you start scrolling and the media
-   takes over; the fade-IN — this base rule, which applies when .chrome-hidden
-   lifts on scroll-STOP — is deliberately SLOW so the product/look detail
-   breathes back in gently rather than popping. */
+   `html.is-scroll-gliding` is set by app/utils/scroll-idle.ts on EVERY
+   scroller in the app (the home document AND the overlay inner scrollers —
+   one capture-phase document listener hears them all) and lifts ~0.3s after
+   the scroll settles. Reduced-motion users never get the class (scroll-idle
+   returns early), so the overlay simply stays visible for them — no flash.
+
+   Previously the home feed faded this same chrome off `.app-root.chrome-hidden`
+   (a DIFFERENT, direction-aware trigger) while #16 faded only the look/product
+   creator chips off is-scroll-gliding — two principles that fought. The card
+   overlay is now is-scroll-gliding everywhere; .chrome-hidden is left to the
+   page header/nav chrome only (see the `header` rule below).
+
+   ASYMMETRIC by design (founder's call): fade-OUT is brisk (0.18s) so the
+   chrome clears the instant scrolling starts and the media takes over; the
+   fade-IN (this base rule, applied when the class lifts on scroll-STOP) is
+   gentler (0.3s) so the detail breathes back rather than popping.
+   Opacity only — compositor-cheap, no layout/backdrop work during the glide. */
 .card-gradient,
 .card-creator-tag,
+.look-card .card-creator-row,
+.look-card .card-creator-name,
+.look-card .card-catalog-btn,
+.inline-look-catalog-btn,
+.inline-look-detail .hotspot-indicator,
 .promo-product-info,
+.promo-chip,
+.pd-look-tile-meta,
 .trail-admin-menu-btn,
 .feed-why-btn,
 .creative-delete-btn {
-  transition: opacity 1.3s cubic-bezier(0.22, 1, 0.36, 1);
+  /* Fade-IN (when the glide lifts on scroll-stop): gentle. */
+  transition: opacity 0.3s cubic-bezier(0.22, 1, 0.36, 1);
 }
-.app-root.chrome-hidden .card-gradient,
-.app-root.chrome-hidden .card-creator-tag,
-.app-root.chrome-hidden .promo-product-info,
-.app-root.chrome-hidden .trail-admin-menu-btn,
-.app-root.chrome-hidden .feed-why-btn,
-.app-root.chrome-hidden .creative-delete-btn {
-  opacity: 0 !important;
-  transition: opacity 0.6s cubic-bezier(0.45, 0, 0.55, 1);
+html.is-scroll-gliding .card-gradient,
+html.is-scroll-gliding .card-creator-tag,
+html.is-scroll-gliding .look-card .card-creator-row,
+html.is-scroll-gliding .look-card .card-creator-name,
+html.is-scroll-gliding .look-card .card-catalog-btn,
+html.is-scroll-gliding .inline-look-catalog-btn,
+html.is-scroll-gliding .inline-look-detail .hotspot-indicator,
+html.is-scroll-gliding .promo-product-info,
+html.is-scroll-gliding .promo-chip,
+html.is-scroll-gliding .pd-look-tile-meta,
+html.is-scroll-gliding .trail-admin-menu-btn,
+html.is-scroll-gliding .feed-why-btn,
+html.is-scroll-gliding .creative-delete-btn {
+  opacity: 0;
+  /* Fade-OUT: brisk so the chrome clears the instant scrolling starts. */
+  transition: opacity 0.18s cubic-bezier(0.45, 0, 0.55, 1);
 }
 /* EXCEPTION: the creator chip must NOT eat taps while it's invisible.
    It's an absolutely-positioned strip over the card bottom, so a tap on a
-   faded feed (chrome at 0) was hitting the unseen chip and opening a
-   creator catalog instead of the look — the "tapped a look, got the wrong
-   creator" bug. Hidden = pass taps through to the card (opens the look); a
-   deliberate hover restores it. */
-.app-root.chrome-hidden .card-creator-tag { pointer-events: none; }
-html.is-pointing .app-root.chrome-hidden :hover > .card-creator-tag { pointer-events: auto; }
-
-/* Intentional hover beats the hide: when the mouse has GENUINELY moved
-   (html.is-pointing — cleared by scrolling, so content sliding under a
-   stationary cursor can't trigger this), the hovered card's chrome
-   resurfaces quickly. `:hover >` matches each chrome element's own
-   hovered parent, so only the card under the cursor lights up. */
-html.is-pointing .app-root.chrome-hidden :hover > .card-gradient,
-html.is-pointing .app-root.chrome-hidden :hover > .card-creator-tag,
-html.is-pointing .app-root.chrome-hidden :hover > .promo-product-info,
-html.is-pointing .app-root.chrome-hidden :hover > .trail-admin-menu-btn,
-html.is-pointing .app-root.chrome-hidden :hover > .feed-why-btn,
-html.is-pointing .app-root.chrome-hidden :hover > .creative-delete-btn {
-  opacity: 1 !important;
-  transition: opacity 0.45s cubic-bezier(0.22, 1, 0.36, 1);
-}
+   faded feed was hitting the unseen chip and opening a creator catalog
+   instead of the look — the "tapped a look, got the wrong creator" bug.
+   Hidden during the glide = pass taps through to the card (opens the look).
+   The glide lifts ~0.3s after scrolling stops, restoring taps right away. */
+html.is-scroll-gliding .card-creator-tag { pointer-events: none; }
 
 /* ── Top chrome (header + the creator stories/orbit rail it holds) DISSOLVES
    on scroll, never snaps ──────────────────────────────────────────────────
