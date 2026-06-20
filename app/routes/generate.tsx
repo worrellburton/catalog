@@ -8,7 +8,7 @@ import { particleControls } from '~/services/particles';
 import { supabase } from '~/utils/supabase';
 import { useAuth } from '~/hooks/useAuth';
 import { startGenerationJob } from '~/services/generation-queue';
-import { type PickedProduct, ROLE_TAGS, roleTagFromName } from '~/services/product-roles';
+import { type PickedProduct, ROLE_TAGS, roleForProduct } from '~/services/product-roles';
 import AIStylist, { type StylistComplete } from '~/components/AIStylist';
 import { BUILD_JOKES, BUILD_PHASES, typicalSecondsFor } from '~/services/generation-progress';
 import { playExplosion } from '~/utils/explode';
@@ -660,13 +660,13 @@ export default function GeneratePage() {
     (async () => {
       const { data } = await supabase
         .from('products')
-        .select('id, name, brand, price, image_url')
+        .select('id, name, brand, price, image_url, type')
         .eq('url', productUrl)
         .maybeSingle();
       if (cancelled || !data) return;
-      const row = data as { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null };
+      const row = data as { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null; type: string | null };
       setPicked(prev => prev.some(p => p.id === row.id) ? prev : [
-        { id: row.id, name: row.name, brand: row.brand, price: row.price, image_url: row.image_url, role_tag: roleTagFromName(row.name) },
+        { id: row.id, name: row.name, brand: row.brand, price: row.price, image_url: row.image_url, role_tag: roleForProduct(row.type, row.name) },
         ...prev,
       ]);
       // Surface the prefilled product as the centerpiece — the dock
@@ -927,7 +927,7 @@ export default function GeneratePage() {
       // pipeline needs a visual reference per product.
       let query = supabase!
         .from('products')
-        .select('id, name, brand, price, image_url, primary_image_url, primary_video_url, primary_video_poster_url')
+        .select('id, name, brand, price, image_url, primary_image_url, primary_video_url, primary_video_poster_url, type')
         .eq('is_active', true)
         .not('image_url', 'is', null)
         .order('created_at', { ascending: false })
@@ -948,9 +948,9 @@ export default function GeneratePage() {
       if (q) query = query.or(`name.ilike.%${q}%,brand.ilike.%${q}%`);
       const { data } = await query;
       if (cancelled) return;
-      const mapped = ((data || []) as PickedProduct[]).map(p => ({
+      const mapped = ((data || []) as Array<PickedProduct & { type?: string | null }>).map(p => ({
         ...p,
-        role_tag: roleTagFromName(p.name),
+        role_tag: roleForProduct(p.type, p.name),
       }));
       // Dresses are women-only: never surface them to a male creator, even
       // when the row's gender tag is unisex / untagged.
