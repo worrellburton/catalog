@@ -208,11 +208,14 @@ async function fetchLooksFromSupabase(): Promise<Look[]> {
     return staticLooks;
   }
 
-  // Surface only live looks (or legacy seed rows with no status) whose primary
-  // creative actually has a playable video_url.
+  // Surface ONLY live looks whose primary creative has a playable video_url.
+  // Active is a hard stop: a look the creator set inactive (archived /
+  // submitted / draft / denied) must never reach the consumer feed, even
+  // when one of its products is otherwise in catalog. Strict `=== 'live'`
+  // (no NULL escape hatch) — every DB look carries a status.
   const liveLooks = (data as unknown as SupabaseLook[]).filter((row) => {
     const primary = row.looks_creative?.[0];
-    return primary?.video_url && (!row.status || row.status === 'live');
+    return primary?.video_url && row.status === 'live';
   });
 
   // Forward-rule: every visible look must back-resolve to a real

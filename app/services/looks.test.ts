@@ -58,7 +58,8 @@ interface Look {
 function filterLiveLooks(data: SupabaseLook[]): SupabaseLook[] {
   return data.filter((row) => {
     const primary = row.looks_creative?.[0];
-    return primary?.video_url && (!row.status || row.status === 'live');
+    // Active is a hard stop — only status === 'live' reaches the feed.
+    return primary?.video_url && row.status === 'live';
   });
 }
 
@@ -100,7 +101,7 @@ function makeLegacyLook(overrides: Partial<SupabaseLook> = {}): SupabaseLook {
     creator_handle: '@lilywittman',
     description: 'A curated selection',
     color: '#c4a882',
-    status: null,
+    status: 'live',
     looks_creative: [
       { video_url: 'girl2.mp4', thumbnail_url: null, is_primary: true },
     ],
@@ -141,9 +142,9 @@ function makeUserCreatedLook(overrides: Partial<SupabaseLook> = {}): SupabaseLoo
 // ============================================
 
 describe('filterLiveLooks', () => {
-  it('includes legacy looks with a primary creative video and no status', () => {
-    const looks = [makeLegacyLook()];
-    expect(filterLiveLooks(looks)).toHaveLength(1);
+  it('excludes looks with no status — active is a hard stop', () => {
+    const looks = [makeLegacyLook({ status: null })];
+    expect(filterLiveLooks(looks)).toHaveLength(0);
   });
 
   it('includes looks with status=live and a primary creative video', () => {

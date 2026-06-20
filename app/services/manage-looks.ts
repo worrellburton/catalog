@@ -186,8 +186,11 @@ export async function getMyLooks(params?: { status?: LookStatus | 'inactive'; pa
   query = query.range(from, to);
 
   if (params?.status === 'inactive') {
-    // "Not published" — everything that isn't live.
-    query = query.neq('status', 'live');
+    // "Not published" — everything that isn't live, INCLUDING rows with a
+    // NULL status. A bare `.neq('status','live')` drops NULLs in SQL
+    // (NULL != 'live' is NULL, not true), which made the Inactive list
+    // under-count versus the "X inactive" badge.
+    query = query.or('status.is.null,status.neq.live');
   } else if (params?.status) {
     query = query.eq('status', params.status);
   }
@@ -210,6 +213,24 @@ export async function getMyLooks(params?: { status?: LookStatus | 'inactive'; pa
     data: looks,
     pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
   };
+}
+
+// Exact look counts for the current creator's catalog header + tab badges.
+// Server-side COUNTs (head:true, no rows fetched) so the "X inactive" badge
+// ALWAYS matches the Inactive tab's total — the old approach fetched 200 rows
+// and subtracted, which silently broke past 200 looks and could disagree with
+// the list's filter. `inactive` = everything that isn't live (NULL-safe), the
+// exact same set the Inactive list returns.
+export async function getMyLookCounts(): Promise<{ all: number; live: number; inactive: number }> {
+  if (!supabase) throw new Error('Supabase not configured');
+  const userId = await getCurrentUserId();
+  const [allRes, liveRes] = await Promise.all([
+    supabase.from('looks').select('id', { count: 'exact', head: true }).eq('user_id', userId),
+    supabase.from('looks').select('id', { count: 'exact', head: true }).eq('user_id', userId).eq('status', 'live'),
+  ]);
+  const all = allRes.count ?? 0;
+  const live = liveRes.count ?? 0;
+  return { all, live, inactive: all - live };
 }
 
 // Persist a new manual order for the current user's looks: sort_order

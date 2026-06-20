@@ -1945,6 +1945,11 @@ export default function AdminData() {
   // "Add Manually": screenshot → Claude extraction → review → save.
   const [showManualProduct, setShowManualProduct] = useState(false);
   const [showPromptSettings, setShowPromptSettings] = useState(false);
+  // Haiku-context column controls: wrap toggles full multi-line text on every
+  // row (off = single-line ellipsis); regeneratingHaiku tracks rows whose
+  // image read is being re-run so the cell shows a "regenerating…" hint.
+  const [haikuWrap, setHaikuWrap] = useState(false);
+  const [regeneratingHaiku, setRegeneratingHaiku] = useState<Set<string>>(new Set());
   const addMenuRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
     if (!addMenuOpen) return;
@@ -2711,6 +2716,13 @@ export default function AdminData() {
           if (idx === -1) return prev;
           const prevRow = prev[idx];
           const merged = { ...prevRow, ...p, is_crawled: p.scrape_status === 'done' || p.scraped_at !== null } as CrawledProduct;
+          // A fresh Haiku read just landed for a row we were regenerating →
+          // clear its spinner (the cell now shows the new text).
+          const prevCtx = (prevRow as { haiku_context?: string | null }).haiku_context ?? null;
+          const newCtx = (p as { haiku_context?: string | null }).haiku_context ?? null;
+          if (newCtx && newCtx !== prevCtx) {
+            setRegeneratingHaiku(s => { if (!s.has(p.id)) return s; const n = new Set(s); n.delete(p.id); return n; });
+          }
           // When a scrape just finished (pending → done) OR a primary
           // video just landed, surface the product at the TOP of the
           // list so the admin sees the freshly-resolved row immediately
@@ -3044,6 +3056,27 @@ export default function AdminData() {
     setToast(msg);
     setTimeout(() => setToast(null), 4000);
   }, []);
+
+  // Regenerate a single product's Haiku image-read on demand (e.g. after the
+  // Haiku prompt changed). Calls the regen_haiku_context RPC, which fires the
+  // haiku-context edge function with the vault service token; the function
+  // overwrites products.haiku_context and the realtime UPDATE handler clears
+  // the spinner + shows the new text. Safety timeout drops the spinner if the
+  // realtime event never arrives.
+  const regenerateHaiku = useCallback(async (productId: string) => {
+    if (!supabase || !productId) return;
+    setRegeneratingHaiku(prev => new Set(prev).add(productId));
+    const { error } = await supabase.rpc('regen_haiku_context', { p_product_id: productId });
+    if (error) {
+      setRegeneratingHaiku(prev => { const n = new Set(prev); n.delete(productId); return n; });
+      showToast(`Haiku regen failed: ${error.message}`);
+      return;
+    }
+    showToast('Regenerating Haiku context…');
+    window.setTimeout(() => {
+      setRegeneratingHaiku(prev => { if (!prev.has(productId)) return prev; const n = new Set(prev); n.delete(productId); return n; });
+    }, 20000);
+  }, [showToast]);
 
   // Real implementation behind runPickPrimaryImages — stashed in a ref
   // above so the trigger is callable from the toolbar before showToast
@@ -4219,6 +4252,23 @@ export default function AdminData() {
                 <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" />
               </svg>
               Settings
+            </button>
+            {/* Wrap Haiku — toggles the Haiku Context column between a single
+                ellipsised line and full multi-line wrapped text on every row. */}
+            <button
+              className={`admin-btn admin-btn-secondary${haikuWrap ? ' is-active' : ''}`}
+              onClick={() => setHaikuWrap(v => !v)}
+              title={haikuWrap ? 'Haiku context: wrapping — click for single line' : 'Haiku context: single line — click to wrap full text'}
+              aria-pressed={haikuWrap}
+              style={{ display: 'inline-flex', alignItems: 'center', gap: 6, ...(haikuWrap ? { background: '#eef2ff', borderColor: '#c7d2fe', color: '#4338ca' } : {}) }}
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+                <line x1="3" y1="6" x2="21" y2="6" />
+                <path d="M3 12h15a3 3 0 1 1 0 6h-4" />
+                <polyline points="16 16 14 18 16 20" />
+                <line x1="3" y1="18" x2="10" y2="18" />
+              </svg>
+              {haikuWrap ? 'Haiku: wrapped' : 'Wrap Haiku'}
             </button>
             <div ref={addMenuRef} style={{ position: 'relative' }}>
               <button
@@ -6515,12 +6565,50 @@ export default function AdminData() {
                   </td>
                   {/* Haiku context — the vision model's read of the primary
                       image, regenerated whenever a new primary is picked
-                      (products_haiku_context trigger → haiku-context fn).
-                      Full text on hover. */}
-                  <td style={{ fontSize: 11.5, color: '#52525b', maxWidth: 240, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}
+                      (products_haiku_context trigger → haiku-context fn) or
+                      on demand via the ↻ button. "Wrap Haiku" (toolbar) toggles
+                      full multi-line text; otherwise single-line + ellipsis. */}
+                  <td style={{ fontSize: 11.5, color: '#52525b', maxWidth: haikuWrap ? 300 : 240, verticalAlign: 'top' }}
                     title={(p as { haiku_context?: string | null }).haiku_context ?? undefined}>
-                    {(p as { haiku_context?: string | null }).haiku_context
-                      ?? <span style={{ color: '#cbd5e1' }}>pending…</span>}
+                    {(() => {
+                      const ctx = (p as { haiku_context?: string | null }).haiku_context ?? null;
+                      const isRegen = !!p.id && regeneratingHaiku.has(p.id);
+                      return (
+                        <div style={{ display: 'flex', alignItems: 'flex-start', gap: 6 }}>
+                          <span style={{
+                            flex: 1, minWidth: 0,
+                            ...(haikuWrap
+                              ? { whiteSpace: 'normal', wordBreak: 'break-word', lineHeight: 1.35 }
+                              : { whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }),
+                          }}>
+                            {isRegen
+                              ? <em style={{ color: '#7c3aed' }}>regenerating…</em>
+                              : (ctx ?? <span style={{ color: '#cbd5e1' }}>pending…</span>)}
+                          </span>
+                          {p.id && (
+                            <button
+                              type="button"
+                              onClick={(e) => { e.stopPropagation(); void regenerateHaiku(p.id!); }}
+                              disabled={isRegen}
+                              title="Regenerate this product's Haiku context from its image"
+                              aria-label="Regenerate Haiku context"
+                              style={{
+                                flexShrink: 0, width: 22, height: 22, padding: 0, borderRadius: 6,
+                                border: '1px solid #e5e7eb', background: '#fff', cursor: isRegen ? 'default' : 'pointer',
+                                color: '#64748b', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+                              }}
+                            >
+                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"
+                                style={isRegen ? { animation: 'admin-spin 0.9s linear infinite' } : undefined} aria-hidden="true">
+                                <polyline points="23 4 23 10 17 10" />
+                                <polyline points="1 20 1 14 7 14" />
+                                <path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15" />
+                              </svg>
+                            </button>
+                          )}
+                        </div>
+                      );
+                    })()}
                   </td>
                   <td style={{ textAlign: 'left' }} onClick={(e) => e.stopPropagation()}>
                     {p.url ? (
