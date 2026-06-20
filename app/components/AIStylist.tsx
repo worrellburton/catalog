@@ -39,12 +39,12 @@ const SLOT_ROLES: Record<StylistSlot, (role: string | null) => boolean> = {
 };
 
 // The garment-type chooser the shopper sees after the occasion ask. Each maps
-// to the stylist slot(s) it fills. "Pants" == the bottoms slot.
+// to the stylist slot(s) it fills. "Bottoms" == the bottoms slot.
 const GARMENT_TYPES: { key: StylistSlot; label: string }[] = [
   { key: 'hats', label: 'Hat' },
   { key: 'tops', label: 'Tops' },
   { key: 'jackets', label: 'Jackets' },
-  { key: 'bottoms', label: 'Pants' },
+  { key: 'bottoms', label: 'Bottoms' },
   { key: 'dresses', label: 'Dresses' },
   { key: 'shoes', label: 'Shoes' },
 ];
