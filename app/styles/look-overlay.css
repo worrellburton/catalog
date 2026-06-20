@@ -2048,3 +2048,25 @@ body:has(.look-overlay.look-overlay--in) {
   .look-skel-lines span::after,
   .look-skel-actions span::after { animation: none; }
 }
+
+/* ── Creator chip fades WHILE SCROLLING (matches the home feed) ──────────────
+   The card feeds below a look ("More like this", "More from this creator",
+   "Popular looks") render the same CreativeCardV2 look tiles as the home grid,
+   so each carries a lower-left .card-creator-tag (avatar + username). On the
+   home feed that chip retires while the feed glides and breathes back when it
+   settles; the founder wants the SAME feel inside the look overlay.
+
+   Driver: scroll-idle.ts sets html.is-scroll-gliding on EVERY scroller (its
+   capture-phase document listener hears the inner .look-overlay-scroll too),
+   so no JS wiring is needed here — only this scoped rule. SCOPED to
+   .look-overlay so the main feed's own chrome-hidden behaviour is untouched.
+   Opacity only (compositor-cheap; no layout/backdrop work during the glide). */
+.look-overlay .card-creator-tag {
+  /* Fade-IN (when gliding lifts on scroll-stop): gentle. */
+  transition: opacity 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+html.is-scroll-gliding .look-overlay .card-creator-tag {
+  opacity: 0;
+  /* Fade-OUT: brisk so the names clear the instant scrolling starts. */
+  transition: opacity 0.2s cubic-bezier(0.45, 0, 0.55, 1);
+}
