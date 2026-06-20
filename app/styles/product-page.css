@@ -2237,3 +2237,27 @@
 /* The retailers drawer lives INSIDE the .pd-actions grid now — span the
    full row so offers open edge-to-edge directly under the Shop button. */
 .pd-actions > .pd-retailers-drawer { grid-column: 1 / -1; }
+
+/* ── Creator names fade WHILE SCROLLING (matches the home feed) ──────────────
+   The card feeds below a product show creator names: the "FEATURED IN LOOKS"
+   tiles carry a .pd-look-tile-meta chip (avatar + .card-creator-tag-name), and
+   any look-mode rail tiles carry the standard .card-creator-tag. On the home
+   feed those names retire while the feed glides and ease back when it settles;
+   the founder wants the SAME feel here.
+
+   Driver: scroll-idle.ts sets html.is-scroll-gliding on EVERY scroller (its
+   capture-phase document listener hears the inner .product-page scroller too),
+   so no JS wiring is needed — only this scoped rule. SCOPED to .product-page so
+   the main feed's own chrome-hidden behaviour is untouched. Opacity only
+   (compositor-cheap; no layout/backdrop work during the glide). */
+.product-page .card-creator-tag,
+.product-page .pd-look-tile-meta {
+  /* Fade-IN (when gliding lifts on scroll-stop): gentle. */
+  transition: opacity 0.3s cubic-bezier(0.22, 1, 0.36, 1);
+}
+html.is-scroll-gliding .product-page .card-creator-tag,
+html.is-scroll-gliding .product-page .pd-look-tile-meta {
+  opacity: 0;
+  /* Fade-OUT: brisk so the names clear the instant scrolling starts. */
+  transition: opacity 0.2s cubic-bezier(0.45, 0, 0.55, 1);
+}
