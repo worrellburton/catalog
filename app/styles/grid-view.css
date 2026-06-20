@@ -632,8 +632,12 @@ html.is-scroll-gliding .pd-look-tile-meta,
 html.is-scroll-gliding .trail-admin-menu-btn,
 html.is-scroll-gliding .feed-why-btn,
 html.is-scroll-gliding .creative-delete-btn {
-  opacity: 0;
-  /* Fade-OUT: brisk so the chrome clears the instant scrolling starts. */
+  opacity: 0 !important;
+  /* Fade-OUT: brisk so the chrome clears the instant scrolling starts.
+     !important because the glide selectors (e.g. html.is-scroll-gliding
+     .card-gradient = 0,2,1) are OUTWEIGHED by the load-fade rules
+     .look-card.loaded .card-gradient / .card-creator-tag (0,3,0) — without it
+     the loaded feed cards never faded on scroll (the unify regression). */
   transition: opacity 0.18s cubic-bezier(0.45, 0, 0.55, 1);
 }
 /* EXCEPTION: the creator chip must NOT eat taps while it's invisible.
