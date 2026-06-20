@@ -21,8 +21,9 @@
 //   • ≥90px downward drag, ≤ 0.5 × |dy| horizontal drift, within 600ms.
 
 import { useEffect } from 'react';
+import { setPeoplePull, snapPeople } from '~/utils/peoplePanel';
 
-const MIN_VERTICAL_PX = 72;
+const MIN_VERTICAL_PX = 96;
 const MAX_HORIZONTAL_RATIO = 0.5;
 
 function hasOptOutAncestor(el: EventTarget | null): boolean {
@@ -80,12 +81,14 @@ export default function PullDownActivityGesture() {
       // scrolling → hand the gesture back to the browser.
       if (dy <= 0 || Math.abs(dx) > Math.abs(dy) * MAX_HORIZONTAL_RATIO || window.scrollY > 0) {
         active = false;
+        if (pulling) { pulling = false; snapPeople(false); }
         return;
       }
       // Pulling DOWN at the very top: suppress the browser's native
-      // pull-to-refresh so our page-open owns the gesture. Needs a
-      // non-passive listener for preventDefault to take effect.
+      // pull-to-refresh so our page-open owns the gesture (needs a
+      // non-passive listener), and reveal the page above 1:1 with the finger.
       pulling = true;
+      setPeoplePull(Math.min(1, dy / ((window.innerHeight || 800) * 0.9)));
       if (e.cancelable) e.preventDefault();
     };
 
@@ -95,13 +98,16 @@ export default function PullDownActivityGesture() {
       if (!pulling) return;
       pulling = false;
       const t = e.changedTouches[0];
-      if (!t) return;
-      const dx = t.clientX - startX;
-      const dy = t.clientY - startY;
-      if (dy < MIN_VERTICAL_PX) return;
-      if (Math.abs(dx) > Math.abs(dy) * MAX_HORIZONTAL_RATIO) return;
-      // _index decides whether to honour it (home active, no overlay open).
-      window.dispatchEvent(new CustomEvent('catalog:open-people'));
+      const dx = t ? t.clientX - startX : 0;
+      const dy = t ? t.clientY - startY : 0;
+      const commit = !!t && dy >= MIN_VERTICAL_PX && Math.abs(dx) <= Math.abs(dy) * MAX_HORIZONTAL_RATIO;
+      if (commit) {
+        // _index decides whether to honour it (home active, no overlay open)
+        // and snaps the panel fully open; otherwise it snaps back.
+        window.dispatchEvent(new CustomEvent('catalog:open-people'));
+      } else {
+        snapPeople(false);
+      }
     };
 
     const attach = () => {

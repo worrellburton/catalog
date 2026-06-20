@@ -8,6 +8,20 @@
   background:
     radial-gradient(120% 80% at 50% -10%, rgba(120, 165, 255, 0.10), transparent 60%),
     radial-gradient(120% 90% at 50% 40%, #15161c 0%, #0b0c10 58%, #060608 100%);
+  /* Parked one viewport ABOVE the feed; the pull (--people-pull 0..1) scrolls
+     it down into view. 0 → translateY(-100%) (hidden above), 1 → 0 (filling). */
+  transform: translateY(calc((var(--people-pull, 0) - 1) * 100%));
+  pointer-events: none;
+  will-change: transform;
+}
+/* Released → ease to the snap point. Absent during the drag so the panel
+   tracks the finger 1:1 (html.people-peeking). */
+html.people-snapping .cc-root {
+  transition: transform 0.46s cubic-bezier(0.22, 0.61, 0.36, 1);
+}
+html.people-open .cc-root { pointer-events: auto; }
+@media (prefers-reduced-motion: reduce) {
+  html.people-snapping .cc-root { transition: transform 0.2s ease; }
 }
 
 .cc-sheet {

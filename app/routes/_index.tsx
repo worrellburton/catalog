@@ -51,6 +51,7 @@ import HeaderWalletPill from '~/components/HeaderWalletPill';
 import HeaderActivityPill from '~/components/HeaderActivityPill';
 import FollowingRail from '~/components/FollowingRail';
 import CreatorConstellation from '~/components/CreatorConstellation';
+import { snapPeople } from '~/utils/peoplePanel';
 import PendingLookPill from '~/components/PendingLookPill';
 import ActivityRealtimeToasts from '~/components/ActivityRealtimeToasts';
 
@@ -2196,7 +2197,13 @@ export default function Home() {
   // Trail depth: while the product/look overlay is open, the under-layer
   // (header + grid) recedes a hair (scale 0.985, 4px blur). Subtle parallax
   // that signals "what you tapped is now the focus" without feeling theatrical.
-  const overlayOpen = !!selectedProduct || !!selectedLook;
+  // brandFilter/showFollowing are full-screen overlays with NO URL path of
+  // their own, so the Flutter shell (which keys off path or .has-overlay) can't
+  // otherwise tell they're open — include them here so .has-overlay is set and
+  // the native header hides over them. On web this only adds pointer-events:none
+  // on the receding under-layer (harmless; prevents tap-through).
+  const overlayOpen =
+    !!selectedProduct || !!selectedLook || !!brandFilter || showFollowing;
 
   // Home top-edge pull → open the people & brands page. Honour it only when
   // the home feed is the active surface (no look/product/creator/brand/gate
@@ -2204,9 +2211,13 @@ export default function Home() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const onOpenPeople = () => {
-      if (view !== 'app') return;
-      if (overlayOpen || creatorFilter || brandFilter || guestGate || showBookmarks || showMyLooks) return;
+      // Rejected (not the home surface) → let the peeked panel slide back.
+      if (view !== 'app' || overlayOpen || creatorFilter || brandFilter || guestGate || showBookmarks || showMyLooks) {
+        snapPeople(false);
+        return;
+      }
       setPeopleOpen(true);
+      snapPeople(true);
     };
     window.addEventListener('catalog:open-people', onOpenPeople);
     return () => window.removeEventListener('catalog:open-people', onOpenPeople);
@@ -2776,7 +2787,7 @@ export default function Home() {
               an orbit of who you follow + the brands you save. */}
           <CreatorConstellation
             open={peopleOpen}
-            onClose={() => setPeopleOpen(false)}
+            onClose={() => { setPeopleOpen(false); snapPeople(false); }}
             onOpenCreator={(h) => { setPeopleOpen(false); handleOpenCreator(h); }}
             onOpenBrand={(b) => { setPeopleOpen(false); handleOpenBrand(b); }}
             savedProducts={bookmarks.bookmarkedProducts as unknown as { brand?: string | null; name?: string | null; image?: string | null }[]}
