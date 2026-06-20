@@ -142,7 +142,9 @@ Deno.serve(async (req: Request) => {
       } else if (!hctx) {
         best = nameBest; // pre-image set only; no image read to corroborate
       }
-      const imgConfirmsCurrent = !!imageBest && !!currentNode && sameBranch(imageBest, currentNode);
+      // Already AT or DEEPER than the image's category match → leave it
+      // (never downgrade); a shallower current node still deepens to it.
+      const imgConfirmsCurrent = !!imageBest && !!currentNode && inBranch(currentNode, imageBest);
       if (best && !imgConfirmsCurrent && (!currentNode || (currentNode.id !== best.id && !inBranch(currentNode, best)))) {
         retypes.push({ productId: p.id, name: p.name, fromType: p.type, toPath: path(best) });
         retypeIds.add(p.id);
