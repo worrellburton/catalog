@@ -1975,6 +1975,69 @@ body:has(.bottom-bar.search-open) {
   }
 }
 
+/* Portal — unlike the ring beams (a masked border), this fills a soft
+   circular field BEHIND the pill so slow light rays read as radiating from
+   the centre outward, wrapped in a gentle breathing glow. Both layers are
+   deliberately faint: noticeable, never loud. The ::before override replaces
+   the base ring mask with a radial fade; ::after is the outer bloom. */
+.bottom-bar.is-beam-portal::before {
+  inset: -45%;
+  padding: 0;
+  border-radius: 50%;
+  background:
+    repeating-conic-gradient(from var(--beam-angle) at 50% 50%,
+      rgba(180, 205, 255, 0) 0deg,
+      rgba(180, 205, 255, 0.20) 2.5deg,
+      rgba(255, 255, 255, 0.08) 5deg,
+      rgba(180, 205, 255, 0) 7.5deg),
+    radial-gradient(closest-side at 50% 50%,
+      rgba(120, 165, 255, 0.16), transparent 70%);
+  -webkit-mask: radial-gradient(closest-side at 50% 50%, #000 8%, rgba(0, 0, 0, 0.6) 45%, transparent 78%);
+          mask: radial-gradient(closest-side at 50% 50%, #000 8%, rgba(0, 0, 0, 0.6) 45%, transparent 78%);
+  -webkit-mask-composite: source-over;
+          mask-composite: add;
+  filter: blur(6px);
+  opacity: 0.8;
+  animation: bb-beam-spin 18s linear infinite, bb-portal-breathe 4.8s ease-in-out infinite;
+}
+.bottom-bar.is-beam-portal::after {
+  content: '';
+  position: absolute;
+  inset: -6px;
+  z-index: 0;
+  border-radius: inherit;
+  pointer-events: none;
+  box-shadow:
+    0 0 18px 2px rgba(120, 165, 255, 0.16),
+    0 0 44px 10px rgba(120, 165, 255, 0.08);
+  animation: bb-portal-breathe 4.8s ease-in-out infinite;
+}
+/* Keep the portal to the resting pill — not the expanded full-screen search
+   sheet (where a big glow over the keyboard UI would distract). */
+.bottom-bar.is-beam-portal.search-open::before,
+.bottom-bar.is-beam-portal.search-open::after { display: none; }
+
+@keyframes bb-portal-breathe {
+  0%, 100% { opacity: 0.55; }
+  50%      { opacity: 0.9; }
+}
+@supports not (background: conic-gradient(from var(--beam-angle), red, blue)) {
+  .bottom-bar.is-beam-portal::before {
+    background:
+      repeating-conic-gradient(from 0deg at 50% 50%,
+        rgba(180, 205, 255, 0) 0deg,
+        rgba(180, 205, 255, 0.20) 2.5deg,
+        rgba(255, 255, 255, 0.08) 5deg,
+        rgba(180, 205, 255, 0) 7.5deg),
+      radial-gradient(closest-side at 50% 50%, rgba(120, 165, 255, 0.16), transparent 70%);
+    animation: bb-beam-rotate-fallback 18s linear infinite, bb-portal-breathe 4.8s ease-in-out infinite;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .bottom-bar.is-beam-portal::before { animation: none; opacity: 0.7; }
+  .bottom-bar.is-beam-portal::after { animation: none; }
+}
+
 /* ═══════════════════════════════════════════════════════════════════════
    Mobile Gemini-style search bar.
    On ≤640px, transform the dark glass catalog search into a white pill
