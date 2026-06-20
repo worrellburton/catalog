@@ -694,7 +694,7 @@ function FollowingOrbitRail({ entries, onlineHandles, unseenByHandle, onOpenCrea
   const count = entries.length;
 
   // Arc geometry + motion tuning.
-  const SPACING = 58;     // px between neighbouring avatars along the arc
+  const SPACING = 66;     // px between neighbouring avatars along the arc (tracks avatar size)
   const CURVE = 0.00045;  // parabola steepness — small = a shallow bow
   const DRIFT = 0.05;     // steady auto-scroll (slots/sec) — very, very slow
 
@@ -787,7 +787,7 @@ function FollowingOrbitRail({ entries, onlineHandles, unseenByHandle, onOpenCrea
         <div className="follow-orbit-viewport">
           <div className="follow-orbit-stage">
             {Array.from({ length: 7 }, (_, i) => {
-              const x = (i - 3) * 58;
+              const x = (i - 3) * 66;
               return (
                 <span key={`orbit-skel-${i}`} className="follow-orbit-item"
                   style={{ transform: `translate(${x}px, ${0.00045 * x * x}px) scale(${Math.max(0.5, 1 - Math.abs(x) * 0.0017)})`, opacity: Math.max(0.15, 1 - Math.pow(Math.abs(x) / 190, 2.2)) }}>

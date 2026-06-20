@@ -47,6 +47,20 @@ function haikuIdentity(text: string | null): string {
   return (line.split(/(?<=[.!?])\s/)[0] ?? line).trim();
 }
 
+// The EXPLICIT category Haiku reports, when present ("**Category:** Footwear
+// / Casual Shoes"). Trusted over the title line for placement — a title like
+// "Men's Low-Top Sneaker" contains "top" and mis-matches Tops. '' for the old
+// two-line format (caller falls back to haikuIdentity).
+function haikuCategory(text: string | null): string {
+  if (!text) return '';
+  for (const raw of text.split('\n')) {
+    const line = raw.replace(/[*_`>#]/g, '').trim();
+    const m = line.match(/^category\s*:?\s*(.+)$/i);
+    if (m && m[1]) return m[1].trim();
+  }
+  return '';
+}
+
 Deno.serve(async (req: Request) => {
   if (req.method !== 'POST') return new Response('method not allowed', { status: 405 });
   const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
@@ -110,7 +124,9 @@ Deno.serve(async (req: Request) => {
 
     for (const p of products) {
       const currentNode = p.type ? byNorm.get(normalize(p.type))?.[0] ?? null : null;
-      const hctx = haikuIdentity(p.haiku_context);
+      // Prefer Haiku's explicit Category over the title line (which can carry
+      // "top" inside "Low-Top Sneaker"); fall back to the identity line.
+      const hctx = haikuCategory(p.haiku_context) || haikuIdentity(p.haiku_context);
       // The IMAGE (haiku identity) is authoritative; the NAME only refines
       // within the branch the image confirms. A confident image read that
       // matches no node suppresses any name-only match — that's the
