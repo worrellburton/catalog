@@ -827,7 +827,12 @@ header > .pending-look-pill {
   }
 
   #grid-container {
-    grid-template-columns: repeat(2, 1fr) !important;
+    /* Driven by the home feed column dial via --feed-cols on .home-feed-wrap
+       (1/2/3). This rule is !important (it has to beat the desktop grid rules
+       on mobile), so it ALSO beat the dial's inline gridTemplateColumns —
+       which is why the dial appeared to do nothing. Using the var here lets the
+       dial actually change the column count. Defaults to 2. */
+    grid-template-columns: repeat(var(--feed-cols, 2), 1fr) !important;
     gap: 2px !important;
     padding-top: 100px;
     padding-left: 2px;

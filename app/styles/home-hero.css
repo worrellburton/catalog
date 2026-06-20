@@ -209,9 +209,13 @@
   font-size: 12px;
   letter-spacing: 0.02em;
 }
-/* "Your daily feed" label — a bare button that reveals the feed. */
+/* "Your daily feed" heading — a bare button that opens the "what is the
+   daily feed" info modal. The trailing (i) glyph signals it's tappable. */
 .sfh-scroll-cta {
   order: 2;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
   background: none;
   border: none;
   padding: 0;
@@ -222,8 +226,15 @@
   letter-spacing: 0.01em;
   color: rgba(255, 255, 255, 0.9);
   transition: color 0.2s ease;
+  -webkit-tap-highlight-color: transparent;
 }
 .sfh-scroll-cta:hover { color: #fff; }
+.sfh-scroll-cta-info {
+  flex: 0 0 auto;
+  opacity: 0.6;
+  transition: opacity 0.2s ease;
+}
+.sfh-scroll-cta:hover .sfh-scroll-cta-info { opacity: 1; }
 /* One-line live countdown to the next daily-feed drop. */
 .sfh-scroll-sub {
   order: 3;
@@ -260,6 +271,172 @@
   0%, 100% { transform: translateY(0); opacity: 0.6; }
   50%      { transform: translateY(5px); opacity: 1; }
 }
+
+/* ── "What is the daily feed?" info modal ─────────────────────────────────
+   Opened by tapping the "Your daily feed" heading. A fixed full-screen scrim
+   with a CENTERED card. Centered per the repo's hard rule (CLAUDE.md §1):
+   left:0; right:0; margin-inline:auto + an explicit % width — never
+   translateX(-50%) — so the card's entrance animation can own `transform`
+   cleanly without being clobbered. */
+.sfh-info-scrim {
+  position: fixed;
+  inset: 0;
+  z-index: 700;
+  background: rgba(0, 0, 0, 0.62);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  /* The card centers itself via margin-inline + width; this flex just pins it
+     to the vertical middle and adds top/bottom breathing room. */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: max(24px, env(safe-area-inset-top)) 0 max(24px, env(safe-area-inset-bottom));
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  animation: sfh-info-scrim-in 0.2s ease both;
+}
+@keyframes sfh-info-scrim-in { from { opacity: 0; } to { opacity: 1; } }
+
+.sfh-info-card {
+  position: relative;
+  /* Centered with margin-inline + an explicit % width (NOT translateX). */
+  left: 0;
+  right: 0;
+  margin-inline: auto;
+  width: min(440px, calc(100% - 48px));
+  max-height: 100%;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  box-sizing: border-box;
+  padding: 28px 24px 24px;
+  border-radius: 22px;
+  text-align: left;
+  color: #f5f5f7;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background:
+    linear-gradient(180deg, rgba(28, 30, 38, 0.96), rgba(14, 15, 20, 0.98));
+  box-shadow:
+    0 24px 70px rgba(0, 0, 0, 0.6),
+    inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  animation: sfh-info-card-in 0.34s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes sfh-info-card-in {
+  from { opacity: 0; transform: translateY(16px) scale(0.97); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.sfh-info-close {
+  position: absolute;
+  top: 14px;
+  right: 14px;
+  width: 34px;
+  height: 34px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  color: rgba(255, 255, 255, 0.75);
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: background 0.18s ease, color 0.18s ease;
+}
+.sfh-info-close:hover { background: rgba(255, 255, 255, 0.14); color: #fff; }
+
+.sfh-info-title {
+  margin: 0 40px 12px 0;
+  font-size: 24px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: #fff;
+}
+.sfh-info-subhead {
+  margin: 20px 0 8px;
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+}
+.sfh-info-lead {
+  margin: 0;
+  font-size: 14.5px;
+  line-height: 1.55;
+  color: rgba(255, 255, 255, 0.78);
+}
+.sfh-info-list {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 11px;
+}
+.sfh-info-list li {
+  position: relative;
+  padding-left: 18px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.72);
+}
+.sfh-info-list li::before {
+  content: '';
+  position: absolute;
+  left: 2px;
+  top: 8px;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.55);
+}
+.sfh-info-list strong { color: #f5f5f7; font-weight: 650; }
+
+.sfh-info-done {
+  margin-top: 22px;
+  width: 100%;
+  padding: 13px 16px;
+  border-radius: 14px;
+  border: none;
+  background: #fff;
+  color: #0a0a0c;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  transition: transform 0.12s ease, opacity 0.18s ease;
+}
+.sfh-info-done:hover { opacity: 0.9; }
+.sfh-info-done:active { transform: scale(0.985); }
+
+/* Light-mode treatment — the hero supports .light-mode (see .sc-name-pill). */
+.light-mode .sfh-info-scrim { background: rgba(15, 23, 42, 0.42); }
+.light-mode .sfh-info-card {
+  color: #0f172a;
+  border-color: rgba(15, 23, 42, 0.08);
+  background: linear-gradient(180deg, #ffffff, #f6f7f9);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+.light-mode .sfh-info-title { color: #0f172a; }
+.light-mode .sfh-info-subhead { color: rgba(15, 23, 42, 0.5); }
+.light-mode .sfh-info-lead { color: rgba(15, 23, 42, 0.72); }
+.light-mode .sfh-info-list li { color: rgba(15, 23, 42, 0.7); }
+.light-mode .sfh-info-list li::before { background: rgba(15, 23, 42, 0.45); }
+.light-mode .sfh-info-list strong { color: #0f172a; }
+.light-mode .sfh-info-close {
+  border-color: rgba(15, 23, 42, 0.12);
+  background: rgba(15, 23, 42, 0.05);
+  color: rgba(15, 23, 42, 0.6);
+}
+.light-mode .sfh-info-close:hover { background: rgba(15, 23, 42, 0.12); color: #0f172a; }
+.light-mode .sfh-info-done { background: #0f172a; color: #fff; }
+
+@media (prefers-reduced-motion: reduce) {
+  .sfh-info-scrim, .sfh-info-card { animation: none !important; }
+}
+
 /* ── Search ceremony ─────────────────────────────────────────────────── */
 .search-ceremony {
   position: fixed;
