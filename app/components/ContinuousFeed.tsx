@@ -905,15 +905,25 @@ function ContinuousFeed({
     });
   }, [brandMatchedCreatives, tagMatchedCreatives, semanticallyOrderedCreatives, committedQuery, seenKeys, affinity, personalizedOrder, savedBrandBoost]);
 
-  // Log search queries through the batch endpoint. Debounced 1.5 s and
-  // prefix-deduped so mid-typing keystrokes don't each enqueue an entry;
-  // the queue itself flushes every 5 s or on tab close, so a user's
-  // session of pauses lands as one POST.
+  // Log search queries through the batch endpoint. Debounced 2.5 s and
+  // prefix-deduped so a continuous refinement ("i need" → "i need a
+  // dress" → "…for a wedding") lands as a SINGLE longest-query row
+  // instead of one row per paused partial (each of which used to become
+  // its own "catalog"). Two collaborating layers do this:
+  //   1. Here: skip backspacing (q is a prefix of the last logged query),
+  //      and for forward refinement (q extends last) let the debounce
+  //      simply re-arm with the longer q — the cleanup clears the prior
+  //      timer, so only the latest/longest query in a chain ever fires.
+  //   2. search-log.ts: the queue itself prefix-collapses, so even if an
+  //      earlier partial already flushed, the longer one supersedes it.
+  // A genuinely DIFFERENT query (no prefix relationship) still logs.
   const lastLoggedQueryRef = useRef<string>('');
   useEffect(() => {
     const q = committedQuery.trim().toLowerCase();
     if (!q || q.length < 2) return;
     const last = lastLoggedQueryRef.current;
+    // Backspacing / re-typing a shorter prefix of what we already logged:
+    // the longer query already covers it, so don't log a fresh partial.
     if (q === last || last.startsWith(q)) return;
     const timer = setTimeout(() => {
       lastLoggedQueryRef.current = q;
@@ -937,7 +947,7 @@ function ContinuousFeed({
         clicked: false,
         filter: activeFilter,
       });
-    }, 1500);
+    }, 2500);
     return () => clearTimeout(timer);
   }, [committedQuery, renderedCreatives.length, semanticallyOrderedLooks.length, activeFilter, user]);
 

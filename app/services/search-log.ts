@@ -45,6 +45,31 @@ async function flush(): Promise<void> {
 
 export function logSearch(entry: SearchLogEntry): void {
   if (!entry.query || !entry.user_handle) return;
+  // Prefix-collapse a continuous typing chain within the flush window so
+  // only the FINAL/longest query of a refinement lands as a row. Typing
+  // "i need" → "i need a dress" → "i need a dress for a wedding" with
+  // ~1.5 s pauses used to enqueue THREE rows (each became its own
+  // "catalog"); now the queue keeps just the longest.
+  //
+  // Compare per user_handle so one shopper's refinement never swallows
+  // another shopper's queued query.
+  const q = entry.query;
+  for (let i = 0; i < queue.length; i++) {
+    const existing = queue[i];
+    if (existing.user_handle !== entry.user_handle) continue;
+    // The new query extends a queued one (forward typing) → replace the
+    // shorter entry with the longer, keeping the latest counts/filter.
+    if (q.length > existing.query.length && q.startsWith(existing.query)) {
+      queue[i] = entry;
+      // No new push, no size/timer change — we swapped in place.
+      return;
+    }
+    // The new query is a prefix of a queued one (backspace / shorter
+    // pause that already has a longer sibling queued) → skip enqueuing.
+    if (existing.query.startsWith(q)) {
+      return;
+    }
+  }
   queue.push(entry);
   if (queue.length >= FLUSH_AT_SIZE) {
     void flush();
