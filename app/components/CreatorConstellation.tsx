@@ -1,21 +1,19 @@
-// CreatorConstellation — the full-viewport "people & brands" page the home
-// pull-down opens into. It's a continuation of the top creator ARC: the same
-// profile circles ease into a readable orbit of the creators you follow plus
-// the brands you gravitate to, each carrying a glanceable insight. Built on
-// Motion (motion/react) so the avatars spring into place and the whole sheet
-// tracks the pull.
+// CreatorConstellation — the "people & brands" page parked in the viewport
+// ABOVE the home feed. You scroll up into it (pull down at the very top) and
+// it snaps into place; the same profile circles from the top arc gather into a
+// readable orbit of the creators you follow plus the brands you save, each
+// with a glanceable insight. The vertical slide/snap is owned by a CSS var
+// (--people-pull, see utils/peoplePanel) so the pull tracks your finger; this
+// component owns the look + the spring stagger of the tiles on open.
 //
 // Data is resilient + client-only:
 //   • Creators — who you follow (newest-posting first); featured creators of
 //     your gender when you follow no one yet.
 //   • Brands — derived from the products you've saved (your strongest "I like
 //     this brand" signal); hidden until you've saved something.
-//
-// Dismiss by scrolling back to the top and continuing up (the pull unwinds
-// back to the feed) or the close control.
 
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
+import { motion, useReducedMotion } from 'motion/react';
 import { supabase } from '~/utils/supabase';
 import { getMyFollowing, getPopularCreators } from '~/services/follows';
 import { getShopperGender } from '~/services/product-creative';
@@ -32,6 +30,8 @@ interface SavedProductLike {
 }
 
 interface Props {
+  /** Committed open (interactive + content mounted). The slide itself is the
+   *  CSS var; this gates data load, body lock and the stagger. */
   open: boolean;
   onClose: () => void;
   onOpenCreator: (handle: string) => void;
@@ -44,9 +44,9 @@ interface CreatorTile {
   handle: string;
   name: string;
   avatarUrl: string | null;
-  lastPostTs: number;   // ms; 0 = unknown
+  lastPostTs: number;
   lookCount: number;
-  followed: boolean;     // false = a suggestion (you follow no one yet)
+  followed: boolean;
 }
 
 interface BrandTile {
@@ -75,8 +75,6 @@ export default function CreatorConstellation({ open, onClose, onOpenCreator, onO
   const [onlineHandles, setOnlineHandles] = useState<Set<string>>(new Set());
   const scrollRef = useRef<HTMLDivElement | null>(null);
 
-  // Brands you like — grouped from saved products (brand → count + a sample
-  // image), strongest first. Memoised off the saved set.
   const brands = useMemo<BrandTile[]>(() => {
     const by = new Map<string, BrandTile>();
     for (const p of savedProducts ?? []) {
@@ -90,7 +88,8 @@ export default function CreatorConstellation({ open, onClose, onOpenCreator, onO
     return [...by.values()].sort((a, b) => b.saved - a.saved).slice(0, 12);
   }, [savedProducts]);
 
-  // Load creators when the page opens (and only then — it's behind a pull).
+  // Load creators when the page commits open (it's behind a pull, so never
+  // on cold mount).
   useEffect(() => {
     if (!open) return;
     let cancelled = false;
@@ -101,7 +100,6 @@ export default function CreatorConstellation({ open, onClose, onOpenCreator, onO
         if (cancelled) return;
 
         if (handles.length === 0 || !supabase) {
-          // Featured creators of the shopper's gender when you follow no one.
           const pop = await getPopularCreators(getShopperGender(), { limit: 18 }).catch(() => []);
           if (cancelled) return;
           setCreators(pop.map(s => ({
@@ -149,13 +147,12 @@ export default function CreatorConstellation({ open, onClose, onOpenCreator, onO
     return () => { cancelled = true; };
   }, [open]);
 
-  // Live presence → the green "online now" ring, only while open.
   useEffect(() => {
     if (!open) return;
     return subscribeOnline((s) => setOnlineHandles(new Set(s.handles)));
   }, [open]);
 
-  // Lock the body scroll behind the page; restore on close.
+  // Lock the body scroll behind the page while it's open.
   useEffect(() => {
     if (!open) return;
     const prev = document.body.style.overflow;
@@ -163,10 +160,9 @@ export default function CreatorConstellation({ open, onClose, onOpenCreator, onO
     return () => { document.body.style.overflow = prev; };
   }, [open]);
 
-  // Scroll up past the top → dismiss (continuation of the pull). We watch for
-  // an over-scroll attempt at the very top of the sheet.
+  // Scroll up past the top → dismiss (a continuation of the pull/scroll).
   const overTopRef = useRef(0);
-  const onScrollTouchMove = (e: React.TouchEvent) => {
+  const onScrollTouchMove = () => {
     const el = scrollRef.current;
     if (!el) return;
     if (el.scrollTop <= 0) {
@@ -186,36 +182,21 @@ export default function CreatorConstellation({ open, onClose, onOpenCreator, onO
     : { type: 'spring' as const, stiffness: 420, damping: 34, mass: 0.7 };
 
   return (
-    <AnimatePresence>
-      {open && (
-        <motion.div
-          className="cc-root"
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          exit={{ opacity: 0 }}
-          transition={{ duration: reduce ? 0 : 0.28 }}
-          role="dialog"
-          aria-label="People and brands"
-        >
-          <motion.div
-            className="cc-sheet"
-            initial={reduce ? false : { y: '6%', scale: 0.98, opacity: 0 }}
-            animate={{ y: 0, scale: 1, opacity: 1 }}
-            exit={reduce ? { opacity: 0 } : { y: '4%', scale: 0.985, opacity: 0 }}
-            transition={reduce ? { duration: 0 } : { type: 'spring', stiffness: 280, damping: 32, mass: 0.9 }}
-          >
-            <div className="cc-scroll" ref={scrollRef} onTouchMove={onScrollTouchMove}>
-              {/* Grab handle + close */}
-              <div className="cc-grab" aria-hidden="true"><span /></div>
-              <button className="cc-close" onClick={onClose} aria-label="Back to feed">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="18 15 12 9 6 15" /></svg>
-              </button>
+    <div className="cc-root" id="people-panel" aria-hidden={!open} role="dialog" aria-label="People and brands">
+      <div className="cc-sheet">
+        <div className="cc-scroll" ref={scrollRef} onTouchMove={onScrollTouchMove}>
+          <div className="cc-grab" aria-hidden="true"><span /></div>
+          <button className="cc-close" onClick={onClose} aria-label="Back to feed">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9" /></svg>
+          </button>
 
+          {open && (
+            <>
               <motion.header
                 className="cc-head"
                 initial={reduce ? false : { opacity: 0, y: 10 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ duration: reduce ? 0 : 0.4, delay: reduce ? 0 : 0.05 }}
+                transition={{ duration: reduce ? 0 : 0.4, delay: reduce ? 0 : 0.04 }}
               >
                 <h1 className="cc-title">Your orbit</h1>
                 <p className="cc-sub">
@@ -225,7 +206,6 @@ export default function CreatorConstellation({ open, onClose, onOpenCreator, onO
                 </p>
               </motion.header>
 
-              {/* Creators */}
               <section className="cc-section">
                 <div className="cc-section-label">{isSuggested ? 'Discover creators' : 'Creators'}</div>
                 {creators === null ? (
@@ -249,7 +229,7 @@ export default function CreatorConstellation({ open, onClose, onOpenCreator, onO
                     {creators.map((c) => {
                       const online = onlineHandles.has(c.handle.toLowerCase());
                       const insight = c.lastPostTs
-                        ? `${timeAgo(c.lastPostTs)}`
+                        ? timeAgo(c.lastPostTs)
                         : (c.lookCount ? `${c.lookCount} look${c.lookCount === 1 ? '' : 's'}` : 'New');
                       return (
                         <motion.button
@@ -279,7 +259,6 @@ export default function CreatorConstellation({ open, onClose, onOpenCreator, onO
                 )}
               </section>
 
-              {/* Brands you like */}
               {brands.length > 0 && (
                 <section className="cc-section">
                   <div className="cc-section-label">Brands you love</div>
@@ -318,10 +297,10 @@ export default function CreatorConstellation({ open, onClose, onOpenCreator, onO
               )}
 
               <button className="cc-return" onClick={onClose}>Back to feed</button>
-            </div>
-          </motion.div>
-        </motion.div>
-      )}
-    </AnimatePresence>
+            </>
+          )}
+        </div>
+      </div>
+    </div>
   );
 }
