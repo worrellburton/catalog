@@ -51,6 +51,7 @@ import HeaderWalletPill from '~/components/HeaderWalletPill';
 import HeaderActivityPill from '~/components/HeaderActivityPill';
 import FollowingRail from '~/components/FollowingRail';
 import CreatorConstellation from '~/components/CreatorConstellation';
+import { snapPeople } from '~/utils/peoplePanel';
 import PendingLookPill from '~/components/PendingLookPill';
 import ActivityRealtimeToasts from '~/components/ActivityRealtimeToasts';
 
@@ -2210,9 +2211,13 @@ export default function Home() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const onOpenPeople = () => {
-      if (view !== 'app') return;
-      if (overlayOpen || creatorFilter || brandFilter || guestGate || showBookmarks || showMyLooks) return;
+      // Rejected (not the home surface) → let the peeked panel slide back.
+      if (view !== 'app' || overlayOpen || creatorFilter || brandFilter || guestGate || showBookmarks || showMyLooks) {
+        snapPeople(false);
+        return;
+      }
       setPeopleOpen(true);
+      snapPeople(true);
     };
     window.addEventListener('catalog:open-people', onOpenPeople);
     return () => window.removeEventListener('catalog:open-people', onOpenPeople);
@@ -2782,7 +2787,7 @@ export default function Home() {
               an orbit of who you follow + the brands you save. */}
           <CreatorConstellation
             open={peopleOpen}
-            onClose={() => setPeopleOpen(false)}
+            onClose={() => { setPeopleOpen(false); snapPeople(false); }}
             onOpenCreator={(h) => { setPeopleOpen(false); handleOpenCreator(h); }}
             onOpenBrand={(b) => { setPeopleOpen(false); handleOpenBrand(b); }}
             savedProducts={bookmarks.bookmarkedProducts as unknown as { brand?: string | null; name?: string | null; image?: string | null }[]}
