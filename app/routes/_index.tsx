@@ -2197,13 +2197,7 @@ export default function Home() {
   // Trail depth: while the product/look overlay is open, the under-layer
   // (header + grid) recedes a hair (scale 0.985, 4px blur). Subtle parallax
   // that signals "what you tapped is now the focus" without feeling theatrical.
-  // brandFilter/showFollowing are full-screen overlays with NO URL path of
-  // their own, so the Flutter shell (which keys off path or .has-overlay) can't
-  // otherwise tell they're open — include them here so .has-overlay is set and
-  // the native header hides over them. On web this only adds pointer-events:none
-  // on the receding under-layer (harmless; prevents tap-through).
-  const overlayOpen =
-    !!selectedProduct || !!selectedLook || !!brandFilter || showFollowing;
+  const overlayOpen = !!selectedProduct || !!selectedLook;
 
   // Home top-edge pull → open the people & brands page. Honour it only when
   // the home feed is the active surface (no look/product/creator/brand/gate
