@@ -162,7 +162,7 @@ export default function AIStylist({ gender, onComplete, onBack }: Props) {
       setRationale(result.rationale);
       setStep('result');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Could not style a look — try again.');
+      setError(err instanceof Error ? err.message : 'Could not style a look. Try again.');
     } finally {
       setLoading(false);
     }
@@ -232,7 +232,7 @@ export default function AIStylist({ gender, onComplete, onBack }: Props) {
       <div className="gen-stylist gen-stylist--ask">
         <div className="gen-stylist-askbody">
           <h1 className="gen-stylist-title">What do you want to wear?</h1>
-          <p className="gen-stylist-sub">Tell me the occasion or the vibe — I&apos;ll style a whole look from the catalog.</p>
+          <p className="gen-stylist-sub">Tell me the occasion or the vibe. I&apos;ll style a whole look from the catalog.</p>
           <textarea
             className="gen-stylist-input"
             value={occasion}
