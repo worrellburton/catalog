@@ -25,6 +25,10 @@ import { setPeoplePull, snapPeople } from '~/utils/peoplePanel';
 
 const MIN_VERTICAL_PX = 96;
 const MAX_HORIZONTAL_RATIO = 0.5;
+// A pull must START within this many px of the viewport top edge. Touches that
+// begin lower are normal feed scrolls and must keep the browser's threaded
+// (off-main-thread) scroll path — see the lazy non-passive bind below.
+const TOP_EDGE_PX = 24;
 
 function hasOptOutAncestor(el: EventTarget | null): boolean {
   let node = el as HTMLElement | null;
@@ -48,28 +52,13 @@ export default function PullDownActivityGesture() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const mql = window.matchMedia('(max-width: 768px)');
-    let attached = false;
+    let enabled = false;     // mobile: listening for the candidate touchstart
+    let moveBound = false;   // non-passive touchmove attached for THIS pull only
 
     let startX = 0;
     let startY = 0;
     let active = false;
     let pulling = false;
-
-    const onTouchStart = (e: TouchEvent) => {
-      active = false;
-      pulling = false;
-      if (e.touches.length !== 1) return;
-      if (focusInInput()) return;
-      if (document.documentElement.dataset.shell === 'catalog-app') return;
-      // The feed must be at the very top — only there is a downward drag a
-      // "pull to reveal" rather than a continuation of a scroll.
-      if (window.scrollY > 0) return;
-      if (hasOptOutAncestor(e.target)) return;
-      const t = e.touches[0];
-      startX = t.clientX;
-      startY = t.clientY;
-      active = true;
-    };
 
     const onTouchMove = (e: TouchEvent) => {
       if (!active) return;
@@ -78,10 +67,13 @@ export default function PullDownActivityGesture() {
       const dy = t.clientY - startY;
       const dx = t.clientX - startX;
       // Reversed into an upward scroll, drifted sideways, or the page started
-      // scrolling → hand the gesture back to the browser.
+      // scrolling → hand the gesture back to the browser and drop the
+      // non-passive listener immediately so the rest of the gesture scrolls
+      // on the fast threaded path.
       if (dy <= 0 || Math.abs(dx) > Math.abs(dy) * MAX_HORIZONTAL_RATIO || window.scrollY > 0) {
         active = false;
         if (pulling) { pulling = false; snapPeople(false); }
+        unbindMove();
         return;
       }
       // Pulling DOWN at the very top: suppress the browser's native
@@ -93,9 +85,10 @@ export default function PullDownActivityGesture() {
     };
 
     const onTouchEnd = (e: TouchEvent) => {
-      if (!active) return;
+      const wasActive = active;
       active = false;
-      if (!pulling) return;
+      unbindMove();
+      if (!wasActive || !pulling) { pulling = false; return; }
       pulling = false;
       const t = e.changedTouches[0];
       const dx = t ? t.clientX - startX : 0;
@@ -110,26 +103,63 @@ export default function PullDownActivityGesture() {
       }
     };
 
-    const attach = () => {
-      if (attached) return;
-      attached = true;
-      window.addEventListener('touchstart', onTouchStart, { passive: true });
+    // The non-passive touchmove lives ONLY for the span of a qualifying pull.
+    // A non-passive touch listener on window de-optimises scrolling for the
+    // whole document, so binding it permanently made the feed choppy; binding
+    // it per-pull keeps normal feed scrolling on the threaded path.
+    function bindMove() {
+      if (moveBound) return;
+      moveBound = true;
       window.addEventListener('touchmove', onTouchMove, { passive: false });
       window.addEventListener('touchend', onTouchEnd, { passive: true });
-    };
-    const detach = () => {
-      if (!attached) return;
-      attached = false;
-      window.removeEventListener('touchstart', onTouchStart);
+      window.addEventListener('touchcancel', onTouchEnd, { passive: true });
+    }
+    function unbindMove() {
+      if (!moveBound) return;
+      moveBound = false;
       window.removeEventListener('touchmove', onTouchMove);
       window.removeEventListener('touchend', onTouchEnd);
+      window.removeEventListener('touchcancel', onTouchEnd);
+    }
+
+    const onTouchStart = (e: TouchEvent) => {
+      active = false;
+      pulling = false;
+      if (e.touches.length !== 1) return;
+      if (focusInInput()) return;
+      if (document.documentElement.dataset.shell === 'catalog-app') return;
+      // The feed must be at the very top — only there is a downward drag a
+      // "pull to reveal" rather than a continuation of a scroll.
+      if (window.scrollY > 0) return;
+      const t = e.touches[0];
+      // Only a touch that STARTS at the very top edge is a candidate pull.
+      // Touches lower down are normal feed scrolls — leave them alone so they
+      // never get the non-passive listener (keeps scrolling smooth).
+      if (t.clientY > TOP_EDGE_PX) return;
+      if (hasOptOutAncestor(e.target)) return;
+      startX = t.clientX;
+      startY = t.clientY;
+      active = true;
+      bindMove();
     };
 
-    if (mql.matches) attach();
-    const onChange = (ev: MediaQueryListEvent) => { if (ev.matches) attach(); else detach(); };
+    const enable = () => {
+      if (enabled) return;
+      enabled = true;
+      window.addEventListener('touchstart', onTouchStart, { passive: true });
+    };
+    const disable = () => {
+      if (!enabled) return;
+      enabled = false;
+      window.removeEventListener('touchstart', onTouchStart);
+      unbindMove();
+    };
+
+    if (mql.matches) enable();
+    const onChange = (ev: MediaQueryListEvent) => { if (ev.matches) enable(); else disable(); };
     mql.addEventListener?.('change', onChange);
     return () => {
-      detach();
+      disable();
       mql.removeEventListener?.('change', onChange);
     };
   }, []);
