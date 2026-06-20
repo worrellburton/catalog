@@ -135,6 +135,15 @@
   overflow: hidden;
   cursor: pointer;
   transition: transform 0.5s cubic-bezier(0.25, 0.1, 0.25, 1), box-shadow 0.5s cubic-bezier(0.25, 0.1, 0.25, 1);
+  /* Isolate each card as a layout + paint boundary. The playback director
+     constantly mutates individual cards mid-scroll (attaching/releasing the
+     pooled <video>, applying cover-size, fading the freeze-frame, flipping
+     opacity on reveal). Without containment each of those writes can force
+     style/layout/paint work to ripple into sibling cards and the grid; with
+     it the work is scoped to the one card, which keeps the feed scroll smooth.
+     NOT `size` (the box is sized by aspect-ratio + the grid track) and NOT
+     `content-visibility: auto` — see below. */
+  contain: layout paint;
   /* (content-visibility: auto removed - it suppressed paint of off-screen
      cards on mobile, causing a visible black flash as cards scrolled in
      before the browser caught up with rendering. The 2-viewport video
