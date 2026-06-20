@@ -275,33 +275,64 @@ export function auditProductTypes(
     .filter((m): m is { node: TypeNode; norm: string; rx: RegExp } => m !== null);
 
   const recs: TypeAuditRecommendation[] = [];
+  const sameBranch = (a: TypeNode | null, b: TypeNode | null): boolean =>
+    !!a && !!b && (inBranch(a, b) || inBranch(b, a));
+  const deeper = (a: TypeNode | null, b: TypeNode | null): TypeNode | null =>
+    !a ? b : !b ? a : (depth(a) >= depth(b) ? a : b);
+
   for (const p of products) {
     const currentNode = p.type ? byNorm.get(normalizeTypeName(p.type)) ?? null : null;
-
-    let best: TypeNode | null = null;
-    let bestScore = -1;
-    let bestReason = '';
-    const consider = (node: TypeNode, reason: string) => {
-      const score = depth(node) * 100 + normalizeTypeName(node.name).length;
-      if (score > bestScore) { best = node; bestScore = score; bestReason = reason; }
-    };
     const hctx = haikuIdentity(p.haikuContext);
+
+    // Match each source INDEPENDENTLY so the IMAGE can out-rank a misleading
+    // NAME — the whole reason haiku_context exists. "...Twist-Top Lid..." must
+    // not drag a body scrub into Tops when the photo plainly shows a jar.
+    //   • imageNode — best tree node whose word appears in the image identity
+    //   • nameNode  — best tree node whose word appears in the product name
+    //   • taxNode   — the regex taxonomy's read of the name
+    let imageNode: TypeNode | null = null, imageScore = -1;
+    let nameNode: TypeNode | null = null, nameScore = -1;
     for (const m of matchers) {
-      if (m.rx.test(p.name)) consider(m.node, `name contains “${m.node.name}”`);
-      else if (hctx && m.rx.test(hctx)) {
-        consider(m.node, `image shows ${m.node.name} (Haiku)`);
-      }
+      const score = depth(m.node) * 100 + m.norm.length;
+      if (hctx && m.rx.test(hctx) && score > imageScore) { imageNode = m.node; imageScore = score; }
+      if (m.rx.test(p.name) && score > nameScore) { nameNode = m.node; nameScore = score; }
     }
     const inferred = inferProductTypeAndSubtype(p.name, p.brand);
+    let taxNode: TypeNode | null = null;
     for (const cand of [inferred?.subtype, inferred?.type]) {
       if (!cand) continue;
-      const node = byNorm.get(normalizeTypeName(cand));
-      if (node) consider(node, `taxonomy match: ${cand}`);
+      taxNode = deeper(taxNode, byNorm.get(normalizeTypeName(cand)) ?? null);
     }
 
-    if (!best) continue;
-    const target: TypeNode = best;
+    // Decide the target, weighting the IMAGE as ground truth and using the
+    // CURRENT type as context to avoid needless churn.
+    let target: TypeNode | null = null;
+    let reason = '';
+    if (imageNode) {
+      // The image confirms the branch; deepen with name/taxonomy ONLY if they
+      // agree with it. A disagreeing name is ignored (the image wins).
+      target = imageNode;
+      if (sameBranch(imageNode, nameNode)) target = deeper(target, nameNode);
+      if (sameBranch(imageNode, taxNode)) target = deeper(target, taxNode);
+      reason = target && target.id === imageNode.id
+        ? `image shows ${imageNode.name} (Haiku)`
+        : `image shows ${imageNode.name}, refined to ${target?.name}`;
+    } else if (!hctx) {
+      // No image read yet → fall back to name + taxonomy, but require the two
+      // to AGREE so a lone fragment ("top" inside "Twist-Top") can't retype on
+      // its own. Pre-image set only; shrinks as haiku_context backfills.
+      if (sameBranch(nameNode, taxNode)) {
+        target = deeper(nameNode, taxNode);
+        reason = `name + taxonomy agree: ${target?.name}`;
+      }
+    }
+    // hctx present but it matched NO node → we have a confident image read that
+    // supports no tree node; never trust a name-only match here (this is the
+    // body-scrub-into-Tops false positive). target stays null → skip.
+
+    if (!target) continue;
     if (currentNode && (currentNode.id === target.id || inBranch(currentNode, target))) continue;
+    if (imageNode && currentNode && sameBranch(currentNode, imageNode)) continue; // image confirms where it already is
     recs.push({
       productId: p.id,
       name: p.name,
@@ -311,7 +342,7 @@ export function auditProductTypes(
       toNodeId: target.id,
       toName: target.name,
       toPath: path(target),
-      reason: bestReason,
+      reason,
     });
   }
   recs.sort((a, b) => (a.toPath + a.name).localeCompare(b.toPath + b.name));
