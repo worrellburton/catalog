@@ -5,6 +5,7 @@
 // the count is fed from Supabase realtime so it ticks up live.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 // ParticleBackground is mounted once at the app root (SiteParticleHost) so
 // this surface shares the same field as splash + hero + ceremony.
 import { supabase } from '~/utils/supabase';
@@ -86,7 +87,19 @@ export default function EmptyCatalogState({ catalogName, isSourcing = false }: E
   const display = count == null ? '' : count.toLocaleString();
   const noun = count === 1 ? 'shopper' : 'shoppers';
 
-  return (
+  // EmptyCatalogState is `position:fixed; inset:0` and must center on the
+  // VIEWPORT. It renders deep inside ContinuousFeed → .home-feed-wrap, and
+  // that wrapper takes a `transform`/`filter`/`will-change` (the
+  // `home-results-reveal` reveal animation) whenever a search resolves — which
+  // turns it into the containing block for fixed descendants, trapping this
+  // surface inside the wrap's box (pushed into the lower third with a void
+  // above). Portal to document.body so it always centers on the viewport,
+  // escaping any transformed ancestor. (Same fix UserMenu uses to escape
+  // .app-root's transform.) The ecCardIn fade is preserved — it lives on
+  // .empty-catalog-content, which moves with this subtree.
+  if (typeof document === 'undefined') return null;
+
+  return createPortal(
     <div className="empty-catalog">
       <div className="empty-catalog-content">
         {/* Catalog AI spark — the orbiting-tiles diamond from the home hero,
@@ -177,6 +190,7 @@ export default function EmptyCatalogState({ catalogName, isSourcing = false }: E
           </>
         )}
       </div>
-    </div>
+    </div>,
+    document.body,
   );
 }
