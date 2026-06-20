@@ -878,7 +878,23 @@ export default function Home() {
       // no-ops cleanly when already home and resyncs useLocation() when
       // it was stale; that resync is also what lets a re-submitted search
       // re-fire the ?q= effect afterwards.
-      navigate('/');
+      //
+      // BUT: My Catalog / Bookmarks open via a RAW window.history.pushState
+      // ('/my-looks', '/bookmarks') that React Router never observes, so RR's
+      // internal location stays '/' while the URL bar shows '/my-looks'. A
+      // plain navigate('/') is then a PUSH that RR computes from its stale
+      // internal '/', so it stacks a fresh '/' entry ON TOP of the dangling
+      // '/my-looks' bar entry — Back returns to '/my-looks' and a refresh
+      // there reopens My Catalog via the cold-open `startsWith('/my-looks')`
+      // effect, so the logo "still lands on My Looks". Authoritatively pin the
+      // URL bar to '/' first (raw replaceState — same belt-and-braces the
+      // overlay-search path and the address-bar safety net use), THEN
+      // navigate('/', { replace: true }) so RR replaces (not pushes) and
+      // resyncs onto the clean root with no stranded deep-link entry behind it.
+      if (window.location.pathname !== '/' || window.location.search) {
+        window.history.replaceState({}, '', '/');
+      }
+      navigate('/', { replace: true });
       // Scroll to top of the feed so the user lands at the start
       // of the grid, not wherever they were last reading.
       window.scrollTo({ top: 0, behavior: 'smooth' });
