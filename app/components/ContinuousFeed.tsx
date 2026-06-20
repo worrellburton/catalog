@@ -83,6 +83,14 @@ interface ContinuousFeedProps {
    * feed's director registrations. See FeedSection.slotPrefix.
    */
   slotPrefix?: string;
+  /**
+   * Mobile column count (1 / 2 / 3) from the home-feed grid-density dial.
+   * Forwarded to every FeedSection so the grid renders an inline
+   * gridTemplateColumns (bulletproof — see FeedSection.feedCols). Only the
+   * main home feed passes this; nested/overlay instances leave it undefined
+   * (FeedSection defaults to 2 columns on mobile).
+   */
+  feedCols?: number;
 }
 
 type Segment =
@@ -161,6 +169,7 @@ function ContinuousFeed({
   nested = false,
   scrollRoot = null,
   slotPrefix,
+  feedCols,
 }: ContinuousFeedProps) {
   // Declared early so fitRankedLooks (below) can reference shopperBody.
   // The same `user` is reused by the search-log telemetry block further down.
@@ -1232,6 +1241,7 @@ function ContinuousFeed({
                 onLoadMore={segment.isInitial ? semantic.loadMore : undefined}
                 scrollRoot={scrollRoot}
                 slotPrefix={slotPrefix}
+                feedCols={feedCols}
               />
             );
           }

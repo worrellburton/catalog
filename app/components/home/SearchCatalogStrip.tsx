@@ -5,13 +5,12 @@
 // shopper scrolls straight from the picks into the feed (no blocking picker).
 // Tapping a catalog runs THAT catalog; the last button keeps the current search.
 //
-// As the big intro scrolls away, a compact catalog-name pill rises from the
-// bottom of the screen — the persistent "you're browsing Candles, tap to search
-// again" affordance. Tapping it opens the search sheet (same path as tapping the
-// resting search bar: focusing #bottom-search-input fires BottomBar's onFocus →
-// openSearch, which raises the keyboard + opens the sheet).
-
-import { useEffect, useRef, useState } from 'react';
+// The compact catalog-name pill is the searched feed's persistent search entry
+// ("you're browsing Candles, tap to search again") — it REPLACES the white
+// resting bottom bar on a searched feed (hidden via CSS). Tapping it opens the
+// search sheet (same path as tapping the resting search bar: focusing
+// #bottom-search-input fires BottomBar's onFocus → openSearch, which raises the
+// keyboard + opens the sheet).
 
 interface SearchCatalogStripProps {
   query: string;
@@ -56,34 +55,20 @@ function openSearchSheet() {
 }
 
 export default function SearchCatalogStrip({ query, recommendations, onPick, onContinue }: SearchCatalogStripProps) {
-  // The intro (big catalog name) is observed; once it scrolls out of view the
-  // compact name pill rises from the bottom. transform/opacity only on the pill
-  // — no scroll listener, no backdrop-filter churn (IntersectionObserver fires
-  // a couple of times total, not per-frame).
-  const introRef = useRef<HTMLDivElement>(null);
-  const [showPill, setShowPill] = useState(false);
-
+  // The catalog-name pill is the PERSISTENT search entry on a searched feed —
+  // it replaces the white resting bottom bar there (hidden via CSS on
+  // `.home-feed-wrap.has-catalog-strip`). It must be visible the whole time
+  // the searched feed is up, regardless of whether there's content to scroll
+  // (an empty catalog like "Pizza" has nothing to scroll past), so it starts
+  // visible. The big intro still scrolls away normally above the feed.
   const title = titleCase(query) || 'Your catalog';
-
-  useEffect(() => {
-    const el = introRef.current;
-    if (!el || typeof IntersectionObserver === 'undefined') return;
-    const io = new IntersectionObserver(
-      ([entry]) => setShowPill(!entry.isIntersecting),
-      // A tiny negative top margin so the pill appears just as the name clears
-      // the header, not the instant a single pixel leaves the viewport.
-      { rootMargin: '-72px 0px 0px 0px', threshold: 0 },
-    );
-    io.observe(el);
-    return () => io.disconnect();
-  }, []);
 
   if (recommendations.length === 0) return null;
 
   return (
     <div className="search-catalog-strip">
       {/* Intro — the current catalog name, big, as the top of the screen. */}
-      <div className="sc-intro" ref={introRef}>
+      <div className="sc-intro">
         <span className="sc-intro-eyebrow">Now browsing</span>
         <h1 className="sc-intro-name">{title}</h1>
       </div>
@@ -107,14 +92,13 @@ export default function SearchCatalogStrip({ query, recommendations, onPick, onC
         </div>
       </div>
 
-      {/* Persistent catalog-name pill — rises from the bottom once the big intro
-          has scrolled away; tapping it reopens the search sheet. */}
+      {/* Persistent catalog-name pill — the searched feed's ONLY search entry
+          (the white resting bottom bar is hidden here via CSS). Always visible
+          while the searched feed is up; tapping it reopens the search sheet. */}
       <button
         type="button"
-        className={`sc-name-pill${showPill ? ' is-visible' : ''}`}
+        className="sc-name-pill is-visible"
         onClick={openSearchSheet}
-        aria-hidden={!showPill}
-        tabIndex={showPill ? 0 : -1}
       >
         <Spark />
         <span className="sc-name-pill-text">{title}</span>

@@ -817,6 +817,23 @@
    add its full 100px top padding (would leave a big gap under the picks). */
 .home-feed-wrap.has-catalog-strip #grid-container { padding-top: 12px; }
 
+/* ── Searched feed: catalog-name pill is the ONLY search entry ────────────
+   On a searched/browsing feed the founder wants a single search affordance:
+   the "✦ <CatalogName> 🔍" pill (.sc-name-pill, persistent + always visible),
+   NOT the white resting bottom bar. So hide the resting bottom bar while the
+   `.has-catalog-strip` state is up — but ONLY when the search sheet is closed.
+   The pill TAPS into that same bottom bar (focuses #bottom-search-input →
+   BottomBar.openSearch → .bottom-bar.search-open), so the editable sheet must
+   stay fully visible + interactive when open. The default home feed (no
+   `.has-catalog-strip`) keeps the white bar untouched. Mobile-only — desktop
+   has no mobile bottom bar (uses TypeAnywhere) and no .sc-name-pill. */
+@media (max-width: 768px) {
+  .app-root:has(.home-feed-wrap.has-catalog-strip) .bottom-bar:not(.search-open) {
+    opacity: 0;
+    pointer-events: none;
+  }
+}
+
 /* The "keep my search" option — same pill format as the picks, just a touch
    quieter so it reads as the secondary choice. */
 .sc-rec--continue { opacity: 0.78; }
