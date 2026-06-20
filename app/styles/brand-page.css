@@ -13,12 +13,6 @@
   padding: var(--header-height) 16px 120px;
   -webkit-overflow-scrolling: touch;
 }
-/* In the Flutter shell, env(safe-area-inset-top) reads ~0 and --header-height
-   (64px) only barely clears the status bar. Anchor the top to the shell-provided
-   status-bar height, +12px to match the overlay back arrows. */
-html[data-shell="catalog-app"] .brand-page {
-  padding-top: calc(var(--shell-sb, 44px) + 12px);
-}
 
 .light-mode .brand-page {
   background: #fff;

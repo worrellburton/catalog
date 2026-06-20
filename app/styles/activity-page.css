@@ -29,12 +29,6 @@
   pointer-events: none;
 }
 .ap-header > * { pointer-events: auto; }
-/* In the Flutter shell, env(safe-area-inset-top) reads ~0 in the WebView, so
-   this sticky header (back + title) sits under the status bar. Anchor it to the
-   shell-provided status-bar height, +12px to match the overlay back arrows. */
-html[data-shell="catalog-app"] .ap-header {
-  padding-top: calc(var(--shell-sb, 44px) + 12px);
-}
 .ap-back {
   display: inline-flex;
   align-items: center;
