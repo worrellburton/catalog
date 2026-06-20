@@ -867,14 +867,18 @@ export default function Home() {
       // Push the URL bar back to "/" so clicking the logo from a
       // deep-linked surface (/l/<look-slug>, /p/<product-slug>,
       // /b/<brand-slug>, or /?q=<search>) cleanly resets to the
-      // catalog root. Use Remix's navigate (not raw pushState) so
-      // useLocation() stays in sync — otherwise re-submitting the
-      // same search via the TypeAnywhere overlay would land on the
-      // same router-level location and the ?q= effect wouldn't fire.
-      const target = '/';
-      if (window.location.pathname !== target || window.location.search) {
-        navigate(target);
-      }
+      // catalog root. ALWAYS navigate — don't gate on
+      // window.location.search. A search applied via the ?q= deep-link /
+      // TypeAnywhere path strips ?q= from the URL bar with replaceState,
+      // which does NOT notify React Router, so useLocation() stays stale
+      // at "?q=…" while window.location.search reads "". The old guard
+      // (`|| window.location.search`) then saw an empty search and SKIPPED
+      // navigate, leaving useLocation() stranded on the searched route —
+      // so the logo never returned home from that path. navigate('/')
+      // no-ops cleanly when already home and resyncs useLocation() when
+      // it was stale; that resync is also what lets a re-submitted search
+      // re-fire the ?q= effect afterwards.
+      navigate('/');
       // Scroll to top of the feed so the user lands at the start
       // of the grid, not wherever they were last reading.
       window.scrollTo({ top: 0, behavior: 'smooth' });
@@ -2434,7 +2438,6 @@ export default function Home() {
               query={searchQuery}
               recommendations={ceremonyRecs}
               onPick={handlePickRecommendedCatalog}
-              onContinue={() => setCeremonyRecs([])}
             />
           )}
           <ContinuousFeed

@@ -791,23 +791,27 @@
   margin-bottom: 10px;
 }
 
-/* Big tappable catalog buttons (scoped to the strip so the ceremony end-state
-   keeps its own sizing). */
-.search-catalog-strip .sc-recs-list { gap: 10px; }
+/* Small compact catalog chips, packed several per row (scoped to the strip so
+   the ceremony end-state keeps its own full-width sizing). They read as a tight
+   cluster of pills, not big stacked rows — flex-wrap, auto width, the ✦ glyph +
+   catalog name, no chevron. Centered as a cluster. */
+.search-catalog-strip .sc-recs-list {
+  flex-direction: row;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
 .search-catalog-strip .sc-rec {
-  padding: 17px 18px;
-  border-radius: 16px;
-  font-size: 16px;
-  gap: 12px;
+  width: auto;
+  padding: 8px 13px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  gap: 6px;
 }
-.search-catalog-strip .sc-rec-spark svg { width: 18px; height: 18px; }
-.sc-rec-arrow {
-  flex: 0 0 auto;
-  margin-left: auto;
-  color: rgba(255, 255, 255, 0.4);
-  transition: transform 0.16s ease, color 0.16s ease;
-}
-.search-catalog-strip .sc-rec:hover .sc-rec-arrow { color: rgba(255, 255, 255, 0.8); transform: translateX(2px); }
+.search-catalog-strip .sc-rec-spark { color: rgba(255, 255, 255, 0.7); }
+.search-catalog-strip .sc-rec-spark svg { width: 13px; height: 13px; }
+.search-catalog-strip .sc-rec-name { white-space: nowrap; }
 
 /* The strip provides the header clearance, so the feed grid below mustn't also
    add its full 100px top padding (would leave a big gap under the picks). */
@@ -830,17 +834,12 @@
   }
 }
 
-/* The "keep my search" option — same pill format as the picks, just a touch
-   quieter so it reads as the secondary choice. */
-.sc-rec--continue { opacity: 0.78; }
-.sc-rec--continue:hover { opacity: 1; }
-
 /* ── Persistent catalog-name pill (searched feed only) ───────────────────
-   Rises from the bottom of the screen once the big intro has scrolled away,
+   Docked at the VERY BOTTOM of the screen (above the safe-area inset),
    echoing the catalog name you're browsing ("Candles"). Tapping it reopens
    the search sheet (focuses #bottom-search-input → BottomBar openSearch).
-   It rides just ABOVE the resting search bar (which docks at
-   max(safe-area, --ios-bottom-chrome) + 20px), so it never overlaps it.
+   The white resting bottom bar is hidden on a searched feed, so this pill
+   owns the bottom edge.
 
    Centered with margin-inline:auto + an explicit width (NOT translateX), so
    the entrance/exit animation can own `transform` cleanly — this is the
@@ -853,8 +852,9 @@
   margin-inline: auto;
   width: max-content;
   max-width: calc(100% - 48px);
-  /* Sit above the docked search bar: its bottom + a generous bar-height gap. */
-  bottom: calc(max(env(safe-area-inset-bottom, 0px), var(--ios-bottom-chrome, 0px)) + 78px);
+  /* Dock at the very bottom: clear the home indicator AND iOS Safari's bottom
+     URL toolbar (--ios-bottom-chrome), plus a small breathing gap. */
+  bottom: calc(max(env(safe-area-inset-bottom, 0px), var(--ios-bottom-chrome, 0px)) + 14px);
   z-index: 96;
   display: inline-flex;
   align-items: center;
