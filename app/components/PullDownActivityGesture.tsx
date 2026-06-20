@@ -1,7 +1,10 @@
 // Global mobile gesture: EDGE-pull DOWN from the top of the viewport
-// → navigate to /activity (the followed-creator activity feed). Same
-// guard pattern as SwipeMenuGesture so it never fires inside vertical
-// scrollers, modals, or the native Flutter shell.
+// → opens the CreatorConstellation "people & brands" page (a continuation
+// of the top creator arc). Replaces the browser's pull-to-refresh on the
+// home. Dispatches a `catalog:open-people` window event that _index listens
+// for (the page is React state there, not a route). Same guard pattern as
+// SwipeMenuGesture so it never fires inside vertical scrollers, modals, or
+// the native Flutter shell. (Activity stays reachable via the header pill.)
 //
 // Skip rules:
 //   • Desktop: gesture is disabled (matchMedia max-width 768px).
@@ -18,7 +21,6 @@
 //   • ≥90px downward drag, ≤ 0.5 × |dy| horizontal drift, within 600ms.
 
 import { useEffect } from 'react';
-import { useNavigate } from '@remix-run/react';
 
 const TOP_EDGE_PX = 24;
 const MIN_VERTICAL_PX = 90;
@@ -44,7 +46,6 @@ function focusInInput(): boolean {
 }
 
 export default function PullDownActivityGesture() {
-  const navigate = useNavigate();
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const mql = window.matchMedia('(max-width: 768px)');
@@ -87,7 +88,8 @@ export default function PullDownActivityGesture() {
       if (dy < MIN_VERTICAL_PX) return;
       if (Math.abs(dx) > Math.abs(dy) * MAX_HORIZONTAL_RATIO) return;
       if (dt > MAX_DURATION_MS) return;
-      navigate('/activity');
+      // _index decides whether to honour it (home active, no overlay open).
+      window.dispatchEvent(new CustomEvent('catalog:open-people'));
     };
 
     const attach = () => {
@@ -110,6 +112,6 @@ export default function PullDownActivityGesture() {
       detach();
       mql.removeEventListener?.('change', onChange);
     };
-  }, [navigate]);
+  }, []);
   return null;
 }

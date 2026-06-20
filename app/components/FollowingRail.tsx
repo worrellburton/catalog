@@ -676,44 +676,32 @@ function FollowingStoriesRail({ entries, onlineHandles, unseenByHandle, onOpenCr
  *  straight to the DOM via refs so the loop never triggers React re-renders.
  *  The loop idles whenever the rail is display:none (desktop), off-screen,
  *  or the tab is hidden. */
-function FollowingOrbitRail({ entries, onlineHandles, unseenByHandle, onOpenCreator, onSeeAll }: FollowingStoriesRailProps) {
+function FollowingOrbitRail({ entries, onlineHandles, unseenByHandle, onOpenCreator }: FollowingStoriesRailProps) {
   const rootRef = useRef<HTMLDivElement | null>(null);
   const stageRef = useRef<HTMLDivElement | null>(null);
-  const captionRef = useRef<HTMLSpanElement | null>(null);
-  const angleRef = useRef(0);
+  // Continuous scroll position in "avatar slot" units; the arc wraps around
+  // it so the wheel spins endlessly. velRef is the flick momentum (slots/sec)
+  // that decays back into the steady drift instead of stopping dead.
+  const scrollRef = useRef(0);
+  const velRef = useRef(0);
   const draggingRef = useRef(false);
   const dragStartXRef = useRef(0);
-  const dragStartAngleRef = useRef(0);
+  const dragStartScrollRef = useRef(0);
+  const lastMoveXRef = useRef(0);
+  const lastMoveTRef = useRef(0);
   const movedRef = useRef(0);
-  const frontIdxRef = useRef(-1);
 
   const count = entries.length;
-  const step = count > 0 ? 360 / count : 0;
-  // Radius spreads the avatars evenly around the cylinder so neighbours never
-  // collide at the front, growing with the number of creators.
-  const ITEM = 36;
-  const GAP = 18;
-  const radius = count > 1
-    ? Math.max(104, (ITEM + GAP) / (2 * Math.sin(Math.PI / count)))
-    : 0;
 
-  // Seat each avatar at its fixed slot on the ring (set once per layout).
-  useEffect(() => {
-    const stage = stageRef.current;
-    if (!stage) return;
-    const kids = Array.from(stage.children) as HTMLElement[];
-    kids.forEach((el, i) => {
-      el.style.transform = `rotateY(${i * step}deg) translateZ(${radius}px)`;
-    });
-  }, [step, radius, count]);
+  // Arc geometry + motion tuning.
+  const SPACING = 58;     // px between neighbouring avatars along the arc
+  const CURVE = 0.00045;  // parabola steepness — small = a shallow bow
+  const DRIFT = 0.05;     // steady auto-scroll (slots/sec) — very, very slow
 
-  // Auto-rotation + per-frame depth shading. Pauses while dragging, off-screen,
-  // tab-hidden, or fully display:none (desktop).
   useEffect(() => {
     if (count === 0) return;
     const reduced = typeof window !== 'undefined'
       && window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
-    const SPEED = reduced ? 0 : 7; // deg / second — a slow, premium drift
     let raf = 0;
     let last = performance.now();
     const tick = (now: number) => {
@@ -724,44 +712,72 @@ function FollowingOrbitRail({ entries, onlineHandles, unseenByHandle, onOpenCrea
       if (!stage || !root || root.offsetParent === null) { last = now; return; }
       const dt = Math.min(64, now - last) / 1000;
       last = now;
-      if (!draggingRef.current && !document.hidden) angleRef.current += SPEED * dt;
-      const a = angleRef.current;
-      stage.style.transform = `rotateY(${a}deg)`;
-      const kids = stage.children as HTMLCollectionOf<HTMLElement>;
-      let bestC = -2, bestI = -1;
-      for (let i = 0; i < kids.length; i++) {
-        const c = Math.cos(((i * step + a) * Math.PI) / 180); // 1 front … -1 back
-        const el = kids[i];
-        el.style.opacity = String(0.2 + 0.8 * (c * 0.5 + 0.5));
-        el.style.zIndex = String(Math.round((c + 1) * 100));
-        el.style.pointerEvents = c > 0.4 ? 'auto' : 'none';
-        if (c > bestC) { bestC = c; bestI = i; }
+      if (!draggingRef.current && !document.hidden) {
+        // A flick keeps gliding (momentum), easing down until it settles into
+        // the perpetual slow drift — it never jerks to a stop.
+        if (Math.abs(velRef.current) > DRIFT) {
+          scrollRef.current += velRef.current * dt;
+          velRef.current *= Math.pow(0.95, dt * 60);
+        } else {
+          velRef.current = 0;
+          if (!reduced) scrollRef.current += DRIFT * dt;
+        }
       }
-      if (bestI !== frontIdxRef.current) {
-        frontIdxRef.current = bestI;
-        const e = entries[bestI];
-        if (captionRef.current && e) captionRef.current.textContent = e.displayName || e.handle;
+      const s = scrollRef.current;
+      const halfW = root.clientWidth / 2;
+      const kids = stage.children as HTMLCollectionOf<HTMLElement>;
+      for (let i = 0; i < kids.length; i++) {
+        // Wrap each avatar's continuous position into [-count/2, count/2) so
+        // the row is an endless loop centred on the current scroll.
+        let p = (((i + s) % count) + count) % count;
+        if (p > count / 2) p -= count;
+        const x = p * SPACING;
+        const el = kids[i];
+        const absx = Math.abs(x);
+        if (absx > halfW + SPACING) {
+          el.style.opacity = '0';
+          el.style.pointerEvents = 'none';
+          continue;
+        }
+        const y = CURVE * x * x;                       // shallow downward bow at the edges
+        const scale = Math.max(0.5, 1 - absx * 0.0017); // centre largest, edges smaller
+        const op = Math.max(0, 1 - Math.pow(absx / (halfW * 0.96), 2.2));
+        el.style.transform = `translate(${x}px, ${y}px) scale(${scale})`;
+        el.style.opacity = String(op);
+        el.style.zIndex = String(1000 - Math.round(absx));
+        el.style.pointerEvents = op > 0.45 ? 'auto' : 'none';
       }
     };
     raf = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(raf);
-  }, [count, step, entries]);
+  }, [count]);
 
   const onPointerDown = (e: React.PointerEvent) => {
     draggingRef.current = true;
     dragStartXRef.current = e.clientX;
-    dragStartAngleRef.current = angleRef.current;
+    dragStartScrollRef.current = scrollRef.current;
+    lastMoveXRef.current = e.clientX;
+    lastMoveTRef.current = performance.now();
     movedRef.current = 0;
+    velRef.current = 0;
     (e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
   };
   const onPointerMove = (e: React.PointerEvent) => {
     if (!draggingRef.current) return;
     const dx = e.clientX - dragStartXRef.current;
     movedRef.current = Math.max(movedRef.current, Math.abs(dx));
-    angleRef.current = dragStartAngleRef.current + dx * 0.55;
+    scrollRef.current = dragStartScrollRef.current + dx / SPACING;
+    // Track instantaneous velocity so the release carries momentum.
+    const now = performance.now();
+    const dtv = (now - lastMoveTRef.current) / 1000;
+    if (dtv > 0) velRef.current = ((e.clientX - lastMoveXRef.current) / SPACING) / dtv;
+    lastMoveXRef.current = e.clientX;
+    lastMoveTRef.current = now;
   };
   const endDrag = (e: React.PointerEvent) => {
     draggingRef.current = false;
+    // Clamp the flick so a hard swipe doesn't rocket off-screen.
+    velRef.current = Math.max(-9, Math.min(9, velRef.current));
     (e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
   };
 
@@ -770,14 +786,17 @@ function FollowingOrbitRail({ entries, onlineHandles, unseenByHandle, onOpenCrea
       <div className="follow-orbit follow-orbit--skeleton" aria-hidden="true">
         <div className="follow-orbit-viewport">
           <div className="follow-orbit-stage">
-            {Array.from({ length: 6 }, (_, i) => (
-              <span key={`orbit-skel-${i}`} className="follow-orbit-item" style={{ transform: `rotateY(${i * 60}deg) translateZ(74px)` }}>
-                <span className="follow-orbit-ring"><span className="follow-orbit-avatar follow-orbit-avatar--skeleton" /></span>
-              </span>
-            ))}
+            {Array.from({ length: 7 }, (_, i) => {
+              const x = (i - 3) * 58;
+              return (
+                <span key={`orbit-skel-${i}`} className="follow-orbit-item"
+                  style={{ transform: `translate(${x}px, ${0.00045 * x * x}px) scale(${Math.max(0.5, 1 - Math.abs(x) * 0.0017)})`, opacity: Math.max(0.15, 1 - Math.pow(Math.abs(x) / 190, 2.2)) }}>
+                  <span className="follow-orbit-ring"><span className="follow-orbit-avatar follow-orbit-avatar--skeleton" /></span>
+                </span>
+              );
+            })}
           </div>
         </div>
-        <span className="follow-orbit-caption" />
       </div>
     );
   }
@@ -787,7 +806,7 @@ function FollowingOrbitRail({ entries, onlineHandles, unseenByHandle, onOpenCrea
       className="follow-orbit"
       ref={rootRef}
       role="group"
-      aria-label="Creators you follow"
+      aria-label="Creators"
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={endDrag}
@@ -827,10 +846,6 @@ function FollowingOrbitRail({ entries, onlineHandles, unseenByHandle, onOpenCrea
           })}
         </div>
       </div>
-      <span className="follow-orbit-caption" ref={captionRef}>{entries[0]?.displayName || entries[0]?.handle || ''}</span>
-      {onSeeAll && (
-        <button type="button" className="follow-orbit-seeall" onClick={onSeeAll}>See all</button>
-      )}
     </div>
   );
 }
