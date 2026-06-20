@@ -22,6 +22,34 @@ import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 const MODEL = 'claude-haiku-4-5-20251001';
 const IMAGE_FETCH_TIMEOUT_MS = 10_000;
 
+// Editable in admin → Data → Settings ("Haiku Context"), stored in
+// app_settings under this key. The metadata block (title/brand/price/
+// materials) is prepended automatically; this is the instruction that
+// follows it. Keep in sync with DEFAULT_HAIKU_CONTEXT_PROMPT in
+// app/constants/ai-prompts.ts (edge functions can't import from app/).
+const HAIKU_PROMPT_KEY = 'prompt_haiku_context';
+const DEFAULT_HAIKU_INSTRUCTION = [
+  'Identify what this item ACTUALLY is. Use the PHOTO as your main reference — product titles and metadata often mislead, so trust the image first and treat the title, brand, price, and materials as supporting hints only.',
+  '',
+  'Reply in EXACTLY two lines, nothing else. Plain text only — no markdown, no "#" headings, no labels, no blank line, no bullets:',
+  'Line 1 — the item\'s category in 1-4 plain words, using the most common everyday noun for it (e.g. "potted plant", "high heels", "denim jacket", "table lamp"). Name only the object itself. Do NOT mention the room, background, setting, or surroundings.',
+  'Line 2 — one dense sentence that STARTS with the item\'s main colour(s), then its materials and any notable detail.',
+  '',
+  'No marketing language.',
+].join('\n');
+
+// deno-lint-ignore no-explicit-any
+async function loadInstruction(supabase: any): Promise<string> {
+  try {
+    const { data } = await supabase
+      .from('app_settings').select('value').eq('key', HAIKU_PROMPT_KEY).maybeSingle();
+    const v = typeof data?.value === 'string' ? data.value.trim() : '';
+    return v || DEFAULT_HAIKU_INSTRUCTION;
+  } catch {
+    return DEFAULT_HAIKU_INSTRUCTION;
+  }
+}
+
 function b64(bytes: Uint8Array): string {
   let bin = '';
   const CHUNK = 0x8000;
@@ -53,15 +81,25 @@ async function fetchImage(url: string): Promise<{ media_type: string; data: stri
 }
 
 // deno-lint-ignore no-explicit-any
-async function describeOne(supabase: any, apiKey: string, productId: string): Promise<boolean> {
+async function describeOne(supabase: any, apiKey: string, productId: string, instruction: string): Promise<boolean> {
   const { data: p } = await supabase
-    .from('products').select('id, name, brand, primary_image_url, image_url')
+    .from('products').select('id, name, brand, price, materials_care, primary_image_url, image_url')
     .eq('id', productId).maybeSingle();
   if (!p) return false;
   const imgUrl = p.primary_image_url || p.image_url;
   if (!imgUrl) return false;
   const image = await fetchImage(imgUrl);
   if (!image) return false;
+
+  // Metadata block — supporting reference. Always built fresh from the row
+  // so the editable instruction never has to hardcode the product fields.
+  const meta = [
+    `Product title: "${p.name}"`,
+    p.brand ? `Brand: ${p.brand}` : '',
+    p.price ? `Price: ${p.price}` : '',
+    p.materials_care ? `Materials / care: ${p.materials_care}` : '',
+  ].filter(Boolean).join('\n');
+  const promptText = `${meta}\n\n${instruction}`;
 
   const res = await fetch('https://api.anthropic.com/v1/messages', {
     method: 'POST',
@@ -73,7 +111,7 @@ async function describeOne(supabase: any, apiKey: string, productId: string): Pr
         role: 'user',
         content: [
           { type: 'image', source: { type: 'base64', media_type: image.media_type, data: image.data } },
-          { type: 'text', text: `Product title: "${p.name}"${p.brand ? ` by ${p.brand}` : ''}.\n\nIdentify what this item ACTUALLY is from the photo — titles often mislead, so trust the image.\n\nReply in EXACTLY two lines, nothing else. Plain text only — no markdown, no "#" headings, no labels, no blank line, no bullets:\nLine 1 — the item's category in 1-4 plain words, using the most common everyday noun for it (e.g. "potted plant", "high heels", "computer monitor", "wristwatch", "denim jacket", "table lamp"). Name only the object itself. Do NOT mention the room, background, setting, surroundings, or where it sits.\nLine 2 — one dense sentence: materials, colors, and any notable detail.\n\nNo marketing language.` },
+          { type: 'text', text: promptText },
         ],
       }],
     }),
@@ -115,8 +153,12 @@ Deno.serve(async (req: Request) => {
     const productId = typeof body.productId === 'string' ? body.productId : null;
     const backfill = Number(body.backfill) || 0;
 
+    // Load the (editable) instruction once per invocation — the admin can
+    // override it in Data → Settings; otherwise the default is used.
+    const instruction = await loadInstruction(supabase);
+
     if (productId) {
-      const ok = await describeOne(supabase, apiKey, productId);
+      const ok = await describeOne(supabase, apiKey, productId, instruction);
       return new Response(JSON.stringify({ success: ok }), { headers: { 'Content-Type': 'application/json' } });
     }
 
@@ -129,7 +171,7 @@ Deno.serve(async (req: Request) => {
         .limit(Math.min(backfill, 25));
       let done = 0;
       for (const r of (rows ?? []) as Array<{ id: string }>) {
-        try { if (await describeOne(supabase, apiKey, r.id)) done++; }
+        try { if (await describeOne(supabase, apiKey, r.id, instruction)) done++; }
         catch { /* skip and continue the batch */ }
       }
       return new Response(JSON.stringify({ success: true, done, remaining_query: 'haiku_context is null' }), {
