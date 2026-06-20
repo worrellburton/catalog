@@ -13,7 +13,7 @@
 // casing it has.
 
 import { supabase } from '~/utils/supabase';
-import { haikuIdentity } from '~/utils/haiku';
+import { haikuIdentity, haikuCategory } from '~/utils/haiku';
 import { proposeProductGenders, type ProductGender } from '~/services/genders';
 import { inferProductTypeAndSubtype } from '~/services/product-types';
 import { governanceRendition, warmPosters } from '~/utils/poster-prefetch';
@@ -282,7 +282,10 @@ export function auditProductTypes(
 
   for (const p of products) {
     const currentNode = p.type ? byNorm.get(normalizeTypeName(p.type)) ?? null : null;
-    const hctx = haikuIdentity(p.haikuContext);
+    // Prefer Haiku's explicit Category ("Footwear / Casual Shoes") over the
+    // title line ("Men's Low-Top Sneaker" → mis-hits Tops). Falls back to the
+    // identity line for the old two-line format.
+    const hctx = haikuCategory(p.haikuContext) || haikuIdentity(p.haikuContext);
 
     // Match each source INDEPENDENTLY so the IMAGE can out-rank a misleading
     // NAME — the whole reason haiku_context exists. "...Twist-Top Lid..." must
