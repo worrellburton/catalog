@@ -2049,24 +2049,18 @@ body:has(.look-overlay.look-overlay--in) {
   .look-skel-actions span::after { animation: none; }
 }
 
-/* ── Creator chip fades WHILE SCROLLING (matches the home feed) ──────────────
+/* ── Card-overlay fade WHILE SCROLLING — UNIFIED, see grid-view.css ──────────
    The card feeds below a look ("More like this", "More from this creator",
-   "Popular looks") render the same CreativeCardV2 look tiles as the home grid,
-   so each carries a lower-left .card-creator-tag (avatar + username). On the
-   home feed that chip retires while the feed glides and breathes back when it
-   settles; the founder wants the SAME feel inside the look overlay.
+   "Popular looks") render the same CreativeCardV2 tiles as the home grid (each
+   with its .card-gradient, .card-creator-tag, .promo-product-info, super-admin
+   buttons, etc.), and the look hero itself carries .inline-look-catalog-btn +
+   .hotspot-indicator chrome.
 
-   Driver: scroll-idle.ts sets html.is-scroll-gliding on EVERY scroller (its
-   capture-phase document listener hears the inner .look-overlay-scroll too),
-   so no JS wiring is needed here — only this scoped rule. SCOPED to
-   .look-overlay so the main feed's own chrome-hidden behaviour is untouched.
-   Opacity only (compositor-cheap; no layout/backdrop work during the glide). */
-.look-overlay .card-creator-tag {
-  /* Fade-IN (when gliding lifts on scroll-stop): gentle. */
-  transition: opacity 0.3s cubic-bezier(0.22, 1, 0.36, 1);
-}
-html.is-scroll-gliding .look-overlay .card-creator-tag {
-  opacity: 0;
-  /* Fade-OUT: brisk so the names clear the instant scrolling starts. */
-  transition: opacity 0.2s cubic-bezier(0.45, 0, 0.55, 1);
-}
+   ALL of that card-overlay chrome now fades on a SINGLE shared mechanism keyed
+   off `html.is-scroll-gliding` — defined ONCE in grid-view.css (the "UNIFIED
+   card-overlay fade" block) so the home feed, the look overlay and the product
+   page behave identically. scroll-idle.ts sets the class on the inner
+   .look-overlay-scroll too (one capture-phase document listener), so nothing
+   extra is wired here. Previously this file carried a .card-creator-tag-only
+   variant (#16) that fought the home feed's .chrome-hidden fade — that scoped
+   rule is intentionally removed; the unified rule supersedes it. */
