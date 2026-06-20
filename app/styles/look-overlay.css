@@ -2013,7 +2013,10 @@ body:has(.look-overlay.look-overlay--in) {
   animation: look-skel-sweep 1.5s ease-in-out infinite;
 }
 
-.look-skel-media { flex: 1 1 auto; min-height: 0; border-radius: 16px; }
+/* Portrait 3:4 media skeleton — matches the look's actual hero proportions
+   (the flex:1 fill collapsed short in doc-scroll mode, where .look-loading's
+   absolute parent isn't full height). */
+.look-skel-media { flex: 0 0 auto; aspect-ratio: 3 / 4; min-height: 0; border-radius: 16px; }
 .look-skel-info { display: flex; flex-direction: column; gap: 12px; flex: 0 0 auto; }
 .look-skel-meta { width: 64px; height: 12px; }
 .look-skel-tab { width: 104px; height: 28px; border-radius: 8px; }
@@ -2035,7 +2038,7 @@ body:has(.look-overlay.look-overlay--in) {
     bottom: auto;
     height: 85vh;
   }
-  .look-skel-media { flex: 0 0 42%; border-radius: 0; }
+  .look-skel-media { flex: 0 0 42%; aspect-ratio: auto; border-radius: 0; }
   .look-skel-info { flex: 0 0 58%; justify-content: center; padding: 0 60px; }
   .look-skel-card { height: 92px; }
 }
