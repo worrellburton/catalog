@@ -1,0 +1,243 @@
+/* CreatorConstellation — the pull-down "people & brands" page. Full-viewport,
+   dark, premium. Motion drives the spring entrance; this owns the look. */
+
+.cc-root {
+  position: fixed;
+  inset: 0;
+  z-index: 520; /* above the feed + chrome, below the auth-splash (600) */
+  background:
+    radial-gradient(120% 80% at 50% -10%, rgba(120, 165, 255, 0.10), transparent 60%),
+    radial-gradient(120% 90% at 50% 40%, #15161c 0%, #0b0c10 58%, #060608 100%);
+}
+
+.cc-sheet {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.cc-scroll {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  padding: 0 18px calc(40px + env(safe-area-inset-bottom, 0px));
+  padding-top: calc(8px + env(safe-area-inset-top, 0px));
+}
+
+.cc-grab {
+  display: flex;
+  justify-content: center;
+  padding: 8px 0 2px;
+  position: sticky;
+  top: 0;
+  z-index: 2;
+}
+.cc-grab span {
+  width: 38px;
+  height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.22);
+}
+
+.cc-close {
+  position: absolute;
+  top: calc(6px + env(safe-area-inset-top, 0px));
+  right: 12px;
+  width: 36px;
+  height: 36px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: #e5e7eb;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  z-index: 3;
+  backdrop-filter: blur(8px);
+}
+
+.cc-head {
+  text-align: center;
+  padding: 14px 6px 22px;
+}
+.cc-title {
+  margin: 0;
+  font-size: 30px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  color: #fff;
+  line-height: 1.05;
+}
+.cc-sub {
+  margin: 8px auto 0;
+  max-width: 30ch;
+  font-size: 13.5px;
+  line-height: 1.4;
+  color: #9aa3b2;
+}
+
+.cc-section { margin-bottom: 26px; }
+.cc-section-label {
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6b7280;
+  margin: 0 4px 12px;
+}
+
+.cc-empty {
+  margin: 0 4px;
+  font-size: 13px;
+  color: #9aa3b2;
+}
+
+/* Creator grid — circular avatar tiles that read as an orbit of people. */
+.cc-grid--creators {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 18px 10px;
+}
+@media (min-width: 520px) {
+  .cc-grid--creators { grid-template-columns: repeat(4, 1fr); }
+}
+
+.cc-creator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  font-family: inherit;
+  min-width: 0;
+}
+
+.cc-avatar {
+  position: relative;
+  width: 76px;
+  height: 76px;
+  border-radius: 50%;
+  overflow: visible;
+  background: #1b1f29;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow:
+    0 0 0 2px rgba(255, 255, 255, 0.10),
+    0 10px 24px rgba(0, 0, 0, 0.45);
+}
+.cc-avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: 50%;
+  object-fit: cover;
+}
+.cc-avatar.is-online {
+  box-shadow:
+    0 0 0 2px rgba(74, 222, 128, 0.85),
+    0 0 18px rgba(74, 222, 128, 0.35),
+    0 10px 24px rgba(0, 0, 0, 0.45);
+}
+.cc-online-dot {
+  position: absolute;
+  right: 4px;
+  bottom: 4px;
+  width: 13px;
+  height: 13px;
+  border-radius: 50%;
+  background: #4ade80;
+  border: 2.5px solid #0b0c10;
+}
+.cc-initial { color: #cbd5e1; font-size: 30px; font-weight: 700; }
+
+.cc-name {
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #f1f5f9;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.cc-insight {
+  font-size: 11px;
+  color: #7c8696;
+}
+
+/* Brands — horizontal cards with a thumbnail + the "saved" insight. */
+.cc-grid--brands {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 10px;
+}
+.cc-brand {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  background: rgba(255, 255, 255, 0.045);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  border-radius: 16px;
+  padding: 10px;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+  font-family: inherit;
+  text-align: left;
+  min-width: 0;
+}
+.cc-brand-thumb {
+  flex-shrink: 0;
+  width: 46px;
+  height: 46px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #15171d;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.cc-brand-thumb img { width: 100%; height: 100%; object-fit: cover; }
+.cc-brand-mono { color: #cbd5e1; font-size: 20px; font-weight: 800; }
+.cc-brand-meta { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
+.cc-brand-name {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: #f1f5f9;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.cc-return {
+  display: block;
+  margin: 8px auto 0;
+  padding: 11px 22px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.05);
+  color: #e5e7eb;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+/* Skeletons */
+.cc-avatar--skel,
+.cc-skel-line {
+  background: linear-gradient(90deg, rgba(255,255,255,0.05) 0%, rgba(255,255,255,0.12) 50%, rgba(255,255,255,0.05) 100%);
+  background-size: 200% 100%;
+  animation: cc-skel 1.4s ease-in-out infinite;
+}
+.cc-creator--skel { pointer-events: none; }
+.cc-skel-line { width: 60%; height: 10px; border-radius: 6px; margin-top: 2px; }
+@keyframes cc-skel { 0%,100% { background-position: 200% 0; } 50% { background-position: -200% 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .cc-avatar--skel, .cc-skel-line { animation: none; }
+}
