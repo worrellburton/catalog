@@ -3890,16 +3890,21 @@ html[data-shell="catalog-app"] .gen-page {
 .gen-stylist--ask .gen-stylist-foot {
   flex: 0 0 auto;
 }
-.gen-stylist-resulthead { padding-top: 2px; }
+.gen-stylist-resulthead { padding-top: 2px; text-align: center; }
 .gen-stylist-title--sm { font-size: clamp(20px, 5.5vw, 26px); }
+/* "Why this look" narrative — a quiet, readable paragraph under the result
+   heading. Kept compact (clamped to a few lines) so the result still fits
+   roughly one viewport; centered with a comfortable measure for legibility. */
 .gen-stylist-rationale {
-  margin: 4px 0 0;
+  margin: 6px auto 0;
+  max-width: 30em;
   color: rgba(255, 255, 255, 0.6);
   font-size: 13px;
-  line-height: 1.35;
+  line-height: 1.45;
+  text-align: center;
   overflow: hidden;
   display: -webkit-box;
-  -webkit-line-clamp: 2;
+  -webkit-line-clamp: 4;
   -webkit-box-orient: vertical;
 }
 .gen-stylist-title {
