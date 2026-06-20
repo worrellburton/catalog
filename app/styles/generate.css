@@ -3851,6 +3851,45 @@ html[data-shell="catalog-app"] .gen-page {
   overflow: hidden;
   padding-bottom: 0;
 }
+
+/* ASK / TYPES = ONE viewport, no page scroll. Same treatment as the result:
+   pin the wrapping page to exactly one screen and kill its scroll. The ask
+   screen's content centers above the keyboard (svh shrinks via
+   interactive-widget=resizes-content); the types screen's chips + CTA all fit
+   between the top and the bottom console. */
+.gen-page--stylist:has(.gen-stylist--ask) {
+  height: 100svh;
+  min-height: 0;
+  overflow: hidden;
+  padding-top: 0;
+  padding-bottom: 0;
+  overscroll-behavior: none;
+}
+.gen-page--stylist:has(.gen-stylist--ask) .gen-stylist--ask {
+  flex: 1;
+  min-height: 0;
+  height: auto;
+  max-height: 100%;
+  overflow: hidden;
+  padding-bottom: 0;
+}
+/* Fallback for browsers without :has() — still cap to the viewport. */
+.gen-stylist--ask {
+  max-height: 100svh;
+  overflow: hidden;
+}
+/* The body holds the title/input (ask) or the chip grid (types); it owns the
+   slack between the top and the bottom console. Allow it to scroll internally
+   only as a last resort on very short viewports — the page never scrolls. */
+.gen-stylist--ask .gen-stylist-askbody {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: hidden auto;
+}
+/* Console pinned at the bottom of the one viewport, never scrolls away. */
+.gen-stylist--ask .gen-stylist-foot {
+  flex: 0 0 auto;
+}
 .gen-stylist-resulthead { padding-top: 2px; }
 .gen-stylist-title--sm { font-size: clamp(20px, 5.5vw, 26px); }
 .gen-stylist-rationale {
@@ -3889,19 +3928,21 @@ html[data-shell="catalog-app"] .gen-page {
 .gen-stylist-input::placeholder { color: rgba(255, 255, 255, 0.35); }
 .gen-stylist-input:focus { outline: none; border-color: rgba(255, 255, 255, 0.4); }
 
-/* Garment-type chooser — multi-select chips on the 'types' step. */
+/* Garment-type chooser — multi-select chips on the 'types' step. Tightened so
+   all six chips + the title + the bottom console fit in a single viewport with
+   no scroll. */
 .gen-stylist-types {
-  margin-top: 10px;
+  margin-top: 8px;
   display: grid;
   grid-template-columns: repeat(2, 1fr);
-  gap: 10px;
+  gap: 8px;
 }
 .gen-stylist-type {
   display: flex;
   align-items: center;
   gap: 10px;
   width: 100%;
-  padding: 14px 16px;
+  padding: 12px 14px;
   border-radius: 14px;
   border: 1px solid rgba(255, 255, 255, 0.16);
   background: rgba(255, 255, 255, 0.05);
