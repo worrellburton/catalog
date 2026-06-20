@@ -19,12 +19,6 @@
   overflow-y: auto;
   padding: 16px clamp(14px, 4vw, 40px) 60px;
 }
-/* In the Flutter shell, env(safe-area-inset-top) reads ~0 in the WebView, so
-   the header (back arrow + title) sits under the status bar. Anchor it to the
-   shell-provided status-bar height, +12px to match the overlay back arrows. */
-html[data-shell="catalog-app"] .saved-page {
-  padding-top: calc(var(--shell-sb, 44px) + 12px);
-}
 
 .saved-screen--embedded {
   background: #0c0c0e;

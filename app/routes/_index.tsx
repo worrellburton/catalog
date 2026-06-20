@@ -405,12 +405,10 @@ export default function Home() {
   // ── New home: "What are you shopping for?" hero ──────────────────────
   // The hero is the home entry; the catalog feed lives directly below it
   // (scroll reveals it). A search plays the SearchCeremony then reveals
-  // results. Shown everywhere — including inside the native Flutter shell,
-  // which now mirrors the mobile-web home: the hero's centred search bar is
-  // the repositioned #bottom-bar, and the shell hides only its resting/docked
-  // state (see bottom-bar.css) so there's no extra pill at the bottom.
+  // results. Skipped inside the native Flutter shell (it has its own
+  // launch UX) and once a search/catalog filter is already active.
   const inShell = typeof document !== 'undefined' && document.documentElement.dataset.shell === 'catalog-app';
-  const [heroMode, setHeroMode] = useState(true);
+  const [heroMode, setHeroMode] = useState(() => !inShell);
   const [heroScrolled, setHeroScrolled] = useState(false);
   // The followed-creators rail is pinned (position:fixed) at the top of the
   // hero while the page is at rest, but it lives in the high-z-index header so
@@ -759,7 +757,7 @@ export default function Home() {
     suppressCeremonyRef.current = true;
     setCeremony({ active: false, query: '', kind: 'search' });
     setCeremonyRecs([]);
-    setHeroMode(false);
+    if (!inShell) setHeroMode(false);
     setSearchQuery(q);
     bumpSearchTrigger();
     setRevealResults(true);
@@ -847,8 +845,7 @@ export default function Home() {
     // 'catalog:close-search' event so BottomBar can drop its
     // local searchOpen state (the suggestions column).
     // Also return to the "What are you shopping for?" home hero.
-    setHeroMode(true);
-    window.scrollTo({ top: 0, behavior: 'auto' });
+    if (!inShell) { setHeroMode(true); window.scrollTo({ top: 0, behavior: 'auto' }); }
     setSearchQuery('');
     resetGenderFilter();
     setCreatorFilter(null);
@@ -2077,7 +2074,7 @@ export default function Home() {
     setCreatorFilter(null);
     setShowBookmarks(false);
     setShowMyLooks(false);
-    setHeroMode(false);
+    if (!inShell) setHeroMode(false);
     if (typeof window !== 'undefined') {
       if (window.location.pathname !== '/') window.history.replaceState({}, '', '/');
       window.scrollTo({ top: 0, behavior: 'auto' });
