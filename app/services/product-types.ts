@@ -204,6 +204,30 @@ export function inferProductTypeAndSubtype(
   return null;
 }
 
+export interface InferenceExplanation extends TaxonomyResult {
+  /** The exact substring in the name that triggered the match — so the admin
+   *  can SEE why "Premier Low Top" became a Top (it matched "top"). */
+  matchedText: string;
+}
+
+/**
+ * Same as {@link inferProductTypeAndSubtype} but also returns the exact
+ * substring in the name that triggered the matching rule. Powers the "how
+ * this type was constructed" derivation map in the admin products table.
+ */
+export function explainProductTypeInference(
+  name: string | null | undefined,
+): InferenceExplanation | null {
+  if (!name) return null;
+  for (const rule of RULES) {
+    for (const rx of rule.patterns) {
+      const m = rx.exec(name);
+      if (m) return { type: rule.type, subtype: rule.subtype, matchedText: m[0] };
+    }
+  }
+  return null;
+}
+
 /**
  * Back-compat helper — returns just the broad `type` (or null). Prefer
  * {@link inferProductTypeAndSubtype} for new code that wants the subtype too.
