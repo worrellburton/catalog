@@ -1266,25 +1266,18 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
                   was removed). */}
               <>
                 <>
-                  <div className="look-creator-about">
-                    {/* Creator avatar + name intentionally omitted here — the
-                        floating top-left creator badge already shows the
-                        identity, so this card stays slim (just the summary +
-                        "View all looks"). */}
-                    {lookDescription ? (
-                      // Unique, image-grounded description for THIS look —
-                      // centered, glowing editorial copy (no spark mark).
-                      <p className="look-creator-about-bio look-creator-about-bio--ai">
-                        {lookDescription}
-                      </p>
-                    ) : creatorData?.bio ? (
-                      <p className="look-creator-about-bio">{creatorData.bio}</p>
-                    ) : aboutSummary ? (
-                      <p className="look-creator-about-bio look-creator-about-bio--ai">
-                        {aboutSummary}
-                      </p>
-                    ) : null}
-                  </div>
+                  {/* Creator avatar + name intentionally omitted here — the
+                      floating top-left creator badge already shows the
+                      identity, so this card stays slim (just the summary +
+                      "View all looks"). The description is a tappable button
+                      that expands/collapses long copy (clamped to a few lines
+                      with a "Show more" affordance). */}
+                  {(lookDescription || creatorData?.bio || aboutSummary) && (
+                    <LookAboutBio
+                      text={(lookDescription || creatorData?.bio || aboutSummary) as string}
+                      isAi={!!lookDescription || (!creatorData?.bio && !!aboutSummary)}
+                    />
+                  )}
 
                   {/* One action row: the creator's catalog (avatar + name)
                       beside Comments (founder's call — same row). */}
@@ -1458,6 +1451,51 @@ export default function LookOverlay({ look, onClose, onOpenCreator, onOpenBrowse
           onClose={() => setSimDebug({ open: false, report: null })}
         />
       )}
+    </div>
+  );
+}
+
+/**
+ * The look's editorial description, rendered as a tappable button that
+ * expands/collapses. Collapsed it clamps to a few lines; if the copy actually
+ * overflows that clamp a "Show more" affordance appears and the whole block
+ * toggles open. Short copy that fits stays static (button disabled, no
+ * affordance) so we never show a pointless "more" on one-liners.
+ */
+function LookAboutBio({ text, isAi }: { text: string; isAi: boolean }) {
+  const [expanded, setExpanded] = useState(false);
+  const [overflows, setOverflows] = useState(false);
+  const pRef = useRef<HTMLParagraphElement>(null);
+
+  // Measure ONLY while clamped — that's when scrollHeight > clientHeight tells
+  // us the copy is being cut off. When expanded we skip (clientHeight grows to
+  // fit, which would falsely read as "no overflow" and hide "Show less").
+  useEffect(() => {
+    if (expanded) return;
+    const el = pRef.current;
+    if (!el) return;
+    setOverflows(el.scrollHeight > el.clientHeight + 2);
+  }, [text, expanded]);
+
+  return (
+    <div className="look-creator-about">
+      <button
+        type="button"
+        className={`look-about-bio-toggle${overflows ? ' is-interactive' : ''}`}
+        onClick={() => { if (overflows) setExpanded(v => !v); }}
+        aria-expanded={overflows ? expanded : undefined}
+        disabled={!overflows}
+      >
+        <p
+          ref={pRef}
+          className={`look-creator-about-bio${isAi ? ' look-creator-about-bio--ai' : ''}${expanded ? '' : ' is-clamped'}`}
+        >
+          {text}
+        </p>
+        {overflows && (
+          <span className="look-about-more">{expanded ? 'Show less' : 'Show more'}</span>
+        )}
+      </button>
     </div>
   );
 }

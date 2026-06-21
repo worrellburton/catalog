@@ -683,6 +683,10 @@
    white and cost a per-frame additive-blend GPU fill while scrolling (the
    desktop hero↔Similar jank). Flat, theme-matching, zero scroll cost. */
 .look-creator-about {
+  /* Inset 24px to align with the product list (.look-products-list) and the
+     action row (.look-about-actions) — it used to span the panel edge-to-edge,
+     reading wider than everything else stacked with it. */
+  margin: 0 24px;
   padding: 18px 20px;
   display: flex;
   flex-direction: column;
@@ -690,6 +694,47 @@
   background: rgba(255, 255, 255, 0.035);
   border: 1px solid rgba(255, 255, 255, 0.07);
   border-radius: 16px;
+}
+
+/* The description is a button now (tap to expand/collapse). Strip the native
+   button chrome so it reads as plain editorial copy; full-width so the clamped
+   text + "Show more" stack centered like before. */
+.look-about-bio-toggle {
+  appearance: none;
+  -webkit-appearance: none;
+  background: none;
+  border: none;
+  margin: 0;
+  padding: 0;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  color: inherit;
+  font: inherit;
+  text-align: center;
+  cursor: default;
+}
+.look-about-bio-toggle.is-interactive { cursor: pointer; }
+
+/* Clamp the collapsed description to a few lines; expanding lifts the clamp. */
+.look-creator-about-bio.is-clamped {
+  display: -webkit-box;
+  -webkit-line-clamp: 4;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+/* "Show more" / "Show less" affordance under the clamped copy. */
+.look-about-more {
+  align-self: center;
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  color: rgba(255, 255, 255, 0.62);
+}
+.look-about-bio-toggle.is-interactive:hover .look-about-more {
+  color: rgba(255, 255, 255, 0.92);
 }
 
 .look-creator-about-header {

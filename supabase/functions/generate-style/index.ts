@@ -6,13 +6,19 @@
 // 3. Reads the foundational prompt from app_settings('style_prompt') and
 //    substitutes {{gender}} {{name}} {{height}} {{age}} {{pronoun}} {{occasion}}
 //    plus the contracted form {{pronoun}}'s → he's|she's|they're.
-// 4. Submits 4 fal.ai jobs in parallel — all to openai/gpt-image-2/edit —
-//    each with the user's reference photos. (nano-banana-2 was removed
-//    by request; existing nano-banana-2 rows stay in the DB and render
-//    historically.) Asks for 16:9 outputs so the tile grid is consistent.
-// 5. As each completes, writes a row into style_generation_images. When all
-//    4 settle, marks the parent style_generations row done|failed.
-// 6. Returns the parent row + the 4 image rows (success-only) to the client.
+// 4. Seeds 4 'pending' style_generation_images rows and RETURNS IMMEDIATELY
+//    with the 'generating' parent + those pending rows. The slow fal.ai work
+//    runs in a background task (EdgeRuntime.waitUntil) so the client's invoke()
+//    fetch isn't held open for 30-150s (which used to get killed mid-flight and
+//    surface a false "Failed to send a request to the Edge Function").
+// 5. In the background: submits 4 fal.ai jobs in parallel — all to
+//    openai/gpt-image-2/edit — each with the user's reference photos.
+//    (nano-banana-2 was removed by request; existing nano-banana-2 rows stay in
+//    the DB and render historically.) Asks for 16:9 outputs so the tile grid is
+//    consistent. As each completes it writes the row; when all 4 settle it
+//    marks the parent style_generations row done|failed.
+// 6. The client polls style_generations / style_generation_images until the
+//    parent reaches done|failed, filling tiles as images land.
 //
 // Environment:
 //   FAL_KEY                       — Fal AI key (required)
@@ -156,6 +162,64 @@ async function callFalImage(
   return { url, error: null };
 }
 
+// ── Background fan-out ──────────────────────────────────────────────────────
+// Supabase keeps the worker alive for promises handed to EdgeRuntime.waitUntil
+// even after the response is sent, so we return the seeded `pending` rows to the
+// client immediately and finish the slow fal.ai work here. The client polls the
+// DB and fills tiles as each image lands. (Previously the handler awaited all 4
+// fal calls before responding — 30-156s — so the browser's invoke() fetch was
+// killed long before the function returned, surfacing a false "Failed to send a
+// request to the Edge Function" even though the generation had actually
+// succeeded server-side.)
+
+// Read EdgeRuntime off globalThis so we don't collide with (or depend on) the
+// ambient Supabase type declaration.
+function getEdgeWaitUntil(): ((p: Promise<unknown>) => void) | null {
+  const rt = (globalThis as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } }).EdgeRuntime;
+  return rt?.waitUntil ? rt.waitUntil.bind(rt) : null;
+}
+
+async function runStyleFanOut(
+  admin: ReturnType<typeof createClient>,
+  generationId: string,
+  referenceUrls: string[],
+  resolvedPrompt: string,
+  falKey: string,
+): Promise<void> {
+  try {
+    const sortOrders = [0, 1, 2, 3];
+    const tasks = sortOrders.map(sortOrder =>
+      (async () => {
+        const result = await callFalImage(GPT_IMAGE_SLUG, resolvedPrompt, referenceUrls, falKey);
+        const update = result.url
+          ? { status: 'done', image_url: result.url, error: null }
+          : { status: 'failed', image_url: null, error: result.error };
+        await admin
+          .from('style_generation_images')
+          .update(update)
+          .eq('generation_id', generationId)
+          .eq('sort_order', sortOrder);
+        return update.status;
+      })(),
+    );
+    const settled = await Promise.allSettled(tasks);
+    const successes = settled.filter(s => s.status === 'fulfilled' && s.value === 'done').length;
+    await admin.from('style_generations').update({
+      status: successes > 0 ? 'done' : 'failed',
+      error: successes > 0 ? null : 'all_providers_failed',
+      completed_at: new Date().toISOString(),
+    }).eq('id', generationId);
+  } catch (err) {
+    // A throw in the background must still close out the row, otherwise the
+    // client polls a 'generating' row forever.
+    await admin.from('style_generations').update({
+      status: 'failed',
+      error: `fanout_crash:${String(err).slice(0, 200)}`,
+      completed_at: new Date().toISOString(),
+    }).eq('id', generationId);
+  }
+}
+
 // ── Handler ───────────────────────────────────────────────────────────────
 
 Deno.serve(async (req: Request) => {
@@ -198,8 +262,10 @@ Deno.serve(async (req: Request) => {
   const generation = genRow as GenerationRow;
   if (generation.user_id !== userId) return jsonRes({ error: 'forbidden' }, 403);
 
-  // Idempotent: if we already finished, return the existing rows.
-  if (generation.status === 'done' || generation.status === 'failed') {
+  // Idempotent: if we already finished — or a background fan-out is already
+  // running for this row — return the existing rows instead of starting a
+  // second fan-out. The client polls these rows directly afterward.
+  if (generation.status === 'done' || generation.status === 'failed' || generation.status === 'generating') {
     const { data: imgs } = await admin
       .from('style_generation_images')
       .select('*')
@@ -247,7 +313,8 @@ Deno.serve(async (req: Request) => {
   }).eq('id', generation.id);
 
   // Seed 4 image rows in 'pending' so the client can poll/render placeholders.
-  // All 4 use gpt-image-2 (nano-banana-2 dropped per request).
+  // All 4 use gpt-image-2 (nano-banana-2 dropped per request). `.select()` so
+  // we can hand the seeded rows (with ids) straight back to the client.
   const seedRows = [
     { generation_id: generation.id, provider: 'gpt-image-2', sort_order: 0, status: 'pending' },
     { generation_id: generation.id, provider: 'gpt-image-2', sort_order: 1, status: 'pending' },
@@ -256,39 +323,19 @@ Deno.serve(async (req: Request) => {
   ];
   await admin.from('style_generation_images').upsert(seedRows, { onConflict: 'generation_id,sort_order' });
 
-  // Fan out 4 fal.ai calls in parallel. Each result is written immediately so
-  // a partial success still surfaces images even if one call 500s.
-  const tasks = seedRows.map(seed =>
-    (async () => {
-      const result = await callFalImage(GPT_IMAGE_SLUG, resolvedPrompt, generation.reference_urls, falKey);
-      const update = result.url
-        ? { status: 'done', image_url: result.url, error: null }
-        : { status: 'failed', image_url: null, error: result.error };
-      await admin
-        .from('style_generation_images')
-        .update(update)
-        .eq('generation_id', generation.id)
-        .eq('sort_order', seed.sort_order);
-      return { sort_order: seed.sort_order, ...update };
-    })(),
-  );
-  const settled = await Promise.allSettled(tasks);
+  // Kick the slow fal.ai fan-out into a background task and respond NOW. The
+  // worker stays alive for the waitUntil promise; the client polls the seeded
+  // rows and fills tiles as each image lands. (Fallback: if EdgeRuntime isn't
+  // present we detach the promise — still better than blocking the response.)
+  const fanOut = runStyleFanOut(admin, generation.id, generation.reference_urls, resolvedPrompt, falKey);
+  const waitUntil = getEdgeWaitUntil();
+  if (waitUntil) waitUntil(fanOut); else void fanOut;
 
-  // Mark the parent generation done if we got at least one image; otherwise failed.
-  const successes = settled.filter(s => s.status === 'fulfilled' && (s.value as { status: string }).status === 'done').length;
-  const finalStatus = successes > 0 ? 'done' : 'failed';
-  const failureReason = successes > 0 ? null : 'all_providers_failed';
-  await admin.from('style_generations').update({
-    status: finalStatus,
-    error: failureReason,
-    completed_at: new Date().toISOString(),
-  }).eq('id', generation.id);
-
-  // Return the final row + image rows so the client can render immediately.
-  const { data: finalRow } = await admin
+  // Return the 'generating' row + the 4 seeded pending rows immediately.
+  const { data: genNow } = await admin
     .from('style_generations').select('*').eq('id', generation.id).single();
-  const { data: finalImages } = await admin
+  const { data: seededImages } = await admin
     .from('style_generation_images').select('*').eq('generation_id', generation.id).order('sort_order');
 
-  return jsonRes({ generation: finalRow, images: finalImages ?? [] });
+  return jsonRes({ generation: genNow, images: seededImages ?? [] });
 });
