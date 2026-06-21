@@ -16,28 +16,31 @@
   inset: 0;
   z-index: 200;
   background: #0a0a0a;
-  /* Instant-opaque OPEN, slide-DOWN CLOSE (mirrors product-page.css). Mounts
-     ON-SCREEN at translateY(0) and OPAQUE so there's no feed-flash window AND
-     the cold hero <video> paints immediately (an enter slide mounted it
-     off-screen and left the hero black until it slid in). Only --out animates:
-     the look slides down to reveal the layer beneath; 360ms matches
-     handleClose's unmount delay (the feed re-warms "under cover of the
-     slide-out"). The shared <video> hero appendChild'd inside rides along. */
+  /* Standardized FADE in + FADE out (identical on the look + product overlays,
+     and the only open/close transition anywhere). Stays at translateY(0) so the
+     shared <video> hero mounts ON-SCREEN and paints immediately (an OFF-SCREEN
+     slide mount is what left the hero black) — we fade OPACITY, not position.
+     `transform` is still transitioned so the swipe-down dismiss tracks + slides. */
   transform: translateY(0);
-  transition: transform 360ms cubic-bezier(0.32, 0.72, 0, 1);
+  opacity: 0;
+  transition: opacity 280ms cubic-bezier(0.4, 0, 0.2, 1),
+              transform 360ms cubic-bezier(0.32, 0.72, 0, 1);
   overflow: hidden;
-  will-change: transform;
+  will-change: opacity, transform;
 }
 
-/* Open is instant — no enter animation (mount == settled at translateY(0)). */
+/* Open — fade in (mounted flips to --in on the first rAF). */
 .look-overlay--in {
   transform: translateY(0);
+  opacity: 1;
 }
 
-/* Close — slide down off-screen; the JS close timeout then unmounts.
-   pointer-events off so the revealed surface/feed is usable at once. */
+/* Close (X / back / tap-outside) — fade out; the JS close timeout then
+   unmounts. pointer-events off so the revealed surface is usable at once.
+   (Swipe-to-dismiss still slides via the inline transform the drag handler
+   sets — direct manipulation should follow the finger.) */
 .look-overlay--out {
-  transform: translateY(100%);
+  opacity: 0;
   pointer-events: none;
 }
 
