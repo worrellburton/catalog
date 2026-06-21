@@ -144,6 +144,16 @@ export default defineConfig({
               || id.includes('/components/AvatarCropModal')
               || id.includes('/components/CountUp')
               || id.includes('/components/SimilarDebugModal')) return 'app-core';
+          // Subdivide the admin chunk: the two behemoths (data.tsx ~9.5k lines,
+          // catalogs.tsx ~7.7k) + the next heaviest get their OWN chunks so a
+          // light admin page (e.g. /admin/dials) no longer downloads them. The
+          // broad admin pin below still catches everything else, so admin code
+          // stays OFF the consumer shell (the burial protection is intact).
+          if (id.includes('/routes/admin/data')) return 'admin-data';
+          if (id.includes('/routes/admin/catalogs')) return 'admin-catalogs';
+          if (id.includes('/routes/admin/affiliate')) return 'admin-affiliate';
+          if (id.includes('/routes/admin/users')) return 'admin-users';
+          if (id.includes('/routes/admin/governance')) return 'admin-governance';
           if (id.includes('/routes/admin/')) return 'admin';
           if (id.includes('/components/DeckView') || id.includes('/components/deck')) return 'deck';
           if (id.includes('/components/CreatorWallet')) return 'wallet';
