@@ -74,30 +74,29 @@
   inset: 0;
   z-index: 250;
   background: #0a0a0a;
-  /* Standardized FADE in + FADE out (identical to the look overlay). Stays at
-     translateY(0) so the shared <video> hero mounts ON-SCREEN and paints its
-     first frame immediately (an OFF-SCREEN slide mount is what left the hero
-     black) — we fade OPACITY, not position. `transform` is still transitioned
-     so the swipe-down dismiss tracks + slides. */
+  /* Instant-opaque OPEN, slide-DOWN CLOSE. The overlay mounts ON-SCREEN at
+     translateY(0) and fully OPAQUE, so (a) there's no opacity window for the
+     home feed to flash through, and (b) the cold hero <video> paints its first
+     frame in the same cycle as the poster — mounting OFF-SCREEN (an enter
+     slide) delayed that paint and left the hero black until it slid in. Only
+     the CLOSE animates: --out slides the (already-painted) overlay down to
+     reveal the layer beneath. transform-only so the shared <video> hero
+     (appendChild'd inside) rides along; 360ms matches handleClose's unmount
+     delay so the slide-out finishes exactly as the frame pops. */
   transform: translateY(0);
-  opacity: 0;
-  transition: opacity 280ms cubic-bezier(0.4, 0, 0.2, 1),
-              transform 360ms cubic-bezier(0.32, 0.72, 0, 1);
-  will-change: opacity, transform;
+  transition: transform 360ms cubic-bezier(0.32, 0.72, 0, 1);
+  will-change: transform;
 }
 
-/* Open — fade in (mounted flips to --in on the first rAF). */
+/* Open is instant — no enter animation (mount == settled at translateY(0)). */
 .product-page-overlay--in {
   transform: translateY(0);
-  opacity: 1;
 }
 
-/* Close (X / back / tap-outside) — fade out; the JS close timeout then
-   unmounts. pointer-events off so the revealed surface is usable at once.
-   (Swipe-to-dismiss still slides via the inline transform the drag handler
-   sets — direct manipulation should follow the finger.) */
+/* Close — slide down off-screen, then the JS close timeout unmounts.
+   pointer-events off so the revealed surface/feed is usable at once. */
 .product-page-overlay--out {
-  opacity: 0;
+  transform: translateY(100%);
   pointer-events: none;
 }
 
