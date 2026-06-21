@@ -133,13 +133,13 @@ export async function promoteGenerationToLook(input: PromoteInput): Promise<Prom
     .eq('id', look.id);
   if (stampErr) throw new Error(`Source-gen stamp failed: ${stampErr.message}`);
 
-  // Best-effort product attach. A single bad product shouldn't fail
-  // the whole publish — the admin can retry from the Products dropdown.
-  await Promise.all((input.products ?? []).map(p =>
-    addProductToLook(look.id, { product_id: p.id }).catch(err => {
-      console.warn('[promoteGenerationToLook] addProductToLook failed:', err);
-    })
-  ));
+  // Best-effort product attach, sequential with one retry each. A single bad
+  // product shouldn't fail the whole publish — the admin can retry from the
+  // Products dropdown, and ensureGenerationsInCatalog self-heals an empty look
+  // on the next My Catalog open. Sequential (not Promise.all): the original
+  // concurrent burst of edge calls is what a transient blip / edge cold-start
+  // took down all-at-once, leaving looks with zero products.
+  await attachProducts(look.id, input.products ?? []);
 
   // Insert the primary creative + warm the poster so the consumer feed
   // and admin Published tab can render the row immediately. The unique
@@ -220,22 +220,23 @@ export async function ensureGenerationsInCatalog(): Promise<number> {
     id: string; video_url: string | null; style: string | null; display_name: string | null;
   }>;
   if (completed.length === 0) return 0;
-
-  // 2. Which already have a looks row (by source_generation_id)?
   const ids = completed.map(g => g.id);
-  const { data: existing } = await supabase
-    .from('looks')
-    .select('source_generation_id')
-    .in('source_generation_id', ids);
-  const have = new Set((existing || []).map(r => (r as { source_generation_id: string }).source_generation_id));
-  const missing = completed.filter(g => !have.has(g.id));
-  if (missing.length === 0) return 0;
 
-  // 3. Products picked across the missing generations (one round-trip).
+  // 2. Existing looks for these generations — id + which generation they came
+  //    from (so step 5 can repair an existing look that lost its products).
+  const { data: existingRows } = await supabase
+    .from('looks')
+    .select('id, source_generation_id')
+    .in('source_generation_id', ids);
+  const existing = (existingRows || []) as Array<{ id: string; source_generation_id: string }>;
+  const lookByGen = new Map(existing.map(r => [r.source_generation_id, r.id]));
+
+  // 3. Products picked across ALL these generations (one round-trip) — used both
+  //    to attach on create and to repair existing looks that came out empty.
   const { data: prodRows } = await supabase
     .from('user_generation_products')
     .select('generation_id, product_id, sort_order')
-    .in('generation_id', missing.map(g => g.id))
+    .in('generation_id', ids)
     .order('sort_order');
   const productsByGen = new Map<string, Array<{ id: string }>>();
   for (const r of (prodRows || []) as Array<{ generation_id: string; product_id: string }>) {
@@ -246,6 +247,7 @@ export async function ensureGenerationsInCatalog(): Promise<number> {
 
   // 4. Create the missing archived looks. Sequential so we don't hammer the
   //    manage-looks edge function or race RLS; failures skip, never throw.
+  const missing = completed.filter(g => !lookByGen.has(g.id));
   let created = 0;
   for (const g of missing) {
     try {
@@ -262,6 +264,27 @@ export async function ensureGenerationsInCatalog(): Promise<number> {
       if (res.created) created++;
     } catch { /* keep going — one bad generation shouldn't block the rest */ }
   }
+
+  // 5. Self-heal: a look that ended up with ZERO products while its generation
+  //    actually had some is the swallowed-attach failure (a network blip / edge
+  //    cold-start during the original concurrent attach). Re-attach now. Guarded
+  //    to ONLY-empty looks so a look whose products were deliberately removed is
+  //    never silently repopulated.
+  const existingWithProducts = existing.filter(
+    r => (productsByGen.get(r.source_generation_id)?.length ?? 0) > 0,
+  );
+  if (existingWithProducts.length > 0) {
+    const { data: lpRows } = await supabase
+      .from('look_products')
+      .select('look_id')
+      .in('look_id', existingWithProducts.map(r => r.id));
+    const hasProducts = new Set((lpRows || []).map(r => (r as { look_id: string }).look_id));
+    for (const r of existingWithProducts) {
+      if (hasProducts.has(r.id)) continue; // already populated — leave it
+      await attachProducts(r.id, productsByGen.get(r.source_generation_id) || []);
+    }
+  }
+
   return created;
 }
 
@@ -290,6 +313,31 @@ export async function unpublishLook(lookId: string, generationId?: string | null
 }
 
 // ── helpers ──────────────────────────────────────────────────────────────
+
+/**
+ * Attach products to a look one-at-a-time, retrying each once on failure.
+ * The attach goes through the manage-looks edge function (addProductToLook);
+ * a transient network blip / edge cold-start during the previous all-at-once
+ * (Promise.all) attach is what silently left some looks with zero products.
+ * Sequential + a single retry makes that path resilient; remaining failures
+ * are logged (not thrown) and get a second chance via the self-heal pass in
+ * ensureGenerationsInCatalog. Returns how many landed.
+ */
+async function attachProducts(lookId: string, products: Array<{ id: string }>): Promise<number> {
+  let ok = 0;
+  for (const p of products) {
+    for (let attempt = 0; attempt < 2; attempt++) {
+      try {
+        await addProductToLook(lookId, { product_id: p.id });
+        ok++;
+        break;
+      } catch (err) {
+        if (attempt === 1) console.warn('[promote] attachProducts failed after retry:', p.id, err);
+      }
+    }
+  }
+  return ok;
+}
 
 async function flipGenerationFlag(generationId: string, isPublished: boolean): Promise<void> {
   try {
