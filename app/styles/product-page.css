@@ -1579,6 +1579,22 @@
   /* Override the inherited pointer-events:none used elsewhere — the
      chip IS the click target for "open creator catalog". */
   pointer-events: auto;
+  /* Appear-fade — the info layer on a product-page look tile FADES in on first
+     paint instead of snapping, so it matches the home-feed / look-overlay card
+     chrome (which fades in via the `.loaded` media gate in grid-view.css).
+     These tiles have no `.loaded` class, so a one-shot opacity animation gives
+     the same "always dissolve in, never pop" behaviour. Opacity-only =
+     compositor-cheap. The scroll-glide fade-OUT (`opacity:0 !important` in the
+     UNIFIED card-overlay block) still wins during a scroll because !important
+     author rules outrank animations in the cascade. */
+  animation: pdTileMetaIn 0.6s ease both;
+}
+@keyframes pdTileMetaIn {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pd-look-tile-meta { animation: none; }
 }
 /* Keep the look-tile creator avatar + name WHITE, like the home feed —
    not the gold "following" accent. The shared CreatorAvatarFollow turns the
