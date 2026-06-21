@@ -103,6 +103,21 @@ jobs:
           node-version: '22'
       - run: node scripts/check-tdz-forward-refs.mjs --strict
 
+  guard-routes:
+    name: Guard admin route coverage
+    runs-on: ubuntu-latest
+    timeout-minutes: 2
+    # Pure node — no install. Asserts every /admin/* nav + search target in
+    # route.tsx has a registered route() in vite.config.ts. Cheap static check
+    # that catches the 404/blank-page class (e.g. /admin/daily-feed) before the
+    # browser smoke job even has to.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - run: node scripts/check-routes.mjs
+
   smoke:
     name: Smoke (admin routes)
     runs-on: ubuntu-latest

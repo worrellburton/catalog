@@ -1,5 +1,5 @@
 import { vitePlugin as remix } from "@remix-run/dev";
-import { defineConfig } from "vite";
+import { defineConfig } from "vitest/config";
 import tsconfigPaths from "vite-tsconfig-paths";
 import { remixDevTools } from "remix-development-tools";
 import { copyFileSync, writeFileSync } from "node:fs";
@@ -23,6 +23,12 @@ export default defineConfig({
   envPrefix: ["VITE_", "NEXT_PUBLIC_"],
   define: {
     "import.meta.env.VITE_VERCEL_GIT_COMMIT_SHA": JSON.stringify(COMMIT_SHA),
+  },
+  // Vitest: only collect unit tests under app/. Without this, vitest also picks
+  // up the Playwright e2e spec (tests/smoke.spec.ts) and errors ("test() not
+  // expected here"); Playwright runs separately via `npm run test:smoke`.
+  test: {
+    include: ["app/**/*.test.{ts,tsx}"],
   },
   // ESBuild minification config — preserves function names and avoids
   // the transformation that breaks function-declaration hoisting in

@@ -17,8 +17,6 @@ const supabaseKey =
   import.meta.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
   DEFAULT_SUPABASE_ANON_KEY;
 
-console.log('[Supabase] init url:', supabaseUrl?.substring(0, 30) + '...', 'key present:', !!supabaseKey, 'key length:', supabaseKey?.length);
-
 // Explicit auth config so mobile Safari (and the Flutter webview) get a
 // reliable OAuth flow regardless of browser default. PKCE is required
 // for the code-exchange path that catches the Google redirect on
