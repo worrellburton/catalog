@@ -232,6 +232,7 @@ export default defineConfig({
             route("projections", "routes/admin/projections.tsx");
             route("creative", "routes/admin/creative.tsx");
             route("catalogs", "routes/admin/catalogs.tsx");
+            route("daily-feed", "routes/admin/daily-feed.tsx");
             route("governance", "routes/admin/governance.tsx");
             route("governance/types", "routes/admin/governance.types.tsx");
             route("governance/users", "routes/admin/governance.users.tsx");
