@@ -557,6 +557,9 @@ export interface FeedRules {
   /** Reserve N of the top-20 slots for items the user has never been
    *  shown — the "new feed every morning" mechanic. */
   freshSlots: FeedRule;
+  /** Reshuffle the top N items each day (date+user seeded) so the visible
+   *  head of the feed changes daily even for stable-taste shoppers. */
+  dailyShuffle: FeedRule;
 }
 
 /** Defaults mirror today's live behavior — engaged brands/types and the
@@ -574,6 +577,7 @@ export const DEFAULT_FEED_RULES: FeedRules = {
   genderStrict:    { enabled: true,  weight: 0 },
   trendingBoost:   { enabled: false, weight: 4 },
   freshSlots:      { enabled: true,  weight: 6 },
+  dailyShuffle:    { enabled: true,  weight: 8 },
 };
 
 function sanitizeFeedRules(raw: unknown): FeedRules {
@@ -625,4 +629,5 @@ export const FEED_RULE_META: {
   { key: 'genderStrict', label: 'Strict gender matching', hint: 'Only their gender + unisex products appear', weight: false },
   { key: 'trendingBoost', label: 'Show what is trending this week', hint: 'Platform-wide clickout velocity (last 7 days)', weight: true },
   { key: 'freshSlots', label: 'Fresh finds up top, every day', hint: 'Reserve N of the top 20 slots for items they have never been shown', weight: true, min: 0, max: 20 },
+  { key: 'dailyShuffle', label: 'Reshuffle the top every day', hint: 'Re-order the top N items each day so the feed visibly changes (weight = how many top slots)', weight: true, min: 0, max: 10 },
 ];
