@@ -1681,6 +1681,18 @@ export default function Home() {
   // Also forces view='app' so the user lands on the grid even if
   // they were on the password gate.
   const location = useLocation();
+  // A ?q= present in the URL when the app FIRST loads (a shared/bookmarked
+  // deep link, or an external link into a search) should go STRAIGHT to the
+  // results catalog — no search ceremony. An in-app TypeAnywhere search
+  // (navigate('/?q=…') AFTER mount) still plays the ceremony. We tell them
+  // apart by remembering the q that was in the URL at mount and consuming it
+  // once (the OAuth round-trip can defer the first real handling, so we key
+  // off "first q actually processed that matches the mount q", not the first
+  // render).
+  const initialQRef = useRef<string | null>(
+    typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('q') : null,
+  );
+  const initialQConsumedRef = useRef(false);
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const params = new URLSearchParams(location.search);
@@ -1695,7 +1707,21 @@ export default function Home() {
     // the auth listener clears the code from the URL, then this effect
     // re-runs on the next location update.
     if (params.has('code') || params.has('error_description')) return;
+    // Deep link → the q was in the URL at first load. Skip the ceremony and
+    // drop the shopper straight onto the results catalog.
+    const isDeepLink = !initialQConsumedRef.current && q === initialQRef.current;
+    if (isDeepLink) initialQConsumedRef.current = true;
     handleCreateCatalog(q);
+    if (isDeepLink) {
+      // Suppress the ceremony the searchTrigger bump below would otherwise
+      // play, and reveal the results catalog immediately (same end-state as
+      // handleCeremonyDone, minus the loading animation).
+      suppressCeremonyRef.current = true;
+      if (!inShell) setHeroMode(false);
+      setRevealResults(true);
+      window.setTimeout(() => setRevealResults(false), 950);
+      window.scrollTo({ top: 0, behavior: 'auto' });
+    }
     bumpSearchTrigger();
     setView('app');
     params.delete('q');
