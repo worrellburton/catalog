@@ -16,6 +16,7 @@ import { startGenerationJob } from '~/services/generation-queue';
 const StyleLensSheet = lazy(() => import('~/components/StyleLensSheet'));
 import {
   createStyleGeneration,
+  pollStyleGeneration,
   listStyleGenerationsWithImages,
   deleteStyleGeneration,
   deleteStyleGenerationImage,
@@ -84,6 +85,13 @@ export default function StylePage() {
   >(null);
   const [lensTarget, setLensTarget] = useState<{ imageUrl: string; occasion: string } | null>(null);
   const occasionRef = useRef<HTMLInputElement>(null);
+  // Background poll(s) watching in-flight generations fill in. Aborted on
+  // unmount so we never setState on a torn-down page.
+  const pollControllers = useRef<Set<AbortController>>(new Set());
+  useEffect(() => {
+    const controllers = pollControllers.current;
+    return () => { controllers.forEach(c => c.abort()); controllers.clear(); };
+  }, []);
 
   // Esc closes the lightbox.
   useEffect(() => {
@@ -205,11 +213,39 @@ export default function StylePage() {
     });
     setSubmitting(false);
     setSubmittingOccasion('');
-    if (err) { queueJob.fail(err); setError(err); return; }
-    queueJob.finish(undefined, 'Done');
-    if (data) {
-      setHistory(prev => [data, ...prev.filter(p => p.generation.id !== data.generation.id)]);
-      setOccasion('');
+    if (err || !data) { queueJob.fail(err ?? 'Failed to start'); setError(err ?? 'Failed to start'); return; }
+
+    // The edge function returns fast with 4 'pending' tiles. Prepend the sheet
+    // now (real card with spinners) and poll the DB until it settles, filling
+    // tiles as each image lands — instead of holding the request open for the
+    // full 30-150s render (which the browser used to kill mid-flight).
+    const genId = data.generation.id;
+    setHistory(prev => [data, ...prev.filter(p => p.generation.id !== genId)]);
+    setOccasion('');
+
+    const controller = new AbortController();
+    pollControllers.current.add(controller);
+    const { data: final, error: pollErr } = await pollStyleGeneration(genId, {
+      signal: controller.signal,
+      onSnapshot: (snap) => {
+        setHistory(prev => prev.map(e => e.generation.id === genId ? snap : e));
+      },
+    });
+    pollControllers.current.delete(controller);
+    if (controller.signal.aborted) return;
+
+    if (pollErr) { queueJob.fail(pollErr); setError(pollErr); }
+    else { queueJob.finish(undefined, 'Done'); }
+
+    // Pull ingest counts for the freshly generated tiles so their "{n} saved"
+    // badges render without a full re-hydrate.
+    if (final) {
+      const urls = final.images.map(i => i.image_url).filter((u): u is string => !!u);
+      if (urls.length > 0) {
+        getLensIngestCounts(urls).then(counts => {
+          setIngestCounts(prev => new Map([...prev, ...counts]));
+        });
+      }
     }
   }
 

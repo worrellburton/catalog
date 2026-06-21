@@ -39,9 +39,14 @@ export interface StyleGenerationResult {
 
 /**
  * Insert a new style_generations row, then invoke the generate-style edge
- * function. The edge function blocks until all 4 fal.ai calls settle and
- * returns the populated parent row + image rows in one shot, so the caller
- * doesn't need to poll.
+ * function. The edge function seeds 4 'pending' image rows, kicks the slow
+ * fal.ai work into a background task, and returns IMMEDIATELY with the
+ * 'generating' parent + those pending rows — so this call resolves in ~1s
+ * instead of being held open for 30-150s (which the browser killed mid-flight,
+ * surfacing a false "Failed to send a request to the Edge Function").
+ *
+ * The caller renders the returned pending tiles (spinners) and then calls
+ * `pollStyleGeneration` to watch the rows fill in.
  */
 export async function createStyleGeneration(input: {
   userId: string;
@@ -70,6 +75,53 @@ export async function createStyleGeneration(input: {
   });
   if (invokeErr) return { data: null, error: invokeErr.message };
   return { data: invokeData as StyleGenerationResult, error: null };
+}
+
+/** A style generation reached a terminal state once it's done or failed. */
+function isTerminalStatus(status: StyleGenerationStatus): boolean {
+  return status === 'done' || status === 'failed';
+}
+
+/**
+ * Poll a generation until it reaches a terminal status (done|failed) or the
+ * timeout elapses. `onSnapshot` fires on every successful read so the UI can
+ * fill tiles as each image lands. Returns the final snapshot; `error` is set
+ * only when the generation itself failed (a timeout returns the latest
+ * snapshot with no error so the spinners simply persist).
+ */
+export async function pollStyleGeneration(
+  generationId: string,
+  opts: {
+    onSnapshot?: (result: StyleGenerationResult) => void;
+    intervalMs?: number;
+    timeoutMs?: number;
+    signal?: AbortSignal;
+  } = {},
+): Promise<{ data: StyleGenerationResult | null; error: string | null }> {
+  const intervalMs = opts.intervalMs ?? 2500;
+  // gpt-image-2 fan-outs have run as long as ~156s; give generous headroom.
+  const timeoutMs = opts.timeoutMs ?? 240_000;
+  const startedAt = Date.now();
+  let latest: StyleGenerationResult | null = null;
+
+  while (!opts.signal?.aborted) {
+    const snap = await getStyleGenerationDetail(generationId);
+    if (snap) {
+      latest = snap;
+      opts.onSnapshot?.(snap);
+      if (isTerminalStatus(snap.generation.status)) {
+        return {
+          data: snap,
+          error: snap.generation.status === 'failed'
+            ? (snap.generation.error ?? 'Generation failed')
+            : null,
+        };
+      }
+    }
+    if (Date.now() - startedAt > timeoutMs) return { data: latest, error: null };
+    await new Promise(resolve => setTimeout(resolve, intervalMs));
+  }
+  return { data: latest, error: null };
 }
 
 /** List a user's prior style generations (newest first). Used for history UI. */
