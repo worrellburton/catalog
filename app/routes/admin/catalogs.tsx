@@ -2184,20 +2184,22 @@ export default function AdminCatalogs() {
                               ★ LANDING SCREEN
                             </span>
                             <Link to="/admin/catalogs/home" style={{ color: '#111', textDecoration: 'none' }}>Your daily feed</Link>
-                            {/* Automatic Editor lives HERE, on the landing-screen
-                                catalog only — it curates THIS daily personalized
-                                feed, not the static curated catalogs below. */}
+                            {/* Daily Feed settings live HERE, on the landing-screen
+                                catalog only — they tune THIS per-shopper Daily Feed,
+                                not the static curated catalogs below. ("Daily Feed"
+                                is the canonical name for this concept — see
+                                docs/daily-feed.md.) */}
                             <button
                               className="admin-btn admin-btn-secondary"
                               onClick={() => setShowAutoEditor(true)}
-                              title="Configure the Automatic Editor — this daily personalized feed"
+                              title="Configure the Daily Feed — each shopper's custom daily feed"
                               style={{ marginLeft: 6, padding: '2px 8px', fontSize: 11, display: 'inline-flex', alignItems: 'center' }}
                             >
                               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 4 }}>
                                 <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
                                 <circle cx="12" cy="12" r="4" />
                               </svg>
-                              Automatic Editor
+                              Daily Feed
                             </button>
                             <button
                               className="admin-btn admin-btn-secondary"
@@ -2585,8 +2587,8 @@ export default function AdminCatalogs() {
         </div>
       )}
 
-      {/* Automatic Editor modal — master toggle + tuning for the daily
-          personalized feed (app_settings via setAutoEditorConfig). */}
+      {/* Daily Feed settings modal — master toggle + tuning for the
+          per-shopper Daily Feed (app_settings via setAutoEditorConfig). */}
       {showAutoEditor && (
         <AutoEditorModal onClose={() => setShowAutoEditor(false)} showToast={showToast} />
       )}
@@ -4215,9 +4217,9 @@ export function CatalogCreativeDropdown({ isAll, isUniverse, catalogName, loadin
       {!isAll && isUniverse && (
         <div style={{ fontSize: 11, color: '#475569', background: '#fef3c7', border: '1px solid #fde68a', borderRadius: 6, padding: '6px 10px' }}>
           The <strong>home</strong> catalog is the <strong>candidate pool + baseline order</strong> —
-          what a brand-new shopper sees, and the starting point every personal daily feed
-          re-ranks from (Automatic Editor + feed rules). No two shoppers see this exact
-          order: curate the pool and baseline here, tune the rules in Automatic Editor,
+          what a brand-new shopper sees, and the starting point every shopper's <strong>Daily Feed</strong>
+          re-ranks from (Daily Feed engine + feed rules). No two shoppers see this exact
+          order: curate the pool and baseline here, tune the rules in <strong>Daily Feed</strong>,
           and use <strong>Preview feed</strong> to see the result as any specific user.
         </div>
       )}
@@ -7092,8 +7094,10 @@ function GenderDropdown({ value, onChange }: { value: CatalogGenderUI; onChange:
   );
 }
 
-// ── Automatic Editor modal (self-contained) ─────────────────────────
-// Master on/off + tuning for the daily personalized feed. Reads the
+// ── Daily Feed settings modal (self-contained) ──────────────────────
+// Master on/off + tuning for the per-shopper Daily Feed (the engine was
+// historically called the "Automatic Editor"; "Daily Feed" is now the
+// canonical name — see docs/daily-feed.md). Reads the
 // current config on open via getAutoEditorConfig() and writes each
 // change back through setAutoEditorConfig() (one app_settings upsert per
 // changed field). Numeric tuning is gated behind the master toggle being
@@ -7138,7 +7142,7 @@ function AutoEditorModal({
     setSaving(true);
     try {
       await setAutoEditorConfig(partial);
-      showToast('Automatic Editor settings saved');
+      showToast('Daily Feed settings saved');
     } catch (err) {
       showToast(`Save failed: ${err instanceof Error ? err.message : String(err)}`);
       // Re-pull the authoritative state so the UI doesn't drift on failure.
@@ -7164,10 +7168,11 @@ function AutoEditorModal({
         style={{ width: 560, maxWidth: '92vw', padding: 24, maxHeight: '86vh', overflowY: 'auto' }}
         onClick={e => e.stopPropagation()}
       >
-        <h2 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 600 }}>Automatic Editor</h2>
+        <h2 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 600 }}>Daily Feed</h2>
         <p style={{ margin: '0 0 18px', fontSize: 13, color: '#888' }}>
-          When on, each signed-in shopper gets a feed re-ranked to their taste
-          once per day. Off keeps everyone on the global feed order.
+          Each signed-in shopper&apos;s custom feed, re-ranked to their taste once
+          per day. When on, every shopper gets their own Daily Feed; off keeps
+          everyone on the global feed order.
         </p>
 
         {/* Master on/off toggle. */}

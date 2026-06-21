@@ -765,11 +765,16 @@
    above true-center ("kind of in the middle"). Mobile keeps its compact strip. */
 @media (min-width: 769px) {
   .search-catalog-strip {
-    min-height: 100svh;
+    /* Shorter than the viewport ON PURPOSE: the product grid is the strip's
+       next sibling, so leaving ~34vh below the strip lets the top row of cards
+       peek up at the bottom of the screen (the founder wants the cards visible,
+       not fully below the fold) while the intro still reads as a centered,
+       upper-middle hero. */
+    min-height: 66vh;
     display: flex;
     flex-direction: column;
     justify-content: center;
-    padding: calc(env(safe-area-inset-top, 0px) + 72px) 0 16vh;
+    padding: calc(env(safe-area-inset-top, 0px) + 72px) 0 24px;
     box-sizing: border-box;
   }
 }
