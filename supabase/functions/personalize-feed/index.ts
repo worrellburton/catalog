@@ -81,7 +81,7 @@ interface FeedRule { enabled: boolean; weight: number }
 type FeedRules = Record<
   'convertingBoost' | 'clickedProducts' | 'engagedBrands' | 'engagedTypes' | 'savedBrands'
   | 'freshnessBoost' | 'seenDecay' | 'diversityGuard' | 'genderStrict' | 'trendingBoost'
-  | 'freshSlots',
+  | 'freshSlots' | 'dailyShuffle',
   FeedRule
 >;
 
@@ -102,6 +102,10 @@ const DEFAULT_RULES: FeedRules = {
   // for items this shopper has never been shown. THE "new feed every
   // morning" mechanic — on by default (founder's call).
   freshSlots:      { enabled: true,  weight: 6 },
+  // Daily shuffle: weight = how many of the TOP slots get re-ordered each day
+  // (date+user seeded), so the VISIBLE head of the feed changes daily even for
+  // a stable-taste shopper. On by default.
+  dailyShuffle:    { enabled: true,  weight: 8 },
 };
 
 function parseRules(raw: string | undefined): FeedRules {
@@ -161,6 +165,32 @@ function applyFreshSlots(order: string[], seen: Set<string>, k: number): string[
   const out = [...rest];
   promoted.forEach((id, i) => out.splice(Math.min(1 + i * 3, out.length), 0, id));
   return out;
+}
+
+/** Re-order the top `window` items with a date+user-seeded shuffle so the
+ *  VISIBLE head of the feed changes every day even when the shopper's taste
+ *  (and therefore the ranking) is stable. Everything below `window` keeps its
+ *  order. Deterministic per (feedDate, userId) — same shopper, same day, same
+ *  result. window is 0..10 (the rule weight); 0/1 is a no-op. */
+function applyDailyShuffle(order: string[], seedStr: string, window: number): string[] {
+  const n = Math.min(window, order.length);
+  if (n <= 1) return order;
+  // FNV-1a → mulberry32: a tiny seeded PRNG (no deps in the edge runtime).
+  let h = 2166136261;
+  for (let i = 0; i < seedStr.length; i++) { h ^= seedStr.charCodeAt(i); h = Math.imul(h, 16777619); }
+  let s = h >>> 0;
+  const rand = () => {
+    s = (s + 0x6D2B79F5) | 0;
+    let t = Math.imul(s ^ (s >>> 15), 1 | s);
+    t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+  const head = order.slice(0, n);
+  for (let i = n - 1; i > 0; i--) {
+    const j = Math.floor(rand() * (i + 1));
+    [head[i], head[j]] = [head[j], head[i]];
+  }
+  return [...head, ...order.slice(n)];
 }
 
 /** Hard rotation: cap how many of yesterday's top-12 may repeat in
@@ -435,6 +465,14 @@ Deno.serve(async (req: Request) => {
       reason = { ...reason, rotated: true };
     }
 
+    // Daily shuffle — re-order the top slots with a date+user seed so the
+    // VISIBLE head changes every day even when taste (and the ranking) is
+    // stable. Last product step so it owns the final lead order.
+    if (rules.dailyShuffle.enabled) {
+      finalOrder = applyDailyShuffle(finalOrder, `${feedDate}:${userId}`, Math.round(rules.dailyShuffle.weight));
+      reason = { ...reason, shuffled: true };
+    }
+
     // ── Personalize LOOKS too (deterministic, fail-open) ────────────────
     // Looks are ranked separately here and woven into the feed client-side by
     // feed_rank (looks still lead). A look inherits the brand/type affinity of
@@ -444,6 +482,9 @@ Deno.serve(async (req: Request) => {
     let lookOrder: string[] = [];
     try {
       lookOrder = await rankLooks(supabase, userId, sinceISO, brandNorm, typeNorm, rules);
+      if (rules.dailyShuffle.enabled && lookOrder.length > 1) {
+        lookOrder = applyDailyShuffle(lookOrder, `looks:${feedDate}:${userId}`, Math.round(rules.dailyShuffle.weight));
+      }
       if (lookOrder.length > 0) reason = { ...reason, looks: lookOrder.length };
     } catch (err) {
       void logUsage(supabase, { operation: 'personalize-feed-looks', model: 'deterministic', status: 'error', error_message: (err instanceof Error ? err.message : String(err)).slice(0, 500) });
