@@ -56,6 +56,17 @@ when there's a genuine dependency or risk worth flagging.
 
 A visual lookbook webapp for browsing fashion "looks" — short video clips paired with product information. The interface is a grid of video cards on a dark background.
 
+## Canonical term: "Daily Feed"
+
+**"Daily Feed" is the one canonical name for each shopper's own custom,
+once-per-day home feed and everything that produces it.** Use it in code,
+PRs, admin UI, and conversation. The engine was historically called the
+**"Automatic Editor"** and the implementation is prefixed
+**`personalize` / `personalized`** (`personalize-feed` edge fn,
+`personalized_feeds` table, `personalized-feed.ts`, `auto_editor_*`
+dials) — those identifiers remain, but they ALL mean Daily Feed. Full
+definition + name map + admin controls: **`docs/daily-feed.md`**.
+
 ## Live Site
 
 | Environment | URL |
