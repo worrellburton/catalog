@@ -182,7 +182,7 @@ function applyRotationGuard(order: string[], prevTop: Set<string>, maxRepeats: n
   return [...head, ...demoted, ...order.slice(i)];
 }
 
-interface RankedItem { type: 'product'; id: string }
+interface RankedItem { type: 'product' | 'look'; id: string }
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS_HEADERS });
@@ -435,7 +435,21 @@ Deno.serve(async (req: Request) => {
       reason = { ...reason, rotated: true };
     }
 
-    return await persistAndReturn(supabase, userId, feedDate, finalOrder, 'personalized', model, reason, preview);
+    // ── Personalize LOOKS too (deterministic, fail-open) ────────────────
+    // Looks are ranked separately here and woven into the feed client-side by
+    // feed_rank (looks still lead). A look inherits the brand/type affinity of
+    // its attached products (reusing the weights above), plus freshness − seen-
+    // decay. Wrapped so any failure leaves lookOrder empty and products — which
+    // are already ranked — are never affected.
+    let lookOrder: string[] = [];
+    try {
+      lookOrder = await rankLooks(supabase, userId, sinceISO, brandNorm, typeNorm, rules);
+      if (lookOrder.length > 0) reason = { ...reason, looks: lookOrder.length };
+    } catch (err) {
+      void logUsage(supabase, { operation: 'personalize-feed-looks', model: 'deterministic', status: 'error', error_message: (err instanceof Error ? err.message : String(err)).slice(0, 500) });
+    }
+
+    return await persistAndReturn(supabase, userId, feedDate, finalOrder, 'personalized', model, reason, preview, lookOrder);
   } catch (err) {
     return jsonRes({ success: false, error: err instanceof Error ? err.message : String(err) }, 500);
   }
@@ -483,8 +497,15 @@ async function persistAndReturn(
   model: string | null,
   reason: Record<string, unknown> | null,
   preview = false,
+  lookOrder: string[] = [],
 ) {
-  const ranked: RankedItem[] = order.map(id => ({ type: 'product', id }));
+  // Products first, then the personalized look order. The client splits by
+  // type and weaves looks in by feed_rank; keeping products first also keeps
+  // the rotation guard's "top 12" (read elsewhere) product-based.
+  const ranked: RankedItem[] = [
+    ...order.map(id => ({ type: 'product' as const, id })),
+    ...lookOrder.map(id => ({ type: 'look' as const, id })),
+  ];
   // Preview (admin viewing another user) must not write the target's row.
   if (!preview) {
     await supabase.from('personalized_feeds').upsert({
@@ -498,6 +519,75 @@ async function persistAndReturn(
     }, { onConflict: 'user_id,feed_date' });
   }
   return jsonRes({ success: true, enabled: true, cached: false, preview, variant, model, reason, ranked_items: ranked });
+}
+
+// Deterministic LOOK ranking for the Daily Feed. Mirrors the product taste
+// score but for looks: a look inherits the brand/type affinity of its attached
+// products, plus a freshness boost and a seen-decay. Returns look ids best-
+// first. Bounded + the caller wraps it in try/catch (fail-open).
+async function rankLooks(
+  // deno-lint-ignore no-explicit-any
+  supabase: any,
+  userId: string,
+  sinceISO: string,
+  brandNorm: Map<string, number>,
+  typeNorm: Map<string, number>,
+  rules: FeedRules,
+): Promise<string[]> {
+  const LOOK_POOL = 120;
+  const { data: lookRows } = await supabase
+    .from('looks')
+    .select('id, feed_rank, created_at')
+    .eq('status', 'live')
+    .order('feed_rank', { ascending: true, nullsFirst: false })
+    .order('created_at', { ascending: false, nullsFirst: false })
+    .limit(LOOK_POOL);
+  const looks = (lookRows ?? []) as Array<{ id: string; feed_rank: number | null; created_at: string | null }>;
+  if (looks.length === 0) return [];
+  const lookIds = looks.map(l => l.id);
+
+  // Each look inherits its attached products' brand/type affinity.
+  const affRaw = new Map<string, number>();
+  const { data: lp } = await supabase
+    .from('look_products')
+    .select('look_id, products:products ( brand, type )')
+    .in('look_id', lookIds);
+  for (const row of (lp ?? []) as Array<{ look_id: string; products: { brand: string | null; type: string | null } | null }>) {
+    const b = row.products?.brand; const t = row.products?.type;
+    const a = (b ? (brandNorm.get(b) ?? 0) : 0) + (t ? (typeNorm.get(t) ?? 0) : 0);
+    if (a > 0) affRaw.set(row.look_id, (affRaw.get(row.look_id) ?? 0) + a);
+  }
+  const affNorm = normMap(affRaw);
+
+  // Looks the shopper has already seen (impressions) get decayed.
+  const seenLooks = new Set<string>();
+  if (rules.seenDecay.enabled) {
+    const { data: lookEvents } = await supabase
+      .from('user_events')
+      .select('target_id, target_uuid')
+      .eq('user_id', userId).eq('target_type', 'look').eq('event_type', 'impression')
+      .gte('created_at', sinceISO).limit(5000);
+    for (const e of (lookEvents ?? []) as Array<{ target_id: string | null; target_uuid: string | null }>) {
+      const id = e.target_uuid || e.target_id; if (id) seenLooks.add(id);
+    }
+  }
+
+  const times = looks.map(l => (l.created_at ? Date.parse(l.created_at) : 0)).filter(Boolean);
+  const newest = Math.max(...times, 1);
+  const oldest = Math.min(...(times.length ? times : [newest]));
+  const span = Math.max(newest - oldest, 1);
+  const affWeight = (rules.engagedBrands.weight + rules.engagedTypes.weight) / 2;
+
+  const scored = looks.map((l, idx) => {
+    let s = 0;
+    if (rules.engagedBrands.enabled || rules.engagedTypes.enabled) s += affWeight * (affNorm.get(l.id) ?? 0);
+    if (rules.freshnessBoost.enabled && l.created_at) s += rules.freshnessBoost.weight * ((Date.parse(l.created_at) - oldest) / span);
+    if (rules.seenDecay.enabled && seenLooks.has(l.id)) s -= rules.seenDecay.weight / 2;
+    s += (LOOK_POOL - idx) * 0.001; // editorial tiebreaker — keeps feed_rank order on ties
+    return { id: l.id, s };
+  });
+  scored.sort((a, b) => b.s - a.s);
+  return scored.map(x => x.id);
 }
 
 interface ClaudeResponse {
