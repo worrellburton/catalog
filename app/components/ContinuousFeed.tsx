@@ -26,7 +26,7 @@ import { useUserAffinity } from '~/hooks/useUserAffinity';
 import { getFeedRules } from '~/services/dials';
 import { composeRenderedCreatives } from '~/services/feed-compose';
 import { recordRecentSearch } from '~/services/recent-searches';
-import { getPersonalizedProductOrder } from '~/services/personalized-feed';
+import { getPersonalizedProductOrder, getPersonalizedLookOrder } from '~/services/personalized-feed';
 
 interface BookmarksInterface {
   isLookBookmarked: (id: number) => boolean;
@@ -187,6 +187,9 @@ function ContinuousFeed({
   // service's own dial gate + per-day localStorage cache. Only ever applied
   // to the default home feed's product lane below.
   const [personalizedOrder, setPersonalizedOrder] = useState<string[] | null>(null);
+  // The Daily Feed also ranks LOOKS per shopper (look uuids, best-first). We
+  // float these to the front of the look lane, mirroring the product lane.
+  const [personalizedLookOrder, setPersonalizedLookOrder] = useState<string[] | null>(null);
 
   // "Boost brands they saved" feed rule (admin rulebook in app_settings).
   // Bookmarks are on-device, so this is the one rule applied client-side:
@@ -212,6 +215,9 @@ function ContinuousFeed({
     let cancelled = false;
     getPersonalizedProductOrder().then(ids => {
       if (!cancelled) setPersonalizedOrder(ids);
+    });
+    getPersonalizedLookOrder().then(ids => {
+      if (!cancelled) setPersonalizedLookOrder(ids);
     });
     return () => { cancelled = true; };
   }, [user?.id]);
@@ -515,9 +521,23 @@ function ContinuousFeed({
     const q = committedQuery.trim();
     if (q.length >= 3 && searchMatchedLooks.length > 0) return searchMatchedLooks;
     if (q.length >= 3) return [];
-    // Default home feed → hide already-seen looks (reset when all seen).
-    return partitionUnseen(fitRankedLooks, seenKeys, l => l.uuid ? `look:${l.uuid}` : null);
-  }, [fitRankedLooks, searchMatchedLooks, committedQuery, seenKeys]);
+    // Home feed → float the Daily Feed's per-shopper LOOK order to the front
+    // (rest keep their fit/feed_rank order), mirroring the product lane, then
+    // hide already-seen looks. FeedSection still weaves looks + products by
+    // feed_rank with looks leading; this only sets the order among unranked.
+    let looks: Look[] = fitRankedLooks;
+    if (personalizedLookOrder && personalizedLookOrder.length > 0) {
+      const priority = new Map(personalizedLookOrder.map((id, i) => [id, i]));
+      const front: Look[] = [];
+      const rest: Look[] = [];
+      for (const l of looks) {
+        if (l.uuid && priority.has(l.uuid)) front.push(l); else rest.push(l);
+      }
+      front.sort((a, b) => (priority.get(a.uuid!) ?? 0) - (priority.get(b.uuid!) ?? 0));
+      looks = [...front, ...rest];
+    }
+    return partitionUnseen(looks, seenKeys, l => l.uuid ? `look:${l.uuid}` : null);
+  }, [fitRankedLooks, searchMatchedLooks, committedQuery, seenKeys, personalizedLookOrder]);
 
   const [state, dispatch] = useReducer(feedReducer, {
     segments: [{ type: 'feed', id: 'initial', looks: semanticallyOrderedLooks, isInitial: true }],

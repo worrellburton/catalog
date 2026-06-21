@@ -1,42 +1,68 @@
 // Daily Feed — preview panel. See what ANY shopper's feed looks like:
-//   • By username — their LIVE feed (today) computed on demand, or
+//   • By user — their LIVE feed (today) computed on demand, or
 //   • a past DATE — the exact feed they were served that day (read back
 //     from the persisted personalized_feeds row), or
 //   • a cohort baseline (all users / men / women — what a cold-start sees).
 //
-// Per-user "live" mode calls the admin-gated `personalize-feed` edge
-// function with { target_user_id } (computes live, never persists to their
-// real daily row). A past date instead reads the stored personalized_feeds
-// row for (user, date). Inline panel on the /admin/daily-feed page (was a
-// modal on /admin/catalogs). "Daily Feed" is canonical — see docs/daily-feed.md.
+// Products AND looks are shown, woven together the way the consumer feed does
+// (by feed_rank, looks leading) so the preview matches what the shopper sees.
+// Per-user "live" mode calls the admin-gated `personalize-feed` edge function
+// with { target_user_id } (computes live, never persists). A past date reads
+// the stored personalized_feeds row. "Daily Feed" is canonical — docs/daily-feed.md.
 
 import { useEffect, useRef, useState } from 'react';
 import { supabase } from '~/utils/supabase';
 
 type Mode = 'user' | 'all' | 'men' | 'women';
 
-interface PreviewProduct { id: string; name: string; brand: string; image: string }
+interface PreviewItem {
+  kind: 'product' | 'look';
+  id: string;
+  title: string;
+  sub: string;
+  image: string;
+  feedRank: number | null;
+}
 
-/** Why the feed ranked the way it did — surfaced from personalize-feed (or the
- *  stored row) so an admin can see which signals and rules shaped this feed. */
 interface FeedReason {
   topBrands?: string[];
   topTypes?: string[];
   engaged?: number;
   seen?: number;
   rules?: string[];
+  looks?: number;
 }
 
-// Strip characters that would break a PostgREST .or() filter string (an admin
-// types free text here). Keeps the ilike match safe + predictable.
 function sanitizeTerm(s: string): string {
   return s.replace(/[%,()*\\]/g, '').trim();
 }
 
-/** UTC day stamp (YYYY-MM-DD) — matches personalized_feeds.feed_date + the
- *  edge function's per-day key. */
 function todayUtc(): string {
   return new Date().toISOString().slice(0, 10);
+}
+
+// Weave looks + products exactly like FeedSection's initial deck: sort by
+// feed_rank (admin pins lead), looks lead on a tie, otherwise keep input order
+// (which is each lane's personalized order); then guarantee a look near the top.
+function weave(products: PreviewItem[], looks: PreviewItem[]): PreviewItem[] {
+  const entries = [...looks, ...products]; // looks first → they win ties
+  const withIdx = entries.map((e, i) => ({ e, i }));
+  const rankOf = (e: PreviewItem) => (typeof e.feedRank === 'number' ? e.feedRank : Number.POSITIVE_INFINITY);
+  const typeRank = (e: PreviewItem) => (e.kind === 'look' ? 0 : 1);
+  withIdx.sort((a, b) => {
+    const d = rankOf(a.e) - rankOf(b.e);
+    if (d !== 0) return d;
+    const t = typeRank(a.e) - typeRank(b.e);
+    return t !== 0 ? t : a.i - b.i;
+  });
+  const sorted = withIdx.map(x => x.e);
+  const FRONT = 4;
+  const firstLookIdx = sorted.findIndex(e => e.kind === 'look');
+  if (firstLookIdx >= FRONT) {
+    const [lk] = sorted.splice(firstLookIdx, 1);
+    sorted.splice(1, 0, lk);
+  }
+  return sorted;
 }
 
 const MODES: { id: Mode; label: string }[] = [
@@ -49,15 +75,13 @@ const MODES: { id: Mode; label: string }[] = [
 export default function DailyFeedPreview() {
   const [mode, setMode] = useState<Mode>('user');
   const [username, setUsername] = useState('');
-  // '' = today / live. A past YYYY-MM-DD reads the stored feed for that day.
-  const [feedDate, setFeedDate] = useState('');
+  const [feedDate, setFeedDate] = useState(''); // '' = today / live
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [who, setWho] = useState<string | null>(null);
   const [variant, setVariant] = useState<string | null>(null);
-  const [products, setProducts] = useState<PreviewProduct[]>([]);
+  const [items, setItems] = useState<PreviewItem[]>([]);
   const [reason, setReason] = useState<FeedReason | null>(null);
-  // Live typeahead: suggestions appear as the admin types a user.
   const [suggestions, setSuggestions] = useState<{ id: string; label: string; sub: string }[]>([]);
   const pickedUser = useRef<{ id: string; label: string } | null>(null);
   const searchTimer = useRef(0);
@@ -86,7 +110,6 @@ export default function DailyFeedPreview() {
       .from('profiles').select('id, full_name, email')
       .or(`full_name.ilike.%${term}%,email.ilike.%${term}%`).limit(1);
     if (profs && profs.length) return { id: profs[0].id as string, label: (profs[0].full_name || profs[0].email || term) as string };
-    // creators.id === profiles.id, so a handle/display-name match resolves too.
     const { data: creators } = await supabase
       .from('creators').select('id, handle, display_name')
       .or(`handle.ilike.%${term}%,display_name.ilike.%${term}%`).limit(1);
@@ -94,32 +117,80 @@ export default function DailyFeedPreview() {
     return null;
   }
 
-  async function productsByIds(ids: string[]): Promise<PreviewProduct[]> {
+  async function productsByIds(ids: string[]): Promise<PreviewItem[]> {
     if (!supabase || ids.length === 0) return [];
     const { data } = await supabase
-      .from('products').select('id, name, brand, primary_video_poster_url, primary_image_url, image_url')
-      .in('id', ids.slice(0, 60));
+      .from('products').select('id, name, brand, feed_rank, primary_video_poster_url, primary_image_url, image_url')
+      .in('id', ids.slice(0, 80));
     const byId = new Map((data ?? []).map((p: Record<string, unknown>) => [p.id as string, p]));
     return ids.map(id => byId.get(id)).filter(Boolean).map((p) => {
-      const r = p as Record<string, string | null>;
-      return { id: r.id as string, name: r.name || 'Product', brand: r.brand || '', image: r.primary_video_poster_url || r.primary_image_url || r.image_url || '' };
+      const r = p as Record<string, unknown>;
+      return {
+        kind: 'product' as const,
+        id: r.id as string,
+        title: (r.name as string) || 'Product',
+        sub: (r.brand as string) || '',
+        image: (r.primary_video_poster_url || r.primary_image_url || r.image_url || '') as string,
+        feedRank: typeof r.feed_rank === 'number' ? (r.feed_rank as number) : null,
+      };
     });
   }
 
-  async function cohort(gender: 'all' | 'men' | 'women'): Promise<PreviewProduct[]> {
+  function mapLookRow(r: Record<string, unknown>): PreviewItem {
+    const creatives = (r.looks_creative ?? []) as { thumbnail_url: string | null; is_primary: boolean | null }[];
+    const primary = creatives.find(c => c.is_primary) ?? creatives[0];
+    return {
+      kind: 'look',
+      id: r.id as string,
+      title: (r.creator_handle as string) || 'Look',
+      sub: 'Look',
+      image: (primary?.thumbnail_url || '') as string,
+      feedRank: typeof r.feed_rank === 'number' ? (r.feed_rank as number) : null,
+    };
+  }
+
+  async function looksByIds(ids: string[]): Promise<PreviewItem[]> {
+    if (!supabase || ids.length === 0) return [];
+    const { data } = await supabase
+      .from('looks').select('id, feed_rank, creator_handle, looks_creative ( thumbnail_url, is_primary )')
+      .in('id', ids.slice(0, 60));
+    const byId = new Map((data ?? []).map((l: Record<string, unknown>) => [l.id as string, l]));
+    return ids.map(id => byId.get(id)).filter(Boolean).map(l => mapLookRow(l as Record<string, unknown>));
+  }
+
+  // The live look set (feed_rank order) — what a cold-start shopper sees, and
+  // the fallback when a stored row predates per-shopper look ranking.
+  async function liveLooks(): Promise<PreviewItem[]> {
     if (!supabase) return [];
     const { data } = await supabase
-      .from('products').select('id, name, brand, gender, primary_video_poster_url, primary_image_url, image_url')
+      .from('looks').select('id, feed_rank, creator_handle, looks_creative ( thumbnail_url, is_primary )')
+      .eq('status', 'live')
+      .order('feed_rank', { ascending: true, nullsFirst: false })
+      .limit(40);
+    return ((data ?? []) as Record<string, unknown>[]).map(mapLookRow);
+  }
+
+  async function cohort(gender: 'all' | 'men' | 'women'): Promise<PreviewItem[]> {
+    if (!supabase) return [];
+    const { data } = await supabase
+      .from('products').select('id, name, brand, gender, feed_rank, primary_video_poster_url, primary_image_url, image_url')
       .eq('is_active', true).not('primary_video_url', 'is', null)
       .order('feed_rank', { ascending: true, nullsFirst: false }).limit(60);
-    let rows = (data ?? []) as Record<string, string | null>[];
+    let rows = (data ?? []) as Record<string, unknown>[];
     if (gender !== 'all') rows = rows.filter(p => !p.gender || p.gender === gender || p.gender === 'unisex');
-    return rows.map(r => ({ id: r.id as string, name: r.name || 'Product', brand: r.brand || '', image: r.primary_video_poster_url || r.primary_image_url || r.image_url || '' }));
+    return rows.map(r => ({
+      kind: 'product' as const,
+      id: r.id as string,
+      title: (r.name as string) || 'Product',
+      sub: (r.brand as string) || '',
+      image: (r.primary_video_poster_url || r.primary_image_url || r.image_url || '') as string,
+      feedRank: typeof r.feed_rank === 'number' ? (r.feed_rank as number) : null,
+    }));
   }
 
   const run = async () => {
     if (!supabase) { setErr('Supabase not configured.'); return; }
-    setLoading(true); setErr(null); setProducts([]); setWho(null); setVariant(null); setReason(null); setSuggestions([]);
+    setLoading(true); setErr(null); setItems([]); setWho(null); setVariant(null); setReason(null); setSuggestions([]);
     try {
       if (mode === 'user') {
         const u = pickedUser.current?.label === username.trim()
@@ -128,8 +199,8 @@ export default function DailyFeedPreview() {
         if (!u) { setErr(`No user found matching “${username}”.`); setLoading(false); return; }
         setWho(u.label);
         const isPast = !!feedDate && feedDate < todayUtc();
+        let ranked: { type?: string; id: string }[];
         if (isPast) {
-          // Historical: read the exact feed served that day from the store.
           const { data, error } = await supabase
             .from('personalized_feeds')
             .select('ranked_items, variant, model, reason')
@@ -142,23 +213,27 @@ export default function DailyFeedPreview() {
           const row = data as { ranked_items?: { type?: string; id: string }[]; variant?: string; model?: string; reason?: FeedReason | null };
           setVariant(`${row.variant ?? 'feed'}${row.model ? ` · ${row.model}` : ''}`);
           setReason(row.reason ?? null);
-          const ids = (row.ranked_items ?? []).filter(r => !r.type || r.type === 'product').map(r => r.id);
-          setProducts(await productsByIds(ids));
+          ranked = row.ranked_items ?? [];
         } else {
-          // Today / live: compute on demand (never persisted to their real row).
           const { data, error } = await supabase.functions.invoke('personalize-feed', { body: { target_user_id: u.id } });
           if (error) throw error;
-          const resp = data as { enabled?: boolean; variant?: string; reason?: FeedReason | null; ranked_items?: { id: string }[] };
+          const resp = data as { enabled?: boolean; variant?: string; reason?: FeedReason | null; ranked_items?: { type?: string; id: string }[] };
           setVariant(resp.enabled === false ? 'auto-editor disabled' : `${resp.variant ?? 'live'} · live`);
           setReason(resp.reason ?? null);
-          const ids = (resp.ranked_items ?? []).map(r => r.id);
-          // personalized/cold-start with no ranked ids → fall back to the global feed.
-          setProducts(ids.length ? await productsByIds(ids) : await cohort('all'));
+          ranked = resp.ranked_items ?? [];
         }
+        const productIds = ranked.filter(r => !r.type || r.type === 'product').map(r => r.id);
+        const lookIds = ranked.filter(r => r.type === 'look').map(r => r.id);
+        const products = productIds.length ? await productsByIds(productIds) : await cohort('all');
+        // Personalized looks if the engine ranked them; else fall back to the
+        // live look set so the preview still shows the woven-in looks.
+        const looks = lookIds.length ? await looksByIds(lookIds) : await liveLooks();
+        setItems(weave(products, looks));
       } else {
         setWho(mode === 'all' ? 'All users' : mode === 'men' ? 'All men' : 'All women');
         setVariant('global feed');
-        setProducts(await cohort(mode));
+        const [products, looks] = await Promise.all([cohort(mode), liveLooks()]);
+        setItems(weave(products, looks));
       }
     } catch (e) {
       setErr(e instanceof Error ? e.message : 'Failed to load feed.');
@@ -167,12 +242,15 @@ export default function DailyFeedPreview() {
     }
   };
 
+  const lookCount = items.filter(i => i.kind === 'look').length;
+
   return (
     <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 14, overflow: 'hidden' }}>
       <div style={{ padding: '16px 18px', borderBottom: '1px solid #eee' }}>
         <h2 style={{ margin: '0 0 2px', fontSize: 17, fontWeight: 700, color: '#111' }}>Preview a shopper&apos;s feed</h2>
         <p style={{ margin: 0, fontSize: 12.5, color: '#777' }}>
           See any shopper&apos;s live feed, the feed they were served on a past day, or a cohort baseline.
+          Looks and products are woven together exactly like the shopper&apos;s feed.
         </p>
       </div>
 
@@ -181,7 +259,7 @@ export default function DailyFeedPreview() {
           {MODES.map(m => (
             <button
               key={m.id}
-              onClick={() => { setMode(m.id); setProducts([]); setWho(null); setVariant(null); setErr(null); }}
+              onClick={() => { setMode(m.id); setItems([]); setWho(null); setVariant(null); setErr(null); }}
               style={{
                 padding: '6px 12px', borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
                 border: '1px solid', borderColor: mode === m.id ? '#111' : '#e5e7eb',
@@ -266,7 +344,7 @@ export default function DailyFeedPreview() {
               <span style={{ marginLeft: 6, color: '#999' }}>on {feedDate}</span>
             )}
             {variant && <span style={{ marginLeft: 6, padding: '2px 8px', borderRadius: 999, background: '#eef2ff', color: '#4338ca', fontSize: 11, fontWeight: 600 }}>{variant}</span>}
-            <span style={{ marginLeft: 6, color: '#999' }}>· {products.length} items</span>
+            <span style={{ marginLeft: 6, color: '#999' }}>· {items.length} items · {lookCount} looks</span>
             {reason && (
               <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 8 }}>
                 {(reason.topBrands ?? []).slice(0, 4).map(b => (
@@ -286,16 +364,21 @@ export default function DailyFeedPreview() {
           </div>
         )}
 
-        {products.length > 0 && (
+        {items.length > 0 && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 10, maxHeight: '60vh', overflow: 'auto' }}>
-            {products.map((p, i) => (
-              <div key={`${p.id}-${i}`} style={{ border: '1px solid #f0f0f0', borderRadius: 10, overflow: 'hidden', background: '#fafafa' }}>
+            {items.map((p, i) => (
+              <div key={`${p.kind}-${p.id}-${i}`} style={{ border: p.kind === 'look' ? '1px solid #c7d2fe' : '1px solid #f0f0f0', borderRadius: 10, overflow: 'hidden', background: '#fafafa' }}>
                 <div style={{ position: 'relative', aspectRatio: '3 / 4', background: p.image ? `center/cover no-repeat url(${p.image})` : '#e9e9ee' }}>
                   <span style={{ position: 'absolute', top: 4, left: 4, background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: 10, fontWeight: 700, borderRadius: 6, padding: '1px 6px' }}>{i + 1}</span>
+                  <span style={{
+                    position: 'absolute', top: 4, right: 4, fontSize: 9, fontWeight: 800, letterSpacing: '0.4px',
+                    borderRadius: 5, padding: '1px 5px', color: '#fff',
+                    background: p.kind === 'look' ? 'rgba(79,70,229,0.92)' : 'rgba(0,0,0,0.55)',
+                  }}>{p.kind === 'look' ? 'LOOK' : 'PRODUCT'}</span>
                 </div>
                 <div style={{ padding: '6px 8px' }}>
-                  {p.brand && <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.3px', fontWeight: 700 }}>{p.brand}</div>}
-                  <div style={{ fontSize: 12, color: '#222', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
+                  {p.sub && <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.3px', fontWeight: 700 }}>{p.sub}</div>}
+                  <div style={{ fontSize: 12, color: '#222', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.title}</div>
                 </div>
               </div>
             ))}
