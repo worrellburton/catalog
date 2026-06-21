@@ -1668,7 +1668,6 @@ function NetworksDirectory() {
                 className="admin-btn admin-btn-primary"
                 disabled={!connectTarget.connectionRequirements || connectTarget.connectionRequirements.fields.some(f => !formValues[f.key])}
                 onClick={() => {
-                  console.log('[affiliate] Connect submitted:', connectTarget.name, formValues);
                   setConnectTarget(null);
                 }}
               >

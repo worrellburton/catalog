@@ -14,6 +14,8 @@
     "test:smoke": "playwright test",
     "check:no-typeof-import": "node scripts/check-no-typeof-import.mjs",
     "check:tdz": "node scripts/check-tdz-forward-refs.mjs --strict",
+    "check:routes": "node scripts/check-routes.mjs",
+    "deploy:edge": "node scripts/deploy-edge.mjs",
     "eval:search": "node tests/search/eval-relevance.mjs",
     "prepare": "husky || true"
   },
