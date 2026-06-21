@@ -1,0 +1,65 @@
+/* Shared loading / empty / error state primitives (app/components/ui/StateViews).
+   One visual language for "the data isn't here yet / there's nothing / it
+   failed" across the whole platform, so every surface degrades the same way
+   instead of going blank. Honors prefers-reduced-motion (no shimmer). */
+
+.sv {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+  gap: 10px;
+  padding: 40px 20px;
+  color: var(--text-muted, #94a3b8);
+}
+.sv-icon { opacity: 0.7; }
+.sv-title { font-size: 15px; font-weight: 600; color: var(--text, #e5e7eb); }
+.sv-body { font-size: 13px; max-width: 36ch; line-height: 1.45; }
+.sv-retry {
+  margin-top: 4px;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid var(--border, rgba(255, 255, 255, 0.16));
+  background: transparent;
+  color: var(--text, #e5e7eb);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.sv-retry:hover { background: rgba(255, 255, 255, 0.06); border-color: rgba(255, 255, 255, 0.3); }
+.sv-retry:focus-visible { outline: 2px solid #6366f1; outline-offset: 2px; }
+.sv--light .sv-title { color: #111; }
+.sv--light .sv-retry { color: #111; border-color: #d4d4d8; }
+.sv--light .sv-retry:hover { background: #f4f4f5; }
+
+/* Skeleton placeholder — a shimmering block sized by the caller. */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--skeleton-base, rgba(255, 255, 255, 0.06));
+  border-radius: 8px;
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(
+    90deg,
+    transparent,
+    var(--skeleton-sheen, rgba(255, 255, 255, 0.09)),
+    transparent
+  );
+  animation: skeleton-shimmer 1.4s ease-in-out infinite;
+}
+@keyframes skeleton-shimmer {
+  100% { transform: translateX(100%); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .skeleton::after { animation: none; }
+}
