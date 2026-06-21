@@ -6,6 +6,7 @@ import { warmPosters, posterRendition } from '~/utils/poster-prefetch';
 import type { Look } from '~/data/looks';
 import type { ProductAd } from '~/services/product-creative';
 import { seededShuffle, hashSeed } from '~/utils/seededShuffle';
+import { weaveByFeedRank } from '~/utils/feed-weave';
 
 interface FeedSectionProps {
   looks: Look[];
@@ -222,38 +223,17 @@ function FeedSection({
       // reproduces the /admin/catalogs FEED arrangement exactly. Search
       // results and later cycles still shuffle (relevance / variety).
       if (isInitial && !searchMode) {
-        const rankOf = (e: DeckEntry) => {
-          const r = e.type === 'look' ? e.look.feed_rank : e.creative.feed_rank;
-          return typeof r === 'number' ? r : Number.POSITIVE_INFINITY;
-        };
-        // Looks lead on any rank tie. The admin writes a unified, dense
-        // feed_rank (no collisions), so ties only happen in the UNRANKED
-        // group (feed_rank null → Infinity) — there we keep looks first,
-        // matching the "looks go first" rule, then fall back to input order.
-        const typeRank = (e: DeckEntry) => (e.type === 'look' ? 0 : 1);
-        const sorted = entries
-          .map((e, i) => ({ e, i }))
-          .sort((a, b) => {
-            const d = rankOf(a.e) - rankOf(b.e);
-            if (d !== 0) return d;
-            const t = typeRank(a.e) - typeRank(b.e);
-            return t !== 0 ? t : a.i - b.i;
-          })
-          .map(x => x.e);
-        // Guarantee creator looks lead the home feed. The unified feed_rank
-        // can place products ahead of every gender-surviving look (with 0
-        // unisex looks, a gendered shopper only ever sees half the looks),
-        // which makes the feed read as product-only — the #1 reason "I don't
-        // see any looks". If no look lands in the first FRONT cells, pull the
-        // highest-ranked surviving look forward to just behind the lead item.
-        // Everything else keeps the admin's exact feed_rank order.
-        const FRONT = 4;
-        const firstLookIdx = sorted.findIndex(e => e.type === 'look');
-        if (firstLookIdx >= FRONT) {
-          const [lookEntry] = sorted.splice(firstLookIdx, 1);
-          sorted.splice(1, 0, lookEntry);
-        }
-        return sorted;
+        // Unified feed_rank weave (looks + products share one rank space via
+        // apply_feed_order): rank asc, looks lead ties, unranked keep input
+        // order, and a look is guaranteed near the top. The exact rule lives in
+        // weaveByFeedRank — shared with the admin Daily Feed preview so the two
+        // can never drift.
+        return weaveByFeedRank<DeckEntry>(
+          entries.filter(e => e.type === 'look'),
+          entries.filter(e => e.type === 'creative'),
+          e => (e.type === 'look' ? e.look.feed_rank : e.creative.feed_rank),
+          e => e.type === 'look',
+        );
       }
       // Search results carry a RELEVANCE order (search_products V8 ranks the
       // products, search_looks the looks). Never shuffle it — shuffling was

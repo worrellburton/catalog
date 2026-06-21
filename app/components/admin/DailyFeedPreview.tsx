@@ -12,6 +12,7 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { supabase } from '~/utils/supabase';
+import { weaveByFeedRank } from '~/utils/feed-weave';
 
 type Mode = 'user' | 'all' | 'men' | 'women';
 
@@ -41,28 +42,10 @@ function todayUtc(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-// Weave looks + products exactly like FeedSection's initial deck: sort by
-// feed_rank (admin pins lead), looks lead on a tie, otherwise keep input order
-// (which is each lane's personalized order); then guarantee a look near the top.
+// Weave looks + products exactly like the live home feed — delegates to the
+// shared weaveByFeedRank so this preview can never drift from FeedSection.
 function weave(products: PreviewItem[], looks: PreviewItem[]): PreviewItem[] {
-  const entries = [...looks, ...products]; // looks first → they win ties
-  const withIdx = entries.map((e, i) => ({ e, i }));
-  const rankOf = (e: PreviewItem) => (typeof e.feedRank === 'number' ? e.feedRank : Number.POSITIVE_INFINITY);
-  const typeRank = (e: PreviewItem) => (e.kind === 'look' ? 0 : 1);
-  withIdx.sort((a, b) => {
-    const d = rankOf(a.e) - rankOf(b.e);
-    if (d !== 0) return d;
-    const t = typeRank(a.e) - typeRank(b.e);
-    return t !== 0 ? t : a.i - b.i;
-  });
-  const sorted = withIdx.map(x => x.e);
-  const FRONT = 4;
-  const firstLookIdx = sorted.findIndex(e => e.kind === 'look');
-  if (firstLookIdx >= FRONT) {
-    const [lk] = sorted.splice(firstLookIdx, 1);
-    sorted.splice(1, 0, lk);
-  }
-  return sorted;
+  return weaveByFeedRank(looks, products, i => i.feedRank, i => i.kind === 'look');
 }
 
 const MODES: { id: Mode; label: string }[] = [
