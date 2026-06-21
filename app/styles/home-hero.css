@@ -757,6 +757,22 @@
 @media (max-width: 768px) {
   .search-catalog-strip { padding-top: calc(env(safe-area-inset-top) + 88px); }
 }
+/* Desktop: mirror the home hero (.sfh) — the "Now browsing <catalog>" intro
+   fills the viewport and vertically centers, so it reads as a real top-of-page
+   hero and the product grid starts BELOW the fold (you scroll down into it),
+   exactly like the home feed. Top padding clears the fixed header; the bottom
+   padding reserves the floating search bar's zone and biases the intro just
+   above true-center ("kind of in the middle"). Mobile keeps its compact strip. */
+@media (min-width: 769px) {
+  .search-catalog-strip {
+    min-height: 100svh;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    padding: calc(env(safe-area-inset-top, 0px) + 72px) 0 16vh;
+    box-sizing: border-box;
+  }
+}
 
 /* Intro — the current catalog name as a big, centered title card: the "really
    good top of the screen". Sized to echo the Mercury hero heading. */
