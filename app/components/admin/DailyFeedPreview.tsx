@@ -13,6 +13,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { supabase } from '~/utils/supabase';
 import { weaveByFeedRank } from '~/utils/feed-weave';
+import { ErrorState } from '~/components/ui/StateViews';
 
 type Mode = 'user' | 'all' | 'men' | 'women';
 
@@ -318,7 +319,7 @@ export default function DailyFeedPreview() {
           >{loading ? 'Loading…' : (mode === 'user' && feedDate && feedDate < todayUtc()) ? 'View that day' : 'Preview feed'}</button>
         </div>
 
-        {err && <div style={{ background: '#fef2f2', color: '#b91c1c', borderRadius: 8, padding: '10px 12px', fontSize: 13, marginBottom: 12 }}>{err}</div>}
+        {err && <ErrorState light body={err} onRetry={run} retryLabel="Retry" />}
 
         {who && !err && (
           <div style={{ fontSize: 12.5, color: '#555', marginBottom: 10 }}>
