@@ -11,8 +11,6 @@ import {
 } from '~/services/product-research';
 import { getFeedSearchResults, getFeedSearchDiagnostics } from '~/services/feed-search';
 import SimilarDebugModal, { buildFeedSearchReport, type SimilarDebugReport } from '~/components/SimilarDebugModal';
-import DailyFeedPreview from '~/components/admin/DailyFeedPreview';
-import DailyFeedLens from '~/components/admin/DailyFeedLens';
 import { useAuth } from '~/hooks/useAuth';
 import type { ProductAd } from '~/services/product-creative';
 import { getShopperGender, setShopperGender, subscribeToShopperGender } from '~/services/product-creative';
@@ -26,16 +24,6 @@ import {
   type Catalog as CatalogService,
   type CatalogSearchCounts,
 } from '~/services/catalogs';
-import {
-  getAutoEditorConfig,
-  setAutoEditorConfig,
-  DEFAULT_AUTO_EDITOR_CONFIG,
-  type AutoEditorConfig,
-  getFeedRules, setFeedRules,
-  DEFAULT_FEED_RULES,
-  FEED_RULE_META,
-  type FeedRules,
-} from '~/services/dials';
 
 type CatalogGenderUI = 'all' | 'women' | 'men' | 'unisex';
 
@@ -645,8 +633,6 @@ export default function AdminCatalogs() {
     return () => { cancelled = true; };
   }, []);
   const [showAdd, setShowAdd] = useState(false);
-  const [showAutoEditor, setShowAutoEditor] = useState(false);
-  const [showFeedPreview, setShowFeedPreview] = useState(false);
   const [newName, setNewName] = useState('');
   const [toast, setToast] = useState<string | null>(null);
   const [products, setProducts] = useState<ProductRow[]>([]);
@@ -2184,34 +2170,21 @@ export default function AdminCatalogs() {
                               ★ LANDING SCREEN
                             </span>
                             <Link to="/admin/catalogs/home" style={{ color: '#111', textDecoration: 'none' }}>Your daily feed</Link>
-                            {/* Daily Feed settings live HERE, on the landing-screen
-                                catalog only — they tune THIS per-shopper Daily Feed,
-                                not the static curated catalogs below. ("Daily Feed"
-                                is the canonical name for this concept — see
-                                docs/daily-feed.md.) */}
-                            <button
+                            {/* The Daily Feed has its own admin page now — settings,
+                                dials, and the per-shopper / per-date preview all live
+                                there. This catalog is just its candidate pool +
+                                baseline order. See docs/daily-feed.md. */}
+                            <Link
+                              to="/admin/daily-feed"
                               className="admin-btn admin-btn-secondary"
-                              onClick={() => setShowAutoEditor(true)}
-                              title="Configure the Daily Feed — each shopper's custom daily feed"
-                              style={{ marginLeft: 6, padding: '2px 8px', fontSize: 11, display: 'inline-flex', alignItems: 'center' }}
+                              title="Open the Daily Feed page — settings, dials, and shopper preview"
+                              style={{ marginLeft: 6, padding: '2px 8px', fontSize: 11, display: 'inline-flex', alignItems: 'center', textDecoration: 'none' }}
                             >
                               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 4 }}>
-                                <path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41" />
-                                <circle cx="12" cy="12" r="4" />
+                                <path d="M3 4h18v18H3zM3 10h18M8 2v4M16 2v4" />
                               </svg>
-                              Daily Feed
-                            </button>
-                            <button
-                              className="admin-btn admin-btn-secondary"
-                              onClick={() => setShowFeedPreview(true)}
-                              title="Preview a shopper's live daily feed (by username) or a cohort baseline"
-                              style={{ marginLeft: 6, padding: '2px 8px', fontSize: 11, display: 'inline-flex', alignItems: 'center' }}
-                            >
-                              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginRight: 4 }}>
-                                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z" /><circle cx="12" cy="12" r="3" />
-                              </svg>
-                              Preview feed
-                            </button>
+                              Daily Feed →
+                            </Link>
                           </div>
                           <span style={{ fontSize: 10, color: '#92400e', fontWeight: 400 }}>
                             This is what users see first — a personalized daily feed, unique per shopper.
@@ -2249,11 +2222,15 @@ export default function AdminCatalogs() {
                   </tr>
                   {isOpen && (
                     <tr>
-                      <td colSpan={7} style={{ padding: 0, background: '#fafafa', borderTop: 'none' }}>
-                        {/* USER LENS ONLY (founder's call): no feed shows
-                            until a user is typed — there is no "the" feed,
-                            only each shopper's. */}
-                        <DailyFeedLens showToast={showToast} />
+                      <td colSpan={7} style={{ padding: '14px 18px', background: '#fafafa', borderTop: 'none', fontSize: 13, color: '#555' }}>
+                        The Daily Feed (settings, dials, and the per-shopper /
+                        per-date preview) now lives on its own page.{' '}
+                        <Link to="/admin/daily-feed" style={{ color: '#1d4ed8', fontWeight: 600 }}>
+                          Open Daily Feed →
+                        </Link>
+                        <div style={{ marginTop: 4, color: '#999' }}>
+                          This catalog is the Daily Feed&apos;s candidate pool + baseline order.
+                        </div>
                       </td>
                     </tr>
                   )}
@@ -2586,13 +2563,6 @@ export default function AdminCatalogs() {
           </div>
         </div>
       )}
-
-      {/* Daily Feed settings modal — master toggle + tuning for the
-          per-shopper Daily Feed (app_settings via setAutoEditorConfig). */}
-      {showAutoEditor && (
-        <AutoEditorModal onClose={() => setShowAutoEditor(false)} showToast={showToast} />
-      )}
-      <DailyFeedPreview open={showFeedPreview} onClose={() => setShowFeedPreview(false)} />
 
       {/* Add Products modal - pick from existing library */}
       {addProductsCatalog && (
@@ -7093,253 +7063,6 @@ function GenderDropdown({ value, onChange }: { value: CatalogGenderUI; onChange:
     </select>
   );
 }
-
-// ── Daily Feed settings modal (self-contained) ──────────────────────
-// Master on/off + tuning for the per-shopper Daily Feed (the engine was
-// historically called the "Automatic Editor"; "Daily Feed" is now the
-// canonical name — see docs/daily-feed.md). Reads the
-// current config on open via getAutoEditorConfig() and writes each
-// change back through setAutoEditorConfig() (one app_settings upsert per
-// changed field). Numeric tuning is gated behind the master toggle being
-// on so admins don't fiddle dials that have no effect.
-function AutoEditorModal({
-  onClose,
-  showToast,
-}: {
-  onClose: () => void;
-  showToast: (msg: string) => void;
-}) {
-  const [config, setConfig] = useState<AutoEditorConfig>(DEFAULT_AUTO_EDITOR_CONFIG);
-  const [rules, setRules] = useState<FeedRules>(DEFAULT_FEED_RULES);
-  const [loading, setLoading] = useState(true);
-  const [saving, setSaving] = useState(false);
-
-  // Load current values on open.
-  useEffect(() => {
-    let cancelled = false;
-    Promise.all([getAutoEditorConfig(), getFeedRules()])
-      .then(([c, r]) => { if (!cancelled) { setConfig(c); setRules(r); } })
-      .finally(() => { if (!cancelled) setLoading(false); });
-    return () => { cancelled = true; };
-  }, []);
-
-  // Debounced rule persistence — sliders fire fast; write once settled.
-  const ruleSaveTimer = useRef(0);
-  const saveRules = useCallback((next: FeedRules) => {
-    setRules(next);
-    window.clearTimeout(ruleSaveTimer.current);
-    ruleSaveTimer.current = window.setTimeout(() => {
-      setFeedRules(next)
-        .then(() => showToast('Feed rules saved'))
-        .catch(err => showToast(`Save failed: ${err instanceof Error ? err.message : String(err)}`));
-    }, 450);
-  }, [showToast]);
-
-  // Persist a partial change immediately (optimistic local update) so the
-  // toggle/select feel instant, then surface a small saved confirmation.
-  const save = useCallback(async (partial: Partial<AutoEditorConfig>) => {
-    setConfig(prev => ({ ...prev, ...partial }));
-    setSaving(true);
-    try {
-      await setAutoEditorConfig(partial);
-      showToast('Daily Feed settings saved');
-    } catch (err) {
-      showToast(`Save failed: ${err instanceof Error ? err.message : String(err)}`);
-      // Re-pull the authoritative state so the UI doesn't drift on failure.
-      getAutoEditorConfig().then(setConfig).catch(() => {});
-    } finally {
-      setSaving(false);
-    }
-  }, [showToast]);
-
-  const fieldLabel: React.CSSProperties = {
-    fontSize: 11, fontWeight: 600, color: '#475569',
-    textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6, display: 'block',
-  };
-  const numInput: React.CSSProperties = {
-    width: '100%', padding: '8px 10px', borderRadius: 6,
-    border: '1px solid #ddd', fontSize: 13,
-  };
-
-  return (
-    <div className="admin-modal-overlay" onClick={onClose}>
-      <div
-        className="admin-modal"
-        style={{ width: 560, maxWidth: '92vw', padding: 24, maxHeight: '86vh', overflowY: 'auto' }}
-        onClick={e => e.stopPropagation()}
-      >
-        <h2 style={{ margin: '0 0 4px', fontSize: 18, fontWeight: 600 }}>Daily Feed</h2>
-        <p style={{ margin: '0 0 18px', fontSize: 13, color: '#888' }}>
-          Each signed-in shopper&apos;s custom feed, re-ranked to their taste once
-          per day. When on, every shopper gets their own Daily Feed; off keeps
-          everyone on the global feed order.
-        </p>
-
-        {/* Master on/off toggle. */}
-        <label
-          style={{
-            display: 'flex', alignItems: 'center', justifyContent: 'space-between',
-            gap: 12, padding: '12px 14px', borderRadius: 8, border: '1px solid #e2e8f0',
-            background: config.enabled ? '#ecfdf5' : '#f8fafc', cursor: loading ? 'default' : 'pointer',
-            marginBottom: 18,
-          }}
-        >
-          <span style={{ fontSize: 13, fontWeight: 600, color: '#111' }}>
-            Automatic Editor — personalized daily feed
-          </span>
-          <input
-            type="checkbox"
-            checked={config.enabled}
-            disabled={loading || saving}
-            onChange={e => save({ enabled: e.target.checked })}
-            style={{ width: 18, height: 18, cursor: 'pointer' }}
-          />
-        </label>
-
-        {/* Tuning — only meaningful while the master flag is on. */}
-        <fieldset
-          disabled={!config.enabled || loading || saving}
-          style={{
-            border: 'none', padding: 0, margin: 0,
-            opacity: config.enabled ? 1 : 0.5,
-            display: 'flex', flexDirection: 'column', gap: 16,
-          }}
-        >
-          <div>
-            <label style={fieldLabel}>Frequency</label>
-            <select
-              value={config.frequency}
-              onChange={e => save({ frequency: e.target.value as AutoEditorConfig['frequency'] })}
-              style={{ ...numInput, cursor: 'pointer', appearance: 'none' }}
-            >
-              <option value="daily">Daily</option>
-              <option value="every_signin">Every sign-in</option>
-            </select>
-          </div>
-
-          {/* When the daily feed rolls over — the UTC hour a shopper's first
-              visit gets a freshly re-ranked feed. Only meaningful for Daily. */}
-          {config.frequency === 'daily' && (
-            <div>
-              <label style={fieldLabel}>Refresh time (UTC)</label>
-              <input
-                type="time"
-                step={3600}
-                value={`${String(config.refreshHour).padStart(2, '0')}:00`}
-                onChange={e => {
-                  const hh = parseInt((e.target.value || '00:00').split(':')[0], 10);
-                  save({ refreshHour: Number.isFinite(hh) ? hh : 0 });
-                }}
-                style={numInput}
-              />
-              <div style={{ marginTop: 6, fontSize: 12, color: '#94a3b8' }}>
-                A new feed rolls over at {String(config.refreshHour).padStart(2, '0')}:00 UTC each day.
-              </div>
-            </div>
-          )}
-
-          <div>
-            <label style={fieldLabel}>Holdout % (kept on the global feed)</label>
-            <input
-              type="number"
-              min={0}
-              max={100}
-              value={config.holdoutPct}
-              onChange={e => save({ holdoutPct: Number(e.target.value) })}
-              style={numInput}
-            />
-          </div>
-
-          <div>
-            <label style={fieldLabel}>History window (days)</label>
-            <input
-              type="number"
-              min={1}
-              max={365}
-              value={config.recencyDays}
-              onChange={e => save({ recencyDays: Number(e.target.value) })}
-              style={numInput}
-            />
-          </div>
-
-          <div>
-            <label style={fieldLabel}>Min signal (events before personalizing)</label>
-            <input
-              type="number"
-              min={0}
-              max={1000}
-              value={config.minSignal}
-              onChange={e => save({ minSignal: Number(e.target.value) })}
-              style={numInput}
-            />
-          </div>
-        </fieldset>
-
-        {/* ── The daily feed rulebook ───────────────────────────────────
-            Ten founder-tunable ranking rules. Server rules run inside the
-            personalize-feed edge function; "saved brands" is client-side
-            (bookmarks live in localStorage). Weight scales a normalized
-            0..1 signal, so 10 ≈ can dominate the feed, 1 ≈ a nudge. */}
-        <div style={{ marginTop: 22, borderTop: '1px solid #eee', paddingTop: 16 }}>
-          <h3 style={{ margin: '0 0 2px', fontSize: 14, fontWeight: 700 }}>Daily feed rules</h3>
-          <p style={{ margin: '0 0 12px', fontSize: 12, color: '#888' }}>
-            The rulebook behind every shopper&apos;s daily feed. Each rule is a switch + a weight
-            (how hard it pulls). Defaults match today&apos;s behavior.
-          </p>
-          <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-            {FEED_RULE_META.map(meta => {
-              const rule = rules[meta.key];
-              return (
-                <div
-                  key={meta.key}
-                  style={{
-                    display: 'flex', alignItems: 'center', gap: 12,
-                    padding: '10px 12px', borderRadius: 8, border: '1px solid #e2e8f0',
-                    background: rule.enabled ? '#f0fdf4' : '#fafafa',
-                  }}
-                >
-                  <input
-                    type="checkbox"
-                    checked={rule.enabled}
-                    disabled={loading}
-                    onChange={e => saveRules({ ...rules, [meta.key]: { ...rule, enabled: e.target.checked } })}
-                    style={{ width: 16, height: 16, cursor: 'pointer', flexShrink: 0 }}
-                  />
-                  <div style={{ flex: 1, minWidth: 0 }}>
-                    <div style={{ fontSize: 12.5, fontWeight: 600, color: '#111' }}>{meta.label}</div>
-                    <div style={{ fontSize: 11, color: '#94a3b8' }}>{meta.hint}</div>
-                  </div>
-                  {meta.weight && (
-                    <label style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, opacity: rule.enabled ? 1 : 0.35 }}>
-                      <input
-                        type="range"
-                        min={meta.min ?? 0}
-                        max={meta.max ?? 10}
-                        step={1}
-                        value={rule.weight}
-                        disabled={loading || !rule.enabled}
-                        onChange={e => saveRules({ ...rules, [meta.key]: { ...rule, weight: Number(e.target.value) } })}
-                        style={{ width: 90 }}
-                      />
-                      <span style={{ fontSize: 11, fontWeight: 700, color: '#475569', width: 18, textAlign: 'right' }}>{rule.weight}</span>
-                    </label>
-                  )}
-                </div>
-              );
-            })}
-          </div>
-        </div>
-
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 20 }}>
-          <button className="admin-btn admin-btn-secondary" onClick={onClose}>
-            Done
-          </button>
-        </div>
-      </div>
-    </div>
-  );
-}
-
 
 // ── Suggest Products modal (self-contained) ─────────────────────────
 // Claude brainstorms product ideas for the catalog vibe, searches Google

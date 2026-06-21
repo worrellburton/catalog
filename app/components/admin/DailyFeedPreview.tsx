@@ -1,11 +1,14 @@
-// Admin preview of the personalized daily feed (the landing-screen "Your
-// daily feed" catalog). Lets an admin see what ANY shopper's live feed looks
-// like by username, plus the cohort baselines (all users / men / women).
+// Daily Feed — preview panel. See what ANY shopper's feed looks like:
+//   • By username — their LIVE feed (today) computed on demand, or
+//   • a past DATE — the exact feed they were served that day (read back
+//     from the persisted personalized_feeds row), or
+//   • a cohort baseline (all users / men / women — what a cold-start sees).
 //
-// Per-user mode calls the admin-gated `personalize-feed` edge function with
-// { target_user_id } — it computes that user's feed live and never persists
-// to their real daily row. Cohort modes render the global active product feed
-// (what a cold-start shopper sees), gender-filtered.
+// Per-user "live" mode calls the admin-gated `personalize-feed` edge
+// function with { target_user_id } (computes live, never persists to their
+// real daily row). A past date instead reads the stored personalized_feeds
+// row for (user, date). Inline panel on the /admin/daily-feed page (was a
+// modal on /admin/catalogs). "Daily Feed" is canonical — see docs/daily-feed.md.
 
 import { useEffect, useRef, useState } from 'react';
 import { supabase } from '~/utils/supabase';
@@ -14,8 +17,8 @@ type Mode = 'user' | 'all' | 'men' | 'women';
 
 interface PreviewProduct { id: string; name: string; brand: string; image: string }
 
-/** Why the feed ranked the way it did — surfaced from personalize-feed so
- *  an admin can see which signals and rules shaped this user's feed. */
+/** Why the feed ranked the way it did — surfaced from personalize-feed (or the
+ *  stored row) so an admin can see which signals and rules shaped this feed. */
 interface FeedReason {
   topBrands?: string[];
   topTypes?: string[];
@@ -30,16 +33,24 @@ function sanitizeTerm(s: string): string {
   return s.replace(/[%,()*\\]/g, '').trim();
 }
 
+/** UTC day stamp (YYYY-MM-DD) — matches personalized_feeds.feed_date + the
+ *  edge function's per-day key. */
+function todayUtc(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
 const MODES: { id: Mode; label: string }[] = [
-  { id: 'user', label: 'By username' },
+  { id: 'user', label: 'By user' },
   { id: 'all', label: 'All users' },
   { id: 'men', label: 'All men' },
   { id: 'women', label: 'All women' },
 ];
 
-export default function DailyFeedPreview({ open, onClose }: { open: boolean; onClose: () => void }) {
+export default function DailyFeedPreview() {
   const [mode, setMode] = useState<Mode>('user');
   const [username, setUsername] = useState('');
+  // '' = today / live. A past YYYY-MM-DD reads the stored feed for that day.
+  const [feedDate, setFeedDate] = useState('');
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [who, setWho] = useState<string | null>(null);
@@ -66,8 +77,6 @@ export default function DailyFeedPreview({ open, onClose }: { open: boolean; onC
     }, 220);
     return () => window.clearTimeout(searchTimer.current);
   }, [username, mode]);
-
-  if (!open) return null;
 
   async function resolveUser(q: string): Promise<{ id: string; label: string } | null> {
     if (!supabase) return null;
@@ -118,14 +127,34 @@ export default function DailyFeedPreview({ open, onClose }: { open: boolean; onC
           : await resolveUser(username);
         if (!u) { setErr(`No user found matching “${username}”.`); setLoading(false); return; }
         setWho(u.label);
-        const { data, error } = await supabase.functions.invoke('personalize-feed', { body: { target_user_id: u.id } });
-        if (error) throw error;
-        const resp = data as { enabled?: boolean; variant?: string; reason?: FeedReason | null; ranked_items?: { id: string }[] };
-        setVariant(resp.enabled === false ? 'auto-editor disabled' : (resp.variant ?? null));
-        setReason(resp.reason ?? null);
-        const ids = (resp.ranked_items ?? []).map(r => r.id);
-        // personalized/cold-start with no ranked ids → fall back to the global feed.
-        setProducts(ids.length ? await productsByIds(ids) : await cohort('all'));
+        const isPast = !!feedDate && feedDate < todayUtc();
+        if (isPast) {
+          // Historical: read the exact feed served that day from the store.
+          const { data, error } = await supabase
+            .from('personalized_feeds')
+            .select('ranked_items, variant, model, reason')
+            .eq('user_id', u.id).eq('feed_date', feedDate).maybeSingle();
+          if (error) throw error;
+          if (!data) {
+            setErr(`No stored Daily Feed for ${u.label} on ${feedDate} (they may not have opened the app that day).`);
+            setLoading(false); return;
+          }
+          const row = data as { ranked_items?: { type?: string; id: string }[]; variant?: string; model?: string; reason?: FeedReason | null };
+          setVariant(`${row.variant ?? 'feed'}${row.model ? ` · ${row.model}` : ''}`);
+          setReason(row.reason ?? null);
+          const ids = (row.ranked_items ?? []).filter(r => !r.type || r.type === 'product').map(r => r.id);
+          setProducts(await productsByIds(ids));
+        } else {
+          // Today / live: compute on demand (never persisted to their real row).
+          const { data, error } = await supabase.functions.invoke('personalize-feed', { body: { target_user_id: u.id } });
+          if (error) throw error;
+          const resp = data as { enabled?: boolean; variant?: string; reason?: FeedReason | null; ranked_items?: { id: string }[] };
+          setVariant(resp.enabled === false ? 'auto-editor disabled' : `${resp.variant ?? 'live'} · live`);
+          setReason(resp.reason ?? null);
+          const ids = (resp.ranked_items ?? []).map(r => r.id);
+          // personalized/cold-start with no ranked ids → fall back to the global feed.
+          setProducts(ids.length ? await productsByIds(ids) : await cohort('all'));
+        }
       } else {
         setWho(mode === 'all' ? 'All users' : mode === 'men' ? 'All men' : 'All women');
         setVariant('global feed');
@@ -139,123 +168,139 @@ export default function DailyFeedPreview({ open, onClose }: { open: boolean; onC
   };
 
   return (
-    <div
-      role="dialog" aria-modal="true" aria-label="Preview daily feed"
-      onClick={onClose}
-      style={{ position: 'fixed', inset: 0, zIndex: 12000, background: 'rgba(0,0,0,0.4)', display: 'flex', alignItems: 'flex-start', justifyContent: 'center', padding: '6vh 16px', overflow: 'auto' }}
-    >
-      <div onClick={e => e.stopPropagation()} style={{ background: '#fff', borderRadius: 14, width: 'min(880px, 100%)', boxShadow: '0 24px 70px rgba(0,0,0,0.35)', overflow: 'hidden' }}>
-        <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 12, padding: '16px 18px', borderBottom: '1px solid #eee' }}>
-          <div>
-            <h2 style={{ margin: '0 0 2px', fontSize: 17, fontWeight: 700, color: '#111' }}>Preview the daily feed</h2>
-            <p style={{ margin: 0, fontSize: 12.5, color: '#777' }}>See any shopper’s live personalized feed, or a cohort baseline.</p>
-          </div>
-          <button onClick={onClose} aria-label="Close" style={{ background: 'transparent', border: 'none', fontSize: 22, lineHeight: 1, color: '#999', cursor: 'pointer' }}>×</button>
+    <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 14, overflow: 'hidden' }}>
+      <div style={{ padding: '16px 18px', borderBottom: '1px solid #eee' }}>
+        <h2 style={{ margin: '0 0 2px', fontSize: 17, fontWeight: 700, color: '#111' }}>Preview a shopper&apos;s feed</h2>
+        <p style={{ margin: 0, fontSize: 12.5, color: '#777' }}>
+          See any shopper&apos;s live feed, the feed they were served on a past day, or a cohort baseline.
+        </p>
+      </div>
+
+      <div style={{ padding: '14px 18px' }}>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
+          {MODES.map(m => (
+            <button
+              key={m.id}
+              onClick={() => { setMode(m.id); setProducts([]); setWho(null); setVariant(null); setErr(null); }}
+              style={{
+                padding: '6px 12px', borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
+                border: '1px solid', borderColor: mode === m.id ? '#111' : '#e5e7eb',
+                background: mode === m.id ? '#111' : '#fff', color: mode === m.id ? '#fff' : '#444',
+              }}
+            >{m.label}</button>
+          ))}
         </div>
 
-        <div style={{ padding: '14px 18px' }}>
-          <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginBottom: 12 }}>
-            {MODES.map(m => (
-              <button
-                key={m.id}
-                onClick={() => { setMode(m.id); setProducts([]); setWho(null); setVariant(null); setErr(null); }}
-                style={{
-                  padding: '6px 12px', borderRadius: 999, fontSize: 12.5, fontWeight: 600, cursor: 'pointer',
-                  border: '1px solid', borderColor: mode === m.id ? '#111' : '#e5e7eb',
-                  background: mode === m.id ? '#111' : '#fff', color: mode === m.id ? '#fff' : '#444',
-                }}
-              >{m.label}</button>
-            ))}
-          </div>
-
-          <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 14 }}>
-            {mode === 'user' && (
-              <div style={{ flex: 1, position: 'relative' }}>
-                <input
-                  value={username}
-                  onChange={e => { pickedUser.current = null; setUsername(e.target.value); }}
-                  onKeyDown={e => { if (e.key === 'Enter') { setSuggestions([]); run(); } }}
-                  placeholder="Type a user — name or email…"
-                  style={{ width: '100%', boxSizing: 'border-box', padding: '9px 12px', borderRadius: 8, border: '1px solid #ddd', fontSize: 13, fontFamily: 'inherit' }}
-                />
-                {suggestions.length > 0 && (
-                  <div style={{
-                    position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 5, marginTop: 4,
-                    background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10,
-                    boxShadow: '0 12px 32px rgba(0,0,0,0.14)', overflow: 'hidden',
-                  }}>
-                    {suggestions.map(s => (
-                      <button
-                        key={s.id}
-                        onClick={() => {
-                          pickedUser.current = { id: s.id, label: s.label };
-                          setUsername(s.label);
-                          setSuggestions([]);
-                        }}
-                        style={{
-                          display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px',
-                          background: '#fff', border: 'none', borderBottom: '1px solid #f4f4f5',
-                          fontSize: 13, cursor: 'pointer',
-                        }}
-                      >
-                        <span style={{ fontWeight: 600, color: '#111' }}>{s.label}</span>
-                        {s.sub && s.sub !== s.label && <span style={{ marginLeft: 8, fontSize: 11.5, color: '#999' }}>{s.sub}</span>}
-                      </button>
-                    ))}
-                  </div>
-                )}
-              </div>
-            )}
-            <button
-              className="admin-btn admin-btn-primary"
-              onClick={run}
-              disabled={loading || (mode === 'user' && !username.trim())}
-              style={{ whiteSpace: 'nowrap' }}
-            >{loading ? 'Loading…' : 'Preview feed'}</button>
-          </div>
-
-          {err && <div style={{ background: '#fef2f2', color: '#b91c1c', borderRadius: 8, padding: '10px 12px', fontSize: 13, marginBottom: 12 }}>{err}</div>}
-
-          {who && !err && (
-            <div style={{ fontSize: 12.5, color: '#555', marginBottom: 10 }}>
-              Showing <strong style={{ color: '#111' }}>{who}</strong>
-              {variant && <span style={{ marginLeft: 6, padding: '2px 8px', borderRadius: 999, background: '#eef2ff', color: '#4338ca', fontSize: 11, fontWeight: 600 }}>{variant}</span>}
-              <span style={{ marginLeft: 6, color: '#999' }}>· {products.length} items</span>
-              {reason && (
-                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 8 }}>
-                  {(reason.topBrands ?? []).slice(0, 4).map(b => (
-                    <span key={`b-${b}`} style={{ padding: '2px 8px', borderRadius: 999, background: '#fef3c7', color: '#92400e', fontSize: 10.5, fontWeight: 600 }}>♥ {b}</span>
+        <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 14, flexWrap: 'wrap' }}>
+          {mode === 'user' && (
+            <div style={{ flex: 1, minWidth: 220, position: 'relative' }}>
+              <input
+                value={username}
+                onChange={e => { pickedUser.current = null; setUsername(e.target.value); }}
+                onKeyDown={e => { if (e.key === 'Enter') { setSuggestions([]); run(); } }}
+                placeholder="Type a user — name or email…"
+                style={{ width: '100%', boxSizing: 'border-box', padding: '9px 12px', borderRadius: 8, border: '1px solid #ddd', fontSize: 13, fontFamily: 'inherit' }}
+              />
+              {suggestions.length > 0 && (
+                <div style={{
+                  position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 5, marginTop: 4,
+                  background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10,
+                  boxShadow: '0 12px 32px rgba(0,0,0,0.14)', overflow: 'hidden',
+                }}>
+                  {suggestions.map(s => (
+                    <button
+                      key={s.id}
+                      onClick={() => {
+                        pickedUser.current = { id: s.id, label: s.label };
+                        setUsername(s.label);
+                        setSuggestions([]);
+                      }}
+                      style={{
+                        display: 'block', width: '100%', textAlign: 'left', padding: '8px 12px',
+                        background: '#fff', border: 'none', borderBottom: '1px solid #f4f4f5',
+                        fontSize: 13, cursor: 'pointer',
+                      }}
+                    >
+                      <span style={{ fontWeight: 600, color: '#111' }}>{s.label}</span>
+                      {s.sub && s.sub !== s.label && <span style={{ marginLeft: 8, fontSize: 11.5, color: '#999' }}>{s.sub}</span>}
+                    </button>
                   ))}
-                  {(reason.topTypes ?? []).slice(0, 4).map(ty => (
-                    <span key={`t-${ty}`} style={{ padding: '2px 8px', borderRadius: 999, background: '#dcfce7', color: '#166534', fontSize: 10.5, fontWeight: 600 }}>{ty}</span>
-                  ))}
-                  {(reason.rules ?? []).map(r => (
-                    <span key={`r-${r}`} style={{ padding: '2px 8px', borderRadius: 999, background: '#f1f5f9', color: '#475569', fontSize: 10.5, fontWeight: 600 }}>rule: {r}</span>
-                  ))}
-                  {typeof reason.engaged === 'number' && (
-                    <span style={{ padding: '2px 8px', borderRadius: 999, background: '#f1f5f9', color: '#475569', fontSize: 10.5, fontWeight: 600 }}>{reason.engaged} engaged · {reason.seen ?? 0} seen</span>
-                  )}
                 </div>
               )}
             </div>
           )}
-
-          {products.length > 0 && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 10, maxHeight: '52vh', overflow: 'auto' }}>
-              {products.map((p, i) => (
-                <div key={`${p.id}-${i}`} style={{ border: '1px solid #f0f0f0', borderRadius: 10, overflow: 'hidden', background: '#fafafa' }}>
-                  <div style={{ position: 'relative', aspectRatio: '3 / 4', background: p.image ? `center/cover no-repeat url(${p.image})` : '#e9e9ee' }}>
-                    <span style={{ position: 'absolute', top: 4, left: 4, background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: 10, fontWeight: 700, borderRadius: 6, padding: '1px 6px' }}>{i + 1}</span>
-                  </div>
-                  <div style={{ padding: '6px 8px' }}>
-                    {p.brand && <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.3px', fontWeight: 700 }}>{p.brand}</div>}
-                    <div style={{ fontSize: 12, color: '#222', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
-                  </div>
-                </div>
-              ))}
-            </div>
+          {mode === 'user' && (
+            <label style={{ display: 'flex', alignItems: 'center', gap: 6, fontSize: 12, color: '#666' }}>
+              <span style={{ whiteSpace: 'nowrap' }}>Date</span>
+              <input
+                type="date"
+                value={feedDate}
+                max={todayUtc()}
+                onChange={e => setFeedDate(e.target.value)}
+                title="Leave as today for the live feed; pick a past day to see the feed they were served then"
+                style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid #ddd', fontSize: 13, fontFamily: 'inherit' }}
+              />
+              {feedDate && (
+                <button
+                  onClick={() => setFeedDate('')}
+                  title="Back to today (live)"
+                  style={{ background: 'transparent', border: 'none', color: '#999', fontSize: 16, cursor: 'pointer', lineHeight: 1 }}
+                >×</button>
+              )}
+            </label>
           )}
+          <button
+            className="admin-btn admin-btn-primary"
+            onClick={run}
+            disabled={loading || (mode === 'user' && !username.trim())}
+            style={{ whiteSpace: 'nowrap' }}
+          >{loading ? 'Loading…' : (mode === 'user' && feedDate && feedDate < todayUtc()) ? 'View that day' : 'Preview feed'}</button>
         </div>
+
+        {err && <div style={{ background: '#fef2f2', color: '#b91c1c', borderRadius: 8, padding: '10px 12px', fontSize: 13, marginBottom: 12 }}>{err}</div>}
+
+        {who && !err && (
+          <div style={{ fontSize: 12.5, color: '#555', marginBottom: 10 }}>
+            Showing <strong style={{ color: '#111' }}>{who}</strong>
+            {mode === 'user' && feedDate && feedDate < todayUtc() && (
+              <span style={{ marginLeft: 6, color: '#999' }}>on {feedDate}</span>
+            )}
+            {variant && <span style={{ marginLeft: 6, padding: '2px 8px', borderRadius: 999, background: '#eef2ff', color: '#4338ca', fontSize: 11, fontWeight: 600 }}>{variant}</span>}
+            <span style={{ marginLeft: 6, color: '#999' }}>· {products.length} items</span>
+            {reason && (
+              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 8 }}>
+                {(reason.topBrands ?? []).slice(0, 4).map(b => (
+                  <span key={`b-${b}`} style={{ padding: '2px 8px', borderRadius: 999, background: '#fef3c7', color: '#92400e', fontSize: 10.5, fontWeight: 600 }}>♥ {b}</span>
+                ))}
+                {(reason.topTypes ?? []).slice(0, 4).map(ty => (
+                  <span key={`t-${ty}`} style={{ padding: '2px 8px', borderRadius: 999, background: '#dcfce7', color: '#166534', fontSize: 10.5, fontWeight: 600 }}>{ty}</span>
+                ))}
+                {(reason.rules ?? []).map(r => (
+                  <span key={`r-${r}`} style={{ padding: '2px 8px', borderRadius: 999, background: '#f1f5f9', color: '#475569', fontSize: 10.5, fontWeight: 600 }}>rule: {r}</span>
+                ))}
+                {typeof reason.engaged === 'number' && (
+                  <span style={{ padding: '2px 8px', borderRadius: 999, background: '#f1f5f9', color: '#475569', fontSize: 10.5, fontWeight: 600 }}>{reason.engaged} engaged · {reason.seen ?? 0} seen</span>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {products.length > 0 && (
+          <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 10, maxHeight: '60vh', overflow: 'auto' }}>
+            {products.map((p, i) => (
+              <div key={`${p.id}-${i}`} style={{ border: '1px solid #f0f0f0', borderRadius: 10, overflow: 'hidden', background: '#fafafa' }}>
+                <div style={{ position: 'relative', aspectRatio: '3 / 4', background: p.image ? `center/cover no-repeat url(${p.image})` : '#e9e9ee' }}>
+                  <span style={{ position: 'absolute', top: 4, left: 4, background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: 10, fontWeight: 700, borderRadius: 6, padding: '1px 6px' }}>{i + 1}</span>
+                </div>
+                <div style={{ padding: '6px 8px' }}>
+                  {p.brand && <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.3px', fontWeight: 700 }}>{p.brand}</div>}
+                  <div style={{ fontSize: 12, color: '#222', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.name}</div>
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
       </div>
     </div>
   );
