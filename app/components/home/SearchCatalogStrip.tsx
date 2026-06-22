@@ -13,6 +13,8 @@
 // BottomBar's onFocus → openSearch, which raises the keyboard + opens the
 // sheet).
 
+import { funnyCatalogName } from '~/utils/searchIntent';
+
 interface SearchCatalogStripProps {
   query: string;
   recommendations: string[];
@@ -30,10 +32,6 @@ function Spark() {
   );
 }
 
-// "shoes" → "Shoes", "running shoes" → "Running Shoes"
-function titleCase(s: string): string {
-  return s.trim().replace(/\S+/g, (w) => w.charAt(0).toUpperCase() + w.slice(1));
-}
 
 /** Open the search sheet exactly like tapping the resting search bar: focus the
  *  shared input, which fires BottomBar's onFocus → openSearch (raises keyboard +
@@ -51,7 +49,10 @@ export default function SearchCatalogStrip({ query, recommendations, onPick }: S
   // the searched feed is up, regardless of whether there's content to scroll
   // (an empty catalog like "Pizza" has nothing to scroll past), so it starts
   // visible. The big intro still scrolls away normally above the feed.
-  const title = titleCase(query) || 'Your catalog';
+  // The fun, on-topic catalog name — SAME generator as the header + the
+  // empty-state headline, so "Now browsing", the sparkle pill, and every other
+  // surface read the same playful title.
+  const title = funnyCatalogName(query) || 'Your catalog';
 
   if (recommendations.length === 0) return null;
 
