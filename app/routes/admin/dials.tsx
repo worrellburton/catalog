@@ -24,6 +24,10 @@ import {
   setCommentsEnabled,
   subscribeCommentsEnabled,
   DEFAULT_COMMENTS_ENABLED,
+  getUiOnScroll,
+  setUiOnScroll,
+  subscribeUiOnScroll,
+  DEFAULT_UI_ON_SCROLL,
   getWaitlistMode,
   setWaitlistMode,
   subscribeWaitlistMode,
@@ -226,6 +230,41 @@ export default function AdminDials() {
         setCommentsSaving(false);
         window.setTimeout(() => {
           if (inflightComments.current === next) inflightComments.current = null;
+        }, 1500);
+      });
+  };
+
+  // ── UI on scroll (card chrome fade) ─────────────────────────────────
+  // When ON, card chrome fades out while scrolling and eases back when the
+  // feed settles. When OFF, the chrome stays put — nothing pops on scroll.
+  const [uiOnScroll, setUiOnScrollState] = useState<boolean>(DEFAULT_UI_ON_SCROLL);
+  const [uiOnScrollLoaded, setUiOnScrollLoaded] = useState(false);
+  const [uiOnScrollSaving, setUiOnScrollSaving] = useState(false);
+  const inflightUiOnScroll = useRef<boolean | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    getUiOnScroll().then(v => {
+      if (cancelled) return;
+      setUiOnScrollState(v);
+      setUiOnScrollLoaded(true);
+    });
+    const unsub = subscribeUiOnScroll(v => {
+      if (cancelled) return;
+      if (inflightUiOnScroll.current === v) return;
+      setUiOnScrollState(v);
+    });
+    return () => { cancelled = true; unsub(); };
+  }, []);
+  const onToggleUiOnScroll = (next: boolean) => {
+    setUiOnScrollState(next);
+    inflightUiOnScroll.current = next;
+    setUiOnScrollSaving(true);
+    setUiOnScroll(next)
+      .catch(err => { setError(err.message || 'Save failed'); })
+      .finally(() => {
+        setUiOnScrollSaving(false);
+        window.setTimeout(() => {
+          if (inflightUiOnScroll.current === next) inflightUiOnScroll.current = null;
         }, 1500);
       });
   };
@@ -776,6 +815,57 @@ export default function AdminDials() {
                   <span
                     style={{
                       position: 'absolute', top: 3, left: commentsEnabled ? 23 : 3,
+                      width: 18, height: 18, borderRadius: '50%',
+                      background: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.25)',
+                      transition: 'left 160ms ease',
+                    }}
+                  />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="admin-detail-card">
+          <h3>UI on scroll</h3>
+          <p style={{ fontSize: 13, color: '#888', margin: '4px 0 16px' }}>
+            When ON, the card chrome (creator chip, price, gradient) fades out
+            while the feed scrolls and eases back in when it settles — the
+            media-first scroll feel. When OFF, the chrome stays put and nothing
+            pops up on scroll. Applies to every viewport, live.
+          </p>
+          {!uiOnScrollLoaded ? (
+            <div className="admin-empty" style={{ marginTop: 0 }}>Loading…</div>
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#111' }}>
+                  {uiOnScroll ? 'On' : 'Off'}
+                </span>
+                <span style={{ fontSize: 11, color: '#999' }}>
+                  {uiOnScroll
+                    ? 'Chrome fades while scrolling, returns when it settles (default).'
+                    : 'Chrome stays put — nothing fades or pops on scroll.'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 11, color: '#999' }}>
+                  {uiOnScrollSaving ? 'Saving…' : 'Saved'}
+                </span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={uiOnScroll}
+                  onClick={() => onToggleUiOnScroll(!uiOnScroll)}
+                  style={{
+                    position: 'relative', width: 44, height: 24, borderRadius: 999,
+                    border: 'none', background: uiOnScroll ? '#16a34a' : '#cbd5e1',
+                    cursor: 'pointer', transition: 'background 160ms ease', padding: 0,
+                  }}
+                >
+                  <span
+                    style={{
+                      position: 'absolute', top: 3, left: uiOnScroll ? 23 : 3,
                       width: 18, height: 18, borderRadius: '50%',
                       background: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.25)',
                       transition: 'left 160ms ease',
