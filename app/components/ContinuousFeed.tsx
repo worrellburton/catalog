@@ -10,6 +10,7 @@ import { FeedWhyProvider } from './feed/FeedWhyContext';
 import type { FeedWhyContextData } from '~/services/feed-why';
 import InlineLookDetail from './InlineLookDetail';
 import EmptyCatalogState from './EmptyCatalogState';
+import CatalogDemandCTA from './CatalogDemandCTA';
 import { prefetchHomeFeed, getCachedHomeFeed, getHomeFeed, getCreativesByCatalogTag, getCreativesByBrandQuery, resolveBrandFromQuerySync, creativeMatchesCatalogQuery, resolveCatalogTypes, resolveMaterialKeywords, deleteProductAd, deleteProduct, subscribeToShopperGender, getShopperGender, type ProductAd } from '~/services/product-creative';
 import { primeTrailAssets, primeLookAssets } from '~/utils/trailPrefetch';
 import { supabase } from '~/utils/supabase';
@@ -49,6 +50,10 @@ interface ContinuousFeedProps {
   onOpenBrand?: (brandName: string) => void;
   onCreateCatalog?: (query: string) => void;
   bookmarks: BookmarksInterface;
+  /** True when the "Now browsing" catalog strip (with recommendations) is
+   *  showing above the feed. On an empty search we then fold the demand CTA in
+   *  below those recs instead of taking over the screen with the full overlay. */
+  hasCatalogStrip?: boolean;
   /** Called with true when nl-search is in-flight, false when resolved. */
   onSearchLoadingChange?: (loading: boolean) => void;
   /** Called when a search resolves, with the first few result product images
@@ -162,6 +167,7 @@ function ContinuousFeed({
   onOpenBrand,
   onCreateCatalog,
   bookmarks,
+  hasCatalogStrip = false,
   onSearchLoadingChange,
   onResultsReady,
   searchTrigger = 0,
@@ -1248,7 +1254,17 @@ function ContinuousFeed({
         <div className="feed-no-results-toast" role="status">{toastMsg}</div>
       )}
       {showEmptyState && (
-        <EmptyCatalogState catalogName={emptyCatalogName} />
+        hasCatalogStrip ? (
+          // The "Now browsing" strip (fun title + "Other catalogs you might
+          // like") is already the header — fold the demand CTA in below it
+          // instead of taking over the screen with the full overlay.
+          <div className="ec-inline">
+            <p className="ec-inline-head">Nothing in <em>{emptyCatalogName}</em> yet — but tap if you'd shop it.</p>
+            <CatalogDemandCTA catalogName={emptyCatalogName} className="catalog-demand--inline" />
+          </div>
+        ) : (
+          <EmptyCatalogState catalogName={emptyCatalogName} />
+        )
       )}
       <div ref={feedContentRef} hidden={showEmptyState}>
         {state.segments.map((segment, idx) => {
