@@ -36,6 +36,7 @@ import {
 import { backfillBrandLogos, type BackfillResult } from '~/services/brandLogos';
 import { shouldBeVideo } from '~/utils/videoStillSplit';
 import VideoPipelineCard from '~/components/admin/VideoPipelineCard';
+import { Skeleton } from '~/components/ui/StateViews';
 
 /**
  * /admin/dials — global tuning knobs that affect the whole catalog
@@ -404,7 +405,7 @@ export default function AdminDials() {
             per-card so the same shopper sees the same set on refresh.
           </p>
           {!loaded ? (
-            <div className="admin-empty" style={{ marginTop: 0 }}>Loading…</div>
+            <Skeleton height={40} radius={8} />
           ) : (
             <>
               <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -514,7 +515,7 @@ export default function AdminDials() {
             the clean catalog imagery brands already produce.
           </p>
           {!productsImageOnlyLoaded ? (
-            <div className="admin-empty" style={{ marginTop: 0 }}>Loading…</div>
+            <Skeleton height={40} radius={8} />
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -577,7 +578,7 @@ export default function AdminDials() {
             a label.
           </p>
           {!brandLogosLoaded ? (
-            <div className="admin-empty" style={{ marginTop: 0 }}>Loading…</div>
+            <Skeleton height={40} radius={8} />
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -732,7 +733,7 @@ export default function AdminDials() {
             {' '}(clear with <code>?flow=clear</code>).
           </p>
           {!waitlistLoaded ? (
-            <div className="admin-empty" style={{ marginTop: 0 }}>Loading…</div>
+            <Skeleton height={40} radius={8} />
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -784,7 +785,7 @@ export default function AdminDials() {
             off. Existing comments are preserved either way.
           </p>
           {!commentsLoaded ? (
-            <div className="admin-empty" style={{ marginTop: 0 }}>Loading…</div>
+            <Skeleton height={40} radius={8} />
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -835,7 +836,7 @@ export default function AdminDials() {
             pops up on scroll. Applies to every viewport, live.
           </p>
           {!uiOnScrollLoaded ? (
-            <div className="admin-empty" style={{ marginTop: 0 }}>Loading…</div>
+            <Skeleton height={40} radius={8} />
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -888,7 +889,7 @@ export default function AdminDials() {
             products pass — the rail may shrink when nothing qualifies.
           </p>
           {!productSimilarityLoaded ? (
-            <div className="admin-empty" style={{ marginTop: 0 }}>Loading…</div>
+            <Skeleton height={40} radius={8} />
           ) : (
             <>
               <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -950,7 +951,7 @@ export default function AdminDials() {
             seed must appear in the candidate — very strict.
           </p>
           {!lookSimilarityLoaded ? (
-            <div className="admin-empty" style={{ marginTop: 0 }}>Loading…</div>
+            <Skeleton height={40} radius={8} />
           ) : (
             <>
               <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
