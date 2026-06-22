@@ -36,6 +36,8 @@ import { prefetchSimilarProducts, prefetchCreativesByBrand, prefetchHomeFeed, ty
 import { getGraphPairs, type GraphPair } from '~/services/graph-pairs';
 import { getLooks, getLookByUuid } from '~/services/looks';
 import { suggestCatalogs } from '~/services/catalog-suggest';
+import { getPopularCatalogPills } from '~/services/catalogs';
+import { getMyFollowing } from '~/services/follows';
 import { creativeStill, creativePoster, productPoster } from '~/services/media-resolver';
 import { pickVideoUrl, pickPlaybackSource } from '~/services/video-loading';
 import { emitSavedToast } from '~/utils/savedToast';
@@ -1584,6 +1586,20 @@ export default function Home() {
     void hydrateVideoPipeline();
     prefetchHiddenContent();
     getLooks().then(rows => { if (!cancelled) setLiveLooks(rows); }).catch(() => {});
+    // Warm the "Jump into a catalog" pills + Following cache while the feed
+    // loads so the search sheet renders them instantly instead of fetching on
+    // open. App-only (the native shell has no launch UX to mask the fetch);
+    // low priority, so run it on idle behind the feed.
+    if (document.documentElement.dataset.shell === 'catalog-app') {
+      const ric = (window as unknown as {
+        requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      }).requestIdleCallback;
+      const warm = () => {
+        void getPopularCatalogPills().catch(() => {});
+        void getMyFollowing().catch(() => {});
+      };
+      ric ? ric(warm, { timeout: 2000 }) : window.setTimeout(warm, 600);
+    }
     return () => { cancelled = true; };
   }, []);
 

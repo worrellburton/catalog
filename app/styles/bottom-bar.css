@@ -71,6 +71,17 @@
   overflow: hidden;
   transition: box-shadow 0.3s ease, border-color 0.3s ease, background 0.3s ease;
 }
+/* In the Flutter native shell the search bar floats over the feed; the
+   translucent "liquid glass" lets the feed bleed through and reads as busy
+   in-app. Use a solid dark surface (a faint top sheen for depth, but no
+   transparency) and drop the now-pointless blur. Web keeps the glass. */
+html[data-shell="catalog-app"] .bottom-bar {
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.03)),
+    #0f1218;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
 /* Loud, glassy, glowing — the glow intensifies while the user is in the bar. */
 .bottom-bar:focus-within {
   border-color: rgba(255, 255, 255, 0.34);
