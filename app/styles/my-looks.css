@@ -1685,16 +1685,15 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   padding: var(--header-height) max(28px, calc((100% - 1200px) / 2)) 28px;
 }
 /* In the Flutter shell, env(safe-area-inset-top) reads ~0 and --header-height
-   (64px) only barely clears the iOS status bar. Anchor the hero's top to the
-   shell-provided status-bar height, +24px — a touch lower than the public
-   .creator-page-scroll (+12px) so the corner FABs + hero sit comfortably below
-   the status bar / Dynamic Island instead of crowding it. Keep this in step
-   with .my-cat-fab-row / .my-cat-back-fab below (same +24px) so the pinned
-   corner buttons stay aligned with the hero top. (Form mode is excluded; its
-   absolute .my-cat-form-container ignores this padding and the form root
-   handles its own offset.) */
+   (64px) only barely clears the iOS status bar. The pinned corner buttons
+   (.my-cat-fab-row / .my-cat-back-fab) sit at shell-sb + 24px and are 40px
+   tall, so the hero must start BELOW their bottom edge or the buttons overlap
+   the card. Mirror the web relationship (hero top = FAB bottom): shell-sb + 24
+   (FAB top) + 40 (FAB height) + 12 (gap) = shell-sb + 76. (Form mode is
+   excluded; its absolute .my-cat-form-container ignores this padding and the
+   form root handles its own offset.) */
 html[data-shell="catalog-app"] .my-cat-page:not(.my-cat-page--form) {
-  padding-top: calc(var(--shell-sb, 44px) + 24px);
+  padding-top: calc(var(--shell-sb, 44px) + 76px);
 }
 
 /* Form-mode root - swaps the page padding so the LookForm fills the

@@ -304,6 +304,12 @@
 html[data-shell="catalog-app"] .sfh-info-scrim {
   padding-top: calc(var(--shell-sb, 44px) + 16px);
 }
+/* Native shell: keep the card a contained, internally-scrolling panel rather
+   than spanning nearly edge-to-edge, so the feed reads around it and it stops
+   short of the bottom. Capped below the (long) content height — it scrolls. */
+html[data-shell="catalog-app"] .sfh-info-card {
+  max-height: min(100%, 72dvh);
+}
 
 .sfh-info-card {
   position: relative;
