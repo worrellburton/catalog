@@ -193,6 +193,24 @@ function applyDailyShuffle(order: string[], seedStr: string, window: number): st
   return [...head, ...order.slice(n)];
 }
 
+/** Day-to-day derangement: guarantee NO id holds the same index it held
+ *  yesterday, so every drop visibly moves (founder's ask: "make sure no
+ *  product is in the same place"). Single deterministic pass — wherever
+ *  today[i] === prev[i], swap with the neighbour, which always breaks the
+ *  collision (the neighbour is a different id, so it can't re-collide here).
+ *  Items not present yesterday are left where the ranking put them. */
+function derangeAgainstPrev(order: string[], prev: string[]): string[] {
+  if (order.length < 2 || prev.length === 0) return order;
+  const out = order.slice();
+  for (let i = 0; i < out.length; i++) {
+    if (i < prev.length && out[i] === prev[i]) {
+      const j = i + 1 < out.length ? i + 1 : i - 1;
+      [out[i], out[j]] = [out[j], out[i]];
+    }
+  }
+  return out;
+}
+
 /** Hard rotation: cap how many of yesterday's top-12 may repeat in
  *  today's top-12 — excess repeats demote past the window so the drop
  *  always FEELS new (founder's call: at most half may carry over). */
@@ -473,6 +491,15 @@ Deno.serve(async (req: Request) => {
       reason = { ...reason, shuffled: true };
     }
 
+    // Day-to-day derangement guarantee: no product may sit in the SAME slot it
+    // held yesterday, so each drop visibly moves even below the shuffled head.
+    const prevProductOrder = ((prevRow?.ranked_items ?? []) as RankedItem[])
+      .filter(r => !r.type || r.type === 'product').map(r => r.id);
+    if (prevProductOrder.length > 0) {
+      finalOrder = derangeAgainstPrev(finalOrder, prevProductOrder);
+      reason = { ...reason, deranged: true };
+    }
+
     // ── Personalize LOOKS too (deterministic, fail-open) ────────────────
     // Looks are ranked separately here and woven into the feed client-side by
     // feed_rank (looks still lead). A look inherits the brand/type affinity of
@@ -484,6 +511,13 @@ Deno.serve(async (req: Request) => {
       lookOrder = await rankLooks(supabase, userId, sinceISO, brandNorm, typeNorm, rules);
       if (rules.dailyShuffle.enabled && lookOrder.length > 1) {
         lookOrder = applyDailyShuffle(lookOrder, `looks:${feedDate}:${userId}`, Math.round(rules.dailyShuffle.weight));
+      }
+      // Same day-to-day guarantee for looks so the lead look isn't the same
+      // every drop ("I've seen the same look first every time").
+      const prevLookOrder = ((prevRow?.ranked_items ?? []) as RankedItem[])
+        .filter(r => r.type === 'look').map(r => r.id);
+      if (lookOrder.length > 1 && prevLookOrder.length > 0) {
+        lookOrder = derangeAgainstPrev(lookOrder, prevLookOrder);
       }
       if (lookOrder.length > 0) reason = { ...reason, looks: lookOrder.length };
     } catch (err) {
