@@ -2092,6 +2092,22 @@ export default function Home() {
     if (m) setCommentsTarget({ type: m[1] === 'p' ? 'product' : 'look', slug: decodeURIComponent(m[2]) });
   }, []);
   const handleLogout = useCallback(async () => {
+    // In the native shell, the NATIVE Supabase session is the source of truth
+    // that drives the app's AuthGate. Logging out only on the web side leaves
+    // the app "signed in" (it just shows the web sign-in gate inside the still
+    // signed-in shell). Tell the shell to sign out natively; it re-injects and
+    // flips back to the native LoginScreen. The web logout still runs as a
+    // fallback (and is the only path on mobile web).
+    if (
+      typeof window !== 'undefined' &&
+      document.documentElement.dataset.shell === 'catalog-app' &&
+      (window as unknown as { flutter_inappwebview?: { callHandler: (n: string) => void } }).flutter_inappwebview
+    ) {
+      try {
+        (window as unknown as { flutter_inappwebview: { callHandler: (n: string) => void } })
+          .flutter_inappwebview.callHandler('catalogSignOut');
+      } catch { /* not in shell / bridge unavailable */ }
+    }
     await logout();
     setView('locked');
   }, [logout]);
