@@ -4,6 +4,7 @@ import { looks as staticLooksFallback, type Look, type Product } from '~/data/lo
 import { getLooks, getCachedLooks, subscribeToLooksChange, fetchSeenLookIds, reorderBySeen } from '~/services/looks';
 import { trackImpression } from '~/services/session-tracker';
 import { getSimilarLooks } from '~/utils/similarity';
+import { funnyCatalogName } from '~/utils/searchIntent';
 import FeedSection from './FeedSection';
 import { FeedWhyProvider } from './feed/FeedWhyContext';
 import type { FeedWhyContextData } from '~/services/feed-why';
@@ -1198,8 +1199,10 @@ function ContinuousFeed({
     displayCreatives.length === 0 &&
     displayLooks.length === 0 &&
     trimmedQuery.length > 0;
-  // Title-case the query so "hair care" reads as "Hair Care" in the headline.
-  const emptyCatalogName = trimmedQuery.replace(/\b\w/g, c => c.toUpperCase());
+  // The catalog's fun, on-topic name ("Main Character Dresses in Italy") —
+  // SAME generator the header uses, so the empty-state headline matches the
+  // title in the upper-left instead of echoing the literal typed query.
+  const emptyCatalogName = funnyCatalogName(trimmedQuery);
 
   // Snapshot of the live composition for the super-admin "why?" buttons.
   // Memoized on the same inputs that drive renderedCreatives so it never
