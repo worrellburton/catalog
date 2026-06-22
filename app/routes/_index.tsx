@@ -277,16 +277,26 @@ export default function Home() {
     try { sessionStorage.setItem('catalog:cold-open-done', '1'); } catch { /* ignore */ }
     // SplashScreen + SplashHost were retired — the big "Catalog" wordmark
     // splash was duplicating the smaller auth-splash above. Drop the
-    // cinematic on the next tick and fire the done event so any
-    // listeners (ActivityRealtimeToasts, etc.) don't hang waiting for a
-    // splash that never paints.
+    // cinematic on the next tick. (We DON'T fire catalog:splash-done here
+    // anymore — that's owned by the auth-splash lifecycle effect below, so
+    // notifications wait for the splash the user actually sees to finish.)
     const t = setTimeout(() => {
       setCinematic(c => ({ ...c, active: false }));
-      try { window.dispatchEvent(new Event('catalog:splash-done')); } catch { /* ignore */ }
     }, 0);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Notifications (ActivityRealtimeToasts) wait on catalog:splash-done. The
+  // ONLY splash the shopper actually sees is the auth-splash (the "Catalog"
+  // wordmark), so fire the event off ITS lifecycle: once it's no longer
+  // mounted — whether it finished fading out or never armed this load — the
+  // gate may open. Firing more than once is harmless (the listener just flips
+  // a boolean).
+  useEffect(() => {
+    if (authSplashMounted) return;
+    try { window.dispatchEvent(new Event('catalog:splash-done')); } catch { /* ignore */ }
+  }, [authSplashMounted]);
 
   const [selectedLook, setSelectedLook] = useState<Look | null>(null); // kept for BookmarksPage/CreatorPage overlays
   const [creatorFilter, setCreatorFilter] = useState<string | null>(null);

@@ -119,12 +119,14 @@ export default function ActivityRealtimeToasts() {
   // which case we initialise to true via the same flag SplashHost reads).
   const [splashDone, setSplashDone] = useState<boolean>(() => {
     if (typeof window === 'undefined') return true;
-    // If the cold-open splash never armed for this tab — disabled in
-    // admin config, returning visit (sessionStorage gate), or running
-    // inside the Flutter shell — the gate is open from the start.
-    try {
-      if (sessionStorage.getItem('catalog:cold-open-done') === '1') return true;
-    } catch { /* ignore */ }
+    // Inside the Flutter shell there's no web splash (the shell draws its own
+    // launch screen), so the gate is open from the start. Otherwise we stay
+    // closed and wait for catalog:splash-done — which _index fires off the
+    // auth-splash ("Catalog" wordmark) lifecycle, the splash the shopper
+    // actually sees. We deliberately DON'T open on the `catalog:cold-open-done`
+    // sessionStorage flag: it persists across reloads, so on a refresh (where
+    // the auth-splash still paints) it used to open the gate early and the
+    // first toast popped over the splash.
     if (document.documentElement.dataset.shell === 'catalog-app') return true;
     return false;
   });

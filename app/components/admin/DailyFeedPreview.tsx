@@ -43,10 +43,29 @@ function todayUtc(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-// Weave looks + products exactly like the live home feed — delegates to the
-// shared weaveByFeedRank so this preview can never drift from FeedSection.
+// Cohort baselines have no per-shopper order, so they weave by feed_rank — the
+// shared weaveByFeedRank, identical to what a cold-start shopper sees.
 function weave(products: PreviewItem[], looks: PreviewItem[]): PreviewItem[] {
   return weaveByFeedRank(looks, products, i => i.feedRank, i => i.kind === 'look');
+}
+
+// A real shopper's feed is the ENGINE's per-day ranked order, NOT the static
+// feed_rank — that's the whole point of the Daily Feed (it re-ranks + shuffles
+// + deranges daily). The preview must preserve that order or it looks identical
+// every day (the "day to day it hasn't changed" bug). `products` and `looks`
+// already arrive in the engine's order (productsByIds/looksByIds preserve the
+// id order), so here we just weave them looks-leading at a steady cadence,
+// keeping each lane's engine order intact.
+function weaveEngineOrder(products: PreviewItem[], looks: PreviewItem[]): PreviewItem[] {
+  if (looks.length === 0) return products;
+  if (products.length === 0) return looks;
+  const out: PreviewItem[] = [looks[0]];
+  let li = 1, pi = 0;
+  while (pi < products.length || li < looks.length) {
+    for (let k = 0; k < 4 && pi < products.length; k++) out.push(products[pi++]);
+    if (li < looks.length) out.push(looks[li++]);
+  }
+  return out;
 }
 
 const MODES: { id: Mode; label: string }[] = [
@@ -212,7 +231,11 @@ export default function DailyFeedPreview() {
         // Personalized looks if the engine ranked them; else fall back to the
         // live look set so the preview still shows the woven-in looks.
         const looks = lookIds.length ? await looksByIds(lookIds) : await liveLooks();
-        setItems(weave(products, looks));
+        // Preserve the engine's per-day order so the preview changes day to day
+        // (matches the shopper). Only fall back to feed_rank weave when the
+        // engine returned no personalized ids (cold start / disabled).
+        const hasEngineOrder = productIds.length > 0 || lookIds.length > 0;
+        setItems(hasEngineOrder ? weaveEngineOrder(products, looks) : weave(products, looks));
       } else {
         setWho(mode === 'all' ? 'All users' : mode === 'men' ? 'All men' : 'All women');
         setVariant('global feed');
