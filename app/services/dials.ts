@@ -611,6 +611,38 @@ export async function setFeedRules(rules: FeedRules): Promise<void> {
   if (error) throw error;
 }
 
+// The admin can drag the rules into their own order on /admin/daily-feed. The
+// order is purely presentational (the engine applies every enabled rule in its
+// own fixed pipeline order) — it's stored so the admin's arrangement sticks.
+export const FEED_RULES_ORDER_KEY = 'feed_rules_order';
+
+/** The admin's saved rule display order, with any missing/new keys appended
+ *  in their default position so the list is always complete. */
+export async function getFeedRulesOrder(): Promise<(keyof FeedRules)[]> {
+  const fallback = FEED_RULE_META.map(m => m.key);
+  if (!supabase) return fallback;
+  const { data, error } = await supabase
+    .from('app_settings').select('value').eq('key', FEED_RULES_ORDER_KEY).maybeSingle();
+  if (error || !data?.value) return fallback;
+  try {
+    const arr = JSON.parse(data.value);
+    if (!Array.isArray(arr)) return fallback;
+    const seen = new Set<string>();
+    const valid = arr.filter((k): k is keyof FeedRules =>
+      fallback.includes(k as keyof FeedRules) && !seen.has(k) && (seen.add(k), true));
+    for (const k of fallback) if (!valid.includes(k)) valid.push(k);
+    return valid;
+  } catch { return fallback; }
+}
+
+export async function setFeedRulesOrder(order: (keyof FeedRules)[]): Promise<void> {
+  if (!supabase) throw new Error('Supabase not configured');
+  const { error } = await supabase
+    .from('app_settings')
+    .upsert({ key: FEED_RULES_ORDER_KEY, value: JSON.stringify(order) }, { onConflict: 'key' });
+  if (error) throw error;
+}
+
 /** The daily-feed rules in founder-priority order — shared by the
  *  Automatic Editor modal and the daily-feed lens. */
 // Rules listed in founder-priority order. `weight: false`
