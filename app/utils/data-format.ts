@@ -1,6 +1,22 @@
 // Small pure formatting/parsing helpers for the admin Data surface. Extracted
 // from app/routes/admin/data.tsx (god-file split #8) — no React, easy to test.
 
+/** Read a JSON-array localStorage value back into a Set (empty on miss/parse
+ *  error). Generic over the element type. */
+export function readLocalSet<T extends string | number>(key: string): Set<T> {
+  try {
+    const raw = localStorage.getItem(key);
+    if (!raw) return new Set();
+    const arr = JSON.parse(raw);
+    return new Set(Array.isArray(arr) ? arr : []);
+  } catch { return new Set(); }
+}
+
+/** Persist a Set as a JSON array under `key` (no-op on quota errors). */
+export function writeLocalSet(key: string, set: Set<string | number>) {
+  try { localStorage.setItem(key, JSON.stringify([...set])); } catch { /* quota */ }
+}
+
 /** Pull a deduped list of http(s) URLs out of a free-text blob (paste of one
  *  or many product links), stripping trailing punctuation that isn't part of
  *  the URL. */
