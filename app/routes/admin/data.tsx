@@ -29,6 +29,8 @@ import { deriveTags } from '~/utils/derive-tags';
 import { extractUrls, formatDateAdded, readLocalSet, writeLocalSet } from '~/utils/data-format';
 import { PhotoDropzone, AdminToggle } from '~/components/admin/DataWidgets';
 import { LazyThumb } from '~/components/admin/LazyThumb';
+import { ModelDetailsPanel } from '~/components/admin/ModelDetailsPanel';
+import type { CrawledProduct, LookRow, UnpublishedLook } from '~/types/admin-data';
 import { VIDEO_MODELS, DEFAULT_VIDEO_MODEL } from '~/constants/video-models';
 import { useAdminSearch } from '~/hooks/useAdminSearch';
 import { createBatchAds, promoteQueuedAds } from '~/services/product-creative';
@@ -40,68 +42,7 @@ import { catalogAlert, catalogConfirm } from '~/components/CatalogDialog';
 import { generateAndStorePoster } from '~/utils/video-poster';
 import { regeneratePrimaryPoster, PosterRegenError } from '~/services/regenerate-poster';
 
-interface CrawledProduct {
-  id: string;
-  name: string | null;
-  brand: string | null;
-  price: string | null;
-  url: string | null;
-  image_url: string | null;
-  images?: string[] | null;
-  /** Vision-picked solo-product image (no human, no other products).
-   *  Falls back to image_url when null. Populated by the
-   *  pick-primary-image edge function or the admin star-click. */
-  primary_image_url?: string | null;
-  /** True once polish-primary-image has reframed the primary into a
-   *  uniform 3:4 packshot. Drives the "polish wand" affordance in the
-   *  admin Primary column — unpolished primaries get a tappable wand
-   *  icon overlay, polished ones don't. */
-  primary_image_polished?: boolean | null;
-  /** Original primary_image_url before the polish step. Kept so the
-   *  polish node-graph modal can render input → model → output. */
-  primary_image_pre_polish_url?: string | null;
-  /** Short cinematic-motion video of the product, generated from
-   *  primary_image_url via generate-primary-video. Rendered in the
-   *  detail-row "Primary Video" tile; null rows get a Generate CTA. */
-  primary_video_url?: string | null;
-  /** Async pipeline state: 'pending' (submitted to fal queue, waiting
-   *  on webhook), 'done' (webhook landed with primary_video_url),
-   *  'failed' (webhook landed with error). Null = never started. */
-  primary_video_status?: 'pending' | 'done' | 'failed' | null;
-  /** Fal request id used by fal-webhook to match the inbound callback
-   *  back to this product row. */
-  primary_video_request_id?: string | null;
-  /** 3:4 hero still extracted from primary_video_url (Modal poster job).
-   *  This is the poster the feed renders before the clip plays; null
-   *  rows fall back to the square primary_image_url. Re-extracted via
-   *  the detail-row "Primary Poster" tile's Regen button. */
-  primary_video_poster_url?: string | null;
-  scraped_at: string | null;
-  scrape_status: string;
-  is_crawled: boolean;
-  is_active?: boolean;
-  is_elite?: boolean;
-  /** Sister flag to is_active. When false the product is hidden from
-   *  search results / catalog-wide listings (admin keeps the row).
-   *  Default true so existing inventory keeps surfacing. */
-  is_platform?: boolean;
-  type?: string | null;
-  /** Sub-category under `type`. For Shoes → Sneakers / Sandals / Boots /
-   *  Heels / Loafers / Flats. Search broadens "shoes" to include all
-   *  subtypes; Try-It-On groups by type and offers subtype as a
-   *  secondary filter. Nullable — older categories haven't been split
-   *  yet. */
-  subtype?: string | null;
-  gender?: 'male' | 'female' | 'unisex' | null;
-  created_at?: string | null;
-  source?: string | null;
-  /** Freeform measurements / fit copy scraped from the product page.
-   *  Surfaced on the row via the measurements icon column. ~1% of
-   *  rows have it filled in today; the rest fall back to "Not
-   *  available" in the hover panel. */
-  size_fit?: string | null;
-  materials_care?: string | null;
-}
+
 
 // localStorage fallback for hidden looks/products. Module-scope so
 // the useState initializers inside AdminData (which run on mount,
@@ -177,51 +118,12 @@ interface AutoJob {
 
 
 
-interface LookRow {
-  id: number;
-  creator: string;
-  creatorDisplay: string;
-  creatorAvatar: string;
-  /** True when the owning creator profile is_ai=true — drives the
-   *  Human / AI source filter on the Published tab. */
-  creatorIsAi: boolean;
-  video: string;
-  products: number;
-  /** DB looks.created_at — drives the Created At column + sort. */
-  created_at: string | null;
-}
+
 
 type Tab = 'looks' | 'products' | 'musics' | 'places';
 type LooksFilter = 'published' | 'unpublished' | 'failed';
 
-interface UnpublishedLook {
-  id: string;
-  user_id: string;
-  status: 'pending' | 'generating' | 'done' | 'failed';
-  style: string;
-  height_label: string | null;
-  age_label: string | null;
-  model: 'fast' | 'pro' | null;
-  video_url: string | null;
-  error: string | null;
-  created_at: string;
-  // Pipeline-detail columns surfaced when the user clicks the Model
-  // cell on a row in the Unpublished table - see the model-details
-  // expansion row in the render below.
-  prompt: string | null;
-  height_cm: number | null;
-  fal_request_id: string | null;
-  completed_at: string | null;
-  storage_path: string | null;
-  veo_model: string | null;
-  product_count: number;
-  creator_name: string | null;
-  creator_avatar: string | null;
-  creator_email: string | null;
-  /** True when the look's owning profile is_ai=true. Drives the
-   *  AI vs Human split filter on the /admin/data Looks tab. */
-  creator_is_ai: boolean;
-}
+
 
 /** AI vs Human sub-filter for the Looks tab. 'all' shows every row,
  *  'human' filters to looks owned by real profiles, 'ai' filters to
@@ -249,161 +151,7 @@ type LookSource = 'all' | 'human' | 'ai';
 // shows the pipeline as a simple node diagram + the prompt + the
 // parameters that were sent to the model. Read-only; admins use it to
 // debug a generation without leaving the page.
-function ModelDetailsPanel({ gen }: { gen: UnpublishedLook }) {
-  const modelLabel = gen.model
-    ? gen.model === 'pro' ? 'Pro (Seedance Pro)' : 'Fast (Seedance Lite)'
-    : ' - ';
-  const modelTier = gen.veo_model || (gen.model === 'pro' ? 'bytedance/seedance/v1/pro' : gen.model === 'fast' ? 'bytedance/seedance/v1/lite' : null);
 
-  type NodeStatus = 'done' | 'active' | 'pending' | 'failed';
-  const status = gen.status;
-  const statusOf = (i: number): NodeStatus => {
-    // 0 photo, 1 products, 2 prompt, 3 model call, 4 video, 5 status
-    if (status === 'failed') {
-      // Mark the call (index 3) as failed; everything before it is done,
-      // everything after stays pending so the failure point is obvious.
-      if (i < 3) return 'done';
-      if (i === 3) return 'failed';
-      return 'pending';
-    }
-    if (status === 'done') return 'done';
-    // pending / generating: photo + products + prompt are done by the time
-    // the row exists; the call is in flight, video + status are pending.
-    if (i <= 2) return 'done';
-    if (i === 3) return 'active';
-    return 'pending';
-  };
-
-  const nodes = [
-    {
-      label: 'Face photo',
-      sub: 'user_uploads',
-      detail: 'Reference photo uploaded via /generate',
-    },
-    {
-      label: 'Products',
-      sub: `${gen.product_count} item${gen.product_count === 1 ? '' : 's'}`,
-      detail: 'user_generation_products - role-tagged for prompt slotting',
-    },
-    {
-      label: 'Prompt',
-      sub: gen.style,
-      detail: gen.prompt ? `${gen.prompt.length} chars` : 'Assembled from style preset + role tags',
-    },
-    {
-      label: 'Model call',
-      sub: modelLabel,
-      detail: gen.fal_request_id ? `fal_id ${gen.fal_request_id.slice(0, 10)}…` : 'Fal queue submission',
-    },
-    {
-      label: 'Video',
-      sub: gen.video_url ? 'Stored' : 'Pending',
-      detail: gen.storage_path || (gen.video_url ? 'Hosted on Fal CDN' : ' - '),
-    },
-    {
-      label: 'Status',
-      sub: status,
-      detail: gen.completed_at ? new Date(gen.completed_at).toLocaleString() : ' - ',
-    },
-  ];
-
-  return (
-    <div className="admin-model-panel">
-      <div className="admin-model-panel-head">
-        <h3 className="admin-products-title" style={{ margin: 0 }}>Pipeline</h3>
-        <span className="admin-model-panel-meta">
-          gen <code>{gen.id.slice(0, 8)}…</code> · created {new Date(gen.created_at).toLocaleString()}
-        </span>
-      </div>
-
-      <div className="admin-model-flow">
-        {nodes.map((n, i) => (
-          <div key={n.label} className="admin-model-flow-step">
-            <div className={`admin-model-node admin-model-node--${statusOf(i)}`}>
-              <div className="admin-model-node-num">{i + 1}</div>
-              <div className="admin-model-node-body">
-                <div className="admin-model-node-label">{n.label}</div>
-                <div className="admin-model-node-sub">{n.sub}</div>
-                <div className="admin-model-node-detail">{n.detail}</div>
-              </div>
-            </div>
-            {i < nodes.length - 1 && (
-              <svg className="admin-model-arrow" width="22" height="14" viewBox="0 0 22 14" fill="none">
-                <path d="M1 7H19" stroke="currentColor" strokeWidth="2" strokeLinecap="round" />
-                <path d="M14 1L20 7L14 13" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-              </svg>
-            )}
-          </div>
-        ))}
-      </div>
-
-      <div className="admin-model-grid">
-        <div className="admin-model-card">
-          <div className="admin-model-card-label">Model</div>
-          <div className="admin-model-card-value">{modelLabel}</div>
-          {modelTier && <div className="admin-model-card-sub">{modelTier}</div>}
-        </div>
-        <div className="admin-model-card">
-          <div className="admin-model-card-label">Style preset</div>
-          <div className="admin-model-card-value" style={{ textTransform: 'capitalize' }}>{gen.style}</div>
-        </div>
-        <div className="admin-model-card">
-          <div className="admin-model-card-label">Height</div>
-          <div className="admin-model-card-value">
-            {gen.height_label || (gen.height_cm ? `${gen.height_cm} cm` : ' - ')}
-          </div>
-        </div>
-        <div className="admin-model-card">
-          <div className="admin-model-card-label">Age band</div>
-          <div className="admin-model-card-value">{gen.age_label || ' - '}</div>
-        </div>
-        <div className="admin-model-card">
-          <div className="admin-model-card-label">Fal request id</div>
-          <div className="admin-model-card-value admin-model-mono">
-            {gen.fal_request_id || ' - '}
-          </div>
-        </div>
-        <div className="admin-model-card">
-          <div className="admin-model-card-label">Completed at</div>
-          <div className="admin-model-card-value">
-            {gen.completed_at ? new Date(gen.completed_at).toLocaleString() : ' - '}
-          </div>
-        </div>
-      </div>
-
-      <div className="admin-model-prompt">
-        <div className="admin-model-card-label">Prompt sent to {modelLabel}</div>
-        <pre className="admin-model-prompt-body">
-          {gen.prompt || ' -  no prompt recorded  - '}
-        </pre>
-      </div>
-
-      {gen.video_url && (
-        <div className="admin-model-output">
-          <div className="admin-model-card-label">Output</div>
-          <a
-            href={gen.video_url}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="admin-model-mono admin-model-link"
-          >
-            {gen.video_url}
-          </a>
-          {gen.storage_path && (
-            <div className="admin-model-card-sub admin-model-mono">{gen.storage_path}</div>
-          )}
-        </div>
-      )}
-
-      {gen.error && (
-        <div className="admin-model-error">
-          <div className="admin-model-card-label">Error</div>
-          <pre className="admin-model-prompt-body admin-model-error-body">{gen.error}</pre>
-        </div>
-      )}
-    </div>
-  );
-}
 
 // ── Add Products Modal ────────────────────────────────────────────────────────
 // Extracted into its own component so typing in the query input only re-renders
