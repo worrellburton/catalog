@@ -122,6 +122,12 @@ export const DEFAULT_SHOW_BRAND_LOGOS = false;
 export const COMMENTS_ENABLED_KEY = 'comments_enabled';
 export const DEFAULT_COMMENTS_ENABLED = true;
 
+// "UI on scroll" — the card chrome (creator chip, price, gradient) fading out
+// while scrolling and easing back when it settles. ON = current behaviour; OFF
+// = the chrome stays put and never fades/pops on scroll. Default ON.
+export const UI_ON_SCROLL_KEY = 'ui_on_scroll';
+export const DEFAULT_UI_ON_SCROLL = true;
+
 /**
  * Warm every boot-time dial in a single round-trip. Call once early in the
  * app boot (in parallel with the feed fetch). After it resolves, the dial
@@ -225,6 +231,40 @@ export function subscribeShowBrandLogos(onChange: (value: boolean) => void): () 
       (payload) => {
         const next = (payload.new as { value?: string } | null)?.value;
         onChange(parseBool(next ?? null, DEFAULT_SHOW_BRAND_LOGOS));
+      },
+    )
+    .subscribe();
+  return () => { void supabase!.removeChannel(channel); };
+}
+
+// ────────────────────────────────────────────────────────────────────
+// "UI on scroll" toggle. When ON, card chrome fades out while scrolling
+// and eases back when the feed settles (scroll-idle.ts). When OFF, the
+// chrome stays put — nothing pops up on scroll. Default ON.
+// ────────────────────────────────────────────────────────────────────
+
+export async function getUiOnScroll(): Promise<boolean> {
+  return parseBool(await readDial(UI_ON_SCROLL_KEY), DEFAULT_UI_ON_SCROLL);
+}
+
+export async function setUiOnScroll(value: boolean): Promise<void> {
+  if (!supabase) throw new Error('Supabase not configured');
+  const { error } = await supabase
+    .from('app_settings')
+    .upsert({ key: UI_ON_SCROLL_KEY, value: String(value) }, { onConflict: 'key' });
+  if (error) throw error;
+}
+
+export function subscribeUiOnScroll(onChange: (value: boolean) => void): () => void {
+  if (!supabase) return () => {};
+  const channel = supabase
+    .channel(`dials:${UI_ON_SCROLL_KEY}`)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'app_settings', filter: `key=eq.${UI_ON_SCROLL_KEY}` },
+      (payload) => {
+        const next = (payload.new as { value?: string } | null)?.value;
+        onChange(parseBool(next ?? null, DEFAULT_UI_ON_SCROLL));
       },
     )
     .subscribe();
