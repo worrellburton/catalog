@@ -675,9 +675,12 @@ export default function Home() {
   // founder wants the segments to be a direct picker, not a 1→2→3 cycle.
   // Suppressed right after a drag so the touchend-synthesized click doesn't
   // fight a vertical-drag step. The wheel/drag handlers below still STEP.
-  const selectFeedCols = useCallback((index: number) => {
+  // Tap ANYWHERE on the dial cycles to the next density (1 → 2 → 3 → 1). The
+  // shopper doesn't have to hit an exact segment. The dragged guard keeps a
+  // scroll/drag gesture from also firing a cycle on release.
+  const cycleFeedCols = useCallback(() => {
     if (feedDialDraggedRef.current) { feedDialDraggedRef.current = false; return; }
-    setFeedColsIndex(index);
+    setFeedColsIndex(i => (i + 1) % FEED_GRID_COLS.length);
   }, []);
   // Wheel + vertical-drag stepping on the dial. Attached non-passive so the
   // gesture on the dial doesn't scroll the feed behind it.
@@ -2545,28 +2548,28 @@ export default function Home() {
               the home feed. CSS (feed.css) gates display to <=768px; we only
               MOUNT it on the home feed (no overlay open) so it never sits over a
               look/product. Hidden at the top, fades in once the shopper scrolls
-              (feedDialVisible). Each segment DIRECTLY selects its column count
-              (tap "1"/"2"/"3"); scroll/drag still steps. */}
+              (feedDialVisible). Tapping ANYWHERE on it cycles 1 → 2 → 3 → 1
+              (no need to hit an exact segment); scroll/drag still steps. */}
           {navStack.length === 0 && (
             <div
               ref={feedDialRef}
               className={`feed-view-dial${feedDialVisible ? ' is-visible' : ''}`}
-              role="group"
-              aria-label="Feed grid columns"
+              role="button"
+              tabIndex={0}
+              aria-label={`Feed grid: ${feedGridCols} column${feedGridCols > 1 ? 's' : ''}. Tap to change.`}
+              onClick={cycleFeedCols}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); cycleFeedCols(); } }}
             >
               {FEED_GRID_COLS.map((c, i) => (
-                <button
+                <span
                   key={c}
-                  type="button"
                   className={`feed-view-dial-dot${i === feedColsIndex ? ' is-active' : ''}`}
-                  aria-label={`${c} column${c > 1 ? 's' : ''}`}
-                  aria-pressed={i === feedColsIndex}
-                  onClick={() => selectFeedCols(i)}
+                  aria-hidden="true"
                 >
                   <span className="feed-view-dial-bars">
                     {Array.from({ length: c }).map((_, b) => <i key={b} />)}
                   </span>
-                </button>
+                </span>
               ))}
             </div>
           )}
