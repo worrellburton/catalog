@@ -6,6 +6,7 @@
 // already maps over, so ContinuousFeed only needs to swap the import.
 
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '~/utils/supabase';
+import { cleanSearchQuery } from '~/utils/searchIntent';
 
 export interface SemanticCreative {
   id: string;                       // creative UUID, or product UUID when placeholder
@@ -65,7 +66,9 @@ export async function search(
   } = {}
 ): Promise<SearchResponse> {
   const { k = 24, gender = null, exclude_ids, signal } = options;
-  const trimmed = query.trim();
+  // Intent-first: strip conversational scaffolding ("I need a dress for italy"
+  // → "dress italy") so the semantic engine matches the wish, not the filler.
+  const trimmed = cleanSearchQuery(query);
 
   if (!trimmed) {
     return { ok: true, query: '', results: [], looks: [], count: 0, took_ms: 0 };

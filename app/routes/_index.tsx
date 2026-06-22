@@ -32,6 +32,7 @@ import { useWaitlistMode, applyFlowOverrideFromUrl } from '~/hooks/useWaitlistMo
 import { useSearchUrlSync } from '~/hooks/useSearchUrlSync';
 import { useShopperGender } from '~/hooks/useShopperGender';
 import { toCatalogName, getRandomCatalogName } from '~/utils/catalogName';
+import { funnyCatalogName } from '~/utils/searchIntent';
 import { prefetchSimilarProducts, prefetchCreativesByBrand, prefetchHomeFeed, type ProductAd } from '~/services/product-creative';
 import { getGraphPairs, type GraphPair } from '~/services/graph-pairs';
 import { getLooks, getLookByUuid } from '~/services/looks';
@@ -736,6 +737,9 @@ export default function Home() {
     // Live typing doesn't bump the trigger, so it never fires mid-type.
     if (searchQuery.trim() && !ceremony.active) {
       const q = searchQuery.trim();
+      // Crown the result with a fun, on-topic catalog name ("I need a dress for
+      // italy" → "Italy-Coded Dresses") instead of the literal sentence.
+      setCatalogName(funnyCatalogName(q));
       setCeremonyImages([]);
       setCeremony({ active: true, query: q, kind: 'search' });
       // Kick off demographic-aware catalog suggestions for the END of the
@@ -1665,11 +1669,10 @@ export default function Home() {
       setSelectedProduct(null);
       setSelectedLook(null);
       setSearchQuery(query);
-      // The catalog name is the user's actual query, title-cased - so a
-      // search for "omg shoes" surfaces as "OMG Shoes" under the logo.
-      // Single short tokens (acronyms) stay uppercase.
+      // Crown the catalog with a fun, on-topic name derived from the query
+      // ("I need a dress for italy" → "Italy-Coded Dresses").
       const trimmed = query.trim();
-      setCatalogName(trimmed ? toCatalogName(trimmed) : 'all');
+      setCatalogName(trimmed ? funnyCatalogName(trimmed) : 'all');
     };
     // Mobile: if a text input is focused (keyboard up), dismiss it FIRST
     // and let it start sliding down before the loading ceremony mounts —
@@ -2092,7 +2095,7 @@ export default function Home() {
   }, []);
   const handleSelectSuggestion = useCallback((q: string) => {
     setSearchQuery(q.toLowerCase());
-    setCatalogName(toCatalogName(q));
+    setCatalogName(funnyCatalogName(q));
     bumpSearchTrigger();
     // The searchTrigger effect plays the ceremony when on the hero.
   }, []);
