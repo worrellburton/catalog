@@ -6,7 +6,7 @@
 // already maps over, so ContinuousFeed only needs to swap the import.
 
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '~/utils/supabase';
-import { cleanSearchQuery } from '~/utils/searchIntent';
+import { cleanSearchQuery, searchFallbackQuery } from '~/utils/searchIntent';
 
 export interface SemanticCreative {
   id: string;                       // creative UUID, or product UUID when placeholder
@@ -65,15 +65,34 @@ export async function search(
     signal?:      AbortSignal;
   } = {}
 ): Promise<SearchResponse> {
-  const { k = 24, gender = null, exclude_ids, signal } = options;
   // Intent-first: strip conversational scaffolding ("I need a dress for italy"
   // → "dress italy") so the semantic engine matches the wish, not the filler.
   const trimmed = cleanSearchQuery(query);
-
   if (!trimmed) {
     return { ok: true, query: '', results: [], looks: [], count: 0, took_ms: 0 };
   }
 
+  const first = await runSearch(trimmed, options);
+  // Subject fallback: a conversational/contextual query ("dress italy") often
+  // matches no inventory because products aren't tagged by destination. If the
+  // full query came back empty, retry on the bare garment ("dress") so the
+  // shopper lands on a populated catalog instead of a dead end. The fun catalog
+  // NAME still uses the original query, so the title keeps the "Italy" flavour.
+  if (first.ok && first.results.length === 0 && first.looks.length === 0) {
+    const fallback = searchFallbackQuery(trimmed);
+    if (fallback) {
+      const second = await runSearch(fallback, options);
+      if (second.ok && (second.results.length > 0 || second.looks.length > 0)) return second;
+    }
+  }
+  return first;
+}
+
+async function runSearch(
+  trimmed: string,
+  options: { k?: number; gender?: string | null; exclude_ids?: string[]; signal?: AbortSignal },
+): Promise<SearchResponse> {
+  const { k = 24, gender = null, exclude_ids, signal } = options;
   let res: Response;
   try {
     res = await fetch(SEARCH_ENDPOINT, {

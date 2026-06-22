@@ -91,11 +91,12 @@ export function funnyCatalogName(raw: string): string {
   const words = cleaned.split(/\s+/).filter(Boolean);
   if (words.length === 0) return raw.trim();
 
-  // Subject = first recognized garment/category; context = the rest.
+  // Subject = first recognized garment/category; context = the rest (capped to
+  // 3 words so a long, rambling query can't produce a runaway title).
   const subjectIdx = words.findIndex(w => SUBJECT_PLURALS[w]);
   if (subjectIdx >= 0) {
     const subject = SUBJECT_PLURALS[words[subjectIdx]];
-    const context = words.filter((_, i) => i !== subjectIdx).map(titleWord).join(' ').trim();
+    const context = words.filter((_, i) => i !== subjectIdx).slice(0, 3).map(titleWord).join(' ').trim();
     if (context) {
       const frame = FRAMES_WITH_CONTEXT[seededIndex(cleaned, FRAMES_WITH_CONTEXT.length)];
       return frame.replace('{s}', subject).replace('{c}', context);
@@ -104,8 +105,41 @@ export function funnyCatalogName(raw: string): string {
     return frame.replace('{s}', subject);
   }
 
-  // No known garment — treat the whole cleaned query as the subject.
-  const subject = words.map(titleWord).join(' ');
+  // No known garment — treat the cleaned query as the subject (capped to 4
+  // words so the frame stays punchy on long queries).
+  const subject = words.slice(0, 4).map(titleWord).join(' ');
   const frame = FRAMES_SUBJECT_ONLY[seededIndex(cleaned, FRAMES_SUBJECT_ONLY.length)];
   return frame.replace('{s}', subject);
+}
+
+// Singular forms of the recognized garment subjects — used by the search
+// fallback (we search the bare garment, e.g. "dress", not its title plural).
+const SUBJECT_SINGULAR: Record<string, string> = {
+  dress: 'dress', dresses: 'dress', shoe: 'shoe', shoes: 'shoes',
+  sneaker: 'sneaker', sneakers: 'sneakers', boot: 'boot', boots: 'boots',
+  bag: 'bag', bags: 'bags', top: 'top', tops: 'top', shirt: 'shirt',
+  shirts: 'shirt', pant: 'pants', pants: 'pants', jean: 'jeans', jeans: 'jeans',
+  jacket: 'jacket', jackets: 'jacket', coat: 'coat', coats: 'coat',
+  skirt: 'skirt', skirts: 'skirt', suit: 'suit', suits: 'suit',
+  hat: 'hat', hats: 'hat', sunglasses: 'sunglasses', watch: 'watch',
+  jewelry: 'jewelry', sandal: 'sandal', sandals: 'sandals', heel: 'heel',
+  heels: 'heels', sweater: 'sweater', sweaters: 'sweater',
+};
+
+/**
+ * A broader retry query for when the full cleaned query returns nothing. A
+ * conversational query like "dress italy" matches no inventory (products aren't
+ * tagged by destination), so fall back to the garment alone ("dress") to fill
+ * the catalog. Returns null when there's nothing broader to try (single token,
+ * or no recognized garment among multiple words).
+ */
+export function searchFallbackQuery(cleaned: string): string | null {
+  const words = cleaned.toLowerCase().split(/\s+/).filter(Boolean);
+  if (words.length <= 1) return null;
+  const garment = words.find(w => SUBJECT_SINGULAR[w]);
+  if (garment) {
+    const fb = SUBJECT_SINGULAR[garment];
+    return fb !== cleaned ? fb : null;
+  }
+  return null;
 }
