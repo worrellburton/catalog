@@ -618,6 +618,14 @@
   padding-bottom: max(env(safe-area-inset-bottom, 0px), 20px);
 }
 
+/* In the native shell, env(safe-area-inset-top) reads ~0 inside the
+   WebView, so the page tucks under the iOS status bar. Anchor the top
+   padding to the shell-injected status-bar height instead (mirrors the
+   .profile-page-overlay rule in profile-page.css). */
+html[data-shell="catalog-app"] .user-menu-page {
+  padding-top: max(var(--shell-sb, 44px), 12px);
+}
+
 /* Dedicated particle layer inside the page. Sits behind the header +
    body content (z-index 0) but ABOVE the solid background. Pointer
    events off so taps fall through to the capsules. */
