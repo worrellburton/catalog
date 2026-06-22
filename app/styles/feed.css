@@ -927,10 +927,11 @@
   height: 12px;
   opacity: 0.38;
   transition: opacity 0.15s ease, transform 0.15s ease;
-  /* Each segment is a real <button> now (direct column select). Strip the
-     native chrome so it renders identically to the old <span>; the dial
-     container owns the pill background/border. */
+  /* Visual indicator only — the dial CONTAINER owns the tap (tap anywhere to
+     cycle). These reset props are harmless leftovers from when each dot was a
+     <button>; kept so the bars render identically. */
   padding: 0;
+  pointer-events: none;
   border: 0;
   background: none;
   cursor: pointer;
