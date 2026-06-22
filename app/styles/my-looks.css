@@ -1684,6 +1684,14 @@ html[data-shell="catalog-app"] .my-looks-overlay {
      instead of stretching its cards full-bleed on wide desktops. */
   padding: var(--header-height) max(28px, calc((100% - 1200px) / 2)) 28px;
 }
+/* In the Flutter shell, env(safe-area-inset-top) reads ~0 and --header-height
+   (64px) only barely clears the iOS status bar. Anchor the hero's top to the
+   shell-provided status-bar height, +12px — identical to the public
+   .creator-page-scroll. (Form mode is excluded; its absolute .my-cat-form-
+   container ignores this padding and the form root handles its own offset.) */
+html[data-shell="catalog-app"] .my-cat-page:not(.my-cat-page--form) {
+  padding-top: calc(var(--shell-sb, 44px) + 12px);
+}
 
 /* Form-mode root - swaps the page padding so the LookForm fills the
    whole canvas the way the legacy my-looks-form-container did. */
@@ -1775,6 +1783,9 @@ html[data-shell="catalog-app"] .my-looks-overlay {
 .my-cat-addlook-particles canvas { width: 100%; height: 100%; }
 .my-cat-addlook-close {
   position: fixed;
+  /* env(safe-area-inset-top) reads ~0 in the Flutter WebView, so this would
+     collapse to 18px and tuck under the status bar; the shell rule below
+     anchors it to the real status-bar height instead. */
   top: max(env(safe-area-inset-top), 18px);
   left: 18px;
   z-index: 5;
@@ -1790,6 +1801,9 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   cursor: pointer;
   backdrop-filter: blur(8px);
   -webkit-backdrop-filter: blur(8px);
+}
+html[data-shell="catalog-app"] .my-cat-addlook-close {
+  top: calc(var(--shell-sb, 44px) + 12px);
 }
 .my-cat-addlook-cards {
   position: relative;
@@ -2809,6 +2823,11 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   gap: 8px;
   z-index: 30;
 }
+/* Native shell: the 24px top is below the iOS status bar — push the row
+   below it so the gear/analytics/+ buttons don't collide with the clock. */
+html[data-shell="catalog-app"] .my-cat-fab-row {
+  top: calc(var(--shell-sb, 44px) + 12px);
+}
 .my-cat-fab-row .my-cat-create-fab {
   position: static;
   top: auto;
@@ -3035,6 +3054,12 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   opacity: 0;
   transform: translateY(8px);
   transition: opacity 320ms cubic-bezier(.32,.72,0,1), transform 320ms cubic-bezier(.32,.72,0,1);
+}
+/* Native shell: the look-form header (.cl-v2-head close + title) sits at the
+   top of this padded column; clear the iOS status bar above it. The data-shell
+   specificity bump also wins over .cl-v2.is-hero's padding shorthand. */
+html[data-shell="catalog-app"] .cl-v2 {
+  padding-top: calc(var(--shell-sb, 44px) + 20px);
 }
 .cl-v2.is-mounted { opacity: 1; transform: none; }
 
@@ -3793,6 +3818,10 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   transform: translateY(8px);
   transition: opacity 320ms cubic-bezier(.32,.72,0,1), transform 320ms cubic-bezier(.32,.72,0,1);
 }
+/* Native shell: clear the iOS status bar above the .apv2-head close + title. */
+html[data-shell="catalog-app"] .apv2 {
+  padding-top: calc(var(--shell-sb, 44px) + 16px);
+}
 .apv2.is-mounted { opacity: 1; transform: none; }
 .apv2-particles {
   position: fixed;
@@ -4065,6 +4094,10 @@ html[data-shell="catalog-app"] .my-looks-overlay {
   left: 24px;
   right: auto;
   z-index: 30;
+}
+/* Native shell: clear the iOS status bar, matching the top-right fab row. */
+html[data-shell="catalog-app"] .my-cat-back-fab {
+  top: calc(var(--shell-sb, 44px) + 12px);
 }
 
 /* My info pill on the hero — same slot the public CreatorPage uses
