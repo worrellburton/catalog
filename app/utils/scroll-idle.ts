@@ -15,6 +15,19 @@
 // its own wiring. Reduced-motion users never get either class.
 
 let started = false;
+// Admin "UI on scroll" dial. When false, scrolling never sets
+// `is-scroll-gliding`, so card chrome stays put and nothing fades/pops on
+// scroll. Listeners stay attached either way so the dial can flip live.
+let enabled = true;
+
+/** Toggle the on-scroll chrome fade (the `ui_on_scroll` dial). Turning it off
+ *  also clears any classes currently applied so the chrome reappears at once. */
+export function setScrollIdleFadeEnabled(on: boolean): void {
+  enabled = on;
+  if (!on && typeof document !== 'undefined') {
+    document.documentElement.classList.remove('is-scroll-gliding', 'is-pointing');
+  }
+}
 
 export function initScrollIdleFade(): void {
   if (started || typeof window === 'undefined') return;
@@ -39,6 +52,7 @@ export function initScrollIdleFade(): void {
     document.documentElement.classList.remove('is-scroll-gliding');
   };
   const onScroll = () => {
+    if (!enabled) return; // dial off — chrome stays put, nothing pops on scroll
     if (!gliding) {
       gliding = true;
       document.documentElement.classList.add('is-scroll-gliding');

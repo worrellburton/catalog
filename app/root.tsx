@@ -27,7 +27,8 @@ import { SpeedInsights } from "@vercel/speed-insights/remix";
 import { isRouteErrorResponse, useRouteError } from "@remix-run/react";
 import { useEffect, useState } from "react";
 import TypeAnywhere from "~/components/TypeAnywhere";
-import { initScrollIdleFade } from "~/utils/scroll-idle";
+import { initScrollIdleFade, setScrollIdleFadeEnabled } from "~/utils/scroll-idle";
+import { getUiOnScroll, subscribeUiOnScroll } from "~/services/dials";
 import SessionTrackerHost from "~/components/SessionTrackerHost";
 import PresenceHost from "~/components/PresenceHost";
 import GenerationQueueHost from "~/components/GenerationQueueHost";
@@ -329,7 +330,15 @@ export default function App() {
   useEffect(() => { void initSentry(); }, []);
   // Media-first scrolling (founder's call): card chrome fades away while
   // gliding and eases back in when the scroll settles — every viewport.
-  useEffect(() => { initScrollIdleFade(); }, []);
+  // Gated by the admin "UI on scroll" dial (default on); we still attach the
+  // listeners so the dial can flip the behaviour live without a reload.
+  useEffect(() => {
+    initScrollIdleFade();
+    let cancelled = false;
+    getUiOnScroll().then(on => { if (!cancelled) setScrollIdleFadeEnabled(on); });
+    const unsub = subscribeUiOnScroll(on => setScrollIdleFadeEnabled(on));
+    return () => { cancelled = true; unsub(); };
+  }, []);
 
   return (
     <ClerkGate>
