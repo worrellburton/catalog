@@ -14,12 +14,41 @@ import {
   getAutoEditorConfig, setAutoEditorConfig,
   DEFAULT_AUTO_EDITOR_CONFIG, type AutoEditorConfig,
   getFeedRules, setFeedRules,
+  getFeedRulesOrder, setFeedRulesOrder,
   DEFAULT_FEED_RULES, FEED_RULE_META, type FeedRules,
 } from '~/services/dials';
+
+// Per-field context shown on hover via a "?" dot, so the row of dials stays
+// compact instead of carrying a paragraph under each input.
+const FIELD_HELP: Record<string, string> = {
+  frequency: 'How often each shopper’s feed re-ranks — once a day, or fresh on every sign-in.',
+  refreshHour: 'The hour (UTC) the Daily Feed rolls over to a new drop each day.',
+  holdoutPct: 'Share of shoppers deliberately kept on the global feed as a control group for measurement.',
+  recencyDays: 'How many days of a shopper’s activity the personalization looks back over.',
+  minSignal: 'Minimum engagement events a shopper needs before they get a personalized feed (below this, the global feed).',
+};
+
+// Small "?" affordance — native title tooltip on hover keeps it dependency-free.
+function HelpDot({ text }: { text: string }) {
+  return (
+    <span
+      title={text}
+      aria-label={text}
+      style={{
+        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+        width: 14, height: 14, marginLeft: 5, borderRadius: '50%',
+        border: '1px solid #cbd5e1', color: '#94a3b8', fontSize: 9, fontWeight: 700,
+        cursor: 'help', verticalAlign: 'middle', lineHeight: 1, flexShrink: 0,
+      }}
+    >?</span>
+  );
+}
 
 export default function DailyFeedSettings() {
   const [config, setConfig] = useState<AutoEditorConfig>(DEFAULT_AUTO_EDITOR_CONFIG);
   const [rules, setRules] = useState<FeedRules>(DEFAULT_FEED_RULES);
+  const [ruleOrder, setRuleOrder] = useState<(keyof FeedRules)[]>(FEED_RULE_META.map(m => m.key));
+  const [dragKey, setDragKey] = useState<keyof FeedRules | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   // Inline saved/err flash (replaces the page-level toast the modal used).
@@ -33,11 +62,28 @@ export default function DailyFeedSettings() {
 
   useEffect(() => {
     let cancelled = false;
-    Promise.all([getAutoEditorConfig(), getFeedRules()])
-      .then(([c, r]) => { if (!cancelled) { setConfig(c); setRules(r); } })
+    Promise.all([getAutoEditorConfig(), getFeedRules(), getFeedRulesOrder()])
+      .then(([c, r, o]) => { if (!cancelled) { setConfig(c); setRules(r); setRuleOrder(o); } })
       .finally(() => { if (!cancelled) setLoading(false); });
     return () => { cancelled = true; };
   }, []);
+
+  // Drag-to-reorder the rules. Reorder live on drag-over for a smooth feel;
+  // persist the arrangement on drop (it's presentational — the engine applies
+  // every enabled rule in its own fixed pipeline regardless of this order).
+  const reorder = useCallback((from: keyof FeedRules, to: keyof FeedRules) => {
+    setRuleOrder(prev => {
+      if (from === to) return prev;
+      const next = prev.filter(k => k !== from);
+      const idx = next.indexOf(to);
+      if (idx < 0) return prev;
+      next.splice(idx, 0, from);
+      return next;
+    });
+  }, []);
+  const persistOrder = useCallback((order: (keyof FeedRules)[]) => {
+    setFeedRulesOrder(order).catch(err => say(`Save failed: ${err instanceof Error ? err.message : String(err)}`, true));
+  }, [say]);
 
   // Debounced rule persistence — sliders fire fast; write once settled.
   const ruleSaveTimer = useRef(0);
@@ -68,7 +114,8 @@ export default function DailyFeedSettings() {
 
   const fieldLabel: React.CSSProperties = {
     fontSize: 11, fontWeight: 600, color: '#475569',
-    textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6, display: 'block',
+    textTransform: 'uppercase', letterSpacing: '0.5px', marginBottom: 6,
+    display: 'flex', alignItems: 'center',
   };
   const numInput: React.CSSProperties = {
     width: '100%', padding: '8px 10px', borderRadius: 6,
@@ -120,11 +167,11 @@ export default function DailyFeedSettings() {
         style={{
           border: 'none', padding: 0, margin: 0,
           opacity: config.enabled ? 1 : 0.5,
-          display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(200px, 1fr))', gap: 16,
+          display: 'flex', flexWrap: 'wrap', gap: 16, alignItems: 'flex-start',
         }}
       >
-        <div>
-          <label style={fieldLabel}>Frequency</label>
+        <div style={{ flex: '1 1 150px', minWidth: 140 }}>
+          <label style={fieldLabel}>Frequency<HelpDot text={FIELD_HELP.frequency} /></label>
           <select
             value={config.frequency}
             onChange={e => save({ frequency: e.target.value as AutoEditorConfig['frequency'] })}
@@ -136,8 +183,8 @@ export default function DailyFeedSettings() {
         </div>
 
         {config.frequency === 'daily' && (
-          <div>
-            <label style={fieldLabel}>Refresh time (UTC)</label>
+          <div style={{ flex: '1 1 150px', minWidth: 140 }}>
+            <label style={fieldLabel}>Refresh time (UTC)<HelpDot text={FIELD_HELP.refreshHour} /></label>
             <input
               type="time"
               step={3600}
@@ -154,8 +201,8 @@ export default function DailyFeedSettings() {
           </div>
         )}
 
-        <div>
-          <label style={fieldLabel}>Holdout % (kept on the global feed)</label>
+        <div style={{ flex: '1 1 150px', minWidth: 140 }}>
+          <label style={fieldLabel}>Holdout %<HelpDot text={FIELD_HELP.holdoutPct} /></label>
           <input
             type="number" min={0} max={100}
             value={config.holdoutPct}
@@ -164,8 +211,8 @@ export default function DailyFeedSettings() {
           />
         </div>
 
-        <div>
-          <label style={fieldLabel}>History window (days)</label>
+        <div style={{ flex: '1 1 150px', minWidth: 140 }}>
+          <label style={fieldLabel}>History (days)<HelpDot text={FIELD_HELP.recencyDays} /></label>
           <input
             type="number" min={1} max={365}
             value={config.recencyDays}
@@ -174,8 +221,8 @@ export default function DailyFeedSettings() {
           />
         </div>
 
-        <div>
-          <label style={fieldLabel}>Min signal (events before personalizing)</label>
+        <div style={{ flex: '1 1 150px', minWidth: 140 }}>
+          <label style={fieldLabel}>Min signal<HelpDot text={FIELD_HELP.minSignal} /></label>
           <input
             type="number" min={0} max={1000}
             value={config.minSignal}
@@ -190,20 +237,33 @@ export default function DailyFeedSettings() {
         <h3 style={{ margin: '0 0 2px', fontSize: 14, fontWeight: 700 }}>Daily feed rules</h3>
         <p style={{ margin: '0 0 12px', fontSize: 12, color: '#888' }}>
           The rulebook behind every shopper&apos;s Daily Feed. Each rule is a switch + a weight
-          (how hard it pulls). Defaults match today&apos;s behavior.
+          (how hard it pulls). Drag the handle to reorder; hover the&nbsp;? for what each does.
         </p>
         <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-          {FEED_RULE_META.map(meta => {
+          {ruleOrder.map(key => {
+            const meta = FEED_RULE_META.find(m => m.key === key);
+            if (!meta) return null;
             const rule = rules[meta.key];
+            const isDragging = dragKey === meta.key;
             return (
               <div
                 key={meta.key}
+                onDragOver={e => { if (dragKey && dragKey !== meta.key) { e.preventDefault(); reorder(dragKey, meta.key); } }}
                 style={{
-                  display: 'flex', alignItems: 'center', gap: 12,
+                  display: 'flex', alignItems: 'center', gap: 10,
                   padding: '10px 12px', borderRadius: 8, border: '1px solid #e2e8f0',
                   background: rule.enabled ? '#f0fdf4' : '#fafafa',
+                  opacity: isDragging ? 0.5 : 1,
                 }}
               >
+                <span
+                  draggable={!loading}
+                  onDragStart={() => setDragKey(meta.key)}
+                  onDragEnd={() => { setDragKey(null); persistOrder(ruleOrder); }}
+                  title="Drag to reorder"
+                  aria-label="Drag to reorder"
+                  style={{ cursor: 'grab', color: '#cbd5e1', fontSize: 14, lineHeight: 1, flexShrink: 0, userSelect: 'none' }}
+                >⠿</span>
                 <input
                   type="checkbox"
                   checked={rule.enabled}
@@ -211,9 +271,9 @@ export default function DailyFeedSettings() {
                   onChange={e => saveRules({ ...rules, [meta.key]: { ...rule, enabled: e.target.checked } })}
                   style={{ width: 16, height: 16, cursor: 'pointer', flexShrink: 0 }}
                 />
-                <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ fontSize: 12.5, fontWeight: 600, color: '#111' }}>{meta.label}</div>
-                  <div style={{ fontSize: 11, color: '#94a3b8' }}>{meta.hint}</div>
+                <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center' }}>
+                  <span style={{ fontSize: 12.5, fontWeight: 600, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{meta.label}</span>
+                  <HelpDot text={meta.hint} />
                 </div>
                 {meta.weight && (
                   <label style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, opacity: rule.enabled ? 1 : 0.35 }}>
