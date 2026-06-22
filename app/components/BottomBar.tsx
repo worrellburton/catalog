@@ -651,7 +651,13 @@ function BottomBar({
             // keyboard AND (via onFocus) opens the sheet, so the shopper can type
             // immediately. Reverses Samir's dca5b7c readOnly "open without
             // keyboard" trick (founder wants the keyboard up on tap).
-            value={localSearch}
+            // Collapsed + a catalog committed → show the fun catalog name
+            // ("Main Character Dresses in Italy"), matching the header + the
+            // empty-state headline. Focusing flips back to the raw query so it
+            // stays editable (openSearch sets searchOpen on focus).
+            value={!searchOpen && catalogName && catalogName !== 'all' && searchQuery.trim()
+              ? catalogName
+              : localSearch}
             onChange={handleSearchInput}
             onFocus={openSearch}
             onBlur={() => {
