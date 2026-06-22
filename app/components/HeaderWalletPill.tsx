@@ -26,6 +26,19 @@ export default function HeaderWalletPill({ onOpenWallet }: HeaderWalletPillProps
     return () => { cancelled = true; };
   }, [user?.id]);
 
+  // When running inside the Flutter native shell, the web <header> is hidden
+  // and the shell draws its own copy of this pill. This component still mounts
+  // and fetches here, so mirror the balance up to the native header over the
+  // `catalogWalletBalance` JS bridge (no native re-fetch of the authed edge fn).
+  useEffect(() => {
+    const fw = (window as unknown as {
+      flutter_inappwebview?: { callHandler?: (name: string, ...args: unknown[]) => void };
+    }).flutter_inappwebview;
+    if (!fw?.callHandler) return;
+    if (document.documentElement.dataset.shell !== 'catalog-app') return;
+    fw.callHandler('catalogWalletBalance', balance);
+  }, [balance]);
+
   if (!user?.id) return null;
 
   return (

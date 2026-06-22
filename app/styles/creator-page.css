@@ -39,6 +39,12 @@
      max() collapses to the base 28px gutter on mobile. */
   padding: var(--header-height) max(28px, calc((100% - 1200px) / 2)) 28px;
 }
+/* In the Flutter shell, env(safe-area-inset-top) reads ~0 and --header-height
+   (64px) only barely clears the status bar. Anchor the top to the shell-provided
+   status-bar height, +12px to match the overlay back arrows. */
+html[data-shell="catalog-app"] .creator-page-scroll {
+  padding-top: calc(var(--shell-sb, 44px) + 12px);
+}
 
 /* Creator-chosen particle field — over the page bg, behind all content. */
 .creator-page-particles {
