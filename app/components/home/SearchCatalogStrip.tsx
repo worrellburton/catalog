@@ -38,7 +38,12 @@ function Spark() {
  *  opens the sheet). Synchronous inside the tap so iOS transient activation lets
  *  the keyboard come up. Keeps Problem B self-contained (no _index.tsx wiring). */
 function openSearchSheet() {
-  const input = document.getElementById('bottom-search-input') as HTMLInputElement | null;
+  // Mobile: focus the bottom-bar input (raises the sheet via its onFocus).
+  // Desktop has no bottom bar (it's display:none) — focus the floating
+  // TypeAnywhere bar instead so the pill opens search there too.
+  const isDesktop = typeof window !== 'undefined' && window.matchMedia('(min-width: 769px)').matches;
+  const id = isDesktop ? 'ai-bar-search' : 'bottom-search-input';
+  const input = document.getElementById(id) as HTMLInputElement | null;
   input?.focus();
 }
 

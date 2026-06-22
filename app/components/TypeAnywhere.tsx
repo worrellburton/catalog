@@ -283,6 +283,7 @@ export default function TypeAnywhere() {
             data-lpignore="true"
             data-form-type="other"
             name="ai-bar-search"
+            id="ai-bar-search"
             className="ai-bar-input"
             placeholder={text ? '' : rotatingHint}
             value={text}

@@ -926,10 +926,24 @@
 }
 .light-mode .sc-name-pill-search { color: rgba(15, 23, 42, 0.5); }
 .light-mode .sc-name-pill .sc-rec-spark { color: rgba(15, 23, 42, 0.8); }
-/* Hide the pill while the search sheet is open (the sheet owns the screen)
-   and on desktop (no mobile bottom bar there — desktop uses TypeAnywhere). */
+/* Hide the pill while the search sheet is open (the sheet owns the screen). */
 html:has(.bottom-bar.search-open) .sc-name-pill { opacity: 0; pointer-events: none; }
-@media (min-width: 769px) { .sc-name-pill { display: none; } }
+/* Desktop: the sparkle pill is the searched-feed's persistent search entry too
+   (tapping it focuses the TypeAnywhere bar — see openSearchSheet). To avoid two
+   floating affordances stacking at the bottom-center, the pill is the RESTING
+   entry and the TypeAnywhere bar stays mounted but invisible+inert until it's
+   focused (opacity, NOT display:none, so the pill can still focus its input).
+   When the bar gains focus the pill steps aside and the full search UI shows. */
+@media (min-width: 769px) {
+  html:has(.home-feed-wrap.has-catalog-strip) .ai-bar-wrap:not(:focus-within) {
+    opacity: 0;
+    pointer-events: none;
+  }
+  html:has(.ai-bar-wrap:focus-within) .sc-name-pill {
+    opacity: 0;
+    pointer-events: none;
+  }
+}
 
 /* Peek-on-landing: the feed wrapper is pulled up under the hero by a
    small amount ONLY while the hero is showing, so just the very top
