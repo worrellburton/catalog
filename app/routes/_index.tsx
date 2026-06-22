@@ -911,6 +911,17 @@ export default function Home() {
     }
   }, [navigate]);
 
+  // Native shell logo tap → full home reset. The Flutter wrapper hides the web
+  // header-left (and its logo) and renders its own native logo, so it can't
+  // call handleLogoClick directly; it dispatches this bridge event instead.
+  // CRITICAL: 'catalog:go-home' is part of the shell contract (see the Bridge
+  // Events table in CLAUDE.md) — do not rename without updating catalog-flutter.
+  useEffect(() => {
+    const onGoHome = () => handleLogoClick();
+    window.addEventListener('catalog:go-home', onGoHome);
+    return () => window.removeEventListener('catalog:go-home', onGoHome);
+  }, [handleLogoClick]);
+
   // "Following" catalog pill (desktop search cloud, via TypeAnywhere)
   // hands us the resolved follow handles through a CustomEvent. Scope
   // the feed to them, same as the FollowingRail's CTA.
