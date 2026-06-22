@@ -2531,6 +2531,7 @@ export default function Home() {
             onOpenBrand={handleOpenBrand}
             onCreateCatalog={handleCreateCatalog}
             bookmarks={bookmarks}
+            hasCatalogStrip={!heroMode && !ceremony.active && searchQuery.trim() !== '' && ceremonyRecs.length > 0}
             onSearchLoadingChange={handleSearchLoadingChange}
             onResultsReady={setCeremonyImages}
             searchTrigger={searchTrigger}

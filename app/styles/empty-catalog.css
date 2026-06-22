@@ -155,6 +155,31 @@
   color: rgba(255, 255, 255, 0.65);
 }
 
+/* The extracted demand CTA wrapper (button + live count), used both inside the
+   full overlay and folded into the now-browsing strip. */
+.catalog-demand { display: flex; flex-direction: column; align-items: center; }
+
+/* Inline empty-state CTA — shown when the "Now browsing" strip is already the
+   header (recommendations present). Folds the demand signal in BELOW the recs
+   in-flow, instead of the full-screen .empty-catalog overlay taking over. */
+.ec-inline {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 4px;
+  padding: 8px 24px 48px;
+}
+.ec-inline-head {
+  margin: 0 0 10px;
+  font-size: 14px;
+  line-height: 1.5;
+  color: rgba(255, 255, 255, 0.5);
+}
+.ec-inline-head em { font-style: normal; color: #fff; font-weight: 600; }
+.light-mode .ec-inline-head { color: rgba(15, 23, 42, 0.6); }
+.light-mode .ec-inline-head em { color: #0f172a; }
+
 /* Sourcing variant — keep the agent-progress affordance but in monochrome. */
 .ec-sourcing {
   display: inline-flex;
