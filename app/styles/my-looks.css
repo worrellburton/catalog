@@ -1686,11 +1686,15 @@ html[data-shell="catalog-app"] .my-looks-overlay {
 }
 /* In the Flutter shell, env(safe-area-inset-top) reads ~0 and --header-height
    (64px) only barely clears the iOS status bar. Anchor the hero's top to the
-   shell-provided status-bar height, +12px — identical to the public
-   .creator-page-scroll. (Form mode is excluded; its absolute .my-cat-form-
-   container ignores this padding and the form root handles its own offset.) */
+   shell-provided status-bar height, +24px — a touch lower than the public
+   .creator-page-scroll (+12px) so the corner FABs + hero sit comfortably below
+   the status bar / Dynamic Island instead of crowding it. Keep this in step
+   with .my-cat-fab-row / .my-cat-back-fab below (same +24px) so the pinned
+   corner buttons stay aligned with the hero top. (Form mode is excluded; its
+   absolute .my-cat-form-container ignores this padding and the form root
+   handles its own offset.) */
 html[data-shell="catalog-app"] .my-cat-page:not(.my-cat-page--form) {
-  padding-top: calc(var(--shell-sb, 44px) + 12px);
+  padding-top: calc(var(--shell-sb, 44px) + 24px);
 }
 
 /* Form-mode root - swaps the page padding so the LookForm fills the
@@ -2826,7 +2830,7 @@ html[data-shell="catalog-app"] .my-cat-addlook-close {
 /* Native shell: the 24px top is below the iOS status bar — push the row
    below it so the gear/analytics/+ buttons don't collide with the clock. */
 html[data-shell="catalog-app"] .my-cat-fab-row {
-  top: calc(var(--shell-sb, 44px) + 12px);
+  top: calc(var(--shell-sb, 44px) + 24px);
 }
 .my-cat-fab-row .my-cat-create-fab {
   position: static;
@@ -3079,6 +3083,12 @@ html[data-shell="catalog-app"] .cl-v2 {
   justify-content: space-between;
   padding: max(12px, env(safe-area-inset-top)) 16px 12px;
   flex: 0 0 auto;
+}
+/* Native shell: env(safe-area-inset-top) reads ~0 in the WebView, so the trim
+   tool's header (Cancel / Done) sits under the iOS status bar. Anchor it to the
+   shell-provided status-bar height. (Web, with no --shell-sb, is untouched.) */
+html[data-shell="catalog-app"] .vtrim-head {
+  padding-top: calc(var(--shell-sb, 44px) + 12px);
 }
 .vtrim-cancel, .vtrim-done {
   background: none;
@@ -4095,9 +4105,9 @@ html[data-shell="catalog-app"] .apv2 {
   right: auto;
   z-index: 30;
 }
-/* Native shell: clear the iOS status bar, matching the top-right fab row. */
+/* Native shell: clear the iOS status bar, matching the top-right fab row (+24px). */
 html[data-shell="catalog-app"] .my-cat-back-fab {
-  top: calc(var(--shell-sb, 44px) + 12px);
+  top: calc(var(--shell-sb, 44px) + 24px);
 }
 
 /* My info pill on the hero — same slot the public CreatorPage uses
@@ -4404,6 +4414,13 @@ html[data-shell="catalog-app"] .my-cat-back-fab {
   background: transparent;
   border-radius: 0;
   box-shadow: none;
+}
+/* Native shell: env(safe-area-inset-top) reads ~0 in the WebView, so the
+   "Your catalog" head + its X close tuck behind the iOS status bar and can't
+   be tapped to dismiss. Anchor the card's top padding to the shell-provided
+   status-bar height. (Web, with no --shell-sb, is untouched.) */
+html[data-shell="catalog-app"] .my-cat-analytics-card--page {
+  padding-top: calc(var(--shell-sb, 44px) + 12px);
 }
 .my-cat-analytics-card--page .my-cat-analytics-head {
   flex: 0 0 auto;

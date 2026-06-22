@@ -297,6 +297,14 @@
 }
 @keyframes sfh-info-scrim-in { from { opacity: 0; } to { opacity: 1; } }
 
+/* Native shell: env(safe-area-inset-top) reads ~0 in the WebView, so the
+   centered card's top edge — and its X close — tuck under the iOS status bar.
+   Anchor the scrim's top padding to the shell-provided status-bar height so
+   the card always clears the clock. (Web, with no --shell-sb, is untouched.) */
+html[data-shell="catalog-app"] .sfh-info-scrim {
+  padding-top: calc(var(--shell-sb, 44px) + 16px);
+}
+
 .sfh-info-card {
   position: relative;
   /* Centered with margin-inline + an explicit % width (NOT translateX). */
