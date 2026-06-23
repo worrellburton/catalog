@@ -46,11 +46,26 @@ html.home2-paper body {
 }
 .h2-wordmark {
   font-family: Didot, 'Bodoni MT', Georgia, 'Times New Roman', serif;
-  font-size: clamp(64px, 14vw, 184px);
+  /* Drives the company logo's size: the SVG wordmark is set to height:1em and
+     the font-rendered variant to font-size:1em, so this one value scales
+     either render path. The mark is far wider than the old serif "Catalog"
+     text, so it's sized shorter. */
+  font-size: clamp(40px, 8vw, 92px);
   font-weight: 400;
   letter-spacing: -0.02em;
   line-height: 1;
   margin: 26px 0 10px;
+  color: var(--ink);
+}
+/* The CatalogLogo company mark in the masthead/footer — height tracks the
+   wrapper's font-size so the SVG (height:1em) and word variant (font-size:1em)
+   both render at the masthead scale, in ink. */
+.h2-wordmark-logo {
+  display: inline-block;
+  height: 1em;
+  width: auto;
+  color: var(--ink);
+  vertical-align: middle;
 }
 .h2-dek {
   max-width: 560px;
@@ -79,14 +94,16 @@ html.home2-paper body {
   padding: clamp(16px, 3vw, 40px);
   display: block;
 }
-.h2-hero-media img {
+.h2-hero-media img,
+.h2-hero-media video {
   width: 100%;
   aspect-ratio: 4 / 5;
   object-fit: contain;
   display: block;
   transition: transform 0.6s cubic-bezier(0.22, 1, 0.36, 1);
 }
-.h2-hero-media:hover img { transform: scale(1.03); }
+.h2-hero-media:hover img,
+.h2-hero-media:hover video { transform: scale(1.03); }
 .h2-hero-tag {
   position: absolute;
   top: 14px;
@@ -194,14 +211,16 @@ html.home2-paper body {
   min-width: 0;
 }
 .h2-card-media { display: block; overflow: hidden; margin-bottom: 10px; }
-.h2-card-media img {
+.h2-card-media img,
+.h2-card-media video {
   width: 100%;
   aspect-ratio: 4 / 5;
   object-fit: contain;
   display: block;
   transition: transform 0.5s cubic-bezier(0.22, 1, 0.36, 1);
 }
-.h2-card:hover .h2-card-media img { transform: scale(1.05); }
+.h2-card:hover .h2-card-media img,
+.h2-card:hover .h2-card-media video { transform: scale(1.05); }
 .h2-card em {
   font-style: normal;
   font-size: 10px;
@@ -255,7 +274,8 @@ html.home2-paper body {
   flex-direction: column;
   gap: 7px;
 }
-.h2-look img {
+.h2-look img,
+.h2-look video {
   width: 100%;
   aspect-ratio: 9 / 14;
   object-fit: cover;
@@ -263,7 +283,8 @@ html.home2-paper body {
   filter: saturate(0.96);
   transition: filter 0.3s;
 }
-.h2-look:hover img { filter: saturate(1.1); }
+.h2-look:hover img,
+.h2-look:hover video { filter: saturate(1.1); }
 .h2-look span {
   font-size: 10.5px;
   letter-spacing: 0.1em;
@@ -295,7 +316,7 @@ html.home2-paper body {
 
 /* ── Footer ────────────────────────────────────────────────────────── */
 .h2-foot { text-align: center; padding: 30px 0 70px; }
-.h2-wordmark--foot { font-size: clamp(40px, 7vw, 84px); margin: 30px 0 8px; }
+.h2-wordmark--foot { font-size: clamp(30px, 5vw, 60px); margin: 30px 0 8px; }
 .h2-foot p { color: var(--ink-soft); font-size: 14px; margin: 0 0 22px; }
 .h2-foot-cta {
   border: 1px solid var(--ink);
