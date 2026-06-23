@@ -1668,10 +1668,12 @@ html:has(.bottom-bar.search-open) .sc-name-pill { opacity: 0; pointer-events: no
      does. The earlier `.app-root.home-hero .ai-bar-wrap:focus-within`
      forms could never match (the bar isn't inside .app-root), so the
      headline never lifted and collided with the rising bar + pills. */
-  body:has(.ai-bar-wrap:focus-within) .app-root.home-hero .sfh-stage {
+  body:has(.ai-bar-wrap:not(.ai-bar-wrap--inline):focus-within) .app-root.home-hero .sfh-stage {
     /* Slide ONLY the spark+headline up (not the whole .sfh section) when
        the bar is focused, so the trio (spark + headline + bar) rises as
        one group and clears the catalog-pills panel. Targeting .sfh-stage
+       — only for the GLOBAL bar; the inline copy is itself inside .sfh-stage
+       (lifting the stage would lift it too) and floats its own pill cloud.
        rather than .sfh leaves the section's full-viewport gradient
        background in place — translating the whole .sfh dragged its
        background up too and exposed a bare band below it.
@@ -1902,7 +1904,7 @@ body:has(.app-root.chrome-hidden) .ai-bar-wrap {
   body:has(.app-root.home-hero) .ai-bar-wrap:focus-within { bottom: 48vh; }
   /* Bar rises 16vh here (32vh → 48vh) — match the headline lift so the
      gap stays constant focused vs. resting. */
-  body:has(.ai-bar-wrap:focus-within) .app-root.home-hero .sfh-stage {
+  body:has(.ai-bar-wrap:not(.ai-bar-wrap--inline):focus-within) .app-root.home-hero .sfh-stage {
     transform: translateY(-16vh);
   }
 }
@@ -1910,7 +1912,7 @@ body:has(.app-root.chrome-hidden) .ai-bar-wrap {
   body:has(.app-root.home-hero) .ai-bar-wrap { bottom: 24vh; }
   body:has(.app-root.home-hero) .ai-bar-wrap:focus-within { bottom: 42vh; }
   /* Bar rises 18vh here (24vh → 42vh) — match the headline lift. */
-  body:has(.ai-bar-wrap:focus-within) .app-root.home-hero .sfh-stage {
+  body:has(.ai-bar-wrap:not(.ai-bar-wrap--inline):focus-within) .app-root.home-hero .sfh-stage {
     transform: translateY(-18vh);
   }
 }

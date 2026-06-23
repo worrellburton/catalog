@@ -535,6 +535,15 @@ export default function Home() {
     });
   }, [heroMode, heroScrolled]);
 
+  // Tell the two TypeAnywhere copies who's in charge: while the hero is at the
+  // top, the inline copy (inside ShoppingForHero) owns the screen and the
+  // global fixed copy steps aside; once the shopper scrolls into the feed (or
+  // the ceremony takes over) they swap back. See TypeAnywhere `inline`.
+  useEffect(() => {
+    const active = heroMode && !ceremony.active && !heroScrolled;
+    window.dispatchEvent(new CustomEvent('catalog:hero-inline', { detail: { active } }));
+  }, [heroMode, ceremony.active, heroScrolled]);
+
   // Reveal the bottom search bar once the shopper scrolls down off the
   // hero into the catalog (while heroMode is the active screen). While
   // scrolling within the hero band we also write a 0→1 progress value
