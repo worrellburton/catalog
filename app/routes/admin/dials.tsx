@@ -830,10 +830,10 @@ export default function AdminDials() {
         <div className="admin-detail-card">
           <h3>UI on scroll</h3>
           <p style={{ fontSize: 13, color: '#888', margin: '4px 0 16px' }}>
-            When ON, the card chrome (creator chip, price, gradient) fades out
-            while the feed scrolls and eases back in when it settles — the
-            media-first scroll feel. When OFF, the chrome stays put and nothing
-            pops up on scroll. Applies to every viewport, live.
+            When ON, the card chrome (creator chip, price, gradient) shows —
+            fading out while the feed scrolls and easing back when it settles
+            (the media-first feel). When OFF, the chrome is hidden entirely:
+            pure imagery, nothing on the cards. Applies to every viewport, live.
           </p>
           {!uiOnScrollLoaded ? (
             <Skeleton height={40} radius={8} />
@@ -845,8 +845,8 @@ export default function AdminDials() {
                 </span>
                 <span style={{ fontSize: 11, color: '#999' }}>
                   {uiOnScroll
-                    ? 'Chrome fades while scrolling, returns when it settles (default).'
-                    : 'Chrome stays put — nothing fades or pops on scroll.'}
+                    ? 'Chrome shows; fades while scrolling, returns when it settles (default).'
+                    : 'Chrome hidden — pure imagery, nothing on the cards.'}
                 </span>
               </div>
               <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
