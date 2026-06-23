@@ -230,6 +230,28 @@ function applyRotationGuard(order: string[], prevTop: Set<string>, maxRepeats: n
   return [...head, ...demoted, ...order.slice(i)];
 }
 
+/** Daily lead-rotation: cycle WHICH slice of the ranked pool leads, so a
+ *  stable-taste shopper sees a genuinely different head each day — not the
+ *  same top set merely re-shuffled. Rotates only within the top `pool`
+ *  (quality preserved: every lead is still a high-affinity item); the long
+ *  tail keeps its order. `dayIndex` is a monotonic day counter so consecutive
+ *  days step by `step` positions through the pool. `step` should be coprime
+ *  with `pool` for a full, even cycle. Deterministic per (day, pool, step). */
+function applyDailyRotation(order: string[], dayIndex: number, pool: number, step: number): string[] {
+  const n = Math.min(pool, order.length);
+  if (n <= 1) return order;
+  const head = order.slice(0, n);
+  const tail = order.slice(n);
+  const off = (((dayIndex * step) % n) + n) % n;
+  return [...head.slice(off), ...head.slice(0, off), ...tail];
+}
+
+/** Whole-days since the Unix epoch for a YYYY-MM-DD feed date — the monotonic
+ *  counter that drives applyDailyRotation's per-day offset. */
+function dayIndexOf(feedDate: string): number {
+  return Math.floor(Date.parse(`${feedDate}T00:00:00Z`) / 86_400_000);
+}
+
 interface RankedItem { type: 'product' | 'look'; id: string }
 
 Deno.serve(async (req: Request) => {
@@ -509,6 +531,17 @@ Deno.serve(async (req: Request) => {
     let lookOrder: string[] = [];
     try {
       lookOrder = await rankLooks(supabase, userId, sinceISO, brandNorm, typeNorm, rules);
+      // LEAD ROTATION (the fix for "I keep seeing the same looks first"): looks
+      // lead the feed, but the affinity ranking is stable day-to-day, so the
+      // SAME top looks always won — dailyShuffle only re-ordered that same set
+      // and derange only swapped positions, leaving the lead pool unchanged.
+      // Rotate which slice of the top looks leads each day so a genuinely
+      // different (still high-affinity) set heads the feed. Cycles through the
+      // top 18 in steps of 7 (coprime → even 18-day cycle).
+      if (lookOrder.length > 1) {
+        lookOrder = applyDailyRotation(lookOrder, dayIndexOf(feedDate), 18, 7);
+        reason = { ...reason, lookRotated: true };
+      }
       if (rules.dailyShuffle.enabled && lookOrder.length > 1) {
         lookOrder = applyDailyShuffle(lookOrder, `looks:${feedDate}:${userId}`, Math.round(rules.dailyShuffle.weight));
       }
