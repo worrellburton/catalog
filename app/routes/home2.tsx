@@ -5,13 +5,14 @@
 // pixel is shoppable: products → /p/, looks → /l/, brands → /b/ (the
 // home route's deep-link consumer opens the overlays).
 
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from '@remix-run/react';
 import { supabase } from '~/utils/supabase';
 import { productSlug, lookSlug, brandSlug } from '~/utils/slug';
 import { getLooks } from '~/services/looks';
 import { lookPoster } from '~/services/media-resolver';
 import { posterRendition } from '~/utils/poster-prefetch';
+import CatalogLogo from '~/components/CatalogLogo';
 import type { Look } from '~/data/looks';
 import '~/styles/home2.css';
 
@@ -24,6 +25,47 @@ interface Row {
   type_path: string | null;
   is_elite: boolean | null;
   image: string | null;
+  /** The product's generated catalog video — every tile plays it (the
+   *  feed contract: one product = one looping video). Null falls back to
+   *  the still image. */
+  video: string | null;
+}
+
+/** A shoppable tile's media: plays the product/look video in-viewport (muted,
+ *  looped, IntersectionObserver-gated so off-screen tiles never fetch or
+ *  decode), falling back to the still image when there's no video. Mirrors the
+ *  consumer feed's "every picture is a doorway → in motion" treatment for the
+ *  editorial Home 2.0 layout. */
+function H2Media({ video, poster, alt }: { video: string | null; poster: string | null; alt: string }) {
+  const ref = useRef<HTMLVideoElement | null>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const io = new IntersectionObserver(
+      ([entry]) => {
+        if (entry.isIntersecting) void el.play().catch(() => {});
+        else el.pause();
+      },
+      { threshold: 0.2 },
+    );
+    io.observe(el);
+    return () => io.disconnect();
+  }, [video]);
+  if (!video) {
+    return <img src={poster ?? ''} alt={alt} loading="lazy" decoding="async" />;
+  }
+  return (
+    <video
+      ref={ref}
+      src={video}
+      poster={poster ?? undefined}
+      muted
+      loop
+      playsInline
+      preload="none"
+      aria-label={alt}
+    />
+  );
 }
 
 const ISSUE_NO = (() => {
@@ -47,13 +89,17 @@ export default function HomeTwo() {
     if (!supabase) return;
     void supabase
       .from('products')
-      .select('id, name, brand, price, type, type_path, is_elite, primary_image_url, image_url')
+      .select('id, name, brand, price, type, type_path, is_elite, primary_image_url, image_url, primary_video_url, primary_video_poster_url')
       .eq('is_active', true)
       .limit(400)
       .then(({ data }) => {
-        setRows(((data ?? []) as Array<Row & { primary_image_url: string | null; image_url: string | null }>)
-          .map(r => ({ ...r, image: r.primary_image_url || r.image_url }))
-          .filter(r => !!r.image));
+        setRows(((data ?? []) as Array<Row & { primary_image_url: string | null; image_url: string | null; primary_video_url: string | null; primary_video_poster_url: string | null }>)
+          .map(r => ({
+            ...r,
+            image: r.primary_video_poster_url || r.primary_image_url || r.image_url,
+            video: r.primary_video_url,
+          }))
+          .filter(r => !!r.image || !!r.video));
       });
     void getLooks().then(all => setLooks(all.slice(0, 14)));
   }, []);
@@ -107,7 +153,7 @@ export default function HomeTwo() {
           <span>Issue No. {ISSUE_NO}</span>
           <span>{today}</span>
         </div>
-        <h1 className="h2-wordmark">Catalog</h1>
+        <h1 className="h2-wordmark"><CatalogLogo className="h2-wordmark-logo" /></h1>
         <p className="h2-dek">
           Every page is real inventory. Every picture is a doorway.
           Tap anything — it&rsquo;s yours in two clicks.
@@ -119,7 +165,7 @@ export default function HomeTwo() {
       {hero && (
         <section className="h2-hero">
           <button type="button" className="h2-hero-media" onClick={() => openProduct(hero)}>
-            <img src={posterRendition(hero.image) ?? hero.image ?? ''} alt={hero.name} />
+            <H2Media video={hero.video} poster={posterRendition(hero.image) ?? hero.image} alt={hero.name} />
             <span className="h2-hero-tag">This week&rsquo;s cover</span>
           </button>
           <div className="h2-hero-copy">
@@ -174,7 +220,7 @@ export default function HomeTwo() {
             {s.items.slice(0, 8).map(r => (
               <button key={r.id} type="button" className="h2-card" onClick={() => openProduct(r)}>
                 <span className="h2-card-media">
-                  <img src={posterRendition(r.image) ?? r.image ?? ''} alt={r.name} loading="lazy" decoding="async" />
+                  <H2Media video={r.video} poster={posterRendition(r.image) ?? r.image} alt={r.name} />
                 </span>
                 {r.brand && <em>{r.brand}</em>}
                 <strong>{r.name}</strong>
@@ -199,10 +245,10 @@ export default function HomeTwo() {
           <div className="h2-looks-band">
             {looks.map(l => {
               const poster = lookPoster(l);
-              if (!poster) return null;
+              if (!poster && !l.video) return null;
               return (
                 <button key={l.uuid || l.id} type="button" className="h2-look" onClick={() => openLook(l)}>
-                  <img src={posterRendition(poster) ?? poster} alt="" loading="lazy" decoding="async" />
+                  <H2Media video={l.video ?? null} poster={(poster ? posterRendition(poster) : null) ?? poster ?? null} alt={l.title || ''} />
                   <span>{l.creatorDisplayName || l.creator}</span>
                 </button>
               );
@@ -223,7 +269,7 @@ export default function HomeTwo() {
 
       <div className="h2-foot">
         <div className="h2-rule h2-rule--double" />
-        <h1 className="h2-wordmark h2-wordmark--foot">Catalog</h1>
+        <h1 className="h2-wordmark h2-wordmark--foot"><CatalogLogo className="h2-wordmark-logo" /></h1>
         <p>AI shopping doesn&rsquo;t have a home yet. You&rsquo;re standing in it.</p>
         <button type="button" className="h2-foot-cta" onClick={() => navigate('/')}>Enter the feed →</button>
       </div>
