@@ -413,7 +413,12 @@ export default function SearchCeremony({ query, kind = 'search', ready, onDone, 
 
         {/* 2 — Thinking: a shimmering label + the streamed step list. */}
         <div className="sc-think-label">
-          <span className={finalDone ? 'sc-think-done' : 'sc-think-shimmer'}>
+          {/* Shimmer technique needs the visible string mirrored into data-text
+              so the ::before layer can mask the sweep onto the same glyphs. */}
+          <span
+            className={finalDone ? 'sc-think-done' : 'sc-shimmer-text'}
+            data-text={finalDone ? undefined : 'Thinking'}
+          >
             {finalDone ? 'Ready' : 'Thinking'}
           </span>
         </div>
@@ -437,7 +442,15 @@ export default function SearchCeremony({ query, kind = 'search', ready, onDone, 
                     </svg>
                   )}
                 </span>
-                <span className="sc-step-label">{s}</span>
+                {/* The in-progress step shimmers (Transitions.dev technique);
+                    data-text mirrors the label so the ::before sweep masks
+                    onto the same glyphs. Done/pending steps render flat. */}
+                <span
+                  className={`sc-step-label${isActive ? ' sc-shimmer-text' : ''}`}
+                  data-text={isActive ? s : undefined}
+                >
+                  {s}
+                </span>
               </div>
             );
           })}
