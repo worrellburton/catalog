@@ -638,16 +638,47 @@
 
 /* 2 — Thinking label: a shimmering "Thinking" that settles to "Ready". */
 .sc-think-label { font-size: 13px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
-.sc-think-shimmer {
-  background: linear-gradient(100deg,
-    rgba(255, 255, 255, 0.35) 30%, #fff 50%, rgba(255, 255, 255, 0.35) 70%);
-  background-size: 200% 100%;
+/* Shimmer text (Transitions.dev technique). Two layers: the base text sits in
+   --shimmer-base, and a duplicated ::before (content: attr(data-text)) paints a
+   transparent→white→transparent band, clips it to the same glyphs via
+   background-clip:text, and animates background-position to sweep the band
+   across. Tuned for the dark ceremony (dim base, white highlight). Used for the
+   "Thinking" label AND the active step's label so the live narration pulses.
+   Callers MUST mirror the visible string into data-text. */
+.sc-shimmer-text {
+  --shimmer-dur: 2000ms;
+  --shimmer-base: rgba(255, 255, 255, 0.55);
+  --shimmer-highlight: #ffffff;
+  --shimmer-band: 400%;
+  position: relative;
+  display: inline-block;
+  color: var(--shimmer-base);
+}
+.sc-shimmer-text::before {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    transparent 40%,
+    var(--shimmer-highlight) 50%,
+    transparent 60%,
+    transparent 100%
+  );
+  background-size: var(--shimmer-band) 100%;
+  background-repeat: no-repeat;
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  animation: sc-shimmer 1.6s linear infinite;
+  -webkit-text-fill-color: transparent;
+  animation: sc-shimmer-sweep var(--shimmer-dur) linear infinite;
 }
-@keyframes sc-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@keyframes sc-shimmer-sweep {
+  0%   { background-position: 100% 0; }
+  100% { background-position: 0% 0; }
+}
 .sc-think-done { color: #4ade80; }
 
 /* Streamed step list — each ticks from spinner to check. */
@@ -1012,7 +1043,7 @@ html:has(.bottom-bar.search-open) .sc-name-pill { opacity: 0; pointer-events: no
 
 @media (prefers-reduced-motion: reduce) {
   .sfh-spark, .sfh-title, .sfh-pill, .sfh-scroll-hint,
-  .sc-echo-spark, .sc-think-shimmer, .sc-step, .sc-step-spinner,
+  .sc-echo-spark, .sc-shimmer-text, .sc-shimmer-text::before, .sc-step, .sc-step-spinner,
   .search-ceremony, .home-results-reveal {
     animation: none !important;
   }
