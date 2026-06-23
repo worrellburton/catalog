@@ -46,6 +46,53 @@
 
 .ai-bar-wrap { flex-direction: column; align-items: center; gap: 10px; }
 
+/* ── In-flow hero copy ───────────────────────────────────────────────────
+   Rendered INSIDE ShoppingForHero's .sfh-stage (TypeAnywhere `inline`) so the
+   search bar rides the same flex column as the sparkle + headline and can
+   never drift out of alignment with them — the bug the fixed, vh-anchored
+   global copy had on odd viewport heights. Static-in-flow (well, relative so
+   the pill cloud can anchor to it), capped width, no fixed positioning. The
+   global copy steps aside while the hero is at the top (see the JS), so only
+   one shows at a time. Still inherits the ≤768px + shell hard-hide above. */
+.ai-bar-wrap--inline {
+  position: relative;
+  /* Beat the global hero rules in home-hero.css — `body:has(.app-root.home-hero)
+     .ai-bar-wrap { bottom: Nvh }` outranks this single class via :has, and a
+     `bottom` on a relative element would shove it up out of the column. */
+  bottom: auto !important;
+  top: auto !important;
+  left: auto;
+  right: auto;
+  width: min(560px, 100%);
+  margin: 4px auto 0;
+  padding: 0;
+  z-index: auto;
+  pointer-events: auto;
+}
+/* The autocomplete + catalog-pill cloud overlay ABOVE the inline bar instead
+   of growing the column (which would shove the bar + scroll hint around on
+   focus). Centered with left/right + margin-inline (never translateX — the
+   pills' entrance animation owns `transform`). */
+.ai-bar-wrap--inline > .ai-bar-autocomplete,
+.ai-bar-wrap--inline > .catalog-pills {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: calc(100% + 12px);
+  margin-inline: auto;
+}
+/* Once the shopper scrolls into the feed the inline copy (which lives in the
+   now-scrolled-away hero) yields to the global fixed bar that docks at the
+   bottom — hide it so the two never momentarily co-exist on screen. */
+.app-root.home-hero.hero-scrolled .ai-bar-wrap--inline { display: none; }
+/* First-paint backstop: while the hero is at the top the inline copy owns the
+   screen, so the global fixed copy must never flash in (the JS unmounts it a
+   tick later via the catalog:hero-inline event — this just covers the race
+   frame before that effect runs). */
+body:has(.app-root.home-hero:not(.hero-scrolled)) .ai-bar-wrap:not(.ai-bar-wrap--inline) {
+  display: none !important;
+}
+
 /* Type-ahead suggestions — stacks above the bar (column wrap) on the same
    liquid-glass surface as .ai-bar. pointer-events:auto since the wrap is
    pass-through. Rows run top→down, best match first; the freeform "Make a

@@ -5,6 +5,7 @@
 
 import { useEffect, useRef, useMemo, useState } from 'react';
 import { getAutoEditorConfig } from '~/services/dials';
+import TypeAnywhere from '~/components/TypeAnywhere';
 
 // Headline rotation. First HEADLINE_BASELINE_VISITS the user sees the
 // canonical "What are you shopping for?". After that, we pick from
@@ -287,6 +288,14 @@ export default function ShoppingForHero({ onRevealFeed }: ShoppingForHeroProps) 
           <br/>
           {headline.line2}
         </h1>
+
+        {/* Desktop search lives INSIDE the hero's flex column (in-flow) so it
+            stays locked to the sparkle + headline and can't drift on odd
+            viewport heights. The global fixed copy (root.tsx) steps aside while
+            the hero is at the top — see TypeAnywhere `inline` + the
+            `catalog:hero-inline` event. Hidden ≤768px (mobile keeps the
+            BottomBar pill) via .ai-bar-wrap's own media query. */}
+        <TypeAnywhere inline />
       </div>
 
       {/* Scroll-to-your-daily-feed affordance: the "Your daily feed" heading
