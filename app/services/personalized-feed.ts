@@ -35,8 +35,10 @@ export interface PersonalizedOrders {
 }
 
 // Bumped to v2 when looks joined the cached payload (shape changed from a bare
-// product-id array to { p, l }).
-const CACHE_PREFIX = 'catalog:personalized-feed:v2';
+// product-id array to { p, l }). Bumped to v3 with the engine's daily
+// lead-rotation for looks — invalidates the day's cached order so shoppers pick
+// up the rotated feed immediately instead of after the next UTC rollover.
+const CACHE_PREFIX = 'catalog:personalized-feed:v3';
 
 /** UTC day stamp (YYYY-MM-DD) — matches the edge function's per-day key. */
 function todayUtc(): string {
