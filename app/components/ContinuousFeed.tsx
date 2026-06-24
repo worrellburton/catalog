@@ -28,7 +28,7 @@ import { useUserAffinity } from '~/hooks/useUserAffinity';
 import { getFeedRules } from '~/services/dials';
 import { composeRenderedCreatives } from '~/services/feed-compose';
 import { recordRecentSearch } from '~/services/recent-searches';
-import { getPersonalizedProductOrder, getPersonalizedLookOrder } from '~/services/personalized-feed';
+import { getPersonalizedProductOrder, getPersonalizedLookOrder, clearPersonalizedCache, subscribeFeedAdvance } from '~/services/personalized-feed';
 
 interface BookmarksInterface {
   isLookBookmarked: (id: number) => boolean;
@@ -228,6 +228,21 @@ function ContinuousFeed({
     });
     return () => { cancelled = true; };
   }, [user?.id]);
+
+  // Live "Advance": when an admin bumps the Daily Feed epoch, re-roll this open
+  // feed immediately — bust the cached order and re-pull — instead of waiting
+  // for a reload or the next UTC rollover. Setting personalizedOrder/
+  // personalizedLookOrder recomputes renderedCreatives + semanticallyOrderedLooks
+  // (both list them as deps), so the top of the grid reorders in place.
+  useEffect(() => {
+    let active = true;
+    const unsub = subscribeFeedAdvance(() => {
+      clearPersonalizedCache();
+      getPersonalizedProductOrder().then(ids => { if (active) setPersonalizedOrder(ids); });
+      getPersonalizedLookOrder().then(ids => { if (active) setPersonalizedLookOrder(ids); });
+    });
+    return () => { active = false; unsub(); };
+  }, []);
 
   // ── Committed query - the feed only updates when nl-search resolves ─────
   // While the user is typing (or nl-search is in flight), committedQuery stays
