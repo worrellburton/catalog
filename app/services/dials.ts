@@ -551,6 +551,24 @@ export async function advanceDailyFeed(): Promise<number> {
     { onConflict: 'key' },
   );
   if (error) throw new Error(error.message);
+
+  // Bust the SERVER-side feed cache so the advance takes effect immediately.
+  // personalize-feed is idempotent per (user_id, feed_date) — without this, any
+  // row already computed for the advanced day is re-served stale even after the
+  // epoch bump. Clearing forces every shopper to recompute fresh on next visit.
+  // Cutoff = yesterday UTC: the engine's feed_date is Date.now() shifted by the
+  // refresh hour (up to 23h back, i.e. onto the previous UTC day) plus the epoch
+  // days forward, so today/future plus a one-day margin covers every row that
+  // could be served now; older rows are harmless history. Needs the admin DELETE
+  // policy (migration 20260624000000_personalized_feeds_admin_delete) — non-
+  // fatal if it fails since the epoch bump already invalidates the client cache.
+  const cutoff = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+  const { error: delErr } = await supabase
+    .from('personalized_feeds')
+    .delete()
+    .gte('feed_date', cutoff);
+  if (delErr) console.warn('[dials] advanceDailyFeed: server feed-cache clear failed:', delErr.message);
+
   return next;
 }
 
