@@ -12,10 +12,11 @@
 
 import DailyFeedSettings from '~/components/admin/DailyFeedSettings';
 import DailyFeedPreview from '~/components/admin/DailyFeedPreview';
+import '~/styles/daily-feed-admin.css';
 
 export default function AdminDailyFeed() {
   return (
-    <div className="admin-page">
+    <div className="admin-page df-admin">
       <div className="admin-page-header">
         <h1>Daily Feed</h1>
         <p className="admin-page-subtitle">

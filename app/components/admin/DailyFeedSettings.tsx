@@ -28,19 +28,15 @@ const FIELD_HELP: Record<string, string> = {
   minSignal: 'Minimum engagement events a shopper needs before they get a personalized feed (below this, the global feed).',
 };
 
-// Small "?" affordance — native title tooltip on hover keeps it dependency-free.
+// "?" affordance with a real hover/focus tooltip (styled bubble via
+// daily-feed-admin.css) so the product-insight copy shows instantly instead of
+// relying on the slow, unstyled native title.
 function HelpDot({ text }: { text: string }) {
   return (
-    <span
-      title={text}
-      aria-label={text}
-      style={{
-        display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-        width: 14, height: 14, marginLeft: 5, borderRadius: '50%',
-        border: '1px solid #cbd5e1', color: '#94a3b8', fontSize: 9, fontWeight: 700,
-        cursor: 'help', verticalAlign: 'middle', lineHeight: 1, flexShrink: 0,
-      }}
-    >?</span>
+    <span className="df-help" tabIndex={0} aria-label={text}>
+      ?
+      <span className="df-help-tip" role="tooltip">{text}</span>
+    </span>
   );
 }
 
@@ -153,12 +149,6 @@ export default function DailyFeedSettings() {
             When on, every shopper gets their own Daily Feed; off keeps everyone on the global feed order.
           </p>
         </div>
-        {flash && (
-          <span style={{
-            flexShrink: 0, fontSize: 12, fontWeight: 600, padding: '4px 10px', borderRadius: 999,
-            background: flash.err ? '#fef2f2' : '#ecfdf5', color: flash.err ? '#b91c1c' : '#047857',
-          }}>{flash.msg}</span>
-        )}
       </div>
 
       {/* Master on/off toggle. */}
@@ -291,7 +281,8 @@ export default function DailyFeedSettings() {
           The rulebook behind every shopper&apos;s Daily Feed. Each rule is a switch + a weight
           (how hard it pulls). Drag the handle to reorder; hover the&nbsp;? for what each does.
         </p>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+        {/* Gallery view — a grid of rule cards (was a tall single column). */}
+        <div className="df-rules-gallery">
           {ruleOrder.map(key => {
             const meta = FEED_RULE_META.find(m => m.key === key);
             if (!meta) return null;
@@ -300,53 +291,69 @@ export default function DailyFeedSettings() {
             return (
               <div
                 key={meta.key}
+                className={`df-rule-card${rule.enabled ? ' is-on' : ''}${isDragging ? ' is-dragging' : ''}`}
                 onDragOver={e => { if (dragKey && dragKey !== meta.key) { e.preventDefault(); reorder(dragKey, meta.key); } }}
-                style={{
-                  display: 'flex', alignItems: 'center', gap: 10,
-                  padding: '10px 12px', borderRadius: 8, border: '1px solid #e2e8f0',
-                  background: rule.enabled ? '#f0fdf4' : '#fafafa',
-                  opacity: isDragging ? 0.5 : 1,
-                }}
               >
-                <span
-                  draggable={!loading}
-                  onDragStart={() => setDragKey(meta.key)}
-                  onDragEnd={() => { setDragKey(null); persistOrder(ruleOrder); }}
-                  title="Drag to reorder"
-                  aria-label="Drag to reorder"
-                  style={{ cursor: 'grab', color: '#cbd5e1', fontSize: 14, lineHeight: 1, flexShrink: 0, userSelect: 'none' }}
-                >⠿</span>
-                <input
-                  type="checkbox"
-                  checked={rule.enabled}
-                  disabled={loading}
-                  onChange={e => saveRules({ ...rules, [meta.key]: { ...rule, enabled: e.target.checked } })}
-                  style={{ width: 16, height: 16, cursor: 'pointer', flexShrink: 0 }}
-                />
-                <div style={{ flex: 1, minWidth: 0, display: 'flex', alignItems: 'center' }}>
-                  <span style={{ fontSize: 12.5, fontWeight: 600, color: '#111', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{meta.label}</span>
-                  <HelpDot text={meta.hint} />
+                <div className="df-rule-card-head">
+                  <span
+                    className="df-rule-card-grip"
+                    draggable={!loading}
+                    onDragStart={() => setDragKey(meta.key)}
+                    onDragEnd={() => { setDragKey(null); persistOrder(ruleOrder); }}
+                    title="Drag to reorder"
+                    aria-label="Drag to reorder"
+                  >⠿</span>
+                  <span className="df-rule-card-title">{meta.label}<HelpDot text={meta.hint} /></span>
+                  <input
+                    type="checkbox"
+                    checked={rule.enabled}
+                    disabled={loading}
+                    onChange={e => saveRules({ ...rules, [meta.key]: { ...rule, enabled: e.target.checked } })}
+                    style={{ width: 16, height: 16, cursor: 'pointer', flexShrink: 0, marginTop: 1 }}
+                  />
                 </div>
-                {meta.weight && (
-                  <label style={{ display: 'flex', alignItems: 'center', gap: 8, flexShrink: 0, opacity: rule.enabled ? 1 : 0.35 }}>
-                    <input
-                      type="range"
-                      min={meta.min ?? 0}
-                      max={meta.max ?? 10}
-                      step={1}
-                      value={rule.weight}
-                      disabled={loading || !rule.enabled}
-                      onChange={e => saveRules({ ...rules, [meta.key]: { ...rule, weight: Number(e.target.value) } })}
-                      style={{ width: 90 }}
-                    />
-                    <span style={{ fontSize: 11, fontWeight: 700, color: '#475569', width: 18, textAlign: 'right' }}>{rule.weight}</span>
-                  </label>
-                )}
+                <div className="df-rule-card-foot">
+                  {meta.weight ? (
+                    <label className="df-rule-card-weight" style={{ opacity: rule.enabled ? 1 : 0.4 }}>
+                      <input
+                        type="range"
+                        min={meta.min ?? 0}
+                        max={meta.max ?? 10}
+                        step={1}
+                        value={rule.weight}
+                        disabled={loading || !rule.enabled}
+                        onChange={e => saveRules({ ...rules, [meta.key]: { ...rule, weight: Number(e.target.value) } })}
+                      />
+                      <span className="df-rule-card-weight-val">{rule.weight}</span>
+                    </label>
+                  ) : (
+                    <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8' }}>{rule.enabled ? 'On' : 'Off'}</span>
+                  )}
+                </div>
               </div>
             );
           })}
         </div>
       </div>
+
+      {/* Saved notification — a success-check toast (Transitions.dev) fires on
+          every save: settings, rule changes, and the advance action all funnel
+          through say(), so any "set" shows this with its context message. */}
+      {flash && (
+        <div className={`df-save-toast${flash.err ? ' is-err' : ''}`} role="status" aria-live="polite">
+          <span className="df-save-toast-icon">
+            <span className="t-success-check" data-state="in" aria-hidden="true">
+              <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="#fff" strokeWidth="3" strokeLinecap="round" strokeLinejoin="round">
+                {flash.err ? <path d="M18 6 6 18M6 6l12 12" /> : <path d="M20 6 9 17l-5-5" />}
+              </svg>
+            </span>
+          </span>
+          <div>
+            <div className="df-save-toast-title">{flash.err ? 'Couldn’t save' : 'Saved'}</div>
+            <div className="df-save-toast-sub">{flash.msg}</div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

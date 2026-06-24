@@ -78,7 +78,9 @@ const MODES: { id: Mode; label: string }[] = [
 export default function DailyFeedPreview() {
   const [mode, setMode] = useState<Mode>('user');
   const [username, setUsername] = useState('');
-  const [feedDate, setFeedDate] = useState(''); // '' = today / live
+  // Defaults to today (the live feed). A past date reads the stored row; today
+  // (== now) still resolves to the live compute since isPast is feedDate<today.
+  const [feedDate, setFeedDate] = useState(todayUtc());
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [who, setWho] = useState<string | null>(null);
@@ -252,8 +254,10 @@ export default function DailyFeedPreview() {
   const lookCount = items.filter(i => i.kind === 'look').length;
 
   return (
-    <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 14, overflow: 'hidden' }}>
-      <div style={{ padding: '16px 18px', borderBottom: '1px solid #eee' }}>
+    // overflow:visible (not hidden) so the user-search autocomplete dropdown
+    // isn't clipped by the card edge; the header rounds its own top corners.
+    <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 14, overflow: 'visible' }}>
+      <div style={{ padding: '16px 18px', borderBottom: '1px solid #eee', borderRadius: '14px 14px 0 0' }}>
         <h2 style={{ margin: '0 0 2px', fontSize: 17, fontWeight: 700, color: '#111' }}>Preview a shopper&apos;s feed</h2>
         <p style={{ margin: 0, fontSize: 12.5, color: '#777' }}>
           See any shopper&apos;s live feed, the feed they were served on a past day, or a cohort baseline.
@@ -276,6 +280,19 @@ export default function DailyFeedPreview() {
           ))}
         </div>
 
+        {/* What the selected mode actually previews — the cohort tabs are a
+            BASELINE (the global, non-personalized feed a cold-start shopper
+            sees), not a per-shopper feed. */}
+        <div style={{ fontSize: 12, color: '#777', margin: '-4px 0 12px', lineHeight: 1.45 }}>
+          {mode === 'user'
+            ? 'A real shopper’s own Daily Feed — personalized to their taste (today’s live feed, or a past day exactly as served).'
+            : mode === 'men'
+              ? 'Cohort baseline — the global feed a brand-new / cold-start shopper sees (no personalization yet), filtered to men’s + unisex.'
+              : mode === 'women'
+                ? 'Cohort baseline — the global feed a brand-new / cold-start shopper sees (no personalization yet), filtered to women’s + unisex.'
+                : 'Cohort baseline — the global feed a brand-new / cold-start shopper sees (no personalization yet), across all genders.'}
+        </div>
+
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 14, flexWrap: 'wrap' }}>
           {mode === 'user' && (
             <div style={{ flex: 1, minWidth: 220, position: 'relative' }}>
@@ -288,7 +305,7 @@ export default function DailyFeedPreview() {
               />
               {suggestions.length > 0 && (
                 <div style={{
-                  position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 5, marginTop: 4,
+                  position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, marginTop: 4,
                   background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10,
                   boxShadow: '0 12px 32px rgba(0,0,0,0.14)', overflow: 'hidden',
                 }}>
@@ -325,9 +342,9 @@ export default function DailyFeedPreview() {
                 title="Leave as today for the live feed; pick a past day to see the feed they were served then"
                 style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid #ddd', fontSize: 13, fontFamily: 'inherit' }}
               />
-              {feedDate && (
+              {feedDate && feedDate < todayUtc() && (
                 <button
-                  onClick={() => setFeedDate('')}
+                  onClick={() => setFeedDate(todayUtc())}
                   title="Back to today (live)"
                   style={{ background: 'transparent', border: 'none', color: '#999', fontSize: 16, cursor: 'pointer', lineHeight: 1 }}
                 >×</button>
