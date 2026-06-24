@@ -1067,17 +1067,16 @@ html:has(.bottom-bar.search-open) .sc-name-pill { opacity: 0; pointer-events: no
   }
 }
 @media (min-width: 769px) {
-  /* Desktop feed peek — nose the feed up so more of the first rows of cards
-     show below the hero ("there's more below" reads stronger on the wide
-     viewport). Bumped 10svh → 18svh to reposition the hero higher / reveal
-     more grid above the fold. */
+  /* Desktop feed peek — nose the feed up so a strip of the first rows shows
+     below the hero ("there's more below"). Eased 18svh → 8svh per request so
+     the feed starts a little lower (less peek, hero sits a touch lower too). */
   .app-root.home-hero:not(.hero-scrolled) .home-feed-wrap {
-    margin-top: -18svh;
+    margin-top: -8svh;
   }
   /* Keep the "Your daily feed" hint clear of the peek — track it (+ a 32px
      gap) so the label always sits just above the first row of cards. */
   .app-root.home-hero:not(.hero-scrolled) .sfh-scroll-hint {
-    bottom: calc(18svh + 32px + env(safe-area-inset-bottom));
+    bottom: calc(8svh + 32px + env(safe-area-inset-bottom));
   }
 }
 
@@ -1719,7 +1718,16 @@ html:has(.bottom-bar.search-open) .sc-name-pill { opacity: 0; pointer-events: no
   /* Even, balanced spacing for the desktop hero trio: a comfortable gap
      between the spark and the headline that matches the headline→bar gap. */
   .sfh-stage {
-    gap: 36px;
+    gap: 28px;
+  }
+  /* Dial the desktop hero down a notch (per request) — smaller spark +
+     headline so the cluster reads more compact above the bar. */
+  .sfh-spark svg {
+    width: 56px;
+    height: 56px;
+  }
+  .sfh-title {
+    font-size: clamp(26px, 3vw, 38px);
   }
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar,
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar.search-open {
