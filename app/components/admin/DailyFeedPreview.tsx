@@ -362,29 +362,43 @@ export default function DailyFeedPreview() {
         {err && <ErrorState light body={err} onRetry={run} retryLabel="Retry" />}
 
         {who && !err && (
-          <div style={{ fontSize: 12.5, color: '#555', marginBottom: 10 }}>
-            Showing <strong style={{ color: '#111' }}>{who}</strong>
-            {mode === 'user' && feedDate && feedDate < todayUtc() && (
-              <span style={{ marginLeft: 6, color: '#999' }}>on {feedDate}</span>
-            )}
-            {variant && <span style={{ marginLeft: 6, padding: '2px 8px', borderRadius: 999, background: '#eef2ff', color: '#4338ca', fontSize: 11, fontWeight: 600 }}>{variant}</span>}
-            <span style={{ marginLeft: 6, color: '#999' }}>· {items.length} items · {lookCount} looks</span>
-            {reason && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 8 }}>
-                {(reason.topBrands ?? []).slice(0, 4).map(b => (
-                  <span key={`b-${b}`} style={{ padding: '2px 8px', borderRadius: 999, background: '#fef3c7', color: '#92400e', fontSize: 10.5, fontWeight: 600 }}>♥ {b}</span>
-                ))}
-                {(reason.topTypes ?? []).slice(0, 4).map(ty => (
-                  <span key={`t-${ty}`} style={{ padding: '2px 8px', borderRadius: 999, background: '#dcfce7', color: '#166534', fontSize: 10.5, fontWeight: 600 }}>{ty}</span>
-                ))}
-                {(reason.rules ?? []).map(r => (
-                  <span key={`r-${r}`} style={{ padding: '2px 8px', borderRadius: 999, background: '#f1f5f9', color: '#475569', fontSize: 10.5, fontWeight: 600 }}>rule: {r}</span>
-                ))}
-                {typeof reason.engaged === 'number' && (
-                  <span style={{ padding: '2px 8px', borderRadius: 999, background: '#f1f5f9', color: '#475569', fontSize: 10.5, fontWeight: 600 }}>{reason.engaged} engaged · {reason.seen ?? 0} seen</span>
-                )}
-              </div>
-            )}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 10 }}>
+            <div style={{ fontSize: 12.5, color: '#555' }}>
+              Showing <strong style={{ color: '#111' }}>{who}</strong>
+              {mode === 'user' && feedDate && feedDate < todayUtc() && (
+                <span style={{ marginLeft: 6, color: '#999' }}>on {feedDate}</span>
+              )}
+              {variant && <span style={{ marginLeft: 6, padding: '2px 8px', borderRadius: 999, background: '#eef2ff', color: '#4338ca', fontSize: 11, fontWeight: 600 }}>{variant}</span>}
+              <span style={{ marginLeft: 6, color: '#999' }}>· {items.length} items · {lookCount} looks</span>
+              {reason && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 8 }}>
+                  {(reason.topBrands ?? []).slice(0, 4).map(b => (
+                    <span key={`b-${b}`} style={{ padding: '2px 8px', borderRadius: 999, background: '#fef3c7', color: '#92400e', fontSize: 10.5, fontWeight: 600 }}>♥ {b}</span>
+                  ))}
+                  {(reason.topTypes ?? []).slice(0, 4).map(ty => (
+                    <span key={`t-${ty}`} style={{ padding: '2px 8px', borderRadius: 999, background: '#dcfce7', color: '#166534', fontSize: 10.5, fontWeight: 600 }}>{ty}</span>
+                  ))}
+                  {(reason.rules ?? []).map(r => (
+                    <span key={`r-${r}`} style={{ padding: '2px 8px', borderRadius: 999, background: '#f1f5f9', color: '#475569', fontSize: 10.5, fontWeight: 600 }}>rule: {r}</span>
+                  ))}
+                  {typeof reason.engaged === 'number' && (
+                    <span style={{ padding: '2px 8px', borderRadius: 999, background: '#f1f5f9', color: '#475569', fontSize: 10.5, fontWeight: 600 }}>{reason.engaged} engaged · {reason.seen ?? 0} seen</span>
+                  )}
+                </div>
+              )}
+            </div>
+            {/* Collapse the previewed feed back down (keeps the user/date inputs
+                so you can re-run without retyping). */}
+            <button
+              type="button"
+              onClick={() => { setItems([]); setWho(null); setVariant(null); setReason(null); }}
+              title="Collapse this preview"
+              style={{
+                flexShrink: 0, padding: '5px 12px', borderRadius: 999, cursor: 'pointer',
+                border: '1px solid #e5e7eb', background: '#fff', color: '#444',
+                fontSize: 12, fontWeight: 600,
+              }}
+            >Collapse ↑</button>
           </div>
         )}
 
