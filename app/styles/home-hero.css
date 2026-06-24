@@ -2023,3 +2023,25 @@ body:has(.app-root.chrome-hidden) .ai-bar-wrap {
     transform: translateY(-18vh);
   }
 }
+
+/* ── "App chrome on scroll" dial (OFF) — immersive home ──────────────────────
+   Set by root.tsx as html.app-chrome-scroll-off when the admin turns the dial
+   off. Once the home feed is scrolled past the hero (.hero-scrolled), retire
+   the top header (Catalog logo + creators rail) and the bottom search so the
+   feed fills the screen. Both glide back at the very top (hero, not scrolled).
+   The feed, card info, and look/product overlays are never touched. The header
+   is position:fixed and the search bar is fixed, so a translate slides each one
+   cleanly off-screen. */
+html.app-chrome-scroll-off .app-root.home-hero.hero-scrolled > header {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-110%);
+  transition: opacity 0.28s ease, transform 0.28s ease;
+}
+html.app-chrome-scroll-off body:has(.app-root.home-hero.hero-scrolled) .ai-bar-wrap,
+html.app-chrome-scroll-off body:has(.app-root.home-hero.hero-scrolled) .bottom-bar {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(160%);
+  transition: opacity 0.28s ease, transform 0.28s ease;
+}

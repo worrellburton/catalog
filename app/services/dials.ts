@@ -128,6 +128,15 @@ export const DEFAULT_COMMENTS_ENABLED = true;
 export const UI_ON_SCROLL_KEY = 'ui_on_scroll';
 export const DEFAULT_UI_ON_SCROLL = true;
 
+// "App chrome on scroll" dial — distinct from ui_on_scroll (which governs the
+// CARD chrome). This one governs the APP chrome: the top header (Catalog logo +
+// creators rail) and the bottom search bar on the home feed. ON = they follow
+// the feed as you scroll (current behaviour). OFF = once you scroll past the
+// hero they hide for an immersive, media-only scroll; they reappear at the very
+// top. The feed and its card info / look-product overlays are never touched.
+export const CHROME_ON_SCROLL_KEY = 'chrome_on_scroll';
+export const DEFAULT_CHROME_ON_SCROLL = true;
+
 /**
  * Warm every boot-time dial in a single round-trip. Call once early in the
  * app boot (in parallel with the feed fetch). After it resolves, the dial
@@ -265,6 +274,34 @@ export function subscribeUiOnScroll(onChange: (value: boolean) => void): () => v
       (payload) => {
         const next = (payload.new as { value?: string } | null)?.value;
         onChange(parseBool(next ?? null, DEFAULT_UI_ON_SCROLL));
+      },
+    )
+    .subscribe();
+  return () => { void supabase!.removeChannel(channel); };
+}
+
+export async function getChromeOnScroll(): Promise<boolean> {
+  return parseBool(await readDial(CHROME_ON_SCROLL_KEY), DEFAULT_CHROME_ON_SCROLL);
+}
+
+export async function setChromeOnScroll(value: boolean): Promise<void> {
+  if (!supabase) throw new Error('Supabase not configured');
+  const { error } = await supabase
+    .from('app_settings')
+    .upsert({ key: CHROME_ON_SCROLL_KEY, value: String(value) }, { onConflict: 'key' });
+  if (error) throw error;
+}
+
+export function subscribeChromeOnScroll(onChange: (value: boolean) => void): () => void {
+  if (!supabase) return () => {};
+  const channel = supabase
+    .channel(`dials:${CHROME_ON_SCROLL_KEY}`)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'app_settings', filter: `key=eq.${CHROME_ON_SCROLL_KEY}` },
+      (payload) => {
+        const next = (payload.new as { value?: string } | null)?.value;
+        onChange(parseBool(next ?? null, DEFAULT_CHROME_ON_SCROLL));
       },
     )
     .subscribe();
