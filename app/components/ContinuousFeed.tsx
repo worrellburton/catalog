@@ -1305,6 +1305,11 @@ function ContinuousFeed({
                 onOpenCreativeProduct={handleOpenCreativeProduct}
                 creatives={segment.isInitial ? displayCreatives : undefined}
                 creativesLoading={segment.isInitial ? creativesLoading : false}
+                // Daily Feed mode: when the engine produced a per-shopper order
+                // (products and/or looks), tell FeedSection to PRESERVE it
+                // instead of re-sorting the initial deck by feed_rank — that
+                // re-sort was silently discarding the personalized order.
+                personalized={segment.isInitial && ((personalizedOrder?.length ?? 0) > 0 || (personalizedLookOrder?.length ?? 0) > 0)}
                 canDeleteCreative={canDeleteCreative}
                 onDeleteCreative={handleDeleteCreative}
                 onDeleteLook={canDeleteCreative ? handleDeleteLook : undefined}
