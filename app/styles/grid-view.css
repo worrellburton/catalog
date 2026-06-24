@@ -205,7 +205,9 @@
  * "standard" ease (in + out symmetric). */
 @media (hover: hover) {
   .look-card {
-    transition: opacity 1.2s cubic-bezier(0.42, 0, 0.58, 1);
+    /* Snappy hover feedback: the hovered card pops to full opacity (siblings
+       dim) quickly instead of the old sluggish 1.2s fade. */
+    transition: opacity 0.25s cubic-bezier(0.42, 0, 0.58, 1);
   }
   /* Gated on html.is-pointing so the sibling-dim only kicks in when the mouse
      is genuinely pointing — NOT while scrolling content slides under a
