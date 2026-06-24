@@ -33,7 +33,8 @@ import { useSearchUrlSync } from '~/hooks/useSearchUrlSync';
 import { useShopperGender } from '~/hooks/useShopperGender';
 import { toCatalogName, getRandomCatalogName } from '~/utils/catalogName';
 import { funnyCatalogName } from '~/utils/searchIntent';
-import { prefetchSimilarProducts, prefetchCreativesByBrand, prefetchHomeFeed, type ProductAd } from '~/services/product-creative';
+import { prefetchSimilarProducts, prefetchCreativesByBrand, prefetchHomeFeed, pruneStaleHomeFeedCaches, type ProductAd } from '~/services/product-creative';
+import { pruneStalePersistedOrders } from '~/services/personalized-feed';
 import { getGraphPairs, type GraphPair } from '~/services/graph-pairs';
 import { getLooks, getLookByUuid } from '~/services/looks';
 import { suggestCatalogs } from '~/services/catalog-suggest';
@@ -2238,8 +2239,14 @@ export default function Home() {
   // The SPA no longer uses a service worker (Vercel already serves hashed
   // assets `immutable`). Proactively retire any SW a returning visitor still
   // has registered and purge its caches, so stale chunk hashes can't hang nav.
+  // Same pass reclaims orphaned localStorage: the daily-feed order is no longer
+  // persisted (it re-validates every load), and old home-feed cache versions
+  // (v8→v12, gender variants) linger forever otherwise — sweep both so the
+  // shopper's storage stays small and can't fill the quota.
   useEffect(() => {
     retireServiceWorker();
+    pruneStalePersistedOrders();
+    pruneStaleHomeFeedCaches();
   }, []);
 
   // Trail depth: while the product/look overlay is open, the under-layer
