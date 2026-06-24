@@ -1,155 +1,144 @@
-# Catalog — Improvement Review
+# Catalog — Product Improvement Review
+**Branch:** `main` · **Reviewed:** 2026-06-24 · **Reviewer:** Claude Sonnet 4.6
 
-**Date:** 2026-06-23  
-**Branch reviewed:** `main` (read-only)  
-**Reviewed by:** Claude Sonnet 4.6
+Sources examined: `CLAUDE.md`, `docs/daily-feed.md`, `docs/PENDING_QUEUE.md`,
+`docs/VIBE_AESTHETIC_SEARCH_PLAN.md`, `supabase/functions/embed-product/index.ts`,
+`supabase/functions/haiku-context/index.ts`, `supabase/functions/affiliate-sync/index.ts`,
+`supabase/migrations/082_search_v3_clean.sql` (trg_products_auto_embed),
+`supabase/migrations/20260612010000_haiku_context.sql`,
+`supabase/migrations/20260618000000_haiku_context_backfill_cron.sql`,
+`app/services/personalized-feed.ts`, `app/services/seen-feed.ts`,
+`app/services/looks.ts` (fetchSeenLookIds),
+`app/components/ContinuousFeed.tsx`, `app/components/FollowingRail.tsx`,
+`app/services/affiliate.ts`, and recent git log.
 
-Sources consulted: `CLAUDE.md`, `docs/daily-feed.md`, `docs/VIBE_AESTHETIC_SEARCH_PLAN.md`,
-`docs/SEARCH_ENRICHMENT_PLAN.md`, `docs/BACKFILL_STATUS.md`, `docs/PENDING_QUEUE.md`,
-`supabase/functions/personalize-feed/index.ts`, `app/services/personalized-feed.ts`,
-`app/services/session-tracker.ts`, `app/services/seen-feed.ts`, `app/services/looks.ts`,
-`app/components/ContinuousFeed.tsx`, `app/components/LookCard.tsx`,
-migrations `20260603000001–20260608000001`, recent `git log --oneline -30`.
-
----
-
-## 1. Aesthetic search Phase 2 — style data will re-pollute as the catalog grows
-
-**Problem.** The V8 aesthetic route (`search_products`, migrations `20260605000007–9`)
-correctly fixes `"quiet luxury" → candles` today by filtering candidates to
-`taxonomy.category ∈ APPAREL_DEPARTMENT` before BM25 ranking. But the underlying
-data is still wrong: `agents/product-scraper/modal_app.py::generate_taxonomy_and_styling`
-emits a free-text `taxonomy.style` string without any department constraint, so new
-products keep arriving with dept-blind labels ("minimal luxury" on a laptop, on a
-cashmere coat). `product_occasions_text()` (migration `20260603000001`) feeds that
-raw string directly into the BM25 doc: `coalesce(taxonomy->>'style','')`. The V8
-department gate papers over the existing pollution; it does nothing to stop the next
-scrape batch re-introducing it.
-
-The VIBE_AESTHETIC_SEARCH_PLAN.md §5 specifies the actual fix — a **controlled
-`style[]` vocabulary** applied only to apparel — but it was never built. The plan's
-own §7 flags this: "when the controlled `style[]`/occasion vocab lands, update the
-`generate_taxonomy_and_styling` prompt … so new products are born compliant.
-Otherwise the backfill drifts out of date."
-
-**Why it matters.** The aesthetic route is stable today but becomes less precise as
-catalog size grows. The current `style` signal in the BM25 doc is noisy enough that
-V8 chose to bypass it entirely (apparel filter + query expansion rather than style
-matching). Phase 2 would make `style[]` a real ranking signal, eliminating the
-bypass dependency and improving precision at every catalog size.
-
-**Next step.** Run `scripts/enrich-aesthetics.mjs` (described in VIBE_AESTHETIC_SEARCH_PLAN.md §5.3 — needs to be written, mirrors `enrich-occasions-v2.mjs`): a Haiku
-pass over all apparel/footwear/accessories that replaces free-text style with 1–3
-values from the controlled vocab (quiet luxury · old money · streetwear · clean girl ·
-coastal grandma · y2k · coquette · gorpcore · minimalist · classic tailoring · athleisure ·
-bohemian · edgy · preppy · workwear). In the same PR, update
-`modal_app.py::generate_taxonomy_and_styling` to emit the controlled `style[]` on
-new scrapes. Estimated: ~1 day, ~$0.10 Haiku cost for backfill.
+Compared against prior review (2026-06-22) to confirm novelty. Items #1 and #2
+are new since that review. Items #3 and #4 were flagged then and remain open.
 
 ---
 
-## 2. Daily Feed holdout is unmeasurable at event level
+## 1 · haiku\_context is generated for every product but never enters the search index
 
-**Problem.** The `personalize-feed` edge function deterministically assigns shoppers
-to a `personalized` or `holdout` variant (10% holdout by default, tunable) and stores
-the assignment in `personalized_feeds.variant`. But `user_events` carries no variant
-field. The only way to measure holdout vs. personalized performance is a fuzzy
-date-join: link every impression/click a user fires on a given day to whichever variant
-they were assigned that morning. That answers "did personalized users click more on
-average?" but not "which specific placements drove the lift?" or "does the
-`engagedBrands` rule help the sub-segment with 3–10 events?"
+**The gap:** The `haiku-context` edge function writes a two-line visual description
+to `products.haiku_context` (line 1: plain-language category, e.g. "potted plant";
+line 2: colour + materials, e.g. "deep green, waxy leaves with architectural form").
+A cron fires every 10 minutes to backfill this for all products that have a primary
+image. The column is already read by `AIStylist.tsx`, `type-governance.ts`, and
+`genders.ts` — but **neither `embed-product/buildDoc()` nor `product_occasions_text()`
+reads it**. Search (both the semantic/embedding path and the BM25 path) is blind to
+the visual description entirely.
 
-The `context` column in `user_events` already exists and is already passed through
-`session-tracker.ts::emit()` as `target.context`. In the consumer code, it's never
-populated — `LookCard.tsx` and `ContinuousFeed.tsx` pass no `context` argument to
-`trackImpression`.
+The compounding problem: `trg_products_auto_embed` fires on
+`after insert or update of name, brand, type, description, is_active` (migration
+`082_search_v3_clean.sql:321`) — `haiku_context` is absent from the column list.
+So when the backfill cron sets `haiku_context` on a product that already has an
+embedding, the auto-embed trigger never fires. The product's search vector was
+built before the visual description existed and is never updated.
 
-**Why it matters.** The Daily Feed is the product's most complex feature and the one
-with the most tuning surface (10 Feed Rules, holdout %, recency window, Claude re-rank
-top-N). Without event-level variant tagging, the only feedback loop is gut feel. The
-holdout exists; the measurement doesn't.
+**Why it matters:** The design intent for `haiku_context` was precisely to correct
+cases where the scraped product name misleads (e.g. "Men's Low-Top Sneaker" being
+mapped wrong, or a "ZZ Plant" matching beauty products). That correction is applied
+for taxonomy and gender inference, but the embedding — the signal the search RPC
+uses for semantic matching — still reflects the pre-haiku text. Shoppers who search
+for "potted plant", "ankle strap heel", or "oversized canvas" get rankings that
+ignore the clearest visual evidence for those terms.
 
-**Next step.** In `app/services/personalized-feed.ts`, after `compute()` resolves,
-write the variant to sessionStorage (`catalog:feed-variant:v1:{userId}:{date}`).
-Expose it via a `getFeedVariant()` getter. In `app/components/LookCard.tsx` (the
-impression fire path, line ~222), call `getFeedVariant()` and pass it as `context:
-\`df:${variant}\`` on `trackImpression`. ~30 lines across two files, no schema
-change.
+**Next steps:**
 
----
-
-## 3. Orphaned description-enrichment artifacts signal a live backfill that does nothing
-
-**Problem.** `docs/BACKFILL_STATUS.md` says "🏃 IN PROGRESS" on a May 2026 run that
-enriched ~45 of 790 products (5.7%) with AI-generated lifestyle phrases written into
-`products.description`. That column is **not in the search document** — migration
-`20260603000002` dropped it from the BM25 tsvector explicitly (the VIBE_AESTHETIC_SEARCH_PLAN.md §3 cites this: "the description approach re-introduces term-dilution
-that got `description` dropped"). The current `search_products` builds its BM25 doc
-from `name`, `product_occasions_text()`, `brand`, and `type` — never `description`.
-The enriched text on those 45 products has zero effect on search.
-
-The live artifacts are:
-- `supabase/migrations/089_add_description_enriched_flag.sql` — adds `description_enriched boolean` + partial index
-- `scripts/enrich-all-descriptions.mjs` and `scripts/reembed-enriched-products.mjs` — checked-in backfill runners
-- `docs/BACKFILL_STATUS.md` — says "IN PROGRESS" against a superseded approach
-- `docs/SEARCH_ENRICHMENT_PLAN.md` — presents the enrichment approach as the design
-
-A developer reading BACKFILL_STATUS.md today would reasonably try to complete the
-backfill. The VIBE_AESTHETIC_SEARCH_PLAN.md exists but is labeled "Proposed" (it was
-shipped in V8, but the plan doc was never updated to reflect that either).
-
-**Next step.** (a) Add a one-line tombstone header to `docs/BACKFILL_STATUS.md` and
-`docs/SEARCH_ENRICHMENT_PLAN.md`: "Approach superseded by V8 aesthetic routing — see
-VIBE_AESTHETIC_SEARCH_PLAN.md. Do not resume." (b) Drop the `description_enriched`
-column in a new timestamped migration. (c) Delete the two backfill scripts. (d) Update
-`docs/VIBE_AESTHETIC_SEARCH_PLAN.md` status from "Proposed" to "Phase 1 shipped
-(20260605000009); Phase 2–3 pending." Total effort: ~30 min.
+1. In `supabase/functions/embed-product/index.ts`: add `haiku_context` to the
+   `buildDoc()` SELECT and to the `parts` assembly (after `materials_care`, before
+   the enriched fields).
+2. In a new migration: add `haiku_context` to the trigger column list, and in
+   `notify_embed_product()` pass `force: true` when
+   `NEW.haiku_context IS DISTINCT FROM OLD.haiku_context` so the trigger overwrites
+   an existing embedding rather than skipping it.
+3. Run a one-shot batch re-embed scoped to
+   `where haiku_context is not null and embedded_at < haiku_context_at` — these are
+   the products whose embedding predates the visual description.
 
 ---
 
-## 4. Two parallel `user_events` round trips on every home feed mount
+## 2 · Three separate `user_events` round trips fire on every feed mount
 
-**Problem.** `ContinuousFeed.tsx` fires two independent reads against `user_events`
-on every mount, both load-path critical for the feed's opening order:
+**The gap:** On mount, the consumer home page makes three independent Supabase
+queries for seen-state, with no shared cache:
 
-| Line | Call | Result | Used for |
-|---|---|---|---|
-| 317 | `fetchSeenLookIds(user.id)` | Direct `.from('user_events')` select; returns `Set<string>` (look UUIDs) | `reorderBySeen()` — orders seen looks last |
-| 355 | `getSeenKeys()` | `supabase.rpc('user_seen_keys')` → reads `user_events` server-side; returns `Set<SeenKey>` | `partitionUnseen()` — hides already-seen items |
+| Component | Call | Query |
+|---|---|---|
+| `ContinuousFeed.tsx:317` | `fetchSeenLookIds(user.id)` | `user_events` direct select — look UUIDs → `reorderBySeen` |
+| `ContinuousFeed.tsx:355` | `getSeenKeys()` | `user_seen_keys()` RPC — look + product keys → `partitionUnseen` |
+| `FollowingRail.tsx:115` | `fetchSeenLookIds(user.id)` | same `user_events` query again → unseen badge counts |
 
-Both queries hit the same table, both block first-paint ordering, and both are
-non-batched. The distinction is real (ordering vs. hiding, looks vs. products), but
-the underlying data is identical impression rows — and currently the `user_seen_keys`
-RPC only returns seen items, not their types in a way that would let one call serve
-both paths without changes.
+`fetchSeenLookIds` has no caching — every call fires a fresh `user_events`
+query (up to 50 k rows). `FollowingRail` calls it independently of `ContinuousFeed`,
+so the query runs twice on every cold page load. `getSeenKeys()` is a third trip.
+All three read `user_events` impressions for the same user.
 
-On a real mobile session, each Supabase RPC takes 200–400 ms. The two calls can
-overlap (both are fired concurrently via separate `useEffect`s), but the feed
-rendering waits on both via their respective `useMemo` dependencies.
+**Why it matters:** On a slow connection or for a power user with many impressions,
+this is three waterfalls in the critical render path. The redundancy also makes the
+"same order every visit" symptom harder to debug — three look-seen signals means
+three places to check when the seen state appears stale. The `PENDING_QUEUE.md`
+reports this symptom but the redundant queries are an underappreciated contributor.
 
-**Why it matters.** Consolidating into one RPC that returns `{target_type, target_uuid}`
-for all seen item types eliminates one database round trip from the critical path for
-every authenticated home feed load, and removes the maintenance surface where two seen
-systems must stay in sync independently.
-
-**Next step.** Update the `user_seen_keys` RPC (currently returning look keys, see
-`app/services/seen-feed.ts:24`) to return both look and product seen keys in one
-query. In `ContinuousFeed.tsx`, replace the two `useEffect` fetches with one that
-calls the updated RPC, then derives both `seenLookIds` (Set of UUIDs for
-`reorderBySeen`) and `seenKeys` (Set of SeenKey strings for `partitionUnseen`) from
-the single result. Changes confined to the RPC definition, `seen-feed.ts`, and
-~15 lines in `ContinuousFeed.tsx`.
+**Next steps:** Add a session-level cache to `fetchSeenLookIds` (same pattern as
+`looksPromise` / `creatorsPromise` in `looks.ts` — a module-level `Promise | null`
+keyed on `userId` that clears on auth change and when a new impression fires via
+`subscribeToLooksChange`). `FollowingRail` can then call the cached function and
+get the in-flight result instead of racing a fresh query. Longer-term: decide
+whether `getSeenKeys()` (which overlaps on looks) and `fetchSeenLookIds` should be
+unified into one query — the prior review (2026-06-22 §3) has the full analysis.
 
 ---
 
-*Feed type-clustering (PENDING_QUEUE.md §"Feed ordering algorithm") was evaluated but
-excluded: the queue itself flags the target surface as ambiguous ("reorderBySeen
-operates on LOOKS, not products — confirm target before building") and this review
-found no surface where a clustered shuffle is currently happening but wrong; it needs
-a design decision, not a code suggestion.*
+## 3 · `daily-feed.md` describes shipped features as open improvements
 
-*Look re-ranking expansion (`daily-feed.md` says "extending the daily re-rank to looks
-is an open improvement") was also evaluated: looks are already re-ranked in the edge
-function via `rankLooks()` at `personalize-feed/index.ts:533`, with `applyDailyRotation`,
-`applyDailyShuffle`, and `derangeAgainstPrev` applied. The `daily-feed.md` doc is
-stale on this point — a one-line update to that doc, not a feature.*
+**The gap:** `docs/daily-feed.md` (the canonical Daily Feed reference) still says
+in its "Known nuance" section:
+
+> Today, the daily re-rank reorders **products**; looks keep the unified `feed_rank`
+> order (plus seen-decay). … Making the **head** visibly rotate each day (a
+> date-seeded rotation) and extending the daily re-rank to **looks** are the two
+> open improvements.
+
+Both shipped. `applyDailyRotation` was added to `personalize-feed/index.ts`
+(commit `cb52a72`, 2026-06-23) for the look lead, and the personalize-feed engine
+already re-ranks looks per shopper. The "open improvements" paragraph now describes
+completed work.
+
+**Why it matters:** `daily-feed.md` is the first document a new session or
+contributor reads to understand what the engine does. Finding "open improvements"
+that are already live will cause future sessions to re-investigate or attempt to
+re-implement them. The `PENDING_QUEUE` has already drifted from this doc.
+
+**Next step:** Update `docs/daily-feed.md`: remove the "open improvements" sentence
+from "Known nuance", update the "What it is" description to confirm that both
+products and looks are now re-ranked per shopper, and add a one-liner on the daily
+lead rotation (applyDailyRotation, pool=18, step=7, ~18-day cycle).
+
+---
+
+## 4 · Feed type-clustering spec has no scope decision
+
+**The gap:** `PENDING_QUEUE.md §Feed ordering algorithm` specifies that the seen
+portion of the feed should be "clustered by type — all shoes together, then all
+shirts, etc. Grouped random, NOT pure random" and closes with "STILL NEEDS A
+DECISION: feed type-clustering (product grid?)." This was also open in the
+2026-06-22 review (§4).
+
+The ambiguity is concrete: `reorderBySeen` operates on looks (which contain
+multiple product types — clustering by type doesn't map cleanly), while
+`partitionUnseen` hides seen products entirely rather than shuffling them. No
+current code path produces a shuffled-seen product section to cluster. The spec
+as written targets a surface that doesn't exist.
+
+**Why it matters:** The open decision is a small drain on every future session that
+reads the queue — it reads as a pending TODO when it's actually a product choice.
+If the answer is "we hide seen products, not shuffle them" (which is what the code
+does), the spec should be removed. If a shuffled-seen product section is genuinely
+wanted, it needs a design.
+
+**Next step:** Make the decision explicit in `PENDING_QUEUE.md`. Option A: remove
+the type-clustering spec (current hide-and-reset is correct; no shuffled-seen
+section will be built). Option B: scope it explicitly to a future "you've seen it
+all" product section and write the target UX. Either closes the recurring
+re-derivation cost.
