@@ -228,13 +228,23 @@ function ContinuousFeed({
     // Re-gate on every shopper change: stay "pending" (shimmer) until this
     // shopper's order resolves, so we never paint the global order first.
     setPersonalizationResolved(false);
+    // SAFETY VALVE: never block the feed on personalization for more than a
+    // short beat. compute() calls supabase.functions.invoke, which can hang
+    // (no built-in timeout) — without this cap a slow/stalled edge call would
+    // leave the feed stuck on its shimmer forever. After the cap we paint the
+    // feed regardless; if the personalized order arrives later it re-rolls in
+    // place. Normal resolves (~300–500ms) win the race, so there's no flash.
+    const failOpen = window.setTimeout(() => {
+      if (!cancelled) setPersonalizationResolved(true);
+    }, 1200);
     getPersonalizedOrders().then(o => {
       if (cancelled) return;
+      window.clearTimeout(failOpen);
       setPersonalizedOrder(o && o.products.length > 0 ? o.products : null);
       setPersonalizedLookOrder(o && o.looks.length > 0 ? o.looks : null);
       setPersonalizationResolved(true);
     });
-    return () => { cancelled = true; };
+    return () => { cancelled = true; window.clearTimeout(failOpen); };
   }, [user?.id]);
 
   // Live "Advance": when an admin bumps the Daily Feed epoch, re-roll this open
