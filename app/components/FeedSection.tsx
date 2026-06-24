@@ -90,6 +90,10 @@ const LAYOUT_CONFIGS = [
 // scroll-triggered grow. Subsequent grows add `batch` more at a time.
 const DEFAULT_BATCH = 24;
 const SUB_BATCH = 8;
+// The initial home feed grows its pool in cycles of this many items; each cycle
+// re-runs buildDeck() (which repeats/rotates the deck) so the daily feed loops
+// forever instead of ending. Module-scoped so the pool-growth effect can read it.
+const CYCLE_SIZE = 80;
 // D1 — max cards kept mounted on the infinite MOBILE feed. Cards scrolled
 // further than this above the viewport are unmounted and their height replaced
 // by the grid's padding-top (so scroll position is preserved). ~160 ≈ many
@@ -198,9 +202,8 @@ function FeedSection({
     if (!isInitial && looks.length === 0) return [];
     // Sub-segments (More like this) show the exact looks array — no cycling
     // beyond the input so the section stays at exactly 8 items.
-    // Initial segment grows in cycles of CYCLE_SIZE; sentinel bumps poolCycles
-    // when the user nears the end so the feed scrolls indefinitely.
-    const CYCLE_SIZE = 80;
+    // Initial segment grows in cycles of CYCLE_SIZE (module const); the pool
+    // stays ahead of what's rendered via the effect below so the feed loops.
     const targetCells = isInitial ? CYCLE_SIZE * poolCycles : looks.length;
 
     if (isInitial && creativesLoading) {
@@ -483,6 +486,19 @@ function FeedSection({
     setVisibleCount(batch);
     setPoolCycles(1);
   }, [looks, batch]);
+
+  // Infinite daily feed: keep the pool a few batches AHEAD of what's rendered,
+  // driven by visibleCount (which the sentinel grows on every scroll) rather
+  // than relying on the IntersectionObserver's own poolCycles bump firing at
+  // the right instant. buildDeck() repeats/rotates the deck each cycle, so the
+  // home feed loops forever instead of ending in a cut-off. Monotonic (poolCycles
+  // only grows), so it never reorders already-rendered cards. Search + bounded
+  // sub-segments are excluded (they page via onLoadMore / stay fixed).
+  useEffect(() => {
+    if (!isInitial || searchMode) return;
+    const needed = Math.ceil((visibleCount + batch * 4) / CYCLE_SIZE);
+    setPoolCycles(c => (needed > c ? needed : c));
+  }, [isInitial, searchMode, visibleCount, batch]);
 
   // Hide only when both inputs are empty. Initial sections show creatives
   // before looks resolve; sub-segments render the looks-driven similars.
