@@ -679,6 +679,27 @@ html.ui-scroll-off .pd-look-tile-meta {
 html.ui-scroll-off .card-creator-tag,
 html.ui-scroll-off .promo-product-info { pointer-events: none; }
 
+/* ── Desktop hover reveal — show a card's product UI on hover ────────────────
+   Even when the card chrome is hidden (mid scroll-glide, or the "UI on scroll"
+   dial OFF for pure imagery), hovering a card brings back its product UI — the
+   info bar (brand / name / price), gradient, and creator tag — so you can read
+   it on demand. Gated on html.is-pointing (genuine mouse movement, not content
+   scrolling under a stationary cursor — same guard as the sibling-dim hover).
+   #grid-container + !important so it outweighs the glide / ui-scroll-off
+   opacity:0 !important. Touch devices (no hover) are unaffected. */
+@media (hover: hover) {
+  html.is-pointing #grid-container .look-card:hover .card-gradient,
+  html.is-pointing #grid-container .look-card:hover .promo-product-info,
+  html.is-pointing #grid-container .look-card:hover .card-creator-tag {
+    opacity: 1 !important;
+    transition: opacity 0.18s ease;
+  }
+  html.is-pointing #grid-container .look-card:hover .promo-product-info,
+  html.is-pointing #grid-container .look-card:hover .card-creator-tag {
+    pointer-events: auto;
+  }
+}
+
 /* ── Top chrome (header + the creator stories/orbit rail it holds) DISSOLVES
    on scroll, never snaps ──────────────────────────────────────────────────
    The header (header.css) only transitions `background`, and home-hero.css's
