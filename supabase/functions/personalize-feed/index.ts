@@ -385,16 +385,25 @@ Deno.serve(async (req: Request) => {
       .limit(CANDIDATE_POOL);
     let candidates = (candidateRows ?? []) as ProductRow[];
 
-    // Rule: strict gender match — drop products for the other gender
-    // (unisex and untyped always pass; unknown shopper gender disables).
+    // Rule: strict gender match — drop items for the other gender (unisex and
+    // untagged always pass; unknown shopper gender disables). The catalog is
+    // inconsistent: PRODUCTS are tagged male/female/unisex while LOOKS are
+    // tagged men/women — so a shopper's gender must accept BOTH spellings
+    // (female → {female, women}; male → {male, men}). The old code mapped to a
+    // single "women"/"men" plus a broken alias ("women".slice(0,-2)+"le" =
+    // "womle"), so it matched ZERO products (all tagged female) and only let
+    // unisex through — which is why a female shopper saw a menswear-heavy feed.
+    let genderAccept: string[] | null = null;
     if (rules.genderStrict.enabled) {
       const { data: prof } = await supabase.from('profiles').select('gender').eq('id', userId).maybeSingle();
       const g = String(prof?.gender ?? '').toLowerCase();
-      const want = g.startsWith('m') ? 'men' : g.startsWith('f') || g.startsWith('w') ? 'women' : '';
-      if (want) {
+      if (g.startsWith('m')) genderAccept = ['men', 'male'];
+      else if (g.startsWith('f') || g.startsWith('w')) genderAccept = ['women', 'female'];
+      if (genderAccept) {
+        const ok = new Set([...genderAccept, 'unisex']);
         candidates = candidates.filter(c => {
           const pg = String(c.gender ?? '').toLowerCase();
-          return !pg || pg === 'unisex' || pg === want || pg === want.slice(0, -2) + 'le'; // men/male, women/female
+          return !pg || ok.has(pg);
         });
       }
     }
@@ -537,7 +546,7 @@ Deno.serve(async (req: Request) => {
     // are already ranked — are never affected.
     let lookOrder: string[] = [];
     try {
-      lookOrder = await rankLooks(supabase, userId, sinceISO, brandNorm, typeNorm, rules);
+      lookOrder = await rankLooks(supabase, userId, sinceISO, brandNorm, typeNorm, rules, genderAccept);
       // LEAD ROTATION (the fix for "I keep seeing the same looks first"): looks
       // lead the feed, but the affinity ranking is stable day-to-day, so the
       // SAME top looks always won — dailyShuffle only re-ordered that same set
@@ -648,16 +657,24 @@ async function rankLooks(
   brandNorm: Map<string, number>,
   typeNorm: Map<string, number>,
   rules: FeedRules,
+  genderAccept: string[] | null,
 ): Promise<string[]> {
   const LOOK_POOL = 120;
   const { data: lookRows } = await supabase
     .from('looks')
-    .select('id, feed_rank, created_at')
+    .select('id, feed_rank, created_at, gender')
     .eq('status', 'live')
     .order('feed_rank', { ascending: true, nullsFirst: false })
     .order('created_at', { ascending: false, nullsFirst: false })
     .limit(LOOK_POOL);
-  const looks = (lookRows ?? []) as Array<{ id: string; feed_rank: number | null; created_at: string | null }>;
+  let looks = (lookRows ?? []) as Array<{ id: string; feed_rank: number | null; created_at: string | null; gender: string | null }>;
+  // Strict gender match for looks too (they were never filtered — the reason a
+  // female shopper still saw male-model looks). Looks are tagged men/women;
+  // accept the shopper's gender (both spellings) + unisex/untagged.
+  if (genderAccept) {
+    const ok = new Set([...genderAccept, 'unisex']);
+    looks = looks.filter(l => { const lg = String(l.gender ?? '').toLowerCase(); return !lg || ok.has(lg); });
+  }
   if (looks.length === 0) return [];
   const lookIds = looks.map(l => l.id);
 
