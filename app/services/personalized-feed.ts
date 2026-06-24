@@ -13,7 +13,7 @@
 // its existing global feed_rank order.
 
 import { supabase } from '~/utils/supabase';
-import { getAutoEditorConfig } from './dials';
+import { getAutoEditorConfig, AUTO_EDITOR_EPOCH_KEY } from './dials';
 
 interface RankedItem {
   type: string;
@@ -148,4 +148,41 @@ export function getPersonalizedProductOrder(): Promise<string[] | null> {
 /** Today's personalized LOOK uuid order, or null. */
 export function getPersonalizedLookOrder(): Promise<string[] | null> {
   return getPersonalizedOrders().then(o => (o && o.looks.length > 0 ? o.looks : null));
+}
+
+/** Purge every cached personalized order (all days + epochs) and drop any
+ *  in-flight compute so the next getPersonalizedOrders() re-invokes the edge
+ *  function fresh. The cache key already folds in the epoch, but an already-open
+ *  session holds React state + a warm cache for the OLD epoch — when an admin
+ *  advances the feed we clear both and re-pull. */
+export function clearPersonalizedCache(): void {
+  inFlight = null;
+  if (typeof window === 'undefined') return;
+  try {
+    const stale: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith(CACHE_PREFIX)) stale.push(k);
+    }
+    for (const k of stale) localStorage.removeItem(k);
+  } catch { /* localStorage unavailable — fine, the next compute re-fetches */ }
+}
+
+/** Live "Advance" hook. Fires `onAdvance` whenever the global Daily Feed epoch
+ *  changes (admin clicked "Advance to next daily feed") so an open feed can
+ *  re-roll immediately instead of waiting for a reload or the UTC rollover —
+ *  this is what makes the admin dialog's "re-rolls everyone's order
+ *  immediately" actually true for live sessions. Returns an unsubscribe fn;
+ *  no-op when realtime/Supabase isn't available. */
+export function subscribeFeedAdvance(onAdvance: () => void): () => void {
+  if (typeof window === 'undefined' || !supabase) return () => {};
+  const channel = supabase
+    .channel('daily-feed-advance')
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'app_settings', filter: `key=eq.${AUTO_EDITOR_EPOCH_KEY}` },
+      () => onAdvance(),
+    )
+    .subscribe();
+  return () => { try { supabase.removeChannel(channel); } catch { /* ignore */ } };
 }
