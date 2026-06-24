@@ -45,17 +45,20 @@ function todayUtc(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-function cacheKey(userId: string): string {
-  return `${CACHE_PREFIX}:${userId}:${todayUtc()}`;
+// The cache key folds in the global "advance" epoch so an admin bumping it
+// (advanceDailyFeed) instantly invalidates every shopper's cached order — the
+// next render re-invokes and gets the advanced feed, no UTC-rollover wait.
+function cacheKey(userId: string, epoch: number): string {
+  return `${CACHE_PREFIX}:${userId}:${todayUtc()}:e${epoch}`;
 }
 
 /** Read today's cached order, or null when there's no entry for today. An
  *  entry with both arrays empty means "already invoked, nothing to
  *  personalize" — still returned (callers treat empty as "no personalization"
  *  per-lane) so we don't re-hit the edge function. */
-function readCache(userId: string): PersonalizedOrders | null {
+function readCache(userId: string, epoch: number): PersonalizedOrders | null {
   try {
-    const raw = localStorage.getItem(cacheKey(userId));
+    const raw = localStorage.getItem(cacheKey(userId, epoch));
     if (raw == null) return null;
     const parsed = JSON.parse(raw);
     if (parsed && Array.isArray(parsed.p) && Array.isArray(parsed.l)) {
@@ -67,9 +70,9 @@ function readCache(userId: string): PersonalizedOrders | null {
   }
 }
 
-function writeCache(userId: string, o: PersonalizedOrders): void {
+function writeCache(userId: string, epoch: number, o: PersonalizedOrders): void {
   try {
-    localStorage.setItem(cacheKey(userId), JSON.stringify({ p: o.products, l: o.looks }));
+    localStorage.setItem(cacheKey(userId, epoch), JSON.stringify({ p: o.products, l: o.looks }));
   } catch {
     /* localStorage full / unavailable — fine, we just re-invoke later */
   }
@@ -91,8 +94,8 @@ async function compute(): Promise<PersonalizedOrders | null> {
   const config = await getAutoEditorConfig();
   if (!config.enabled) return null;
 
-  // Today's answer is sticky in localStorage.
-  const cached = readCache(user.id);
+  // Today's answer is sticky in localStorage (keyed by the advance epoch too).
+  const cached = readCache(user.id, config.epoch);
   if (cached) return (cached.products.length || cached.looks.length) ? cached : null;
 
   const { data, error } = await supabase.functions.invoke<PersonalizeFeedResponse>(
@@ -113,14 +116,14 @@ async function compute(): Promise<PersonalizedOrders | null> {
     }
     if (products.length > 0 || looks.length > 0) {
       const orders = { products, looks };
-      writeCache(user.id, orders);
+      writeCache(user.id, config.epoch, orders);
       return orders;
     }
   }
 
   // Any non-personalized variant (fallback / holdout / disabled) or an empty
   // ranking: cache empties for today so we don't re-invoke, return null.
-  writeCache(user.id, { products: [], looks: [] });
+  writeCache(user.id, config.epoch, { products: [], looks: [] });
   return null;
 }
 

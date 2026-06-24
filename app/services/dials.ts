@@ -474,6 +474,11 @@ export const AUTO_EDITOR_HOLDOUT_PCT_KEY  = 'auto_editor_holdout_pct';
 export const AUTO_EDITOR_RECENCY_DAYS_KEY = 'auto_editor_recency_days';
 export const AUTO_EDITOR_MIN_SIGNAL_KEY   = 'auto_editor_min_signal';
 export const AUTO_EDITOR_REFRESH_HOUR_KEY = 'auto_editor_refresh_hour';
+// Global "advance" counter. The edge function shifts every shopper's feed day
+// forward by this many days (on top of the natural date rollover), and the
+// consumer folds it into its per-day cache key — so bumping it force-advances
+// EVERYONE to their next daily feed immediately AND busts the client cache.
+export const AUTO_EDITOR_EPOCH_KEY         = 'auto_editor_epoch';
 
 export type AutoEditorFrequency = 'daily' | 'every_signin';
 
@@ -484,6 +489,7 @@ export interface AutoEditorConfig {
   recencyDays: number; // 1..365 — history lookback for signals
   minSignal: number;   // 0..1000 — min user_events before personalizing
   refreshHour: number; // 0..23 — UTC hour the daily feed rolls over to a new day
+  epoch: number;       // ≥0 — manual "advance the daily feed" counter (admin)
 }
 
 export const DEFAULT_AUTO_EDITOR_CONFIG: AutoEditorConfig = {
@@ -493,6 +499,7 @@ export const DEFAULT_AUTO_EDITOR_CONFIG: AutoEditorConfig = {
   recencyDays: 30,
   minSignal: 3,
   refreshHour: 0,
+  epoch: 0,
 };
 
 function parseIntClamped(raw: string | null | undefined, fallback: number, min: number, max: number): number {
@@ -509,6 +516,7 @@ export async function getAutoEditorConfig(): Promise<AutoEditorConfig> {
   const keys = [
     AUTO_EDITOR_ENABLED_KEY, AUTO_EDITOR_FREQUENCY_KEY, AUTO_EDITOR_HOLDOUT_PCT_KEY,
     AUTO_EDITOR_RECENCY_DAYS_KEY, AUTO_EDITOR_MIN_SIGNAL_KEY, AUTO_EDITOR_REFRESH_HOUR_KEY,
+    AUTO_EDITOR_EPOCH_KEY,
   ];
   const { data, error } = await supabase.from('app_settings').select('key, value').in('key', keys);
   if (error) {
@@ -524,7 +532,26 @@ export async function getAutoEditorConfig(): Promise<AutoEditorConfig> {
     recencyDays: parseIntClamped(byKey.get(AUTO_EDITOR_RECENCY_DAYS_KEY), DEFAULT_AUTO_EDITOR_CONFIG.recencyDays, 1, 365),
     minSignal: parseIntClamped(byKey.get(AUTO_EDITOR_MIN_SIGNAL_KEY), DEFAULT_AUTO_EDITOR_CONFIG.minSignal, 0, 1000),
     refreshHour: parseIntClamped(byKey.get(AUTO_EDITOR_REFRESH_HOUR_KEY), DEFAULT_AUTO_EDITOR_CONFIG.refreshHour, 0, 23),
+    epoch: parseIntClamped(byKey.get(AUTO_EDITOR_EPOCH_KEY), DEFAULT_AUTO_EDITOR_CONFIG.epoch, 0, 100000),
   };
+}
+
+/** Force-advance the Daily Feed for EVERY shopper by one day: bump the global
+ *  epoch. The edge function shifts each shopper's feed day forward by the epoch
+ *  (new order, fresh row) and the consumer folds it into its cache key (so the
+ *  new feed shows immediately instead of after the next UTC rollover). Returns
+ *  the new epoch. Admin-only in practice (gated by the admin UI). */
+export async function advanceDailyFeed(): Promise<number> {
+  if (!supabase) throw new Error('Supabase not configured');
+  const { data } = await supabase.from('app_settings').select('value').eq('key', AUTO_EDITOR_EPOCH_KEY).maybeSingle();
+  const current = parseIntClamped((data as { value: string | null } | null)?.value, 0, 0, 100000);
+  const next = current + 1;
+  const { error } = await supabase.from('app_settings').upsert(
+    { key: AUTO_EDITOR_EPOCH_KEY, value: String(next) },
+    { onConflict: 'key' },
+  );
+  if (error) throw new Error(error.message);
+  return next;
 }
 
 /** Persist a partial config change (only the provided fields are written).

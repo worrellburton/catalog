@@ -11,7 +11,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import {
-  getAutoEditorConfig, setAutoEditorConfig,
+  getAutoEditorConfig, setAutoEditorConfig, advanceDailyFeed,
   DEFAULT_AUTO_EDITOR_CONFIG, type AutoEditorConfig,
   getFeedRules, setFeedRules,
   getFeedRulesOrder, setFeedRulesOrder,
@@ -51,6 +51,7 @@ export default function DailyFeedSettings() {
   const [dragKey, setDragKey] = useState<keyof FeedRules | null>(null);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [advancing, setAdvancing] = useState(false);
   // Inline saved/err flash (replaces the page-level toast the modal used).
   const [flash, setFlash] = useState<{ msg: string; err: boolean } | null>(null);
   const flashTimer = useRef(0);
@@ -109,6 +110,26 @@ export default function DailyFeedSettings() {
       getAutoEditorConfig().then(setConfig).catch(() => {});
     } finally {
       setSaving(false);
+    }
+  }, [say]);
+
+  // Force-advance EVERY shopper to their next Daily Feed now (bumps the global
+  // epoch — the edge fn shifts the feed day forward, the client cache key folds
+  // it in, so the new order shows immediately instead of at the next rollover).
+  const advance = useCallback(async () => {
+    if (!window.confirm(
+      'Advance the Daily Feed for EVERY shopper to their next feed right now?\n\n'
+      + 'This re-rolls everyone’s order immediately (no waiting for the daily rollover).',
+    )) return;
+    setAdvancing(true);
+    try {
+      const next = await advanceDailyFeed();
+      setConfig(prev => ({ ...prev, epoch: next }));
+      say('Advanced — every shopper is on their next feed');
+    } catch (err) {
+      say(`Advance failed: ${err instanceof Error ? err.message : String(err)}`, true);
+    } finally {
+      setAdvancing(false);
     }
   }, [say]);
 
@@ -231,6 +252,37 @@ export default function DailyFeedSettings() {
           />
         </div>
       </fieldset>
+
+      {/* ── Manual advance: roll EVERY shopper to their next feed now ──── */}
+      <div
+        style={{
+          marginTop: 18, padding: 14, borderRadius: 8, border: '1px solid #e2e8f0',
+          background: '#f8fafc', display: 'flex', alignItems: 'center',
+          justifyContent: 'space-between', gap: 12,
+        }}
+      >
+        <div style={{ minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 600, color: '#111' }}>Advance to next daily feed</div>
+          <div style={{ fontSize: 12, color: '#888', marginTop: 2 }}>
+            Roll <strong>every shopper</strong> to their next Daily Feed right now — a fresh
+            order for all users, without waiting for the {String(config.refreshHour).padStart(2, '0')}:00 UTC rollover.
+          </div>
+        </div>
+        <button
+          type="button"
+          onClick={advance}
+          disabled={loading || advancing || !config.enabled}
+          title={config.enabled ? 'Advance the Daily Feed for all users' : 'Turn the Daily Feed on first'}
+          style={{
+            flexShrink: 0, padding: '9px 16px', borderRadius: 8, border: 'none',
+            background: (config.enabled && !advancing && !loading) ? '#111' : '#cbd5e1',
+            color: '#fff', fontSize: 13, fontWeight: 600,
+            cursor: (config.enabled && !advancing && !loading) ? 'pointer' : 'default',
+          }}
+        >
+          {advancing ? 'Advancing…' : 'Advance →'}
+        </button>
+      </div>
 
       {/* ── The daily feed rulebook ──────────────────────────────────── */}
       <div style={{ marginTop: 22, borderTop: '1px solid #eee', paddingTop: 16 }}>
