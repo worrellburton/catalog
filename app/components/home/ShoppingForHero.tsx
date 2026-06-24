@@ -283,10 +283,20 @@ export default function ShoppingForHero({ onRevealFeed }: ShoppingForHeroProps) 
             "this is a quote" cue — kept inline so the lyric headline
             occupies the same vertical shape as the plain ones, no
             attribution caption below. */}
+        {/* Shimmer the headline (the main CTA). Per-line spans so each ::before
+            overlay aligns to its own line; lyric headlines stay plain — their
+            🎵 emoji would get clipped by background-clip:text. data-text mirrors
+            the visible string for the masked sweep. */}
         <h1 className={`sfh-title${headline.lyric ? ' sfh-title--lyric' : ''}`}>
-          {headline.line1}
-          <br/>
-          {headline.line2}
+          {headline.lyric ? (
+            <>{headline.line1}<br/>{headline.line2}</>
+          ) : (
+            <>
+              <span className="t-shimmer" data-text={headline.line1}>{headline.line1}</span>
+              <br/>
+              <span className="t-shimmer" data-text={headline.line2}>{headline.line2}</span>
+            </>
+          )}
         </h1>
 
         {/* Desktop search lives INSIDE the hero's flex column (in-flow) so it
