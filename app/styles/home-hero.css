@@ -917,6 +917,25 @@
    add its full 100px top padding (would leave a big gap under the picks). */
 .home-feed-wrap.has-catalog-strip #grid-container { padding-top: 12px; }
 
+/* ── Empty searched feed — ONE centered concept, no scroll ───────────────
+   When a search resolves to ZERO products/looks, the now-browsing strip
+   (title + recs) and the demand CTA below it fold into a SINGLE block that
+   centers in the viewport, and the page stops scrolling (nothing is below to
+   reach). ContinuousFeed sets html.feed-empty while this state holds. */
+html.feed-empty,
+html.feed-empty body { overflow: hidden; }
+/* Collapse the strip's hero spacing so the title + recs sit right above the
+   "Nothing yet" CTA as one cluster (desktop's 66vh hero height is for the
+   scroll-into-grid case, which no longer applies with an empty feed). Keep the
+   group in its natural upper position with header clearance — NOT vertically
+   centered, which would push a long title off-screen (overflow is locked). */
+html.feed-empty .search-catalog-strip {
+  min-height: 0;
+  padding-top: clamp(80px, 12vh, 130px);
+  padding-bottom: 8px;
+}
+html.feed-empty .ec-inline { padding-top: 0; padding-bottom: 0; }
+
 /* ── Searched feed: catalog-name pill is the ONLY search entry ────────────
    On a searched/browsing feed the founder wants a single search affordance:
    the "✦ <CatalogName> 🔍" pill (.sc-name-pill, persistent + always visible),
