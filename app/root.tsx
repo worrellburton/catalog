@@ -28,7 +28,7 @@ import { isRouteErrorResponse, useRouteError } from "@remix-run/react";
 import { useEffect, useState } from "react";
 import TypeAnywhere from "~/components/TypeAnywhere";
 import { initScrollIdleFade, setScrollIdleFadeEnabled } from "~/utils/scroll-idle";
-import { getUiOnScroll, subscribeUiOnScroll } from "~/services/dials";
+import { getUiOnScroll, subscribeUiOnScroll, getChromeOnScroll, subscribeChromeOnScroll } from "~/services/dials";
 import SessionTrackerHost from "~/components/SessionTrackerHost";
 import PresenceHost from "~/components/PresenceHost";
 import GenerationQueueHost from "~/components/GenerationQueueHost";
@@ -337,6 +337,19 @@ export default function App() {
     let cancelled = false;
     getUiOnScroll().then(on => { if (!cancelled) setScrollIdleFadeEnabled(on); });
     const unsub = subscribeUiOnScroll(on => setScrollIdleFadeEnabled(on));
+    return () => { cancelled = true; unsub(); };
+  }, []);
+
+  // "App chrome on scroll" dial (default on). OFF → add html.app-chrome-scroll-off
+  // so the home header + bottom search hide once the feed is scrolled past the
+  // hero (immersive); they reappear at the very top. CSS in home-hero.css.
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    let cancelled = false;
+    const apply = (on: boolean) =>
+      document.documentElement.classList.toggle('app-chrome-scroll-off', !on);
+    getChromeOnScroll().then(on => { if (!cancelled) apply(on); });
+    const unsub = subscribeChromeOnScroll(apply);
     return () => { cancelled = true; unsub(); };
   }, []);
 
