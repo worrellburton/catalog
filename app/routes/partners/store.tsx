@@ -13,12 +13,18 @@ const ERROR_COPY: Record<string, string> = {
   persist_failed: 'Connected to Shopify but failed to save — try again.',
 };
 
+const MAX_SYNC_PAGES = 200; // safety bound on the client continuation loop
+
+interface SyncResp { success: boolean; synced?: number; hasMore?: boolean; cursor?: string | null; error?: string }
+
 export default function PartnersStore() {
   const { brand, role } = usePartnersContext();
   const [searchParams, setSearchParams] = useSearchParams();
   const [shop, setShop] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [syncing, setSyncing] = useState(false);
+  const [syncMsg, setSyncMsg] = useState<string | null>(null);
 
   const connected = Boolean(brand.shopify_shop);
   const canConnect = role === 'owner' || role === 'admin';
@@ -46,11 +52,42 @@ export default function PartnersStore() {
         setBusy(false);
         return;
       }
-      // Hand off to Shopify's consent screen.
       window.location.href = data.url as string;
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Unexpected error.');
       setBusy(false);
+    }
+  }
+
+  async function syncProducts() {
+    if (!supabase) return;
+    setSyncing(true);
+    setSyncMsg('Starting sync…');
+    let total = 0;
+    let cursor: string | null = null;
+    try {
+      for (let i = 0; i < MAX_SYNC_PAGES; i++) {
+        // No generic on invoke() + cast: passing the reassigned `cursor` into the
+        // body while typing the result off it creates a TS inference cycle.
+        const resp = await supabase.functions.invoke('shopify-sync', {
+          body: { brandId: brand.id, cursor },
+        });
+        const data = (resp.data ?? null) as SyncResp | null;
+        if (resp.error || !data?.success) {
+          setSyncMsg(`Sync failed: ${data?.error || resp.error?.message || 'unknown error'}`);
+          setSyncing(false);
+          return;
+        }
+        total += data.synced ?? 0;
+        setSyncMsg(`Synced ${total} product${total === 1 ? '' : 's'}…`);
+        if (!data.hasMore) break;
+        cursor = data.cursor ?? null;
+      }
+      setSyncMsg(`Done — ${total} product${total === 1 ? '' : 's'} synced. They’ll appear in the catalog after review.`);
+    } catch (e) {
+      setSyncMsg(`Sync failed: ${e instanceof Error ? e.message : 'unexpected error'}`);
+    } finally {
+      setSyncing(false);
     }
   }
 
@@ -61,12 +98,8 @@ export default function PartnersStore() {
         Connect your Shopify store to import products into the catalog.
       </p>
 
-      {justConnected && (
-        <Banner tone="ok" onClose={clearBanners}>Shopify connected. Products will sync shortly.</Banner>
-      )}
-      {callbackError && (
-        <Banner tone="warn" onClose={clearBanners}>{ERROR_COPY[callbackError] ?? 'Something went wrong connecting Shopify.'}</Banner>
-      )}
+      {justConnected && <Banner tone="ok" onClose={clearBanners}>Shopify connected. You can sync products now.</Banner>}
+      {callbackError && <Banner tone="warn" onClose={clearBanners}>{ERROR_COPY[callbackError] ?? 'Something went wrong connecting Shopify.'}</Banner>}
 
       <div style={{ padding: 20, borderRadius: 14, border: '1px solid #ececef', background: '#fff' }}>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12, marginBottom: 16 }}>
@@ -80,43 +113,67 @@ export default function PartnersStore() {
         </div>
 
         {!canConnect ? (
-          <p style={{ fontSize: 13, color: '#8b8b93', margin: 0 }}>Only a brand owner or admin can connect Shopify.</p>
-        ) : (
+          <p style={{ fontSize: 13, color: '#8b8b93', margin: 0 }}>Only a brand owner or admin can manage the Shopify connection.</p>
+        ) : connected ? (
           <>
-            <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#6b6b73', marginBottom: 6 }}>
-              Store domain
-            </label>
-            <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-              <input
-                type="text"
-                value={shop}
-                onChange={(e) => setShop(e.target.value)}
-                placeholder="your-store.myshopify.com"
-                disabled={busy}
-                style={{ flex: '1 1 260px', minWidth: 220, padding: '9px 12px', borderRadius: 9, border: '1px solid #e2e2e6', fontSize: 13 }}
-              />
-              <button
-                type="button"
-                onClick={connect}
-                disabled={busy}
-                style={{
-                  padding: '9px 16px', borderRadius: 9, border: 'none', fontSize: 13, fontWeight: 600,
-                  background: busy ? '#ececef' : '#111', color: busy ? '#9a9aa2' : '#fff',
-                  cursor: busy ? 'default' : 'pointer', whiteSpace: 'nowrap',
-                }}
-              >
-                {busy ? 'Connecting…' : connected ? 'Reconnect' : 'Connect Shopify'}
-              </button>
-            </div>
-            {error && <p style={{ fontSize: 12, color: '#c0392b', marginTop: 10, marginBottom: 0 }}>{error}</p>}
-            <p style={{ fontSize: 12, color: '#a0a0a8', marginTop: 12, marginBottom: 0 }}>
-              You’ll be sent to Shopify to approve access, then returned here.
-            </p>
+            <button
+              type="button"
+              onClick={syncProducts}
+              disabled={syncing}
+              style={{
+                padding: '9px 16px', borderRadius: 9, border: 'none', fontSize: 13, fontWeight: 600,
+                background: syncing ? '#ececef' : '#111', color: syncing ? '#9a9aa2' : '#fff',
+                cursor: syncing ? 'default' : 'pointer',
+              }}
+            >
+              {syncing ? 'Syncing…' : 'Sync products'}
+            </button>
+            {syncMsg && <p style={{ fontSize: 12, color: '#555', marginTop: 10, marginBottom: 0 }}>{syncMsg}</p>}
+            <details style={{ marginTop: 14 }}>
+              <summary style={{ fontSize: 12, color: '#8b8b93', cursor: 'pointer' }}>Reconnect a different store</summary>
+              <div style={{ marginTop: 10 }}>{renderConnectForm()}</div>
+            </details>
           </>
+        ) : (
+          renderConnectForm()
         )}
       </div>
     </div>
   );
+
+  function renderConnectForm() {
+    return (
+      <>
+        <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#6b6b73', marginBottom: 6 }}>Store domain</label>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
+          <input
+            type="text"
+            value={shop}
+            onChange={(e) => setShop(e.target.value)}
+            placeholder="your-store.myshopify.com"
+            disabled={busy}
+            style={{ flex: '1 1 260px', minWidth: 220, padding: '9px 12px', borderRadius: 9, border: '1px solid #e2e2e6', fontSize: 13 }}
+          />
+          <button
+            type="button"
+            onClick={connect}
+            disabled={busy}
+            style={{
+              padding: '9px 16px', borderRadius: 9, border: 'none', fontSize: 13, fontWeight: 600,
+              background: busy ? '#ececef' : '#111', color: busy ? '#9a9aa2' : '#fff',
+              cursor: busy ? 'default' : 'pointer', whiteSpace: 'nowrap',
+            }}
+          >
+            {busy ? 'Connecting…' : connected ? 'Reconnect' : 'Connect Shopify'}
+          </button>
+        </div>
+        {error && <p style={{ fontSize: 12, color: '#c0392b', marginTop: 10, marginBottom: 0 }}>{error}</p>}
+        <p style={{ fontSize: 12, color: '#a0a0a8', marginTop: 12, marginBottom: 0 }}>
+          You’ll be sent to Shopify to approve access, then returned here.
+        </p>
+      </>
+    );
+  }
 }
 
 function Banner({ tone, children, onClose }: { tone: 'ok' | 'warn'; children: React.ReactNode; onClose: () => void }) {
