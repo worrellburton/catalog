@@ -306,6 +306,7 @@ export default defineConfig({
           route("partners", "routes/partners/route.tsx", () => {
             route("", "routes/partners/_index.tsx", { index: true });
             route("products", "routes/partners/products.tsx");
+            route("creatives", "routes/partners/creatives.tsx");
             route("store", "routes/partners/store.tsx");
             route("team", "routes/partners/team.tsx");
           });
