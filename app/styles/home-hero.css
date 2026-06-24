@@ -150,6 +150,54 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 
+/* Shimmer text utility (Transitions.dev technique) — the base text renders in
+   --shimmer-base; a duplicated ::before (content: attr(data-text)) paints a
+   transparent→highlight→transparent band, clips it to the same glyphs via
+   background-clip:text, and sweeps it with background-position. Callers MUST
+   mirror the visible string into data-text. Used on the hero headline (the
+   main CTA); tuned for the dark hero with a light-mode override. */
+.t-shimmer {
+  --shimmer-dur: 2600ms;
+  --shimmer-base: rgba(255, 255, 255, 0.66);
+  --shimmer-highlight: #ffffff;
+  --shimmer-band: 400%;
+  position: relative;
+  display: inline-block;
+  color: var(--shimmer-base);
+}
+.t-shimmer::before {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    transparent 40%,
+    var(--shimmer-highlight) 50%,
+    transparent 60%,
+    transparent 100%
+  );
+  background-size: var(--shimmer-band) 100%;
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: t-shimmer-sweep var(--shimmer-dur) linear infinite;
+}
+@keyframes t-shimmer-sweep {
+  0%   { background-position: 100% 0; }
+  100% { background-position: 0% 0; }
+}
+.light-mode .t-shimmer {
+  --shimmer-base: #6e6e6e;
+  --shimmer-highlight: #0d0d0d;
+}
+@media (prefers-reduced-motion: reduce) {
+  .t-shimmer::before { animation: none !important; }
+}
+
 /* Search pill — Gemini-ish, Catalog matte. */
 .sfh-pill {
   width: 100%;
@@ -868,6 +916,25 @@
 /* The strip provides the header clearance, so the feed grid below mustn't also
    add its full 100px top padding (would leave a big gap under the picks). */
 .home-feed-wrap.has-catalog-strip #grid-container { padding-top: 12px; }
+
+/* ── Empty searched feed — ONE centered concept, no scroll ───────────────
+   When a search resolves to ZERO products/looks, the now-browsing strip
+   (title + recs) and the demand CTA below it fold into a SINGLE block that
+   centers in the viewport, and the page stops scrolling (nothing is below to
+   reach). ContinuousFeed sets html.feed-empty while this state holds. */
+html.feed-empty,
+html.feed-empty body { overflow: hidden; }
+/* Collapse the strip's hero spacing so the title + recs sit right above the
+   "Nothing yet" CTA as one cluster (desktop's 66vh hero height is for the
+   scroll-into-grid case, which no longer applies with an empty feed). Keep the
+   group in its natural upper position with header clearance — NOT vertically
+   centered, which would push a long title off-screen (overflow is locked). */
+html.feed-empty .search-catalog-strip {
+  min-height: 0;
+  padding-top: clamp(80px, 12vh, 130px);
+  padding-bottom: 8px;
+}
+html.feed-empty .ec-inline { padding-top: 0; padding-bottom: 0; }
 
 /* ── Searched feed: catalog-name pill is the ONLY search entry ────────────
    On a searched/browsing feed the founder wants a single search affordance:
