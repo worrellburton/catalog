@@ -21,6 +21,27 @@ const FLUSH_AT_SIZE = 16;
 const queue: SearchLogEntry[] = [];
 let flushTimer: number | null = null;
 
+// Click tracking. Search rows are batched fire-and-forget (no row id comes
+// back, no UPDATE path), so we record a click as client state keyed on
+// handle+query and apply it where the row is still mutable:
+//   1. flip a matching entry that's still in the queue (not yet flushed), and
+//   2. seed `clicked` when logSearch enqueues — catches a tile-open that
+//      landed BEFORE the 2.5 s debounce fired the log.
+// A click after the row already flushed to the DB is dropped (best-effort).
+const clickedKeys = new Set<string>();
+const keyOf = (query: string, handle: string) => `${handle}\n${query}`;
+
+// Called when a shopper opens any tile while a search is active. Query must
+// be normalized the same way logSearch's caller normalizes it (trim+lower).
+export function markSearchClicked(query: string, user_handle: string): void {
+  const q = query.trim().toLowerCase();
+  if (!q || !user_handle) return;
+  clickedKeys.add(keyOf(q, user_handle));
+  for (const e of queue) {
+    if (e.user_handle === user_handle && e.query === q) e.clicked = true;
+  }
+}
+
 async function flush(): Promise<void> {
   if (flushTimer != null) {
     window.clearTimeout(flushTimer);
@@ -45,6 +66,8 @@ async function flush(): Promise<void> {
 
 export function logSearch(entry: SearchLogEntry): void {
   if (!entry.query || !entry.user_handle) return;
+  // A click may have arrived before this debounced log fired.
+  if (clickedKeys.has(keyOf(entry.query, entry.user_handle))) entry.clicked = true;
   // Prefix-collapse a continuous typing chain within the flush window so
   // only the FINAL/longest query of a refinement lands as a row. Typing
   // "i need" → "i need a dress" → "i need a dress for a wedding" with
@@ -60,6 +83,8 @@ export function logSearch(entry: SearchLogEntry): void {
     // The new query extends a queued one (forward typing) → replace the
     // shorter entry with the longer, keeping the latest counts/filter.
     if (q.length > existing.query.length && q.startsWith(existing.query)) {
+      // Carry a click on the shorter query forward to the surviving longer one.
+      if (existing.clicked) entry.clicked = true;
       queue[i] = entry;
       // No new push, no size/timer change — we swapped in place.
       return;
