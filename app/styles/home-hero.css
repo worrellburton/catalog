@@ -1710,10 +1710,11 @@ html:has(.bottom-bar.search-open) .sc-name-pill { opacity: 0; pointer-events: no
     min-height: 100vh;
     justify-content: flex-end;
     padding-top: calc(env(safe-area-inset-top, 0px) + 96px);
-    /* Headline bottom lands ~54vh from top; the bar (36vh-from-bottom below)
-       sits ~4vh under it, with a matching spark→headline gap — an evenly
-       spaced, vertically-centered trio. */
-    padding-bottom: 46vh;
+    /* Lowered (46vh → 38vh) to re-center the spark + headline + bar trio now
+       that the feed peek eased to -8svh — the feed sits lower, so the trio
+       drops ~8vh to stay centered in the taller hero space. The bar bottom
+       below drops the same 8vh so the trio's internal spacing is unchanged. */
+    padding-bottom: 38vh;
   }
   /* Even, balanced spacing for the desktop hero trio: a comfortable gap
      between the spark and the headline that matches the headline→bar gap. */
@@ -1757,7 +1758,7 @@ html:has(.bottom-bar.search-open) .sc-name-pill { opacity: 0; pointer-events: no
        When the bar gains focus (recommended-options panel about to appear
        above), the trio rises 18vh (32vh → 50vh) so the panel has room
        without colliding with the feed peek; .sfh matches with -18vh. */
-    bottom: 36vh;
+    bottom: 28vh;
     /* MUST re-list transform here: this rule overrides the base
        .ai-bar-wrap transition, and without transform the chrome auto-hide
        slide-back would snap instead of animate. */
@@ -1766,7 +1767,7 @@ html:has(.bottom-bar.search-open) .sc-name-pill { opacity: 0; pointer-events: no
       transform 0.4s cubic-bezier(0.32, 0.72, 0, 1);
   }
   body:has(.app-root.home-hero) .ai-bar-wrap:focus-within {
-    bottom: 48vh;
+    bottom: 40vh;
   }
   /* The desktop bar (.ai-bar-wrap) is a SIBLING of .app-root under <body>,
      NOT a descendant — so this MUST be reached from the shared <body>
