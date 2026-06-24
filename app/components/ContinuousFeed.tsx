@@ -1210,6 +1210,17 @@ function ContinuousFeed({
   // title in the upper-left instead of echoing the literal typed query.
   const emptyCatalogName = funnyCatalogName(trimmedQuery);
 
+  // When the searched feed is EMPTY (no products and no looks), fold the
+  // now-browsing strip + demand CTA into one centered concept and lock the
+  // page scroll — there's nothing below to scroll to. CSS keys off
+  // html.feed-empty (see home-hero.css). Cleared on unmount / when results
+  // return.
+  useEffect(() => {
+    if (typeof document === 'undefined') return;
+    document.documentElement.classList.toggle('feed-empty', showEmptyState);
+    return () => { document.documentElement.classList.remove('feed-empty'); };
+  }, [showEmptyState]);
+
   // Snapshot of the live composition for the super-admin "why?" buttons.
   // Memoized on the same inputs that drive renderedCreatives so it never
   // churns on unrelated re-renders; read lazily (on tap), never at render.
