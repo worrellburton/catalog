@@ -60,8 +60,12 @@ function holdoutBucket(userId: string): number {
 // (admin-configurable). Shifting now back by refreshHour hours and taking the
 // UTC date means before that hour we stay on yesterday's feed, after it a new
 // one is computed. refreshHour=0 ⇒ midnight-UTC rollover (the default).
-function editorDay(refreshHour: number): string {
-  return new Date(Date.now() - refreshHour * 3_600_000).toISOString().slice(0, 10); // YYYY-MM-DD
+// `epoch` is the manual "advance the daily feed" counter (app_settings
+// auto_editor_epoch): it shifts the day FORWARD by `epoch` days on top of the
+// natural rollover, so an admin bump force-advances every shopper to their next
+// feed (new feed_date key ⇒ fresh recompute, new rotation offset ⇒ new order).
+function editorDay(refreshHour: number, epoch = 0): string {
+  return new Date(Date.now() - refreshHour * 3_600_000 + epoch * 86_400_000).toISOString().slice(0, 10); // YYYY-MM-DD
 }
 
 interface ProductRow {
@@ -292,18 +296,21 @@ Deno.serve(async (req: Request) => {
     const { data: settingRows } = await supabase
       .from('app_settings')
       .select('key, value')
-      .in('key', ['auto_editor_enabled', 'auto_editor_holdout_pct', 'auto_editor_recency_days', 'auto_editor_min_signal', 'auto_editor_refresh_hour', 'feed_rules']);
+      .in('key', ['auto_editor_enabled', 'auto_editor_holdout_pct', 'auto_editor_recency_days', 'auto_editor_min_signal', 'auto_editor_refresh_hour', 'auto_editor_epoch', 'feed_rules']);
     const cfg = new Map((settingRows ?? []).map((r: { key: string; value: string | null }) => [r.key, r.value ?? '']));
     const enabled = (cfg.get('auto_editor_enabled') || 'false').trim().toLowerCase() === 'true';
     const holdoutPct = clampInt(cfg.get('auto_editor_holdout_pct'), 10, 0, 100);
     const recencyDays = clampInt(cfg.get('auto_editor_recency_days'), 30, 1, 365);
     const minSignal = clampInt(cfg.get('auto_editor_min_signal'), 3, 0, 1000);
     const refreshHour = clampInt(cfg.get('auto_editor_refresh_hour'), 0, 0, 23);
+    // Manual "advance the daily feed" counter — shifts every shopper's feed day
+    // forward so an admin can push everyone to their next feed on demand.
+    const epoch = clampInt(cfg.get('auto_editor_epoch'), 0, 0, 100000);
     const rules = parseRules(cfg.get('feed_rules'));
 
     if (!enabled) return jsonRes({ success: true, enabled: false, variant: 'disabled' });
 
-    const feedDate = editorDay(refreshHour);
+    const feedDate = editorDay(refreshHour, epoch);
 
     // ── Idempotency: today's feed already computed? ──────────────────────
     // Admin previews skip the cache: the lens must reflect rule-dial
