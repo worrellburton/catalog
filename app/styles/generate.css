@@ -3314,6 +3314,34 @@ html[data-shell="catalog-app"] .gen-page {
     gap: 20px;
   }
   .gen-step-photos .gen-slots { gap: 12px; }
+
+  /* Condense the photos ENTRY step so the title, the "You" context (stats +
+     photo orbs) AND both build-mode choices all fit in ONE viewport without
+     scrolling. Scoped to .gen-page--photos so other steps that reuse these
+     classes (review/style) keep their roomier spacing. */
+  .gen-page--photos .gen-head { margin-bottom: 8px; padding: 6px 0 10px; }
+  .gen-page--photos .gen-head h1 { font-size: 24px; margin: 2px 0 0; }
+  .gen-page--photos .gen-head .gen-sub { font-size: 12.5px; line-height: 1.3; }
+  .gen-page--photos .gen-step-photos { padding-top: 0; }
+  .gen-page--photos .gen-photos-form { gap: 12px; padding: 16px; margin-top: 0; }
+  .gen-page--photos .gen-photos-title-row { gap: 6px; }
+  .gen-page--photos .gen-step h2.gen-photos-title { font-size: 22px; }
+  .gen-page--photos .gen-photos-stats { gap: 6px; }
+  .gen-page--photos .gen-step-photos .gen-slots { gap: 10px; }
+
+  /* Keep BOTH build-mode cards side-by-side — the narrow-screen stack pushed
+     "AI Stylist" below the fold. Compact padding + copy so two fit on a row. */
+  .gen-page--photos .gen-mode-cards--inline {
+    margin-top: 12px;
+    padding-top: 12px;
+    gap: 10px;
+    flex-direction: row;
+  }
+  .gen-page--photos .gen-mode-cards--inline .gen-mode-card { flex: 1 1 0; padding: 12px; gap: 4px; }
+  .gen-page--photos .gen-mode-card-icon svg { width: 22px; height: 22px; }
+  .gen-page--photos .gen-mode-card-title { font-size: 13.5px; line-height: 1.2; }
+  .gen-page--photos .gen-mode-card-sub { font-size: 11px; line-height: 1.3; }
+  .gen-page--photos .gen-mode-cards-hint { margin-top: 8px; font-size: 11.5px; }
 }
 
 /* Limit warning toast - surfaces when the user taps a 6th product
@@ -3877,7 +3905,11 @@ html[data-shell="catalog-app"] .gen-page {
    interactive-widget=resizes-content); the types screen's chips + CTA all fit
    between the top and the bottom console. */
 .gen-page--stylist:has(.gen-stylist--ask) {
-  height: 100svh;
+  /* --stylist-vh is set by AIStylist from the VisualViewport so the page
+     shrinks when the keyboard opens (iOS Safari won't shrink 100svh itself),
+     keeping the textarea + bottom console above the keyboard. Falls back to
+     100svh before the JS runs / on browsers without VisualViewport. */
+  height: var(--stylist-vh, 100svh);
   min-height: 0;
   overflow: hidden;
   padding-top: 0;
@@ -4068,6 +4100,7 @@ html[data-shell="catalog-app"] .gen-page {
 .gen-stylist-reel-none { font-size: 12px; color: rgba(255, 255, 255, 0.4); margin: 0 auto; }
 /* A single option chip — image only. Centered/selected one scales up. */
 .gen-stylist-chip {
+  position: relative;
   flex: 0 0 auto;
   width: var(--chip);
   height: var(--chip);
@@ -4084,6 +4117,29 @@ html[data-shell="catalog-app"] .gen-page {
 }
 .gen-stylist-chip img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .gen-stylist-chip-empty { display: block; width: 100%; height: 100%; }
+/* Tiny rank badge in the thumbnail corner — alludes to the stylist's ranking
+   (1 = pick, 2 · 3 = next alternates; deeper cuts unbadged). Kept very small so
+   it whispers a ranking rather than shouting a label. */
+.gen-stylist-chip-rank {
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  z-index: 2;
+  min-width: 11px;
+  height: 11px;
+  padding: 0 2px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 5px;
+  background: rgba(0, 0, 0, 0.55);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1;
+  letter-spacing: 0;
+  pointer-events: none;
+}
 .gen-stylist-chip.is-selected {
   opacity: 1;
   transform: scale(1.3);
