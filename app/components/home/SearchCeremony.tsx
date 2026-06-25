@@ -43,6 +43,11 @@ interface SearchCeremonyProps {
   pickMode?: boolean;
   /** Suggested catalog names to offer in pick mode. */
   recs?: string[];
+  /** True once the catalog-suggest call has RESOLVED (picks or empty). In pick
+   *  mode the ceremony HOLDS until this flips so it doesn't race ahead to the
+   *  raw results before the picks land; if it resolves empty, it reveals results
+   *  normally. */
+  recsReady?: boolean;
   /** Fired when the shopper taps a suggested catalog in pick mode. */
   onPickCatalog?: (name: string) => void;
 }
@@ -209,7 +214,7 @@ function buildSteps(query: string, kind: 'search' | 'brand'): string[] {
   ];
 }
 
-export default function SearchCeremony({ query, kind = 'search', ready, onDone, floatingImages = [], pickMode = false, recs = [], onPickCatalog }: SearchCeremonyProps) {
+export default function SearchCeremony({ query, kind = 'search', ready, onDone, floatingImages = [], pickMode = false, recs = [], recsReady = false, onPickCatalog }: SearchCeremonyProps) {
   const steps = useRef(buildSteps(query, kind)).current;
   // How many steps are currently visible (they stream in over time).
   const [revealed, setRevealed] = useState(1);
@@ -221,9 +226,17 @@ export default function SearchCeremony({ query, kind = 'search', ready, onDone, 
     && !!window.matchMedia?.('(prefers-reduced-motion: reduce)').matches;
 
   const allRevealed = revealed >= steps.length;
+
+  // Pick mode is still WAITING for its catalog suggestions to come back. While
+  // pending we hold the ceremony open (no auto-handoff, no "Ready"/gather) so a
+  // conversational query never races past the picks — the catalog-suggest call
+  // (an AI call) often resolves a beat after the narration finishes.
+  const pickPending = pickMode && !recsReady;
+
   // Every step gets a check once the search is in AND the narration has fully
   // streamed in; until then the last-revealed step spins as the "active" one.
-  const finalDone = ready && allRevealed;
+  // Held off while pick suggestions are still loading.
+  const finalDone = ready && allRevealed && !pickPending;
 
   // Pause-and-pick terminal state: a conversational query that has finished
   // narrating shows the reasoning beat + suggested catalogs and HOLDS here —
@@ -345,8 +358,10 @@ export default function SearchCeremony({ query, kind = 'search', ready, onDone, 
   // checks state so it reads as "done" before the results take over.
   useEffect(() => {
     if (!ready || !allRevealed) return;
-    // In pick mode we DON'T auto-hand-off — the ceremony parks on the catalog
-    // picks and waits for a tap (onPickCatalog) instead of loading any feed.
+    // Pick mode: while the suggestions are still loading, HOLD (don't reveal
+    // results yet); once they land we either park on the picks (choosing) or —
+    // if none came back — fall through here and reveal results normally.
+    if (pickPending) return;
     if (choosing) return;
     const elapsed = Date.now() - startedAt.current;
     // The hold after the last check is exactly the gather beat — the floating
@@ -358,19 +373,21 @@ export default function SearchCeremony({ query, kind = 'search', ready, onDone, 
     // in _index), so the ceremony no longer blocks on a picker.
     const t = window.setTimeout(() => onDone(), wait);
     return () => window.clearTimeout(t);
-  }, [ready, allRevealed, onDone, choosing]);
+  }, [ready, allRevealed, onDone, choosing, pickPending]);
 
-  // Hard safety: always reveal results within MAX_DURATION even if `ready`
+  // Hard safety: always reveal results within a max window even if `ready`
   // never flips (e.g. a cached/instant query whose loading flag never trips).
   // Skipped ONLY once we're actually showing catalog picks (`choosing`) — there
   // the shopper drives the hand-off by tapping a catalog, so we must not time
-  // out and auto-load a feed they didn't choose. If pick mode was intended but
-  // no recs arrived, `choosing` stays false and this safety net still fires.
+  // out and auto-load a feed they didn't choose. Pick mode gets a longer cap so
+  // a slow catalog-suggest call still gets to surface its picks; if it truly
+  // hangs, this still falls through to results.
   useEffect(() => {
     if (choosing) return;
-    const t = window.setTimeout(() => onDone(), MAX_DURATION_MS);
+    const cap = pickMode ? 12000 : MAX_DURATION_MS;
+    const t = window.setTimeout(() => onDone(), cap);
     return () => window.clearTimeout(t);
-  }, [onDone, choosing]);
+  }, [onDone, choosing, pickMode]);
 
   // Speed the singleton particle field up while the ceremony is on screen
   // (reads as "searching the world"). The canvas keeps running; only its

@@ -441,6 +441,10 @@ export default function Home() {
   // suppressCeremonyRef lets a recommended-catalog pick re-run the search
   // WITHOUT replaying the ceremony; the seq ref drops stale async results.
   const [ceremonyRecs, setCeremonyRecs] = useState<string[]>([]);
+  // True once the catalog-suggest call has RESOLVED (with picks or empty). Lets
+  // the ceremony tell "still fetching suggestions" from "fetched, none" — so a
+  // conversational query holds for the picks instead of racing ahead to results.
+  const [ceremonyRecsReady, setCeremonyRecsReady] = useState(false);
   const suppressCeremonyRef = useRef(false);
   const ceremonyRecSeqRef = useRef(0);
   // Chrome auto-hide on scroll-down once you're past the hero. Header
@@ -759,9 +763,12 @@ export default function Home() {
       // ceremony (resolves to [] on failure → ceremony just reveals results).
       // Seq-guarded so a slow call from a previous search can't bleed in.
       setCeremonyRecs([]);
+      setCeremonyRecsReady(false);
       const seq = ++ceremonyRecSeqRef.current;
       void suggestCatalogs(q, { gender: activeFilter }).then(recs => {
-        if (ceremonyRecSeqRef.current === seq) setCeremonyRecs(recs);
+        if (ceremonyRecSeqRef.current !== seq) return;
+        setCeremonyRecs(recs);
+        setCeremonyRecsReady(true);
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -2616,6 +2623,7 @@ export default function Home() {
               floatingImages={ceremonyImages}
               pickMode={ceremony.kind === 'search' && isConversationalQuery(ceremony.query)}
               recs={ceremonyRecs}
+              recsReady={ceremonyRecsReady}
               onPickCatalog={handlePickRecommendedCatalog}
             />
           )}
