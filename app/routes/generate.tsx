@@ -1696,7 +1696,7 @@ export default function GeneratePage() {
   }
 
   return (
-    <div className={`gen-page${isGeneratingView ? ' gen-page--generating' : ''}${step === 'review' ? ' gen-page--review' : ''}${step === 'style' ? ' gen-page--style' : ''}`}>
+    <div className={`gen-page${isGeneratingView ? ' gen-page--generating' : ''}${step === 'review' ? ' gen-page--review' : ''}${step === 'style' ? ' gen-page--style' : ''}${step === 'photos' ? ' gen-page--photos' : ''}`}>
       {/* Pick + Review: a live WebGL particle field sits behind the screen so
           products/photos read as floating in 3D space over it. */}
       {(step === 'products' || step === 'review' || step === 'photos') && (
