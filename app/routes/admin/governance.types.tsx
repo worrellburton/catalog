@@ -758,6 +758,53 @@ export default function AdminGovernanceTypes() {
     setAudit({ ...full, genderChanges: [] });
   };
 
+  /** 改 Kaizen types · AI — the deterministic sweep can only place a product
+   *  on a type that ALREADY exists; this asks Claude to read each product's
+   *  image + name and propose its best path, INVENTING or relocating types
+   *  when the tree fits poorly (a snowboard under "fashion" → "sports /
+   *  snowboard"). resolveOrCreatePath makes any new paths real, then the
+   *  panel opens with the placements for review + Apply. */
+  const [kaizenTypesAiBusy, setKaizenTypesAiBusy] = useState(false);
+  const runKaizenTypesAI = async () => {
+    setKaizenMenuOpen(false);
+    if (!supabase || kaizenTypesAiBusy) return;
+    if (products.length === 0) { showToast('No products to sweep'); return; }
+    setKaizenTypesAiBusy(true);
+    showToast(`改 Kaizen is reading ${products.length} product${products.length === 1 ? '' : 's'}…`);
+    try {
+      const { data, error } = await supabase.functions.invoke('kaizen-types', {
+        body: {
+          products: products.map(pr => ({ id: pr.id, name: pr.name, brand: pr.brand, type: pr.type, path: pr.typePath, context: pr.haikuContext })),
+          typePaths: [...new Set([...paths.values()])],
+        },
+      });
+      if (error) { showToast(`Kaizen failed: ${error.message}`); return; }
+      const resp = data as { success?: boolean; error?: string; moves?: Array<{ productId: string; toPath: string; reason?: string }>; note?: string | null };
+      if (!resp?.success) { showToast(resp?.error ?? 'Kaizen failed'); return; }
+      const moves = resp.moves ?? [];
+      if (moves.length === 0) { showToast(resp.note || 'Everything looks well-placed.'); return; }
+      const recs: TypeAuditRecommendation[] = [];
+      for (const mv of moves) {
+        const product = products.find(pr => pr.id === mv.productId);
+        if (!product) continue;
+        const target = await resolveOrCreatePath(mv.toPath);
+        if (!target) continue;
+        // Skip no-op moves (already on the resolved node).
+        if (product.type && normalizeTypeName(product.type) === normalizeTypeName(target.name)
+          && (product.typePath ?? null) === mv.toPath) continue;
+        recs.push({
+          productId: product.id, name: product.name, brand: product.brand, image: product.image,
+          fromType: product.type, toNodeId: target.id, toName: target.name, toPath: mv.toPath,
+          reason: mv.reason || 'AI placement (image + name)',
+        });
+      }
+      if (recs.length === 0) { showToast(resp.note || 'Everything looks well-placed.'); return; }
+      setAudit({ retypes: recs, drift: [], genderChanges: [], emptyTypes: [], duplicateTypes: [], orphanTypes: [] });
+    } finally {
+      setKaizenTypesAiBusy(false);
+    }
+  };
+
   /** Drill delete: deactivates the products (gone from the consumer feed
    *  AND the brain — fetchGovernanceProducts is is_active-scoped). One
    *  undoable gesture; Undo reactivates. */
@@ -873,6 +920,9 @@ export default function AdminGovernanceTypes() {
             {kaizenMenuOpen && (
               <div className="gov-kaizen-menu" role="menu">
                 <button type="button" role="menuitem" onClick={() => runKaizen('types')}>改 Kaizen types</button>
+                <button type="button" role="menuitem" disabled={kaizenTypesAiBusy} onClick={() => void runKaizenTypesAI()}>
+                  {kaizenTypesAiBusy ? '改 Thinking…' : '改 Kaizen types · AI'}
+                </button>
                 <button type="button" role="menuitem" onClick={() => runKaizen('gender')}>改 Kaizen gender</button>
               </div>
             )}
@@ -893,6 +943,9 @@ export default function AdminGovernanceTypes() {
             {kaizenMenuOpen && (
               <div className="gov-kaizen-menu" role="menu">
                 <button type="button" role="menuitem" onClick={() => runKaizen('types')}>改 Kaizen types</button>
+                <button type="button" role="menuitem" disabled={kaizenTypesAiBusy} onClick={() => void runKaizenTypesAI()}>
+                  {kaizenTypesAiBusy ? '改 Thinking…' : '改 Kaizen types · AI'}
+                </button>
                 <button type="button" role="menuitem" onClick={() => runKaizen('gender')}>改 Kaizen gender</button>
               </div>
             )}
