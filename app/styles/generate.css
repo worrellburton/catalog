@@ -3868,17 +3868,18 @@ html[data-shell="catalog-app"] .gen-page {
   padding: 8px 0;
   cursor: pointer;
 }
-/* Ask body — TOP-aligned so the title + input + CTA cluster stays above the
-   keyboard when it's up. */
-/* Centered in the visible area — the viewport meta uses
-   interactive-widget=resizes-content, so svh shrinks when the keyboard opens
-   and this stays vertically centered above it. */
+/* Ask body — centered in the visible area when there's room, but TOP-aligned
+   the moment the content is taller than that area (keyboard up on a short
+   phone). Plain `center` overflows symmetrically, pushing the title ABOVE the
+   viewport where it can't be scrolled back to; `safe center` falls back to
+   flex-start on overflow so the title is never clipped off the top. The body
+   itself scrolls (overflow:auto below) so everything stays reachable. */
 .gen-stylist-askbody {
   flex: 1;
   display: flex;
   flex-direction: column;
   gap: 10px;
-  justify-content: center;
+  justify-content: safe center;
 }
 /* Result is locked to one viewport — header stays compact. Inside the pinned
    .gen-page--stylist it flexes to fill exactly the available height (no fixed
