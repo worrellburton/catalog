@@ -44,16 +44,18 @@ const FLOATER_SLOTS = 8;
 /** Beat the gather animation needs to play out before the reveal. */
 const GATHER_MS = 760;
 
-// Hand-placed scatter for the floating tiles — TOP and BOTTOM bands only,
-// kept clear of the centered thinking card (which lives in the y 30-72%
-// middle), and spaced so tiles don't overlap each other. Interleaved
-// top/bottom so the progressive reveal scatters evenly instead of filling
-// one band first. {x, y} are viewport percentages of the tile's center.
-const FLOATER_SLOTS_POS: { x: number; y: number }[] = [
-  { x: 18, y: 11 }, { x: 16, y: 84 },
-  { x: 41, y: 6 },  { x: 45, y: 92 },
-  { x: 63, y: 13 }, { x: 60, y: 82 },
-  { x: 85, y: 8 },  { x: 86, y: 88 },
+// Tiles scatter ALL OVER the viewport (not just top/bottom) — distributed
+// around the central stage in four edge zones (left/right span the FULL height;
+// top/bottom span the width), kept clear of the centered headline + search
+// (the cleared box is roughly x 26-74, y 24-76). Each tile's exact spot is
+// randomized per QUERY (see floaterPosition) so the scatter lands somewhere new
+// every search, but stays fixed for that ceremony's lifetime. Slots round-robin
+// across the zones so the reveal fills all sides evenly.
+const FLOATER_ZONES: { xr: [number, number]; yr: [number, number] }[] = [
+  { xr: [4, 22],  yr: [6, 90] },   // left edge — full height
+  { xr: [78, 95], yr: [6, 90] },   // right edge — full height
+  { xr: [26, 74], yr: [4, 19] },   // top band
+  { xr: [26, 74], yr: [81, 94] },  // bottom band
 ];
 // Per-slot depth: scale + drift amplitude + settled opacity. Bigger tiles
 // read as closer (drift LESS, slightly more opaque); smaller as farther
@@ -94,6 +96,28 @@ function slotJitter(seed: string, i: number, range: number): number {
     h = Math.imul(h, 16777619);
   }
   return (((h >>> 0) % 1000) / 1000 - 0.5) * 2 * range;
+}
+
+/** Per-query pseudo-random in [0,1) — stable for a query, varies between
+ *  queries (the `salt` decorrelates x from y). */
+function rand01(seed: string, i: number, salt: number): number {
+  let h = (2166136261 ^ (i * 16777619) ^ Math.imul(salt, 2654435761)) >>> 0;
+  for (let c = 0; c < seed.length; c++) {
+    h ^= seed.charCodeAt(c);
+    h = Math.imul(h, 16777619);
+  }
+  return ((h >>> 0) % 100000) / 100000;
+}
+
+/** A tile's viewport-% center for this query: a random spot inside its edge
+ *  zone (round-robin by slot), so tiles land all over the viewport and
+ *  somewhere new each search while never invading the central stage. */
+function floaterPosition(seed: string, i: number): { x: number; y: number } {
+  const z = FLOATER_ZONES[i % FLOATER_ZONES.length];
+  return {
+    x: z.xr[0] + rand01(seed, i, 1) * (z.xr[1] - z.xr[0]),
+    y: z.yr[0] + rand01(seed, i, 2) * (z.yr[1] - z.yr[0]),
+  };
 }
 /** How fast the thinking steps stream in, one after another. */
 const STEP_INTERVAL_MS = 600;
@@ -353,11 +377,9 @@ export default function SearchCeremony({ query, kind = 'search', ready, onDone, 
       <div className={`sc-floaters${finalDone ? ' is-gather' : ''}`} aria-hidden="true">
         {slots.map((f, i) => {
           if (!f || i >= visibleFloaters) return null;
-          const base = FLOATER_SLOTS_POS[i];
           const depth = FLOATER_DEPTH[i];
-          // Organic per-query scatter; stable for the ceremony's lifetime.
-          const x = base.x + slotJitter(query, i, 3);
-          const y = base.y + slotJitter(query, i * 7 + 3, 3.5);
+          // Full-viewport scatter, randomized per query, stable for this ceremony.
+          const { x, y } = floaterPosition(query, i);
           return (
             <span
               key={`slot-${i}`}
