@@ -1055,6 +1055,7 @@ export default function CreatorPage({
                 onOpenLook={onOpenLook}
                 onOpenCreator={() => {}}
                 hideCreator
+                lookPosterOnly
                 priority={i < 6}
               />
             ))}
