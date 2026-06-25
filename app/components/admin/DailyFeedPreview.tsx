@@ -24,6 +24,12 @@ interface PreviewItem {
   sub: string;
   image: string;
   feedRank: number | null;
+  // Per-item data surfaced in the hover info panel (admin debugging).
+  gender?: string | null;
+  productType?: string | null;
+  price?: string | null;
+  conversionScore?: number | null;
+  isElite?: boolean | null;
 }
 
 interface FeedReason {
@@ -43,10 +49,29 @@ function todayUtc(): string {
   return new Date().toISOString().slice(0, 10);
 }
 
-// Weave looks + products exactly like the live home feed — delegates to the
-// shared weaveByFeedRank so this preview can never drift from FeedSection.
+// Cohort baselines have no per-shopper order, so they weave by feed_rank — the
+// shared weaveByFeedRank, identical to what a cold-start shopper sees.
 function weave(products: PreviewItem[], looks: PreviewItem[]): PreviewItem[] {
   return weaveByFeedRank(looks, products, i => i.feedRank, i => i.kind === 'look');
+}
+
+// A real shopper's feed is the ENGINE's per-day ranked order, NOT the static
+// feed_rank — that's the whole point of the Daily Feed (it re-ranks + shuffles
+// + deranges daily). The preview must preserve that order or it looks identical
+// every day (the "day to day it hasn't changed" bug). `products` and `looks`
+// already arrive in the engine's order (productsByIds/looksByIds preserve the
+// id order), so here we just weave them looks-leading at a steady cadence,
+// keeping each lane's engine order intact.
+function weaveEngineOrder(products: PreviewItem[], looks: PreviewItem[]): PreviewItem[] {
+  if (looks.length === 0) return products;
+  if (products.length === 0) return looks;
+  const out: PreviewItem[] = [looks[0]];
+  let li = 1, pi = 0;
+  while (pi < products.length || li < looks.length) {
+    for (let k = 0; k < 4 && pi < products.length; k++) out.push(products[pi++]);
+    if (li < looks.length) out.push(looks[li++]);
+  }
+  return out;
 }
 
 const MODES: { id: Mode; label: string }[] = [
@@ -59,7 +84,9 @@ const MODES: { id: Mode; label: string }[] = [
 export default function DailyFeedPreview() {
   const [mode, setMode] = useState<Mode>('user');
   const [username, setUsername] = useState('');
-  const [feedDate, setFeedDate] = useState(''); // '' = today / live
+  // Defaults to today (the live feed). A past date reads the stored row; today
+  // (== now) still resolves to the live compute since isPast is feedDate<today.
+  const [feedDate, setFeedDate] = useState(todayUtc());
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
   const [who, setWho] = useState<string | null>(null);
@@ -69,6 +96,8 @@ export default function DailyFeedPreview() {
   const [suggestions, setSuggestions] = useState<{ id: string; label: string; sub: string }[]>([]);
   const pickedUser = useRef<{ id: string; label: string } | null>(null);
   const searchTimer = useRef(0);
+  // Index of the tile whose hover info panel is open (admin debugging).
+  const [infoIdx, setInfoIdx] = useState<number | null>(null);
 
   useEffect(() => {
     if (mode !== 'user') { setSuggestions([]); return; }
@@ -104,7 +133,7 @@ export default function DailyFeedPreview() {
   async function productsByIds(ids: string[]): Promise<PreviewItem[]> {
     if (!supabase || ids.length === 0) return [];
     const { data } = await supabase
-      .from('products').select('id, name, brand, feed_rank, primary_video_poster_url, primary_image_url, image_url')
+      .from('products').select('id, name, brand, type, gender, price, conversion_score, is_elite, feed_rank, primary_video_poster_url, primary_image_url, image_url')
       .in('id', ids.slice(0, 80));
     const byId = new Map((data ?? []).map((p: Record<string, unknown>) => [p.id as string, p]));
     return ids.map(id => byId.get(id)).filter(Boolean).map((p) => {
@@ -116,6 +145,11 @@ export default function DailyFeedPreview() {
         sub: (r.brand as string) || '',
         image: (r.primary_video_poster_url || r.primary_image_url || r.image_url || '') as string,
         feedRank: typeof r.feed_rank === 'number' ? (r.feed_rank as number) : null,
+        gender: (r.gender as string) ?? null,
+        productType: (r.type as string) ?? null,
+        price: (r.price as string) ?? null,
+        conversionScore: typeof r.conversion_score === 'number' ? (r.conversion_score as number) : null,
+        isElite: (r.is_elite as boolean) ?? null,
       };
     });
   }
@@ -130,13 +164,14 @@ export default function DailyFeedPreview() {
       sub: 'Look',
       image: (primary?.thumbnail_url || '') as string,
       feedRank: typeof r.feed_rank === 'number' ? (r.feed_rank as number) : null,
+      gender: (r.gender as string) ?? null,
     };
   }
 
   async function looksByIds(ids: string[]): Promise<PreviewItem[]> {
     if (!supabase || ids.length === 0) return [];
     const { data } = await supabase
-      .from('looks').select('id, feed_rank, creator_handle, looks_creative ( thumbnail_url, is_primary )')
+      .from('looks').select('id, feed_rank, gender, creator_handle, looks_creative ( thumbnail_url, is_primary )')
       .in('id', ids.slice(0, 60));
     const byId = new Map((data ?? []).map((l: Record<string, unknown>) => [l.id as string, l]));
     return ids.map(id => byId.get(id)).filter(Boolean).map(l => mapLookRow(l as Record<string, unknown>));
@@ -147,7 +182,7 @@ export default function DailyFeedPreview() {
   async function liveLooks(): Promise<PreviewItem[]> {
     if (!supabase) return [];
     const { data } = await supabase
-      .from('looks').select('id, feed_rank, creator_handle, looks_creative ( thumbnail_url, is_primary )')
+      .from('looks').select('id, feed_rank, gender, creator_handle, looks_creative ( thumbnail_url, is_primary )')
       .eq('status', 'live')
       .order('feed_rank', { ascending: true, nullsFirst: false })
       .limit(40);
@@ -157,7 +192,7 @@ export default function DailyFeedPreview() {
   async function cohort(gender: 'all' | 'men' | 'women'): Promise<PreviewItem[]> {
     if (!supabase) return [];
     const { data } = await supabase
-      .from('products').select('id, name, brand, gender, feed_rank, primary_video_poster_url, primary_image_url, image_url')
+      .from('products').select('id, name, brand, type, gender, price, conversion_score, is_elite, feed_rank, primary_video_poster_url, primary_image_url, image_url')
       .eq('is_active', true).not('primary_video_url', 'is', null)
       .order('feed_rank', { ascending: true, nullsFirst: false }).limit(60);
     let rows = (data ?? []) as Record<string, unknown>[];
@@ -169,6 +204,11 @@ export default function DailyFeedPreview() {
       sub: (r.brand as string) || '',
       image: (r.primary_video_poster_url || r.primary_image_url || r.image_url || '') as string,
       feedRank: typeof r.feed_rank === 'number' ? (r.feed_rank as number) : null,
+      gender: (r.gender as string) ?? null,
+      productType: (r.type as string) ?? null,
+      price: (r.price as string) ?? null,
+      conversionScore: typeof r.conversion_score === 'number' ? (r.conversion_score as number) : null,
+      isElite: (r.is_elite as boolean) ?? null,
     }));
   }
 
@@ -212,7 +252,11 @@ export default function DailyFeedPreview() {
         // Personalized looks if the engine ranked them; else fall back to the
         // live look set so the preview still shows the woven-in looks.
         const looks = lookIds.length ? await looksByIds(lookIds) : await liveLooks();
-        setItems(weave(products, looks));
+        // Preserve the engine's per-day order so the preview changes day to day
+        // (matches the shopper). Only fall back to feed_rank weave when the
+        // engine returned no personalized ids (cold start / disabled).
+        const hasEngineOrder = productIds.length > 0 || lookIds.length > 0;
+        setItems(hasEngineOrder ? weaveEngineOrder(products, looks) : weave(products, looks));
       } else {
         setWho(mode === 'all' ? 'All users' : mode === 'men' ? 'All men' : 'All women');
         setVariant('global feed');
@@ -229,8 +273,10 @@ export default function DailyFeedPreview() {
   const lookCount = items.filter(i => i.kind === 'look').length;
 
   return (
-    <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 14, overflow: 'hidden' }}>
-      <div style={{ padding: '16px 18px', borderBottom: '1px solid #eee' }}>
+    // overflow:visible (not hidden) so the user-search autocomplete dropdown
+    // isn't clipped by the card edge; the header rounds its own top corners.
+    <div style={{ background: '#fff', border: '1px solid #eee', borderRadius: 14, overflow: 'visible' }}>
+      <div style={{ padding: '16px 18px', borderBottom: '1px solid #eee', borderRadius: '14px 14px 0 0' }}>
         <h2 style={{ margin: '0 0 2px', fontSize: 17, fontWeight: 700, color: '#111' }}>Preview a shopper&apos;s feed</h2>
         <p style={{ margin: 0, fontSize: 12.5, color: '#777' }}>
           See any shopper&apos;s live feed, the feed they were served on a past day, or a cohort baseline.
@@ -253,6 +299,19 @@ export default function DailyFeedPreview() {
           ))}
         </div>
 
+        {/* What the selected mode actually previews — the cohort tabs are a
+            BASELINE (the global, non-personalized feed a cold-start shopper
+            sees), not a per-shopper feed. */}
+        <div style={{ fontSize: 12, color: '#777', margin: '-4px 0 12px', lineHeight: 1.45 }}>
+          {mode === 'user'
+            ? 'A real shopper’s own Daily Feed — personalized to their taste (today’s live feed, or a past day exactly as served).'
+            : mode === 'men'
+              ? 'Cohort baseline — the global feed a brand-new / cold-start shopper sees (no personalization yet), filtered to men’s + unisex.'
+              : mode === 'women'
+                ? 'Cohort baseline — the global feed a brand-new / cold-start shopper sees (no personalization yet), filtered to women’s + unisex.'
+                : 'Cohort baseline — the global feed a brand-new / cold-start shopper sees (no personalization yet), across all genders.'}
+        </div>
+
         <div style={{ display: 'flex', gap: 8, alignItems: 'center', marginBottom: 14, flexWrap: 'wrap' }}>
           {mode === 'user' && (
             <div style={{ flex: 1, minWidth: 220, position: 'relative' }}>
@@ -265,7 +324,7 @@ export default function DailyFeedPreview() {
               />
               {suggestions.length > 0 && (
                 <div style={{
-                  position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 5, marginTop: 4,
+                  position: 'absolute', top: '100%', left: 0, right: 0, zIndex: 50, marginTop: 4,
                   background: '#fff', border: '1px solid #e5e7eb', borderRadius: 10,
                   boxShadow: '0 12px 32px rgba(0,0,0,0.14)', overflow: 'hidden',
                 }}>
@@ -302,9 +361,9 @@ export default function DailyFeedPreview() {
                 title="Leave as today for the live feed; pick a past day to see the feed they were served then"
                 style={{ padding: '8px 10px', borderRadius: 8, border: '1px solid #ddd', fontSize: 13, fontFamily: 'inherit' }}
               />
-              {feedDate && (
+              {feedDate && feedDate < todayUtc() && (
                 <button
-                  onClick={() => setFeedDate('')}
+                  onClick={() => setFeedDate(todayUtc())}
                   title="Back to today (live)"
                   style={{ background: 'transparent', border: 'none', color: '#999', fontSize: 16, cursor: 'pointer', lineHeight: 1 }}
                 >×</button>
@@ -322,35 +381,65 @@ export default function DailyFeedPreview() {
         {err && <ErrorState light body={err} onRetry={run} retryLabel="Retry" />}
 
         {who && !err && (
-          <div style={{ fontSize: 12.5, color: '#555', marginBottom: 10 }}>
-            Showing <strong style={{ color: '#111' }}>{who}</strong>
-            {mode === 'user' && feedDate && feedDate < todayUtc() && (
-              <span style={{ marginLeft: 6, color: '#999' }}>on {feedDate}</span>
-            )}
-            {variant && <span style={{ marginLeft: 6, padding: '2px 8px', borderRadius: 999, background: '#eef2ff', color: '#4338ca', fontSize: 11, fontWeight: 600 }}>{variant}</span>}
-            <span style={{ marginLeft: 6, color: '#999' }}>· {items.length} items · {lookCount} looks</span>
-            {reason && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 8 }}>
-                {(reason.topBrands ?? []).slice(0, 4).map(b => (
-                  <span key={`b-${b}`} style={{ padding: '2px 8px', borderRadius: 999, background: '#fef3c7', color: '#92400e', fontSize: 10.5, fontWeight: 600 }}>♥ {b}</span>
-                ))}
-                {(reason.topTypes ?? []).slice(0, 4).map(ty => (
-                  <span key={`t-${ty}`} style={{ padding: '2px 8px', borderRadius: 999, background: '#dcfce7', color: '#166534', fontSize: 10.5, fontWeight: 600 }}>{ty}</span>
-                ))}
-                {(reason.rules ?? []).map(r => (
-                  <span key={`r-${r}`} style={{ padding: '2px 8px', borderRadius: 999, background: '#f1f5f9', color: '#475569', fontSize: 10.5, fontWeight: 600 }}>rule: {r}</span>
-                ))}
-                {typeof reason.engaged === 'number' && (
-                  <span style={{ padding: '2px 8px', borderRadius: 999, background: '#f1f5f9', color: '#475569', fontSize: 10.5, fontWeight: 600 }}>{reason.engaged} engaged · {reason.seen ?? 0} seen</span>
-                )}
-              </div>
-            )}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 10 }}>
+            <div style={{ fontSize: 12.5, color: '#555' }}>
+              Showing <strong style={{ color: '#111' }}>{who}</strong>
+              {mode === 'user' && feedDate && feedDate < todayUtc() && (
+                <span style={{ marginLeft: 6, color: '#999' }}>on {feedDate}</span>
+              )}
+              {variant && <span style={{ marginLeft: 6, padding: '2px 8px', borderRadius: 999, background: '#eef2ff', color: '#4338ca', fontSize: 11, fontWeight: 600 }}>{variant}</span>}
+              <span style={{ marginLeft: 6, color: '#999' }}>· {items.length} items · {lookCount} looks</span>
+              {reason && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 8 }}>
+                  {(reason.topBrands ?? []).slice(0, 4).map(b => (
+                    <span key={`b-${b}`} style={{ padding: '2px 8px', borderRadius: 999, background: '#fef3c7', color: '#92400e', fontSize: 10.5, fontWeight: 600 }}>♥ {b}</span>
+                  ))}
+                  {(reason.topTypes ?? []).slice(0, 4).map(ty => (
+                    <span key={`t-${ty}`} style={{ padding: '2px 8px', borderRadius: 999, background: '#dcfce7', color: '#166534', fontSize: 10.5, fontWeight: 600 }}>{ty}</span>
+                  ))}
+                  {(reason.rules ?? []).map(r => (
+                    <span key={`r-${r}`} style={{ padding: '2px 8px', borderRadius: 999, background: '#f1f5f9', color: '#475569', fontSize: 10.5, fontWeight: 600 }}>rule: {r}</span>
+                  ))}
+                  {typeof reason.engaged === 'number' && (
+                    <span style={{ padding: '2px 8px', borderRadius: 999, background: '#f1f5f9', color: '#475569', fontSize: 10.5, fontWeight: 600 }}>{reason.engaged} engaged · {reason.seen ?? 0} seen</span>
+                  )}
+                </div>
+              )}
+            </div>
+            {/* Collapse the previewed feed back down (keeps the user/date inputs
+                so you can re-run without retyping). */}
+            <button
+              type="button"
+              onClick={() => { setItems([]); setWho(null); setVariant(null); setReason(null); }}
+              title="Collapse this preview"
+              style={{
+                flexShrink: 0, padding: '5px 12px', borderRadius: 999, cursor: 'pointer',
+                border: '1px solid #e5e7eb', background: '#fff', color: '#444',
+                fontSize: 12, fontWeight: 600,
+              }}
+            >Collapse ↑</button>
           </div>
         )}
 
         {items.length > 0 && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 10, maxHeight: '60vh', overflow: 'auto' }}>
-            {items.map((p, i) => (
+            {items.map((p, i) => {
+              const dataRows: [string, string][] = [
+                ['Position', `#${i + 1}`],
+                ['Type', p.kind === 'look' ? 'Look' : 'Product'],
+                [p.kind === 'look' ? 'Creator' : 'Brand', p.sub || '—'],
+                ['Name', p.title || '—'],
+                ['feed_rank', p.feedRank == null ? 'unranked' : String(p.feedRank)],
+                ['Gender', p.gender || '—'],
+                ...(p.kind === 'product' ? ([
+                  ['Category', p.productType || '—'],
+                  ['Price', p.price || '—'],
+                  ['Conversion', p.conversionScore == null ? '—' : p.conversionScore.toFixed(2)],
+                  ['Elite', p.isElite ? 'yes' : 'no'],
+                ] as [string, string][]) : []),
+                ['ID', p.id.slice(0, 8) + '…'],
+              ];
+              return (
               <div key={`${p.kind}-${p.id}-${i}`} style={{ border: p.kind === 'look' ? '1px solid #c7d2fe' : '1px solid #f0f0f0', borderRadius: 10, overflow: 'hidden', background: '#fafafa' }}>
                 <div style={{ position: 'relative', aspectRatio: '3 / 4', background: p.image ? `center/cover no-repeat url(${p.image})` : '#e9e9ee' }}>
                   <span style={{ position: 'absolute', top: 4, left: 4, background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: 10, fontWeight: 700, borderRadius: 6, padding: '1px 6px' }}>{i + 1}</span>
@@ -359,13 +448,44 @@ export default function DailyFeedPreview() {
                     borderRadius: 5, padding: '1px 5px', color: '#fff',
                     background: p.kind === 'look' ? 'rgba(79,70,229,0.92)' : 'rgba(0,0,0,0.55)',
                   }}>{p.kind === 'look' ? 'LOOK' : 'PRODUCT'}</span>
+                  {/* Info icon — hover to reveal the per-item data panel. */}
+                  <button
+                    type="button"
+                    aria-label="Show item data"
+                    onMouseEnter={() => setInfoIdx(i)}
+                    onMouseLeave={() => setInfoIdx(prev => (prev === i ? null : prev))}
+                    onClick={() => setInfoIdx(prev => (prev === i ? null : i))}
+                    style={{
+                      position: 'absolute', bottom: 6, right: 6, width: 22, height: 22, borderRadius: '50%',
+                      border: 'none', cursor: 'pointer', color: '#fff', fontSize: 12, fontWeight: 700,
+                      fontStyle: 'italic', fontFamily: 'Georgia, serif', lineHeight: 1,
+                      background: infoIdx === i ? 'rgba(17,17,17,0.92)' : 'rgba(0,0,0,0.55)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}
+                  >i</button>
+                  {infoIdx === i && (
+                    <div
+                      style={{
+                        position: 'absolute', inset: 0, background: 'rgba(10,10,12,0.92)',
+                        color: '#fff', padding: '10px 11px', overflowY: 'auto', fontSize: 11, lineHeight: 1.5,
+                      }}
+                    >
+                      {dataRows.map(([k, v]) => (
+                        <div key={k} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 3 }}>
+                          <span style={{ color: 'rgba(255,255,255,0.5)', flexShrink: 0 }}>{k}</span>
+                          <span style={{ color: '#fff', fontWeight: 600, textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div style={{ padding: '6px 8px' }}>
                   {p.sub && <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.3px', fontWeight: 700 }}>{p.sub}</div>}
                   <div style={{ fontSize: 12, color: '#222', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.title}</div>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

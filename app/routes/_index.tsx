@@ -32,7 +32,9 @@ import { useWaitlistMode, applyFlowOverrideFromUrl } from '~/hooks/useWaitlistMo
 import { useSearchUrlSync } from '~/hooks/useSearchUrlSync';
 import { useShopperGender } from '~/hooks/useShopperGender';
 import { toCatalogName, getRandomCatalogName } from '~/utils/catalogName';
-import { prefetchSimilarProducts, prefetchCreativesByBrand, prefetchHomeFeed, type ProductAd } from '~/services/product-creative';
+import { funnyCatalogName } from '~/utils/searchIntent';
+import { prefetchSimilarProducts, prefetchCreativesByBrand, prefetchHomeFeed, pruneStaleHomeFeedCaches, type ProductAd } from '~/services/product-creative';
+import { pruneStalePersistedOrders } from '~/services/personalized-feed';
 import { getGraphPairs, type GraphPair } from '~/services/graph-pairs';
 import { getLooks, getLookByUuid } from '~/services/looks';
 import { suggestCatalogs } from '~/services/catalog-suggest';
@@ -279,16 +281,26 @@ export default function Home() {
     try { sessionStorage.setItem('catalog:cold-open-done', '1'); } catch { /* ignore */ }
     // SplashScreen + SplashHost were retired — the big "Catalog" wordmark
     // splash was duplicating the smaller auth-splash above. Drop the
-    // cinematic on the next tick and fire the done event so any
-    // listeners (ActivityRealtimeToasts, etc.) don't hang waiting for a
-    // splash that never paints.
+    // cinematic on the next tick. (We DON'T fire catalog:splash-done here
+    // anymore — that's owned by the auth-splash lifecycle effect below, so
+    // notifications wait for the splash the user actually sees to finish.)
     const t = setTimeout(() => {
       setCinematic(c => ({ ...c, active: false }));
-      try { window.dispatchEvent(new Event('catalog:splash-done')); } catch { /* ignore */ }
     }, 0);
     return () => clearTimeout(t);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Notifications (ActivityRealtimeToasts) wait on catalog:splash-done. The
+  // ONLY splash the shopper actually sees is the auth-splash (the "Catalog"
+  // wordmark), so fire the event off ITS lifecycle: once it's no longer
+  // mounted — whether it finished fading out or never armed this load — the
+  // gate may open. Firing more than once is harmless (the listener just flips
+  // a boolean).
+  useEffect(() => {
+    if (authSplashMounted) return;
+    try { window.dispatchEvent(new Event('catalog:splash-done')); } catch { /* ignore */ }
+  }, [authSplashMounted]);
 
   const [selectedLook, setSelectedLook] = useState<Look | null>(null); // kept for BookmarksPage/CreatorPage overlays
   const [creatorFilter, setCreatorFilter] = useState<string | null>(null);
@@ -528,6 +540,15 @@ export default function Home() {
     });
   }, [heroMode, heroScrolled]);
 
+  // Tell the two TypeAnywhere copies who's in charge: while the hero is at the
+  // top, the inline copy (inside ShoppingForHero) owns the screen and the
+  // global fixed copy steps aside; once the shopper scrolls into the feed (or
+  // the ceremony takes over) they swap back. See TypeAnywhere `inline`.
+  useEffect(() => {
+    const active = heroMode && !ceremony.active && !heroScrolled;
+    window.dispatchEvent(new CustomEvent('catalog:hero-inline', { detail: { active } }));
+  }, [heroMode, ceremony.active, heroScrolled]);
+
   // Reveal the bottom search bar once the shopper scrolls down off the
   // hero into the catalog (while heroMode is the active screen). While
   // scrolling within the hero band we also write a 0→1 progress value
@@ -668,9 +689,12 @@ export default function Home() {
   // founder wants the segments to be a direct picker, not a 1→2→3 cycle.
   // Suppressed right after a drag so the touchend-synthesized click doesn't
   // fight a vertical-drag step. The wheel/drag handlers below still STEP.
-  const selectFeedCols = useCallback((index: number) => {
+  // Tap ANYWHERE on the dial cycles to the next density (1 → 2 → 3 → 1). The
+  // shopper doesn't have to hit an exact segment. The dragged guard keeps a
+  // scroll/drag gesture from also firing a cycle on release.
+  const cycleFeedCols = useCallback(() => {
     if (feedDialDraggedRef.current) { feedDialDraggedRef.current = false; return; }
-    setFeedColsIndex(index);
+    setFeedColsIndex(i => (i + 1) % FEED_GRID_COLS.length);
   }, []);
   // Wheel + vertical-drag stepping on the dial. Attached non-passive so the
   // gesture on the dial doesn't scroll the feed behind it.
@@ -730,6 +754,9 @@ export default function Home() {
     // Live typing doesn't bump the trigger, so it never fires mid-type.
     if (searchQuery.trim() && !ceremony.active) {
       const q = searchQuery.trim();
+      // Crown the result with a fun, on-topic catalog name ("I need a dress for
+      // italy" → "Italy-Coded Dresses") instead of the literal sentence.
+      setCatalogName(funnyCatalogName(q));
       setCeremonyImages([]);
       setCeremony({ active: true, query: q, kind: 'search' });
       // Kick off demographic-aware catalog suggestions for the END of the
@@ -1685,11 +1712,10 @@ export default function Home() {
       setSelectedProduct(null);
       setSelectedLook(null);
       setSearchQuery(query);
-      // The catalog name is the user's actual query, title-cased - so a
-      // search for "omg shoes" surfaces as "OMG Shoes" under the logo.
-      // Single short tokens (acronyms) stay uppercase.
+      // Crown the catalog with a fun, on-topic name derived from the query
+      // ("I need a dress for italy" → "Italy-Coded Dresses").
       const trimmed = query.trim();
-      setCatalogName(trimmed ? toCatalogName(trimmed) : 'all');
+      setCatalogName(trimmed ? funnyCatalogName(trimmed) : 'all');
     };
     // Mobile: if a text input is focused (keyboard up), dismiss it FIRST
     // and let it start sliding down before the loading ceremony mounts —
@@ -2128,7 +2154,7 @@ export default function Home() {
   }, []);
   const handleSelectSuggestion = useCallback((q: string) => {
     setSearchQuery(q.toLowerCase());
-    setCatalogName(toCatalogName(q));
+    setCatalogName(funnyCatalogName(q));
     bumpSearchTrigger();
     // The searchTrigger effect plays the ceremony when on the hero.
   }, []);
@@ -2259,8 +2285,14 @@ export default function Home() {
   // The SPA no longer uses a service worker (Vercel already serves hashed
   // assets `immutable`). Proactively retire any SW a returning visitor still
   // has registered and purge its caches, so stale chunk hashes can't hang nav.
+  // Same pass reclaims orphaned localStorage: the daily-feed order is no longer
+  // persisted (it re-validates every load), and old home-feed cache versions
+  // (v8→v12, gender variants) linger forever otherwise — sweep both so the
+  // shopper's storage stays small and can't fill the quota.
   useEffect(() => {
     retireServiceWorker();
+    pruneStalePersistedOrders();
+    pruneStaleHomeFeedCaches();
   }, []);
 
   // Trail depth: while the product/look overlay is open, the under-layer
@@ -2570,6 +2602,7 @@ export default function Home() {
             onOpenBrand={handleOpenBrand}
             onCreateCatalog={handleCreateCatalog}
             bookmarks={bookmarks}
+            hasCatalogStrip={!heroMode && !ceremony.active && searchQuery.trim() !== '' && ceremonyRecs.length > 0}
             onSearchLoadingChange={handleSearchLoadingChange}
             onResultsReady={setCeremonyImages}
             searchTrigger={searchTrigger}
@@ -2583,28 +2616,28 @@ export default function Home() {
               the home feed. CSS (feed.css) gates display to <=768px; we only
               MOUNT it on the home feed (no overlay open) so it never sits over a
               look/product. Hidden at the top, fades in once the shopper scrolls
-              (feedDialVisible). Each segment DIRECTLY selects its column count
-              (tap "1"/"2"/"3"); scroll/drag still steps. */}
+              (feedDialVisible). Tapping ANYWHERE on it cycles 1 → 2 → 3 → 1
+              (no need to hit an exact segment); scroll/drag still steps. */}
           {navStack.length === 0 && (
             <div
               ref={feedDialRef}
               className={`feed-view-dial${feedDialVisible ? ' is-visible' : ''}`}
-              role="group"
-              aria-label="Feed grid columns"
+              role="button"
+              tabIndex={0}
+              aria-label={`Feed grid: ${feedGridCols} column${feedGridCols > 1 ? 's' : ''}. Tap to change.`}
+              onClick={cycleFeedCols}
+              onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); cycleFeedCols(); } }}
             >
               {FEED_GRID_COLS.map((c, i) => (
-                <button
+                <span
                   key={c}
-                  type="button"
                   className={`feed-view-dial-dot${i === feedColsIndex ? ' is-active' : ''}`}
-                  aria-label={`${c} column${c > 1 ? 's' : ''}`}
-                  aria-pressed={i === feedColsIndex}
-                  onClick={() => selectFeedCols(i)}
+                  aria-hidden="true"
                 >
                   <span className="feed-view-dial-bars">
                     {Array.from({ length: c }).map((_, b) => <i key={b} />)}
                   </span>
-                </button>
+                </span>
               ))}
             </div>
           )}

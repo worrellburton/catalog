@@ -583,6 +583,28 @@ export function getCachedHomeFeed(): ProductAd[] | null {
   return readHomeFeedFromStorage();
 }
 
+// Each version bump (v8 → v13) and each gender variant (:male/:female/bare)
+// writes a NEW localStorage key; the previous ones are simply never read again
+// but otherwise linger forever, eating the shopper's ~5 MB origin quota (and
+// once full, every cache write silently fails). Sweep every
+// `catalog:home-feed-cache:*` key that isn't the CURRENT version — the live
+// key (HOME_FEED_LS_KEY, optionally gender-suffixed) is preserved so the fast
+// path still hydrates. Run once on boot.
+const HOME_FEED_LS_FAMILY = 'catalog:home-feed-cache:';
+export function pruneStaleHomeFeedCaches(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const stale: string[] = [];
+    for (let i = 0; i < window.localStorage.length; i++) {
+      const k = window.localStorage.key(i);
+      if (k && k.startsWith(HOME_FEED_LS_FAMILY) && !k.startsWith(HOME_FEED_LS_KEY)) {
+        stale.push(k);
+      }
+    }
+    for (const k of stale) window.localStorage.removeItem(k);
+  } catch { /* localStorage unavailable — nothing to reclaim */ }
+}
+
 export function prefetchHomeFeed(): Promise<ProductAd[]> {
   const now = Date.now();
   if (homeFeedPromise && (now - homeFeedFetchedAt) < HOME_FEED_TTL_MS) {

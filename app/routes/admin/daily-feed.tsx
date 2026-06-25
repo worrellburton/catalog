@@ -10,40 +10,27 @@
 //
 // "Daily Feed" is the canonical name for this concept — see docs/daily-feed.md.
 
-import { Link } from '@remix-run/react';
 import DailyFeedSettings from '~/components/admin/DailyFeedSettings';
 import DailyFeedPreview from '~/components/admin/DailyFeedPreview';
+import '~/styles/daily-feed-admin.css';
 
 export default function AdminDailyFeed() {
   return (
-    <div className="admin-page">
+    <div className="admin-page df-admin">
       <div className="admin-page-header">
         <h1>Daily Feed</h1>
         <p className="admin-page-subtitle">
           Each signed-in shopper&apos;s own custom feed, re-ranked to their taste and
-          refreshed once per day. Tune it here, and preview any shopper&apos;s feed
-          (today or on a past day).
+          refreshed once per day. Preview any shopper&apos;s feed (today or on a past
+          day), then tune it below.
         </p>
       </div>
 
-      <div
-        style={{
-          fontSize: 12.5, color: '#475569', background: '#fffbeb',
-          border: '1px solid #fde68a', borderRadius: 10, padding: '10px 14px',
-          marginBottom: 18, maxWidth: 1100,
-        }}
-      >
-        The <strong>candidate pool &amp; baseline order</strong> (what a brand-new
-        shopper sees, and the starting point every Daily Feed re-ranks from) is the{' '}
-        <strong>home</strong> catalog —{' '}
-        <Link to="/admin/catalogs/home" style={{ color: '#1d4ed8', fontWeight: 600 }}>
-          curate it on the Catalogs page →
-        </Link>
-      </div>
-
+      {/* Preview first — it's the primary thing the admin reaches for; the
+          dials live below it. */}
       <div style={{ display: 'flex', flexDirection: 'column', gap: 18, maxWidth: 1100 }}>
-        <DailyFeedSettings />
         <DailyFeedPreview />
+        <DailyFeedSettings />
       </div>
     </div>
   );

@@ -150,6 +150,54 @@
   to   { opacity: 1; transform: translateY(0); }
 }
 
+/* Shimmer text utility (Transitions.dev technique) — the base text renders in
+   --shimmer-base; a duplicated ::before (content: attr(data-text)) paints a
+   transparent→highlight→transparent band, clips it to the same glyphs via
+   background-clip:text, and sweeps it with background-position. Callers MUST
+   mirror the visible string into data-text. Used on the hero headline (the
+   main CTA); tuned for the dark hero with a light-mode override. */
+.t-shimmer {
+  --shimmer-dur: 2600ms;
+  --shimmer-base: rgba(255, 255, 255, 0.66);
+  --shimmer-highlight: #ffffff;
+  --shimmer-band: 400%;
+  position: relative;
+  display: inline-block;
+  color: var(--shimmer-base);
+}
+.t-shimmer::before {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    transparent 40%,
+    var(--shimmer-highlight) 50%,
+    transparent 60%,
+    transparent 100%
+  );
+  background-size: var(--shimmer-band) 100%;
+  background-repeat: no-repeat;
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  -webkit-text-fill-color: transparent;
+  animation: t-shimmer-sweep var(--shimmer-dur) linear infinite;
+}
+@keyframes t-shimmer-sweep {
+  0%   { background-position: 100% 0; }
+  100% { background-position: 0% 0; }
+}
+.light-mode .t-shimmer {
+  --shimmer-base: #6e6e6e;
+  --shimmer-highlight: #0d0d0d;
+}
+@media (prefers-reduced-motion: reduce) {
+  .t-shimmer::before { animation: none !important; }
+}
+
 /* Search pill — Gemini-ish, Catalog matte. */
 .sfh-pill {
   width: 100%;
@@ -652,16 +700,47 @@ html[data-shell="catalog-app"] .sfh-info-card {
 
 /* 2 — Thinking label: a shimmering "Thinking" that settles to "Ready". */
 .sc-think-label { font-size: 13px; font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase; }
-.sc-think-shimmer {
-  background: linear-gradient(100deg,
-    rgba(255, 255, 255, 0.35) 30%, #fff 50%, rgba(255, 255, 255, 0.35) 70%);
-  background-size: 200% 100%;
+/* Shimmer text (Transitions.dev technique). Two layers: the base text sits in
+   --shimmer-base, and a duplicated ::before (content: attr(data-text)) paints a
+   transparent→white→transparent band, clips it to the same glyphs via
+   background-clip:text, and animates background-position to sweep the band
+   across. Tuned for the dark ceremony (dim base, white highlight). Used for the
+   "Thinking" label AND the active step's label so the live narration pulses.
+   Callers MUST mirror the visible string into data-text. */
+.sc-shimmer-text {
+  --shimmer-dur: 2000ms;
+  --shimmer-base: rgba(255, 255, 255, 0.55);
+  --shimmer-highlight: #ffffff;
+  --shimmer-band: 400%;
+  position: relative;
+  display: inline-block;
+  color: var(--shimmer-base);
+}
+.sc-shimmer-text::before {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: linear-gradient(
+    90deg,
+    transparent 0%,
+    transparent 40%,
+    var(--shimmer-highlight) 50%,
+    transparent 60%,
+    transparent 100%
+  );
+  background-size: var(--shimmer-band) 100%;
+  background-repeat: no-repeat;
   -webkit-background-clip: text;
   background-clip: text;
   color: transparent;
-  animation: sc-shimmer 1.6s linear infinite;
+  -webkit-text-fill-color: transparent;
+  animation: sc-shimmer-sweep var(--shimmer-dur) linear infinite;
 }
-@keyframes sc-shimmer { from { background-position: 200% 0; } to { background-position: -200% 0; } }
+@keyframes sc-shimmer-sweep {
+  0%   { background-position: 100% 0; }
+  100% { background-position: 0% 0; }
+}
 .sc-think-done { color: #4ade80; }
 
 /* Streamed step list — each ticks from spinner to check. */
@@ -852,6 +931,25 @@ html[data-shell="catalog-app"] .sfh-info-card {
    add its full 100px top padding (would leave a big gap under the picks). */
 .home-feed-wrap.has-catalog-strip #grid-container { padding-top: 12px; }
 
+/* ── Empty searched feed — ONE centered concept, no scroll ───────────────
+   When a search resolves to ZERO products/looks, the now-browsing strip
+   (title + recs) and the demand CTA below it fold into a SINGLE block that
+   centers in the viewport, and the page stops scrolling (nothing is below to
+   reach). ContinuousFeed sets html.feed-empty while this state holds. */
+html.feed-empty,
+html.feed-empty body { overflow: hidden; }
+/* Collapse the strip's hero spacing so the title + recs sit right above the
+   "Nothing yet" CTA as one cluster (desktop's 66vh hero height is for the
+   scroll-into-grid case, which no longer applies with an empty feed). Keep the
+   group in its natural upper position with header clearance — NOT vertically
+   centered, which would push a long title off-screen (overflow is locked). */
+html.feed-empty .search-catalog-strip {
+  min-height: 0;
+  padding-top: clamp(80px, 12vh, 130px);
+  padding-bottom: 8px;
+}
+html.feed-empty .ec-inline { padding-top: 0; padding-bottom: 0; }
+
 /* ── Searched feed: catalog-name pill is the ONLY search entry ────────────
    On a searched/browsing feed the founder wants a single search affordance:
    the "✦ <CatalogName> 🔍" pill (.sc-name-pill, persistent + always visible),
@@ -940,10 +1038,24 @@ html[data-shell="catalog-app"] .sfh-info-card {
 }
 .light-mode .sc-name-pill-search { color: rgba(15, 23, 42, 0.5); }
 .light-mode .sc-name-pill .sc-rec-spark { color: rgba(15, 23, 42, 0.8); }
-/* Hide the pill while the search sheet is open (the sheet owns the screen)
-   and on desktop (no mobile bottom bar there — desktop uses TypeAnywhere). */
+/* Hide the pill while the search sheet is open (the sheet owns the screen). */
 html:has(.bottom-bar.search-open) .sc-name-pill { opacity: 0; pointer-events: none; }
-@media (min-width: 769px) { .sc-name-pill { display: none; } }
+/* Desktop: the sparkle pill is the searched-feed's persistent search entry too
+   (tapping it focuses the TypeAnywhere bar — see openSearchSheet). To avoid two
+   floating affordances stacking at the bottom-center, the pill is the RESTING
+   entry and the TypeAnywhere bar stays mounted but invisible+inert until it's
+   focused (opacity, NOT display:none, so the pill can still focus its input).
+   When the bar gains focus the pill steps aside and the full search UI shows. */
+@media (min-width: 769px) {
+  html:has(.home-feed-wrap.has-catalog-strip) .ai-bar-wrap:not(:focus-within) {
+    opacity: 0;
+    pointer-events: none;
+  }
+  html:has(.ai-bar-wrap:focus-within) .sc-name-pill {
+    opacity: 0;
+    pointer-events: none;
+  }
+}
 
 /* Peek-on-landing: the feed wrapper is pulled up under the hero by a
    small amount ONLY while the hero is showing, so just the very top
@@ -969,17 +1081,16 @@ html:has(.bottom-bar.search-open) .sc-name-pill { opacity: 0; pointer-events: no
   }
 }
 @media (min-width: 769px) {
-  /* Desktop feed peek — nose the feed up so more of the first rows of cards
-     show below the hero ("there's more below" reads stronger on the wide
-     viewport). Bumped 10svh → 18svh to reposition the hero higher / reveal
-     more grid above the fold. */
+  /* Desktop feed peek — nose the feed up so a strip of the first rows shows
+     below the hero ("there's more below"). Eased 18svh → 8svh per request so
+     the feed starts a little lower (less peek, hero sits a touch lower too). */
   .app-root.home-hero:not(.hero-scrolled) .home-feed-wrap {
-    margin-top: -18svh;
+    margin-top: -8svh;
   }
   /* Keep the "Your daily feed" hint clear of the peek — track it (+ a 32px
      gap) so the label always sits just above the first row of cards. */
   .app-root.home-hero:not(.hero-scrolled) .sfh-scroll-hint {
-    bottom: calc(18svh + 32px + env(safe-area-inset-bottom));
+    bottom: calc(8svh + 32px + env(safe-area-inset-bottom));
   }
 }
 
@@ -1012,7 +1123,7 @@ html:has(.bottom-bar.search-open) .sc-name-pill { opacity: 0; pointer-events: no
 
 @media (prefers-reduced-motion: reduce) {
   .sfh-spark, .sfh-title, .sfh-pill, .sfh-scroll-hint,
-  .sc-echo-spark, .sc-think-shimmer, .sc-step, .sc-step-spinner,
+  .sc-echo-spark, .sc-shimmer-text, .sc-shimmer-text::before, .sc-step, .sc-step-spinner,
   .search-ceremony, .home-results-reveal {
     animation: none !important;
   }
@@ -1613,15 +1724,25 @@ html:has(.bottom-bar.search-open) .sc-name-pill { opacity: 0; pointer-events: no
     min-height: 100vh;
     justify-content: flex-end;
     padding-top: calc(env(safe-area-inset-top, 0px) + 96px);
-    /* Headline bottom lands ~54vh from top; the bar (36vh-from-bottom below)
-       sits ~4vh under it, with a matching spark→headline gap — an evenly
-       spaced, vertically-centered trio. */
-    padding-bottom: 46vh;
+    /* Lowered (46vh → 38vh) to re-center the spark + headline + bar trio now
+       that the feed peek eased to -8svh — the feed sits lower, so the trio
+       drops ~8vh to stay centered in the taller hero space. The bar bottom
+       below drops the same 8vh so the trio's internal spacing is unchanged. */
+    padding-bottom: 38vh;
   }
   /* Even, balanced spacing for the desktop hero trio: a comfortable gap
      between the spark and the headline that matches the headline→bar gap. */
   .sfh-stage {
-    gap: 36px;
+    gap: 28px;
+  }
+  /* Dial the desktop hero down a notch (per request) — smaller spark +
+     headline so the cluster reads more compact above the bar. */
+  .sfh-spark svg {
+    width: 56px;
+    height: 56px;
+  }
+  .sfh-title {
+    font-size: clamp(26px, 3vw, 38px);
   }
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar,
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar.search-open {
@@ -1651,7 +1772,7 @@ html:has(.bottom-bar.search-open) .sc-name-pill { opacity: 0; pointer-events: no
        When the bar gains focus (recommended-options panel about to appear
        above), the trio rises 18vh (32vh → 50vh) so the panel has room
        without colliding with the feed peek; .sfh matches with -18vh. */
-    bottom: 36vh;
+    bottom: 28vh;
     /* MUST re-list transform here: this rule overrides the base
        .ai-bar-wrap transition, and without transform the chrome auto-hide
        slide-back would snap instead of animate. */
@@ -1660,7 +1781,7 @@ html:has(.bottom-bar.search-open) .sc-name-pill { opacity: 0; pointer-events: no
       transform 0.4s cubic-bezier(0.32, 0.72, 0, 1);
   }
   body:has(.app-root.home-hero) .ai-bar-wrap:focus-within {
-    bottom: 48vh;
+    bottom: 40vh;
   }
   /* The desktop bar (.ai-bar-wrap) is a SIBLING of .app-root under <body>,
      NOT a descendant — so this MUST be reached from the shared <body>
@@ -1668,10 +1789,12 @@ html:has(.bottom-bar.search-open) .sc-name-pill { opacity: 0; pointer-events: no
      does. The earlier `.app-root.home-hero .ai-bar-wrap:focus-within`
      forms could never match (the bar isn't inside .app-root), so the
      headline never lifted and collided with the rising bar + pills. */
-  body:has(.ai-bar-wrap:focus-within) .app-root.home-hero .sfh-stage {
+  body:has(.ai-bar-wrap:not(.ai-bar-wrap--inline):focus-within) .app-root.home-hero .sfh-stage {
     /* Slide ONLY the spark+headline up (not the whole .sfh section) when
        the bar is focused, so the trio (spark + headline + bar) rises as
        one group and clears the catalog-pills panel. Targeting .sfh-stage
+       — only for the GLOBAL bar; the inline copy is itself inside .sfh-stage
+       (lifting the stage would lift it too) and floats its own pill cloud.
        rather than .sfh leaves the section's full-viewport gradient
        background in place — translating the whole .sfh dragged its
        background up too and exposed a bare band below it.
@@ -1902,7 +2025,7 @@ body:has(.app-root.chrome-hidden) .ai-bar-wrap {
   body:has(.app-root.home-hero) .ai-bar-wrap:focus-within { bottom: 48vh; }
   /* Bar rises 16vh here (32vh → 48vh) — match the headline lift so the
      gap stays constant focused vs. resting. */
-  body:has(.ai-bar-wrap:focus-within) .app-root.home-hero .sfh-stage {
+  body:has(.ai-bar-wrap:not(.ai-bar-wrap--inline):focus-within) .app-root.home-hero .sfh-stage {
     transform: translateY(-16vh);
   }
 }
@@ -1910,7 +2033,29 @@ body:has(.app-root.chrome-hidden) .ai-bar-wrap {
   body:has(.app-root.home-hero) .ai-bar-wrap { bottom: 24vh; }
   body:has(.app-root.home-hero) .ai-bar-wrap:focus-within { bottom: 42vh; }
   /* Bar rises 18vh here (24vh → 42vh) — match the headline lift. */
-  body:has(.ai-bar-wrap:focus-within) .app-root.home-hero .sfh-stage {
+  body:has(.ai-bar-wrap:not(.ai-bar-wrap--inline):focus-within) .app-root.home-hero .sfh-stage {
     transform: translateY(-18vh);
   }
+}
+
+/* ── "App chrome on scroll" dial (OFF) — immersive home ──────────────────────
+   Set by root.tsx as html.app-chrome-scroll-off when the admin turns the dial
+   off. Once the home feed is scrolled past the hero (.hero-scrolled), retire
+   the top header (Catalog logo + creators rail) and the bottom search so the
+   feed fills the screen. Both glide back at the very top (hero, not scrolled).
+   The feed, card info, and look/product overlays are never touched. The header
+   is position:fixed and the search bar is fixed, so a translate slides each one
+   cleanly off-screen. */
+html.app-chrome-scroll-off .app-root.home-hero.hero-scrolled > header {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-110%);
+  transition: opacity 0.28s ease, transform 0.28s ease;
+}
+html.app-chrome-scroll-off body:has(.app-root.home-hero.hero-scrolled) .ai-bar-wrap,
+html.app-chrome-scroll-off body:has(.app-root.home-hero.hero-scrolled) .bottom-bar {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(160%);
+  transition: opacity 0.28s ease, transform 0.28s ease;
 }

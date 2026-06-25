@@ -24,6 +24,14 @@ import {
   setCommentsEnabled,
   subscribeCommentsEnabled,
   DEFAULT_COMMENTS_ENABLED,
+  getUiOnScroll,
+  setUiOnScroll,
+  subscribeUiOnScroll,
+  DEFAULT_UI_ON_SCROLL,
+  getChromeOnScroll,
+  setChromeOnScroll,
+  subscribeChromeOnScroll,
+  DEFAULT_CHROME_ON_SCROLL,
   getWaitlistMode,
   setWaitlistMode,
   subscribeWaitlistMode,
@@ -32,6 +40,7 @@ import {
 import { backfillBrandLogos, type BackfillResult } from '~/services/brandLogos';
 import { shouldBeVideo } from '~/utils/videoStillSplit';
 import VideoPipelineCard from '~/components/admin/VideoPipelineCard';
+import { Skeleton } from '~/components/ui/StateViews';
 
 /**
  * /admin/dials — global tuning knobs that affect the whole catalog
@@ -230,6 +239,77 @@ export default function AdminDials() {
       });
   };
 
+  // ── UI on scroll (card chrome fade) ─────────────────────────────────
+  // When ON, card chrome fades out while scrolling and eases back when the
+  // feed settles. When OFF, the chrome stays put — nothing pops on scroll.
+  const [uiOnScroll, setUiOnScrollState] = useState<boolean>(DEFAULT_UI_ON_SCROLL);
+  const [uiOnScrollLoaded, setUiOnScrollLoaded] = useState(false);
+  const [uiOnScrollSaving, setUiOnScrollSaving] = useState(false);
+  const inflightUiOnScroll = useRef<boolean | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    getUiOnScroll().then(v => {
+      if (cancelled) return;
+      setUiOnScrollState(v);
+      setUiOnScrollLoaded(true);
+    });
+    const unsub = subscribeUiOnScroll(v => {
+      if (cancelled) return;
+      if (inflightUiOnScroll.current === v) return;
+      setUiOnScrollState(v);
+    });
+    return () => { cancelled = true; unsub(); };
+  }, []);
+  const onToggleUiOnScroll = (next: boolean) => {
+    setUiOnScrollState(next);
+    inflightUiOnScroll.current = next;
+    setUiOnScrollSaving(true);
+    setUiOnScroll(next)
+      .catch(err => { setError(err.message || 'Save failed'); })
+      .finally(() => {
+        setUiOnScrollSaving(false);
+        window.setTimeout(() => {
+          if (inflightUiOnScroll.current === next) inflightUiOnScroll.current = null;
+        }, 1500);
+      });
+  };
+
+  // ── App chrome on scroll (header + search) ──────────────────────────
+  // When ON, the home header (Catalog + creators) and bottom search follow the
+  // feed as you scroll. When OFF, they hide once you scroll past the hero
+  // (immersive, media-only) and reappear at the very top.
+  const [chromeOnScroll, setChromeOnScrollState] = useState<boolean>(DEFAULT_CHROME_ON_SCROLL);
+  const [chromeOnScrollLoaded, setChromeOnScrollLoaded] = useState(false);
+  const [chromeOnScrollSaving, setChromeOnScrollSaving] = useState(false);
+  const inflightChromeOnScroll = useRef<boolean | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    getChromeOnScroll().then(v => {
+      if (cancelled) return;
+      setChromeOnScrollState(v);
+      setChromeOnScrollLoaded(true);
+    });
+    const unsub = subscribeChromeOnScroll(v => {
+      if (cancelled) return;
+      if (inflightChromeOnScroll.current === v) return;
+      setChromeOnScrollState(v);
+    });
+    return () => { cancelled = true; unsub(); };
+  }, []);
+  const onToggleChromeOnScroll = (next: boolean) => {
+    setChromeOnScrollState(next);
+    inflightChromeOnScroll.current = next;
+    setChromeOnScrollSaving(true);
+    setChromeOnScroll(next)
+      .catch(err => { setError(err.message || 'Save failed'); })
+      .finally(() => {
+        setChromeOnScrollSaving(false);
+        window.setTimeout(() => {
+          if (inflightChromeOnScroll.current === next) inflightChromeOnScroll.current = null;
+        }, 1500);
+      });
+  };
+
   // ── Waitlist mode (launch master switch) ────────────────────────────
   // ON  → old flow (sign-in-only, guests → landing, new accounts → waitlist).
   // OFF → open flow (guests browse; looks/creators gate behind signup).
@@ -365,7 +445,7 @@ export default function AdminDials() {
             per-card so the same shopper sees the same set on refresh.
           </p>
           {!loaded ? (
-            <div className="admin-empty" style={{ marginTop: 0 }}>Loading…</div>
+            <Skeleton height={40} radius={8} />
           ) : (
             <>
               <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -475,7 +555,7 @@ export default function AdminDials() {
             the clean catalog imagery brands already produce.
           </p>
           {!productsImageOnlyLoaded ? (
-            <div className="admin-empty" style={{ marginTop: 0 }}>Loading…</div>
+            <Skeleton height={40} radius={8} />
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -538,7 +618,7 @@ export default function AdminDials() {
             a label.
           </p>
           {!brandLogosLoaded ? (
-            <div className="admin-empty" style={{ marginTop: 0 }}>Loading…</div>
+            <Skeleton height={40} radius={8} />
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -693,7 +773,7 @@ export default function AdminDials() {
             {' '}(clear with <code>?flow=clear</code>).
           </p>
           {!waitlistLoaded ? (
-            <div className="admin-empty" style={{ marginTop: 0 }}>Loading…</div>
+            <Skeleton height={40} radius={8} />
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -745,7 +825,7 @@ export default function AdminDials() {
             off. Existing comments are preserved either way.
           </p>
           {!commentsLoaded ? (
-            <div className="admin-empty" style={{ marginTop: 0 }}>Loading…</div>
+            <Skeleton height={40} radius={8} />
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
               <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
@@ -788,6 +868,109 @@ export default function AdminDials() {
         </div>
 
         <div className="admin-detail-card">
+          <h3>App chrome on scroll</h3>
+          <p style={{ fontSize: 13, color: '#888', margin: '4px 0 16px' }}>
+            Controls the top header (Catalog logo + creators) and the bottom
+            search on the home feed. When ON, they stay with you as you scroll
+            (default). When OFF, they hide once you scroll past the hero for an
+            immersive, media-only feed and glide back at the very top. The feed,
+            its product info, and look/product overlays are never affected.
+          </p>
+          {!chromeOnScrollLoaded ? (
+            <Skeleton height={40} radius={8} />
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#111' }}>
+                  {chromeOnScroll ? 'On' : 'Off'}
+                </span>
+                <span style={{ fontSize: 11, color: '#999' }}>
+                  {chromeOnScroll
+                    ? 'Header + search follow the feed on scroll (default).'
+                    : 'Header + search hide on scroll — immersive feed; back at the top.'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 11, color: '#999' }}>
+                  {chromeOnScrollSaving ? 'Saving…' : 'Saved'}
+                </span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={chromeOnScroll}
+                  onClick={() => onToggleChromeOnScroll(!chromeOnScroll)}
+                  style={{
+                    position: 'relative', width: 44, height: 24, borderRadius: 999,
+                    border: 'none', background: chromeOnScroll ? '#16a34a' : '#cbd5e1',
+                    cursor: 'pointer', transition: 'background 160ms ease', padding: 0,
+                  }}
+                >
+                  <span
+                    style={{
+                      position: 'absolute', top: 3, left: chromeOnScroll ? 23 : 3,
+                      width: 18, height: 18, borderRadius: '50%',
+                      background: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.25)',
+                      transition: 'left 160ms ease',
+                    }}
+                  />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="admin-detail-card">
+          <h3>UI on scroll</h3>
+          <p style={{ fontSize: 13, color: '#888', margin: '4px 0 16px' }}>
+            When ON, the card chrome (creator chip, price, gradient) shows —
+            fading out while the feed scrolls and easing back when it settles
+            (the media-first feel). When OFF, the chrome is hidden entirely:
+            pure imagery, nothing on the cards. Applies to every viewport, live.
+          </p>
+          {!uiOnScrollLoaded ? (
+            <Skeleton height={40} radius={8} />
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 2 }}>
+                <span style={{ fontSize: 13, fontWeight: 600, color: '#111' }}>
+                  {uiOnScroll ? 'On' : 'Off'}
+                </span>
+                <span style={{ fontSize: 11, color: '#999' }}>
+                  {uiOnScroll
+                    ? 'Chrome shows; fades while scrolling, returns when it settles (default).'
+                    : 'Chrome hidden — pure imagery, nothing on the cards.'}
+                </span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                <span style={{ fontSize: 11, color: '#999' }}>
+                  {uiOnScrollSaving ? 'Saving…' : 'Saved'}
+                </span>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={uiOnScroll}
+                  onClick={() => onToggleUiOnScroll(!uiOnScroll)}
+                  style={{
+                    position: 'relative', width: 44, height: 24, borderRadius: 999,
+                    border: 'none', background: uiOnScroll ? '#16a34a' : '#cbd5e1',
+                    cursor: 'pointer', transition: 'background 160ms ease', padding: 0,
+                  }}
+                >
+                  <span
+                    style={{
+                      position: 'absolute', top: 3, left: uiOnScroll ? 23 : 3,
+                      width: 18, height: 18, borderRadius: '50%',
+                      background: '#fff', boxShadow: '0 1px 3px rgba(0,0,0,0.25)',
+                      transition: 'left 160ms ease',
+                    }}
+                  />
+                </button>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="admin-detail-card">
           <h3>Product "More like this" similarity</h3>
           <p style={{ fontSize: 13, color: '#888', margin: '4px 0 16px' }}>
             How closely related products must be to appear in the "More
@@ -798,7 +981,7 @@ export default function AdminDials() {
             products pass — the rail may shrink when nothing qualifies.
           </p>
           {!productSimilarityLoaded ? (
-            <div className="admin-empty" style={{ marginTop: 0 }}>Loading…</div>
+            <Skeleton height={40} radius={8} />
           ) : (
             <>
               <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
@@ -860,7 +1043,7 @@ export default function AdminDials() {
             seed must appear in the candidate — very strict.
           </p>
           {!lookSimilarityLoaded ? (
-            <div className="admin-empty" style={{ marginTop: 0 }}>Loading…</div>
+            <Skeleton height={40} radius={8} />
           ) : (
             <>
               <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>

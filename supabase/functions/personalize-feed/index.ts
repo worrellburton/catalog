@@ -60,8 +60,12 @@ function holdoutBucket(userId: string): number {
 // (admin-configurable). Shifting now back by refreshHour hours and taking the
 // UTC date means before that hour we stay on yesterday's feed, after it a new
 // one is computed. refreshHour=0 ⇒ midnight-UTC rollover (the default).
-function editorDay(refreshHour: number): string {
-  return new Date(Date.now() - refreshHour * 3_600_000).toISOString().slice(0, 10); // YYYY-MM-DD
+// `epoch` is the manual "advance the daily feed" counter (app_settings
+// auto_editor_epoch): it shifts the day FORWARD by `epoch` days on top of the
+// natural rollover, so an admin bump force-advances every shopper to their next
+// feed (new feed_date key ⇒ fresh recompute, new rotation offset ⇒ new order).
+function editorDay(refreshHour: number, epoch = 0): string {
+  return new Date(Date.now() - refreshHour * 3_600_000 + epoch * 86_400_000).toISOString().slice(0, 10); // YYYY-MM-DD
 }
 
 interface ProductRow {
@@ -193,6 +197,24 @@ function applyDailyShuffle(order: string[], seedStr: string, window: number): st
   return [...head, ...order.slice(n)];
 }
 
+/** Day-to-day derangement: guarantee NO id holds the same index it held
+ *  yesterday, so every drop visibly moves (founder's ask: "make sure no
+ *  product is in the same place"). Single deterministic pass — wherever
+ *  today[i] === prev[i], swap with the neighbour, which always breaks the
+ *  collision (the neighbour is a different id, so it can't re-collide here).
+ *  Items not present yesterday are left where the ranking put them. */
+function derangeAgainstPrev(order: string[], prev: string[]): string[] {
+  if (order.length < 2 || prev.length === 0) return order;
+  const out = order.slice();
+  for (let i = 0; i < out.length; i++) {
+    if (i < prev.length && out[i] === prev[i]) {
+      const j = i + 1 < out.length ? i + 1 : i - 1;
+      [out[i], out[j]] = [out[j], out[i]];
+    }
+  }
+  return out;
+}
+
 /** Hard rotation: cap how many of yesterday's top-12 may repeat in
  *  today's top-12 — excess repeats demote past the window so the drop
  *  always FEELS new (founder's call: at most half may carry over). */
@@ -210,6 +232,28 @@ function applyRotationGuard(order: string[], prevTop: Set<string>, maxRepeats: n
     head.push(id);
   }
   return [...head, ...demoted, ...order.slice(i)];
+}
+
+/** Daily lead-rotation: cycle WHICH slice of the ranked pool leads, so a
+ *  stable-taste shopper sees a genuinely different head each day — not the
+ *  same top set merely re-shuffled. Rotates only within the top `pool`
+ *  (quality preserved: every lead is still a high-affinity item); the long
+ *  tail keeps its order. `dayIndex` is a monotonic day counter so consecutive
+ *  days step by `step` positions through the pool. `step` should be coprime
+ *  with `pool` for a full, even cycle. Deterministic per (day, pool, step). */
+function applyDailyRotation(order: string[], dayIndex: number, pool: number, step: number): string[] {
+  const n = Math.min(pool, order.length);
+  if (n <= 1) return order;
+  const head = order.slice(0, n);
+  const tail = order.slice(n);
+  const off = (((dayIndex * step) % n) + n) % n;
+  return [...head.slice(off), ...head.slice(0, off), ...tail];
+}
+
+/** Whole-days since the Unix epoch for a YYYY-MM-DD feed date — the monotonic
+ *  counter that drives applyDailyRotation's per-day offset. */
+function dayIndexOf(feedDate: string): number {
+  return Math.floor(Date.parse(`${feedDate}T00:00:00Z`) / 86_400_000);
 }
 
 interface RankedItem { type: 'product' | 'look'; id: string }
@@ -252,18 +296,21 @@ Deno.serve(async (req: Request) => {
     const { data: settingRows } = await supabase
       .from('app_settings')
       .select('key, value')
-      .in('key', ['auto_editor_enabled', 'auto_editor_holdout_pct', 'auto_editor_recency_days', 'auto_editor_min_signal', 'auto_editor_refresh_hour', 'feed_rules']);
+      .in('key', ['auto_editor_enabled', 'auto_editor_holdout_pct', 'auto_editor_recency_days', 'auto_editor_min_signal', 'auto_editor_refresh_hour', 'auto_editor_epoch', 'feed_rules']);
     const cfg = new Map((settingRows ?? []).map((r: { key: string; value: string | null }) => [r.key, r.value ?? '']));
     const enabled = (cfg.get('auto_editor_enabled') || 'false').trim().toLowerCase() === 'true';
     const holdoutPct = clampInt(cfg.get('auto_editor_holdout_pct'), 10, 0, 100);
     const recencyDays = clampInt(cfg.get('auto_editor_recency_days'), 30, 1, 365);
     const minSignal = clampInt(cfg.get('auto_editor_min_signal'), 3, 0, 1000);
     const refreshHour = clampInt(cfg.get('auto_editor_refresh_hour'), 0, 0, 23);
+    // Manual "advance the daily feed" counter — shifts every shopper's feed day
+    // forward so an admin can push everyone to their next feed on demand.
+    const epoch = clampInt(cfg.get('auto_editor_epoch'), 0, 0, 100000);
     const rules = parseRules(cfg.get('feed_rules'));
 
     if (!enabled) return jsonRes({ success: true, enabled: false, variant: 'disabled' });
 
-    const feedDate = editorDay(refreshHour);
+    const feedDate = editorDay(refreshHour, epoch);
 
     // ── Idempotency: today's feed already computed? ──────────────────────
     // Admin previews skip the cache: the lens must reflect rule-dial
@@ -338,16 +385,25 @@ Deno.serve(async (req: Request) => {
       .limit(CANDIDATE_POOL);
     let candidates = (candidateRows ?? []) as ProductRow[];
 
-    // Rule: strict gender match — drop products for the other gender
-    // (unisex and untyped always pass; unknown shopper gender disables).
+    // Rule: strict gender match — drop items for the other gender (unisex and
+    // untagged always pass; unknown shopper gender disables). The catalog is
+    // inconsistent: PRODUCTS are tagged male/female/unisex while LOOKS are
+    // tagged men/women — so a shopper's gender must accept BOTH spellings
+    // (female → {female, women}; male → {male, men}). The old code mapped to a
+    // single "women"/"men" plus a broken alias ("women".slice(0,-2)+"le" =
+    // "womle"), so it matched ZERO products (all tagged female) and only let
+    // unisex through — which is why a female shopper saw a menswear-heavy feed.
+    let genderAccept: string[] | null = null;
     if (rules.genderStrict.enabled) {
       const { data: prof } = await supabase.from('profiles').select('gender').eq('id', userId).maybeSingle();
       const g = String(prof?.gender ?? '').toLowerCase();
-      const want = g.startsWith('m') ? 'men' : g.startsWith('f') || g.startsWith('w') ? 'women' : '';
-      if (want) {
+      if (g.startsWith('m')) genderAccept = ['men', 'male'];
+      else if (g.startsWith('f') || g.startsWith('w')) genderAccept = ['women', 'female'];
+      if (genderAccept) {
+        const ok = new Set([...genderAccept, 'unisex']);
         candidates = candidates.filter(c => {
           const pg = String(c.gender ?? '').toLowerCase();
-          return !pg || pg === 'unisex' || pg === want || pg === want.slice(0, -2) + 'le'; // men/male, women/female
+          return !pg || ok.has(pg);
         });
       }
     }
@@ -473,6 +529,15 @@ Deno.serve(async (req: Request) => {
       reason = { ...reason, shuffled: true };
     }
 
+    // Day-to-day derangement guarantee: no product may sit in the SAME slot it
+    // held yesterday, so each drop visibly moves even below the shuffled head.
+    const prevProductOrder = ((prevRow?.ranked_items ?? []) as RankedItem[])
+      .filter(r => !r.type || r.type === 'product').map(r => r.id);
+    if (prevProductOrder.length > 0) {
+      finalOrder = derangeAgainstPrev(finalOrder, prevProductOrder);
+      reason = { ...reason, deranged: true };
+    }
+
     // ── Personalize LOOKS too (deterministic, fail-open) ────────────────
     // Looks are ranked separately here and woven into the feed client-side by
     // feed_rank (looks still lead). A look inherits the brand/type affinity of
@@ -481,9 +546,27 @@ Deno.serve(async (req: Request) => {
     // are already ranked — are never affected.
     let lookOrder: string[] = [];
     try {
-      lookOrder = await rankLooks(supabase, userId, sinceISO, brandNorm, typeNorm, rules);
+      lookOrder = await rankLooks(supabase, userId, sinceISO, brandNorm, typeNorm, rules, genderAccept);
+      // LEAD ROTATION (the fix for "I keep seeing the same looks first"): looks
+      // lead the feed, but the affinity ranking is stable day-to-day, so the
+      // SAME top looks always won — dailyShuffle only re-ordered that same set
+      // and derange only swapped positions, leaving the lead pool unchanged.
+      // Rotate which slice of the top looks leads each day so a genuinely
+      // different (still high-affinity) set heads the feed. Cycles through the
+      // top 18 in steps of 7 (coprime → even 18-day cycle).
+      if (lookOrder.length > 1) {
+        lookOrder = applyDailyRotation(lookOrder, dayIndexOf(feedDate), 18, 7);
+        reason = { ...reason, lookRotated: true };
+      }
       if (rules.dailyShuffle.enabled && lookOrder.length > 1) {
         lookOrder = applyDailyShuffle(lookOrder, `looks:${feedDate}:${userId}`, Math.round(rules.dailyShuffle.weight));
+      }
+      // Same day-to-day guarantee for looks so the lead look isn't the same
+      // every drop ("I've seen the same look first every time").
+      const prevLookOrder = ((prevRow?.ranked_items ?? []) as RankedItem[])
+        .filter(r => r.type === 'look').map(r => r.id);
+      if (lookOrder.length > 1 && prevLookOrder.length > 0) {
+        lookOrder = derangeAgainstPrev(lookOrder, prevLookOrder);
       }
       if (lookOrder.length > 0) reason = { ...reason, looks: lookOrder.length };
     } catch (err) {
@@ -574,16 +657,24 @@ async function rankLooks(
   brandNorm: Map<string, number>,
   typeNorm: Map<string, number>,
   rules: FeedRules,
+  genderAccept: string[] | null,
 ): Promise<string[]> {
   const LOOK_POOL = 120;
   const { data: lookRows } = await supabase
     .from('looks')
-    .select('id, feed_rank, created_at')
+    .select('id, feed_rank, created_at, gender')
     .eq('status', 'live')
     .order('feed_rank', { ascending: true, nullsFirst: false })
     .order('created_at', { ascending: false, nullsFirst: false })
     .limit(LOOK_POOL);
-  const looks = (lookRows ?? []) as Array<{ id: string; feed_rank: number | null; created_at: string | null }>;
+  let looks = (lookRows ?? []) as Array<{ id: string; feed_rank: number | null; created_at: string | null; gender: string | null }>;
+  // Strict gender match for looks too (they were never filtered — the reason a
+  // female shopper still saw male-model looks). Looks are tagged men/women;
+  // accept the shopper's gender (both spellings) + unisex/untagged.
+  if (genderAccept) {
+    const ok = new Set([...genderAccept, 'unisex']);
+    looks = looks.filter(l => { const lg = String(l.gender ?? '').toLowerCase(); return !lg || ok.has(lg); });
+  }
   if (looks.length === 0) return [];
   const lookIds = looks.map(l => l.id);
 

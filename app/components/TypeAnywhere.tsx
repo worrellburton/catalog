@@ -39,7 +39,27 @@ interface Suggestion {
   avatar?: string;
 }
 
-export default function TypeAnywhere() {
+interface TypeAnywhereProps {
+  /** Render IN the hero's flow (a child of ShoppingForHero) instead of as the
+   *  global fixed bottom bar. The in-flow copy lives in the same flex column as
+   *  the sparkle + headline so it can never drift out of alignment with them on
+   *  odd viewport heights — the bug the floating, vh-anchored bar had. The two
+   *  copies are mutually exclusive: while the hero is at the top the inline copy
+   *  shows + captures typing and the global copy hides; once the shopper scrolls
+   *  into the feed they swap. Coordinated via the `catalog:hero-inline` event
+   *  dispatched by _index. */
+  inline?: boolean;
+}
+
+/** Is the home hero showing at the top right now (so the inline search owns the
+ *  screen and the global one should step aside)? Read synchronously for the
+ *  initial render so there's no first-paint flash of both bars. */
+function heroAtTop(): boolean {
+  if (typeof document === 'undefined') return false;
+  return !!document.querySelector('.app-root.home-hero:not(.hero-scrolled)');
+}
+
+export default function TypeAnywhere({ inline = false }: TypeAnywhereProps) {
   const navigate = useNavigate();
   const location = useLocation();
   const inputRef = useRef<HTMLInputElement>(null);
@@ -47,6 +67,15 @@ export default function TypeAnywhere() {
   const [focused, setFocused] = useState(false);
   const [filtersOpen, setFiltersOpen] = useState(false);
   const [activeFilters, setActiveFilters] = useState<ActiveFilters>(getEmptyFilters());
+  // Tracks whether the home hero is at the top (the inline copy's domain).
+  const [heroInline, setHeroInline] = useState(heroAtTop);
+  useEffect(() => {
+    const onHero = (e: Event) => setHeroInline(!!(e as CustomEvent).detail?.active);
+    window.addEventListener('catalog:hero-inline', onHero);
+    // Re-sync on mount in case the event fired before this listener attached.
+    setHeroInline(heroAtTop());
+    return () => window.removeEventListener('catalog:hero-inline', onHero);
+  }, []);
   // Rotating placeholder. Picks a different hint every ~3s while
   // the input is empty so the bar feels alive and shoppers see a
   // wider menu of "things to type" without being told. Pauses while
@@ -117,7 +146,10 @@ export default function TypeAnywhere() {
   // Suppress on /activity - the insights page is a reading surface, not a
   // search surface; the floating search bar just clutters it.
   const onActivity = location.pathname.startsWith('/activity');
-  const hidden = onAdmin || onGenerate || onActivity;
+  // The GLOBAL (fixed) copy steps aside while the hero is at the top — the
+  // inline copy inside the hero owns the screen there. The inline copy itself
+  // is never hidden by this (it IS the hero one).
+  const hidden = onAdmin || onGenerate || onActivity || (!inline && heroInline);
 
   const submit = useCallback((q: string) => {
     const trimmed = q.trim();
@@ -147,6 +179,10 @@ export default function TypeAnywhere() {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     if (hidden) return;
+    // The inline copy only captures "type anywhere" while the hero is at the
+    // top; once scrolled away the global copy takes back over. (The global copy
+    // is already gated off at the top via `hidden` above.)
+    if (inline && !heroInline) return;
     const mql = window.matchMedia('(max-width: 768px)');
     if (mql.matches) return;
 
@@ -170,7 +206,7 @@ export default function TypeAnywhere() {
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [hidden, filtersOpen, text]);
+  }, [hidden, filtersOpen, text, inline, heroInline]);
 
   // Reset on route change so a stale buffer doesn't linger across
   // page navigations.
@@ -198,8 +234,8 @@ export default function TypeAnywhere() {
       {/* Dark gradient scrim that rises from the bottom while the bar is
           focused, so the catalog pills / autocomplete read against a bright
           feed instead of disappearing into it. Sits behind the bar + pills. */}
-      {focused && <div className="ai-bar-scrim" aria-hidden="true" />}
-      <div className="ai-bar-wrap" role="search" aria-label="Search catalog">
+      {focused && !inline && <div className="ai-bar-scrim" aria-hidden="true" />}
+      <div className={`ai-bar-wrap${inline ? ' ai-bar-wrap--inline' : ''}`} role="search" aria-label="Search catalog">
         {/* Popular-catalog cloud — springs up above the bar when it's
             focused with an empty query, and gives way the moment the
             user starts typing. onMouseDown-preventDefault inside keeps
@@ -283,6 +319,7 @@ export default function TypeAnywhere() {
             data-lpignore="true"
             data-form-type="other"
             name="ai-bar-search"
+            id="ai-bar-search"
             className="ai-bar-input"
             placeholder={text ? '' : rotatingHint}
             value={text}

@@ -205,7 +205,9 @@
  * "standard" ease (in + out symmetric). */
 @media (hover: hover) {
   .look-card {
-    transition: opacity 1.2s cubic-bezier(0.42, 0, 0.58, 1);
+    /* Snappy hover feedback: the hovered card pops to full opacity (siblings
+       dim) quickly instead of the old sluggish 1.2s fade. */
+    transition: opacity 0.25s cubic-bezier(0.42, 0, 0.58, 1);
   }
   /* Gated on html.is-pointing so the sibling-dim only kicks in when the mouse
      is genuinely pointing — NOT while scrolling content slides under a
@@ -656,6 +658,47 @@ html.is-scroll-gliding .creative-delete-btn {
    Hidden during the glide = pass taps through to the card (opens the look).
    The glide lifts ~0.3s after scrolling stops, restoring taps right away. */
 html.is-scroll-gliding .card-creator-tag { pointer-events: none; }
+
+/* ── "UI on scroll" dial OFF (html.ui-scroll-off) → hide the card chrome for
+   good (pure imagery). Same chrome set the glide fades, but PERMANENT (no
+   scroll needed). Set by scroll-idle.ts:setScrollIdleFadeEnabled(false) from
+   the admin dial. !important to outweigh the .loaded load-fade (0,3,0). */
+html.ui-scroll-off .card-gradient,
+html.ui-scroll-off .card-creator-tag,
+html.ui-scroll-off .look-card .card-creator-row,
+html.ui-scroll-off .look-card .card-creator-name,
+html.ui-scroll-off .look-card .card-catalog-btn,
+html.ui-scroll-off .inline-look-catalog-btn,
+html.ui-scroll-off .inline-look-detail .hotspot-indicator,
+html.ui-scroll-off .promo-product-info,
+html.ui-scroll-off .promo-chip,
+html.ui-scroll-off .pd-look-tile-meta {
+  opacity: 0 !important;
+}
+/* Hidden chrome must not eat taps (same reason as the glide exception). */
+html.ui-scroll-off .card-creator-tag,
+html.ui-scroll-off .promo-product-info { pointer-events: none; }
+
+/* ── Desktop hover reveal — show a card's product UI on hover ────────────────
+   Even when the card chrome is hidden (mid scroll-glide, or the "UI on scroll"
+   dial OFF for pure imagery), hovering a card brings back its product UI — the
+   info bar (brand / name / price), gradient, and creator tag — so you can read
+   it on demand. Gated on html.is-pointing (genuine mouse movement, not content
+   scrolling under a stationary cursor — same guard as the sibling-dim hover).
+   #grid-container + !important so it outweighs the glide / ui-scroll-off
+   opacity:0 !important. Touch devices (no hover) are unaffected. */
+@media (hover: hover) {
+  html.is-pointing #grid-container .look-card:hover .card-gradient,
+  html.is-pointing #grid-container .look-card:hover .promo-product-info,
+  html.is-pointing #grid-container .look-card:hover .card-creator-tag {
+    opacity: 1 !important;
+    transition: opacity 0.18s ease;
+  }
+  html.is-pointing #grid-container .look-card:hover .promo-product-info,
+  html.is-pointing #grid-container .look-card:hover .card-creator-tag {
+    pointer-events: auto;
+  }
+}
 
 /* ── Top chrome (header + the creator stories/orbit rail it holds) DISSOLVES
    on scroll, never snaps ──────────────────────────────────────────────────

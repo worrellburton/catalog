@@ -15,6 +15,32 @@
 // its own wiring. Reduced-motion users never get either class.
 
 let started = false;
+// Admin "UI on scroll" dial.
+//   ON  → the media-first scroll glide: card chrome fades out while scrolling
+//         and eases back when the feed settles (the default).
+//   OFF → the card chrome (creator chip, price, gradient) is HIDDEN entirely —
+//         pure imagery, nothing pops up on the cards. Implemented with a
+//         persistent `html.ui-scroll-off` class (see grid-view.css) and by
+//         pausing the dynamic glide so it can't fight the hidden state.
+// Listeners stay attached either way so the dial can flip live.
+let enabled = true;
+
+/** Apply the `ui_on_scroll` dial. ON resumes the live glide; OFF hides the card
+ *  chrome (pure imagery) and stops the glide from toggling it back. */
+export function setScrollIdleFadeEnabled(on: boolean): void {
+  enabled = on;
+  if (typeof document === 'undefined') return;
+  const root = document.documentElement;
+  if (on) {
+    // Resume normal behaviour: drop the forced-hidden state + any transient
+    // glide classes so the chrome is governed by scrolling again.
+    root.classList.remove('ui-scroll-off', 'is-scroll-gliding', 'is-pointing');
+  } else {
+    // OFF: hide the chrome for good; clear transient glide state.
+    root.classList.add('ui-scroll-off');
+    root.classList.remove('is-scroll-gliding', 'is-pointing');
+  }
+}
 
 export function initScrollIdleFade(): void {
   if (started || typeof window === 'undefined') return;
@@ -39,6 +65,7 @@ export function initScrollIdleFade(): void {
     document.documentElement.classList.remove('is-scroll-gliding');
   };
   const onScroll = () => {
+    if (!enabled) return; // dial off — chrome stays put, nothing pops on scroll
     if (!gliding) {
       gliding = true;
       document.documentElement.classList.add('is-scroll-gliding');

@@ -122,6 +122,21 @@ export const DEFAULT_SHOW_BRAND_LOGOS = false;
 export const COMMENTS_ENABLED_KEY = 'comments_enabled';
 export const DEFAULT_COMMENTS_ENABLED = true;
 
+// "UI on scroll" — the card chrome (creator chip, price, gradient) fading out
+// while scrolling and easing back when it settles. ON = current behaviour; OFF
+// = the chrome stays put and never fades/pops on scroll. Default ON.
+export const UI_ON_SCROLL_KEY = 'ui_on_scroll';
+export const DEFAULT_UI_ON_SCROLL = true;
+
+// "App chrome on scroll" dial — distinct from ui_on_scroll (which governs the
+// CARD chrome). This one governs the APP chrome: the top header (Catalog logo +
+// creators rail) and the bottom search bar on the home feed. ON = they follow
+// the feed as you scroll (current behaviour). OFF = once you scroll past the
+// hero they hide for an immersive, media-only scroll; they reappear at the very
+// top. The feed and its card info / look-product overlays are never touched.
+export const CHROME_ON_SCROLL_KEY = 'chrome_on_scroll';
+export const DEFAULT_CHROME_ON_SCROLL = true;
+
 /**
  * Warm every boot-time dial in a single round-trip. Call once early in the
  * app boot (in parallel with the feed fetch). After it resolves, the dial
@@ -225,6 +240,68 @@ export function subscribeShowBrandLogos(onChange: (value: boolean) => void): () 
       (payload) => {
         const next = (payload.new as { value?: string } | null)?.value;
         onChange(parseBool(next ?? null, DEFAULT_SHOW_BRAND_LOGOS));
+      },
+    )
+    .subscribe();
+  return () => { void supabase!.removeChannel(channel); };
+}
+
+// ────────────────────────────────────────────────────────────────────
+// "UI on scroll" toggle. When ON, card chrome fades out while scrolling
+// and eases back when the feed settles (scroll-idle.ts). When OFF, the
+// chrome stays put — nothing pops up on scroll. Default ON.
+// ────────────────────────────────────────────────────────────────────
+
+export async function getUiOnScroll(): Promise<boolean> {
+  return parseBool(await readDial(UI_ON_SCROLL_KEY), DEFAULT_UI_ON_SCROLL);
+}
+
+export async function setUiOnScroll(value: boolean): Promise<void> {
+  if (!supabase) throw new Error('Supabase not configured');
+  const { error } = await supabase
+    .from('app_settings')
+    .upsert({ key: UI_ON_SCROLL_KEY, value: String(value) }, { onConflict: 'key' });
+  if (error) throw error;
+}
+
+export function subscribeUiOnScroll(onChange: (value: boolean) => void): () => void {
+  if (!supabase) return () => {};
+  const channel = supabase
+    .channel(`dials:${UI_ON_SCROLL_KEY}`)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'app_settings', filter: `key=eq.${UI_ON_SCROLL_KEY}` },
+      (payload) => {
+        const next = (payload.new as { value?: string } | null)?.value;
+        onChange(parseBool(next ?? null, DEFAULT_UI_ON_SCROLL));
+      },
+    )
+    .subscribe();
+  return () => { void supabase!.removeChannel(channel); };
+}
+
+export async function getChromeOnScroll(): Promise<boolean> {
+  return parseBool(await readDial(CHROME_ON_SCROLL_KEY), DEFAULT_CHROME_ON_SCROLL);
+}
+
+export async function setChromeOnScroll(value: boolean): Promise<void> {
+  if (!supabase) throw new Error('Supabase not configured');
+  const { error } = await supabase
+    .from('app_settings')
+    .upsert({ key: CHROME_ON_SCROLL_KEY, value: String(value) }, { onConflict: 'key' });
+  if (error) throw error;
+}
+
+export function subscribeChromeOnScroll(onChange: (value: boolean) => void): () => void {
+  if (!supabase) return () => {};
+  const channel = supabase
+    .channel(`dials:${CHROME_ON_SCROLL_KEY}`)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'app_settings', filter: `key=eq.${CHROME_ON_SCROLL_KEY}` },
+      (payload) => {
+        const next = (payload.new as { value?: string } | null)?.value;
+        onChange(parseBool(next ?? null, DEFAULT_CHROME_ON_SCROLL));
       },
     )
     .subscribe();
@@ -434,6 +511,11 @@ export const AUTO_EDITOR_HOLDOUT_PCT_KEY  = 'auto_editor_holdout_pct';
 export const AUTO_EDITOR_RECENCY_DAYS_KEY = 'auto_editor_recency_days';
 export const AUTO_EDITOR_MIN_SIGNAL_KEY   = 'auto_editor_min_signal';
 export const AUTO_EDITOR_REFRESH_HOUR_KEY = 'auto_editor_refresh_hour';
+// Global "advance" counter. The edge function shifts every shopper's feed day
+// forward by this many days (on top of the natural date rollover), and the
+// consumer folds it into its per-day cache key — so bumping it force-advances
+// EVERYONE to their next daily feed immediately AND busts the client cache.
+export const AUTO_EDITOR_EPOCH_KEY         = 'auto_editor_epoch';
 
 export type AutoEditorFrequency = 'daily' | 'every_signin';
 
@@ -444,6 +526,7 @@ export interface AutoEditorConfig {
   recencyDays: number; // 1..365 — history lookback for signals
   minSignal: number;   // 0..1000 — min user_events before personalizing
   refreshHour: number; // 0..23 — UTC hour the daily feed rolls over to a new day
+  epoch: number;       // ≥0 — manual "advance the daily feed" counter (admin)
 }
 
 export const DEFAULT_AUTO_EDITOR_CONFIG: AutoEditorConfig = {
@@ -453,6 +536,7 @@ export const DEFAULT_AUTO_EDITOR_CONFIG: AutoEditorConfig = {
   recencyDays: 30,
   minSignal: 3,
   refreshHour: 0,
+  epoch: 0,
 };
 
 function parseIntClamped(raw: string | null | undefined, fallback: number, min: number, max: number): number {
@@ -469,6 +553,7 @@ export async function getAutoEditorConfig(): Promise<AutoEditorConfig> {
   const keys = [
     AUTO_EDITOR_ENABLED_KEY, AUTO_EDITOR_FREQUENCY_KEY, AUTO_EDITOR_HOLDOUT_PCT_KEY,
     AUTO_EDITOR_RECENCY_DAYS_KEY, AUTO_EDITOR_MIN_SIGNAL_KEY, AUTO_EDITOR_REFRESH_HOUR_KEY,
+    AUTO_EDITOR_EPOCH_KEY,
   ];
   const { data, error } = await supabase.from('app_settings').select('key, value').in('key', keys);
   if (error) {
@@ -484,7 +569,44 @@ export async function getAutoEditorConfig(): Promise<AutoEditorConfig> {
     recencyDays: parseIntClamped(byKey.get(AUTO_EDITOR_RECENCY_DAYS_KEY), DEFAULT_AUTO_EDITOR_CONFIG.recencyDays, 1, 365),
     minSignal: parseIntClamped(byKey.get(AUTO_EDITOR_MIN_SIGNAL_KEY), DEFAULT_AUTO_EDITOR_CONFIG.minSignal, 0, 1000),
     refreshHour: parseIntClamped(byKey.get(AUTO_EDITOR_REFRESH_HOUR_KEY), DEFAULT_AUTO_EDITOR_CONFIG.refreshHour, 0, 23),
+    epoch: parseIntClamped(byKey.get(AUTO_EDITOR_EPOCH_KEY), DEFAULT_AUTO_EDITOR_CONFIG.epoch, 0, 100000),
   };
+}
+
+/** Force-advance the Daily Feed for EVERY shopper by one day: bump the global
+ *  epoch. The edge function shifts each shopper's feed day forward by the epoch
+ *  (new order, fresh row) and the consumer folds it into its cache key (so the
+ *  new feed shows immediately instead of after the next UTC rollover). Returns
+ *  the new epoch. Admin-only in practice (gated by the admin UI). */
+export async function advanceDailyFeed(): Promise<number> {
+  if (!supabase) throw new Error('Supabase not configured');
+  const { data } = await supabase.from('app_settings').select('value').eq('key', AUTO_EDITOR_EPOCH_KEY).maybeSingle();
+  const current = parseIntClamped((data as { value: string | null } | null)?.value, 0, 0, 100000);
+  const next = current + 1;
+  const { error } = await supabase.from('app_settings').upsert(
+    { key: AUTO_EDITOR_EPOCH_KEY, value: String(next) },
+    { onConflict: 'key' },
+  );
+  if (error) throw new Error(error.message);
+
+  // Bust the SERVER-side feed cache so the advance takes effect immediately.
+  // personalize-feed is idempotent per (user_id, feed_date) — without this, any
+  // row already computed for the advanced day is re-served stale even after the
+  // epoch bump. Clearing forces every shopper to recompute fresh on next visit.
+  // Cutoff = yesterday UTC: the engine's feed_date is Date.now() shifted by the
+  // refresh hour (up to 23h back, i.e. onto the previous UTC day) plus the epoch
+  // days forward, so today/future plus a one-day margin covers every row that
+  // could be served now; older rows are harmless history. Needs the admin DELETE
+  // policy (migration 20260624000000_personalized_feeds_admin_delete) — non-
+  // fatal if it fails since the epoch bump already invalidates the client cache.
+  const cutoff = new Date(Date.now() - 86_400_000).toISOString().slice(0, 10);
+  const { error: delErr } = await supabase
+    .from('personalized_feeds')
+    .delete()
+    .gte('feed_date', cutoff);
+  if (delErr) console.warn('[dials] advanceDailyFeed: server feed-cache clear failed:', delErr.message);
+
+  return next;
 }
 
 /** Persist a partial config change (only the provided fields are written).
@@ -608,6 +730,38 @@ export async function setFeedRules(rules: FeedRules): Promise<void> {
   const { error } = await supabase
     .from('app_settings')
     .upsert({ key: FEED_RULES_KEY, value: JSON.stringify(sanitizeFeedRules(rules)) }, { onConflict: 'key' });
+  if (error) throw error;
+}
+
+// The admin can drag the rules into their own order on /admin/daily-feed. The
+// order is purely presentational (the engine applies every enabled rule in its
+// own fixed pipeline order) — it's stored so the admin's arrangement sticks.
+export const FEED_RULES_ORDER_KEY = 'feed_rules_order';
+
+/** The admin's saved rule display order, with any missing/new keys appended
+ *  in their default position so the list is always complete. */
+export async function getFeedRulesOrder(): Promise<(keyof FeedRules)[]> {
+  const fallback = FEED_RULE_META.map(m => m.key);
+  if (!supabase) return fallback;
+  const { data, error } = await supabase
+    .from('app_settings').select('value').eq('key', FEED_RULES_ORDER_KEY).maybeSingle();
+  if (error || !data?.value) return fallback;
+  try {
+    const arr = JSON.parse(data.value);
+    if (!Array.isArray(arr)) return fallback;
+    const seen = new Set<string>();
+    const valid = arr.filter((k): k is keyof FeedRules =>
+      fallback.includes(k as keyof FeedRules) && !seen.has(k) && (seen.add(k), true));
+    for (const k of fallback) if (!valid.includes(k)) valid.push(k);
+    return valid;
+  } catch { return fallback; }
+}
+
+export async function setFeedRulesOrder(order: (keyof FeedRules)[]): Promise<void> {
+  if (!supabase) throw new Error('Supabase not configured');
+  const { error } = await supabase
+    .from('app_settings')
+    .upsert({ key: FEED_RULES_ORDER_KEY, value: JSON.stringify(order) }, { onConflict: 'key' });
   if (error) throw error;
 }
 

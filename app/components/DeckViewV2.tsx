@@ -1,7 +1,6 @@
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import CatalogLogo from './CatalogLogo';
-import ParticleBackground from './ParticleBackground';
 import { getHomeFeed, type ProductAd } from '~/services/product-creative';
 
 interface DeckViewV2Props {
@@ -274,12 +273,6 @@ const DeckViewV2: React.FC<DeckViewV2Props> = () => {
           })}
         </div>
         <div className="deck-insight-overlay" />
-      </div>
-
-      {/* Ambient particle field over the feed. `speed` makes this a one-off
-          mount that always renders (no shared singleton on the admin route). */}
-      <div className="deck-v2-particles" aria-hidden="true">
-        <ParticleBackground speed={0.7} />
       </div>
 
       {/* Left-side nav dots with hover-reveal slide labels */}
