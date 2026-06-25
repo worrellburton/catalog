@@ -35,6 +35,26 @@ export function cleanSearchQuery(raw: string): string {
   return cleaned || raw.trim();
 }
 
+/** True when a query reads as a CONVERSATIONAL ask ("I want to dress for this",
+ *  "outfit for a wedding") rather than a direct product search ("black shoes").
+ *  Conversational asks get the reasoning + pick-a-catalog beat instead of
+ *  auto-landing on one catalog. Detected by a conversational opener phrase, an
+ *  occasion preposition (" for "), or a long rambling ask. */
+export function isConversationalQuery(raw: string): boolean {
+  const q = ` ${raw.toLowerCase().trim()} `;
+  for (const phrase of FILLER_PHRASES) if (q.includes(` ${phrase} `)) return true;
+  if (q.includes(' for ')) return true;
+  return raw.trim().split(/\s+/).filter(Boolean).length >= 5;
+}
+
+/** The short garment subject of a query ("dresses") for the pick-a-catalog
+ *  reasoning line, or null when no known garment is present. */
+export function searchSubject(raw: string): string | null {
+  const words = cleanSearchQuery(raw).toLowerCase().split(/\s+/).filter(Boolean);
+  const g = words.find(w => SUBJECT_PLURALS[w]);
+  return g ? SUBJECT_PLURALS[g].toLowerCase() : null;
+}
+
 // Garment / product nouns we treat as the "subject" of the catalog. Plurals
 // are normalized for the title so "dress" reads as "Dresses".
 const SUBJECT_PLURALS: Record<string, string> = {
