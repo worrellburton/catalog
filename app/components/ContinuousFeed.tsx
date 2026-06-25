@@ -28,7 +28,7 @@ import { useUserAffinity } from '~/hooks/useUserAffinity';
 import { getFeedRules } from '~/services/dials';
 import { composeRenderedCreatives } from '~/services/feed-compose';
 import { recordRecentSearch } from '~/services/recent-searches';
-import { getPersonalizedProductOrder, getPersonalizedLookOrder } from '~/services/personalized-feed';
+import { getPersonalizedOrders, clearPersonalizedCache, subscribeFeedAdvance } from '~/services/personalized-feed';
 
 interface BookmarksInterface {
   isLookBookmarked: (id: number) => boolean;
@@ -180,7 +180,7 @@ function ContinuousFeed({
 }: ContinuousFeedProps) {
   // Declared early so fitRankedLooks (below) can reference shopperBody.
   // The same `user` is reused by the search-log telemetry block further down.
-  const { user } = useAuth();
+  const { user, loading: authLoading } = useAuth();
   const shopperBody = useShopperBody(user?.id);
   // Per-shopper category lean (clicks + searches). Drives the soft affinity
   // re-rank applied to the default home / "you might also like" feed below.
@@ -197,6 +197,11 @@ function ContinuousFeed({
   // The Daily Feed also ranks LOOKS per shopper (look uuids, best-first). We
   // float these to the front of the look lane, mirroring the product lane.
   const [personalizedLookOrder, setPersonalizedLookOrder] = useState<string[] | null>(null);
+  // False until the personalized order has resolved for the current shopper.
+  // While pending (and auth still settling), the home feed shows its loading
+  // shimmer instead of painting the global order first and then snapping to the
+  // personalized one — that flash was the "it starts on the default feed" bug.
+  const [personalizationResolved, setPersonalizationResolved] = useState(false);
 
   // "Boost brands they saved" feed rule (admin rulebook in app_settings).
   // Bookmarks are on-device, so this is the one rule applied client-side:
@@ -220,14 +225,46 @@ function ContinuousFeed({
   }, []);
   useEffect(() => {
     let cancelled = false;
-    getPersonalizedProductOrder().then(ids => {
-      if (!cancelled) setPersonalizedOrder(ids);
+    // Re-gate on every shopper change: stay "pending" (shimmer) until this
+    // shopper's order resolves, so we never paint the global order first.
+    setPersonalizationResolved(false);
+    // SAFETY VALVE: never block the feed on personalization for more than a
+    // short beat. compute() calls supabase.functions.invoke, which can hang
+    // (no built-in timeout) — without this cap a slow/stalled edge call would
+    // leave the feed stuck on its shimmer forever. After the cap we paint the
+    // feed regardless; if the personalized order arrives later it re-rolls in
+    // place. Normal resolves (~300–500ms) win the race, so there's no flash.
+    const failOpen = window.setTimeout(() => {
+      if (!cancelled) setPersonalizationResolved(true);
+    }, 1200);
+    getPersonalizedOrders().then(o => {
+      if (cancelled) return;
+      window.clearTimeout(failOpen);
+      setPersonalizedOrder(o && o.products.length > 0 ? o.products : null);
+      setPersonalizedLookOrder(o && o.looks.length > 0 ? o.looks : null);
+      setPersonalizationResolved(true);
     });
-    getPersonalizedLookOrder().then(ids => {
-      if (!cancelled) setPersonalizedLookOrder(ids);
-    });
-    return () => { cancelled = true; };
+    return () => { cancelled = true; window.clearTimeout(failOpen); };
   }, [user?.id]);
+
+  // Live "Advance": when an admin bumps the Daily Feed epoch, re-roll this open
+  // feed immediately — bust the cached order and re-pull — instead of waiting
+  // for a reload or the next UTC rollover. Setting personalizedOrder/
+  // personalizedLookOrder recomputes renderedCreatives + semanticallyOrderedLooks
+  // (both list them as deps), so the top of the grid reorders in place. No
+  // shimmer here — the feed is already painted, so we swap the order live.
+  useEffect(() => {
+    let active = true;
+    const unsub = subscribeFeedAdvance(() => {
+      clearPersonalizedCache();
+      getPersonalizedOrders().then(o => {
+        if (!active) return;
+        setPersonalizedOrder(o && o.products.length > 0 ? o.products : null);
+        setPersonalizedLookOrder(o && o.looks.length > 0 ? o.looks : null);
+      });
+    });
+    return () => { active = false; unsub(); };
+  }, []);
 
   // ── Committed query - the feed only updates when nl-search resolves ─────
   // While the user is typing (or nl-search is in flight), committedQuery stays
@@ -1268,6 +1305,14 @@ function ContinuousFeed({
     };
   }, [committedQuery, semanticallyOrderedCreatives, personalizedOrder, seenKeys, searchMatchedLooks, brandMatchedCreatives, tagMatchedCreatives, affinity, savedBrandBoost]);
 
+  // Hold the home feed on its loading shimmer until the personalized order has
+  // resolved (and auth has settled), so the first paint IS the personalized
+  // order — no flash of the global feed first. Guests / disabled personalization
+  // resolve near-instantly, so they don't wait. Only the home feed waits; an
+  // active search has its own ranking + loading UX.
+  const awaitingPersonalization =
+    committedQuery.trim().length === 0 && (authLoading || !personalizationResolved);
+
   return (
     <FeedWhyProvider value={feedWhyData}>
     <div className="continuous-feed" id={nested ? undefined : 'grid-viewport'}>
@@ -1306,7 +1351,12 @@ function ContinuousFeed({
                 onCreateCatalog={onCreateCatalog}
                 onOpenCreativeProduct={handleOpenCreativeProduct}
                 creatives={segment.isInitial ? displayCreatives : undefined}
-                creativesLoading={segment.isInitial ? creativesLoading : false}
+                creativesLoading={segment.isInitial ? (creativesLoading || awaitingPersonalization) : false}
+                // Daily Feed mode: when the engine produced a per-shopper order
+                // (products and/or looks), tell FeedSection to PRESERVE it
+                // instead of re-sorting the initial deck by feed_rank — that
+                // re-sort was silently discarding the personalized order.
+                personalized={segment.isInitial && ((personalizedOrder?.length ?? 0) > 0 || (personalizedLookOrder?.length ?? 0) > 0)}
                 canDeleteCreative={canDeleteCreative}
                 onDeleteCreative={handleDeleteCreative}
                 onDeleteLook={canDeleteCreative ? handleDeleteLook : undefined}

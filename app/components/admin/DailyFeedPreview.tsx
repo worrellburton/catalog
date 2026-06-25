@@ -24,6 +24,12 @@ interface PreviewItem {
   sub: string;
   image: string;
   feedRank: number | null;
+  // Per-item data surfaced in the hover info panel (admin debugging).
+  gender?: string | null;
+  productType?: string | null;
+  price?: string | null;
+  conversionScore?: number | null;
+  isElite?: boolean | null;
 }
 
 interface FeedReason {
@@ -90,6 +96,8 @@ export default function DailyFeedPreview() {
   const [suggestions, setSuggestions] = useState<{ id: string; label: string; sub: string }[]>([]);
   const pickedUser = useRef<{ id: string; label: string } | null>(null);
   const searchTimer = useRef(0);
+  // Index of the tile whose hover info panel is open (admin debugging).
+  const [infoIdx, setInfoIdx] = useState<number | null>(null);
 
   useEffect(() => {
     if (mode !== 'user') { setSuggestions([]); return; }
@@ -125,7 +133,7 @@ export default function DailyFeedPreview() {
   async function productsByIds(ids: string[]): Promise<PreviewItem[]> {
     if (!supabase || ids.length === 0) return [];
     const { data } = await supabase
-      .from('products').select('id, name, brand, feed_rank, primary_video_poster_url, primary_image_url, image_url')
+      .from('products').select('id, name, brand, type, gender, price, conversion_score, is_elite, feed_rank, primary_video_poster_url, primary_image_url, image_url')
       .in('id', ids.slice(0, 80));
     const byId = new Map((data ?? []).map((p: Record<string, unknown>) => [p.id as string, p]));
     return ids.map(id => byId.get(id)).filter(Boolean).map((p) => {
@@ -137,6 +145,11 @@ export default function DailyFeedPreview() {
         sub: (r.brand as string) || '',
         image: (r.primary_video_poster_url || r.primary_image_url || r.image_url || '') as string,
         feedRank: typeof r.feed_rank === 'number' ? (r.feed_rank as number) : null,
+        gender: (r.gender as string) ?? null,
+        productType: (r.type as string) ?? null,
+        price: (r.price as string) ?? null,
+        conversionScore: typeof r.conversion_score === 'number' ? (r.conversion_score as number) : null,
+        isElite: (r.is_elite as boolean) ?? null,
       };
     });
   }
@@ -151,13 +164,14 @@ export default function DailyFeedPreview() {
       sub: 'Look',
       image: (primary?.thumbnail_url || '') as string,
       feedRank: typeof r.feed_rank === 'number' ? (r.feed_rank as number) : null,
+      gender: (r.gender as string) ?? null,
     };
   }
 
   async function looksByIds(ids: string[]): Promise<PreviewItem[]> {
     if (!supabase || ids.length === 0) return [];
     const { data } = await supabase
-      .from('looks').select('id, feed_rank, creator_handle, looks_creative ( thumbnail_url, is_primary )')
+      .from('looks').select('id, feed_rank, gender, creator_handle, looks_creative ( thumbnail_url, is_primary )')
       .in('id', ids.slice(0, 60));
     const byId = new Map((data ?? []).map((l: Record<string, unknown>) => [l.id as string, l]));
     return ids.map(id => byId.get(id)).filter(Boolean).map(l => mapLookRow(l as Record<string, unknown>));
@@ -168,7 +182,7 @@ export default function DailyFeedPreview() {
   async function liveLooks(): Promise<PreviewItem[]> {
     if (!supabase) return [];
     const { data } = await supabase
-      .from('looks').select('id, feed_rank, creator_handle, looks_creative ( thumbnail_url, is_primary )')
+      .from('looks').select('id, feed_rank, gender, creator_handle, looks_creative ( thumbnail_url, is_primary )')
       .eq('status', 'live')
       .order('feed_rank', { ascending: true, nullsFirst: false })
       .limit(40);
@@ -178,7 +192,7 @@ export default function DailyFeedPreview() {
   async function cohort(gender: 'all' | 'men' | 'women'): Promise<PreviewItem[]> {
     if (!supabase) return [];
     const { data } = await supabase
-      .from('products').select('id, name, brand, gender, feed_rank, primary_video_poster_url, primary_image_url, image_url')
+      .from('products').select('id, name, brand, type, gender, price, conversion_score, is_elite, feed_rank, primary_video_poster_url, primary_image_url, image_url')
       .eq('is_active', true).not('primary_video_url', 'is', null)
       .order('feed_rank', { ascending: true, nullsFirst: false }).limit(60);
     let rows = (data ?? []) as Record<string, unknown>[];
@@ -190,6 +204,11 @@ export default function DailyFeedPreview() {
       sub: (r.brand as string) || '',
       image: (r.primary_video_poster_url || r.primary_image_url || r.image_url || '') as string,
       feedRank: typeof r.feed_rank === 'number' ? (r.feed_rank as number) : null,
+      gender: (r.gender as string) ?? null,
+      productType: (r.type as string) ?? null,
+      price: (r.price as string) ?? null,
+      conversionScore: typeof r.conversion_score === 'number' ? (r.conversion_score as number) : null,
+      isElite: (r.is_elite as boolean) ?? null,
     }));
   }
 
@@ -362,35 +381,65 @@ export default function DailyFeedPreview() {
         {err && <ErrorState light body={err} onRetry={run} retryLabel="Retry" />}
 
         {who && !err && (
-          <div style={{ fontSize: 12.5, color: '#555', marginBottom: 10 }}>
-            Showing <strong style={{ color: '#111' }}>{who}</strong>
-            {mode === 'user' && feedDate && feedDate < todayUtc() && (
-              <span style={{ marginLeft: 6, color: '#999' }}>on {feedDate}</span>
-            )}
-            {variant && <span style={{ marginLeft: 6, padding: '2px 8px', borderRadius: 999, background: '#eef2ff', color: '#4338ca', fontSize: 11, fontWeight: 600 }}>{variant}</span>}
-            <span style={{ marginLeft: 6, color: '#999' }}>· {items.length} items · {lookCount} looks</span>
-            {reason && (
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 8 }}>
-                {(reason.topBrands ?? []).slice(0, 4).map(b => (
-                  <span key={`b-${b}`} style={{ padding: '2px 8px', borderRadius: 999, background: '#fef3c7', color: '#92400e', fontSize: 10.5, fontWeight: 600 }}>♥ {b}</span>
-                ))}
-                {(reason.topTypes ?? []).slice(0, 4).map(ty => (
-                  <span key={`t-${ty}`} style={{ padding: '2px 8px', borderRadius: 999, background: '#dcfce7', color: '#166534', fontSize: 10.5, fontWeight: 600 }}>{ty}</span>
-                ))}
-                {(reason.rules ?? []).map(r => (
-                  <span key={`r-${r}`} style={{ padding: '2px 8px', borderRadius: 999, background: '#f1f5f9', color: '#475569', fontSize: 10.5, fontWeight: 600 }}>rule: {r}</span>
-                ))}
-                {typeof reason.engaged === 'number' && (
-                  <span style={{ padding: '2px 8px', borderRadius: 999, background: '#f1f5f9', color: '#475569', fontSize: 10.5, fontWeight: 600 }}>{reason.engaged} engaged · {reason.seen ?? 0} seen</span>
-                )}
-              </div>
-            )}
+          <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12, marginBottom: 10 }}>
+            <div style={{ fontSize: 12.5, color: '#555' }}>
+              Showing <strong style={{ color: '#111' }}>{who}</strong>
+              {mode === 'user' && feedDate && feedDate < todayUtc() && (
+                <span style={{ marginLeft: 6, color: '#999' }}>on {feedDate}</span>
+              )}
+              {variant && <span style={{ marginLeft: 6, padding: '2px 8px', borderRadius: 999, background: '#eef2ff', color: '#4338ca', fontSize: 11, fontWeight: 600 }}>{variant}</span>}
+              <span style={{ marginLeft: 6, color: '#999' }}>· {items.length} items · {lookCount} looks</span>
+              {reason && (
+                <div style={{ display: 'flex', flexWrap: 'wrap', gap: 5, marginTop: 8 }}>
+                  {(reason.topBrands ?? []).slice(0, 4).map(b => (
+                    <span key={`b-${b}`} style={{ padding: '2px 8px', borderRadius: 999, background: '#fef3c7', color: '#92400e', fontSize: 10.5, fontWeight: 600 }}>♥ {b}</span>
+                  ))}
+                  {(reason.topTypes ?? []).slice(0, 4).map(ty => (
+                    <span key={`t-${ty}`} style={{ padding: '2px 8px', borderRadius: 999, background: '#dcfce7', color: '#166534', fontSize: 10.5, fontWeight: 600 }}>{ty}</span>
+                  ))}
+                  {(reason.rules ?? []).map(r => (
+                    <span key={`r-${r}`} style={{ padding: '2px 8px', borderRadius: 999, background: '#f1f5f9', color: '#475569', fontSize: 10.5, fontWeight: 600 }}>rule: {r}</span>
+                  ))}
+                  {typeof reason.engaged === 'number' && (
+                    <span style={{ padding: '2px 8px', borderRadius: 999, background: '#f1f5f9', color: '#475569', fontSize: 10.5, fontWeight: 600 }}>{reason.engaged} engaged · {reason.seen ?? 0} seen</span>
+                  )}
+                </div>
+              )}
+            </div>
+            {/* Collapse the previewed feed back down (keeps the user/date inputs
+                so you can re-run without retyping). */}
+            <button
+              type="button"
+              onClick={() => { setItems([]); setWho(null); setVariant(null); setReason(null); }}
+              title="Collapse this preview"
+              style={{
+                flexShrink: 0, padding: '5px 12px', borderRadius: 999, cursor: 'pointer',
+                border: '1px solid #e5e7eb', background: '#fff', color: '#444',
+                fontSize: 12, fontWeight: 600,
+              }}
+            >Collapse ↑</button>
           </div>
         )}
 
         {items.length > 0 && (
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fill, minmax(120px, 1fr))', gap: 10, maxHeight: '60vh', overflow: 'auto' }}>
-            {items.map((p, i) => (
+            {items.map((p, i) => {
+              const dataRows: [string, string][] = [
+                ['Position', `#${i + 1}`],
+                ['Type', p.kind === 'look' ? 'Look' : 'Product'],
+                [p.kind === 'look' ? 'Creator' : 'Brand', p.sub || '—'],
+                ['Name', p.title || '—'],
+                ['feed_rank', p.feedRank == null ? 'unranked' : String(p.feedRank)],
+                ['Gender', p.gender || '—'],
+                ...(p.kind === 'product' ? ([
+                  ['Category', p.productType || '—'],
+                  ['Price', p.price || '—'],
+                  ['Conversion', p.conversionScore == null ? '—' : p.conversionScore.toFixed(2)],
+                  ['Elite', p.isElite ? 'yes' : 'no'],
+                ] as [string, string][]) : []),
+                ['ID', p.id.slice(0, 8) + '…'],
+              ];
+              return (
               <div key={`${p.kind}-${p.id}-${i}`} style={{ border: p.kind === 'look' ? '1px solid #c7d2fe' : '1px solid #f0f0f0', borderRadius: 10, overflow: 'hidden', background: '#fafafa' }}>
                 <div style={{ position: 'relative', aspectRatio: '3 / 4', background: p.image ? `center/cover no-repeat url(${p.image})` : '#e9e9ee' }}>
                   <span style={{ position: 'absolute', top: 4, left: 4, background: 'rgba(0,0,0,0.6)', color: '#fff', fontSize: 10, fontWeight: 700, borderRadius: 6, padding: '1px 6px' }}>{i + 1}</span>
@@ -399,13 +448,44 @@ export default function DailyFeedPreview() {
                     borderRadius: 5, padding: '1px 5px', color: '#fff',
                     background: p.kind === 'look' ? 'rgba(79,70,229,0.92)' : 'rgba(0,0,0,0.55)',
                   }}>{p.kind === 'look' ? 'LOOK' : 'PRODUCT'}</span>
+                  {/* Info icon — hover to reveal the per-item data panel. */}
+                  <button
+                    type="button"
+                    aria-label="Show item data"
+                    onMouseEnter={() => setInfoIdx(i)}
+                    onMouseLeave={() => setInfoIdx(prev => (prev === i ? null : prev))}
+                    onClick={() => setInfoIdx(prev => (prev === i ? null : i))}
+                    style={{
+                      position: 'absolute', bottom: 6, right: 6, width: 22, height: 22, borderRadius: '50%',
+                      border: 'none', cursor: 'pointer', color: '#fff', fontSize: 12, fontWeight: 700,
+                      fontStyle: 'italic', fontFamily: 'Georgia, serif', lineHeight: 1,
+                      background: infoIdx === i ? 'rgba(17,17,17,0.92)' : 'rgba(0,0,0,0.55)',
+                      display: 'flex', alignItems: 'center', justifyContent: 'center',
+                    }}
+                  >i</button>
+                  {infoIdx === i && (
+                    <div
+                      style={{
+                        position: 'absolute', inset: 0, background: 'rgba(10,10,12,0.92)',
+                        color: '#fff', padding: '10px 11px', overflowY: 'auto', fontSize: 11, lineHeight: 1.5,
+                      }}
+                    >
+                      {dataRows.map(([k, v]) => (
+                        <div key={k} style={{ display: 'flex', justifyContent: 'space-between', gap: 8, marginBottom: 3 }}>
+                          <span style={{ color: 'rgba(255,255,255,0.5)', flexShrink: 0 }}>{k}</span>
+                          <span style={{ color: '#fff', fontWeight: 600, textAlign: 'right', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{v}</span>
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
                 <div style={{ padding: '6px 8px' }}>
                   {p.sub && <div style={{ fontSize: 10, color: '#888', textTransform: 'uppercase', letterSpacing: '0.3px', fontWeight: 700 }}>{p.sub}</div>}
                   <div style={{ fontSize: 12, color: '#222', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{p.title}</div>
                 </div>
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

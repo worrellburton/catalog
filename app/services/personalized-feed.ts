@@ -3,17 +3,21 @@
 // Reads the daily ranked order for the signed-in shopper. The heavy lifting
 // (signal gathering, holdout assignment, ranking) lives in the `personalize-
 // feed` edge function, which is idempotent per user/day and persists its
-// result. This module decides whether to invoke it, caches today's answer in
-// localStorage, and hands the ranked ids back to the feed — BOTH the product
-// order and the look order (the engine now ranks looks per shopper too; the
-// feed weaves them in by feed_rank with looks leading).
+// result. This module decides whether to invoke it, caches today's answer
+// IN MEMORY for the current page session (NOT localStorage — see below), and
+// hands the ranked ids back to the feed — BOTH the product order and the look
+// order (the engine now ranks looks per shopper too; the feed weaves them in by
+// feed_rank with looks leading). Because the cache is session memory, every
+// reload re-validates the order against the engine (which is cheap: the engine
+// returns the same idempotent row unless the day or epoch changed), so the feed
+// can never get stuck on a stale order.
 //
 // Fail-open everywhere: any error, a disabled dial, a holdout/fallback
 // variant, or a guest session all resolve to null so the consumer feed keeps
 // its existing global feed_rank order.
 
 import { supabase } from '~/utils/supabase';
-import { getAutoEditorConfig } from './dials';
+import { getAutoEditorConfig, AUTO_EDITOR_EPOCH_KEY } from './dials';
 
 interface RankedItem {
   type: string;
@@ -34,49 +38,22 @@ export interface PersonalizedOrders {
   looks: string[];
 }
 
-// Bumped to v2 when looks joined the cached payload (shape changed from a bare
-// product-id array to { p, l }). Bumped to v3 with the engine's daily
-// lead-rotation for looks — invalidates the day's cached order so shoppers pick
-// up the rotated feed immediately instead of after the next UTC rollover.
-const CACHE_PREFIX = 'catalog:personalized-feed:v3';
+// Persisted feed-order caching was REMOVED. A localStorage entry keyed by
+// (user, UTC-day, epoch) made the order sticky for the whole day, so a shopper
+// who loaded once — or briefly landed in the holdout — was locked to that order
+// until the next UTC rollover, even after an admin advanced the feed or flipped
+// a dial. That was the "feed never changes" bug. The order is now cached only
+// IN MEMORY for the current page session (below): re-renders within one load
+// reuse it (a single edge call), but every reload re-validates the current
+// order, and nothing is written to the user's storage. PERSIST_PREFIX is kept
+// only so the boot sweep (pruneStalePersistedOrders) can purge entries any
+// older build left behind.
+const PERSIST_PREFIX = 'catalog:personalized-feed:';
 
-/** UTC day stamp (YYYY-MM-DD) — matches the edge function's per-day key. */
-function todayUtc(): string {
-  return new Date().toISOString().slice(0, 10);
-}
-
-// The cache key folds in the global "advance" epoch so an admin bumping it
-// (advanceDailyFeed) instantly invalidates every shopper's cached order — the
-// next render re-invokes and gets the advanced feed, no UTC-rollover wait.
-function cacheKey(userId: string, epoch: number): string {
-  return `${CACHE_PREFIX}:${userId}:${todayUtc()}:e${epoch}`;
-}
-
-/** Read today's cached order, or null when there's no entry for today. An
- *  entry with both arrays empty means "already invoked, nothing to
- *  personalize" — still returned (callers treat empty as "no personalization"
- *  per-lane) so we don't re-hit the edge function. */
-function readCache(userId: string, epoch: number): PersonalizedOrders | null {
-  try {
-    const raw = localStorage.getItem(cacheKey(userId, epoch));
-    if (raw == null) return null;
-    const parsed = JSON.parse(raw);
-    if (parsed && Array.isArray(parsed.p) && Array.isArray(parsed.l)) {
-      return { products: parsed.p as string[], looks: parsed.l as string[] };
-    }
-    return null;
-  } catch {
-    return null;
-  }
-}
-
-function writeCache(userId: string, epoch: number, o: PersonalizedOrders): void {
-  try {
-    localStorage.setItem(cacheKey(userId, epoch), JSON.stringify({ p: o.products, l: o.looks }));
-  } catch {
-    /* localStorage full / unavailable — fine, we just re-invoke later */
-  }
-}
+// In-memory, session-scoped order cache, keyed by the advance epoch so a live
+// Advance (realtime → clearPersonalizedCache) or any epoch change re-pulls.
+// Module memory ⇒ gone on reload ⇒ the feed always re-validates on a fresh load.
+let sessionOrders: { epoch: number; value: PersonalizedOrders | null } | null = null;
 
 // Coalesce concurrent callers onto one in-flight promise so a burst of feed
 // renders during boot doesn't fire multiple edge-function invokes.
@@ -94,9 +71,13 @@ async function compute(): Promise<PersonalizedOrders | null> {
   const config = await getAutoEditorConfig();
   if (!config.enabled) return null;
 
-  // Today's answer is sticky in localStorage (keyed by the advance epoch too).
-  const cached = readCache(user.id, config.epoch);
-  if (cached) return (cached.products.length || cached.looks.length) ? cached : null;
+  // Reuse this session's already-resolved order for the SAME epoch (covers the
+  // boot render burst). A different epoch (admin advanced) falls through and
+  // re-pulls. Empty value = "invoked, nothing to personalize" → null per lane.
+  if (sessionOrders && sessionOrders.epoch === config.epoch) {
+    const v = sessionOrders.value;
+    return v && (v.products.length || v.looks.length) ? v : null;
+  }
 
   const { data, error } = await supabase.functions.invoke<PersonalizeFeedResponse>(
     'personalize-feed',
@@ -106,6 +87,7 @@ async function compute(): Promise<PersonalizedOrders | null> {
     return null;
   }
 
+  let orders: PersonalizedOrders | null = null;
   if (data.variant === 'personalized' && Array.isArray(data.ranked_items) && data.ranked_items.length > 0) {
     const products: string[] = [];
     const looks: string[] = [];
@@ -114,17 +96,12 @@ async function compute(): Promise<PersonalizedOrders | null> {
       if (item.type === 'look') looks.push(item.id);
       else if (item.type === 'product') products.push(item.id);
     }
-    if (products.length > 0 || looks.length > 0) {
-      const orders = { products, looks };
-      writeCache(user.id, config.epoch, orders);
-      return orders;
-    }
+    if (products.length > 0 || looks.length > 0) orders = { products, looks };
   }
 
-  // Any non-personalized variant (fallback / holdout / disabled) or an empty
-  // ranking: cache empties for today so we don't re-invoke, return null.
-  writeCache(user.id, config.epoch, { products: [], looks: [] });
-  return null;
+  // Remember for the rest of THIS page session (cleared on reload / advance).
+  sessionOrders = { epoch: config.epoch, value: orders };
+  return orders;
 }
 
 /**
@@ -148,4 +125,49 @@ export function getPersonalizedProductOrder(): Promise<string[] | null> {
 /** Today's personalized LOOK uuid order, or null. */
 export function getPersonalizedLookOrder(): Promise<string[] | null> {
   return getPersonalizedOrders().then(o => (o && o.looks.length > 0 ? o.looks : null));
+}
+
+/** Drop the in-memory session order + any in-flight compute so the next
+ *  getPersonalizedOrders() re-pulls fresh from the engine. Called on a live
+ *  Advance (realtime) and safe to call anytime. Also sweeps any persisted
+ *  feed-order entries left by older builds (this module no longer writes them)
+ *  so they don't linger in the shopper's storage. */
+export function clearPersonalizedCache(): void {
+  sessionOrders = null;
+  inFlight = null;
+  pruneStalePersistedOrders();
+}
+
+/** Remove every `catalog:personalized-feed:*` key (any version) from
+ *  localStorage. We no longer persist the order, so these are always stale —
+ *  this reclaims the space older builds used and is run once on boot. */
+export function pruneStalePersistedOrders(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const stale: string[] = [];
+    for (let i = 0; i < localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith(PERSIST_PREFIX)) stale.push(k);
+    }
+    for (const k of stale) localStorage.removeItem(k);
+  } catch { /* localStorage unavailable — nothing to reclaim */ }
+}
+
+/** Live "Advance" hook. Fires `onAdvance` whenever the global Daily Feed epoch
+ *  changes (admin clicked "Advance to next daily feed") so an open feed can
+ *  re-roll immediately instead of waiting for a reload or the UTC rollover —
+ *  this is what makes the admin dialog's "re-rolls everyone's order
+ *  immediately" actually true for live sessions. Returns an unsubscribe fn;
+ *  no-op when realtime/Supabase isn't available. */
+export function subscribeFeedAdvance(onAdvance: () => void): () => void {
+  if (typeof window === 'undefined' || !supabase) return () => {};
+  const channel = supabase
+    .channel('daily-feed-advance')
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'app_settings', filter: `key=eq.${AUTO_EDITOR_EPOCH_KEY}` },
+      () => onAdvance(),
+    )
+    .subscribe();
+  return () => { try { supabase.removeChannel(channel); } catch { /* ignore */ } };
 }

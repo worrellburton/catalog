@@ -1067,17 +1067,16 @@ html:has(.bottom-bar.search-open) .sc-name-pill { opacity: 0; pointer-events: no
   }
 }
 @media (min-width: 769px) {
-  /* Desktop feed peek — nose the feed up so more of the first rows of cards
-     show below the hero ("there's more below" reads stronger on the wide
-     viewport). Bumped 10svh → 18svh to reposition the hero higher / reveal
-     more grid above the fold. */
+  /* Desktop feed peek — nose the feed up so a strip of the first rows shows
+     below the hero ("there's more below"). Eased 18svh → 8svh per request so
+     the feed starts a little lower (less peek, hero sits a touch lower too). */
   .app-root.home-hero:not(.hero-scrolled) .home-feed-wrap {
-    margin-top: -18svh;
+    margin-top: -8svh;
   }
   /* Keep the "Your daily feed" hint clear of the peek — track it (+ a 32px
      gap) so the label always sits just above the first row of cards. */
   .app-root.home-hero:not(.hero-scrolled) .sfh-scroll-hint {
-    bottom: calc(18svh + 32px + env(safe-area-inset-bottom));
+    bottom: calc(8svh + 32px + env(safe-area-inset-bottom));
   }
 }
 
@@ -1711,15 +1710,25 @@ html:has(.bottom-bar.search-open) .sc-name-pill { opacity: 0; pointer-events: no
     min-height: 100vh;
     justify-content: flex-end;
     padding-top: calc(env(safe-area-inset-top, 0px) + 96px);
-    /* Headline bottom lands ~54vh from top; the bar (36vh-from-bottom below)
-       sits ~4vh under it, with a matching spark→headline gap — an evenly
-       spaced, vertically-centered trio. */
-    padding-bottom: 46vh;
+    /* Lowered (46vh → 38vh) to re-center the spark + headline + bar trio now
+       that the feed peek eased to -8svh — the feed sits lower, so the trio
+       drops ~8vh to stay centered in the taller hero space. The bar bottom
+       below drops the same 8vh so the trio's internal spacing is unchanged. */
+    padding-bottom: 38vh;
   }
   /* Even, balanced spacing for the desktop hero trio: a comfortable gap
      between the spark and the headline that matches the headline→bar gap. */
   .sfh-stage {
-    gap: 36px;
+    gap: 28px;
+  }
+  /* Dial the desktop hero down a notch (per request) — smaller spark +
+     headline so the cluster reads more compact above the bar. */
+  .sfh-spark svg {
+    width: 56px;
+    height: 56px;
+  }
+  .sfh-title {
+    font-size: clamp(26px, 3vw, 38px);
   }
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar,
   .app-root.home-hero:not(.hero-scrolled) .bottom-bar.search-open {
@@ -1749,7 +1758,7 @@ html:has(.bottom-bar.search-open) .sc-name-pill { opacity: 0; pointer-events: no
        When the bar gains focus (recommended-options panel about to appear
        above), the trio rises 18vh (32vh → 50vh) so the panel has room
        without colliding with the feed peek; .sfh matches with -18vh. */
-    bottom: 36vh;
+    bottom: 28vh;
     /* MUST re-list transform here: this rule overrides the base
        .ai-bar-wrap transition, and without transform the chrome auto-hide
        slide-back would snap instead of animate. */
@@ -1758,7 +1767,7 @@ html:has(.bottom-bar.search-open) .sc-name-pill { opacity: 0; pointer-events: no
       transform 0.4s cubic-bezier(0.32, 0.72, 0, 1);
   }
   body:has(.app-root.home-hero) .ai-bar-wrap:focus-within {
-    bottom: 48vh;
+    bottom: 40vh;
   }
   /* The desktop bar (.ai-bar-wrap) is a SIBLING of .app-root under <body>,
      NOT a descendant — so this MUST be reached from the shared <body>
@@ -2013,4 +2022,26 @@ body:has(.app-root.chrome-hidden) .ai-bar-wrap {
   body:has(.ai-bar-wrap:not(.ai-bar-wrap--inline):focus-within) .app-root.home-hero .sfh-stage {
     transform: translateY(-18vh);
   }
+}
+
+/* ── "App chrome on scroll" dial (OFF) — immersive home ──────────────────────
+   Set by root.tsx as html.app-chrome-scroll-off when the admin turns the dial
+   off. Once the home feed is scrolled past the hero (.hero-scrolled), retire
+   the top header (Catalog logo + creators rail) and the bottom search so the
+   feed fills the screen. Both glide back at the very top (hero, not scrolled).
+   The feed, card info, and look/product overlays are never touched. The header
+   is position:fixed and the search bar is fixed, so a translate slides each one
+   cleanly off-screen. */
+html.app-chrome-scroll-off .app-root.home-hero.hero-scrolled > header {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(-110%);
+  transition: opacity 0.28s ease, transform 0.28s ease;
+}
+html.app-chrome-scroll-off body:has(.app-root.home-hero.hero-scrolled) .ai-bar-wrap,
+html.app-chrome-scroll-off body:has(.app-root.home-hero.hero-scrolled) .bottom-bar {
+  opacity: 0;
+  pointer-events: none;
+  transform: translateY(160%);
+  transition: opacity 0.28s ease, transform 0.28s ease;
 }
