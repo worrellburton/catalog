@@ -20,6 +20,7 @@ import { getHomeFeed, getProductImagesForQuery } from '~/services/product-creati
 // hidden during the ceremony — that's intentional: the ceremony covers
 // the feed, but its own particle layer keeps the brand world alive).
 import { particleControls } from '~/services/particles';
+import { searchSubject } from '~/utils/searchIntent';
 
 interface SearchCeremonyProps {
   query: string;
@@ -35,6 +36,15 @@ interface SearchCeremonyProps {
   /** Result product images to float in the particle field behind the stage
    *  (the searched products drifting in space). Populated once results land. */
   floatingImages?: string[];
+  /** Pause-and-pick: when true, a CONVERSATIONAL query ends the ceremony on a
+   *  reasoning beat + a short list of suggested catalogs, and waits for the
+   *  shopper to tap one before any feed loads (nothing auto-opens). When false
+   *  (a direct product search) the ceremony hands straight off to onDone. */
+  pickMode?: boolean;
+  /** Suggested catalog names to offer in pick mode. */
+  recs?: string[];
+  /** Fired when the shopper taps a suggested catalog in pick mode. */
+  onPickCatalog?: (name: string) => void;
 }
 
 const MIN_DURATION_MS = 2400;
@@ -199,7 +209,7 @@ function buildSteps(query: string, kind: 'search' | 'brand'): string[] {
   ];
 }
 
-export default function SearchCeremony({ query, kind = 'search', ready, onDone, floatingImages = [] }: SearchCeremonyProps) {
+export default function SearchCeremony({ query, kind = 'search', ready, onDone, floatingImages = [], pickMode = false, recs = [], onPickCatalog }: SearchCeremonyProps) {
   const steps = useRef(buildSteps(query, kind)).current;
   // How many steps are currently visible (they stream in over time).
   const [revealed, setRevealed] = useState(1);
@@ -214,6 +224,14 @@ export default function SearchCeremony({ query, kind = 'search', ready, onDone, 
   // Every step gets a check once the search is in AND the narration has fully
   // streamed in; until then the last-revealed step spins as the "active" one.
   const finalDone = ready && allRevealed;
+
+  // Pause-and-pick terminal state: a conversational query that has finished
+  // narrating shows the reasoning beat + suggested catalogs and HOLDS here —
+  // both auto-reveal paths below bail while `choosing` is true, so nothing
+  // loads until the shopper taps a catalog. A short garment subject ("dresses")
+  // personalizes the reasoning line when we can detect one.
+  const choosing = pickMode && allRevealed && recs.length > 0;
+  const subject = choosing ? searchSubject(query) : null;
 
   // Products "forming" in the background, revealed progressively as each
   // phase completes. Three relevance tiers compete for the fixed slots:
@@ -327,6 +345,9 @@ export default function SearchCeremony({ query, kind = 'search', ready, onDone, 
   // checks state so it reads as "done" before the results take over.
   useEffect(() => {
     if (!ready || !allRevealed) return;
+    // In pick mode we DON'T auto-hand-off — the ceremony parks on the catalog
+    // picks and waits for a tap (onPickCatalog) instead of loading any feed.
+    if (choosing) return;
     const elapsed = Date.now() - startedAt.current;
     // The hold after the last check is exactly the gather beat — the floating
     // products dive down toward where the results rise from, so the ceremony
@@ -337,14 +358,19 @@ export default function SearchCeremony({ query, kind = 'search', ready, onDone, 
     // in _index), so the ceremony no longer blocks on a picker.
     const t = window.setTimeout(() => onDone(), wait);
     return () => window.clearTimeout(t);
-  }, [ready, allRevealed, onDone]);
+  }, [ready, allRevealed, onDone, choosing]);
 
   // Hard safety: always reveal results within MAX_DURATION even if `ready`
   // never flips (e.g. a cached/instant query whose loading flag never trips).
+  // Skipped ONLY once we're actually showing catalog picks (`choosing`) — there
+  // the shopper drives the hand-off by tapping a catalog, so we must not time
+  // out and auto-load a feed they didn't choose. If pick mode was intended but
+  // no recs arrived, `choosing` stays false and this safety net still fires.
   useEffect(() => {
+    if (choosing) return;
     const t = window.setTimeout(() => onDone(), MAX_DURATION_MS);
     return () => window.clearTimeout(t);
-  }, [onDone]);
+  }, [onDone, choosing]);
 
   // Speed the singleton particle field up while the ceremony is on screen
   // (reads as "searching the world"). The canvas keeps running; only its
@@ -438,18 +464,18 @@ export default function SearchCeremony({ query, kind = 'search', ready, onDone, 
           {/* Shimmer technique needs the visible string mirrored into data-text
               so the ::before layer can mask the sweep onto the same glyphs. */}
           <span
-            className={finalDone ? 'sc-think-done' : 'sc-shimmer-text'}
-            data-text={finalDone ? undefined : 'Thinking'}
+            className={finalDone || choosing ? 'sc-think-done' : 'sc-shimmer-text'}
+            data-text={finalDone || choosing ? undefined : 'Thinking'}
           >
-            {finalDone ? 'Ready' : 'Thinking'}
+            {finalDone || choosing ? 'Ready' : 'Thinking'}
           </span>
         </div>
 
         <div className="sc-steps">
           {steps.map((s, i) => {
             if (i >= revealed) return null;
-            const isDone = i < activeIndex || finalDone;
-            const isActive = i === activeIndex && !finalDone;
+            const isDone = i < activeIndex || finalDone || choosing;
+            const isActive = i === activeIndex && !finalDone && !choosing;
             return (
               <div key={s} className={`sc-step${isDone ? ' is-done' : ''}${isActive ? ' is-active' : ''}`}>
                 <span className="sc-step-icon" aria-hidden="true">
@@ -478,10 +504,44 @@ export default function SearchCeremony({ query, kind = 'search', ready, onDone, 
           })}
         </div>
 
-        {/* 3 — Progress thread feeding into the reveal. */}
-        <div className="sc-bar" aria-hidden="true">
-          <div className="sc-bar-fill" style={{ width: `${progress}%` }} />
-        </div>
+        {/* 3 — Progress thread feeding into the reveal. Hidden in pick mode once
+            we've handed over to the catalog choices (no feed is loading). */}
+        {!choosing && (
+          <div className="sc-bar" aria-hidden="true">
+            <div className="sc-bar-fill" style={{ width: `${progress}%` }} />
+          </div>
+        )}
+
+        {/* 4 — Pause-and-pick: a conversational query ends on a reasoning beat
+            and a short list of suggested catalogs. NOTHING loads until the
+            shopper taps one (onPickCatalog), so they always choose the catalog
+            they land in rather than being dropped into one they never picked. */}
+        {choosing && (
+          <div className="sc-picks">
+            <p className="sc-pick-headline">
+              {subject
+                ? <>Looks like you want <strong>{subject}</strong> — pick a catalog to shop.</>
+                : <>Here's where to start — pick a catalog to shop.</>}
+            </p>
+            <div className="sc-pick-list">
+              {recs.map((name) => (
+                <button
+                  key={name}
+                  type="button"
+                  className="sc-pick"
+                  onClick={() => onPickCatalog?.(name)}
+                >
+                  <span className="sc-pick-spark" aria-hidden="true">
+                    <svg viewBox="0 0 100 100" width="15" height="15">
+                      <path d="M50 4 C54 30 70 46 96 50 C70 54 54 70 50 96 C46 70 30 54 4 50 C30 46 46 30 50 4 Z" fill="currentColor" />
+                    </svg>
+                  </span>
+                  <span className="sc-pick-name">{name}</span>
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
