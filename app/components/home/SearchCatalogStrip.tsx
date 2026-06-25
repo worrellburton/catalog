@@ -63,9 +63,9 @@ export default function SearchCatalogStrip({ query, recommendations, onPick }: S
 
   return (
     <div className="search-catalog-strip">
-      {/* Intro — the current catalog name, big, as the top of the screen. */}
+      {/* Intro — just the current catalog name, big (the "Now browsing"
+          eyebrow was dropped to simplify the screen). */}
       <div className="sc-intro">
-        <span className="sc-intro-eyebrow">Now browsing</span>
         <h1 className="sc-intro-name">{title}</h1>
       </div>
 
