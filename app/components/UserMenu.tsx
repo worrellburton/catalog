@@ -68,6 +68,102 @@ function MiniTile({ src, label, onClick }: { src?: string; label: string; onClic
   );
 }
 
+/** Graphical content sections shared by the desktop popout AND the mobile
+ *  account page: Recently viewed, Saved looks, Saved products, Following.
+ *  Defined once so the two surfaces never drift — any future change here
+ *  shows up in both. The `.user-menu-*` classes are dark-first, so they
+ *  render correctly on the dark account page with no extra styling. `run`
+ *  wraps each action in the host surface's close-then-navigate lifecycle
+ *  (runTile in the popout, runPageItem on the page). */
+function MenuContentSections({
+  recents,
+  looks,
+  products,
+  onOpenProduct,
+  onOpenLook,
+  onOpenBookmarks,
+  onOpenCreator,
+  run,
+}: {
+  recents: Product[];
+  looks: Look[];
+  products: Product[];
+  onOpenProduct?: (product: Product) => void;
+  onOpenLook?: (look: Look) => void;
+  onOpenBookmarks: () => void;
+  onOpenCreator?: (handle: string) => void;
+  run: (action: () => void) => () => void;
+}) {
+  const showRecents = recents.length > 0 && !!onOpenProduct;
+  const showLooks = looks.length > 0 && !!onOpenLook;
+  const showProducts = products.length > 0 && !!onOpenProduct;
+  const hasStrips = showRecents || showLooks || showProducts;
+  return (
+    <>
+      {showRecents && (
+        <div className="user-menu-section">
+          <div className="user-menu-section-title">Recently viewed</div>
+          <div className="user-menu-strip">
+            {recents.map((p, i) => (
+              <MiniTile
+                key={`r-${p.brand}|${p.name}|${i}`}
+                src={p.image}
+                label={p.name || 'Product'}
+                onClick={run(() => onOpenProduct!(p))}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+      {showLooks && (
+        <div className="user-menu-section">
+          <div className="user-menu-section-title">
+            Saved looks
+            <button className="user-menu-section-link" onClick={run(onOpenBookmarks)}>See all</button>
+          </div>
+          <div className="user-menu-strip">
+            {looks.map(l => (
+              <MiniTile
+                key={`look-${l.id}`}
+                src={l.products?.[0]?.image}
+                label={l.title || 'Look'}
+                onClick={run(() => onOpenLook!(l))}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+      {showProducts && (
+        <div className="user-menu-section">
+          <div className="user-menu-section-title">
+            Saved products
+            <button className="user-menu-section-link" onClick={run(onOpenBookmarks)}>See all</button>
+          </div>
+          <div className="user-menu-strip">
+            {products.map((p, i) => (
+              <MiniTile
+                key={`p-${p.brand}|${p.name}|${i}`}
+                src={p.image}
+                label={p.name || 'Product'}
+                onClick={run(() => onOpenProduct!(p))}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+      {hasStrips && <div className="user-menu-divider" />}
+      <FollowingMenuItem
+        onOpenCreator={(handle) =>
+          run(() => {
+            if (onOpenCreator) onOpenCreator(handle);
+            else if (typeof window !== 'undefined') window.location.assign(`/c/${handle}`);
+          })()
+        }
+      />
+    </>
+  );
+}
+
 function UserMenu({
   onOpenBookmarks,
   onOpenMyLooks,
@@ -461,74 +557,21 @@ function UserMenu({
 
             {/* Try it on removed; Style moved to the super-admin section below. */}
 
-            {/* Recently viewed - products tapped in the trail, newest first. */}
-            {recents.length > 0 && onOpenProduct && (
-              <div className="user-menu-section">
-                <div className="user-menu-section-title">Recently viewed</div>
-                <div className="user-menu-strip">
-                  {recents.map((p, i) => (
-                    <MiniTile
-                      key={`${p.brand}|${p.name}|${i}`}
-                      src={p.image}
-                      label={p.name || 'Product'}
-                      onClick={runTile(() => onOpenProduct(p))}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Saved looks. */}
-            {looks.length > 0 && onOpenLook && (
-              <div className="user-menu-section">
-                <div className="user-menu-section-title">
-                  Saved looks
-                  <button className="user-menu-section-link" onClick={runItem(onOpenBookmarks)}>See all</button>
-                </div>
-                <div className="user-menu-strip">
-                  {looks.map(l => (
-                    <MiniTile
-                      key={`look-${l.id}`}
-                      src={l.products?.[0]?.image}
-                      label={l.title || 'Look'}
-                      onClick={runTile(() => onOpenLook(l))}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Saved products. */}
-            {products.length > 0 && onOpenProduct && (
-              <div className="user-menu-section">
-                <div className="user-menu-section-title">
-                  Saved products
-                  <button className="user-menu-section-link" onClick={runItem(onOpenBookmarks)}>See all</button>
-                </div>
-                <div className="user-menu-strip">
-                  {products.map((p, i) => (
-                    <MiniTile
-                      key={`p-${p.brand}|${p.name}|${i}`}
-                      src={p.image}
-                      label={p.name || 'Product'}
-                      onClick={runTile(() => onOpenProduct(p))}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="user-menu-divider" />
-
-            {/* Secondary nav (following, full bookmarks, my catalog,
-                admin/decks/logout). Following sits above Bookmarks
-                so the creators you've opted into reading rank ahead
-                of the things you've passively saved. */}
-            <FollowingMenuItem onOpenCreator={(handle) => {
-              setOpen(false);
-              if (onOpenCreator) onOpenCreator(handle);
-              else if (typeof window !== 'undefined') window.location.assign(`/c/${handle}`);
-            }} />
+            {/* Recently viewed, Saved looks, Saved products, Following —
+                shared with the mobile account page via MenuContentSections so
+                the two surfaces never drift. runTile closes the popout before
+                opening the target. The My Catalog / Saved / admin nav below
+                follows the Following row, same as before. */}
+            <MenuContentSections
+              recents={recents}
+              looks={looks}
+              products={products}
+              onOpenProduct={onOpenProduct}
+              onOpenLook={onOpenLook}
+              onOpenBookmarks={onOpenBookmarks}
+              onOpenCreator={onOpenCreator}
+              run={runTile}
+            />
             {onOpenMyLooks && (
               <button className="user-menu-item" onClick={runItem(onOpenMyLooks)}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
@@ -796,6 +839,20 @@ function UserMenu({
                     )}
                   </button>
                 </div>
+                {/* Recently viewed / Saved looks / Saved products / Following —
+                    the SAME MenuContentSections the desktop popout renders, so
+                    the two surfaces stay in sync. runPageItem closes the page
+                    first, then opens the target. */}
+                <MenuContentSections
+                  recents={recents}
+                  looks={looks}
+                  products={products}
+                  onOpenProduct={onOpenProduct}
+                  onOpenLook={onOpenLook}
+                  onOpenBookmarks={onOpenBookmarks}
+                  onOpenCreator={onOpenCreator}
+                  run={runPageItem}
+                />
                 {onChangeCatalogGender && (
                   <div className="user-menu-page-row user-menu-page-row--segmented">
                     <span className="user-menu-page-row-icon">
