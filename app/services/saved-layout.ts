@@ -45,6 +45,20 @@ function load<T>(key: string, fallback: T): T {
   return fallback;
 }
 
+// Test/placeholder collections (named like "filler-0-x") were seeded into some
+// browsers' localStorage and showed up in the catalogs/collections list. Never
+// surface them, and scrub them from storage on load so they don't linger.
+const FILLER_NAME = /^filler-\d+-x$/i;
+function loadCollections(): SavedCollection[] {
+  const all = load<SavedCollection[]>(COLLECTIONS_KEY, []);
+  if (!Array.isArray(all)) return [];
+  const clean = all.filter(c => !(c && typeof c.name === 'string' && FILLER_NAME.test(c.name.trim())));
+  if (clean.length !== all.length) {
+    try { localStorage.setItem(COLLECTIONS_KEY, JSON.stringify(clean)); } catch { /* ignore */ }
+  }
+  return clean;
+}
+
 function newId(): string {
   return `col_${Date.now().toString(36)}_${Math.random().toString(36).slice(2, 7)}`;
 }
@@ -86,12 +100,12 @@ export function useSavedLayout(
   const { user } = useAuth();
   const userId = user?.id;
 
-  const [collections, setCollections] = useState<SavedCollection[]>(() => load(COLLECTIONS_KEY, []));
+  const [collections, setCollections] = useState<SavedCollection[]>(() => loadCollections());
   const [lookOrder, setLookOrder] = useState<number[]>(() => load(ORDER_LOOKS_KEY, []));
   const [productOrder, setProductOrder] = useState<string[]>(() => load(ORDER_PRODUCTS_KEY, []));
   // Last-persisted snapshot, used to compute `dirty`.
   const [saved, setSaved] = useState<Snapshot>(() => ({
-    collections: load(COLLECTIONS_KEY, []),
+    collections: loadCollections(),
     lookOrder: load(ORDER_LOOKS_KEY, []),
     productOrder: load(ORDER_PRODUCTS_KEY, []),
   }));
