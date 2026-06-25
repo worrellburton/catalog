@@ -153,8 +153,14 @@
    Not scoped to .df-admin (it's a fixed overlay rendered at the page root). */
 .df-save-toast {
   position: fixed;
-  right: 22px;
+  /* Bottom-center. Margin-inline centering (NOT translateX) per the repo
+     convention, so the toast's in/out translateY animation can't clobber it. */
+  left: 0;
+  right: 0;
   bottom: 22px;
+  margin-inline: auto;
+  width: max-content;
+  max-width: min(340px, calc(100% - 32px));
   z-index: 4000;
   display: flex;
   align-items: center;
@@ -164,7 +170,6 @@
   background: #0f172a;
   color: #f8fafc;
   box-shadow: 0 18px 48px rgba(15, 23, 42, 0.34);
-  max-width: 340px;
   animation: df-toast-in 0.4s cubic-bezier(0.22, 1, 0.36, 1) both;
 }
 .df-save-toast.is-err { background: #7f1d1d; }
