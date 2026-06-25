@@ -7,6 +7,7 @@ import CatalogLogo from '~/components/CatalogLogo';
 import { useAuth } from '~/hooks/useAuth';
 import { useBrandMembership, type PartnersContext } from '~/hooks/useBrandMembership';
 import { signInWithGoogle } from '~/services/auth';
+import { supabase } from '~/utils/supabase';
 
 // The brand portal reuses the admin shell's stylesheet for layout chrome
 // (sidebar / main / nav). It's visually distinct via the `partners-layout`
@@ -77,6 +78,69 @@ function SignInScreen() {
   );
 }
 
+const onbInput: React.CSSProperties = {
+  display: 'block', width: '100%', marginTop: 6, padding: '9px 11px', borderRadius: 9,
+  border: '1px solid #e2e2e6', fontSize: 13, fontFamily: 'inherit', color: '#1a1a1f', background: '#fff',
+};
+
+// First-run brand setup. Shown when a user holds a brand role (brand_owner /
+// brand_member) but has no brand yet. create_my_brand makes them owner of a new
+// brand (seeded with any matching catalog products), then we reload into the portal.
+function BrandOnboarding() {
+  const [name, setName] = useState('');
+  const [website, setWebsite] = useState('');
+  const [logo, setLogo] = useState('');
+  const [description, setDescription] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+
+  async function submit() {
+    if (!supabase) return;
+    if (!name.trim()) { setErr('Brand name is required.'); return; }
+    setErr(null); setBusy(true);
+    const { error } = await supabase.rpc('create_my_brand', {
+      p_name: name.trim(),
+      p_logo_url: logo.trim() || null,
+      p_website: website.trim() || null,
+      p_description: description.trim() || null,
+    });
+    if (error) { setErr(error.message); setBusy(false); return; }
+    window.location.assign('/partners'); // reload → membership resolves → portal
+  }
+
+  return (
+    <div style={{ minHeight: '100vh', display: 'flex', alignItems: 'center', justifyContent: 'center', padding: 24, background: '#f6f6f8', fontFamily: 'system-ui, sans-serif' }}>
+      <div style={{ width: '100%', maxWidth: 460, background: '#fff', border: '1px solid #ececef', borderRadius: 16, padding: 28 }}>
+        <h1 style={{ fontSize: 20, fontWeight: 800, margin: '0 0 4px' }}>Set up your brand</h1>
+        <p style={{ fontSize: 13, color: '#8b8b93', margin: '0 0 18px' }}>Tell us about your brand to get started.</p>
+
+        <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#6b6b73', marginBottom: 12 }}>
+          Brand name
+          <input value={name} onChange={e => setName(e.target.value)} placeholder="e.g. Aritzia" disabled={busy} style={onbInput} />
+        </label>
+        <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#6b6b73', marginBottom: 12 }}>
+          Website
+          <input value={website} onChange={e => setWebsite(e.target.value)} placeholder="https://yourbrand.com" disabled={busy} style={onbInput} />
+        </label>
+        <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#6b6b73', marginBottom: 12 }}>
+          Logo URL
+          <input value={logo} onChange={e => setLogo(e.target.value)} placeholder="https://…" disabled={busy} style={onbInput} />
+        </label>
+        <label style={{ display: 'block', fontSize: 12, fontWeight: 600, color: '#6b6b73', marginBottom: 16 }}>
+          Description
+          <textarea value={description} onChange={e => setDescription(e.target.value)} rows={3} disabled={busy} style={{ ...onbInput, resize: 'vertical' }} />
+        </label>
+
+        <button onClick={submit} disabled={busy}
+          style={{ width: '100%', padding: '11px', borderRadius: 10, border: 'none', background: busy ? '#ececef' : '#111', color: busy ? '#9a9aa2' : '#fff', fontWeight: 600, fontSize: 14, cursor: busy ? 'default' : 'pointer' }}>
+          {busy ? 'Creating…' : 'Create brand'}
+        </button>
+        {err && <p style={{ fontSize: 12, color: '#c0392b', marginTop: 10, marginBottom: 0 }}>{err}</p>}
+      </div>
+    </div>
+  );
+}
+
 export default function PartnersLayout() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -101,6 +165,11 @@ export default function PartnersLayout() {
   if (!user) return <SignInScreen />;
 
   if (!active) {
+    // Assigned a brand role (from the admin Users table) but no brand yet →
+    // set one up. create_my_brand makes them owner, then we reload into the portal.
+    if (user.role === 'brand_owner' || user.role === 'brand_member') {
+      return <BrandOnboarding />;
+    }
     return isPlatformAdmin
       ? <GateScreen
           title="No brand to manage"

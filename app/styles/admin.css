@@ -1862,6 +1862,8 @@ html.admin-on-dark-canvas .admin-topbar,
 .admin-role-shopper { color: #666; }
 .admin-role-creator { color: #2e7d32; background: #e8f5e9; border-color: #c8e6c9; }
 .admin-role-admin { color: #1565c0; background: #e3f2fd; border-color: #bbdefb; }
+.admin-role-brand_owner { color: #6a1b9a; background: #f3e5f5; border-color: #e1bee7; }
+.admin-role-brand_member { color: #8e24aa; background: #f8eefb; border-color: #efcdf3; }
 .admin-role-dropdown {
   position: absolute;
   top: calc(100% + 4px);
@@ -2828,6 +2830,8 @@ html.admin-on-dark-canvas .admin-topbar,
 }
 .admin-dark .admin-role-creator { color: #66bb6a; background: rgba(46, 125, 50, 0.15); border-color: rgba(46, 125, 50, 0.3); }
 .admin-dark .admin-role-admin { color: #64b5f6; background: rgba(21, 101, 192, 0.15); border-color: rgba(21, 101, 192, 0.3); }
+.admin-dark .admin-role-brand_owner { color: #ce93d8; background: rgba(106, 27, 154, 0.18); border-color: rgba(106, 27, 154, 0.35); }
+.admin-dark .admin-role-brand_member { color: #ba68c8; background: rgba(142, 36, 170, 0.18); border-color: rgba(142, 36, 170, 0.35); }
 .admin-dark .admin-role-dropdown {
   background: #2a2a2a;
   border-color: rgba(255, 255, 255, 0.12);
