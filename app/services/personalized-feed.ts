@@ -50,10 +50,18 @@ export interface PersonalizedOrders {
 // older build left behind.
 const PERSIST_PREFIX = 'catalog:personalized-feed:';
 
-// In-memory, session-scoped order cache, keyed by the advance epoch so a live
-// Advance (realtime → clearPersonalizedCache) or any epoch change re-pulls.
-// Module memory ⇒ gone on reload ⇒ the feed always re-validates on a fresh load.
-let sessionOrders: { epoch: number; value: PersonalizedOrders | null } | null = null;
+// Client-side mirror of the edge function's editorDay(refreshHour, epoch).
+// Keyed by refreshHour so the session cache invalidates automatically when
+// the daily rollover passes — critical for the Flutter WebView where the page
+// is never reloaded on app-resume (unlike mobile Safari which purges tabs).
+function editorDay(refreshHour: number): string {
+  return new Date(Date.now() - refreshHour * 3_600_000).toISOString().slice(0, 10);
+}
+
+// In-memory, session-scoped order cache, keyed by epoch + editor day.
+// Clears when: admin advances (epoch changes), day rolls over at refreshHour,
+// or the module is reloaded (full page load). Any of those re-pulls fresh.
+let sessionOrders: { epoch: number; date: string; value: PersonalizedOrders | null } | null = null;
 
 // Coalesce concurrent callers onto one in-flight promise so a burst of feed
 // renders during boot doesn't fire multiple edge-function invokes.
@@ -71,10 +79,10 @@ async function compute(): Promise<PersonalizedOrders | null> {
   const config = await getAutoEditorConfig();
   if (!config.enabled) return null;
 
-  // Reuse this session's already-resolved order for the SAME epoch (covers the
-  // boot render burst). A different epoch (admin advanced) falls through and
-  // re-pulls. Empty value = "invoked, nothing to personalize" → null per lane.
-  if (sessionOrders && sessionOrders.epoch === config.epoch) {
+  // Reuse this session's order when epoch + editor day both match. Epoch changes
+  // on admin advance; date changes at refreshHour — either invalidates the cache.
+  const today = editorDay(config.refreshHour);
+  if (sessionOrders && sessionOrders.epoch === config.epoch && sessionOrders.date === today) {
     const v = sessionOrders.value;
     return v && (v.products.length || v.looks.length) ? v : null;
   }
@@ -99,8 +107,8 @@ async function compute(): Promise<PersonalizedOrders | null> {
     if (products.length > 0 || looks.length > 0) orders = { products, looks };
   }
 
-  // Remember for the rest of THIS page session (cleared on reload / advance).
-  sessionOrders = { epoch: config.epoch, value: orders };
+  // Remember for the rest of THIS page session (cleared on reload / advance / rollover).
+  sessionOrders = { epoch: config.epoch, date: today, value: orders };
   return orders;
 }
 
