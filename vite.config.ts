@@ -224,6 +224,7 @@ export default defineConfig({
             route("appearance", "routes/admin/appearance.tsx");
             route("audiences", "routes/admin/audiences.tsx");
             route("brands", "routes/admin/brands.tsx");
+            route("partners", "routes/admin/partners.tsx");
             route("campaigns", "routes/admin/campaigns.tsx");
             route("categories", "routes/admin/categories.tsx");
             route("clickouts", "routes/admin/clickouts.tsx");
@@ -309,6 +310,7 @@ export default defineConfig({
             route("creatives", "routes/partners/creatives.tsx");
             route("store", "routes/partners/store.tsx");
             route("team", "routes/partners/team.tsx");
+            route("settings", "routes/partners/settings.tsx");
           });
         });
       },

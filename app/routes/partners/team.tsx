@@ -23,7 +23,7 @@ export default function PartnersTeam() {
       // another member's row — the UI falls back to a shortened id in that case.
       const { data } = await supabase
         .from('brand_members')
-        .select('user_id, role, status, created_at, profiles ( full_name, email )')
+        .select('user_id, role, status, created_at, profiles!brand_members_user_id_fkey ( full_name, email )')
         .eq('brand_id', brand.id)
         .order('created_at', { ascending: true });
       if (cancelled) return;
