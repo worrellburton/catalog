@@ -10,6 +10,7 @@
 // "Daily Feed" is the canonical name for this concept — see docs/daily-feed.md.
 
 import { useCallback, useEffect, useRef, useState } from 'react';
+import WeightDial from '~/components/admin/WeightDial';
 import {
   getAutoEditorConfig, setAutoEditorConfig, advanceDailyFeed,
   DEFAULT_AUTO_EDITOR_CONFIG, type AutoEditorConfig,
@@ -314,18 +315,17 @@ export default function DailyFeedSettings() {
                 </div>
                 <div className="df-rule-card-foot">
                   {meta.weight ? (
-                    <label className="df-rule-card-weight" style={{ opacity: rule.enabled ? 1 : 0.4 }}>
-                      <input
-                        type="range"
+                    <div className="df-rule-card-dial" style={{ opacity: rule.enabled ? 1 : 0.4 }}>
+                      <WeightDial
+                        value={rule.weight}
                         min={meta.min ?? 0}
                         max={meta.max ?? 10}
                         step={1}
-                        value={rule.weight}
                         disabled={loading || !rule.enabled}
-                        onChange={e => saveRules({ ...rules, [meta.key]: { ...rule, weight: Number(e.target.value) } })}
+                        onChange={n => saveRules({ ...rules, [meta.key]: { ...rule, weight: n } })}
                       />
-                      <span className="df-rule-card-weight-val">{rule.weight}</span>
-                    </label>
+                      <span className="df-rule-card-dial-scale" aria-hidden="true"><span>low</span><span>high</span></span>
+                    </div>
                   ) : (
                     <span style={{ fontSize: 11, fontWeight: 600, color: '#94a3b8' }}>{rule.enabled ? 'On' : 'Off'}</span>
                   )}
