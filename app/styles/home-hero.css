@@ -924,15 +924,15 @@
    reach). ContinuousFeed sets html.feed-empty while this state holds. */
 html.feed-empty,
 html.feed-empty body { overflow: hidden; }
-/* Collapse the strip's hero spacing so the title + recs sit right above the
-   "Nothing yet" CTA as one cluster (desktop's 66vh hero height is for the
-   scroll-into-grid case, which no longer applies with an empty feed). Keep the
-   group in its natural upper position with header clearance — NOT vertically
-   centered, which would push a long title off-screen (overflow is locked). */
+/* Collapse the strip's hero spacing so the title + recs sit just above the
+   "Nothing yet" CTA as one centered cluster. Nudge it down toward the vertical
+   middle with a larger top offset — but via padding (not justify-content:center)
+   so a long title can never be pushed off-screen while overflow is locked. */
 html.feed-empty .search-catalog-strip {
   min-height: 0;
-  padding-top: clamp(80px, 12vh, 130px);
+  padding-top: clamp(96px, 24vh, 260px);
   padding-bottom: 8px;
+  text-align: center;
 }
 html.feed-empty .ec-inline { padding-top: 0; padding-bottom: 0; }
 
