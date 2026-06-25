@@ -306,11 +306,22 @@ export default defineConfig({
           // codebase; gated by brand_members + RLS, not a shared admin role.
           route("partners", "routes/partners/route.tsx", () => {
             route("", "routes/partners/_index.tsx", { index: true });
+            route("orders", "routes/partners/orders.tsx");
             route("products", "routes/partners/products.tsx");
+            route("products/:id", "routes/partners/products.$id.tsx");
+            route("collections", "routes/partners/collections.tsx");
             route("creatives", "routes/partners/creatives.tsx");
+            route("ads", "routes/partners/ads.tsx");
+            route("audience", "routes/partners/audience.tsx");
+            route("campaigns", "routes/partners/campaigns.tsx");
             route("store", "routes/partners/store.tsx");
             route("team", "routes/partners/team.tsx");
+            route("company", "routes/partners/company.tsx");
+            route("billing", "routes/partners/billing.tsx");
+            route("billing/plans", "routes/partners/plans.tsx");
+            route("billing/invoices", "routes/partners/invoices.tsx");
             route("settings", "routes/partners/settings.tsx");
+            route("terms", "routes/partners/terms.tsx");
           });
         });
       },
