@@ -189,12 +189,14 @@ const HEIGHT_OPTIONS = (() => {
 const STEP_VALUES: readonly Step[] = ['mode', 'stylist', 'photos', 'products', 'style', 'review', 'result'];
 
 function readStepFromUrl(): Step {
-  if (typeof window === 'undefined') return 'mode';
+  // 'photos' (the "You" context + build-mode choices) is the entry screen now —
+  // the separate 'mode' chooser was folded into it so the context is shown once.
+  if (typeof window === 'undefined') return 'photos';
   try {
     const q = new URLSearchParams(window.location.search).get('step');
     if (q && (STEP_VALUES as readonly string[]).includes(q)) return q as Step;
   } catch { /* ignore */ }
-  return 'mode';
+  return 'photos';
 }
 
 // Per-style glyph for the style cards. Animated (float / pop) via CSS so
@@ -302,10 +304,10 @@ export default function GeneratePage() {
     }
     if (typeof window === 'undefined') return;
     const url = new URL(window.location.href);
-    const current = url.searchParams.get('step') ?? 'mode';
+    const current = url.searchParams.get('step') ?? 'photos';
     if (current === step) return;
-    if (step === 'mode') url.searchParams.delete('step');
-    else                 url.searchParams.set('step', step);
+    if (step === 'photos') url.searchParams.delete('step');
+    else                   url.searchParams.set('step', step);
     window.history.pushState({ step }, '', url.toString());
   }, [step]);
 
@@ -1694,7 +1696,7 @@ export default function GeneratePage() {
   }
 
   return (
-    <div className={`gen-page${isGeneratingView ? ' gen-page--generating' : ''}${step === 'review' ? ' gen-page--review' : ''}${step === 'style' ? ' gen-page--style' : ''}`}>
+    <div className={`gen-page${isGeneratingView ? ' gen-page--generating' : ''}${step === 'review' ? ' gen-page--review' : ''}${step === 'style' ? ' gen-page--style' : ''}${step === 'photos' ? ' gen-page--photos' : ''}`}>
       {/* Pick + Review: a live WebGL particle field sits behind the screen so
           products/photos read as floating in 3D space over it. */}
       {(step === 'products' || step === 'review' || step === 'photos') && (
@@ -1788,10 +1790,10 @@ export default function GeneratePage() {
                   setStep('photos');
                   return;
                 }
-                // Stylist flow: Photos is the first step (after the mode
-                // chooser), so its back returns to the mode chooser.
-                if (step === 'photos' && flowMode === 'stylist') {
-                  setStep('mode');
+                // Photos ("You") is now the entry screen — back leaves the
+                // generate flow entirely (returns to the catalog).
+                if (step === 'photos') {
+                  navigate('/#app');
                   return;
                 }
                 // Stylist flow: the Style (director) step sits right after the
@@ -2017,11 +2019,44 @@ export default function GeneratePage() {
 
             </div>
 
-            {/* Continue CTA lives in the fixed bottom dock (rendered below,
-                outside the form) so it matches the toolbar on the Products /
-                Style / Review screens. */}
-            {/* "Your looks" grid removed from this page — generated looks now
-                live in My Catalog (as Inactive) instead. */}
+            {/* Build-mode choice — shown right under the "You" context so the
+                shopper picks how to build the look on the SAME screen, and the
+                context is never shown again. Tapping a card sets the flow and
+                jumps straight to that path (manual → products, style → AI
+                Stylist), skipping the old separate chooser + re-ask. */}
+            <div className="gen-mode-cards gen-mode-cards--inline">
+              <button
+                type="button"
+                className="gen-mode-card"
+                onClick={() => {
+                  if (!canAdvance) { window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
+                  setFlowMode('manual'); setStep('products');
+                }}
+              >
+                <span className="gen-mode-card-icon" aria-hidden="true">
+                  <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+                </span>
+                <span className="gen-mode-card-title">Select products manually</span>
+                <span className="gen-mode-card-sub">Browse the catalog and pick each piece yourself.</span>
+              </button>
+              <button
+                type="button"
+                className="gen-mode-card gen-mode-card--ai"
+                onClick={() => {
+                  if (!canAdvance) { window.scrollTo({ top: 0, behavior: 'smooth' }); return; }
+                  setFlowMode('stylist'); setStep('stylist');
+                }}
+              >
+                <span className="gen-mode-card-icon" aria-hidden="true">
+                  <svg width="26" height="26" viewBox="0 0 100 100" fill="currentColor"><path d="M50 6 C55 34 66 45 94 50 C66 55 55 66 50 94 C45 66 34 55 6 50 C34 45 45 34 50 6 Z"/></svg>
+                </span>
+                <span className="gen-mode-card-title">AI Stylist</span>
+                <span className="gen-mode-card-sub">Tell us the occasion — AI builds the outfit.</span>
+              </button>
+            </div>
+            {!canAdvance && (
+              <p className="gen-mode-cards-hint">Add a photo of yourself and your stats above to continue.</p>
+            )}
           </section>
         )}
 
@@ -2737,28 +2772,9 @@ export default function GeneratePage() {
         </>
       )}
 
-      {/* Photos-step dock — same liquid-glass toolbar as the next screens,
-          but a single full-width Continue. canAdvance gates it forward;
-          otherwise it scrolls the user back up to the upload slots. */}
-      {step === 'photos' && (
-        <aside className="gen-dock gen-dock--solo is-revealed" aria-label="Step controls">
-          <div className="gen-dock-actions">
-            <button
-              type="button"
-              className="gen-btn-primary"
-              onClick={() => {
-                // Stylist flow: Photos ("You") is the first step → continue to
-                // the AI Stylist (occasion ask + product reels). Manual flow
-                // continues to the product picker.
-                if (canAdvance) setStep(flowMode === 'stylist' ? 'stylist' : 'products');
-                else window.scrollTo({ top: 0, behavior: 'smooth' });
-              }}
-            >
-              Continue
-            </button>
-          </div>
-        </aside>
-      )}
+      {/* Photos ("You") advances via the in-content build-mode choice cards
+          (Select manually / AI Stylist) rendered under the context above, so
+          there's no separate Continue dock on this step anymore. */}
 
       {editingStats && effectiveUserId && (
         <StatsEditorModal

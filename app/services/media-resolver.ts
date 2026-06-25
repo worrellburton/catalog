@@ -38,11 +38,17 @@ function firstLookProductImage(look: Pick<Look, 'products'>): string {
  * Order: the look's own generated frame (thumbnail_url) → a static cover →
  * a product packshot. The product fallback exists ONLY so a posterless look is
  * never black; once the poster pipeline has run, thumbnail_url always wins.
+ *
+ * `ownOnly` drops the product-packshot fallback — for surfaces that must show
+ * the LOOK itself (its frame / video) and never a product image, e.g. the
+ * creator catalog, where a posterless generated look should reveal its own
+ * video frame rather than borrowing a product packshot.
  */
 export function lookPoster(
   look: Pick<Look, 'thumbnail_url' | 'cover' | 'products'>,
+  ownOnly = false,
 ): string {
-  return look.thumbnail_url || look.cover || firstLookProductImage(look) || '';
+  return look.thumbnail_url || look.cover || (ownOnly ? '' : firstLookProductImage(look)) || '';
 }
 
 /**
