@@ -1,144 +1,163 @@
 # Catalog — Product Improvement Review
-**Branch:** `main` · **Reviewed:** 2026-06-24 · **Reviewer:** Claude Sonnet 4.6
+**Branch:** `main` · **Reviewed:** 2026-06-24T23:39Z · **Reviewer:** Claude Sonnet 4.6
 
 Sources examined: `CLAUDE.md`, `docs/daily-feed.md`, `docs/PENDING_QUEUE.md`,
-`docs/VIBE_AESTHETIC_SEARCH_PLAN.md`, `supabase/functions/embed-product/index.ts`,
-`supabase/functions/haiku-context/index.ts`, `supabase/functions/affiliate-sync/index.ts`,
-`supabase/migrations/082_search_v3_clean.sql` (trg_products_auto_embed),
+`docs/VIBE_AESTHETIC_SEARCH_PLAN.md`, `docs/SEARCH_ENRICHMENT_PLAN.md`,
+`docs/ENRICHMENT_FINAL_RESULTS.md`, `docs/BACKFILL_STATUS.md`,
+`supabase/functions/embed-product/index.ts` (buildDoc, SELECT column list),
+`supabase/migrations/082_search_v3_clean.sql` (trg_products_auto_embed trigger column list),
 `supabase/migrations/20260612010000_haiku_context.sql`,
 `supabase/migrations/20260618000000_haiku_context_backfill_cron.sql`,
+`supabase/migrations/20260601000001_user_seen_keys_rpc.sql`,
+`supabase/migrations/20260605000006*.sql` (search_products V7),
 `app/services/personalized-feed.ts`, `app/services/seen-feed.ts`,
-`app/services/looks.ts` (fetchSeenLookIds),
+`app/services/looks.ts` (fetchSeenLookIds, reorderBySeen),
 `app/components/ContinuousFeed.tsx`, `app/components/FollowingRail.tsx`,
-`app/services/affiliate.ts`, and recent git log.
+`app/components/CreativeCardV2.tsx`, `app/services/session-tracker.ts`,
+`app/components/SessionTrackerHost.tsx`, and recent git log.
 
-Compared against prior review (2026-06-22) to confirm novelty. Items #1 and #2
-are new since that review. Items #3 and #4 were flagged then and remain open.
+Items #1 and #2 carried forward from prior pass (2026-06-22) — still open.
+Items #3 and #4 are new findings from this pass.
 
 ---
 
-## 1 · haiku\_context is generated for every product but never enters the search index
+## 1 · `haiku_context` is generated for every product but never enters the search index
 
-**The gap:** The `haiku-context` edge function writes a two-line visual description
+**The gap.** The `haiku-context` edge function writes a two-line visual description
 to `products.haiku_context` (line 1: plain-language category, e.g. "potted plant";
-line 2: colour + materials, e.g. "deep green, waxy leaves with architectural form").
-A cron fires every 10 minutes to backfill this for all products that have a primary
-image. The column is already read by `AIStylist.tsx`, `type-governance.ts`, and
-`genders.ts` — but **neither `embed-product/buildDoc()` nor `product_occasions_text()`
-reads it**. Search (both the semantic/embedding path and the BM25 path) is blind to
-the visual description entirely.
+line 2: colour + materials). A pg_cron backfill runs every 10 minutes for any
+product with a primary image. The column is already consumed by `AIStylist.tsx`,
+`type-governance.ts`, and `genders.ts` — but `embed-product/buildDoc()` does **not**
+include it (confirmed: the SELECT at `supabase/functions/embed-product/index.ts:100`
+lists `name, brand, type, description, size_fit, materials_care, fit_intelligence,
+product_taxonomy, styling_metadata` — no `haiku_context`). Semantic search is blind
+to the visual description.
 
 The compounding problem: `trg_products_auto_embed` fires on
-`after insert or update of name, brand, type, description, is_active` (migration
-`082_search_v3_clean.sql:321`) — `haiku_context` is absent from the column list.
-So when the backfill cron sets `haiku_context` on a product that already has an
-embedding, the auto-embed trigger never fires. The product's search vector was
-built before the visual description existed and is never updated.
+`AFTER INSERT OR UPDATE OF name, brand, type, description, is_active`
+(`supabase/migrations/082_search_v3_clean.sql:321`) — `haiku_context` is absent.
+When the cron sets `haiku_context` on a product that already has an embedding, the
+auto-embed trigger never fires. The search vector predates the visual description
+and is never refreshed.
 
-**Why it matters:** The design intent for `haiku_context` was precisely to correct
-cases where the scraped product name misleads (e.g. "Men's Low-Top Sneaker" being
-mapped wrong, or a "ZZ Plant" matching beauty products). That correction is applied
-for taxonomy and gender inference, but the embedding — the signal the search RPC
-uses for semantic matching — still reflects the pre-haiku text. Shoppers who search
-for "potted plant", "ankle strap heel", or "oversized canvas" get rankings that
-ignore the clearest visual evidence for those terms.
+**Why it matters.** The design intent for `haiku_context` was to correct misleading
+scraped product names and provide a clean visual label (e.g. "oversized canvas tote"
+vs. the raw product title). That signal improves taxonomy and gender inference — but
+the embedding, which drives semantic search, was frozen before the visual description
+existed. Shoppers searching "oversized canvas", "ankle strap heel", or "waffle knit"
+get rankings that ignore the clearest per-product visual evidence for those terms.
 
-**Next steps:**
-
-1. In `supabase/functions/embed-product/index.ts`: add `haiku_context` to the
-   `buildDoc()` SELECT and to the `parts` assembly (after `materials_care`, before
-   the enriched fields).
-2. In a new migration: add `haiku_context` to the trigger column list, and in
-   `notify_embed_product()` pass `force: true` when
-   `NEW.haiku_context IS DISTINCT FROM OLD.haiku_context` so the trigger overwrites
-   an existing embedding rather than skipping it.
-3. Run a one-shot batch re-embed scoped to
-   `where haiku_context is not null and embedded_at < haiku_context_at` — these are
-   the products whose embedding predates the visual description.
+**Next step.** In `supabase/functions/embed-product/index.ts`: add `haiku_context`
+to the `SELECT` clause and insert it into `buildDoc`'s `parts` array (after
+`materials_care`, before the JSON-enriched fields). In a new migration: add
+`haiku_context` to the `trg_products_auto_embed` trigger column list and set
+`force: true` in `notify_embed_product()` when
+`NEW.haiku_context IS DISTINCT FROM OLD.haiku_context`. Then run a one-shot batch
+re-embed for `WHERE haiku_context IS NOT NULL AND embedded_at < haiku_context_at`.
 
 ---
 
-## 2 · Three separate `user_events` round trips fire on every feed mount
+## 2 · Three separate `user_events` round trips fire on every feed mount — and the product-side RPC is unbounded
 
-**The gap:** On mount, the consumer home page makes three independent Supabase
-queries for seen-state, with no shared cache:
+**The gap.** On every cold mount the consumer home page fires three independent
+Supabase queries for seen-state:
 
-| Component | Call | Query |
+| Component | Call | What it queries |
 |---|---|---|
-| `ContinuousFeed.tsx:317` | `fetchSeenLookIds(user.id)` | `user_events` direct select — look UUIDs → `reorderBySeen` |
-| `ContinuousFeed.tsx:355` | `getSeenKeys()` | `user_seen_keys()` RPC — look + product keys → `partitionUnseen` |
-| `FollowingRail.tsx:115` | `fetchSeenLookIds(user.id)` | same `user_events` query again → unseen badge counts |
+| `ContinuousFeed.tsx:354` | `fetchSeenLookIds(user.id)` | `user_events` direct — look UUIDs → `reorderBySeen` |
+| `ContinuousFeed.tsx:392` | `getSeenKeys()` | `user_seen_keys()` RPC — look + product keys → `partitionUnseen` |
+| `FollowingRail.tsx:115` | `fetchSeenLookIds(user.id)` | same `user_events` query again — unseen badge counts |
 
-`fetchSeenLookIds` has no caching — every call fires a fresh `user_events`
-query (up to 50 k rows). `FollowingRail` calls it independently of `ContinuousFeed`,
-so the query runs twice on every cold page load. `getSeenKeys()` is a third trip.
-All three read `user_events` impressions for the same user.
+`fetchSeenLookIds` has no caching and is called independently by both `ContinuousFeed`
+and `FollowingRail`, so the 50k-row look-impression query runs **twice in parallel**.
+Meanwhile the product-side `user_seen_keys()` RPC
+(`supabase/migrations/20260601000001_user_seen_keys_rpc.sql`) does
+`SELECT DISTINCT … FROM user_events WHERE user_id = auth.uid()` with **no `LIMIT`**.
+`fetchSeenLookIds` explicitly caps at 50,000 rows with a comment explaining the LRU
+bias — the product-side RPC has no such cap and will do a full table scan as
+impression history grows.
 
-**Why it matters:** On a slow connection or for a power user with many impressions,
-this is three waterfalls in the critical render path. The redundancy also makes the
-"same order every visit" symptom harder to debug — three look-seen signals means
-three places to check when the seen state appears stale. The `PENDING_QUEUE.md`
-reports this symptom but the redundant queries are an underappreciated contributor.
+**Why it matters.** The three round trips are serial dead weight on page load for
+any signed-in shopper. At 500 DAU × 200 impressions/session × 90 days, the
+unbounded RPC becomes a visible p99 spike. The redundant `fetchSeenLookIds` pair
+also means both callers race to build their own seen-set from potentially
+in-flight data, making the "same order every visit" symptom (`PENDING_QUEUE.md`)
+harder to isolate.
 
-**Next steps:** Add a session-level cache to `fetchSeenLookIds` (same pattern as
-`looksPromise` / `creatorsPromise` in `looks.ts` — a module-level `Promise | null`
-keyed on `userId` that clears on auth change and when a new impression fires via
-`subscribeToLooksChange`). `FollowingRail` can then call the cached function and
-get the in-flight result instead of racing a fresh query. Longer-term: decide
-whether `getSeenKeys()` (which overlaps on looks) and `fetchSeenLookIds` should be
-unified into one query — the prior review (2026-06-22 §3) has the full analysis.
-
----
-
-## 3 · `daily-feed.md` describes shipped features as open improvements
-
-**The gap:** `docs/daily-feed.md` (the canonical Daily Feed reference) still says
-in its "Known nuance" section:
-
-> Today, the daily re-rank reorders **products**; looks keep the unified `feed_rank`
-> order (plus seen-decay). … Making the **head** visibly rotate each day (a
-> date-seeded rotation) and extending the daily re-rank to **looks** are the two
-> open improvements.
-
-Both shipped. `applyDailyRotation` was added to `personalize-feed/index.ts`
-(commit `cb52a72`, 2026-06-23) for the look lead, and the personalize-feed engine
-already re-ranks looks per shopper. The "open improvements" paragraph now describes
-completed work.
-
-**Why it matters:** `daily-feed.md` is the first document a new session or
-contributor reads to understand what the engine does. Finding "open improvements"
-that are already live will cause future sessions to re-investigate or attempt to
-re-implement them. The `PENDING_QUEUE` has already drifted from this doc.
-
-**Next step:** Update `docs/daily-feed.md`: remove the "open improvements" sentence
-from "Known nuance", update the "What it is" description to confirm that both
-products and looks are now re-ranked per shopper, and add a one-liner on the daily
-lead rotation (applyDailyRotation, pool=18, step=7, ~18-day cycle).
+**Next step.** (a) Add a session-level cache to `fetchSeenLookIds`
+(`app/services/looks.ts`) — same `Promise | null` module-level pattern as
+`looksPromise`. Both `ContinuousFeed` and `FollowingRail` share the in-flight
+result. Clear on auth change or `invalidateLooksCache()`. (b) Rewrite
+`user_seen_keys` with a `WITH recent AS (… ORDER BY created_at DESC LIMIT 50000)`
+inner query to bound the scan, mirroring the cap already in `fetchSeenLookIds`.
 
 ---
 
-## 4 · Feed type-clustering spec has no scope decision
+## 3 · Aesthetic/vibe search routing is fully designed but unimplemented
 
-**The gap:** `PENDING_QUEUE.md §Feed ordering algorithm` specifies that the seen
-portion of the feed should be "clustered by type — all shoes together, then all
-shirts, etc. Grouped random, NOT pure random" and closes with "STILL NEEDS A
-DECISION: feed type-clustering (product grid?)." This was also open in the
-2026-06-22 review (§4).
+**The gap.** Consumer search now routes correctly on category intent ("white shoes"
+→ footwear filter) and handles occasion vibes ("date night", "gym workout" — fixed
+by the enrichment pass, 83% contextual success). But _aesthetic/trend_ queries
+remain badly broken: `"quiet luxury"` returns Le Labo candles and Augustinus Bader
+face cream; `"old money"` returns _The Psychology of Money_. The cause is diagnosed
+and data-verified in `docs/VIBE_AESTHETIC_SEARCH_PLAN.md`: `taxonomy.style =
+"minimal luxury"` was applied to all premium items across every department, so
+expanding "quiet luxury" to "minimal luxury" surfaces candles and a laptop rather
+than cashmere blazers. The `search_products` function has no department gate for
+aesthetic queries.
 
-The ambiguity is concrete: `reorderBySeen` operates on looks (which contain
-multiple product types — clustering by type doesn't map cleanly), while
-`partitionUnseen` hides seen products entirely rather than shuffling them. No
-current code path produces a shuffled-seen product section to cluster. The spec
-as written targets a surface that doesn't exist.
+**Why it matters.** Aesthetic queries — "quiet luxury", "clean girl", "streetwear"
+— are the highest-intent fashion vocabulary a shopper can use. Getting them badly
+wrong (a finance book for "old money") is the fastest way to lose trust in the
+search bar entirely. This failure mode is user-visible on any fashion-forward entry
+into the product.
 
-**Why it matters:** The open decision is a small drain on every future session that
-reads the queue — it reads as a pending TODO when it's actually a product choice.
-If the answer is "we hide seen products, not shuffle them" (which is what the code
-does), the spec should be removed. If a shuffled-seen product section is genuinely
-wanted, it needs a design.
+**What's ready.** `docs/VIBE_AESTHETIC_SEARCH_PLAN.md` Phase 1 is fully scoped:
+add a third route to `search_products` that fires before the vibe fallback when an
+aesthetic term is detected via a curated regex (Appendix A), hard-filters candidates
+to `taxonomy.category IN APPAREL_DEPARTMENT`, and OR-expands the query with
+canonical apparel tokens ("quiet luxury" also matches `minimal, tailored, refined,
+cashmere`). Estimated: ~½ day, $0, low risk. Same shadow→eval→promote gate as V7.
 
-**Next step:** Make the decision explicit in `PENDING_QUEUE.md`. Option A: remove
-the type-clustering spec (current hide-and-reset is correct; no shuffled-seen
-section will be built). Option B: scope it explicitly to a future "you've seen it
-all" product section and write the target UX. Either closes the recurring
-re-derivation cost.
+**Next step.** Implement Phase 1 from the plan doc: add the `aesthetic_intent()`
+detection branch and `APPAREL_DEPARTMENT` filter as a new `ELSIF` block in the
+`search_products` plpgsql function (new migration following `20260605000006*.sql`
+pattern). Add eval assertions from Appendix A's lexicon to
+`tests/search/eval-relevance.mjs` before promoting to canonical. Phase 2 (curating
+`taxonomy.style` to a controlled vocab, ~1 day + ~$0.10) is the next natural step
+after Phase 1 passes eval.
+
+---
+
+## 4 · 324 products have no description text and are invisible to contextual search
+
+**The gap.** The enrichment backfill (`scripts/enrich-all-descriptions.mjs`) skipped
+324 of 793 products because `description IS NULL OR description = ''`. These products
+can match exact-name and type queries via BM25, but have zero occasion, activity, or
+style text in their embedding. They are effectively invisible to any contextual or
+aesthetic query ("casual friday", "brunch", "date night"). `description_enriched`
+correctly flags them as `false`, but no follow-up pass was ever written for the
+no-description case — the current script just increments `skipped` and continues.
+
+**Why it matters.** 324 ÷ 793 ≈ 41% of the catalog missed the enrichment lift
+entirely. If any of those are the types already sparse in the active catalog (the
+`SEARCH_QUALITY_ANALYSIS.md` noted jackets, sneakers, and accessories were thin),
+the search gaps compound: no enrichment AND low catalog depth. Products that have
+only a name and a brand are ranked purely by embedding similarity on the raw name
+text — the weakest possible semantic signal.
+
+**Next step.** Add an `elif not product.description` branch to
+`scripts/enrich-all-descriptions.mjs` (~line 204): when `description` is empty,
+call Claude Haiku with a _generation_ prompt (not the augmentation prompt used for
+existing descriptions) to produce a 2–3 sentence synthetic description from
+`name + brand + type + price + gender`. Example output: _"Casual shorts by Alo Yoga
+at $78. Great for gym workouts, yoga sessions, and outdoor activities. Priced under
+$100, ideal for everyday active wear."_ Cost: <$0.50 for 324 products at Haiku
+rates. Re-embed with the existing `scripts/reembed-enriched-products.mjs`.
+
+---
+
+_Checked against `docs/PENDING_QUEUE.md`, `CLAUDE.md`, and the recent git log
+(`3131c45`). Items D-rest, E, F, G–K (generate flow), L–T (large rebuilds), the
+feed type-clustering decision, and the `daily-feed.md` doc-staleness note are
+tracked elsewhere and not repeated here._
