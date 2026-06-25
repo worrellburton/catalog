@@ -11,6 +11,7 @@ import {
 } from '~/services/product-research';
 import { getFeedSearchResults, getFeedSearchDiagnostics } from '~/services/feed-search';
 import SimilarDebugModal, { buildFeedSearchReport, type SimilarDebugReport } from '~/components/SimilarDebugModal';
+import DailyFeedPreview from '~/components/admin/DailyFeedPreview';
 import { useAuth } from '~/hooks/useAuth';
 import type { ProductAd } from '~/services/product-creative';
 import { getShopperGender, setShopperGender, subscribeToShopperGender } from '~/services/product-creative';
@@ -2046,6 +2047,13 @@ export default function AdminCatalogs() {
             Add new catalog
           </button>
         </div>
+      </div>
+
+      {/* Monitor any shopper: search a user and see their live/served Daily
+          Feed + the engine's reasoning. Mounted prominently at the top of the
+          catalogs page so admins can monitor users from here too. */}
+      <div style={{ marginBottom: 24 }}>
+        <DailyFeedPreview />
       </div>
 
       <div style={{ display: 'flex', gap: 20, padding: '10px 0', marginBottom: 12, flexWrap: 'wrap' }}>
