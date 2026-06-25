@@ -155,7 +155,7 @@ export default function AdminPartners() {
                     <div key={i.id} style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '6px 0', fontSize: 13 }}>
                       <span style={{ flex: 1 }}>{i.email} <span style={{ fontSize: 11, color: '#9a6b00', background: '#fffaeb', padding: '1px 6px', borderRadius: 999, marginLeft: 6 }}>pending</span></span>
                       <button
-                        onClick={() => navigator.clipboard?.writeText(`${origin}/  (sign in with Google as ${i.email})`)}
+                        onClick={() => navigator.clipboard?.writeText(`${origin}/partners  —  sign in with Google as ${i.email}`)}
                         style={linkBtn}>Copy invite link</button>
                       <button onClick={() => revoke(i.id)} style={{ ...linkBtn, color: '#c0392b' }}>Revoke</button>
                     </div>

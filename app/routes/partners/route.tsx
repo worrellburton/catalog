@@ -6,6 +6,7 @@ import {
 import CatalogLogo from '~/components/CatalogLogo';
 import { useAuth } from '~/hooks/useAuth';
 import { useBrandMembership, type PartnersContext } from '~/hooks/useBrandMembership';
+import { signInWithGoogle } from '~/services/auth';
 
 // The brand portal reuses the admin shell's stylesheet for layout chrome
 // (sidebar / main / nav). It's visually distinct via the `partners-layout`
@@ -44,6 +45,38 @@ function GateScreen({ title, body, cta }: { title: string; body: string; cta?: {
   );
 }
 
+// Sign-in entry for the brand portal. Google OAuth returns to /partners
+// (signInWithGoogle uses the current pathname as redirectTo), so an invited
+// brand admin completes the whole flow here and never touches the consumer
+// waitlist gate that lives on `/`.
+function SignInScreen() {
+  const [busy, setBusy] = useState(false);
+  return (
+    <div style={{
+      minHeight: '100vh', display: 'flex', flexDirection: 'column',
+      alignItems: 'center', justifyContent: 'center', gap: 16, padding: 24,
+      background: '#0b0b0c', color: '#e7e7ea', textAlign: 'center', fontFamily: 'system-ui, sans-serif',
+    }}>
+      <CatalogLogo style={{ width: 150, height: 'auto' }} />
+      <div style={{ fontSize: 15, fontWeight: 700, marginTop: 4 }}>Brand portal</div>
+      <div style={{ fontSize: 13, opacity: 0.65, maxWidth: 320 }}>
+        Sign in with the email you were invited with to manage your brand.
+      </div>
+      <button
+        onClick={async () => { setBusy(true); const r = await signInWithGoogle(); if (r.error) setBusy(false); }}
+        disabled={busy}
+        style={{
+          marginTop: 8, padding: '11px 22px', borderRadius: 10, border: 'none',
+          background: busy ? '#3a3a3d' : '#fff', color: busy ? '#aaa' : '#111',
+          fontWeight: 600, fontSize: 14, cursor: busy ? 'default' : 'pointer',
+        }}
+      >
+        {busy ? 'Redirecting…' : 'Continue with Google'}
+      </button>
+    </div>
+  );
+}
+
 export default function PartnersLayout() {
   const navigate = useNavigate();
   const location = useLocation();
@@ -51,11 +84,6 @@ export default function PartnersLayout() {
   const { loading: memLoading, isPlatformAdmin, memberships } = useBrandMembership();
   const [sidebarOpen, setSidebarOpen] = useState(false);
   const [activeBrandId, setActiveBrandId] = useState<string | null>(null);
-
-  // Bounce a signed-out visitor to the consumer app (where the auth gate lives).
-  useEffect(() => {
-    if (!authLoading && !user) navigate('/', { replace: true });
-  }, [authLoading, user, navigate]);
 
   // Default the active brand to the first membership once resolved.
   useEffect(() => {
@@ -68,7 +96,9 @@ export default function PartnersLayout() {
   );
 
   if (authLoading || memLoading) return null;
-  if (!user) return null;
+  // Signed-out visitors sign in HERE (own the OAuth round-trip back to /partners),
+  // so an invited brand admin never gets routed into the consumer waitlist gate.
+  if (!user) return <SignInScreen />;
 
   if (!active) {
     return isPlatformAdmin
