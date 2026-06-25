@@ -111,26 +111,31 @@ export default function AIStylist({ gender, onComplete, onBack }: Props) {
     return m;
   }, [candidates]);
 
-  // Keyboard-aware height for the ask/types steps. iOS Safari ignores the
-  // viewport's interactive-widget=resizes-content, so 100svh does NOT shrink
-  // when the keyboard opens — the textarea + the bottom console get hidden
-  // BEHIND it. The VisualViewport DOES exclude the keyboard, so mirror its
-  // height into a --stylist-vh custom property and size the pinned page off it
-  // (see generate.css), keeping the console just above the keyboard. Only while
-  // a keyboard-bearing step is mounted; cleared on unmount / step change.
+  // Keyboard inset for the ask/types steps. The bottom bar is a FIXED floating
+  // pill (same treatment as the manual flow's .gen-dock) so it's always on
+  // screen + tappable. iOS Safari leaves position:fixed bottom elements BEHIND
+  // the keyboard, and ignores interactive-widget=resizes-content — but the
+  // VisualViewport DOES exclude the keyboard. Mirror the keyboard height into a
+  // --gen-kb-inset custom property so the bar (and the body's bottom padding)
+  // lift above the keyboard. 0 when the keyboard is down → the bar sits at the
+  // normal bottom, exactly like the manual dock. Only while a keyboard-bearing
+  // step is mounted; cleared on unmount / step change.
   useEffect(() => {
     if (step !== 'ask' && step !== 'types') return;
     const vv = typeof window !== 'undefined' ? window.visualViewport : null;
     if (!vv) return;
     const root = document.documentElement;
-    const apply = () => root.style.setProperty('--stylist-vh', `${Math.round(vv.height)}px`);
+    const apply = () => {
+      const inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      root.style.setProperty('--gen-kb-inset', `${Math.round(inset)}px`);
+    };
     apply();
     vv.addEventListener('resize', apply);
     vv.addEventListener('scroll', apply);
     return () => {
       vv.removeEventListener('resize', apply);
       vv.removeEventListener('scroll', apply);
-      root.style.removeProperty('--stylist-vh');
+      root.style.removeProperty('--gen-kb-inset');
     };
   }, [step]);
 
@@ -299,7 +304,6 @@ export default function AIStylist({ gender, onComplete, onBack }: Props) {
             <button
               type="button"
               className="gen-btn-primary gen-stylist-cta gen-stylist-cta--pop gen-stylist-console-go"
-              disabled={loading || baseCandidates.length === 0}
               onClick={() => setStep('types')}
             >
               Next
