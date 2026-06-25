@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { cleanSearchQuery, funnyCatalogName, searchFallbackQuery } from './searchIntent';
+import { cleanSearchQuery, funnyCatalogName, searchFallbackQuery, isConversationalQuery, searchSubject } from './searchIntent';
 
 describe('cleanSearchQuery', () => {
   it('strips conversational scaffolding', () => {
@@ -36,6 +36,32 @@ describe('funnyCatalogName', () => {
   it('stays punchy on a long rambling query (no runaway title)', () => {
     const name = funnyCatalogName('dress for a summer wedding in tuscany italy with my family');
     expect(name.length).toBeLessThan(60);
+  });
+});
+
+describe('isConversationalQuery', () => {
+  it('flags conversational asks (opener phrase, occasion, or rambling)', () => {
+    expect(isConversationalQuery('I want to dress for this')).toBe(true);
+    expect(isConversationalQuery('outfit for a wedding')).toBe(true);
+    expect(isConversationalQuery('something cozy to wear on a rainy day')).toBe(true);
+  });
+
+  it('treats short direct product searches as NOT conversational', () => {
+    expect(isConversationalQuery('black shoes')).toBe(false);
+    expect(isConversationalQuery('vintage denim')).toBe(false);
+    expect(isConversationalQuery('Nike')).toBe(false);
+  });
+});
+
+describe('searchSubject', () => {
+  it('returns the lowercased garment subject when present', () => {
+    expect(searchSubject('I want a dress for italy')).toBe('dresses');
+    expect(searchSubject('cool sneakers')).toBe('sneakers');
+  });
+
+  it('returns null when no known garment is present', () => {
+    expect(searchSubject('something for a wedding')).toBeNull();
+    expect(searchSubject('quiet luxury')).toBeNull();
   });
 });
 

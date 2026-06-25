@@ -821,6 +821,54 @@
 .sc-rec:active { transform: scale(0.985); }
 .sc-rec-spark { flex: 0 0 auto; display: inline-flex; color: rgba(255, 255, 255, 0.85); filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.4)); }
 .sc-rec-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
+/* Pause-and-pick: a CONVERSATIONAL query ("I want to dress for a wedding")
+   ends the ceremony on a reasoning beat + a short list of suggested catalogs,
+   and HOLDS here until the shopper taps one — so they always choose the catalog
+   they land in. Eases in below the steps as the payoff of the loading moment. */
+.sc-picks {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+  width: 100%;
+  margin-top: 4px;
+  animation: sc-recs-in 0.45s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.sc-pick-headline {
+  margin: 0 0 2px;
+  font-size: 16px;
+  font-weight: 600;
+  line-height: 1.4;
+  letter-spacing: -0.01em;
+  text-align: center;
+  color: rgba(255, 255, 255, 0.82);
+}
+.sc-pick-headline strong { color: #fff; font-weight: 800; }
+.sc-pick-list { display: flex; flex-direction: column; gap: 8px; }
+.sc-pick {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 13px 16px;
+  border-radius: 14px;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: linear-gradient(180deg, rgba(255, 255, 255, 0.10), rgba(255, 255, 255, 0.04));
+  color: #fff;
+  font-family: inherit;
+  font-size: 15px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.16s ease, transform 0.12s ease, border-color 0.16s ease;
+}
+.sc-pick:hover { background: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.07)); border-color: rgba(255, 255, 255, 0.3); }
+.sc-pick:active { transform: scale(0.985); }
+.sc-pick-spark { flex: 0 0 auto; display: inline-flex; color: rgba(255, 255, 255, 0.85); filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.4)); }
+.sc-pick-name { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+
 /* Ceremony Option 1: the catalog picks render as an in-flow strip ABOVE the
    results feed (SearchCatalogStrip). It reuses .sc-recs / .sc-rec; this just
    sizes + centers it in the feed column — margin-inline auto + an explicit %

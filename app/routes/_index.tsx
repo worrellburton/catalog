@@ -32,7 +32,7 @@ import { useWaitlistMode, applyFlowOverrideFromUrl } from '~/hooks/useWaitlistMo
 import { useSearchUrlSync } from '~/hooks/useSearchUrlSync';
 import { useShopperGender } from '~/hooks/useShopperGender';
 import { toCatalogName, getRandomCatalogName } from '~/utils/catalogName';
-import { funnyCatalogName } from '~/utils/searchIntent';
+import { funnyCatalogName, isConversationalQuery } from '~/utils/searchIntent';
 import { prefetchSimilarProducts, prefetchCreativesByBrand, prefetchHomeFeed, pruneStaleHomeFeedCaches, type ProductAd } from '~/services/product-creative';
 import { pruneStalePersistedOrders } from '~/services/personalized-feed';
 import { getGraphPairs, type GraphPair } from '~/services/graph-pairs';
@@ -2614,6 +2614,9 @@ export default function Home() {
               ready={!searchLoading}
               onDone={handleCeremonyDone}
               floatingImages={ceremonyImages}
+              pickMode={ceremony.kind === 'search' && isConversationalQuery(ceremony.query)}
+              recs={ceremonyRecs}
+              onPickCatalog={handlePickRecommendedCatalog}
             />
           )}
 
