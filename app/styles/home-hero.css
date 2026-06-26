@@ -1234,23 +1234,41 @@ html:has(.bottom-bar.search-open) .sc-name-pill { opacity: 0; pointer-events: no
   pointer-events: none;
 }
 
-/* ── Recently viewed — a small thumbnail strip riding UNDER the search pill on
-   the home hero (mirrors the account menu). It's a child of .bottom-bar,
-   absolutely anchored just below the pill, so it inherits the bar's hero-lift
-   transform AND its scroll fade for free — no separate positioning math. Shown
-   ONLY on the home hero at rest (not scrolled, not searching); the bar is
-   already mobile-only so this is too. */
-.bottom-bar-recent { display: none; }
-.app-root.home-hero:not(.hero-scrolled) .bottom-bar:not(.search-open) .bottom-bar-recent {
-  display: flex;
-  flex-direction: column;
-  gap: 8px;
-  position: absolute;
-  top: calc(100% + 14px);
-  left: 0;
-  right: 0;
+/* ── Recently viewed — a thumbnail strip riding directly UNDER the home search
+   pill (mirrors the account menu). Rendered as a SIBLING of .bottom-bar, NOT a
+   child: the bar has overflow:hidden for its pill clip, which would hide
+   anything sitting below it. Anchored off the SAME --hero-bar-bottom the bar is
+   lifted to, and faded off the same --hero-scroll-progress, so the strip stays
+   glued just under the bar through the whole hero→scroll motion. Shown only on
+   the home hero at rest; mobile only; only when there's view history. */
+.home-recent-strip { display: none; }
+@media (max-width: 768px) {
+  .app-root.home-hero:not(.hero-scrolled) .home-recent-strip {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    position: fixed;
+    left: 0;
+    right: 0;
+    margin-inline: auto;
+    width: min(560px, calc(100% - 48px)); /* match the search bar's width */
+    /* The bar's visual bottom edge sits at --hero-bar-bottom. Put the strip's
+       box bottom 14px under that, then translateY(100%) drops it by its own
+       height so the strip hangs just below the bar — height-independent. */
+    bottom: calc(var(--hero-bar-bottom, 36svh) - 14px);
+    transform: translateY(100%);
+    z-index: 99; /* just under the bar (z-index:100) */
+    opacity: clamp(0, calc(1.2 - var(--hero-scroll-progress, 0) * 2.4), 1);
+    transition: opacity 0.18s linear;
+  }
+  /* Match the bar: stop intercepting taps once it's faded past the threshold. */
+  .app-root.home-hero.hero-bar-faded:not(.hero-scrolled) .home-recent-strip {
+    pointer-events: none;
+  }
+  /* Hide while the search sheet is open (keyboard up). */
+  html:has(.bottom-bar.search-open) .home-recent-strip { display: none !important; }
 }
-.bottom-bar-recent-title {
+.home-recent-title {
   font-size: 11px;
   font-weight: 600;
   letter-spacing: 0.08em;
@@ -1258,7 +1276,7 @@ html:has(.bottom-bar.search-open) .sc-name-pill { opacity: 0; pointer-events: no
   color: rgba(255, 255, 255, 0.5);
   padding-left: 6px;
 }
-.bottom-bar-recent-strip {
+.home-recent-row {
   display: flex;
   gap: 8px;
   overflow-x: auto;
@@ -1267,8 +1285,8 @@ html:has(.bottom-bar.search-open) .sc-name-pill { opacity: 0; pointer-events: no
   -webkit-overflow-scrolling: touch;
   padding-bottom: 2px;
 }
-.bottom-bar-recent-strip::-webkit-scrollbar { display: none; }
-.bottom-bar-recent-tile {
+.home-recent-row::-webkit-scrollbar { display: none; }
+.home-recent-tile {
   flex: 0 0 auto;
   width: 56px;
   height: 56px;
@@ -1278,11 +1296,11 @@ html:has(.bottom-bar.search-open) .sc-name-pill { opacity: 0; pointer-events: no
   border: 1px solid rgba(255, 255, 255, 0.14);
   background: rgba(255, 255, 255, 0.06);
   cursor: pointer;
-  transition: transform 0.12s ease, border-color 0.16s ease;
+  transition: transform 0.12s ease;
 }
-.bottom-bar-recent-tile:active { transform: scale(0.94); }
-.bottom-bar-recent-tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.bottom-bar-recent-tile-empty { display: block; width: 100%; height: 100%; }
+.home-recent-tile:active { transform: scale(0.94); }
+.home-recent-tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.home-recent-tile-empty { display: block; width: 100%; height: 100%; }
 
 @media (max-width: 640px) {
   /* Mobile landing bar — match the new one-color glass treatment from
