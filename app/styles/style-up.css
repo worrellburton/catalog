@@ -1,0 +1,245 @@
+/* Style Up — AI stylist chat (admin-gated v1). iMessage-style layout: a
+   stylist roster, then a thread with the shopper's context pinned at the top,
+   a scrolling chat, and a docked composer. Reads in the admin light theme;
+   --su-accent is the active stylist's color. */
+
+.su-page {
+  --su-accent: #8aa0c0;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 24px 20px 32px;
+  color: #14151a;
+}
+
+/* ── Roster ──────────────────────────────────────────────────────────── */
+.su-roster-head h1 {
+  margin: 0 0 6px;
+  font-size: 26px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.su-roster-head p {
+  margin: 0 0 22px;
+  font-size: 14px;
+  color: #6b7280;
+  max-width: 46ch;
+}
+.su-roster { display: flex; flex-direction: column; gap: 12px; }
+.su-stylist-card {
+  --su-accent: #8aa0c0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  text-align: left;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid #ececf0;
+  background: #fff;
+  cursor: pointer;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.12s ease;
+}
+.su-stylist-card:hover { border-color: var(--su-accent); box-shadow: 0 6px 24px rgba(0, 0, 0, 0.06); }
+.su-stylist-card:active { transform: scale(0.995); }
+.su-stylist-card:disabled { opacity: 0.6; cursor: wait; }
+.su-stylist-avatar {
+  flex: 0 0 auto;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 19px;
+  font-weight: 800;
+  color: #fff;
+  background: var(--su-accent);
+  overflow: hidden;
+}
+.su-stylist-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.su-stylist-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 auto; }
+.su-stylist-name { font-size: 16px; font-weight: 700; }
+.su-stylist-specialty { font-size: 13px; font-weight: 600; color: var(--su-accent); }
+.su-stylist-bio { font-size: 12.5px; color: #6b7280; line-height: 1.4; }
+.su-stylist-cta {
+  flex: 0 0 auto;
+  align-self: center;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: #111317;
+  color: #fff;
+  font-size: 13px;
+  font-weight: 700;
+}
+.su-empty { padding: 28px; text-align: center; color: #9ca3af; }
+
+/* ── Thread ──────────────────────────────────────────────────────────── */
+.su-page--thread {
+  display: flex;
+  flex-direction: column;
+  height: calc(100dvh - 53px); /* admin topbar is 53px sticky */
+  max-width: 720px;
+  padding: 0;
+}
+.su-thread-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #ececf0;
+  background: #fff;
+}
+.su-back {
+  flex: 0 0 auto;
+  width: 34px; height: 34px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  border: none;
+  background: #f1f2f4;
+  color: #14151a;
+  cursor: pointer;
+}
+.su-back:hover { background: #e7e9ec; }
+.su-thread-avatar {
+  flex: 0 0 auto;
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 15px; font-weight: 800; color: #fff;
+  background: var(--su-accent);
+  overflow: hidden;
+}
+.su-thread-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.su-thread-id { display: flex; flex-direction: column; min-width: 0; }
+.su-thread-name { font-size: 15px; font-weight: 700; }
+.su-thread-specialty { font-size: 12px; color: var(--su-accent); font-weight: 600; }
+
+/* Context card — the shopper's AI-look inputs, read-only. */
+.su-context {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #ececf0;
+  background: #fafbfc;
+}
+.su-context-photos { display: flex; gap: 6px; flex: 0 0 auto; }
+.su-context-photo {
+  width: 44px; height: 44px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #e9eaee;
+  border: 1px solid #e3e4e8;
+}
+.su-context-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.su-context-photo--empty { background: repeating-linear-gradient(45deg, #eceef1, #eceef1 6px, #f5f6f8 6px, #f5f6f8 12px); }
+.su-context-meta { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.su-context-title { font-size: 13px; font-weight: 800; letter-spacing: -0.01em; }
+.su-context-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.su-context-chip {
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: #eef0f3;
+  color: #3b3f47;
+  text-transform: capitalize;
+}
+.su-context-chip--muted { color: #9ca3af; background: #f3f4f6; text-transform: none; }
+.su-context-chip--style { background: color-mix(in srgb, var(--su-accent) 18%, #fff); color: #3b3f47; text-transform: none; }
+.su-context-note { font-size: 11px; color: #9ca3af; }
+
+/* Chat scroller. */
+.su-chat {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  padding: 16px 16px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: #fff;
+}
+.su-chat-intro { margin: auto; text-align: center; color: #9ca3af; max-width: 30ch; }
+.su-chat-intro p { margin: 0 0 4px; font-size: 14px; }
+.su-chat-intro-sub { font-size: 12.5px; color: #b6bac1; }
+.su-msg { display: flex; }
+.su-msg--shopper { justify-content: flex-end; }
+.su-msg--stylist { justify-content: flex-start; }
+.su-bubble {
+  max-width: 76%;
+  padding: 9px 13px;
+  border-radius: 18px;
+  font-size: 14.5px;
+  line-height: 1.35;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+.su-msg--shopper .su-bubble {
+  background: #2f6fed;
+  color: #fff;
+  border-bottom-right-radius: 6px;
+}
+.su-msg--stylist .su-bubble {
+  background: #e9e9eb;
+  color: #14151a;
+  border-bottom-left-radius: 6px;
+}
+
+/* Composer. */
+.su-composer {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  border-top: 1px solid #ececf0;
+  background: #fff;
+}
+.su-composer-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid #e0e2e6;
+  background: #f6f7f9;
+  font-size: 14.5px;
+  color: #14151a;
+  outline: none;
+}
+.su-composer-input:focus { border-color: var(--su-accent); background: #fff; }
+.su-composer-send {
+  flex: 0 0 auto;
+  width: 40px; height: 40px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  border: none;
+  background: #2f6fed;
+  color: #fff;
+  cursor: pointer;
+  transition: opacity 0.16s ease, transform 0.12s ease;
+}
+.su-composer-send:disabled { opacity: 0.4; cursor: default; }
+.su-composer-send:not(:disabled):active { transform: scale(0.92); }
+
+/* Dark admin theme. */
+.admin-dark .su-page { color: #e7e7ea; }
+.admin-dark .su-stylist-card,
+.admin-dark .su-thread-head,
+.admin-dark .su-chat,
+.admin-dark .su-composer { background: #141518; }
+.admin-dark .su-stylist-card { border-color: #26282d; }
+.admin-dark .su-thread-head,
+.admin-dark .su-context,
+.admin-dark .su-composer { border-color: #26282d; }
+.admin-dark .su-context { background: #17181c; }
+.admin-dark .su-back { background: #26282d; color: #e7e7ea; }
+.admin-dark .su-context-chip { background: #26282d; color: #c7c9cf; }
+.admin-dark .su-msg--stylist .su-bubble { background: #2a2c31; color: #e7e7ea; }
+.admin-dark .su-composer-input { background: #1c1d21; border-color: #2a2c31; color: #e7e7ea; }
+.admin-dark .su-roster-head p,
+.admin-dark .su-stylist-bio,
+.admin-dark .su-context-note { color: #8b8e96; }
