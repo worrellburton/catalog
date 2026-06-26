@@ -1,0 +1,50 @@
+name: Sync main into flutter
+
+# Keeps the long-lived `flutter` variant branch up to date with `main`.
+# Fires on every push to main and merges main into flutter. `flutter` keeps
+# its own shell-specific commits, so this is a real merge (not a fast-forward):
+#   clean merge -> pushed to flutter (Vercel redeploys the flutter branch)
+#   conflict    -> opens a PR so a human resolves it; nothing is force-pushed
+# This file MUST live on `main` for the push trigger to fire.
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+
+# Serialize syncs so two quick main pushes don't race on the flutter push.
+concurrency:
+  group: sync-main-into-flutter
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: flutter
+          fetch-depth: 0
+      - name: Merge main into flutter
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git fetch origin main --quiet
+          if git merge --no-edit origin/main; then
+            git push origin flutter
+            echo "::notice::Merged main into flutter and pushed."
+          else
+            git merge --abort
+            echo "::warning::Merge conflict — opening a PR for manual resolution."
+            gh pr create --base flutter --head main \
+              --title "Sync main → flutter (merge conflicts)" \
+              --body "Auto-sync of \`main\` into \`flutter\` hit conflicts. Resolve them here, then merge." \
+              || echo "A main → flutter PR is already open."
+          fi
