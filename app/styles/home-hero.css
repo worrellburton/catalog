@@ -1248,6 +1248,56 @@ html:has(.bottom-bar.search-open) .sc-name-pill { opacity: 0; pointer-events: no
   pointer-events: none;
 }
 
+/* ── Recently viewed — a small thumbnail strip riding UNDER the search pill on
+   the home hero (mirrors the account menu). It's a child of .bottom-bar,
+   absolutely anchored just below the pill, so it inherits the bar's hero-lift
+   transform AND its scroll fade for free — no separate positioning math. Shown
+   ONLY on the home hero at rest (not scrolled, not searching); the bar is
+   already mobile-only so this is too. */
+.bottom-bar-recent { display: none; }
+.app-root.home-hero:not(.hero-scrolled) .bottom-bar:not(.search-open) .bottom-bar-recent {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  position: absolute;
+  top: calc(100% + 14px);
+  left: 0;
+  right: 0;
+}
+.bottom-bar-recent-title {
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.5);
+  padding-left: 6px;
+}
+.bottom-bar-recent-strip {
+  display: flex;
+  gap: 8px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 2px;
+}
+.bottom-bar-recent-strip::-webkit-scrollbar { display: none; }
+.bottom-bar-recent-tile {
+  flex: 0 0 auto;
+  width: 56px;
+  height: 56px;
+  padding: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  transition: transform 0.12s ease, border-color 0.16s ease;
+}
+.bottom-bar-recent-tile:active { transform: scale(0.94); }
+.bottom-bar-recent-tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.bottom-bar-recent-tile-empty { display: block; width: 100%; height: 100%; }
+
 @media (max-width: 640px) {
   /* Mobile landing bar — match the new one-color glass treatment from
      bottom-bar.css (top→bottom gradient surface, 999px pill, inner

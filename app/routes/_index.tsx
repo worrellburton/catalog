@@ -2661,6 +2661,8 @@ export default function Home() {
             mySizeOnly={mySizeOnly}
             onMySizeChange={setMySizeOnly}
             onOpenCreative={handleOpenCreative}
+            recentProducts={recentProducts}
+            onOpenProduct={handleOpenProduct}
           />
 
           {/* Magical loading screen between a hero search and its results.
