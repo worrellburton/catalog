@@ -141,6 +141,9 @@ export default function TypeAnywhere({ inline = false }: TypeAnywhereProps) {
   // Suppress on admin routes - admins are typing into form fields
   // constantly and a fixed bar would clutter the UI.
   const onAdmin = location.pathname.startsWith('/admin');
+  // Suppress on the brand partner portal too — it's its own app surface
+  // (like admin), not a consumer search context.
+  const onPartners = location.pathname.startsWith('/partners');
   // Suppress on /generate too - that flow owns its own input layer.
   const onGenerate = location.pathname.startsWith('/generate');
   // Suppress on /activity - the insights page is a reading surface, not a
@@ -149,7 +152,7 @@ export default function TypeAnywhere({ inline = false }: TypeAnywhereProps) {
   // The GLOBAL (fixed) copy steps aside while the hero is at the top — the
   // inline copy inside the hero owns the screen there. The inline copy itself
   // is never hidden by this (it IS the hero one).
-  const hidden = onAdmin || onGenerate || onActivity || (!inline && heroInline);
+  const hidden = onAdmin || onPartners || onGenerate || onActivity || (!inline && heroInline);
 
   const submit = useCallback((q: string) => {
     const trimmed = q.trim();

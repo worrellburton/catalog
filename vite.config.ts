@@ -155,6 +155,9 @@ export default defineConfig({
           if (id.includes('/routes/admin/users')) return 'admin-users';
           if (id.includes('/routes/admin/governance')) return 'admin-governance';
           if (id.includes('/routes/admin/')) return 'admin';
+          // Brand partners portal: own chunk so it never lands on the
+          // consumer first paint (same burial protection as admin).
+          if (id.includes('/routes/partners/')) return 'partners';
           if (id.includes('/components/DeckView') || id.includes('/components/deck')) return 'deck';
           if (id.includes('/components/CreatorWallet')) return 'wallet';
           if (id.includes('/components/MyLooks')
@@ -172,7 +175,7 @@ export default defineConfig({
     remix({
       ssr: false,
       basename: basePath,
-      ignoredRouteFiles: ["routes/admin/**"],
+      ignoredRouteFiles: ["routes/admin/**", "routes/partners/**"],
       routes(defineRoutes) {
         return defineRoutes((route) => {
           // Persistent consumer-app shell. _index (Home) mounts ONCE as a
@@ -221,6 +224,7 @@ export default defineConfig({
             route("appearance", "routes/admin/appearance.tsx");
             route("audiences", "routes/admin/audiences.tsx");
             route("brands", "routes/admin/brands.tsx");
+            route("partners", "routes/admin/partners.tsx");
             route("campaigns", "routes/admin/campaigns.tsx");
             route("categories", "routes/admin/categories.tsx");
             route("clickouts", "routes/admin/clickouts.tsx");
@@ -296,6 +300,28 @@ export default defineConfig({
             route("users", "routes/admin/users.tsx");
             route("user/:name", "routes/admin/user.$name.tsx");
             route("brand/:name", "routes/admin/brand.$name.tsx");
+          });
+
+          // Brand partners portal (Shopify brand admins). Greenfield in this
+          // codebase; gated by brand_members + RLS, not a shared admin role.
+          route("partners", "routes/partners/route.tsx", () => {
+            route("", "routes/partners/_index.tsx", { index: true });
+            route("orders", "routes/partners/orders.tsx");
+            route("products", "routes/partners/products.tsx");
+            route("products/:id", "routes/partners/products.$id.tsx");
+            route("collections", "routes/partners/collections.tsx");
+            route("creatives", "routes/partners/creatives.tsx");
+            route("ads", "routes/partners/ads.tsx");
+            route("audience", "routes/partners/audience.tsx");
+            route("campaigns", "routes/partners/campaigns.tsx");
+            route("store", "routes/partners/store.tsx");
+            route("team", "routes/partners/team.tsx");
+            route("company", "routes/partners/company.tsx");
+            route("billing", "routes/partners/billing.tsx");
+            route("billing/plans", "routes/partners/plans.tsx");
+            route("billing/invoices", "routes/partners/invoices.tsx");
+            route("settings", "routes/partners/settings.tsx");
+            route("terms", "routes/partners/terms.tsx");
           });
         });
       },
