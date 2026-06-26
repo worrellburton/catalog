@@ -111,6 +111,34 @@ export default function AIStylist({ gender, onComplete, onBack }: Props) {
     return m;
   }, [candidates]);
 
+  // Keyboard inset for the ask/types steps. The bottom bar is a FIXED floating
+  // pill (same treatment as the manual flow's .gen-dock) so it's always on
+  // screen + tappable. iOS Safari leaves position:fixed bottom elements BEHIND
+  // the keyboard, and ignores interactive-widget=resizes-content — but the
+  // VisualViewport DOES exclude the keyboard. Mirror the keyboard height into a
+  // --gen-kb-inset custom property so the bar (and the body's bottom padding)
+  // lift above the keyboard. 0 when the keyboard is down → the bar sits at the
+  // normal bottom, exactly like the manual dock. Only while a keyboard-bearing
+  // step is mounted; cleared on unmount / step change.
+  useEffect(() => {
+    if (step !== 'ask' && step !== 'types') return;
+    const vv = typeof window !== 'undefined' ? window.visualViewport : null;
+    if (!vv) return;
+    const root = document.documentElement;
+    const apply = () => {
+      const inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      root.style.setProperty('--gen-kb-inset', `${Math.round(inset)}px`);
+    };
+    apply();
+    vv.addEventListener('resize', apply);
+    vv.addEventListener('scroll', apply);
+    return () => {
+      vv.removeEventListener('resize', apply);
+      vv.removeEventListener('scroll', apply);
+      root.style.removeProperty('--gen-kb-inset');
+    };
+  }, [step]);
+
   const runStylist = useCallback(async () => {
     if (!occasion.trim() || baseCandidates.length === 0) return;
     setLoading(true);
@@ -201,6 +229,24 @@ export default function AIStylist({ gender, onComplete, onBack }: Props) {
     return map;
   }, [visibleSlots, candidates, aiOutfit]);
 
+  // Rank badges for the reel — a tiny 1 · 2 · 3 in each thumbnail's corner that
+  // alludes to the stylist's ranking. The AI's pick is 1, the next two most
+  // relevant alternates are 2 and 3; deeper cuts get no number, so scrolling
+  // counts 1 → 2 → 3 then stops. Keyed off aiOutfit (not the live outfit) so it
+  // stays put as the shopper scrolls/selects.
+  const rankById = useMemo(() => {
+    const m = new Map<string, number>();
+    for (const s of visibleSlots) {
+      const ranked = candidates.filter(c => SLOT_ROLES[s.key](c.role_tag));
+      const pickId = aiOutfit[s.key];
+      const ordered = pickId
+        ? [...ranked.filter(c => c.id === pickId), ...ranked.filter(c => c.id !== pickId)]
+        : ranked;
+      ordered.slice(0, 3).forEach((p, i) => m.set(p.id, i + 1));
+    }
+    return m;
+  }, [visibleSlots, candidates, aiOutfit]);
+
   const select = (slot: StylistSlot, id: string) => setOutfit(prev => {
     const next = { ...prev, [slot]: id };
     if (slot === 'dresses') { next.tops = null; next.bottoms = null; }
@@ -258,7 +304,6 @@ export default function AIStylist({ gender, onComplete, onBack }: Props) {
             <button
               type="button"
               className="gen-btn-primary gen-stylist-cta gen-stylist-cta--pop gen-stylist-console-go"
-              disabled={loading || baseCandidates.length === 0}
               onClick={() => setStep('types')}
             >
               Next
@@ -341,7 +386,7 @@ export default function AIStylist({ gender, onComplete, onBack }: Props) {
                   </span>
                 )}
               </div>
-              <Reel items={items} selectedId={selId} onSelect={(id) => select(slot.key, id)} delay={visibleSlots.indexOf(slot) * 0.12} />
+              <Reel items={items} selectedId={selId} onSelect={(id) => select(slot.key, id)} rankById={rankById} delay={visibleSlots.indexOf(slot) * 0.12} />
             </div>
           );
         })}
@@ -364,7 +409,7 @@ export default function AIStylist({ gender, onComplete, onBack }: Props) {
 // One slot's horizontal reel: scroll-snap row where the CENTERED item is the
 // selection (rendered bigger). Scrolling re-centers → re-selects; tapping an
 // item glides it to center.
-function Reel({ items, selectedId, onSelect, delay = 0 }: { items: PickedProduct[]; selectedId: string | null; onSelect: (id: string) => void; delay?: number }) {
+function Reel({ items, selectedId, onSelect, rankById, delay = 0 }: { items: PickedProduct[]; selectedId: string | null; onSelect: (id: string) => void; rankById: Map<string, number>; delay?: number }) {
   const trackRef = useRef<HTMLDivElement>(null);
   const rafRef = useRef(0);
   // True while the GSAP entrance is running, so the scroll listener doesn't
@@ -433,6 +478,9 @@ function Reel({ items, selectedId, onSelect, delay = 0 }: { items: PickedProduct
           {item.image_url
             ? <img src={item.image_url} alt="" loading="lazy" />
             : <span className="gen-stylist-chip-empty" />}
+          {rankById.get(item.id) != null && (
+            <span className="gen-stylist-chip-rank" aria-hidden="true">{rankById.get(item.id)}</span>
+          )}
         </button>
       ))}
     </div>

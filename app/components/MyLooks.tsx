@@ -85,6 +85,10 @@ export default function MyLooks({ onClose }: MyLooksProps) {
     // minimum-visible timer; handoffActive guards re-entry.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [loading]);
+  // True while we're handing off to the AI studio (/generate). Shows the same
+  // branded cover as the inbound handoff so the My Catalog grid never flashes
+  // between closing the add-look sheet and the /generate route mounting.
+  const [launchingAi, setLaunchingAi] = useState(false);
   const [statusFilter, setStatusFilter] = useState<'live' | 'inactive' | 'products'>('live');
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
@@ -568,7 +572,7 @@ export default function MyLooks({ onClose }: MyLooksProps) {
           </button>
           <button
             className="my-cat-addlook-option my-cat-addlook-option--ai"
-            onClick={() => { setAddLookOpen(false); navigate('/generate'); }}
+            onClick={() => { setAddLookOpen(false); setLaunchingAi(true); navigate('/generate'); }}
           >
             <span className="my-cat-addlook-spark" aria-hidden="true">
               <span className="my-cat-addlook-spark-glow" />
@@ -624,7 +628,7 @@ export default function MyLooks({ onClose }: MyLooksProps) {
       {/* Branded handoff cover — only when we arrived straight from /generate.
           Keeps the empty/skeleton grid from flashing the feed underneath until
           the looks have loaded, then fades out. */}
-      <CatalogHandoffLoader active={handoffActive} label="Opening your catalog…" />
+      <CatalogHandoffLoader active={handoffActive || launchingAi} label={launchingAi ? 'Opening the AI studio…' : 'Opening your catalog…'} />
       {/* Creator-chosen appearance: particle field behind content (z-index:-1
           so it floats over the page bg without covering anything) + the hue
           tint applied to the page background above. */}

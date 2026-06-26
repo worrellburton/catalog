@@ -84,6 +84,10 @@ interface CreativeCardV2Props {
    *  catalog page where the creator identity is already in the page header,
    *  so per-tile attribution is redundant noise (mirrors LookCard.hideCreator). */
   hideCreator?: boolean;
+  /** Look-mode: use the look's OWN poster (its frame / video) and never fall
+   *  back to a product packshot. The creator catalog sets this so a posterless
+   *  generated look reveals its own video frame instead of a product image. */
+  lookPosterOnly?: boolean;
 }
 
 /** Poster/still rendition width matches the VIDEO rendition the card
@@ -105,6 +109,7 @@ const CreativeCardV2 = memo(function CreativeCardV2({
   priority = false,
   slotId,
   hideCreator = false,
+  lookPosterOnly = false,
 }: CreativeCardV2Props) {
   const isLook = !!look && !creative;
   // Subscribe to the global pipeline dial: a flip (hls ⇄ mp4) re-renders the
@@ -141,8 +146,8 @@ const CreativeCardV2 = memo(function CreativeCardV2({
   // Canonical poster chains (services/media-resolver) — the look chain lives in
   // ONE place now, so the card, overlay hero, and inline detail can't drift
   // (that drift was the "looks go black, then the video appears" bug).
-  const rawPosterUrl = isLook ? lookPoster(look!) : pickPosterUrl(creative!);
-  const rawStillImageUrl = isLook ? lookPoster(look!) : pickStillImageUrl(creative!);
+  const rawPosterUrl = isLook ? lookPoster(look!, lookPosterOnly) : pickPosterUrl(creative!);
+  const rawStillImageUrl = isLook ? lookPoster(look!, lookPosterOnly) : pickStillImageUrl(creative!);
 
   // Compressed render variants for ON-SCREEN display. Routed through
   // Supabase's storage image-transform endpoint so the feed ships
