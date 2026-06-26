@@ -10,6 +10,7 @@ import { useShopperBody } from '~/hooks/useShopperBody';
 import { useSearchBeam } from '~/hooks/useSearchBeam';
 import FilterPanel, { ActiveFilters, getEmptyFilters, hasActiveFilters } from './FilterPanel';
 import { getSearchSuggestions, getCreators } from '~/services/looks';
+import type { Product } from '~/data/looks';
 
 // Filter fields that carry real search intent (men/women are the gender
 // toggle, price/creator aren't search terms). A few tokens get humanized so
@@ -42,6 +43,11 @@ interface BottomBarProps {
   /** Open a product creative — fills the top of the search sheet with a
    *  shoppable product grid when the keyboard is down. */
   onOpenCreative?: (ad: ProductAd) => void;
+  /** The shopper's recently-viewed products. Shown as a small strip riding
+   *  UNDER the search pill on the home hero (mirrors the account menu). */
+  recentProducts?: Product[];
+  /** Open one of the recently-viewed products. */
+  onOpenProduct?: (p: Product) => void;
 }
 
 /** A type-ahead match: a plain search term, or a creator (carries the
@@ -54,7 +60,7 @@ interface SearchSuggestion {
 }
 
 function BottomBar({
-  activeFilter, onFilterChange, searchQuery, onSearchChange, onSelectSuggestion, onOpenCreators, catalogName, searchLoading = false, mySizeOnly = false, onMySizeChange, onOpenCreative,
+  activeFilter, onFilterChange, searchQuery, onSearchChange, onSelectSuggestion, onOpenCreators, catalogName, searchLoading = false, mySizeOnly = false, onMySizeChange, onOpenCreative, recentProducts = [], onOpenProduct,
 }: BottomBarProps) {
   const { user } = useAuth();
   const isAdmin = user?.role === 'admin';
@@ -707,6 +713,31 @@ function BottomBar({
           </button>
         )}
         </div>
+
+        {/* Recently viewed — rides directly UNDER the search pill on the home
+            hero (CSS gates it to hero-at-rest, mobile-only). Absolutely
+            anchored to the bar so it tracks the bar's hero-lift transform and
+            scroll fade with no separate positioning. Mirrors the account menu. */}
+        {recentProducts.length > 0 && onOpenProduct && (
+          <div className="bottom-bar-recent" aria-label="Recently viewed">
+            <div className="bottom-bar-recent-title">Recently viewed</div>
+            <div className="bottom-bar-recent-strip">
+              {recentProducts.slice(0, 12).map((p, i) => (
+                <button
+                  key={`${p.brand}|${p.name}|${i}`}
+                  type="button"
+                  className="bottom-bar-recent-tile"
+                  onClick={() => onOpenProduct(p)}
+                  aria-label={p.name || 'Product'}
+                >
+                  {p.image
+                    ? <img src={p.image} alt="" loading="lazy" decoding="async" />
+                    : <span className="bottom-bar-recent-tile-empty" />}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
 
       </div>
 
