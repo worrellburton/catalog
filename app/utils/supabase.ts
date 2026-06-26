@@ -17,6 +17,20 @@ const supabaseKey =
   import.meta.env.NEXT_PUBLIC_SUPABASE_ANON_KEY ||
   DEFAULT_SUPABASE_ANON_KEY;
 
+// Inside the native shell (Flutter webview) the native app owns the Supabase
+// session — it logs the user in, auto-refreshes, and re-seeds the rotated
+// token into our localStorage. If THIS client ALSO auto-refreshed, both would
+// rotate the same single-use refresh token; whichever refreshes second gets
+// "Invalid Refresh Token: Already Used", which breaks the web session on the
+// next reload (the "stuck on the logo splash" report). So in the shell we
+// leave refreshing to the native app and just consume the token it seeds.
+// ponytail: the seeded access token is valid for ~1h, refreshed on every
+// reload via the shell's re-seed. A >1h actively-used session with no reload
+// would expire — add a native→web setSession push if that ever bites.
+const inShell =
+  typeof document !== 'undefined' &&
+  document.documentElement.dataset.shell === 'catalog-app';
+
 // Explicit auth config so mobile Safari (and the Flutter webview) get a
 // reliable OAuth flow regardless of browser default. PKCE is required
 // for the code-exchange path that catches the Google redirect on
@@ -29,7 +43,7 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
     flowType: 'pkce',
     detectSessionInUrl: true,
     persistSession: true,
-    autoRefreshToken: true,
+    autoRefreshToken: !inShell,
     storage: typeof window !== 'undefined' ? window.localStorage : undefined,
     storageKey: 'sb-vtarjrnqvcqbhoclvcur-auth-token',
   },
