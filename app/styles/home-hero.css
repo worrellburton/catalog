@@ -244,9 +244,11 @@
    bar (which is the single search input on the hero). */
 .sfh-scroll-hint {
   position: absolute;
-  /* Lifted above the peeking feed cards at the bottom of the hero so the
-     label never overlaps their tops. */
-  bottom: calc(84px + env(safe-area-inset-bottom));
+  /* Sits low in the hero, just above the peeking feed cards — it belongs to
+     the feed below (the "scroll for your daily feed" cue), separate from the
+     search + recently-viewed cluster above it. Nudged a touch lower so that
+     separation reads clearly now that recently-viewed rides under the bar. */
+  bottom: calc(62px + env(safe-area-inset-bottom));
   left: 50%;
   transform: translateX(-50%);
   display: inline-flex;
@@ -1246,16 +1248,16 @@ html:has(.bottom-bar.search-open) .sc-name-pill { opacity: 0; pointer-events: no
   .app-root.home-hero:not(.hero-scrolled) .home-recent-strip {
     display: flex;
     flex-direction: column;
-    gap: 8px;
+    gap: 6px;
     position: fixed;
     left: 0;
     right: 0;
     margin-inline: auto;
     width: min(560px, calc(100% - 48px)); /* match the search bar's width */
     /* The bar's visual bottom edge sits at --hero-bar-bottom. Put the strip's
-       box bottom 14px under that, then translateY(100%) drops it by its own
-       height so the strip hangs just below the bar — height-independent. */
-    bottom: calc(var(--hero-bar-bottom, 36svh) - 14px);
+       box bottom 10px under that, then translateY(100%) drops it by its own
+       height so the strip hugs just below the bar — height-independent. */
+    bottom: calc(var(--hero-bar-bottom, 36svh) - 10px);
     transform: translateY(100%);
     z-index: 99; /* just under the bar (z-index:100) */
     opacity: clamp(0, calc(1.2 - var(--hero-scroll-progress, 0) * 2.4), 1);
@@ -1269,16 +1271,16 @@ html:has(.bottom-bar.search-open) .sc-name-pill { opacity: 0; pointer-events: no
   html:has(.bottom-bar.search-open) .home-recent-strip { display: none !important; }
 }
 .home-recent-title {
-  font-size: 11px;
+  font-size: 9.5px;
   font-weight: 600;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.09em;
   text-transform: uppercase;
-  color: rgba(255, 255, 255, 0.5);
+  color: rgba(255, 255, 255, 0.42);
   padding-left: 6px;
 }
 .home-recent-row {
   display: flex;
-  gap: 8px;
+  gap: 7px;
   overflow-x: auto;
   overflow-y: hidden;
   scrollbar-width: none;
@@ -1288,12 +1290,12 @@ html:has(.bottom-bar.search-open) .sc-name-pill { opacity: 0; pointer-events: no
 .home-recent-row::-webkit-scrollbar { display: none; }
 .home-recent-tile {
   flex: 0 0 auto;
-  width: 56px;
-  height: 56px;
+  width: 46px;
+  height: 46px;
   padding: 0;
-  border-radius: 12px;
+  border-radius: 11px;
   overflow: hidden;
-  border: 1px solid rgba(255, 255, 255, 0.14);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   background: rgba(255, 255, 255, 0.06);
   cursor: pointer;
   transition: transform 0.12s ease;
