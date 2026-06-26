@@ -1010,6 +1010,20 @@ export default function ProductPage({
     };
   }, [scrollStashKey]);
 
+  // On a cold / direct load (refresh, shared URL) there's no feed-card
+  // handoff, so `creative` is undefined and the hero used to fall back to a
+  // static image. When the product itself carries a primary video, synthesize
+  // a hero creative from it so the hero plays the primary video instead.
+  // The pipeline dial gates every hlsUrl read below: in 'mp4' mode the hero
+  // plays the progressive videoUrl even when a caller passed an hlsUrl.
+  // Declared above handleClose so it can be a real dependency (TDZ otherwise).
+  const pipelineMode = useVideoPipelineMode();
+  const effectiveCreative: ProductPageCreative | undefined = creative
+    ?? (product.video_url
+      ? { id: `product:${product.brand}-${product.name}`, videoUrl: product.video_url, hlsUrl: pipelineMode === 'hls' ? (product.primary_hls_url ?? null) : null, thumbnailUrl: product.image ?? product.thumbnail_url ?? null }
+      : undefined);
+  const heroHlsUrl = pipelineMode === 'hls' ? effectiveCreative?.hlsUrl : null;
+
   const handleClose = useCallback(() => {
     // Reverse handoff — see LookOverlay.handleClose: the source card resumes
     // at the hero's exact frame instead of restarting.
@@ -1031,9 +1045,7 @@ export default function ProductPage({
       }
       onClose();
     }, 360);
-    // effectiveCreative is captured by closure (declared below); matches the
-    // original deps which also referenced it without listing it.
-  }, [onClose, directorScope, trailMgr]);
+  }, [onClose, directorScope, trailMgr, effectiveCreative?.id]);
 
   // Mobile drag-to-dismiss. Listens on the scroller; only engages while
   // scrollTop is at the top so users can scroll content normally without
@@ -1167,19 +1179,6 @@ export default function ProductPage({
   // prices are consistent across re-renders). Cheapest gets a lowest /
   // discount badge.
   const retailerOffers = useMemo(() => buildRetailerOffers(product), [product]);
-
-  // On a cold / direct load (refresh, shared URL) there's no feed-card
-  // handoff, so `creative` is undefined and the hero used to fall back to a
-  // static image. When the product itself carries a primary video, synthesize
-  // a hero creative from it so the hero plays the primary video instead.
-  // The pipeline dial gates every hlsUrl read below: in 'mp4' mode the hero
-  // plays the progressive videoUrl even when a caller passed an hlsUrl.
-  const pipelineMode = useVideoPipelineMode();
-  const effectiveCreative: ProductPageCreative | undefined = creative
-    ?? (product.video_url
-      ? { id: `product:${product.brand}-${product.name}`, videoUrl: product.video_url, hlsUrl: pipelineMode === 'hls' ? (product.primary_hls_url ?? null) : null, thumbnailUrl: product.image ?? product.thumbnail_url ?? null }
-      : undefined);
-  const heroHlsUrl = pipelineMode === 'hls' ? effectiveCreative?.hlsUrl : null;
 
   // Poster source of last resort (canonical productPoster chain). Products
   // opened from a look can carry a primary-video poster in thumbnail_url while

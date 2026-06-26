@@ -745,7 +745,8 @@ export default function AdminUsers() {
   // is the catch-all.
   const dbUsers = useMemo(
     () => allUsers.filter(u =>
-      (u.role === 'shopper' || u.role === 'creator' || u.role === 'admin' || u.role === 'super_admin')
+      (u.role === 'shopper' || u.role === 'creator' || u.role === 'admin' || u.role === 'super_admin'
+        || u.role === 'brand_owner' || u.role === 'brand_member')
       && !waitlistIds.has(u.id)
     ),
     [allUsers, waitlistIds],
@@ -1060,7 +1061,7 @@ export default function AdminUsers() {
         <div className="admin-batch-bar" style={{ display: 'flex', alignItems: 'center', gap: 10, padding: '10px 14px', marginBottom: 10, background: '#0f172a', color: '#fff', borderRadius: 10, flexWrap: 'wrap' }}>
           <span style={{ fontWeight: 700, fontSize: 13 }}>{selectedUserIds.size} selected</span>
           <span style={{ fontSize: 12, opacity: 0.7, marginLeft: 4 }}>Set role:</span>
-          {(['shopper', 'creator', 'admin', 'super_admin'] as UserRole[]).map(r => (
+          {(['shopper', 'creator', 'admin', 'super_admin', 'brand_owner', 'brand_member'] as UserRole[]).map(r => (
             <button
               key={r}
               type="button"

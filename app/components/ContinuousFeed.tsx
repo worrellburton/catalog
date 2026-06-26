@@ -14,7 +14,7 @@ import CatalogDemandCTA from './CatalogDemandCTA';
 import { prefetchHomeFeed, getCachedHomeFeed, getHomeFeed, getCreativesByCatalogTag, getCreativesByBrandQuery, resolveBrandFromQuerySync, creativeMatchesCatalogQuery, resolveCatalogTypes, resolveMaterialKeywords, deleteProductAd, deleteProduct, subscribeToShopperGender, getShopperGender, type ProductAd } from '~/services/product-creative';
 import { primeTrailAssets, primeLookAssets } from '~/utils/trailPrefetch';
 import { supabase } from '~/utils/supabase';
-import { logSearch } from '~/services/search-log';
+import { logSearch, markSearchClicked } from '~/services/search-log';
 import { useAuth } from '~/hooks/useAuth';
 import { useShopperBody } from '~/hooks/useShopperBody';
 import { lookFitScore } from '~/services/size-match';
@@ -981,6 +981,25 @@ function ContinuousFeed({
   //   2. search-log.ts: the queue itself prefix-collapses, so even if an
   //      earlier partial already flushed, the longer one supersedes it.
   // A genuinely DIFFERENT query (no prefix relationship) still logs.
+  // Stable shopper handle, shared by the search-log telemetry below and the
+  // click marker so their keys match (a mismatch would silently drop clicks).
+  const resolveSearchHandle = useCallback(() => {
+    return user?.displayName || user?.email || localStorage.getItem('catalog_user_handle') || (() => {
+      const h = `user_${Math.random().toString(36).slice(2, 8)}`;
+      localStorage.setItem('catalog_user_handle', h);
+      return h;
+    })();
+  }, [user]);
+
+  // Record a search click when a tile is opened while a search is active.
+  // Mirrors the log effect's gate (q.length >= 2) and normalization so the
+  // key lands on the same row logSearch writes.
+  const markClickIfSearching = useCallback(() => {
+    const q = committedQuery.trim().toLowerCase();
+    if (q.length < 2) return;
+    markSearchClicked(q, resolveSearchHandle());
+  }, [committedQuery, resolveSearchHandle]);
+
   const lastLoggedQueryRef = useRef<string>('');
   useEffect(() => {
     const q = committedQuery.trim().toLowerCase();
@@ -994,11 +1013,7 @@ function ContinuousFeed({
       // Personalization signal: remember this search locally so the affinity
       // model can lean the feed toward the categories the shopper searches for.
       recordRecentSearch(q);
-      const handle = user?.displayName || user?.email || localStorage.getItem('catalog_user_handle') || (() => {
-        const h = `user_${Math.random().toString(36).slice(2, 8)}`;
-        localStorage.setItem('catalog_user_handle', h);
-        return h;
-      })();
+      const handle = resolveSearchHandle();
       logSearch({
         query: q,
         user_handle: handle,
@@ -1013,7 +1028,7 @@ function ContinuousFeed({
       });
     }, 2500);
     return () => clearTimeout(timer);
-  }, [committedQuery, renderedCreatives.length, semanticallyOrderedLooks.length, activeFilter, user]);
+  }, [committedQuery, renderedCreatives.length, semanticallyOrderedLooks.length, activeFilter, resolveSearchHandle]);
 
   // Reset when filters/search/shuffle change - use committedQuery so the
   // feed only resets after nl-search resolves, not on every keystroke.
@@ -1050,12 +1065,13 @@ function ContinuousFeed({
   }, [state.segments.length]);
 
   const handleOpenLook = useCallback((look: Look) => {
+    markClickIfSearching();
     if (onOpenLookProp) {
       onOpenLookProp(look);
     } else {
       dispatch({ type: 'OPEN_LOOK', look, allLooks });
     }
-  }, [onOpenLookProp, allLooks]);
+  }, [onOpenLookProp, allLooks, markClickIfSearching]);
 
   // Delete-on-feed is destructive on a public surface - only super-admins
   // see the trash affordance, and only when they've explicitly toggled
@@ -1121,6 +1137,7 @@ function ContinuousFeed({
   }, []);
 
   const handleOpenCreativeProduct = useCallback((creative: ProductAd) => {
+    markClickIfSearching();
     if (onOpenCreative) {
       onOpenCreative(creative);
       return;
@@ -1130,7 +1147,7 @@ function ContinuousFeed({
     if (url) {
       onOpenBrowser(url, creative.product?.name || 'Shop');
     }
-  }, [onOpenBrowser, onOpenCreative]);
+  }, [onOpenBrowser, onOpenCreative, markClickIfSearching]);
 
   // Find the last detail segment index for ref assignment
   const lastDetailIdx = useMemo(() => {
@@ -1364,8 +1381,8 @@ function ContinuousFeed({
                 look={segment.look}
                 onOpenCreator={onOpenCreator}
                 onOpenBrowser={onOpenBrowser}
-                onOpenProduct={onOpenProduct}
-                onOpenBrand={onOpenBrand}
+                onOpenProduct={onOpenProduct ? (p) => { markClickIfSearching(); onOpenProduct(p); } : undefined}
+                onOpenBrand={onOpenBrand ? (b) => { markClickIfSearching(); onOpenBrand(b); } : undefined}
                 onCreateCatalog={onCreateCatalog}
                 bookmarks={bookmarks}
               />

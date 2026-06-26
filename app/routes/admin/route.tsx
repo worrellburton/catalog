@@ -28,6 +28,7 @@ const navItems: NavItem[] = [
   { to: '/admin/daily-feed', label: 'Daily Feed', icon: 'M3 4h18v18H3zM3 10h18M8 2v4M16 2v4' },
   { to: '/admin/governance', label: 'Governance', icon: 'M12 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM5 16a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM19 16a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM12 8v4M12 12l-5.5 4M12 12l5.5 4' },
   { to: '/admin/brands', label: 'Brands', icon: 'M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82zM7 7h.01' },
+  { to: '/admin/partners', label: 'Brand Partners', icon: 'M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2M9 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8M23 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75' },
   { to: '/admin/pages', label: 'Pages', icon: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8' },
   { to: '/admin/search', label: 'Search', icon: 'M11 19a8 8 0 1 0 0-16 8 8 0 0 0 0 16zM21 21l-4.35-4.35' },
   { to: '/admin/advertisements', label: 'Partnerships', icon: 'M2 7v10M6 5v14M11 4l9 4v12l-9-4z' },
@@ -83,6 +84,8 @@ const allSearchItems: SearchItem[] = [
   // Working name during build-out — keep resolving in admin search.
   { label: 'Type Brain', type: 'Page', to: '/admin/governance/types' },
   { label: 'Brands', type: 'Page', to: '/admin/brands' },
+  { label: 'Brand Partners', type: 'Page', to: '/admin/partners' },
+  { label: 'Invite brand admin', type: 'Page', to: '/admin/partners' },
   { label: 'Search', type: 'Page', to: '/admin/search' },
   { label: 'Advertisements', type: 'Page', to: '/admin/advertisements' },
   { label: 'Affiliate Networks', type: 'Page', to: '/admin/affiliate' },
