@@ -2661,9 +2661,35 @@ export default function Home() {
             mySizeOnly={mySizeOnly}
             onMySizeChange={setMySizeOnly}
             onOpenCreative={handleOpenCreative}
-            recentProducts={recentProducts}
-            onOpenProduct={handleOpenProduct}
           />
+
+          {/* Recently viewed — a thumbnail strip that rides directly UNDER the
+              home search pill (mirrors the account menu). Rendered as a SIBLING
+              of the bar (not a child) because .bottom-bar has overflow:hidden
+              for its pill clip, which would hide anything below it. Positioned
+              + faded by CSS off the same --hero-bar-bottom / --hero-scroll-
+              progress the bar uses, so the two stay glued. Mobile, home hero,
+              at rest only; only when there's view history. */}
+          {heroMode && !ceremony.active && recentProducts.length > 0 && (
+            <div className="home-recent-strip" aria-label="Recently viewed">
+              <div className="home-recent-title">Recently viewed</div>
+              <div className="home-recent-row">
+                {recentProducts.slice(0, 12).map((p, i) => (
+                  <button
+                    key={`${p.brand}|${p.name}|${i}`}
+                    type="button"
+                    className="home-recent-tile"
+                    onClick={() => handleOpenProduct(p)}
+                    aria-label={p.name || 'Product'}
+                  >
+                    {p.image
+                      ? <img src={p.image} alt="" loading="lazy" decoding="async" />
+                      : <span className="home-recent-tile-empty" />}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
 
           {/* Magical loading screen between a hero search and its results.
               Search ceremonies end on demographic-aware catalog picks; brand
