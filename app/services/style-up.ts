@@ -6,6 +6,10 @@
 // messages to the signed-in shopper (admins see all); the roster is world-read.
 
 import { supabase } from '~/utils/supabase';
+import { getUserHeightAge, getUserCustomStyle } from '~/services/profiles';
+import { getUserGender } from '~/services/genders';
+import { getUserSlots, createGeneration, buildGenerationPrompt } from '~/services/user-generations';
+import { roleForProduct } from '~/services/product-roles';
 
 export interface StyleUpStylist {
   id: string;
@@ -131,4 +135,73 @@ export async function sendShopperMessage(
     .update({ last_message_at: new Date().toISOString() })
     .eq('id', threadId);
   return mapMessage(data as Record<string, unknown>);
+}
+
+/** "See it on me" — render the shopper wearing a stylist's product pick, reusing
+ *  the exact generate-look (Seedance) pipeline the AI-look flow uses. Pulls the
+ *  shopper's reference photos + context, kicks a generation, and drops a
+ *  `render` message into the thread that the chat polls to completion.
+ *  Returns the generation id, or an error string the UI can surface. */
+const MAX_REF_PHOTOS = 3;
+export async function startLookRender(opts: {
+  threadId: string;
+  shopperUserId: string;
+  product: StyleUpProductRef;
+}): Promise<{ generationId: string | null; error: string | null }> {
+  if (!supabase) return { generationId: null, error: 'No database connection' };
+  const { threadId, shopperUserId, product } = opts;
+  if (!product.id) return { generationId: null, error: "This pick can't be rendered yet." };
+
+  const [ha, gender, customStyle, slots] = await Promise.all([
+    getUserHeightAge(shopperUserId),
+    getUserGender(shopperUserId),
+    getUserCustomStyle(shopperUserId),
+    getUserSlots(shopperUserId, MAX_REF_PHOTOS),
+  ]);
+  const uploadIds = slots.filter((x): x is string => !!x);
+  if (uploadIds.length === 0) {
+    return { generationId: null, error: 'Add a photo of yourself in the AI studio first, then try again.' };
+  }
+
+  // Product type → role tag (drives the prompt's head-to-toe placement).
+  const { data: prow } = await supabase
+    .from('products').select('type, name, brand').eq('id', product.id).maybeSingle();
+  const name = (prow?.name as string | null) ?? product.name ?? null;
+  const brand = (prow?.brand as string | null) ?? product.brand ?? null;
+  const roleTag = roleForProduct((prow?.type as string | null) ?? null, name);
+
+  const prompt = buildGenerationPrompt({
+    heightLabel: ha.heightLabel ?? '',
+    weightLabel: ha.weightLabel,
+    ageLabel: ha.ageLabel ?? undefined,
+    style: 'editorial',
+    customStyle,
+    gender,
+    productLines: [{ role_tag: roleTag, brand, name }],
+    durationSeconds: 10,
+  });
+
+  const { data: gen, error } = await createGeneration({
+    userId: shopperUserId,
+    uploadIds,
+    products: [{ product_id: product.id, role_tag: roleTag, sort_order: 0 }],
+    heightCm: ha.heightCm ?? 178,
+    heightLabel: ha.heightLabel ?? '5\'10"',
+    ageLabel: ha.ageLabel ?? 'mid 20s',
+    weightLabel: ha.weightLabel,
+    style: 'editorial',
+    prompt,
+    durationSeconds: 10,
+    model: 'pro',
+  });
+  if (error || !gen) return { generationId: null, error: error ?? 'Render failed to start' };
+
+  await supabase.from('style_up_messages').insert({
+    thread_id: threadId, sender: 'stylist', kind: 'render',
+    render_generation_id: gen.id, product_ref: product,
+  });
+  await supabase.from('style_up_threads')
+    .update({ last_message_at: new Date().toISOString() }).eq('id', threadId);
+
+  return { generationId: gen.id, error: null };
 }
