@@ -12,12 +12,12 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useAuth } from '~/hooks/useAuth';
 import { supabase } from '~/utils/supabase';
 import {
-  fetchStylists, getOrCreateThread, fetchMessages, sendShopperMessage,
+  fetchStylists, getOrCreateThread, fetchMessages, sendShopperMessage, startLookRender,
   type StyleUpStylist, type StyleUpMessage,
 } from '~/services/style-up';
 import { getUserHeightAge, getUserCustomStyle } from '~/services/profiles';
 import { getUserGender, type UserGender } from '~/services/genders';
-import { listUserUploads, getUserSlots } from '~/services/user-generations';
+import { listUserUploads, getUserSlots, getGeneration, type UserGeneration } from '~/services/user-generations';
 import '~/styles/style-up.css';
 
 const MAX_PHOTOS = 3;
@@ -43,7 +43,13 @@ export default function StyleUpPage() {
   const [opening, setOpening] = useState(false);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
+  const [stylistTyping, setStylistTyping] = useState(false);
   const [ctx, setCtx] = useState<ShopperContext | null>(null);
+  // Render polling: generation id → its latest row. Drives the on-you render
+  // bubbles (spinner → video).
+  const [renders, setRenders] = useState<Record<string, UserGeneration>>({});
+  const [renderError, setRenderError] = useState<string | null>(null);
+  const [renderingIds, setRenderingIds] = useState<Set<string>>(new Set());
   const scrollerRef = useRef<HTMLDivElement | null>(null);
 
   // Roster.
@@ -125,7 +131,7 @@ export default function StyleUpPage() {
   useEffect(() => {
     const el = scrollerRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [messages.length]);
+  }, [messages.length, stylistTyping]);
 
   const send = useCallback(async () => {
     const text = draft.trim();
@@ -135,7 +141,55 @@ export default function StyleUpPage() {
     const msg = await sendShopperMessage(threadId, text);
     if (msg) setMessages(prev => (prev.some(m => m.id === msg.id) ? prev : [...prev, msg]));
     setSending(false);
+    // Kick the AI stylist. Its reply (+ any product picks) streams back via the
+    // realtime subscription; the typing bubble holds until the call resolves.
+    if (!supabase) return;
+    setStylistTyping(true);
+    try {
+      await supabase.functions.invoke('style-up-chat', { body: { threadId } });
+    } catch { /* surfaced as: no reply appears */ }
+    finally { setStylistTyping(false); }
   }, [draft, threadId, sending]);
+
+  // "See it on me" — render the shopper wearing a stylist pick (reuses the
+  // generate-look pipeline). The render bubble arrives via realtime and the
+  // polling effect below carries it to the finished video.
+  const tryOn = useCallback(async (product: StyleUpMessage['productRef']) => {
+    if (!threadId || !userId || !product) return;
+    const key = product.id || product.url || product.name || '';
+    if (renderingIds.has(key)) return;
+    setRenderingIds(prev => new Set(prev).add(key));
+    setRenderError(null);
+    const { error } = await startLookRender({ threadId, shopperUserId: userId, product });
+    if (error) setRenderError(error);
+    setRenderingIds(prev => { const n = new Set(prev); n.delete(key); return n; });
+  }, [threadId, userId, renderingIds]);
+
+  // Poll any in-flight render generations referenced by the thread until they
+  // reach a terminal state, so the render bubbles promote spinner → video.
+  useEffect(() => {
+    const ids = messages
+      .filter(m => m.kind === 'render' && m.renderGenerationId)
+      .map(m => m.renderGenerationId as string);
+    const pending = ids.filter(id => {
+      const r = renders[id];
+      return !r || (r.status !== 'done' && r.status !== 'failed');
+    });
+    if (pending.length === 0) return;
+    let cancelled = false;
+    const tick = async () => {
+      const rows = await Promise.all(pending.map(id => getGeneration(id)));
+      if (cancelled) return;
+      setRenders(prev => {
+        const next = { ...prev };
+        rows.forEach(r => { if (r) next[r.id] = r; });
+        return next;
+      });
+    };
+    void tick();
+    const h = window.setInterval(tick, 3000);
+    return () => { cancelled = true; window.clearInterval(h); };
+  }, [messages, renders]);
 
   const contextCard = useMemo(() => (
     <div className="su-context" aria-label="Your styling context">
@@ -219,11 +273,80 @@ export default function StyleUpPage() {
             <p className="su-chat-intro-sub">e.g. &ldquo;I need a date-night fit&rdquo; or &ldquo;help me build a capsule for work&rdquo;.</p>
           </div>
         )}
-        {messages.map(m => (
-          <div key={m.id} className={`su-msg su-msg--${m.sender}`}>
-            {m.body && <div className="su-bubble">{m.body}</div>}
+        {messages.map(m => {
+          if (m.kind === 'product' && m.productRef) {
+            const p = m.productRef;
+            const key = p.id || p.url || p.name || '';
+            return (
+              <div key={m.id} className="su-msg su-msg--stylist">
+                <div className="su-product">
+                  <div className="su-product-media">
+                    {p.image ? <img src={p.image} alt={p.name || 'Product'} loading="lazy" /> : <span className="su-product-media--empty" />}
+                  </div>
+                  <div className="su-product-info">
+                    {p.brand && <div className="su-product-brand">{p.brand}</div>}
+                    <div className="su-product-name">{p.name || 'Product'}</div>
+                    {p.price && <div className="su-product-price">{p.price}</div>}
+                    <div className="su-product-actions">
+                      {p.url && (
+                        <button type="button" className="su-product-btn" onClick={() => window.open(p.url!, '_blank', 'noopener')}>Shop</button>
+                      )}
+                      <button
+                        type="button"
+                        className="su-product-btn su-product-btn--primary"
+                        onClick={() => void tryOn(p)}
+                        disabled={renderingIds.has(key)}
+                      >
+                        {renderingIds.has(key) ? 'Starting…' : 'See it on me'}
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            );
+          }
+          if (m.kind === 'render') {
+            const r = m.renderGenerationId ? renders[m.renderGenerationId] : null;
+            const p = m.productRef;
+            const done = r?.status === 'done' && r.video_url;
+            const failed = r?.status === 'failed';
+            return (
+              <div key={m.id} className="su-msg su-msg--stylist">
+                <div className="su-render">
+                  {done ? (
+                    <video className="su-render-video" src={r!.video_url!} autoPlay loop muted playsInline controls />
+                  ) : failed ? (
+                    <div className="su-render-status su-render-status--failed">Couldn&apos;t render that look — try another piece.</div>
+                  ) : (
+                    <div className="su-render-status">
+                      <span className="su-render-spinner" aria-hidden="true" />
+                      Styling you in {p?.name ? p.name : 'this look'}…
+                    </div>
+                  )}
+                  {done && p && (
+                    <div className="su-render-cap">
+                      <span>{[p.brand, p.name].filter(Boolean).join(' · ')}</span>
+                      {p.url && <button type="button" className="su-product-btn" onClick={() => window.open(p.url!, '_blank', 'noopener')}>Shop</button>}
+                    </div>
+                  )}
+                </div>
+              </div>
+            );
+          }
+          return (
+            <div key={m.id} className={`su-msg su-msg--${m.sender}`}>
+              {m.body && <div className="su-bubble">{m.body}</div>}
+            </div>
+          );
+        })}
+        {stylistTyping && (
+          <div className="su-msg su-msg--stylist">
+            <div className="su-bubble su-bubble--typing" aria-label={`${active?.name ?? 'Stylist'} is typing`}>
+              <span /><span /><span />
+            </div>
           </div>
-        ))}
+        )}
+        {renderError && <div className="su-render-err">{renderError}</div>}
       </div>
 
       <div className="su-composer">
