@@ -587,7 +587,7 @@ function UserMenu({
             {user && (
               <button className="user-menu-item" onClick={runItem(() => navigate('/style-up'))}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                <span>Style Up</span>
+                <span>StyleUp</span>
               </button>
             )}
             {onOpenWallet && dotsConnected === false && (
@@ -814,7 +814,7 @@ function UserMenu({
 
                 {/* Style Up — AI-stylist chat. App feature (all signed-in users). */}
                 {user && (
-                  <PageRow icon="chat" label="Style Up" onClick={runPageItem(() => navigate('/style-up'))} />
+                  <PageRow icon="chat" label="StyleUp" onClick={runPageItem(() => navigate('/style-up'))} />
                 )}
 
                 {/* Quick row — Activity, Earnings, Saved as three glowing

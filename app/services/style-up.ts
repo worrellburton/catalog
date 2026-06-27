@@ -106,6 +106,25 @@ export async function getOrCreateThread(
   return String(data.id);
 }
 
+/** The shopper's most-recently-active thread (+ its stylist), or null. Used to
+ *  resume the ongoing conversation on open so the chat history keeps going. */
+export async function getLatestThread(
+  shopperUserId: string,
+): Promise<{ threadId: string; stylist: StyleUpStylist } | null> {
+  if (!supabase) return null;
+  const { data } = await supabase
+    .from('style_up_threads')
+    .select('id, stylist:style_up_stylists(id, name, avatar_url, specialty, bio, accent_color)')
+    .eq('shopper_user_id', shopperUserId)
+    .order('last_message_at', { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!data || !data.stylist) return null;
+  const raw = Array.isArray(data.stylist) ? data.stylist[0] : data.stylist;
+  if (!raw) return null;
+  return { threadId: String(data.id), stylist: mapStylist(raw as Record<string, unknown>) };
+}
+
 /** Every message in a thread, oldest first. */
 export async function fetchMessages(threadId: string): Promise<StyleUpMessage[]> {
   if (!supabase) return [];
