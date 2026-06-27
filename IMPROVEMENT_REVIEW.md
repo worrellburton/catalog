@@ -1,163 +1,69 @@
-# Catalog — Product Improvement Review
-**Branch:** `main` · **Reviewed:** 2026-06-24T23:39Z · **Reviewer:** Claude Sonnet 4.6
+# Catalog Webapp — Improvement Review
 
-Sources examined: `CLAUDE.md`, `docs/daily-feed.md`, `docs/PENDING_QUEUE.md`,
-`docs/VIBE_AESTHETIC_SEARCH_PLAN.md`, `docs/SEARCH_ENRICHMENT_PLAN.md`,
-`docs/ENRICHMENT_FINAL_RESULTS.md`, `docs/BACKFILL_STATUS.md`,
-`supabase/functions/embed-product/index.ts` (buildDoc, SELECT column list),
-`supabase/migrations/082_search_v3_clean.sql` (trg_products_auto_embed trigger column list),
-`supabase/migrations/20260612010000_haiku_context.sql`,
-`supabase/migrations/20260618000000_haiku_context_backfill_cron.sql`,
-`supabase/migrations/20260601000001_user_seen_keys_rpc.sql`,
-`supabase/migrations/20260605000006*.sql` (search_products V7),
-`app/services/personalized-feed.ts`, `app/services/seen-feed.ts`,
-`app/services/looks.ts` (fetchSeenLookIds, reorderBySeen),
-`app/components/ContinuousFeed.tsx`, `app/components/FollowingRail.tsx`,
-`app/components/CreativeCardV2.tsx`, `app/services/session-tracker.ts`,
-`app/components/SessionTrackerHost.tsx`, and recent git log.
+**Branch:** `main` · **Reviewed:** 2026-06-27 · **Reviewer:** Claude Sonnet 4.6 (scheduled pass)
 
-Items #1 and #2 carried forward from prior pass (2026-06-22) — still open.
-Items #3 and #4 are new findings from this pass.
+Sources examined: `CLAUDE.md`, `docs/daily-feed.md`, `docs/PENDING_QUEUE.md`, `docs/VIBE_AESTHETIC_SEARCH_PLAN.md`, recent git log (50 commits). Key files: `supabase/functions/personalize-feed/index.ts`, `supabase/functions/embed-product/index.ts`, `app/services/session-tracker.ts`, `app/services/personalized-feed.ts`, `app/services/seen-feed.ts`, `app/services/looks.ts`, `app/components/CreativeCardV2.tsx`, `app/components/ContinuousFeed.tsx`, `app/components/FollowingRail.tsx`, `app/components/ShoppingForHero.tsx`, `app/routes/style-up.tsx`, `app/components/UserMenu.tsx`.
+
+Items 1–2 are carried forward from the 2026-06-24 review (confirmed still open). Items 3–5 are new findings from this pass. Items already planned in `docs/*_PLAN.md` or `PENDING_QUEUE.md` are excluded.
 
 ---
 
-## 1 · `haiku_context` is generated for every product but never enters the search index
+## 1 · Product scroll impressions bypass `user_events`, starving the Daily Feed engine
 
-**The gap.** The `haiku-context` edge function writes a two-line visual description
-to `products.haiku_context` (line 1: plain-language category, e.g. "potted plant";
-line 2: colour + materials). A pg_cron backfill runs every 10 minutes for any
-product with a primary image. The column is already consumed by `AIStylist.tsx`,
-`type-governance.ts`, and `genders.ts` — but `embed-product/buildDoc()` does **not**
-include it (confirmed: the SELECT at `supabase/functions/embed-product/index.ts:100`
-lists `name, brand, type, description, size_fit, materials_care, fit_intelligence,
-product_taxonomy, styling_metadata` — no `haiku_context`). Semantic search is blind
-to the visual description.
+**The gap.** When a shopper scrolls past a product card in the home feed, `CreativeCardV2.tsx` (~line 306) calls `trackAdImpression(creative.id)`. That function (`app/services/product-creative.ts:1692`) batches and flushes to `product_creatives.impressions` — a simple counter column — and writes **nothing** to `user_events`. The Daily Feed engine (`supabase/functions/personalize-feed/index.ts`, line 338–341) queries `user_events WHERE target_type='product'` to build its brand/type affinity maps and the per-product `seen` decay set. Product `user_events` rows only exist today when a shopper opens a look overlay (via `trackCreativeImpressions` in `session-tracker.ts:266`). A shopper who browses the product feed for 30 minutes without opening any look overlays produces zero product signal, hits the cold-start guard (`events.length < minSignal`, default 3), and falls back to the global `feed_rank` order. The personalization engine is blind to passive browsing — the most common shopper behaviour.
 
-The compounding problem: `trg_products_auto_embed` fires on
-`AFTER INSERT OR UPDATE OF name, brand, type, description, is_active`
-(`supabase/migrations/082_search_v3_clean.sql:321`) — `haiku_context` is absent.
-When the cron sets `haiku_context` on a product that already has an embedding, the
-auto-embed trigger never fires. The search vector predates the visual description
-and is never refreshed.
+**Why it matters.** This is the upstream root of the "same order every visit" complaint noted in `PENDING_QUEUE.md` ("Likely the seen-tracking isn't populating"). The `applyDailyShuffle`, `applyRotationGuard`, and `derangeAgainstPrev` mechanics added recently all work correctly — they just operate on an empty signal set for most shoppers.
 
-**Why it matters.** The design intent for `haiku_context` was to correct misleading
-scraped product names and provide a clean visual label (e.g. "oversized canvas tote"
-vs. the raw product title). That signal improves taxonomy and gender inference — but
-the embedding, which drives semantic search, was frozen before the visual description
-existed. Shoppers searching "oversized canvas", "ankle strap heel", or "waffle knit"
-get rankings that ignore the clearest per-product visual evidence for those terms.
-
-**Next step.** In `supabase/functions/embed-product/index.ts`: add `haiku_context`
-to the `SELECT` clause and insert it into `buildDoc`'s `parts` array (after
-`materials_care`, before the JSON-enriched fields). In a new migration: add
-`haiku_context` to the `trg_products_auto_embed` trigger column list and set
-`force: true` in `notify_embed_product()` when
-`NEW.haiku_context IS DISTINCT FROM OLD.haiku_context`. Then run a one-shot batch
-re-embed for `WHERE haiku_context IS NOT NULL AND embedded_at < haiku_context_at`.
+**Next step.** In `CreativeCardV2.tsx`'s impression effect (line ~286, the `!isLook` path), add `trackImpression({ type: 'product', id: creative.product?.id, uuid: creative.product?.id, context: creative.product?.name })` alongside `trackAdImpression(creative.id)`. The existing `user_seen_keys` RPC already handles `target_uuid` via `coalesce`, so no migration is needed.
 
 ---
 
-## 2 · Three separate `user_events` round trips fire on every feed mount — and the product-side RPC is unbounded
+## 2 · `haiku_context` is generated for every product but never enters the search embedding
 
-**The gap.** On every cold mount the consumer home page fires three independent
-Supabase queries for seen-state:
+**The gap.** The `haiku-context` edge function writes a two-line AI visual description to `products.haiku_context` (line 1: plain-language category; line 2: colour + materials). A pg_cron backfill runs every 10 minutes for any product with a primary image. The column is already consumed by other services (`AIStylist`, `type-governance`, `genders`) — but `embed-product/buildDoc()` does **not** include it. Confirmed: the SELECT at `supabase/functions/embed-product/index.ts:100` lists `name, brand, type, description, size_fit, materials_care, fit_intelligence, product_taxonomy, styling_metadata` — no `haiku_context`. The `buildDoc` function at lines 45–76 also has no reference to it. Semantic search is blind to the visual description. Compounding the problem: `trg_products_auto_embed` fires on `UPDATE OF name, brand, type, description, is_active` — `haiku_context` is absent from the trigger column list, so when the cron sets it on an already-embedded product, no re-embed fires. The embedding predates the visual description and is never refreshed.
 
-| Component | Call | What it queries |
-|---|---|---|
-| `ContinuousFeed.tsx:354` | `fetchSeenLookIds(user.id)` | `user_events` direct — look UUIDs → `reorderBySeen` |
-| `ContinuousFeed.tsx:392` | `getSeenKeys()` | `user_seen_keys()` RPC — look + product keys → `partitionUnseen` |
-| `FollowingRail.tsx:115` | `fetchSeenLookIds(user.id)` | same `user_events` query again — unseen badge counts |
+**Why it matters.** The design intent for `haiku_context` was to provide clean, literal visual labels ("oversized canvas tote") correcting misleading scraped names. Shoppers searching "oversized canvas", "ankle strap heel", or "waffle knit" get rankings that ignore the clearest per-product evidence for those terms.
 
-`fetchSeenLookIds` has no caching and is called independently by both `ContinuousFeed`
-and `FollowingRail`, so the 50k-row look-impression query runs **twice in parallel**.
-Meanwhile the product-side `user_seen_keys()` RPC
-(`supabase/migrations/20260601000001_user_seen_keys_rpc.sql`) does
-`SELECT DISTINCT … FROM user_events WHERE user_id = auth.uid()` with **no `LIMIT`**.
-`fetchSeenLookIds` explicitly caps at 50,000 rows with a comment explaining the LRU
-bias — the product-side RPC has no such cap and will do a full table scan as
-impression history grows.
-
-**Why it matters.** The three round trips are serial dead weight on page load for
-any signed-in shopper. At 500 DAU × 200 impressions/session × 90 days, the
-unbounded RPC becomes a visible p99 spike. The redundant `fetchSeenLookIds` pair
-also means both callers race to build their own seen-set from potentially
-in-flight data, making the "same order every visit" symptom (`PENDING_QUEUE.md`)
-harder to isolate.
-
-**Next step.** (a) Add a session-level cache to `fetchSeenLookIds`
-(`app/services/looks.ts`) — same `Promise | null` module-level pattern as
-`looksPromise`. Both `ContinuousFeed` and `FollowingRail` share the in-flight
-result. Clear on auth change or `invalidateLooksCache()`. (b) Rewrite
-`user_seen_keys` with a `WITH recent AS (… ORDER BY created_at DESC LIMIT 50000)`
-inner query to bound the scan, mirroring the cap already in `fetchSeenLookIds`.
+**Next step.** In `supabase/functions/embed-product/index.ts`: add `haiku_context` to the SELECT at line 100 and insert it into `buildDoc`'s `parts` array (after `materials_care`, before the JSON-enriched fields). In a new migration: add `haiku_context` to the `trg_products_auto_embed` trigger column list; set `force: true` in `notify_embed_product()` when `NEW.haiku_context IS DISTINCT FROM OLD.haiku_context`. Run a one-shot batch re-embed for `WHERE haiku_context IS NOT NULL AND embedded_at < haiku_context_at`.
 
 ---
 
-## 3 · Aesthetic/vibe search routing is fully designed but unimplemented
+## 3 · Daily Feed countdown and "personalized" copy shown to signed-out users who get the global feed
 
-**The gap.** Consumer search now routes correctly on category intent ("white shoes"
-→ footwear filter) and handles occasion vibes ("date night", "gym workout" — fixed
-by the enrichment pass, 83% contextual success). But _aesthetic/trend_ queries
-remain badly broken: `"quiet luxury"` returns Le Labo candles and Augustinus Bader
-face cream; `"old money"` returns _The Psychology of Money_. The cause is diagnosed
-and data-verified in `docs/VIBE_AESTHETIC_SEARCH_PLAN.md`: `taxonomy.style =
-"minimal luxury"` was applied to all premium items across every department, so
-expanding "quiet luxury" to "minimal luxury" surfaces candles and a laptop rather
-than cashmere blazers. The `search_products` function has no department gate for
-aesthetic queries.
+**The gap.** `ShoppingForHero.tsx` unconditionally renders the "Your daily feed / Your next feed drops in HH:MM:SS" block (lines 344–372) and fetches `refreshHour` via `getAutoEditorConfig()` regardless of auth state. Signed-out shoppers receive the global `feed_rank` order — the countdown is meaningless for them, and the info modal copy ("A fresh, personalized mix… rebuilt once a day… shaped by what you view & click") is factually wrong: nothing is personalised for a guest. `ShoppingForHero` receives no auth-related prop; `_index.tsx` has `user` state available but doesn't pass it down.
 
-**Why it matters.** Aesthetic queries — "quiet luxury", "clean girl", "streetwear"
-— are the highest-intent fashion vocabulary a shopper can use. Getting them badly
-wrong (a finance book for "old money") is the fastest way to lose trust in the
-search bar entirely. This failure mode is user-visible on any fashion-forward entry
-into the product.
+**Why it matters.** Guests are the highest-value conversion audience — the daily feed is a key sign-up incentive. Showing them a countdown to a feed they're already receiving (as if it's locked behind sign-up) breeds confusion rather than aspiration. The copy should surface what guests could unlock, not imply they already have it.
 
-**What's ready.** `docs/VIBE_AESTHETIC_SEARCH_PLAN.md` Phase 1 is fully scoped:
-add a third route to `search_products` that fires before the vibe fallback when an
-aesthetic term is detected via a curated regex (Appendix A), hard-filters candidates
-to `taxonomy.category IN APPAREL_DEPARTMENT`, and OR-expands the query with
-canonical apparel tokens ("quiet luxury" also matches `minimal, tailored, refined,
-cashmere`). Estimated: ~½ day, $0, low risk. Same shadow→eval→promote gate as V7.
-
-**Next step.** Implement Phase 1 from the plan doc: add the `aesthetic_intent()`
-detection branch and `APPAREL_DEPARTMENT` filter as a new `ELSIF` block in the
-`search_products` plpgsql function (new migration following `20260605000006*.sql`
-pattern). Add eval assertions from Appendix A's lexicon to
-`tests/search/eval-relevance.mjs` before promoting to canonical. Phase 2 (curating
-`taxonomy.style` to a controlled vocab, ~1 day + ~$0.10) is the next natural step
-after Phase 1 passes eval.
+**Next step.** Add `isAuthenticated?: boolean` to `ShoppingForHero`'s props. In `_index.tsx`, pass `isAuthenticated={!!user}`. In the component, gate the `sfh-scroll-hint` block: authenticated users see the countdown as today; guests see a "Create your daily feed →" sign-in CTA instead, and the `getAutoEditorConfig()` fetch is skipped entirely for them.
 
 ---
 
-## 4 · 324 products have no description text and are invisible to contextual search
+## 4 · Style Up has no front-door in the consumer feed — it is buried two taps into the user menu
 
-**The gap.** The enrichment backfill (`scripts/enrich-all-descriptions.mjs`) skipped
-324 of 793 products because `description IS NULL OR description = ''`. These products
-can match exact-name and type queries via BM25, but have zero occasion, activity, or
-style text in their embedding. They are effectively invisible to any contextual or
-aesthetic query ("casual friday", "brunch", "date night"). `description_enriched`
-correctly flags them as `false`, but no follow-up pass was ever written for the
-no-description case — the current script just increments `skipped` and continues.
+**The gap.** `app/routes/style-up.tsx` was moved from admin to consumer-facing in the most recent commit batch (`feat(style-up): make Style Up a consumer app feature`). Its only consumer entry point is `UserMenu.tsx` line 544–548: tap the profile icon, then tap "Style Up." It does not appear in the home hero, bottom bar, look overlay, product page, or any surface a shopper encounters organically. The feature requires auth; a signed-in shopper would have to know it exists to find it.
 
-**Why it matters.** 324 ÷ 793 ≈ 41% of the catalog missed the enrichment lift
-entirely. If any of those are the types already sparse in the active catalog (the
-`SEARCH_QUALITY_ANALYSIS.md` noted jackets, sneakers, and accessories were thin),
-the search gaps compound: no enrichment AND low catalog depth. Products that have
-only a name and a brand are ranked purely by embedding similarity on the raw name
-text — the weakest possible semantic signal.
+**Why it matters.** Style Up is the product's flagship AI differentiator. Four sequential phases shipped in rapid succession — AI replies, product picks, on-you renders — but the feature was never given a front-door entry. Organic trial will be near zero if the surface is buried under a profile tap.
 
-**Next step.** Add an `elif not product.description` branch to
-`scripts/enrich-all-descriptions.mjs` (~line 204): when `description` is empty,
-call Claude Haiku with a _generation_ prompt (not the augmentation prompt used for
-existing descriptions) to produce a 2–3 sentence synthetic description from
-`name + brand + type + price + gender`. Example output: _"Casual shorts by Alo Yoga
-at $78. Great for gym workouts, yoga sessions, and outdoor activities. Priced under
-$100, ideal for everyday active wear."_ Cost: <$0.50 for 324 products at Haiku
-rates. Re-embed with the existing `scripts/reembed-enriched-products.mjs`.
+**Next step.** The lowest-friction placement: a secondary CTA row in `ShoppingForHero.tsx` — below the inline search bar, above the recently-viewed strip — showing "Chat with a stylist →" that renders only when `isAuthenticated` is true (ties into the prop from suggestion #3). Alternatively, add a chip to the search bar's browse suggestions in `BottomBar.tsx`. Either is a one-component change.
 
 ---
 
-_Checked against `docs/PENDING_QUEUE.md`, `CLAUDE.md`, and the recent git log
-(`3131c45`). Items D-rest, E, F, G–K (generate flow), L–T (large rebuilds), the
-feed type-clustering decision, and the `daily-feed.md` doc-staleness note are
-tracked elsewhere and not repeated here._
+## 5 · Look click signals are discarded by the Daily Feed's `rankLooks` — only seen-decay is read
+
+**The gap.** `rankLooks` in `personalize-feed/index.ts` (lines 696–705) reads `user_events WHERE event_type='impression'` to build the `seenLooks` decay set, but reads nothing for `event_type='click'`. A shopper who opens a look generates a `click` event on `target_type='look'` (via `session-tracker.ts`) — strong positive intent. That click has zero effect on the look's score: `rankLooks` ranks entirely on brand/type affinity inherited from the look's attached products and a freshness boost. The product half of the engine has an explicit `clickedProducts` rule that boosts clicked products; looks have no equivalent. The engine is asymmetric.
+
+**Why it matters.** Looks lead the consumer feed. A shopper who repeatedly opens editorial streetwear looks generates no affinity boost for that aesthetic in their next Daily Feed, even though the signal already exists in `user_events`. This is the cheapest possible signal improvement — no new data collection required.
+
+**Next step.** In `rankLooks` (line ~694 in `personalize-feed/index.ts`), add a query for `user_events WHERE event_type='click' AND target_type='look'` to build a `clickedLooks` map (key = `target_uuid || target_id`, value = weighted click count). Apply `normMap`, then add `clickWeight * (clickNorm.get(l.id) ?? 0)` to the look's score (`clickWeight ≈ 0.3 * affWeight`). The change is fully contained in `rankLooks`; no schema change or new rule type needed.
+
+---
+
+## Summary
+
+| # | Area | Impact | Effort |
+|---|---|---|---|
+| 1 | Product impressions → `user_events` (Daily Feed signal pipeline) | High | Low — 1 call in `CreativeCardV2.tsx` |
+| 2 | `haiku_context` missing from embed-product (search quality) | High | Low — add field to `buildDoc` + trigger |
+| 3 | Guest hero messaging (conversion UX) | Medium | Low — prop thread + conditional render |
+| 4 | Style Up discoverability (feature launch) | Medium | Low — add CTA to hero or bottom bar |
+| 5 | Look click signal in `rankLooks` (feed quality) | Medium | Low–Medium — new query + score term |
