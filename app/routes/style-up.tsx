@@ -13,7 +13,7 @@ import { useNavigate } from '@remix-run/react';
 import { useAuth } from '~/hooks/useAuth';
 import { supabase } from '~/utils/supabase';
 import {
-  fetchStylists, getOrCreateThread, fetchMessages, sendShopperMessage,
+  fetchStylists, getOrCreateThread, getLatestThread, fetchMessages, sendShopperMessage,
   sendStylistText, startLookRender, startFullLookRender,
   type StyleUpStylist, type StyleUpMessage, type StyleUpProductRef,
 } from '~/services/style-up';
@@ -65,6 +65,8 @@ export default function StyleUpPage() {
   const [active, setActive] = useState<StyleUpStylist | null>(null);
   const [threadId, setThreadId] = useState<string | null>(null);
   const [messages, setMessages] = useState<StyleUpMessage[]>([]);
+  const [latestThread, setLatestThread] = useState<{ threadId: string; stylist: StyleUpStylist } | null>(null);
+  const [bootResumed, setBootResumed] = useState(false);
   const [opening, setOpening] = useState(false);
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
@@ -131,18 +133,29 @@ export default function StyleUpPage() {
   }, [userId]);
   useEffect(() => { void loadContext(); }, [loadContext]);
 
-  // Open (or resume) a thread with the chosen stylist.
+  // Open a known thread (resume) — loads its full history so the conversation
+  // keeps going where it left off.
+  const openThread = useCallback(async (id: string, s: StyleUpStylist) => {
+    setActive(s);
+    setThreadId(id);
+    setLatestThread({ threadId: id, stylist: s });
+    setMessages(await fetchMessages(id));
+  }, []);
+
+  // Open (or resume) a thread with the chosen stylist from the roster.
   const openStylist = useCallback(async (s: StyleUpStylist) => {
     if (!userId || opening) return;
     setOpening(true);
     setActive(s);
     const id = await getOrCreateThread(s.id, userId);
-    if (id) {
-      setThreadId(id);
-      setMessages(await fetchMessages(id));
-    }
+    if (id) await openThread(id, s);
     setOpening(false);
-  }, [userId, opening]);
+  }, [userId, opening, openThread]);
+
+  // Resume the most-recent active chat (the upper-right chat icon).
+  const resumeLatest = useCallback(() => {
+    if (latestThread) void openThread(latestThread.threadId, latestThread.stylist);
+  }, [latestThread, openThread]);
 
   const closeThread = useCallback(() => {
     setThreadId(null);
@@ -150,6 +163,23 @@ export default function StyleUpPage() {
     setMessages([]);
     setDraft('');
   }, []);
+
+  // On open, resume the shopper's most-recent conversation so an active chat's
+  // history keeps going instead of dropping them back on the roster every time.
+  useEffect(() => {
+    if (!userId || bootResumed) return;
+    let cancelled = false;
+    (async () => {
+      const latest = await getLatestThread(userId);
+      if (cancelled) return;
+      setBootResumed(true);
+      if (latest) {
+        setLatestThread(latest);
+        await openThread(latest.threadId, latest.stylist);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [userId, bootResumed, openThread]);
 
   // Realtime: new messages (either side) stream into the open thread.
   useEffect(() => {
@@ -417,11 +447,17 @@ export default function StyleUpPage() {
     return (
       <div className="su-shell">
         <header className="su-shell-head">
-          <button type="button" className="su-back" onClick={exit} aria-label="Back">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
-          </button>
-          <span className="su-shell-title">Style Up</span>
-          <span aria-hidden="true" style={{ width: 34 }} />
+          <div className="su-shell-head-left">
+            <button type="button" className="su-back" onClick={exit} aria-label="Back">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+            </button>
+            <span className="su-shell-title">StyleUp</span>
+          </div>
+          {latestThread && (
+            <button type="button" className="su-back" onClick={resumeLatest} aria-label="Open your chat">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
+            </button>
+          )}
         </header>
         <div className="su-signin">
           <p>Sign in to chat with a stylist and see picks on yourself.</p>
@@ -435,11 +471,17 @@ export default function StyleUpPage() {
     return (
       <div className="su-shell">
         <header className="su-shell-head">
-          <button type="button" className="su-back" onClick={exit} aria-label="Back">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
-          </button>
-          <span className="su-shell-title">Style Up</span>
-          <span aria-hidden="true" style={{ width: 34 }} />
+          <div className="su-shell-head-left">
+            <button type="button" className="su-back" onClick={exit} aria-label="Back">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+            </button>
+            <span className="su-shell-title">StyleUp</span>
+          </div>
+          {latestThread && (
+            <button type="button" className="su-back" onClick={resumeLatest} aria-label="Open your chat">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
+            </button>
+          )}
         </header>
         <div className="su-page">
           <div className="su-roster-head">
