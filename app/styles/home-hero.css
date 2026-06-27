@@ -1270,6 +1270,40 @@ html:has(.bottom-bar.search-open) .sc-name-pill { opacity: 0; pointer-events: no
   /* Hide while the search sheet is open (keyboard up). */
   html:has(.bottom-bar.search-open) .home-recent-strip { display: none !important; }
 }
+/* Desktop: mirror the mobile recently-viewed strip, glued just under the
+   TypeAnywhere search bar (.ai-bar-wrap, bottom:28vh). That bar is mounted
+   OUTSIDE .app-root (a <body> sibling), so the strip can't sibling it — but we
+   fix the strip to the same viewport anchor (bar bottom − 12px, then drop by
+   its own height with translateY(100%)) so the two read as one stack. Home
+   hero, at rest, with view history only. Hidden the moment the bar is focused
+   (the catalog-pills cloud rises into that zone). */
+@media (min-width: 769px) {
+  .app-root.home-hero:not(.hero-scrolled) .home-recent-strip {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    position: fixed;
+    left: 0;
+    right: 0;
+    margin-inline: auto;
+    width: min(560px, calc(100% - 48px)); /* match the search bar's width */
+    bottom: calc(28vh - 12px);
+    transform: translateY(100%);
+    z-index: 99;
+    opacity: clamp(0, calc(1.2 - var(--hero-scroll-progress, 0) * 2.4), 1);
+    transition: opacity 0.18s linear;
+  }
+  /* Bar gains focus → pills cloud appears there; clear the strip out. */
+  body:has(.ai-bar-wrap:focus-within) .home-recent-strip { display: none !important; }
+}
+/* Keep the strip glued to the bar's shorter-viewport anchors (see the
+   .ai-bar-wrap bottom overrides at the same breakpoints). */
+@media (min-width: 769px) and (max-height: 880px) {
+  .app-root.home-hero:not(.hero-scrolled) .home-recent-strip { bottom: calc(32vh - 12px); }
+}
+@media (min-width: 769px) and (max-height: 720px) {
+  .app-root.home-hero:not(.hero-scrolled) .home-recent-strip { bottom: calc(24vh - 12px); }
+}
 .home-recent-title {
   font-size: 9.5px;
   font-weight: 600;
