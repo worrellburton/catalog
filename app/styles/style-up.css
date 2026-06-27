@@ -148,8 +148,10 @@
 .su-thread-name { font-size: 15px; font-weight: 700; }
 .su-thread-specialty { font-size: 12px; color: var(--su-accent); font-weight: 600; }
 
-/* Context card — the shopper's AI-look inputs, read-only. */
+/* Context card — the shopper's AI-look inputs. Editable; collapses to a slim
+   bar as the chat scrolls. */
 .su-context {
+  position: relative;
   flex: 0 0 auto;
   display: flex;
   align-items: center;
@@ -157,7 +159,119 @@
   padding: 12px 16px;
   border-bottom: 1px solid #26282d;
   background: #17181c;
+  transition: padding 0.18s ease;
 }
+.su-context--mini { padding: 0; }
+.su-context--editing { align-items: stretch; }
+
+/* Pencil — opens the inline editor. */
+.su-context-edit {
+  position: absolute;
+  top: 10px; right: 12px;
+  width: 28px; height: 28px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  border: none;
+  background: #26282d;
+  color: #c7c9cf;
+  cursor: pointer;
+}
+.su-context-edit:hover { background: #34363c; color: #e7e7ea; }
+
+/* Collapsed slim bar. */
+.su-context-minibar {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  background: none;
+  border: none;
+  color: #c7c9cf;
+  cursor: pointer;
+  text-align: left;
+}
+.su-context-mini-photo {
+  flex: 0 0 auto;
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--su-accent);
+  color: #0a0a0a;
+  font-size: 10px; font-weight: 800;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.su-context-mini-photo img { width: 100%; height: 100%; object-fit: cover; }
+.su-context-mini-chips { flex: 1 1 auto; min-width: 0; font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.su-context-mini-chev { flex: 0 0 auto; color: #8b8e96; }
+
+/* Inline editor. */
+.su-context-editor { display: flex; flex-direction: column; gap: 10px; width: 100%; }
+.su-context-photos--edit { gap: 8px; }
+.su-context-photo--edit {
+  width: 48px; height: 48px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #1c1d21;
+  border: 1px dashed #3a3c42;
+  cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0;
+}
+.su-context-photo--edit img { width: 100%; height: 100%; object-fit: cover; }
+.su-context-photo-add { font-size: 22px; font-weight: 300; color: #71747c; line-height: 1; }
+.su-edit-fields { display: flex; flex-direction: column; gap: 8px; }
+.su-edit-row { display: flex; gap: 8px; }
+.su-edit-input {
+  flex: 1 1 0; min-width: 0;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid #2a2c31;
+  background: #1c1d21;
+  color: #e7e7ea;
+  font-size: 13.5px;
+  outline: none;
+}
+.su-edit-input:focus { border-color: var(--su-accent); }
+.su-edit-gender { flex: 1 1 0; display: flex; gap: 6px; }
+.su-edit-gender-btn {
+  flex: 1 1 0;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid #2a2c31;
+  background: #1c1d21;
+  color: #c7c9cf;
+  font-size: 13px; font-weight: 700;
+  cursor: pointer;
+}
+.su-edit-gender-btn.is-on { background: var(--su-accent); color: #0a0a0a; border-color: var(--su-accent); }
+.su-edit-style {
+  width: 100%;
+  min-height: 54px;
+  resize: vertical;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid #2a2c31;
+  background: #1c1d21;
+  color: #e7e7ea;
+  font-size: 13.5px;
+  font-family: inherit;
+  outline: none;
+}
+.su-edit-style:focus { border-color: var(--su-accent); }
+.su-edit-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.su-edit-btn {
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid #34363c;
+  background: #26282d;
+  color: #e7e7ea;
+  font-size: 13px; font-weight: 700;
+  cursor: pointer;
+}
+.su-edit-btn--save { background: #e7e7ea; color: #141518; border-color: #e7e7ea; }
+.su-edit-btn:disabled { opacity: 0.55; cursor: default; }
 .su-context-photos { display: flex; gap: 6px; flex: 0 0 auto; }
 .su-context-photo {
   width: 44px; height: 44px;
