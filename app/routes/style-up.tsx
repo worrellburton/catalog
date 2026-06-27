@@ -1,14 +1,15 @@
-// Style Up — AI stylist chat (admin-gated v1). A shopper requests a stylist
-// from the roster, then chats iMessage-style; the stylist (AI, wired in a
-// later phase) sends product picks + on-you renders. The shopper's AI-look
-// context rides at the top, read-only, so the stylist always sees who it's
-// styling.
+// Style Up — AI stylist chat, a consumer app feature. A shopper requests a
+// stylist from the roster, then chats iMessage-style; the stylist (AI) sends
+// product picks + on-you renders. The shopper's AI-look context rides at the
+// top, read-only, so the stylist always sees who it's styling.
 //
-// Phase 1 (this file): roster → open/resume a thread → context card + live
-// message list + composer (shopper text persists + streams via realtime).
-// The AI stylist replies, product picks, and renders land in later phases.
+// Full-screen consumer page (dark). Roster → open/resume a thread → context
+// card + live message list + composer. The AI stylist replies (style-up-chat
+// edge fn), product picks, and "see it on me" renders (generate-look pipeline)
+// stream in via realtime.
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useNavigate } from '@remix-run/react';
 import { useAuth } from '~/hooks/useAuth';
 import { supabase } from '~/utils/supabase';
 import {
@@ -35,6 +36,7 @@ function initials(name: string): string {
 export default function StyleUpPage() {
   const { user } = useAuth();
   const userId = user?.id ?? null;
+  const navigate = useNavigate();
 
   const [stylists, setStylists] = useState<StyleUpStylist[]>([]);
   const [active, setActive] = useState<StyleUpStylist | null>(null);
@@ -52,6 +54,12 @@ export default function StyleUpPage() {
   const [renderError, setRenderError] = useState<string | null>(null);
   const [renderingIds, setRenderingIds] = useState<Set<string>>(new Set());
   const scrollerRef = useRef<HTMLDivElement | null>(null);
+
+  const exit = useCallback(() => {
+    // Return to wherever the shopper came from; fall back to home.
+    if (window.history.length > 1) navigate(-1);
+    else navigate('/');
+  }, [navigate]);
 
   // Roster.
   useEffect(() => { void fetchStylists().then(setStylists); }, []);
@@ -136,9 +144,8 @@ export default function StyleUpPage() {
 
   // Kick the AI stylist for the current thread. Its reply (+ any product picks)
   // streams back via the realtime subscription; the typing bubble holds until
-  // the call resolves. Any failure (incl. the function not being deployed yet)
-  // surfaces a recoverable error row with a retry, rather than silently
-  // dropping the turn.
+  // the call resolves. Any failure surfaces a recoverable error row with a
+  // retry, rather than silently dropping the turn.
   const triggerStylist = useCallback(async () => {
     if (!threadId || !supabase) return;
     setChatError(null);
@@ -229,36 +236,63 @@ export default function StyleUpPage() {
     </div>
   ), [ctx]);
 
+  // Not signed in — prompt to sign in (Style Up is per-shopper).
+  if (!userId) {
+    return (
+      <div className="su-shell">
+        <header className="su-shell-head">
+          <button type="button" className="su-back" onClick={exit} aria-label="Back">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+          </button>
+          <span className="su-shell-title">Style Up</span>
+          <span aria-hidden="true" style={{ width: 34 }} />
+        </header>
+        <div className="su-signin">
+          <p>Sign in to chat with a stylist and see picks on yourself.</p>
+        </div>
+      </div>
+    );
+  }
+
   // ── Roster ────────────────────────────────────────────────────────────
   if (!threadId) {
     return (
-      <div className="su-page">
-        <div className="su-roster-head">
-          <h1>Style Up</h1>
-          <p>Request a stylist. They&apos;ll learn your vibe, send picks, and show you wearing them.</p>
-        </div>
-        <div className="su-roster">
-          {stylists.map(s => (
-            <button
-              key={s.id}
-              type="button"
-              className="su-stylist-card"
-              style={{ ['--su-accent' as string]: s.accentColor ?? '#8aa0c0' }}
-              onClick={() => void openStylist(s)}
-              disabled={opening}
-            >
-              <span className="su-stylist-avatar" aria-hidden="true">
-                {s.avatarUrl ? <img src={s.avatarUrl} alt="" /> : initials(s.name)}
-              </span>
-              <span className="su-stylist-info">
-                <span className="su-stylist-name">{s.name}</span>
-                {s.specialty && <span className="su-stylist-specialty">{s.specialty}</span>}
-                {s.bio && <span className="su-stylist-bio">{s.bio}</span>}
-              </span>
-              <span className="su-stylist-cta">Request</span>
-            </button>
-          ))}
-          {stylists.length === 0 && <div className="su-empty">No stylists available yet.</div>}
+      <div className="su-shell">
+        <header className="su-shell-head">
+          <button type="button" className="su-back" onClick={exit} aria-label="Back">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+          </button>
+          <span className="su-shell-title">Style Up</span>
+          <span aria-hidden="true" style={{ width: 34 }} />
+        </header>
+        <div className="su-page">
+          <div className="su-roster-head">
+            <h1>Find your stylist</h1>
+            <p>Request a stylist. They&apos;ll learn your vibe, send picks, and show you wearing them.</p>
+          </div>
+          <div className="su-roster">
+            {stylists.map(s => (
+              <button
+                key={s.id}
+                type="button"
+                className="su-stylist-card"
+                style={{ ['--su-accent' as string]: s.accentColor ?? '#8aa0c0' }}
+                onClick={() => void openStylist(s)}
+                disabled={opening}
+              >
+                <span className="su-stylist-avatar" aria-hidden="true">
+                  {s.avatarUrl ? <img src={s.avatarUrl} alt="" /> : initials(s.name)}
+                </span>
+                <span className="su-stylist-info">
+                  <span className="su-stylist-name">{s.name}</span>
+                  {s.specialty && <span className="su-stylist-specialty">{s.specialty}</span>}
+                  {s.bio && <span className="su-stylist-bio">{s.bio}</span>}
+                </span>
+                <span className="su-stylist-cta">Request</span>
+              </button>
+            ))}
+            {stylists.length === 0 && <div className="su-empty">No stylists available yet.</div>}
+          </div>
         </div>
       </div>
     );
@@ -266,121 +300,123 @@ export default function StyleUpPage() {
 
   // ── Thread ────────────────────────────────────────────────────────────
   return (
-    <div className="su-page su-page--thread" style={{ ['--su-accent' as string]: active?.accentColor ?? '#8aa0c0' }}>
-      <div className="su-thread-head">
-        <button type="button" className="su-back" onClick={closeThread} aria-label="Back to stylists">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
-        </button>
-        <span className="su-thread-avatar" aria-hidden="true">
-          {active?.avatarUrl ? <img src={active.avatarUrl} alt="" /> : initials(active?.name ?? '?')}
-        </span>
-        <span className="su-thread-id">
-          <span className="su-thread-name">{active?.name}</span>
-          {active?.specialty && <span className="su-thread-specialty">{active.specialty}</span>}
-        </span>
-      </div>
-
-      {contextCard}
-
-      <div className="su-chat" ref={scrollerRef}>
-        {messages.length === 0 && (
-          <div className="su-chat-intro">
-            <p>Say hi to {active?.name} and tell them what you&apos;re looking for.</p>
-            <p className="su-chat-intro-sub">e.g. &ldquo;I need a date-night fit&rdquo; or &ldquo;help me build a capsule for work&rdquo;.</p>
-          </div>
-        )}
-        {messages.map(m => {
-          if (m.kind === 'product' && m.productRef) {
-            const p = m.productRef;
-            const key = p.id || p.url || p.name || '';
-            return (
-              <div key={m.id} className="su-msg su-msg--stylist">
-                <div className="su-product">
-                  <div className="su-product-media">
-                    {p.image ? <img src={p.image} alt={p.name || 'Product'} loading="lazy" /> : <span className="su-product-media--empty" />}
-                  </div>
-                  <div className="su-product-info">
-                    {p.brand && <div className="su-product-brand">{p.brand}</div>}
-                    <div className="su-product-name">{p.name || 'Product'}</div>
-                    {p.price && <div className="su-product-price">{p.price}</div>}
-                    <div className="su-product-actions">
-                      {p.url && (
-                        <button type="button" className="su-product-btn" onClick={() => window.open(p.url!, '_blank', 'noopener')}>Shop</button>
-                      )}
-                      <button
-                        type="button"
-                        className="su-product-btn su-product-btn--primary"
-                        onClick={() => void tryOn(p)}
-                        disabled={renderingIds.has(key)}
-                      >
-                        {renderingIds.has(key) ? 'Starting…' : 'See it on me'}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          }
-          if (m.kind === 'render') {
-            const r = m.renderGenerationId ? renders[m.renderGenerationId] : null;
-            const p = m.productRef;
-            const done = r?.status === 'done' && r.video_url;
-            const failed = r?.status === 'failed';
-            return (
-              <div key={m.id} className="su-msg su-msg--stylist">
-                <div className="su-render">
-                  {done ? (
-                    <video className="su-render-video" src={r!.video_url!} autoPlay loop muted playsInline controls />
-                  ) : failed ? (
-                    <div className="su-render-status su-render-status--failed">Couldn&apos;t render that look — try another piece.</div>
-                  ) : (
-                    <div className="su-render-status">
-                      <span className="su-render-spinner" aria-hidden="true" />
-                      Styling you in {p?.name ? p.name : 'this look'}…
-                    </div>
-                  )}
-                  {done && p && (
-                    <div className="su-render-cap">
-                      <span>{[p.brand, p.name].filter(Boolean).join(' · ')}</span>
-                      {p.url && <button type="button" className="su-product-btn" onClick={() => window.open(p.url!, '_blank', 'noopener')}>Shop</button>}
-                    </div>
-                  )}
-                </div>
-              </div>
-            );
-          }
-          return (
-            <div key={m.id} className={`su-msg su-msg--${m.sender}`}>
-              {m.body && <div className="su-bubble">{m.body}</div>}
-            </div>
-          );
-        })}
-        {stylistTyping && (
-          <div className="su-msg su-msg--stylist">
-            <div className="su-bubble su-bubble--typing" aria-label={`${active?.name ?? 'Stylist'} is typing`}>
-              <span /><span /><span />
-            </div>
-          </div>
-        )}
-        {chatError && !stylistTyping && (
-          <button type="button" className="su-chat-retry" onClick={() => void triggerStylist()}>
-            {chatError} <span className="su-chat-retry-go">Retry</span>
+    <div className="su-shell" style={{ ['--su-accent' as string]: active?.accentColor ?? '#8aa0c0' }}>
+      <div className="su-page su-page--thread">
+        <div className="su-thread-head">
+          <button type="button" className="su-back" onClick={closeThread} aria-label="Back to stylists">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
           </button>
-        )}
-        {renderError && <div className="su-render-err">{renderError}</div>}
-      </div>
+          <span className="su-thread-avatar" aria-hidden="true">
+            {active?.avatarUrl ? <img src={active.avatarUrl} alt="" /> : initials(active?.name ?? '?')}
+          </span>
+          <span className="su-thread-id">
+            <span className="su-thread-name">{active?.name}</span>
+            {active?.specialty && <span className="su-thread-specialty">{active.specialty}</span>}
+          </span>
+        </div>
 
-      <div className="su-composer">
-        <input
-          className="su-composer-input"
-          value={draft}
-          onChange={e => setDraft(e.target.value)}
-          onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void send(); } }}
-          placeholder={`Message ${active?.name ?? 'your stylist'}…`}
-        />
-        <button type="button" className="su-composer-send" onClick={() => void send()} disabled={!draft.trim() || sending} aria-label="Send">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>
-        </button>
+        {contextCard}
+
+        <div className="su-chat" ref={scrollerRef}>
+          {messages.length === 0 && (
+            <div className="su-chat-intro">
+              <p>Say hi to {active?.name} and tell them what you&apos;re looking for.</p>
+              <p className="su-chat-intro-sub">e.g. &ldquo;I need a date-night fit&rdquo; or &ldquo;help me build a capsule for work&rdquo;.</p>
+            </div>
+          )}
+          {messages.map(m => {
+            if (m.kind === 'product' && m.productRef) {
+              const p = m.productRef;
+              const key = p.id || p.url || p.name || '';
+              return (
+                <div key={m.id} className="su-msg su-msg--stylist">
+                  <div className="su-product">
+                    <div className="su-product-media">
+                      {p.image ? <img src={p.image} alt={p.name || 'Product'} loading="lazy" /> : <span className="su-product-media--empty" />}
+                    </div>
+                    <div className="su-product-info">
+                      {p.brand && <div className="su-product-brand">{p.brand}</div>}
+                      <div className="su-product-name">{p.name || 'Product'}</div>
+                      {p.price && <div className="su-product-price">{p.price}</div>}
+                      <div className="su-product-actions">
+                        {p.url && (
+                          <button type="button" className="su-product-btn" onClick={() => window.open(p.url!, '_blank', 'noopener')}>Shop</button>
+                        )}
+                        <button
+                          type="button"
+                          className="su-product-btn su-product-btn--primary"
+                          onClick={() => void tryOn(p)}
+                          disabled={renderingIds.has(key)}
+                        >
+                          {renderingIds.has(key) ? 'Starting…' : 'See it on me'}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              );
+            }
+            if (m.kind === 'render') {
+              const r = m.renderGenerationId ? renders[m.renderGenerationId] : null;
+              const p = m.productRef;
+              const done = r?.status === 'done' && r.video_url;
+              const failed = r?.status === 'failed';
+              return (
+                <div key={m.id} className="su-msg su-msg--stylist">
+                  <div className="su-render">
+                    {done ? (
+                      <video className="su-render-video" src={r!.video_url!} autoPlay loop muted playsInline controls />
+                    ) : failed ? (
+                      <div className="su-render-status su-render-status--failed">Couldn&apos;t render that look — try another piece.</div>
+                    ) : (
+                      <div className="su-render-status">
+                        <span className="su-render-spinner" aria-hidden="true" />
+                        Styling you in {p?.name ? p.name : 'this look'}…
+                      </div>
+                    )}
+                    {done && p && (
+                      <div className="su-render-cap">
+                        <span>{[p.brand, p.name].filter(Boolean).join(' · ')}</span>
+                        {p.url && <button type="button" className="su-product-btn" onClick={() => window.open(p.url!, '_blank', 'noopener')}>Shop</button>}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              );
+            }
+            return (
+              <div key={m.id} className={`su-msg su-msg--${m.sender}`}>
+                {m.body && <div className="su-bubble">{m.body}</div>}
+              </div>
+            );
+          })}
+          {stylistTyping && (
+            <div className="su-msg su-msg--stylist">
+              <div className="su-bubble su-bubble--typing" aria-label={`${active?.name ?? 'Stylist'} is typing`}>
+                <span /><span /><span />
+              </div>
+            </div>
+          )}
+          {chatError && !stylistTyping && (
+            <button type="button" className="su-chat-retry" onClick={() => void triggerStylist()}>
+              {chatError} <span className="su-chat-retry-go">Retry</span>
+            </button>
+          )}
+          {renderError && <div className="su-render-err">{renderError}</div>}
+        </div>
+
+        <div className="su-composer">
+          <input
+            className="su-composer-input"
+            value={draft}
+            onChange={e => setDraft(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void send(); } }}
+            placeholder={`Message ${active?.name ?? 'your stylist'}…`}
+          />
+          <button type="button" className="su-composer-send" onClick={() => void send()} disabled={!draft.trim() || sending} aria-label="Send">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>
+          </button>
+        </div>
       </div>
     </div>
   );

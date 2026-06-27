@@ -540,6 +540,13 @@ function UserMenu({
               <span>Saved</span>
               {bookmarkCount > 0 && <span className="user-menu-badge">{bookmarkCount}</span>}
             </button>
+            {/* Style Up — AI-stylist chat. App feature (all signed-in users). */}
+            {user && (
+              <button className="user-menu-item" onClick={runItem(() => navigate('/style-up'))}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                <span>Style Up</span>
+              </button>
+            )}
             {onOpenWallet && dotsConnected === false && (
               <button className="user-menu-item" onClick={runItem(onOpenWallet)}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>
@@ -587,14 +594,6 @@ function UserMenu({
               <button className="user-menu-item" onClick={runItem(() => navigate('/admin'))}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 15v2m-6 4h12a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2zm10-10V7a4 4 0 0 0-8 0v4h8z"/></svg>
                 <span>Admin</span>
-              </button>
-            )}
-            {isAdmin && (
-              /* Style Up — AI-stylist chat (admin-gated v1). Direct shortcut so
-                 it's reachable from the menu, not just buried in the admin nav. */
-              <button className="user-menu-item" onClick={runItem(() => navigate('/admin/style-up'))}>
-                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
-                <span>Style Up</span>
               </button>
             )}
             {isAdmin && (
@@ -770,6 +769,11 @@ function UserMenu({
                   <PageRow icon="grid" label="My Catalog" onClick={runPageItem(onOpenMyLooks)} />
                 )}
 
+                {/* Style Up — AI-stylist chat. App feature (all signed-in users). */}
+                {user && (
+                  <PageRow icon="chat" label="Style Up" onClick={runPageItem(() => navigate('/style-up'))} />
+                )}
+
                 {/* Quick row — Activity, Earnings, Saved as three glowing
                     columns. Auto-fits to 2 columns when Earnings is hidden
                     (non-creators). Each tile pulses with a soft glow. */}
@@ -912,7 +916,7 @@ function UserMenu({
 // Reusable row for the mobile Account page. The icon is keyed by name so
 // the row component stays compact; the SVGs are inline so we don't drag in
 // an icon library.
-type PageRowIcon = 'bookmark' | 'grid' | 'star' | 'wallet' | 'shield' | 'import' | 'deck' | 'logout';
+type PageRowIcon = 'bookmark' | 'grid' | 'star' | 'wallet' | 'shield' | 'import' | 'deck' | 'logout' | 'chat';
 function PageRow({ icon, label, onClick, badge, trailing, variant }: {
   icon: PageRowIcon;
   label: string;
@@ -926,6 +930,7 @@ function PageRow({ icon, label, onClick, badge, trailing, variant }: {
       <span className="user-menu-page-row-icon" aria-hidden="true">
         {icon === 'bookmark' && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>}
         {icon === 'grid' && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>}
+        {icon === 'chat' && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>}
         {icon === 'star' && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"/></svg>}
         {icon === 'wallet' && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>}
         {icon === 'shield' && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 15v2m-6 4h12a2 2 0 0 0 2-2v-6a2 2 0 0 0-2-2H6a2 2 0 0 0-2 2v6a2 2 0 0 0 2 2zm10-10V7a4 4 0 0 0-8 0v4h8z"/></svg>}

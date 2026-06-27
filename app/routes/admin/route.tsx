@@ -26,7 +26,6 @@ const navItems: NavItem[] = [
   { to: '/admin/data', label: 'Data', icon: 'M15 10l4.553-2.276A1 1 0 0 1 21 8.618v6.764a1 1 0 0 1-1.447.894L15 14M3 6h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z' },
   { to: '/admin/catalogs', label: 'Catalogs', icon: 'M4 19.5A2.5 2.5 0 0 1 6.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z' },
   { to: '/admin/daily-feed', label: 'Daily Feed', icon: 'M3 4h18v18H3zM3 10h18M8 2v4M16 2v4' },
-  { to: '/admin/style-up', label: 'Style Up', icon: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z' },
   { to: '/admin/governance', label: 'Governance', icon: 'M12 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM5 16a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM19 16a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM12 8v4M12 12l-5.5 4M12 12l5.5 4' },
   { to: '/admin/brands', label: 'Brands', icon: 'M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82zM7 7h.01' },
   { to: '/admin/pages', label: 'Pages', icon: 'M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8zM14 2v6h6M16 13H8M16 17H8M10 9H8' },
@@ -79,8 +78,6 @@ const allSearchItems: SearchItem[] = [
   { label: 'Content', type: 'Page', to: '/admin/data' },
   { label: 'Catalogs', type: 'Page', to: '/admin/catalogs' },
   { label: 'Daily Feed', type: 'Page', to: '/admin/daily-feed' },
-  { label: 'Style Up', type: 'Page', to: '/admin/style-up' },
-  { label: 'Stylist', type: 'Page', to: '/admin/style-up' },
   { label: 'Governance', type: 'Page', to: '/admin/governance' },
   { label: 'Types', type: 'Page', to: '/admin/governance/types' },
   // Working name during build-out — keep resolving in admin search.
@@ -203,7 +200,7 @@ function pickNavMatch(pathname: string, items: NavItem[]): string | null {
 // Routes that are PINNED at the top of the sidebar — never reordered
 // by the MRU bubble. Home is the user's compass; sliding it down
 // every time they click another tab made the sidebar feel rootless.
-const NAV_PINNED_TOP = new Set(['/admin', '/admin/style-up']);
+const NAV_PINNED_TOP = new Set(['/admin']);
 
 function applyMruOrder(items: NavItem[], mru: string[]): NavItem[] {
   const byTo = new Map(items.map(i => [i.to, i]));
