@@ -8,25 +8,48 @@
 // edge fn), product picks, and "see it on me" renders (generate-look pipeline)
 // stream in via realtime.
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from '@remix-run/react';
 import { useAuth } from '~/hooks/useAuth';
 import { supabase } from '~/utils/supabase';
 import {
-  fetchStylists, getOrCreateThread, fetchMessages, sendShopperMessage, startLookRender,
-  type StyleUpStylist, type StyleUpMessage,
+  fetchStylists, getOrCreateThread, fetchMessages, sendShopperMessage,
+  sendStylistText, startLookRender, startFullLookRender,
+  type StyleUpStylist, type StyleUpMessage, type StyleUpProductRef,
 } from '~/services/style-up';
-import { getUserHeightAge, getUserCustomStyle } from '~/services/profiles';
-import { getUserGender, type UserGender } from '~/services/genders';
-import { listUserUploads, getUserSlots, getGeneration, type UserGeneration } from '~/services/user-generations';
+import { getUserHeightAge, getUserCustomStyle, updateUserHeightAge, updateUserCustomStyle } from '~/services/profiles';
+import { getUserGender, updateUserGender, type UserGender } from '~/services/genders';
+import {
+  listUserUploads, getUserSlots, saveUserSlots, uploadUserPhoto, getGeneration,
+  setGenerationPublished, nameLookForGeneration, type UserGeneration,
+} from '~/services/user-generations';
 import '~/styles/style-up.css';
+
+/** Does this shopper message read as "put the whole look on me"? Detected
+ *  client-side so the existing generate-look pipeline can fire without waiting
+ *  on the AI turn (and without it claiming it "can't generate photos"). */
+function wantsFullLook(text: string): boolean {
+  const t = text.toLowerCase();
+  const onMe = /\bon me\b|\bon myself\b|\bon my body\b/.test(t);
+  const lookWord = /\b(look|outfit|fit|ensemble|whole thing|all of (it|this|these|them)|these|this|it|them)\b/.test(t);
+  const verb = /\b(generate|make|create|show|see|put|try|render|build|style|dress|model)\b/.test(t);
+  if (onMe && lookWord) return true;
+  if (verb && /\b(whole|full|entire|complete)\b[^.?!]*\b(look|outfit|fit)\b/.test(t)) return true;
+  if (/\b(generate|make|create|build|render|show)\b[^.?!]*\b(the|this|that|a|my|your)\b[^.?!]*\b(look|outfit|fit)\b/.test(t)) return true;
+  return false;
+}
 
 const MAX_PHOTOS = 3;
 
 interface ShopperContext {
-  photos: string[];
+  photos: (string | null)[];  // resolved URL per slot (null = empty), length MAX_PHOTOS
+  slots: (string | null)[];   // upload id per slot (length MAX_PHOTOS)
+  heightLabel: string;
+  weightLabel: string;
+  ageLabel: string;
+  gender: UserGender;
+  style: string;
   chips: string[];
-  style: string | null;
 }
 
 function initials(name: string): string {
@@ -48,11 +71,20 @@ export default function StyleUpPage() {
   const [stylistTyping, setStylistTyping] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
   const [ctx, setCtx] = useState<ShopperContext | null>(null);
+  const [ctxMini, setCtxMini] = useState(false);     // collapse-on-scroll
+  const [ctxEditing, setCtxEditing] = useState(false);
   // Render polling: generation id → its latest row. Drives the on-you render
   // bubbles (spinner → video).
   const [renders, setRenders] = useState<Record<string, UserGeneration>>({});
   const [renderError, setRenderError] = useState<string | null>(null);
   const [renderingIds, setRenderingIds] = useState<Set<string>>(new Set());
+  const [genLook, setGenLook] = useState(false);     // full-look render in flight
+  const [published, setPublished] = useState<Set<string>>(new Set()); // gen ids added to looks
+  const [edit, setEdit] = useState<{ heightLabel: string; weightLabel: string; ageLabel: string; gender: UserGender; style: string } | null>(null);
+  const [savingCtx, setSavingCtx] = useState(false);
+  const [uploadingSlot, setUploadingSlot] = useState<number | null>(null);
+  const photoSlotRef = useRef<number>(0);
+  const fileInputRef = useRef<HTMLInputElement | null>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
 
   const exit = useCallback(() => {
@@ -65,32 +97,39 @@ export default function StyleUpPage() {
   useEffect(() => { void fetchStylists().then(setStylists); }, []);
 
   // Shopper context — the SAME inputs the AI-look flow uses (face photos +
-  // height / weight / age / gender + saved style). Read-only here; editing it
-  // in the AI studio updates the profile the stylist reads each turn.
-  useEffect(() => {
+  // height / weight / age / gender + saved style). Editable here; saving writes
+  // straight to the profile the stylist reads each turn, so it stays in sync
+  // with the AI-look studio (one source of truth).
+  const loadContext = useCallback(async () => {
     if (!userId) return;
-    let cancelled = false;
-    (async () => {
-      const [ha, gender, style, uploads, slots] = await Promise.all([
-        getUserHeightAge(userId),
-        getUserGender(userId),
-        getUserCustomStyle(userId),
-        listUserUploads(userId),
-        getUserSlots(userId, MAX_PHOTOS),
-      ]);
-      if (cancelled) return;
-      const byId = new Map(uploads.map(u => [u.id, u.public_url]));
-      const picked = slots.map(id => (id ? byId.get(id) : null)).filter((u): u is string => !!u);
-      const photos = picked.length ? picked : uploads.slice(0, MAX_PHOTOS).map(u => u.public_url).filter(Boolean);
-      const chips: string[] = [];
-      if (ha.heightLabel) chips.push(ha.heightLabel);
-      if (ha.weightLabel) chips.push(ha.weightLabel.replace(/\s*\(.*\)\s*/, ''));
-      if (ha.ageLabel) chips.push(ha.ageLabel);
-      if (gender !== 'unknown') chips.push(gender as UserGender);
-      setCtx({ photos, chips, style: style || null });
-    })();
-    return () => { cancelled = true; };
+    const [ha, gender, style, uploads, slots] = await Promise.all([
+      getUserHeightAge(userId),
+      getUserGender(userId),
+      getUserCustomStyle(userId),
+      listUserUploads(userId),
+      getUserSlots(userId, MAX_PHOTOS),
+    ]);
+    const byId = new Map(uploads.map(u => [u.id, u.public_url]));
+    let normSlots = slots.slice(0, MAX_PHOTOS);
+    while (normSlots.length < MAX_PHOTOS) normSlots.push(null);
+    // Fall back to most-recent uploads when no explicit slots are set.
+    if (!normSlots.some(Boolean) && uploads.length) {
+      normSlots = uploads.slice(0, MAX_PHOTOS).map(u => u.id);
+      while (normSlots.length < MAX_PHOTOS) normSlots.push(null);
+    }
+    const photos = normSlots.map(id => (id ? byId.get(id) ?? null : null));
+    const chips: string[] = [];
+    if (ha.heightLabel) chips.push(ha.heightLabel);
+    if (ha.weightLabel) chips.push(ha.weightLabel.replace(/\s*\(.*\)\s*/, ''));
+    if (ha.ageLabel) chips.push(ha.ageLabel);
+    if (gender !== 'unknown') chips.push(gender);
+    setCtx({
+      photos, slots: normSlots,
+      heightLabel: ha.heightLabel ?? '', weightLabel: ha.weightLabel ?? '', ageLabel: ha.ageLabel ?? '',
+      gender, style: style ?? '', chips,
+    });
   }, [userId]);
+  useEffect(() => { void loadContext(); }, [loadContext]);
 
   // Open (or resume) a thread with the chosen stylist.
   const openStylist = useCallback(async (s: StyleUpStylist) => {
@@ -163,6 +202,28 @@ export default function StyleUpPage() {
     }
   }, [threadId]);
 
+  // "Generate the look on me" — the stylist confirms in-thread, then the FULL
+  // set of recommended pieces is composited onto the shopper via the existing
+  // generate-look pipeline. The render bubble streams in + polls to the video.
+  const generateFullLook = useCallback(async (products: StyleUpProductRef[]) => {
+    if (!threadId || !userId || genLook) return;
+    const seen = new Set<string>();
+    const uniq = products.filter(p => {
+      if (!p.id || seen.has(p.id)) return false;
+      seen.add(p.id); return true;
+    });
+    if (uniq.length === 0) { void triggerStylist(); return; }
+    setGenLook(true);
+    setRenderError(null);
+    await sendStylistText(threadId, "Love it — putting your full look together now. I'll send it over the second it's ready ✨");
+    const { error } = await startFullLookRender({ threadId, shopperUserId: userId, products: uniq });
+    if (error) {
+      setRenderError(error);
+      await sendStylistText(threadId, `Hmm, I couldn't start that render — ${error}`);
+    }
+    setGenLook(false);
+  }, [threadId, userId, genLook, triggerStylist]);
+
   const send = useCallback(async () => {
     const text = draft.trim();
     if (!text || !threadId || sending) return;
@@ -171,8 +232,27 @@ export default function StyleUpPage() {
     const msg = await sendShopperMessage(threadId, text);
     if (msg) setMessages(prev => (prev.some(m => m.id === msg.id) ? prev : [...prev, msg]));
     setSending(false);
-    void triggerStylist();
-  }, [draft, threadId, sending, triggerStylist]);
+    // If they're asking to see the whole look on themselves AND the stylist has
+    // already recommended pieces, fire the generate-look flow directly. Else let
+    // the AI stylist take the turn (it may recommend pieces first).
+    const looks = messages
+      .filter(m => m.kind === 'product' && m.productRef?.id)
+      .map(m => m.productRef as StyleUpProductRef);
+    if (wantsFullLook(text) && looks.length > 0) void generateFullLook(looks);
+    else void triggerStylist();
+  }, [draft, threadId, sending, triggerStylist, generateFullLook, messages]);
+
+  // Add a finished render to the shopper's own looks (publishes to My Catalog).
+  const addToLooks = useCallback(async (genId: string) => {
+    if (published.has(genId)) return;
+    setPublished(prev => new Set(prev).add(genId));
+    const { error } = await setGenerationPublished(genId, true);
+    if (error) {
+      setPublished(prev => { const n = new Set(prev); n.delete(genId); return n; });
+      return;
+    }
+    void nameLookForGeneration(genId);
+  }, [published]);
 
   // "See it on me" — render the shopper wearing a stylist pick (reuses the
   // generate-look pipeline). The render bubble arrives via realtime and the
@@ -214,27 +294,123 @@ export default function StyleUpPage() {
     return () => { cancelled = true; window.clearInterval(h); };
   }, [messages, renders]);
 
-  const contextCard = useMemo(() => (
-    <div className="su-context" aria-label="Your styling context">
-      <div className="su-context-photos">
-        {ctx && ctx.photos.length > 0
-          ? ctx.photos.map((src, i) => (
-              <span className="su-context-photo" key={i}><img src={src} alt="" loading="lazy" /></span>
-            ))
-          : <span className="su-context-photo su-context-photo--empty" aria-hidden="true" />}
-      </div>
-      <div className="su-context-meta">
-        <div className="su-context-title">You</div>
-        <div className="su-context-chips">
-          {ctx && ctx.chips.length > 0
-            ? ctx.chips.map((c, i) => <span className="su-context-chip" key={i}>{c}</span>)
-            : <span className="su-context-chip su-context-chip--muted">No stats yet</span>}
-          {ctx?.style && <span className="su-context-chip su-context-chip--style">{ctx.style}</span>}
+  // ── Context editing — writes straight to the profile (shared with the
+  // AI-look studio), so edits here show up everywhere. ──────────────────────
+  const beginEdit = useCallback(() => {
+    if (!ctx) return;
+    setEdit({ heightLabel: ctx.heightLabel, weightLabel: ctx.weightLabel, ageLabel: ctx.ageLabel, gender: ctx.gender, style: ctx.style });
+    setCtxEditing(true);
+    setCtxMini(false);
+  }, [ctx]);
+  const cancelEdit = useCallback(() => { setCtxEditing(false); setEdit(null); }, []);
+  const saveCtx = useCallback(async () => {
+    if (!userId || !edit) return;
+    setSavingCtx(true);
+    await Promise.all([
+      updateUserHeightAge(userId, { heightLabel: edit.heightLabel || null, weightLabel: edit.weightLabel || null, ageLabel: edit.ageLabel || null }),
+      updateUserGender(userId, edit.gender),
+      updateUserCustomStyle(userId, edit.style),
+    ]);
+    await loadContext();
+    setSavingCtx(false);
+    setCtxEditing(false);
+    setEdit(null);
+  }, [userId, edit, loadContext]);
+  const pickPhoto = useCallback((slot: number) => {
+    photoSlotRef.current = slot;
+    fileInputRef.current?.click();
+  }, []);
+  const onPhotoFile = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !userId || !ctx) return;
+    const slot = photoSlotRef.current;
+    setUploadingSlot(slot);
+    const { data, error } = await uploadUserPhoto(file, userId);
+    if (!error && data) {
+      const slots = [...ctx.slots];
+      while (slots.length < MAX_PHOTOS) slots.push(null);
+      slots[slot] = data.id;
+      await saveUserSlots(userId, slots);
+      await loadContext();
+    }
+    setUploadingSlot(null);
+  }, [userId, ctx, loadContext]);
+
+  const filledPhotos = (ctx?.photos ?? []).filter((u): u is string => !!u);
+  const contextCard = (
+    <div className={`su-context${ctxMini && !ctxEditing ? ' su-context--mini' : ''}${ctxEditing ? ' su-context--editing' : ''}`} aria-label="Your styling context">
+      {ctxMini && !ctxEditing ? (
+        // Collapsed slim bar — tap to expand back to the full card.
+        <button type="button" className="su-context-minibar" onClick={() => { setCtxMini(false); if (scrollerRef.current) scrollerRef.current.scrollTop = 0; }}>
+          <span className="su-context-mini-photo" aria-hidden="true">
+            {filledPhotos[0] ? <img src={filledPhotos[0]} alt="" /> : 'You'}
+          </span>
+          <span className="su-context-mini-chips">{ctx?.chips.length ? ctx.chips.join(' · ') : 'Add your stats'}</span>
+          <svg className="su-context-mini-chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+      ) : ctxEditing && edit ? (
+        // Inline editor — photos + stats + gender + style, saved to the profile.
+        <div className="su-context-editor">
+          <div className="su-context-photos su-context-photos--edit">
+            {[0, 1, 2].map(i => (
+              <button type="button" key={i} className="su-context-photo su-context-photo--edit" onClick={() => pickPhoto(i)} aria-label={`Photo ${i + 1}`}>
+                {uploadingSlot === i
+                  ? <span className="su-render-spinner" aria-hidden="true" />
+                  : ctx?.photos[i]
+                    ? <img src={ctx.photos[i] as string} alt="" />
+                    : <span className="su-context-photo-add" aria-hidden="true">+</span>}
+              </button>
+            ))}
+          </div>
+          <div className="su-edit-fields">
+            <div className="su-edit-row">
+              <input className="su-edit-input" placeholder="Height (e.g. 6'1&quot;)" value={edit.heightLabel} onChange={e => setEdit({ ...edit, heightLabel: e.target.value })} />
+              <input className="su-edit-input" placeholder="Weight" value={edit.weightLabel} onChange={e => setEdit({ ...edit, weightLabel: e.target.value })} />
+            </div>
+            <div className="su-edit-row">
+              <input className="su-edit-input" placeholder="Age (e.g. Late 30s)" value={edit.ageLabel} onChange={e => setEdit({ ...edit, ageLabel: e.target.value })} />
+              <div className="su-edit-gender">
+                {(['male', 'female'] as const).map(g => (
+                  <button type="button" key={g} className={`su-edit-gender-btn${edit.gender === g ? ' is-on' : ''}`} onClick={() => setEdit({ ...edit, gender: g })}>{g === 'male' ? 'Male' : 'Female'}</button>
+                ))}
+              </div>
+            </div>
+            <textarea className="su-edit-style" placeholder="Your style (e.g. quiet luxury, tailored, neutral tones)" value={edit.style} maxLength={400} onChange={e => setEdit({ ...edit, style: e.target.value })} />
+            <div className="su-edit-actions">
+              <button type="button" className="su-edit-btn" onClick={cancelEdit} disabled={savingCtx}>Cancel</button>
+              <button type="button" className="su-edit-btn su-edit-btn--save" onClick={() => void saveCtx()} disabled={savingCtx}>{savingCtx ? 'Saving…' : 'Save'}</button>
+            </div>
+          </div>
         </div>
-        <div className="su-context-note">Your stylist sees this. Edit it in the AI studio and it updates here.</div>
-      </div>
+      ) : (
+        // Full card.
+        <>
+          <div className="su-context-photos">
+            {filledPhotos.length > 0
+              ? filledPhotos.map((src, i) => (
+                  <span className="su-context-photo" key={i}><img src={src} alt="" loading="lazy" /></span>
+                ))
+              : <span className="su-context-photo su-context-photo--empty" aria-hidden="true" />}
+          </div>
+          <div className="su-context-meta">
+            <div className="su-context-title">You</div>
+            <div className="su-context-chips">
+              {ctx && ctx.chips.length > 0
+                ? ctx.chips.map((c, i) => <span className="su-context-chip" key={i}>{c}</span>)
+                : <span className="su-context-chip su-context-chip--muted">No stats yet</span>}
+              {ctx?.style && <span className="su-context-chip su-context-chip--style">{ctx.style}</span>}
+            </div>
+            <div className="su-context-note">Your stylist sees this — keep it current.</div>
+          </div>
+          <button type="button" className="su-context-edit" onClick={beginEdit} aria-label="Edit your context">
+            <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
+          </button>
+        </>
+      )}
+      <input ref={fileInputRef} type="file" accept="image/*" hidden onChange={onPhotoFile} />
     </div>
-  ), [ctx]);
+  );
 
   // Not signed in — prompt to sign in (Style Up is per-shopper).
   if (!userId) {
@@ -317,7 +493,11 @@ export default function StyleUpPage() {
 
         {contextCard}
 
-        <div className="su-chat" ref={scrollerRef}>
+        <div
+          className="su-chat"
+          ref={scrollerRef}
+          onScroll={e => { if (!ctxEditing) setCtxMini((e.target as HTMLDivElement).scrollTop > 24); }}
+        >
           {messages.length === 0 && (
             <div className="su-chat-intro">
               <p>Say hi to {active?.name} and tell them what you&apos;re looking for.</p>
@@ -374,10 +554,17 @@ export default function StyleUpPage() {
                         Styling you in {p?.name ? p.name : 'this look'}…
                       </div>
                     )}
-                    {done && p && (
+                    {done && (
                       <div className="su-render-cap">
-                        <span>{[p.brand, p.name].filter(Boolean).join(' · ')}</span>
-                        {p.url && <button type="button" className="su-product-btn" onClick={() => window.open(p.url!, '_blank', 'noopener')}>Shop</button>}
+                        <span>{p ? [p.brand, p.name].filter(Boolean).join(' · ') || 'Your look' : 'Your look'}</span>
+                        <button
+                          type="button"
+                          className="su-product-btn su-product-btn--primary"
+                          onClick={() => void addToLooks(m.renderGenerationId as string)}
+                          disabled={published.has(m.renderGenerationId as string)}
+                        >
+                          {published.has(m.renderGenerationId as string) ? 'Added ✓' : 'Add to my looks'}
+                        </button>
                       </div>
                     )}
                   </div>

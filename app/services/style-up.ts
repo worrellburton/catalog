@@ -137,20 +137,45 @@ export async function sendShopperMessage(
   return mapMessage(data as Record<string, unknown>);
 }
 
-/** "See it on me" — render the shopper wearing a stylist's product pick, reusing
- *  the exact generate-look (Seedance) pipeline the AI-look flow uses. Pulls the
- *  shopper's reference photos + context, kicks a generation, and drops a
- *  `render` message into the thread that the chat polls to completion.
- *  Returns the generation id, or an error string the UI can surface. */
+/** Post a stylist text message (client-side, owner-scoped). Used for the
+ *  conversational "Generating a look now…" beat before a full-look render kicks
+ *  off — the same owner-insert path the render/product messages already use. */
+export async function sendStylistText(
+  threadId: string,
+  text: string,
+): Promise<StyleUpMessage | null> {
+  if (!supabase || !text.trim()) return null;
+  const { data, error } = await supabase
+    .from('style_up_messages')
+    .insert({ thread_id: threadId, sender: 'stylist', kind: 'text', body: text.trim() })
+    .select('id, thread_id, sender, kind, body, product_ref, render_generation_id, created_at')
+    .single();
+  if (error || !data) return null;
+  await supabase
+    .from('style_up_threads')
+    .update({ last_message_at: new Date().toISOString() })
+    .eq('id', threadId);
+  return mapMessage(data as Record<string, unknown>);
+}
+
+// Render the shopper wearing one or more stylist picks, reusing the exact
+// generate-look (Seedance) pipeline the AI-look flow uses. Pulls the shopper's
+// reference photos + context, maps each pick's type → role tag (head-to-toe
+// placement), kicks ONE generation for the whole set, and drops a `render`
+// message the chat polls to completion.
 const MAX_REF_PHOTOS = 3;
-export async function startLookRender(opts: {
-  threadId: string;
-  shopperUserId: string;
-  product: StyleUpProductRef;
-}): Promise<{ generationId: string | null; error: string | null }> {
+const MAX_LOOK_PIECES = 6;
+
+async function renderLook(
+  threadId: string,
+  shopperUserId: string,
+  picks: StyleUpProductRef[],
+  caption: StyleUpProductRef,
+): Promise<{ generationId: string | null; error: string | null }> {
   if (!supabase) return { generationId: null, error: 'No database connection' };
-  const { threadId, shopperUserId, product } = opts;
-  if (!product.id) return { generationId: null, error: "This pick can't be rendered yet." };
+
+  const withId = picks.filter(p => !!p.id).slice(0, MAX_LOOK_PIECES);
+  if (withId.length === 0) return { generationId: null, error: "These picks can't be rendered yet." };
 
   const [ha, gender, customStyle, slots] = await Promise.all([
     getUserHeightAge(shopperUserId),
@@ -163,12 +188,20 @@ export async function startLookRender(opts: {
     return { generationId: null, error: 'Add a photo of yourself in the AI studio first, then try again.' };
   }
 
-  // Product type → role tag (drives the prompt's head-to-toe placement).
-  const { data: prow } = await supabase
-    .from('products').select('type, name, brand').eq('id', product.id).maybeSingle();
-  const name = (prow?.name as string | null) ?? product.name ?? null;
-  const brand = (prow?.brand as string | null) ?? product.brand ?? null;
-  const roleTag = roleForProduct((prow?.type as string | null) ?? null, name);
+  // Resolve product type/name/brand from the catalog so role tags + the prompt
+  // stay accurate even when a chat ref only carried a name.
+  const ids = withId.map(p => p.id as string);
+  const { data: rows } = await supabase
+    .from('products').select('id, type, name, brand').in('id', ids);
+  const byId = new Map(((rows ?? []) as Array<{ id: string; type: string | null; name: string | null; brand: string | null }>).map(r => [r.id, r]));
+
+  const lines = withId.map(p => {
+    const row = byId.get(p.id as string);
+    const name = row?.name ?? p.name ?? null;
+    const brand = row?.brand ?? p.brand ?? null;
+    const roleTag = roleForProduct(row?.type ?? null, name);
+    return { product_id: p.id as string, roleTag, name, brand };
+  });
 
   const prompt = buildGenerationPrompt({
     heightLabel: ha.heightLabel ?? '',
@@ -177,14 +210,14 @@ export async function startLookRender(opts: {
     style: 'editorial',
     customStyle,
     gender,
-    productLines: [{ role_tag: roleTag, brand, name }],
+    productLines: lines.map(l => ({ role_tag: l.roleTag, brand: l.brand, name: l.name })),
     durationSeconds: 10,
   });
 
   const { data: gen, error } = await createGeneration({
     userId: shopperUserId,
     uploadIds,
-    products: [{ product_id: product.id, role_tag: roleTag, sort_order: 0 }],
+    products: lines.map((l, i) => ({ product_id: l.product_id, role_tag: l.roleTag, sort_order: i })),
     heightCm: ha.heightCm ?? 178,
     heightLabel: ha.heightLabel ?? '5\'10"',
     ageLabel: ha.ageLabel ?? 'mid 20s',
@@ -198,10 +231,36 @@ export async function startLookRender(opts: {
 
   await supabase.from('style_up_messages').insert({
     thread_id: threadId, sender: 'stylist', kind: 'render',
-    render_generation_id: gen.id, product_ref: product,
+    render_generation_id: gen.id, product_ref: caption,
   });
   await supabase.from('style_up_threads')
     .update({ last_message_at: new Date().toISOString() }).eq('id', threadId);
 
   return { generationId: gen.id, error: null };
+}
+
+/** "See it on me" — render the shopper wearing a single stylist pick. */
+export async function startLookRender(opts: {
+  threadId: string;
+  shopperUserId: string;
+  product: StyleUpProductRef;
+}): Promise<{ generationId: string | null; error: string | null }> {
+  const { threadId, shopperUserId, product } = opts;
+  if (!product.id) return { generationId: null, error: "This pick can't be rendered yet." };
+  return renderLook(threadId, shopperUserId, [product], product);
+}
+
+/** Render the shopper wearing the WHOLE look — every stylist pick composited
+ *  head-to-toe in a single generation. */
+export async function startFullLookRender(opts: {
+  threadId: string;
+  shopperUserId: string;
+  products: StyleUpProductRef[];
+}): Promise<{ generationId: string | null; error: string | null }> {
+  const { threadId, shopperUserId, products } = opts;
+  const caption: StyleUpProductRef = {
+    name: 'Your full look',
+    image: products.find(p => p.image)?.image,
+  };
+  return renderLook(threadId, shopperUserId, products, caption);
 }
