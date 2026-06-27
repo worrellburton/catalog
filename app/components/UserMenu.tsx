@@ -633,6 +633,14 @@ function UserMenu({
               </button>
             )}
             {isAdmin && (
+              /* Style Up — AI-stylist chat (admin-gated v1). Direct shortcut so
+                 it's reachable from the menu, not just buried in the admin nav. */
+              <button className="user-menu-item" onClick={runItem(() => navigate('/admin/style-up'))}>
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
+                <span>Style Up</span>
+              </button>
+            )}
+            {isAdmin && (
               /* Unlisted preview of the print-issue homepage (founder's
                  Home 2.0 experiment). */
               <button className="user-menu-item" onClick={runItem(() => navigate('/home2'))}>
