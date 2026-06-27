@@ -2526,7 +2526,7 @@ export default function Home() {
               down reveals the catalog. Hidden once a search resolves into
               results (heroMode flips off). */}
           {heroMode && !ceremony.active && (
-            <ShoppingForHero onRevealFeed={handleRevealFeed} />
+            <ShoppingForHero onRevealFeed={handleRevealFeed} recentProducts={recentProducts} onOpenProduct={handleOpenProduct} />
           )}
 
           <div
