@@ -300,7 +300,6 @@ export default defineConfig({
             route("users", "routes/admin/users.tsx");
             route("user/:name", "routes/admin/user.$name.tsx");
             route("brand/:name", "routes/admin/brand.$name.tsx");
-            route("style-up", "routes/admin/style-up.tsx");
           });
 
           // Brand partners portal (Shopify brand admins). Greenfield in this

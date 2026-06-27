@@ -1,27 +1,54 @@
-/* Style Up — AI stylist chat (admin-gated v1). iMessage-style layout: a
-   stylist roster, then a thread with the shopper's context pinned at the top,
-   a scrolling chat, and a docked composer. Reads in the admin light theme;
-   --su-accent is the active stylist's color. */
+/* Style Up — AI stylist chat, a consumer app feature. iMessage-style layout: a
+   stylist roster, then a thread with the shopper's context pinned at the top, a
+   scrolling chat, and a docked composer. Dark by default (the consumer app is
+   dark); --su-accent is the active stylist's color. */
+
+/* Full-screen shell — the page fills the viewport with its own top bar and an
+   internally-scrolling chat. */
+.su-shell {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  background: #0a0a0a;
+  color: #e7e7ea;
+  padding-top: env(safe-area-inset-top);
+}
+.su-shell-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-bottom: 1px solid #1f2024;
+}
+.su-shell-title { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; }
+.su-signin { margin: auto; padding: 32px; text-align: center; color: #8b8e96; max-width: 32ch; font-size: 14.5px; }
 
 .su-page {
   --su-accent: #8aa0c0;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  width: 100%;
   max-width: 720px;
   margin: 0 auto;
-  padding: 24px 20px 32px;
-  color: #14151a;
+  padding: 22px 18px 32px;
 }
 
 /* ── Roster ──────────────────────────────────────────────────────────── */
 .su-roster-head h1 {
   margin: 0 0 6px;
-  font-size: 26px;
+  font-size: 24px;
   font-weight: 800;
   letter-spacing: -0.02em;
 }
 .su-roster-head p {
   margin: 0 0 22px;
   font-size: 14px;
-  color: #6b7280;
+  color: #8b8e96;
   max-width: 46ch;
 }
 .su-roster { display: flex; flex-direction: column; gap: 12px; }
@@ -34,12 +61,13 @@
   text-align: left;
   padding: 14px 16px;
   border-radius: 16px;
-  border: 1px solid #ececf0;
-  background: #fff;
+  border: 1px solid #26282d;
+  background: #141518;
+  color: inherit;
   cursor: pointer;
   transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.12s ease;
 }
-.su-stylist-card:hover { border-color: var(--su-accent); box-shadow: 0 6px 24px rgba(0, 0, 0, 0.06); }
+.su-stylist-card:hover { border-color: var(--su-accent); box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35); }
 .su-stylist-card:active { transform: scale(0.995); }
 .su-stylist-card:disabled { opacity: 0.6; cursor: wait; }
 .su-stylist-avatar {
@@ -52,7 +80,7 @@
   justify-content: center;
   font-size: 19px;
   font-weight: 800;
-  color: #fff;
+  color: #0a0a0a;
   background: var(--su-accent);
   overflow: hidden;
 }
@@ -60,26 +88,31 @@
 .su-stylist-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 auto; }
 .su-stylist-name { font-size: 16px; font-weight: 700; }
 .su-stylist-specialty { font-size: 13px; font-weight: 600; color: var(--su-accent); }
-.su-stylist-bio { font-size: 12.5px; color: #6b7280; line-height: 1.4; }
+.su-stylist-bio { font-size: 12.5px; color: #8b8e96; line-height: 1.4; }
 .su-stylist-cta {
   flex: 0 0 auto;
   align-self: center;
   padding: 8px 14px;
   border-radius: 999px;
-  background: #111317;
-  color: #fff;
+  background: #e7e7ea;
+  color: #0a0a0a;
   font-size: 13px;
   font-weight: 700;
 }
-.su-empty { padding: 28px; text-align: center; color: #9ca3af; }
+.su-empty { padding: 28px; text-align: center; color: #8b8e96; }
 
 /* ── Thread ──────────────────────────────────────────────────────────── */
 .su-page--thread {
+  --su-accent: #8aa0c0;
   display: flex;
   flex-direction: column;
-  height: calc(100dvh - 53px); /* admin topbar is 53px sticky */
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
   max-width: 720px;
+  margin: 0 auto;
   padding: 0;
+  overflow: hidden;
 }
 .su-thread-head {
   flex: 0 0 auto;
@@ -87,8 +120,8 @@
   align-items: center;
   gap: 12px;
   padding: 12px 16px;
-  border-bottom: 1px solid #ececf0;
-  background: #fff;
+  border-bottom: 1px solid #26282d;
+  background: #141518;
 }
 .su-back {
   flex: 0 0 auto;
@@ -96,17 +129,17 @@
   display: inline-flex; align-items: center; justify-content: center;
   border-radius: 50%;
   border: none;
-  background: #f1f2f4;
-  color: #14151a;
+  background: #26282d;
+  color: #e7e7ea;
   cursor: pointer;
 }
-.su-back:hover { background: #e7e9ec; }
+.su-back:hover { background: #34363c; }
 .su-thread-avatar {
   flex: 0 0 auto;
   width: 38px; height: 38px;
   border-radius: 50%;
   display: inline-flex; align-items: center; justify-content: center;
-  font-size: 15px; font-weight: 800; color: #fff;
+  font-size: 15px; font-weight: 800; color: #0a0a0a;
   background: var(--su-accent);
   overflow: hidden;
 }
@@ -122,19 +155,19 @@
   align-items: center;
   gap: 14px;
   padding: 12px 16px;
-  border-bottom: 1px solid #ececf0;
-  background: #fafbfc;
+  border-bottom: 1px solid #26282d;
+  background: #17181c;
 }
 .su-context-photos { display: flex; gap: 6px; flex: 0 0 auto; }
 .su-context-photo {
   width: 44px; height: 44px;
   border-radius: 10px;
   overflow: hidden;
-  background: #e9eaee;
-  border: 1px solid #e3e4e8;
+  background: #26282d;
+  border: 1px solid #2a2c31;
 }
 .su-context-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
-.su-context-photo--empty { background: repeating-linear-gradient(45deg, #eceef1, #eceef1 6px, #f5f6f8 6px, #f5f6f8 12px); }
+.su-context-photo--empty { background: repeating-linear-gradient(45deg, #1c1d21, #1c1d21 6px, #26282d 6px, #26282d 12px); }
 .su-context-meta { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
 .su-context-title { font-size: 13px; font-weight: 800; letter-spacing: -0.01em; }
 .su-context-chips { display: flex; flex-wrap: wrap; gap: 5px; }
@@ -143,13 +176,13 @@
   font-weight: 600;
   padding: 3px 9px;
   border-radius: 999px;
-  background: #eef0f3;
-  color: #3b3f47;
+  background: #26282d;
+  color: #c7c9cf;
   text-transform: capitalize;
 }
-.su-context-chip--muted { color: #9ca3af; background: #f3f4f6; text-transform: none; }
-.su-context-chip--style { background: color-mix(in srgb, var(--su-accent) 18%, #fff); color: #3b3f47; text-transform: none; }
-.su-context-note { font-size: 11px; color: #9ca3af; }
+.su-context-chip--muted { color: #8b8e96; background: #1c1d21; text-transform: none; }
+.su-context-chip--style { background: color-mix(in srgb, var(--su-accent) 26%, #1c1d21); color: #e7e7ea; text-transform: none; }
+.su-context-note { font-size: 11px; color: #8b8e96; }
 
 /* Chat scroller. */
 .su-chat {
@@ -160,11 +193,11 @@
   display: flex;
   flex-direction: column;
   gap: 8px;
-  background: #fff;
+  background: #0d0e10;
 }
-.su-chat-intro { margin: auto; text-align: center; color: #9ca3af; max-width: 30ch; }
+.su-chat-intro { margin: auto; text-align: center; color: #8b8e96; max-width: 30ch; }
 .su-chat-intro p { margin: 0 0 4px; font-size: 14px; }
-.su-chat-intro-sub { font-size: 12.5px; color: #b6bac1; }
+.su-chat-intro-sub { font-size: 12.5px; color: #71747c; }
 .su-msg { display: flex; }
 .su-msg--shopper { justify-content: flex-end; }
 .su-msg--stylist { justify-content: flex-start; }
@@ -183,8 +216,8 @@
   border-bottom-right-radius: 6px;
 }
 .su-msg--stylist .su-bubble {
-  background: #e9e9eb;
-  color: #14151a;
+  background: #2a2c31;
+  color: #e7e7ea;
   border-bottom-left-radius: 6px;
 }
 
@@ -215,35 +248,35 @@
   max-width: 82%;
   padding: 10px;
   border-radius: 16px;
-  background: #f1f2f4;
-  border: 1px solid #e8e9ec;
+  background: #1c1d21;
+  border: 1px solid #2a2c31;
 }
 .su-product-media {
   flex: 0 0 auto;
   width: 84px; height: 104px;
   border-radius: 10px;
   overflow: hidden;
-  background: #e3e4e8;
+  background: #26282d;
 }
 .su-product-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .su-product-media--empty { display: block; width: 100%; height: 100%; }
 .su-product-info { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
 .su-product-brand { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--su-accent); }
-.su-product-name { font-size: 13.5px; font-weight: 600; line-height: 1.3; color: #14151a; }
-.su-product-price { font-size: 13px; color: #6b7280; margin-top: 1px; }
+.su-product-name { font-size: 13.5px; font-weight: 600; line-height: 1.3; color: #e7e7ea; }
+.su-product-price { font-size: 13px; color: #8b8e96; margin-top: 1px; }
 .su-product-actions { display: flex; gap: 8px; margin-top: auto; padding-top: 8px; }
 .su-product-btn {
   padding: 7px 14px;
   border-radius: 999px;
-  border: 1px solid #d6d8dd;
-  background: #fff;
-  color: #14151a;
+  border: 1px solid #34363c;
+  background: #26282d;
+  color: #e7e7ea;
   font-size: 12.5px;
   font-weight: 700;
   cursor: pointer;
 }
-.su-product-btn:hover { border-color: #b9bcc3; }
-.su-product-btn--primary { background: #111317; color: #fff; border-color: #111317; }
+.su-product-btn:hover { border-color: #4a4d54; }
+.su-product-btn--primary { background: #e7e7ea; color: #141518; border-color: #e7e7ea; }
 .su-product-btn:disabled { opacity: 0.55; cursor: default; }
 
 /* On-you render bubble. */
@@ -251,20 +284,20 @@
   max-width: 78%;
   border-radius: 16px;
   overflow: hidden;
-  background: #f1f2f4;
-  border: 1px solid #e8e9ec;
+  background: #1c1d21;
+  border: 1px solid #2a2c31;
 }
 .su-render-video { display: block; width: 240px; max-width: 60vw; aspect-ratio: 9 / 16; object-fit: cover; background: #000; }
 .su-render-status {
   display: flex; align-items: center; gap: 10px;
   padding: 16px 18px;
-  font-size: 13.5px; color: #6b7280;
+  font-size: 13.5px; color: #8b8e96;
 }
-.su-render-status--failed { color: #b4453a; }
+.su-render-status--failed { color: #e9a59c; }
 .su-render-spinner {
   width: 16px; height: 16px; flex: 0 0 auto;
   border-radius: 50%;
-  border: 2px solid #cfd2d8;
+  border: 2px solid #34363c;
   border-top-color: var(--su-accent);
   animation: su-spin 0.8s linear infinite;
 }
@@ -272,9 +305,9 @@
 .su-render-cap {
   display: flex; align-items: center; justify-content: space-between; gap: 10px;
   padding: 8px 12px;
-  font-size: 12.5px; color: #3b3f47;
+  font-size: 12.5px; color: #c7c9cf;
 }
-.su-render-err { align-self: center; font-size: 12.5px; color: #b4453a; padding: 4px 8px; text-align: center; }
+.su-render-err { align-self: center; font-size: 12.5px; color: #e9a59c; padding: 4px 8px; text-align: center; }
 .su-chat-retry {
   align-self: center;
   display: inline-flex;
@@ -283,15 +316,14 @@
   margin: 4px auto;
   padding: 8px 14px;
   border-radius: 999px;
-  border: 1px solid #f0c9c4;
-  background: #fbeeec;
-  color: #b4453a;
+  border: 1px solid #4a2a26;
+  background: #2a1c1a;
+  color: #e9a59c;
   font-size: 12.5px;
   font-weight: 600;
   cursor: pointer;
 }
 .su-chat-retry-go { font-weight: 800; text-decoration: underline; }
-.admin-dark .su-chat-retry { background: #2a1c1a; border-color: #4a2a26; color: #e9a59c; }
 
 /* Composer. */
 .su-composer {
@@ -300,8 +332,8 @@
   align-items: center;
   gap: 8px;
   padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
-  border-top: 1px solid #ececf0;
-  background: #fff;
+  border-top: 1px solid #26282d;
+  background: #141518;
 }
 .su-composer-input {
   flex: 1 1 auto;
@@ -309,13 +341,13 @@
   height: 40px;
   padding: 0 16px;
   border-radius: 999px;
-  border: 1px solid #e0e2e6;
-  background: #f6f7f9;
+  border: 1px solid #2a2c31;
+  background: #1c1d21;
   font-size: 14.5px;
-  color: #14151a;
+  color: #e7e7ea;
   outline: none;
 }
-.su-composer-input:focus { border-color: var(--su-accent); background: #fff; }
+.su-composer-input:focus { border-color: var(--su-accent); }
 .su-composer-send {
   flex: 0 0 auto;
   width: 40px; height: 40px;
@@ -329,28 +361,3 @@
 }
 .su-composer-send:disabled { opacity: 0.4; cursor: default; }
 .su-composer-send:not(:disabled):active { transform: scale(0.92); }
-
-/* Dark admin theme. */
-.admin-dark .su-page { color: #e7e7ea; }
-.admin-dark .su-stylist-card,
-.admin-dark .su-thread-head,
-.admin-dark .su-chat,
-.admin-dark .su-composer { background: #141518; }
-.admin-dark .su-stylist-card { border-color: #26282d; }
-.admin-dark .su-thread-head,
-.admin-dark .su-context,
-.admin-dark .su-composer { border-color: #26282d; }
-.admin-dark .su-context { background: #17181c; }
-.admin-dark .su-back { background: #26282d; color: #e7e7ea; }
-.admin-dark .su-context-chip { background: #26282d; color: #c7c9cf; }
-.admin-dark .su-msg--stylist .su-bubble { background: #2a2c31; color: #e7e7ea; }
-.admin-dark .su-composer-input { background: #1c1d21; border-color: #2a2c31; color: #e7e7ea; }
-.admin-dark .su-roster-head p,
-.admin-dark .su-stylist-bio,
-.admin-dark .su-context-note { color: #8b8e96; }
-.admin-dark .su-product,
-.admin-dark .su-render { background: #1c1d21; border-color: #2a2c31; }
-.admin-dark .su-product-name { color: #e7e7ea; }
-.admin-dark .su-product-btn { background: #26282d; border-color: #34363c; color: #e7e7ea; }
-.admin-dark .su-product-btn--primary { background: #e7e7ea; color: #141518; border-color: #e7e7ea; }
-.admin-dark .su-render-cap { color: #c7c9cf; }
