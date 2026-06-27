@@ -44,6 +44,7 @@ export default function StyleUpPage() {
   const [draft, setDraft] = useState('');
   const [sending, setSending] = useState(false);
   const [stylistTyping, setStylistTyping] = useState(false);
+  const [chatError, setChatError] = useState<string | null>(null);
   const [ctx, setCtx] = useState<ShopperContext | null>(null);
   // Render polling: generation id → its latest row. Drives the on-you render
   // bubbles (spinner → video).
@@ -133,6 +134,28 @@ export default function StyleUpPage() {
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages.length, stylistTyping]);
 
+  // Kick the AI stylist for the current thread. Its reply (+ any product picks)
+  // streams back via the realtime subscription; the typing bubble holds until
+  // the call resolves. Any failure (incl. the function not being deployed yet)
+  // surfaces a recoverable error row with a retry, rather than silently
+  // dropping the turn.
+  const triggerStylist = useCallback(async () => {
+    if (!threadId || !supabase) return;
+    setChatError(null);
+    setStylistTyping(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('style-up-chat', { body: { threadId } });
+      const resp = data as { success?: boolean; error?: string } | null;
+      if (error || !resp?.success) {
+        setChatError(resp?.error || 'Your stylist couldn’t respond. Tap to retry.');
+      }
+    } catch {
+      setChatError('Your stylist couldn’t respond. Tap to retry.');
+    } finally {
+      setStylistTyping(false);
+    }
+  }, [threadId]);
+
   const send = useCallback(async () => {
     const text = draft.trim();
     if (!text || !threadId || sending) return;
@@ -141,15 +164,8 @@ export default function StyleUpPage() {
     const msg = await sendShopperMessage(threadId, text);
     if (msg) setMessages(prev => (prev.some(m => m.id === msg.id) ? prev : [...prev, msg]));
     setSending(false);
-    // Kick the AI stylist. Its reply (+ any product picks) streams back via the
-    // realtime subscription; the typing bubble holds until the call resolves.
-    if (!supabase) return;
-    setStylistTyping(true);
-    try {
-      await supabase.functions.invoke('style-up-chat', { body: { threadId } });
-    } catch { /* surfaced as: no reply appears */ }
-    finally { setStylistTyping(false); }
-  }, [draft, threadId, sending]);
+    void triggerStylist();
+  }, [draft, threadId, sending, triggerStylist]);
 
   // "See it on me" — render the shopper wearing a stylist pick (reuses the
   // generate-look pipeline). The render bubble arrives via realtime and the
@@ -345,6 +361,11 @@ export default function StyleUpPage() {
               <span /><span /><span />
             </div>
           </div>
+        )}
+        {chatError && !stylistTyping && (
+          <button type="button" className="su-chat-retry" onClick={() => void triggerStylist()}>
+            {chatError} <span className="su-chat-retry-go">Retry</span>
+          </button>
         )}
         {renderError && <div className="su-render-err">{renderError}</div>}
       </div>
