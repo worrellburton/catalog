@@ -170,6 +170,27 @@ function avgPullMs(): number {
   } catch { return DEFAULT_PULL_MS; }
 }
 
+// Persisted per-thread "a pull is in progress" marker so the working module
+// stays in sync no matter where the shopper goes (leave + come back, refresh).
+// TTL-bounded so a pull that died mid-flight (hard reload) can't show forever.
+const HUNT_FLAG_PREFIX = 'styleup:hunt:';
+interface HuntFlag { startedAt: number; estSec: number; }
+function setHuntFlag(threadId: string, estSec: number): void {
+  try { localStorage.setItem(HUNT_FLAG_PREFIX + threadId, JSON.stringify({ startedAt: Date.now(), estSec })); } catch { /* ignore */ }
+}
+function clearHuntFlag(threadId: string): void {
+  try { localStorage.removeItem(HUNT_FLAG_PREFIX + threadId); } catch { /* ignore */ }
+}
+function getHuntFlag(threadId: string): HuntFlag | null {
+  try {
+    const raw = localStorage.getItem(HUNT_FLAG_PREFIX + threadId);
+    if (!raw) return null;
+    const f = JSON.parse(raw) as HuntFlag;
+    if (Date.now() - f.startedAt > f.estSec * 1000 + 30000) { clearHuntFlag(threadId); return null; }
+    return f;
+  } catch { return null; }
+}
+
 /** A natural, conversational way to say the wait (no em dashes). */
 function waitPhrase(sec: number): string {
   if (sec <= 6) return 'a few seconds';
@@ -329,10 +350,7 @@ export function StyleUpExperience({
   const [viewer, setViewer] = useState<{ videoUrl: string; pieces: StyleUpProductRef[]; genId: string } | null>(null); // expanded look
   const [, setNowTick] = useState(0);                // 1s heartbeat for the render ETA
   const [isDesktop, setIsDesktop] = useState(false); // desktop = two-pane layout
-  const [hunting, setHunting] = useState(false);     // stylist pulling pieces together
-  const [huntThreadId, setHuntThreadId] = useState<string | null>(null); // which thread the pull belongs to
-  const [huntTick, setHuntTick] = useState(0);       // seconds elapsed in the current pull
-  const [huntEstSec, setHuntEstSec] = useState(0);   // estimated total seconds for the pull
+  const [huntView, setHuntView] = useState<{ estSec: number; elapsed: number } | null>(null); // working module for the open thread (flag-driven)
   const [typingThreadId, setTypingThreadId] = useState<string | null>(null); // which thread the typing belongs to
   const [adminNote, setAdminNote] = useState<string | null>(null); // super-admin-only diagnostics (client-only)
   const [signingIn, setSigningIn] = useState(false); // landing Google sign-in in flight
@@ -552,14 +570,22 @@ export function StyleUpExperience({
   useEffect(() => {
     const el = scrollerRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [messages.length, stylistTyping, hunting]);
+  }, [messages.length, stylistTyping, !!huntView]);
 
-  // Tick the pull timer (drives both the cycling status line + the ETA badge).
+  // Poll the persisted hunt marker for THIS thread every second, so the working
+  // module shows whenever a pull is actually in progress for the open chat,
+  // regardless of navigation (leave + come back, refresh), and hides the moment
+  // it finishes or expires. The marker is the single source of truth.
   useEffect(() => {
-    if (!hunting) { setHuntTick(0); return; }
-    const h = window.setInterval(() => setHuntTick(s => s + 1), 1000);
+    if (!threadId) { setHuntView(null); return; }
+    const read = () => {
+      const f = getHuntFlag(threadId);
+      setHuntView(f ? { estSec: f.estSec, elapsed: Math.max(0, Math.floor((Date.now() - f.startedAt) / 1000)) } : null);
+    };
+    read();
+    const h = window.setInterval(read, 1000);
     return () => window.clearInterval(h);
-  }, [hunting]);
+  }, [threadId]);
 
   // Show the typing bubble for a randomized 1/2/3s before the stylist's reply
   // lands, used by the tap-driven flows (swaps, outfit, scene) so every
@@ -583,9 +609,8 @@ export function StyleUpExperience({
     // and scope the "working" indicator to THIS thread so it never shows up in a
     // different chat the shopper switches to mid-pull.
     const estSec = Math.max(3, Math.round((avgPullMs() * qs.length) / 1000));
-    setHuntEstSec(estSec);
-    setHuntThreadId(tid);
-    setHunting(true);
+    setHuntFlag(tid, estSec);                       // persist so the module survives navigation
+    setHuntView({ estSec, elapsed: 0 });            // show immediately (poll keeps it in sync)
     setAdminNote(null);
     await sendStylistText(tid, `On it. Give me ${waitPhrase(estSec)} and I'll have ${qs.length === 1 ? 'it' : 'these'} ready for you.`);
     try {
@@ -610,8 +635,7 @@ export function StyleUpExperience({
     } catch (e) {
       if (isSuperAdmin) setAdminNote(`pull crashed: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
-      setHunting(false);
-      setHuntThreadId(null);
+      clearHuntFlag(tid);                            // the poll hides the module within ~1s
     }
   }, [threadId, userId, rejected, isSuperAdmin]);
 
@@ -1414,12 +1438,12 @@ export function StyleUpExperience({
               </div>
             </div>
           )}
-          {hunting && huntThreadId === threadId && (
+          {huntView && (
             <div className="su-msg su-msg--stylist">
               <div className="su-hunting" role="status" aria-live="polite">
                 <span className="su-hunting-orb" aria-hidden="true" />
-                <span className="su-hunting-text">{HUNT_PHRASES[Math.floor(huntTick / 2) % HUNT_PHRASES.length]}</span>
-                {huntEstSec > 0 && <span className="su-hunting-eta">{fmtRemaining(Math.max(0, huntEstSec - huntTick))}</span>}
+                <span className="su-hunting-text">{HUNT_PHRASES[Math.floor(huntView.elapsed / 2) % HUNT_PHRASES.length]}</span>
+                <span className="su-hunting-eta">{fmtRemaining(Math.max(0, huntView.estSec - huntView.elapsed))}</span>
               </div>
             </div>
           )}
