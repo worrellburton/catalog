@@ -23,7 +23,16 @@ import {
   listUserUploads, getUserSlots, saveUserSlots, uploadUserPhoto, getGeneration,
   setGenerationPublished, nameLookForGeneration, type UserGeneration,
 } from '~/services/user-generations';
+import { generationProgress } from '~/services/generation-progress';
 import '~/styles/style-up.css';
+
+/** "~2 min left" / "~40s left" — estimated wait from the shared generation
+ *  timing model (based on typical generation durations). */
+function fmtRemaining(sec: number): string {
+  if (sec <= 0) return 'almost done…';
+  if (sec < 60) return `~${sec}s left`;
+  return `~${Math.ceil(sec / 60)} min left`;
+}
 
 /** Does this shopper message read as "put the whole look on me"? Detected
  *  client-side so the existing generate-look pipeline can fire without waiting
@@ -98,6 +107,7 @@ export default function StyleUpPage() {
   const [renderingIds, setRenderingIds] = useState<Set<string>>(new Set());
   const [genLook, setGenLook] = useState(false);     // full-look render in flight
   const [published, setPublished] = useState<Set<string>>(new Set()); // gen ids added to looks
+  const [, setNowTick] = useState(0);                // 1s heartbeat for the render ETA
   const [edit, setEdit] = useState<{ heightLabel: string; weightLabel: string; ageLabel: string; gender: UserGender; style: string } | null>(null);
   const [savingCtx, setSavingCtx] = useState(false);
   const [uploadingSlot, setUploadingSlot] = useState<number | null>(null);
@@ -345,6 +355,18 @@ export default function StyleUpPage() {
     void tick();
     const h = window.setInterval(tick, 3000);
     return () => { cancelled = true; window.clearInterval(h); };
+  }, [messages, renders]);
+
+  // 1s heartbeat while any render is in-flight so the ETA countdown ticks down.
+  useEffect(() => {
+    const pending = messages.some(m => {
+      if (m.kind !== 'render') return false;
+      const r = m.renderGenerationId ? renders[m.renderGenerationId] : null;
+      return !r || (r.status !== 'done' && r.status !== 'failed');
+    });
+    if (!pending) return;
+    const h = window.setInterval(() => setNowTick(t => t + 1), 1000);
+    return () => window.clearInterval(h);
   }, [messages, renders]);
 
   // ── Context editing — writes straight to the profile (shared with the
@@ -647,7 +669,12 @@ export default function StyleUpPage() {
                     ) : (
                       <div className="su-render-status">
                         <span className="su-render-spinner" aria-hidden="true" />
-                        Styling you in {p?.name ? p.name : 'this look'}…
+                        <span className="su-render-status-text">
+                          Styling you in {p?.name ? p.name : 'this look'}…
+                          <span className="su-render-eta">
+                            {fmtRemaining(generationProgress(r?.created_at ?? m.createdAt, r?.duration_seconds ?? 10).remainingSec)}
+                          </span>
+                        </span>
                       </div>
                     )}
                     {done && (
