@@ -16,7 +16,7 @@ import {
   fetchStylists, getOrCreateThread, getLatestThread, fetchMyThreads, fetchMessages, sendShopperMessage,
   sendStylistText, startLookRender, startFullLookRender, fetchSwapOptions, sendSwapOptions,
   sendChooser, recommendForSlot, sendProductPick,
-  webFetchSwapOptions, webRecommendForSlot, webRecommend,
+  webFetchSwapOptions, webRecommendForSlot, webHuntOne,
   type StyleUpStylist, type StyleUpMessage, type StyleUpProductRef, type StyleUpThreadSummary, type RecommendOpts,
 } from '~/services/style-up';
 import { roleTagFromName } from '~/services/product-roles';
@@ -289,6 +289,7 @@ export function StyleUpExperience({
 }: StyleUpExperienceProps = {}) {
   const { user } = useAuth();
   const userId = user?.id ?? null;
+  const isSuperAdmin = user?.role === 'super_admin';
   const navigate = useNavigate();
   // Only auto-resume / surface threads that belong to the current surface.
   const inScope = useCallback(
@@ -333,6 +334,7 @@ export function StyleUpExperience({
   const [huntTick, setHuntTick] = useState(0);       // seconds elapsed in the current pull
   const [huntEstSec, setHuntEstSec] = useState(0);   // estimated total seconds for the pull
   const [typingThreadId, setTypingThreadId] = useState<string | null>(null); // which thread the typing belongs to
+  const [adminNote, setAdminNote] = useState<string | null>(null); // super-admin-only diagnostics (client-only)
   const [signingIn, setSigningIn] = useState(false); // landing Google sign-in in flight
   const [signinError, setSigninError] = useState('');
   const [edit, setEdit] = useState<{ heightLabel: string; weightLabel: string; ageLabel: string; gender: UserGender; style: string } | null>(null);
@@ -482,6 +484,8 @@ export function StyleUpExperience({
   useEffect(() => {
     setChosenBySlot({});
     setChosenScene(null);
+    setAdminNote(null);
+    setChatError(null);
     lastRenderSigRef.current = '';
     if (!threadId) { setRejected(new Set()); setPrefs(EMPTY_PREFS); prefsRef.current = EMPTY_PREFS; return; }
     try {
@@ -582,27 +586,34 @@ export function StyleUpExperience({
     setHuntEstSec(estSec);
     setHuntThreadId(tid);
     setHunting(true);
+    setAdminNote(null);
     await sendStylistText(tid, `On it. Give me ${waitPhrase(estSec)} and I'll have ${qs.length === 1 ? 'it' : 'these'} ready for you.`);
     try {
       const found: StyleUpProductRef[] = [];
+      const diags: string[] = [];
       for (const q of qs) {
         const got = found.map(f => f.id).filter((x): x is string => !!x);
         const t0 = Date.now();
-        const [p] = await webRecommend(userId, q, 1, [...rejected, ...got]);
+        const { pick, diag } = await webHuntOne(userId, q, [...rejected, ...got]);
         recordPullMs(Date.now() - t0);          // self-calibrate future estimates
-        if (p?.id) found.push(p);
+        diags.push(`"${q}" → ${diag.ok ? `${diag.rawCount} found · ${diag.withUrl} w/url · ${diag.matched} usable` : `ERR: ${diag.error}`}`);
+        if (pick?.id) found.push(pick);
       }
       if (found.length === 0) {
         await sendStylistText(tid, "Couldn't quite pin those down. Give me a brand or a budget and I'll take another run at it.");
+        // Super admins get the raw reason the pull came back empty.
+        if (isSuperAdmin) setAdminNote(`pull empty (${qs.length} ${qs.length === 1 ? 'query' : 'queries'}):\n${diags.join('\n')}`);
         return;
       }
       await sendStylistText(tid, `Here's what I pulled. Tap any to see it on you, or say "put the look on me".`);
       for (const p of found) await sendProductPick(tid, p);
+    } catch (e) {
+      if (isSuperAdmin) setAdminNote(`pull crashed: ${e instanceof Error ? e.message : String(e)}`);
     } finally {
       setHunting(false);
       setHuntThreadId(null);
     }
-  }, [threadId, userId, rejected]);
+  }, [threadId, userId, rejected, isSuperAdmin]);
 
   // Kick the AI stylist for the current thread. Its reply (+ any product picks)
   // streams back via the realtime subscription; the typing bubble holds until
@@ -612,6 +623,7 @@ export function StyleUpExperience({
   const triggerStylist = useCallback(async () => {
     if (!threadId || !supabase) return;
     setChatError(null);
+    setAdminNote(null);
     await stylistBeat();           // human "reading" pause (1/2/3s) before typing
     setTypingThreadId(threadId);
     setStylistTyping(true);
@@ -636,7 +648,8 @@ export function StyleUpExperience({
     }
     setStylistTyping(false);
     setChatError(lastErr || 'Your stylist couldn’t respond. Tap to retry.');
-  }, [threadId, runWebHunt]);
+    if (isSuperAdmin) setAdminNote(`style-up-chat failed: ${lastErr || 'no response (network / timeout)'}`);
+  }, [threadId, runWebHunt, isSuperAdmin]);
 
   // "Generate the look on me", the stylist confirms in-thread, then the FULL
   // set of recommended pieces is composited onto the shopper via the existing
@@ -1414,6 +1427,12 @@ export function StyleUpExperience({
             <button type="button" className="su-chat-retry" onClick={() => void triggerStylist()}>
               {chatError} <span className="su-chat-retry-go">Retry</span>
             </button>
+          )}
+          {isSuperAdmin && adminNote && (
+            <div className="su-admin-note" role="status">
+              <span className="su-admin-note-tag">admin</span>
+              <pre>{adminNote}</pre>
+            </div>
           )}
           {renderError && <div className="su-render-err">{renderError}</div>}
         </div>
