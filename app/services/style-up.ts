@@ -18,6 +18,11 @@ export interface StyleUpStylist {
   specialty: string | null;
   bio: string | null;
   accentColor: string | null;
+  /** Where this stylist's picks come from: 'catalog' = our own products,
+   *  'web' = the open web (searched + auto-imported on the fly). */
+  sourceMode: 'catalog' | 'web';
+  /** Marks the two stylists featured on the /style landing page (else null). */
+  landingSlot: string | null;
 }
 
 /** A product attached to a chat message (the stylist's pick). Loose by design
@@ -68,8 +73,15 @@ function mapStylist(r: Record<string, unknown>): StyleUpStylist {
     specialty: (r.specialty as string | null) ?? null,
     bio: (r.bio as string | null) ?? null,
     accentColor: (r.accent_color as string | null) ?? null,
+    sourceMode: (r.source_mode as 'catalog' | 'web') === 'web' ? 'web' : 'catalog',
+    landingSlot: (r.landing_slot as string | null) ?? null,
   };
 }
+
+// Every stylist column the client maps. Centralized so every select stays in
+// sync with mapStylist (source_mode / landing_slot were easy to forget).
+const STYLIST_COLS = 'id, name, avatar_url, specialty, bio, accent_color, source_mode, landing_slot';
+const STYLIST_JOIN = `stylist:style_up_stylists(${STYLIST_COLS})`;
 
 function mapMessage(r: Record<string, unknown>): StyleUpMessage {
   return {
@@ -84,14 +96,16 @@ function mapMessage(r: Record<string, unknown>): StyleUpMessage {
   };
 }
 
-/** The active stylist roster, in display order. */
-export async function fetchStylists(): Promise<StyleUpStylist[]> {
+/** The active stylist roster, in display order. Pass `landingOnly` to get just
+ *  the two stylists featured on the /style landing page (landing_slot set). */
+export async function fetchStylists(opts: { landingOnly?: boolean } = {}): Promise<StyleUpStylist[]> {
   if (!supabase) return [];
-  const { data, error } = await supabase
+  let q = supabase
     .from('style_up_stylists')
-    .select('id, name, avatar_url, specialty, bio, accent_color')
-    .eq('is_active', true)
-    .order('sort', { ascending: true });
+    .select(STYLIST_COLS)
+    .eq('is_active', true);
+  if (opts.landingOnly) q = q.not('landing_slot', 'is', null);
+  const { data, error } = await q.order('sort', { ascending: true });
   if (error || !data) return [];
   return (data as Record<string, unknown>[]).map(mapStylist);
 }
@@ -135,7 +149,7 @@ export async function fetchMyThreads(shopperUserId: string): Promise<StyleUpThre
   if (!supabase) return [];
   const { data: threads } = await supabase
     .from('style_up_threads')
-    .select('id, last_message_at, stylist:style_up_stylists(id, name, avatar_url, specialty, bio, accent_color)')
+    .select(`id, last_message_at, ${STYLIST_JOIN}`)
     .eq('shopper_user_id', shopperUserId)
     .order('last_message_at', { ascending: false });
   if (!threads || threads.length === 0) return [];
@@ -227,7 +241,7 @@ export async function adminListThreads(): Promise<AdminThread[]> {
   if (!supabase) return [];
   const { data: threads } = await supabase
     .from('style_up_threads')
-    .select('id, shopper_user_id, last_message_at, stylist:style_up_stylists(id, name, avatar_url, specialty, bio, accent_color)')
+    .select(`id, shopper_user_id, last_message_at, ${STYLIST_JOIN}`)
     .order('last_message_at', { ascending: false });
   if (!threads || threads.length === 0) return [];
 
@@ -285,7 +299,7 @@ export async function adminListLooks(limit = 120): Promise<AdminLook[]> {
   const [{ data: gens }, { data: gprods }, { data: threads }] = await Promise.all([
     supabase.from('user_generations').select('id, status, video_url, created_at').in('id', genIds.length ? genIds : ['00000000-0000-0000-0000-000000000000']),
     supabase.from('user_generation_products').select('generation_id, sort_order, products(name, brand, image_url, primary_image_url, url)').in('generation_id', genIds.length ? genIds : ['00000000-0000-0000-0000-000000000000']),
-    supabase.from('style_up_threads').select('id, shopper_user_id, stylist:style_up_stylists(id, name, avatar_url, specialty, bio, accent_color)').in('id', threadIds.length ? threadIds : ['00000000-0000-0000-0000-000000000000']),
+    supabase.from('style_up_threads').select(`id, shopper_user_id, ${STYLIST_JOIN}`).in('id', threadIds.length ? threadIds : ['00000000-0000-0000-0000-000000000000']),
   ]);
 
   const genById = new Map(((gens ?? []) as Array<{ id: string; status: string; video_url: string | null; created_at: string }>).map(g => [g.id, g]));
@@ -348,7 +362,7 @@ export async function getLatestThread(
   if (!supabase) return null;
   const { data } = await supabase
     .from('style_up_threads')
-    .select('id, stylist:style_up_stylists(id, name, avatar_url, specialty, bio, accent_color)')
+    .select(`id, ${STYLIST_JOIN}`)
     .eq('shopper_user_id', shopperUserId)
     .order('last_message_at', { ascending: false })
     .limit(1)
@@ -636,6 +650,129 @@ export async function fetchSwapOptions(
   }
   scored.sort((a, b) => (b.score - a.score) || (a.idx - b.idx));
   return scored.slice(0, count).map(s => s.ref);
+}
+
+// ── Web sourcing (web stylists, e.g. Theo) ──────────────────────────────────
+// A web stylist doesn't pull from our catalog — the app searches the open web
+// via product-search (Google Shopping/SerpAPI), which AUTO-IMPORTS each match
+// into `products` (real ids + queued embeddings), then we return those imported
+// rows as product refs. Because they now live in `products`, the exact same
+// on-you render pipeline works on them unchanged.
+
+const ROLE_QUERY_NOUN: Record<string, string> = {
+  Top: 'shirt', Pants: 'pants', Jacket: 'jacket', Shoes: 'shoes', Hat: 'hat',
+  Dress: 'dress', Bag: 'bag', Sunglasses: 'sunglasses', Jewelry: 'jewelry', Accessory: 'accessory',
+};
+
+function genderWord(gender: string): string {
+  return gender === 'male' ? "men's" : gender === 'female' ? "women's" : '';
+}
+
+/** A few search qualifiers distilled from the running prefs + saved style, so a
+ *  web query reads like a real shopper ("men's dressy minimalist jacket"). */
+function webQualifiers(opts: RecommendOpts): string {
+  const bits: string[] = [];
+  if (opts.formality === 'dressier') bits.push('dressy');
+  if (opts.formality === 'casual') bits.push('casual');
+  if (opts.simpler) bits.push('minimalist');
+  if (opts.occasion) bits.push(opts.occasion);
+  bits.push(...kw(opts.styleText ?? '').slice(0, 2));
+  return bits.join(' ');
+}
+
+/** Search the open web for `query`, auto-import the matches, and return the
+ *  imported products (now real catalog rows, so they're renderable) as refs —
+ *  in SerpAPI's relevance order, capped at `count`. */
+export async function webSearchProducts(
+  query: string,
+  gender: string,
+  count = 4,
+): Promise<StyleUpProductRef[]> {
+  if (!supabase || !query.trim()) return [];
+  const g = gender === 'male' ? 'men' : gender === 'female' ? 'women' : 'unisex';
+  const { data, error } = await supabase.functions.invoke('product-search', {
+    body: { query: query.trim(), ingest: true, gender: g },
+  });
+  const resp = data as { success?: boolean; products?: Array<{ url?: string }> } | null;
+  if (error || !resp?.success) return [];
+  // Resolve searched products → catalog rows by url (covers freshly-imported
+  // AND already-existing ones). Only rows with an id can be rendered, so we key
+  // off the DB rows and keep SerpAPI's order.
+  const urls = (resp.products ?? []).map(p => p.url).filter((u): u is string => !!u);
+  if (urls.length === 0) return [];
+  type Row = { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null; primary_image_url: string | null; url: string | null; type: string | null };
+  const { data: rows } = await supabase
+    .from('products')
+    .select('id, name, brand, price, image_url, primary_image_url, url, type')
+    .in('url', urls.slice(0, 30));
+  const byUrl = new Map<string, Row>(((rows ?? []) as Row[]).map(r => [r.url ?? '', r]));
+  const out: StyleUpProductRef[] = [];
+  const seen = new Set<string>();
+  for (const u of urls) {
+    const r = byUrl.get(u);
+    if (!r || seen.has(r.id)) continue;
+    seen.add(r.id);
+    out.push({
+      id: r.id, name: r.name ?? undefined, brand: r.brand ?? undefined, price: r.price ?? undefined,
+      image: r.primary_image_url || r.image_url || undefined, url: r.url ?? undefined,
+    });
+    if (out.length >= count) break;
+  }
+  return out;
+}
+
+/** Web equivalent of fetchSwapOptions — N web finds for one slot (role),
+ *  honoring budget + role where the noisy web titles let us tell. */
+export async function webFetchSwapOptions(
+  shopperUserId: string,
+  role: string,
+  count = 3,
+  excludeIds: string[] = [],
+  opts: RecommendOpts = {},
+): Promise<StyleUpProductRef[]> {
+  const gender = await getUserGender(shopperUserId);
+  const noun = ROLE_QUERY_NOUN[role] ?? role.toLowerCase();
+  const query = [genderWord(gender), webQualifiers(opts), noun].filter(Boolean).join(' ');
+  const found = await webSearchProducts(query, gender, count + excludeIds.length + 4);
+  const exclude = new Set(excludeIds);
+  const filtered: StyleUpProductRef[] = [];
+  for (const p of found) {
+    if (!p.id || exclude.has(p.id)) continue;
+    const guessed = roleForProduct(null, p.name ?? null);
+    if (guessed && guessed !== role) continue;          // wrong slot when we can tell
+    const price = priceNum(p.price);
+    if (opts.budgetMax && price !== null && price > opts.budgetMax) continue;
+    filtered.push(p);
+    if (filtered.length >= count) break;
+  }
+  // Web titles are noisy — if role filtering was too aggressive, fall back to
+  // the raw finds so the shopper still gets options.
+  return filtered.length ? filtered : found.filter(p => p.id && !exclude.has(p.id)).slice(0, count);
+}
+
+/** Recommend ONE web find for a slot (role). */
+export async function webRecommendForSlot(
+  shopperUserId: string,
+  role: string,
+  excludeIds: string[] = [],
+  opts: RecommendOpts = {},
+): Promise<StyleUpProductRef | null> {
+  const [p] = await webFetchSwapOptions(shopperUserId, role, 1, excludeIds, opts);
+  return p ?? null;
+}
+
+/** Free-text web recommend — "find me a black leather jacket". */
+export async function webRecommend(
+  shopperUserId: string,
+  text: string,
+  count = 3,
+  excludeIds: string[] = [],
+): Promise<StyleUpProductRef[]> {
+  const gender = await getUserGender(shopperUserId);
+  const query = [genderWord(gender), text].filter(Boolean).join(' ');
+  const found = await webSearchProducts(query, gender, count + excludeIds.length + 2);
+  const exclude = new Set(excludeIds);
+  return found.filter(p => p.id && !exclude.has(p.id)).slice(0, count);
 }
 
 /** Post a generic tap-chooser into the thread (which shoes / which slots / …). */
