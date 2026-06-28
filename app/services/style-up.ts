@@ -680,26 +680,44 @@ function webQualifiers(opts: RecommendOpts): string {
   return bits.join(' ');
 }
 
+/** Diagnostics for one web search — surfaced to super admins so a failed pull
+ *  can be debugged (was it the search, the import, or the catalog match?). */
+export interface WebSearchDiag {
+  ok: boolean;          // the product-search call itself succeeded
+  error: string | null; // error text when it didn't
+  rawCount: number;     // results the search returned
+  withUrl: number;      // of those, how many had a usable URL
+  matched: number;      // how many resolved to renderable catalog rows
+}
+
 /** Search the open web for `query`, auto-import the matches, and return the
- *  imported products (now real catalog rows, so they're renderable) as refs —
- *  in SerpAPI's relevance order, capped at `count`. */
+ *  imported products (now real catalog rows, so they're renderable) as refs in
+ *  relevance order, capped at `count` — plus diagnostics for debugging. */
 export async function webSearchProducts(
   query: string,
   gender: string,
   count = 4,
-): Promise<StyleUpProductRef[]> {
-  if (!supabase || !query.trim()) return [];
+): Promise<{ products: StyleUpProductRef[]; diag: WebSearchDiag }> {
+  const diag: WebSearchDiag = { ok: false, error: null, rawCount: 0, withUrl: 0, matched: 0 };
+  if (!supabase || !query.trim()) { diag.error = 'no query / no db'; return { products: [], diag }; }
   const g = gender === 'male' ? 'men' : gender === 'female' ? 'women' : 'unisex';
   const { data, error } = await supabase.functions.invoke('product-search', {
     body: { query: query.trim(), ingest: true, gender: g },
   });
-  const resp = data as { success?: boolean; products?: Array<{ url?: string }> } | null;
-  if (error || !resp?.success) return [];
+  const resp = data as { success?: boolean; error?: string; products?: Array<{ url?: string }> } | null;
+  if (error || !resp?.success) {
+    diag.error = (error as { message?: string } | null)?.message || resp?.error || 'search failed';
+    return { products: [], diag };
+  }
+  diag.ok = true;
   // Resolve searched products → catalog rows by url (covers freshly-imported
   // AND already-existing ones). Only rows with an id can be rendered, so we key
   // off the DB rows and keep SerpAPI's order.
-  const urls = (resp.products ?? []).map(p => p.url).filter((u): u is string => !!u);
-  if (urls.length === 0) return [];
+  const all = resp.products ?? [];
+  diag.rawCount = all.length;
+  const urls = all.map(p => p.url).filter((u): u is string => !!u);
+  diag.withUrl = urls.length;
+  if (urls.length === 0) return { products: [], diag };
   type Row = { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null; primary_image_url: string | null; url: string | null; type: string | null };
   const { data: rows } = await supabase
     .from('products')
@@ -718,7 +736,21 @@ export async function webSearchProducts(
     });
     if (out.length >= count) break;
   }
-  return out;
+  diag.matched = out.length;
+  return { products: out, diag };
+}
+
+/** One web find for the hunt + its diagnostics (for super-admin error display). */
+export async function webHuntOne(
+  shopperUserId: string,
+  query: string,
+  excludeIds: string[] = [],
+): Promise<{ pick: StyleUpProductRef | null; diag: WebSearchDiag }> {
+  const gender = await getUserGender(shopperUserId);
+  const { products, diag } = await webSearchProducts(query, gender, 1 + excludeIds.length + 3);
+  const exclude = new Set(excludeIds);
+  const pick = products.find(p => p.id && !exclude.has(p.id)) ?? null;
+  return { pick, diag };
 }
 
 /** Web equivalent of fetchSwapOptions — N web finds for one slot (role),
@@ -733,7 +765,7 @@ export async function webFetchSwapOptions(
   const gender = await getUserGender(shopperUserId);
   const noun = ROLE_QUERY_NOUN[role] ?? role.toLowerCase();
   const query = [genderWord(gender), webQualifiers(opts), noun].filter(Boolean).join(' ');
-  const found = await webSearchProducts(query, gender, count + excludeIds.length + 4);
+  const { products: found } = await webSearchProducts(query, gender, count + excludeIds.length + 4);
   const exclude = new Set(excludeIds);
   const filtered: StyleUpProductRef[] = [];
   for (const p of found) {
@@ -759,20 +791,6 @@ export async function webRecommendForSlot(
 ): Promise<StyleUpProductRef | null> {
   const [p] = await webFetchSwapOptions(shopperUserId, role, 1, excludeIds, opts);
   return p ?? null;
-}
-
-/** Free-text web recommend — "find me a black leather jacket". */
-export async function webRecommend(
-  shopperUserId: string,
-  text: string,
-  count = 3,
-  excludeIds: string[] = [],
-): Promise<StyleUpProductRef[]> {
-  const gender = await getUserGender(shopperUserId);
-  const query = [genderWord(gender), text].filter(Boolean).join(' ');
-  const found = await webSearchProducts(query, gender, count + excludeIds.length + 2);
-  const exclude = new Set(excludeIds);
-  return found.filter(p => p.id && !exclude.has(p.id)).slice(0, count);
 }
 
 /** Post a generic tap-chooser into the thread (which shoes / which slots / …). */
