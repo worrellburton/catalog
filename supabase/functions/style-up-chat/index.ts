@@ -248,10 +248,46 @@ productIds is optional — include it only when you're actually recommending pie
       input_tokens: out.usage?.input_tokens ?? null, output_tokens: out.usage?.output_tokens ?? null, status: 'success',
     });
 
+    // Research trace — a structured record of exactly how this turn was produced
+    // (context, persona, what was sent to the model, the reply + queries), for
+    // the admin "view research" node diagram. Best-effort; never blocks the turn.
+    let traceId: string | null = null;
+    try {
+      const { data: traceRow } = await admin.from('style_up_traces').insert({
+        thread_id: threadId,
+        shopper_user_id: thread.shopper_user_id,
+        stylist_id: thread.stylist_id,
+        source_mode: isWeb ? 'web' : 'catalog',
+        payload: {
+          source_mode: isWeb ? 'web' : 'catalog',
+          stylist: stylist?.name ?? null,
+          context: {
+            name: prof?.full_name ?? null, gender: genderNorm,
+            height: prof?.height_label ?? null, weight: prof?.weight_label ?? null,
+            age: prof?.age_label ?? null, custom_style: prof?.custom_style_prompt ?? null,
+            fashion_styles: prof?.fashion_styles ?? null,
+          },
+          context_line: ctxBits.join('; '),
+          persona,
+          system,
+          messages,
+          candidate_count: cands.length,
+          model: MODEL,
+          reply,
+          product_ids: productIds,
+          picks: picks.map(p => ({ id: p.id, name: p.name, brand: p.brand })),
+          search_queries: searchQueries,
+          usage: { input_tokens: out.usage?.input_tokens ?? null, output_tokens: out.usage?.output_tokens ?? null },
+        },
+      }).select('id').single();
+      traceId = (traceRow?.id as string | undefined) ?? null;
+    } catch (_e) { /* trace is best-effort */ }
+
     // Web stylists return per-piece web search queries for the client to run
     // (search → import → show), so the stylist's "let me surface options"
-    // actually produces products.
-    return json({ success: true, reply, picks: picks.length, searchQueries: isWeb ? searchQueries : [] });
+    // actually produces products. traceId lets the client enrich the trace with
+    // the per-query search results.
+    return json({ success: true, reply, picks: picks.length, searchQueries: isWeb ? searchQueries : [], traceId });
   } catch (err) {
     return json({ success: false, error: err instanceof Error ? err.message : String(err) }, 500);
   }
