@@ -26,6 +26,24 @@ function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 }
 
+// Call the Anthropic Messages API, retrying transient failures (rate-limit /
+// overload / 5xx) with a short backoff before giving up — so a momentary blip
+// doesn't surface as a dead chat to the shopper.
+async function callAnthropic(apiKey: string, payload: unknown): Promise<Response> {
+  const RETRYABLE = new Set([429, 500, 502, 503, 504, 529]);
+  let res: Response | null = null;
+  for (let attempt = 0; attempt < 3; attempt++) {
+    res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
+      body: JSON.stringify(payload),
+    });
+    if (res.ok || !RETRYABLE.has(res.status)) return res;
+    if (attempt < 2) await new Promise((r) => setTimeout(r, 700 * (attempt + 1)));
+  }
+  return res as Response;
+}
+
 interface ProductCand {
   id: string; name: string | null; brand: string | null; price: string | null;
   image_url: string | null; primary_image_url: string | null; url: string | null; type: string | null;
@@ -67,9 +85,12 @@ Deno.serve(async (req: Request) => {
     // Stylist persona.
     const { data: stylist } = await admin
       .from('style_up_stylists')
-      .select('name, specialty, persona_prompt')
+      .select('name, specialty, persona_prompt, source_mode')
       .eq('id', thread.stylist_id)
       .maybeSingle();
+    // Web stylists (e.g. Theo) source from the open web — the client searches +
+    // auto-imports their picks, so the brain never recommends from our catalog.
+    const isWeb = stylist?.source_mode === 'web';
 
     // Shopper context — the same inputs the AI-look flow uses.
     const { data: prof } = await admin
@@ -101,24 +122,40 @@ Deno.serve(async (req: Request) => {
     if (turns.length === 0) return json({ success: false, error: 'nothing to reply to' }, 400);
 
     // Candidate products to recommend FROM — gender-filtered active catalog.
-    // The model may only pick ids that appear here (we validate below).
-    let q = admin.from('products')
-      .select('id, name, brand, price, image_url, primary_image_url, url, type')
-      .eq('is_active', true)
-      .not('image_url', 'is', null)
-      .order('created_at', { ascending: false })
-      .limit(120);
-    if (genderNorm === 'male') q = q.or('gender.eq.male,gender.eq.unisex');
-    else if (genderNorm === 'female') q = q.or('gender.eq.female,gender.eq.unisex');
-    const { data: candRows } = await q;
-    const cands = (candRows ?? []) as ProductCand[];
+    // The model may only pick ids that appear here (we validate below). Web
+    // stylists skip this entirely (their picks come from a live web search).
+    let cands: ProductCand[] = [];
+    if (!isWeb) {
+      let q = admin.from('products')
+        .select('id, name, brand, price, image_url, primary_image_url, url, type')
+        .eq('is_active', true)
+        .not('image_url', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(120);
+      if (genderNorm === 'male') q = q.or('gender.eq.male,gender.eq.unisex');
+      else if (genderNorm === 'female') q = q.or('gender.eq.female,gender.eq.unisex');
+      const { data: candRows } = await q;
+      cands = (candRows ?? []) as ProductCand[];
+    }
     const candList = cands.map(c =>
       `${c.id} | ${(c.name ?? '').slice(0, 70)} | ${c.brand ?? ''} | ${c.price ?? ''} | ${c.type ?? ''}`,
     ).join('\n');
 
     const persona = stylist?.persona_prompt
       || `You are ${stylist?.name ?? 'a personal stylist'}, a friendly personal stylist.`;
-    const system = `${persona}
+    const system = isWeb ? `${persona}
+
+You're texting ${shopperName} inside a styling chat. Shopper context (use it; never ask for what you already know): ${ctxBits.join('; ') || 'not provided yet'}.
+
+STYLE OF REPLY:
+- Talk like texting: warm, concise, 1-3 short sentences. No markdown, no bullet lists.
+- Ask a sharp clarifying question early if you don't yet know the occasion/vibe.
+- You source pieces from the OPEN WEB — never from any in-house catalog. When you want to suggest pieces, say so in words (name the brand / cut / color / vibe you're hunting for). The app then searches the web, imports the real products, and shows them to ${shopperName} automatically right after your message — so don't paste links or invent products, just describe what you're going for.
+- They can tap any piece you surface to see it on themselves, or ask you to put the whole look on them — you CAN generate the look on them (it kicks off automatically). NEVER say you can't generate photos.
+
+Return ONLY JSON, no prose:
+{"reply":"<your text message>","productIds":[]}
+productIds MUST be an empty array — you never pick from an internal list.` : `${persona}
 
 You're texting ${shopperName} inside a styling chat. Shopper context (use it; never ask for what you already know): ${ctxBits.join('; ') || 'not provided yet'}.
 
@@ -135,27 +172,32 @@ Return ONLY JSON, no prose:
 {"reply":"<your text message>","productIds":["<id>", ...]}
 productIds is optional — include it only when you're actually recommending pieces this turn (max 4).`;
 
-    const messages = turns
-      .map(t => {
-        const role = t.sender === 'shopper' ? 'user' : 'assistant';
-        let content = t.body ?? '';
-        if (t.kind === 'product' && t.product_ref) {
-          const pr = t.product_ref as { name?: string; brand?: string };
-          content = `[recommended ${pr.brand ?? ''} ${pr.name ?? 'a product'}]${content ? ' ' + content : ''}`;
-        }
-        return { role, content: content || '…' };
-      })
-      // Claude requires the first message to be a user turn.
-      .filter((m, i, arr) => !(i === 0 && m.role === 'assistant') || arr.length === 0);
-    if (messages.length === 0 || messages[0].role !== 'user') {
-      messages.unshift({ role: 'user', content: `Hi ${stylist?.name ?? ''}` });
+    const mapped = turns.map(t => {
+      const role: 'user' | 'assistant' = t.sender === 'shopper' ? 'user' : 'assistant';
+      let content = t.body ?? '';
+      if (t.kind === 'product' && t.product_ref) {
+        const pr = t.product_ref as { name?: string; brand?: string };
+        content = `[recommended ${pr.brand ?? ''} ${pr.name ?? 'a product'}]${content ? ' ' + content : ''}`;
+      }
+      return { role, content: content || '…' };
+    });
+    // Collapse consecutive same-role turns into one — Anthropic rejects two
+    // assistant (or two user) messages in a row, which happens whenever the
+    // stylist sends a text reply + product cards as separate rows. Without this
+    // a product-heavy thread deterministically 400s.
+    const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
+    for (const m of mapped) {
+      const last = messages[messages.length - 1];
+      if (last && last.role === m.role) last.content += `\n${m.content}`;
+      else messages.push({ ...m });
+    }
+    // Claude requires the first message to be a user turn.
+    while (messages.length && messages[0].role === 'assistant') messages.shift();
+    if (messages.length === 0) {
+      messages.push({ role: 'user', content: `Hi ${stylist?.name ?? ''}` });
     }
 
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01' },
-      body: JSON.stringify({ model: MODEL, max_tokens: 700, system, messages }),
-    });
+    const res = await callAnthropic(apiKey, { model: MODEL, max_tokens: 700, system, messages });
     if (!res.ok) return json({ success: false, error: `anthropic ${res.status}: ${(await res.text()).slice(0, 200)}` }, 502);
     const out = await res.json() as { content?: Array<{ type: string; text?: string }>; usage?: { input_tokens?: number; output_tokens?: number } };
     const text = (out.content?.find(c => c.type === 'text')?.text ?? '').replace(/```json\s*|```\s*/g, '').trim();
