@@ -16,8 +16,9 @@ import {
   fetchStylists, getOrCreateThread, getLatestThread, fetchMyThreads, fetchMessages, sendShopperMessage,
   sendStylistText, startLookRender, startFullLookRender, fetchSwapOptions, sendSwapOptions,
   sendChooser, recommendForSlot, sendProductPick,
-  webFetchSwapOptions, webRecommendForSlot, webHuntOne,
+  webFetchSwapOptions, webRecommendForSlot, webHuntOne, appendTraceSearches,
   type StyleUpStylist, type StyleUpMessage, type StyleUpProductRef, type StyleUpThreadSummary, type RecommendOpts,
+  type StyleUpTraceSearch,
 } from '~/services/style-up';
 import { roleTagFromName } from '~/services/product-roles';
 import { signInWithGoogle } from '~/services/auth';
@@ -601,10 +602,11 @@ export function StyleUpExperience({
   // → renderable ref) behind a visible "researching" indicator, then drop the
   // finds into the thread. Driven by the searchQueries the stylist's brain
   // returns, so "let me surface some options" actually produces products.
-  const runWebHunt = useCallback(async (queries: string[]) => {
+  const runWebHunt = useCallback(async (queries: string[], traceId: string | null = null) => {
     const tid = threadId;
     if (!tid || !userId || queries.length === 0) return;
     const qs = queries.slice(0, 4);
+    const traceSearches: StyleUpTraceSearch[] = [];
     // Estimate the wait from past pull times, tell the shopper conversationally,
     // and scope the "working" indicator to THIS thread so it never shows up in a
     // different chat the shopper switches to mid-pull.
@@ -622,8 +624,13 @@ export function StyleUpExperience({
         const { pick, diag } = await webHuntOne(userId, q, [...rejected, ...got]);
         recordPullMs(Date.now() - t0);          // self-calibrate future estimates
         diags.push(`"${q}" → ${diag.ok ? `${diag.rawCount} found · ${diag.withUrl} w/url · ${diag.matched} usable` : `ERR: ${diag.error}`}`);
+        traceSearches.push({
+          query: q, ok: diag.ok, error: diag.error, rawCount: diag.rawCount, withUrl: diag.withUrl, matched: diag.matched,
+          importedId: pick?.id ?? null, importedName: pick ? [pick.brand, pick.name].filter(Boolean).join(' ') || null : null,
+        });
         if (pick?.id) found.push(pick);
       }
+      if (traceId) await appendTraceSearches(traceId, traceSearches);
       if (found.length === 0) {
         await sendStylistText(tid, "Couldn't quite pin those down. Give me a brand or a budget and I'll take another run at it.");
         // Super admins get the raw reason the pull came back empty.
@@ -659,10 +666,10 @@ export function StyleUpExperience({
       if (attempt > 0) await new Promise((r) => setTimeout(r, 1200 * attempt));
       try {
         const { data, error } = await supabase.functions.invoke('style-up-chat', { body: { threadId } });
-        const resp = data as { success?: boolean; error?: string; searchQueries?: string[] } | null;
+        const resp = data as { success?: boolean; error?: string; searchQueries?: string[]; traceId?: string | null } | null;
         if (!error && resp?.success) {
           setStylistTyping(false);
-          if (resp.searchQueries?.length) await runWebHunt(resp.searchQueries);
+          if (resp.searchQueries?.length) await runWebHunt(resp.searchQueries, resp.traceId ?? null);
           return;
         }
         lastErr = resp?.error || '';
