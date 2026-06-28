@@ -13,9 +13,9 @@ import { useNavigate } from '@remix-run/react';
 import { useAuth } from '~/hooks/useAuth';
 import { supabase } from '~/utils/supabase';
 import {
-  fetchStylists, getOrCreateThread, getLatestThread, fetchMessages, sendShopperMessage,
+  fetchStylists, getOrCreateThread, getLatestThread, fetchMyThreads, fetchMessages, sendShopperMessage,
   sendStylistText, startLookRender, startFullLookRender,
-  type StyleUpStylist, type StyleUpMessage, type StyleUpProductRef,
+  type StyleUpStylist, type StyleUpMessage, type StyleUpProductRef, type StyleUpThreadSummary,
 } from '~/services/style-up';
 import { getUserHeightAge, getUserCustomStyle, updateUserHeightAge, updateUserCustomStyle } from '~/services/profiles';
 import { getUserGender, updateUserGender, type UserGender } from '~/services/genders';
@@ -56,6 +56,21 @@ function initials(name: string): string {
   return name.trim().slice(0, 1).toUpperCase() || '?';
 }
 
+/** Compact relative time for the conversation list (now / 3h / 2d / Jun 8). */
+function relativeTime(iso: string | null): string {
+  if (!iso) return '';
+  const then = new Date(iso).getTime();
+  if (Number.isNaN(then)) return '';
+  const mins = Math.floor((Date.now() - then) / 60000);
+  if (mins < 1) return 'now';
+  if (mins < 60) return `${mins}m`;
+  const hrs = Math.floor(mins / 60);
+  if (hrs < 24) return `${hrs}h`;
+  const days = Math.floor(hrs / 24);
+  if (days < 7) return `${days}d`;
+  return new Date(iso).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+}
+
 export default function StyleUpPage() {
   const { user } = useAuth();
   const userId = user?.id ?? null;
@@ -66,6 +81,7 @@ export default function StyleUpPage() {
   const [threadId, setThreadId] = useState<string | null>(null);
   const [messages, setMessages] = useState<StyleUpMessage[]>([]);
   const [latestThread, setLatestThread] = useState<{ threadId: string; stylist: StyleUpStylist } | null>(null);
+  const [myThreads, setMyThreads] = useState<StyleUpThreadSummary[]>([]);
   const [bootResumed, setBootResumed] = useState(false);
   const [opening, setOpening] = useState(false);
   const [draft, setDraft] = useState('');
@@ -157,12 +173,19 @@ export default function StyleUpPage() {
     if (latestThread) void openThread(latestThread.threadId, latestThread.stylist);
   }, [latestThread, openThread]);
 
+  // Load the shopper's saved conversations (for the roster list).
+  const loadThreads = useCallback(async () => {
+    if (!userId) return;
+    setMyThreads(await fetchMyThreads(userId));
+  }, [userId]);
+
   const closeThread = useCallback(() => {
     setThreadId(null);
     setActive(null);
     setMessages([]);
     setDraft('');
-  }, []);
+    void loadThreads(); // refresh the saved-conversations list with the latest
+  }, [loadThreads]);
 
   // On open, resume the shopper's most-recent conversation so an active chat's
   // history keeps going instead of dropping them back on the roster every time.
@@ -170,7 +193,7 @@ export default function StyleUpPage() {
     if (!userId || bootResumed) return;
     let cancelled = false;
     (async () => {
-      const latest = await getLatestThread(userId);
+      const [latest] = await Promise.all([getLatestThread(userId), loadThreads()]);
       if (cancelled) return;
       setBootResumed(true);
       if (latest) {
@@ -179,7 +202,7 @@ export default function StyleUpPage() {
       }
     })();
     return () => { cancelled = true; };
-  }, [userId, bootResumed, openThread]);
+  }, [userId, bootResumed, openThread, loadThreads]);
 
   // Realtime: new messages (either side) stream into the open thread.
   useEffect(() => {
@@ -446,7 +469,7 @@ export default function StyleUpPage() {
   if (!userId) {
     return (
       <div className="su-shell">
-        <header className="su-shell-head">
+        <div className="su-shell-head">
           <div className="su-shell-head-left">
             <button type="button" className="su-back" onClick={exit} aria-label="Back">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
@@ -458,7 +481,7 @@ export default function StyleUpPage() {
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
             </button>
           )}
-        </header>
+        </div>
         <div className="su-signin">
           <p>Sign in to chat with a stylist and see picks on yourself.</p>
         </div>
@@ -470,7 +493,7 @@ export default function StyleUpPage() {
   if (!threadId) {
     return (
       <div className="su-shell">
-        <header className="su-shell-head">
+        <div className="su-shell-head">
           <div className="su-shell-head-left">
             <button type="button" className="su-back" onClick={exit} aria-label="Back">
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
@@ -482,14 +505,42 @@ export default function StyleUpPage() {
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
             </button>
           )}
-        </header>
+        </div>
         <div className="su-page">
+          {/* Saved conversations — the shopper's ongoing chats live here so they
+              can pick any one back up where they left off. */}
+          {myThreads.length > 0 && (
+            <div className="su-convos">
+              <div className="su-section-label">Your conversations</div>
+              {myThreads.map(t => (
+                <button
+                  key={t.threadId}
+                  type="button"
+                  className="su-convo-card"
+                  style={{ ['--su-accent' as string]: t.stylist.accentColor ?? '#8aa0c0' }}
+                  onClick={() => void openThread(t.threadId, t.stylist)}
+                >
+                  <span className="su-stylist-avatar" aria-hidden="true">
+                    {t.stylist.avatarUrl ? <img src={t.stylist.avatarUrl} alt="" /> : initials(t.stylist.name)}
+                  </span>
+                  <span className="su-convo-info">
+                    <span className="su-convo-top">
+                      <span className="su-stylist-name">{t.stylist.name}</span>
+                      <span className="su-convo-time">{relativeTime(t.lastMessageAt)}</span>
+                    </span>
+                    {t.lastMessage && <span className="su-convo-preview">{t.lastMessage}</span>}
+                  </span>
+                </button>
+              ))}
+            </div>
+          )}
+
           <div className="su-roster-head">
-            <h1>Find your stylist</h1>
+            <h1>{myThreads.length > 0 ? 'Find another stylist' : 'Find your stylist'}</h1>
             <p>Request a stylist. They&apos;ll learn your vibe, send picks, and show you wearing them.</p>
           </div>
           <div className="su-roster">
-            {stylists.map(s => (
+            {stylists.filter(s => !myThreads.some(t => t.stylist.id === s.id)).map(s => (
               <button
                 key={s.id}
                 type="button"
@@ -510,6 +561,9 @@ export default function StyleUpPage() {
               </button>
             ))}
             {stylists.length === 0 && <div className="su-empty">No stylists available yet.</div>}
+            {stylists.length > 0 && stylists.every(s => myThreads.some(t => t.stylist.id === s.id)) && (
+              <div className="su-empty">You&apos;re chatting with all our stylists.</div>
+            )}
           </div>
         </div>
       </div>
