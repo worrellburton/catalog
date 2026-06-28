@@ -16,9 +16,41 @@ import {
   fetchStylists, getOrCreateThread, getLatestThread, fetchMyThreads, fetchMessages, sendShopperMessage,
   sendStylistText, startLookRender, startFullLookRender, fetchSwapOptions, sendSwapOptions,
   sendChooser, recommendForSlot, sendProductPick,
-  type StyleUpStylist, type StyleUpMessage, type StyleUpProductRef, type StyleUpThreadSummary,
+  type StyleUpStylist, type StyleUpMessage, type StyleUpProductRef, type StyleUpThreadSummary, type RecommendOpts,
 } from '~/services/style-up';
 import { roleTagFromName } from '~/services/product-roles';
+
+// Preferences the stylist infers from chat — budget, occasion, formality lean,
+// dropped colors, simplicity — applied to every recommendation (#4/#6/#7).
+interface StylePrefs {
+  budgetMax: number | null;
+  occasion: string | null;
+  formality: 'dressier' | 'casual' | null;
+  avoidColors: string[];
+  simpler: boolean;
+}
+const EMPTY_PREFS: StylePrefs = { budgetMax: null, occasion: null, formality: null, avoidColors: [], simpler: false };
+const COLORS = ['black', 'white', 'blue', 'navy', 'red', 'green', 'beige', 'tan', 'brown', 'grey', 'gray', 'pink', 'purple', 'orange', 'yellow', 'khaki', 'cream', 'olive'];
+
+/** Fold a shopper message into the running preferences. */
+function applyPrefs(prev: StylePrefs, text: string): StylePrefs {
+  const t = text.toLowerCase();
+  const p: StylePrefs = { ...prev, avoidColors: [...prev.avoidColors] };
+  const bm = t.match(/(?:under|below|less than|max|budget(?: of)?|keep it (?:under|below))\s*\$?\s*(\d{2,4})/) || t.match(/\$\s*(\d{2,4})\b/);
+  if (bm) p.budgetMax = parseInt(bm[1], 10);
+  const occ = t.match(/\b(date night|date|wedding|interview|work|office|brunch|party|night out|dinner|gym|travel|vacation|festival|concert|beach|graduation|reunion|funeral)\b/);
+  if (occ) p.occasion = occ[1];
+  if (/\b(more casual|casual|chill|relaxed|laid.?back|dress.?down|comfy)\b/.test(t)) p.formality = 'casual';
+  if (/\b(dressier|dress.?up|fancier|more formal|formal|elevated|sharper|classy|smart)\b/.test(t)) p.formality = 'dressier';
+  if (/\b(simpler|less flashy|minimal|clean|understated|tone.? down|subtle|plain)\b/.test(t)) p.simpler = true;
+  if (/\b(bolder|louder|more fun|flashy|statement|stand out)\b/.test(t)) p.simpler = false;
+  for (const c of COLORS) {
+    if (new RegExp(`\\b(?:no|not|hate|avoid|don'?t (?:like|want)|less)\\s+(?:the\\s+)?${c}\\b`).test(t) && !p.avoidColors.includes(c)) {
+      p.avoidColors = [...p.avoidColors, c];
+    }
+  }
+  return p;
+}
 import { getUserHeightAge, getUserCustomStyle, updateUserHeightAge, updateUserCustomStyle } from '~/services/profiles';
 import { getUserGender, updateUserGender, type UserGender } from '~/services/genders';
 import {
@@ -49,6 +81,8 @@ function wantsFullLook(text: string): boolean {
   if (onMe && lookWord) return true;
   if (verb && /\b(whole|full|entire|complete)\b[^.?!]*\b(look|outfit|fit)\b/.test(t)) return true;
   if (/\b(generate|make|create|build|render|show)\b[^.?!]*\b(the|this|that|a|my|your)\b[^.?!]*\b(look|outfit|fit)\b/.test(t)) return true;
+  if (/\b(show me|let me see|can i see)\b[^.?!]*\b(look|outfit|fit|it|them|this)\b/.test(t)) return true;
+  if (/\bput (it|them|this|that) on me\b|\bmodel (it|them|this)\b|\bhow (would|do) i look\b/.test(t)) return true;
   return false;
 }
 
@@ -56,7 +90,7 @@ function wantsFullLook(text: string): boolean {
  *  target role (ROLE_TAG) + a friendly label, or null. */
 function swapTargetFromText(text: string): { role: string; label: string } | null {
   const t = text.toLowerCase();
-  const change = /\b(different|another|other|swap|change|switch|new|alternativ\w*|else|instead|try|replace)\b/.test(t);
+  const change = /\b(different|another|other|swap|change|switch|new|alternativ\w*|else|instead|try|replace|lose|ditch|drop|remove|hate|not feeling|don'?t like)\b/.test(t);
   if (!change) return null;
   if (/\b(pant|pants|trouser|trousers|jean|jeans|denim|chino|chinos|bottom|bottoms|slacks|short|shorts)\b/.test(t)) return { role: 'Pants', label: 'pants' };
   if (/\b(shoe|shoes|sneaker|sneakers|boot|boots|loafer|loafers|footwear|heel|heels|sandal|sandals|trainer|trainers)\b/.test(t)) return { role: 'Shoes', label: 'shoes' };
@@ -211,6 +245,9 @@ export default function StyleUpPage() {
   const [chosenBySlot, setChosenBySlot] = useState<Record<string, string>>({}); // role → chosen product id
   const [rejected, setRejected] = useState<Set<string>>(new Set());   // product ids the shopper passed on
   const [chosenScene, setChosenScene] = useState<string | null>(null); // the look's setting
+  const [prefs, setPrefs] = useState<StylePrefs>(EMPTY_PREFS);
+  const prefsRef = useRef<StylePrefs>(EMPTY_PREFS); // always-current copy for callbacks
+  const lastRenderSigRef = useRef<string>('');      // dedupe identical re-renders (#10)
   const [viewer, setViewer] = useState<{ videoUrl: string; pieces: StyleUpProductRef[]; genId: string } | null>(null); // expanded look
   const [, setNowTick] = useState(0);                // 1s heartbeat for the render ETA
   const [isDesktop, setIsDesktop] = useState(false); // desktop = two-pane layout
@@ -342,12 +379,32 @@ export default function StyleUpPage() {
   useEffect(() => {
     setChosenBySlot({});
     setChosenScene(null);
-    if (!threadId) { setRejected(new Set()); return; }
+    lastRenderSigRef.current = '';
+    if (!threadId) { setRejected(new Set()); setPrefs(EMPTY_PREFS); prefsRef.current = EMPTY_PREFS; return; }
     try {
       const raw = localStorage.getItem(`styleup:rejected:${threadId}`);
       setRejected(new Set(raw ? (JSON.parse(raw) as string[]) : []));
     } catch { setRejected(new Set()); }
+    try {
+      const raw = localStorage.getItem(`styleup:prefs:${threadId}`);
+      const p = raw ? { ...EMPTY_PREFS, ...(JSON.parse(raw) as Partial<StylePrefs>) } : EMPTY_PREFS;
+      setPrefs(p); prefsRef.current = p;
+    } catch { setPrefs(EMPTY_PREFS); prefsRef.current = EMPTY_PREFS; }
   }, [threadId]);
+
+  // Persist + keep the ref current so callbacks always read fresh prefs.
+  const updatePrefs = useCallback((next: StylePrefs) => {
+    prefsRef.current = next;
+    setPrefs(next);
+    if (threadId) { try { localStorage.setItem(`styleup:prefs:${threadId}`, JSON.stringify(next)); } catch { /* ignore */ } }
+  }, [threadId]);
+
+  // Recommendation signals from current prefs + the shopper's saved style.
+  const recOpts = useCallback((): RecommendOpts => {
+    const p = prefsRef.current;
+    const styleText = [ctx?.style, ...(ctx?.chips ?? [])].filter(Boolean).join(' ');
+    return { budgetMax: p.budgetMax, occasion: p.occasion, formality: p.formality, avoidColors: p.avoidColors, simpler: p.simpler, styleText };
+  }, [ctx]);
   const rejectIds = useCallback((ids: Array<string | undefined>) => {
     const clean = ids.filter((x): x is string => !!x);
     if (!threadId || clean.length === 0) return;
@@ -422,6 +479,13 @@ export default function StyleUpPage() {
       seen.add(p.id); return true;
     });
     if (uniq.length === 0) { void triggerStylist(); return; }
+    // Don't re-render the exact same pieces + scene (#10).
+    const sig = [...uniq.map(p => p.id).sort(), scene ?? ''].join('|');
+    if (sig === lastRenderSigRef.current) {
+      await sendStylistText(threadId, "That's the same look + setting you just saw — change a piece or pick a new spot and I'll re-render.");
+      return;
+    }
+    lastRenderSigRef.current = sig;
     setGenLook(true);
     setRenderError(null);
     await sendStylistText(threadId, "Love it — putting your full look together now. I'll send it over the second it's ready ✨");
@@ -510,12 +574,19 @@ export default function StyleUpPage() {
       await sendStylistText(threadId, 'On it — pulling pieces for that now…');
       const exclude = [...lookPicks().map(p => p.id).filter((x): x is string => !!x), ...rejected];
       for (const role of values) {
-        const pick = await recommendForSlot(userId, role, exclude);
+        const pick = await recommendForSlot(userId, role, exclude, recOpts());
         if (pick?.id) { await sendProductPick(threadId, pick); exclude.push(pick.id); }
       }
       await sendStylistText(threadId, "Here's your outfit — tap “See it on me” on any piece, or say “show me the full look” and I'll put it all on you.");
+      // Proactive gap completion (#9): nudge the missing core piece, with a reason.
+      const have = new Set([...lookPicks().map(p => roleTagFromName(p.name ?? null)), ...values]);
+      const GAP_REASON: Record<string, string> = {
+        Shoes: 'a clean pair of shoes to ground it', Top: 'a top to anchor the fit', Pants: 'bottoms to complete it', Jacket: 'a layer to pull it together',
+      };
+      const missing = (['Shoes', 'Top', 'Pants'] as const).find(s => !have.has(s));
+      if (missing) await sendStylistText(threadId, `One more thing — you'll want ${GAP_REASON[missing]}. Say “different ${missing.toLowerCase()}” and I'll pull a few.`);
     }
-  }, [threadId, userId, lookPicks, rejected, rejectIds, askOutfitSlots, assembleLook, generateFullLook]);
+  }, [threadId, userId, lookPicks, rejected, rejectIds, askOutfitSlots, assembleLook, generateFullLook, recOpts]);
 
   // "Try different pants" — the stylist offers 3 alternatives for that slot.
   const handleSwapRequest = useCallback(async (swap: { role: string; label: string }) => {
@@ -524,7 +595,7 @@ export default function StyleUpPage() {
     await sendStylistText(threadId, `Sure thing — here are a few ${swap.label} options. Tap the one you like and I'll put it on you.`);
     // Exclude what's in the look AND anything they've already passed on (memory).
     const exclude = [...lookPicks().map(p => p.id).filter((x): x is string => !!x), ...rejected];
-    const options = await fetchSwapOptions(userId, swap.role, 3, exclude);
+    const options = await fetchSwapOptions(userId, swap.role, 3, exclude, recOpts());
     if (options.length === 0) {
       await sendStylistText(threadId, `Hmm, I'm short on alternate ${swap.label} right now — want to try a different piece?`);
       return;
@@ -557,6 +628,10 @@ export default function StyleUpPage() {
     const msg = await sendShopperMessage(threadId, text);
     if (msg) setMessages(prev => (prev.some(m => m.id === msg.id) ? prev : [...prev, msg]));
     setSending(false);
+    // Fold any budget / occasion / formality / color / simplicity cues from this
+    // message into the running prefs (applied to all future recommendations).
+    const np = applyPrefs(prefsRef.current, text);
+    if (JSON.stringify(np) !== JSON.stringify(prefsRef.current)) updatePrefs(np);
     // Routing: swap request → 3 options; "build a full outfit" → guided chooser
     // flow; "see the look on me" → render; otherwise the AI stylist takes the
     // turn (it may recommend pieces first).
