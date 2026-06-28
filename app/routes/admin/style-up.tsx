@@ -7,9 +7,10 @@
 import { useCallback, useEffect, useState } from 'react';
 import {
   adminListThreads, adminListLooks, adminSendStylistMessage, adminDeleteThread, adminDeleteLook,
-  fetchMessages,
-  type AdminThread, type AdminLook, type StyleUpMessage,
+  fetchMessages, adminListTraces,
+  type AdminThread, type AdminLook, type StyleUpMessage, type StyleUpTrace,
 } from '~/services/style-up';
+import StyleUpTraceDiagram from '~/components/style-up/StyleUpTraceDiagram';
 import '~/styles/admin-style-up.css';
 
 function fmtTime(iso: string | null): string {
@@ -35,6 +36,12 @@ export default function AdminStyleUpPage() {
   const [transcript, setTranscript] = useState<StyleUpMessage[]>([]);
   const [reply, setReply] = useState('');
   const [sending, setSending] = useState(false);
+
+  // Research-trace drawer.
+  const [traceThread, setTraceThread] = useState<AdminThread | null>(null);
+  const [traces, setTraces] = useState<StyleUpTrace[]>([]);
+  const [traceIdx, setTraceIdx] = useState(0);
+  const [traceLoading, setTraceLoading] = useState(false);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -63,6 +70,15 @@ export default function AdminStyleUpPage() {
     }
     setSending(false);
   }, [openThread, reply, sending, load]);
+
+  const openTraces = useCallback(async (t: AdminThread) => {
+    setTraceThread(t);
+    setTraces([]);
+    setTraceIdx(0);
+    setTraceLoading(true);
+    setTraces(await adminListTraces(t.threadId));
+    setTraceLoading(false);
+  }, []);
 
   const removeThread = useCallback(async (t: AdminThread) => {
     if (!window.confirm(`Delete the conversation between ${t.shopper.name} and ${t.stylist.name}? This removes all its messages.`)) return;
@@ -117,6 +133,7 @@ export default function AdminStyleUpPage() {
               </div>
               <div className="sua-row-actions">
                 <button type="button" className="sua-btn" onClick={() => void openTranscript(t)}>Open</button>
+                <button type="button" className="sua-btn" onClick={() => void openTraces(t)}>Research</button>
                 <button type="button" className="sua-btn sua-btn--danger" onClick={() => void removeThread(t)}>Delete</button>
               </div>
             </div>
@@ -221,6 +238,37 @@ export default function AdminStyleUpPage() {
               <button type="button" className="sua-btn sua-btn--primary" onClick={() => void sendReply()} disabled={!reply.trim() || sending}>
                 {sending ? 'Sending…' : 'Send'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── Research-trace drawer ─────────────────────────────────────────── */}
+      {traceThread && (
+        <div className="sua-drawer-backdrop" onClick={() => setTraceThread(null)}>
+          <div className="sua-drawer sua-drawer--wide" onClick={e => e.stopPropagation()}>
+            <div className="sua-drawer-head">
+              <div className="sua-drawer-id">
+                <span className="sua-row-name">Research</span>
+                <span className="sua-row-with">{traceThread.shopper.name} with <b style={{ color: traceThread.stylist.accentColor ?? '#8aa0c0' }}>{traceThread.stylist.name}</b></span>
+              </div>
+              <button type="button" className="sua-drawer-close" onClick={() => setTraceThread(null)} aria-label="Close">✕</button>
+            </div>
+            {traces.length > 1 && (
+              <div className="sua-trace-turns">
+                {traces.map((tr, i) => (
+                  <button key={tr.id} type="button" className={`sua-trace-turn${i === traceIdx ? ' is-active' : ''}`} onClick={() => setTraceIdx(i)}>
+                    {fmtTime(tr.createdAt)}{tr.sourceMode === 'web' ? ' · web' : ''}
+                  </button>
+                ))}
+              </div>
+            )}
+            <div className="sua-trace-body">
+              {traceLoading && <div className="sua-empty">Loading…</div>}
+              {!traceLoading && traces.length === 0 && (
+                <div className="sua-empty">No research traces for this conversation yet. Traces are recorded on new stylist turns.</div>
+              )}
+              {!traceLoading && traces[traceIdx] && <StyleUpTraceDiagram trace={traces[traceIdx]} />}
             </div>
           </div>
         </div>
