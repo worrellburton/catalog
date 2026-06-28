@@ -1,4 +1,4 @@
-// Style Up — AI stylist chat, a consumer app feature. A shopper requests a
+// Style Up, AI stylist chat, a consumer app feature. A shopper requests a
 // stylist from the roster, then chats iMessage-style; the stylist (AI) sends
 // product picks + on-you renders. The shopper's AI-look context rides at the
 // top, read-only, so the stylist always sees who it's styling.
@@ -23,8 +23,8 @@ import { roleTagFromName } from '~/services/product-roles';
 import { signInWithGoogle } from '~/services/auth';
 import StyleUpBackground from './StyleUpBackground';
 
-// Preferences the stylist infers from chat — budget, occasion, formality lean,
-// dropped colors, simplicity — applied to every recommendation (#4/#6/#7).
+// Preferences the stylist infers from chat, budget, occasion, formality lean,
+// dropped colors, simplicity, applied to every recommendation (#4/#6/#7).
 interface StylePrefs {
   budgetMax: number | null;
   occasion: string | null;
@@ -65,7 +65,7 @@ import { generationProgress } from '~/services/generation-progress';
 import { productSlug } from '~/utils/slug';
 import '~/styles/style-up.css';
 
-/** "~2 min left" / "~40s left" — estimated wait from the shared generation
+/** "~2 min left" / "~40s left", estimated wait from the shared generation
  *  timing model (based on typical generation durations). */
 function fmtRemaining(sec: number): string {
   if (sec <= 0) return 'almost done…';
@@ -111,7 +111,7 @@ function swapTargetFromText(text: string): { role: string; label: string } | nul
 function describeLook(products: StyleUpProductRef[]): string {
   const names = products.map(p => p.brand || p.name).filter(Boolean).slice(0, 4) as string[];
   const list = names.length ? names.join(', ') : 'the pieces we picked';
-  return `Here's the full look on you — ${list}. I kept it cohesive and true to your vibe. How do you like it? Want to adjust anything — different pants, a fresh top, another shoe? Just say the word and I'll swap it.`;
+  return `Here's the full look on you, ${list}. I kept it cohesive and true to your vibe. How do you like it? Want to adjust anything, different pants, a fresh top, another shoe? Just say the word and I'll swap it.`;
 }
 
 /** Does this read as "build me a full OUTFIT" (multi-slot) vs "see it on me"?
@@ -124,7 +124,7 @@ function wantsFullOutfit(text: string): boolean {
   return withFull || (outfit && build);
 }
 
-// A human "reading" beat before the stylist responds — always at least 1s,
+// A human "reading" beat before the stylist responds, always at least 1s,
 // randomized to exactly 1 / 2 / 3s and unique to each response, so replies feel
 // considered rather than instant.
 const TYPING_BEATS = [1000, 2000, 3000];
@@ -133,13 +133,54 @@ function stylistBeat(): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-// Cycling status lines for the web-hunt "researching" module, so a web search
-// reads as active work rather than a dead pause.
-const HUNT_PHRASES = ['Scanning the web…', 'Reading product pages…', 'Pulling the best matches…', 'Importing the pieces…'];
+// Cycling status lines for the "putting pieces together" module, playful
+// stylist humor (NEVER anything that hints pieces come from anywhere external).
+const HUNT_PHRASES = [
+  'Consulting the style gods…',
+  'Raiding the dream closet…',
+  'Doing a little fashion math…',
+  'Channeling main-character energy…',
+  'Steaming out the wrinkles…',
+  'Negotiating with the fashion police…',
+  'Measuring twice, styling once…',
+  'Trusting the process…',
+  'Pretending this is effortless…',
+];
+
+// Per-piece pull timing, we record how long each piece actually takes to pull
+// (localStorage, last 24) and average it, so the ETA self-calibrates to the
+// shopper's real conditions instead of a hardcoded guess.
+const PULL_TIMINGS_KEY = 'styleup:pull-timings';
+const DEFAULT_PULL_MS = 4500;
+function recordPullMs(ms: number): void {
+  if (!Number.isFinite(ms) || ms <= 0) return;
+  try {
+    const raw = localStorage.getItem(PULL_TIMINGS_KEY);
+    const arr: number[] = raw ? JSON.parse(raw) : [];
+    arr.push(Math.round(ms));
+    localStorage.setItem(PULL_TIMINGS_KEY, JSON.stringify(arr.slice(-24)));
+  } catch { /* ignore */ }
+}
+function avgPullMs(): number {
+  try {
+    const raw = localStorage.getItem(PULL_TIMINGS_KEY);
+    const arr: number[] = raw ? (JSON.parse(raw) as number[]) : [];
+    if (!arr.length) return DEFAULT_PULL_MS;
+    return arr.reduce((a, b) => a + b, 0) / arr.length;
+  } catch { return DEFAULT_PULL_MS; }
+}
+
+/** A natural, conversational way to say the wait (no em dashes). */
+function waitPhrase(sec: number): string {
+  if (sec <= 6) return 'a few seconds';
+  if (sec < 60) return `about ${Math.max(5, Math.round(sec / 5) * 5)} seconds`;
+  const m = Math.round(sec / 60);
+  return m <= 1 ? 'about a minute' : `about ${m} minutes`;
+}
 
 const SLOT_LABEL: Record<string, string> = { Top: 'Top', Pants: 'Pants / Shorts', Jacket: 'Jacket', Hat: 'Hat', Shoes: 'Shoes' };
 
-// Scene options for "where do you want to be seen?" — Clean studio is always
+// Scene options for "where do you want to be seen?", Clean studio is always
 // first, then two fun spots, and the 4th is always a little wild.
 const FUN_SCENES = ['a cozy coffee shop', 'a rooftop at golden hour', 'a city street at night', 'a sunny park', 'a minimalist loft', 'an art gallery', 'a jazz bar', 'a boardwalk by the sea', 'a sidewalk café in Paris'];
 const WILD_SCENES = ['a neon Tokyo alley in the rain', 'the surface of Mars', 'a 1970s disco', 'backstage at a runway show', 'a snowy mountain peak', 'an underwater glass tunnel', 'a desert at sunset'];
@@ -154,7 +195,7 @@ function sceneOptions(): Array<{ value: string; label: string }> {
   ];
 }
 
-/** A tap-chooser bubble — single-tap dispatches; multi-select toggles + a
+/** A tap-chooser bubble, single-tap dispatches; multi-select toggles + a
  *  confirm. Used for "which shoes?" and "what do you want in the outfit?". */
 function ChooserBubble({ choose, disabled, onSubmit }: {
   choose: NonNullable<StyleUpProductRef['choose']>;
@@ -233,7 +274,7 @@ function relativeTime(iso: string | null): string {
 export interface StyleUpExperienceProps {
   /** Restrict the roster + resumed threads to the two /style landing stylists. */
   landingOnly?: boolean;
-  /** Landing mode — embedded under a marketing hero (richer copy + sign-in). */
+  /** Landing mode, embedded under a marketing hero (richer copy + sign-in). */
   landing?: boolean;
   /** Hero headline / subhead shown in landing mode above the roster. */
   landingTitle?: string;
@@ -244,7 +285,7 @@ export function StyleUpExperience({
   landingOnly = false,
   landing = false,
   landingTitle = 'Meet your AI stylist',
-  landingSubtitle = 'Two stylists, one feed. Tell them your vibe — they pull the pieces and put the look on you.',
+  landingSubtitle = 'Two stylists, one feed. Tell them your vibe, they pull the pieces and put the look on you.',
 }: StyleUpExperienceProps = {}) {
   const { user } = useAuth();
   const userId = user?.id ?? null;
@@ -287,8 +328,11 @@ export function StyleUpExperience({
   const [viewer, setViewer] = useState<{ videoUrl: string; pieces: StyleUpProductRef[]; genId: string } | null>(null); // expanded look
   const [, setNowTick] = useState(0);                // 1s heartbeat for the render ETA
   const [isDesktop, setIsDesktop] = useState(false); // desktop = two-pane layout
-  const [hunting, setHunting] = useState(false);     // web stylist searching the web
-  const [huntPhase, setHuntPhase] = useState(0);     // cycles the researching status line
+  const [hunting, setHunting] = useState(false);     // stylist pulling pieces together
+  const [huntThreadId, setHuntThreadId] = useState<string | null>(null); // which thread the pull belongs to
+  const [huntTick, setHuntTick] = useState(0);       // seconds elapsed in the current pull
+  const [huntEstSec, setHuntEstSec] = useState(0);   // estimated total seconds for the pull
+  const [typingThreadId, setTypingThreadId] = useState<string | null>(null); // which thread the typing belongs to
   const [signingIn, setSigningIn] = useState(false); // landing Google sign-in in flight
   const [signinError, setSigninError] = useState('');
   const [edit, setEdit] = useState<{ heightLabel: string; weightLabel: string; ageLabel: string; gender: UserGender; style: string } | null>(null);
@@ -298,7 +342,7 @@ export function StyleUpExperience({
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
 
-  // A render is in flight for this thread — used to block stacking renders.
+  // A render is in flight for this thread, used to block stacking renders.
   const pendingRender = messages.some(m => {
     if (m.kind !== 'render' || !m.renderGenerationId) return false;
     const r = renders[m.renderGenerationId];
@@ -311,7 +355,7 @@ export function StyleUpExperience({
     else navigate('/');
   }, [navigate]);
 
-  // Landing sign-in — same Google OAuth the rest of the app uses. On success
+  // Landing sign-in, same Google OAuth the rest of the app uses. On success
   // the page redirects to Google and resolves back here authenticated.
   const handleSignIn = useCallback(async () => {
     setSigninError('');
@@ -320,7 +364,7 @@ export function StyleUpExperience({
     if (error) { setSigninError(error); setSigningIn(false); }
   }, []);
 
-  // Desktop vs mobile — desktop gets a two-pane (rail + chat) experience.
+  // Desktop vs mobile, desktop gets a two-pane (rail + chat) experience.
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const mq = window.matchMedia('(min-width: 769px)');
@@ -330,10 +374,10 @@ export function StyleUpExperience({
     return () => mq.removeEventListener('change', apply);
   }, []);
 
-  // Roster — scoped to the landing pair on /style, the full roster elsewhere.
+  // Roster, scoped to the landing pair on /style, the full roster elsewhere.
   useEffect(() => { void fetchStylists({ landingOnly }).then(setStylists); }, [landingOnly]);
 
-  // Shopper context — the SAME inputs the AI-look flow uses (face photos +
+  // Shopper context, the SAME inputs the AI-look flow uses (face photos +
   // height / weight / age / gender + saved style). Editable here; saving writes
   // straight to the profile the stylist reads each turn, so it stays in sync
   // with the AI-look studio (one source of truth).
@@ -368,14 +412,14 @@ export function StyleUpExperience({
   }, [userId]);
   useEffect(() => { void loadContext(); }, [loadContext]);
 
-  // Open a known thread (resume) — loads its full history so the conversation
+  // Open a known thread (resume), loads its full history so the conversation
   // keeps going where it left off.
   const openThread = useCallback(async (id: string, s: StyleUpStylist) => {
     setActive(s);
     setThreadId(id);
     setLatestThread({ threadId: id, stylist: s });
     setMessages(await fetchMessages(id));
-    // Open where they left off — pin to the latest message once the thread has
+    // Open where they left off, pin to the latest message once the thread has
     // rendered + laid out (two frames covers the mount + first paint).
     requestAnimationFrame(() => requestAnimationFrame(() => {
       const el = scrollerRef.current;
@@ -415,7 +459,7 @@ export function StyleUpExperience({
 
   // On open, resume the shopper's most-recent conversation so an active chat's
   // history keeps going instead of dropping them back on the roster every time.
-  // EXCEPT on the /style landing — that should always open on the landing hero,
+  // EXCEPT on the /style landing, that should always open on the landing hero,
   // never drop you straight into a chat. We still remember the latest thread so
   // the resume affordance works; we just don't auto-open it.
   useEffect(() => {
@@ -506,44 +550,57 @@ export function StyleUpExperience({
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages.length, stylistTyping, hunting]);
 
-  // Cycle the "researching" status line while a web hunt is in flight.
+  // Tick the pull timer (drives both the cycling status line + the ETA badge).
   useEffect(() => {
-    if (!hunting) { setHuntPhase(0); return; }
-    const h = window.setInterval(() => setHuntPhase(p => p + 1), 1600);
+    if (!hunting) { setHuntTick(0); return; }
+    const h = window.setInterval(() => setHuntTick(s => s + 1), 1000);
     return () => window.clearInterval(h);
   }, [hunting]);
 
   // Show the typing bubble for a randomized 1/2/3s before the stylist's reply
-  // lands — used by the tap-driven flows (swaps, outfit, scene) so every
+  // lands, used by the tap-driven flows (swaps, outfit, scene) so every
   // response feels considered, not instant.
   const beat = useCallback(async () => {
+    setTypingThreadId(threadId);
     setStylistTyping(true);
     await stylistBeat();
     setStylistTyping(false);
-  }, []);
+  }, [threadId]);
 
   // Web stylist surfacing pieces: run each per-piece web query (search → import
   // → renderable ref) behind a visible "researching" indicator, then drop the
   // finds into the thread. Driven by the searchQueries the stylist's brain
   // returns, so "let me surface some options" actually produces products.
   const runWebHunt = useCallback(async (queries: string[]) => {
-    if (!threadId || !userId || queries.length === 0) return;
+    const tid = threadId;
+    if (!tid || !userId || queries.length === 0) return;
+    const qs = queries.slice(0, 4);
+    // Estimate the wait from past pull times, tell the shopper conversationally,
+    // and scope the "working" indicator to THIS thread so it never shows up in a
+    // different chat the shopper switches to mid-pull.
+    const estSec = Math.max(3, Math.round((avgPullMs() * qs.length) / 1000));
+    setHuntEstSec(estSec);
+    setHuntThreadId(tid);
     setHunting(true);
+    await sendStylistText(tid, `On it. Give me ${waitPhrase(estSec)} and I'll have ${qs.length === 1 ? 'it' : 'these'} ready for you.`);
     try {
       const found: StyleUpProductRef[] = [];
-      for (const q of queries.slice(0, 4)) {
+      for (const q of qs) {
         const got = found.map(f => f.id).filter((x): x is string => !!x);
+        const t0 = Date.now();
         const [p] = await webRecommend(userId, q, 1, [...rejected, ...got]);
+        recordPullMs(Date.now() - t0);          // self-calibrate future estimates
         if (p?.id) found.push(p);
       }
       if (found.length === 0) {
-        await sendStylistText(threadId, "Couldn't pin those down — give me a brand or budget and I'll hunt again.");
+        await sendStylistText(tid, "Couldn't quite pin those down. Give me a brand or a budget and I'll take another run at it.");
         return;
       }
-      await sendStylistText(threadId, `Surfaced ${found.length === 1 ? 'this' : 'these'} — tap any to see it on you, or say “put the look on me”.`);
-      for (const p of found) await sendProductPick(threadId, p);
+      await sendStylistText(tid, `Here's what I pulled. Tap any to see it on you, or say "put the look on me".`);
+      for (const p of found) await sendProductPick(tid, p);
     } finally {
       setHunting(false);
+      setHuntThreadId(null);
     }
   }, [threadId, userId, rejected]);
 
@@ -556,6 +613,7 @@ export function StyleUpExperience({
     if (!threadId || !supabase) return;
     setChatError(null);
     await stylistBeat();           // human "reading" pause (1/2/3s) before typing
+    setTypingThreadId(threadId);
     setStylistTyping(true);
     // The Anthropic call behind the edge function can transiently 429/529/502
     // under load. Retry a couple times with backoff before surfacing an error,
@@ -580,12 +638,12 @@ export function StyleUpExperience({
     setChatError(lastErr || 'Your stylist couldn’t respond. Tap to retry.');
   }, [threadId, runWebHunt]);
 
-  // "Generate the look on me" — the stylist confirms in-thread, then the FULL
+  // "Generate the look on me", the stylist confirms in-thread, then the FULL
   // set of recommended pieces is composited onto the shopper via the existing
   // generate-look pipeline. The render bubble streams in + polls to the video.
   const generateFullLook = useCallback(async (products: StyleUpProductRef[], scene?: string | null) => {
     if (!threadId || !userId || genLook) return;
-    if (pendingRender) { setRenderError('Still finishing your last look — give it a sec.'); return; }
+    if (pendingRender) { setRenderError('Still finishing your last look, give it a sec.'); return; }
     const seen = new Set<string>();
     const uniq = products.filter(p => {
       if (!p.id || seen.has(p.id)) return false;
@@ -595,23 +653,23 @@ export function StyleUpExperience({
     // Don't re-render the exact same pieces + scene (#10).
     const sig = [...uniq.map(p => p.id).sort(), scene ?? ''].join('|');
     if (sig === lastRenderSigRef.current) {
-      await sendStylistText(threadId, "That's the same look + setting you just saw — change a piece or pick a new spot and I'll re-render.");
+      await sendStylistText(threadId, "That's the same look + setting you just saw, change a piece or pick a new spot and I'll re-render.");
       return;
     }
     lastRenderSigRef.current = sig;
     setGenLook(true);
     setRenderError(null);
     await beat();
-    await sendStylistText(threadId, "Love it — putting your full look together now. I'll send it over the second it's ready ✨");
+    await sendStylistText(threadId, "Love it, putting your full look together now. I'll send it over the second it's ready ✨");
     const { error } = await startFullLookRender({ threadId, shopperUserId: userId, products: uniq, scene });
     if (error) {
       setRenderError(error);
-      await sendStylistText(threadId, `Hmm, I couldn't start that render — ${error}`);
+      await sendStylistText(threadId, `Hmm, I couldn't start that render, ${error}`);
     }
     setGenLook(false);
   }, [threadId, userId, genLook, pendingRender, triggerStylist, beat]);
 
-  // The pieces currently in the look — the stylist's product picks, excluding
+  // The pieces currently in the look, the stylist's product picks, excluding
   // swap/chooser cards. Drives full-look generation + swap re-renders.
   const lookPicks = useCallback((): StyleUpProductRef[] => messages
     .filter(m => m.kind === 'product' && m.productRef?.id && !m.productRef?.swap && !m.productRef?.choose)
@@ -639,7 +697,7 @@ export function StyleUpExperience({
       .filter(s => !filled.has(s))
       .map(s => ({ value: s, label: SLOT_LABEL[s] }));
     if (candidates.length === 0) {
-      await sendStylistText(threadId, "You've got the pieces — say “show me the full look” and I'll put it all on you.");
+      await sendStylistText(threadId, "You've got the pieces, say “show me the full look” and I'll put it all on you.");
       return;
     }
     await sendStylistText(threadId, 'Got it. What do you want in the outfit? Tap all that apply.');
@@ -648,11 +706,11 @@ export function StyleUpExperience({
 
   const startOutfitFlow = useCallback(async () => {
     if (!threadId || !userId) return;
-    if (pendingRender) { setRenderError('Still finishing your last look — one sec.'); return; }
+    if (pendingRender) { setRenderError('Still finishing your last look, one sec.'); return; }
     await beat();
     const shoes = lookPicks().filter(p => roleTagFromName(p.name ?? null) === 'Shoes' && p.id);
     if (shoes.length > 1 && !chosenBySlot['Shoes']) {
-      await sendStylistText(threadId, 'Love it — let’s build the full fit. First, which shoes do you want to build around?');
+      await sendStylistText(threadId, 'Love it, let’s build the full fit. First, which shoes do you want to build around?');
       await sendChooser(threadId, {
         kind: 'shoes', prompt: 'Pick your shoes', multi: false,
         options: shoes.map(s => ({ value: s.id as string, label: s.name || 'Shoes', image: s.image, ref: s })),
@@ -665,10 +723,10 @@ export function StyleUpExperience({
   // Before any restyle: ask where they want to be seen (scene), then render.
   const askScene = useCallback(async () => {
     if (!threadId || !userId) return;
-    if (pendingRender) { setRenderError('Still finishing your last look — one sec.'); return; }
+    if (pendingRender) { setRenderError('Still finishing your last look, one sec.'); return; }
     if (assembleLook().length === 0) { void triggerStylist(); return; }
     await beat();
-    await sendStylistText(threadId, 'Before I restyle you — where do you want to be seen?');
+    await sendStylistText(threadId, 'Before I restyle you, where do you want to be seen?');
     await sendChooser(threadId, { kind: 'scene', prompt: 'Pick your setting', multi: false, options: sceneOptions() });
   }, [threadId, userId, pendingRender, assembleLook, triggerStylist, beat]);
 
@@ -685,12 +743,12 @@ export function StyleUpExperience({
       setChosenBySlot(prev => ({ ...prev, Shoes: id }));
       rejectIds(lookPicks().filter(p => roleTagFromName(p.name ?? null) === 'Shoes' && p.id !== id).map(p => p.id));
       await beat();
-      await sendStylistText(threadId, 'Perfect — building around those. 👟');
+      await sendStylistText(threadId, 'Perfect, building around those. 👟');
       await askOutfitSlots();
     } else if (kind === 'slots') {
       const isWeb = active?.sourceMode === 'web';
       await beat();
-      await sendStylistText(threadId, isWeb ? 'On it — hunting the web for those now…' : 'On it — pulling pieces for that now…');
+      await sendStylistText(threadId, isWeb ? 'On it, tracking those down now…' : 'On it, pulling pieces for that now…');
       const exclude = [...lookPicks().map(p => p.id).filter((x): x is string => !!x), ...rejected];
       for (const role of values) {
         const pick = isWeb
@@ -698,23 +756,23 @@ export function StyleUpExperience({
           : await recommendForSlot(userId, role, exclude, recOpts());
         if (pick?.id) { await sendProductPick(threadId, pick); exclude.push(pick.id); }
       }
-      await sendStylistText(threadId, "Here's your outfit — tap “See it on me” on any piece, or say “show me the full look” and I'll put it all on you.");
+      await sendStylistText(threadId, "Here's your outfit, tap “See it on me” on any piece, or say “show me the full look” and I'll put it all on you.");
       // Proactive gap completion (#9): nudge the missing core piece, with a reason.
       const have = new Set([...lookPicks().map(p => roleTagFromName(p.name ?? null)), ...values]);
       const GAP_REASON: Record<string, string> = {
         Shoes: 'a clean pair of shoes to ground it', Top: 'a top to anchor the fit', Pants: 'bottoms to complete it', Jacket: 'a layer to pull it together',
       };
       const missing = (['Shoes', 'Top', 'Pants'] as const).find(s => !have.has(s));
-      if (missing) await sendStylistText(threadId, `One more thing — you'll want ${GAP_REASON[missing]}. Say “different ${missing.toLowerCase()}” and I'll pull a few.`);
+      if (missing) await sendStylistText(threadId, `One more thing, you'll want ${GAP_REASON[missing]}. Say “different ${missing.toLowerCase()}” and I'll pull a few.`);
     }
   }, [threadId, userId, lookPicks, rejected, rejectIds, askOutfitSlots, assembleLook, generateFullLook, recOpts, active, beat]);
 
-  // "Try different pants" — the stylist offers 3 alternatives for that slot.
+  // "Try different pants", the stylist offers 3 alternatives for that slot.
   const handleSwapRequest = useCallback(async (swap: { role: string; label: string }) => {
     if (!threadId || !userId) return;
     setRenderError(null);
     await beat();
-    await sendStylistText(threadId, `Sure thing — here are a few ${swap.label} options. Tap the one you like and I'll put it on you.`);
+    await sendStylistText(threadId, `Sure thing, here are a few ${swap.label} options. Tap the one you like and I'll put it on you.`);
     // Exclude what's in the look AND anything they've already passed on (memory).
     const exclude = [...lookPicks().map(p => p.id).filter((x): x is string => !!x), ...rejected];
     // Web stylists hunt the open web for alternates; catalog stylists pull ours.
@@ -722,7 +780,7 @@ export function StyleUpExperience({
       ? await webFetchSwapOptions(userId, swap.role, 3, exclude, recOpts())
       : await fetchSwapOptions(userId, swap.role, 3, exclude, recOpts());
     if (options.length === 0) {
-      await sendStylistText(threadId, `Hmm, I'm short on alternate ${swap.label} right now — want to try a different piece?`);
+      await sendStylistText(threadId, `Hmm, I'm short on alternate ${swap.label} right now, want to try a different piece?`);
       return;
     }
     await sendSwapOptions(threadId, swap.role, swap.label, options);
@@ -731,17 +789,17 @@ export function StyleUpExperience({
   // Shopper picked one of the swap options → re-render the full look with it.
   const selectSwapOption = useCallback(async (role: string, chosen: StyleUpProductRef, siblings: StyleUpProductRef[] = []) => {
     if (!threadId || !userId || genLook) return;
-    if (pendingRender) { setRenderError('Still finishing your last look — give it a sec.'); return; }
+    if (pendingRender) { setRenderError('Still finishing your last look, give it a sec.'); return; }
     setGenLook(true);
     setRenderError(null);
     setChosenBySlot(prev => ({ ...prev, [role]: chosen.id as string }));
     rejectIds(siblings.filter(o => o.id !== chosen.id).map(o => o.id)); // remember the passed-over options
     await beat();
-    await sendStylistText(threadId, `Great pick — restyling you with the ${chosen.brand || chosen.name || 'new piece'} now ✨`);
+    await sendStylistText(threadId, `Great pick, restyling you with the ${chosen.brand || chosen.name || 'new piece'} now ✨`);
     const { error } = await startFullLookRender({ threadId, shopperUserId: userId, products: assembleLook(), replace: { role, product: chosen }, scene: chosenScene });
     if (error) {
       setRenderError(error);
-      await sendStylistText(threadId, `Couldn't render that — ${error}`);
+      await sendStylistText(threadId, `Couldn't render that, ${error}`);
     }
     setGenLook(false);
   }, [threadId, userId, genLook, pendingRender, assembleLook, rejectIds, chosenScene, beat]);
@@ -772,7 +830,7 @@ export function StyleUpExperience({
     else void triggerStylist();
   }, [draft, threadId, sending, triggerStylist, handleSwapRequest, startOutfitFlow, askScene, lookPicks]);
 
-  // Add a finished render to the shopper's own looks — promotes the generation
+  // Add a finished render to the shopper's own looks, promotes the generation
   // to a LIVE look (with its video + poster + pieces), associated with THIS
   // shopper, so it lands in My Catalog properly (not stuck Inactive/posterless).
   const addToLooks = useCallback(async (genId: string, pieces: StyleUpProductRef[]) => {
@@ -805,12 +863,12 @@ export function StyleUpExperience({
     else if (p.url) window.open(p.url, '_blank', 'noopener');
   }, [navigate]);
 
-  // "See it on me" — render the shopper wearing a stylist pick (reuses the
+  // "See it on me", render the shopper wearing a stylist pick (reuses the
   // generate-look pipeline). The render bubble arrives via realtime and the
   // polling effect below carries it to the finished video.
   const tryOn = useCallback(async (product: StyleUpMessage['productRef']) => {
     if (!threadId || !userId || !product) return;
-    if (pendingRender) { setRenderError('Still finishing your last look — give it a sec.'); return; }
+    if (pendingRender) { setRenderError('Still finishing your last look, give it a sec.'); return; }
     const key = product.id || product.url || product.name || '';
     if (renderingIds.has(key)) return;
     setRenderingIds(prev => new Set(prev).add(key));
@@ -873,7 +931,7 @@ export function StyleUpExperience({
     void sendStylistText(threadId, describeLook(assembleLook()));
   }, [messages, renders, threadId, followedUp, assembleLook]);
 
-  // ── Context editing — writes straight to the profile (shared with the
+  // ── Context editing, writes straight to the profile (shared with the
   // AI-look studio), so edits here show up everywhere. ──────────────────────
   const beginEdit = useCallback(() => {
     if (!ctx) return;
@@ -920,7 +978,7 @@ export function StyleUpExperience({
   const contextCard = (
     <div className={`su-context${ctxMini && !ctxEditing ? ' su-context--mini' : ''}${ctxEditing ? ' su-context--editing' : ''}`} aria-label="Your styling context">
       {ctxMini && !ctxEditing ? (
-        // Collapsed slim bar — tap to expand back to the full card.
+        // Collapsed slim bar, tap to expand back to the full card.
         <button type="button" className="su-context-minibar" onClick={() => { setCtxMini(false); if (scrollerRef.current) scrollerRef.current.scrollTop = 0; }}>
           <span className="su-context-mini-photo" aria-hidden="true">
             {filledPhotos[0] ? <img src={filledPhotos[0]} alt="" /> : 'You'}
@@ -929,7 +987,7 @@ export function StyleUpExperience({
           <svg className="su-context-mini-chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
       ) : ctxEditing && edit ? (
-        // Inline editor — photos + stats + gender + style, saved to the profile.
+        // Inline editor, photos + stats + gender + style, saved to the profile.
         <div className="su-context-editor">
           <div className="su-context-photos su-context-photos--edit">
             {[0, 1, 2].map(i => (
@@ -980,7 +1038,7 @@ export function StyleUpExperience({
                 : <span className="su-context-chip su-context-chip--muted">No stats yet</span>}
               {ctx?.style && <span className="su-context-chip su-context-chip--style">{ctx.style}</span>}
             </div>
-            <div className="su-context-note">Your stylist sees this — keep it current.</div>
+            <div className="su-context-note">Your stylist sees this, keep it current.</div>
           </div>
           <button type="button" className="su-context-edit" onClick={beginEdit} aria-label="Edit your context">
             <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.12 2.12 0 0 1 3 3L12 15l-4 1 1-4z"/></svg>
@@ -991,7 +1049,7 @@ export function StyleUpExperience({
     </div>
   );
 
-  // Shared top bar — StyleUp title + (mobile) a resume-chat icon. On desktop
+  // Shared top bar, StyleUp title + (mobile) a resume-chat icon. On desktop
   // the conversations live in the rail, so the resume icon is hidden.
   const railHeader = (
     <div className="su-shell-head">
@@ -1009,7 +1067,7 @@ export function StyleUpExperience({
     </div>
   );
 
-  // Expanded look viewer — the big, full-screen video + its pieces + add-to-looks.
+  // Expanded look viewer, the big, full-screen video + its pieces + add-to-looks.
   const viewerOverlay = viewer ? (
     <div className="su-viewer" onClick={() => setViewer(null)} role="dialog" aria-modal="true">
       <div className="su-viewer-inner" onClick={e => e.stopPropagation()}>
@@ -1053,7 +1111,7 @@ export function StyleUpExperience({
     </div>
   ) : null;
 
-  // Not signed in — Style Up is per-shopper. On /style this doubles as the
+  // Not signed in, Style Up is per-shopper. On /style this doubles as the
   // landing: hero + a preview of the two stylists + the Google sign-in.
   if (!userId) {
     return (
@@ -1083,10 +1141,10 @@ export function StyleUpExperience({
     );
   }
 
-  // ── Roster pane — saved conversations + the stylist list. ───────────────
+  // ── Roster pane, saved conversations + the stylist list. ───────────────
   const rosterPane = (
         <div className="su-page">
-          {/* Saved conversations — the shopper's ongoing chats live here so they
+          {/* Saved conversations, the shopper's ongoing chats live here so they
               can pick any one back up where they left off. */}
           {myThreads.length > 0 && (
             <div className="su-convos">
@@ -1154,7 +1212,7 @@ export function StyleUpExperience({
         </div>
   );
 
-  // ── Thread pane — the active conversation. ──────────────────────────────
+  // ── Thread pane, the active conversation. ──────────────────────────────
   const threadPane = (
       <div className="su-page su-page--thread">
         <div className="su-thread-head">
@@ -1279,7 +1337,7 @@ export function StyleUpExperience({
                         </span>
                       </button>
                     ) : failed ? (
-                      <div className="su-render-status su-render-status--failed">Couldn&apos;t render that look — try another piece.</div>
+                      <div className="su-render-status su-render-status--failed">Couldn&apos;t render that look, try another piece.</div>
                     ) : (
                       <div className="su-render-cook">
                         <div className="su-render-status">
@@ -1292,7 +1350,7 @@ export function StyleUpExperience({
                           </span>
                         </div>
                         {/* The pieces going into the look (mirrors the studio's
-                            cooking screen) — float them while it renders. */}
+                            cooking screen), float them while it renders. */}
                         {pieces.length > 0 && (
                           <div className="su-render-pieces">
                             {pieces.slice(0, 6).map((pc, i) => (
@@ -1336,18 +1394,19 @@ export function StyleUpExperience({
               </div>
             );
           })}
-          {stylistTyping && (
+          {stylistTyping && typingThreadId === threadId && (
             <div className="su-msg su-msg--stylist">
               <div className="su-bubble su-bubble--typing" aria-label={`${active?.name ?? 'Stylist'} is typing`}>
                 <span /><span /><span />
               </div>
             </div>
           )}
-          {hunting && (
+          {hunting && huntThreadId === threadId && (
             <div className="su-msg su-msg--stylist">
               <div className="su-hunting" role="status" aria-live="polite">
                 <span className="su-hunting-orb" aria-hidden="true" />
-                <span className="su-hunting-text">{HUNT_PHRASES[huntPhase % HUNT_PHRASES.length]}</span>
+                <span className="su-hunting-text">{HUNT_PHRASES[Math.floor(huntTick / 2) % HUNT_PHRASES.length]}</span>
+                {huntEstSec > 0 && <span className="su-hunting-eta">{fmtRemaining(Math.max(0, huntEstSec - huntTick))}</span>}
               </div>
             </div>
           )}
@@ -1377,7 +1436,7 @@ export function StyleUpExperience({
   const bgLayer = <div className="su-bg" aria-hidden="true"><StyleUpBackground /></div>;
 
   // Landing (/style) → a single-column experience: hero + the two stylist cards,
-  // and the full chat once a stylist is open. No two-pane rail here — it reads
+  // and the full chat once a stylist is open. No two-pane rail here, it reads
   // as a focused landing rather than an inbox.
   if (landing) {
     return (
@@ -1403,7 +1462,7 @@ export function StyleUpExperience({
             {threadId ? threadPane : (
               <div className="su-main-empty">
                 <div className="su-main-empty-mark" aria-hidden="true">✦</div>
-                <p>Pick a stylist — or open one of your conversations — to start chatting.</p>
+                <p>Pick a stylist, or open one of your conversations, to start chatting.</p>
               </div>
             )}
           </main>
