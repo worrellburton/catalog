@@ -106,6 +106,60 @@ export async function getOrCreateThread(
   return String(data.id);
 }
 
+export interface StyleUpThreadSummary {
+  threadId: string;
+  stylist: StyleUpStylist;
+  lastMessage: string | null;
+  lastMessageAt: string | null;
+}
+
+/** All of the shopper's conversations that have at least one message, newest
+ *  first, each with a short preview of the last message — so the roster can
+ *  surface ongoing chats to resume. */
+export async function fetchMyThreads(shopperUserId: string): Promise<StyleUpThreadSummary[]> {
+  if (!supabase) return [];
+  const { data: threads } = await supabase
+    .from('style_up_threads')
+    .select('id, last_message_at, stylist:style_up_stylists(id, name, avatar_url, specialty, bio, accent_color)')
+    .eq('shopper_user_id', shopperUserId)
+    .order('last_message_at', { ascending: false });
+  if (!threads || threads.length === 0) return [];
+
+  const ids = threads.map(t => String(t.id));
+  const { data: msgs } = await supabase
+    .from('style_up_messages')
+    .select('thread_id, sender, kind, body, created_at')
+    .in('thread_id', ids)
+    .order('created_at', { ascending: false });
+
+  const preview = new Map<string, string>();
+  for (const m of (msgs ?? []) as Array<{ thread_id: string; sender: string; kind: string; body: string | null }>) {
+    const tid = String(m.thread_id);
+    if (preview.has(tid)) continue;
+    let text = m.kind === 'product' ? 'Sent a product pick'
+      : m.kind === 'render' ? 'Sent a look'
+      : (m.body ?? '');
+    if (m.sender === 'shopper') text = `You: ${text}`;
+    preview.set(tid, text);
+  }
+
+  return threads
+    .map(t => {
+      const raw = Array.isArray(t.stylist) ? t.stylist[0] : t.stylist;
+      if (!raw) return null;
+      const tid = String(t.id);
+      // Only surface threads that actually have a message.
+      if (!preview.has(tid)) return null;
+      return {
+        threadId: tid,
+        stylist: mapStylist(raw as Record<string, unknown>),
+        lastMessage: preview.get(tid) ?? null,
+        lastMessageAt: (t.last_message_at as string | null) ?? null,
+      };
+    })
+    .filter((x): x is StyleUpThreadSummary => !!x);
+}
+
 /** The shopper's most-recently-active thread (+ its stylist), or null. Used to
  *  resume the ongoing conversation on open so the chat history keeps going. */
 export async function getLatestThread(
