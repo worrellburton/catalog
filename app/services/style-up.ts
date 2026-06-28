@@ -425,6 +425,7 @@ async function renderLook(
   picks: StyleUpProductRef[],
   caption: StyleUpProductRef,
   replace?: { role: string; product: StyleUpProductRef } | null,
+  scene?: string | null,
 ): Promise<{ generationId: string | null; error: string | null }> {
   if (!supabase) return { generationId: null, error: 'No database connection' };
 
@@ -477,7 +478,7 @@ async function renderLook(
     lines = lines.filter(l => (seen.has(l.product_id) ? false : (seen.add(l.product_id), true)));
   }
 
-  const prompt = buildGenerationPrompt({
+  let prompt = buildGenerationPrompt({
     heightLabel: ha.heightLabel ?? '',
     weightLabel: ha.weightLabel,
     ageLabel: ha.ageLabel ?? undefined,
@@ -487,6 +488,8 @@ async function renderLook(
     productLines: lines.map(l => ({ role_tag: l.roleTag, brand: l.brand, name: l.name })),
     durationSeconds: 10,
   });
+  // Scene/setting the shopper chose ("clean studio", "rooftop at golden hour"…).
+  if (scene && scene.trim()) prompt += `\n\nSetting: ${scene.trim()}. Place the subject naturally in this environment.`;
 
   const { data: gen, error } = await createGeneration({
     userId: shopperUserId,
@@ -542,13 +545,14 @@ export async function startFullLookRender(opts: {
   shopperUserId: string;
   products: StyleUpProductRef[];
   replace?: { role: string; product: StyleUpProductRef } | null;
+  scene?: string | null;
 }): Promise<{ generationId: string | null; error: string | null }> {
-  const { threadId, shopperUserId, products, replace } = opts;
+  const { threadId, shopperUserId, products, replace, scene } = opts;
   const caption: StyleUpProductRef = {
     name: replace ? 'Your updated look' : 'Your full look',
     image: replace?.product.image || products.find(p => p.image)?.image,
   };
-  return renderLook(threadId, shopperUserId, products, caption, replace);
+  return renderLook(threadId, shopperUserId, products, caption, replace, scene);
 }
 
 const SWAP_FETCH_LIMIT = 200;
