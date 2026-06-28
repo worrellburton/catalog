@@ -426,6 +426,42 @@
 .su-product-btn--primary { background: #e7e7ea; color: #141518; border-color: #e7e7ea; }
 .su-product-btn:disabled { opacity: 0.55; cursor: default; }
 
+/* Swap picker — "pick a different pant" set of 3 options. */
+.su-swap {
+  max-width: 88%;
+  padding: 12px;
+  border-radius: 16px;
+  background: #1c1d21;
+  border: 1px solid #2a2c31;
+}
+.su-swap-label {
+  font-size: 12px; font-weight: 700; text-transform: capitalize;
+  color: var(--su-accent); margin-bottom: 9px;
+}
+.su-swap-options { display: flex; gap: 8px; }
+.su-swap-opt {
+  flex: 1 1 0; min-width: 0;
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 0;
+  border-radius: 12px;
+  border: 1px solid #2a2c31;
+  background: #141518;
+  color: #e7e7ea;
+  cursor: pointer;
+  overflow: hidden;
+  text-align: left;
+  transition: border-color 0.14s ease, transform 0.1s ease;
+}
+.su-swap-opt:hover { border-color: var(--su-accent); }
+.su-swap-opt:active { transform: scale(0.97); }
+.su-swap-opt:disabled { opacity: 0.55; cursor: default; }
+.su-swap-opt-media { width: 100%; aspect-ratio: 3 / 4; background: #26282d; }
+.su-swap-opt-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.su-swap-opt-info { display: flex; flex-direction: column; gap: 1px; padding: 0 8px 9px; min-width: 0; }
+.su-swap-opt-brand { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--su-accent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.su-swap-opt-name { font-size: 11.5px; line-height: 1.25; color: #e7e7ea; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.su-swap-opt-price { font-size: 11px; color: #8b8e96; margin-top: 1px; }
+
 /* On-you render bubble. */
 .su-render {
   max-width: 78%;
@@ -443,6 +479,20 @@
 .su-render-status-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
 .su-render-eta { font-size: 12px; color: #71747c; font-weight: 600; }
 .su-render-status--failed { color: #e9a59c; }
+.su-render-cook { display: flex; flex-direction: column; gap: 12px; padding-bottom: 14px; }
+/* The pieces going into the look — bob gently while it cooks. */
+.su-render-pieces { display: flex; gap: 8px; flex-wrap: wrap; padding: 0 18px; }
+.su-render-pieces--done { padding: 10px 12px 2px; }
+.su-render-piece {
+  width: 40px; height: 50px; border-radius: 8px; overflow: hidden;
+  background: #26282d; border: 1px solid #2a2c31; flex: 0 0 auto;
+}
+.su-render-cook .su-render-piece { animation: su-piece-bob 1.8s ease-in-out infinite; }
+.su-render-piece img { width: 100%; height: 100%; object-fit: cover; display: block; }
+@keyframes su-piece-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
 .su-render-spinner {
   width: 16px; height: 16px; flex: 0 0 auto;
   border-radius: 50%;
