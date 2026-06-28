@@ -17,68 +17,39 @@ const VS = /* glsl */ `
   void main() { gl_Position = vec4(aPos, 0.0, 1.0); }
 `;
 
-// All work is done in aspect-corrected UV space (small numbers) so mediump
-// stays precise at any resolution. Line widths are derived from pixels.
+// A minimal motif — NOT a grid. A few super-thin, dim, slowly wandering
+// contour lines (a stencil-sketch feel), nothing more. Line widths are derived
+// from pixels so they stay hairline at any resolution.
 const FS = /* glsl */ `
   precision mediump float;
   uniform vec2  uRes;   // canvas size in device px
   uniform float uTime;  // slow seconds
   uniform float uFade;  // 0..1 load-in ramp
 
-  const float CELLS = 26.0;   // fine grid rows across the height
-
-  // Thin antialiased mask for the nearest line of a unit grid in g-space.
-  float lineMask(vec2 g, float halfW, float aa) {
-    vec2 f = abs(fract(g) - 0.5);
-    float d = 0.5 - max(f.x, f.y);          // distance to nearest grid line
-    return 1.0 - smoothstep(halfW, halfW + aa, d);
-  }
-
-  // Distance to a single straight line (normal n, offset off) → thin mask.
-  float sweepMask(vec2 uv, vec2 n, float off, float halfW, float aa) {
-    float d = abs(dot(uv - 0.5, n) - off);
-    return 1.0 - smoothstep(halfW, halfW + aa, d);
+  // Hairline antialiased contour at y = base + amp*sin(freq*x + phase).
+  float contour(vec2 uv, float base, float amp, float freq, float phase, float w, float aa) {
+    float y = base + amp * sin(uv.x * freq + phase);
+    float d = abs(uv.y - y);
+    return 1.0 - smoothstep(w, w + aa, d);
   }
 
   void main() {
     vec2 uv = gl_FragCoord.xy / uRes;
-    vec2 asp = vec2(uRes.x / uRes.y, 1.0);
+    float asp = uRes.x / uRes.y;
     float t = uTime;
 
-    // Barely-there drift of the whole field — slow and deliberate.
-    vec2 g = uv * asp * CELLS + vec2(t * 0.45, -t * 0.27);
+    float px = 1.0 / uRes.y;     // one device pixel, in uv-y units
+    float w  = 0.35 * px;        // ~0.7px → hairline
+    float aa = 1.0 * px;
 
-    float pxToG = CELLS / uRes.y;           // one device px → g units
+    // Three sparse, slow, gently wandering lines — a sketch motif, not a field.
+    float ink = 0.0;
+    ink += contour(uv, 0.26, 0.045, 4.2 * asp,  t * 0.05,        w, aa);
+    ink += contour(uv, 0.55, 0.065, 3.1 * asp, -t * 0.043 + 1.6, w, aa);
+    ink += contour(uv, 0.79, 0.040, 5.4 * asp,  t * 0.058 + 3.2, w, aa);
 
-    // Fine blueprint grid — whisper faint, continuous thin lines.
-    float fine = lineMask(g, 0.5 * pxToG, 1.3 * pxToG);
-
-    // Major grid every 5 cells, broken into measurement ticks along its length.
-    vec2 gm = g / 5.0;
-    float major = lineMask(gm, 0.7 * (pxToG * 5.0), 1.2 * (pxToG * 5.0));
-    float ticks = step(0.72, fract(g.x * 2.0)) + step(0.72, fract(g.y * 2.0));
-    major *= clamp(ticks, 0.0, 1.0);
-
-    // Two long sweep lines crossing very slowly (the "ruler" gesture).
-    float a1 = 0.62, a2 = 2.42;
-    vec2 n1 = vec2(-sin(a1), cos(a1));
-    vec2 n2 = vec2(-sin(a2), cos(a2));
-    float o1 = (fract(t * 0.011) - 0.5) * 1.3;
-    float o2 = (fract(t * 0.008 + 0.5) - 0.5) * 1.3;
-    float s1 = sweepMask(uv, n1, o1, 0.0014, 0.0026);
-    float s2 = sweepMask(uv, n2, o2, 0.0014, 0.0026);
-
-    // Compose — kept low so it's ambient, not busy.
-    float ink = fine * 0.05 + major * 0.11 + (s1 + s2) * 0.16;
-
-    // Cool blueprint tint; brighten slightly on the structural lines.
-    vec3 col = mix(vec3(0.52, 0.66, 0.84), vec3(0.82, 0.91, 1.0),
-                   clamp(major + s1 + s2, 0.0, 1.0));
-
-    // Soft radial falloff keeps the center clean and the edges quiet.
-    float vig = smoothstep(1.18, 0.30, length(uv - 0.5) * 1.4);
-
-    gl_FragColor = vec4(col, ink * vig * uFade);
+    // Cool, and dim — a quiet motif, never a focal element.
+    gl_FragColor = vec4(vec3(0.74, 0.82, 0.95), ink * 0.075 * uFade);
   }
 `;
 
