@@ -25,6 +25,7 @@ import {
 } from '~/services/user-generations';
 import { promoteGenerationToLook } from '~/services/promote-generation';
 import { generationProgress } from '~/services/generation-progress';
+import { productSlug } from '~/utils/slug';
 import '~/styles/style-up.css';
 
 /** "~2 min left" / "~40s left" — estimated wait from the shared generation
@@ -391,6 +392,13 @@ export default function StyleUpPage() {
     }
   }, [published, renders, userId, user, ctx]);
 
+  // Open a pick's in-app product page (deeplink). Falls back to its shop URL.
+  const openProduct = useCallback((p: StyleUpProductRef) => {
+    const slug = productSlug({ id: p.id, name: p.name, brand: p.brand });
+    if (slug) navigate(`/p/${slug}`);
+    else if (p.url) window.open(p.url, '_blank', 'noopener');
+  }, [navigate]);
+
   // "See it on me" — render the shopper wearing a stylist pick (reuses the
   // generate-look pipeline). The render bubble arrives via realtime and the
   // polling effect below carries it to the finished video.
@@ -748,13 +756,15 @@ export default function StyleUpPage() {
               return (
                 <div key={m.id} className="su-msg su-msg--stylist">
                   <div className="su-product">
-                    <div className="su-product-media">
+                    <button type="button" className="su-product-media su-product-media--tap" onClick={() => openProduct(p)} aria-label={`Open ${p.name || 'product'}`}>
                       {p.image ? <img src={p.image} alt={p.name || 'Product'} loading="lazy" /> : <span className="su-product-media--empty" />}
-                    </div>
+                    </button>
                     <div className="su-product-info">
-                      {p.brand && <div className="su-product-brand">{p.brand}</div>}
-                      <div className="su-product-name">{p.name || 'Product'}</div>
-                      {p.price && <div className="su-product-price">{p.price}</div>}
+                      <button type="button" className="su-product-tap" onClick={() => openProduct(p)}>
+                        {p.brand && <div className="su-product-brand">{p.brand}</div>}
+                        <div className="su-product-name">{p.name || 'Product'}</div>
+                        {p.price && <div className="su-product-price">{p.price}</div>}
+                      </button>
                       <div className="su-product-actions">
                         {p.url && (
                           <button type="button" className="su-product-btn" onClick={() => window.open(p.url!, '_blank', 'noopener')}>Shop</button>
