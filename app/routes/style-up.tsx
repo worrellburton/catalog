@@ -211,6 +211,7 @@ export default function StyleUpPage() {
   const [chosenBySlot, setChosenBySlot] = useState<Record<string, string>>({}); // role → chosen product id
   const [rejected, setRejected] = useState<Set<string>>(new Set());   // product ids the shopper passed on
   const [chosenScene, setChosenScene] = useState<string | null>(null); // the look's setting
+  const [viewer, setViewer] = useState<{ videoUrl: string; pieces: StyleUpProductRef[]; genId: string } | null>(null); // expanded look
   const [, setNowTick] = useState(0);                // 1s heartbeat for the render ETA
   const [isDesktop, setIsDesktop] = useState(false); // desktop = two-pane layout
   const [edit, setEdit] = useState<{ heightLabel: string; weightLabel: string; ageLabel: string; gender: UserGender; style: string } | null>(null);
@@ -804,6 +805,28 @@ export default function StyleUpPage() {
     </div>
   );
 
+  // Expanded look viewer — the big, full-screen video + its pieces + add-to-looks.
+  const viewerOverlay = viewer ? (
+    <div className="su-viewer" onClick={() => setViewer(null)} role="dialog" aria-modal="true">
+      <div className="su-viewer-inner" onClick={e => e.stopPropagation()}>
+        <button type="button" className="su-viewer-close" onClick={() => setViewer(null)} aria-label="Close">✕</button>
+        <video className="su-viewer-video" src={viewer.videoUrl} autoPlay loop controls playsInline />
+        {viewer.pieces.length > 0 && (
+          <div className="su-viewer-pieces">
+            {viewer.pieces.map((pc, i) => (
+              <button type="button" className="su-viewer-piece" key={pc.id || i} onClick={() => openProduct(pc)} title={[pc.brand, pc.name].filter(Boolean).join(' · ')}>
+                {pc.image ? <img src={pc.image} alt="" /> : <span className="su-product-media--empty" />}
+              </button>
+            ))}
+          </div>
+        )}
+        <button type="button" className="su-viewer-add" onClick={() => void addToLooks(viewer.genId, viewer.pieces)} disabled={published.has(viewer.genId)}>
+          {published.has(viewer.genId) ? 'Added to your looks ✓' : 'Add to my looks'}
+        </button>
+      </div>
+    </div>
+  ) : null;
+
   // Not signed in — prompt to sign in (Style Up is per-shopper).
   if (!userId) {
     return (
@@ -993,7 +1016,17 @@ export default function StyleUpPage() {
                 <div key={m.id} className="su-msg su-msg--stylist">
                   <div className="su-render">
                     {done ? (
-                      <video className="su-render-video" src={r!.video_url!} autoPlay loop muted playsInline controls />
+                      <button
+                        type="button"
+                        className="su-render-video-btn"
+                        onClick={() => setViewer({ videoUrl: r!.video_url!, pieces, genId: m.renderGenerationId as string })}
+                        aria-label="Open look"
+                      >
+                        <video className="su-render-video" src={r!.video_url!} autoPlay loop muted playsInline />
+                        <span className="su-render-expand" aria-hidden="true">
+                          <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
+                        </span>
+                      </button>
                     ) : failed ? (
                       <div className="su-render-status su-render-status--failed">Couldn&apos;t render that look — try another piece.</div>
                     ) : (
@@ -1086,22 +1119,28 @@ export default function StyleUpPage() {
   // on the left, the active chat on the right. Mobile → single view.
   if (isDesktop) {
     return (
-      <div className="su-shell su-shell--split" style={{ ['--su-accent' as string]: active?.accentColor ?? '#8aa0c0' }}>
-        <aside className="su-rail">{railHeader}{rosterPane}</aside>
-        <main className="su-main">
-          {threadId ? threadPane : (
-            <div className="su-main-empty">
-              <div className="su-main-empty-mark" aria-hidden="true">✦</div>
-              <p>Pick a stylist — or open one of your conversations — to start chatting.</p>
-            </div>
-          )}
-        </main>
-      </div>
+      <>
+        <div className="su-shell su-shell--split" style={{ ['--su-accent' as string]: active?.accentColor ?? '#8aa0c0' }}>
+          <aside className="su-rail">{railHeader}{rosterPane}</aside>
+          <main className="su-main">
+            {threadId ? threadPane : (
+              <div className="su-main-empty">
+                <div className="su-main-empty-mark" aria-hidden="true">✦</div>
+                <p>Pick a stylist — or open one of your conversations — to start chatting.</p>
+              </div>
+            )}
+          </main>
+        </div>
+        {viewerOverlay}
+      </>
     );
   }
   return (
-    <div className="su-shell" style={threadId ? { ['--su-accent' as string]: active?.accentColor ?? '#8aa0c0' } : undefined}>
-      {threadId ? threadPane : <>{railHeader}{rosterPane}</>}
-    </div>
+    <>
+      <div className="su-shell" style={threadId ? { ['--su-accent' as string]: active?.accentColor ?? '#8aa0c0' } : undefined}>
+        {threadId ? threadPane : <>{railHeader}{rosterPane}</>}
+      </div>
+      {viewerOverlay}
+    </>
   );
 }
