@@ -555,39 +555,87 @@ export async function startFullLookRender(opts: {
   return renderLook(threadId, shopperUserId, products, caption, replace, scene);
 }
 
-const SWAP_FETCH_LIMIT = 200;
+const SWAP_FETCH_LIMIT = 240;
 
-/** Fetch a few alternative products for one slot (role), gender-matched, to
- *  offer the shopper a swap. Skips ids already in the look. */
+/** Signals that shape recommendations beyond plain recency. */
+export interface RecommendOpts {
+  budgetMax?: number | null;            // hard ceiling per piece
+  styleText?: string | null;           // shopper's saved style + fashion tags
+  occasion?: string | null;            // "date night", "work", "wedding"…
+  formality?: 'dressier' | 'casual' | null; // running constraint from feedback
+  avoidColors?: string[];              // colors the shopper passed on
+  simpler?: boolean;                   // "keep it simple / less flashy"
+}
+
+function priceNum(s?: string | null): number | null {
+  if (!s) return null;
+  const m = String(s).replace(/[, ]/g, '').match(/(\d+(?:\.\d+)?)/);
+  return m ? parseFloat(m[1]) : null;
+}
+const FORMAL_RE = /\b(blazer|suit|tuxedo|oxford|loafer|derby|brogue|trouser|slacks|tie|gown|heel|pump|silk|wool|cashmere|tailored|dress\s?shirt|chelsea)\b/;
+const CASUAL_RE = /\b(hoodie|sweatshirt|tee|t-?shirt|sneaker|trainer|shorts?|jogger|sweatpant|cargo|flip[\s-]?flop|graphic|denim|jean|tank)\b/;
+const LOUD_RE = /\b(print|printed|graphic|neon|sequin|leopard|floral|tie-?dye|logo|bold|bright|metallic)\b/;
+const kw = (s: string): string[] => (s.toLowerCase().match(/[a-z]{4,}/g) ?? []);
+
+/** Score + rank gender-matched, in-stock candidates for one slot (role).
+ *  Folds in relevance to the shopper's style + occasion (#2), budget (#4),
+ *  formality coherence + simplicity (#3), and feedback constraints (#7).
+ *  Recency breaks ties. Skips excluded ids + items that violate hard limits. */
 export async function fetchSwapOptions(
   shopperUserId: string,
   role: string,
   count = 3,
   excludeIds: string[] = [],
+  opts: RecommendOpts = {},
 ): Promise<StyleUpProductRef[]> {
   if (!supabase) return [];
   const gender = await getUserGender(shopperUserId);
   let q = supabase.from('products')
-    .select('id, name, brand, price, image_url, primary_image_url, url, type, gender')
-    .eq('is_active', true)
+    .select('id, name, brand, price, image_url, primary_image_url, url, type, gender, haiku_context')
+    .eq('is_active', true)              // in-stock proxy (#5)
     .not('image_url', 'is', null)
     .order('created_at', { ascending: false })
     .limit(SWAP_FETCH_LIMIT);
   if (gender === 'male') q = q.or('gender.eq.male,gender.eq.unisex');
   else if (gender === 'female') q = q.or('gender.eq.female,gender.eq.unisex');
   const { data } = await q;
+
   const exclude = new Set(excludeIds);
-  const out: StyleUpProductRef[] = [];
-  for (const p of (data ?? []) as Array<{ id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null; primary_image_url: string | null; url: string | null; type: string | null }>) {
+  const styleKw = kw(opts.styleText ?? '');
+  const occKw = kw(opts.occasion ?? '');
+  const avoid = (opts.avoidColors ?? []).map(c => c.toLowerCase());
+
+  type Row = { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null; primary_image_url: string | null; url: string | null; type: string | null; haiku_context: string | null };
+  const scored: Array<{ ref: StyleUpProductRef; score: number; idx: number }> = [];
+  let idx = 0;
+  for (const p of (data ?? []) as Row[]) {
+    idx++;
     if (exclude.has(p.id)) continue;
     if (roleForProduct(p.type, p.name) !== role) continue;
-    out.push({
-      id: p.id, name: p.name ?? undefined, brand: p.brand ?? undefined, price: p.price ?? undefined,
-      image: p.primary_image_url || p.image_url || undefined, url: p.url ?? undefined,
+    const text = `${p.name ?? ''} ${p.brand ?? ''} ${p.type ?? ''} ${p.haiku_context ?? ''}`.toLowerCase();
+    if (avoid.some(c => text.includes(c))) continue;            // dropped color (#7)
+    const price = priceNum(p.price);
+    if (opts.budgetMax && price !== null && price > opts.budgetMax) continue; // budget (#4)
+
+    let score = 0;
+    for (const k of styleKw) if (text.includes(k)) score += 1;   // style relevance (#2)
+    for (const k of occKw) if (text.includes(k)) score += 2;     // occasion fit (#6)
+    if (opts.formality === 'casual') score += (FORMAL_RE.test(text) ? -3 : 0) + (CASUAL_RE.test(text) ? 1 : 0);
+    if (opts.formality === 'dressier') score += (CASUAL_RE.test(text) ? -3 : 0) + (FORMAL_RE.test(text) ? 1 : 0);
+    if (opts.simpler && LOUD_RE.test(text)) score -= 2;          // simplicity (#3)
+    score += Math.max(0, 1 - idx / SWAP_FETCH_LIMIT) * 0.5;      // gentle recency tiebreak
+
+    scored.push({
+      idx,
+      score,
+      ref: {
+        id: p.id, name: p.name ?? undefined, brand: p.brand ?? undefined, price: p.price ?? undefined,
+        image: p.primary_image_url || p.image_url || undefined, url: p.url ?? undefined,
+      },
     });
-    if (out.length >= count) break;
   }
-  return out;
+  scored.sort((a, b) => (b.score - a.score) || (a.idx - b.idx));
+  return scored.slice(0, count).map(s => s.ref);
 }
 
 /** Post a generic tap-chooser into the thread (which shoes / which slots / …). */
@@ -613,8 +661,9 @@ export async function recommendForSlot(
   shopperUserId: string,
   role: string,
   excludeIds: string[] = [],
+  opts: RecommendOpts = {},
 ): Promise<StyleUpProductRef | null> {
-  const [pick] = await fetchSwapOptions(shopperUserId, role, 1, excludeIds);
+  const [pick] = await fetchSwapOptions(shopperUserId, role, 1, excludeIds, opts);
   return pick ?? null;
 }
 
