@@ -133,14 +133,15 @@ function stylistBeat(): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-/** Does this message read as "find/show me pieces"? Used for web stylists, who
- *  source picks from the open web on a plain product request. */
+/** Does this message clearly ask to FIND a specific piece? Used for web
+ *  stylists, who search the open web on a concrete product request. Kept tight
+ *  (a garment word AND an acquisition verb) so conversational replies like
+ *  "sit down" or "nice restraint" stay a normal chat turn, not a web search. */
 function wantsPicks(text: string): boolean {
   const t = text.toLowerCase();
-  const verb = /\b(find|show|get|need|want|looking for|look for|recommend|suggest|pull|hunt|search|grab|cop|source|gimme|give me|hook me up)\b/.test(t);
-  const garment = /\b(shirt|tee|t-?shirt|top|pants|trousers|jeans|denim|chinos|shorts|jacket|coat|blazer|hoodie|sweater|knit|shoes|sneakers|boots|loafers|dress|hat|cap|bag|outfit|fit|look|clothes|something to wear|jewelry|necklace|sunglasses|watch)\b/.test(t);
-  if (verb && garment) return true;
-  return /\b(need|want|looking for|find me|show me|get me|recommend|suggest|hook me up)\b/.test(t);
+  const verb = /\b(find|show|get|need|want|looking for|look for|recommend|suggest|pull|hunt|search|grab|cop|source|buy|shop|gimme|give me|hook me up)\b/.test(t);
+  const garment = /\b(shirt|tee|t-?shirt|top|polo|pants|trousers|jeans|denim|chinos|shorts|jacket|coat|blazer|hoodie|sweater|knit|cardigan|shoes|sneakers|boots|loafers|sandals|dress|suit|hat|cap|beanie|bag|belt|outfit|clothes|jewelry|necklace|bracelet|earrings|sunglasses|watch)\b/.test(t);
+  return verb && garment;
 }
 
 const SLOT_LABEL: Record<string, string> = { Top: 'Top', Pants: 'Pants / Shorts', Jacket: 'Jacket', Hat: 'Hat', Shoes: 'Shoes' };
@@ -706,19 +707,21 @@ export function StyleUpExperience({
     setGenLook(false);
   }, [threadId, userId, genLook, pendingRender, assembleLook, rejectIds, chosenScene, beat]);
 
-  // Web stylist: a plain product request → the stylist talks, then the app
-  // hunts the open web (product-search → auto-import) and drops the finds in.
+  // Web stylist: a concrete product request → the app hunts the open web
+  // (product-search → auto-import) and drops the finds in as one stylist turn.
+  // (We DON'T also fire the AI text turn here — that double-texts the stylist,
+  // which both reads oddly and stacks two same-sender rows.)
   const webConversationalPicks = useCallback(async (text: string) => {
     if (!threadId || !userId) return;
-    await triggerStylist();                       // the stylist replies in words first
+    await beat();
     const picks = await webRecommend(userId, text, 3, [...rejected]);
     if (picks.length === 0) {
-      await sendStylistText(threadId, "Hunted around but came up short on that — give me a brand, color, or budget and I'll dig deeper.");
+      await sendStylistText(threadId, "Couldn't pin that down just yet — give me a brand, color, budget, or vibe and I'll hunt again.");
       return;
     }
+    await sendStylistText(threadId, 'Tracked a few down — tap any to see it on you, or say “put the look on me”.');
     for (const p of picks) await sendProductPick(threadId, p);
-    await sendStylistText(threadId, 'Found these out in the wild — tap any to see it on you, or say “put the look on me”.');
-  }, [threadId, userId, rejected, triggerStylist]);
+  }, [threadId, userId, rejected, beat]);
 
   const send = useCallback(async () => {
     const text = draft.trim();
