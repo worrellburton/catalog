@@ -414,6 +414,9 @@ export function StyleUpExperience({
 
   // On open, resume the shopper's most-recent conversation so an active chat's
   // history keeps going instead of dropping them back on the roster every time.
+  // EXCEPT on the /style landing — that should always open on the landing hero,
+  // never drop you straight into a chat. We still remember the latest thread so
+  // the resume affordance works; we just don't auto-open it.
   useEffect(() => {
     if (!userId || bootResumed) return;
     let cancelled = false;
@@ -423,11 +426,11 @@ export function StyleUpExperience({
       setBootResumed(true);
       if (latest && inScope(latest.stylist)) {
         setLatestThread(latest);
-        await openThread(latest.threadId, latest.stylist);
+        if (!landing) await openThread(latest.threadId, latest.stylist);
       }
     })();
     return () => { cancelled = true; };
-  }, [userId, bootResumed, openThread, loadThreads, inScope]);
+  }, [userId, bootResumed, openThread, loadThreads, inScope, landing]);
 
   // Preference memory: per-thread set of product ids the shopper passed on, so
   // the stylist never re-recommends a no. Persisted in localStorage.
