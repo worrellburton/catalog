@@ -408,6 +408,41 @@
   30% { transform: translateY(-4px); opacity: 1; }
 }
 
+/* "Researching" module — shown while a web stylist searches + imports pieces,
+   so the wait reads as active work rather than a dead pause. */
+.su-hunting {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 15px;
+  border-radius: 16px;
+  border: 1px solid color-mix(in srgb, var(--su-accent, #5fb6a8) 40%, #26282d);
+  background: color-mix(in srgb, var(--su-accent, #5fb6a8) 12%, #15161a);
+}
+.su-hunting-orb {
+  flex: 0 0 auto;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--su-accent, #5fb6a8) 45%, transparent);
+  border-top-color: var(--su-accent, #5fb6a8);
+  animation: su-spin 0.8s linear infinite;
+}
+.su-hunting-text {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #cfd2d8;
+  background: linear-gradient(90deg, #8b8e96 25%, #fff 50%, #8b8e96 75%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: su-hunting-shimmer 2.4s linear infinite;
+}
+@keyframes su-hunting-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
 /* Product card — a stylist's pick. */
 .su-product {
   display: flex;

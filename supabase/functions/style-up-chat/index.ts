@@ -150,12 +150,14 @@ You're texting ${shopperName} inside a styling chat. Shopper context (use it; ne
 STYLE OF REPLY:
 - Talk like texting: warm, concise, 1-3 short sentences. No markdown, no bullet lists.
 - Ask a sharp clarifying question early if you don't yet know the occasion/vibe.
-- You source pieces from the OPEN WEB — never from any in-house catalog. When you want to suggest pieces, say so in words (name the brand / cut / color / vibe you're hunting for). The app then searches the web, imports the real products, and shows them to ${shopperName} automatically right after your message — so don't paste links or invent products, just describe what you're going for.
-- They can tap any piece you surface to see it on themselves, or ask you to put the whole look on them — you CAN generate the look on them (it kicks off automatically). NEVER say you can't generate photos.
+- You source pieces from the OPEN WEB — never from any in-house catalog. When you're ready to surface pieces, set searchQueries: one tight web search per garment (e.g. "men's sand linen short sleeve button up shirt", "white leather low top sneakers"). The app runs those searches, imports the real products, and shows them to ${shopperName} right after your message — so don't paste links or invent products.
+- Only set searchQueries when you're ACTUALLY surfacing pieces this turn. While you're still clarifying (asking a question), leave it empty.
+- When you do surface, your reply should say you're pulling them up now (e.g. "pulling these up for you 👀").
+- They can tap any piece you surface to see it on themselves, or ask you to put the whole look on them — you CAN generate the look on them. NEVER say you can't generate photos.
 
 Return ONLY JSON, no prose:
-{"reply":"<your text message>","productIds":[]}
-productIds MUST be an empty array — you never pick from an internal list.` : `${persona}
+{"reply":"<your text message>","searchQueries":["<one tight web search per garment>", ...]}
+searchQueries: 1-4 entries when surfacing pieces this turn, otherwise [].` : `${persona}
 
 You're texting ${shopperName} inside a styling chat. Shopper context (use it; never ask for what you already know): ${ctxBits.join('; ') || 'not provided yet'}.
 
@@ -205,10 +207,14 @@ productIds is optional — include it only when you're actually recommending pie
     const end = text.lastIndexOf('}');
     let reply = '';
     let productIds: string[] = [];
+    let searchQueries: string[] = [];
     try {
-      const parsed = JSON.parse(text.slice(start, end + 1)) as { reply?: string; productIds?: string[] };
+      const parsed = JSON.parse(text.slice(start, end + 1)) as { reply?: string; productIds?: string[]; searchQueries?: string[] };
       reply = String(parsed.reply ?? '').trim();
       productIds = Array.isArray(parsed.productIds) ? parsed.productIds.map(String) : [];
+      searchQueries = Array.isArray(parsed.searchQueries)
+        ? parsed.searchQueries.map(q => String(q).trim()).filter(Boolean).slice(0, 4)
+        : [];
     } catch {
       reply = text || "Tell me a bit more about what you're going for?";
     }
@@ -241,7 +247,10 @@ productIds is optional — include it only when you're actually recommending pie
       input_tokens: out.usage?.input_tokens ?? null, output_tokens: out.usage?.output_tokens ?? null, status: 'success',
     });
 
-    return json({ success: true, reply, picks: picks.length });
+    // Web stylists return per-piece web search queries for the client to run
+    // (search → import → show), so the stylist's "let me surface options"
+    // actually produces products.
+    return json({ success: true, reply, picks: picks.length, searchQueries: isWeb ? searchQueries : [] });
   } catch (err) {
     return json({ success: false, error: err instanceof Error ? err.message : String(err) }, 500);
   }

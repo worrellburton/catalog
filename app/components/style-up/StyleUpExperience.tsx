@@ -133,16 +133,9 @@ function stylistBeat(): Promise<void> {
   return new Promise((r) => setTimeout(r, ms));
 }
 
-/** Does this message clearly ask to FIND a specific piece? Used for web
- *  stylists, who search the open web on a concrete product request. Kept tight
- *  (a garment word AND an acquisition verb) so conversational replies like
- *  "sit down" or "nice restraint" stay a normal chat turn, not a web search. */
-function wantsPicks(text: string): boolean {
-  const t = text.toLowerCase();
-  const verb = /\b(find|show|get|need|want|looking for|look for|recommend|suggest|pull|hunt|search|grab|cop|source|buy|shop|gimme|give me|hook me up)\b/.test(t);
-  const garment = /\b(shirt|tee|t-?shirt|top|polo|pants|trousers|jeans|denim|chinos|shorts|jacket|coat|blazer|hoodie|sweater|knit|cardigan|shoes|sneakers|boots|loafers|sandals|dress|suit|hat|cap|beanie|bag|belt|outfit|clothes|jewelry|necklace|bracelet|earrings|sunglasses|watch)\b/.test(t);
-  return verb && garment;
-}
+// Cycling status lines for the web-hunt "researching" module, so a web search
+// reads as active work rather than a dead pause.
+const HUNT_PHRASES = ['Scanning the web…', 'Reading product pages…', 'Pulling the best matches…', 'Importing the pieces…'];
 
 const SLOT_LABEL: Record<string, string> = { Top: 'Top', Pants: 'Pants / Shorts', Jacket: 'Jacket', Hat: 'Hat', Shoes: 'Shoes' };
 
@@ -294,6 +287,8 @@ export function StyleUpExperience({
   const [viewer, setViewer] = useState<{ videoUrl: string; pieces: StyleUpProductRef[]; genId: string } | null>(null); // expanded look
   const [, setNowTick] = useState(0);                // 1s heartbeat for the render ETA
   const [isDesktop, setIsDesktop] = useState(false); // desktop = two-pane layout
+  const [hunting, setHunting] = useState(false);     // web stylist searching the web
+  const [huntPhase, setHuntPhase] = useState(0);     // cycles the researching status line
   const [signingIn, setSigningIn] = useState(false); // landing Google sign-in in flight
   const [signinError, setSigninError] = useState('');
   const [edit, setEdit] = useState<{ heightLabel: string; weightLabel: string; ageLabel: string; gender: UserGender; style: string } | null>(null);
@@ -504,11 +499,19 @@ export function StyleUpExperience({
     return () => { void supabase.removeChannel(channel); };
   }, [threadId]);
 
-  // Keep the chat pinned to the latest message.
+  // Keep the chat pinned to the latest message (incl. the typing / researching
+  // indicators as they appear).
   useEffect(() => {
     const el = scrollerRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [messages.length, stylistTyping]);
+  }, [messages.length, stylistTyping, hunting]);
+
+  // Cycle the "researching" status line while a web hunt is in flight.
+  useEffect(() => {
+    if (!hunting) { setHuntPhase(0); return; }
+    const h = window.setInterval(() => setHuntPhase(p => p + 1), 1600);
+    return () => window.clearInterval(h);
+  }, [hunting]);
 
   // Show the typing bubble for a randomized 1/2/3s before the stylist's reply
   // lands — used by the tap-driven flows (swaps, outfit, scene) so every
@@ -519,10 +522,36 @@ export function StyleUpExperience({
     setStylistTyping(false);
   }, []);
 
+  // Web stylist surfacing pieces: run each per-piece web query (search → import
+  // → renderable ref) behind a visible "researching" indicator, then drop the
+  // finds into the thread. Driven by the searchQueries the stylist's brain
+  // returns, so "let me surface some options" actually produces products.
+  const runWebHunt = useCallback(async (queries: string[]) => {
+    if (!threadId || !userId || queries.length === 0) return;
+    setHunting(true);
+    try {
+      const found: StyleUpProductRef[] = [];
+      for (const q of queries.slice(0, 4)) {
+        const got = found.map(f => f.id).filter((x): x is string => !!x);
+        const [p] = await webRecommend(userId, q, 1, [...rejected, ...got]);
+        if (p?.id) found.push(p);
+      }
+      if (found.length === 0) {
+        await sendStylistText(threadId, "Couldn't pin those down — give me a brand or budget and I'll hunt again.");
+        return;
+      }
+      await sendStylistText(threadId, `Surfaced ${found.length === 1 ? 'this' : 'these'} — tap any to see it on you, or say “put the look on me”.`);
+      for (const p of found) await sendProductPick(threadId, p);
+    } finally {
+      setHunting(false);
+    }
+  }, [threadId, userId, rejected]);
+
   // Kick the AI stylist for the current thread. Its reply (+ any product picks)
   // streams back via the realtime subscription; the typing bubble holds until
-  // the call resolves. Any failure surfaces a recoverable error row with a
-  // retry, rather than silently dropping the turn.
+  // the call resolves. For web stylists, the reply may carry searchQueries —
+  // we then run a web hunt for the pieces. Any failure surfaces a recoverable
+  // error row with a retry, rather than silently dropping the turn.
   const triggerStylist = useCallback(async () => {
     if (!threadId || !supabase) return;
     setChatError(null);
@@ -536,9 +565,10 @@ export function StyleUpExperience({
       if (attempt > 0) await new Promise((r) => setTimeout(r, 1200 * attempt));
       try {
         const { data, error } = await supabase.functions.invoke('style-up-chat', { body: { threadId } });
-        const resp = data as { success?: boolean; error?: string } | null;
+        const resp = data as { success?: boolean; error?: string; searchQueries?: string[] } | null;
         if (!error && resp?.success) {
           setStylistTyping(false);
+          if (resp.searchQueries?.length) await runWebHunt(resp.searchQueries);
           return;
         }
         lastErr = resp?.error || '';
@@ -548,7 +578,7 @@ export function StyleUpExperience({
     }
     setStylistTyping(false);
     setChatError(lastErr || 'Your stylist couldn’t respond. Tap to retry.');
-  }, [threadId]);
+  }, [threadId, runWebHunt]);
 
   // "Generate the look on me" — the stylist confirms in-thread, then the FULL
   // set of recommended pieces is composited onto the shopper via the existing
@@ -716,22 +746,6 @@ export function StyleUpExperience({
     setGenLook(false);
   }, [threadId, userId, genLook, pendingRender, assembleLook, rejectIds, chosenScene, beat]);
 
-  // Web stylist: a concrete product request → the app hunts the open web
-  // (product-search → auto-import) and drops the finds in as one stylist turn.
-  // (We DON'T also fire the AI text turn here — that double-texts the stylist,
-  // which both reads oddly and stacks two same-sender rows.)
-  const webConversationalPicks = useCallback(async (text: string) => {
-    if (!threadId || !userId) return;
-    await beat();
-    const picks = await webRecommend(userId, text, 3, [...rejected]);
-    if (picks.length === 0) {
-      await sendStylistText(threadId, "Couldn't pin that down just yet — give me a brand, color, budget, or vibe and I'll hunt again.");
-      return;
-    }
-    await sendStylistText(threadId, 'Tracked a few down — tap any to see it on you, or say “put the look on me”.');
-    for (const p of picks) await sendProductPick(threadId, p);
-  }, [threadId, userId, rejected, beat]);
-
   const send = useCallback(async () => {
     const text = draft.trim();
     if (!text || !threadId || sending) return;
@@ -747,15 +761,16 @@ export function StyleUpExperience({
     // Routing: swap request → 3 options; "build a full outfit" → guided chooser
     // flow; "see the look on me" → render; a web stylist + product request →
     // hunt the web; otherwise the AI stylist takes the turn.
+    // Routing: explicit swap / full-outfit / "see it on me" stay client-driven;
+    // everything else goes to the stylist's brain. For web stylists the brain
+    // decides when to surface pieces (returning searchQueries → a web hunt).
     const swap = swapTargetFromText(text);
     const looks = lookPicks();
-    const isWeb = active?.sourceMode === 'web';
     if (swap && looks.length > 0) void handleSwapRequest(swap);
     else if (wantsFullOutfit(text)) void startOutfitFlow();
     else if (wantsFullLook(text) && looks.length > 0) void askScene();
-    else if (isWeb && wantsPicks(text)) void webConversationalPicks(text);
     else void triggerStylist();
-  }, [draft, threadId, sending, triggerStylist, handleSwapRequest, startOutfitFlow, askScene, lookPicks, active, webConversationalPicks]);
+  }, [draft, threadId, sending, triggerStylist, handleSwapRequest, startOutfitFlow, askScene, lookPicks]);
 
   // Add a finished render to the shopper's own looks — promotes the generation
   // to a LIVE look (with its video + poster + pieces), associated with THIS
@@ -1325,6 +1340,14 @@ export function StyleUpExperience({
             <div className="su-msg su-msg--stylist">
               <div className="su-bubble su-bubble--typing" aria-label={`${active?.name ?? 'Stylist'} is typing`}>
                 <span /><span /><span />
+              </div>
+            </div>
+          )}
+          {hunting && (
+            <div className="su-msg su-msg--stylist">
+              <div className="su-hunting" role="status" aria-live="polite">
+                <span className="su-hunting-orb" aria-hidden="true" />
+                <span className="su-hunting-text">{HUNT_PHRASES[huntPhase % HUNT_PHRASES.length]}</span>
               </div>
             </div>
           )}
