@@ -15,8 +15,10 @@ import { supabase } from '~/utils/supabase';
 import {
   fetchStylists, getOrCreateThread, getLatestThread, fetchMyThreads, fetchMessages, sendShopperMessage,
   sendStylistText, startLookRender, startFullLookRender, fetchSwapOptions, sendSwapOptions,
+  sendChooser, recommendForSlot, sendProductPick,
   type StyleUpStylist, type StyleUpMessage, type StyleUpProductRef, type StyleUpThreadSummary,
 } from '~/services/style-up';
+import { roleTagFromName } from '~/services/product-roles';
 import { getUserHeightAge, getUserCustomStyle, updateUserHeightAge, updateUserCustomStyle } from '~/services/profiles';
 import { getUserGender, updateUserGender, type UserGender } from '~/services/genders';
 import {
@@ -73,6 +75,62 @@ function describeLook(products: StyleUpProductRef[]): string {
   const names = products.map(p => p.brand || p.name).filter(Boolean).slice(0, 4) as string[];
   const list = names.length ? names.join(', ') : 'the pieces we picked';
   return `Here's the full look on you — ${list}. I kept it cohesive and true to your vibe. How do you like it? Want to adjust anything — different pants, a fresh top, another shoe? Just say the word and I'll swap it.`;
+}
+
+/** Does this read as "build me a full OUTFIT" (multi-slot) vs "see it on me"?
+ *  The outfit ask kicks off the guided chooser flow; "see it" just renders. */
+function wantsFullOutfit(text: string): boolean {
+  const t = text.toLowerCase();
+  const withFull = /\bwith (a |an )?(full|whole|complete|entire) (outfit|look|fit)\b/.test(t);
+  const outfit = /\b(outfit|ensemble|full fit|whole fit)\b/.test(t);
+  const build = /\b(build|put together|style me|dress me|make me|create|complete|full|whole|entire)\b/.test(t);
+  return withFull || (outfit && build);
+}
+
+const SLOT_LABEL: Record<string, string> = { Top: 'Top', Pants: 'Pants / Shorts', Jacket: 'Jacket', Hat: 'Hat', Shoes: 'Shoes' };
+
+/** A tap-chooser bubble — single-tap dispatches; multi-select toggles + a
+ *  confirm. Used for "which shoes?" and "what do you want in the outfit?". */
+function ChooserBubble({ choose, disabled, onSubmit }: {
+  choose: NonNullable<StyleUpProductRef['choose']>;
+  disabled: boolean;
+  onSubmit: (values: string[]) => void;
+}) {
+  const [sel, setSel] = useState<string[]>([]);
+  const [submitted, setSubmitted] = useState(false);
+  const multi = !!choose.multi;
+  const hasCards = choose.options.some(o => o.image);
+  const submit = (vals: string[]) => { if (submitted || vals.length === 0) return; setSubmitted(true); onSubmit(vals); };
+  const toggle = (v: string) => setSel(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]);
+  return (
+    <div className="su-msg su-msg--stylist">
+      <div className="su-choose">
+        <div className="su-choose-prompt">{choose.prompt}</div>
+        <div className={`su-choose-options${hasCards ? ' su-choose-options--cards' : ''}`}>
+          {choose.options.map(o => {
+            const on = sel.includes(o.value);
+            return (
+              <button
+                key={o.value}
+                type="button"
+                className={`su-choose-opt${o.image ? ' su-choose-opt--card' : ''}${on ? ' is-on' : ''}`}
+                disabled={disabled || submitted}
+                onClick={() => (multi ? toggle(o.value) : submit([o.value]))}
+              >
+                {o.image && <span className="su-choose-opt-media"><img src={o.image} alt="" loading="lazy" /></span>}
+                <span className="su-choose-opt-label">{o.label}</span>
+              </button>
+            );
+          })}
+        </div>
+        {multi && (
+          <button type="button" className="su-choose-go" disabled={disabled || submitted || sel.length === 0} onClick={() => submit(sel)}>
+            {submitted ? 'Done' : 'Recommend these'}
+          </button>
+        )}
+      </div>
+    </div>
+  );
 }
 
 const MAX_PHOTOS = 3;
@@ -135,6 +193,8 @@ export default function StyleUpPage() {
   const [genLook, setGenLook] = useState(false);     // full-look render in flight
   const [published, setPublished] = useState<Set<string>>(new Set()); // gen ids added to looks
   const [followedUp, setFollowedUp] = useState<Set<string>>(new Set()); // renders the stylist has reacted to
+  const [chosenBySlot, setChosenBySlot] = useState<Record<string, string>>({}); // role → chosen product id
+  const [rejected, setRejected] = useState<Set<string>>(new Set());   // product ids the shopper passed on
   const [, setNowTick] = useState(0);                // 1s heartbeat for the render ETA
   const [isDesktop, setIsDesktop] = useState(false); // desktop = two-pane layout
   const [edit, setEdit] = useState<{ heightLabel: string; weightLabel: string; ageLabel: string; gender: UserGender; style: string } | null>(null);
@@ -143,6 +203,13 @@ export default function StyleUpPage() {
   const photoSlotRef = useRef<number>(0);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
+
+  // A render is in flight for this thread — used to block stacking renders.
+  const pendingRender = messages.some(m => {
+    if (m.kind !== 'render' || !m.renderGenerationId) return false;
+    const r = renders[m.renderGenerationId];
+    return !r || (r.status !== 'done' && r.status !== 'failed');
+  });
 
   const exit = useCallback(() => {
     // Return to wherever the shopper came from; fall back to home.
@@ -253,6 +320,27 @@ export default function StyleUpPage() {
     return () => { cancelled = true; };
   }, [userId, bootResumed, openThread, loadThreads]);
 
+  // Preference memory: per-thread set of product ids the shopper passed on, so
+  // the stylist never re-recommends a no. Persisted in localStorage.
+  useEffect(() => {
+    setChosenBySlot({});
+    if (!threadId) { setRejected(new Set()); return; }
+    try {
+      const raw = localStorage.getItem(`styleup:rejected:${threadId}`);
+      setRejected(new Set(raw ? (JSON.parse(raw) as string[]) : []));
+    } catch { setRejected(new Set()); }
+  }, [threadId]);
+  const rejectIds = useCallback((ids: Array<string | undefined>) => {
+    const clean = ids.filter((x): x is string => !!x);
+    if (!threadId || clean.length === 0) return;
+    setRejected(prev => {
+      const n = new Set(prev);
+      clean.forEach(i => n.add(i));
+      try { localStorage.setItem(`styleup:rejected:${threadId}`, JSON.stringify([...n])); } catch { /* ignore */ }
+      return n;
+    });
+  }, [threadId]);
+
   // Realtime: new messages (either side) stream into the open thread.
   useEffect(() => {
     if (!threadId || !supabase) return;
@@ -309,6 +397,7 @@ export default function StyleUpPage() {
   // generate-look pipeline. The render bubble streams in + polls to the video.
   const generateFullLook = useCallback(async (products: StyleUpProductRef[]) => {
     if (!threadId || !userId || genLook) return;
+    if (pendingRender) { setRenderError('Still finishing your last look — give it a sec.'); return; }
     const seen = new Set<string>();
     const uniq = products.filter(p => {
       if (!p.id || seen.has(p.id)) return false;
@@ -324,41 +413,108 @@ export default function StyleUpPage() {
       await sendStylistText(threadId, `Hmm, I couldn't start that render — ${error}`);
     }
     setGenLook(false);
-  }, [threadId, userId, genLook, triggerStylist]);
+  }, [threadId, userId, genLook, pendingRender, triggerStylist]);
 
   // The pieces currently in the look — the stylist's product picks, excluding
-  // swap pickers. Drives full-look generation + swap re-renders.
+  // swap/chooser cards. Drives full-look generation + swap re-renders.
   const lookPicks = useCallback((): StyleUpProductRef[] => messages
-    .filter(m => m.kind === 'product' && m.productRef?.id && !m.productRef?.swap)
+    .filter(m => m.kind === 'product' && m.productRef?.id && !m.productRef?.swap && !m.productRef?.choose)
     .map(m => m.productRef as StyleUpProductRef), [messages]);
+
+  // Assemble a coherent head-to-toe look: ONE piece per garment slot. The
+  // shopper's explicit choice for a slot wins; otherwise the most-recent pick.
+  const assembleLook = useCallback((): StyleUpProductRef[] => {
+    const picks = lookPicks();
+    const bySlot = new Map<string, StyleUpProductRef>();
+    for (const p of picks) bySlot.set(roleTagFromName(p.name ?? null) || `other:${p.id}`, p);
+    for (const [slot, id] of Object.entries(chosenBySlot)) {
+      const found = picks.find(p => p.id === id);
+      if (found) bySlot.set(slot, found);
+    }
+    return [...bySlot.values()];
+  }, [lookPicks, chosenBySlot]);
+
+  // ── Guided outfit flow (logic #1+#3+#4): ask which shoes (if ambiguous),
+  // then which slots, then recommend one piece per slot. ────────────────────
+  const askOutfitSlots = useCallback(async () => {
+    if (!threadId) return;
+    const filled = new Set(lookPicks().map(p => roleTagFromName(p.name ?? null)).filter(Boolean));
+    const candidates = (['Top', 'Pants', 'Jacket', 'Hat'] as const)
+      .filter(s => !filled.has(s))
+      .map(s => ({ value: s, label: SLOT_LABEL[s] }));
+    if (candidates.length === 0) {
+      await sendStylistText(threadId, "You've got the pieces — say “show me the full look” and I'll put it all on you.");
+      return;
+    }
+    await sendStylistText(threadId, 'Got it. What do you want in the outfit? Tap all that apply.');
+    await sendChooser(threadId, { kind: 'slots', prompt: 'Build your outfit', multi: true, options: candidates });
+  }, [threadId, lookPicks]);
+
+  const startOutfitFlow = useCallback(async () => {
+    if (!threadId || !userId) return;
+    if (pendingRender) { setRenderError('Still finishing your last look — one sec.'); return; }
+    const shoes = lookPicks().filter(p => roleTagFromName(p.name ?? null) === 'Shoes' && p.id);
+    if (shoes.length > 1 && !chosenBySlot['Shoes']) {
+      await sendStylistText(threadId, 'Love it — let’s build the full fit. First, which shoes do you want to build around?');
+      await sendChooser(threadId, {
+        kind: 'shoes', prompt: 'Pick your shoes', multi: false,
+        options: shoes.map(s => ({ value: s.id as string, label: s.name || 'Shoes', image: s.image, ref: s })),
+      });
+      return;
+    }
+    await askOutfitSlots();
+  }, [threadId, userId, pendingRender, lookPicks, chosenBySlot, askOutfitSlots]);
+
+  const onChoose = useCallback(async (kind: string, values: string[]) => {
+    if (!threadId || !userId) return;
+    if (kind === 'shoes') {
+      const id = values[0];
+      setChosenBySlot(prev => ({ ...prev, Shoes: id }));
+      rejectIds(lookPicks().filter(p => roleTagFromName(p.name ?? null) === 'Shoes' && p.id !== id).map(p => p.id));
+      await sendStylistText(threadId, 'Perfect — building around those. 👟');
+      await askOutfitSlots();
+    } else if (kind === 'slots') {
+      await sendStylistText(threadId, 'On it — pulling pieces for that now…');
+      const exclude = [...lookPicks().map(p => p.id).filter((x): x is string => !!x), ...rejected];
+      for (const role of values) {
+        const pick = await recommendForSlot(userId, role, exclude);
+        if (pick?.id) { await sendProductPick(threadId, pick); exclude.push(pick.id); }
+      }
+      await sendStylistText(threadId, "Here's your outfit — tap “See it on me” on any piece, or say “show me the full look” and I'll put it all on you.");
+    }
+  }, [threadId, userId, lookPicks, rejected, rejectIds, askOutfitSlots]);
 
   // "Try different pants" — the stylist offers 3 alternatives for that slot.
   const handleSwapRequest = useCallback(async (swap: { role: string; label: string }) => {
     if (!threadId || !userId) return;
     setRenderError(null);
     await sendStylistText(threadId, `Sure thing — here are a few ${swap.label} options. Tap the one you like and I'll put it on you.`);
-    const exclude = lookPicks().map(p => p.id).filter((x): x is string => !!x);
+    // Exclude what's in the look AND anything they've already passed on (memory).
+    const exclude = [...lookPicks().map(p => p.id).filter((x): x is string => !!x), ...rejected];
     const options = await fetchSwapOptions(userId, swap.role, 3, exclude);
     if (options.length === 0) {
       await sendStylistText(threadId, `Hmm, I'm short on alternate ${swap.label} right now — want to try a different piece?`);
       return;
     }
     await sendSwapOptions(threadId, swap.role, swap.label, options);
-  }, [threadId, userId, lookPicks]);
+  }, [threadId, userId, lookPicks, rejected]);
 
   // Shopper picked one of the swap options → re-render the full look with it.
-  const selectSwapOption = useCallback(async (role: string, chosen: StyleUpProductRef) => {
+  const selectSwapOption = useCallback(async (role: string, chosen: StyleUpProductRef, siblings: StyleUpProductRef[] = []) => {
     if (!threadId || !userId || genLook) return;
+    if (pendingRender) { setRenderError('Still finishing your last look — give it a sec.'); return; }
     setGenLook(true);
     setRenderError(null);
+    setChosenBySlot(prev => ({ ...prev, [role]: chosen.id as string }));
+    rejectIds(siblings.filter(o => o.id !== chosen.id).map(o => o.id)); // remember the passed-over options
     await sendStylistText(threadId, `Great pick — restyling you with the ${chosen.brand || chosen.name || 'new piece'} now ✨`);
-    const { error } = await startFullLookRender({ threadId, shopperUserId: userId, products: lookPicks(), replace: { role, product: chosen } });
+    const { error } = await startFullLookRender({ threadId, shopperUserId: userId, products: assembleLook(), replace: { role, product: chosen } });
     if (error) {
       setRenderError(error);
       await sendStylistText(threadId, `Couldn't render that — ${error}`);
     }
     setGenLook(false);
-  }, [threadId, userId, genLook, lookPicks]);
+  }, [threadId, userId, genLook, pendingRender, assembleLook, rejectIds]);
 
   const send = useCallback(async () => {
     const text = draft.trim();
@@ -368,14 +524,16 @@ export default function StyleUpPage() {
     const msg = await sendShopperMessage(threadId, text);
     if (msg) setMessages(prev => (prev.some(m => m.id === msg.id) ? prev : [...prev, msg]));
     setSending(false);
-    // Routing: a swap request ("different pants") → offer 3 options; a
-    // whole-look request → generate; otherwise let the AI stylist take the turn.
+    // Routing: swap request → 3 options; "build a full outfit" → guided chooser
+    // flow; "see the look on me" → render; otherwise the AI stylist takes the
+    // turn (it may recommend pieces first).
     const swap = swapTargetFromText(text);
     const looks = lookPicks();
     if (swap && looks.length > 0) void handleSwapRequest(swap);
-    else if (wantsFullLook(text) && looks.length > 0) void generateFullLook(looks);
+    else if (wantsFullOutfit(text)) void startOutfitFlow();
+    else if (wantsFullLook(text) && looks.length > 0) void generateFullLook(assembleLook());
     else void triggerStylist();
-  }, [draft, threadId, sending, triggerStylist, generateFullLook, handleSwapRequest, lookPicks]);
+  }, [draft, threadId, sending, triggerStylist, generateFullLook, handleSwapRequest, startOutfitFlow, assembleLook, lookPicks]);
 
   // Add a finished render to the shopper's own looks — promotes the generation
   // to a LIVE look (with its video + poster + pieces), associated with THIS
@@ -415,6 +573,7 @@ export default function StyleUpPage() {
   // polling effect below carries it to the finished video.
   const tryOn = useCallback(async (product: StyleUpMessage['productRef']) => {
     if (!threadId || !userId || !product) return;
+    if (pendingRender) { setRenderError('Still finishing your last look — give it a sec.'); return; }
     const key = product.id || product.url || product.name || '';
     if (renderingIds.has(key)) return;
     setRenderingIds(prev => new Set(prev).add(key));
@@ -422,7 +581,7 @@ export default function StyleUpPage() {
     const { error } = await startLookRender({ threadId, shopperUserId: userId, product });
     if (error) setRenderError(error);
     setRenderingIds(prev => { const n = new Set(prev); n.delete(key); return n; });
-  }, [threadId, userId, renderingIds]);
+  }, [threadId, userId, renderingIds, pendingRender]);
 
   // Poll any in-flight render generations referenced by the thread until they
   // reach a terminal state, so the render bubbles promote spinner → video.
@@ -474,8 +633,8 @@ export default function StyleUpPage() {
     if (renders[last.renderGenerationId]?.status !== 'done') return;
     const gid = last.renderGenerationId;
     setFollowedUp(prev => new Set(prev).add(gid));
-    void sendStylistText(threadId, describeLook(lookPicks()));
-  }, [messages, renders, threadId, followedUp, lookPicks]);
+    void sendStylistText(threadId, describeLook(assembleLook()));
+  }, [messages, renders, threadId, followedUp, assembleLook]);
 
   // ── Context editing — writes straight to the profile (shared with the
   // AI-look studio), so edits here show up everywhere. ──────────────────────
@@ -719,6 +878,16 @@ export default function StyleUpPage() {
             </div>
           )}
           {messages.map(m => {
+            if (m.kind === 'product' && m.productRef?.choose) {
+              return (
+                <ChooserBubble
+                  key={m.id}
+                  choose={m.productRef.choose}
+                  disabled={genLook || pendingRender}
+                  onSubmit={(vals) => void onChoose(m.productRef!.choose!.kind, vals)}
+                />
+              );
+            }
             if (m.kind === 'product' && m.productRef?.swap) {
               const sw = m.productRef.swap;
               return (
@@ -731,7 +900,7 @@ export default function StyleUpPage() {
                           key={o.id || i}
                           type="button"
                           className="su-swap-opt"
-                          onClick={() => void selectSwapOption(sw.role, o)}
+                          onClick={() => void selectSwapOption(sw.role, o, sw.options)}
                           disabled={genLook}
                         >
                           <span className="su-swap-opt-media">

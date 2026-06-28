@@ -487,6 +487,48 @@
 .su-swap-opt-name { font-size: 11.5px; line-height: 1.25; color: #e7e7ea; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
 .su-swap-opt-price { font-size: 11px; color: #8b8e96; margin-top: 1px; }
 
+/* Tap-chooser — "which shoes?", "what do you want in the outfit?". */
+.su-choose {
+  max-width: 88%;
+  padding: 12px;
+  border-radius: 16px;
+  background: #1c1d21;
+  border: 1px solid #2a2c31;
+}
+.su-choose-prompt { font-size: 12px; font-weight: 700; color: var(--su-accent); margin-bottom: 10px; }
+.su-choose-options { display: flex; flex-wrap: wrap; gap: 8px; }
+.su-choose-options--cards { gap: 8px; }
+.su-choose-opt {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid #34363c;
+  background: #141518;
+  color: #e7e7ea;
+  font-size: 13px; font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.14s ease, background 0.14s ease;
+}
+.su-choose-opt:hover { border-color: var(--su-accent); }
+.su-choose-opt.is-on { background: var(--su-accent); color: #0a0a0a; border-color: var(--su-accent); }
+.su-choose-opt:disabled { opacity: 0.55; cursor: default; }
+.su-choose-opt--card { flex-direction: column; gap: 6px; padding: 0; border-radius: 12px; overflow: hidden; width: 96px; align-items: stretch; }
+.su-choose-opt--card .su-choose-opt-media { width: 100%; aspect-ratio: 3 / 4; background: #26282d; }
+.su-choose-opt--card .su-choose-opt-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.su-choose-opt--card .su-choose-opt-label { padding: 0 8px 9px; font-size: 11.5px; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.su-choose-go {
+  margin-top: 11px;
+  width: 100%;
+  padding: 9px;
+  border-radius: 12px;
+  border: none;
+  background: #e7e7ea;
+  color: #141518;
+  font-size: 13px; font-weight: 800;
+  cursor: pointer;
+}
+.su-choose-go:disabled { opacity: 0.45; cursor: default; }
+
 /* On-you render bubble. */
 .su-render {
   max-width: 78%;

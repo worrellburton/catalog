@@ -32,6 +32,15 @@ export interface StyleUpProductRef {
   /** When present, this `product` message is actually a swap picker — a set of
    *  alternatives for one slot the shopper can choose from (e.g. 3 pants). */
   swap?: { role: string; label: string; options: StyleUpProductRef[] };
+  /** A generic tap-chooser — "which shoes?", "what do you want in the outfit?".
+   *  `kind` routes the selection; `multi` allows picking several. Options can
+   *  carry a product ref (shoe pick) or just a value/label (slot pick). */
+  choose?: {
+    kind: string;
+    prompt: string;
+    multi?: boolean;
+    options: Array<{ value: string; label: string; image?: string; ref?: StyleUpProductRef }>;
+  };
   /** On a `render` caption: the pieces composited into the look, so the chat
    *  can show them while it cooks and when it's done. */
   pieces?: StyleUpProductRef[];
@@ -575,6 +584,51 @@ export async function fetchSwapOptions(
     if (out.length >= count) break;
   }
   return out;
+}
+
+/** Post a generic tap-chooser into the thread (which shoes / which slots / …). */
+export async function sendChooser(
+  threadId: string,
+  choose: NonNullable<StyleUpProductRef['choose']>,
+): Promise<StyleUpMessage | null> {
+  if (!supabase || choose.options.length === 0) return null;
+  const { data, error } = await supabase
+    .from('style_up_messages')
+    .insert({ thread_id: threadId, sender: 'stylist', kind: 'product', product_ref: { choose } })
+    .select('id, thread_id, sender, kind, body, product_ref, render_generation_id, created_at')
+    .single();
+  if (error || !data) return null;
+  await supabase.from('style_up_threads')
+    .update({ last_message_at: new Date().toISOString() }).eq('id', threadId);
+  return mapMessage(data as Record<string, unknown>);
+}
+
+/** Recommend ONE product for a given slot (role), gender-matched, excluding ids
+ *  already shown/used. Used by the outfit flow to fill chosen slots. */
+export async function recommendForSlot(
+  shopperUserId: string,
+  role: string,
+  excludeIds: string[] = [],
+): Promise<StyleUpProductRef | null> {
+  const [pick] = await fetchSwapOptions(shopperUserId, role, 1, excludeIds);
+  return pick ?? null;
+}
+
+/** Post a single product pick into the thread (the stylist recommending). */
+export async function sendProductPick(
+  threadId: string,
+  product: StyleUpProductRef,
+): Promise<StyleUpMessage | null> {
+  if (!supabase || !product.id) return null;
+  const { data, error } = await supabase
+    .from('style_up_messages')
+    .insert({ thread_id: threadId, sender: 'stylist', kind: 'product', product_ref: product })
+    .select('id, thread_id, sender, kind, body, product_ref, render_generation_id, created_at')
+    .single();
+  if (error || !data) return null;
+  await supabase.from('style_up_threads')
+    .update({ last_message_at: new Date().toISOString() }).eq('id', threadId);
+  return mapMessage(data as Record<string, unknown>);
 }
 
 /** Post a swap picker into the thread — a `product` message whose product_ref
