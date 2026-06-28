@@ -460,6 +460,14 @@ async function renderLook(
     lines.push({ product_id: replace.product.id, roleTag: roleForProduct(row?.type ?? null, name), name, brand });
   }
 
+  // De-dupe by product_id — user_generation_products has a unique (generation,
+  // product) key, so a repeated pick (or a swap that collides) would otherwise
+  // throw "duplicate key … user_generation_products_pkey".
+  {
+    const seen = new Set<string>();
+    lines = lines.filter(l => (seen.has(l.product_id) ? false : (seen.add(l.product_id), true)));
+  }
+
   const prompt = buildGenerationPrompt({
     heightLabel: ha.heightLabel ?? '',
     weightLabel: ha.weightLabel,
