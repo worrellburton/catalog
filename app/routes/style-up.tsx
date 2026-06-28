@@ -25,6 +25,7 @@ import {
 } from '~/services/user-generations';
 import { promoteGenerationToLook } from '~/services/promote-generation';
 import { generationProgress } from '~/services/generation-progress';
+import { productSlug } from '~/utils/slug';
 import '~/styles/style-up.css';
 
 /** "~2 min left" / "~40s left" — estimated wait from the shared generation
@@ -135,6 +136,7 @@ export default function StyleUpPage() {
   const [published, setPublished] = useState<Set<string>>(new Set()); // gen ids added to looks
   const [followedUp, setFollowedUp] = useState<Set<string>>(new Set()); // renders the stylist has reacted to
   const [, setNowTick] = useState(0);                // 1s heartbeat for the render ETA
+  const [isDesktop, setIsDesktop] = useState(false); // desktop = two-pane layout
   const [edit, setEdit] = useState<{ heightLabel: string; weightLabel: string; ageLabel: string; gender: UserGender; style: string } | null>(null);
   const [savingCtx, setSavingCtx] = useState(false);
   const [uploadingSlot, setUploadingSlot] = useState<number | null>(null);
@@ -147,6 +149,16 @@ export default function StyleUpPage() {
     if (window.history.length > 1) navigate(-1);
     else navigate('/');
   }, [navigate]);
+
+  // Desktop vs mobile — desktop gets a two-pane (rail + chat) experience.
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mq = window.matchMedia('(min-width: 769px)');
+    const apply = () => setIsDesktop(mq.matches);
+    apply();
+    mq.addEventListener('change', apply);
+    return () => mq.removeEventListener('change', apply);
+  }, []);
 
   // Roster.
   useEffect(() => { void fetchStylists().then(setStylists); }, []);
@@ -391,6 +403,13 @@ export default function StyleUpPage() {
     }
   }, [published, renders, userId, user, ctx]);
 
+  // Open a pick's in-app product page (deeplink). Falls back to its shop URL.
+  const openProduct = useCallback((p: StyleUpProductRef) => {
+    const slug = productSlug({ id: p.id, name: p.name, brand: p.brand });
+    if (slug) navigate(`/p/${slug}`);
+    else if (p.url) window.open(p.url, '_blank', 'noopener');
+  }, [navigate]);
+
   // "See it on me" — render the shopper wearing a stylist pick (reuses the
   // generate-look pipeline). The render bubble arrives via realtime and the
   // polling effect below carries it to the finished video.
@@ -576,23 +595,29 @@ export default function StyleUpPage() {
     </div>
   );
 
+  // Shared top bar — StyleUp title + (mobile) a resume-chat icon. On desktop
+  // the conversations live in the rail, so the resume icon is hidden.
+  const railHeader = (
+    <div className="su-shell-head">
+      <div className="su-shell-head-left">
+        <button type="button" className="su-back" onClick={exit} aria-label="Back">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+        </button>
+        <span className="su-shell-title">StyleUp</span>
+      </div>
+      {!isDesktop && latestThread && (
+        <button type="button" className="su-back" onClick={resumeLatest} aria-label="Open your chat">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
+        </button>
+      )}
+    </div>
+  );
+
   // Not signed in — prompt to sign in (Style Up is per-shopper).
   if (!userId) {
     return (
       <div className="su-shell">
-        <div className="su-shell-head">
-          <div className="su-shell-head-left">
-            <button type="button" className="su-back" onClick={exit} aria-label="Back">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
-            </button>
-            <span className="su-shell-title">StyleUp</span>
-          </div>
-          {latestThread && (
-            <button type="button" className="su-back" onClick={resumeLatest} aria-label="Open your chat">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
-            </button>
-          )}
-        </div>
+        {railHeader}
         <div className="su-signin">
           <p>Sign in to chat with a stylist and see picks on yourself.</p>
         </div>
@@ -600,23 +625,8 @@ export default function StyleUpPage() {
     );
   }
 
-  // ── Roster ────────────────────────────────────────────────────────────
-  if (!threadId) {
-    return (
-      <div className="su-shell">
-        <div className="su-shell-head">
-          <div className="su-shell-head-left">
-            <button type="button" className="su-back" onClick={exit} aria-label="Back">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
-            </button>
-            <span className="su-shell-title">StyleUp</span>
-          </div>
-          {latestThread && (
-            <button type="button" className="su-back" onClick={resumeLatest} aria-label="Open your chat">
-              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
-            </button>
-          )}
-        </div>
+  // ── Roster pane — saved conversations + the stylist list. ───────────────
+  const rosterPane = (
         <div className="su-page">
           {/* Saved conversations — the shopper's ongoing chats live here so they
               can pick any one back up where they left off. */}
@@ -677,13 +687,10 @@ export default function StyleUpPage() {
             )}
           </div>
         </div>
-      </div>
-    );
-  }
+  );
 
-  // ── Thread ────────────────────────────────────────────────────────────
-  return (
-    <div className="su-shell" style={{ ['--su-accent' as string]: active?.accentColor ?? '#8aa0c0' }}>
+  // ── Thread pane — the active conversation. ──────────────────────────────
+  const threadPane = (
       <div className="su-page su-page--thread">
         <div className="su-thread-head">
           <button type="button" className="su-back" onClick={closeThread} aria-label="Back to stylists">
@@ -748,13 +755,15 @@ export default function StyleUpPage() {
               return (
                 <div key={m.id} className="su-msg su-msg--stylist">
                   <div className="su-product">
-                    <div className="su-product-media">
+                    <button type="button" className="su-product-media su-product-media--tap" onClick={() => openProduct(p)} aria-label={`Open ${p.name || 'product'}`}>
                       {p.image ? <img src={p.image} alt={p.name || 'Product'} loading="lazy" /> : <span className="su-product-media--empty" />}
-                    </div>
+                    </button>
                     <div className="su-product-info">
-                      {p.brand && <div className="su-product-brand">{p.brand}</div>}
-                      <div className="su-product-name">{p.name || 'Product'}</div>
-                      {p.price && <div className="su-product-price">{p.price}</div>}
+                      <button type="button" className="su-product-tap" onClick={() => openProduct(p)}>
+                        {p.brand && <div className="su-product-brand">{p.brand}</div>}
+                        <div className="su-product-name">{p.name || 'Product'}</div>
+                        {p.price && <div className="su-product-price">{p.price}</div>}
+                      </button>
                       <div className="su-product-actions">
                         {p.url && (
                           <button type="button" className="su-product-btn" onClick={() => window.open(p.url!, '_blank', 'noopener')}>Shop</button>
@@ -870,6 +879,28 @@ export default function StyleUpPage() {
           </button>
         </div>
       </div>
+  );
+
+  // Desktop → a true two-pane experience: persistent stylist/conversation rail
+  // on the left, the active chat on the right. Mobile → single view.
+  if (isDesktop) {
+    return (
+      <div className="su-shell su-shell--split" style={{ ['--su-accent' as string]: active?.accentColor ?? '#8aa0c0' }}>
+        <aside className="su-rail">{railHeader}{rosterPane}</aside>
+        <main className="su-main">
+          {threadId ? threadPane : (
+            <div className="su-main-empty">
+              <div className="su-main-empty-mark" aria-hidden="true">✦</div>
+              <p>Pick a stylist — or open one of your conversations — to start chatting.</p>
+            </div>
+          )}
+        </main>
+      </div>
+    );
+  }
+  return (
+    <div className="su-shell" style={threadId ? { ['--su-accent' as string]: active?.accentColor ?? '#8aa0c0' } : undefined}>
+      {threadId ? threadPane : <>{railHeader}{rosterPane}</>}
     </div>
   );
 }
