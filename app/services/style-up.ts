@@ -160,6 +160,171 @@ export async function fetchMyThreads(shopperUserId: string): Promise<StyleUpThre
     .filter((x): x is StyleUpThreadSummary => !!x);
 }
 
+// ── Admin monitoring (admin StyleUp dashboard) ──────────────────────────────
+// Admins have full RLS access to threads / messages / generations, so these
+// run client-side from the admin page (which is already admin-gated).
+
+export interface AdminShopper { id: string; name: string; avatarUrl: string | null; }
+
+export interface AdminThread {
+  threadId: string;
+  shopper: AdminShopper;
+  stylist: StyleUpStylist;
+  lastMessage: string | null;
+  lastMessageAt: string | null;
+  messageCount: number;
+  awaitingStylist: boolean; // latest message is from the shopper
+}
+
+export interface AdminLook {
+  messageId: string;
+  threadId: string;
+  generationId: string | null;
+  status: string;
+  videoUrl: string | null;
+  createdAt: string;
+  shopper: AdminShopper;
+  stylist: StyleUpStylist | null;
+  products: StyleUpProductRef[];
+}
+
+function previewOf(kind: string, body: string | null): string {
+  if (kind === 'product') return 'Product pick';
+  if (kind === 'render') return 'On-you look';
+  return body ?? '';
+}
+
+async function shopperMap(ids: string[]): Promise<Map<string, AdminShopper>> {
+  const out = new Map<string, AdminShopper>();
+  if (!supabase || ids.length === 0) return out;
+  const { data } = await supabase
+    .from('profiles').select('id, full_name, avatar_url').in('id', ids);
+  for (const r of (data ?? []) as Array<{ id: string; full_name: string | null; avatar_url: string | null }>) {
+    out.set(r.id, { id: r.id, name: r.full_name || 'Shopper', avatarUrl: r.avatar_url ?? null });
+  }
+  return out;
+}
+
+/** Every conversation with at least one message — newest activity first — with
+ *  the shopper, stylist, last-message preview, count, and whether it's waiting
+ *  on the stylist. */
+export async function adminListThreads(): Promise<AdminThread[]> {
+  if (!supabase) return [];
+  const { data: threads } = await supabase
+    .from('style_up_threads')
+    .select('id, shopper_user_id, last_message_at, stylist:style_up_stylists(id, name, avatar_url, specialty, bio, accent_color)')
+    .order('last_message_at', { ascending: false });
+  if (!threads || threads.length === 0) return [];
+
+  const ids = threads.map(t => String(t.id));
+  const { data: msgs } = await supabase
+    .from('style_up_messages')
+    .select('thread_id, sender, kind, body, created_at')
+    .in('thread_id', ids)
+    .order('created_at', { ascending: false });
+
+  const count = new Map<string, number>();
+  const last = new Map<string, { sender: string; kind: string; body: string | null }>();
+  for (const m of (msgs ?? []) as Array<{ thread_id: string; sender: string; kind: string; body: string | null }>) {
+    const tid = String(m.thread_id);
+    count.set(tid, (count.get(tid) ?? 0) + 1);
+    if (!last.has(tid)) last.set(tid, m);
+  }
+
+  const shoppers = await shopperMap([...new Set(threads.map(t => String(t.shopper_user_id)))]);
+
+  return threads
+    .map((t): AdminThread | null => {
+      const tid = String(t.id);
+      if (!last.has(tid)) return null; // ≥1 message only
+      const raw = Array.isArray(t.stylist) ? t.stylist[0] : t.stylist;
+      const lm = last.get(tid)!;
+      return {
+        threadId: tid,
+        shopper: shoppers.get(String(t.shopper_user_id)) ?? { id: String(t.shopper_user_id), name: 'Shopper', avatarUrl: null },
+        stylist: mapStylist((raw ?? {}) as Record<string, unknown>),
+        lastMessage: previewOf(lm.kind, lm.body),
+        lastMessageAt: (t.last_message_at as string | null) ?? null,
+        messageCount: count.get(tid) ?? 0,
+        awaitingStylist: lm.sender === 'shopper',
+      };
+    })
+    .filter((x): x is AdminThread => !!x);
+}
+
+/** All StyleUp-generated looks (render messages) with their generation status,
+ *  video, the shopper, stylist, and the pieces in the look. */
+export async function adminListLooks(limit = 120): Promise<AdminLook[]> {
+  if (!supabase) return [];
+  const { data: renders } = await supabase
+    .from('style_up_messages')
+    .select('id, thread_id, render_generation_id, product_ref, created_at')
+    .eq('kind', 'render')
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  if (!renders || renders.length === 0) return [];
+
+  const genIds = renders.map(r => r.render_generation_id).filter((x): x is string => !!x);
+  const threadIds = [...new Set(renders.map(r => String(r.thread_id)))];
+
+  const [{ data: gens }, { data: gprods }, { data: threads }] = await Promise.all([
+    supabase.from('user_generations').select('id, status, video_url, created_at').in('id', genIds.length ? genIds : ['00000000-0000-0000-0000-000000000000']),
+    supabase.from('user_generation_products').select('generation_id, sort_order, products(name, brand, image_url, primary_image_url, url)').in('generation_id', genIds.length ? genIds : ['00000000-0000-0000-0000-000000000000']),
+    supabase.from('style_up_threads').select('id, shopper_user_id, stylist:style_up_stylists(id, name, avatar_url, specialty, bio, accent_color)').in('id', threadIds.length ? threadIds : ['00000000-0000-0000-0000-000000000000']),
+  ]);
+
+  const genById = new Map(((gens ?? []) as Array<{ id: string; status: string; video_url: string | null; created_at: string }>).map(g => [g.id, g]));
+  const prodsByGen = new Map<string, StyleUpProductRef[]>();
+  for (const r of (gprods ?? []) as Array<{ generation_id: string; products: { name: string | null; brand: string | null; image_url: string | null; primary_image_url: string | null; url: string | null } | { name: string | null; brand: string | null; image_url: string | null; primary_image_url: string | null; url: string | null }[] | null }>) {
+    const p = Array.isArray(r.products) ? r.products[0] : r.products;
+    if (!p) continue;
+    const list = prodsByGen.get(r.generation_id) ?? [];
+    list.push({ name: p.name ?? undefined, brand: p.brand ?? undefined, image: p.primary_image_url || p.image_url || undefined, url: p.url ?? undefined });
+    prodsByGen.set(r.generation_id, list);
+  }
+  const threadById = new Map(((threads ?? []) as Array<Record<string, unknown>>).map(t => [String(t.id), t]));
+  const shoppers = await shopperMap([...new Set(((threads ?? []) as Array<{ shopper_user_id: string }>).map(t => String(t.shopper_user_id)))]);
+
+  return renders.map(r => {
+    const t = threadById.get(String(r.thread_id));
+    const rawStylist = t ? (Array.isArray(t.stylist) ? (t.stylist as unknown[])[0] : t.stylist) : null;
+    const gid = r.render_generation_id as string | null;
+    const gen = gid ? genById.get(gid) : null;
+    const fallback = (r.product_ref as StyleUpProductRef | null);
+    const products = (gid && prodsByGen.get(gid)) || (fallback ? [fallback] : []);
+    return {
+      messageId: String(r.id),
+      threadId: String(r.thread_id),
+      generationId: gid,
+      status: gen?.status ?? 'pending',
+      videoUrl: gen?.video_url ?? null,
+      createdAt: String(r.created_at),
+      shopper: t ? (shoppers.get(String((t as { shopper_user_id: string }).shopper_user_id)) ?? { id: '', name: 'Shopper', avatarUrl: null }) : { id: '', name: 'Shopper', avatarUrl: null },
+      stylist: rawStylist ? mapStylist(rawStylist as Record<string, unknown>) : null,
+      products,
+    };
+  });
+}
+
+/** Admin: post a stylist message into any thread (reply on behalf of stylist). */
+export async function adminSendStylistMessage(threadId: string, text: string): Promise<boolean> {
+  return !!(await sendStylistText(threadId, text));
+}
+
+/** Admin: delete a conversation (cascades to its messages). */
+export async function adminDeleteThread(threadId: string): Promise<{ error: string | null }> {
+  if (!supabase) return { error: 'No database connection' };
+  const { error } = await supabase.from('style_up_threads').delete().eq('id', threadId);
+  return { error: error?.message ?? null };
+}
+
+/** Admin: remove a generated look from its thread (deletes the render message). */
+export async function adminDeleteLook(messageId: string): Promise<{ error: string | null }> {
+  if (!supabase) return { error: 'No database connection' };
+  const { error } = await supabase.from('style_up_messages').delete().eq('id', messageId);
+  return { error: error?.message ?? null };
+}
+
 /** The shopper's most-recently-active thread (+ its stylist), or null. Used to
  *  resume the ongoing conversation on open so the chat history keeps going. */
 export async function getLatestThread(
