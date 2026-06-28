@@ -29,6 +29,12 @@ export interface StyleUpProductRef {
   image?: string;
   price?: string;
   url?: string;
+  /** When present, this `product` message is actually a swap picker — a set of
+   *  alternatives for one slot the shopper can choose from (e.g. 3 pants). */
+  swap?: { role: string; label: string; options: StyleUpProductRef[] };
+  /** On a `render` caption: the pieces composited into the look, so the chat
+   *  can show them while it cooks and when it's done. */
+  pieces?: StyleUpProductRef[];
 }
 
 export type StyleUpSender = 'shopper' | 'stylist';
@@ -409,11 +415,15 @@ async function renderLook(
   shopperUserId: string,
   picks: StyleUpProductRef[],
   caption: StyleUpProductRef,
+  replace?: { role: string; product: StyleUpProductRef } | null,
 ): Promise<{ generationId: string | null; error: string | null }> {
   if (!supabase) return { generationId: null, error: 'No database connection' };
 
   const withId = picks.filter(p => !!p.id).slice(0, MAX_LOOK_PIECES);
-  if (withId.length === 0) return { generationId: null, error: "These picks can't be rendered yet." };
+  // The replacement piece must be renderable even if the base set was empty.
+  if (withId.length === 0 && !replace?.product.id) {
+    return { generationId: null, error: "These picks can't be rendered yet." };
+  }
 
   const [ha, gender, customStyle, slots] = await Promise.all([
     getUserHeightAge(shopperUserId),
@@ -428,18 +438,27 @@ async function renderLook(
 
   // Resolve product type/name/brand from the catalog so role tags + the prompt
   // stay accurate even when a chat ref only carried a name.
-  const ids = withId.map(p => p.id as string);
+  const ids = [...withId.map(p => p.id as string), ...(replace?.product.id ? [replace.product.id] : [])];
   const { data: rows } = await supabase
     .from('products').select('id, type, name, brand').in('id', ids);
   const byId = new Map(((rows ?? []) as Array<{ id: string; type: string | null; name: string | null; brand: string | null }>).map(r => [r.id, r]));
 
-  const lines = withId.map(p => {
+  let lines = withId.map(p => {
     const row = byId.get(p.id as string);
     const name = row?.name ?? p.name ?? null;
     const brand = row?.brand ?? p.brand ?? null;
     const roleTag = roleForProduct(row?.type ?? null, name);
     return { product_id: p.id as string, roleTag, name, brand };
   });
+
+  // Slot swap: drop whatever currently fills the target role and add the pick.
+  if (replace?.product.id) {
+    lines = lines.filter(l => l.roleTag !== replace.role);
+    const row = byId.get(replace.product.id);
+    const name = row?.name ?? replace.product.name ?? null;
+    const brand = row?.brand ?? replace.product.brand ?? null;
+    lines.push({ product_id: replace.product.id, roleTag: roleForProduct(row?.type ?? null, name), name, brand });
+  }
 
   const prompt = buildGenerationPrompt({
     heightLabel: ha.heightLabel ?? '',
@@ -467,9 +486,19 @@ async function renderLook(
   });
   if (error || !gen) return { generationId: null, error: error ?? 'Render failed to start' };
 
+  // Carry the pieces (with images) on the render caption so the chat can show
+  // what went into the look while it cooks and once it's done.
+  const imageById = new Map<string, string | undefined>();
+  for (const p of [...picks, ...(replace?.product ? [replace.product] : [])]) {
+    if (p.id) imageById.set(p.id, p.image);
+  }
+  const pieces: StyleUpProductRef[] = lines.map(l => ({
+    id: l.product_id, name: l.name ?? undefined, brand: l.brand ?? undefined, image: imageById.get(l.product_id),
+  }));
+
   await supabase.from('style_up_messages').insert({
     thread_id: threadId, sender: 'stylist', kind: 'render',
-    render_generation_id: gen.id, product_ref: caption,
+    render_generation_id: gen.id, product_ref: { ...caption, pieces },
   });
   await supabase.from('style_up_threads')
     .update({ last_message_at: new Date().toISOString() }).eq('id', threadId);
@@ -489,16 +518,73 @@ export async function startLookRender(opts: {
 }
 
 /** Render the shopper wearing the WHOLE look — every stylist pick composited
- *  head-to-toe in a single generation. */
+ *  head-to-toe in a single generation. Pass `replace` to swap one slot (e.g.
+ *  new pants) — the old piece in that role is dropped and the new one added. */
 export async function startFullLookRender(opts: {
   threadId: string;
   shopperUserId: string;
   products: StyleUpProductRef[];
+  replace?: { role: string; product: StyleUpProductRef } | null;
 }): Promise<{ generationId: string | null; error: string | null }> {
-  const { threadId, shopperUserId, products } = opts;
+  const { threadId, shopperUserId, products, replace } = opts;
   const caption: StyleUpProductRef = {
-    name: 'Your full look',
-    image: products.find(p => p.image)?.image,
+    name: replace ? 'Your updated look' : 'Your full look',
+    image: replace?.product.image || products.find(p => p.image)?.image,
   };
-  return renderLook(threadId, shopperUserId, products, caption);
+  return renderLook(threadId, shopperUserId, products, caption, replace);
+}
+
+const SWAP_FETCH_LIMIT = 200;
+
+/** Fetch a few alternative products for one slot (role), gender-matched, to
+ *  offer the shopper a swap. Skips ids already in the look. */
+export async function fetchSwapOptions(
+  shopperUserId: string,
+  role: string,
+  count = 3,
+  excludeIds: string[] = [],
+): Promise<StyleUpProductRef[]> {
+  if (!supabase) return [];
+  const gender = await getUserGender(shopperUserId);
+  let q = supabase.from('products')
+    .select('id, name, brand, price, image_url, primary_image_url, url, type, gender')
+    .eq('is_active', true)
+    .not('image_url', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(SWAP_FETCH_LIMIT);
+  if (gender === 'male') q = q.or('gender.eq.male,gender.eq.unisex');
+  else if (gender === 'female') q = q.or('gender.eq.female,gender.eq.unisex');
+  const { data } = await q;
+  const exclude = new Set(excludeIds);
+  const out: StyleUpProductRef[] = [];
+  for (const p of (data ?? []) as Array<{ id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null; primary_image_url: string | null; url: string | null; type: string | null }>) {
+    if (exclude.has(p.id)) continue;
+    if (roleForProduct(p.type, p.name) !== role) continue;
+    out.push({
+      id: p.id, name: p.name ?? undefined, brand: p.brand ?? undefined, price: p.price ?? undefined,
+      image: p.primary_image_url || p.image_url || undefined, url: p.url ?? undefined,
+    });
+    if (out.length >= count) break;
+  }
+  return out;
+}
+
+/** Post a swap picker into the thread — a `product` message whose product_ref
+ *  carries the alternative options for one slot. */
+export async function sendSwapOptions(
+  threadId: string,
+  role: string,
+  label: string,
+  options: StyleUpProductRef[],
+): Promise<StyleUpMessage | null> {
+  if (!supabase || options.length === 0) return null;
+  const { data, error } = await supabase
+    .from('style_up_messages')
+    .insert({ thread_id: threadId, sender: 'stylist', kind: 'product', product_ref: { swap: { role, label, options } } })
+    .select('id, thread_id, sender, kind, body, product_ref, render_generation_id, created_at')
+    .single();
+  if (error || !data) return null;
+  await supabase.from('style_up_threads')
+    .update({ last_message_at: new Date().toISOString() }).eq('id', threadId);
+  return mapMessage(data as Record<string, unknown>);
 }

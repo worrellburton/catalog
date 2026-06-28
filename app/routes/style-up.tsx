@@ -14,15 +14,16 @@ import { useAuth } from '~/hooks/useAuth';
 import { supabase } from '~/utils/supabase';
 import {
   fetchStylists, getOrCreateThread, getLatestThread, fetchMyThreads, fetchMessages, sendShopperMessage,
-  sendStylistText, startLookRender, startFullLookRender,
+  sendStylistText, startLookRender, startFullLookRender, fetchSwapOptions, sendSwapOptions,
   type StyleUpStylist, type StyleUpMessage, type StyleUpProductRef, type StyleUpThreadSummary,
 } from '~/services/style-up';
 import { getUserHeightAge, getUserCustomStyle, updateUserHeightAge, updateUserCustomStyle } from '~/services/profiles';
 import { getUserGender, updateUserGender, type UserGender } from '~/services/genders';
 import {
   listUserUploads, getUserSlots, saveUserSlots, uploadUserPhoto, getGeneration,
-  setGenerationPublished, nameLookForGeneration, type UserGeneration,
+  type UserGeneration,
 } from '~/services/user-generations';
+import { promoteGenerationToLook } from '~/services/promote-generation';
 import { generationProgress } from '~/services/generation-progress';
 import '~/styles/style-up.css';
 
@@ -46,6 +47,31 @@ function wantsFullLook(text: string): boolean {
   if (verb && /\b(whole|full|entire|complete)\b[^.?!]*\b(look|outfit|fit)\b/.test(t)) return true;
   if (/\b(generate|make|create|build|render|show)\b[^.?!]*\b(the|this|that|a|my|your)\b[^.?!]*\b(look|outfit|fit)\b/.test(t)) return true;
   return false;
+}
+
+/** Does this message ask to swap one slot ("try different pants")? Returns the
+ *  target role (ROLE_TAG) + a friendly label, or null. */
+function swapTargetFromText(text: string): { role: string; label: string } | null {
+  const t = text.toLowerCase();
+  const change = /\b(different|another|other|swap|change|switch|new|alternativ\w*|else|instead|try|replace)\b/.test(t);
+  if (!change) return null;
+  if (/\b(pant|pants|trouser|trousers|jean|jeans|denim|chino|chinos|bottom|bottoms|slacks|short|shorts)\b/.test(t)) return { role: 'Pants', label: 'pants' };
+  if (/\b(shoe|shoes|sneaker|sneakers|boot|boots|loafer|loafers|footwear|heel|heels|sandal|sandals|trainer|trainers)\b/.test(t)) return { role: 'Shoes', label: 'shoes' };
+  if (/\b(jacket|jackets|coat|coats|blazer|blazers|outerwear|parka|overcoat|bomber)\b/.test(t)) return { role: 'Jacket', label: 'jacket' };
+  if (/\b(top|tops|shirt|shirts|tee|tees|t-shirt|tshirt|sweater|sweaters|knit|polo|blouse|sweatshirt|henley)\b/.test(t)) return { role: 'Top', label: 'top' };
+  if (/\b(dress|dresses|gown)\b/.test(t)) return { role: 'Dress', label: 'dress' };
+  if (/\b(hat|hats|cap|caps|beanie)\b/.test(t)) return { role: 'Hat', label: 'hat' };
+  if (/\b(bag|bags|tote|backpack|purse|handbag)\b/.test(t)) return { role: 'Bag', label: 'bag' };
+  if (/\b(sunglass\w*|shades|eyewear)\b/.test(t)) return { role: 'Sunglasses', label: 'sunglasses' };
+  if (/\b(watch|jewelry|jewellery|necklace|bracelet|ring|earring|earrings)\b/.test(t)) return { role: 'Jewelry', label: 'jewelry' };
+  return null;
+}
+
+/** The stylist's warm description + feedback prompt once the look is rendered. */
+function describeLook(products: StyleUpProductRef[]): string {
+  const names = products.map(p => p.brand || p.name).filter(Boolean).slice(0, 4) as string[];
+  const list = names.length ? names.join(', ') : 'the pieces we picked';
+  return `Here's the full look on you — ${list}. I kept it cohesive and true to your vibe. How do you like it? Want to adjust anything — different pants, a fresh top, another shoe? Just say the word and I'll swap it.`;
 }
 
 const MAX_PHOTOS = 3;
@@ -107,6 +133,7 @@ export default function StyleUpPage() {
   const [renderingIds, setRenderingIds] = useState<Set<string>>(new Set());
   const [genLook, setGenLook] = useState(false);     // full-look render in flight
   const [published, setPublished] = useState<Set<string>>(new Set()); // gen ids added to looks
+  const [followedUp, setFollowedUp] = useState<Set<string>>(new Set()); // renders the stylist has reacted to
   const [, setNowTick] = useState(0);                // 1s heartbeat for the render ETA
   const [edit, setEdit] = useState<{ heightLabel: string; weightLabel: string; ageLabel: string; gender: UserGender; style: string } | null>(null);
   const [savingCtx, setSavingCtx] = useState(false);
@@ -287,6 +314,40 @@ export default function StyleUpPage() {
     setGenLook(false);
   }, [threadId, userId, genLook, triggerStylist]);
 
+  // The pieces currently in the look — the stylist's product picks, excluding
+  // swap pickers. Drives full-look generation + swap re-renders.
+  const lookPicks = useCallback((): StyleUpProductRef[] => messages
+    .filter(m => m.kind === 'product' && m.productRef?.id && !m.productRef?.swap)
+    .map(m => m.productRef as StyleUpProductRef), [messages]);
+
+  // "Try different pants" — the stylist offers 3 alternatives for that slot.
+  const handleSwapRequest = useCallback(async (swap: { role: string; label: string }) => {
+    if (!threadId || !userId) return;
+    setRenderError(null);
+    await sendStylistText(threadId, `Sure thing — here are a few ${swap.label} options. Tap the one you like and I'll put it on you.`);
+    const exclude = lookPicks().map(p => p.id).filter((x): x is string => !!x);
+    const options = await fetchSwapOptions(userId, swap.role, 3, exclude);
+    if (options.length === 0) {
+      await sendStylistText(threadId, `Hmm, I'm short on alternate ${swap.label} right now — want to try a different piece?`);
+      return;
+    }
+    await sendSwapOptions(threadId, swap.role, swap.label, options);
+  }, [threadId, userId, lookPicks]);
+
+  // Shopper picked one of the swap options → re-render the full look with it.
+  const selectSwapOption = useCallback(async (role: string, chosen: StyleUpProductRef) => {
+    if (!threadId || !userId || genLook) return;
+    setGenLook(true);
+    setRenderError(null);
+    await sendStylistText(threadId, `Great pick — restyling you with the ${chosen.brand || chosen.name || 'new piece'} now ✨`);
+    const { error } = await startFullLookRender({ threadId, shopperUserId: userId, products: lookPicks(), replace: { role, product: chosen } });
+    if (error) {
+      setRenderError(error);
+      await sendStylistText(threadId, `Couldn't render that — ${error}`);
+    }
+    setGenLook(false);
+  }, [threadId, userId, genLook, lookPicks]);
+
   const send = useCallback(async () => {
     const text = draft.trim();
     if (!text || !threadId || sending) return;
@@ -295,27 +356,40 @@ export default function StyleUpPage() {
     const msg = await sendShopperMessage(threadId, text);
     if (msg) setMessages(prev => (prev.some(m => m.id === msg.id) ? prev : [...prev, msg]));
     setSending(false);
-    // If they're asking to see the whole look on themselves AND the stylist has
-    // already recommended pieces, fire the generate-look flow directly. Else let
-    // the AI stylist take the turn (it may recommend pieces first).
-    const looks = messages
-      .filter(m => m.kind === 'product' && m.productRef?.id)
-      .map(m => m.productRef as StyleUpProductRef);
-    if (wantsFullLook(text) && looks.length > 0) void generateFullLook(looks);
+    // Routing: a swap request ("different pants") → offer 3 options; a
+    // whole-look request → generate; otherwise let the AI stylist take the turn.
+    const swap = swapTargetFromText(text);
+    const looks = lookPicks();
+    if (swap && looks.length > 0) void handleSwapRequest(swap);
+    else if (wantsFullLook(text) && looks.length > 0) void generateFullLook(looks);
     else void triggerStylist();
-  }, [draft, threadId, sending, triggerStylist, generateFullLook, messages]);
+  }, [draft, threadId, sending, triggerStylist, generateFullLook, handleSwapRequest, lookPicks]);
 
-  // Add a finished render to the shopper's own looks (publishes to My Catalog).
-  const addToLooks = useCallback(async (genId: string) => {
-    if (published.has(genId)) return;
+  // Add a finished render to the shopper's own looks — promotes the generation
+  // to a LIVE look (with its video + poster + pieces), associated with THIS
+  // shopper, so it lands in My Catalog properly (not stuck Inactive/posterless).
+  const addToLooks = useCallback(async (genId: string, pieces: StyleUpProductRef[]) => {
+    if (!userId || published.has(genId)) return;
+    const r = renders[genId];
+    if (!r?.video_url) { setRenderError('Give it a moment to finish, then add it.'); return; }
     setPublished(prev => new Set(prev).add(genId));
-    const { error } = await setGenerationPublished(genId, true);
-    if (error) {
+    try {
+      await promoteGenerationToLook({
+        generationId: genId,
+        creatorUserId: userId, // associate the look with this shopper
+        videoUrl: r.video_url,
+        creatorLabel: user?.displayName || user?.email?.split('@')[0] || 'My',
+        style: 'editorial',
+        gender: ctx?.gender === 'male' ? 'men' : ctx?.gender === 'female' ? 'women' : 'unisex',
+        products: pieces.map(p => p.id).filter((id): id is string => !!id).map(id => ({ id })),
+        status: 'live',
+        titleOverride: 'My StyleUp look',
+      });
+    } catch (e) {
       setPublished(prev => { const n = new Set(prev); n.delete(genId); return n; });
-      return;
+      setRenderError(e instanceof Error ? e.message : 'Could not add to your looks.');
     }
-    void nameLookForGeneration(genId);
-  }, [published]);
+  }, [published, renders, userId, user, ctx]);
 
   // "See it on me" — render the shopper wearing a stylist pick (reuses the
   // generate-look pipeline). The render bubble arrives via realtime and the
@@ -368,6 +442,21 @@ export default function StyleUpPage() {
     const h = window.setInterval(() => setNowTick(t => t + 1), 1000);
     return () => window.clearInterval(h);
   }, [messages, renders]);
+
+  // When a render finishes AND it's the latest message, the stylist follows up
+  // with a description + asks how they like it (once per render). Gated on the
+  // render being last so it never double-posts (on reload the follow-up already
+  // sits after it).
+  useEffect(() => {
+    if (!threadId || messages.length === 0) return;
+    const last = messages[messages.length - 1];
+    if (last.kind !== 'render' || !last.renderGenerationId) return;
+    if (followedUp.has(last.renderGenerationId)) return;
+    if (renders[last.renderGenerationId]?.status !== 'done') return;
+    const gid = last.renderGenerationId;
+    setFollowedUp(prev => new Set(prev).add(gid));
+    void sendStylistText(threadId, describeLook(lookPicks()));
+  }, [messages, renders, threadId, followedUp, lookPicks]);
 
   // ── Context editing — writes straight to the profile (shared with the
   // AI-look studio), so edits here show up everywhere. ──────────────────────
@@ -623,6 +712,36 @@ export default function StyleUpPage() {
             </div>
           )}
           {messages.map(m => {
+            if (m.kind === 'product' && m.productRef?.swap) {
+              const sw = m.productRef.swap;
+              return (
+                <div key={m.id} className="su-msg su-msg--stylist">
+                  <div className="su-swap">
+                    <div className="su-swap-label">Pick a {sw.label}</div>
+                    <div className="su-swap-options">
+                      {sw.options.map((o, i) => (
+                        <button
+                          key={o.id || i}
+                          type="button"
+                          className="su-swap-opt"
+                          onClick={() => void selectSwapOption(sw.role, o)}
+                          disabled={genLook}
+                        >
+                          <span className="su-swap-opt-media">
+                            {o.image ? <img src={o.image} alt={o.name || ''} loading="lazy" /> : <span className="su-product-media--empty" />}
+                          </span>
+                          <span className="su-swap-opt-info">
+                            {o.brand && <span className="su-swap-opt-brand">{o.brand}</span>}
+                            <span className="su-swap-opt-name">{o.name || 'Option'}</span>
+                            {o.price && <span className="su-swap-opt-price">{o.price}</span>}
+                          </span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+              );
+            }
             if (m.kind === 'product' && m.productRef) {
               const p = m.productRef;
               const key = p.id || p.url || p.name || '';
@@ -657,6 +776,7 @@ export default function StyleUpPage() {
             if (m.kind === 'render') {
               const r = m.renderGenerationId ? renders[m.renderGenerationId] : null;
               const p = m.productRef;
+              const pieces = p?.pieces ?? [];
               const done = r?.status === 'done' && r.video_url;
               const failed = r?.status === 'failed';
               return (
@@ -667,14 +787,36 @@ export default function StyleUpPage() {
                     ) : failed ? (
                       <div className="su-render-status su-render-status--failed">Couldn&apos;t render that look — try another piece.</div>
                     ) : (
-                      <div className="su-render-status">
-                        <span className="su-render-spinner" aria-hidden="true" />
-                        <span className="su-render-status-text">
-                          Styling you in {p?.name ? p.name : 'this look'}…
-                          <span className="su-render-eta">
-                            {fmtRemaining(generationProgress(r?.created_at ?? m.createdAt, r?.duration_seconds ?? 10).remainingSec)}
+                      <div className="su-render-cook">
+                        <div className="su-render-status">
+                          <span className="su-render-spinner" aria-hidden="true" />
+                          <span className="su-render-status-text">
+                            Putting your look together…
+                            <span className="su-render-eta">
+                              {fmtRemaining(generationProgress(r?.created_at ?? m.createdAt, r?.duration_seconds ?? 10).remainingSec)}
+                            </span>
                           </span>
-                        </span>
+                        </div>
+                        {/* The pieces going into the look (mirrors the studio's
+                            cooking screen) — float them while it renders. */}
+                        {pieces.length > 0 && (
+                          <div className="su-render-pieces">
+                            {pieces.slice(0, 6).map((pc, i) => (
+                              <span className="su-render-piece" key={pc.id || i} style={{ animationDelay: `${i * 0.18}s` }} title={[pc.brand, pc.name].filter(Boolean).join(' · ')}>
+                                {pc.image ? <img src={pc.image} alt="" loading="lazy" /> : <span className="su-product-media--empty" />}
+                              </span>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                    {done && pieces.length > 0 && (
+                      <div className="su-render-pieces su-render-pieces--done">
+                        {pieces.slice(0, 6).map((pc, i) => (
+                          <span className="su-render-piece" key={pc.id || i} title={[pc.brand, pc.name].filter(Boolean).join(' · ')}>
+                            {pc.image ? <img src={pc.image} alt="" loading="lazy" /> : <span className="su-product-media--empty" />}
+                          </span>
+                        ))}
                       </div>
                     )}
                     {done && (
@@ -683,7 +825,7 @@ export default function StyleUpPage() {
                         <button
                           type="button"
                           className="su-product-btn su-product-btn--primary"
-                          onClick={() => void addToLooks(m.renderGenerationId as string)}
+                          onClick={() => void addToLooks(m.renderGenerationId as string, pieces)}
                           disabled={published.has(m.renderGenerationId as string)}
                         >
                           {published.has(m.renderGenerationId as string) ? 'Added ✓' : 'Add to my looks'}
