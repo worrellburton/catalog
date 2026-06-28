@@ -89,6 +89,21 @@ function wantsFullOutfit(text: string): boolean {
 
 const SLOT_LABEL: Record<string, string> = { Top: 'Top', Pants: 'Pants / Shorts', Jacket: 'Jacket', Hat: 'Hat', Shoes: 'Shoes' };
 
+// Scene options for "where do you want to be seen?" — Clean studio is always
+// first, then two fun spots, and the 4th is always a little wild.
+const FUN_SCENES = ['a cozy coffee shop', 'a rooftop at golden hour', 'a city street at night', 'a sunny park', 'a minimalist loft', 'an art gallery', 'a jazz bar', 'a boardwalk by the sea', 'a sidewalk café in Paris'];
+const WILD_SCENES = ['a neon Tokyo alley in the rain', 'the surface of Mars', 'a 1970s disco', 'backstage at a runway show', 'a snowy mountain peak', 'an underwater glass tunnel', 'a desert at sunset'];
+function sceneOptions(): Array<{ value: string; label: string }> {
+  const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+  const fun = [...FUN_SCENES].sort(() => Math.random() - 0.5).slice(0, 2);
+  const wild = WILD_SCENES[Math.floor(Math.random() * WILD_SCENES.length)];
+  return [
+    { value: 'a clean studio', label: 'Clean studio' },
+    ...fun.map(s => ({ value: s, label: cap(s) })),
+    { value: wild, label: `${cap(wild)} 🤯` },
+  ];
+}
+
 /** A tap-chooser bubble — single-tap dispatches; multi-select toggles + a
  *  confirm. Used for "which shoes?" and "what do you want in the outfit?". */
 function ChooserBubble({ choose, disabled, onSubmit }: {
@@ -195,6 +210,7 @@ export default function StyleUpPage() {
   const [followedUp, setFollowedUp] = useState<Set<string>>(new Set()); // renders the stylist has reacted to
   const [chosenBySlot, setChosenBySlot] = useState<Record<string, string>>({}); // role → chosen product id
   const [rejected, setRejected] = useState<Set<string>>(new Set());   // product ids the shopper passed on
+  const [chosenScene, setChosenScene] = useState<string | null>(null); // the look's setting
   const [, setNowTick] = useState(0);                // 1s heartbeat for the render ETA
   const [isDesktop, setIsDesktop] = useState(false); // desktop = two-pane layout
   const [edit, setEdit] = useState<{ heightLabel: string; weightLabel: string; ageLabel: string; gender: UserGender; style: string } | null>(null);
@@ -324,6 +340,7 @@ export default function StyleUpPage() {
   // the stylist never re-recommends a no. Persisted in localStorage.
   useEffect(() => {
     setChosenBySlot({});
+    setChosenScene(null);
     if (!threadId) { setRejected(new Set()); return; }
     try {
       const raw = localStorage.getItem(`styleup:rejected:${threadId}`);
@@ -395,7 +412,7 @@ export default function StyleUpPage() {
   // "Generate the look on me" — the stylist confirms in-thread, then the FULL
   // set of recommended pieces is composited onto the shopper via the existing
   // generate-look pipeline. The render bubble streams in + polls to the video.
-  const generateFullLook = useCallback(async (products: StyleUpProductRef[]) => {
+  const generateFullLook = useCallback(async (products: StyleUpProductRef[], scene?: string | null) => {
     if (!threadId || !userId || genLook) return;
     if (pendingRender) { setRenderError('Still finishing your last look — give it a sec.'); return; }
     const seen = new Set<string>();
@@ -407,7 +424,7 @@ export default function StyleUpPage() {
     setGenLook(true);
     setRenderError(null);
     await sendStylistText(threadId, "Love it — putting your full look together now. I'll send it over the second it's ready ✨");
-    const { error } = await startFullLookRender({ threadId, shopperUserId: userId, products: uniq });
+    const { error } = await startFullLookRender({ threadId, shopperUserId: userId, products: uniq, scene });
     if (error) {
       setRenderError(error);
       await sendStylistText(threadId, `Hmm, I couldn't start that render — ${error}`);
@@ -465,8 +482,23 @@ export default function StyleUpPage() {
     await askOutfitSlots();
   }, [threadId, userId, pendingRender, lookPicks, chosenBySlot, askOutfitSlots]);
 
+  // Before any restyle: ask where they want to be seen (scene), then render.
+  const askScene = useCallback(async () => {
+    if (!threadId || !userId) return;
+    if (pendingRender) { setRenderError('Still finishing your last look — one sec.'); return; }
+    if (assembleLook().length === 0) { void triggerStylist(); return; }
+    await sendStylistText(threadId, 'Before I restyle you — where do you want to be seen?');
+    await sendChooser(threadId, { kind: 'scene', prompt: 'Pick your setting', multi: false, options: sceneOptions() });
+  }, [threadId, userId, pendingRender, assembleLook, triggerStylist]);
+
   const onChoose = useCallback(async (kind: string, values: string[]) => {
     if (!threadId || !userId) return;
+    if (kind === 'scene') {
+      const scene = values[0];
+      setChosenScene(scene);
+      await generateFullLook(assembleLook(), scene);
+      return;
+    }
     if (kind === 'shoes') {
       const id = values[0];
       setChosenBySlot(prev => ({ ...prev, Shoes: id }));
@@ -482,7 +514,7 @@ export default function StyleUpPage() {
       }
       await sendStylistText(threadId, "Here's your outfit — tap “See it on me” on any piece, or say “show me the full look” and I'll put it all on you.");
     }
-  }, [threadId, userId, lookPicks, rejected, rejectIds, askOutfitSlots]);
+  }, [threadId, userId, lookPicks, rejected, rejectIds, askOutfitSlots, assembleLook, generateFullLook]);
 
   // "Try different pants" — the stylist offers 3 alternatives for that slot.
   const handleSwapRequest = useCallback(async (swap: { role: string; label: string }) => {
@@ -508,13 +540,13 @@ export default function StyleUpPage() {
     setChosenBySlot(prev => ({ ...prev, [role]: chosen.id as string }));
     rejectIds(siblings.filter(o => o.id !== chosen.id).map(o => o.id)); // remember the passed-over options
     await sendStylistText(threadId, `Great pick — restyling you with the ${chosen.brand || chosen.name || 'new piece'} now ✨`);
-    const { error } = await startFullLookRender({ threadId, shopperUserId: userId, products: assembleLook(), replace: { role, product: chosen } });
+    const { error } = await startFullLookRender({ threadId, shopperUserId: userId, products: assembleLook(), replace: { role, product: chosen }, scene: chosenScene });
     if (error) {
       setRenderError(error);
       await sendStylistText(threadId, `Couldn't render that — ${error}`);
     }
     setGenLook(false);
-  }, [threadId, userId, genLook, pendingRender, assembleLook, rejectIds]);
+  }, [threadId, userId, genLook, pendingRender, assembleLook, rejectIds, chosenScene]);
 
   const send = useCallback(async () => {
     const text = draft.trim();
@@ -531,9 +563,9 @@ export default function StyleUpPage() {
     const looks = lookPicks();
     if (swap && looks.length > 0) void handleSwapRequest(swap);
     else if (wantsFullOutfit(text)) void startOutfitFlow();
-    else if (wantsFullLook(text) && looks.length > 0) void generateFullLook(assembleLook());
+    else if (wantsFullLook(text) && looks.length > 0) void askScene();
     else void triggerStylist();
-  }, [draft, threadId, sending, triggerStylist, generateFullLook, handleSwapRequest, startOutfitFlow, assembleLook, lookPicks]);
+  }, [draft, threadId, sending, triggerStylist, handleSwapRequest, startOutfitFlow, askScene, lookPicks]);
 
   // Add a finished render to the shopper's own looks — promotes the generation
   // to a LIVE look (with its video + poster + pieces), associated with THIS
