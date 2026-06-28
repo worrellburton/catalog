@@ -354,11 +354,13 @@
   flex: 1 1 auto;
   min-height: 0;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;   /* iOS momentum scroll */
+  overscroll-behavior: contain;        /* don't chain to the body */
   padding: 16px 16px 8px;
   display: flex;
   flex-direction: column;
   gap: 8px;
-  background: #0d0e10;
+  background: transparent;             /* let the blueprint show behind messages */
 }
 .su-chat-intro { margin: auto; text-align: center; color: #8b8e96; max-width: 30ch; }
 .su-chat-intro p { margin: 0 0 4px; font-size: 14px; }
@@ -664,17 +666,18 @@
 /* ── WebGL blueprint background ──────────────────────────────────────────
    A subtle, slow field of thin "measurement" lines behind the whole StyleUp
    surface. The canvas is pinned to the (fixed) shell so it stays put while the
-   chat scrolls; all real content is lifted above it. */
+   chat scrolls. It sits at z-index:-1 so it paints above the shell's flat base
+   but BEHIND all content WITHOUT forcing any positioning on the content — the
+   chat scroller stays a plain in-flow block so its overflow scroll (and iOS
+   momentum) keeps working. */
 .su-bg {
   position: absolute;
   inset: 0;
-  z-index: 0;
+  z-index: -1;
   overflow: hidden;
   pointer-events: none;
 }
 .su-bg-canvas { display: block; width: 100%; height: 100%; }
-/* Lift every non-bg child of the shell above the blueprint layer. */
-.su-shell > :not(.su-bg) { position: relative; z-index: 1; }
 
 /* ── /style landing ─────────────────────────────────────────────────────── */
 .su-shell--landing .su-page { max-width: 640px; }

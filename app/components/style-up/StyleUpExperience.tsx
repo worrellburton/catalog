@@ -380,6 +380,12 @@ export function StyleUpExperience({
     setThreadId(id);
     setLatestThread({ threadId: id, stylist: s });
     setMessages(await fetchMessages(id));
+    // Open where they left off — pin to the latest message once the thread has
+    // rendered + laid out (two frames covers the mount + first paint).
+    requestAnimationFrame(() => requestAnimationFrame(() => {
+      const el = scrollerRef.current;
+      if (el) el.scrollTop = el.scrollHeight;
+    }));
   }, []);
 
   // Open (or resume) a thread with the chosen stylist from the roster.
