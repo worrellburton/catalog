@@ -46,6 +46,16 @@ function inferGender(text: string): 'men' | 'women' | 'unisex' {
   return 'unisex';
 }
 
+// The catalog's products.gender CHECK allows only male / female / unisex, so
+// normalize SerpAPI's men/women labels (and any male/female input) before
+// insert — otherwise the ingest row is rejected by products_gender_check.
+function toCatalogGender(g: string): 'male' | 'female' | 'unisex' {
+  const v = (g || '').toLowerCase();
+  if (['men', 'man', 'mens', 'male', 'boys', 'boy'].includes(v)) return 'male';
+  if (['women', 'woman', 'womens', 'female', 'ladies', 'girls', 'girl'].includes(v)) return 'female';
+  return 'unisex';
+}
+
 function guessBrand(title: string, source: string): string {
   const known = [
     'Nike', 'Adidas', 'Jordan', 'Puma', 'Reebok', 'New Balance', 'Converse',
@@ -223,13 +233,13 @@ Deno.serve(async (req: Request) => {
     const url = new URL(req.url);
     let query = url.searchParams.get('q') || '';
     let ingest = url.searchParams.get('ingest') === 'true';
-    let ingestGender: 'men' | 'women' | 'unisex' | undefined;
+    let ingestGender: string | undefined;
     if (req.method === 'POST') {
       const body = await req.json().catch(() => ({}));
       if (!query) query = String(body.query || body.q || '');
       if (body.ingest === true) ingest = true;
-      if (body.gender && ['men', 'women', 'unisex'].includes(body.gender)) {
-        ingestGender = body.gender;
+      if (body.gender && ['men', 'women', 'unisex', 'male', 'female'].includes(String(body.gender).toLowerCase())) {
+        ingestGender = String(body.gender).toLowerCase();
       }
     }
     query = query.trim();
@@ -283,7 +293,7 @@ Deno.serve(async (req: Request) => {
           price: p.price || null,
           url: p.url,
           image_url: p.image_url || null,
-          gender: ingestGender ?? p.gender,
+          gender: toCatalogGender(ingestGender ?? p.gender),
           is_active: true,
         }));
 
