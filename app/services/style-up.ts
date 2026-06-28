@@ -217,6 +217,51 @@ export interface AdminLook {
   products: StyleUpProductRef[];
 }
 
+// ── Research traces (admin "view research" node diagram) ────────────────────
+export interface StyleUpTraceSearch {
+  query: string;
+  ok: boolean;
+  error: string | null;
+  rawCount: number;
+  withUrl: number;
+  matched: number;
+  importedId?: string | null;
+  importedName?: string | null;
+}
+export interface StyleUpTrace {
+  id: string;
+  threadId: string;
+  sourceMode: string | null;
+  createdAt: string;
+  payload: Record<string, unknown>;     // edge-written turn record
+  searches: StyleUpTraceSearch[] | null; // client-enriched per-query results
+}
+
+/** Enrich a turn's trace with the per-query web search results (client side). */
+export async function appendTraceSearches(traceId: string, searches: StyleUpTraceSearch[]): Promise<void> {
+  if (!supabase || !traceId) return;
+  await supabase.from('style_up_traces').update({ searches }).eq('id', traceId);
+}
+
+/** Admin: the research traces for a thread, newest first. */
+export async function adminListTraces(threadId: string, limit = 20): Promise<StyleUpTrace[]> {
+  if (!supabase) return [];
+  const { data } = await supabase
+    .from('style_up_traces')
+    .select('id, thread_id, source_mode, payload, searches, created_at')
+    .eq('thread_id', threadId)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  return ((data ?? []) as Record<string, unknown>[]).map(r => ({
+    id: String(r.id),
+    threadId: String(r.thread_id),
+    sourceMode: (r.source_mode as string | null) ?? null,
+    createdAt: String(r.created_at),
+    payload: (r.payload as Record<string, unknown>) ?? {},
+    searches: (r.searches as StyleUpTraceSearch[] | null) ?? null,
+  }));
+}
+
 function previewOf(kind: string, body: string | null): string {
   if (kind === 'product') return 'Product pick';
   if (kind === 'render') return 'On-you look';
