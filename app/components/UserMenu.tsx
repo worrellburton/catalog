@@ -565,9 +565,9 @@ function UserMenu({
               </button>
             )}
             {isSuperAdmin && (
-              <button className="user-menu-item" onClick={runItem(() => navigate('/style'))}>
+              <button className="user-menu-item" onClick={runItem(() => navigate('/studio'))}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M12 2l1.9 5.85h6.15l-4.97 3.62 1.9 5.85L12 13.7l-4.98 3.62 1.9-5.85L3.95 7.85h6.15z"/></svg>
-                <span>Style</span>
+                <span>Studio</span>
               </button>
             )}
             {isSuperAdmin && (
@@ -864,7 +864,7 @@ function UserMenu({
             {superSection && isSuperAdmin && (
               <>
                 <PageRow icon="shield" label="Admin" onClick={runPageItem(() => navigate('/admin'))} />
-                <PageRow icon="star" label="Style" onClick={runPageItem(() => navigate('/style'))} />
+                <PageRow icon="star" label="Studio" onClick={runPageItem(() => navigate('/studio'))} />
                 <PageRow icon="import" label="Import" onClick={runPageItem(() => navigate('/import'))} />
                 {onOpenDecks && (
                   <PageRow icon="deck" label="Decks" onClick={runPageItem(onOpenDecks)} />
