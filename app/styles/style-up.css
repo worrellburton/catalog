@@ -26,6 +26,24 @@
 }
 .su-shell-head-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
 .su-shell-title { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; white-space: nowrap; }
+
+/* ── Desktop: two-pane (stylist/conversation rail + active chat) ───────── */
+@media (min-width: 769px) {
+  .su-shell--split { display: grid; grid-template-columns: 360px 1fr; }
+  .su-rail {
+    display: flex; flex-direction: column; min-height: 0;
+    border-right: 1px solid #1f2024; background: #0c0d0f;
+  }
+  .su-rail .su-page { max-width: none; }
+  .su-main { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+  .su-main .su-page--thread { max-width: 760px; }
+  .su-main-empty {
+    margin: auto; padding: 32px; max-width: 34ch;
+    display: flex; flex-direction: column; align-items: center; gap: 12px;
+    text-align: center; color: #8b8e96; font-size: 15px;
+  }
+  .su-main-empty-mark { font-size: 34px; color: var(--su-accent); opacity: 0.7; }
+}
 .su-signin { margin: auto; padding: 32px; text-align: center; color: #8b8e96; max-width: 32ch; font-size: 14.5px; }
 
 .su-page {
@@ -407,7 +425,14 @@
 }
 .su-product-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .su-product-media--empty { display: block; width: 100%; height: 100%; }
+.su-product-media--tap { border: none; padding: 0; cursor: pointer; display: block; }
 .su-product-info { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
+/* Tapping the image or the title opens the product page. */
+.su-product-tap {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
+  background: none; border: none; padding: 0; margin: 0; width: 100%; min-width: 0;
+  text-align: left; color: inherit; cursor: pointer;
+}
 .su-product-brand { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--su-accent); }
 .su-product-name { font-size: 13.5px; font-weight: 600; line-height: 1.3; color: #e7e7ea; }
 .su-product-price { font-size: 13px; color: #8b8e96; margin-top: 1px; }
