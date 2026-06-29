@@ -111,6 +111,17 @@ export default function SeedingPage() {
     await load();
   }, [load]);
 
+  // Master switch: start/stop the kill-switch AND every seeding cron together.
+  const setMaster = useCallback(async (on: boolean) => {
+    if (!supabase) return;
+    if (!on && !window.confirm('Pause everything? This stops the loop and pauses all seeding crons.')) return;
+    setBusy('master');
+    const { error } = await supabase.rpc('set_seeding_master', { p_on: on });
+    if (error) setMsg(`Error: ${error.message}`);
+    setBusy(null);
+    await load();
+  }, [load]);
+
   const setStatus = useCallback(async (id: string, status: string) => {
     if (!supabase) return;
     await supabase.from('seed_targets').update({ status }).eq('id', id);
@@ -229,6 +240,20 @@ export default function SeedingPage() {
       {/* Shared controls. color-scheme:light keeps native controls (checkbox,
           number spinner, text inputs) light under an OS dark-mode preference. */}
       <div className="admin-detail-card" style={{ marginBottom: 16, colorScheme: 'light' }}>
+        {/* Master switch — flips the kill-switch AND every cron together. */}
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 14, paddingBottom: 14, borderBottom: '1px solid #ececec' }}>
+          <button
+            className="admin-btn admin-btn-primary"
+            disabled={busy === 'master'}
+            onClick={() => void setMaster(!enabled)}
+            style={enabled ? { background: '#dc2626', borderColor: '#dc2626', color: '#fff' } : undefined}
+          >
+            {busy === 'master' ? '…' : enabled ? '⏸ Pause everything' : '▶ Enable everything'}
+          </button>
+          <span className="admin-cell-muted" style={{ fontSize: 13 }}>
+            {enabled ? 'Loop + crons running — fetching, enriching, publishing.' : 'Loop + crons paused — nothing runs.'}
+          </span>
+        </div>
         <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
             <input type="checkbox" checked={enabled}

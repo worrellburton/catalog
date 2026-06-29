@@ -118,6 +118,7 @@ Watch found/published per target; run **Simulate** to find scenario gaps.
 
 | 2026-06-29 | flag | Seeded products stamped `source='seed_serpapi'` at INSERT (product-search `source`/`is_active` params) AND belt-and-suspenders in seed-run, so the deletable flag always holds | `functions/product-search/index.ts`, `functions/seed-run/index.ts` (seed-run redeployed v3) |
 | 2026-06-29 | flag | `purge_seeded_products()` is_admin RPC + "Purge seeded (N)" button — one-call delete of all seeded rows (FK-safe: all product FKs CASCADE/SET NULL) | `migrations/20260629000008_purge_seeded_products.sql`, `app/routes/admin/seeding.tsx` |
+| 2026-06-29 | S2 | Master switch: one "Pause / Enable everything" button (`set_seeding_master(bool)` — flips `seeding_enabled` AND `cron.alter_job` on all seeding-* crons together) so the whole system stops/starts in one click | `migrations/20260629000012_seeding_master_switch.sql`, `app/routes/admin/seeding.tsx` |
 | 2026-06-29 | S7 | `seed-curate` edge fn — Claude classifies PENDING terms: real search → approved, gibberish ("fff","kzjs","tatinajc","test","detergemt") → rejected; only touches pending (manual decisions safe). **Verified:** 50 → 37 approved / 13 rejected, correct gibberish catches | `functions/seed-curate/index.ts` (deployed) |
 | 2026-06-29 | S7 | `seeding-curate` cron (*/10) via `run_seeding_curate()`; runs regardless of kill-switch (Claude-only, no SerpAPI). **Verified:** auto-cleared the queue on schedule | `migrations/20260629000011_seeding_curate_cron.sql` |
 | 2026-06-29 | S2 | Automation panel on /admin/seeding: lists all seeding crons (label, cadence, last run, on/paused toggle) via `seeding_cron_status()` + `set_seeding_cron_active()` (is_admin, seeding-* only, `cron.alter_job`) | `migrations/20260629000010_seeding_cron_controls.sql`, `app/routes/admin/seeding.tsx` |
@@ -170,6 +171,7 @@ select cron.unschedule('seeding-budget-reset');
 select cron.unschedule('seeding-curate');
 
 drop function if exists public.run_seeding_curate();
+drop function if exists public.set_seeding_master(boolean);
 drop function if exists public.seeding_cron_status();
 drop function if exists public.set_seeding_cron_active(text, boolean);
 drop function if exists public.run_seeding_refresh();
