@@ -545,6 +545,8 @@ export default function AdminData() {
     // Deep-link from /admin/seeding: ?tab=products&filters=seeding
     () => (searchParams.get('filters') === 'seeding' ? 'seeded' : 'all'),
   );
+  // Optional deep-link: ?target=<seed_target_id> narrows products to one seeding target.
+  const seedTargetParam = searchParams.get('target');
 
   // Date-added filter for the Products table. 'all' lets every row
   // through. 'week' / 'month' use rolling-window cutoffs (created_at
@@ -1442,7 +1444,7 @@ export default function AdminData() {
       // Reload products in the table
       const { data: reloaded } = await supabase
         .from('products')
-        .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, primary_video_poster_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, subtype, gender, created_at, source, size_fit, materials_care, haiku_context, affiliate_url, barcode, barcode_type')
+        .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, primary_video_poster_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, subtype, gender, created_at, source, seed_target_id, size_fit, materials_care, haiku_context, affiliate_url, barcode, barcode_type')
         .order('scraped_at', { ascending: false });
       if (reloaded) {
         setCrawledProducts((reloaded || []).map(p => ({
@@ -1890,7 +1892,7 @@ export default function AdminData() {
       if (!supabase) { setProductsLoading(false); return; }
       const { data, error } = await supabase
         .from('products')
-        .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, primary_video_poster_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, subtype, gender, created_at, source, size_fit, materials_care, haiku_context, affiliate_url, barcode, barcode_type')
+        .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, primary_video_poster_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, subtype, gender, created_at, source, seed_target_id, size_fit, materials_care, haiku_context, affiliate_url, barcode, barcode_type')
         .order('scraped_at', { ascending: false });
       if (error) {
         console.error('Failed to load crawled products:', error);
@@ -2019,7 +2021,7 @@ export default function AdminData() {
   }, [genJobs, loadAdProductIds]);
 
   const allProducts = useMemo(() => {
-    const productMap = new Map<string, { id?: string; brand: string; name: string; price: string; url: string; image_url?: string | null; images?: string[]; primary_image_url?: string | null; primary_image_polished?: boolean | null; primary_video_url?: string | null; primary_video_poster_url?: string | null; video_urls: string[]; looks: Set<string>; creators: Set<string>; saves: number; clicks: number; impressions: number; connection: 'Look' | 'Crawl' | 'Ad'; is_active?: boolean; is_elite?: boolean; is_platform?: boolean; type?: string | null; subtype?: string | null; gender?: 'male' | 'female' | 'unisex' | null; created_at?: string | null; source?: string | null; size_fit?: string | null; materials_care?: string | null; haiku_context?: string | null }>();
+    const productMap = new Map<string, { id?: string; brand: string; name: string; price: string; url: string; image_url?: string | null; images?: string[]; primary_image_url?: string | null; primary_image_polished?: boolean | null; primary_video_url?: string | null; primary_video_poster_url?: string | null; video_urls: string[]; looks: Set<string>; creators: Set<string>; saves: number; clicks: number; impressions: number; connection: 'Look' | 'Crawl' | 'Ad'; is_active?: boolean; is_elite?: boolean; is_platform?: boolean; type?: string | null; subtype?: string | null; gender?: 'male' | 'female' | 'unisex' | null; created_at?: string | null; source?: string | null; seed_target_id?: string | null; size_fit?: string | null; materials_care?: string | null; haiku_context?: string | null }>();
     looks.forEach(look => {
       const c = creators[look.creator];
       look.products.forEach(p => {
@@ -2101,6 +2103,7 @@ export default function AdminData() {
           gender: cp.gender ?? null,
           created_at: cp.created_at ?? null,
           source: cp.source ?? null,
+          seed_target_id: (cp as { seed_target_id?: string | null }).seed_target_id ?? null,
           size_fit: cp.size_fit ?? null,
           materials_care: cp.materials_care ?? null,
           haiku_context: (cp as { haiku_context?: string | null }).haiku_context ?? null,
@@ -2208,6 +2211,7 @@ export default function AdminData() {
       // Automatic view: only products added by the autonomous pipeline.
       if (productFilter === 'automatic' && (p as { source?: string | null }).source !== AUTO_SOURCE) return false;
       if (productFilter === 'seeded' && (p as { source?: string | null }).source !== SEED_SOURCE) return false;
+      if (seedTargetParam && (p as { seed_target_id?: string | null }).seed_target_id !== seedTargetParam) return false;
       // Hide soft-deleted from every other view.
       if (deletedProductKeys.has(key)) return false;
       if (brandFilter && (p.brand || '').toLowerCase() !== brandFilter.toLowerCase()) return false;
@@ -2218,7 +2222,7 @@ export default function AdminData() {
       if (!matchesDateFilter(p.created_at)) return false;
       return true;
     }),
-    [allProducts, productFilter, deletedProductKeys, adminQuery, brandFilter, matchesDateFilter]
+    [allProducts, productFilter, deletedProductKeys, adminQuery, brandFilter, matchesDateFilter, seedTargetParam]
   );
   // sharedTableId opts this table into the cross-admin sort state in
   // app_settings — when one admin clicks a column header, every other

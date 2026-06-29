@@ -367,7 +367,11 @@ export default function SeedingPage() {
                 <td><span className={`admin-status-dot admin-status-dot--${statusDotKind(t.status)}`} /> {t.status}</td>
                 <td className="admin-cell-num">{t.priority}</td>
                 <td className="admin-cell-muted">{timeAgo(t.last_run_at)}</td>
-                <td className="admin-cell-num">{t.products_found}</td>
+                <td className="admin-cell-num">
+                  {t.products_found > 0
+                    ? <Link to={`/admin/data?tab=products&filters=seeding&target=${t.id}`} title="View the products this target fetched">{t.products_found}</Link>
+                    : 0}
+                </td>
                 <td className="admin-cell-num">{t.products_published}</td>
                 <td style={{ whiteSpace: 'nowrap', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
                   {t.status !== 'approved' && <button className="admin-btn admin-btn-secondary admin-row-promote" onClick={() => void setStatus(t.id, 'approved')}>Approve</button>}

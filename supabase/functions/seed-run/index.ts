@@ -146,7 +146,7 @@ Deno.serve(async (req: Request) => {
       // product_ready_for_feed (image + occasion).
       let published = 0;
       if (allIds.length) {
-        await admin.from('products').update({ source: 'seed_serpapi', is_active: false }).in('id', allIds);
+        await admin.from('products').update({ source: 'seed_serpapi', is_active: false, seed_target_id: t.id }).in('id', allIds);
         const { data: ready } = await admin
           .from('products')
           .select('id')

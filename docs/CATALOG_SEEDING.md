@@ -118,6 +118,7 @@ Watch found/published per target; run **Simulate** to find scenario gaps.
 
 | 2026-06-29 | flag | Seeded products stamped `source='seed_serpapi'` at INSERT (product-search `source`/`is_active` params) AND belt-and-suspenders in seed-run, so the deletable flag always holds | `functions/product-search/index.ts`, `functions/seed-run/index.ts` (seed-run redeployed v3) |
 | 2026-06-29 | flag | `purge_seeded_products()` is_admin RPC + "Purge seeded (N)" button — one-call delete of all seeded rows (FK-safe: all product FKs CASCADE/SET NULL) | `migrations/20260629000008_purge_seeded_products.sql`, `app/routes/admin/seeding.tsx` |
+| 2026-06-29 | S2 | View products per target: `products.seed_target_id` (FK → seed_targets, ON DELETE SET NULL) stamped by seed-run (v4) + backfilled; Data page filters on `?target=<id>`; the "Found" count on each Seeding row links to `/admin/data?tab=products&filters=seeding&target=<id>`. **Verified:** white shoes → 20 linked | `migrations/20260629000013_products_seed_target_id.sql`, `functions/seed-run/index.ts`, `app/routes/admin/data.tsx`, `app/routes/admin/seeding.tsx` |
 | 2026-06-29 | S2 | Master switch: one "Pause / Enable everything" button (`set_seeding_master(bool)` — flips `seeding_enabled` AND `cron.alter_job` on all seeding-* crons together) so the whole system stops/starts in one click | `migrations/20260629000012_seeding_master_switch.sql`, `app/routes/admin/seeding.tsx` |
 | 2026-06-29 | S7 | `seed-curate` edge fn — Claude classifies PENDING terms: real search → approved, gibberish ("fff","kzjs","tatinajc","test","detergemt") → rejected; only touches pending (manual decisions safe). **Verified:** 50 → 37 approved / 13 rejected, correct gibberish catches | `functions/seed-curate/index.ts` (deployed) |
 | 2026-06-29 | S7 | `seeding-curate` cron (*/10) via `run_seeding_curate()`; runs regardless of kill-switch (Claude-only, no SerpAPI). **Verified:** auto-cleared the queue on schedule | `migrations/20260629000011_seeding_curate_cron.sql` |
@@ -183,6 +184,7 @@ drop function if exists public.purge_seeded_products();
 drop function if exists public.seed_duplicate_report();
 drop function if exists public.product_ready_for_feed(public.products);
 drop function if exists public.refresh_seed_targets_from_searches();
+alter table if exists public.products drop column if exists seed_target_id;
 drop table if exists public.seed_targets cascade;
 delete from public.app_settings
   where key in ('seeding_enabled','seeding_monthly_serpapi_cap','seeding_serpapi_used_month');
