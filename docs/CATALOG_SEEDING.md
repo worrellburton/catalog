@@ -85,13 +85,20 @@ used.
 
 ## 5. Build stages
 
-- [x] **S1 — Foundation** (this doc + `seed_targets` + refresh + gate predicate). Additive, no behavior change.
-- [ ] **S2 — Seeding page** (`/admin/seeding`): queue list, approve/pause/reject, Simulate button.
-- [ ] **S3 — Orchestrator** (`seed-run` edge fn): due target → brainstorm → product-search ingest → record yield. + budget cap.
-- [ ] **S4 — Activation** (cron): `is_active=true` where `product_ready_for_feed`. + dedup key.
-- [ ] **S5 — Simulate page** (`/admin/seeding/simulate`): scenario+profile → outfit + empty slots → seed target.
-- [ ] **S6 — Scenario source**: ingest `style_up_traces` gaps as scenario targets.
-- [ ] **S7 — Schedule + monitor**: new=priority / old=weekly crons, stuck counters.
+- [x] **S1 — Foundation** (`seed_targets` + refresh + gate predicate). Additive.
+- [x] **S2 — Seeding page** (`/admin/seeding`): queue, approve/pause/reject, kill-switch, budget, run-now, Simulate link.
+- [x] **S3 — Orchestrator** (`seed-run` edge fn): due target → (scenario→brainstorm) → product-search ingest → hold inactive + stamp source → record yield. Hard-gated + budget cap.
+- [x] **S4 — Activation** (`run_seeding_activation`, cron): promote-only `is_active=true` where `product_ready_for_feed` and not suppressed. Gated. Dedup = non-destructive report (hard index deferred, see §7 notes).
+- [x] **S5 — Simulate page** (`/admin/seeding/simulate`): scenario+gender → real `ai-stylist` over live catalog → outfit + empty slots → one-click seed gap.
+- [~] **S6 — Scenario source from `style_up_traces`**: DEFERRED (YAGNI — `searches` empty today; conversational search_logs entries already flow through as scenario-kind via the orchestrator's ≥4-word→brainstorm heuristic). Future hook: `refresh_seed_targets_from_traces()`.
+- [x] **S7 — Schedule** (crons): refresh / occasion-backfill / driver / activate / budget-reset. All spend/feed steps no-op while disabled. (Funnel UI = the Seeding table's found/published columns; richer monitor deferred.)
+
+### Operating it (turn the loop ON)
+Everything ships OFF. To go live: `/admin/seeding` → review queue → **Reject** junk
+("books", "pizza", "kzjs") → **Approve** good targets → set the budget cap → flip
+**Seeding ON**. Crons then refresh demand, fetch for approved targets (throttled),
+auto-enrich occasion, and the activation cron publishes products that pass the gate.
+Watch found/published per target; run **Simulate** to find scenario gaps.
 
 ## 6. Change Log
 
@@ -100,6 +107,14 @@ used.
 | 2026-06-29 | S1 | `seed_targets` queue table + RLS (service_role + admin via `profiles.is_admin`) + indexes + `updated_at` trigger; `app_settings` keys `seeding_enabled='false'`, `seeding_monthly_serpapi_cap='5000'`, `seeding_serpapi_used_month='0'` | `migrations/20260629000001_seeding_foundation.sql` → `public.seed_targets`, `public.seed_targets_touch_updated_at()` |
 | 2026-06-29 | S1 | `refresh_seed_targets_from_searches()` — aggregates `search_logs`→`seed_targets` (keyword), upsert never overwrites status. **Verified:** 139 targets, zero-result +100 priority, idempotent, rejected not resurrected | `migrations/20260629000002_seed_targets_refresh.sql` → `public.refresh_seed_targets_from_searches()` |
 | 2026-06-29 | S1 | `product_ready_for_feed(products)` gate predicate (image + occasion; not quality_score). Function only, not yet wired. **Verified:** 180/192 active pass, 12 fail, 38 inactive recoverable | `migrations/20260629000003_product_ready_for_feed.sql` → `public.product_ready_for_feed(public.products)` |
+
+| 2026-06-29 | S3 | `enrich-occasions` edge fn (auto occasion enrichment; prompt lifted from `scripts/enrich-occasions-v2.mjs`) | `supabase/functions/enrich-occasions/index.ts` (deployed) |
+| 2026-06-29 | S3 | `seed-run` orchestrator edge fn. **Verified:** kill-switch returns `{skipped:'seeding_disabled'}` | `supabase/functions/seed-run/index.ts` (deployed) |
+| 2026-06-29 | S4 | `run_seeding_activation()` promote-only gated activation. **Verified:** returns 0 + feed unchanged (192) while disabled | `migrations/20260629000005_seeding_activation.sql` |
+| 2026-06-29 | S4 | `seed_duplicate_report()` non-destructive dup report (hard index deferred) | `migrations/20260629000004_seeding_dedup_report.sql` |
+| 2026-06-29 | S7 | cron fns + 5 schedules (refresh/occasion/driver/activate/budget-reset), all gated. **Verified:** scheduled + active, work-fns no-op while disabled | `migrations/20260629000006_seeding_crons.sql` |
+| 2026-06-29 | S2 | `admin_set_seeding_setting()` is_admin RPC (flip kill-switch / budget from UI) | `migrations/20260629000007_admin_set_seeding_setting.sql` |
+| 2026-06-29 | S2/S5 | `/admin/seeding` + `/admin/seeding/simulate` pages, nav + search entry, route registration. **Verified:** typecheck 0 errors, route-check pass, build OK | `app/routes/admin/seeding.tsx`, `seeding.simulate.tsx`, `admin/route.tsx`, `vite.config.ts` |
 
 ### Notes surfaced during S1 (feed into later stages)
 - The zero-result queue top is mostly junk ("pizza", "kzjs", "fff") + off-vertical
@@ -115,28 +130,44 @@ used.
 
 To remove the feature entirely, in order:
 
-**Database** (run as service role / via MCP):
-```sql
--- crons (when scheduled in later stages)
--- select cron.unschedule('seeding_refresh');
--- select cron.unschedule('seeding_run');
--- select cron.unschedule('seeding_activate');
+**Fastest kill (no revert):** `/admin/seeding` → flip **Seeding OFF**, or
+`update app_settings set value='false' where key='seeding_enabled';`. The whole
+loop goes inert immediately (no spend, no new activations).
 
+**Full revert — Database** (run as service role / via MCP):
+```sql
+select cron.unschedule('seeding-refresh');
+select cron.unschedule('seeding-occasion');
+select cron.unschedule('seeding-driver');
+select cron.unschedule('seeding-activate');
+select cron.unschedule('seeding-budget-reset');
+
+drop function if exists public.run_seeding_refresh();
+drop function if exists public.run_seeding_occasion_backfill();
+drop function if exists public.run_seeding_driver();
+drop function if exists public.run_seeding_activation();
+drop function if exists public.admin_set_seeding_setting(text, text);
+drop function if exists public.seed_duplicate_report();
 drop function if exists public.product_ready_for_feed(public.products);
 drop function if exists public.refresh_seed_targets_from_searches();
 drop table if exists public.seed_targets cascade;
 delete from public.app_settings
   where key in ('seeding_enabled','seeding_monthly_serpapi_cap','seeding_serpapi_used_month');
 ```
+Note: products already seeded while ON keep `source='seed_serpapi'`; to also
+retire them: `update products set is_active=false where source='seed_serpapi';`
+(they are otherwise normal catalog rows — leaving them is fine).
 
-**Edge functions** (later stages): delete `supabase/functions/seed-run` and undeploy.
+**Edge functions** — undeploy/delete `supabase/functions/seed-run` and
+`supabase/functions/enrich-occasions`.
 
-**Frontend** (later stages): delete `app/routes/admin/seeding.tsx`,
-`app/routes/admin/seeding.simulate.tsx`, and remove the nav entry.
+**Frontend** — delete `app/routes/admin/seeding.tsx` +
+`app/routes/admin/seeding.simulate.tsx`; remove the 2 `route(...)` lines in
+`vite.config.ts`; remove the Seeding nav item + the Seeding/Simulate search
+items in `app/routes/admin/route.tsx`.
 
-**Migrations**: the feature's migrations are self-contained
-(`20260629000001..` prefixed); reverting = run the SQL above (dropping a
-migration file alone does not undrop applied objects).
+**Reused (do NOT delete on revert):** `catalog-brainstorm`, `product-search`,
+`ai-stylist`, `embed-product`, `app_settings`, `search_logs`, `products`.
 
 Nothing in this feature modifies existing tables/functions destructively — it is
 purely additive, so revert is a clean drop.
