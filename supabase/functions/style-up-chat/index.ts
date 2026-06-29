@@ -111,14 +111,18 @@ Deno.serve(async (req: Request) => {
     if (prof?.fashion_styles) ctxBits.push(`style tags: ${prof.fashion_styles}`);
     const shopperName = (prof?.full_name ? String(prof.full_name).split(/\s+/)[0] : '') || 'there';
 
-    // Chat history (oldest first, capped).
+    // Chat history — the most recent 30 messages, oldest-first. We fetch
+    // newest-first then reverse: ordering ascending with a LIMIT keeps the
+    // OLDEST 30 and silently drops the shopper's latest message on a long
+    // thread (which also leaves the window ending on a stylist turn — see the
+    // user-terminal guard below).
     const { data: history } = await admin
       .from('style_up_messages')
       .select('sender, kind, body, product_ref')
       .eq('thread_id', threadId)
-      .order('created_at', { ascending: true })
+      .order('created_at', { ascending: false })
       .limit(30);
-    const turns = (history ?? []) as Array<{ sender: string; kind: string; body: string | null; product_ref: unknown }>;
+    const turns = ((history ?? []) as Array<{ sender: string; kind: string; body: string | null; product_ref: unknown }>).reverse();
     if (turns.length === 0) return json({ success: false, error: 'nothing to reply to' }, 400);
 
     // Candidate products to recommend FROM — gender-filtered active catalog.
@@ -199,9 +203,26 @@ productIds is optional — include it only when you're actually recommending pie
     if (messages.length === 0) {
       messages.push({ role: 'user', content: `Hi ${stylist?.name ?? ''}` });
     }
+    // Claude 4.6 also requires the conversation to END on a user turn — it
+    // rejects assistant-message prefill with a 400. When the stylist spoke last
+    // (a follow-up the shopper hasn't answered, or a retry after the stylist
+    // already replied), nudge with a user turn so the model continues the
+    // thread instead of failing.
+    if (messages[messages.length - 1].role === 'assistant') {
+      messages.push({ role: 'user', content: '(continue)' });
+    }
 
     const res = await callAnthropic(apiKey, { model: MODEL, max_tokens: 700, system, messages });
-    if (!res.ok) return json({ success: false, error: `anthropic ${res.status}: ${(await res.text()).slice(0, 200)}` }, 502);
+    if (!res.ok) {
+      const errBody = (await res.text()).slice(0, 300);
+      // Record the failure so it's visible server-side, not just returned to
+      // the client (which historically swallowed it). Best-effort.
+      void admin.from('ai_usage_logs').insert({
+        platform: 'anthropic', operation: 'style-up-chat', model: MODEL,
+        status: 'error', error_message: `${res.status}: ${errBody}`,
+      });
+      return json({ success: false, error: `anthropic ${res.status}: ${errBody}` }, 502);
+    }
     const out = await res.json() as { content?: Array<{ type: string; text?: string }>; usage?: { input_tokens?: number; output_tokens?: number } };
     const text = (out.content?.find(c => c.type === 'text')?.text ?? '').replace(/```json\s*|```\s*/g, '').trim();
     const start = text.indexOf('{');

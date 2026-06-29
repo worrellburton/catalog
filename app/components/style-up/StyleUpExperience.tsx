@@ -661,6 +661,20 @@ export function StyleUpExperience({
     // The Anthropic call behind the edge function can transiently 429/529/502
     // under load. Retry a couple times with backoff before surfacing an error,
     // so a momentary overload doesn't leave the shopper staring at a dead chat.
+    // On a non-2xx response supabase-js returns a FunctionsHttpError and leaves
+    // `data` null — the edge fn's real reason ({ error }) is on error.context
+    // (the Response). Read it so failures are diagnosable instead of collapsing
+    // to a generic "no response (network / timeout)".
+    const readFnError = async (error: unknown): Promise<string> => {
+      const ctx = (error as { context?: Response } | null)?.context;
+      if (ctx && typeof ctx.json === 'function') {
+        try {
+          const body = await ctx.json() as { error?: string };
+          if (body?.error) return String(body.error);
+        } catch { /* body wasn't JSON */ }
+      }
+      return error instanceof Error ? error.message : '';
+    };
     let lastErr = '';
     for (let attempt = 0; attempt < 3; attempt++) {
       if (attempt > 0) await new Promise((r) => setTimeout(r, 1200 * attempt));
@@ -672,9 +686,9 @@ export function StyleUpExperience({
           if (resp.searchQueries?.length) await runWebHunt(resp.searchQueries, resp.traceId ?? null);
           return;
         }
-        lastErr = resp?.error || '';
-      } catch {
-        lastErr = '';
+        lastErr = error ? await readFnError(error) : (resp?.error || '');
+      } catch (e) {
+        lastErr = e instanceof Error ? e.message : '';
       }
     }
     setStylistTyping(false);
