@@ -118,6 +118,7 @@ Watch found/published per target; run **Simulate** to find scenario gaps.
 
 | 2026-06-29 | flag | Seeded products stamped `source='seed_serpapi'` at INSERT (product-search `source`/`is_active` params) AND belt-and-suspenders in seed-run, so the deletable flag always holds | `functions/product-search/index.ts`, `functions/seed-run/index.ts` (seed-run redeployed v3) |
 | 2026-06-29 | flag | `purge_seeded_products()` is_admin RPC + "Purge seeded (N)" button — one-call delete of all seeded rows (FK-safe: all product FKs CASCADE/SET NULL) | `migrations/20260629000008_purge_seeded_products.sql`, `app/routes/admin/seeding.tsx` |
+| 2026-06-29 | S2 | Seeding page redesign: two top tabs (Searches=keyword/manual, Styling=scenario) + flat Data-page look (admin-tabs/admin-btn/SortableTable, no inline styles); Add button kind follows the active tab | `app/routes/admin/seeding.tsx` |
 | 2026-06-29 | S2 | "View seeded products (N)" link on /admin/seeding → `/admin/data?tab=products&filters=seeding`; new **Seeded** product filter (source=`seed_serpapi`) + chip, URL-drivable | `app/routes/admin/data.tsx`, `app/routes/admin/seeding.tsx` |
 | 2026-06-29 | fix | Activation dropped the `scrape_status<>'failed'` guard — the scrape-new-products trigger marks SerpAPI rows 'failed' (they already have images), which wrongly blocked them; the image+occasion gate is the real filter | `migrations/20260629000009_seeding_activation_fix.sql` |
 

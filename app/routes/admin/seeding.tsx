@@ -1,12 +1,14 @@
 // Admin · Seeding — control panel for demand-driven catalog seeding.
-// Lists every seed target (search keywords + scenarios), lets the operator
-// curate (approve/pause/reject), flip the global kill-switch, set the budget,
-// refresh demand from search_logs, and run a target on demand. The loop only
-// spends/publishes while the kill-switch is ON. See docs/CATALOG_SEEDING.md.
+// Two tabs split seed_targets by kind: "Searches" (keyword/manual demand) and
+// "Styling" (scenarios). Same data + actions per tab. Operator curates
+// (approve/pause/reject), flips the global kill-switch, sets the budget,
+// refreshes demand, and runs a target on demand. The loop only spends/publishes
+// while the kill-switch is ON. See docs/CATALOG_SEEDING.md.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from '@remix-run/react';
 import { supabase } from '~/utils/supabase';
+import { useSortableTable, SortableTh } from '~/components/SortableTable';
 
 interface SeedTarget {
   id: string;
@@ -22,10 +24,8 @@ interface SeedTarget {
   products_published: number;
 }
 
+type TopTab = 'searches' | 'styling';
 const STATUSES = ['pending', 'approved', 'paused', 'rejected', 'done'] as const;
-const STATUS_COLOR: Record<string, string> = {
-  pending: '#9aa0a6', approved: '#34a853', paused: '#fbbc04', rejected: '#ea4335', done: '#4285f4',
-};
 
 function timeAgo(iso: string | null): string {
   if (!iso) return '—';
@@ -36,6 +36,12 @@ function timeAgo(iso: string | null): string {
   return `${Math.floor(h / 24)}d ago`;
 }
 
+function statusDotKind(status: string): 'live' | 'failed' | 'inactive' {
+  if (status === 'approved' || status === 'done') return 'live';
+  if (status === 'rejected') return 'failed';
+  return 'inactive';
+}
+
 export default function SeedingPage() {
   const [targets, setTargets] = useState<SeedTarget[]>([]);
   const [enabled, setEnabled] = useState(false);
@@ -44,6 +50,7 @@ export default function SeedingPage() {
   const [seededCount, setSeededCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
+  const [topTab, setTopTab] = useState<TopTab>('searches');
   const [filter, setFilter] = useState<string>('all');
   const [newTerm, setNewTerm] = useState('');
   const [msg, setMsg] = useState<string | null>(null);
@@ -113,120 +120,155 @@ export default function SeedingPage() {
   const addTarget = useCallback(async () => {
     const term = newTerm.trim();
     if (!supabase || !term) return;
-    const kind = term.split(/\s+/).length >= 4 ? 'scenario' : 'manual';
+    // Kind follows the active tab (not word-count) so "Add scenario" always
+    // lands a scenario and "Add search" a keyword.
+    const kind = topTab === 'styling' ? 'scenario' : 'manual';
     const { error } = await supabase.from('seed_targets')
       .insert({ term: term.toLowerCase(), kind, status: 'approved', priority: 50 });
-    setMsg(error ? `Error: ${error.message}` : `Added "${term}" as ${kind}.`);
+    setMsg(error ? `Error: ${error.message}` : `Added "${term}" to ${topTab === 'styling' ? 'Styling' : 'Searches'}.`);
     setNewTerm('');
     await load();
-  }, [newTerm, load]);
+  }, [newTerm, topTab, load]);
 
-  const shown = useMemo(
-    () => (filter === 'all' ? targets : targets.filter(t => t.status === filter)),
-    [targets, filter],
-  );
+  // Split by kind. Searches = keyword/manual demand; Styling = scenarios.
+  const searchTargets = useMemo(() => targets.filter(t => t.kind === 'keyword' || t.kind === 'manual'), [targets]);
+  const stylingTargets = useMemo(() => targets.filter(t => t.kind === 'scenario'), [targets]);
+  const tabTargets = topTab === 'styling' ? stylingTargets : searchTargets;
+
   const counts = useMemo(() => {
-    const c: Record<string, number> = { all: targets.length };
-    for (const s of STATUSES) c[s] = targets.filter(t => t.status === s).length;
+    const c: Record<string, number> = { all: tabTargets.length };
+    for (const s of STATUSES) c[s] = tabTargets.filter(t => t.status === s).length;
     return c;
-  }, [targets]);
+  }, [tabTargets]);
+  const shown = useMemo(
+    () => (filter === 'all' ? tabTargets : tabTargets.filter(t => t.status === filter)),
+    [tabTargets, filter],
+  );
+
+  const table = useSortableTable(shown, { key: 'priority', direction: 'desc' });
 
   if (loading) return <div className="admin-page"><p>Loading seeding…</p></div>;
 
   return (
-    <div className="admin-page" style={{ padding: 24, maxWidth: 1100 }}>
-      <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
-        <h1 style={{ margin: 0 }}>Seeding</h1>
+    <div className="admin-page">
+      <div className="admin-page-header">
+        <div>
+          <h1>Seeding</h1>
+          <p className="admin-page-subtitle">
+            Demand-driven catalog seeding. Approve keywords/scenarios; the loop fetches, quality-gates,
+            and publishes — only while the switch below is ON.
+          </p>
+        </div>
         <div style={{ display: 'flex', gap: 8 }}>
-          <Link to="/admin/data?tab=products&filters=seeding" className="admin-btn" style={{ textDecoration: 'none' }}>
+          <Link to="/admin/data?tab=products&filters=seeding" className="admin-btn admin-btn-secondary">
             View seeded products ({seededCount})
           </Link>
-          <Link to="/admin/seeding/simulate" className="admin-btn" style={{ textDecoration: 'none' }}>
-            ▶ Simulate
-          </Link>
+          <Link to="/admin/seeding/simulate" className="admin-btn admin-btn-secondary">▶ Simulate</Link>
         </div>
       </div>
-      <p style={{ color: '#9aa0a6', marginTop: 4 }}>
-        Demand-driven catalog seeding. Approve keywords/scenarios; the loop fetches, quality-gates, and publishes —
-        only while the switch below is ON.
-      </p>
 
-      {/* Kill-switch + budget */}
-      <div style={{ display: 'flex', gap: 24, alignItems: 'center', flexWrap: 'wrap', padding: '14px 16px', border: '1px solid #2a2a2a', borderRadius: 10, margin: '12px 0' }}>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
-          <input type="checkbox" checked={enabled} onChange={e => void setSetting('seeding_enabled', e.target.checked ? 'true' : 'false')} />
-          <strong style={{ color: enabled ? '#34a853' : '#ea4335' }}>{enabled ? 'Seeding ON' : 'Seeding OFF'}</strong>
-        </label>
-        <div>
-          Budget: <strong>{used}</strong> / {cap} SerpAPI searches this month
-          {cap > 0 && used >= cap && <span style={{ color: '#ea4335' }}> · cap reached</span>}
+      {/* Shared controls */}
+      <div className="admin-detail-card" style={{ marginBottom: 16 }}>
+        <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
+            <input type="checkbox" checked={enabled}
+              onChange={e => void setSetting('seeding_enabled', e.target.checked ? 'true' : 'false')} />
+            <span className={`admin-status-dot admin-status-dot--${enabled ? 'live' : 'failed'}`} />
+            <strong>{enabled ? 'Seeding ON' : 'Seeding OFF'}</strong>
+          </label>
+          <div>
+            Budget: <strong>{used}</strong> / {cap} SerpAPI searches this month
+            {cap > 0 && used >= cap && <span className="admin-status-warning" style={{ marginLeft: 6 }}>cap reached</span>}
+          </div>
+          <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
+            Cap:
+            <input type="number" defaultValue={cap} style={{ width: 90 }}
+              onBlur={e => { const v = e.target.value; if (Number(v) !== cap) void setSetting('seeding_monthly_serpapi_cap', String(Math.max(0, Number(v) || 0))); }} />
+          </label>
+          <button className="admin-btn admin-btn-secondary" onClick={() => void setSetting('seeding_serpapi_used_month', '0')}>Reset budget</button>
         </div>
-        <label style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
-          Cap:
-          <input type="number" defaultValue={cap} style={{ width: 90 }}
-            onBlur={e => { const v = e.target.value; if (Number(v) !== cap) void setSetting('seeding_monthly_serpapi_cap', String(Math.max(0, Number(v) || 0))); }} />
-        </label>
-        <button className="admin-btn" onClick={() => void setSetting('seeding_serpapi_used_month', '0')}>Reset budget</button>
+        <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap' }}>
+          {topTab === 'searches' && (
+            <button className="admin-btn admin-btn-secondary" disabled={busy === 'refresh'} onClick={() => void refreshFromSearches()}>
+              {busy === 'refresh' ? 'Refreshing…' : 'Refresh from searches'}
+            </button>
+          )}
+          <input
+            placeholder={topTab === 'styling' ? 'Add a scenario…' : 'Add a search keyword…'}
+            value={newTerm} onChange={e => setNewTerm(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter') void addTarget(); }}
+            style={{ flex: '1 1 240px', minWidth: 200 }} />
+          <button className="admin-btn admin-btn-primary" onClick={() => void addTarget()} disabled={!newTerm.trim()}>
+            {topTab === 'styling' ? '+ Add scenario' : '+ Add search'}
+          </button>
+          <button className="admin-btn admin-btn-secondary" disabled={busy === 'purge' || seededCount === 0}
+            onClick={() => void purgeSeeded()} title="Delete every product seeded by this loop (source=seed_serpapi)">
+            {busy === 'purge' ? 'Purging…' : `Purge seeded (${seededCount})`}
+          </button>
+        </div>
       </div>
 
-      {/* Controls */}
-      <div style={{ display: 'flex', gap: 10, alignItems: 'center', flexWrap: 'wrap', margin: '12px 0' }}>
-        <button className="admin-btn" disabled={busy === 'refresh'} onClick={() => void refreshFromSearches()}>
-          {busy === 'refresh' ? 'Refreshing…' : 'Refresh from searches'}
+      {msg && <div className="admin-status-warning" style={{ margin: '8px 0', fontSize: 13 }}>{msg}</div>}
+
+      {/* Top tabs: Searches | Styling */}
+      <div className="admin-tabs">
+        <button className={`admin-tab ${topTab === 'searches' ? 'active' : ''}`} onClick={() => setTopTab('searches')}>
+          Searches<span className="admin-tab-badge">{searchTargets.length}</span>
         </button>
-        <input placeholder="Add a keyword or scenario…" value={newTerm}
-          onChange={e => setNewTerm(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') void addTarget(); }}
-          style={{ flex: '1 1 240px', minWidth: 200 }} />
-        <button className="admin-btn" onClick={() => void addTarget()} disabled={!newTerm.trim()}>Add</button>
-        <button className="admin-btn" disabled={busy === 'purge' || seededCount === 0} onClick={() => void purgeSeeded()}
-          title="Delete every product seeded by this loop (source=seed_serpapi)">
-          {busy === 'purge' ? 'Purging…' : `Purge seeded (${seededCount})`}
+        <button className={`admin-tab ${topTab === 'styling' ? 'active' : ''}`} onClick={() => setTopTab('styling')}>
+          Styling<span className="admin-tab-badge">{stylingTargets.length}</span>
         </button>
       </div>
 
-      {msg && <div style={{ padding: '8px 12px', background: '#1a2733', borderRadius: 8, margin: '8px 0', fontSize: 13 }}>{msg}</div>}
-
-      {/* Status filter */}
-      <div style={{ display: 'flex', gap: 8, margin: '12px 0', flexWrap: 'wrap' }}>
+      {/* Status sub-filter (scoped to active tab) */}
+      <div className="admin-tabs" style={{ marginBottom: 12 }}>
         {(['all', ...STATUSES] as string[]).map(s => (
-          <button key={s} onClick={() => setFilter(s)}
-            style={{ padding: '4px 10px', borderRadius: 14, border: '1px solid #333', cursor: 'pointer',
-              background: filter === s ? '#2a3f5f' : 'transparent', color: '#ddd', fontSize: 13 }}>
-            {s} ({counts[s] ?? 0})
+          <button key={s} className={`admin-tab ${filter === s ? 'active' : ''}`} onClick={() => setFilter(s)}>
+            {s === 'all' ? 'All' : s.charAt(0).toUpperCase() + s.slice(1)}
+            <span className="admin-tab-badge">{counts[s] ?? 0}</span>
           </button>
         ))}
       </div>
 
-      {/* Table */}
-      <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-        <thead>
-          <tr style={{ textAlign: 'left', color: '#9aa0a6', borderBottom: '1px solid #2a2a2a' }}>
-            <th style={{ padding: 8 }}>Target</th>
-            <th>Kind</th><th>Demand</th><th>Pri</th><th>Status</th><th>Last run</th><th>Found</th><th>Pub</th><th>Actions</th>
-          </tr>
-        </thead>
-        <tbody>
-          {shown.map(t => (
-            <tr key={t.id} style={{ borderBottom: '1px solid #1c1c1c' }}>
-              <td style={{ padding: 8, maxWidth: 280, overflow: 'hidden', textOverflow: 'ellipsis' }}>{t.term}</td>
-              <td>{t.kind}</td>
-              <td>{t.search_hits}{t.zero_result && <span title="returned nothing" style={{ color: '#ea4335' }}> ⚑</span>}</td>
-              <td>{t.priority}</td>
-              <td><span style={{ color: STATUS_COLOR[t.status] }}>{t.status}</span></td>
-              <td>{timeAgo(t.last_run_at)}</td>
-              <td>{t.products_found}</td>
-              <td>{t.products_published}</td>
-              <td style={{ whiteSpace: 'nowrap' }}>
-                {t.status !== 'approved' && <button className="admin-btn-sm" onClick={() => void setStatus(t.id, 'approved')}>Approve</button>}
-                {t.status !== 'paused' && <button className="admin-btn-sm" onClick={() => void setStatus(t.id, 'paused')}>Pause</button>}
-                {t.status !== 'rejected' && <button className="admin-btn-sm" onClick={() => void setStatus(t.id, 'rejected')}>Reject</button>}
-                {t.status === 'approved' && <button className="admin-btn-sm" disabled={busy === t.id} onClick={() => void runNow(t.id)}>{busy === t.id ? '…' : 'Run'}</button>}
-              </td>
+      {/* Targets table */}
+      <div className="admin-table-wrap">
+        <table className="admin-table">
+          <thead>
+            <tr>
+              <SortableTh label="Target" sortKey="term" currentSort={table.sort} onSort={table.handleSort} />
+              <SortableTh label="Demand" sortKey="search_hits" currentSort={table.sort} onSort={table.handleSort} />
+              <SortableTh label="Status" sortKey="status" currentSort={table.sort} onSort={table.handleSort} />
+              <SortableTh label="Priority" sortKey="priority" currentSort={table.sort} onSort={table.handleSort} />
+              <SortableTh label="Last run" sortKey="last_run_at" currentSort={table.sort} onSort={table.handleSort} />
+              <SortableTh label="Found" sortKey="products_found" currentSort={table.sort} onSort={table.handleSort} />
+              <SortableTh label="Published" sortKey="products_published" currentSort={table.sort} onSort={table.handleSort} />
+              <th>Actions</th>
             </tr>
-          ))}
-          {shown.length === 0 && <tr><td colSpan={9} style={{ padding: 16, color: '#9aa0a6' }}>No targets.</td></tr>}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {table.sortedData.map(t => (
+              <tr key={t.id}>
+                <td className="admin-cell-name">{t.term}</td>
+                <td className="admin-cell-num">{t.search_hits}{t.zero_result && <span title="returned nothing" style={{ color: '#ea4335' }}> ⚑</span>}</td>
+                <td><span className={`admin-status-dot admin-status-dot--${statusDotKind(t.status)}`} /> {t.status}</td>
+                <td className="admin-cell-num">{t.priority}</td>
+                <td className="admin-cell-muted">{timeAgo(t.last_run_at)}</td>
+                <td className="admin-cell-num">{t.products_found}</td>
+                <td className="admin-cell-num">{t.products_published}</td>
+                <td style={{ whiteSpace: 'nowrap', display: 'flex', gap: 8, justifyContent: 'flex-end' }}>
+                  {t.status !== 'approved' && <button className="admin-btn admin-btn-secondary admin-row-promote" onClick={() => void setStatus(t.id, 'approved')}>Approve</button>}
+                  {t.status !== 'paused' && <button className="admin-btn admin-btn-secondary admin-row-promote" onClick={() => void setStatus(t.id, 'paused')}>Pause</button>}
+                  {t.status !== 'rejected' && <button className="admin-btn admin-btn-secondary admin-row-promote" onClick={() => void setStatus(t.id, 'rejected')}>Reject</button>}
+                  {t.status === 'approved' && <button className="admin-btn admin-btn-primary admin-row-promote" disabled={busy === t.id} onClick={() => void runNow(t.id)}>{busy === t.id ? '…' : 'Run'}</button>}
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        {table.sortedData.length === 0 && (
+          <div style={{ padding: 20, textAlign: 'center', color: '#888', fontSize: 13 }}>No targets.</div>
+        )}
+      </div>
     </div>
   );
 }
