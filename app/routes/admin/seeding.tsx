@@ -362,14 +362,17 @@ export default function SeedingPage() {
           <tbody>
             {paged.map(t => (
               <tr key={t.id}>
-                <td className="admin-cell-name">{t.term}</td>
+                <td className="admin-cell-name">
+                  <Link to={`/admin/data?tab=products&filters=seeding&target=${t.id}&label=${encodeURIComponent(t.term)}`}
+                    title="View this target's products">{t.term}</Link>
+                </td>
                 <td className="admin-cell-num">{t.search_hits}{t.zero_result && <span title="returned nothing" style={{ color: '#ea4335' }}> ⚑</span>}</td>
                 <td><span className={`admin-status-dot admin-status-dot--${statusDotKind(t.status)}`} /> {t.status}</td>
                 <td className="admin-cell-num">{t.priority}</td>
                 <td className="admin-cell-muted">{timeAgo(t.last_run_at)}</td>
                 <td className="admin-cell-num">
                   {t.products_found > 0
-                    ? <Link to={`/admin/data?tab=products&filters=seeding&target=${t.id}`} title="View the products this target fetched">{t.products_found}</Link>
+                    ? <Link to={`/admin/data?tab=products&filters=seeding&target=${t.id}&label=${encodeURIComponent(t.term)}`} title="View the products this target fetched">{t.products_found}</Link>
                     : 0}
                 </td>
                 <td className="admin-cell-num">{t.products_published}</td>

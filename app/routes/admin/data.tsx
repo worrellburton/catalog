@@ -545,8 +545,10 @@ export default function AdminData() {
     // Deep-link from /admin/seeding: ?tab=products&filters=seeding
     () => (searchParams.get('filters') === 'seeding' ? 'seeded' : 'all'),
   );
-  // Optional deep-link: ?target=<seed_target_id> narrows products to one seeding target.
+  // Optional deep-link: ?target=<seed_target_id> narrows products to one seeding
+  // target; ?label=<term> is just the display label for the filter chip.
   const seedTargetParam = searchParams.get('target');
+  const seedLabel = searchParams.get('label');
 
   // Date-added filter for the Products table. 'all' lets every row
   // through. 'week' / 'month' use rolling-window cutoffs (created_at
@@ -4433,6 +4435,22 @@ export default function AdminData() {
                 title="Clear brand filter"
                 aria-label="Clear brand filter"
                 onClick={clearBrandFilter}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+          )}
+          {seedTargetParam && (
+            <div className="admin-brand-filter-chip">
+              <span>Seeding target: <strong>{seedLabel || 'selected'}</strong></span>
+              <span className="admin-brand-filter-count">{filteredProductsList.length} product{filteredProductsList.length !== 1 ? 's' : ''}</span>
+              <button
+                className="admin-icon-btn"
+                title="Clear target filter"
+                aria-label="Clear target filter"
+                onClick={() => setSearchParams(prev => { const p = new URLSearchParams(prev); p.delete('target'); p.delete('label'); return p; }, { replace: false })}
               >
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                   <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
