@@ -41,6 +41,7 @@ export default function SeedingPage() {
   const [enabled, setEnabled] = useState(false);
   const [cap, setCap] = useState(0);
   const [used, setUsed] = useState(0);
+  const [seededCount, setSeededCount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [filter, setFilter] = useState<string>('all');
@@ -49,16 +50,18 @@ export default function SeedingPage() {
 
   const load = useCallback(async () => {
     if (!supabase) return;
-    const [{ data: rows }, { data: settings }] = await Promise.all([
+    const [{ data: rows }, { data: settings }, { count: seeded }] = await Promise.all([
       supabase.from('seed_targets').select('*').order('priority', { ascending: false }).limit(1000),
       supabase.from('app_settings').select('key, value')
         .in('key', ['seeding_enabled', 'seeding_monthly_serpapi_cap', 'seeding_serpapi_used_month']),
+      supabase.from('products').select('id', { count: 'exact', head: true }).eq('source', 'seed_serpapi'),
     ]);
     setTargets((rows ?? []) as SeedTarget[]);
     const map = new Map((settings ?? []).map(s => [s.key, s.value] as [string, string]));
     setEnabled(map.get('seeding_enabled') === 'true');
     setCap(Number(map.get('seeding_monthly_serpapi_cap') || '0'));
     setUsed(Number(map.get('seeding_serpapi_used_month') || '0'));
+    setSeededCount(seeded ?? 0);
     setLoading(false);
   }, []);
 
@@ -96,6 +99,16 @@ export default function SeedingPage() {
     setBusy(null);
     await load();
   }, [load]);
+
+  const purgeSeeded = useCallback(async () => {
+    if (!supabase) return;
+    if (!window.confirm(`Delete all ${seededCount} seeded products (source=seed_serpapi)? This cannot be undone.`)) return;
+    setBusy('purge');
+    const { data, error } = await supabase.rpc('purge_seeded_products');
+    setMsg(error ? `Error: ${error.message}` : `Purged ${data} seeded products.`);
+    setBusy(null);
+    await load();
+  }, [seededCount, load]);
 
   const addTarget = useCallback(async () => {
     const term = newTerm.trim();
@@ -160,6 +173,10 @@ export default function SeedingPage() {
           onChange={e => setNewTerm(e.target.value)} onKeyDown={e => { if (e.key === 'Enter') void addTarget(); }}
           style={{ flex: '1 1 240px', minWidth: 200 }} />
         <button className="admin-btn" onClick={() => void addTarget()} disabled={!newTerm.trim()}>Add</button>
+        <button className="admin-btn" disabled={busy === 'purge' || seededCount === 0} onClick={() => void purgeSeeded()}
+          title="Delete every product seeded by this loop (source=seed_serpapi)">
+          {busy === 'purge' ? 'Purging…' : `Purge seeded (${seededCount})`}
+        </button>
       </div>
 
       {msg && <div style={{ padding: '8px 12px', background: '#1a2733', borderRadius: 8, margin: '8px 0', fontSize: 13 }}>{msg}</div>}

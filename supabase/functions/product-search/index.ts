@@ -234,6 +234,8 @@ Deno.serve(async (req: Request) => {
     let query = url.searchParams.get('q') || '';
     let ingest = url.searchParams.get('ingest') === 'true';
     let ingestGender: string | undefined;
+    let ingestSource: string | null = null;
+    let ingestActive = true;
     if (req.method === 'POST') {
       const body = await req.json().catch(() => ({}));
       if (!query) query = String(body.query || body.q || '');
@@ -241,6 +243,11 @@ Deno.serve(async (req: Request) => {
       if (body.gender && ['men', 'women', 'unisex', 'male', 'female'].includes(String(body.gender).toLowerCase())) {
         ingestGender = String(body.gender).toLowerCase();
       }
+      // Optional ingest provenance + visibility — the seeding orchestrator passes
+      // source:'seed_serpapi' (the deletable flag) and is_active:false so the
+      // quality gate, not the default, decides go-live.
+      if (typeof body.source === 'string') ingestSource = body.source;
+      if (typeof body.is_active === 'boolean') ingestActive = body.is_active;
     }
     query = query.trim();
     if (!query) return jsonRes({ success: false, error: 'missing query' }, 400);
@@ -294,7 +301,8 @@ Deno.serve(async (req: Request) => {
           url: p.url,
           image_url: p.image_url || null,
           gender: toCatalogGender(ingestGender ?? p.gender),
-          is_active: true,
+          source: ingestSource,
+          is_active: ingestActive,
         }));
 
       if (rowsToInsert.length) {

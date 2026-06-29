@@ -73,7 +73,9 @@ async function ingestQuery(base: string, key: string, query: string): Promise<st
   const res = await fetch(`${base}/functions/v1/product-search`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}`, apikey: key },
-    body: JSON.stringify({ query, ingest: true }),
+    // Stamp the deletable flag + hold inactive AT INSERT (atomic) — the gate
+    // promotes later. So a crash can never leave an untagged seeded product.
+    body: JSON.stringify({ query, ingest: true, source: 'seed_serpapi', is_active: false }),
   });
   const json = await res.json().catch(() => ({}));
   return Array.isArray(json?.ingested?.ids) ? json.ingested.ids.map(String) : [];
@@ -138,8 +140,10 @@ Deno.serve(async (req: Request) => {
         allIds.push(...ids);
       }
 
-      // Hold freshly-seeded rows inactive + stamp source; the activation cron
-      // promotes them once they pass product_ready_for_feed (image + occasion).
+      // Flag + hold inactive. product-search stamps these at insert too, but we
+      // ALSO enforce here so the deletable flag holds even against an older
+      // product-search build. The activation cron promotes once they pass
+      // product_ready_for_feed (image + occasion).
       let published = 0;
       if (allIds.length) {
         await admin.from('products').update({ source: 'seed_serpapi', is_active: false }).in('id', allIds);

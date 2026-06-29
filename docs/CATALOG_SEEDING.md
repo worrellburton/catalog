@@ -116,6 +116,26 @@ Watch found/published per target; run **Simulate** to find scenario gaps.
 | 2026-06-29 | S2 | `admin_set_seeding_setting()` is_admin RPC (flip kill-switch / budget from UI) | `migrations/20260629000007_admin_set_seeding_setting.sql` |
 | 2026-06-29 | S2/S5 | `/admin/seeding` + `/admin/seeding/simulate` pages, nav + search entry, route registration. **Verified:** typecheck 0 errors, route-check pass, build OK | `app/routes/admin/seeding.tsx`, `seeding.simulate.tsx`, `admin/route.tsx`, `vite.config.ts` |
 
+| 2026-06-29 | flag | Seeded products stamped `source='seed_serpapi'` at INSERT (product-search `source`/`is_active` params) AND belt-and-suspenders in seed-run, so the deletable flag always holds | `functions/product-search/index.ts`, `functions/seed-run/index.ts` (seed-run redeployed v3) |
+| 2026-06-29 | flag | `purge_seeded_products()` is_admin RPC + "Purge seeded (N)" button — one-call delete of all seeded rows (FK-safe: all product FKs CASCADE/SET NULL) | `migrations/20260629000008_purge_seeded_products.sql`, `app/routes/admin/seeding.tsx` |
+| 2026-06-29 | fix | Activation dropped the `scrape_status<>'failed'` guard — the scrape-new-products trigger marks SerpAPI rows 'failed' (they already have images), which wrongly blocked them; the image+occasion gate is the real filter | `migrations/20260629000009_seeding_activation_fix.sql` |
+
+### ✅ Live end-to-end test (2026-06-29, bounded: cap 12, one keyword)
+Ran the full loop ON for "white shoes", then turned OFF. Result:
+`seed-run` → **20 products fetched** (SerpAPI, 6 credits), flagged `seed_serpapi`,
+held inactive → `enrich-occasions` → **20/20 got occasion** → `run_seeding_activation`
+→ **20/20 activated** (passed image+occasion gate). Sample: Asics Gel-1130
+["running","gym workout",…], Nike Court Vision, Puma Caven. Activation also recovered
+22 previously-stranded ready products (192→234 active). Seeding returned to OFF, budget reset.
+
+**Known limitations (follow-ups, non-blocking):**
+- `products_published` per target is computed at fetch-time (before enrichment), so it
+  reads ~0 even when the products later activate. Accurate per-target publish needs a
+  `seed_target_id` column on products (deferred). `products_found` is accurate.
+- The `scrape-new-products` trigger still fires on seeded rows (they have images, so the
+  scrape fails and marks them `scrape_status='failed'` — harmless now that activation
+  ignores it, but wasteful Modal calls). Fix later: skip auto-scrape when `image_url` present.
+
 ### Notes surfaced during S1 (feed into later stages)
 - The zero-result queue top is mostly junk ("pizza", "kzjs", "fff") + off-vertical
   ("perfume catalog") + **conversational** ("i need a dress for a wedding in ireland
@@ -147,6 +167,7 @@ drop function if exists public.run_seeding_occasion_backfill();
 drop function if exists public.run_seeding_driver();
 drop function if exists public.run_seeding_activation();
 drop function if exists public.admin_set_seeding_setting(text, text);
+drop function if exists public.purge_seeded_products();
 drop function if exists public.seed_duplicate_report();
 drop function if exists public.product_ready_for_feed(public.products);
 drop function if exists public.refresh_seed_targets_from_searches();
