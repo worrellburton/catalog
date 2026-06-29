@@ -81,6 +81,7 @@ export default function SeedingPage() {
   const [filter, setFilter] = useState<string>('all');
   const [newTerm, setNewTerm] = useState('');
   const [page, setPage] = useState(0);
+  const [showInfo, setShowInfo] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
 
   const load = useCallback(async () => {
@@ -223,7 +224,20 @@ export default function SeedingPage() {
     <div className="admin-page">
       <div className="admin-page-header">
         <div>
-          <h1>Seeding</h1>
+          <h1 style={{ display: 'inline-flex', alignItems: 'center', gap: 8 }}>
+            Seeding
+            <button
+              type="button"
+              onClick={() => setShowInfo(true)}
+              title="How seeding works"
+              aria-label="How seeding works"
+              style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22, borderRadius: '50%', border: '1px solid #d0d0d0', background: '#fff', color: '#555', cursor: 'pointer', padding: 0 }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <circle cx="12" cy="12" r="10" /><line x1="12" y1="16" x2="12" y2="12" /><line x1="12" y1="8" x2="12.01" y2="8" />
+              </svg>
+            </button>
+          </h1>
           <p className="admin-page-subtitle">
             Demand-driven catalog seeding. Approve keywords/scenarios; the loop fetches, quality-gates,
             and publishes — only while the switch below is ON.
@@ -396,6 +410,61 @@ export default function SeedingPage() {
           <span className="admin-cell-muted">{table.sortedData.length} targets · page {pageSafe + 1} of {pageCount}</span>
           <button className="admin-btn admin-btn-secondary" disabled={pageSafe === 0} onClick={() => setPage(p => Math.max(0, p - 1))}>Prev</button>
           <button className="admin-btn admin-btn-secondary" disabled={pageSafe >= pageCount - 1} onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))}>Next</button>
+        </div>
+      )}
+
+      {showInfo && (
+        <div className="admin-modal-overlay" onClick={() => setShowInfo(false)}>
+          <div className="admin-modal admin-modal-wide" onClick={e => e.stopPropagation()} style={{ maxHeight: '85vh', display: 'flex', flexDirection: 'column' }}>
+            <div className="admin-modal-header">
+              <h3>How seeding works</h3>
+              <button className="admin-modal-close" onClick={() => setShowInfo(false)}>&times;</button>
+            </div>
+            <div className="admin-modal-body" style={{ overflow: 'auto', fontSize: 14, lineHeight: 1.55 }}>
+              <p style={{ marginTop: 0 }}>
+                Seeding turns <strong>real shopper demand</strong> into live catalog products — automatically,
+                behind a quality gate. Two demand sources feed one pipeline:
+              </p>
+              <ul style={{ marginTop: 0 }}>
+                <li><strong>Searches</strong> — keywords people typed, e.g. <em>“white shoes”</em>.</li>
+                <li><strong>Styling</strong> — scenarios people asked the stylist, e.g. <em>“beach trip”</em> (a whole outfit).</li>
+              </ul>
+
+              <h4 style={{ marginBottom: 6 }}>The pipeline</h4>
+              <ol style={{ marginTop: 0, paddingLeft: 18 }}>
+                <li><strong>Curate</strong> — Claude auto-checks each pending term: a real search is <em>approved</em>, gibberish (“fff”, “kzjs”, “tatinajc”) is <em>rejected</em>. You can override any decision.</li>
+                <li><strong>Fetch</strong> — each <em>approved</em> target is searched on Google Shopping (SerpAPI). Scenarios first expand into one query per garment via Claude. Pending/rejected targets are never fetched.</li>
+                <li><strong>Hold &amp; flag</strong> — new products land <em>inactive</em>, tagged <code>source=seed_serpapi</code> + the target that fetched them — so nothing goes live before it’s ready, and everything stays deletable.</li>
+                <li><strong>Enrich</strong> — Claude adds occasion / use-case metadata (the signal search and catalogs rank on).</li>
+                <li><strong>Quality gate</strong> — a product goes live <em>only</em> if it has a real image <strong>and</strong> occasion text. Popular demand never lowers this bar.</li>
+                <li><strong>Publish</strong> — products that pass flip to <em>active</em> and appear in the feed &amp; search.</li>
+              </ol>
+
+              <h4 style={{ marginBottom: 6 }}>Automation (the crons)</h4>
+              <table className="admin-table" style={{ marginBottom: 12 }}>
+                <thead><tr><th>Job</th><th>Runs</th><th>Spends $ / changes feed?</th></tr></thead>
+                <tbody>
+                  <tr><td>Auto-curate (Claude)</td><td>every 10 min</td><td>no</td></tr>
+                  <tr><td>Pull search demand</td><td>hourly</td><td>no</td></tr>
+                  <tr><td>Fetch products</td><td>every 30 min</td><td><strong>spends</strong> — only while ON</td></tr>
+                  <tr><td>Enrich occasions</td><td>every 15 min</td><td>only while ON</td></tr>
+                  <tr><td>Publish (gate)</td><td>every 15 min</td><td>only while ON</td></tr>
+                </tbody>
+              </table>
+
+              <h4 style={{ marginBottom: 6 }}>Controls</h4>
+              <ul style={{ marginTop: 0, marginBottom: 0 }}>
+                <li><strong>Pause / Enable everything</strong> — one switch starts or stops the loop <em>and</em> every cron.</li>
+                <li><strong>Seeding ON/OFF + budget cap</strong> — fetch/enrich/publish only run while ON; the cap limits monthly SerpAPI spend.</li>
+                <li><strong>Auto-curate pending</strong> + approve / pause / reject — curate the queue; rejected rows sink to the bottom.</li>
+                <li><strong>Purge seeded</strong> — deletes every product this loop added (safe — the flag scopes it).</li>
+                <li>Click any <strong>target</strong> (or its Found count) to see exactly the products it fetched.</li>
+              </ul>
+            </div>
+            <div className="admin-modal-footer">
+              <button className="admin-btn admin-btn-primary" onClick={() => setShowInfo(false)}>Got it</button>
+            </div>
+          </div>
         </div>
       )}
     </div>
