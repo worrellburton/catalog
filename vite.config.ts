@@ -252,6 +252,8 @@ export default defineConfig({
             route("projections", "routes/admin/projections.tsx");
             route("creative", "routes/admin/creative.tsx");
             route("catalogs", "routes/admin/catalogs.tsx");
+            route("seeding", "routes/admin/seeding.tsx");
+            route("seeding/simulate", "routes/admin/seeding.simulate.tsx");
             route("daily-feed", "routes/admin/daily-feed.tsx");
             route("governance", "routes/admin/governance.tsx");
             route("governance/types", "routes/admin/governance.types.tsx");
