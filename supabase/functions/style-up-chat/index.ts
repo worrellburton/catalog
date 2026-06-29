@@ -1,21 +1,8 @@
 // style-up-chat — the AI stylist's brain for Style Up (admin-gated v1).
-//
-// Given a thread, it loads the stylist persona, the shopper's context (the
-// same AI-look inputs: height / weight / age / gender + saved style), the
-// recent chat, and an optional candidate set of catalog products, then asks
-// Claude to reply in character. The reply may ALSO recommend specific products
-// (chosen from the candidates) — those land as `product` messages the shopper
-// can view, buy, or render on themselves. The stylist's text + each pick are
-// inserted as style_up_messages (service role) and stream to the client via
-// realtime.
-//
-// Auth: caller must be the thread's shopper (or an admin).
-// Secrets: ANTHROPIC_API_KEY.
-
+// Auth: caller must be the thread's shopper (or an admin). Secrets: ANTHROPIC_API_KEY.
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 
 const MODEL = 'claude-sonnet-4-6';
-
 const CORS = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
@@ -25,10 +12,6 @@ const CORS = {
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 }
-
-// Call the Anthropic Messages API, retrying transient failures (rate-limit /
-// overload / 5xx) with a short backoff before giving up — so a momentary blip
-// doesn't surface as a dead chat to the shopper.
 async function callAnthropic(apiKey: string, payload: unknown): Promise<Response> {
   const RETRYABLE = new Set([429, 500, 502, 503, 504, 529]);
   let res: Response | null = null;
@@ -43,64 +26,36 @@ async function callAnthropic(apiKey: string, payload: unknown): Promise<Response
   }
   return res as Response;
 }
-
-interface ProductCand {
-  id: string; name: string | null; brand: string | null; price: string | null;
-  image_url: string | null; primary_image_url: string | null; url: string | null; type: string | null;
-}
+interface ProductCand { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null; primary_image_url: string | null; url: string | null; type: string | null; }
 
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
   if (req.method !== 'POST') return json({ success: false, error: 'method not allowed' }, 405);
-
   const supabaseUrl = Deno.env.get('SUPABASE_URL') ?? '';
   const serviceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? '';
   const apiKey = Deno.env.get('ANTHROPIC_API_KEY') ?? '';
   if (!supabaseUrl || !serviceKey) return json({ success: false, error: 'server misconfigured' }, 500);
   if (!apiKey) return json({ success: false, error: 'ANTHROPIC_API_KEY not set' }, 500);
   const admin = createClient(supabaseUrl, serviceKey);
-
   try {
     const token = (req.headers.get('Authorization') ?? '').replace(/^Bearer\s+/i, '');
     const { data: { user } } = await admin.auth.getUser(token);
     if (!user) return json({ success: false, error: 'invalid auth' }, 401);
-
     const body = await req.json().catch(() => ({}));
     const threadId = String(body.threadId ?? '');
     if (!threadId) return json({ success: false, error: 'missing threadId' }, 400);
-
-    // Thread + ownership (shopper or admin).
-    const { data: thread } = await admin
-      .from('style_up_threads')
-      .select('id, shopper_user_id, stylist_id')
-      .eq('id', threadId)
-      .maybeSingle();
+    const { data: thread } = await admin.from('style_up_threads').select('id, shopper_user_id, stylist_id').eq('id', threadId).maybeSingle();
     if (!thread) return json({ success: false, error: 'thread not found' }, 404);
     if (thread.shopper_user_id !== user.id) {
-      const { data: prof } = await admin.from('profiles').select('is_admin, role').eq('id', user.id).maybeSingle();
-      const isAdmin = prof?.is_admin === true || prof?.role === 'admin' || prof?.role === 'super_admin';
+      const { data: p } = await admin.from('profiles').select('is_admin, role').eq('id', user.id).maybeSingle();
+      const isAdmin = p?.is_admin === true || p?.role === 'admin' || p?.role === 'super_admin';
       if (!isAdmin) return json({ success: false, error: 'forbidden' }, 403);
     }
-
-    // Stylist persona.
-    const { data: stylist } = await admin
-      .from('style_up_stylists')
-      .select('name, specialty, persona_prompt, source_mode')
-      .eq('id', thread.stylist_id)
-      .maybeSingle();
-    // Web stylists (e.g. Theo) source from the open web — the client searches +
-    // auto-imports their picks, so the brain never recommends from our catalog.
+    const { data: stylist } = await admin.from('style_up_stylists').select('name, specialty, persona_prompt, source_mode').eq('id', thread.stylist_id).maybeSingle();
     const isWeb = stylist?.source_mode === 'web';
-
-    // Shopper context — the same inputs the AI-look flow uses.
-    const { data: prof } = await admin
-      .from('profiles')
-      .select('full_name, gender, height_label, weight_label, age_label, custom_style_prompt, fashion_styles')
-      .eq('id', thread.shopper_user_id)
-      .maybeSingle();
+    const { data: prof } = await admin.from('profiles').select('full_name, gender, height_label, weight_label, age_label, custom_style_prompt, fashion_styles').eq('id', thread.shopper_user_id).maybeSingle();
     const shopperGender = String(prof?.gender ?? '').toLowerCase();
-    const genderNorm = ['male', 'men', 'm'].includes(shopperGender) ? 'male'
-      : ['female', 'women', 'f'].includes(shopperGender) ? 'female' : 'unknown';
+    const genderNorm = ['male', 'men', 'm'].includes(shopperGender) ? 'male' : ['female', 'women', 'f'].includes(shopperGender) ? 'female' : 'unknown';
     const ctxBits: string[] = [];
     if (prof?.full_name) ctxBits.push(`name: ${prof.full_name}`);
     if (genderNorm !== 'unknown') ctxBits.push(`gender: ${genderNorm}`);
@@ -110,204 +65,69 @@ Deno.serve(async (req: Request) => {
     if (prof?.custom_style_prompt) ctxBits.push(`their style: ${prof.custom_style_prompt}`);
     if (prof?.fashion_styles) ctxBits.push(`style tags: ${prof.fashion_styles}`);
     const shopperName = (prof?.full_name ? String(prof.full_name).split(/\s+/)[0] : '') || 'there';
-
-    // Chat history — the most recent 30 messages, oldest-first. We fetch
-    // newest-first then reverse: ordering ascending with a LIMIT keeps the
-    // OLDEST 30 and silently drops the shopper's latest message on a long
-    // thread (which also leaves the window ending on a stylist turn — see the
-    // user-terminal guard below).
-    const { data: history } = await admin
-      .from('style_up_messages')
-      .select('sender, kind, body, product_ref')
-      .eq('thread_id', threadId)
-      .order('created_at', { ascending: false })
-      .limit(30);
+    // History: most recent 30, oldest-first. ascending+limit kept the OLDEST 30
+    // and dropped the shopper's newest message (also left it ending on a stylist
+    // turn). Fetch newest-first then reverse.
+    const { data: history } = await admin.from('style_up_messages').select('sender, kind, body, product_ref').eq('thread_id', threadId).order('created_at', { ascending: false }).limit(30);
     const turns = ((history ?? []) as Array<{ sender: string; kind: string; body: string | null; product_ref: unknown }>).reverse();
     if (turns.length === 0) return json({ success: false, error: 'nothing to reply to' }, 400);
-
-    // Candidate products to recommend FROM — gender-filtered active catalog.
-    // The model may only pick ids that appear here (we validate below). Web
-    // stylists skip this entirely (their picks come from a live web search).
     let cands: ProductCand[] = [];
     if (!isWeb) {
-      let q = admin.from('products')
-        .select('id, name, brand, price, image_url, primary_image_url, url, type')
-        .eq('is_active', true)
-        .not('image_url', 'is', null)
-        .order('created_at', { ascending: false })
-        .limit(120);
+      let q = admin.from('products').select('id, name, brand, price, image_url, primary_image_url, url, type').eq('is_active', true).not('image_url', 'is', null).order('created_at', { ascending: false }).limit(120);
       if (genderNorm === 'male') q = q.or('gender.eq.male,gender.eq.unisex');
       else if (genderNorm === 'female') q = q.or('gender.eq.female,gender.eq.unisex');
       const { data: candRows } = await q;
       cands = (candRows ?? []) as ProductCand[];
     }
-    const candList = cands.map(c =>
-      `${c.id} | ${(c.name ?? '').slice(0, 70)} | ${c.brand ?? ''} | ${c.price ?? ''} | ${c.type ?? ''}`,
-    ).join('\n');
-
-    const persona = stylist?.persona_prompt
-      || `You are ${stylist?.name ?? 'a personal stylist'}, a friendly personal stylist.`;
-    const system = isWeb ? `${persona}
-
-You're texting ${shopperName} inside a styling chat. Shopper context (use it; never ask for what you already know): ${ctxBits.join('; ') || 'not provided yet'}.
-
-STYLE OF REPLY:
-- Talk like texting: warm, concise, 1-3 short sentences. No markdown, no bullet lists. Never use em dashes; use commas or periods.
-- Ask a sharp clarifying question early if you don't yet know the occasion/vibe.
-- When you're ready to surface pieces, set searchQueries: one tight query per garment (e.g. "men's sand linen short sleeve button up shirt", "white leather low top sneakers"). This is an INTERNAL field the app uses to fetch the real products; the shopper never sees it. Don't paste links or invent products.
-- CRITICAL: NEVER mention the internet, the web, online, searching, browsing, scraping, links, sources, or that pieces come from anywhere outside. To the shopper you simply know where to find things. Talk like a stylist with great taste and connections, never like a search engine.
-- Only set searchQueries when you're ACTUALLY surfacing pieces this turn. While you're still clarifying (asking a question), leave it empty.
-- When you do surface, your reply should sound like a stylist pulling pieces (e.g. "pulling these together for you 👀").
-- They can tap any piece you surface to see it on themselves, or ask you to put the whole look on them. You CAN generate the look on them. NEVER say you can't generate photos.
-
-Return ONLY JSON, no prose:
-{"reply":"<your text message>","searchQueries":["<one tight query per garment>", ...]}
-searchQueries: 1-4 entries when surfacing pieces this turn, otherwise [].` : `${persona}
-
-You're texting ${shopperName} inside a styling chat. Shopper context (use it; never ask for what you already know): ${ctxBits.join('; ') || 'not provided yet'}.
-
-STYLE OF REPLY:
-- Talk like texting: warm, concise, 1-3 short sentences. No markdown, no bullet lists. Never use em dashes; use commas or periods.
-- Ask a sharp clarifying question early if you don't yet know the occasion/vibe.
-- When you're ready to recommend, pick 1-4 SPECIFIC products from the candidate list below (by id). Recommend things that actually fit their context and the conversation. Don't recommend products that aren't in the list.
-- After recommending, tell them they can tap any piece to see it on themselves, or just ask you to put the whole look on them — you CAN generate the look on them (it kicks off automatically when they ask). NEVER say you can't generate photos.
-
-CANDIDATE PRODUCTS (id | name | brand | price | type) — only recommend from these:
-${candList || '(none available)'}
-
-Return ONLY JSON, no prose:
-{"reply":"<your text message>","productIds":["<id>", ...]}
-productIds is optional — include it only when you're actually recommending pieces this turn (max 4).`;
-
+    const candList = cands.map(c => `${c.id} | ${(c.name ?? '').slice(0, 70)} | ${c.brand ?? ''} | ${c.price ?? ''} | ${c.type ?? ''}`).join('\n');
+    const persona = stylist?.persona_prompt || `You are ${stylist?.name ?? 'a personal stylist'}, a friendly personal stylist.`;
+    const styleWeb = `STYLE OF REPLY:\n- Talk like texting: warm, concise, 1-3 short sentences. No markdown, no bullet lists. Never use em dashes; use commas or periods.\n- Ask a sharp clarifying question early if you don't yet know the occasion/vibe.\n- When you're ready to surface pieces, set searchQueries: one tight query per garment. This is an INTERNAL field the app uses to fetch the real products; the shopper never sees it. Don't paste links or invent products.\n- CRITICAL: NEVER mention the internet, the web, online, searching, browsing, scraping, links, sources, or that pieces come from anywhere outside. Talk like a stylist with great taste and connections, never like a search engine.\n- Only set searchQueries when you're ACTUALLY surfacing pieces this turn. While clarifying, leave it empty.\n- They can tap any piece to see it on themselves, or ask you to put the whole look on them. You CAN generate the look on them. NEVER say you can't generate photos.\n\nReturn ONLY JSON, no prose:\n{"reply":"<your text message>","searchQueries":["<one tight query per garment>", ...]}\nsearchQueries: 1-4 entries when surfacing pieces this turn, otherwise [].`;
+    const styleCat = `STYLE OF REPLY:\n- Talk like texting: warm, concise, 1-3 short sentences. No markdown, no bullet lists. Never use em dashes; use commas or periods.\n- Ask a sharp clarifying question early if you don't yet know the occasion/vibe.\n- When you're ready to recommend, pick 1-4 SPECIFIC products from the candidate list below (by id). Don't recommend products that aren't in the list.\n- After recommending, tell them they can tap any piece to see it on themselves, or ask you to put the whole look on them — you CAN generate the look on them. NEVER say you can't generate photos.\n\nCANDIDATE PRODUCTS (id | name | brand | price | type) — only recommend from these:\n${candList || '(none available)'}\n\nReturn ONLY JSON, no prose:\n{"reply":"<your text message>","productIds":["<id>", ...]}\nproductIds is optional — include it only when actually recommending pieces this turn (max 4).`;
+    const ctxLine = ctxBits.join('; ') || 'not provided yet';
+    const system = `${persona}\n\nYou're texting ${shopperName} inside a styling chat. Shopper context (use it; never ask for what you already know): ${ctxLine}.\n\n${isWeb ? styleWeb : styleCat}`;
     const mapped = turns.map(t => {
       const role: 'user' | 'assistant' = t.sender === 'shopper' ? 'user' : 'assistant';
       let content = t.body ?? '';
-      if (t.kind === 'product' && t.product_ref) {
-        const pr = t.product_ref as { name?: string; brand?: string };
-        content = `[recommended ${pr.brand ?? ''} ${pr.name ?? 'a product'}]${content ? ' ' + content : ''}`;
-      }
+      if (t.kind === 'product' && t.product_ref) { const pr = t.product_ref as { name?: string; brand?: string }; content = `[recommended ${pr.brand ?? ''} ${pr.name ?? 'a product'}]${content ? ' ' + content : ''}`; }
       return { role, content: content || '…' };
     });
-    // Collapse consecutive same-role turns into one — Anthropic rejects two
-    // assistant (or two user) messages in a row, which happens whenever the
-    // stylist sends a text reply + product cards as separate rows. Without this
-    // a product-heavy thread deterministically 400s.
     const messages: Array<{ role: 'user' | 'assistant'; content: string }> = [];
-    for (const m of mapped) {
-      const last = messages[messages.length - 1];
-      if (last && last.role === m.role) last.content += `\n${m.content}`;
-      else messages.push({ ...m });
-    }
-    // Claude requires the first message to be a user turn.
+    for (const m of mapped) { const last = messages[messages.length - 1]; if (last && last.role === m.role) last.content += `\n${m.content}`; else messages.push({ ...m }); }
     while (messages.length && messages[0].role === 'assistant') messages.shift();
-    if (messages.length === 0) {
-      messages.push({ role: 'user', content: `Hi ${stylist?.name ?? ''}` });
-    }
-    // Claude 4.6 also requires the conversation to END on a user turn — it
-    // rejects assistant-message prefill with a 400. When the stylist spoke last
-    // (a follow-up the shopper hasn't answered, or a retry after the stylist
-    // already replied), nudge with a user turn so the model continues the
-    // thread instead of failing.
-    if (messages[messages.length - 1].role === 'assistant') {
-      messages.push({ role: 'user', content: '(continue)' });
-    }
-
+    if (messages.length === 0) messages.push({ role: 'user', content: `Hi ${stylist?.name ?? ''}` });
+    // Claude 4.6 rejects assistant-message prefill: the conversation must end on
+    // a user turn. If the stylist spoke last, nudge to continue.
+    if (messages[messages.length - 1].role === 'assistant') messages.push({ role: 'user', content: '(continue)' });
     const res = await callAnthropic(apiKey, { model: MODEL, max_tokens: 700, system, messages });
     if (!res.ok) {
       const errBody = (await res.text()).slice(0, 300);
-      // Record the failure so it's visible server-side, not just returned to
-      // the client (which historically swallowed it). Best-effort.
-      void admin.from('ai_usage_logs').insert({
-        platform: 'anthropic', operation: 'style-up-chat', model: MODEL,
-        status: 'error', error_message: `${res.status}: ${errBody}`,
-      });
+      void admin.from('ai_usage_logs').insert({ platform: 'anthropic', operation: 'style-up-chat', model: MODEL, status: 'error', error_message: `${res.status}: ${errBody}` });
       return json({ success: false, error: `anthropic ${res.status}: ${errBody}` }, 502);
     }
     const out = await res.json() as { content?: Array<{ type: string; text?: string }>; usage?: { input_tokens?: number; output_tokens?: number } };
     const text = (out.content?.find(c => c.type === 'text')?.text ?? '').replace(/```json\s*|```\s*/g, '').trim();
-    const start = text.indexOf('{');
-    const end = text.lastIndexOf('}');
-    let reply = '';
-    let productIds: string[] = [];
-    let searchQueries: string[] = [];
+    const start = text.indexOf('{'); const end = text.lastIndexOf('}');
+    let reply = ''; let productIds: string[] = []; let searchQueries: string[] = [];
     try {
       const parsed = JSON.parse(text.slice(start, end + 1)) as { reply?: string; productIds?: string[]; searchQueries?: string[] };
       reply = String(parsed.reply ?? '').trim();
       productIds = Array.isArray(parsed.productIds) ? parsed.productIds.map(String) : [];
-      searchQueries = Array.isArray(parsed.searchQueries)
-        ? parsed.searchQueries.map(q => String(q).trim()).filter(Boolean).slice(0, 4)
-        : [];
-    } catch {
-      reply = text || "Tell me a bit more about what you're going for?";
-    }
+      searchQueries = Array.isArray(parsed.searchQueries) ? parsed.searchQueries.map(q => String(q).trim()).filter(Boolean).slice(0, 4) : [];
+    } catch { reply = text || "Tell me a bit more about what you're going for?"; }
     if (!reply) reply = "Tell me a bit more about what you're going for?";
-
-    // Validate picks against the candidate set (no hallucinated ids).
     const candById = new Map(cands.map(c => [c.id, c]));
     const picks = productIds.map(id => candById.get(id)).filter((c): c is ProductCand => !!c).slice(0, 4);
-
-    // Insert the stylist's text reply, then a product message per pick.
-    const inserted: unknown[] = [];
-    const { data: textMsg } = await admin.from('style_up_messages')
-      .insert({ thread_id: threadId, sender: 'stylist', kind: 'text', body: reply })
-      .select('id').single();
-    if (textMsg) inserted.push(textMsg.id);
-
+    await admin.from('style_up_messages').insert({ thread_id: threadId, sender: 'stylist', kind: 'text', body: reply });
     for (const p of picks) {
-      await admin.from('style_up_messages').insert({
-        thread_id: threadId, sender: 'stylist', kind: 'product',
-        product_ref: {
-          id: p.id, name: p.name, brand: p.brand, price: p.price,
-          image: p.primary_image_url || p.image_url, url: p.url,
-        },
-      });
+      await admin.from('style_up_messages').insert({ thread_id: threadId, sender: 'stylist', kind: 'product', product_ref: { id: p.id, name: p.name, brand: p.brand, price: p.price, image: p.primary_image_url || p.image_url, url: p.url } });
     }
-
     await admin.from('style_up_threads').update({ last_message_at: new Date().toISOString() }).eq('id', threadId);
-    void admin.from('ai_usage_logs').insert({
-      platform: 'anthropic', operation: 'style-up-chat', model: MODEL,
-      input_tokens: out.usage?.input_tokens ?? null, output_tokens: out.usage?.output_tokens ?? null, status: 'success',
-    });
-
-    // Research trace — a structured record of exactly how this turn was produced
-    // (context, persona, what was sent to the model, the reply + queries), for
-    // the admin "view research" node diagram. Best-effort; never blocks the turn.
+    void admin.from('ai_usage_logs').insert({ platform: 'anthropic', operation: 'style-up-chat', model: MODEL, input_tokens: out.usage?.input_tokens ?? null, output_tokens: out.usage?.output_tokens ?? null, status: 'success' });
     let traceId: string | null = null;
     try {
-      const { data: traceRow } = await admin.from('style_up_traces').insert({
-        thread_id: threadId,
-        shopper_user_id: thread.shopper_user_id,
-        stylist_id: thread.stylist_id,
-        source_mode: isWeb ? 'web' : 'catalog',
-        payload: {
-          source_mode: isWeb ? 'web' : 'catalog',
-          stylist: stylist?.name ?? null,
-          context: {
-            name: prof?.full_name ?? null, gender: genderNorm,
-            height: prof?.height_label ?? null, weight: prof?.weight_label ?? null,
-            age: prof?.age_label ?? null, custom_style: prof?.custom_style_prompt ?? null,
-            fashion_styles: prof?.fashion_styles ?? null,
-          },
-          context_line: ctxBits.join('; '),
-          persona,
-          system,
-          messages,
-          candidate_count: cands.length,
-          model: MODEL,
-          reply,
-          product_ids: productIds,
-          picks: picks.map(p => ({ id: p.id, name: p.name, brand: p.brand })),
-          search_queries: searchQueries,
-          usage: { input_tokens: out.usage?.input_tokens ?? null, output_tokens: out.usage?.output_tokens ?? null },
-        },
-      }).select('id').single();
+      const { data: traceRow } = await admin.from('style_up_traces').insert({ thread_id: threadId, shopper_user_id: thread.shopper_user_id, stylist_id: thread.stylist_id, source_mode: isWeb ? 'web' : 'catalog', payload: { source_mode: isWeb ? 'web' : 'catalog', stylist: stylist?.name ?? null, context: { name: prof?.full_name ?? null, gender: genderNorm, height: prof?.height_label ?? null, weight: prof?.weight_label ?? null, age: prof?.age_label ?? null, custom_style: prof?.custom_style_prompt ?? null, fashion_styles: prof?.fashion_styles ?? null }, context_line: ctxBits.join('; '), persona, system, messages, candidate_count: cands.length, model: MODEL, reply, product_ids: productIds, picks: picks.map(p => ({ id: p.id, name: p.name, brand: p.brand })), search_queries: searchQueries, usage: { input_tokens: out.usage?.input_tokens ?? null, output_tokens: out.usage?.output_tokens ?? null } } }).select('id').single();
       traceId = (traceRow?.id as string | undefined) ?? null;
     } catch (_e) { /* trace is best-effort */ }
-
-    // Web stylists return per-piece web search queries for the client to run
-    // (search → import → show), so the stylist's "let me surface options"
-    // actually produces products. traceId lets the client enrich the trace with
-    // the per-query search results.
     return json({ success: true, reply, picks: picks.length, searchQueries: isWeb ? searchQueries : [], traceId });
   } catch (err) {
     return json({ success: false, error: err instanceof Error ? err.message : String(err) }, 500);
