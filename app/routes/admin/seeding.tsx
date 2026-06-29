@@ -167,8 +167,9 @@ export default function SeedingPage() {
         </div>
       </div>
 
-      {/* Shared controls */}
-      <div className="admin-detail-card" style={{ marginBottom: 16 }}>
+      {/* Shared controls. color-scheme:light keeps native controls (checkbox,
+          number spinner, text inputs) light under an OS dark-mode preference. */}
+      <div className="admin-detail-card" style={{ marginBottom: 16, colorScheme: 'light' }}>
         <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap', marginBottom: 12 }}>
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
             <input type="checkbox" checked={enabled}
@@ -182,7 +183,7 @@ export default function SeedingPage() {
           </div>
           <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
             Cap:
-            <input type="number" defaultValue={cap} style={{ width: 90 }}
+            <input type="number" className="admin-date-input" defaultValue={cap} style={{ width: 90 }}
               onBlur={e => { const v = e.target.value; if (Number(v) !== cap) void setSetting('seeding_monthly_serpapi_cap', String(Math.max(0, Number(v) || 0))); }} />
           </label>
           <button className="admin-btn admin-btn-secondary" onClick={() => void setSetting('seeding_serpapi_used_month', '0')}>Reset budget</button>
@@ -194,6 +195,7 @@ export default function SeedingPage() {
             </button>
           )}
           <input
+            className="admin-date-input"
             placeholder={topTab === 'styling' ? 'Add a scenario…' : 'Add a search keyword…'}
             value={newTerm} onChange={e => setNewTerm(e.target.value)}
             onKeyDown={e => { if (e.key === 'Enter') void addTarget(); }}
