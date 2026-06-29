@@ -423,41 +423,63 @@ export default function SeedingPage() {
             <div className="admin-modal-body" style={{ overflow: 'auto', fontSize: 14, lineHeight: 1.55 }}>
               <p style={{ marginTop: 0 }}>
                 Seeding turns <strong>real shopper demand</strong> into live catalog products — automatically,
-                behind a quality gate. Two demand sources feed one pipeline:
+                behind a quality gate. Here is the full pipeline and the tech behind each step.
               </p>
-              <ul style={{ marginTop: 0 }}>
-                <li><strong>Searches</strong> — keywords people typed, e.g. <em>“white shoes”</em>.</li>
-                <li><strong>Styling</strong> — scenarios people asked the stylist, e.g. <em>“beach trip”</em> (a whole outfit).</li>
-              </ul>
 
-              <h4 style={{ marginBottom: 6 }}>The pipeline</h4>
+              <h4 style={{ marginBottom: 6 }}>Follow one keyword: “white shoes”</h4>
               <ol style={{ marginTop: 0, paddingLeft: 18 }}>
-                <li><strong>Curate</strong> — Claude auto-checks each pending term: a real search is <em>approved</em>, gibberish (“fff”, “kzjs”, “tatinajc”) is <em>rejected</em>. You can override any decision.</li>
-                <li><strong>Fetch</strong> — each <em>approved</em> target is searched on Google Shopping (SerpAPI). Scenarios first expand into one query per garment via Claude. Pending/rejected targets are never fetched.</li>
-                <li><strong>Hold &amp; flag</strong> — new products land <em>inactive</em>, tagged <code>source=seed_serpapi</code> + the target that fetched them — so nothing goes live before it’s ready, and everything stays deletable.</li>
-                <li><strong>Enrich</strong> — Claude adds occasion / use-case metadata (the signal search and catalogs rank on).</li>
-                <li><strong>Quality gate</strong> — a product goes live <em>only</em> if it has a real image <strong>and</strong> occasion text. Popular demand never lowers this bar.</li>
-                <li><strong>Publish</strong> — products that pass flip to <em>active</em> and appear in the feed &amp; search.</li>
+                <li>A shopper types <em>“white shoes”</em> in the app → it’s logged to the <code>search_logs</code> table (by the <code>search-log-batch</code> function).</li>
+                <li>Hourly, <code>refresh_seed_targets_from_searches()</code> rolls every search up into this queue (<code>seed_targets</code>), ranked by how often it was searched — and boosted if it returned nothing.</li>
+                <li>The auto-curate job (<code>seed-curate</code>) sends pending terms to <strong>Claude (Haiku)</strong>, which marks “white shoes” <em>valid → approved</em> and gibberish like “fff” <em>→ rejected</em>.</li>
+                <li>The orchestrator (<code>seed-run</code>) picks up the approved target and calls <code>product-search</code>, which queries <strong>SerpAPI’s Google Shopping</strong> engine, then hits Google’s <em>immersive-product</em> API to resolve each result’s real merchant URL + image gallery.</li>
+                <li>~20 products are written to the <code>products</code> table — held <code>is_active=false</code>, tagged <code>source=seed_serpapi</code> and linked to this target (<code>seed_target_id</code>).</li>
+                <li><code>enrich-occasions</code> sends each product to <strong>Claude (Haiku)</strong> for occasion tags (e.g. <em>["running","gym","casual"]</em>); <code>embed-product</code> generates vector embeddings for semantic search.</li>
+                <li>The activation job runs <code>product_ready_for_feed()</code> — has a real image <strong>and</strong> occasion text? — and flips the passers to <code>is_active=true</code>. They’re now live in the feed &amp; search.</li>
               </ol>
 
-              <h4 style={{ marginBottom: 6 }}>Automation (the crons)</h4>
-              <table className="admin-table" style={{ marginBottom: 12 }}>
-                <thead><tr><th>Job</th><th>Runs</th><th>Spends $ / changes feed?</th></tr></thead>
+              <h4 style={{ marginBottom: 6 }}>Under the hood</h4>
+              <table className="admin-table" style={{ marginBottom: 8 }}>
+                <thead><tr><th>Stage</th><th>Component</th><th>Tech</th></tr></thead>
                 <tbody>
-                  <tr><td>Auto-curate (Claude)</td><td>every 10 min</td><td>no</td></tr>
-                  <tr><td>Pull search demand</td><td>hourly</td><td>no</td></tr>
-                  <tr><td>Fetch products</td><td>every 30 min</td><td><strong>spends</strong> — only while ON</td></tr>
-                  <tr><td>Enrich occasions</td><td>every 15 min</td><td>only while ON</td></tr>
-                  <tr><td>Publish (gate)</td><td>every 15 min</td><td>only while ON</td></tr>
+                  <tr><td>Log a search</td><td><code>search-log-batch</code></td><td>→ <code>search_logs</code></td></tr>
+                  <tr><td>Build the queue</td><td><code>refresh_seed_targets_from_searches()</code></td><td>SQL aggregate</td></tr>
+                  <tr><td>Curate</td><td><code>seed-curate</code></td><td>Claude Haiku</td></tr>
+                  <tr><td>Expand a scenario</td><td><code>catalog-brainstorm</code></td><td>Claude → per-garment queries</td></tr>
+                  <tr><td>Fetch products</td><td><code>product-search</code></td><td>SerpAPI Google Shopping + immersive</td></tr>
+                  <tr><td>Enrich</td><td><code>enrich-occasions</code></td><td>Claude Haiku → occasion tags</td></tr>
+                  <tr><td>Embed</td><td><code>embed-product</code></td><td>vector embeddings</td></tr>
+                  <tr><td>Gate &amp; publish</td><td><code>product_ready_for_feed()</code> + activation</td><td>Postgres + pg_cron</td></tr>
+                </tbody>
+              </table>
+              <p className="admin-cell-muted" style={{ marginTop: 0 }}>
+                Each step is a <strong>Supabase edge function</strong> (Deno). Scheduling is <strong>pg_cron</strong>;
+                the jobs call the edge functions over HTTP via <strong>pg_net</strong> with a vault service token.
+              </p>
+
+              <h4 style={{ marginBottom: 6 }}>Two demand sources</h4>
+              <ul style={{ marginTop: 0 }}>
+                <li><strong>Searches</strong> — keywords (<em>“white shoes”</em>) → searched directly on SerpAPI.</li>
+                <li><strong>Styling</strong> — scenarios (<em>“beach trip”</em>) → first expanded by <code>catalog-brainstorm</code> into one query per garment (top, bottom, shoes, bag…), then each searched.</li>
+              </ul>
+
+              <h4 style={{ marginBottom: 6 }}>Automation (pg_cron)</h4>
+              <table className="admin-table" style={{ marginBottom: 12 }}>
+                <thead><tr><th>Job</th><th>Calls</th><th>Runs</th><th>Spends $ / changes feed?</th></tr></thead>
+                <tbody>
+                  <tr><td>Auto-curate</td><td><code>seed-curate</code></td><td>10 min</td><td>no</td></tr>
+                  <tr><td>Pull demand</td><td><code>refresh…()</code></td><td>hourly</td><td>no</td></tr>
+                  <tr><td>Fetch</td><td><code>seed-run</code></td><td>30 min</td><td><strong>spends</strong> — only while ON</td></tr>
+                  <tr><td>Enrich</td><td><code>enrich-occasions</code></td><td>15 min</td><td>only while ON</td></tr>
+                  <tr><td>Publish</td><td><code>run_seeding_activation()</code></td><td>15 min</td><td>only while ON</td></tr>
                 </tbody>
               </table>
 
-              <h4 style={{ marginBottom: 6 }}>Controls</h4>
+              <h4 style={{ marginBottom: 6 }}>Safeguards &amp; controls</h4>
               <ul style={{ marginTop: 0, marginBottom: 0 }}>
-                <li><strong>Pause / Enable everything</strong> — one switch starts or stops the loop <em>and</em> every cron.</li>
-                <li><strong>Seeding ON/OFF + budget cap</strong> — fetch/enrich/publish only run while ON; the cap limits monthly SerpAPI spend.</li>
-                <li><strong>Auto-curate pending</strong> + approve / pause / reject — curate the queue; rejected rows sink to the bottom.</li>
-                <li><strong>Purge seeded</strong> — deletes every product this loop added (safe — the flag scopes it).</li>
+                <li><strong>Quality gate</strong> — live only with a real image + occasion text; demand never lowers the bar.</li>
+                <li><strong>Pause / Enable everything</strong> — one switch stops/starts the loop <em>and</em> every cron.</li>
+                <li><strong>Budget cap</strong> — limits monthly SerpAPI spend; fetching stops when it’s hit.</li>
+                <li><strong>Deletable</strong> — every seeded product carries <code>source=seed_serpapi</code>, so “Purge seeded” removes them cleanly.</li>
                 <li>Click any <strong>target</strong> (or its Found count) to see exactly the products it fetched.</li>
               </ul>
             </div>
