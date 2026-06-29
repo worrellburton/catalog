@@ -71,6 +71,9 @@ const SOURCE_LABELS: Record<string, string> = {
 // Marks products discovered & added by the autonomous Claude + Gemini
 // pipeline (the "Automatic" filter tab). Stored in products.source.
 const AUTO_SOURCE = 'auto_ai';
+// Products fetched by the demand-driven Seeding loop (/admin/seeding). The
+// "Seeded" filter + ?filters=seeding deep-link show exactly what it fetched.
+const SEED_SOURCE = 'seed_serpapi';
 
 // The ordered steps each auto-added product walks through. Drives the
 // live progress UI so the admin always sees "what step it's in".
@@ -538,7 +541,10 @@ export default function AdminData() {
       return p;
     }, { replace: false });
   }, [setSearchParams]);
-  const [productFilter, setProductFilter] = useState<'all' | 'no-creative' | 'active' | 'inactive' | 'untagged' | 'soft-deleted' | 'automatic' | 'affiliate' | 'no-affiliate'>('all');
+  const [productFilter, setProductFilter] = useState<'all' | 'no-creative' | 'active' | 'inactive' | 'untagged' | 'soft-deleted' | 'automatic' | 'seeded' | 'affiliate' | 'no-affiliate'>(
+    // Deep-link from /admin/seeding: ?tab=products&filters=seeding
+    () => (searchParams.get('filters') === 'seeding' ? 'seeded' : 'all'),
+  );
 
   // Date-added filter for the Products table. 'all' lets every row
   // through. 'week' / 'month' use rolling-window cutoffs (created_at
@@ -2201,6 +2207,7 @@ export default function AdminData() {
       }
       // Automatic view: only products added by the autonomous pipeline.
       if (productFilter === 'automatic' && (p as { source?: string | null }).source !== AUTO_SOURCE) return false;
+      if (productFilter === 'seeded' && (p as { source?: string | null }).source !== SEED_SOURCE) return false;
       // Hide soft-deleted from every other view.
       if (deletedProductKeys.has(key)) return false;
       if (brandFilter && (p.brand || '').toLowerCase() !== brandFilter.toLowerCase()) return false;
@@ -4671,6 +4678,40 @@ export default function AdminData() {
               >
                 {allProducts.filter(p =>
                   (p as { source?: string | null }).source === AUTO_SOURCE
+                  && !deletedProductKeys.has(`${p.brand}-${p.name}`)
+                ).length}
+              </span>
+            </button>
+            {/* Seeded — products fetched by the demand-driven Seeding loop
+                (/admin/seeding). Teal accent so it reads as its own bucket. */}
+            <button
+              className={`admin-tab ${productFilter === 'seeded' ? 'active' : ''}`}
+              onClick={() => setProductFilter('seeded')}
+              title="Products fetched by the Seeding loop (/admin/seeding)"
+              style={{
+                marginLeft: 8,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                background: productFilter === 'seeded' ? '#0d9488' : '#ccfbf1',
+                color: productFilter === 'seeded' ? '#fff' : '#0f766e',
+                border: `1px solid ${productFilter === 'seeded' ? '#0f766e' : '#99f6e4'}`,
+                fontWeight: 600,
+              }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                <path d="M12 2v8M12 10c-3 0-5 2-5 5M12 10c3 0 5 2 5 5M5 22h14M12 13v9" />
+              </svg>
+              Seeded
+              <span
+                className="admin-tab-badge"
+                style={{
+                  background: productFilter === 'seeded' ? 'rgba(255,255,255,0.22)' : '#99f6e4',
+                  color: productFilter === 'seeded' ? '#fff' : '#0f766e',
+                }}
+              >
+                {allProducts.filter(p =>
+                  (p as { source?: string | null }).source === SEED_SOURCE
                   && !deletedProductKeys.has(`${p.brand}-${p.name}`)
                 ).length}
               </span>

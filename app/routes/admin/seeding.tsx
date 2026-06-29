@@ -137,9 +137,14 @@ export default function SeedingPage() {
     <div className="admin-page" style={{ padding: 24, maxWidth: 1100 }}>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16, flexWrap: 'wrap' }}>
         <h1 style={{ margin: 0 }}>Seeding</h1>
-        <Link to="/admin/seeding/simulate" className="admin-btn" style={{ textDecoration: 'none' }}>
-          ▶ Simulate
-        </Link>
+        <div style={{ display: 'flex', gap: 8 }}>
+          <Link to="/admin/data?tab=products&filters=seeding" className="admin-btn" style={{ textDecoration: 'none' }}>
+            View seeded products ({seededCount})
+          </Link>
+          <Link to="/admin/seeding/simulate" className="admin-btn" style={{ textDecoration: 'none' }}>
+            ▶ Simulate
+          </Link>
+        </div>
       </div>
       <p style={{ color: '#9aa0a6', marginTop: 4 }}>
         Demand-driven catalog seeding. Approve keywords/scenarios; the loop fetches, quality-gates, and publishes —
