@@ -118,6 +118,10 @@ Watch found/published per target; run **Simulate** to find scenario gaps.
 
 | 2026-06-29 | flag | Seeded products stamped `source='seed_serpapi'` at INSERT (product-search `source`/`is_active` params) AND belt-and-suspenders in seed-run, so the deletable flag always holds | `functions/product-search/index.ts`, `functions/seed-run/index.ts` (seed-run redeployed v3) |
 | 2026-06-29 | flag | `purge_seeded_products()` is_admin RPC + "Purge seeded (N)" button — one-call delete of all seeded rows (FK-safe: all product FKs CASCADE/SET NULL) | `migrations/20260629000008_purge_seeded_products.sql`, `app/routes/admin/seeding.tsx` |
+| 2026-06-29 | S7 | `seed-curate` edge fn — Claude classifies PENDING terms: real search → approved, gibberish ("fff","kzjs","tatinajc","test","detergemt") → rejected; only touches pending (manual decisions safe). **Verified:** 50 → 37 approved / 13 rejected, correct gibberish catches | `functions/seed-curate/index.ts` (deployed) |
+| 2026-06-29 | S7 | `seeding-curate` cron (*/10) via `run_seeding_curate()`; runs regardless of kill-switch (Claude-only, no SerpAPI). **Verified:** auto-cleared the queue on schedule | `migrations/20260629000011_seeding_curate_cron.sql` |
+| 2026-06-29 | S2 | Automation panel on /admin/seeding: lists all seeding crons (label, cadence, last run, on/paused toggle) via `seeding_cron_status()` + `set_seeding_cron_active()` (is_admin, seeding-* only, `cron.alter_job`) | `migrations/20260629000010_seeding_cron_controls.sql`, `app/routes/admin/seeding.tsx` |
+| 2026-06-29 | S2 | Seeding table: pagination (25/page) + rejected pinned to the bottom (default order) + "Auto-curate pending" button | `app/routes/admin/seeding.tsx` |
 | 2026-06-29 | S2 | Seeding page redesign: two top tabs (Searches=keyword/manual, Styling=scenario) + flat Data-page look (admin-tabs/admin-btn/SortableTable, no inline styles); Add button kind follows the active tab | `app/routes/admin/seeding.tsx` |
 | 2026-06-29 | S2 | "View seeded products (N)" link on /admin/seeding → `/admin/data?tab=products&filters=seeding`; new **Seeded** product filter (source=`seed_serpapi`) + chip, URL-drivable | `app/routes/admin/data.tsx`, `app/routes/admin/seeding.tsx` |
 | 2026-06-29 | fix | Activation dropped the `scrape_status<>'failed'` guard — the scrape-new-products trigger marks SerpAPI rows 'failed' (they already have images), which wrongly blocked them; the image+occasion gate is the real filter | `migrations/20260629000009_seeding_activation_fix.sql` |
@@ -163,7 +167,11 @@ select cron.unschedule('seeding-occasion');
 select cron.unschedule('seeding-driver');
 select cron.unschedule('seeding-activate');
 select cron.unschedule('seeding-budget-reset');
+select cron.unschedule('seeding-curate');
 
+drop function if exists public.run_seeding_curate();
+drop function if exists public.seeding_cron_status();
+drop function if exists public.set_seeding_cron_active(text, boolean);
 drop function if exists public.run_seeding_refresh();
 drop function if exists public.run_seeding_occasion_backfill();
 drop function if exists public.run_seeding_driver();
@@ -181,8 +189,8 @@ Note: products already seeded while ON keep `source='seed_serpapi'`; to also
 retire them: `update products set is_active=false where source='seed_serpapi';`
 (they are otherwise normal catalog rows — leaving them is fine).
 
-**Edge functions** — undeploy/delete `supabase/functions/seed-run` and
-`supabase/functions/enrich-occasions`.
+**Edge functions** — undeploy/delete `supabase/functions/seed-run`,
+`supabase/functions/enrich-occasions`, and `supabase/functions/seed-curate`.
 
 **Frontend** — delete `app/routes/admin/seeding.tsx` +
 `app/routes/admin/seeding.simulate.tsx`; remove the 2 `route(...)` lines in

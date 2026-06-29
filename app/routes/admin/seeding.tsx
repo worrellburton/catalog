@@ -5,7 +5,7 @@
 // refreshes demand, and runs a target on demand. The loop only spends/publishes
 // while the kill-switch is ON. See docs/CATALOG_SEEDING.md.
 
-import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Fragment, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from '@remix-run/react';
 import { supabase } from '~/utils/supabase';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
@@ -26,6 +26,32 @@ interface SeedTarget {
 
 type TopTab = 'searches' | 'styling';
 const STATUSES = ['pending', 'approved', 'paused', 'rejected', 'done'] as const;
+const PAGE_SIZE = 25;
+
+interface CronRow {
+  jobname: string;
+  schedule: string;
+  active: boolean;
+  last_status: string | null;
+  last_run: string | null;
+}
+
+const CRON_LABELS: Record<string, string> = {
+  'seeding-curate': 'Auto-curate pending (Claude)',
+  'seeding-refresh': 'Pull search demand',
+  'seeding-driver': 'Fetch products (spends $)',
+  'seeding-occasion': 'Enrich occasions',
+  'seeding-activate': 'Publish (quality gate)',
+  'seeding-budget-reset': 'Reset monthly budget',
+};
+
+function humanCron(s: string): string {
+  const m: Record<string, string> = {
+    '*/10 * * * *': 'every 10 min', '*/15 * * * *': 'every 15 min', '*/30 * * * *': 'every 30 min',
+    '0 * * * *': 'hourly', '0 0 1 * *': 'monthly (1st)',
+  };
+  return m[s] || s;
+}
 
 function timeAgo(iso: string | null): string {
   if (!iso) return '—';
@@ -48,20 +74,23 @@ export default function SeedingPage() {
   const [cap, setCap] = useState(0);
   const [used, setUsed] = useState(0);
   const [seededCount, setSeededCount] = useState(0);
+  const [crons, setCrons] = useState<CronRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [busy, setBusy] = useState<string | null>(null);
   const [topTab, setTopTab] = useState<TopTab>('searches');
   const [filter, setFilter] = useState<string>('all');
   const [newTerm, setNewTerm] = useState('');
+  const [page, setPage] = useState(0);
   const [msg, setMsg] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     if (!supabase) return;
-    const [{ data: rows }, { data: settings }, { count: seeded }] = await Promise.all([
+    const [{ data: rows }, { data: settings }, { count: seeded }, { data: cronRows }] = await Promise.all([
       supabase.from('seed_targets').select('*').order('priority', { ascending: false }).limit(1000),
       supabase.from('app_settings').select('key, value')
         .in('key', ['seeding_enabled', 'seeding_monthly_serpapi_cap', 'seeding_serpapi_used_month']),
       supabase.from('products').select('id', { count: 'exact', head: true }).eq('source', 'seed_serpapi'),
+      supabase.rpc('seeding_cron_status'),
     ]);
     setTargets((rows ?? []) as SeedTarget[]);
     const map = new Map((settings ?? []).map(s => [s.key, s.value] as [string, string]));
@@ -69,6 +98,7 @@ export default function SeedingPage() {
     setCap(Number(map.get('seeding_monthly_serpapi_cap') || '0'));
     setUsed(Number(map.get('seeding_serpapi_used_month') || '0'));
     setSeededCount(seeded ?? 0);
+    setCrons((cronRows ?? []) as CronRow[]);
     setLoading(false);
   }, []);
 
@@ -92,6 +122,23 @@ export default function SeedingPage() {
     setBusy('refresh');
     const { data, error } = await supabase.rpc('refresh_seed_targets_from_searches');
     setMsg(error ? `Error: ${error.message}` : `Refreshed — ${data} targets from search demand.`);
+    setBusy(null);
+    await load();
+  }, [load]);
+
+  const toggleCron = useCallback(async (jobname: string, active: boolean) => {
+    if (!supabase) return;
+    const { error } = await supabase.rpc('set_seeding_cron_active', { p_jobname: jobname, p_active: active });
+    if (error) setMsg(`Error: ${error.message}`);
+    await load();
+  }, [load]);
+
+  const autoCurate = useCallback(async () => {
+    if (!supabase) return;
+    setBusy('curate');
+    const { data, error } = await supabase.functions.invoke('seed-curate', { body: { limit: 50 } });
+    setMsg(error ? `Error: ${error.message}`
+      : `Auto-curated — ${data?.approved ?? 0} approved, ${data?.rejected ?? 0} rejected (${data?.processed ?? 0} pending checked).`);
     setBusy(null);
     await load();
   }, [load]);
@@ -145,7 +192,19 @@ export default function SeedingPage() {
     [tabTargets, filter],
   );
 
-  const table = useSortableTable(shown, { key: 'priority', direction: 'desc' });
+  // Default order: rejected pinned to the bottom, then priority desc. Fed to the
+  // sortable hook WITHOUT a default sort, so clicking a column header still sorts.
+  const ordered = useMemo(() => {
+    const rank = (s: string) => (s === 'rejected' ? 1 : 0);
+    return [...shown].sort((a, b) => rank(a.status) - rank(b.status) || b.priority - a.priority);
+  }, [shown]);
+
+  const table = useSortableTable(ordered);
+
+  const pageCount = Math.max(1, Math.ceil(table.sortedData.length / PAGE_SIZE));
+  const pageSafe = Math.min(page, pageCount - 1);
+  const paged = table.sortedData.slice(pageSafe * PAGE_SIZE, (pageSafe + 1) * PAGE_SIZE);
+  useEffect(() => { setPage(0); }, [topTab, filter, table.sort]);
 
   if (loading) return <div className="admin-page"><p>Loading seeding…</p></div>;
 
@@ -194,6 +253,10 @@ export default function SeedingPage() {
               {busy === 'refresh' ? 'Refreshing…' : 'Refresh from searches'}
             </button>
           )}
+          <button className="admin-btn admin-btn-secondary" disabled={busy === 'curate'} onClick={() => void autoCurate()}
+            title="Claude approves real terms and rejects gibberish among pending">
+            {busy === 'curate' ? 'Curating…' : 'Auto-curate pending'}
+          </button>
           <input
             className="admin-date-input"
             placeholder={topTab === 'styling' ? 'Add a scenario…' : 'Add a search keyword…'}
@@ -209,6 +272,30 @@ export default function SeedingPage() {
           </button>
         </div>
       </div>
+
+      {/* Automation — the seeding crons. They run on schedule always; the
+          gated ones (fetch/enrich/publish) only act while Seeding is ON.
+          Pause/resume any here. */}
+      {crons.length > 0 && (
+        <div className="admin-detail-card" style={{ marginBottom: 16, colorScheme: 'light' }}>
+          <div style={{ fontWeight: 600, marginBottom: 10 }}>Automation</div>
+          <div style={{ display: 'grid', gridTemplateColumns: 'minmax(180px,1fr) auto auto auto', gap: '8px 16px', alignItems: 'center', fontSize: 13 }}>
+            {crons.map(c => (
+              <Fragment key={c.jobname}>
+                <div>{CRON_LABELS[c.jobname] || c.jobname}</div>
+                <div className="admin-cell-muted">{humanCron(c.schedule)}</div>
+                <div className="admin-cell-muted" title={c.last_run || ''}>
+                  {c.last_status ? `${c.last_status} · ${timeAgo(c.last_run)}` : 'not yet run'}
+                </div>
+                <label style={{ display: 'inline-flex', alignItems: 'center', gap: 6, cursor: 'pointer', justifySelf: 'end' }}>
+                  <input type="checkbox" checked={c.active} onChange={e => void toggleCron(c.jobname, e.target.checked)} />
+                  <span style={{ color: c.active ? '#0d9488' : '#888' }}>{c.active ? 'on' : 'paused'}</span>
+                </label>
+              </Fragment>
+            ))}
+          </div>
+        </div>
+      )}
 
       {msg && <div className="admin-status-warning" style={{ margin: '8px 0', fontSize: 13 }}>{msg}</div>}
 
@@ -248,7 +335,7 @@ export default function SeedingPage() {
             </tr>
           </thead>
           <tbody>
-            {table.sortedData.map(t => (
+            {paged.map(t => (
               <tr key={t.id}>
                 <td className="admin-cell-name">{t.term}</td>
                 <td className="admin-cell-num">{t.search_hits}{t.zero_result && <span title="returned nothing" style={{ color: '#ea4335' }}> ⚑</span>}</td>
@@ -271,6 +358,14 @@ export default function SeedingPage() {
           <div style={{ padding: 20, textAlign: 'center', color: '#888', fontSize: 13 }}>No targets.</div>
         )}
       </div>
+
+      {table.sortedData.length > PAGE_SIZE && (
+        <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'flex-end', gap: 12, marginTop: 12, fontSize: 13 }}>
+          <span className="admin-cell-muted">{table.sortedData.length} targets · page {pageSafe + 1} of {pageCount}</span>
+          <button className="admin-btn admin-btn-secondary" disabled={pageSafe === 0} onClick={() => setPage(p => Math.max(0, p - 1))}>Prev</button>
+          <button className="admin-btn admin-btn-secondary" disabled={pageSafe >= pageCount - 1} onClick={() => setPage(p => Math.min(pageCount - 1, p + 1))}>Next</button>
+        </div>
+      )}
     </div>
   );
 }
