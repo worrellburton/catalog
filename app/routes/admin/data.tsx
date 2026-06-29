@@ -71,6 +71,9 @@ const SOURCE_LABELS: Record<string, string> = {
 // Marks products discovered & added by the autonomous Claude + Gemini
 // pipeline (the "Automatic" filter tab). Stored in products.source.
 const AUTO_SOURCE = 'auto_ai';
+// Products fetched by the demand-driven Seeding loop (/admin/seeding). The
+// "Seeded" filter + ?filters=seeding deep-link show exactly what it fetched.
+const SEED_SOURCE = 'seed_serpapi';
 
 // The ordered steps each auto-added product walks through. Drives the
 // live progress UI so the admin always sees "what step it's in".
@@ -538,7 +541,14 @@ export default function AdminData() {
       return p;
     }, { replace: false });
   }, [setSearchParams]);
-  const [productFilter, setProductFilter] = useState<'all' | 'no-creative' | 'active' | 'inactive' | 'untagged' | 'soft-deleted' | 'automatic' | 'affiliate' | 'no-affiliate'>('all');
+  const [productFilter, setProductFilter] = useState<'all' | 'no-creative' | 'active' | 'inactive' | 'untagged' | 'soft-deleted' | 'automatic' | 'seeded' | 'affiliate' | 'no-affiliate'>(
+    // Deep-link from /admin/seeding: ?tab=products&filters=seeding
+    () => (searchParams.get('filters') === 'seeding' ? 'seeded' : 'all'),
+  );
+  // Optional deep-link: ?target=<seed_target_id> narrows products to one seeding
+  // target; ?label=<term> is just the display label for the filter chip.
+  const seedTargetParam = searchParams.get('target');
+  const seedLabel = searchParams.get('label');
 
   // Date-added filter for the Products table. 'all' lets every row
   // through. 'week' / 'month' use rolling-window cutoffs (created_at
@@ -1436,7 +1446,7 @@ export default function AdminData() {
       // Reload products in the table
       const { data: reloaded } = await supabase
         .from('products')
-        .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, primary_video_poster_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, subtype, gender, created_at, source, size_fit, materials_care, haiku_context, affiliate_url, barcode, barcode_type')
+        .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, primary_video_poster_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, subtype, gender, created_at, source, seed_target_id, size_fit, materials_care, haiku_context, affiliate_url, barcode, barcode_type')
         .order('scraped_at', { ascending: false });
       if (reloaded) {
         setCrawledProducts((reloaded || []).map(p => ({
@@ -1884,7 +1894,7 @@ export default function AdminData() {
       if (!supabase) { setProductsLoading(false); return; }
       const { data, error } = await supabase
         .from('products')
-        .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, primary_video_poster_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, subtype, gender, created_at, source, size_fit, materials_care, haiku_context, affiliate_url, barcode, barcode_type')
+        .select('id, name, brand, price, url, image_url, images, primary_image_url, primary_image_polished, primary_image_pre_polish_url, primary_video_url, primary_video_status, primary_video_request_id, primary_video_poster_url, scraped_at, scrape_status, is_active, is_elite, is_platform, type, subtype, gender, created_at, source, seed_target_id, size_fit, materials_care, haiku_context, affiliate_url, barcode, barcode_type')
         .order('scraped_at', { ascending: false });
       if (error) {
         console.error('Failed to load crawled products:', error);
@@ -2013,7 +2023,7 @@ export default function AdminData() {
   }, [genJobs, loadAdProductIds]);
 
   const allProducts = useMemo(() => {
-    const productMap = new Map<string, { id?: string; brand: string; name: string; price: string; url: string; image_url?: string | null; images?: string[]; primary_image_url?: string | null; primary_image_polished?: boolean | null; primary_video_url?: string | null; primary_video_poster_url?: string | null; video_urls: string[]; looks: Set<string>; creators: Set<string>; saves: number; clicks: number; impressions: number; connection: 'Look' | 'Crawl' | 'Ad'; is_active?: boolean; is_elite?: boolean; is_platform?: boolean; type?: string | null; subtype?: string | null; gender?: 'male' | 'female' | 'unisex' | null; created_at?: string | null; source?: string | null; size_fit?: string | null; materials_care?: string | null; haiku_context?: string | null }>();
+    const productMap = new Map<string, { id?: string; brand: string; name: string; price: string; url: string; image_url?: string | null; images?: string[]; primary_image_url?: string | null; primary_image_polished?: boolean | null; primary_video_url?: string | null; primary_video_poster_url?: string | null; video_urls: string[]; looks: Set<string>; creators: Set<string>; saves: number; clicks: number; impressions: number; connection: 'Look' | 'Crawl' | 'Ad'; is_active?: boolean; is_elite?: boolean; is_platform?: boolean; type?: string | null; subtype?: string | null; gender?: 'male' | 'female' | 'unisex' | null; created_at?: string | null; source?: string | null; seed_target_id?: string | null; size_fit?: string | null; materials_care?: string | null; haiku_context?: string | null }>();
     looks.forEach(look => {
       const c = creators[look.creator];
       look.products.forEach(p => {
@@ -2095,6 +2105,7 @@ export default function AdminData() {
           gender: cp.gender ?? null,
           created_at: cp.created_at ?? null,
           source: cp.source ?? null,
+          seed_target_id: (cp as { seed_target_id?: string | null }).seed_target_id ?? null,
           size_fit: cp.size_fit ?? null,
           materials_care: cp.materials_care ?? null,
           haiku_context: (cp as { haiku_context?: string | null }).haiku_context ?? null,
@@ -2201,6 +2212,8 @@ export default function AdminData() {
       }
       // Automatic view: only products added by the autonomous pipeline.
       if (productFilter === 'automatic' && (p as { source?: string | null }).source !== AUTO_SOURCE) return false;
+      if (productFilter === 'seeded' && (p as { source?: string | null }).source !== SEED_SOURCE) return false;
+      if (seedTargetParam && (p as { seed_target_id?: string | null }).seed_target_id !== seedTargetParam) return false;
       // Hide soft-deleted from every other view.
       if (deletedProductKeys.has(key)) return false;
       if (brandFilter && (p.brand || '').toLowerCase() !== brandFilter.toLowerCase()) return false;
@@ -2211,7 +2224,7 @@ export default function AdminData() {
       if (!matchesDateFilter(p.created_at)) return false;
       return true;
     }),
-    [allProducts, productFilter, deletedProductKeys, adminQuery, brandFilter, matchesDateFilter]
+    [allProducts, productFilter, deletedProductKeys, adminQuery, brandFilter, matchesDateFilter, seedTargetParam]
   );
   // sharedTableId opts this table into the cross-admin sort state in
   // app_settings — when one admin clicks a column header, every other
@@ -4429,6 +4442,22 @@ export default function AdminData() {
               </button>
             </div>
           )}
+          {seedTargetParam && (
+            <div className="admin-brand-filter-chip">
+              <span>Seeding target: <strong>{seedLabel || 'selected'}</strong></span>
+              <span className="admin-brand-filter-count">{filteredProductsList.length} product{filteredProductsList.length !== 1 ? 's' : ''}</span>
+              <button
+                className="admin-icon-btn"
+                title="Clear target filter"
+                aria-label="Clear target filter"
+                onClick={() => setSearchParams(prev => { const p = new URLSearchParams(prev); p.delete('target'); p.delete('label'); return p; }, { replace: false })}
+              >
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/>
+                </svg>
+              </button>
+            </div>
+          )}
           <div className="admin-tabs" style={{ marginBottom: 12 }}>
             {/* Soft-deleted products are excluded from every count
                 here — they only show up in the dedicated "Soft delete"
@@ -4671,6 +4700,40 @@ export default function AdminData() {
               >
                 {allProducts.filter(p =>
                   (p as { source?: string | null }).source === AUTO_SOURCE
+                  && !deletedProductKeys.has(`${p.brand}-${p.name}`)
+                ).length}
+              </span>
+            </button>
+            {/* Seeded — products fetched by the demand-driven Seeding loop
+                (/admin/seeding). Teal accent so it reads as its own bucket. */}
+            <button
+              className={`admin-tab ${productFilter === 'seeded' ? 'active' : ''}`}
+              onClick={() => setProductFilter('seeded')}
+              title="Products fetched by the Seeding loop (/admin/seeding)"
+              style={{
+                marginLeft: 8,
+                display: 'inline-flex',
+                alignItems: 'center',
+                gap: 6,
+                background: productFilter === 'seeded' ? '#0d9488' : '#ccfbf1',
+                color: productFilter === 'seeded' ? '#fff' : '#0f766e',
+                border: `1px solid ${productFilter === 'seeded' ? '#0f766e' : '#99f6e4'}`,
+                fontWeight: 600,
+              }}
+            >
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                <path d="M12 2v8M12 10c-3 0-5 2-5 5M12 10c3 0 5 2 5 5M5 22h14M12 13v9" />
+              </svg>
+              Seeded
+              <span
+                className="admin-tab-badge"
+                style={{
+                  background: productFilter === 'seeded' ? 'rgba(255,255,255,0.22)' : '#99f6e4',
+                  color: productFilter === 'seeded' ? '#fff' : '#0f766e',
+                }}
+              >
+                {allProducts.filter(p =>
+                  (p as { source?: string | null }).source === SEED_SOURCE
                   && !deletedProductKeys.has(`${p.brand}-${p.name}`)
                 ).length}
               </span>
