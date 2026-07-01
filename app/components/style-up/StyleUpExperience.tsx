@@ -580,7 +580,7 @@ export function StyleUpExperience({
   // Recommendation signals from current prefs + the shopper's saved style.
   const recOpts = useCallback((): RecommendOpts => {
     const p = prefsRef.current;
-    const styleText = [ctx?.style, ...(ctx?.chips ?? [])].filter(Boolean).join(' ');
+    const styleText = (ctx?.chips ?? []).filter(Boolean).join(' ');
     return { budgetMax: p.budgetMax, occasion: p.occasion, formality: p.formality, avoidColors: p.avoidColors, simpler: p.simpler, styleText };
   }, [ctx]);
   const rejectIds = useCallback((ids: Array<string | undefined>) => {
@@ -1083,7 +1083,8 @@ export function StyleUpExperience({
           <svg className="su-context-mini-chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
       ) : ctxEditing && edit ? (
-        // Inline editor, photos + stats + gender + style, saved to the profile.
+        // Inline editor: photos + the mandatory metadata (height / weight / age /
+        // gender), saved to the profile.
         <div className="su-context-editor">
           <div className="su-context-photos su-context-photos--edit">
             {[0, 1, 2].map(i => (
@@ -1109,7 +1110,6 @@ export function StyleUpExperience({
                 ))}
               </div>
             </div>
-            <textarea className="su-edit-style" placeholder="Your style (e.g. quiet luxury, tailored, neutral tones)" value={edit.style} maxLength={400} onChange={e => setEdit({ ...edit, style: e.target.value })} />
             <div className="su-edit-actions">
               <button type="button" className="su-edit-btn" onClick={cancelEdit} disabled={savingCtx}>Cancel</button>
               <button type="button" className="su-edit-btn su-edit-btn--save" onClick={() => void saveCtx()} disabled={savingCtx}>{savingCtx ? 'Saving…' : 'Save'}</button>
@@ -1132,7 +1132,6 @@ export function StyleUpExperience({
               {ctx && ctx.chips.length > 0
                 ? ctx.chips.map((c, i) => <span className="su-context-chip" key={i}>{c}</span>)
                 : <span className="su-context-chip su-context-chip--muted">No stats yet</span>}
-              {ctx?.style && <span className="su-context-chip su-context-chip--style">{ctx.style}</span>}
             </div>
             <div className="su-context-note">Your stylist sees this, keep it current.</div>
           </div>
