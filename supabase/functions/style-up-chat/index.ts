@@ -124,14 +124,31 @@ Deno.serve(async (req: Request) => {
     const turns = ((history ?? []) as Array<{ sender: string; kind: string; body: string | null; product_ref: unknown }>).reverse();
     if (turns.length === 0) return json({ success: false, error: 'nothing to reply to' }, 400);
 
-    // Candidate products to recommend FROM — occasion-aware per-slot retrieval
-    // (the same BM25-over-occasion engine the seeding cockpit validates), so the
-    // pool matches what the shopper's after instead of the 120 newest products.
-    // The model may only pick ids that appear here (we validate below). Web
-    // stylists skip this entirely (their picks come from a live web search).
+    // Retrieval method is an admin dial (app_settings.stylist_engine_method):
+    //   'style_engine' (default) → occasion-aware style_slot_search
+    //   'legacy'                 → the pre-engine 120-newest recency scan
+    const { data: methodRow } = await admin
+      .from('app_settings').select('value').eq('key', 'stylist_engine_method').maybeSingle();
+    const method = (methodRow?.value === 'legacy') ? 'legacy' : 'style_engine';
+    const mode = String(body.mode ?? '');
+
+    // Candidate products to recommend FROM. Web stylists skip this (live web search).
     let cands: ProductCand[] = [];
-    if (!isWeb) {
-      // Occasion signal = the conversation so far; garment/occasion nouns rank the search.
+    if (!isWeb && method === 'legacy') {
+      // LEGACY: the 120 most-recently-added active products, gender-filtered.
+      let q = admin.from('products')
+        .select('id, name, brand, price, image_url, primary_image_url, url, type')
+        .eq('is_active', true)
+        .not('image_url', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(120);
+      if (genderNorm === 'male') q = q.or('gender.eq.male,gender.eq.unisex');
+      else if (genderNorm === 'female') q = q.or('gender.eq.female,gender.eq.unisex');
+      const { data: candRows } = await q;
+      cands = (candRows ?? []) as ProductCand[];
+      console.log(`[style-up-chat] thread=${threadId} retrieval=LEGACY(recency-120) candidates=${cands.length}`);
+    } else if (!isWeb) {
+      // STYLE ENGINE: occasion-aware per-slot style_slot_search.
       const occasion = turns.map(t => (t.body ?? '').trim()).filter(Boolean).join(' ').slice(0, 600);
       const found = await retrieveOccasionCandidates(admin, {
         occasion, gender: genderNorm, aesthetic: stylist?.specialty ?? '',
@@ -140,7 +157,7 @@ Deno.serve(async (req: Request) => {
         id: c.id, name: c.name, brand: c.brand, price: c.price,
         image_url: c.image, primary_image_url: c.image, url: c.url, type: c.type,
       }));
-      console.log(`[style-up-chat] thread=${threadId} retrieval=ENGINE(style_slot_search) candidates=${cands.length} (occasion-aware, NOT recency scan)`);
+      console.log(`[style-up-chat] thread=${threadId} retrieval=ENGINE(style_slot_search) candidates=${cands.length} mode=${mode || 'default'} (occasion-aware, NOT recency scan)`);
     }
     const candList = cands.map(c =>
       `${c.id} | ${(c.name ?? '').slice(0, 70)} | ${c.brand ?? ''} | ${c.price ?? ''} | ${c.type ?? ''}`,
@@ -148,6 +165,9 @@ Deno.serve(async (req: Request) => {
 
     const persona = stylist?.persona_prompt
       || `You are ${stylist?.name ?? 'a personal stylist'}, a friendly personal stylist.`;
+    const outfitClause = (!isWeb && method === 'style_engine' && mode === 'outfit')
+      ? `\n- The shopper wants a COMPLETE outfit this turn. Recommend ONE coherent full look from the candidates: a top (or a dress), a bottom, shoes, plus an optional layer — one piece per slot, all matching in colour, formality and season. Put every piece's id in productIds.`
+      : '';
     const system = isWeb ? `${persona}
 
 You're texting ${shopperName} inside a styling chat. Shopper context (use it; never ask for what you already know): ${ctxBits.join('; ') || 'not provided yet'}.
@@ -171,7 +191,7 @@ STYLE OF REPLY:
 - Talk like texting: warm, concise, 1-3 short sentences. No markdown, no bullet lists. Never use em dashes; use commas or periods.
 - Ask a sharp clarifying question early if you don't yet know the occasion/vibe.
 - When you're ready to recommend, pick 1-4 SPECIFIC products from the candidate list below (by id). Recommend things that actually fit their context and the conversation. Don't recommend products that aren't in the list.
-- After recommending, tell them they can tap any piece to see it on themselves, or just ask you to put the whole look on them — you CAN generate the look on them (it kicks off automatically when they ask). NEVER say you can't generate photos.
+- After recommending, tell them they can tap any piece to see it on themselves, or just ask you to put the whole look on them — you CAN generate the look on them (it kicks off automatically when they ask). NEVER say you can't generate photos.${outfitClause}
 
 CANDIDATE PRODUCTS (id | name | brand | price | type) — only recommend from these:
 ${candList || '(none available)'}
