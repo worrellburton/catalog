@@ -36,6 +36,11 @@ import {
   setWaitlistMode,
   subscribeWaitlistMode,
   DEFAULT_WAITLIST_MODE,
+  getStylistEngineMethod,
+  setStylistEngineMethod,
+  subscribeStylistEngineMethod,
+  DEFAULT_STYLIST_ENGINE_METHOD,
+  type StylistEngineMethod,
 } from '~/services/dials';
 import { backfillBrandLogos, type BackfillResult } from '~/services/brandLogos';
 import { shouldBeVideo } from '~/utils/videoStillSplit';
@@ -236,6 +241,36 @@ export default function AdminDials() {
         window.setTimeout(() => {
           if (inflightComments.current === next) inflightComments.current = null;
         }, 1500);
+      });
+  };
+
+  // ── Stylist engine method (A/B: style engine vs legacy recency) ─────
+  const [stylistMethod, setStylistMethodState] = useState<StylistEngineMethod>(DEFAULT_STYLIST_ENGINE_METHOD);
+  const [stylistMethodLoaded, setStylistMethodLoaded] = useState(false);
+  const [stylistMethodSaving, setStylistMethodSaving] = useState(false);
+  const inflightStylistMethod = useRef<StylistEngineMethod | null>(null);
+  useEffect(() => {
+    getStylistEngineMethod().then(v => {
+      if (inflightStylistMethod.current) return;
+      setStylistMethodState(v);
+      setStylistMethodLoaded(true);
+    });
+    const unsub = subscribeStylistEngineMethod(v => {
+      if (inflightStylistMethod.current === v) return;
+      setStylistMethodState(v);
+    });
+    return () => unsub();
+  }, []);
+  const onSetStylistMethod = (next: StylistEngineMethod) => {
+    if (next === stylistMethod) return;
+    setStylistMethodState(next);
+    inflightStylistMethod.current = next;
+    setStylistMethodSaving(true);
+    setStylistEngineMethod(next)
+      .catch(() => setStylistMethodState(stylistMethod))
+      .finally(() => {
+        setStylistMethodSaving(false);
+        if (inflightStylistMethod.current === next) inflightStylistMethod.current = null;
       });
   };
 
@@ -863,6 +898,40 @@ export default function AdminDials() {
                   />
                 </button>
               </div>
+            </div>
+          )}
+        </div>
+
+        <div className="admin-detail-card">
+          <h3>Stylist engine (Style Up)</h3>
+          <p style={{ fontSize: 13, color: '#888', margin: '4px 0 16px' }}>
+            How the /style catalog stylist finds products. <b>Style engine</b> uses
+            occasion-aware search and suggests a complete look directly (no slot
+            chooser). <b>Legacy</b> restores the pre-engine behavior: the "Build your
+            outfit" chooser and the 120-newest recency scan. Flip to compare — it
+            applies to the next turn in every open chat.
+          </p>
+          {!stylistMethodLoaded ? (
+            <Skeleton height={40} radius={8} />
+          ) : (
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+              <div style={{ display: 'inline-flex', border: '1px solid #e5e7eb', borderRadius: 8, overflow: 'hidden' }}>
+                {(['style_engine', 'legacy'] as const).map(opt => (
+                  <button
+                    key={opt}
+                    type="button"
+                    onClick={() => onSetStylistMethod(opt)}
+                    style={{
+                      padding: '8px 16px', fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer',
+                      background: stylistMethod === opt ? '#111' : '#fff',
+                      color: stylistMethod === opt ? '#fff' : '#555',
+                    }}
+                  >
+                    {opt === 'style_engine' ? 'Style engine' : 'Legacy'}
+                  </button>
+                ))}
+              </div>
+              <span style={{ fontSize: 11, color: '#999' }}>{stylistMethodSaving ? 'Saving…' : 'Saved'}</span>
             </div>
           )}
         </div>
