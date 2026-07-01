@@ -13,12 +13,11 @@ import { useNavigate } from '@remix-run/react';
 import { useAuth } from '~/hooks/useAuth';
 import { supabase } from '~/utils/supabase';
 import {
-  fetchStylists, getOrCreateThread, deleteThread, getLatestThread, fetchMyThreads, fetchMessages, sendShopperMessage,
+  fetchStylists, getOrCreateThread, deleteThread, getThreadHunting, getLatestThread, fetchMyThreads, fetchMessages, sendShopperMessage,
   sendStylistText, startFullLookRender, fetchSwapOptions, sendSwapOptions,
   sendChooser, recommendForSlot, sendProductPick,
-  webFetchSwapOptions, webRecommendForSlot, webHuntOne, appendTraceSearches,
+  webFetchSwapOptions, webRecommendForSlot,
   type StyleUpStylist, type StyleUpMessage, type StyleUpProductRef, type StyleUpThreadSummary, type RecommendOpts,
-  type StyleUpTraceSearch,
 } from '~/services/style-up';
 import { roleTagFromName } from '~/services/product-roles';
 import { signInWithGoogle } from '~/services/auth';
@@ -149,57 +148,6 @@ const HUNT_PHRASES = [
   'Pretending this is effortless…',
 ];
 
-// Per-piece pull timing, we record how long each piece actually takes to pull
-// (localStorage, last 24) and average it, so the ETA self-calibrates to the
-// shopper's real conditions instead of a hardcoded guess.
-const PULL_TIMINGS_KEY = 'styleup:pull-timings';
-const DEFAULT_PULL_MS = 4500;
-function recordPullMs(ms: number): void {
-  if (!Number.isFinite(ms) || ms <= 0) return;
-  try {
-    const raw = localStorage.getItem(PULL_TIMINGS_KEY);
-    const arr: number[] = raw ? JSON.parse(raw) : [];
-    arr.push(Math.round(ms));
-    localStorage.setItem(PULL_TIMINGS_KEY, JSON.stringify(arr.slice(-24)));
-  } catch { /* ignore */ }
-}
-function avgPullMs(): number {
-  try {
-    const raw = localStorage.getItem(PULL_TIMINGS_KEY);
-    const arr: number[] = raw ? (JSON.parse(raw) as number[]) : [];
-    if (!arr.length) return DEFAULT_PULL_MS;
-    return arr.reduce((a, b) => a + b, 0) / arr.length;
-  } catch { return DEFAULT_PULL_MS; }
-}
-
-// Persisted per-thread "a pull is in progress" marker so the working module
-// stays in sync no matter where the shopper goes (leave + come back, refresh).
-// TTL-bounded so a pull that died mid-flight (hard reload) can't show forever.
-const HUNT_FLAG_PREFIX = 'styleup:hunt:';
-interface HuntFlag { startedAt: number; estSec: number; }
-function setHuntFlag(threadId: string, estSec: number): void {
-  try { localStorage.setItem(HUNT_FLAG_PREFIX + threadId, JSON.stringify({ startedAt: Date.now(), estSec })); } catch { /* ignore */ }
-}
-function clearHuntFlag(threadId: string): void {
-  try { localStorage.removeItem(HUNT_FLAG_PREFIX + threadId); } catch { /* ignore */ }
-}
-function getHuntFlag(threadId: string): HuntFlag | null {
-  try {
-    const raw = localStorage.getItem(HUNT_FLAG_PREFIX + threadId);
-    if (!raw) return null;
-    const f = JSON.parse(raw) as HuntFlag;
-    if (Date.now() - f.startedAt > f.estSec * 1000 + 30000) { clearHuntFlag(threadId); return null; }
-    return f;
-  } catch { return null; }
-}
-
-/** A natural, conversational way to say the wait (no em dashes). */
-function waitPhrase(sec: number): string {
-  if (sec <= 6) return 'a few seconds';
-  if (sec < 60) return `about ${Math.max(5, Math.round(sec / 5) * 5)} seconds`;
-  const m = Math.round(sec / 60);
-  return m <= 1 ? 'about a minute' : `about ${m} minutes`;
-}
 
 const SLOT_LABEL: Record<string, string> = { Top: 'Top', Pants: 'Pants / Shorts', Jacket: 'Jacket', Hat: 'Hat', Shoes: 'Shoes' };
 
@@ -626,18 +574,33 @@ export function StyleUpExperience({
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages.length, stylistTyping, !!huntView]);
 
-  // Poll the persisted hunt marker for THIS thread every second, so the working
-  // module shows whenever a pull is actually in progress for the open chat,
-  // regardless of navigation (leave + come back, refresh), and hides the moment
-  // it finishes or expires. The marker is the single source of truth.
+  // The web hunt now runs SERVER-SIDE (in the style-up-chat edge fn), so it
+  // finishes even if the shopper refreshes or leaves. We drive the working
+  // module off the thread's `hunting_until` marker (polled), so it shows for
+  // whoever has the chat open and hides the moment the server clears it.
   useEffect(() => {
     if (!threadId) { setHuntView(null); return; }
-    const read = () => {
-      const f = getHuntFlag(threadId);
-      setHuntView(f ? { estSec: f.estSec, elapsed: Math.max(0, Math.floor((Date.now() - f.startedAt) / 1000)) } : null);
+    let untilMs = 0;
+    let startMs = Date.now();
+    let active = false;
+    let lastFetch = 0;
+    const tick = async () => {
+      const now = Date.now();
+      if (now - lastFetch > 2500) {
+        lastFetch = now;
+        const until = await getThreadHunting(threadId);
+        untilMs = until ? new Date(until).getTime() : 0;
+      }
+      if (untilMs > now) {
+        if (!active) { active = true; startMs = now; }
+        setHuntView({ estSec: Math.ceil((untilMs - now) / 1000), elapsed: Math.floor((now - startMs) / 1000) });
+      } else {
+        active = false;
+        setHuntView(null);
+      }
     };
-    read();
-    const h = window.setInterval(read, 1000);
+    void tick();
+    const h = window.setInterval(tick, 1000);
     return () => window.clearInterval(h);
   }, [threadId]);
 
@@ -651,59 +614,11 @@ export function StyleUpExperience({
     setStylistTyping(false);
   }, [threadId]);
 
-  // Web stylist surfacing pieces: run each per-piece web query (search → import
-  // → renderable ref) behind a visible "researching" indicator, then drop the
-  // finds into the thread. Driven by the searchQueries the stylist's brain
-  // returns, so "let me surface some options" actually produces products.
-  const runWebHunt = useCallback(async (queries: string[], traceId: string | null = null) => {
-    const tid = threadId;
-    if (!tid || !userId || queries.length === 0) return;
-    const qs = queries.slice(0, 4);
-    const traceSearches: StyleUpTraceSearch[] = [];
-    // Estimate the wait from past pull times, tell the shopper conversationally,
-    // and scope the "working" indicator to THIS thread so it never shows up in a
-    // different chat the shopper switches to mid-pull.
-    const estSec = Math.max(3, Math.round((avgPullMs() * qs.length) / 1000));
-    setHuntFlag(tid, estSec);                       // persist so the module survives navigation
-    setHuntView({ estSec, elapsed: 0 });            // show immediately (poll keeps it in sync)
-    setAdminNote(null);
-    await sendStylistText(tid, `On it. Give me ${waitPhrase(estSec)} and I'll have ${qs.length === 1 ? 'it' : 'these'} ready for you.`);
-    try {
-      const found: StyleUpProductRef[] = [];
-      const diags: string[] = [];
-      for (const q of qs) {
-        const got = found.map(f => f.id).filter((x): x is string => !!x);
-        const t0 = Date.now();
-        const { pick, diag } = await webHuntOne(userId, q, [...rejected, ...got]);
-        recordPullMs(Date.now() - t0);          // self-calibrate future estimates
-        diags.push(`"${q}" → ${diag.ok ? `${diag.rawCount} found · ${diag.withUrl} w/url · ${diag.matched} usable` : `ERR: ${diag.error}`}`);
-        traceSearches.push({
-          query: q, ok: diag.ok, error: diag.error, rawCount: diag.rawCount, withUrl: diag.withUrl, matched: diag.matched,
-          importedId: pick?.id ?? null, importedName: pick ? [pick.brand, pick.name].filter(Boolean).join(' ') || null : null,
-        });
-        if (pick?.id) found.push(pick);
-      }
-      if (traceId) await appendTraceSearches(traceId, traceSearches);
-      if (found.length === 0) {
-        await sendStylistText(tid, "Couldn't quite pin those down. Give me a brand or a budget and I'll take another run at it.");
-        // Super admins get the raw reason the pull came back empty.
-        if (isSuperAdmin) setAdminNote(`pull empty (${qs.length} ${qs.length === 1 ? 'query' : 'queries'}):\n${diags.join('\n')}`);
-        return;
-      }
-      await sendStylistText(tid, `Here's what I pulled. Tap any to see it on you, or say "put the look on me".`);
-      for (const p of found) await sendProductPick(tid, p);
-    } catch (e) {
-      if (isSuperAdmin) setAdminNote(`pull crashed: ${e instanceof Error ? e.message : String(e)}`);
-    } finally {
-      clearHuntFlag(tid);                            // the poll hides the module within ~1s
-    }
-  }, [threadId, userId, rejected, isSuperAdmin]);
-
   // Kick the AI stylist for the current thread. Its reply (+ any product picks)
   // streams back via the realtime subscription; the typing bubble holds until
-  // the call resolves. For web stylists, the reply may carry searchQueries —
-  // we then run a web hunt for the pieces. Any failure surfaces a recoverable
-  // error row with a retry, rather than silently dropping the turn.
+  // the call resolves. For WEB stylists, the edge function ALSO runs the piece
+  // hunt server-side (it sets a hunting_until marker + streams products in), so
+  // nothing extra is needed here. Any failure surfaces a recoverable error row.
   const triggerStylist = useCallback(async () => {
     if (!threadId || !supabase) return;
     setChatError(null);
@@ -719,10 +634,9 @@ export function StyleUpExperience({
       if (attempt > 0) await new Promise((r) => setTimeout(r, 1200 * attempt));
       try {
         const { data, error } = await supabase.functions.invoke('style-up-chat', { body: { threadId } });
-        const resp = data as { success?: boolean; error?: string; searchQueries?: string[]; traceId?: string | null } | null;
+        const resp = data as { success?: boolean; error?: string } | null;
         if (!error && resp?.success) {
           setStylistTyping(false);
-          if (resp.searchQueries?.length) await runWebHunt(resp.searchQueries, resp.traceId ?? null);
           return;
         }
         lastErr = resp?.error || '';
@@ -733,7 +647,7 @@ export function StyleUpExperience({
     setStylistTyping(false);
     setChatError(lastErr || 'Your stylist couldn’t respond. Tap to retry.');
     if (isSuperAdmin) setAdminNote(`style-up-chat failed: ${lastErr || 'no response (network / timeout)'}`);
-  }, [threadId, runWebHunt, isSuperAdmin]);
+  }, [threadId, isSuperAdmin]);
 
   // "Generate the look on me", the stylist confirms in-thread, then the FULL
   // set of recommended pieces is composited onto the shopper via the existing
