@@ -154,6 +154,7 @@ export function prefetchDials(): Promise<void> {
       COMMENTS_ENABLED_KEY,
       AUTO_EDITOR_ENABLED_KEY,
       WAITLIST_MODE_KEY,
+      STYLIST_ENGINE_METHOD_KEY,
     ];
     const { data, error } = await supabase
       .from('app_settings').select('key, value').in('key', keys);
@@ -380,6 +381,48 @@ export function subscribeWaitlistMode(onChange: (value: boolean) => void): () =>
         const next = (payload.new as { value?: string } | null)?.value;
         onChange(parseBool(next ?? null, DEFAULT_WAITLIST_MODE));
       },
+    )
+    .subscribe();
+  return () => { void supabase!.removeChannel(channel); };
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Stylist engine method (A/B). How the /style catalog stylist sources
+// products:
+//   'style_engine' (default) → occasion-aware style_slot_search
+//   'legacy'                  → the pre-engine 120-newest recency behavior
+// Read by StyleUpExperience (client, via useStylistEngineMethod) AND the
+// style-up-chat edge fn (direct app_settings select), so both always agree.
+// ────────────────────────────────────────────────────────────────────
+
+export const STYLIST_ENGINE_METHOD_KEY = 'stylist_engine_method';
+export type StylistEngineMethod = 'style_engine' | 'legacy';
+export const DEFAULT_STYLIST_ENGINE_METHOD: StylistEngineMethod = 'style_engine';
+
+export function parseStylistMethod(raw: string | null | undefined): StylistEngineMethod {
+  return raw === 'legacy' ? 'legacy' : DEFAULT_STYLIST_ENGINE_METHOD;
+}
+
+export async function getStylistEngineMethod(): Promise<StylistEngineMethod> {
+  return parseStylistMethod(await readDial(STYLIST_ENGINE_METHOD_KEY));
+}
+
+export async function setStylistEngineMethod(value: StylistEngineMethod): Promise<void> {
+  if (!supabase) throw new Error('Supabase not configured');
+  const { error } = await supabase
+    .from('app_settings')
+    .upsert({ key: STYLIST_ENGINE_METHOD_KEY, value }, { onConflict: 'key' });
+  if (error) throw error;
+}
+
+export function subscribeStylistEngineMethod(onChange: (v: StylistEngineMethod) => void): () => void {
+  if (!supabase) return () => {};
+  const channel = supabase
+    .channel(`dials:${STYLIST_ENGINE_METHOD_KEY}`)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'app_settings', filter: `key=eq.${STYLIST_ENGINE_METHOD_KEY}` },
+      (payload) => onChange(parseStylistMethod((payload.new as { value?: string } | null)?.value ?? null)),
     )
     .subscribe();
   return () => { void supabase!.removeChannel(channel); };
