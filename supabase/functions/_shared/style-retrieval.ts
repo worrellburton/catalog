@@ -64,5 +64,11 @@ export async function retrieveOccasionCandidates(
     if (seen.has(c.id)) continue;
     seen.add(c.id); out.push(c);
   }
+  // Observability: proves this path (per-slot style_slot_search) produced the pool.
+  console.log(
+    `[style-retrieval] ENGINE via style_slot_search × ${slots.length} slots ` +
+    `[${perSlot.map((r, i) => `${slots[i]}:${r.length}`).join(' ')}] ` +
+    `gender=${gender} occasion="${opts.occasion.slice(0, 80)}" -> ${out.length} unique candidates`,
+  );
   return out;
 }
