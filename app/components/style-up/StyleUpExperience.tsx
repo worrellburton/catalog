@@ -11,6 +11,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from '@remix-run/react';
 import { useAuth } from '~/hooks/useAuth';
+import { useStylistEngineMethod } from '~/hooks/useStylistEngineMethod';
 import { supabase } from '~/utils/supabase';
 import {
   fetchStylists, getOrCreateThread, getLatestThread, fetchMyThreads, fetchMessages, sendShopperMessage,
@@ -395,6 +396,36 @@ export function StyleUpExperience({
     return () => mq.removeEventListener('change', apply);
   }, []);
 
+  // Keyboard inset. The chat shell is position:fixed inset:0; iOS Safari leaves
+  // it at full layout-viewport height when the keyboard opens (it ignores
+  // interactive-widget=resizes-content), so the bottom composer lands BEHIND the
+  // keyboard and iOS auto-scrolls the whole shell to reveal it — the composer
+  // floats mid-screen with the messages gone. The VisualViewport DOES exclude
+  // the keyboard, so mirror its height into --su-kb and pad the shell bottom by
+  // it, keeping the composer above the keyboard (0 when the keyboard is down).
+  // Same treatment as AIStylist's --gen-kb-inset.
+  useEffect(() => {
+    const vv = typeof window !== 'undefined' ? window.visualViewport : null;
+    if (!vv) return;
+    const root = document.documentElement;
+    let raf = 0;
+    const apply = () => {
+      raf = 0;
+      const inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
+      root.style.setProperty('--su-kb', `${Math.round(inset)}px`);
+    };
+    const schedule = () => { if (!raf) raf = requestAnimationFrame(apply); };
+    apply();
+    vv.addEventListener('resize', schedule);
+    vv.addEventListener('scroll', schedule);
+    return () => {
+      if (raf) cancelAnimationFrame(raf);
+      vv.removeEventListener('resize', schedule);
+      vv.removeEventListener('scroll', schedule);
+      root.style.removeProperty('--su-kb');
+    };
+  }, []);
+
   // Roster, scoped to the landing pair on /style, the full roster elsewhere.
   useEffect(() => { void fetchStylists({ landingOnly }).then(setStylists); }, [landingOnly]);
 
@@ -525,12 +556,14 @@ export function StyleUpExperience({
     if (threadId) { try { localStorage.setItem(`styleup:prefs:${threadId}`, JSON.stringify(next)); } catch { /* ignore */ } }
   }, [threadId]);
 
+  const { method: engineMethod } = useStylistEngineMethod();
+
   // Recommendation signals from current prefs + the shopper's saved style.
   const recOpts = useCallback((): RecommendOpts => {
     const p = prefsRef.current;
     const styleText = [ctx?.style, ...(ctx?.chips ?? [])].filter(Boolean).join(' ');
-    return { budgetMax: p.budgetMax, occasion: p.occasion, formality: p.formality, avoidColors: p.avoidColors, simpler: p.simpler, styleText };
-  }, [ctx]);
+    return { budgetMax: p.budgetMax, occasion: p.occasion, formality: p.formality, avoidColors: p.avoidColors, simpler: p.simpler, styleText, engineMethod };
+  }, [ctx, engineMethod]);
   const rejectIds = useCallback((ids: Array<string | undefined>) => {
     const clean = ids.filter((x): x is string => !!x);
     if (!threadId || clean.length === 0) return;
@@ -651,7 +684,7 @@ export function StyleUpExperience({
   // the call resolves. For web stylists, the reply may carry searchQueries —
   // we then run a web hunt for the pieces. Any failure surfaces a recoverable
   // error row with a retry, rather than silently dropping the turn.
-  const triggerStylist = useCallback(async () => {
+  const triggerStylist = useCallback(async (mode?: 'outfit') => {
     if (!threadId || !supabase) return;
     setChatError(null);
     setAdminNote(null);
@@ -665,7 +698,7 @@ export function StyleUpExperience({
     for (let attempt = 0; attempt < 3; attempt++) {
       if (attempt > 0) await new Promise((r) => setTimeout(r, 1200 * attempt));
       try {
-        const { data, error } = await supabase.functions.invoke('style-up-chat', { body: { threadId } });
+        const { data, error } = await supabase.functions.invoke('style-up-chat', { body: { threadId, mode } });
         const resp = data as { success?: boolean; error?: string; searchQueries?: string[]; traceId?: string | null } | null;
         if (!error && resp?.success) {
           setStylistTyping(false);
@@ -869,10 +902,13 @@ export function StyleUpExperience({
     const swap = swapTargetFromText(text);
     const looks = lookPicks();
     if (swap && looks.length > 0) void handleSwapRequest(swap);
-    else if (wantsFullOutfit(text)) void startOutfitFlow();
+    else if (wantsFullOutfit(text)) {
+      if (engineMethod === 'style_engine') void triggerStylist('outfit');
+      else void startOutfitFlow();
+    }
     else if (wantsFullLook(text) && looks.length > 0) void askScene();
     else void triggerStylist();
-  }, [draft, threadId, sending, triggerStylist, handleSwapRequest, startOutfitFlow, askScene, lookPicks]);
+  }, [draft, threadId, sending, triggerStylist, handleSwapRequest, startOutfitFlow, askScene, lookPicks, engineMethod]);
 
   // Add a finished render to the shopper's own looks, promotes the generation
   // to a LIVE look (with its video + poster + pieces), associated with THIS
