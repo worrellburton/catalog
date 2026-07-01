@@ -17,15 +17,37 @@
 }
 .su-shell-head {
   flex: 0 0 auto;
-  display: flex;
+  display: grid;
+  grid-template-columns: 34px 1fr 34px;   /* back · centered brand · spacer */
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
   padding: 10px 14px;
   border-bottom: 1px solid #1f2024;
 }
-.su-shell-head-left { display: flex; align-items: center; gap: 10px; min-width: 0; }
-.su-shell-title { font-size: 16px; font-weight: 700; letter-spacing: -0.01em; white-space: nowrap; }
+.su-shell-back { grid-column: 1; }
+/* Centered Catalog · Style wordmark: "catalog" up top, "style" right under it. */
+.su-shell-brand {
+  grid-column: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  line-height: 1;
+  min-width: 0;
+}
+.su-shell-brand-cat {
+  font-size: 17px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+}
+.su-shell-brand-style {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--su-accent, #8aa0c0);
+  padding-left: 0.24em;   /* optical-center the tracked caps */
+}
 
 /* ── Desktop: two-pane (stylist/conversation rail + active chat) ───────── */
 @media (min-width: 769px) {
@@ -133,8 +155,8 @@
   gap: 13px;
   width: 100%;
   text-align: left;
-  padding: 12px 14px;
-  border-radius: 16px;
+  padding: 10px 20px 10px 10px;   /* avatar hugs the left of the pill */
+  border-radius: 999px;           /* rounded pill */
   border: 1px solid #26282d;
   background: #141518;
   color: inherit;
@@ -164,6 +186,16 @@
   margin: 0 auto;
   padding: 0;
   overflow: hidden;
+  /* Zoom + fade into the conversation when it opens. */
+  transform-origin: center;
+  animation: su-thread-zoom 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes su-thread-zoom {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .su-page--thread { animation: none; }
 }
 .su-thread-head {
   flex: 0 0 auto;
