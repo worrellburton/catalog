@@ -317,11 +317,77 @@ productIds is optional — include it only when you're actually recommending pie
       traceId = (traceRow?.id as string | undefined) ?? null;
     } catch (_e) { /* trace is best-effort */ }
 
-    // Web stylists return per-piece web search queries for the client to run
-    // (search → import → show), so the stylist's "let me surface options"
-    // actually produces products. traceId lets the client enrich the trace with
-    // the per-query search results.
-    return json({ success: true, reply, picks: picks.length, searchQueries: isWeb ? searchQueries : [], traceId });
+    // ── Web stylists: run the piece hunt SERVER-SIDE so it finishes even if the
+    // shopper refreshes or leaves the page. Products stream in via realtime; a
+    // `hunting_until` marker on the thread drives the "working" indicator. The
+    // text reply above already posted, so nothing here can break the chat. ──
+    if (isWeb && searchQueries.length > 0) {
+      const estSec = Math.max(8, searchQueries.length * 7);
+      await admin.from('style_up_threads')
+        .update({ hunting_until: new Date(Date.now() + estSec * 1000).toISOString() })
+        .eq('id', threadId);
+
+      const g = genderNorm === 'male' ? 'men' : genderNorm === 'female' ? 'women' : 'unisex';
+      const hunt = (async () => {
+        const traceSearches: unknown[] = [];
+        try {
+          const used = new Set<string>();
+          const found: Array<Record<string, unknown>> = [];
+          for (const q of searchQueries.slice(0, 4)) {
+            try {
+              const { data: sData } = await admin.functions.invoke('product-search', { body: { query: q, ingest: true, gender: g } });
+              const sResp = sData as { success?: boolean; error?: string; products?: Array<{ url?: string }> } | null;
+              const urls = (sResp?.products ?? []).map(p => p.url).filter((u): u is string => !!u).slice(0, 30);
+              let importedId: string | null = null, importedName: string | null = null;
+              if (urls.length) {
+                const { data: rows } = await admin.from('products')
+                  .select('id, name, brand, price, image_url, primary_image_url, url')
+                  .in('url', urls);
+                const byUrl = new Map(((rows ?? []) as Array<Record<string, unknown>>).map(r => [String(r.url), r]));
+                for (const u of urls) {
+                  const r = byUrl.get(u);
+                  if (r && !used.has(String(r.id))) {
+                    used.add(String(r.id)); found.push(r);
+                    importedId = String(r.id);
+                    importedName = [r.brand, r.name].filter(Boolean).join(' ') || null;
+                    break;
+                  }
+                }
+              }
+              traceSearches.push({ query: q, ok: !!sResp?.success, error: sResp?.error ?? null, rawCount: (sResp?.products ?? []).length, withUrl: urls.length, matched: importedId ? 1 : 0, importedId, importedName });
+            } catch (e) {
+              traceSearches.push({ query: q, ok: false, error: e instanceof Error ? e.message : String(e), rawCount: 0, withUrl: 0, matched: 0, importedId: null, importedName: null });
+            }
+          }
+          if (found.length) {
+            await admin.from('style_up_messages').insert({ thread_id: threadId, sender: 'stylist', kind: 'text', body: "Here's what I pulled. Tap any to open it, or hit Try it on to put the look on you." });
+            for (const r of found) {
+              await admin.from('style_up_messages').insert({
+                thread_id: threadId, sender: 'stylist', kind: 'product',
+                product_ref: { id: r.id, name: r.name, brand: r.brand, price: r.price, image: r.primary_image_url || r.image_url, url: r.url },
+              });
+            }
+          } else {
+            await admin.from('style_up_messages').insert({ thread_id: threadId, sender: 'stylist', kind: 'text', body: "Couldn't quite pin those down. Give me a brand or a budget and I'll take another run at it." });
+          }
+          if (traceId) { try { await admin.from('style_up_traces').update({ searches: traceSearches }).eq('id', traceId); } catch (_e) { /* best-effort */ } }
+        } catch (_e) {
+          /* swallow — the reply already posted */
+        } finally {
+          await admin.from('style_up_threads')
+            .update({ hunting_until: null, last_message_at: new Date().toISOString() })
+            .eq('id', threadId);
+        }
+      })();
+
+      // Keep the function alive until the hunt finishes, even after we respond.
+      const er = (globalThis as unknown as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } }).EdgeRuntime;
+      if (er?.waitUntil) er.waitUntil(hunt);
+      else await hunt;
+    }
+
+    // searchQueries are NOT returned anymore — the hunt runs server-side.
+    return json({ success: true, reply, picks: picks.length, searchQueries: [], hunting: isWeb && searchQueries.length > 0, traceId });
   } catch (err) {
     return json({ success: false, error: err instanceof Error ? err.message : String(err) }, 500);
   }

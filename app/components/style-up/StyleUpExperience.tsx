@@ -14,16 +14,16 @@ import { useAuth } from '~/hooks/useAuth';
 import { useStylistEngineMethod } from '~/hooks/useStylistEngineMethod';
 import { supabase } from '~/utils/supabase';
 import {
-  fetchStylists, getOrCreateThread, getLatestThread, fetchMyThreads, fetchMessages, sendShopperMessage,
+  fetchStylists, getOrCreateThread, deleteThread, getThreadHunting, getLatestThread, fetchMyThreads, fetchMessages, sendShopperMessage,
   sendStylistText, startFullLookRender, fetchSwapOptions, sendSwapOptions,
   sendChooser, recommendForSlot, sendProductPick,
-  webFetchSwapOptions, webRecommendForSlot, webHuntOne, appendTraceSearches,
+  webFetchSwapOptions, webRecommendForSlot,
   type StyleUpStylist, type StyleUpMessage, type StyleUpProductRef, type StyleUpThreadSummary, type RecommendOpts,
-  type StyleUpTraceSearch,
 } from '~/services/style-up';
 import { roleTagFromName } from '~/services/product-roles';
 import { signInWithGoogle } from '~/services/auth';
 import StyleUpBackground from './StyleUpBackground';
+import CatalogLogo from '~/components/CatalogLogo';
 
 // Preferences the stylist infers from chat, budget, occasion, formality lean,
 // dropped colors, simplicity, applied to every recommendation (#4/#6/#7).
@@ -150,57 +150,6 @@ const HUNT_PHRASES = [
   'Pretending this is effortless…',
 ];
 
-// Per-piece pull timing, we record how long each piece actually takes to pull
-// (localStorage, last 24) and average it, so the ETA self-calibrates to the
-// shopper's real conditions instead of a hardcoded guess.
-const PULL_TIMINGS_KEY = 'styleup:pull-timings';
-const DEFAULT_PULL_MS = 4500;
-function recordPullMs(ms: number): void {
-  if (!Number.isFinite(ms) || ms <= 0) return;
-  try {
-    const raw = localStorage.getItem(PULL_TIMINGS_KEY);
-    const arr: number[] = raw ? JSON.parse(raw) : [];
-    arr.push(Math.round(ms));
-    localStorage.setItem(PULL_TIMINGS_KEY, JSON.stringify(arr.slice(-24)));
-  } catch { /* ignore */ }
-}
-function avgPullMs(): number {
-  try {
-    const raw = localStorage.getItem(PULL_TIMINGS_KEY);
-    const arr: number[] = raw ? (JSON.parse(raw) as number[]) : [];
-    if (!arr.length) return DEFAULT_PULL_MS;
-    return arr.reduce((a, b) => a + b, 0) / arr.length;
-  } catch { return DEFAULT_PULL_MS; }
-}
-
-// Persisted per-thread "a pull is in progress" marker so the working module
-// stays in sync no matter where the shopper goes (leave + come back, refresh).
-// TTL-bounded so a pull that died mid-flight (hard reload) can't show forever.
-const HUNT_FLAG_PREFIX = 'styleup:hunt:';
-interface HuntFlag { startedAt: number; estSec: number; }
-function setHuntFlag(threadId: string, estSec: number): void {
-  try { localStorage.setItem(HUNT_FLAG_PREFIX + threadId, JSON.stringify({ startedAt: Date.now(), estSec })); } catch { /* ignore */ }
-}
-function clearHuntFlag(threadId: string): void {
-  try { localStorage.removeItem(HUNT_FLAG_PREFIX + threadId); } catch { /* ignore */ }
-}
-function getHuntFlag(threadId: string): HuntFlag | null {
-  try {
-    const raw = localStorage.getItem(HUNT_FLAG_PREFIX + threadId);
-    if (!raw) return null;
-    const f = JSON.parse(raw) as HuntFlag;
-    if (Date.now() - f.startedAt > f.estSec * 1000 + 30000) { clearHuntFlag(threadId); return null; }
-    return f;
-  } catch { return null; }
-}
-
-/** A natural, conversational way to say the wait (no em dashes). */
-function waitPhrase(sec: number): string {
-  if (sec <= 6) return 'a few seconds';
-  if (sec < 60) return `about ${Math.max(5, Math.round(sec / 5) * 5)} seconds`;
-  const m = Math.round(sec / 60);
-  return m <= 1 ? 'about a minute' : `about ${m} minutes`;
-}
 
 const SLOT_LABEL: Record<string, string> = { Top: 'Top', Pants: 'Pants / Shorts', Jacket: 'Jacket', Hat: 'Hat', Shoes: 'Shoes' };
 
@@ -210,11 +159,14 @@ const FUN_SCENES = ['a cozy coffee shop', 'a rooftop at golden hour', 'a city st
 const WILD_SCENES = ['a neon Tokyo alley in the rain', 'the surface of Mars', 'a 1970s disco', 'backstage at a runway show', 'a snowy mountain peak', 'an underwater glass tunnel', 'a desert at sunset'];
 function sceneOptions(): Array<{ value: string; label: string }> {
   const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-  const fun = [...FUN_SCENES].sort(() => Math.random() - 0.5).slice(0, 2);
+  // 1) Studio, 2) Outdoor coffee shop (both fixed), 3) a fresh spot each time,
+  // 4) something wild.
+  const fun = FUN_SCENES.filter(s => !s.includes('coffee')).sort(() => Math.random() - 0.5)[0] ?? 'a sunny park';
   const wild = WILD_SCENES[Math.floor(Math.random() * WILD_SCENES.length)];
   return [
-    { value: 'a clean studio', label: 'Clean studio' },
-    ...fun.map(s => ({ value: s, label: cap(s) })),
+    { value: 'a clean studio', label: 'Studio' },
+    { value: 'an outdoor coffee shop', label: 'Outdoor coffee shop' },
+    { value: fun, label: cap(fun) },
     { value: wild, label: `${cap(wild)} 🤯` },
   ];
 }
@@ -276,8 +228,35 @@ interface ShopperContext {
   chips: string[];
 }
 
-function initials(name: string): string {
-  return name.trim().slice(0, 1).toUpperCase() || '?';
+/** A stylist's avatar contents: their real photo when we have one, otherwise a
+ *  clean line-art portrait (a croquis bust) — never bare initials. Sits inside a
+ *  `.su-stylist-avatar` (accent background), so the line inherits the dark ink. */
+function StylistFace({ avatarUrl, name }: { avatarUrl: string | null; name?: string }) {
+  if (avatarUrl) return <img src={avatarUrl} alt={name ?? ''} loading="lazy" />;
+  return (
+    <svg className="su-avatar-illus" viewBox="0 0 40 40" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="20" cy="15.5" r="6.4" />
+      <path d="M13.6 12.6c.6-4.4 3.5-6.8 6.4-6.8s5.8 2.4 6.4 6.8" />
+      <path d="M8.5 34c0-6.3 5.2-10.2 11.5-10.2S31.5 27.7 31.5 34" />
+    </svg>
+  );
+}
+
+// Per-thread "last seen" marker (localStorage), so the conversations list can
+// flag a thread that has a newer stylist message than the shopper has opened.
+const SEEN_PREFIX = 'styleup:seen:';
+function markThreadSeen(threadId: string): void {
+  try { localStorage.setItem(SEEN_PREFIX + threadId, String(Date.now())); } catch { /* ignore */ }
+}
+function threadHasNews(t: StyleUpThreadSummary): boolean {
+  if (!t.lastMessageAt) return false;
+  // The shopper sent the last message → nothing new for them to read.
+  if (t.lastMessage && t.lastMessage.startsWith('You: ')) return false;
+  try {
+    const seen = localStorage.getItem(SEEN_PREFIX + t.threadId);
+    if (!seen) return true;
+    return new Date(t.lastMessageAt).getTime() > Number(seen);
+  } catch { return false; }
 }
 
 /** Compact relative time for the conversation list (now / 3h / 2d / Jun 8). */
@@ -325,8 +304,9 @@ export function StyleUpExperience({
   const [active, setActive] = useState<StyleUpStylist | null>(null);
   const [threadId, setThreadId] = useState<string | null>(null);
   const [messages, setMessages] = useState<StyleUpMessage[]>([]);
-  const [latestThread, setLatestThread] = useState<{ threadId: string; stylist: StyleUpStylist } | null>(null);
   const [myThreads, setMyThreads] = useState<StyleUpThreadSummary[]>([]);
+  const [pickerOpen, setPickerOpen] = useState(false);        // "Find a stylist" screen
+  const [allStylists, setAllStylists] = useState<StyleUpStylist[]>([]); // full roster for the picker
   const [bootResumed, setBootResumed] = useState(false);
   const [opening, setOpening] = useState(false);
   const [draft, setDraft] = useState('');
@@ -373,9 +353,8 @@ export function StyleUpExperience({
   });
 
   const exit = useCallback(() => {
-    // Return to wherever the shopper came from; fall back to home.
-    if (window.history.length > 1) navigate(-1);
-    else navigate('/');
+    // Back always lands on the /style landing (never dumps out to the app feed).
+    navigate('/style');
   }, [navigate]);
 
   // Landing sign-in, same Google OAuth the rest of the app uses. On success
@@ -472,7 +451,8 @@ export function StyleUpExperience({
   const openThread = useCallback(async (id: string, s: StyleUpStylist) => {
     setActive(s);
     setThreadId(id);
-    setLatestThread({ threadId: id, stylist: s });
+    setPickerOpen(false);
+    markThreadSeen(id);   // opening it clears its "new message" flag
     setMessages(await fetchMessages(id));
     // Open where they left off, pin to the latest message once the thread has
     // rendered + laid out (two frames covers the mount + first paint).
@@ -492,11 +472,6 @@ export function StyleUpExperience({
     setOpening(false);
   }, [userId, opening, openThread]);
 
-  // Resume the most-recent active chat (the upper-right chat icon).
-  const resumeLatest = useCallback(() => {
-    if (latestThread) void openThread(latestThread.threadId, latestThread.stylist);
-  }, [latestThread, openThread]);
-
   // Load the shopper's saved conversations (for the roster list).
   const loadThreads = useCallback(async () => {
     if (!userId) return;
@@ -505,18 +480,46 @@ export function StyleUpExperience({
   }, [userId, inScope]);
 
   const closeThread = useCallback(() => {
+    if (threadId) markThreadSeen(threadId); // leaving marks everything read
     setThreadId(null);
     setActive(null);
     setMessages([]);
     setDraft('');
     void loadThreads(); // refresh the saved-conversations list with the latest
-  }, [loadThreads]);
+  }, [loadThreads, threadId]);
+
+  // "Find a stylist" — open the picker and load the FULL roster (not just the
+  // two landing stylists) so the shopper can choose from all of them.
+  const openPicker = useCallback(async () => {
+    setPickerOpen(true);
+    const all = await fetchStylists({ landingOnly: false });
+    setAllStylists(all);
+  }, []);
+
+  // Delete a conversation (swipe-to-delete on the list). Removes it from the DB
+  // and refreshes; if it's the one that's open, closes back to the list.
+  const [swipedId, setSwipedId] = useState<string | null>(null); // convo card swiped open
+  const swipeStartX = useRef(0);
+  const swipeDX = useRef(0);
+  const handleDeleteThread = useCallback(async (id: string) => {
+    const ok = await deleteThread(id);
+    if (!ok) return;
+    setSwipedId(null);
+    if (threadId === id) closeThread();
+    else void loadThreads();
+  }, [threadId, closeThread, loadThreads]);
+
+  // "End conversation" from inside the thread — same delete, with a confirm.
+  const endConversation = useCallback(async () => {
+    if (!threadId) return;
+    if (typeof window !== 'undefined' && !window.confirm('End this conversation? This permanently deletes it.')) return;
+    await handleDeleteThread(threadId);
+  }, [threadId, handleDeleteThread]);
 
   // On open, resume the shopper's most-recent conversation so an active chat's
   // history keeps going instead of dropping them back on the roster every time.
   // EXCEPT on the /style landing, that should always open on the landing hero,
-  // never drop you straight into a chat. We still remember the latest thread so
-  // the resume affordance works; we just don't auto-open it.
+  // never drop you straight into a chat, the conversations list handles resume.
   useEffect(() => {
     if (!userId || bootResumed) return;
     let cancelled = false;
@@ -524,9 +527,8 @@ export function StyleUpExperience({
       const [latest] = await Promise.all([getLatestThread(userId), loadThreads()]);
       if (cancelled) return;
       setBootResumed(true);
-      if (latest && inScope(latest.stylist)) {
-        setLatestThread(latest);
-        if (!landing) await openThread(latest.threadId, latest.stylist);
+      if (latest && inScope(latest.stylist) && !landing) {
+        await openThread(latest.threadId, latest.stylist);
       }
     })();
     return () => { cancelled = true; };
@@ -564,7 +566,7 @@ export function StyleUpExperience({
   // Recommendation signals from current prefs + the shopper's saved style.
   const recOpts = useCallback((): RecommendOpts => {
     const p = prefsRef.current;
-    const styleText = [ctx?.style, ...(ctx?.chips ?? [])].filter(Boolean).join(' ');
+    const styleText = (ctx?.chips ?? []).filter(Boolean).join(' ');
     return { budgetMax: p.budgetMax, occasion: p.occasion, formality: p.formality, avoidColors: p.avoidColors, simpler: p.simpler, styleText, engineMethod };
   }, [ctx, engineMethod]);
   const rejectIds = useCallback((ids: Array<string | undefined>) => {
@@ -609,18 +611,33 @@ export function StyleUpExperience({
     if (el) el.scrollTop = el.scrollHeight;
   }, [messages.length, stylistTyping, !!huntView]);
 
-  // Poll the persisted hunt marker for THIS thread every second, so the working
-  // module shows whenever a pull is actually in progress for the open chat,
-  // regardless of navigation (leave + come back, refresh), and hides the moment
-  // it finishes or expires. The marker is the single source of truth.
+  // The web hunt now runs SERVER-SIDE (in the style-up-chat edge fn), so it
+  // finishes even if the shopper refreshes or leaves. We drive the working
+  // module off the thread's `hunting_until` marker (polled), so it shows for
+  // whoever has the chat open and hides the moment the server clears it.
   useEffect(() => {
     if (!threadId) { setHuntView(null); return; }
-    const read = () => {
-      const f = getHuntFlag(threadId);
-      setHuntView(f ? { estSec: f.estSec, elapsed: Math.max(0, Math.floor((Date.now() - f.startedAt) / 1000)) } : null);
+    let untilMs = 0;
+    let startMs = Date.now();
+    let active = false;
+    let lastFetch = 0;
+    const tick = async () => {
+      const now = Date.now();
+      if (now - lastFetch > 2500) {
+        lastFetch = now;
+        const until = await getThreadHunting(threadId);
+        untilMs = until ? new Date(until).getTime() : 0;
+      }
+      if (untilMs > now) {
+        if (!active) { active = true; startMs = now; }
+        setHuntView({ estSec: Math.ceil((untilMs - now) / 1000), elapsed: Math.floor((now - startMs) / 1000) });
+      } else {
+        active = false;
+        setHuntView(null);
+      }
     };
-    read();
-    const h = window.setInterval(read, 1000);
+    void tick();
+    const h = window.setInterval(tick, 1000);
     return () => window.clearInterval(h);
   }, [threadId]);
 
@@ -634,59 +651,11 @@ export function StyleUpExperience({
     setStylistTyping(false);
   }, [threadId]);
 
-  // Web stylist surfacing pieces: run each per-piece web query (search → import
-  // → renderable ref) behind a visible "researching" indicator, then drop the
-  // finds into the thread. Driven by the searchQueries the stylist's brain
-  // returns, so "let me surface some options" actually produces products.
-  const runWebHunt = useCallback(async (queries: string[], traceId: string | null = null) => {
-    const tid = threadId;
-    if (!tid || !userId || queries.length === 0) return;
-    const qs = queries.slice(0, 4);
-    const traceSearches: StyleUpTraceSearch[] = [];
-    // Estimate the wait from past pull times, tell the shopper conversationally,
-    // and scope the "working" indicator to THIS thread so it never shows up in a
-    // different chat the shopper switches to mid-pull.
-    const estSec = Math.max(3, Math.round((avgPullMs() * qs.length) / 1000));
-    setHuntFlag(tid, estSec);                       // persist so the module survives navigation
-    setHuntView({ estSec, elapsed: 0 });            // show immediately (poll keeps it in sync)
-    setAdminNote(null);
-    await sendStylistText(tid, `On it. Give me ${waitPhrase(estSec)} and I'll have ${qs.length === 1 ? 'it' : 'these'} ready for you.`);
-    try {
-      const found: StyleUpProductRef[] = [];
-      const diags: string[] = [];
-      for (const q of qs) {
-        const got = found.map(f => f.id).filter((x): x is string => !!x);
-        const t0 = Date.now();
-        const { pick, diag } = await webHuntOne(userId, q, [...rejected, ...got]);
-        recordPullMs(Date.now() - t0);          // self-calibrate future estimates
-        diags.push(`"${q}" → ${diag.ok ? `${diag.rawCount} found · ${diag.withUrl} w/url · ${diag.matched} usable` : `ERR: ${diag.error}`}`);
-        traceSearches.push({
-          query: q, ok: diag.ok, error: diag.error, rawCount: diag.rawCount, withUrl: diag.withUrl, matched: diag.matched,
-          importedId: pick?.id ?? null, importedName: pick ? [pick.brand, pick.name].filter(Boolean).join(' ') || null : null,
-        });
-        if (pick?.id) found.push(pick);
-      }
-      if (traceId) await appendTraceSearches(traceId, traceSearches);
-      if (found.length === 0) {
-        await sendStylistText(tid, "Couldn't quite pin those down. Give me a brand or a budget and I'll take another run at it.");
-        // Super admins get the raw reason the pull came back empty.
-        if (isSuperAdmin) setAdminNote(`pull empty (${qs.length} ${qs.length === 1 ? 'query' : 'queries'}):\n${diags.join('\n')}`);
-        return;
-      }
-      await sendStylistText(tid, `Here's what I pulled. Tap any to see it on you, or say "put the look on me".`);
-      for (const p of found) await sendProductPick(tid, p);
-    } catch (e) {
-      if (isSuperAdmin) setAdminNote(`pull crashed: ${e instanceof Error ? e.message : String(e)}`);
-    } finally {
-      clearHuntFlag(tid);                            // the poll hides the module within ~1s
-    }
-  }, [threadId, userId, rejected, isSuperAdmin]);
-
   // Kick the AI stylist for the current thread. Its reply (+ any product picks)
   // streams back via the realtime subscription; the typing bubble holds until
-  // the call resolves. For web stylists, the reply may carry searchQueries —
-  // we then run a web hunt for the pieces. Any failure surfaces a recoverable
-  // error row with a retry, rather than silently dropping the turn.
+  // the call resolves. For WEB stylists, the edge function ALSO runs the piece
+  // hunt server-side (it sets a hunting_until marker + streams products in), so
+  // nothing extra is needed here. Any failure surfaces a recoverable error row.
   const triggerStylist = useCallback(async (mode?: 'outfit') => {
     if (!threadId || !supabase) return;
     setChatError(null);
@@ -702,10 +671,9 @@ export function StyleUpExperience({
       if (attempt > 0) await new Promise((r) => setTimeout(r, 1200 * attempt));
       try {
         const { data, error } = await supabase.functions.invoke('style-up-chat', { body: { threadId, mode } });
-        const resp = data as { success?: boolean; error?: string; searchQueries?: string[]; traceId?: string | null } | null;
+        const resp = data as { success?: boolean; error?: string } | null;
         if (!error && resp?.success) {
           setStylistTyping(false);
-          if (resp.searchQueries?.length) await runWebHunt(resp.searchQueries, resp.traceId ?? null);
           return;
         }
         lastErr = resp?.error || '';
@@ -716,7 +684,7 @@ export function StyleUpExperience({
     setStylistTyping(false);
     setChatError(lastErr || 'Your stylist couldn’t respond. Tap to retry.');
     if (isSuperAdmin) setAdminNote(`style-up-chat failed: ${lastErr || 'no response (network / timeout)'}`);
-  }, [threadId, runWebHunt, isSuperAdmin]);
+  }, [threadId, isSuperAdmin]);
 
   // "Generate the look on me", the stylist confirms in-thread, then the FULL
   // set of recommended pieces is composited onto the shopper via the existing
@@ -1083,7 +1051,8 @@ export function StyleUpExperience({
           <svg className="su-context-mini-chev" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
       ) : ctxEditing && edit ? (
-        // Inline editor, photos + stats + gender + style, saved to the profile.
+        // Inline editor: photos + the mandatory metadata (height / weight / age /
+        // gender), saved to the profile.
         <div className="su-context-editor">
           <div className="su-context-photos su-context-photos--edit">
             {[0, 1, 2].map(i => (
@@ -1109,7 +1078,6 @@ export function StyleUpExperience({
                 ))}
               </div>
             </div>
-            <textarea className="su-edit-style" placeholder="Your style (e.g. quiet luxury, tailored, neutral tones)" value={edit.style} maxLength={400} onChange={e => setEdit({ ...edit, style: e.target.value })} />
             <div className="su-edit-actions">
               <button type="button" className="su-edit-btn" onClick={cancelEdit} disabled={savingCtx}>Cancel</button>
               <button type="button" className="su-edit-btn su-edit-btn--save" onClick={() => void saveCtx()} disabled={savingCtx}>{savingCtx ? 'Saving…' : 'Save'}</button>
@@ -1132,7 +1100,6 @@ export function StyleUpExperience({
               {ctx && ctx.chips.length > 0
                 ? ctx.chips.map((c, i) => <span className="su-context-chip" key={i}>{c}</span>)
                 : <span className="su-context-chip su-context-chip--muted">No stats yet</span>}
-              {ctx?.style && <span className="su-context-chip su-context-chip--style">{ctx.style}</span>}
             </div>
             <div className="su-context-note">Your stylist sees this, keep it current.</div>
           </div>
@@ -1145,23 +1112,20 @@ export function StyleUpExperience({
     </div>
   );
 
-  // Shared top bar, StyleUp title + (mobile) a resume-chat icon. On desktop
-  // the conversations live in the rail, so the resume icon is hidden.
-  const railHeader = (
+  // Shared top bar: the Catalog logo centered up top with "style" right under
+  // it, and a single back control. No divider bar beneath it.
+  const header = (onBack: () => void) => (
     <div className="su-shell-head">
-      <div className="su-shell-head-left">
-        <button type="button" className="su-back" onClick={exit} aria-label="Back">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
-        </button>
-        <span className="su-shell-title">StyleUp</span>
+      <button type="button" className="su-back su-shell-back" onClick={onBack} aria-label="Back">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+      </button>
+      <div className="su-shell-brand">
+        <CatalogLogo className="su-shell-logo" />
+        <span className="su-shell-brand-style">style</span>
       </div>
-      {!isDesktop && latestThread && (
-        <button type="button" className="su-back" onClick={resumeLatest} aria-label="Open your chat">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
-        </button>
-      )}
     </div>
   );
+  const railHeader = header(exit);
 
   // Expanded look viewer, the big, full-screen video + its pieces + add-to-looks.
   const viewerOverlay = viewer ? (
@@ -1198,12 +1162,11 @@ export function StyleUpExperience({
     </button>
   );
 
-  // The /style marketing hero shown above the roster.
+  // The /style hero — just the headline (the Catalog logo sits in the header
+  // above, so no eyebrow, and no description blurb).
   const landingHero = landing ? (
     <div className="su-landing-hero">
-      <span className="su-landing-eyebrow">Catalog · StyleUp</span>
       <h1 className="su-landing-title">{landingTitle}</h1>
-      <p className="su-landing-sub">{landingSubtitle}</p>
     </div>
   ) : null;
 
@@ -1221,7 +1184,7 @@ export function StyleUpExperience({
               {stylists.map(s => (
                 <div key={s.id} className="su-landing-stylist" style={{ ['--su-accent' as string]: s.accentColor ?? '#8aa0c0' }}>
                   <span className="su-stylist-avatar" aria-hidden="true">
-                    {s.avatarUrl ? <img src={s.avatarUrl} alt="" /> : initials(s.name)}
+                    <StylistFace avatarUrl={s.avatarUrl} name={s.name} />
                   </span>
                   <span className="su-landing-stylist-name">{s.name}</span>
                   {s.specialty && <span className="su-landing-stylist-spec">{s.specialty}</span>}
@@ -1254,7 +1217,7 @@ export function StyleUpExperience({
                   onClick={() => void openThread(t.threadId, t.stylist)}
                 >
                   <span className="su-stylist-avatar" aria-hidden="true">
-                    {t.stylist.avatarUrl ? <img src={t.stylist.avatarUrl} alt="" /> : initials(t.stylist.name)}
+                    <StylistFace avatarUrl={t.stylist.avatarUrl} name={t.stylist.name} />
                   </span>
                   <span className="su-convo-info">
                     <span className="su-convo-top">
@@ -1290,7 +1253,7 @@ export function StyleUpExperience({
                 disabled={opening}
               >
                 <span className="su-stylist-avatar" aria-hidden="true">
-                  {s.avatarUrl ? <img src={s.avatarUrl} alt="" /> : initials(s.name)}
+                  <StylistFace avatarUrl={s.avatarUrl} name={s.name} />
                 </span>
                 <span className="su-stylist-info">
                   <span className="su-stylist-name">{s.name}</span>
@@ -1316,12 +1279,13 @@ export function StyleUpExperience({
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
           </button>
           <span className="su-thread-avatar" aria-hidden="true">
-            {active?.avatarUrl ? <img src={active.avatarUrl} alt="" /> : initials(active?.name ?? '?')}
+            <StylistFace avatarUrl={active?.avatarUrl ?? null} name={active?.name} />
           </span>
           <span className="su-thread-id">
             <span className="su-thread-name">{active?.name}</span>
             {active?.specialty && <span className="su-thread-specialty">{active.specialty}</span>}
           </span>
+          <button type="button" className="su-thread-end" onClick={() => void endConversation()}>End</button>
         </div>
 
         {contextCard}
@@ -1396,6 +1360,15 @@ export function StyleUpExperience({
                       <div className="su-product-actions">
                         {p.url && (
                           <button type="button" className="su-product-btn" onClick={() => window.open(p.url!, '_blank', 'noopener')}>Shop</button>
+                        )}
+                        {roleTagFromName(p.name ?? null) && (
+                          <button
+                            type="button"
+                            className="su-product-btn"
+                            onClick={() => { const role = roleTagFromName(p.name ?? null)!; void handleSwapRequest({ role, label: role.toLowerCase() }); }}
+                          >
+                            Change
+                          </button>
                         )}
                         <button
                           type="button"
@@ -1533,7 +1506,7 @@ export function StyleUpExperience({
                   disabled={genLook || pendingRender}
                   onClick={() => void askSceneForTray()}
                 >
-                  Start
+                  {pendingRender ? 'Styling…' : 'Start'}
                 </button>
               </div>
             </div>
@@ -1568,7 +1541,114 @@ export function StyleUpExperience({
       </div>
   );
 
-  const bgLayer = <div className="su-bg" aria-hidden="true"><StyleUpBackground /></div>;
+  // ── Landing: conversations only (with a "new message" dot), plus a docked
+  // "Find a stylist" button. No stylist roster / "Request" here — starting a new
+  // chat happens through the picker. ─────────────────────────────────────────
+  const convosPane = (
+    <div className="su-page su-page--convos">
+      {myThreads.length > 0 ? (
+        <div className="su-convos">
+          <div className="su-section-label">Your conversations</div>
+          {myThreads.map(t => (
+            <div className="su-convo-row" key={t.threadId}>
+              <button
+                type="button"
+                className="su-convo-delete"
+                onClick={() => void handleDeleteThread(t.threadId)}
+                aria-label={`Delete conversation with ${t.stylist.name}`}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                <span>Delete</span>
+              </button>
+              <button
+                type="button"
+                className={`su-convo-card${swipedId === t.threadId ? ' is-swiped' : ''}`}
+                style={{ ['--su-accent' as string]: t.stylist.accentColor ?? '#8aa0c0' }}
+                onTouchStart={e => { swipeStartX.current = e.touches[0].clientX; swipeDX.current = 0; }}
+                onTouchMove={e => {
+                  swipeDX.current = e.touches[0].clientX - swipeStartX.current;
+                  const dx = Math.max(Math.min(swipeDX.current, 0), -96);
+                  (e.currentTarget as HTMLElement).style.transform = `translateX(${dx}px)`;
+                }}
+                onTouchEnd={e => {
+                  (e.currentTarget as HTMLElement).style.transform = '';
+                  setSwipedId(swipeDX.current < -48 ? t.threadId : null);
+                }}
+                onClick={() => {
+                  if (swipedId === t.threadId) { setSwipedId(null); return; }
+                  void openThread(t.threadId, t.stylist);
+                }}
+              >
+                <span className="su-stylist-avatar" aria-hidden="true">
+                  <StylistFace avatarUrl={t.stylist.avatarUrl} name={t.stylist.name} />
+                </span>
+                <span className="su-convo-info">
+                  <span className="su-convo-top">
+                    <span className="su-stylist-name">{t.stylist.name}</span>
+                    <span className="su-convo-time">{relativeTime(t.lastMessageAt)}</span>
+                  </span>
+                  {t.lastMessage && <span className="su-convo-preview">{t.lastMessage}</span>}
+                </span>
+                {threadHasNews(t) && <span className="su-convo-dot" aria-label="New message" />}
+              </button>
+            </div>
+          ))}
+        </div>
+      ) : (
+        <div className="su-convos-empty">
+          <p>No conversations yet.</p>
+          <p className="su-convos-empty-sub">Find a stylist to start chatting.</p>
+        </div>
+      )}
+    </div>
+  );
+
+  const findStylistBar = (
+    <div className="su-find-bar">
+      <button type="button" className="su-find-btn" onClick={() => void openPicker()}>Find a stylist</button>
+    </div>
+  );
+
+  // The picker screen — choose from the full roster of stylists.
+  const pickerPane = (
+    <div className="su-page">
+      <div className="su-roster-head">
+        <h1>Find a stylist</h1>
+        <p>Choose a stylist to start a new conversation.</p>
+      </div>
+      <div className="su-roster">
+        {allStylists.map(s => {
+          const meta = [s.age ? `${s.age}` : null, s.city].filter(Boolean).join(' · ');
+          return (
+            <button
+              key={s.id}
+              type="button"
+              className="su-stylist-card su-person-card"
+              style={{ ['--su-accent' as string]: s.accentColor ?? '#8aa0c0' }}
+              onClick={() => void openStylist(s)}
+              disabled={opening}
+            >
+              <span className="su-person-avatar" aria-hidden="true">
+                <StylistFace avatarUrl={s.avatarUrl} name={s.name} />
+              </span>
+              <span className="su-stylist-info">
+                <span className="su-person-top">
+                  <span className="su-stylist-name">{s.name}</span>
+                  {meta && <span className="su-person-meta">{meta}</span>}
+                </span>
+                {s.specialty && <span className="su-stylist-specialty">{s.specialty}</span>}
+                {s.bio && <span className="su-stylist-bio">{s.bio}</span>}
+              </span>
+            </button>
+          );
+        })}
+        {allStylists.length === 0 && <div className="su-empty">Loading stylists…</div>}
+      </div>
+    </div>
+  );
+
+  // Bolder drape on the landing / roster, a faint whisper once a chat is open.
+  const bgLayer = <div className="su-bg" aria-hidden="true"><StyleUpBackground intensity={threadId ? 0.4 : 1} /></div>;
 
   // Landing (/style) → a single-column experience: hero + the two stylist cards,
   // and the full chat once a stylist is open. No two-pane rail here, it reads
@@ -1578,7 +1658,9 @@ export function StyleUpExperience({
       <>
         <div className={`su-shell su-shell--landing${threadId ? ' su-shell--landing-thread' : ''}`} style={threadId ? { ['--su-accent' as string]: active?.accentColor ?? '#8aa0c0' } : undefined}>
           {bgLayer}
-          {threadId ? threadPane : <>{railHeader}{landingHero}{rosterPane}</>}
+          {threadId ? threadPane
+            : pickerOpen ? <>{header(() => setPickerOpen(false))}{pickerPane}</>
+            : <>{railHeader}{landingHero}{convosPane}{findStylistBar}</>}
         </div>
         {viewerOverlay}
       </>
