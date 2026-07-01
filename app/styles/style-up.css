@@ -1217,3 +1217,154 @@
   .su-tape--indeterminate .su-tape-fill,
   .su-convo-dot { animation: none; }
 }
+
+/* ── Chat UI pass — grouping, presence, quick replies, new-message pill,
+      day/new dividers, tap-to-reveal timestamps. ─────────────────────── */
+
+/* Message grouping: tight spacing within a same-sender run; the bubble tail
+   and the stylist's mini avatar sit only on the run's last bubble. */
+.su-msg--follow { margin-top: -6px; }   /* flex gap 8px − 6px → 2px inside a run */
+.su-msg { flex-wrap: wrap; }
+.su-msg--stylist { position: relative; }
+.su-msg--stylist .su-bubble { margin-left: 32px; border-bottom-left-radius: 18px; }
+.su-msg--stylist.su-msg--tail .su-bubble { border-bottom-left-radius: 6px; }
+.su-msg--shopper .su-bubble { border-bottom-right-radius: 18px; }
+.su-msg--shopper.su-msg--tail .su-bubble { border-bottom-right-radius: 6px; }
+.su-msg-avatar {
+  position: absolute;
+  left: 0; bottom: 0;
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--su-accent, #8aa0c0);
+  color: #0a0a0a;
+}
+.su-msg-avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+/* Tap a bubble → its time appears beneath (flex-wrap pushes it to a new row). */
+.su-msg-time {
+  flex-basis: 100%;
+  font-size: 10.5px;
+  color: #71747c;
+  padding: 3px 6px 0;
+  font-variant-numeric: tabular-nums;
+}
+.su-msg--stylist .su-msg-time { text-align: left; padding-left: 38px; }
+.su-msg--shopper .su-msg-time { text-align: right; }
+
+/* Header presence line — online / typing… / finding pieces… / styling…. */
+.su-thread-presence {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #8b8e96;
+}
+.su-presence-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: #39c17b;
+}
+.su-thread-presence.is-busy { color: var(--su-accent, #8aa0c0); }
+.su-thread-presence.is-busy .su-presence-dot {
+  background: var(--su-accent, #8aa0c0);
+  animation: su-presence-pulse 1.2s ease-in-out infinite;
+}
+@keyframes su-presence-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+/* Quick-reply chips — a one-tap suggestion row above the composer. */
+.su-quick-row {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 8px;
+  padding: 4px 14px 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.su-quick-row::-webkit-scrollbar { display: none; }
+.su-quick-chip {
+  flex: 0 0 auto;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(28, 29, 33, 0.75);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  color: #d8dae0;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.14s ease, transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.su-quick-chip:not(:disabled):active { transform: scale(0.93); }
+.su-quick-chip:hover { border-color: var(--su-accent, #8aa0c0); }
+.su-quick-chip:disabled { opacity: 0.5; cursor: default; }
+
+/* "↓ New message" pill — floats above the composer when scrolled up.
+   GUARD: centered with left/right + margin-inline (never translateX). */
+.su-page--thread { position: relative; }
+.su-new-pill {
+  position: absolute;
+  left: 0; right: 0;
+  margin-inline: auto;
+  width: fit-content;
+  bottom: 96px;
+  z-index: 5;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(24, 25, 29, 0.92);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  color: #e7e7ea;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+  animation: su-msg-in 0.25s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Day + "New" dividers. */
+.su-day-divider {
+  align-self: center;
+  padding: 12px 0 4px;
+}
+.su-day-divider span {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6b6e76;
+}
+.su-new-divider {
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0 2px;
+}
+.su-new-divider::before,
+.su-new-divider::after {
+  content: '';
+  flex: 1 1 auto;
+  height: 1px;
+  background: color-mix(in srgb, var(--su-accent, #8aa0c0) 40%, transparent);
+}
+.su-new-divider span {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--su-accent, #8aa0c0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .su-thread-presence.is-busy .su-presence-dot,
+  .su-new-pill { animation: none; }
+}
