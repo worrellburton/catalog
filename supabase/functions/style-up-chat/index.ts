@@ -149,7 +149,12 @@ Deno.serve(async (req: Request) => {
       console.log(`[style-up-chat] thread=${threadId} retrieval=LEGACY(recency-120) candidates=${cands.length}`);
     } else if (!isWeb) {
       // STYLE ENGINE: occasion-aware per-slot style_slot_search.
-      const occasion = turns.map(t => (t.body ?? '').trim()).filter(Boolean).join(' ').slice(0, 600);
+      // Occasion = the recent SHOPPER asks only, NOT the whole thread. Joining
+      // every turn made the BM25 query a ~100-word blob that matched almost
+      // nothing on long threads (pool collapsed to ~1); and the 600-char slice of
+      // the joined thread kept the OLDEST text, dropping the current ask entirely.
+      const occasion = turns.filter(t => t.sender === 'shopper' && t.body)
+        .slice(-3).map(t => (t.body ?? '').trim()).join(' ').slice(0, 300);
       const found = await retrieveOccasionCandidates(admin, {
         occasion, gender: genderNorm, aesthetic: stylist?.specialty ?? '',
       });
