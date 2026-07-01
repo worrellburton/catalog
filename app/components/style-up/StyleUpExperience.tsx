@@ -362,7 +362,7 @@ export function StyleUpExperience({
   const [savingCtx, setSavingCtx] = useState(false);
   const [uploadingSlot, setUploadingSlot] = useState<number | null>(null);
   const [lookSelection, setLookSelection] = useState<Set<string> | null>(null); // null = all pieces
-  const [pickingLook, setPickingLook] = useState(false);
+  const [lookBarOpen, setLookBarOpen] = useState(false); // the full-look selection bar (opened via a pick's "See it on me")
   const photoSlotRef = useRef<number>(0);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
@@ -777,7 +777,7 @@ export function StyleUpExperience({
     [assembleLook, lookSelection]);
   // A fresh suggestion resets the selection back to "all".
   const lookIdsKey = lookPicks().map(p => p.id).join(',');
-  useEffect(() => { setLookSelection(null); setPickingLook(false); }, [lookIdsKey]);
+  useEffect(() => { setLookSelection(null); setLookBarOpen(false); }, [lookIdsKey]);
 
   // ── Guided outfit flow (logic #1+#3+#4): ask which shoes (if ambiguous),
   // then which slots, then recommend one piece per slot. ────────────────────
@@ -1398,10 +1398,9 @@ export function StyleUpExperience({
                         <button
                           type="button"
                           className="su-product-btn su-product-btn--primary"
-                          onClick={() => void tryOn(p)}
-                          disabled={renderingIds.has(key)}
+                          onClick={() => { setLookSelection(null); setLookBarOpen(true); }}
                         >
-                          {renderingIds.has(key) ? 'Starting…' : 'See it on me'}
+                          See it on me
                         </button>
                       </div>
                     </div>
@@ -1518,49 +1517,47 @@ export function StyleUpExperience({
           {renderError && <div className="su-render-err">{renderError}</div>}
         </div>
 
-        {engineMethod === 'style_engine' && active?.sourceMode !== 'web' && assembleLook().length >= 2 && (
+        {engineMethod === 'style_engine' && active?.sourceMode !== 'web' && lookBarOpen && assembleLook().length >= 1 && (
           <div className="su-lookbar">
             <div className="su-lookbar-row">
               <span className="su-lookbar-title">Your look · {selectedLook().length} piece{selectedLook().length === 1 ? '' : 's'}</span>
               <div className="su-lookbar-actions">
-                <button type="button" className="su-lookbar-btn" onClick={() => setPickingLook(v => !v)}>
-                  {pickingLook ? 'Done' : 'Choose pieces'}
+                <button type="button" className="su-lookbar-btn" onClick={() => setLookBarOpen(false)}>
+                  Done
                 </button>
                 <button
                   type="button"
                   className="su-lookbar-btn su-lookbar-btn--primary"
                   disabled={selectedLook().length === 0 || genLook || pendingRender}
-                  onClick={() => void askScene()}
+                  onClick={() => { setLookBarOpen(false); void askScene(); }}
                 >
                   See it on me
                 </button>
               </div>
             </div>
-            {pickingLook && (
-              <div className="su-lookbar-pieces">
-                {assembleLook().map(p => {
-                  const on = !lookSelection || (p.id != null && lookSelection.has(p.id));
-                  return (
-                    <button
-                      key={p.id || p.name}
-                      type="button"
-                      className={`su-lookbar-piece${on ? ' su-lookbar-piece--on' : ''}`}
-                      onClick={() => {
-                        if (!p.id) return;
-                        setLookSelection(prev => {
-                          const base = prev ?? new Set(assembleLook().map(x => x.id).filter((x): x is string => !!x));
-                          const next = new Set(base);
-                          if (next.has(p.id!)) next.delete(p.id!); else next.add(p.id!);
-                          return next;
-                        });
-                      }}
-                    >
-                      {on ? '✓ ' : ''}{roleTagFromName(p.name ?? null) || p.name || 'Piece'}
-                    </button>
-                  );
-                })}
-              </div>
-            )}
+            <div className="su-lookbar-pieces">
+              {assembleLook().map(p => {
+                const on = !lookSelection || (p.id != null && lookSelection.has(p.id));
+                return (
+                  <button
+                    key={p.id || p.name}
+                    type="button"
+                    className={`su-lookbar-piece${on ? ' su-lookbar-piece--on' : ''}`}
+                    onClick={() => {
+                      if (!p.id) return;
+                      setLookSelection(prev => {
+                        const base = prev ?? new Set(assembleLook().map(x => x.id).filter((x): x is string => !!x));
+                        const next = new Set(base);
+                        if (next.has(p.id!)) next.delete(p.id!); else next.add(p.id!);
+                        return next;
+                      });
+                    }}
+                  >
+                    {on ? '✓ ' : ''}{roleTagFromName(p.name ?? null) || p.name || 'Piece'}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )}
 
