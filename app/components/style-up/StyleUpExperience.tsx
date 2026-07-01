@@ -323,7 +323,6 @@ export function StyleUpExperience({
   const [active, setActive] = useState<StyleUpStylist | null>(null);
   const [threadId, setThreadId] = useState<string | null>(null);
   const [messages, setMessages] = useState<StyleUpMessage[]>([]);
-  const [latestThread, setLatestThread] = useState<{ threadId: string; stylist: StyleUpStylist } | null>(null);
   const [myThreads, setMyThreads] = useState<StyleUpThreadSummary[]>([]);
   const [bootResumed, setBootResumed] = useState(false);
   const [opening, setOpening] = useState(false);
@@ -438,7 +437,6 @@ export function StyleUpExperience({
   const openThread = useCallback(async (id: string, s: StyleUpStylist) => {
     setActive(s);
     setThreadId(id);
-    setLatestThread({ threadId: id, stylist: s });
     setMessages(await fetchMessages(id));
     // Open where they left off, pin to the latest message once the thread has
     // rendered + laid out (two frames covers the mount + first paint).
@@ -458,11 +456,6 @@ export function StyleUpExperience({
     setOpening(false);
   }, [userId, opening, openThread]);
 
-  // Resume the most-recent active chat (the upper-right chat icon).
-  const resumeLatest = useCallback(() => {
-    if (latestThread) void openThread(latestThread.threadId, latestThread.stylist);
-  }, [latestThread, openThread]);
-
   // Load the shopper's saved conversations (for the roster list).
   const loadThreads = useCallback(async () => {
     if (!userId) return;
@@ -481,8 +474,7 @@ export function StyleUpExperience({
   // On open, resume the shopper's most-recent conversation so an active chat's
   // history keeps going instead of dropping them back on the roster every time.
   // EXCEPT on the /style landing, that should always open on the landing hero,
-  // never drop you straight into a chat. We still remember the latest thread so
-  // the resume affordance works; we just don't auto-open it.
+  // never drop you straight into a chat, the conversations list handles resume.
   useEffect(() => {
     if (!userId || bootResumed) return;
     let cancelled = false;
@@ -490,9 +482,8 @@ export function StyleUpExperience({
       const [latest] = await Promise.all([getLatestThread(userId), loadThreads()]);
       if (cancelled) return;
       setBootResumed(true);
-      if (latest && inScope(latest.stylist)) {
-        setLatestThread(latest);
-        if (!landing) await openThread(latest.threadId, latest.stylist);
+      if (latest && inScope(latest.stylist) && !landing) {
+        await openThread(latest.threadId, latest.stylist);
       }
     })();
     return () => { cancelled = true; };
@@ -1093,21 +1084,17 @@ export function StyleUpExperience({
     </div>
   );
 
-  // Shared top bar, StyleUp title + (mobile) a resume-chat icon. On desktop
-  // the conversations live in the rail, so the resume icon is hidden.
+  // Shared top bar, the Catalog · Style wordmark centered up top (the
+  // conversations live in the page below, so there's no resume-chat icon).
   const railHeader = (
     <div className="su-shell-head">
-      <div className="su-shell-head-left">
-        <button type="button" className="su-back" onClick={exit} aria-label="Back">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
-        </button>
-        <span className="su-shell-title">StyleUp</span>
+      <button type="button" className="su-back su-shell-back" onClick={exit} aria-label="Back">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+      </button>
+      <div className="su-shell-brand">
+        <span className="su-shell-brand-cat">catalog</span>
+        <span className="su-shell-brand-style">style</span>
       </div>
-      {!isDesktop && latestThread && (
-        <button type="button" className="su-back" onClick={resumeLatest} aria-label="Open your chat">
-          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z" /></svg>
-        </button>
-      )}
     </div>
   );
 
@@ -1483,7 +1470,8 @@ export function StyleUpExperience({
       </div>
   );
 
-  const bgLayer = <div className="su-bg" aria-hidden="true"><StyleUpBackground /></div>;
+  // Bolder drape on the landing / roster, a faint whisper once a chat is open.
+  const bgLayer = <div className="su-bg" aria-hidden="true"><StyleUpBackground intensity={threadId ? 0.4 : 1} /></div>;
 
   // Landing (/style) → a single-column experience: hero + the two stylist cards,
   // and the full chat once a stylist is open. No two-pane rail here, it reads
