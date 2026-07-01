@@ -184,7 +184,35 @@
   background: var(--su-accent, #8aa0c0);
   box-shadow: 0 0 0 3px color-mix(in srgb, var(--su-accent, #8aa0c0) 24%, transparent);
 }
-.su-convo-card { position: relative; }
+/* Swipe-to-delete: the card sits above a red delete action revealed on swipe. */
+.su-convo-row { position: relative; }
+.su-convo-card {
+  position: relative;
+  z-index: 1;
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+  touch-action: pan-y;   /* let vertical scroll through; we handle horizontal */
+}
+.su-convo-card.is-swiped { transform: translateX(-96px); }
+.su-convo-delete {
+  position: absolute;
+  top: 0; right: 0;
+  height: 100%; width: 88px;
+  z-index: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  border: none;
+  border-radius: 999px;
+  background: #c0392b;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.su-convo-delete:active { background: #a83226; }
 
 /* Empty conversations state. */
 .su-convos-empty { text-align: center; color: #8b8e96; padding: 40px 20px 8px; }
@@ -267,9 +295,37 @@
   overflow: hidden;
 }
 .su-thread-avatar img { width: 100%; height: 100%; object-fit: cover; }
-.su-thread-id { display: flex; flex-direction: column; min-width: 0; }
+.su-thread-id { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; }
 .su-thread-name { font-size: 15px; font-weight: 700; }
 .su-thread-specialty { font-size: 12px; color: var(--su-accent); font-weight: 600; }
+/* End-conversation control in the thread header. */
+.su-thread-end {
+  flex: 0 0 auto;
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1px solid #3a2a2a;
+  background: #241a1a;
+  color: #e9a59c;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.su-thread-end:hover { background: #2e2020; }
+
+/* Person (stylist) card in the Find-a-stylist picker — bigger photo, age·city. */
+.su-person-avatar {
+  flex: 0 0 auto;
+  width: 60px; height: 60px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: inline-flex; align-items: center; justify-content: center;
+  color: #0a0a0a;
+  background: var(--su-accent);
+}
+.su-person-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.su-person-card { align-items: flex-start; }
+.su-person-top { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.su-person-meta { font-size: 12.5px; color: #8b8e96; font-weight: 600; }
 
 /* Context card — the shopper's AI-look inputs. Editable; collapses to a slim
    bar as the chat scrolls. */

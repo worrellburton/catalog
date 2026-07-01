@@ -17,6 +17,9 @@ export interface StyleUpStylist {
   avatarUrl: string | null;
   specialty: string | null;
   bio: string | null;
+  /** Where the stylist is based + how old they are (shown on the picker). */
+  city: string | null;
+  age: number | null;
   accentColor: string | null;
   /** Where this stylist's picks come from: 'catalog' = our own products,
    *  'web' = the open web (searched + auto-imported on the fly). */
@@ -72,6 +75,8 @@ function mapStylist(r: Record<string, unknown>): StyleUpStylist {
     avatarUrl: (r.avatar_url as string | null) ?? null,
     specialty: (r.specialty as string | null) ?? null,
     bio: (r.bio as string | null) ?? null,
+    city: (r.city as string | null) ?? null,
+    age: typeof r.age === 'number' ? r.age : (r.age != null ? Number(r.age) : null),
     accentColor: (r.accent_color as string | null) ?? null,
     sourceMode: (r.source_mode as 'catalog' | 'web') === 'web' ? 'web' : 'catalog',
     landingSlot: (r.landing_slot as string | null) ?? null,
@@ -80,7 +85,7 @@ function mapStylist(r: Record<string, unknown>): StyleUpStylist {
 
 // Every stylist column the client maps. Centralized so every select stays in
 // sync with mapStylist (source_mode / landing_slot were easy to forget).
-const STYLIST_COLS = 'id, name, avatar_url, specialty, bio, accent_color, source_mode, landing_slot';
+const STYLIST_COLS = 'id, name, avatar_url, specialty, bio, city, age, accent_color, source_mode, landing_slot';
 const STYLIST_JOIN = `stylist:style_up_stylists(${STYLIST_COLS})`;
 
 function mapMessage(r: Record<string, unknown>): StyleUpMessage {
@@ -133,6 +138,14 @@ export async function getOrCreateThread(
     .single();
   if (error || !data) return null;
   return String(data.id);
+}
+
+/** Delete a conversation (and its messages, via ON DELETE CASCADE). RLS scopes
+ *  this to the owning shopper. Returns true on success. */
+export async function deleteThread(threadId: string): Promise<boolean> {
+  if (!supabase) return false;
+  const { error } = await supabase.from('style_up_threads').delete().eq('id', threadId);
+  return !error;
 }
 
 export interface StyleUpThreadSummary {
