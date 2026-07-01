@@ -604,11 +604,11 @@ export function StyleUpExperience({
   }, [threadId]);
 
   // Keep the chat pinned to the latest message (incl. the typing / researching
-  // indicators as they appear).
+  // / render-starting indicators as they appear).
   useEffect(() => {
     const el = scrollerRef.current;
     if (el) el.scrollTop = el.scrollHeight;
-  }, [messages.length, stylistTyping, !!huntView]);
+  }, [messages.length, stylistTyping, !!huntView, genLook]);
 
   // The web hunt now runs SERVER-SIDE (in the style-up-chat edge fn), so it
   // finishes even if the shopper refreshes or leaves. We drive the working
@@ -707,7 +707,7 @@ export function StyleUpExperience({
     setGenLook(true);
     setRenderError(null);
     await beat();
-    await sendStylistText(threadId, "Love it, putting your full look together now. I'll send it over the second it's ready ✨");
+    await sendStylistText(threadId, 'Love it, putting your full look together now ✨');
     const { error } = await startFullLookRender({ threadId, shopperUserId: userId, products: uniq, scene });
     if (error) {
       setRenderError(error);
@@ -813,6 +813,20 @@ export function StyleUpExperience({
       if (missing) await sendStylistText(threadId, `One more thing, you'll want ${GAP_REASON[missing]}. Say “different ${missing.toLowerCase()}” and I'll pull a few.`);
     }
   }, [threadId, userId, lookPicks, rejected, rejectIds, askOutfitSlots, assembleLook, generateFullLook, recOpts, active, beat]);
+
+  // Echo a chooser tap into the thread as the shopper's own right-side reply
+  // first, so picking "Studio" reads like you texted "Studio", then run the
+  // choice. The echo is a persisted message, so it survives reloads.
+  const chooseWithEcho = useCallback(async (choose: NonNullable<StyleUpProductRef['choose']>, values: string[]) => {
+    if (threadId) {
+      const label = values
+        .map(v => choose.options.find(o => o.value === v)?.label ?? v)
+        .join(', ');
+      const echo = await sendShopperMessage(threadId, label);
+      if (echo) setMessages(prev => (prev.some(x => x.id === echo.id) ? prev : [...prev, echo]));
+    }
+    await onChoose(choose.kind, values);
+  }, [threadId, onChoose]);
 
   // "Try different pants", the stylist offers 3 alternatives for that slot.
   const handleSwapRequest = useCallback(async (swap: { role: string; label: string }) => {
@@ -1298,7 +1312,7 @@ export function StyleUpExperience({
                   key={m.id}
                   choose={m.productRef.choose}
                   disabled={genLook || pendingRender}
-                  onSubmit={(vals) => void onChoose(m.productRef!.choose!.kind, vals)}
+                  onSubmit={(vals) => void chooseWithEcho(m.productRef!.choose!, vals)}
                 />
               );
             }
@@ -1470,6 +1484,23 @@ export function StyleUpExperience({
                 <span className="su-hunting-orb" aria-hidden="true" />
                 <span className="su-hunting-text">{HUNT_PHRASES[Math.floor(huntView.elapsed / 2) % HUNT_PHRASES.length]}</span>
                 <span className="su-hunting-eta">{fmtRemaining(Math.max(0, huntView.estSec - huntView.elapsed))}</span>
+              </div>
+            </div>
+          )}
+          {/* The moment a generation is kicked off, show the progress module —
+              the real render bubble (with its live ETA) replaces this as soon
+              as the generation row lands, so there's never a "trust me, it's
+              coming" gap with no progress on screen. */}
+          {genLook && !pendingRender && !stylistTyping && (
+            <div className="su-msg su-msg--stylist">
+              <div className="su-render" role="status" aria-live="polite">
+                <div className="su-render-status">
+                  <span className="su-render-spinner" aria-hidden="true" />
+                  <span className="su-render-status-text">
+                    Starting your look…
+                    <span className="su-render-eta">warming up</span>
+                  </span>
+                </div>
               </div>
             </div>
           )}
