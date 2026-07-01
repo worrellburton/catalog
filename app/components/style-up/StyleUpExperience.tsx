@@ -8,7 +8,7 @@
 // edge fn), product picks, and "see it on me" renders (generate-look pipeline)
 // stream in via realtime.
 
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from '@remix-run/react';
 import { useAuth } from '~/hooks/useAuth';
 import { useStylistEngineMethod } from '~/hooks/useStylistEngineMethod';
@@ -152,6 +152,25 @@ const HUNT_PHRASES = [
 
 
 const SLOT_LABEL: Record<string, string> = { Top: 'Top', Pants: 'Pants / Shorts', Jacket: 'Jacket', Hat: 'Hat', Shoes: 'Shoes' };
+
+// Day boundaries + labels for the in-thread date dividers.
+function sameDay(aIso: string, bIso: string): boolean {
+  return new Date(aIso).toDateString() === new Date(bIso).toDateString();
+}
+function dayLabel(iso: string): string {
+  const d = new Date(iso);
+  const today = new Date();
+  const yesterday = new Date();
+  yesterday.setDate(today.getDate() - 1);
+  if (d.toDateString() === today.toDateString()) return 'Today';
+  if (d.toDateString() === yesterday.toDateString()) return 'Yesterday';
+  return d.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' });
+}
+
+/** Is this message a plain text bubble (groupable)? */
+function isTextBubble(m: StyleUpMessage | null | undefined): boolean {
+  return !!m && m.kind === 'text' && !!m.body;
+}
 
 // Head-to-toe display order for the look card: hat → layers → top → bottoms →
 // shoes, accessories last. Unmapped roles keep their arrival order at the end.
@@ -332,6 +351,11 @@ export function StyleUpExperience({
   const [myThreads, setMyThreads] = useState<StyleUpThreadSummary[]>([]);
   const [pickerOpen, setPickerOpen] = useState(false);        // "Find a stylist" screen
   const [allStylists, setAllStylists] = useState<StyleUpStylist[]>([]); // full roster for the picker
+  const [timeShownId, setTimeShownId] = useState<string | null>(null); // bubble with its timestamp revealed
+  const [newBelow, setNewBelow] = useState(false);            // "↓ New message" pill (scrolled up)
+  const nearBottomRef = useRef(true);                         // is the chat pinned near the bottom?
+  const prevMsgCountRef = useRef(0);                          // detect genuinely-new messages
+  const lastSeenRef = useRef(0);                              // where the "New" divider sits (ms epoch)
   const [bootResumed, setBootResumed] = useState(false);
   const [opening, setOpening] = useState(false);
   const [draft, setDraft] = useState('');
@@ -476,7 +500,13 @@ export function StyleUpExperience({
     setActive(s);
     setThreadId(id);
     setPickerOpen(false);
-    markThreadSeen(id);   // opening it clears its "new message" flag
+    // Remember where they last left off (drives the "New" divider), THEN mark
+    // the thread seen so the list's unread dot clears.
+    try { lastSeenRef.current = Number(localStorage.getItem(SEEN_PREFIX + id) || 0); } catch { lastSeenRef.current = 0; }
+    markThreadSeen(id);
+    nearBottomRef.current = true;
+    setNewBelow(false);
+    setTimeShownId(null);
     setMessages(await fetchMessages(id));
     // Open where they left off, pin to the latest message once the thread has
     // rendered + laid out (two frames covers the mount + first paint).
@@ -631,10 +661,16 @@ export function StyleUpExperience({
   }, [threadId]);
 
   // Keep the chat pinned to the latest message (incl. the typing / researching
-  // / render-starting indicators as they appear).
+  // / render-starting indicators) — but ONLY while the shopper is near the
+  // bottom. Scrolled up to browse, new arrivals surface the "↓ New message"
+  // pill instead of yanking them down.
   useEffect(() => {
     const el = scrollerRef.current;
-    if (el) el.scrollTop = el.scrollHeight;
+    const grew = messages.length > prevMsgCountRef.current;
+    prevMsgCountRef.current = messages.length;
+    if (!el) return;
+    if (nearBottomRef.current) el.scrollTop = el.scrollHeight;
+    else if (grew) setNewBelow(true);
   }, [messages.length, stylistTyping, !!huntView, genLook]);
 
   // The web hunt now runs SERVER-SIDE (in the style-up-chat edge fn), so it
@@ -908,11 +944,13 @@ export function StyleUpExperience({
     setGenLook(false);
   }, [threadId, userId, genLook, pendingRender, assembleLook, rejectIds, chosenScene, beat]);
 
-  const send = useCallback(async () => {
-    const text = draft.trim();
+  // Send the composer draft — or `override` (the quick-reply chips), which
+  // goes straight through the same routing without touching the draft.
+  const send = useCallback(async (override?: string) => {
+    const text = (override ?? draft).trim();
     if (!text || !threadId || sending) return;
     setSending(true);
-    setDraft('');
+    if (!override) setDraft('');
     const msg = await sendShopperMessage(threadId, text);
     if (msg) setMessages(prev => (prev.some(m => m.id === msg.id) ? prev : [...prev, msg]));
     setSending(false);
@@ -1318,6 +1356,20 @@ export function StyleUpExperience({
       i = j;
     }
   }
+  // Contextual quick replies — one-tap suggestions above the composer, shaped
+  // by what just happened (a finished render vs fresh picks vs open chat).
+  const quickChips = (() => {
+    if (messages.length === 0 || sending || stylistTyping || !!huntView || genLook || pendingRender) return [] as string[];
+    const last = messages[messages.length - 1];
+    if (last.kind === 'product' && (last.productRef?.choose || last.productRef?.swap)) return []; // a chooser is waiting
+    const recent = messages.slice(-4);
+    const sawRender = recent.some(x => x.kind === 'render');
+    const sawPicks = recent.some(x => x.kind === 'product' && x.productRef?.id && !x.productRef.swap && !x.productRef.choose);
+    if (sawRender) return ['Love it 😍', 'Different pants', 'Different shoes', 'Make it dressier'];
+    if (sawPicks) return ['Something dressier', 'More casual', 'Different shoes', 'Under $200'];
+    return [];
+  })();
+
   const threadPane = (
       <div className="su-page su-page--thread">
         <div className="su-thread-head">
@@ -1329,7 +1381,19 @@ export function StyleUpExperience({
           </span>
           <span className="su-thread-id">
             <span className="su-thread-name">{active?.name}</span>
-            {active?.specialty && <span className="su-thread-specialty">{active.specialty}</span>}
+            {(() => {
+              // Live presence, mirrors the in-thread indicators so the stylist
+              // feels present even when you've scrolled up.
+              const presence = stylistTyping && typingThreadId === threadId ? 'typing…'
+                : huntView ? 'finding pieces…'
+                : (genLook || pendingRender) ? 'styling your look…'
+                : 'online';
+              return (
+                <span className={`su-thread-presence${presence !== 'online' ? ' is-busy' : ''}`}>
+                  <span className="su-presence-dot" aria-hidden="true" />{presence}
+                </span>
+              );
+            })()}
           </span>
           <button type="button" className="su-thread-end" onClick={() => void endConversation()}>End</button>
         </div>
@@ -1339,7 +1403,13 @@ export function StyleUpExperience({
         <div
           className="su-chat"
           ref={scrollerRef}
-          onScroll={e => { if (!ctxEditing) setCtxMini((e.target as HTMLDivElement).scrollTop > 24); }}
+          onScroll={e => {
+            const el = e.target as HTMLDivElement;
+            if (!ctxEditing) setCtxMini(el.scrollTop > 24);
+            const near = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
+            nearBottomRef.current = near;
+            if (near) setNewBelow(false);
+          }}
         >
           {messages.length === 0 && (
             <div className="su-chat-intro">
@@ -1347,8 +1417,19 @@ export function StyleUpExperience({
               <p className="su-chat-intro-sub">e.g. &ldquo;I need a date-night fit&rdquo; or &ldquo;help me build a capsule for work&rdquo;.</p>
             </div>
           )}
-          {messages.map(m => {
+          {messages.map((m, idx) => {
             if (skipProductIds.has(m.id)) return null; // folded into its look card
+            // Day divider before the first visible message of each calendar day,
+            // and a "New" divider where the shopper left off last visit.
+            let pj = idx - 1;
+            while (pj >= 0 && skipProductIds.has(messages[pj].id)) pj--;
+            const prevVisible = pj >= 0 ? messages[pj] : null;
+            const dayBreak = !prevVisible || !sameDay(prevVisible.createdAt, m.createdAt);
+            const seenTs = lastSeenRef.current;
+            const newBreak = seenTs > 0
+              && new Date(m.createdAt).getTime() > seenTs
+              && (!prevVisible || new Date(prevVisible.createdAt).getTime() <= seenTs);
+            const content = (() => {
             if (m.kind === 'product' && m.productRef?.choose) {
               return (
                 <ChooserBubble
@@ -1528,10 +1609,38 @@ export function StyleUpExperience({
                 </div>
               );
             }
+            // Plain text bubble — grouped: tight spacing within a same-sender
+            // run, the tail + (stylist) avatar only on the run's last bubble.
+            const nextM = idx < messages.length - 1 ? messages[idx + 1] : null;
+            const follow = !dayBreak && !newBreak
+              && isTextBubble(prevVisible) && prevVisible!.sender === m.sender;
+            const tail = !(isTextBubble(nextM) && nextM!.sender === m.sender && sameDay(nextM.createdAt, m.createdAt));
             return (
-              <div key={m.id} className={`su-msg su-msg--${m.sender}`}>
-                {m.body && <div className="su-bubble">{m.body}</div>}
+              <div key={m.id} className={`su-msg su-msg--${m.sender}${follow ? ' su-msg--follow' : ''}${tail ? ' su-msg--tail' : ''}`}>
+                {m.sender === 'stylist' && tail && (
+                  <span className="su-msg-avatar" aria-hidden="true">
+                    <StylistFace avatarUrl={active?.avatarUrl ?? null} name={active?.name} />
+                  </span>
+                )}
+                {m.body && (
+                  <div className="su-bubble" onClick={() => setTimeShownId(prev => (prev === m.id ? null : m.id))}>
+                    {m.body}
+                  </div>
+                )}
+                {timeShownId === m.id && (
+                  <span className="su-msg-time">
+                    {new Date(m.createdAt).toLocaleTimeString(undefined, { hour: 'numeric', minute: '2-digit' })}
+                  </span>
+                )}
               </div>
+            );
+            })();
+            return (
+              <Fragment key={`row-${m.id}`}>
+                {dayBreak && <div className="su-day-divider"><span>{dayLabel(m.createdAt)}</span></div>}
+                {newBreak && !dayBreak && <div className="su-new-divider"><span>New</span></div>}
+                {content}
+              </Fragment>
             );
           })}
           {stylistTyping && typingThreadId === threadId && (
@@ -1583,6 +1692,30 @@ export function StyleUpExperience({
           )}
           {renderError && <div className="su-render-err">{renderError}</div>}
         </div>
+
+        {newBelow && (
+          <button
+            type="button"
+            className="su-new-pill"
+            onClick={() => {
+              const el = scrollerRef.current;
+              if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+              setNewBelow(false);
+            }}
+          >
+            ↓ New message
+          </button>
+        )}
+
+        {quickChips.length > 0 && (
+          <div className="su-quick-row">
+            {quickChips.map(c => (
+              <button key={c} type="button" className="su-quick-chip" disabled={sending} onClick={() => void send(c)}>
+                {c}
+              </button>
+            ))}
+          </div>
+        )}
 
         <div className="su-composer">
           <input
