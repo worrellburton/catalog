@@ -21,24 +21,25 @@
   grid-template-columns: 34px 1fr 34px;   /* back · centered brand · spacer */
   align-items: center;
   gap: 12px;
-  padding: 10px 14px;
-  border-bottom: 1px solid #1f2024;
+  padding: 12px 14px 6px;
+  /* No divider bar under the logo — it floats on the dark base. */
 }
 .su-shell-back { grid-column: 1; }
-/* Centered Catalog · Style wordmark: "catalog" up top, "style" right under it. */
+/* Centered Catalog logo with "style" right under it. */
 .su-shell-brand {
   grid-column: 2;
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 2px;
+  gap: 4px;
   line-height: 1;
   min-width: 0;
 }
-.su-shell-brand-cat {
-  font-size: 17px;
-  font-weight: 800;
-  letter-spacing: -0.01em;
+.su-shell-logo {
+  height: 22px;
+  width: auto;
+  display: block;
+  color: #f2f2f4;
 }
 .su-shell-brand-style {
   font-size: 10.5px;
@@ -126,6 +127,8 @@
   overflow: hidden;
 }
 .su-stylist-avatar img { width: 100%; height: 100%; object-fit: cover; }
+/* Line-art portrait fallback (no photo) — inherits the avatar's dark ink. */
+.su-avatar-illus { width: 100%; height: 100%; display: block; }
 .su-stylist-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 auto; }
 .su-stylist-name { font-size: 16px; font-weight: 700; }
 .su-stylist-specialty { font-size: 13px; font-weight: 600; color: var(--su-accent); }
@@ -173,6 +176,43 @@
   font-size: 13px; color: #8b8e96; line-height: 1.35;
   white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
 }
+/* "New message" dot — a bright accent pip at the right edge of the pill. */
+.su-convo-dot {
+  flex: 0 0 auto;
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--su-accent, #8aa0c0);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--su-accent, #8aa0c0) 24%, transparent);
+}
+.su-convo-card { position: relative; }
+
+/* Empty conversations state. */
+.su-convos-empty { text-align: center; color: #8b8e96; padding: 40px 20px 8px; }
+.su-convos-empty p { margin: 0 0 4px; font-size: 15px; }
+.su-convos-empty-sub { font-size: 13px; color: #71747c; }
+
+/* Docked "Find a stylist" button (landing). */
+.su-find-bar {
+  flex: 0 0 auto;
+  padding: 12px 18px calc(16px + env(safe-area-inset-bottom));
+}
+.su-find-bar .su-find-btn {
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  display: block;
+  padding: 15px;
+  border-radius: 999px;
+  border: none;
+  background: #e7e7ea;
+  color: #0a0a0a;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition: transform 0.12s ease, opacity 0.16s ease;
+}
+.su-find-bar .su-find-btn:active { transform: scale(0.985); }
 
 /* ── Thread ──────────────────────────────────────────────────────────── */
 .su-page--thread {
