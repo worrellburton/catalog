@@ -1,93 +1,93 @@
-# Style Up — unified engine retrieval + full-look "See it on me"
+# Style Up — engine-method dial (A/B) + full-look "See it on me"
 
 **Date:** 2026-07-01
-**Status:** Design approved, pending spec review → implementation plan
+**Status:** Design (revised to an admin dial), pending review → implementation plan
 
 ## Goal
 
-Two changes to the `/style` stylist chat (catalog stylists):
+1. **Runtime method switch (A/B).** Add an admin dial that selects how the `/style` catalog stylist sources products: **Style engine** (occasion-aware `style_slot_search`) or **Legacy** (the pre-engine recency behavior). Flip it live in the admin to compare the two.
+2. **Behavior split by method:**
+   - **Style engine:** the stylist suggests products directly from the engine. The up-front "Build your outfit" slot **chooser is not shown** — an outfit ask returns a complete look as engine cards. "See it on me" composites the whole look, with an optional per-piece toggle.
+   - **Legacy:** exactly today's pre-engine behavior — the "Build your outfit" chooser, recency retrieval, per-card try-on. Nothing changes.
+3. **Nothing is deleted.** The switch is a dial; both code paths stay live and are chosen at runtime.
 
-1. **Unify retrieval on the engine.** Every catalog product surfaced in the chat should come from the occasion-aware engine (`style_slot_search`), not the legacy 240-newest recency scan. Today only the typed "recommend/show me pieces" path uses the engine; the "put together an outfit" ask (slot chooser) and the "try different X" swap picker still use recency.
-2. **"See it on me" = the whole look, with optional piece selection.** A single tap should composite **all** the suggested pieces onto the shopper (complete look). The shopper can optionally drop pieces first (e.g. top + shoes, no bottom).
+Non-goals: web stylists (Theo) always source from the open web (`product-search`) regardless of the dial. No new render pipeline.
 
-Non-goals: web stylists (Theo) intentionally keep sourcing from the open web (`product-search`) — out of scope. No new render pipeline (reuse the existing full-look render). No change to how single-piece "See it on me" works.
+## The switch — a `stylist_engine_method` dial
 
-## Background (current behavior, verified in code)
+Reuses the existing dials system verbatim (`app_settings` text key/value + `services/dials.ts` + `/admin/dials` + realtime).
 
-- `send()` ([StyleUpExperience.tsx:851‑875](../../../app/components/style-up/StyleUpExperience.tsx)) routes free text through client-side detectors **before** the edge fn: `swapTargetFromText` → `handleSwapRequest`; `wantsFullOutfit` → `startOutfitFlow` (slot chooser); `wantsFullLook` → `askScene` (full render); else → `triggerStylist` (the **only** caller of the `style-up-chat` edge fn / engine).
-- The edge fn's catalog candidates come solely from `retrieveOccasionCandidates` → `style_slot_search` (occasion-aware BM25); picks are validated against that pool. **Engine-backed.**
-- `startOutfitFlow` → `askOutfitSlots` shows a "Build your outfit" chooser; on submit, `onChoose('slots')` calls `recommendForSlot` per slot → `fetchSwapOptions` (**240-newest recency scan + JS substring re-score**, [style-up.ts:643](../../../app/services/style-up.ts)).
-- `handleSwapRequest` → `fetchSwapOptions` (same recency scan).
-- Full-look render already exists: `assembleLook()` (one piece per slot from `lookPicks()`), `generateFullLook(products, scene)` → `startFullLookRender({products, scene})` → `renderLook`. Triggered today only by typing "show me the full look" → `askScene` (scene chooser) → `generateFullLook(assembleLook(), scene)`.
+- **Key/values:** `stylist_engine_method` ∈ `'style_engine' | 'legacy'`, default `'style_engine'`.
+- **`services/dials.ts`:** add `STYLIST_ENGINE_METHOD_KEY`, `DEFAULT_STYLIST_ENGINE_METHOD`, `getStylistEngineMethod()`, `setStylistEngineMethod()`, `subscribeStylistEngineMethod()`, and add the key to `prefetchDials()`. Mirrors `waitlist_mode` (a string/enum dial rather than bool).
+- **Hook:** `useStylistEngineMethod()` (mirrors `useWaitlistMode`) — hydrate + realtime subscribe, so flipping the dial updates open `/style` sessions without a refresh.
+- **Admin control:** a "Stylist engine" section on `/admin/dials` — a two-option toggle (Style engine · Legacy) calling `setStylistEngineMethod`. (Scope: **global**, one dial for the whole feature; per-stylist is a future extension via a column on `style_up_stylists`.)
+- **Server read:** `style-up-chat/index.ts` reads the same `app_settings` row (service role select) so the edge fn and client never disagree — the dial is the single source of truth.
 
-## Part A — Unify catalog retrieval on the engine
+## Behavior by method
 
-**Guiding rule: switch, don't delete.** No existing function is removed. Each switch is guarded by a single boolean flag that defaults to the new (engine) behavior; flipping it to `false` restores the exact legacy path. The old chooser flow and recency scan stay in the codebase, reachable, so a revert is one line.
+| Surface | `style_engine` (default) | `legacy` |
+|---|---|---|
+| Typed "show me pieces" (edge fn candidates) | `retrieveOccasionCandidates` → `style_slot_search` (current v8) | 120-newest recency scan (restored pre-v7 query) |
+| "Put together an outfit" | `triggerStylist('outfit')` → engine assembles a complete look; **no chooser** | `startOutfitFlow()` → "Build your outfit" chooser (as today) |
+| "Try different X" swap | `fetchSwapOptions` sourced from `style_slot_search` | `fetchSwapOptions` recency scan (as today) |
+| "See it on me" | full-look bar: renders all suggested pieces, optional "Choose pieces" toggle | per-card single-item try-on (as today) |
 
-### A1. "Put together an outfit" → engine (flag `ROUTE_OUTFIT_TO_ENGINE`)
+### Client (`StyleUpExperience.tsx`)
+- `const method = useStylistEngineMethod()`.
+- `send()` outfit branch: `method === 'style_engine' ? triggerStylist('outfit') : startOutfitFlow()`.
+- `triggerStylist(mode?: 'outfit')` sends `body: { threadId, mode }`.
+- Full-look bar (Part B below) renders only when `method === 'style_engine'`.
 
-- Add a module-level `const ROUTE_OUTFIT_TO_ENGINE = true` in `StyleUpExperience.tsx`.
-- In `send()`, the `wantsFullOutfit(text)` branch becomes:
-  `ROUTE_OUTFIT_TO_ENGINE ? void triggerStylist('outfit') : void startOutfitFlow();`
-  Flag `false` → the current "Build your outfit" chooser returns unchanged.
-- `triggerStylist(mode?: 'outfit')` passes `body: { threadId, mode }` to `supabase.functions.invoke('style-up-chat', …)`.
-- **Edge fn (`style-up-chat/index.ts`):** read `body.mode`. When `mode === 'outfit'` (catalog branch only), append an assembly instruction to the system prompt: *"The shopper wants a COMPLETE look. Recommend one coherent outfit from the candidates — a top (or a dress), a bottom, shoes, plus an optional layer — one piece per slot, all matching in color/formality/season. Return their ids in productIds."* Cap stays at 4 (top+bottom+shoes+layer, or dress+shoes). No `mode` → existing "1‑4 pieces" behavior. This is purely additive on the server (an extra prompt clause), so it needs no flag.
+### Edge fn (`style-up-chat/index.ts`)
+- Read `stylist_engine_method`. Branch the catalog candidate block:
+  - `legacy` → the pre-engine query: `products.is_active.not(image_url null).order(created_at desc).limit(120)` gender-filtered (restored, kept alongside the engine path).
+  - else → `retrieveOccasionCandidates` (current).
+- `mode === 'outfit'` (only sent in engine mode) → append the complete-look assembly clause to the prompt: *"The shopper wants a COMPLETE look — one top (or dress), one bottom, shoes, optional layer, all coherent — return their ids in productIds."* Cap stays 4.
 
-**Kept, not deleted:** `startOutfitFlow`, `askOutfitSlots`, `onChoose('slots')`, the shoes sub-chooser, `recommendForSlot` / `webRecommendForSlot`, `chosenBySlot`, `sendChooser` — all remain. They're simply not reached while the flag is `true`.
+### Swap source (`style-up.ts`)
+- `fetchSwapOptions` reads the dial (`getStylistEngineMethod()`, cached) and branches its candidate **source**: `style_slot_search` (engine) vs the existing recency query. The existing post-filters (exclude, `roleForProduct`, budget, `avoidColors`, formality, `simpler`) run over whichever source produced the rows — unchanged. Add a small `slotSearch(role, gender, occasion, k)` wrapper for the RPC.
 
-### A2. "Try different X" swap → engine (flag `SWAP_USE_ENGINE`)
+## Part B — "See it on me": full look + optional selection (engine mode)
 
-- Add `const SWAP_USE_ENGINE = true` in `style-up.ts`.
-- In `fetchSwapOptions`, branch the candidate **source**:
-  - `SWAP_USE_ENGINE` → `supabase.rpc('style_slot_search', { p_query, p_k, p_gender })`, where `p_query = \`${styleText} ${occasion} ${ROLE_QUERY_NOUN[role]}\``, `p_gender` = shopper gender, `p_k` ≈ 16.
-  - else → the **existing** `.from('products').order('created_at').limit(240)` block, left in place verbatim.
-- The existing post-filters/re-score (exclude ids, `roleForProduct` match, budget, `avoidColors`, formality, `simpler`) run over whichever source produced the candidates — unchanged. The recency tiebreak stays harmless with engine results (engine order dominates).
-- Add a tiny wrapper (e.g. `slotSearch(role, gender, occasion, k)`) so the RPC call lives in one place. `style_slot_search` is granted to `authenticated`, so the client may call it directly.
-- Web swap (`webFetchSwapOptions`) unchanged.
-
-After A1+A2 (flags on), every **catalog** product path (typed, outfit, swap) is engine-backed; web stays web. Flags off → exact prior behavior.
-
-## Part B — "See it on me": full look + optional selection
-
-Add a **sticky look bar** above the composer, shown whenever `assembleLook().length >= 2`:
+When `method === 'style_engine'` and the look has ≥2 pieces, show a sticky **look bar** above the composer:
 
 ```
 Your look · 3 pieces        [ Choose pieces ]  [ See it on me ]
 ```
 
-- **`See it on me` (primary):** triggers the existing full-look flow — `askScene()` (scene chooser) → `generateFullLook(selectedLook(), scene)`. Default `selectedLook()` = `assembleLook()` (all pieces) → complete look. No typing required (replaces needing to type "show me the full look", which still works as a fallback).
-- **`Choose pieces` (optional):** expands the bar to list `assembleLook()` pieces as toggles, all ON by default. Toggling off drops a piece from `selectedLook()`. Empty selection disables the CTA.
-- State: `lookSelection: Set<string> | null` (null = all). `selectedLook()` = `assembleLook()` filtered by `lookSelection`.
-- Per-card "See it on me" (single item, `tryOn`) is unchanged.
-
-No render-pipeline change: `generateFullLook` already accepts an arbitrary product array + scene. Part B is purely **additive** — it deletes nothing (per-card `tryOn` and the "show me the full look" text trigger stay). For consistency it's gated by `const SHOW_LOOK_BAR = true`; `false` hides the bar and restores the prior UI exactly.
+- **See it on me** → the existing full-look flow: `askScene()` (scene chooser) → `generateFullLook(selectedLook(), scene)`. Default `selectedLook()` = `assembleLook()` (all pieces) → complete look.
+- **Choose pieces** (optional) → expands to per-piece toggles (all ON); dropping one (e.g. bottom) renders top + shoes only. State: `lookSelection: Set<string> | null` (null = all), reset when a new suggestion batch arrives.
+- No render-pipeline change — `generateFullLook` already takes an arbitrary product array + scene. Per-card `tryOn` (single item) stays.
 
 ## Files touched
 
-No file loses code. Every change is a flag-gated branch or an additive block.
-
 | File | Change |
 |---|---|
-| `app/components/style-up/StyleUpExperience.tsx` | add `ROUTE_OUTFIT_TO_ENGINE` + `SHOW_LOOK_BAR` flags; `wantsFullOutfit` branch chooses `triggerStylist('outfit')` vs the kept `startOutfitFlow()`; `triggerStylist` takes/sends `mode`; **add** sticky look bar + `lookSelection` + `selectedLook()` wired to `askScene`/`generateFullLook`. Chooser flow kept intact. |
-| `supabase/functions/style-up-chat/index.ts` | read `body.mode`; when `'outfit'`, **append** a complete-look assembly clause to the catalog prompt (additive, no flag) |
-| `app/services/style-up.ts` | add `SWAP_USE_ENGINE` flag + `slotSearch` wrapper; `fetchSwapOptions` branches candidate source (engine vs the kept recency block). `recommendForSlot`/`webRecommendForSlot` kept. |
+| `app/services/dials.ts` | add the `stylist_engine_method` dial (get/set/subscribe + prefetch key) |
+| `app/hooks/useStylistEngineMethod.ts` | **new** — hydrate + subscribe hook (mirrors `useWaitlistMode`) |
+| `app/routes/admin/dials.tsx` | add the "Stylist engine" two-option control |
+| `app/components/style-up/StyleUpExperience.tsx` | read the dial; outfit branch picks engine vs chooser; `triggerStylist` sends `mode`; add the sticky look bar (engine mode) + `lookSelection`/`selectedLook()` |
+| `supabase/functions/style-up-chat/index.ts` | read `stylist_engine_method`; branch candidates (engine vs restored 120-newest); `mode:'outfit'` prompt clause |
+| `app/services/style-up.ts` | `fetchSwapOptions` branches source on the dial; add `slotSearch` wrapper |
+| `supabase/migrations/NNN_stylist_engine_method.sql` | optional seed row `app_settings('stylist_engine_method','style_engine')` (else default applies) |
 
-## Reverting
+No function is removed; both engines stay live.
 
-- Outfit ask → chooser: set `ROUTE_OUTFIT_TO_ENGINE = false`.
-- Swap → recency: set `SWAP_USE_ENGINE = false`.
-- Hide the look bar: set `SHOW_LOOK_BAR = false`.
-- The `mode:'outfit'` prompt clause is inert unless the client sends `mode`, so with `ROUTE_OUTFIT_TO_ENGINE = false` it never fires — no server revert needed. (Redeploy the edge fn only if you also want the clause gone.)
+## Reverting / operating
 
-## Edge cases / decisions
+- **Flip to legacy:** set the dial to `legacy` in `/admin/dials` — instant, no deploy, affects new turns for every session (realtime). Flip back to `style_engine` anytime.
+- Default is `style_engine`, so shipping changes nothing until an admin deliberately switches.
 
-- **Zero engine candidates for a slot** (outfit or swap): behaves like today's empty pool — the stylist says it's short on options; no recency fallback (deliberate — the recency scan is what we're removing).
-- **`mode:'outfit'` reliability:** an explicit prompt instruction + productIds validation (already in code) makes the complete-look assembly deterministic; if Claude still under-fills, that's a prompt tweak, not an architecture change.
-- **Look bar threshold:** `>= 2` pieces so a single suggested item doesn't show a "full look" CTA (single-item try-on covers that).
-- **Selection persistence:** `lookSelection` resets when a new suggestion batch arrives (so a fresh outfit starts "all selected").
+## Edge cases
+
+- **Dial read on the server:** one cheap `app_settings` select per turn (or folded into an existing query); missing row → default `style_engine`.
+- **Zero engine candidates** (engine mode): empty pool + `(none available)`, no recency fallback (deliberate). Legacy mode is the recency behavior by design.
+- **Mid-conversation flip:** applies to the next turn; already-sent messages are unchanged. Fine for A/B.
+- **Look bar threshold:** ≥2 pieces so a single pick doesn't show a "full look" CTA.
 
 ## Verification
 
-- **Manual (local, Chrome MCP, logged-in):** "put together a smart casual dinner outfit" → engine cards, no chooser; confirm via `style_up_traces.candidate_count` + the `[style-retrieval]` log that the engine ran (not recency). "try different pants" → occasion-relevant alternates. Sticky look bar → "See it on me" renders the full look; drop bottom via "Choose pieces" → renders top+shoes.
-- **Assertion:** with `SWAP_USE_ENGINE = true`, a "try different pants" turn issues a `style_slot_search` RPC (visible in the Supabase RPC/postgres logs or a `console.log`), not a `products` recency select. The recency block still exists in the file but is unreached — flipping the flag reactivates it.
-- One runnable check: a small unit test for `selectedLook()` (all-selected vs subset) and for the `fetchSwapOptions` role filter over a mocked `style_slot_search` result.
+- **Manual (local, Chrome MCP, logged-in), both dial positions:**
+  - `style_engine`: "put together a smart casual dinner outfit" → engine cards, **no chooser**; `style_up_traces.candidate_count` ≈ per-slot pool + `[style-retrieval]` log. "try different pants" → occasion-relevant. Look bar → full-look render; drop bottom via "Choose pieces" → top+shoes.
+  - `legacy`: same asks → "Build your outfit" chooser returns; candidates are the 120-newest; no look bar. Confirms the A/B difference on screen.
+- One runnable check: unit test `selectedLook()` (all vs subset) and `fetchSwapOptions` role filter over a mocked `style_slot_search` result.
