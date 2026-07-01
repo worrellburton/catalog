@@ -400,9 +400,8 @@ export function StyleUpExperience({
   });
 
   const exit = useCallback(() => {
-    // Return to wherever the shopper came from; fall back to home.
-    if (window.history.length > 1) navigate(-1);
-    else navigate('/');
+    // Back always lands on the /style landing (never dumps out to the app feed).
+    navigate('/style');
   }, [navigate]);
 
   // Landing sign-in, same Google OAuth the rest of the app uses. On success
