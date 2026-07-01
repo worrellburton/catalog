@@ -399,14 +399,15 @@ export function StyleUpExperience({
     return () => mq.removeEventListener('change', apply);
   }, []);
 
-  // Keyboard inset. The chat shell is position:fixed inset:0; iOS Safari leaves
-  // it at full layout-viewport height when the keyboard opens (it ignores
-  // interactive-widget=resizes-content), so the bottom composer lands BEHIND the
-  // keyboard and iOS auto-scrolls the whole shell to reveal it — the composer
-  // floats mid-screen with the messages gone. The VisualViewport DOES exclude
-  // the keyboard, so mirror its height into --su-kb and pad the shell bottom by
-  // it, keeping the composer above the keyboard (0 when the keyboard is down).
-  // Same treatment as AIStylist's --gen-kb-inset.
+  // Pin the chat shell to the VisualViewport. The shell is position:fixed and
+  // full-screen; iOS Safari ignores interactive-widget=resizes-content, so when
+  // the keyboard opens it leaves the layout viewport full-height and instead
+  // scrolls the fixed shell to reveal the focused composer — dragging the header
+  // and messages off the top and stranding the composer over a black gap. The
+  // VisualViewport excludes the keyboard AND reports how far Safari scrolled
+  // (offsetTop), so size the shell to vv.height and offset it by vv.offsetTop so
+  // it always overlays exactly the visible region — header at top, composer above
+  // the keyboard, messages scrolling internally in between.
   useEffect(() => {
     const vv = typeof window !== 'undefined' ? window.visualViewport : null;
     if (!vv) return;
@@ -414,8 +415,8 @@ export function StyleUpExperience({
     let raf = 0;
     const apply = () => {
       raf = 0;
-      const inset = Math.max(0, window.innerHeight - vv.height - vv.offsetTop);
-      root.style.setProperty('--su-kb', `${Math.round(inset)}px`);
+      root.style.setProperty('--su-vvh', `${Math.round(vv.height)}px`);
+      root.style.setProperty('--su-vvt', `${Math.round(vv.offsetTop)}px`);
     };
     const schedule = () => { if (!raf) raf = requestAnimationFrame(apply); };
     apply();
@@ -425,7 +426,8 @@ export function StyleUpExperience({
       if (raf) cancelAnimationFrame(raf);
       vv.removeEventListener('resize', schedule);
       vv.removeEventListener('scroll', schedule);
-      root.style.removeProperty('--su-kb');
+      root.style.removeProperty('--su-vvh');
+      root.style.removeProperty('--su-vvt');
     };
   }, []);
 
