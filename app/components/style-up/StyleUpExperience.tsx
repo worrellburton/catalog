@@ -23,6 +23,7 @@ import {
 import { roleTagFromName } from '~/services/product-roles';
 import { signInWithGoogle } from '~/services/auth';
 import StyleUpBackground from './StyleUpBackground';
+import CatalogLogo from '~/components/CatalogLogo';
 
 // Preferences the stylist infers from chat, budget, occasion, formality lean,
 // dropped colors, simplicity, applied to every recommendation (#4/#6/#7).
@@ -274,8 +275,35 @@ interface ShopperContext {
   chips: string[];
 }
 
-function initials(name: string): string {
-  return name.trim().slice(0, 1).toUpperCase() || '?';
+/** A stylist's avatar contents: their real photo when we have one, otherwise a
+ *  clean line-art portrait (a croquis bust) — never bare initials. Sits inside a
+ *  `.su-stylist-avatar` (accent background), so the line inherits the dark ink. */
+function StylistFace({ avatarUrl, name }: { avatarUrl: string | null; name?: string }) {
+  if (avatarUrl) return <img src={avatarUrl} alt={name ?? ''} loading="lazy" />;
+  return (
+    <svg className="su-avatar-illus" viewBox="0 0 40 40" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="20" cy="15.5" r="6.4" />
+      <path d="M13.6 12.6c.6-4.4 3.5-6.8 6.4-6.8s5.8 2.4 6.4 6.8" />
+      <path d="M8.5 34c0-6.3 5.2-10.2 11.5-10.2S31.5 27.7 31.5 34" />
+    </svg>
+  );
+}
+
+// Per-thread "last seen" marker (localStorage), so the conversations list can
+// flag a thread that has a newer stylist message than the shopper has opened.
+const SEEN_PREFIX = 'styleup:seen:';
+function markThreadSeen(threadId: string): void {
+  try { localStorage.setItem(SEEN_PREFIX + threadId, String(Date.now())); } catch { /* ignore */ }
+}
+function threadHasNews(t: StyleUpThreadSummary): boolean {
+  if (!t.lastMessageAt) return false;
+  // The shopper sent the last message → nothing new for them to read.
+  if (t.lastMessage && t.lastMessage.startsWith('You: ')) return false;
+  try {
+    const seen = localStorage.getItem(SEEN_PREFIX + t.threadId);
+    if (!seen) return true;
+    return new Date(t.lastMessageAt).getTime() > Number(seen);
+  } catch { return false; }
 }
 
 /** Compact relative time for the conversation list (now / 3h / 2d / Jun 8). */
@@ -324,6 +352,8 @@ export function StyleUpExperience({
   const [threadId, setThreadId] = useState<string | null>(null);
   const [messages, setMessages] = useState<StyleUpMessage[]>([]);
   const [myThreads, setMyThreads] = useState<StyleUpThreadSummary[]>([]);
+  const [pickerOpen, setPickerOpen] = useState(false);        // "Find a stylist" screen
+  const [allStylists, setAllStylists] = useState<StyleUpStylist[]>([]); // full roster for the picker
   const [bootResumed, setBootResumed] = useState(false);
   const [opening, setOpening] = useState(false);
   const [draft, setDraft] = useState('');
@@ -437,6 +467,8 @@ export function StyleUpExperience({
   const openThread = useCallback(async (id: string, s: StyleUpStylist) => {
     setActive(s);
     setThreadId(id);
+    setPickerOpen(false);
+    markThreadSeen(id);   // opening it clears its "new message" flag
     setMessages(await fetchMessages(id));
     // Open where they left off, pin to the latest message once the thread has
     // rendered + laid out (two frames covers the mount + first paint).
@@ -464,12 +496,21 @@ export function StyleUpExperience({
   }, [userId, inScope]);
 
   const closeThread = useCallback(() => {
+    if (threadId) markThreadSeen(threadId); // leaving marks everything read
     setThreadId(null);
     setActive(null);
     setMessages([]);
     setDraft('');
     void loadThreads(); // refresh the saved-conversations list with the latest
-  }, [loadThreads]);
+  }, [loadThreads, threadId]);
+
+  // "Find a stylist" — open the picker and load the FULL roster (not just the
+  // two landing stylists) so the shopper can choose from all of them.
+  const openPicker = useCallback(async () => {
+    setPickerOpen(true);
+    const all = await fetchStylists({ landingOnly: false });
+    setAllStylists(all);
+  }, []);
 
   // On open, resume the shopper's most-recent conversation so an active chat's
   // history keeps going instead of dropping them back on the roster every time.
@@ -1084,19 +1125,20 @@ export function StyleUpExperience({
     </div>
   );
 
-  // Shared top bar, the Catalog · Style wordmark centered up top (the
-  // conversations live in the page below, so there's no resume-chat icon).
-  const railHeader = (
+  // Shared top bar: the Catalog logo centered up top with "style" right under
+  // it, and a single back control. No divider bar beneath it.
+  const header = (onBack: () => void) => (
     <div className="su-shell-head">
-      <button type="button" className="su-back su-shell-back" onClick={exit} aria-label="Back">
+      <button type="button" className="su-back su-shell-back" onClick={onBack} aria-label="Back">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
       </button>
       <div className="su-shell-brand">
-        <span className="su-shell-brand-cat">catalog</span>
+        <CatalogLogo className="su-shell-logo" />
         <span className="su-shell-brand-style">style</span>
       </div>
     </div>
   );
+  const railHeader = header(exit);
 
   // Expanded look viewer, the big, full-screen video + its pieces + add-to-looks.
   const viewerOverlay = viewer ? (
@@ -1133,12 +1175,11 @@ export function StyleUpExperience({
     </button>
   );
 
-  // The /style marketing hero shown above the roster.
+  // The /style hero — just the headline (the Catalog logo sits in the header
+  // above, so no eyebrow, and no description blurb).
   const landingHero = landing ? (
     <div className="su-landing-hero">
-      <span className="su-landing-eyebrow">Catalog · StyleUp</span>
       <h1 className="su-landing-title">{landingTitle}</h1>
-      <p className="su-landing-sub">{landingSubtitle}</p>
     </div>
   ) : null;
 
@@ -1156,7 +1197,7 @@ export function StyleUpExperience({
               {stylists.map(s => (
                 <div key={s.id} className="su-landing-stylist" style={{ ['--su-accent' as string]: s.accentColor ?? '#8aa0c0' }}>
                   <span className="su-stylist-avatar" aria-hidden="true">
-                    {s.avatarUrl ? <img src={s.avatarUrl} alt="" /> : initials(s.name)}
+                    <StylistFace avatarUrl={s.avatarUrl} name={s.name} />
                   </span>
                   <span className="su-landing-stylist-name">{s.name}</span>
                   {s.specialty && <span className="su-landing-stylist-spec">{s.specialty}</span>}
@@ -1189,7 +1230,7 @@ export function StyleUpExperience({
                   onClick={() => void openThread(t.threadId, t.stylist)}
                 >
                   <span className="su-stylist-avatar" aria-hidden="true">
-                    {t.stylist.avatarUrl ? <img src={t.stylist.avatarUrl} alt="" /> : initials(t.stylist.name)}
+                    <StylistFace avatarUrl={t.stylist.avatarUrl} name={t.stylist.name} />
                   </span>
                   <span className="su-convo-info">
                     <span className="su-convo-top">
@@ -1225,7 +1266,7 @@ export function StyleUpExperience({
                 disabled={opening}
               >
                 <span className="su-stylist-avatar" aria-hidden="true">
-                  {s.avatarUrl ? <img src={s.avatarUrl} alt="" /> : initials(s.name)}
+                  <StylistFace avatarUrl={s.avatarUrl} name={s.name} />
                 </span>
                 <span className="su-stylist-info">
                   <span className="su-stylist-name">{s.name}</span>
@@ -1251,7 +1292,7 @@ export function StyleUpExperience({
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
           </button>
           <span className="su-thread-avatar" aria-hidden="true">
-            {active?.avatarUrl ? <img src={active.avatarUrl} alt="" /> : initials(active?.name ?? '?')}
+            <StylistFace avatarUrl={active?.avatarUrl ?? null} name={active?.name} />
           </span>
           <span className="su-thread-id">
             <span className="su-thread-name">{active?.name}</span>
@@ -1470,6 +1511,83 @@ export function StyleUpExperience({
       </div>
   );
 
+  // ── Landing: conversations only (with a "new message" dot), plus a docked
+  // "Find a stylist" button. No stylist roster / "Request" here — starting a new
+  // chat happens through the picker. ─────────────────────────────────────────
+  const convosPane = (
+    <div className="su-page su-page--convos">
+      {myThreads.length > 0 ? (
+        <div className="su-convos">
+          <div className="su-section-label">Your conversations</div>
+          {myThreads.map(t => (
+            <button
+              key={t.threadId}
+              type="button"
+              className="su-convo-card"
+              style={{ ['--su-accent' as string]: t.stylist.accentColor ?? '#8aa0c0' }}
+              onClick={() => void openThread(t.threadId, t.stylist)}
+            >
+              <span className="su-stylist-avatar" aria-hidden="true">
+                <StylistFace avatarUrl={t.stylist.avatarUrl} name={t.stylist.name} />
+              </span>
+              <span className="su-convo-info">
+                <span className="su-convo-top">
+                  <span className="su-stylist-name">{t.stylist.name}</span>
+                  <span className="su-convo-time">{relativeTime(t.lastMessageAt)}</span>
+                </span>
+                {t.lastMessage && <span className="su-convo-preview">{t.lastMessage}</span>}
+              </span>
+              {threadHasNews(t) && <span className="su-convo-dot" aria-label="New message" />}
+            </button>
+          ))}
+        </div>
+      ) : (
+        <div className="su-convos-empty">
+          <p>No conversations yet.</p>
+          <p className="su-convos-empty-sub">Find a stylist to start chatting.</p>
+        </div>
+      )}
+    </div>
+  );
+
+  const findStylistBar = (
+    <div className="su-find-bar">
+      <button type="button" className="su-find-btn" onClick={() => void openPicker()}>Find a stylist</button>
+    </div>
+  );
+
+  // The picker screen — choose from the full roster of stylists.
+  const pickerPane = (
+    <div className="su-page">
+      <div className="su-roster-head">
+        <h1>Find a stylist</h1>
+        <p>Choose a stylist to start a new conversation.</p>
+      </div>
+      <div className="su-roster">
+        {allStylists.map(s => (
+          <button
+            key={s.id}
+            type="button"
+            className="su-stylist-card"
+            style={{ ['--su-accent' as string]: s.accentColor ?? '#8aa0c0' }}
+            onClick={() => void openStylist(s)}
+            disabled={opening}
+          >
+            <span className="su-stylist-avatar" aria-hidden="true">
+              <StylistFace avatarUrl={s.avatarUrl} name={s.name} />
+            </span>
+            <span className="su-stylist-info">
+              <span className="su-stylist-name">{s.name}</span>
+              {s.specialty && <span className="su-stylist-specialty">{s.specialty}</span>}
+              {s.bio && <span className="su-stylist-bio">{s.bio}</span>}
+            </span>
+          </button>
+        ))}
+        {allStylists.length === 0 && <div className="su-empty">Loading stylists…</div>}
+      </div>
+    </div>
+  );
+
   // Bolder drape on the landing / roster, a faint whisper once a chat is open.
   const bgLayer = <div className="su-bg" aria-hidden="true"><StyleUpBackground intensity={threadId ? 0.4 : 1} /></div>;
 
@@ -1481,7 +1599,9 @@ export function StyleUpExperience({
       <>
         <div className={`su-shell su-shell--landing${threadId ? ' su-shell--landing-thread' : ''}`} style={threadId ? { ['--su-accent' as string]: active?.accentColor ?? '#8aa0c0' } : undefined}>
           {bgLayer}
-          {threadId ? threadPane : <>{railHeader}{landingHero}{rosterPane}</>}
+          {threadId ? threadPane
+            : pickerOpen ? <>{header(() => setPickerOpen(false))}{pickerPane}</>
+            : <>{railHeader}{landingHero}{convosPane}{findStylistBar}</>}
         </div>
         {viewerOverlay}
       </>
