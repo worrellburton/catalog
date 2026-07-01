@@ -153,6 +153,14 @@ const HUNT_PHRASES = [
 
 const SLOT_LABEL: Record<string, string> = { Top: 'Top', Pants: 'Pants / Shorts', Jacket: 'Jacket', Hat: 'Hat', Shoes: 'Shoes' };
 
+// Head-to-toe display order for the look card: hat → layers → top → bottoms →
+// shoes, accessories last. Unmapped roles keep their arrival order at the end.
+const SLOT_ORDER: Record<string, number> = { Hat: 0, Sunglasses: 1, Jacket: 2, Top: 3, Dress: 3, Pants: 4, Shoes: 5, Jewelry: 6, Bag: 7 };
+function sortHeadToToe(pieces: StyleUpProductRef[]): StyleUpProductRef[] {
+  return [...pieces].sort((a, b) =>
+    (SLOT_ORDER[roleTagFromName(a.name ?? null) ?? ''] ?? 9) - (SLOT_ORDER[roleTagFromName(b.name ?? null) ?? ''] ?? 9));
+}
+
 // Scene options for "where do you want to be seen?", Clean studio is always
 // first, then two fun spots, and the 4th is always a little wild.
 const FUN_SCENES = ['a cozy coffee shop', 'a rooftop at golden hour', 'a city street at night', 'a sunny park', 'a minimalist loft', 'an art gallery', 'a jazz bar', 'a boardwalk by the sea', 'a sidewalk café in Paris'];
@@ -1383,8 +1391,9 @@ export function StyleUpExperience({
             }
             if (m.kind === 'product' && m.productRef) {
               // One card holding every piece in this pull + a single generate CTA,
-              // laid out like an editorial plate: numbered rows + a total line.
-              const pieces = lookRunPieces.get(m.id) ?? [m.productRef];
+              // laid out like an editorial plate: numbered rows head-to-toe + a
+              // total line.
+              const pieces = sortHeadToToe(lookRunPieces.get(m.id) ?? [m.productRef]);
               let cartTotal = 0;
               let cartPriced = 0;
               for (const pc of pieces) {
