@@ -33,6 +33,7 @@ const FS = /* glsl */ `
   uniform float uFade;      // 0..1 load-in ramp
   uniform float uIntensity; // presence: ~1 landing, ~0.4 in-thread
   uniform float uStatic;    // 1 = reduced-motion (fully drawn, no animation)
+  uniform vec3  uInk;       // line color — neutral ink, tinted per-stylist in-thread
 
   // Cheap per-cycle hash so a stroke's folds vary each time it redraws.
   float hash(float n) { return fract(sin(n * 91.3458) * 47453.5453); }
@@ -97,11 +98,23 @@ const FS = /* glsl */ `
     }
     ink = clamp(ink, 0.0, 1.0);
 
-    // Pale near-white ink; alpha driven by presence + the load-in ramp.
+    // Ink color (neutral, or eased toward the stylist's accent in-thread);
+    // alpha driven by presence + the load-in ramp.
     float a = ink * 0.20 * uIntensity * uFade;
-    gl_FragColor = vec4(vec3(0.86, 0.90, 0.98), a);
+    gl_FragColor = vec4(uInk, a);
   }
 `;
+
+// Neutral near-white ink — the drape's default line color.
+const NEUTRAL_INK: [number, number, number] = [0.86, 0.9, 0.98];
+
+/** "#rrggbb" → 0..1 rgb, or null when unparseable. */
+function hexToRgb(hex: string | null | undefined): [number, number, number] | null {
+  const m = hex?.trim().match(/^#?([0-9a-f]{6})$/i);
+  if (!m) return null;
+  const n = parseInt(m[1], 16);
+  return [((n >> 16) & 255) / 255, ((n >> 8) & 255) / 255, (n & 255) / 255];
+}
 
 function compile(gl: WebGLRenderingContext, type: number, src: string): WebGLShader | null {
   const sh = gl.createShader(type);
@@ -119,19 +132,27 @@ function compile(gl: WebGLRenderingContext, type: number, src: string): WebGLSha
 export interface StyleUpBackgroundProps {
   /** Presence of the drape field: ~1 on the landing (bolder), ~0.4 in-thread. */
   intensity?: number;
+  /** Stylist accent hex — tints the ink toward it in-thread (null = neutral). */
+  accent?: string | null;
 }
 
-export default function StyleUpBackground({ intensity = 1 }: StyleUpBackgroundProps = {}) {
+export default function StyleUpBackground({ intensity = 1, accent = null }: StyleUpBackgroundProps = {}) {
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const targetRef = useRef(intensity);   // where the presence should ease to
+  const inkTargetRef = useRef<[number, number, number]>(NEUTRAL_INK); // ink color to ease to
   const kickRef = useRef<() => void>(() => {}); // resume the loop if it settled
 
-  // Track the desired presence without re-creating the GL context, and nudge the
-  // loop awake (matters under reduced-motion, where it settles then stops).
+  // Track the desired presence + ink tint without re-creating the GL context,
+  // and nudge the loop awake (matters under reduced-motion, where it settles
+  // then stops).
   useEffect(() => {
     targetRef.current = intensity;
+    const a = hexToRgb(accent);
+    // Lift the accent toward white so the hairlines stay luminous on the dark
+    // base (a raw mid-tone accent would read muddy at line weight).
+    inkTargetRef.current = a ? [a[0] * 0.55 + 0.45, a[1] * 0.55 + 0.45, a[2] * 0.55 + 0.45] : NEUTRAL_INK;
     kickRef.current();
-  }, [intensity]);
+  }, [intensity, accent]);
 
   useEffect(() => {
     const canvas = canvasRef.current;
@@ -171,6 +192,7 @@ export default function StyleUpBackground({ intensity = 1 }: StyleUpBackgroundPr
     const uFade = gl.getUniformLocation(program, 'uFade');
     const uIntensity = gl.getUniformLocation(program, 'uIntensity');
     const uStatic = gl.getUniformLocation(program, 'uStatic');
+    const uInk = gl.getUniformLocation(program, 'uInk');
 
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
@@ -200,6 +222,7 @@ export default function StyleUpBackground({ intensity = 1 }: StyleUpBackgroundPr
     gl.uniform1f(uStatic, reduced ? 1 : 0);
     const start = performance.now();
     let current = targetRef.current;   // eased presence
+    const ink: [number, number, number] = [inkTargetRef.current[0], inkTargetRef.current[1], inkTargetRef.current[2]]; // eased ink color
     let raf = 0;
     let running = false;
 
@@ -207,17 +230,23 @@ export default function StyleUpBackground({ intensity = 1 }: StyleUpBackgroundPr
       if (!running) return;
       const now = performance.now();
       const secs = (now - start) / 1000;
-      // Ease the presence toward its target so surface changes glide.
+      // Ease the presence + ink tint toward their targets so surface changes glide.
       current += (targetRef.current - current) * 0.06;
+      let inkDelta = 0;
+      for (let i = 0; i < 3; i++) {
+        ink[i] += (inkTargetRef.current[i] - ink[i]) * 0.06;
+        inkDelta = Math.max(inkDelta, Math.abs(inkTargetRef.current[i] - ink[i]));
+      }
       const fade = Math.min(1, (now - start) / 1200);
       gl.uniform1f(uTime, reduced ? 0 : secs);
       gl.uniform1f(uFade, fade);
       gl.uniform1f(uIntensity, current);
+      gl.uniform3f(uInk, ink[0], ink[1], ink[2]);
       gl.clear(gl.COLOR_BUFFER_BIT);
       gl.drawArrays(gl.TRIANGLES, 0, 6);
       // Keep going while animating; under reduced-motion, stop once the load-in
-      // ramp and the presence ease have both settled.
-      const settled = fade >= 1 && Math.abs(targetRef.current - current) < 0.004;
+      // ramp and the eases have all settled.
+      const settled = fade >= 1 && Math.abs(targetRef.current - current) < 0.004 && inkDelta < 0.004;
       if (!reduced || !settled) raf = requestAnimationFrame(frame);
       else running = false;
     };

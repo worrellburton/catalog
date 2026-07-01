@@ -1048,3 +1048,172 @@
 .su-google:not(:disabled):active { transform: scale(0.97); }
 .su-google:disabled { opacity: 0.6; cursor: default; }
 .su-signin-error { margin-top: 12px; color: #f0a0a0; font-size: 13px; }
+
+/* ════════════════════════════════════════════════════════════════════════
+   Aesthetic pass — atmosphere, glass, choreography, editorial type, tape
+   progress, frosted chrome, micro-interactions. Appended as one section so
+   these refinements win the cascade over the base rules above.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* Editorial serif for display moments (system Didot/Bodoni, no font loads). */
+.su-shell { --su-serif: "Didot", "Bodoni 72", "Playfair Display", Georgia, "Times New Roman", serif; }
+
+/* ── Aurora depth — a slow radial breath of the stylist's accent behind
+      everything, dimming toward the composer so focus falls on the chat. ── */
+.su-aurora {
+  position: absolute;
+  inset: -20%;
+  pointer-events: none;
+  background:
+    radial-gradient(42% 34% at 28% 18%, color-mix(in srgb, var(--su-accent, #8aa0c0) 11%, transparent), transparent 70%),
+    radial-gradient(50% 40% at 78% 64%, color-mix(in srgb, var(--su-accent, #8aa0c0) 6%, transparent), transparent 72%),
+    linear-gradient(to bottom, transparent 55%, rgba(0, 0, 0, 0.5) 100%);
+  animation: su-aurora-drift 26s ease-in-out infinite alternate;
+}
+@keyframes su-aurora-drift {
+  from { transform: translate3d(-2.5%, -1.5%, 0) scale(1); }
+  to { transform: translate3d(2.5%, 2%, 0) scale(1.06); }
+}
+
+/* ── Glass bubbles — the drape lines breathe through the stylist's side;
+      your side gets a rich dual-tone gradient. ─────────────────────────── */
+.su-msg--stylist .su-bubble {
+  background: rgba(42, 44, 49, 0.58);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+.su-msg--shopper .su-bubble {
+  background: linear-gradient(135deg, #2f6fed 0%, #6a5ae0 130%);
+}
+
+/* ── Message choreography — bubbles settle in instead of popping. ──────── */
+@keyframes su-msg-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+.su-chat .su-msg { animation: su-msg-in 0.34s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* ── Develop-in imagery — product photos arrive like a print developing:
+      pale mono line-state first, then full color. ──────────────────────── */
+@keyframes su-develop {
+  from { opacity: 0; filter: grayscale(1) contrast(1.3) brightness(1.12); }
+  55% { opacity: 1; }
+  to { opacity: 1; filter: none; }
+}
+.su-lookcard-media img,
+.su-swap-opt-media img,
+.su-choose-opt-media img,
+.su-render-piece img { animation: su-develop 0.85s ease both; }
+
+/* ── Editorial type — display moments go serif; chat stays sans. ───────── */
+.su-landing-title { font-family: var(--su-serif); font-weight: 500; font-size: 34px; letter-spacing: 0.005em; }
+.su-roster-head h1 { font-family: var(--su-serif); font-weight: 500; letter-spacing: 0.005em; }
+.su-lookcard-title {
+  font-family: var(--su-serif);
+  font-size: 17px;
+  font-style: italic;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  text-transform: none;
+  color: #eceff4;
+}
+
+/* ── Look card as an editorial plate — numbered pieces + a total line. ─── */
+.su-lookcard-num {
+  flex: 0 0 auto;
+  width: 18px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #63666e;
+  font-variant-numeric: tabular-nums;
+}
+.su-lookcard-total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding-top: 9px;
+  border-top: 1px solid #26282d;
+  font-size: 12.5px;
+  color: #8b8e96;
+}
+.su-lookcard-total b { font-weight: 700; color: #e7e7ea; font-variant-numeric: tabular-nums; }
+
+/* ── Measuring-tape progress — a real fill with tailor's tick marks. ───── */
+.su-tape {
+  position: relative;
+  height: 10px;
+  margin: 0 18px;
+  border-radius: 999px;
+  background: #232529;
+  overflow: hidden;
+}
+.su-render > .su-tape { margin-bottom: 14px; }
+.su-tape::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(90deg, transparent 0 9px, rgba(255, 255, 255, 0.12) 9px 10px);
+  pointer-events: none;
+}
+.su-tape-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--su-accent, #8aa0c0) 70%, #fff 0%), var(--su-accent, #8aa0c0));
+  transition: width 1s linear;
+}
+.su-tape--indeterminate .su-tape-fill {
+  width: 34%;
+  animation: su-tape-slide 1.5s ease-in-out infinite;
+}
+@keyframes su-tape-slide {
+  from { transform: translateX(-110%); }
+  to { transform: translateX(340%); }
+}
+.su-render-eta { font-variant-numeric: tabular-nums; }
+
+/* ── Frosted floating chrome — the composer becomes a glass pill and the
+      chat dissolves under the header instead of hard-clipping. ─────────── */
+.su-composer {
+  margin: 6px 12px calc(10px + env(safe-area-inset-bottom));
+  padding: 7px 8px 7px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  background: rgba(18, 19, 22, 0.7);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+}
+.su-composer-input { background: transparent; border-color: transparent; }
+.su-composer-input:focus { border-color: color-mix(in srgb, var(--su-accent, #2f6fed) 55%, transparent); }
+.su-composer-send { background: var(--su-accent, #2f6fed); color: #0a0a0a; }
+.su-chat {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 22px, #000 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 22px, #000 100%);
+}
+
+/* ── Micro-interactions — springy chips, breathing unread dot, accent
+      avatar rings on the conversation pills. ──────────────────────────── */
+.su-choose-opt { transition: border-color 0.14s ease, background 0.14s ease, transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.su-choose-opt:not(:disabled):active { transform: scale(0.93); }
+.su-lookcard-change:active,
+.su-thread-end:active { transform: scale(0.94); }
+.su-convo-card .su-stylist-avatar {
+  box-shadow: 0 0 0 2px #141518, 0 0 0 3.5px color-mix(in srgb, var(--su-accent, #8aa0c0) 60%, transparent);
+}
+@keyframes su-dot-breathe {
+  0%, 100% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--su-accent, #8aa0c0) 24%, transparent); }
+  50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--su-accent, #8aa0c0) 10%, transparent); }
+}
+.su-convo-dot { animation: su-dot-breathe 2.4s ease-in-out infinite; }
+
+/* Reduced motion: keep the refinements, drop the movement. */
+@media (prefers-reduced-motion: reduce) {
+  .su-aurora,
+  .su-chat .su-msg,
+  .su-lookcard-media img,
+  .su-swap-opt-media img,
+  .su-choose-opt-media img,
+  .su-render-piece img,
+  .su-tape--indeterminate .su-tape-fill,
+  .su-convo-dot { animation: none; }
+}

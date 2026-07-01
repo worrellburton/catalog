@@ -1347,8 +1347,15 @@ export function StyleUpExperience({
               );
             }
             if (m.kind === 'product' && m.productRef) {
-              // One card holding every piece in this pull + a single generate CTA.
+              // One card holding every piece in this pull + a single generate CTA,
+              // laid out like an editorial plate: numbered rows + a total line.
               const pieces = lookRunPieces.get(m.id) ?? [m.productRef];
+              let cartTotal = 0;
+              let cartPriced = 0;
+              for (const pc of pieces) {
+                const pm = (pc.price ?? '').replace(/[, ]/g, '').match(/(\d+(?:\.\d+)?)/);
+                if (pm) { cartTotal += parseFloat(pm[1]); cartPriced++; }
+              }
               return (
                 <div key={m.id} className="su-msg su-msg--stylist">
                   <div className="su-lookcard">
@@ -1358,6 +1365,7 @@ export function StyleUpExperience({
                         const role = roleTagFromName(pc.name ?? null);
                         return (
                           <div className="su-lookcard-row" key={pc.id || i}>
+                            <span className="su-lookcard-num" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span>
                             <button type="button" className="su-lookcard-media" onClick={() => openProduct(pc)} aria-label={`Open ${pc.name || 'product'}`}>
                               {pc.image ? <img src={pc.image} alt={pc.name || 'Product'} loading="lazy" /> : <span className="su-product-media--empty" />}
                             </button>
@@ -1380,6 +1388,12 @@ export function StyleUpExperience({
                         );
                       })}
                     </div>
+                    {cartPriced > 0 && (
+                      <div className="su-lookcard-total">
+                        <span>{pieces.length} piece{pieces.length === 1 ? '' : 's'}</span>
+                        <b>${cartTotal.toFixed(2)}{cartPriced < pieces.length ? '+' : ''}</b>
+                      </div>
+                    )}
                     <button
                       type="button"
                       className="su-lookcard-generate"
@@ -1398,6 +1412,9 @@ export function StyleUpExperience({
               const pieces = p?.pieces ?? [];
               const done = r?.status === 'done' && r.video_url;
               const failed = r?.status === 'failed';
+              const prog = !done && !failed
+                ? generationProgress(r?.created_at ?? m.createdAt, r?.duration_seconds ?? 10)
+                : null;
               return (
                 <div key={m.id} className="su-msg su-msg--stylist">
                   <div className="su-render">
@@ -1420,11 +1437,13 @@ export function StyleUpExperience({
                         <div className="su-render-status">
                           <span className="su-render-spinner" aria-hidden="true" />
                           <span className="su-render-status-text">
-                            Putting your look together…
-                            <span className="su-render-eta">
-                              {fmtRemaining(generationProgress(r?.created_at ?? m.createdAt, r?.duration_seconds ?? 10).remainingSec)}
-                            </span>
+                            {prog?.phase ?? 'Putting your look together…'}
+                            <span className="su-render-eta">{fmtRemaining(prog?.remainingSec ?? 0)}</span>
                           </span>
+                        </div>
+                        {/* Measuring-tape progress — a real fill, not just a spinner. */}
+                        <div className="su-tape" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(prog?.pct ?? 0)}>
+                          <div className="su-tape-fill" style={{ width: `${prog?.pct ?? 0}%` }} />
                         </div>
                         {/* The pieces going into the look (mirrors the studio's
                             cooking screen), float them while it renders. */}
@@ -1500,6 +1519,9 @@ export function StyleUpExperience({
                     Starting your look…
                     <span className="su-render-eta">warming up</span>
                   </span>
+                </div>
+                <div className="su-tape su-tape--indeterminate" aria-hidden="true">
+                  <div className="su-tape-fill" />
                 </div>
               </div>
             </div>
@@ -1639,8 +1661,15 @@ export function StyleUpExperience({
     </div>
   );
 
-  // Bolder drape on the landing / roster, a faint whisper once a chat is open.
-  const bgLayer = <div className="su-bg" aria-hidden="true"><StyleUpBackground intensity={threadId ? 0.4 : 1} /></div>;
+  // Bolder drape on the landing / roster, a faint whisper once a chat is open —
+  // tinted toward the active stylist's accent in-thread. The aurora layer adds
+  // slow radial depth in the same accent behind everything.
+  const bgLayer = (
+    <div className="su-bg" aria-hidden="true">
+      <StyleUpBackground intensity={threadId ? 0.4 : 1} accent={threadId ? active?.accentColor ?? null : null} />
+      <div className="su-aurora" />
+    </div>
+  );
 
   // Landing (/style) → a single-column experience: hero + the two stylist cards,
   // and the full chat once a stylist is open. No two-pane rail here, it reads
