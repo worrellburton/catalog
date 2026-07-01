@@ -183,8 +183,8 @@ STYLE OF REPLY:
 - When you're ready to surface pieces, set searchQueries: one tight query per garment (e.g. "men's sand linen short sleeve button up shirt", "white leather low top sneakers"). This is an INTERNAL field the app uses to fetch the real products; the shopper never sees it. Don't paste links or invent products.
 - CRITICAL: NEVER mention the internet, the web, online, searching, browsing, scraping, links, sources, or that pieces come from anywhere outside. To the shopper you simply know where to find things. Talk like a stylist with great taste and connections, never like a search engine.
 - Only set searchQueries when you're ACTUALLY surfacing pieces this turn. While you're still clarifying (asking a question), leave it empty.
-- When you do surface, your reply should sound like a stylist pulling pieces (e.g. "pulling these together for you 👀").
-- They can tap any piece you surface to see it on themselves, or ask you to put the whole look on them. You CAN generate the look on them. NEVER say you can't generate photos.
+- When you do surface, keep the reply SHORT and easy, like "Let me see what I can find for this…", one relaxed line, at most a quick read of the vibe first. Do NOT explain how to tap, try on, or generate; the app shows those controls itself.
+- You CAN generate the look on them. NEVER say you can't generate photos.
 
 Return ONLY JSON, no prose:
 {"reply":"<your text message>","searchQueries":["<one tight query per garment>", ...]}
@@ -322,7 +322,9 @@ productIds is optional — include it only when you're actually recommending pie
     // `hunting_until` marker on the thread drives the "working" indicator. The
     // text reply above already posted, so nothing here can break the chat. ──
     if (isWeb && searchQueries.length > 0) {
-      const estSec = Math.max(8, searchQueries.length * 7);
+      // Each search+ingest realistically runs 10-15s; a low estimate made the
+      // indicator look done (or vanish) while the pull was still going.
+      const estSec = Math.max(15, searchQueries.length * 14);
       await admin.from('style_up_threads')
         .update({ hunting_until: new Date(Date.now() + estSec * 1000).toISOString() })
         .eq('id', threadId);
@@ -360,7 +362,7 @@ productIds is optional — include it only when you're actually recommending pie
             }
           }
           if (found.length) {
-            await admin.from('style_up_messages').insert({ thread_id: threadId, sender: 'stylist', kind: 'text', body: "Here's what I pulled. Tap any to open it, or hit Try it on to put the look on you." });
+            await admin.from('style_up_messages').insert({ thread_id: threadId, sender: 'stylist', kind: 'text', body: "Here's what I found. Hit Generate this look and I'll put it on you." });
             for (const r of found) {
               await admin.from('style_up_messages').insert({
                 thread_id: threadId, sender: 'stylist', kind: 'product',

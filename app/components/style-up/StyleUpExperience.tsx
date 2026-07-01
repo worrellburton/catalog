@@ -157,18 +157,35 @@ const SLOT_LABEL: Record<string, string> = { Top: 'Top', Pants: 'Pants / Shorts'
 // first, then two fun spots, and the 4th is always a little wild.
 const FUN_SCENES = ['a cozy coffee shop', 'a rooftop at golden hour', 'a city street at night', 'a sunny park', 'a minimalist loft', 'an art gallery', 'a jazz bar', 'a boardwalk by the sea', 'a sidewalk café in Paris'];
 const WILD_SCENES = ['a neon Tokyo alley in the rain', 'the surface of Mars', 'a 1970s disco', 'backstage at a runway show', 'a snowy mountain peak', 'an underwater glass tunnel', 'a desert at sunset'];
-function sceneOptions(): Array<{ value: string; label: string }> {
+function sceneOptions(context?: string | null): Array<{ value: string; label: string }> {
   const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-  // 1) Studio, 2) Outdoor coffee shop (both fixed), 3) a fresh spot each time,
-  // 4) something wild.
+  // 1) Studio, 2) Outdoor coffee shop (both fixed), 3) the place the shopper
+  // actually mentioned in chat when we have one ("a beach in Italy"), else a
+  // fresh spot each time, 4) something wild.
   const fun = FUN_SCENES.filter(s => !s.includes('coffee')).sort(() => Math.random() - 0.5)[0] ?? 'a sunny park';
+  const ctx = context && !/coffee shop|studio/i.test(context) ? context : null;
+  const third = ctx ?? fun;
   const wild = WILD_SCENES[Math.floor(Math.random() * WILD_SCENES.length)];
   return [
     { value: 'a clean studio', label: 'Studio' },
     { value: 'an outdoor coffee shop', label: 'Outdoor coffee shop' },
-    { value: fun, label: cap(fun) },
+    { value: third, label: cap(third) },
     { value: wild, label: `${cap(wild)} 🤯` },
   ];
+}
+
+// Scene-ish places the shopper mentioned in chat ("a beach in Italy", "rooftop
+// bar") — the most recent mention becomes one of the scene options, so the
+// setting they were already picturing is one tap away.
+const SCENE_NOUN_RE = /\b(beach|rooftop|park|garden|vineyard|villa|yacht|boat|marina|pier|boardwalk|pool|lake|mountain|ski slope|desert|forest|city street|downtown|club|bar|caf[eé]|restaurant|hotel|gallery|museum|festival|concert|wedding|picnic)\b(\s+(?:in|at|by|on|near)\s+[A-Za-z][\w'’]*(?:\s+[A-Z][\w'’]*)*)?/i;
+function sceneFromChat(msgs: StyleUpMessage[]): string | null {
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    const m = msgs[i];
+    if (m.sender !== 'shopper' || m.kind !== 'text' || !m.body) continue;
+    const hit = m.body.match(SCENE_NOUN_RE);
+    if (hit) return `a ${hit[0].trim()}`;
+  }
+  return null;
 }
 
 /** A tap-chooser bubble, single-tap dispatches; multi-select toggles + a
@@ -471,12 +488,14 @@ export function StyleUpExperience({
     setOpening(false);
   }, [userId, opening, openThread]);
 
-  // Load the shopper's saved conversations (for the roster list).
+  // Load the shopper's saved conversations. ALL active chats belong on the
+  // main screen — the picker offers the full roster, so the list must not be
+  // scoped to the two landing stylists (that made picker-started chats vanish
+  // the moment you headed back).
   const loadThreads = useCallback(async () => {
     if (!userId) return;
-    const all = await fetchMyThreads(userId);
-    setMyThreads(all.filter(t => inScope(t.stylist)));
-  }, [userId, inScope]);
+    setMyThreads(await fetchMyThreads(userId));
+  }, [userId]);
 
   const closeThread = useCallback(() => {
     if (threadId) markThreadSeen(threadId); // leaving marks everything read
@@ -616,7 +635,7 @@ export function StyleUpExperience({
   // whoever has the chat open and hides the moment the server clears it.
   useEffect(() => {
     if (!threadId) { setHuntView(null); return; }
-    let untilMs = 0;
+    let untilMs: number | null = null;
     let startMs = Date.now();
     let active = false;
     let lastFetch = 0;
@@ -625,11 +644,17 @@ export function StyleUpExperience({
       if (now - lastFetch > 2500) {
         lastFetch = now;
         const until = await getThreadHunting(threadId);
-        untilMs = until ? new Date(until).getTime() : 0;
+        untilMs = until ? new Date(until).getTime() : null;
       }
-      if (untilMs > now) {
+      // Visible while the marker EXISTS — the server clears it when the pull
+      // lands, so an estimate running over doesn't hide a live pull (leaving +
+      // coming back mid-pull keeps the module). A stale-grace cap catches a
+      // run that died without cleaning up.
+      const stale = untilMs != null && now > untilMs + 120000;
+      if (untilMs != null && !stale) {
         if (!active) { active = true; startMs = now; }
-        setHuntView({ estSec: Math.ceil((untilMs - now) / 1000), elapsed: Math.floor((now - startMs) / 1000) });
+        // estSec = remaining right now (0 once past the estimate → "almost done…").
+        setHuntView({ estSec: Math.max(0, Math.ceil((untilMs - now) / 1000)), elapsed: Math.floor((now - startMs) / 1000) });
       } else {
         active = false;
         setHuntView(null);
@@ -767,22 +792,32 @@ export function StyleUpExperience({
     await askOutfitSlots();
   }, [threadId, userId, pendingRender, lookPicks, chosenBySlot, askOutfitSlots, beat]);
 
+  // The exact pieces to render when the scene is picked — set by the look
+  // card's Generate button so EVERY piece on that card goes into the render
+  // (assembleLook() collapses to one-per-slot and silently dropped doubles).
+  const lookToGenerateRef = useRef<StyleUpProductRef[] | null>(null);
+
   // Before any restyle: ask where they want to be seen (scene), then render.
-  const askScene = useCallback(async () => {
+  const askScene = useCallback(async (pieces?: StyleUpProductRef[]) => {
     if (!threadId || !userId) return;
     if (pendingRender) { setRenderError('Still finishing your last look, one sec.'); return; }
-    if (assembleLook().length === 0) { void triggerStylist(); return; }
+    lookToGenerateRef.current = pieces && pieces.length > 0 ? pieces : null;
+    if (!lookToGenerateRef.current && assembleLook().length === 0) { void triggerStylist(); return; }
     await beat();
     await sendStylistText(threadId, 'Before I restyle you, where do you want to be seen?');
-    await sendChooser(threadId, { kind: 'scene', prompt: 'Pick your setting', multi: false, options: sceneOptions() });
-  }, [threadId, userId, pendingRender, assembleLook, triggerStylist, beat]);
+    await sendChooser(threadId, { kind: 'scene', prompt: 'Pick your setting', multi: false, options: sceneOptions(sceneFromChat(messages)) });
+  }, [threadId, userId, pendingRender, assembleLook, triggerStylist, beat, messages]);
 
   const onChoose = useCallback(async (kind: string, values: string[]) => {
     if (!threadId || !userId) return;
     if (kind === 'scene') {
       const scene = values[0];
       setChosenScene(scene);
-      await generateFullLook(assembleLook(), scene);
+      // Render the exact pieces from the card that opened this chooser when we
+      // have them; assembleLook() (one-per-slot) only backstops text triggers.
+      const pieces = lookToGenerateRef.current ?? assembleLook();
+      lookToGenerateRef.current = null;
+      await generateFullLook(pieces, scene);
       return;
     }
     if (kind === 'shoes') {
@@ -1397,7 +1432,7 @@ export function StyleUpExperience({
                     <button
                       type="button"
                       className="su-lookcard-generate"
-                      onClick={() => void askScene()}
+                      onClick={() => void askScene(pieces)}
                       disabled={genLook || pendingRender}
                     >
                       {pendingRender ? 'Generating…' : 'Generate this look'}
@@ -1502,7 +1537,7 @@ export function StyleUpExperience({
               <div className="su-hunting" role="status" aria-live="polite">
                 <span className="su-hunting-orb" aria-hidden="true" />
                 <span className="su-hunting-text">{HUNT_PHRASES[Math.floor(huntView.elapsed / 2) % HUNT_PHRASES.length]}</span>
-                <span className="su-hunting-eta">{fmtRemaining(Math.max(0, huntView.estSec - huntView.elapsed))}</span>
+                <span className="su-hunting-eta">{fmtRemaining(huntView.estSec)}</span>
               </div>
             </div>
           )}
