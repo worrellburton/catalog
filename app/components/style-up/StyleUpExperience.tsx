@@ -1470,7 +1470,8 @@ export function StyleUpExperience({
       </div>
   );
 
-  const bgLayer = <div className="su-bg" aria-hidden="true"><StyleUpBackground /></div>;
+  // Bolder drape on the landing / roster, a faint whisper once a chat is open.
+  const bgLayer = <div className="su-bg" aria-hidden="true"><StyleUpBackground intensity={threadId ? 0.4 : 1} /></div>;
 
   // Landing (/style) → a single-column experience: hero + the two stylist cards,
   // and the full chat once a stylist is open. No two-pane rail here, it reads
