@@ -10,6 +10,7 @@ import { getUserHeightAge, getUserCustomStyle } from '~/services/profiles';
 import { getUserGender } from '~/services/genders';
 import { getUserSlots, createGeneration, buildGenerationPrompt } from '~/services/user-generations';
 import { roleForProduct } from '~/services/product-roles';
+import type { StylistEngineMethod } from '~/services/dials';
 
 export interface StyleUpStylist {
   id: string;
@@ -624,6 +625,7 @@ export interface RecommendOpts {
   formality?: 'dressier' | 'casual' | null; // running constraint from feedback
   avoidColors?: string[];              // colors the shopper passed on
   simpler?: boolean;                   // "keep it simple / less flashy"
+  engineMethod?: StylistEngineMethod;   // 'style_engine' (default) → style_slot_search; 'legacy' → recency
 }
 
 function priceNum(s?: string | null): number | null {
@@ -635,6 +637,30 @@ const FORMAL_RE = /\b(blazer|suit|tuxedo|oxford|loafer|derby|brogue|trouser|slac
 const CASUAL_RE = /\b(hoodie|sweatshirt|tee|t-?shirt|sneaker|trainer|shorts?|jogger|sweatpant|cargo|flip[\s-]?flop|graphic|denim|jean|tank)\b/;
 const LOUD_RE = /\b(print|printed|graphic|neon|sequin|leopard|floral|tie-?dye|logo|bold|bright|metallic)\b/;
 const kw = (s: string): string[] => (s.toLowerCase().match(/[a-z]{4,}/g) ?? []);
+
+type SwapRow = {
+  id: string; name: string | null; brand: string | null; price: string | null;
+  image_url: string | null; primary_image_url: string | null; url: string | null;
+  type: string | null; haiku_context: string | null;
+};
+
+/** Occasion-aware candidates for one slot via style_slot_search (the engine).
+ *  Returns rows in the same shape as the legacy recency select so the caller's
+ *  scoring loop is source-agnostic. */
+async function slotSearch(role: string, gender: string, occasion: string, k: number): Promise<SwapRow[]> {
+  if (!supabase) return [];
+  const noun = ROLE_QUERY_NOUN[role] ?? '';
+  const q = `${occasion} ${noun}`.trim();
+  const pGender = gender === 'male' || gender === 'female' ? gender : null;
+  const { data, error } = await supabase.rpc('style_slot_search', { p_query: q, p_k: k, p_gender: pGender });
+  if (error || !Array.isArray(data)) return [];
+  return (data as Array<Record<string, unknown>>).map(r => ({
+    id: String(r.product_id), name: (r.product_name as string) ?? null, brand: (r.product_brand as string) ?? null,
+    price: (r.product_price as string) ?? null, image_url: (r.product_image_url as string) ?? null,
+    primary_image_url: (r.product_image_url as string) ?? null, url: (r.product_url as string) ?? null,
+    type: (r.product_type as string) ?? null, haiku_context: null,
+  }));
+}
 
 /** Score + rank gender-matched, in-stock candidates for one slot (role).
  *  Folds in relevance to the shopper's style + occasion (#2), budget (#4),
@@ -649,25 +675,31 @@ export async function fetchSwapOptions(
 ): Promise<StyleUpProductRef[]> {
   if (!supabase) return [];
   const gender = await getUserGender(shopperUserId);
-  let q = supabase.from('products')
-    .select('id, name, brand, price, image_url, primary_image_url, url, type, gender, haiku_context')
-    .eq('is_active', true)              // in-stock proxy (#5)
-    .not('image_url', 'is', null)
-    .order('created_at', { ascending: false })
-    .limit(SWAP_FETCH_LIMIT);
-  if (gender === 'male') q = q.or('gender.eq.male,gender.eq.unisex');
-  else if (gender === 'female') q = q.or('gender.eq.female,gender.eq.unisex');
-  const { data } = await q;
+  const method: StylistEngineMethod = opts.engineMethod ?? 'style_engine';
+  let data: SwapRow[] | null;
+  if (method === 'style_engine') {
+    const occasion = [opts.styleText, opts.occasion].filter(Boolean).join(' ');
+    data = await slotSearch(role, gender, occasion, SWAP_FETCH_LIMIT);
+  } else {
+    let q = supabase.from('products')
+      .select('id, name, brand, price, image_url, primary_image_url, url, type, gender, haiku_context')
+      .eq('is_active', true)              // in-stock proxy (#5)
+      .not('image_url', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(SWAP_FETCH_LIMIT);
+    if (gender === 'male') q = q.or('gender.eq.male,gender.eq.unisex');
+    else if (gender === 'female') q = q.or('gender.eq.female,gender.eq.unisex');
+    data = (await q).data as SwapRow[] | null;
+  }
 
   const exclude = new Set(excludeIds);
   const styleKw = kw(opts.styleText ?? '');
   const occKw = kw(opts.occasion ?? '');
   const avoid = (opts.avoidColors ?? []).map(c => c.toLowerCase());
 
-  type Row = { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null; primary_image_url: string | null; url: string | null; type: string | null; haiku_context: string | null };
   const scored: Array<{ ref: StyleUpProductRef; score: number; idx: number }> = [];
   let idx = 0;
-  for (const p of (data ?? []) as Row[]) {
+  for (const p of (data ?? []) as SwapRow[]) {
     idx++;
     if (exclude.has(p.id)) continue;
     if (roleForProduct(p.type, p.name) !== role) continue;
