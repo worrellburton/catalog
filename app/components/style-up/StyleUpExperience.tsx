@@ -13,7 +13,7 @@ import { useNavigate } from '@remix-run/react';
 import { useAuth } from '~/hooks/useAuth';
 import { supabase } from '~/utils/supabase';
 import {
-  fetchStylists, getOrCreateThread, getLatestThread, fetchMyThreads, fetchMessages, sendShopperMessage,
+  fetchStylists, getOrCreateThread, deleteThread, getLatestThread, fetchMyThreads, fetchMessages, sendShopperMessage,
   sendStylistText, startLookRender, startFullLookRender, fetchSwapOptions, sendSwapOptions,
   sendChooser, recommendForSlot, sendProductPick,
   webFetchSwapOptions, webRecommendForSlot, webHuntOne, appendTraceSearches,
@@ -511,6 +511,26 @@ export function StyleUpExperience({
     const all = await fetchStylists({ landingOnly: false });
     setAllStylists(all);
   }, []);
+
+  // Delete a conversation (swipe-to-delete on the list). Removes it from the DB
+  // and refreshes; if it's the one that's open, closes back to the list.
+  const [swipedId, setSwipedId] = useState<string | null>(null); // convo card swiped open
+  const swipeStartX = useRef(0);
+  const swipeDX = useRef(0);
+  const handleDeleteThread = useCallback(async (id: string) => {
+    const ok = await deleteThread(id);
+    if (!ok) return;
+    setSwipedId(null);
+    if (threadId === id) closeThread();
+    else void loadThreads();
+  }, [threadId, closeThread, loadThreads]);
+
+  // "End conversation" from inside the thread — same delete, with a confirm.
+  const endConversation = useCallback(async () => {
+    if (!threadId) return;
+    if (typeof window !== 'undefined' && !window.confirm('End this conversation? This permanently deletes it.')) return;
+    await handleDeleteThread(threadId);
+  }, [threadId, handleDeleteThread]);
 
   // On open, resume the shopper's most-recent conversation so an active chat's
   // history keeps going instead of dropping them back on the roster every time.
@@ -1298,6 +1318,7 @@ export function StyleUpExperience({
             <span className="su-thread-name">{active?.name}</span>
             {active?.specialty && <span className="su-thread-specialty">{active.specialty}</span>}
           </span>
+          <button type="button" className="su-thread-end" onClick={() => void endConversation()}>End</button>
         </div>
 
         {contextCard}
@@ -1520,25 +1541,48 @@ export function StyleUpExperience({
         <div className="su-convos">
           <div className="su-section-label">Your conversations</div>
           {myThreads.map(t => (
-            <button
-              key={t.threadId}
-              type="button"
-              className="su-convo-card"
-              style={{ ['--su-accent' as string]: t.stylist.accentColor ?? '#8aa0c0' }}
-              onClick={() => void openThread(t.threadId, t.stylist)}
-            >
-              <span className="su-stylist-avatar" aria-hidden="true">
-                <StylistFace avatarUrl={t.stylist.avatarUrl} name={t.stylist.name} />
-              </span>
-              <span className="su-convo-info">
-                <span className="su-convo-top">
-                  <span className="su-stylist-name">{t.stylist.name}</span>
-                  <span className="su-convo-time">{relativeTime(t.lastMessageAt)}</span>
+            <div className="su-convo-row" key={t.threadId}>
+              <button
+                type="button"
+                className="su-convo-delete"
+                onClick={() => void handleDeleteThread(t.threadId)}
+                aria-label={`Delete conversation with ${t.stylist.name}`}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 0 1-2 2H8a2 2 0 0 1-2-2L5 6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                <span>Delete</span>
+              </button>
+              <button
+                type="button"
+                className={`su-convo-card${swipedId === t.threadId ? ' is-swiped' : ''}`}
+                style={{ ['--su-accent' as string]: t.stylist.accentColor ?? '#8aa0c0' }}
+                onTouchStart={e => { swipeStartX.current = e.touches[0].clientX; swipeDX.current = 0; }}
+                onTouchMove={e => {
+                  swipeDX.current = e.touches[0].clientX - swipeStartX.current;
+                  const dx = Math.max(Math.min(swipeDX.current, 0), -96);
+                  (e.currentTarget as HTMLElement).style.transform = `translateX(${dx}px)`;
+                }}
+                onTouchEnd={e => {
+                  (e.currentTarget as HTMLElement).style.transform = '';
+                  setSwipedId(swipeDX.current < -48 ? t.threadId : null);
+                }}
+                onClick={() => {
+                  if (swipedId === t.threadId) { setSwipedId(null); return; }
+                  void openThread(t.threadId, t.stylist);
+                }}
+              >
+                <span className="su-stylist-avatar" aria-hidden="true">
+                  <StylistFace avatarUrl={t.stylist.avatarUrl} name={t.stylist.name} />
                 </span>
-                {t.lastMessage && <span className="su-convo-preview">{t.lastMessage}</span>}
-              </span>
-              {threadHasNews(t) && <span className="su-convo-dot" aria-label="New message" />}
-            </button>
+                <span className="su-convo-info">
+                  <span className="su-convo-top">
+                    <span className="su-stylist-name">{t.stylist.name}</span>
+                    <span className="su-convo-time">{relativeTime(t.lastMessageAt)}</span>
+                  </span>
+                  {t.lastMessage && <span className="su-convo-preview">{t.lastMessage}</span>}
+                </span>
+                {threadHasNews(t) && <span className="su-convo-dot" aria-label="New message" />}
+              </button>
+            </div>
           ))}
         </div>
       ) : (
@@ -1564,25 +1608,31 @@ export function StyleUpExperience({
         <p>Choose a stylist to start a new conversation.</p>
       </div>
       <div className="su-roster">
-        {allStylists.map(s => (
-          <button
-            key={s.id}
-            type="button"
-            className="su-stylist-card"
-            style={{ ['--su-accent' as string]: s.accentColor ?? '#8aa0c0' }}
-            onClick={() => void openStylist(s)}
-            disabled={opening}
-          >
-            <span className="su-stylist-avatar" aria-hidden="true">
-              <StylistFace avatarUrl={s.avatarUrl} name={s.name} />
-            </span>
-            <span className="su-stylist-info">
-              <span className="su-stylist-name">{s.name}</span>
-              {s.specialty && <span className="su-stylist-specialty">{s.specialty}</span>}
-              {s.bio && <span className="su-stylist-bio">{s.bio}</span>}
-            </span>
-          </button>
-        ))}
+        {allStylists.map(s => {
+          const meta = [s.age ? `${s.age}` : null, s.city].filter(Boolean).join(' · ');
+          return (
+            <button
+              key={s.id}
+              type="button"
+              className="su-stylist-card su-person-card"
+              style={{ ['--su-accent' as string]: s.accentColor ?? '#8aa0c0' }}
+              onClick={() => void openStylist(s)}
+              disabled={opening}
+            >
+              <span className="su-person-avatar" aria-hidden="true">
+                <StylistFace avatarUrl={s.avatarUrl} name={s.name} />
+              </span>
+              <span className="su-stylist-info">
+                <span className="su-person-top">
+                  <span className="su-stylist-name">{s.name}</span>
+                  {meta && <span className="su-person-meta">{meta}</span>}
+                </span>
+                {s.specialty && <span className="su-stylist-specialty">{s.specialty}</span>}
+                {s.bio && <span className="su-stylist-bio">{s.bio}</span>}
+              </span>
+            </button>
+          );
+        })}
         {allStylists.length === 0 && <div className="su-empty">Loading stylists…</div>}
       </div>
     </div>
