@@ -917,12 +917,12 @@ export function StyleUpExperience({
     const looks = lookPicks();
     if (swap && looks.length > 0) void handleSwapRequest(swap);
     else if (wantsFullOutfit(text)) {
-      if (engineMethod === 'style_engine') void triggerStylist('outfit');
+      if (engineMethod === 'style_engine' && active?.sourceMode !== 'web') void triggerStylist('outfit');
       else void startOutfitFlow();
     }
     else if (wantsFullLook(text) && looks.length > 0) void askScene();
     else void triggerStylist();
-  }, [draft, threadId, sending, triggerStylist, handleSwapRequest, startOutfitFlow, askScene, lookPicks, engineMethod]);
+  }, [draft, threadId, sending, triggerStylist, handleSwapRequest, startOutfitFlow, askScene, lookPicks, engineMethod, active]);
 
   // Add a finished render to the shopper's own looks, promotes the generation
   // to a LIVE look (with its video + poster + pieces), associated with THIS
@@ -1518,7 +1518,7 @@ export function StyleUpExperience({
           {renderError && <div className="su-render-err">{renderError}</div>}
         </div>
 
-        {engineMethod === 'style_engine' && assembleLook().length >= 2 && (
+        {engineMethod === 'style_engine' && active?.sourceMode !== 'web' && assembleLook().length >= 2 && (
           <div className="su-lookbar">
             <div className="su-lookbar-row">
               <span className="su-lookbar-title">Your look · {selectedLook().length} piece{selectedLook().length === 1 ? '' : 's'}</span>
