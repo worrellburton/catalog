@@ -13,3 +13,6 @@
 .su-lookbar-piece { font-size: 12px; padding: 6px 12px; border-radius: 999px;
   border: 1px solid rgba(255,255,255,.18); background: transparent; color: #aaa; cursor: pointer; }
 .su-lookbar-piece--on { color: #0a0a0a; background: #e8e8ec; border-color: transparent; }
+
+/* Product card's "See it on me" once it's in the look-bar tray. */
+.su-product-btn--added { background: transparent; border: 1px solid var(--su-accent, #8aa0c0); color: var(--su-accent, #8aa0c0); }

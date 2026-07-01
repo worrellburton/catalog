@@ -15,7 +15,7 @@ import { useStylistEngineMethod } from '~/hooks/useStylistEngineMethod';
 import { supabase } from '~/utils/supabase';
 import {
   fetchStylists, getOrCreateThread, getLatestThread, fetchMyThreads, fetchMessages, sendShopperMessage,
-  sendStylistText, startLookRender, startFullLookRender, fetchSwapOptions, sendSwapOptions,
+  sendStylistText, startFullLookRender, fetchSwapOptions, sendSwapOptions,
   sendChooser, recommendForSlot, sendProductPick,
   webFetchSwapOptions, webRecommendForSlot, webHuntOne, appendTraceSearches,
   type StyleUpStylist, type StyleUpMessage, type StyleUpProductRef, type StyleUpThreadSummary, type RecommendOpts,
@@ -340,7 +340,6 @@ export function StyleUpExperience({
   // bubbles (spinner → video).
   const [renders, setRenders] = useState<Record<string, UserGeneration>>({});
   const [renderError, setRenderError] = useState<string | null>(null);
-  const [renderingIds, setRenderingIds] = useState<Set<string>>(new Set());
   const [genLook, setGenLook] = useState(false);     // full-look render in flight
   const [published, setPublished] = useState<Set<string>>(new Set()); // gen ids added to looks
   const [followedUp, setFollowedUp] = useState<Set<string>>(new Set()); // renders the stylist has reacted to
@@ -361,8 +360,7 @@ export function StyleUpExperience({
   const [edit, setEdit] = useState<{ heightLabel: string; weightLabel: string; ageLabel: string; gender: UserGender; style: string } | null>(null);
   const [savingCtx, setSavingCtx] = useState(false);
   const [uploadingSlot, setUploadingSlot] = useState<number | null>(null);
-  const [lookSelection, setLookSelection] = useState<Set<string> | null>(null); // null = all pieces
-  const [lookBarOpen, setLookBarOpen] = useState(false); // the full-look selection bar (opened via a pick's "See it on me")
+  const [pickedForLook, setPickedForLook] = useState<StyleUpProductRef[]>([]); // look-bar tray: built up by tapping "See it on me" on products in the chat
   const photoSlotRef = useRef<number>(0);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
@@ -770,14 +768,15 @@ export function StyleUpExperience({
     return [...bySlot.values()];
   }, [lookPicks, chosenBySlot]);
 
-  // The look to render on the shopper: assembleLook() minus any pieces the
-  // shopper unticked in "Choose pieces". null selection = all pieces.
-  const selectedLook = useCallback((): StyleUpProductRef[] =>
-    assembleLook().filter(p => !lookSelection || (p.id != null && lookSelection.has(p.id))),
-    [assembleLook, lookSelection]);
-  // A fresh suggestion resets the selection back to "all".
-  const lookIdsKey = lookPicks().map(p => p.id).join(',');
-  useEffect(() => { setLookSelection(null); setLookBarOpen(false); }, [lookIdsKey]);
+  // Look-bar tray: pieces the shopper explicitly picked via a product's "See it
+  // on me" button, independent of the stylist's suggestions — tapping the same
+  // piece again (from the chat OR the bar) removes it.
+  const toggleLookPick = useCallback((p: StyleUpProductRef) => {
+    if (!p.id) return;
+    setPickedForLook(prev => prev.some(x => x.id === p.id) ? prev.filter(x => x.id !== p.id) : [...prev, p]);
+  }, []);
+  // Clear the tray when switching threads.
+  useEffect(() => { setPickedForLook([]); }, [threadId]);
 
   // ── Guided outfit flow (logic #1+#3+#4): ask which shoes (if ambiguous),
   // then which slots, then recommend one piece per slot. ────────────────────
@@ -821,12 +820,30 @@ export function StyleUpExperience({
     await sendChooser(threadId, { kind: 'scene', prompt: 'Pick your setting', multi: false, options: sceneOptions() });
   }, [threadId, userId, pendingRender, assembleLook, triggerStylist, beat]);
 
+  // The look-bar's "Start": ask where to be seen, then render the tray the
+  // shopper built up (independent of askScene's assembleLook()-based flow,
+  // which the "show me the full look" text trigger still uses).
+  const askSceneForTray = useCallback(async () => {
+    if (!threadId || !userId || pickedForLook.length === 0) return;
+    if (pendingRender) { setRenderError('Still finishing your last look, one sec.'); return; }
+    await beat();
+    await sendStylistText(threadId, 'Before I put this together, where do you want to be seen?');
+    await sendChooser(threadId, { kind: 'scene-tray', prompt: 'Pick your setting', multi: false, options: sceneOptions() });
+  }, [threadId, userId, pickedForLook, pendingRender, beat]);
+
   const onChoose = useCallback(async (kind: string, values: string[]) => {
     if (!threadId || !userId) return;
     if (kind === 'scene') {
       const scene = values[0];
       setChosenScene(scene);
-      await generateFullLook(selectedLook(), scene);
+      await generateFullLook(assembleLook(), scene);
+      return;
+    }
+    if (kind === 'scene-tray') {
+      const scene = values[0];
+      setChosenScene(scene);
+      await generateFullLook(pickedForLook, scene);
+      setPickedForLook([]);
       return;
     }
     if (kind === 'shoes') {
@@ -856,7 +873,7 @@ export function StyleUpExperience({
       const missing = (['Shoes', 'Top', 'Pants'] as const).find(s => !have.has(s));
       if (missing) await sendStylistText(threadId, `One more thing, you'll want ${GAP_REASON[missing]}. Say “different ${missing.toLowerCase()}” and I'll pull a few.`);
     }
-  }, [threadId, userId, lookPicks, rejected, rejectIds, askOutfitSlots, assembleLook, generateFullLook, recOpts, active, beat, selectedLook]);
+  }, [threadId, userId, lookPicks, rejected, rejectIds, askOutfitSlots, assembleLook, generateFullLook, recOpts, active, beat, pickedForLook]);
 
   // "Try different pants", the stylist offers 3 alternatives for that slot.
   const handleSwapRequest = useCallback(async (swap: { role: string; label: string }) => {
@@ -956,21 +973,6 @@ export function StyleUpExperience({
     if (slug) navigate(`/p/${slug}`);
     else if (p.url) window.open(p.url, '_blank', 'noopener');
   }, [navigate]);
-
-  // "See it on me", render the shopper wearing a stylist pick (reuses the
-  // generate-look pipeline). The render bubble arrives via realtime and the
-  // polling effect below carries it to the finished video.
-  const tryOn = useCallback(async (product: StyleUpMessage['productRef']) => {
-    if (!threadId || !userId || !product) return;
-    if (pendingRender) { setRenderError('Still finishing your last look, give it a sec.'); return; }
-    const key = product.id || product.url || product.name || '';
-    if (renderingIds.has(key)) return;
-    setRenderingIds(prev => new Set(prev).add(key));
-    setRenderError(null);
-    const { error } = await startLookRender({ threadId, shopperUserId: userId, product });
-    if (error) setRenderError(error);
-    setRenderingIds(prev => { const n = new Set(prev); n.delete(key); return n; });
-  }, [threadId, userId, renderingIds, pendingRender]);
 
   // Poll any in-flight render generations referenced by the thread until they
   // reach a terminal state, so the render bubbles promote spinner → video.
@@ -1378,7 +1380,7 @@ export function StyleUpExperience({
             }
             if (m.kind === 'product' && m.productRef) {
               const p = m.productRef;
-              const key = p.id || p.url || p.name || '';
+              const inLook = pickedForLook.some(x => x.id === p.id);
               return (
                 <div key={m.id} className="su-msg su-msg--stylist">
                   <div className="su-product">
@@ -1397,10 +1399,10 @@ export function StyleUpExperience({
                         )}
                         <button
                           type="button"
-                          className="su-product-btn su-product-btn--primary"
-                          onClick={() => { setLookSelection(null); setLookBarOpen(true); }}
+                          className={`su-product-btn su-product-btn--primary${inLook ? ' su-product-btn--added' : ''}`}
+                          onClick={() => toggleLookPick(p)}
                         >
-                          See it on me
+                          {inLook ? '✓ Added to look' : 'See it on me'}
                         </button>
                       </div>
                     </div>
@@ -1517,46 +1519,36 @@ export function StyleUpExperience({
           {renderError && <div className="su-render-err">{renderError}</div>}
         </div>
 
-        {engineMethod === 'style_engine' && active?.sourceMode !== 'web' && lookBarOpen && assembleLook().length >= 1 && (
+        {engineMethod === 'style_engine' && active?.sourceMode !== 'web' && pickedForLook.length > 0 && (
           <div className="su-lookbar">
             <div className="su-lookbar-row">
-              <span className="su-lookbar-title">Your look · {selectedLook().length} piece{selectedLook().length === 1 ? '' : 's'}</span>
+              <span className="su-lookbar-title">Your look · {pickedForLook.length} piece{pickedForLook.length === 1 ? '' : 's'}</span>
               <div className="su-lookbar-actions">
-                <button type="button" className="su-lookbar-btn" onClick={() => setLookBarOpen(false)}>
-                  Done
+                <button type="button" className="su-lookbar-btn" onClick={() => setPickedForLook([])}>
+                  Clear
                 </button>
                 <button
                   type="button"
                   className="su-lookbar-btn su-lookbar-btn--primary"
-                  disabled={selectedLook().length === 0 || genLook || pendingRender}
-                  onClick={() => { setLookBarOpen(false); void askScene(); }}
+                  disabled={genLook || pendingRender}
+                  onClick={() => void askSceneForTray()}
                 >
-                  See it on me
+                  Start
                 </button>
               </div>
             </div>
             <div className="su-lookbar-pieces">
-              {assembleLook().map(p => {
-                const on = !lookSelection || (p.id != null && lookSelection.has(p.id));
-                return (
-                  <button
-                    key={p.id || p.name}
-                    type="button"
-                    className={`su-lookbar-piece${on ? ' su-lookbar-piece--on' : ''}`}
-                    onClick={() => {
-                      if (!p.id) return;
-                      setLookSelection(prev => {
-                        const base = prev ?? new Set(assembleLook().map(x => x.id).filter((x): x is string => !!x));
-                        const next = new Set(base);
-                        if (next.has(p.id!)) next.delete(p.id!); else next.add(p.id!);
-                        return next;
-                      });
-                    }}
-                  >
-                    {on ? '✓ ' : ''}{roleTagFromName(p.name ?? null) || p.name || 'Piece'}
-                  </button>
-                );
-              })}
+              {pickedForLook.map(p => (
+                <button
+                  key={p.id || p.name}
+                  type="button"
+                  className="su-lookbar-piece su-lookbar-piece--on"
+                  onClick={() => toggleLookPick(p)}
+                  aria-label={`Remove ${p.name || 'piece'} from your look`}
+                >
+                  ✓ {roleTagFromName(p.name ?? null) || p.name || 'Piece'}
+                </button>
+              ))}
             </div>
           </div>
         )}
