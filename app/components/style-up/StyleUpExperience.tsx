@@ -66,6 +66,7 @@ import { promoteGenerationToLook } from '~/services/promote-generation';
 import { generationProgress } from '~/services/generation-progress';
 import { productSlug } from '~/utils/slug';
 import '~/styles/style-up.css';
+import '~/styles/style-up-lookbar.css';
 
 /** "~2 min left" / "~40s left", estimated wait from the shared generation
  *  timing model (based on typical generation durations). */
@@ -360,6 +361,8 @@ export function StyleUpExperience({
   const [edit, setEdit] = useState<{ heightLabel: string; weightLabel: string; ageLabel: string; gender: UserGender; style: string } | null>(null);
   const [savingCtx, setSavingCtx] = useState(false);
   const [uploadingSlot, setUploadingSlot] = useState<number | null>(null);
+  const [lookSelection, setLookSelection] = useState<Set<string> | null>(null); // null = all pieces
+  const [pickingLook, setPickingLook] = useState(false);
   const photoSlotRef = useRef<number>(0);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
@@ -765,6 +768,15 @@ export function StyleUpExperience({
     return [...bySlot.values()];
   }, [lookPicks, chosenBySlot]);
 
+  // The look to render on the shopper: assembleLook() minus any pieces the
+  // shopper unticked in "Choose pieces". null selection = all pieces.
+  const selectedLook = useCallback((): StyleUpProductRef[] =>
+    assembleLook().filter(p => !lookSelection || (p.id != null && lookSelection.has(p.id))),
+    [assembleLook, lookSelection]);
+  // A fresh suggestion resets the selection back to "all".
+  const lookIdsKey = lookPicks().map(p => p.id).join(',');
+  useEffect(() => { setLookSelection(null); setPickingLook(false); }, [lookIdsKey]);
+
   // ── Guided outfit flow (logic #1+#3+#4): ask which shoes (if ambiguous),
   // then which slots, then recommend one piece per slot. ────────────────────
   const askOutfitSlots = useCallback(async () => {
@@ -812,7 +824,7 @@ export function StyleUpExperience({
     if (kind === 'scene') {
       const scene = values[0];
       setChosenScene(scene);
-      await generateFullLook(assembleLook(), scene);
+      await generateFullLook(selectedLook(), scene);
       return;
     }
     if (kind === 'shoes') {
@@ -842,7 +854,7 @@ export function StyleUpExperience({
       const missing = (['Shoes', 'Top', 'Pants'] as const).find(s => !have.has(s));
       if (missing) await sendStylistText(threadId, `One more thing, you'll want ${GAP_REASON[missing]}. Say “different ${missing.toLowerCase()}” and I'll pull a few.`);
     }
-  }, [threadId, userId, lookPicks, rejected, rejectIds, askOutfitSlots, assembleLook, generateFullLook, recOpts, active, beat]);
+  }, [threadId, userId, lookPicks, rejected, rejectIds, askOutfitSlots, assembleLook, generateFullLook, recOpts, active, beat, selectedLook]);
 
   // "Try different pants", the stylist offers 3 alternatives for that slot.
   const handleSwapRequest = useCallback(async (swap: { role: string; label: string }) => {
@@ -1503,6 +1515,52 @@ export function StyleUpExperience({
           )}
           {renderError && <div className="su-render-err">{renderError}</div>}
         </div>
+
+        {engineMethod === 'style_engine' && assembleLook().length >= 2 && (
+          <div className="su-lookbar">
+            <div className="su-lookbar-row">
+              <span className="su-lookbar-title">Your look · {selectedLook().length} piece{selectedLook().length === 1 ? '' : 's'}</span>
+              <div className="su-lookbar-actions">
+                <button type="button" className="su-lookbar-btn" onClick={() => setPickingLook(v => !v)}>
+                  {pickingLook ? 'Done' : 'Choose pieces'}
+                </button>
+                <button
+                  type="button"
+                  className="su-lookbar-btn su-lookbar-btn--primary"
+                  disabled={selectedLook().length === 0 || genLook || pendingRender}
+                  onClick={() => void askScene()}
+                >
+                  See it on me
+                </button>
+              </div>
+            </div>
+            {pickingLook && (
+              <div className="su-lookbar-pieces">
+                {assembleLook().map(p => {
+                  const on = !lookSelection || (p.id != null && lookSelection.has(p.id));
+                  return (
+                    <button
+                      key={p.id || p.name}
+                      type="button"
+                      className={`su-lookbar-piece${on ? ' su-lookbar-piece--on' : ''}`}
+                      onClick={() => {
+                        if (!p.id) return;
+                        setLookSelection(prev => {
+                          const base = prev ?? new Set(assembleLook().map(x => x.id).filter((x): x is string => !!x));
+                          const next = new Set(base);
+                          if (next.has(p.id!)) next.delete(p.id!); else next.add(p.id!);
+                          return next;
+                        });
+                      }}
+                    >
+                      {on ? '✓ ' : ''}{roleTagFromName(p.name ?? null) || p.name || 'Piece'}
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+        )}
 
         <div className="su-composer">
           <input
