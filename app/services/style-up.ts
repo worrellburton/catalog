@@ -148,6 +148,19 @@ export async function deleteThread(threadId: string): Promise<boolean> {
   return !error;
 }
 
+/** The thread's server-side "web hunt in progress" marker (a future timestamp
+ *  while the edge function is still pulling pieces, else null/past). Drives the
+ *  working indicator so it survives refresh/navigation. */
+export async function getThreadHunting(threadId: string): Promise<string | null> {
+  if (!supabase) return null;
+  const { data } = await supabase
+    .from('style_up_threads')
+    .select('hunting_until')
+    .eq('id', threadId)
+    .maybeSingle();
+  return (data?.hunting_until as string | null) ?? null;
+}
+
 export interface StyleUpThreadSummary {
   threadId: string;
   stylist: StyleUpStylist;
