@@ -14,7 +14,7 @@ import { useAuth } from '~/hooks/useAuth';
 import { supabase } from '~/utils/supabase';
 import {
   fetchStylists, getOrCreateThread, deleteThread, getLatestThread, fetchMyThreads, fetchMessages, sendShopperMessage,
-  sendStylistText, startLookRender, startFullLookRender, fetchSwapOptions, sendSwapOptions,
+  sendStylistText, startFullLookRender, fetchSwapOptions, sendSwapOptions,
   sendChooser, recommendForSlot, sendProductPick,
   webFetchSwapOptions, webRecommendForSlot, webHuntOne, appendTraceSearches,
   type StyleUpStylist, type StyleUpMessage, type StyleUpProductRef, type StyleUpThreadSummary, type RecommendOpts,
@@ -209,11 +209,14 @@ const FUN_SCENES = ['a cozy coffee shop', 'a rooftop at golden hour', 'a city st
 const WILD_SCENES = ['a neon Tokyo alley in the rain', 'the surface of Mars', 'a 1970s disco', 'backstage at a runway show', 'a snowy mountain peak', 'an underwater glass tunnel', 'a desert at sunset'];
 function sceneOptions(): Array<{ value: string; label: string }> {
   const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-  const fun = [...FUN_SCENES].sort(() => Math.random() - 0.5).slice(0, 2);
+  // 1) Studio, 2) Outdoor coffee shop (both fixed), 3) a fresh spot each time,
+  // 4) something wild.
+  const fun = FUN_SCENES.filter(s => !s.includes('coffee')).sort(() => Math.random() - 0.5)[0] ?? 'a sunny park';
   const wild = WILD_SCENES[Math.floor(Math.random() * WILD_SCENES.length)];
   return [
-    { value: 'a clean studio', label: 'Clean studio' },
-    ...fun.map(s => ({ value: s, label: cap(s) })),
+    { value: 'a clean studio', label: 'Studio' },
+    { value: 'an outdoor coffee shop', label: 'Outdoor coffee shop' },
+    { value: fun, label: cap(fun) },
     { value: wild, label: `${cap(wild)} 🤯` },
   ];
 }
@@ -367,7 +370,6 @@ export function StyleUpExperience({
   // bubbles (spinner → video).
   const [renders, setRenders] = useState<Record<string, UserGeneration>>({});
   const [renderError, setRenderError] = useState<string | null>(null);
-  const [renderingIds, setRenderingIds] = useState<Set<string>>(new Set());
   const [genLook, setGenLook] = useState(false);     // full-look render in flight
   const [published, setPublished] = useState<Set<string>>(new Set()); // gen ids added to looks
   const [followedUp, setFollowedUp] = useState<Set<string>>(new Set()); // renders the stylist has reacted to
@@ -958,21 +960,6 @@ export function StyleUpExperience({
     else if (p.url) window.open(p.url, '_blank', 'noopener');
   }, [navigate]);
 
-  // "See it on me", render the shopper wearing a stylist pick (reuses the
-  // generate-look pipeline). The render bubble arrives via realtime and the
-  // polling effect below carries it to the finished video.
-  const tryOn = useCallback(async (product: StyleUpMessage['productRef']) => {
-    if (!threadId || !userId || !product) return;
-    if (pendingRender) { setRenderError('Still finishing your last look, give it a sec.'); return; }
-    const key = product.id || product.url || product.name || '';
-    if (renderingIds.has(key)) return;
-    setRenderingIds(prev => new Set(prev).add(key));
-    setRenderError(null);
-    const { error } = await startLookRender({ threadId, shopperUserId: userId, product });
-    if (error) setRenderError(error);
-    setRenderingIds(prev => { const n = new Set(prev); n.delete(key); return n; });
-  }, [threadId, userId, renderingIds, pendingRender]);
-
   // Poll any in-flight render generations referenced by the thread until they
   // reach a terminal state, so the render bubbles promote spinner → video.
   useEffect(() => {
@@ -1303,6 +1290,9 @@ export function StyleUpExperience({
   );
 
   // ── Thread pane, the active conversation. ──────────────────────────────
+  // The current look assembled from the stylist's picks (one per slot) — drives
+  // the docked "Try it on" cart.
+  const cartPieces = assembleLook();
   const threadPane = (
       <div className="su-page su-page--thread">
         <div className="su-thread-head">
@@ -1375,7 +1365,6 @@ export function StyleUpExperience({
             }
             if (m.kind === 'product' && m.productRef) {
               const p = m.productRef;
-              const key = p.id || p.url || p.name || '';
               return (
                 <div key={m.id} className="su-msg su-msg--stylist">
                   <div className="su-product">
@@ -1388,19 +1377,17 @@ export function StyleUpExperience({
                         <div className="su-product-name">{p.name || 'Product'}</div>
                         {p.price && <div className="su-product-price">{p.price}</div>}
                       </button>
-                      <div className="su-product-actions">
-                        {p.url && (
-                          <button type="button" className="su-product-btn" onClick={() => window.open(p.url!, '_blank', 'noopener')}>Shop</button>
-                        )}
-                        <button
-                          type="button"
-                          className="su-product-btn su-product-btn--primary"
-                          onClick={() => void tryOn(p)}
-                          disabled={renderingIds.has(key)}
-                        >
-                          {renderingIds.has(key) ? 'Starting…' : 'See it on me'}
-                        </button>
-                      </div>
+                      {roleTagFromName(p.name ?? null) && (
+                        <div className="su-product-actions">
+                          <button
+                            type="button"
+                            className="su-product-btn"
+                            onClick={() => { const role = roleTagFromName(p.name ?? null)!; void handleSwapRequest({ role, label: role.toLowerCase() }); }}
+                          >
+                            Change
+                          </button>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -1514,6 +1501,32 @@ export function StyleUpExperience({
           )}
           {renderError && <div className="su-render-err">{renderError}</div>}
         </div>
+
+        {cartPieces.length > 0 && (
+          <div className="su-look-cart">
+            <div className="su-look-cart-items">
+              {cartPieces.map((pc, i) => (
+                <button
+                  key={pc.id || i}
+                  type="button"
+                  className="su-look-cart-item"
+                  onClick={() => openProduct(pc)}
+                  title={[pc.brand, pc.name].filter(Boolean).join(' · ')}
+                >
+                  {pc.image ? <img src={pc.image} alt="" loading="lazy" /> : <span className="su-product-media--empty" />}
+                </button>
+              ))}
+            </div>
+            <button
+              type="button"
+              className="su-look-cart-btn"
+              onClick={() => void askScene()}
+              disabled={genLook || pendingRender}
+            >
+              {pendingRender ? 'Styling…' : 'Try it on'}
+            </button>
+          </div>
+        )}
 
         <div className="su-composer">
           <input
