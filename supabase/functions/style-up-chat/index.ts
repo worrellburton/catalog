@@ -13,6 +13,7 @@
 // Secrets: ANTHROPIC_API_KEY.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { retrieveOccasionCandidates } from '../_shared/style-retrieval.ts';
 
 const MODEL = 'claude-sonnet-4-6';
 
@@ -111,31 +112,34 @@ Deno.serve(async (req: Request) => {
     if (prof?.fashion_styles) ctxBits.push(`style tags: ${prof.fashion_styles}`);
     const shopperName = (prof?.full_name ? String(prof.full_name).split(/\s+/)[0] : '') || 'there';
 
-    // Chat history (oldest first, capped).
+    // History: most recent 30, oldest-first. ascending+limit kept the OLDEST 30
+    // and dropped the shopper's newest message (also left it ending on a stylist
+    // turn). Fetch newest-first then reverse.
     const { data: history } = await admin
       .from('style_up_messages')
       .select('sender, kind, body, product_ref')
       .eq('thread_id', threadId)
-      .order('created_at', { ascending: true })
+      .order('created_at', { ascending: false })
       .limit(30);
-    const turns = (history ?? []) as Array<{ sender: string; kind: string; body: string | null; product_ref: unknown }>;
+    const turns = ((history ?? []) as Array<{ sender: string; kind: string; body: string | null; product_ref: unknown }>).reverse();
     if (turns.length === 0) return json({ success: false, error: 'nothing to reply to' }, 400);
 
-    // Candidate products to recommend FROM — gender-filtered active catalog.
+    // Candidate products to recommend FROM — occasion-aware per-slot retrieval
+    // (the same BM25-over-occasion engine the seeding cockpit validates), so the
+    // pool matches what the shopper's after instead of the 120 newest products.
     // The model may only pick ids that appear here (we validate below). Web
     // stylists skip this entirely (their picks come from a live web search).
     let cands: ProductCand[] = [];
     if (!isWeb) {
-      let q = admin.from('products')
-        .select('id, name, brand, price, image_url, primary_image_url, url, type')
-        .eq('is_active', true)
-        .not('image_url', 'is', null)
-        .order('created_at', { ascending: false })
-        .limit(120);
-      if (genderNorm === 'male') q = q.or('gender.eq.male,gender.eq.unisex');
-      else if (genderNorm === 'female') q = q.or('gender.eq.female,gender.eq.unisex');
-      const { data: candRows } = await q;
-      cands = (candRows ?? []) as ProductCand[];
+      // Occasion signal = the conversation so far; garment/occasion nouns rank the search.
+      const occasion = turns.map(t => (t.body ?? '').trim()).filter(Boolean).join(' ').slice(0, 600);
+      const found = await retrieveOccasionCandidates(admin, {
+        occasion, gender: genderNorm, aesthetic: stylist?.specialty ?? '',
+      });
+      cands = found.filter(c => c.image).map(c => ({
+        id: c.id, name: c.name, brand: c.brand, price: c.price,
+        image_url: c.image, primary_image_url: c.image, url: c.url, type: c.type,
+      }));
     }
     const candList = cands.map(c =>
       `${c.id} | ${(c.name ?? '').slice(0, 70)} | ${c.brand ?? ''} | ${c.price ?? ''} | ${c.type ?? ''}`,
@@ -199,9 +203,16 @@ productIds is optional — include it only when you're actually recommending pie
     if (messages.length === 0) {
       messages.push({ role: 'user', content: `Hi ${stylist?.name ?? ''}` });
     }
+    // Claude 4.6 rejects assistant-message prefill: the conversation must end on
+    // a user turn. If the stylist spoke last, nudge to continue.
+    if (messages[messages.length - 1].role === 'assistant') messages.push({ role: 'user', content: '(continue)' });
 
     const res = await callAnthropic(apiKey, { model: MODEL, max_tokens: 700, system, messages });
-    if (!res.ok) return json({ success: false, error: `anthropic ${res.status}: ${(await res.text()).slice(0, 200)}` }, 502);
+    if (!res.ok) {
+      const errBody = (await res.text()).slice(0, 300);
+      void admin.from('ai_usage_logs').insert({ platform: 'anthropic', operation: 'style-up-chat', model: MODEL, status: 'error', error_message: `${res.status}: ${errBody}` });
+      return json({ success: false, error: `anthropic ${res.status}: ${errBody}` }, 502);
+    }
     const out = await res.json() as { content?: Array<{ type: string; text?: string }>; usage?: { input_tokens?: number; output_tokens?: number } };
     const text = (out.content?.find(c => c.type === 'text')?.text ?? '').replace(/```json\s*|```\s*/g, '').trim();
     const start = text.indexOf('{');
@@ -226,11 +237,8 @@ productIds is optional — include it only when you're actually recommending pie
     const picks = productIds.map(id => candById.get(id)).filter((c): c is ProductCand => !!c).slice(0, 4);
 
     // Insert the stylist's text reply, then a product message per pick.
-    const inserted: unknown[] = [];
-    const { data: textMsg } = await admin.from('style_up_messages')
-      .insert({ thread_id: threadId, sender: 'stylist', kind: 'text', body: reply })
-      .select('id').single();
-    if (textMsg) inserted.push(textMsg.id);
+    await admin.from('style_up_messages')
+      .insert({ thread_id: threadId, sender: 'stylist', kind: 'text', body: reply });
 
     for (const p of picks) {
       await admin.from('style_up_messages').insert({
