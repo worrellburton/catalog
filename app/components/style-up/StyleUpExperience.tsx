@@ -14,11 +14,12 @@ import { useAuth } from '~/hooks/useAuth';
 import { useStylistEngineMethod } from '~/hooks/useStylistEngineMethod';
 import { supabase } from '~/utils/supabase';
 import {
-  fetchStylists, getOrCreateThread, deleteThread, getThreadHunting, getLatestThread, fetchMyThreads, fetchMessages, sendShopperMessage,
+  fetchStylists, getOrCreateThread, deleteThread, getThreadHunting, fetchProductDetail, getLatestThread, fetchMyThreads, fetchMessages, sendShopperMessage,
   sendStylistText, startFullLookRender, fetchSwapOptions, sendSwapOptions,
   sendChooser, recommendForSlot, sendProductPick,
   webFetchSwapOptions, webRecommendForSlot,
   type StyleUpStylist, type StyleUpMessage, type StyleUpProductRef, type StyleUpThreadSummary, type RecommendOpts,
+  type StyleUpProductDetail,
 } from '~/services/style-up';
 import { roleTagFromName } from '~/services/product-roles';
 import { signInWithGoogle } from '~/services/auth';
@@ -64,7 +65,7 @@ import {
 } from '~/services/user-generations';
 import { promoteGenerationToLook } from '~/services/promote-generation';
 import { generationProgress } from '~/services/generation-progress';
-import { productSlug } from '~/utils/slug';
+
 import '~/styles/style-up.css';
 import '~/styles/style-up-lookbar.css';
 
@@ -377,6 +378,7 @@ export function StyleUpExperience({
   const [allStylists, setAllStylists] = useState<StyleUpStylist[]>([]); // full roster for the picker
   const [timeShownId, setTimeShownId] = useState<string | null>(null); // bubble with its timestamp revealed
   const [cardsIncoming, setCardsIncoming] = useState(false); // product cards are being pulled → ghost-card anticipation
+  const [productViewer, setProductViewer] = useState<{ ref: StyleUpProductRef; detail: StyleUpProductDetail | null } | null>(null); // in-chat product pop-up
   const [newBelow, setNewBelow] = useState(false);            // "↓ New message" pill (scrolled up)
   const nearBottomRef = useRef(true);                         // is the chat pinned near the bottom?
   const prevMsgCountRef = useRef(0);                          // detect genuinely-new messages
@@ -1061,11 +1063,19 @@ export function StyleUpExperience({
   }, [published, renders, userId, user, ctx]);
 
   // Open a pick's in-app product page (deeplink). Falls back to its shop URL.
+  // Tapping a product opens an in-chat pop-up overlay (like tapping a look) —
+  // never navigates away from the conversation. The full detail (gallery,
+  // description) streams in behind the instantly-shown basics.
   const openProduct = useCallback((p: StyleUpProductRef) => {
-    const slug = productSlug({ id: p.id, name: p.name, brand: p.brand });
-    if (slug) navigate(`/p/${slug}`);
-    else if (p.url) window.open(p.url, '_blank', 'noopener');
-  }, [navigate]);
+    if (p.id) {
+      setProductViewer({ ref: p, detail: null });
+      void fetchProductDetail(p.id).then(d => {
+        setProductViewer(cur => (cur && cur.ref.id === p.id ? { ...cur, detail: d } : cur));
+      });
+    } else if (p.url) {
+      window.open(p.url, '_blank', 'noopener');
+    }
+  }, []);
 
   // Poll any in-flight render generations referenced by the thread until they
   // reach a terminal state, so the render bubbles promote spinner → video.
@@ -1274,6 +1284,38 @@ export function StyleUpExperience({
       </div>
     </div>
   ) : null;
+
+  // Product pop-up — the product counterpart of the look viewer: a slide-up
+  // overlay with the gallery, details, and a shop link. Never leaves the chat.
+  const productOverlay = productViewer ? (() => {
+    const d = productViewer.detail;
+    const ref = productViewer.ref;
+    const gallery = d?.images.length ? d.images : ([ref.image].filter(Boolean) as string[]);
+    const shopUrl = d?.url ?? ref.url ?? null;
+    return (
+      <div className="su-pviewer" onClick={() => setProductViewer(null)} role="dialog" aria-modal="true">
+        <div className="su-pviewer-inner" onClick={e => e.stopPropagation()}>
+          <button type="button" className="su-viewer-close" onClick={() => setProductViewer(null)} aria-label="Close">✕</button>
+          <div className="su-pviewer-gallery">
+            {gallery.length > 0
+              ? gallery.map((src, i) => <img key={i} src={src} alt={i === 0 ? (d?.name ?? ref.name ?? 'Product') : ''} loading={i > 0 ? 'lazy' : undefined} />)
+              : <span className="su-pviewer-empty" aria-hidden="true" />}
+          </div>
+          <div className="su-pviewer-info">
+            {(d?.brand ?? ref.brand) && <div className="su-pviewer-brand">{d?.brand ?? ref.brand}</div>}
+            <div className="su-pviewer-name">{d?.name ?? ref.name ?? 'Product'}</div>
+            {(d?.price ?? ref.price) && <div className="su-pviewer-price">{d?.price ?? ref.price}</div>}
+            {d?.description && <p className="su-pviewer-desc">{d.description}</p>}
+          </div>
+          {shopUrl && (
+            <button type="button" className="su-viewer-add" onClick={() => window.open(shopUrl, '_blank', 'noopener')}>
+              Shop this piece
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  })() : null;
 
   // The app's Google sign-in button (used on the landing + the sign-in gate).
   const googleButton = (
@@ -1960,7 +2002,7 @@ export function StyleUpExperience({
             : pickerOpen ? <>{header(() => setPickerOpen(false))}{pickerPane}</>
             : <>{railHeader}{landingHero}{convosPane}{findStylistBar}</>}
         </div>
-        {viewerOverlay}
+        {viewerOverlay}{productOverlay}
       </>
     );
   }
@@ -1982,7 +2024,7 @@ export function StyleUpExperience({
             )}
           </main>
         </div>
-        {viewerOverlay}
+        {viewerOverlay}{productOverlay}
       </>
     );
   }
@@ -1992,7 +2034,7 @@ export function StyleUpExperience({
         {bgLayer}
         {threadId ? threadPane : <>{railHeader}{rosterPane}</>}
       </div>
-      {viewerOverlay}
+      {viewerOverlay}{productOverlay}
     </>
   );
 }
