@@ -59,7 +59,7 @@ function applyPrefs(prev: StylePrefs, text: string): StylePrefs {
 import { getUserHeightAge, getUserCustomStyle, updateUserHeightAge, updateUserCustomStyle } from '~/services/profiles';
 import { getUserGender, updateUserGender, type UserGender } from '~/services/genders';
 import {
-  listUserUploads, getUserSlots, saveUserSlots, uploadUserPhoto, getGeneration,
+  listUserUploads, getUserSlots, saveUserSlots, uploadUserPhoto, getGeneration, cancelGeneration,
   type UserGeneration,
 } from '~/services/user-generations';
 import { promoteGenerationToLook } from '~/services/promote-generation';
@@ -180,25 +180,28 @@ function sortHeadToToe(pieces: StyleUpProductRef[]): StyleUpProductRef[] {
     (SLOT_ORDER[roleTagFromName(a.name ?? null) ?? ''] ?? 9) - (SLOT_ORDER[roleTagFromName(b.name ?? null) ?? ''] ?? 9));
 }
 
-// Scene options for "where do you want to be seen?", Clean studio is always
-// first, then two fun spots, and the 4th is always a little wild.
-const FUN_SCENES = ['a cozy coffee shop', 'a rooftop at golden hour', 'a city street at night', 'a sunny park', 'a minimalist loft', 'an art gallery', 'a jazz bar', 'a boardwalk by the sea', 'a sidewalk café in Paris'];
-const WILD_SCENES = ['a neon Tokyo alley in the rain', 'the surface of Mars', 'a 1970s disco', 'backstage at a runway show', 'a snowy mountain peak', 'an underwater glass tunnel', 'a desert at sunset'];
-function sceneOptions(context?: string | null): Array<{ value: string; label: string }> {
-  const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-  // 1) Studio, 2) Outdoor coffee shop (both fixed), 3) the place the shopper
-  // actually mentioned in chat when we have one ("a beach in Italy"), else a
-  // fresh spot each time, 4) something wild.
-  const fun = FUN_SCENES.filter(s => !s.includes('coffee')).sort(() => Math.random() - 0.5)[0] ?? 'a sunny park';
-  const ctx = context && !/coffee shop|studio/i.test(context) ? context : null;
-  const third = ctx ?? fun;
-  const wild = WILD_SCENES[Math.floor(Math.random() * WILD_SCENES.length)];
-  return [
-    { value: 'a clean studio', label: 'Studio' },
-    { value: 'an outdoor coffee shop', label: 'Outdoor coffee shop' },
-    { value: third, label: cap(third) },
-    { value: wild, label: `${cap(wild)} 🤯` },
-  ];
+// Auto-derive the render setting from the scenario/occasion so the shopper
+// isn't asked "where do you want to be seen?" before every look. Priority:
+// (1) an explicit place the shopper named in chat, (2) the occasion mapped to
+// a fitting backdrop, (3) a clean studio. Keys match the occasion vocabulary
+// parsed in applyPrefs().
+const OCCASION_SCENE: Record<string, string> = {
+  'date night': 'a candlelit restaurant', date: 'a candlelit restaurant',
+  dinner: 'a warm restaurant at night',
+  wedding: 'an elegant garden venue',
+  interview: 'a bright modern office', work: 'a bright modern office', office: 'a bright modern office',
+  brunch: 'a sunny outdoor café',
+  party: 'a rooftop bar at night', 'night out': 'a rooftop bar at night',
+  gym: 'a bright modern gym',
+  travel: 'a scenic old-town street', vacation: 'a sunlit boardwalk by the sea', beach: 'a sandy beach at golden hour',
+  festival: 'an open-air festival at dusk', concert: 'a concert hall at night',
+  graduation: 'a sunny campus courtyard', reunion: 'a lively lounge', funeral: 'a quiet chapel',
+};
+function autoScene(occasion: string | null | undefined, msgs: StyleUpMessage[]): string {
+  const explicit = sceneFromChat(msgs); // shopper's own words win ("on a rooftop")
+  if (explicit) return explicit;
+  const key = (occasion ?? '').toLowerCase().trim();
+  return OCCASION_SCENE[key] ?? 'a clean studio';
 }
 
 // Scene-ish places the shopper mentioned in chat ("a beach in Italy", "rooftop
@@ -368,6 +371,10 @@ export function StyleUpExperience({
   // Render polling: generation id → its latest row. Drives the on-you render
   // bubbles (spinner → video).
   const [renders, setRenders] = useState<Record<string, UserGeneration>>({});
+  // Generations the shopper hit Stop on. Tracked client-side so the UI unblocks
+  // and stops polling immediately, even if the DB cancel write is denied/slow
+  // (the poll would otherwise re-fetch 'generating' and revive it).
+  const [canceledIds, setCanceledIds] = useState<Set<string>>(new Set());
   const [renderError, setRenderError] = useState<string | null>(null);
   const [genLook, setGenLook] = useState(false);     // full-look render in flight
   const [published, setPublished] = useState<Set<string>>(new Set()); // gen ids added to looks
@@ -396,9 +403,20 @@ export function StyleUpExperience({
   // A render is in flight for this thread, used to block stacking renders.
   const pendingRender = messages.some(m => {
     if (m.kind !== 'render' || !m.renderGenerationId) return false;
+    if (canceledIds.has(m.renderGenerationId)) return false;
     const r = renders[m.renderGenerationId];
     return !r || (r.status !== 'done' && r.status !== 'failed');
   });
+
+  // Stop a render in flight. Mark it canceled locally (unblocks the composer +
+  // halts the poll at once) and fire a best-effort DB cancel so the Fal result
+  // isn't promoted later.
+  const cancelRender = useCallback((genId: string | null) => {
+    if (!genId) return;
+    setCanceledIds(prev => new Set(prev).add(genId));
+    setGenLook(false);
+    void cancelGeneration(genId);
+  }, []);
 
   const exit = useCallback(() => {
     // Back always lands on the /style landing (never dumps out to the app feed).
@@ -836,34 +854,24 @@ export function StyleUpExperience({
     await askOutfitSlots();
   }, [threadId, userId, pendingRender, lookPicks, chosenBySlot, askOutfitSlots, beat]);
 
-  // The exact pieces to render when the scene is picked — set by the look
-  // card's Generate button so EVERY piece on that card goes into the render
-  // (assembleLook() collapses to one-per-slot and silently dropped doubles).
-  const lookToGenerateRef = useRef<StyleUpProductRef[] | null>(null);
-
-  // Before any restyle: ask where they want to be seen (scene), then render.
+  // Kick a full-look render. The setting is auto-derived from the scenario/
+  // occasion (see autoScene) instead of prompting "where do you want to be
+  // seen?" every time — the shopper can still steer it by naming a place in
+  // chat ("put me on a rooftop"). Keeps the name askScene so callers are
+  // unchanged. Renders the exact pieces passed (the look card's Generate
+  // button passes EVERY piece); otherwise assembleLook() (one-per-slot).
   const askScene = useCallback(async (pieces?: StyleUpProductRef[]) => {
     if (!threadId || !userId) return;
     if (pendingRender) { setRenderError('Still finishing your last look, one sec.'); return; }
-    lookToGenerateRef.current = pieces && pieces.length > 0 ? pieces : null;
-    if (!lookToGenerateRef.current && assembleLook().length === 0) { void triggerStylist(); return; }
-    await beat();
-    await sendStylistText(threadId, 'Before I restyle you, where do you want to be seen?');
-    await sendChooser(threadId, { kind: 'scene', prompt: 'Pick your setting', multi: false, options: sceneOptions(sceneFromChat(messages)) });
-  }, [threadId, userId, pendingRender, assembleLook, triggerStylist, beat, messages]);
+    const toRender = pieces && pieces.length > 0 ? pieces : assembleLook();
+    if (toRender.length === 0) { void triggerStylist(); return; }
+    const scene = autoScene(prefsRef.current.occasion, messages);
+    setChosenScene(scene);
+    await generateFullLook(toRender, scene);
+  }, [threadId, userId, pendingRender, assembleLook, triggerStylist, messages, generateFullLook]);
 
   const onChoose = useCallback(async (kind: string, values: string[]) => {
     if (!threadId || !userId) return;
-    if (kind === 'scene') {
-      const scene = values[0];
-      setChosenScene(scene);
-      // Render the exact pieces from the card that opened this chooser when we
-      // have them; assembleLook() (one-per-slot) only backstops text triggers.
-      const pieces = lookToGenerateRef.current ?? assembleLook();
-      lookToGenerateRef.current = null;
-      await generateFullLook(pieces, scene);
-      return;
-    }
     if (kind === 'shoes') {
       const id = values[0];
       setChosenBySlot(prev => ({ ...prev, Shoes: id }));
@@ -1015,6 +1023,7 @@ export function StyleUpExperience({
       .filter(m => m.kind === 'render' && m.renderGenerationId)
       .map(m => m.renderGenerationId as string);
     const pending = ids.filter(id => {
+      if (canceledIds.has(id)) return false;
       const r = renders[id];
       return !r || (r.status !== 'done' && r.status !== 'failed');
     });
@@ -1032,7 +1041,7 @@ export function StyleUpExperience({
     void tick();
     const h = window.setInterval(tick, 3000);
     return () => { cancelled = true; window.clearInterval(h); };
-  }, [messages, renders]);
+  }, [messages, renders, canceledIds]);
 
   // 1s heartbeat while any render is in-flight so the ETA countdown ticks down.
   useEffect(() => {
@@ -1536,8 +1545,9 @@ export function StyleUpExperience({
               const p = m.productRef;
               const pieces = p?.pieces ?? [];
               const done = r?.status === 'done' && r.video_url;
+              const canceled = m.renderGenerationId ? canceledIds.has(m.renderGenerationId) : false;
               const failed = r?.status === 'failed';
-              const prog = !done && !failed
+              const prog = !done && !failed && !canceled
                 ? generationProgress(r?.created_at ?? m.createdAt, r?.duration_seconds ?? 10)
                 : null;
               return (
@@ -1555,6 +1565,8 @@ export function StyleUpExperience({
                           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
                         </span>
                       </button>
+                    ) : canceled ? (
+                      <div className="su-render-status su-render-status--failed">Canceled.</div>
                     ) : failed ? (
                       <div className="su-render-status su-render-status--failed">Couldn&apos;t render that look, try another piece.</div>
                     ) : (
@@ -1565,6 +1577,14 @@ export function StyleUpExperience({
                             {prog?.phase ?? 'Putting your look together…'}
                             <span className="su-render-eta">{fmtRemaining(prog?.remainingSec ?? 0)}</span>
                           </span>
+                          <button
+                            type="button"
+                            className="su-render-stop"
+                            onClick={() => cancelRender(m.renderGenerationId)}
+                            aria-label="Stop generating"
+                          >
+                            Stop
+                          </button>
                         </div>
                         {/* Measuring-tape progress — a real fill, not just a spinner. */}
                         <div className="su-tape" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(prog?.pct ?? 0)}>
@@ -1614,7 +1634,7 @@ export function StyleUpExperience({
             const nextM = idx < messages.length - 1 ? messages[idx + 1] : null;
             const follow = !dayBreak && !newBreak
               && isTextBubble(prevVisible) && prevVisible!.sender === m.sender;
-            const tail = !(isTextBubble(nextM) && nextM!.sender === m.sender && sameDay(nextM.createdAt, m.createdAt));
+            const tail = !(nextM && isTextBubble(nextM) && nextM.sender === m.sender && sameDay(nextM.createdAt, m.createdAt));
             return (
               <div key={m.id} className={`su-msg su-msg--${m.sender}${follow ? ' su-msg--follow' : ''}${tail ? ' su-msg--tail' : ''}`}>
                 {m.sender === 'stylist' && tail && (

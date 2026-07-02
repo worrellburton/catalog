@@ -10,6 +10,7 @@ import { getUserHeightAge, getUserCustomStyle } from '~/services/profiles';
 import { getUserGender } from '~/services/genders';
 import { getUserSlots, createGeneration, buildGenerationPrompt } from '~/services/user-generations';
 import { roleForProduct } from '~/services/product-roles';
+import { getLookVideoQuality, getLookVideoDuration } from '~/services/dials';
 import type { StylistEngineMethod } from '~/services/dials';
 
 export interface StyleUpStylist {
@@ -521,11 +522,13 @@ async function renderLook(
     return { generationId: null, error: "These picks can't be rendered yet." };
   }
 
-  const [ha, gender, customStyle, slots] = await Promise.all([
+  const [ha, gender, customStyle, slots, quality, duration] = await Promise.all([
     getUserHeightAge(shopperUserId),
     getUserGender(shopperUserId),
     getUserCustomStyle(shopperUserId),
     getUserSlots(shopperUserId, MAX_REF_PHOTOS),
+    getLookVideoQuality(),   // admin dial: 'fast' | 'pro' Seedance tier
+    getLookVideoDuration(),  // admin dial: clip length in seconds
   ]);
   const uploadIds = slots.filter((x): x is string => !!x);
   if (uploadIds.length === 0) {
@@ -564,6 +567,20 @@ async function renderLook(
     lines = lines.filter(l => (seen.has(l.product_id) ? false : (seen.add(l.product_id), true)));
   }
 
+  // One piece per single-garment slot — a look with two shoes (or two tops)
+  // is never intended and the video model can't wear both. The client's
+  // one-per-slot collapse misses items whose NAME lacks a garment word (e.g.
+  // "Grand Crosscourt Tennis" → no "shoe"/"sneaker"), but here we have the
+  // governed `type`, so it's reliable. Keep the LAST pick per slot (the most
+  // recent = the one the shopper just swapped to). Accessory/Jewelry/Bag can
+  // legitimately repeat, so they're left alone.
+  {
+    const SINGLE = new Set(['Top', 'Pants', 'Dress', 'Shoes', 'Jacket', 'Hat']);
+    const lastIdx = new Map<string, number>();
+    lines.forEach((l, i) => { if (l.roleTag && SINGLE.has(l.roleTag)) lastIdx.set(l.roleTag, i); });
+    lines = lines.filter((l, i) => !(l.roleTag && SINGLE.has(l.roleTag)) || lastIdx.get(l.roleTag) === i);
+  }
+
   let prompt = buildGenerationPrompt({
     heightLabel: ha.heightLabel ?? '',
     weightLabel: ha.weightLabel,
@@ -572,7 +589,7 @@ async function renderLook(
     customStyle,
     gender,
     productLines: lines.map(l => ({ role_tag: l.roleTag, brand: l.brand, name: l.name })),
-    durationSeconds: 10,
+    durationSeconds: duration,
   });
   // Scene/setting the shopper chose ("clean studio", "rooftop at golden hour"…).
   if (scene && scene.trim()) prompt += `\n\nSetting: ${scene.trim()}. Place the subject naturally in this environment.`;
@@ -587,8 +604,8 @@ async function renderLook(
     weightLabel: ha.weightLabel,
     style: 'editorial',
     prompt,
-    durationSeconds: 10,
-    model: 'pro',
+    durationSeconds: duration,
+    model: quality,
   });
   if (error || !gen) return { generationId: null, error: error ?? 'Render failed to start' };
 

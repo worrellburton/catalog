@@ -21,7 +21,8 @@ const CORS_HEADERS = {
 
 const TARGETS_PER_RUN = 3;       // throttle: targets handled per invocation
 const QUERIES_PER_SCENARIO = 6;  // brainstorm fan-out for a scenario
-const CREDITS_PER_QUERY = 6;     // 1 search + up to 5 immersive lookups (estimate)
+const SEED_DETAIL_LIMIT = 10;    // immersive lookups per query (merchant URL + gallery)
+const CREDITS_PER_QUERY = 1 + SEED_DETAIL_LIMIT; // 1 search + up to N immersive lookups
 
 function jsonRes(data: unknown, status = 200) {
   return new Response(JSON.stringify(data), {
@@ -70,7 +71,7 @@ async function expandToQueries(admin: Admin, t: SeedTarget, base: string, key: s
 }
 
 async function ingestQuery(base: string, key: string, query: string): Promise<string[]> {
-  const res = await fetch(`${base}/functions/v1/product-search`, {
+  const res = await fetch(`${base}/functions/v1/product-search?detailLimit=${SEED_DETAIL_LIMIT}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${key}`, apikey: key },
     // Stamp the deletable flag + hold inactive AT INSERT (atomic) — the gate

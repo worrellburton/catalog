@@ -45,8 +45,21 @@ export async function retrieveOccasionCandidates(
   const aesthetic = (opts.aesthetic ?? '').toLowerCase().replace(/[&/]/g, ' ').replace(/\s+/g, ' ').trim();
 
   const perSlot = await Promise.all(slots.map(async (slot) => {
-    const q = `${aesthetic} ${opts.occasion} ${SLOT_NOUN[slot]}`.trim();
-    const { data, error } = await admin.rpc('style_slot_search', { p_query: q, p_k: k, p_gender: filterGender });
+    // style_slot_search AND-s every query term, so folding the stylist's
+    // specialty into the query ("occasion red carpet … shirt") zeroes the WHOLE
+    // slot when that vocab isn't in the (thin) catalog — that's why a red-carpet
+    // stylist returned "no pieces" while a smart-casual one worked. Query WITH
+    // the aesthetic for the bias, then fall back to the occasion alone when it
+    // comes back empty, so the specialty only RANKS, never empties the pool.
+    let res = await admin.rpc('style_slot_search', {
+      p_query: `${aesthetic} ${opts.occasion} ${SLOT_NOUN[slot]}`.trim(), p_k: k, p_gender: filterGender,
+    });
+    if (aesthetic && (res.error || !Array.isArray(res.data) || res.data.length === 0)) {
+      res = await admin.rpc('style_slot_search', {
+        p_query: `${opts.occasion} ${SLOT_NOUN[slot]}`.trim(), p_k: k, p_gender: filterGender,
+      });
+    }
+    const { data, error } = res;
     if (error || !Array.isArray(data)) return [] as OccasionCand[];
     let rows = (data as Array<Record<string, unknown>>).map((r) => ({
       id: String(r.product_id), name: (r.product_name as string) ?? null, brand: (r.product_brand as string) ?? null,

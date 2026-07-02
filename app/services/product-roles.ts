@@ -47,6 +47,30 @@ const TYPE_TO_ROLE: Record<string, string | null> = {
   jewelry: 'Jewelry',
   watch: 'Jewelry',
   eyewear: 'Sunglasses',
+  // ── real catalog `type` vocabulary (plurals + specific classes the
+  //    curator actually stores). Without these, "Shirt"/"Sneakers"/"Shorts"
+  //    (the common values) fall through to the fragile name heuristic —
+  //    which mis-reads "Short Sleeve" as Pants and can't place a sneaker
+  //    whose name carries no shoe word. The governed type must win. ──
+  shirt: 'Top', shirts: 'Top', tops: 'Top',
+  tee: 'Top', tees: 'Top', 't-shirt': 'Top', 't-shirts': 'Top', tshirt: 'Top', tshirts: 'Top',
+  sweater: 'Top', sweaters: 'Top', knit: 'Top', knitwear: 'Top', pullover: 'Top',
+  sweatshirt: 'Top', polo: 'Top', henley: 'Top', tank: 'Top', blouse: 'Top', bodysuit: 'Top',
+  hoodie: 'Jacket', cardigan: 'Jacket', jacket: 'Jacket', jackets: 'Jacket',
+  coat: 'Jacket', coats: 'Jacket', blazer: 'Jacket', bomber: 'Jacket', parka: 'Jacket', vest: 'Jacket',
+  pants: 'Pants', trousers: 'Pants', shorts: 'Pants', jeans: 'Pants',
+  leggings: 'Pants', skirt: 'Pants', skirts: 'Pants', joggers: 'Pants', chinos: 'Pants',
+  dresses: 'Dress', gown: 'Dress',
+  sneakers: 'Shoes', boots: 'Shoes', sandals: 'Shoes', heels: 'Shoes', loafers: 'Shoes', flats: 'Shoes', trainers: 'Shoes',
+  bags: 'Bag', handbag: 'Bag', backpack: 'Bag', tote: 'Bag', purse: 'Bag', clutch: 'Bag',
+  necklace: 'Jewelry', bracelet: 'Jewelry', ring: 'Jewelry', earrings: 'Jewelry', watches: 'Jewelry',
+  sunglasses: 'Sunglasses',
+  hats: 'Hat', cap: 'Hat', beanie: 'Hat',
+  accessory: 'Accessory', accessories: 'Accessory',
+  // Non-garment `type`s present in the catalog → keep out of outfit slots.
+  art: null, plants: null, electronics: null, laptops: null, candles: null,
+  beauty: null, snowboard: null, lamp: null, home: null, 'home fragrance': null,
+  sunscreen: null, 'gift card': null, 'winter sports equipment': null,
   // ── wearable, but NOT an outfit slot → keep out of garment reels ──
   underwear: null,
   loungewear: null,
@@ -80,8 +104,17 @@ export function roleForProduct(
   name: string | null | undefined,
 ): string | null {
   const fromType = roleTagFromType(type);
+  const fromName = roleTagFromName(name ?? null);
+  // Governed type usually wins (curated, and deliberately null for non-garments).
+  // BUT when type maps to one garment slot and the NAME clearly maps to a
+  // DIFFERENT garment slot, the name wins — governed types are occasionally
+  // mis-set (e.g. a "Camp Collar Shirt" stored as 'shorts' → Pants, which then
+  // collides with the real pants and gets dropped). An explicit garment noun in
+  // the name beats a mislabelled type. This never promotes a non-garment
+  // (fromType === null) into a slot.
+  if (fromType && fromName && fromType !== fromName) return fromName;
   if (fromType !== undefined) return fromType;
-  return roleTagFromName(name ?? null);
+  return fromName;
 }
 
 // Order matters: the FIRST pattern that matches wins, so the most specific /
@@ -101,7 +134,8 @@ export function roleTagFromName(name: string | null): string | null {
   // Outerwear — before tops so "shirt jacket"/"shacket" reads as a Jacket.
   if (/\b(jacket|shacket|coat|parka|blazer|hoodie|cardigan|overshirt|windbreaker|anorak|vest|gilet|bomber|trench|puffer|raincoat)\b/.test(lower)) return 'Jacket';
   if (/\b(dress|gown|frock)\b/.test(lower)) return 'Dress';
-  if (/\b(pant|pants|trouser|trousers|chino|chinos|jean|jeans|denim|short|shorts|skirt|legging|leggings|joggers|sweatpant|sweatpants|cargo|cargos|slacks|culotte|culottes)\b/.test(lower)) return 'Pants';
+  // "short(s)" must NOT match "short sleeve" (that's a top) — negative lookahead.
+  if (/\b(pant|pants|trouser|trousers|chino|chinos|jean|jeans|denim|shorts?(?!\s+sleeve)|skirt|legging|leggings|joggers|sweatpant|sweatpants|cargo|cargos|slacks|culotte|culottes)\b/.test(lower)) return 'Pants';
   if (/\b(bag|tote|clutch|purse|backpack|handbag|crossbody|satchel|duffel|duffle)\b/.test(lower)) return 'Bag';
   if (/\b(necklace|ring|earring|earrings|bracelet|watch|chain|pendant|anklet|brooch|cufflink|cufflinks)\b/.test(lower)) return 'Jewelry';
   if (/\b(shirt|tee|t-shirt|tshirt|top|sweater|jumper|knit|polo|henley|tank|camisole|cami|blouse|bodysuit|turtleneck|crewneck|crew|pullover|sweatshirt)\b/.test(lower)) return 'Top';

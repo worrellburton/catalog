@@ -479,10 +479,18 @@ async function handleRequest(req: Request): Promise<Response> {
     .eq('generation_id', generationId)
     .order('sort_order');
 
+  // A Google-Shopping/SerpAPI search THUMBNAIL (encrypted-tbn*.gstatic.com,
+  // serpapi.com) is tiny and often a wrong colorway — a poor image to
+  // condition a video model on (this is why looks came out the wrong color).
+  // ~47% of active products have such a URL as their primary_image_url, so
+  // prefer a real merchant/storage packshot from EITHER field when one exists.
+  const isThumb = (u: string | null | undefined): boolean =>
+    !!u && /gstatic\.com|serpapi\.com/.test(u);
   const productEntries = (productLinks || [])
     .map(r => {
       const p = r.products as unknown as { name: string | null; brand: string | null; image_url: string | null; primary_image_url: string | null } | null;
-      const chosen = p?.primary_image_url || p?.image_url;
+      const candidates = [p?.primary_image_url, p?.image_url].filter(Boolean) as string[];
+      const chosen = candidates.find(u => !isThumb(u)) ?? candidates[0] ?? null;
       if (!chosen) return null;
       const label = [p?.brand, p?.name].filter(Boolean).join(' ').trim() || 'product';
       return { role: r.role_tag || 'item', label, image_url: chosen, brand: p?.brand ?? null };
@@ -491,8 +499,15 @@ async function handleRequest(req: Request): Promise<Response> {
 
   // ── Resolve video model from platform settings ───────────────────────────
   const { data: modelSetting } = await admin
-    .from('app_settings').select('value').eq('key', 'look_video_model').single();
-  const platformSlug = modelSetting?.value || 'fal-ai/veo3.1/fast/image-to-video';
+    .from('app_settings').select('value').eq('key', 'look_video_model').maybeSingle();
+  // Default to Seedance reference-to-video (sees the product packshots), NOT
+  // Veo image-to-video (which only sees the selfie and would drop the products).
+  const platformSlug = modelSetting?.value || 'bytedance/seedance-2.0/fast/reference-to-video';
+  // Fallback policy: allow the product-blind Veo face-only fallback for a
+  // product look only when an operator opts in. Default false = fail loudly.
+  const { data: fallbackSetting } = await admin
+    .from('app_settings').select('value').eq('key', 'look_video_fallback').maybeSingle();
+  const allowProductBlindFallback = fallbackSetting?.value === 'true';
   // If the platform is still set to a Seedance variant, respect the user's
   // fast/pro quality choice from gen.model; otherwise use the platform slug.
   const modelSlug = SEEDANCE_SLUGS.has(platformSlug)
@@ -634,7 +649,9 @@ async function handleRequest(req: Request): Promise<Response> {
     // face-cloning phrases that trigger ByteDance's content filter.
     taggedPrompt = [
       `Subject: ${faceTags}.`,
-      productClauses.length > 0 ? `Products: ${productClauses.join(', ')}.` : '',
+      productClauses.length > 0
+        ? `The subject must be visibly wearing ALL ${productClauses.length} of these items together in the same shot — do not omit or substitute any: ${productClauses.join('; ')}.`
+        : '',
       gen.prompt,
     ].filter(Boolean).join(' ');
   } else if (gen.style === 'commercial' && productsUsed.length > 0) {
@@ -681,12 +698,22 @@ async function handleRequest(req: Request): Promise<Response> {
   }
 
   // ── Veo fallback: if primary model fails, retry once with Veo Fast ────────
-  if ((submitResult.error || !submitResult.request_id) && !isVeo && modelSlug !== FALLBACK_VEO_SLUG) {
+  // The Veo Fast fallback is a product-BLIND, face-only animation — it renders
+  // the person in whatever they wore in the selfie, NOT the picked products.
+  // That's correct for a no-product "animate my photo" job, but for a try-on it
+  // silently produces the WRONG outfit. So we only fall back when there are no
+  // products, unless an operator explicitly opts in via the look_video_fallback
+  // dial. Otherwise the job fails loudly (below) and the shopper retries.
+  const primaryFailed = !!(submitResult.error || !submitResult.request_id);
+  const canFallback = !isVeo && modelSlug !== FALLBACK_VEO_SLUG;
+  const fallbackAllowed = productsUsed.length === 0 || allowProductBlindFallback;
+  if (primaryFailed && canFallback && fallbackAllowed) {
     await logEvent('fal_submit_fallback', {
       original_model: modelSlug,
       fallback_model: FALLBACK_VEO_SLUG,
       original_error: submitResult.error,
       original_raw_status: submitResult.raw_status,
+      product_count: productsUsed.length,
     });
     // Build a minimal Veo-compatible prompt — animate the first frame, don't describe a new character.
     const fallbackPrompt = `Animate this photo into a short cinematic video. Keep the person, outfit, and setting exactly as shown in the image — do not change their appearance or clothing. Smooth, photorealistic motion. Soft directional light, shallow depth of field. Magazine-quality fashion editorial. 9:16 portrait.`;
@@ -694,15 +721,30 @@ async function handleRequest(req: Request): Promise<Response> {
     if (!submitResult.error && submitResult.request_id) {
       effectiveModelSlug = FALLBACK_VEO_SLUG;
     }
+  } else if (primaryFailed && canFallback && !fallbackAllowed) {
+    // Deliberately NOT falling back: a product try-on would come back wrong.
+    await logEvent('fal_submit_fallback_skipped', {
+      reason: 'product_look_no_blind_fallback',
+      original_model: modelSlug,
+      original_error: submitResult.error,
+      original_raw_status: submitResult.raw_status,
+      product_count: productsUsed.length,
+    });
   }
 
   const { request_id, error: falError, raw_status, raw_body } = submitResult;
 
   if (falError || !request_id) {
+    // Shopper-facing copy stays friendly for a product try-on (the raw Fal
+    // error — e.g. an exhausted balance — is kept in error_raw for admins).
+    const friendly = productsUsed.length > 0
+      ? "Couldn't render your look right now — please try again in a moment."
+      : (falError || 'Fal submit produced no request_id');
     await admin.from('user_generations').update({
       status: 'failed',
-      error: falError || 'Fal submit produced no request_id',
+      error: friendly,
       error_code: 'fal_submit_error',
+      error_raw: falError || null,
       completed_at: new Date().toISOString(),
     }).eq('id', generationId);
     await logEvent('fal_submit_fail', {
