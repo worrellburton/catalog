@@ -885,6 +885,25 @@ export async function createGeneration(
   return { data: gen as UserGeneration, error: null };
 }
 
+/**
+ * Cancel an in-flight generation — the shopper hit Stop while it was
+ * rendering. Flips a still-running row to a terminal state so the poller
+ * stops and (best-effort) the Fal result isn't promoted later. Guarded to
+ * pending/generating so it never clobbers an already-finished row. Owner-gated
+ * by RLS; the caller also tracks cancellation client-side so the UI unblocks
+ * even if the write is denied. `completed_at` is set for stuck-row reconciler
+ * bookkeeping.
+ */
+export async function cancelGeneration(id: string): Promise<{ error: string | null }> {
+  if (!supabase) return { error: 'Supabase not configured' };
+  const { error } = await supabase
+    .from('user_generations')
+    .update({ status: 'failed', error: 'Canceled', error_code: 'canceled', completed_at: new Date().toISOString() })
+    .eq('id', id)
+    .in('status', ['pending', 'generating']);
+  return { error: error?.message ?? null };
+}
+
 export async function getGeneration(id: string): Promise<UserGeneration | null> {
   if (!supabase) return null;
   const { data, error } = await supabase

@@ -59,7 +59,7 @@ function applyPrefs(prev: StylePrefs, text: string): StylePrefs {
 import { getUserHeightAge, getUserCustomStyle, updateUserHeightAge, updateUserCustomStyle } from '~/services/profiles';
 import { getUserGender, updateUserGender, type UserGender } from '~/services/genders';
 import {
-  listUserUploads, getUserSlots, saveUserSlots, uploadUserPhoto, getGeneration,
+  listUserUploads, getUserSlots, saveUserSlots, uploadUserPhoto, getGeneration, cancelGeneration,
   type UserGeneration,
 } from '~/services/user-generations';
 import { promoteGenerationToLook } from '~/services/promote-generation';
@@ -371,6 +371,10 @@ export function StyleUpExperience({
   // Render polling: generation id → its latest row. Drives the on-you render
   // bubbles (spinner → video).
   const [renders, setRenders] = useState<Record<string, UserGeneration>>({});
+  // Generations the shopper hit Stop on. Tracked client-side so the UI unblocks
+  // and stops polling immediately, even if the DB cancel write is denied/slow
+  // (the poll would otherwise re-fetch 'generating' and revive it).
+  const [canceledIds, setCanceledIds] = useState<Set<string>>(new Set());
   const [renderError, setRenderError] = useState<string | null>(null);
   const [genLook, setGenLook] = useState(false);     // full-look render in flight
   const [published, setPublished] = useState<Set<string>>(new Set()); // gen ids added to looks
@@ -399,9 +403,20 @@ export function StyleUpExperience({
   // A render is in flight for this thread, used to block stacking renders.
   const pendingRender = messages.some(m => {
     if (m.kind !== 'render' || !m.renderGenerationId) return false;
+    if (canceledIds.has(m.renderGenerationId)) return false;
     const r = renders[m.renderGenerationId];
     return !r || (r.status !== 'done' && r.status !== 'failed');
   });
+
+  // Stop a render in flight. Mark it canceled locally (unblocks the composer +
+  // halts the poll at once) and fire a best-effort DB cancel so the Fal result
+  // isn't promoted later.
+  const cancelRender = useCallback((genId: string | null) => {
+    if (!genId) return;
+    setCanceledIds(prev => new Set(prev).add(genId));
+    setGenLook(false);
+    void cancelGeneration(genId);
+  }, []);
 
   const exit = useCallback(() => {
     // Back always lands on the /style landing (never dumps out to the app feed).
@@ -1008,6 +1023,7 @@ export function StyleUpExperience({
       .filter(m => m.kind === 'render' && m.renderGenerationId)
       .map(m => m.renderGenerationId as string);
     const pending = ids.filter(id => {
+      if (canceledIds.has(id)) return false;
       const r = renders[id];
       return !r || (r.status !== 'done' && r.status !== 'failed');
     });
@@ -1025,7 +1041,7 @@ export function StyleUpExperience({
     void tick();
     const h = window.setInterval(tick, 3000);
     return () => { cancelled = true; window.clearInterval(h); };
-  }, [messages, renders]);
+  }, [messages, renders, canceledIds]);
 
   // 1s heartbeat while any render is in-flight so the ETA countdown ticks down.
   useEffect(() => {
@@ -1529,8 +1545,9 @@ export function StyleUpExperience({
               const p = m.productRef;
               const pieces = p?.pieces ?? [];
               const done = r?.status === 'done' && r.video_url;
+              const canceled = m.renderGenerationId ? canceledIds.has(m.renderGenerationId) : false;
               const failed = r?.status === 'failed';
-              const prog = !done && !failed
+              const prog = !done && !failed && !canceled
                 ? generationProgress(r?.created_at ?? m.createdAt, r?.duration_seconds ?? 10)
                 : null;
               return (
@@ -1548,6 +1565,8 @@ export function StyleUpExperience({
                           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
                         </span>
                       </button>
+                    ) : canceled ? (
+                      <div className="su-render-status su-render-status--failed">Canceled.</div>
                     ) : failed ? (
                       <div className="su-render-status su-render-status--failed">Couldn&apos;t render that look, try another piece.</div>
                     ) : (
@@ -1558,6 +1577,14 @@ export function StyleUpExperience({
                             {prog?.phase ?? 'Putting your look together…'}
                             <span className="su-render-eta">{fmtRemaining(prog?.remainingSec ?? 0)}</span>
                           </span>
+                          <button
+                            type="button"
+                            className="su-render-stop"
+                            onClick={() => cancelRender(m.renderGenerationId)}
+                            aria-label="Stop generating"
+                          >
+                            Stop
+                          </button>
                         </div>
                         {/* Measuring-tape progress — a real fill, not just a spinner. */}
                         <div className="su-tape" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(prog?.pct ?? 0)}>

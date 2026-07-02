@@ -567,6 +567,20 @@ async function renderLook(
     lines = lines.filter(l => (seen.has(l.product_id) ? false : (seen.add(l.product_id), true)));
   }
 
+  // One piece per single-garment slot — a look with two shoes (or two tops)
+  // is never intended and the video model can't wear both. The client's
+  // one-per-slot collapse misses items whose NAME lacks a garment word (e.g.
+  // "Grand Crosscourt Tennis" → no "shoe"/"sneaker"), but here we have the
+  // governed `type`, so it's reliable. Keep the LAST pick per slot (the most
+  // recent = the one the shopper just swapped to). Accessory/Jewelry/Bag can
+  // legitimately repeat, so they're left alone.
+  {
+    const SINGLE = new Set(['Top', 'Pants', 'Dress', 'Shoes', 'Jacket', 'Hat']);
+    const lastIdx = new Map<string, number>();
+    lines.forEach((l, i) => { if (l.roleTag && SINGLE.has(l.roleTag)) lastIdx.set(l.roleTag, i); });
+    lines = lines.filter((l, i) => !(l.roleTag && SINGLE.has(l.roleTag)) || lastIdx.get(l.roleTag) === i);
+  }
+
   let prompt = buildGenerationPrompt({
     heightLabel: ha.heightLabel ?? '',
     weightLabel: ha.weightLabel,
