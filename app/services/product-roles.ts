@@ -104,8 +104,17 @@ export function roleForProduct(
   name: string | null | undefined,
 ): string | null {
   const fromType = roleTagFromType(type);
+  const fromName = roleTagFromName(name ?? null);
+  // Governed type usually wins (curated, and deliberately null for non-garments).
+  // BUT when type maps to one garment slot and the NAME clearly maps to a
+  // DIFFERENT garment slot, the name wins — governed types are occasionally
+  // mis-set (e.g. a "Camp Collar Shirt" stored as 'shorts' → Pants, which then
+  // collides with the real pants and gets dropped). An explicit garment noun in
+  // the name beats a mislabelled type. This never promotes a non-garment
+  // (fromType === null) into a slot.
+  if (fromType && fromName && fromType !== fromName) return fromName;
   if (fromType !== undefined) return fromType;
-  return roleTagFromName(name ?? null);
+  return fromName;
 }
 
 // Order matters: the FIRST pattern that matches wins, so the most specific /
