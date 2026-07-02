@@ -204,6 +204,27 @@ function autoScene(occasion: string | null | undefined, msgs: StyleUpMessage[]):
   return OCCASION_SCENE[key] ?? 'a clean studio';
 }
 
+// The scene chooser's variable slots: a fresh fun spot when nothing smarter is
+// known, and a wild card that changes every time.
+const FUN_SCENES = ['a sunny park', 'a rooftop at golden hour', 'a city street at night', 'a minimalist loft', 'an art gallery', 'a boardwalk by the sea', 'a sidewalk café in Paris'];
+const WILD_SCENES = ['a neon Tokyo alley in the rain', 'the surface of Mars', 'a 1970s disco', 'backstage at a runway show', 'a snowy mountain peak', 'an underwater glass tunnel', 'a desert at sunset'];
+
+/** The four scene options: Studio, Outdoor coffee shop, the smart suggestion
+ *  (the place they named in chat, or the occasion's backdrop, else a fresh fun
+ *  spot), and something wild. */
+function sceneOptions(smart: string | null): Array<{ value: string; label: string }> {
+  const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+  const fun = FUN_SCENES[Math.floor(Math.random() * FUN_SCENES.length)];
+  const third = smart && !/clean studio|coffee shop/i.test(smart) ? smart : fun;
+  const wild = WILD_SCENES[Math.floor(Math.random() * WILD_SCENES.length)];
+  return [
+    { value: 'a clean studio', label: 'Studio' },
+    { value: 'an outdoor coffee shop', label: 'Outdoor coffee shop' },
+    { value: third, label: cap(third) },
+    { value: wild, label: `${cap(wild)} 🤯` },
+  ];
+}
+
 // Scene-ish places the shopper mentioned in chat ("a beach in Italy", "rooftop
 // bar") — the most recent mention becomes one of the scene options, so the
 // setting they were already picturing is one tap away.
@@ -553,6 +574,15 @@ export function StyleUpExperience({
     setMyThreads(await fetchMyThreads(userId));
   }, [userId]);
 
+  // While the conversations list is on screen, keep it live — the glowing
+  // "working" state (a hunt or render cooking in a thread) appears and clears
+  // without a manual refresh.
+  useEffect(() => {
+    if (!userId || threadId || pickerOpen) return;
+    const h = window.setInterval(() => { void loadThreads(); }, 6000);
+    return () => window.clearInterval(h);
+  }, [userId, threadId, pickerOpen, loadThreads]);
+
   const closeThread = useCallback(() => {
     if (threadId) markThreadSeen(threadId); // leaving marks everything read
     setThreadId(null);
@@ -854,24 +884,37 @@ export function StyleUpExperience({
     await askOutfitSlots();
   }, [threadId, userId, pendingRender, lookPicks, chosenBySlot, askOutfitSlots, beat]);
 
-  // Kick a full-look render. The setting is auto-derived from the scenario/
-  // occasion (see autoScene) instead of prompting "where do you want to be
-  // seen?" every time — the shopper can still steer it by naming a place in
-  // chat ("put me on a rooftop"). Keeps the name askScene so callers are
-  // unchanged. Renders the exact pieces passed (the look card's Generate
-  // button passes EVERY piece); otherwise assembleLook() (one-per-slot).
+  // The exact pieces to render once the scene is picked — set by the look
+  // card's Generate button so EVERY piece on that card goes into the render.
+  const lookToGenerateRef = useRef<StyleUpProductRef[] | null>(null);
+
+  // Before a render: ALWAYS ask where they want to be seen. The smart option
+  // (the place they named in chat, or the occasion's backdrop via autoScene)
+  // is one tap away among Studio / coffee shop / wild. The pick echoes back as
+  // the shopper's own right-side reply (chooseWithEcho), then renders.
   const askScene = useCallback(async (pieces?: StyleUpProductRef[]) => {
     if (!threadId || !userId) return;
     if (pendingRender) { setRenderError('Still finishing your last look, one sec.'); return; }
-    const toRender = pieces && pieces.length > 0 ? pieces : assembleLook();
-    if (toRender.length === 0) { void triggerStylist(); return; }
-    const scene = autoScene(prefsRef.current.occasion, messages);
-    setChosenScene(scene);
-    await generateFullLook(toRender, scene);
-  }, [threadId, userId, pendingRender, assembleLook, triggerStylist, messages, generateFullLook]);
+    lookToGenerateRef.current = pieces && pieces.length > 0 ? pieces : null;
+    if (!lookToGenerateRef.current && assembleLook().length === 0) { void triggerStylist(); return; }
+    const smart = autoScene(prefsRef.current.occasion, messages);
+    await beat();
+    await sendStylistText(threadId, 'Where do you want to be seen in this look?');
+    await sendChooser(threadId, { kind: 'scene', prompt: 'Pick your setting', multi: false, options: sceneOptions(smart) });
+  }, [threadId, userId, pendingRender, assembleLook, triggerStylist, messages, beat]);
 
   const onChoose = useCallback(async (kind: string, values: string[]) => {
     if (!threadId || !userId) return;
+    if (kind === 'scene') {
+      const scene = values[0];
+      setChosenScene(scene);
+      // Render the exact pieces from the card that opened this chooser when we
+      // have them; assembleLook() (one-per-slot) only backstops text triggers.
+      const pieces = lookToGenerateRef.current ?? assembleLook();
+      lookToGenerateRef.current = null;
+      await generateFullLook(pieces, scene);
+      return;
+    }
     if (kind === 'shoes') {
       const id = values[0];
       setChosenBySlot(prev => ({ ...prev, Shoes: id }));
@@ -1371,6 +1414,18 @@ export function StyleUpExperience({
     if (messages.length === 0 || sending || stylistTyping || !!huntView || genLook || pendingRender) return [] as string[];
     const last = messages[messages.length - 1];
     if (last.kind === 'product' && (last.productRef?.choose || last.productRef?.swap)) return []; // a chooser is waiting
+    // The stylist asked a question → offer tap-to-answer suggestions matched to
+    // what they're asking (typing a manual answer always stays available).
+    if (isTextBubble(last) && last.sender === 'stylist' && /\?\s*$/.test(last.body ?? '')) {
+      const q = (last.body ?? '').toLowerCase();
+      if (/\b(day|daytime)\b[\s\S]*\b(evening|night)\b|\b(evening|night)\b[\s\S]*\b(day|daytime)\b/.test(q)) return ['Daytime', 'Evening'];
+      if (/\bcasual\b[\s\S]*\b(dress|formal|elevated|fancy)|\b(dress|formal|elevated|fancy)[\s\S]*\bcasual\b/.test(q)) return ['Keep it casual', 'Dressier'];
+      if (/budget|spend|price range/.test(q)) return ['Under $100', 'Under $250', 'No budget'];
+      if (/colou?r/.test(q)) return ['Neutrals', 'Something bold'];
+      if (/indoor|outdoor/.test(q)) return ['Indoors', 'Outdoors'];
+      if (/occasion|what('| i)s it for|where are (you|we)|what.*vibe/.test(q)) return ['Date night', 'Work', 'A trip', 'Just everyday'];
+      return ['Casual vibe', 'Dressy vibe', 'Surprise me'];
+    }
     const recent = messages.slice(-4);
     const sawRender = recent.some(x => x.kind === 'render');
     const sawPicks = recent.some(x => x.kind === 'product' && x.productRef?.id && !x.productRef.swap && !x.productRef.choose);
@@ -1773,7 +1828,7 @@ export function StyleUpExperience({
               </button>
               <button
                 type="button"
-                className={`su-convo-card${swipedId === t.threadId ? ' is-swiped' : ''}`}
+                className={`su-convo-card${swipedId === t.threadId ? ' is-swiped' : ''}${t.working ? ' su-convo-card--working' : ''}`}
                 style={{ ['--su-accent' as string]: t.stylist.accentColor ?? '#8aa0c0' }}
                 onTouchStart={e => { swipeStartX.current = e.touches[0].clientX; swipeDX.current = 0; }}
                 onTouchMove={e => {
@@ -1798,7 +1853,9 @@ export function StyleUpExperience({
                     <span className="su-stylist-name">{t.stylist.name}</span>
                     <span className="su-convo-time">{relativeTime(t.lastMessageAt)}</span>
                   </span>
-                  {t.lastMessage && <span className="su-convo-preview">{t.lastMessage}</span>}
+                  {t.working
+                    ? <span className="su-convo-preview su-convo-preview--working">Working on your look…</span>
+                    : t.lastMessage && <span className="su-convo-preview">{t.lastMessage}</span>}
                 </span>
                 {threadHasNews(t) && <span className="su-convo-dot" aria-label="New message" />}
               </button>
