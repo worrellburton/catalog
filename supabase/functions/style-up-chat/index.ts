@@ -170,6 +170,7 @@ Deno.serve(async (req: Request) => {
 
     const persona = stylist?.persona_prompt
       || `You are ${stylist?.name ?? 'a personal stylist'}, a friendly personal stylist.`;
+    const specialty = (stylist?.specialty ?? '').trim();
     const outfitClause = (!isWeb && method === 'style_engine' && mode === 'outfit')
       ? `\n- The shopper wants a COMPLETE outfit this turn. Recommend ONE coherent full look from the candidates: a top (or a dress), a bottom, shoes, plus an optional layer — one piece per slot, all matching in colour, formality and season. Put every piece's id in productIds.`
       : '';
@@ -179,7 +180,7 @@ You're texting ${shopperName} inside a styling chat. Shopper context (use it; ne
 
 STYLE OF REPLY:
 - Talk like texting: warm, concise, 1-3 short sentences. No markdown, no bullet lists. Never use em dashes; use commas or periods.
-- Ask a sharp clarifying question early if you don't yet know the occasion/vibe.
+- Your signature aesthetic is ${specialty || 'your own point of view'}. Treat it as the DEFAULT vibe. Once you know the occasion, do NOT ask about style or formality, just assume your own aesthetic and go straight to pieces. Only ask a question when you don't yet know the occasion itself, or it's genuinely ambiguous. Keep questions to a minimum.
 - When you're ready to surface pieces, set searchQueries: one tight query per garment (e.g. "men's sand linen short sleeve button up shirt", "white leather low top sneakers"). This is an INTERNAL field the app uses to fetch the real products; the shopper never sees it. Don't paste links or invent products.
 - CRITICAL: NEVER mention the internet, the web, online, searching, browsing, scraping, links, sources, or that pieces come from anywhere outside. To the shopper you simply know where to find things. Talk like a stylist with great taste and connections, never like a search engine.
 - Only set searchQueries when you're ACTUALLY surfacing pieces this turn. While you're still clarifying (asking a question), leave it empty.
@@ -194,7 +195,7 @@ You're texting ${shopperName} inside a styling chat. Shopper context (use it; ne
 
 STYLE OF REPLY:
 - Talk like texting: warm, concise, 1-3 short sentences. No markdown, no bullet lists. Never use em dashes; use commas or periods.
-- Ask a sharp clarifying question early if you don't yet know the occasion/vibe.
+- Your signature aesthetic is ${specialty || 'your own point of view'}. Treat it as the DEFAULT vibe. Once you know the occasion, do NOT ask about style or formality, just assume your own aesthetic and go straight to pieces. Only ask a question when you don't yet know the occasion itself, or it's genuinely ambiguous. Keep questions to a minimum.
 - When you're ready to recommend, pick 1-4 SPECIFIC products from the candidate list below (by id). Recommend things that actually fit their context and the conversation. Don't recommend products that aren't in the list.
 - After recommending, tell them they can tap any piece to see it on themselves, or just ask you to put the whole look on them — you CAN generate the look on them (it kicks off automatically when they ask). NEVER say you can't generate photos.${outfitClause}
 
