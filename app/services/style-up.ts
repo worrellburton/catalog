@@ -150,6 +150,48 @@ export async function deleteThread(threadId: string): Promise<boolean> {
   return !error;
 }
 
+/** Full product detail for the in-chat product pop-up: gallery, description,
+ *  shop link. Falls back gracefully when enrichment is sparse. */
+export interface StyleUpProductDetail {
+  id: string;
+  name: string | null;
+  brand: string | null;
+  price: string | null;
+  description: string | null;
+  images: string[];
+  url: string | null;
+}
+
+export async function fetchProductDetail(productId: string): Promise<StyleUpProductDetail | null> {
+  if (!supabase) return null;
+  const { data } = await supabase
+    .from('products')
+    .select('id, name, display_name, brand, price, description, image_url, primary_image_url, images, url')
+    .eq('id', productId)
+    .maybeSingle();
+  if (!data) return null;
+  const r = data as Record<string, unknown>;
+  const gallery: string[] = [];
+  const push = (u: unknown) => { if (typeof u === 'string' && u && !gallery.includes(u)) gallery.push(u); };
+  push(r.primary_image_url);
+  push(r.image_url);
+  if (Array.isArray(r.images)) {
+    for (const it of r.images as unknown[]) {
+      if (typeof it === 'string') push(it);
+      else if (it && typeof it === 'object') push((it as Record<string, unknown>).url ?? (it as Record<string, unknown>).src);
+    }
+  }
+  return {
+    id: String(r.id),
+    name: (r.display_name as string | null) || (r.name as string | null) || null,
+    brand: (r.brand as string | null) ?? null,
+    price: (r.price as string | null) ?? null,
+    description: (r.description as string | null) ?? null,
+    images: gallery.slice(0, 8),
+    url: (r.url as string | null) ?? null,
+  };
+}
+
 /** The thread's server-side "web hunt in progress" marker (a future timestamp
  *  while the edge function is still pulling pieces, else null/past). Drives the
  *  working indicator so it survives refresh/navigation. */
