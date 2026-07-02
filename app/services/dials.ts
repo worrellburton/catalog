@@ -29,6 +29,22 @@ async function readDial(key: string): Promise<string | null> {
   return value;
 }
 
+/** Generic realtime subscription for one app_settings key. The callback
+ *  receives the raw string value (or null when the row is deleted/missing);
+ *  callers map it to their typed shape. Returns the unsubscribe fn. */
+function subscribeDial(key: string, onRaw: (raw: string | null) => void): () => void {
+  if (!supabase) return () => {};
+  const channel = supabase
+    .channel(`dials:${key}`)
+    .on(
+      'postgres_changes',
+      { event: '*', schema: 'public', table: 'app_settings', filter: `key=eq.${key}` },
+      (payload) => onRaw((payload.new as { value?: string } | null)?.value ?? null),
+    )
+    .subscribe();
+  return () => { void supabase!.removeChannel(channel); };
+}
+
 /**
  * Global tuning dials backed by app_settings (text key/value).
  * Phase 2 of the /admin/dials buildout — adds the read/write API
@@ -426,6 +442,97 @@ export function subscribeStylistEngineMethod(onChange: (v: StylistEngineMethod) 
     )
     .subscribe();
   return () => { void supabase!.removeChannel(channel); };
+}
+
+// ────────────────────────────────────────────────────────────────────
+// Look generation — the /style "see it on me" try-on VIDEO render.
+// Four dials, all consumed by the render path:
+//   look_video_model    → which Fal video model powers the render.
+//                         Read SERVER-SIDE by the generate-look edge fn.
+//   look_video_quality  → 'fast' | 'pro' Seedance tier (client → gen.model;
+//                         edge fn only applies it when the model is Seedance).
+//   look_video_duration → clip length in seconds (client → gen.duration).
+//   look_video_fallback → when a PRODUCT look fails to submit, allow the
+//                         product-BLIND Veo face-only fallback. Default false
+//                         = fail loudly, so a failed render never silently
+//                         returns the user in their own clothes with none of
+//                         the picked products. Read SERVER-SIDE by generate-look.
+// ────────────────────────────────────────────────────────────────────
+
+export const LOOK_VIDEO_MODEL_KEY = 'look_video_model';
+// Seedance-2 fast reference-to-video conditions on the product packshots
+// (Veo image-to-video does NOT — it only sees the selfie), so it's the safe
+// default for a try-on. Matches the edge fn's own fallback default.
+export const DEFAULT_LOOK_VIDEO_MODEL = 'bytedance/seedance-2.0/fast/reference-to-video';
+
+export async function getLookVideoModel(): Promise<string> {
+  return (await readDial(LOOK_VIDEO_MODEL_KEY)) || DEFAULT_LOOK_VIDEO_MODEL;
+}
+export async function setLookVideoModel(value: string): Promise<void> {
+  if (!supabase) throw new Error('Supabase not configured');
+  const { error } = await supabase
+    .from('app_settings').upsert({ key: LOOK_VIDEO_MODEL_KEY, value }, { onConflict: 'key' });
+  if (error) throw error;
+}
+export function subscribeLookVideoModel(onChange: (v: string) => void): () => void {
+  return subscribeDial(LOOK_VIDEO_MODEL_KEY, raw => onChange(raw || DEFAULT_LOOK_VIDEO_MODEL));
+}
+
+export const LOOK_VIDEO_QUALITY_KEY = 'look_video_quality';
+export type LookVideoQuality = 'fast' | 'pro';
+export const DEFAULT_LOOK_VIDEO_QUALITY: LookVideoQuality = 'pro';
+export function parseLookQuality(raw: string | null | undefined): LookVideoQuality {
+  return raw === 'fast' ? 'fast' : DEFAULT_LOOK_VIDEO_QUALITY;
+}
+export async function getLookVideoQuality(): Promise<LookVideoQuality> {
+  return parseLookQuality(await readDial(LOOK_VIDEO_QUALITY_KEY));
+}
+export async function setLookVideoQuality(value: LookVideoQuality): Promise<void> {
+  if (!supabase) throw new Error('Supabase not configured');
+  const { error } = await supabase
+    .from('app_settings').upsert({ key: LOOK_VIDEO_QUALITY_KEY, value }, { onConflict: 'key' });
+  if (error) throw error;
+}
+export function subscribeLookVideoQuality(onChange: (v: LookVideoQuality) => void): () => void {
+  return subscribeDial(LOOK_VIDEO_QUALITY_KEY, raw => onChange(parseLookQuality(raw)));
+}
+
+export const LOOK_VIDEO_DURATION_KEY = 'look_video_duration';
+export const DEFAULT_LOOK_VIDEO_DURATION = 10;
+export const LOOK_VIDEO_DURATION_MIN = 4;
+export const LOOK_VIDEO_DURATION_MAX = 12;
+export function parseLookDuration(raw: string | null | undefined): number {
+  const n = parseInt(raw ?? '', 10);
+  if (!Number.isFinite(n)) return DEFAULT_LOOK_VIDEO_DURATION;
+  return Math.max(LOOK_VIDEO_DURATION_MIN, Math.min(LOOK_VIDEO_DURATION_MAX, n));
+}
+export async function getLookVideoDuration(): Promise<number> {
+  return parseLookDuration(await readDial(LOOK_VIDEO_DURATION_KEY));
+}
+export async function setLookVideoDuration(value: number): Promise<void> {
+  if (!supabase) throw new Error('Supabase not configured');
+  const clamped = Math.max(LOOK_VIDEO_DURATION_MIN, Math.min(LOOK_VIDEO_DURATION_MAX, Math.round(value)));
+  const { error } = await supabase
+    .from('app_settings').upsert({ key: LOOK_VIDEO_DURATION_KEY, value: String(clamped) }, { onConflict: 'key' });
+  if (error) throw error;
+}
+export function subscribeLookVideoDuration(onChange: (v: number) => void): () => void {
+  return subscribeDial(LOOK_VIDEO_DURATION_KEY, raw => onChange(parseLookDuration(raw)));
+}
+
+export const LOOK_VIDEO_FALLBACK_KEY = 'look_video_fallback';
+export const DEFAULT_LOOK_VIDEO_FALLBACK = false;
+export async function getLookVideoFallback(): Promise<boolean> {
+  return (await readDial(LOOK_VIDEO_FALLBACK_KEY)) === 'true';
+}
+export async function setLookVideoFallback(value: boolean): Promise<void> {
+  if (!supabase) throw new Error('Supabase not configured');
+  const { error } = await supabase
+    .from('app_settings').upsert({ key: LOOK_VIDEO_FALLBACK_KEY, value: String(value) }, { onConflict: 'key' });
+  if (error) throw error;
+}
+export function subscribeLookVideoFallback(onChange: (v: boolean) => void): () => void {
+  return subscribeDial(LOOK_VIDEO_FALLBACK_KEY, raw => onChange(raw === 'true'));
 }
 
 // ────────────────────────────────────────────────────────────────────

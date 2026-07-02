@@ -10,6 +10,7 @@ import { getUserHeightAge, getUserCustomStyle } from '~/services/profiles';
 import { getUserGender } from '~/services/genders';
 import { getUserSlots, createGeneration, buildGenerationPrompt } from '~/services/user-generations';
 import { roleForProduct } from '~/services/product-roles';
+import { getLookVideoQuality, getLookVideoDuration } from '~/services/dials';
 import type { StylistEngineMethod } from '~/services/dials';
 
 export interface StyleUpStylist {
@@ -521,11 +522,13 @@ async function renderLook(
     return { generationId: null, error: "These picks can't be rendered yet." };
   }
 
-  const [ha, gender, customStyle, slots] = await Promise.all([
+  const [ha, gender, customStyle, slots, quality, duration] = await Promise.all([
     getUserHeightAge(shopperUserId),
     getUserGender(shopperUserId),
     getUserCustomStyle(shopperUserId),
     getUserSlots(shopperUserId, MAX_REF_PHOTOS),
+    getLookVideoQuality(),   // admin dial: 'fast' | 'pro' Seedance tier
+    getLookVideoDuration(),  // admin dial: clip length in seconds
   ]);
   const uploadIds = slots.filter((x): x is string => !!x);
   if (uploadIds.length === 0) {
@@ -572,7 +575,7 @@ async function renderLook(
     customStyle,
     gender,
     productLines: lines.map(l => ({ role_tag: l.roleTag, brand: l.brand, name: l.name })),
-    durationSeconds: 10,
+    durationSeconds: duration,
   });
   // Scene/setting the shopper chose ("clean studio", "rooftop at golden hour"…).
   if (scene && scene.trim()) prompt += `\n\nSetting: ${scene.trim()}. Place the subject naturally in this environment.`;
@@ -587,8 +590,8 @@ async function renderLook(
     weightLabel: ha.weightLabel,
     style: 'editorial',
     prompt,
-    durationSeconds: 10,
-    model: 'pro',
+    durationSeconds: duration,
+    model: quality,
   });
   if (error || !gen) return { generationId: null, error: error ?? 'Render failed to start' };
 

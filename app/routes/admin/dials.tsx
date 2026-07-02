@@ -41,11 +41,32 @@ import {
   subscribeStylistEngineMethod,
   DEFAULT_STYLIST_ENGINE_METHOD,
   type StylistEngineMethod,
+  getLookVideoModel,
+  setLookVideoModel,
+  subscribeLookVideoModel,
+  DEFAULT_LOOK_VIDEO_MODEL,
+  getLookVideoQuality,
+  setLookVideoQuality,
+  subscribeLookVideoQuality,
+  DEFAULT_LOOK_VIDEO_QUALITY,
+  type LookVideoQuality,
+  getLookVideoDuration,
+  setLookVideoDuration,
+  subscribeLookVideoDuration,
+  DEFAULT_LOOK_VIDEO_DURATION,
+  LOOK_VIDEO_DURATION_MIN,
+  LOOK_VIDEO_DURATION_MAX,
+  getLookVideoFallback,
+  setLookVideoFallback,
+  subscribeLookVideoFallback,
 } from '~/services/dials';
 import { backfillBrandLogos, type BackfillResult } from '~/services/brandLogos';
 import { shouldBeVideo } from '~/utils/videoStillSplit';
 import VideoPipelineCard from '~/components/admin/VideoPipelineCard';
 import { Skeleton } from '~/components/ui/StateViews';
+import { VIDEO_MODELS } from '~/constants/video-models';
+import { PRICING_BY_SLUG } from '~/constants/video-model-pricing';
+import { supabase } from '~/utils/supabase';
 
 /**
  * /admin/dials — global tuning knobs that affect the whole catalog
@@ -273,6 +294,65 @@ export default function AdminDials() {
         if (inflightStylistMethod.current === next) inflightStylistMethod.current = null;
       });
   };
+
+  // ── Look generation ("see it on me" try-on video) ───────────────────
+  const [lookModel, setLookModel] = useState<string>(DEFAULT_LOOK_VIDEO_MODEL);
+  const [lookQuality, setLookQuality] = useState<LookVideoQuality>(DEFAULT_LOOK_VIDEO_QUALITY);
+  const [lookDuration, setLookDuration] = useState<number>(DEFAULT_LOOK_VIDEO_DURATION);
+  const [lookFallback, setLookFallback] = useState<boolean>(false);
+  const [lookLoaded, setLookLoaded] = useState(false);
+  const [lookSaving, setLookSaving] = useState(false);
+  const [lookCount, setLookCount] = useState<number | null>(null);
+  useEffect(() => {
+    Promise.all([
+      getLookVideoModel(), getLookVideoQuality(), getLookVideoDuration(), getLookVideoFallback(),
+    ]).then(([m, q, d, f]) => {
+      setLookModel(m); setLookQuality(q); setLookDuration(d); setLookFallback(f);
+      setLookLoaded(true);
+    });
+    const unsubs = [
+      subscribeLookVideoModel(setLookModel),
+      subscribeLookVideoQuality(setLookQuality),
+      subscribeLookVideoDuration(setLookDuration),
+      subscribeLookVideoFallback(setLookFallback),
+    ];
+    // Rough running spend estimate = how many looks have been generated so far.
+    if (supabase) {
+      void supabase.from('user_generations').select('id', { count: 'exact', head: true })
+        .then(({ count }) => setLookCount(count ?? 0));
+    }
+    return () => unsubs.forEach(u => u());
+  }, []);
+  const saveLook = (fn: () => Promise<void>) => {
+    setLookSaving(true);
+    fn().catch(() => {}).finally(() => setLookSaving(false));
+  };
+  const onSetLookModel = (v: string) => { setLookModel(v); saveLook(() => setLookVideoModel(v)); };
+  const onSetLookQuality = (v: LookVideoQuality) => { setLookQuality(v); saveLook(() => setLookVideoQuality(v)); };
+  const onSetLookDuration = (v: number) => { setLookDuration(v); saveLook(() => setLookVideoDuration(v)); };
+  const onSetLookFallback = (v: boolean) => { setLookFallback(v); saveLook(() => setLookVideoFallback(v)); };
+  // A Seedance model's fast/pro tier is chosen by the quality dial at submit
+  // time, so the cost estimate reflects the tier the render will actually use.
+  const effectiveLookSlug = useMemo(() => {
+    if (lookModel.startsWith('seedance') || lookModel.startsWith('bytedance/seedance')) {
+      return lookQuality === 'pro'
+        ? 'bytedance/seedance-2.0/reference-to-video'
+        : 'bytedance/seedance-2.0/fast/reference-to-video';
+    }
+    return lookModel;
+  }, [lookModel, lookQuality]);
+  const lookCostPer = PRICING_BY_SLUG[effectiveLookSlug]?.costUsd ?? null;
+  // Usable models only, grouped by provider for the <select>.
+  const lookModelGroups = useMemo(() => {
+    const groups = new Map<string, { value: string; label: string }[]>();
+    for (const m of VIDEO_MODELS) {
+      if (!m.usable) continue;
+      const arr = groups.get(m.group) ?? [];
+      arr.push({ value: m.value, label: m.label });
+      groups.set(m.group, arr);
+    }
+    return Array.from(groups.entries());
+  }, []);
 
   // ── UI on scroll (card chrome fade) ─────────────────────────────────
   // When ON, card chrome fades out while scrolling and eases back when the
@@ -932,6 +1012,89 @@ export default function AdminDials() {
                 ))}
               </div>
               <span style={{ fontSize: 11, color: '#999' }}>{stylistMethodSaving ? 'Saving…' : 'Saved'}</span>
+            </div>
+          )}
+        </div>
+
+        <div className="admin-detail-card">
+          <h3>Look generation <span style={{ fontSize: 11, fontWeight: 500, color: '#6b7280', marginLeft: 6 }}>&ldquo;see it on me&rdquo;</span></h3>
+          <p style={{ fontSize: 13, color: '#888', margin: '4px 0 16px' }}>
+            The video model that renders a shopper wearing their picks in the /style
+            try-on. <b>Reference-to-video</b> models (Seedance, Vidu) see the product
+            packshots; Veo image-to-video only sees the selfie, so it can&rsquo;t place
+            the products — pick a reference model for accurate try-ons.
+          </p>
+          {!lookLoaded ? (
+            <Skeleton height={220} radius={8} />
+          ) : (
+            <div style={{ display: 'grid', gap: 16 }}>
+              {/* Model picker */}
+              <label style={{ display: 'grid', gap: 6 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>Model</span>
+                <select
+                  value={lookModel}
+                  onChange={e => onSetLookModel(e.target.value)}
+                  style={{ padding: '8px 10px', fontSize: 13, border: '1px solid #e5e7eb', borderRadius: 8, background: '#fff' }}
+                >
+                  {lookModelGroups.map(([group, opts]) => (
+                    <optgroup key={group} label={group}>
+                      {opts.map(o => <option key={o.value} value={o.value}>{o.label}</option>)}
+                    </optgroup>
+                  ))}
+                </select>
+              </label>
+
+              {/* Quality tier (Seedance fast/pro) */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>Quality (Seedance tier)</span>
+                <div style={{ display: 'inline-flex', border: '1px solid #e5e7eb', borderRadius: 8, overflow: 'hidden' }}>
+                  {(['fast', 'pro'] as const).map(opt => (
+                    <button key={opt} type="button" onClick={() => onSetLookQuality(opt)}
+                      style={{ padding: '8px 16px', fontSize: 13, fontWeight: 600, border: 'none', cursor: 'pointer',
+                        background: lookQuality === opt ? '#111' : '#fff', color: lookQuality === opt ? '#fff' : '#555' }}>
+                      {opt === 'fast' ? 'Fast' : 'Pro'}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Clip length */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
+                <span style={{ fontSize: 12, fontWeight: 600, color: '#374151' }}>Clip length</span>
+                <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+                  <input type="range" min={LOOK_VIDEO_DURATION_MIN} max={LOOK_VIDEO_DURATION_MAX} step={1}
+                    value={lookDuration} onChange={e => onSetLookDuration(parseInt(e.target.value, 10))} />
+                  <span style={{ fontSize: 13, fontWeight: 600, minWidth: 34, textAlign: 'right' }}>{lookDuration}s</span>
+                </div>
+              </div>
+
+              {/* Fallback toggle */}
+              <div style={{ display: 'flex', alignItems: 'flex-start', justifyContent: 'space-between', gap: 16 }}>
+                <span style={{ fontSize: 12, color: '#374151', maxWidth: 380, lineHeight: 1.4 }}>
+                  <b>Allow face-only fallback</b> — when a product look can&rsquo;t render, animate the
+                  selfie instead of failing. <span style={{ color: '#b45309' }}>Keep off: the fallback drops
+                  the products and shows the shopper in their own clothes.</span>
+                </span>
+                <button type="button" onClick={() => onSetLookFallback(!lookFallback)}
+                  style={{ padding: '8px 16px', fontSize: 13, fontWeight: 600, border: '1px solid #e5e7eb', borderRadius: 8, cursor: 'pointer', flexShrink: 0,
+                    background: lookFallback ? '#111' : '#fff', color: lookFallback ? '#fff' : '#555' }}>
+                  {lookFallback ? 'On' : 'Off'}
+                </button>
+              </div>
+
+              {/* Cost */}
+              <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', borderTop: '1px solid #f0f0f0', paddingTop: 12, fontSize: 12, color: '#6b7280' }}>
+                <span>
+                  {lookCostPer != null ? (
+                    <>Est. <b style={{ color: '#111' }}>${lookCostPer.toFixed(2)}</b> per look
+                      {lookCount != null && lookCount > 0 && (
+                        <> · ~<b style={{ color: '#111' }}>${(lookCostPer * lookCount).toFixed(2)}</b> across {lookCount.toLocaleString()} generated</>
+                      )}
+                    </>
+                  ) : 'No list price on file for this model'}
+                </span>
+                <span style={{ fontSize: 11, color: '#999' }}>{lookSaving ? 'Saving…' : 'Saved'}</span>
+              </div>
             </div>
           )}
         </div>

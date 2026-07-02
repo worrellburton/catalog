@@ -180,25 +180,28 @@ function sortHeadToToe(pieces: StyleUpProductRef[]): StyleUpProductRef[] {
     (SLOT_ORDER[roleTagFromName(a.name ?? null) ?? ''] ?? 9) - (SLOT_ORDER[roleTagFromName(b.name ?? null) ?? ''] ?? 9));
 }
 
-// Scene options for "where do you want to be seen?", Clean studio is always
-// first, then two fun spots, and the 4th is always a little wild.
-const FUN_SCENES = ['a cozy coffee shop', 'a rooftop at golden hour', 'a city street at night', 'a sunny park', 'a minimalist loft', 'an art gallery', 'a jazz bar', 'a boardwalk by the sea', 'a sidewalk café in Paris'];
-const WILD_SCENES = ['a neon Tokyo alley in the rain', 'the surface of Mars', 'a 1970s disco', 'backstage at a runway show', 'a snowy mountain peak', 'an underwater glass tunnel', 'a desert at sunset'];
-function sceneOptions(context?: string | null): Array<{ value: string; label: string }> {
-  const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-  // 1) Studio, 2) Outdoor coffee shop (both fixed), 3) the place the shopper
-  // actually mentioned in chat when we have one ("a beach in Italy"), else a
-  // fresh spot each time, 4) something wild.
-  const fun = FUN_SCENES.filter(s => !s.includes('coffee')).sort(() => Math.random() - 0.5)[0] ?? 'a sunny park';
-  const ctx = context && !/coffee shop|studio/i.test(context) ? context : null;
-  const third = ctx ?? fun;
-  const wild = WILD_SCENES[Math.floor(Math.random() * WILD_SCENES.length)];
-  return [
-    { value: 'a clean studio', label: 'Studio' },
-    { value: 'an outdoor coffee shop', label: 'Outdoor coffee shop' },
-    { value: third, label: cap(third) },
-    { value: wild, label: `${cap(wild)} 🤯` },
-  ];
+// Auto-derive the render setting from the scenario/occasion so the shopper
+// isn't asked "where do you want to be seen?" before every look. Priority:
+// (1) an explicit place the shopper named in chat, (2) the occasion mapped to
+// a fitting backdrop, (3) a clean studio. Keys match the occasion vocabulary
+// parsed in applyPrefs().
+const OCCASION_SCENE: Record<string, string> = {
+  'date night': 'a candlelit restaurant', date: 'a candlelit restaurant',
+  dinner: 'a warm restaurant at night',
+  wedding: 'an elegant garden venue',
+  interview: 'a bright modern office', work: 'a bright modern office', office: 'a bright modern office',
+  brunch: 'a sunny outdoor café',
+  party: 'a rooftop bar at night', 'night out': 'a rooftop bar at night',
+  gym: 'a bright modern gym',
+  travel: 'a scenic old-town street', vacation: 'a sunlit boardwalk by the sea', beach: 'a sandy beach at golden hour',
+  festival: 'an open-air festival at dusk', concert: 'a concert hall at night',
+  graduation: 'a sunny campus courtyard', reunion: 'a lively lounge', funeral: 'a quiet chapel',
+};
+function autoScene(occasion: string | null | undefined, msgs: StyleUpMessage[]): string {
+  const explicit = sceneFromChat(msgs); // shopper's own words win ("on a rooftop")
+  if (explicit) return explicit;
+  const key = (occasion ?? '').toLowerCase().trim();
+  return OCCASION_SCENE[key] ?? 'a clean studio';
 }
 
 // Scene-ish places the shopper mentioned in chat ("a beach in Italy", "rooftop
@@ -836,34 +839,24 @@ export function StyleUpExperience({
     await askOutfitSlots();
   }, [threadId, userId, pendingRender, lookPicks, chosenBySlot, askOutfitSlots, beat]);
 
-  // The exact pieces to render when the scene is picked — set by the look
-  // card's Generate button so EVERY piece on that card goes into the render
-  // (assembleLook() collapses to one-per-slot and silently dropped doubles).
-  const lookToGenerateRef = useRef<StyleUpProductRef[] | null>(null);
-
-  // Before any restyle: ask where they want to be seen (scene), then render.
+  // Kick a full-look render. The setting is auto-derived from the scenario/
+  // occasion (see autoScene) instead of prompting "where do you want to be
+  // seen?" every time — the shopper can still steer it by naming a place in
+  // chat ("put me on a rooftop"). Keeps the name askScene so callers are
+  // unchanged. Renders the exact pieces passed (the look card's Generate
+  // button passes EVERY piece); otherwise assembleLook() (one-per-slot).
   const askScene = useCallback(async (pieces?: StyleUpProductRef[]) => {
     if (!threadId || !userId) return;
     if (pendingRender) { setRenderError('Still finishing your last look, one sec.'); return; }
-    lookToGenerateRef.current = pieces && pieces.length > 0 ? pieces : null;
-    if (!lookToGenerateRef.current && assembleLook().length === 0) { void triggerStylist(); return; }
-    await beat();
-    await sendStylistText(threadId, 'Before I restyle you, where do you want to be seen?');
-    await sendChooser(threadId, { kind: 'scene', prompt: 'Pick your setting', multi: false, options: sceneOptions(sceneFromChat(messages)) });
-  }, [threadId, userId, pendingRender, assembleLook, triggerStylist, beat, messages]);
+    const toRender = pieces && pieces.length > 0 ? pieces : assembleLook();
+    if (toRender.length === 0) { void triggerStylist(); return; }
+    const scene = autoScene(prefsRef.current.occasion, messages);
+    setChosenScene(scene);
+    await generateFullLook(toRender, scene);
+  }, [threadId, userId, pendingRender, assembleLook, triggerStylist, messages, generateFullLook]);
 
   const onChoose = useCallback(async (kind: string, values: string[]) => {
     if (!threadId || !userId) return;
-    if (kind === 'scene') {
-      const scene = values[0];
-      setChosenScene(scene);
-      // Render the exact pieces from the card that opened this chooser when we
-      // have them; assembleLook() (one-per-slot) only backstops text triggers.
-      const pieces = lookToGenerateRef.current ?? assembleLook();
-      lookToGenerateRef.current = null;
-      await generateFullLook(pieces, scene);
-      return;
-    }
     if (kind === 'shoes') {
       const id = values[0];
       setChosenBySlot(prev => ({ ...prev, Shoes: id }));
@@ -1614,7 +1607,7 @@ export function StyleUpExperience({
             const nextM = idx < messages.length - 1 ? messages[idx + 1] : null;
             const follow = !dayBreak && !newBreak
               && isTextBubble(prevVisible) && prevVisible!.sender === m.sender;
-            const tail = !(isTextBubble(nextM) && nextM!.sender === m.sender && sameDay(nextM.createdAt, m.createdAt));
+            const tail = !(nextM && isTextBubble(nextM) && nextM.sender === m.sender && sameDay(nextM.createdAt, m.createdAt));
             return (
               <div key={m.id} className={`su-msg su-msg--${m.sender}${follow ? ' su-msg--follow' : ''}${tail ? ' su-msg--tail' : ''}`}>
                 {m.sender === 'stylist' && tail && (

@@ -317,7 +317,7 @@ function inferRoleFromName(name: string | null): string | null {
   if (/\b(jacket|coat|parka|blazer|bomber|puffer|trench)\b/.test(lower)) return 'jacket';
   if (/\b(dress|gown)\b/.test(lower)) return 'dress';
   if (/\b(skirt)\b/.test(lower)) return 'skirt';
-  if (/\b(short|bermuda)\b/.test(lower)) return 'shorts';
+  if (/\b(shorts?(?!\s+sleeve)|bermuda)\b/.test(lower)) return 'shorts';
   if (/\b(pant|trouser|chino|jean|denim|legging|jogger)\b/.test(lower)) return 'pants';
   if (/\b(belt)\b/.test(lower)) return 'belt';
   if (/\b(sneaker|trainer|shoe|boot|heel|loafer|sandal)\b/.test(lower)) return 'shoes';
