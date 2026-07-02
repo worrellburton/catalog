@@ -376,6 +376,7 @@ export function StyleUpExperience({
   const [pickerOpen, setPickerOpen] = useState(false);        // "Find a stylist" screen
   const [allStylists, setAllStylists] = useState<StyleUpStylist[]>([]); // full roster for the picker
   const [timeShownId, setTimeShownId] = useState<string | null>(null); // bubble with its timestamp revealed
+  const [cardsIncoming, setCardsIncoming] = useState(false); // product cards are being pulled → ghost-card anticipation
   const [newBelow, setNewBelow] = useState(false);            // "↓ New message" pill (scrolled up)
   const nearBottomRef = useRef(true);                         // is the chat pinned near the bottom?
   const prevMsgCountRef = useRef(0);                          // detect genuinely-new messages
@@ -719,7 +720,7 @@ export function StyleUpExperience({
     if (!el) return;
     if (nearBottomRef.current) el.scrollTop = el.scrollHeight;
     else if (grew) setNewBelow(true);
-  }, [messages.length, stylistTyping, !!huntView, genLook]);
+  }, [messages.length, stylistTyping, !!huntView, genLook, cardsIncoming]);
 
   // The web hunt now runs SERVER-SIDE (in the style-up-chat edge fn), so it
   // finishes even if the shopper refreshes or leaves. We drive the working
@@ -927,12 +928,15 @@ export function StyleUpExperience({
       await beat();
       await sendStylistText(threadId, isWeb ? 'On it, tracking those down now…' : 'On it, pulling pieces for that now…');
       const exclude = [...lookPicks().map(p => p.id).filter((x): x is string => !!x), ...rejected];
-      for (const role of values) {
-        const pick = isWeb
-          ? await webRecommendForSlot(userId, role, exclude, recOpts())
-          : await recommendForSlot(userId, role, exclude, recOpts());
-        if (pick?.id) { await sendProductPick(threadId, pick); exclude.push(pick.id); }
-      }
+      setCardsIncoming(true); // ghost-card anticipation while the pieces pull
+      try {
+        for (const role of values) {
+          const pick = isWeb
+            ? await webRecommendForSlot(userId, role, exclude, recOpts())
+            : await recommendForSlot(userId, role, exclude, recOpts());
+          if (pick?.id) { await sendProductPick(threadId, pick); exclude.push(pick.id); }
+        }
+      } finally { setCardsIncoming(false); }
       await sendStylistText(threadId, "Here's your outfit, tap “See it on me” on any piece, or say “show me the full look” and I'll put it all on you.");
       // Proactive gap completion (#9): nudge the missing core piece, with a reason.
       const have = new Set([...lookPicks().map(p => roleTagFromName(p.name ?? null)), ...values]);
@@ -967,9 +971,13 @@ export function StyleUpExperience({
     // Exclude what's in the look AND anything they've already passed on (memory).
     const exclude = [...lookPicks().map(p => p.id).filter((x): x is string => !!x), ...rejected];
     // Web stylists hunt the open web for alternates; catalog stylists pull ours.
-    const options = active?.sourceMode === 'web'
-      ? await webFetchSwapOptions(userId, swap.role, 3, exclude, recOpts())
-      : await fetchSwapOptions(userId, swap.role, 3, exclude, recOpts());
+    setCardsIncoming(true); // ghost-card anticipation while the options pull
+    let options: StyleUpProductRef[] = [];
+    try {
+      options = active?.sourceMode === 'web'
+        ? await webFetchSwapOptions(userId, swap.role, 3, exclude, recOpts())
+        : await fetchSwapOptions(userId, swap.role, 3, exclude, recOpts());
+    } finally { setCardsIncoming(false); }
     if (options.length === 0) {
       await sendStylistText(threadId, `Hmm, I'm short on alternate ${swap.label} right now, want to try a different piece?`);
       return;
@@ -1731,6 +1739,21 @@ export function StyleUpExperience({
                 <span className="su-hunting-orb" aria-hidden="true" />
                 <span className="su-hunting-text">{HUNT_PHRASES[Math.floor(huntView.elapsed / 2) % HUNT_PHRASES.length]}</span>
                 <span className="su-hunting-eta">{fmtRemaining(huntView.estSec)}</span>
+              </div>
+            </div>
+          )}
+          {/* Product cards are on the way — the card counterpart of the typing
+              dots: a shimmering ghost look-card instead of text dots. */}
+          {(cardsIncoming || !!huntView) && !stylistTyping && (
+            <div className="su-msg su-msg--stylist">
+              <div className="su-cardghost" role="status" aria-label="Pieces on the way">
+                {[0, 1].map(i => (
+                  <div className="su-cardghost-row" key={i} style={{ animationDelay: `${i * 0.3}s` }}>
+                    <span className="su-cardghost-thumb" />
+                    <span className="su-cardghost-lines"><span /><span /></span>
+                  </div>
+                ))}
+                <span className="su-cardghost-spark" aria-hidden="true">✦</span>
               </div>
             </div>
           )}
