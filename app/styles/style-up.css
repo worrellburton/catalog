@@ -1376,3 +1376,32 @@
   .su-thread-presence.is-busy .su-presence-dot,
   .su-new-pill { animation: none; }
 }
+
+/* ── Working glow — a conversation with a hunt or render cooking breathes an
+      accent glow on the list so you can see it's active at a glance. ────── */
+.su-convo-card--working {
+  border-color: color-mix(in srgb, var(--su-accent, #8aa0c0) 65%, transparent);
+  animation: su-convo-glow 1.9s ease-in-out infinite;
+}
+@keyframes su-convo-glow {
+  0%, 100% {
+    box-shadow:
+      0 0 0 0 color-mix(in srgb, var(--su-accent, #8aa0c0) 30%, transparent),
+      0 0 16px color-mix(in srgb, var(--su-accent, #8aa0c0) 18%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 0 0 3px color-mix(in srgb, var(--su-accent, #8aa0c0) 16%, transparent),
+      0 0 26px color-mix(in srgb, var(--su-accent, #8aa0c0) 34%, transparent);
+  }
+}
+.su-convo-preview--working {
+  color: var(--su-accent, #8aa0c0);
+  font-weight: 600;
+}
+@media (prefers-reduced-motion: reduce) {
+  .su-convo-card--working {
+    animation: none;
+    box-shadow: 0 0 18px color-mix(in srgb, var(--su-accent, #8aa0c0) 26%, transparent);
+  }
+}

@@ -168,6 +168,9 @@ export interface StyleUpThreadSummary {
   stylist: StyleUpStylist;
   lastMessage: string | null;
   lastMessageAt: string | null;
+  /** Something is cooking in this thread right now — a web hunt or an on-you
+   *  render in flight. Drives the glowing pill on the conversations list. */
+  working: boolean;
 }
 
 /** All of the shopper's conversations that have at least one message, newest
@@ -177,7 +180,7 @@ export async function fetchMyThreads(shopperUserId: string): Promise<StyleUpThre
   if (!supabase) return [];
   const { data: threads } = await supabase
     .from('style_up_threads')
-    .select(`id, last_message_at, ${STYLIST_JOIN}`)
+    .select(`id, last_message_at, hunting_until, ${STYLIST_JOIN}`)
     .eq('shopper_user_id', shopperUserId)
     .order('last_message_at', { ascending: false });
   if (!threads || threads.length === 0) return [];
@@ -185,12 +188,13 @@ export async function fetchMyThreads(shopperUserId: string): Promise<StyleUpThre
   const ids = threads.map(t => String(t.id));
   const { data: msgs } = await supabase
     .from('style_up_messages')
-    .select('thread_id, sender, kind, body, created_at')
+    .select('thread_id, sender, kind, body, render_generation_id, created_at')
     .in('thread_id', ids)
     .order('created_at', { ascending: false });
 
   const preview = new Map<string, string>();
-  for (const m of (msgs ?? []) as Array<{ thread_id: string; sender: string; kind: string; body: string | null }>) {
+  const lastRenderGen = new Map<string, string>(); // thread → gen id when the LAST message is a render
+  for (const m of (msgs ?? []) as Array<{ thread_id: string; sender: string; kind: string; body: string | null; render_generation_id: string | null }>) {
     const tid = String(m.thread_id);
     if (preview.has(tid)) continue;
     let text = m.kind === 'product' ? 'Sent a product pick'
@@ -198,8 +202,26 @@ export async function fetchMyThreads(shopperUserId: string): Promise<StyleUpThre
       : (m.body ?? '');
     if (m.sender === 'shopper') text = `You: ${text}`;
     preview.set(tid, text);
+    if (m.kind === 'render' && m.render_generation_id) lastRenderGen.set(tid, m.render_generation_id);
   }
 
+  // A thread whose newest message is a render may still be cooking — check the
+  // generation's status in one batch (terminal = done/failed).
+  const renderingThreads = new Set<string>();
+  if (lastRenderGen.size > 0) {
+    const { data: gens } = await supabase
+      .from('user_generations')
+      .select('id, status')
+      .in('id', [...lastRenderGen.values()]);
+    const active = new Set(
+      ((gens ?? []) as Array<{ id: string; status: string | null }>)
+        .filter(g => g.status !== 'done' && g.status !== 'failed')
+        .map(g => g.id),
+    );
+    for (const [tid, gid] of lastRenderGen) if (active.has(gid)) renderingThreads.add(tid);
+  }
+
+  const now = Date.now();
   return threads
     .map(t => {
       const raw = Array.isArray(t.stylist) ? t.stylist[0] : t.stylist;
@@ -207,11 +229,16 @@ export async function fetchMyThreads(shopperUserId: string): Promise<StyleUpThre
       const tid = String(t.id);
       // Only surface threads that actually have a message.
       if (!preview.has(tid)) return null;
+      // Hunting marker counts as active while set (the server clears it when
+      // the pull lands); a 2-min stale grace covers a run that died mid-pull.
+      const hu = t.hunting_until ? new Date(String(t.hunting_until)).getTime() : null;
+      const hunting = hu != null && now < hu + 120000;
       return {
         threadId: tid,
         stylist: mapStylist(raw as Record<string, unknown>),
         lastMessage: preview.get(tid) ?? null,
         lastMessageAt: (t.last_message_at as string | null) ?? null,
+        working: hunting || renderingThreads.has(tid),
       };
     })
     .filter((x): x is StyleUpThreadSummary => !!x);
