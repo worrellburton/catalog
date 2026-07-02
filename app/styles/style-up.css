@@ -1405,3 +1405,80 @@
     box-shadow: 0 0 18px color-mix(in srgb, var(--su-accent, #8aa0c0) 26%, transparent);
   }
 }
+
+/* ── Ghost look-card — the card counterpart of the typing dots. Shown while
+      product cards are being pulled: a shimmering skeleton of the card that's
+      about to arrive, breathing gently with anticipation. ────────────────── */
+.su-cardghost {
+  position: relative;
+  width: min(78%, 340px);
+  padding: 12px;
+  border-radius: 18px;
+  background: #17181c;
+  border: 1px solid color-mix(in srgb, var(--su-accent, #8aa0c0) 26%, #2a2c31);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+  animation: su-cardghost-breathe 2s ease-in-out infinite;
+}
+/* A soft sheen sweeps across the whole card. */
+.su-cardghost::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 30%, color-mix(in srgb, var(--su-accent, #8aa0c0) 10%, rgba(255, 255, 255, 0.05)) 50%, transparent 70%);
+  background-size: 220% 100%;
+  animation: su-cardghost-sheen 1.6s linear infinite;
+  pointer-events: none;
+}
+.su-cardghost-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  animation: su-cardghost-breathe 2s ease-in-out infinite;
+}
+.su-cardghost-thumb {
+  flex: 0 0 auto;
+  width: 44px; height: 54px;
+  border-radius: 9px;
+  background: #24262b;
+}
+.su-cardghost-lines {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.su-cardghost-lines span {
+  height: 9px;
+  border-radius: 999px;
+  background: #24262b;
+}
+.su-cardghost-lines span:first-child { width: 72%; }
+.su-cardghost-lines span:last-child { width: 44%; }
+.su-cardghost-spark {
+  position: absolute;
+  top: 9px; right: 12px;
+  font-size: 12px;
+  color: var(--su-accent, #8aa0c0);
+  animation: su-cardghost-spark 1.4s ease-in-out infinite;
+}
+@keyframes su-cardghost-breathe {
+  0%, 100% { opacity: 0.75; }
+  50% { opacity: 1; }
+}
+@keyframes su-cardghost-sheen {
+  from { background-position: 160% 0; }
+  to { background-position: -60% 0; }
+}
+@keyframes su-cardghost-spark {
+  0%, 100% { opacity: 0.35; transform: scale(0.9) rotate(0deg); }
+  50% { opacity: 1; transform: scale(1.15) rotate(20deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .su-cardghost,
+  .su-cardghost::after,
+  .su-cardghost-row,
+  .su-cardghost-spark { animation: none; }
+}
