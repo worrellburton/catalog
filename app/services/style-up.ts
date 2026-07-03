@@ -154,7 +154,7 @@ export async function deleteThread(threadId: string): Promise<boolean> {
 }
 
 /** Full product detail for the in-chat product pop-up: gallery, description,
- *  shop link. Falls back gracefully when enrichment is sparse. */
+ *  fit + fabric metadata, shop link. Falls back gracefully when sparse. */
 export interface StyleUpProductDetail {
   id: string;
   name: string | null;
@@ -163,13 +163,52 @@ export interface StyleUpProductDetail {
   description: string | null;
   images: string[];
   url: string | null;
+  /** Short fit facts from size_fit / fit_intelligence enrichment. */
+  fitChips: string[];
+  /** Short fabric/care facts from materials_structured / materials_care. */
+  fabricChips: string[];
+}
+
+/** Distill a jsonb enrichment blob (array or object of unknown shape) into a
+ *  few short display chips. */
+function jsonChips(v: unknown, max = 4): string[] {
+  const out: string[] = [];
+  const add = (s: unknown) => {
+    const t = String(s ?? '').trim();
+    if (t && t.length <= 42 && !out.includes(t) && out.length < max) out.push(t);
+  };
+  if (Array.isArray(v)) {
+    for (const it of v) {
+      if (typeof it === 'string' || typeof it === 'number') add(it);
+      else if (it && typeof it === 'object') {
+        const o = it as Record<string, unknown>;
+        const label = o.label ?? o.name ?? o.material ?? o.fit ?? o.value;
+        const qty = o.percent ?? o.percentage;
+        add(qty != null && label != null ? `${qty}% ${label}` : label);
+      }
+    }
+  } else if (v && typeof v === 'object') {
+    for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+      if (typeof val === 'string' || typeof val === 'number') {
+        add(`${k.replace(/_/g, ' ')}: ${val}`);
+      }
+    }
+  }
+  return out;
+}
+
+/** First shortish sentences of a text blob, as chips. */
+function textChips(s: unknown, max = 3): string[] {
+  if (typeof s !== 'string' || !s.trim()) return [];
+  return s.split(/(?<=[.;])\s+|\n+/).map(x => x.trim().replace(/[.;]$/, ''))
+    .filter(x => x.length > 2 && x.length <= 42).slice(0, max);
 }
 
 export async function fetchProductDetail(productId: string): Promise<StyleUpProductDetail | null> {
   if (!supabase) return null;
   const { data } = await supabase
     .from('products')
-    .select('id, name, display_name, brand, price, description, image_url, primary_image_url, images, url')
+    .select('id, name, display_name, brand, price, description, image_url, primary_image_url, images, url, size_fit, materials_care, fit_intelligence, materials_structured')
     .eq('id', productId)
     .maybeSingle();
   if (!data) return null;
@@ -184,6 +223,8 @@ export async function fetchProductDetail(productId: string): Promise<StyleUpProd
       else if (it && typeof it === 'object') push((it as Record<string, unknown>).url ?? (it as Record<string, unknown>).src);
     }
   }
+  const fitChips = [...jsonChips(r.fit_intelligence), ...textChips(r.size_fit)].slice(0, 4);
+  const fabricChips = [...jsonChips(r.materials_structured), ...textChips(r.materials_care)].slice(0, 4);
   return {
     id: String(r.id),
     name: (r.display_name as string | null) || (r.name as string | null) || null,
@@ -192,7 +233,27 @@ export async function fetchProductDetail(productId: string): Promise<StyleUpProd
     description: (r.description as string | null) ?? null,
     images: gallery.slice(0, 8),
     url: (r.url as string | null) ?? null,
+    fitChips,
+    fabricChips,
   };
+}
+
+/** Similar products via the generative similarity search (pgvector RPC),
+ *  mapped to renderable refs for the pop-up's "More like this" rail. */
+export async function fetchSimilarProducts(seedId: string, k = 8): Promise<StyleUpProductRef[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase.rpc('find_similar_products', { seed_id: seedId, k });
+  if (error || !Array.isArray(data)) return [];
+  return (data as Array<Record<string, unknown>>)
+    .filter(r => String(r.id) !== seedId)
+    .map(r => ({
+      id: String(r.id),
+      name: (r.name as string) ?? undefined,
+      brand: (r.brand as string) ?? undefined,
+      price: (r.price as string) ?? undefined,
+      image: (r.primary_image_url as string) || (r.image_url as string) || undefined,
+      url: (r.url as string) ?? undefined,
+    }));
 }
 
 /** The thread's server-side "web hunt in progress" marker (a future timestamp
