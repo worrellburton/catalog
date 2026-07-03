@@ -22,6 +22,14 @@
   color: #e7e7ea;
   padding-top: env(safe-area-inset-top);
 }
+/* Inside the native app shell env(safe-area-inset-top) reads ~0, so the header
+   would jam up under the status bar. Anchor to --shell-sb (the real status-bar
+   height in px, injected on <html> at document-start by the Flutter shell).
+   The native Catalog header is hidden on /style, so the status-bar height alone
+   is the correct top clearance for the shell's own su-shell-head. */
+html[data-shell="catalog-app"] .su-shell {
+  padding-top: var(--shell-sb, env(safe-area-inset-top, 0px));
+}
 .su-shell-head {
   flex: 0 0 auto;
   display: grid;
