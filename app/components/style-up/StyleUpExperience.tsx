@@ -14,7 +14,7 @@ import { useAuth } from '~/hooks/useAuth';
 import { useStylistEngineMethod } from '~/hooks/useStylistEngineMethod';
 import { supabase } from '~/utils/supabase';
 import {
-  fetchStylists, getOrCreateThread, deleteThread, getThreadHunting, fetchProductDetail, getLatestThread, fetchMyThreads, fetchMessages, sendShopperMessage,
+  fetchStylists, getOrCreateThread, deleteThread, getThreadHunting, fetchProductDetail, fetchSimilarProducts, getLatestThread, fetchMyThreads, fetchMessages, sendShopperMessage,
   sendStylistText, startFullLookRender, fetchSwapOptions, sendSwapOptions,
   sendChooser, recommendForSlot, sendProductPick,
   webFetchSwapOptions, webRecommendForSlot,
@@ -25,6 +25,8 @@ import { roleTagFromName } from '~/services/product-roles';
 import { signInWithGoogle } from '~/services/auth';
 import StyleUpBackground from './StyleUpBackground';
 import CatalogLogo from '~/components/CatalogLogo';
+import { useBookmarks } from '~/hooks/useBookmarks';
+import type { Product } from '~/data/looks';
 
 // Preferences the stylist infers from chat, budget, occasion, formality lean,
 // dropped colors, simplicity, applied to every recommendation (#4/#6/#7).
@@ -379,6 +381,15 @@ export function StyleUpExperience({
   const [timeShownId, setTimeShownId] = useState<string | null>(null); // bubble with its timestamp revealed
   const [cardsIncoming, setCardsIncoming] = useState(false); // product cards are being pulled → ghost-card anticipation
   const [productViewer, setProductViewer] = useState<{ ref: StyleUpProductRef; detail: StyleUpProductDetail | null } | null>(null); // in-chat product pop-up
+  const [similarProducts, setSimilarProducts] = useState<StyleUpProductRef[]>([]); // "More like this" rail in the pop-up
+  const [descOpen, setDescOpen] = useState(false);   // description clamp expanded
+  const [pvClosing, setPvClosing] = useState(false); // product pop-up dissolve-out
+  const [lvClosing, setLvClosing] = useState(false); // look viewer dissolve-out
+  const pvDragY = useRef(0);                          // swipe-down-to-close drag start
+  const pvDragDy = useRef(0);
+  const lvDragY = useRef(0);
+  const lvDragDy = useRef(0);
+  const { isProductBookmarked, toggleProductBookmark } = useBookmarks();
   const [newBelow, setNewBelow] = useState(false);            // "↓ New message" pill (scrolled up)
   const nearBottomRef = useRef(true);                         // is the chat pinned near the bottom?
   const prevMsgCountRef = useRef(0);                          // detect genuinely-new messages
@@ -1065,17 +1076,35 @@ export function StyleUpExperience({
 
   // Open a pick's in-app product page (deeplink). Falls back to its shop URL.
   // Tapping a product opens an in-chat pop-up overlay (like tapping a look) —
-  // never navigates away from the conversation. The full detail (gallery,
-  // description) streams in behind the instantly-shown basics.
+  // never navigates away from the conversation. The full detail (gallery, fit
+  // and fabric metadata) plus a similar-products rail stream in behind the
+  // instantly-shown basics.
   const openProduct = useCallback((p: StyleUpProductRef) => {
     if (p.id) {
       setProductViewer({ ref: p, detail: null });
+      setSimilarProducts([]);
+      setDescOpen(false);
+      setPvClosing(false);
       void fetchProductDetail(p.id).then(d => {
         setProductViewer(cur => (cur && cur.ref.id === p.id ? { ...cur, detail: d } : cur));
+      });
+      void fetchSimilarProducts(p.id).then(sim => {
+        setProductViewer(cur => { if (cur && cur.ref.id === p.id) setSimilarProducts(sim); return cur; });
       });
     } else if (p.url) {
       window.open(p.url, '_blank', 'noopener');
     }
+  }, []);
+
+  // Close the overlays with a dissolve-out (also the landing spot for the
+  // swipe-down gesture on both sheets).
+  const closeProductViewer = useCallback(() => {
+    setPvClosing(true);
+    window.setTimeout(() => { setProductViewer(null); setPvClosing(false); }, 220);
+  }, []);
+  const closeLookViewer = useCallback(() => {
+    setLvClosing(true);
+    window.setTimeout(() => { setViewer(null); setLvClosing(false); }, 220);
   }, []);
 
   // Poll any in-flight render generations referenced by the thread until they
@@ -1265,10 +1294,27 @@ export function StyleUpExperience({
   const railHeader = header(exit);
 
   // Expanded look viewer, the big, full-screen video + its pieces + add-to-looks.
+  // Swipe down to dismiss; closing dissolves out.
   const viewerOverlay = viewer ? (
-    <div className="su-viewer" onClick={() => setViewer(null)} role="dialog" aria-modal="true">
-      <div className="su-viewer-inner" onClick={e => e.stopPropagation()}>
-        <button type="button" className="su-viewer-close" onClick={() => setViewer(null)} aria-label="Close">✕</button>
+    <div className={`su-viewer${lvClosing ? ' is-closing' : ''}`} onClick={closeLookViewer} role="dialog" aria-modal="true">
+      <div
+        className="su-viewer-inner"
+        onClick={e => e.stopPropagation()}
+        onTouchStart={e => { lvDragY.current = e.touches[0].clientY; lvDragDy.current = 0; }}
+        onTouchMove={e => {
+          lvDragDy.current = e.touches[0].clientY - lvDragY.current;
+          const dy = Math.max(0, lvDragDy.current);
+          (e.currentTarget as HTMLElement).style.transform = dy > 0 ? `translateY(${dy}px)` : '';
+          (e.currentTarget as HTMLElement).style.opacity = dy > 0 ? String(Math.max(0.4, 1 - dy / 500)) : '';
+        }}
+        onTouchEnd={e => {
+          const el = e.currentTarget as HTMLElement;
+          el.style.transform = '';
+          el.style.opacity = '';
+          if (lvDragDy.current > 90) closeLookViewer();
+        }}
+      >
+        <button type="button" className="su-viewer-close" onClick={closeLookViewer} aria-label="Close">✕</button>
         <video className="su-viewer-video" src={viewer.videoUrl} autoPlay loop controls playsInline />
         {viewer.pieces.length > 0 && (
           <div className="su-viewer-pieces">
@@ -1287,27 +1333,106 @@ export function StyleUpExperience({
   ) : null;
 
   // Product pop-up — the product counterpart of the look viewer: a slide-up
-  // overlay with the gallery, details, and a shop link. Never leaves the chat.
+  // overlay with the gallery, fit + fabric facts, a short description, a
+  // similar-products rail, and save/shop. Swipe down (from the top of the
+  // sheet) to dismiss; closing dissolves out. Never leaves the chat.
   const productOverlay = productViewer ? (() => {
     const d = productViewer.detail;
     const ref = productViewer.ref;
     const gallery = d?.images.length ? d.images : ([ref.image].filter(Boolean) as string[]);
     const shopUrl = d?.url ?? ref.url ?? null;
+    const asBookmark: Product = {
+      id: ref.id,
+      name: d?.name ?? ref.name ?? 'Product',
+      brand: d?.brand ?? ref.brand ?? '',
+      price: d?.price ?? ref.price ?? '',
+      url: shopUrl ?? '',
+      image: gallery[0],
+    };
+    const saved = isProductBookmarked(asBookmark);
     return (
-      <div className="su-pviewer" onClick={() => setProductViewer(null)} role="dialog" aria-modal="true">
-        <div className="su-pviewer-inner" onClick={e => e.stopPropagation()}>
-          <button type="button" className="su-viewer-close" onClick={() => setProductViewer(null)} aria-label="Close">✕</button>
+      <div className={`su-pviewer${pvClosing ? ' is-closing' : ''}`} onClick={closeProductViewer} role="dialog" aria-modal="true">
+        <div
+          className="su-pviewer-inner"
+          onClick={e => e.stopPropagation()}
+          onTouchStart={e => { pvDragY.current = e.touches[0].clientY; pvDragDy.current = 0; }}
+          onTouchMove={e => {
+            const el = e.currentTarget as HTMLElement;
+            const dy = e.touches[0].clientY - pvDragY.current;
+            // Only pull-to-dismiss when the sheet is scrolled to its top.
+            pvDragDy.current = el.scrollTop <= 0 && dy > 0 ? dy : 0;
+            el.style.transform = pvDragDy.current > 0 ? `translateY(${pvDragDy.current}px)` : '';
+            el.style.opacity = pvDragDy.current > 0 ? String(Math.max(0.4, 1 - pvDragDy.current / 500)) : '';
+          }}
+          onTouchEnd={e => {
+            const el = e.currentTarget as HTMLElement;
+            el.style.transform = '';
+            el.style.opacity = '';
+            if (pvDragDy.current > 90) closeProductViewer();
+          }}
+        >
+          <span className="su-pviewer-grab" aria-hidden="true" />
+          <button type="button" className="su-viewer-close" onClick={closeProductViewer} aria-label="Close">✕</button>
           <div className="su-pviewer-gallery">
             {gallery.length > 0
               ? gallery.map((src, i) => <img key={i} src={src} alt={i === 0 ? (d?.name ?? ref.name ?? 'Product') : ''} loading={i > 0 ? 'lazy' : undefined} />)
               : <span className="su-pviewer-empty" aria-hidden="true" />}
           </div>
           <div className="su-pviewer-info">
-            {(d?.brand ?? ref.brand) && <div className="su-pviewer-brand">{d?.brand ?? ref.brand}</div>}
-            <div className="su-pviewer-name">{d?.name ?? ref.name ?? 'Product'}</div>
-            {(d?.price ?? ref.price) && <div className="su-pviewer-price">{d?.price ?? ref.price}</div>}
-            {d?.description && <p className="su-pviewer-desc">{d.description}</p>}
+            <div className="su-pviewer-toprow">
+              <div className="su-pviewer-id">
+                {(d?.brand ?? ref.brand) && <div className="su-pviewer-brand">{d?.brand ?? ref.brand}</div>}
+                <div className="su-pviewer-name">{d?.name ?? ref.name ?? 'Product'}</div>
+                {(d?.price ?? ref.price) && <div className="su-pviewer-price">{d?.price ?? ref.price}</div>}
+              </div>
+              <button
+                type="button"
+                className={`su-pviewer-save${saved ? ' is-saved' : ''}`}
+                onClick={() => toggleProductBookmark(asBookmark)}
+                aria-label={saved ? 'Remove from saved' : 'Save this product'}
+              >
+                <svg width="18" height="18" viewBox="0 0 24 24" fill={saved ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+              </button>
+            </div>
+            {d && d.fitChips.length > 0 && (
+              <div className="su-pviewer-meta">
+                <span className="su-pviewer-meta-label">Fit</span>
+                {d.fitChips.map((c, i) => <span className="su-pviewer-chip" key={i}>{c}</span>)}
+              </div>
+            )}
+            {d && d.fabricChips.length > 0 && (
+              <div className="su-pviewer-meta">
+                <span className="su-pviewer-meta-label">Fabric</span>
+                {d.fabricChips.map((c, i) => <span className="su-pviewer-chip" key={i}>{c}</span>)}
+              </div>
+            )}
+            {d?.description && (
+              <p
+                className={`su-pviewer-desc${descOpen ? ' is-open' : ''}`}
+                onClick={() => setDescOpen(v => !v)}
+                role="button"
+                tabIndex={0}
+              >
+                {d.description}
+              </p>
+            )}
           </div>
+          {similarProducts.length > 0 && (
+            <div className="su-pviewer-similar">
+              <div className="su-pviewer-similar-label">More like this</div>
+              <div className="su-pviewer-similar-rail">
+                {similarProducts.map((sp, i) => (
+                  <button type="button" className="su-pviewer-sim" key={sp.id || i} onClick={() => openProduct(sp)}>
+                    <span className="su-pviewer-sim-media">
+                      {sp.image ? <img src={sp.image} alt="" loading="lazy" /> : <span className="su-product-media--empty" />}
+                    </span>
+                    <span className="su-pviewer-sim-name">{sp.name || 'Product'}</span>
+                    {sp.price && <span className="su-pviewer-sim-price">{sp.price}</span>}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
           {shopUrl && (
             <button type="button" className="su-viewer-add" onClick={() => window.open(shopUrl, '_blank', 'noopener')}>
               Shop this piece

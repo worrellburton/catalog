@@ -1568,3 +1568,113 @@
 @media (prefers-reduced-motion: reduce) {
   .su-pviewer-inner { animation: none; }
 }
+
+/* ── Product pop-up v2 — grab handle, save, fit/fabric chips, short
+      description, similar rail, and swipe-down dissolve. ─────────────── */
+.su-pviewer-grab {
+  position: absolute;
+  top: 8px; left: 0; right: 0;
+  margin-inline: auto;
+  width: 40px; height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.28);
+  z-index: 2;
+}
+.su-pviewer-inner { touch-action: pan-y; overscroll-behavior-y: contain; }
+.su-pviewer-toprow { display: flex; align-items: flex-start; gap: 12px; }
+.su-pviewer-id { flex: 1 1 auto; min-width: 0; }
+.su-pviewer-save {
+  flex: 0 0 auto;
+  width: 40px; height: 40px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  border: 1px solid #34363c;
+  background: #1c1d21;
+  color: #c7c9cf;
+  cursor: pointer;
+  transition: transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.14s ease, border-color 0.14s ease;
+}
+.su-pviewer-save:active { transform: scale(0.88); }
+.su-pviewer-save.is-saved { color: var(--su-accent, #8aa0c0); border-color: var(--su-accent, #8aa0c0); }
+
+/* Fit / Fabric metadata chips. */
+.su-pviewer-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.su-pviewer-meta-label {
+  flex: 0 0 auto;
+  font-size: 10.5px; font-weight: 800;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: #71747c;
+  width: 44px;
+}
+.su-pviewer-chip {
+  font-size: 11.5px; font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #26282d;
+  color: #c7c9cf;
+}
+
+/* Short description — 3 lines, tap to expand. */
+.su-pviewer-desc {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  cursor: pointer;
+}
+.su-pviewer-desc.is-open { display: block; -webkit-line-clamp: unset; }
+
+/* "More like this" — similar products from the generative search. */
+.su-pviewer-similar { padding: 14px 0 0; }
+.su-pviewer-similar-label {
+  padding: 0 18px 8px;
+  font-size: 10.5px; font-weight: 800;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: #71747c;
+}
+.su-pviewer-similar-rail {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 0 18px 4px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.su-pviewer-similar-rail::-webkit-scrollbar { display: none; }
+.su-pviewer-sim {
+  flex: 0 0 104px;
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 0; border: none; background: none;
+  color: inherit; text-align: left; cursor: pointer;
+}
+.su-pviewer-sim-media {
+  width: 104px; height: 130px;
+  border-radius: 10px; overflow: hidden;
+  background: #26282d; border: 1px solid #2a2c31;
+}
+.su-pviewer-sim-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.su-pviewer-sim-name {
+  font-size: 11.5px; line-height: 1.25; color: #d8dae0;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.su-pviewer-sim-price { font-size: 11px; color: #8b8e96; }
+
+/* Dissolve-out for both overlays (backdrop fades, sheet sinks + dissolves). */
+.su-pviewer.is-closing,
+.su-viewer.is-closing { animation: su-overlay-fade 0.22s ease both; pointer-events: none; }
+.su-pviewer.is-closing .su-pviewer-inner,
+.su-viewer.is-closing .su-viewer-inner { animation: su-overlay-sink 0.22s ease both; }
+@keyframes su-overlay-fade { to { opacity: 0; } }
+@keyframes su-overlay-sink { to { transform: translateY(24px) scale(0.97); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .su-pviewer.is-closing,
+  .su-viewer.is-closing,
+  .su-pviewer.is-closing .su-pviewer-inner,
+  .su-viewer.is-closing .su-viewer-inner { animation-duration: 0.01s; }
+}
