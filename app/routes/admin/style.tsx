@@ -13,7 +13,7 @@ import {
   adminListThreads, adminListLooks, fetchMessages, adminListTraces,
   type AdminThread, type AdminLook, type StyleUpMessage, type StyleUpTrace,
 } from '~/services/style-up';
-import { getGeneration, type UserGeneration } from '~/services/user-generations';
+import { getGenerationDetail, type UserGeneration, type UserUpload } from '~/services/user-generations';
 import StyleUpTraceDiagram from '~/components/style-up/StyleUpTraceDiagram';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
 import '~/styles/admin-style-up.css';
@@ -47,7 +47,7 @@ const gKv = { display: 'flex', justifyContent: 'space-between', gap: 10, fontSiz
 const gKvVal = { fontWeight: 600, color: '#0f172a', textAlign: 'right' as const };
 const gArrow = { fontSize: 28, color: '#cbd5e1', textAlign: 'center' as const, lineHeight: 1 };
 
-function GenerationDiagram({ look, gen }: { look: AdminLook; gen: UserGeneration | null }) {
+function GenerationDiagram({ look, gen, uploads }: { look: AdminLook; gen: UserGeneration | null; uploads: UserUpload[] }) {
   const status = gen?.status ?? look.status;
   const videoUrl = gen?.video_url ?? look.videoUrl;
   return (
@@ -60,6 +60,16 @@ function GenerationDiagram({ look, gen }: { look: AdminLook; gen: UserGeneration
         <div style={gKv}><span>Weight</span><span style={gKvVal}>{gen?.weight_label ?? '—'}</span></div>
         <div style={gKv}><span>Age</span><span style={gKvVal}>{gen?.age_label ?? '—'}</span></div>
         <div style={gKv}><span>Style</span><span style={gKvVal}>{gen?.style ?? '—'}</span></div>
+        <div style={{ ...gLabel, marginTop: 4 }}>Shopper photos ({uploads.length})</div>
+        <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+          {uploads.length === 0 && <span style={{ fontSize: 12, color: '#94a3b8' }}>(none recorded)</span>}
+          {uploads.map(u => (
+            <span key={u.id} title="Photo of the shopper sent to the model"
+              style={{ width: 40, height: 50, borderRadius: 6, overflow: 'hidden', background: '#f1f5f9', border: '1px solid #e2e8f0' }}>
+              <img src={u.public_url} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />
+            </span>
+          ))}
+        </div>
         <div style={{ ...gLabel, marginTop: 4 }}>Pieces ({look.products.length})</div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
           {look.products.length === 0 && <span style={{ fontSize: 12, color: '#94a3b8' }}>(none recorded)</span>}
@@ -137,6 +147,7 @@ export default function AdminStylePage() {
   // Generation node overlay.
   const [openLook, setOpenLook] = useState<AdminLook | null>(null);
   const [openGen, setOpenGen] = useState<UserGeneration | null>(null);
+  const [openUploads, setOpenUploads] = useState<UserUpload[]>([]);
 
   const load = useCallback(async (initial = false) => {
     if (initial) setLoading(true);
@@ -175,11 +186,17 @@ export default function AdminStylePage() {
     setTraceLoading(false);
   }, []);
 
-  // Open the node overlay with the FULL generation row ("everything").
+  // Open the node overlay with the FULL generation row ("everything"),
+  // including the shopper photos that were sent to the model.
   const openGeneration = useCallback(async (l: AdminLook) => {
     setOpenLook(l);
     setOpenGen(null);
-    if (l.generationId) setOpenGen(await getGeneration(l.generationId));
+    setOpenUploads([]);
+    if (l.generationId) {
+      const detail = await getGenerationDetail(l.generationId);
+      setOpenGen(detail.generation);
+      setOpenUploads(detail.uploads);
+    }
   }, []);
 
   // Flat rows so every generation column is sortable.
@@ -379,7 +396,7 @@ export default function AdminStylePage() {
             </div>
             {openLook.generationId && !openGen
               ? <div style={{ padding: 32, textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>Loading generation…</div>
-              : <GenerationDiagram look={openLook} gen={openGen} />}
+              : <GenerationDiagram look={openLook} gen={openGen} uploads={openUploads} />}
           </div>
         </div>
       )}
