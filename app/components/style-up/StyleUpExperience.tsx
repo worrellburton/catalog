@@ -127,7 +127,14 @@ function wantsFullOutfit(text: string): boolean {
   const withFull = /\bwith (a |an )?(full|whole|complete|entire) (outfit|look|fit)\b/.test(t);
   const outfit = /\b(outfit|ensemble|full fit|whole fit)\b/.test(t);
   const build = /\b(build|put together|style me|dress me|make me|create|complete|full|whole|entire)\b/.test(t);
-  return withFull || (outfit && build);
+  // A request for a whole NEW look — "give me a new one", "another look",
+  // "a fresh fit", "show me a look", "start over" — must always build a
+  // COMPLETE outfit, never a single piece. Runs AFTER swapTargetFromText, so a
+  // garment-specific "new shoes" is already handled as a swap by then.
+  const freshLook = /\b(new|another|different|fresh|whole ?new|other)\b[^.?!]*\b(one|look|outfit|fit|ensemble)\b/.test(t)
+    || /\b(give me|show me|make me|lets? see|i want|how about|got)\b[^.?!]*\b(a |an |another )?(look|outfit|fit|ensemble)\b/.test(t)
+    || /\bstart (over|fresh|again)\b/.test(t);
+  return withFull || (outfit && build) || freshLook;
 }
 
 // A human "reading" beat before the stylist responds, always at least 1s,
