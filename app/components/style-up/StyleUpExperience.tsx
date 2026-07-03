@@ -703,6 +703,7 @@ export function StyleUpExperience({
             body: (r.body as string | null) ?? null,
             productRef: (r.product_ref as StyleUpMessage['productRef']) ?? null,
             renderGenerationId: (r.render_generation_id as string | null) ?? null,
+            quickReplies: Array.isArray(r.quick_replies) ? (r.quick_replies as unknown[]).map(String) : null,
             createdAt: String(r.created_at),
           };
           setMessages(prev => (prev.some(m => m.id === msg.id) ? prev : [...prev, msg]));
@@ -1464,17 +1465,20 @@ export function StyleUpExperience({
     if (messages.length === 0 || sending || stylistTyping || !!huntView || genLook || pendingRender) return [] as string[];
     const last = messages[messages.length - 1];
     if (last.kind === 'product' && (last.productRef?.choose || last.productRef?.swap)) return []; // a chooser is waiting
-    // The stylist asked a question → offer tap-to-answer suggestions matched to
-    // what they're asking (typing a manual answer always stays available).
+    // The stylist asked a question → its OWN supplied answers win (the brain
+    // sends tap options with every question, so chips always fit the ask).
+    // Heuristics only backstop older messages, and there's no generic filler —
+    // when nothing relevant is known, show nothing.
     if (isTextBubble(last) && last.sender === 'stylist' && /\?\s*$/.test(last.body ?? '')) {
+      if (last.quickReplies && last.quickReplies.length > 0) return last.quickReplies.slice(0, 4);
       const q = (last.body ?? '').toLowerCase();
       if (/\b(day|daytime)\b[\s\S]*\b(evening|night)\b|\b(evening|night)\b[\s\S]*\b(day|daytime)\b/.test(q)) return ['Daytime', 'Evening'];
       if (/\bcasual\b[\s\S]*\b(dress|formal|elevated|fancy)|\b(dress|formal|elevated|fancy)[\s\S]*\bcasual\b/.test(q)) return ['Keep it casual', 'Dressier'];
       if (/budget|spend|price range/.test(q)) return ['Under $100', 'Under $250', 'No budget'];
       if (/colou?r/.test(q)) return ['Neutrals', 'Something bold'];
       if (/indoor|outdoor/.test(q)) return ['Indoors', 'Outdoors'];
-      if (/occasion|what('| i)s it for|where are (you|we)|what.*vibe/.test(q)) return ['Date night', 'Work', 'A trip', 'Just everyday'];
-      return ['Casual vibe', 'Dressy vibe', 'Surprise me'];
+      if (/occasion|what('| i)s it for|where are (you|we)/.test(q)) return ['Date night', 'Work', 'A trip', 'Just everyday'];
+      return [];
     }
     const recent = messages.slice(-4);
     const sawRender = recent.some(x => x.kind === 'render');
@@ -1769,7 +1773,10 @@ export function StyleUpExperience({
             );
           })}
           {stylistTyping && typingThreadId === threadId && (
-            <div className="su-msg su-msg--stylist">
+            <div className="su-msg su-msg--stylist su-msg--tail">
+              <span className="su-msg-avatar" aria-hidden="true">
+                <StylistFace avatarUrl={active?.avatarUrl ?? null} name={active?.name} />
+              </span>
               <div className="su-bubble su-bubble--typing" aria-label={`${active?.name ?? 'Stylist'} is typing`}>
                 <span /><span /><span />
               </div>
