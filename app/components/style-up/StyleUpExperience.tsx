@@ -309,7 +309,7 @@ function ChooserBubble({ choose, disabled, onSubmit }: {
     <div className="su-msg su-msg--stylist">
       <div className="su-choose">
         <div className="su-choose-prompt">{choose.prompt}</div>
-        <div className={`su-choose-options${hasCards ? ' su-choose-options--cards' : ''}`}>
+        <div className={`su-choose-options${hasCards ? ' su-choose-options--cards' : ''}${choose.kind === 'scene' ? ' su-choose-options--stack' : ''}`}>
           {choose.options.map(o => {
             const on = sel.includes(o.value);
             return (
@@ -1980,7 +1980,10 @@ export function StyleUpExperience({
                 ? generationProgress(r?.created_at ?? m.createdAt, r?.duration_seconds ?? 10)
                 : null;
               return (
-                <div key={m.id} id={`gen-${m.renderGenerationId}`} className="su-msg su-msg--stylist">
+                <div key={m.id} id={`gen-${m.renderGenerationId}`} className="su-msg su-msg--stylist su-msg--tail">
+                  <span className="su-msg-avatar" aria-hidden="true">
+                    <StylistFace avatarUrl={active?.avatarUrl ?? null} name={active?.name} />
+                  </span>
                   <div className="su-render">
                     {done ? (
                       <button
