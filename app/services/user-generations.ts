@@ -328,6 +328,21 @@ function inferRoleFromName(name: string | null): string | null {
   return null;
 }
 
+/** True when any picked product can't be placed on a body zone — no role,
+ *  or a role with no zone mapping. Such a piece (a demoted type-mislabel, a
+ *  name with no garment word like "Y-3 Superstar") could cover ANY zone,
+ *  footwear included, so zone NEGATIVES ("bare feet", "do not render legs")
+ *  must not be asserted around it — they can directly contradict the
+ *  piece's reference image. */
+function hasUnplaceableProduct(
+  productLines: { role_tag: string | null; name: string | null }[],
+): boolean {
+  return productLines.some(p => {
+    const role = ((p.role_tag || inferRoleFromName(p.name)) || '').toLowerCase().trim();
+    return !role || !(role in ROLE_ZONES);
+  });
+}
+
 /**
  * Pick a framing instruction based on which body zones the picked
  * products cover. The string lands verbatim in the prompt and tells
@@ -346,6 +361,11 @@ function computeFraming(
   // No tags at all -> default to full body so Seedance has something
   // to compose around.
   if (zones.size === 0) {
+    return 'Frame as a centered full-body shot, head to toe.';
+  }
+  // An unplaceable piece may live in any uncovered zone — show the whole
+  // body and skip every "do not render …" / "bare feet" negative.
+  if (hasUnplaceableProduct(productLines)) {
     return 'Frame as a centered full-body shot, head to toe.';
   }
 
@@ -428,6 +448,13 @@ function computeProductOnlyWardrobe(
   const hasShoes = zones.has('feet');
 
   const base = 'Dress them in ONLY the referenced products — no other clothing, outerwear, layering, accessories, logos, or prints.';
+
+  // An unplaceable piece may be the very garment a filler would deny (the
+  // mislabeled sneaker vs "bare feet") — assert nothing about uncovered
+  // zones and let the reference images place every product.
+  if (hasUnplaceableProduct(productLines)) {
+    return `${base} Wear every referenced product where it naturally belongs on the body.`;
+  }
 
   // Neutral fillers, only for zones that the framing will actually show
   // (i.e. once there's a bottom, the torso + legs are in frame).

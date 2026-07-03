@@ -14,6 +14,7 @@ import {
   type AdminThread, type AdminLook, type StyleUpMessage, type StyleUpTrace,
 } from '~/services/style-up';
 import { getGenerationDetail, type UserGeneration, type UserUpload } from '~/services/user-generations';
+import { roleTagFromName } from '~/services/product-roles';
 import StyleUpTraceDiagram from '~/components/style-up/StyleUpTraceDiagram';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
 import '~/styles/admin-style-up.css';
@@ -47,9 +48,19 @@ const gKv = { display: 'flex', justifyContent: 'space-between', gap: 10, fontSiz
 const gKvVal = { fontWeight: 600, color: '#0f172a', textAlign: 'right' as const };
 const gArrow = { fontSize: 28, color: '#cbd5e1', textAlign: 'center' as const, lineHeight: 1 };
 
+// Head-to-toe display order for the pieces row (hat → jacket → top →
+// bottoms → shoes, accessories last). New generations are stored in this
+// order already; the name-based sort covers renders from before that.
+const SLOT_ORDER: Record<string, number> = { Hat: 0, Sunglasses: 1, Jacket: 2, Top: 3, Dress: 3, Pants: 4, Shoes: 5, Jewelry: 6, Bag: 7, Accessory: 8 };
+function sortHeadToToe<T extends { name?: string }>(pieces: T[]): T[] {
+  return [...pieces].sort((a, b) =>
+    (SLOT_ORDER[roleTagFromName(a.name ?? null) ?? ''] ?? 9) - (SLOT_ORDER[roleTagFromName(b.name ?? null) ?? ''] ?? 9));
+}
+
 function GenerationDiagram({ look, gen, uploads }: { look: AdminLook; gen: UserGeneration | null; uploads: UserUpload[] }) {
   const status = gen?.status ?? look.status;
   const videoUrl = gen?.video_url ?? look.videoUrl;
+  const pieces = sortHeadToToe(look.products);
   return (
     <div style={{ display: 'grid', gridTemplateColumns: '1fr auto 1.2fr auto 1fr', gap: 12, alignItems: 'start' }}>
       {/* Input — the shopper + the pieces going into the render. */}
@@ -70,10 +81,10 @@ function GenerationDiagram({ look, gen, uploads }: { look: AdminLook; gen: UserG
             </span>
           ))}
         </div>
-        <div style={{ ...gLabel, marginTop: 4 }}>Pieces ({look.products.length})</div>
+        <div style={{ ...gLabel, marginTop: 4 }}>Pieces ({pieces.length})</div>
         <div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
-          {look.products.length === 0 && <span style={{ fontSize: 12, color: '#94a3b8' }}>(none recorded)</span>}
-          {look.products.map((p, i) => (
+          {pieces.length === 0 && <span style={{ fontSize: 12, color: '#94a3b8' }}>(none recorded)</span>}
+          {pieces.map((p, i) => (
             <span key={p.id || i} title={[p.brand, p.name].filter(Boolean).join(' · ')}
               style={{ width: 40, height: 50, borderRadius: 6, overflow: 'hidden', background: '#f1f5f9', border: '1px solid #e2e8f0' }}>
               {p.image && <img src={p.image} alt="" style={{ width: '100%', height: '100%', objectFit: 'cover', display: 'block' }} />}
