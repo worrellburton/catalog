@@ -212,18 +212,32 @@ function autoScene(occasion: string | null | undefined, msgs: StyleUpMessage[]):
 const FUN_SCENES = ['a sunny park', 'a rooftop at golden hour', 'a city street at night', 'a minimalist loft', 'an art gallery', 'a boardwalk by the sea', 'a sidewalk café in Paris'];
 const WILD_SCENES = ['a neon Tokyo alley in the rain', 'the surface of Mars', 'a 1970s disco', 'backstage at a runway show', 'a snowy mountain peak', 'an underwater glass tunnel', 'a desert at sunset'];
 
-/** The four scene options: Studio, Outdoor coffee shop, the smart suggestion
- *  (the place they named in chat, or the occasion's backdrop, else a fresh fun
- *  spot), and something wild. */
+/** The four scene options. When the shopper's own ask points at a place (the
+ *  spot they named in chat, or the occasion's backdrop), that suggestion LEADS
+ *  the list so the first tap matches what they asked for ("laying out by the
+ *  pool" → "A pool" first). Otherwise: Studio, Outdoor coffee shop, a fresh fun
+ *  spot, and something wild. */
 function sceneOptions(smart: string | null): Array<{ value: string; label: string }> {
   const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-  const fun = FUN_SCENES[Math.floor(Math.random() * FUN_SCENES.length)];
-  const third = smart && !/clean studio|coffee shop/i.test(smart) ? smart : fun;
   const wild = WILD_SCENES[Math.floor(Math.random() * WILD_SCENES.length)];
-  return [
+  const staples = [
     { value: 'a clean studio', label: 'Studio' },
     { value: 'an outdoor coffee shop', label: 'Outdoor coffee shop' },
-    { value: third, label: cap(third) },
+  ];
+  // A genuine, related suggestion (not the neutral studio/coffee fallback)
+  // goes FIRST, aligned to the shopper's request.
+  const related = smart && !/clean studio|coffee shop/i.test(smart) ? smart : null;
+  if (related) {
+    return [
+      { value: related, label: cap(related) },
+      ...staples,
+      { value: wild, label: `${cap(wild)} 🤯` },
+    ];
+  }
+  const fun = FUN_SCENES[Math.floor(Math.random() * FUN_SCENES.length)];
+  return [
+    ...staples,
+    { value: fun, label: cap(fun) },
     { value: wild, label: `${cap(wild)} 🤯` },
   ];
 }
@@ -336,6 +350,55 @@ function BrandChip({ brand }: { brand: { name: string; domain: string } }) {
       )}
       <span className="su-brand-chip-name">{brand.name}</span>
     </span>
+  );
+}
+
+/** Diagnostic log for a failed look render — copied to the clipboard so a
+ *  render error can be troubleshot from any device (including the field). */
+function buildRenderErrorLog(
+  genId: string | null,
+  r: UserGeneration | null,
+  pieces: StyleUpProductRef[],
+): string {
+  return [
+    'StyleUp look render failed',
+    `gen: ${r?.id ?? genId ?? '—'}`,
+    `status: ${r?.status ?? 'unknown'}`,
+    r?.error_code ? `code: ${r.error_code}` : null,
+    r?.error ? `error: ${r.error}` : null,
+    r?.error_raw ? `raw: ${typeof r.error_raw === 'string' ? r.error_raw : JSON.stringify(r.error_raw)}` : null,
+    r?.fal_request_id ? `req: ${r.fal_request_id}` : null,
+    r?.veo_model ? `model: ${r.veo_model}${r.model ? ` (${r.model})` : ''}` : null,
+    pieces.length ? `pieces: ${pieces.map(pc => [pc.brand, pc.name].filter(Boolean).join(' ')).join(' | ')}` : null,
+    `at: ${new Date().toISOString()}`,
+  ].filter(Boolean).join('\n');
+}
+
+/** Small "copy log" pill shown next to a render error, so the exact failure
+ *  (gen id, error code, request id, pieces) is one tap from the clipboard. */
+function CopyLogButton({ text }: { text: string }) {
+  const [copied, setCopied] = useState(false);
+  const copy = async () => {
+    try {
+      await navigator.clipboard.writeText(text);
+    } catch {
+      // Older webviews without the async clipboard API: a throwaway textarea.
+      const ta = document.createElement('textarea');
+      ta.value = text;
+      ta.style.position = 'fixed';
+      ta.style.opacity = '0';
+      document.body.appendChild(ta);
+      ta.select();
+      try { document.execCommand('copy'); } catch { /* best effort */ }
+      document.body.removeChild(ta);
+    }
+    setCopied(true);
+    window.setTimeout(() => setCopied(false), 1600);
+  };
+  return (
+    <button type="button" className="su-render-log" onClick={copy} title="Copy diagnostic log">
+      <span aria-hidden="true">🐛</span> {copied ? 'Copied ✓' : 'Copy log'}
+    </button>
   );
 }
 
@@ -1833,7 +1896,10 @@ export function StyleUpExperience({
                     ) : canceled ? (
                       <div className="su-render-status su-render-status--failed">Canceled.</div>
                     ) : failed ? (
-                      <div className="su-render-status su-render-status--failed">Couldn&apos;t render that look, try another piece.</div>
+                      <div className="su-render-status su-render-status--failed su-render-status--err">
+                        <span>Couldn&apos;t render that look, try another piece.</span>
+                        <CopyLogButton text={buildRenderErrorLog(m.renderGenerationId, r, pieces)} />
+                      </div>
                     ) : (
                       <div className="su-render-cook">
                         <div className="su-render-status">
