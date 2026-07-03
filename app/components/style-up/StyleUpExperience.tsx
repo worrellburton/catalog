@@ -580,12 +580,15 @@ export function StyleUpExperience({
   const scrollerRef = useRef<HTMLDivElement | null>(null);
 
   // A render is in flight for this thread, used to block stacking renders.
-  const pendingRender = messages.some(m => {
+  // Every render still in flight (not done/failed/canceled), in order — powers
+  // both the "still working" gate and the active-generations tray.
+  const activeGens = messages.filter(m => {
     if (m.kind !== 'render' || !m.renderGenerationId) return false;
     if (canceledIds.has(m.renderGenerationId)) return false;
     const r = renders[m.renderGenerationId];
     return !r || (r.status !== 'done' && r.status !== 'failed');
   });
+  const pendingRender = activeGens.length > 0;
 
   // Stop a render in flight. Mark it canceled locally (unblocks the composer +
   // halts the poll at once) and fire a best-effort DB cancel so the Fal result
@@ -992,8 +995,15 @@ export function StyleUpExperience({
     if (error) {
       setRenderError(error);
       await sendStylistText(threadId, `Hmm, I couldn't start that render, ${error}`);
+      setGenLook(false);
+      return;
     }
+    // Render is in flight (the progress bubble + the generations tray cover it).
+    // Re-engage while it cooks so the wait feels alive — the stylist types again
+    // and invites another look in the meantime.
     setGenLook(false);
+    await beat();
+    await sendStylistText(threadId, "Alright, it's cooking now — this one takes a few minutes. Want to start another look while we wait? Tell me a new vibe, or tap a piece to swap and I'll pull options.");
   }, [threadId, userId, genLook, pendingRender, triggerStylist, beat]);
 
   // The pieces currently in the look, the stylist's product picks, excluding
@@ -1808,6 +1818,42 @@ export function StyleUpExperience({
               <p className="su-chat-intro-sub">e.g. &ldquo;I need a date-night fit&rdquo; or &ldquo;help me build a capsule for work&rdquo;.</p>
             </div>
           )}
+          {/* Active-generations tray — every look still rendering, pinned at the
+              top so the shopper can start another look and still keep up with
+              what's cooking. Tap a chip to jump to that render. */}
+          {activeGens.length > 0 && (
+            <div className="su-gentray" role="status" aria-live="polite">
+              <span className="su-gentray-title">
+                <span className="su-gentray-pulse" aria-hidden="true" />
+                {activeGens.length} look{activeGens.length === 1 ? '' : 's'} generating
+              </span>
+              <div className="su-gentray-chips">
+                {activeGens.map((gm, i) => {
+                  const gr = gm.renderGenerationId ? renders[gm.renderGenerationId] : null;
+                  const gprog = generationProgress(gr?.created_at ?? gm.createdAt, gr?.duration_seconds ?? 10);
+                  const gpieces = gm.productRef?.pieces ?? [];
+                  return (
+                    <button
+                      key={gm.id}
+                      type="button"
+                      className="su-gentray-chip"
+                      onClick={() => document.getElementById(`gen-${gm.renderGenerationId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' })}
+                    >
+                      <span className="su-gentray-thumb">
+                        {gpieces[0]?.image
+                          ? <img src={gpieces[0].image} alt="" loading="lazy" />
+                          : <span className="su-gentray-dot" aria-hidden="true" />}
+                      </span>
+                      <span className="su-gentray-meta">
+                        <b>Look {i + 1}</b>
+                        <span>{fmtRemaining(gprog.remainingSec)}</span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
           {messages.map((m, idx) => {
             if (skipProductIds.has(m.id)) return null; // folded into its look card
             // Day divider before the first visible message of each calendar day,
@@ -1934,7 +1980,7 @@ export function StyleUpExperience({
                 ? generationProgress(r?.created_at ?? m.createdAt, r?.duration_seconds ?? 10)
                 : null;
               return (
-                <div key={m.id} className="su-msg su-msg--stylist">
+                <div key={m.id} id={`gen-${m.renderGenerationId}`} className="su-msg su-msg--stylist">
                   <div className="su-render">
                     {done ? (
                       <button
@@ -2063,13 +2109,31 @@ export function StyleUpExperience({
               </Fragment>
             );
           })}
-          {stylistTyping && typingThreadId === threadId && (
+          {stylistTyping && typingThreadId === threadId && !cardsIncoming && !genLook && (
             <div className="su-msg su-msg--stylist su-msg--tail">
               <span className="su-msg-avatar" aria-hidden="true">
                 <StylistFace avatarUrl={active?.avatarUrl ?? null} name={active?.name} />
               </span>
               <div className="su-bubble su-bubble--typing" aria-label={`${active?.name ?? 'Stylist'} is typing`}>
                 <span /><span /><span />
+              </div>
+            </div>
+          )}
+          {/* Laser indicator — same posting format as the typing dots, but a
+              sweeping beam, shown when a PART or a GENERATION is on the way (not
+              a text reply). It's the teaser: the ghost card / render progress
+              module takes over once the real thing starts. */}
+          {(cardsIncoming || (genLook && !pendingRender)) && (
+            <div className="su-msg su-msg--stylist su-msg--tail">
+              <span className="su-msg-avatar" aria-hidden="true">
+                <StylistFace avatarUrl={active?.avatarUrl ?? null} name={active?.name} />
+              </span>
+              <div
+                className="su-bubble su-bubble--laser"
+                role="status"
+                aria-label={`${active?.name ?? 'Stylist'} is preparing ${genLook ? 'your look' : 'pieces'}`}
+              >
+                <span className="su-laser" aria-hidden="true" />
               </div>
             </div>
           )}
@@ -2082,9 +2146,9 @@ export function StyleUpExperience({
               </div>
             </div>
           )}
-          {/* Product cards are on the way — the card counterpart of the typing
-              dots: a shimmering ghost look-card instead of text dots. */}
-          {(cardsIncoming || !!huntView) && !stylistTyping && (
+          {/* Web hunt still shows the shimmering ghost look-card while it
+              searches + imports (a longer, distinct state from the laser). */}
+          {!!huntView && !stylistTyping && (
             <div className="su-msg su-msg--stylist">
               <div className="su-cardghost" role="status" aria-label="Pieces on the way">
                 {[0, 1].map(i => (
@@ -2094,26 +2158,6 @@ export function StyleUpExperience({
                   </div>
                 ))}
                 <span className="su-cardghost-spark" aria-hidden="true">✦</span>
-              </div>
-            </div>
-          )}
-          {/* The moment a generation is kicked off, show the progress module —
-              the real render bubble (with its live ETA) replaces this as soon
-              as the generation row lands, so there's never a "trust me, it's
-              coming" gap with no progress on screen. */}
-          {genLook && !pendingRender && !stylistTyping && (
-            <div className="su-msg su-msg--stylist">
-              <div className="su-render" role="status" aria-live="polite">
-                <div className="su-render-status">
-                  <span className="su-render-spinner" aria-hidden="true" />
-                  <span className="su-render-status-text">
-                    Starting your look…
-                    <span className="su-render-eta">warming up</span>
-                  </span>
-                </div>
-                <div className="su-tape su-tape--indeterminate" aria-hidden="true">
-                  <div className="su-tape-fill" />
-                </div>
               </div>
             </div>
           )}

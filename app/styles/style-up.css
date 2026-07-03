@@ -574,6 +574,41 @@ html[data-shell="catalog-app"] .su-shell {
   30% { transform: translateY(-4px); opacity: 1; }
 }
 
+/* Laser indicator — shown IN PLACE of the three dots (same stylist-bubble
+   posting format) when what's coming is a PART or a GENERATION, not text. A
+   charged accent-color beam sweeps the bubble so "something's being fired over"
+   reads instantly, distinct from the idle typing dots. */
+.su-bubble--laser {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 13px 16px;
+}
+.su-laser {
+  position: relative;
+  width: 46px; height: 3px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--su-accent, #8aa0c0) 22%, transparent);
+  overflow: hidden;
+}
+.su-laser::before {
+  content: '';
+  position: absolute; inset: 0;
+  width: 45%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, transparent, var(--su-accent, #8aa0c0) 40%, #fff, var(--su-accent, #8aa0c0) 60%, transparent);
+  box-shadow: 0 0 9px 1px var(--su-accent, #8aa0c0);
+  animation: su-laser-sweep 1.05s cubic-bezier(0.55, 0, 0.45, 1) infinite;
+}
+@keyframes su-laser-sweep {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(340%); }
+}
+/* Reduced motion: hold a steady lit core instead of sweeping. */
+@media (prefers-reduced-motion: reduce) {
+  .su-laser::before { animation: none; left: 28%; }
+}
+
 /* "Researching" module — shown while a web stylist searches + imports pieces,
    so the wait reads as active work rather than a dead pause. */
 .su-hunting {
@@ -615,6 +650,73 @@ html[data-shell="catalog-app"] .su-shell {
   color: color-mix(in srgb, var(--su-accent, #5fb6a8) 70%, #cfd2d8);
   opacity: 0.85;
   padding-left: 2px;
+}
+
+/* Active-generations tray — pinned at the top of the chat so a shopper can
+   start another look and still track everything that's cooking. */
+.su-gentray {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: -4px 0 6px;
+  padding: 9px 12px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--su-accent, #8aa0c0) 34%, #26282d);
+  background: color-mix(in srgb, var(--su-accent, #8aa0c0) 12%, #141518);
+  backdrop-filter: blur(8px);
+}
+.su-gentray-title {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: 12px; font-weight: 700; letter-spacing: 0.01em;
+  color: color-mix(in srgb, var(--su-accent, #8aa0c0) 70%, #e7e7ea);
+}
+.su-gentray-pulse {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--su-accent, #8aa0c0);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--su-accent, #8aa0c0) 60%, transparent);
+  animation: su-gentray-pulse 1.6s ease-out infinite;
+}
+@keyframes su-gentray-pulse {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--su-accent, #8aa0c0) 55%, transparent); }
+  100% { box-shadow: 0 0 0 7px transparent; }
+}
+.su-gentray-chips { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }
+.su-gentray-chips::-webkit-scrollbar { display: none; }
+.su-gentray-chip {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 5px 12px 5px 5px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--su-accent, #8aa0c0) 26%, #2a2c31);
+  background: #17181c;
+  color: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s ease, transform 0.12s ease;
+}
+.su-gentray-chip:hover { border-color: var(--su-accent, #8aa0c0); }
+.su-gentray-chip:active { transform: scale(0.97); }
+.su-gentray-thumb {
+  width: 30px; height: 30px; flex: 0 0 auto;
+  border-radius: 8px; overflow: hidden;
+  background: #26282d;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.su-gentray-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.su-gentray-dot {
+  width: 12px; height: 12px; border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--su-accent, #8aa0c0) 45%, transparent);
+  border-top-color: var(--su-accent, #8aa0c0);
+  animation: su-spin 0.8s linear infinite;
+}
+.su-gentray-meta { display: flex; flex-direction: column; line-height: 1.2; }
+.su-gentray-meta b { font-size: 12px; font-weight: 700; color: #e7e7ea; }
+.su-gentray-meta span { font-size: 11px; color: #9aa0a8; }
+@media (prefers-reduced-motion: reduce) {
+  .su-gentray-pulse, .su-gentray-dot { animation: none; }
 }
 
 /* Super-admin-only diagnostics — client-only, never shown to shoppers. */
