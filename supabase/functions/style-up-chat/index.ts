@@ -188,7 +188,7 @@ STYLE OF REPLY:
 - You CAN generate the look on them. NEVER say you can't generate photos.
 - When your reply asks the shopper a question, ALSO set quickReplies: 2-4 short tap-to-answer options (under 25 characters each, first-person where natural) that DIRECTLY answer your question. Otherwise [].
 
-Return ONLY JSON, no prose:
+Output ONLY the JSON object below and NOTHING else — no preamble, no reasoning, no commentary, no text before or after it. Decide silently; the shopper only sees the "reply" string.
 {"reply":"<your text message>","searchQueries":["<one tight query per garment>", ...],"quickReplies":["<tap answer>", ...]}
 searchQueries: 1-4 entries when surfacing pieces this turn, otherwise [].` : `${persona}
 
@@ -206,9 +206,9 @@ ${candList || '(none available)'}
 
 - When your reply asks the shopper a question, ALSO set quickReplies: 2-4 short tap-to-answer options (under 25 characters each, first-person where natural) that DIRECTLY answer your question. Otherwise [].
 
-Return ONLY JSON, no prose:
+Output ONLY the JSON object below and NOTHING else — no preamble, no reasoning, no commentary, no text before or after it. Decide silently; the shopper only sees the "reply" string.
 {"reply":"<your text message>","productIds":["<id>", ...],"quickReplies":["<tap answer>", ...]}
-productIds is optional — include it only when you're actually recommending pieces this turn (max 4).`;
+productIds is optional — include it only when you're actually recommending pieces this turn (a full look = 3-4 ids across slots; max 4).`;
 
     const mapped = turns.map(t => {
       const role: 'user' | 'assistant' = t.sender === 'shopper' ? 'user' : 'assistant';
@@ -246,14 +246,27 @@ productIds is optional — include it only when you're actually recommending pie
     }
     const out = await res.json() as { content?: Array<{ type: string; text?: string }>; usage?: { input_tokens?: number; output_tokens?: number } };
     const text = (out.content?.find(c => c.type === 'text')?.text ?? '').replace(/```json\s*|```\s*/g, '').trim();
-    const start = text.indexOf('{');
-    const end = text.lastIndexOf('}');
     let reply = '';
     let productIds: string[] = [];
     let searchQueries: string[] = [];
     let quickReplies: string[] = [];
+    // Extract the FIRST balanced {...} object, so any reasoning the model tacks
+    // on before/after the JSON is ignored (lastIndexOf('}') used to swallow it,
+    // and a parse miss dumped the raw JSON + chain-of-thought into the chat).
+    const jStart = text.indexOf('{');
+    let jsonSlice = '';
+    if (jStart >= 0) {
+      let depth = 0, inStr = false, esc = false;
+      for (let i = jStart; i < text.length; i++) {
+        const ch = text[i];
+        if (inStr) { if (esc) esc = false; else if (ch === '\\') esc = true; else if (ch === '"') inStr = false; }
+        else if (ch === '"') inStr = true;
+        else if (ch === '{') depth++;
+        else if (ch === '}') { depth--; if (depth === 0) { jsonSlice = text.slice(jStart, i + 1); break; } }
+      }
+    }
     try {
-      const parsed = JSON.parse(text.slice(start, end + 1)) as { reply?: string; productIds?: string[]; searchQueries?: string[]; quickReplies?: string[] };
+      const parsed = JSON.parse(jsonSlice) as { reply?: string; productIds?: string[]; searchQueries?: string[]; quickReplies?: string[] };
       reply = String(parsed.reply ?? '').trim();
       productIds = Array.isArray(parsed.productIds) ? parsed.productIds.map(String) : [];
       searchQueries = Array.isArray(parsed.searchQueries)
@@ -263,9 +276,17 @@ productIds is optional — include it only when you're actually recommending pie
         ? parsed.quickReplies.map(q => String(q).trim()).filter(Boolean).slice(0, 4).map(s => s.slice(0, 40))
         : [];
     } catch {
-      reply = text || "Tell me a bit more about what you're going for?";
+      // Malformed / truncated JSON — recover the reply + any product ids by
+      // regex rather than ever showing the raw blob to the shopper.
+      const rm = text.match(/"reply"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+      if (rm) { try { reply = JSON.parse(`"${rm[1]}"`); } catch { reply = rm[1]; } }
+      productIds = [...text.matchAll(/"([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})"/g)].map(m => m[1]);
     }
-    if (!reply) reply = "Tell me a bit more about what you're going for?";
+    // Never surface raw JSON: if the reply still looks like the model's JSON
+    // envelope, drop it for a friendly line.
+    if (!reply || /"reply"\s*:/.test(reply) || reply.trim().startsWith('{')) {
+      reply = "Let me pull that together for you, one sec.";
+    }
 
     // Validate picks against the candidate set (no hallucinated ids).
     const candById = new Map(cands.map(c => [c.id, c]));

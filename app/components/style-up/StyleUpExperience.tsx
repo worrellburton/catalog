@@ -182,6 +182,41 @@ function isTextBubble(m: StyleUpMessage | null | undefined): boolean {
   return !!m && m.kind === 'text' && !!m.body;
 }
 
+/** Defensive display cleanup: if a stylist message body leaked the raw model
+ *  JSON (`{"reply":"…","productIds":[…]}`) plus any chain-of-thought instead of
+ *  just the reply text — a parse miss in the edge function — pull out the reply
+ *  so the shopper never sees raw JSON. Plain text passes through untouched. */
+function cleanStylistText(body: string): string {
+  const t = body.trim();
+  if (!t.includes('"reply"')) return body;
+  // First balanced {...} object → its reply field (ignores trailing reasoning).
+  const start = t.indexOf('{');
+  if (start >= 0) {
+    let depth = 0, inStr = false, esc = false;
+    for (let i = start; i < t.length; i++) {
+      const ch = t[i];
+      if (inStr) {
+        if (esc) esc = false; else if (ch === '\\') esc = true; else if (ch === '"') inStr = false;
+      } else if (ch === '"') inStr = true;
+      else if (ch === '{') depth++;
+      else if (ch === '}') {
+        depth--;
+        if (depth === 0) {
+          try {
+            const p = JSON.parse(t.slice(start, i + 1)) as { reply?: unknown };
+            if (typeof p.reply === 'string' && p.reply.trim()) return p.reply.trim();
+          } catch { /* fall through to regex */ }
+          break;
+        }
+      }
+    }
+  }
+  // Regex fallback for truncated / malformed JSON.
+  const m = t.match(/"reply"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+  if (m) { try { return JSON.parse(`"${m[1]}"`); } catch { return m[1]; } }
+  return body;
+}
+
 // Head-to-toe display order for the look card: hat → layers → top → bottoms →
 // shoes, accessories last. Unmapped roles keep their arrival order at the end.
 const SLOT_ORDER: Record<string, number> = { Hat: 0, Sunglasses: 1, Jacket: 2, Top: 3, Dress: 3, Pants: 4, Shoes: 5, Jewelry: 6, Bag: 7 };
@@ -2130,7 +2165,7 @@ export function StyleUpExperience({
                 )}
                 {m.body && (
                   <div className="su-bubble" onClick={() => setTimeShownId(prev => (prev === m.id ? null : m.id))}>
-                    {m.body}
+                    {m.sender === 'stylist' ? cleanStylistText(m.body) : m.body}
                   </div>
                 )}
                 {timeShownId === m.id && (
