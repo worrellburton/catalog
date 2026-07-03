@@ -46,7 +46,7 @@ function applyPrefs(prev: StylePrefs, text: string): StylePrefs {
   const p: StylePrefs = { ...prev, avoidColors: [...prev.avoidColors] };
   const bm = t.match(/(?:under|below|less than|max|budget(?: of)?|keep it (?:under|below))\s*\$?\s*(\d{2,4})/) || t.match(/\$\s*(\d{2,4})\b/);
   if (bm) p.budgetMax = parseInt(bm[1], 10);
-  const occ = t.match(/\b(date night|date|wedding|interview|work|office|brunch|party|night out|dinner|gym|travel|vacation|festival|concert|beach|graduation|reunion|funeral)\b/);
+  const occ = t.match(/\b(running errands|errands|date night|date|wedding|interview|work|office|brunch|party|night out|dinner|gym|travel|vacation|festival|concert|beach|pool|poolside|graduation|reunion|funeral|hike|hiking|golf|tennis|picnic|museum|church)\b/);
   if (occ) p.occasion = occ[1];
   if (/\b(more casual|casual|chill|relaxed|laid.?back|dress.?down|comfy)\b/.test(t)) p.formality = 'casual';
   if (/\b(dressier|dress.?up|fancier|more formal|formal|elevated|sharper|classy|smart)\b/.test(t)) p.formality = 'dressier';
@@ -200,11 +200,47 @@ const OCCASION_SCENE: Record<string, string> = {
   festival: 'an open-air festival at dusk', concert: 'a concert hall at night',
   graduation: 'a sunny campus courtyard', reunion: 'a lively lounge', funeral: 'a quiet chapel',
 };
+// What the shopper says they need the look FOR — an activity OR a place —
+// each mapped to a natural, well-phrased render setting. This drives the FIRST
+// scene option so it always matches their ask ("running errands" → "Running
+// errands…", "laying out by the pool" → "A pool"). More specific phrases are
+// listed first so they win when several could match.
+const INTENT_SCENE: Array<{ re: RegExp; scene: string }> = [
+  { re: /\b(running errands|errands|errand|grocery run|groceries|farmers.? ?market)\b/, scene: 'running errands around town' },
+  { re: /\b(by the pool|poolside|pool day|the pool|\bpool\b|laying out|lounging|sunbathing)\b/, scene: 'a pool' },
+  { re: /\b(beach|seaside|shore|the ocean|by the sea)\b/, scene: 'a sandy beach at golden hour' },
+  { re: /\b(coffee run|coffee shop|caf[eé])\b/, scene: 'an outdoor coffee shop' },
+  { re: /\b(walking the dog|walk the dog|dog walk)\b/, scene: 'a leafy neighborhood on a dog walk' },
+  { re: /\b(commute|commuting|the office|office|work meeting|at work|for work)\b/, scene: 'a bright modern office' },
+  { re: /\b(gym|workout|working out|training)\b/, scene: 'a bright modern gym' },
+  { re: /\b(date night|date|dinner)\b/, scene: 'a candlelit restaurant' },
+  { re: /\b(night out|party|club|going out)\b/, scene: 'a rooftop bar at night' },
+  { re: /\b(wedding)\b/, scene: 'an elegant garden venue' },
+  { re: /\b(brunch)\b/, scene: 'a sunny outdoor café' },
+  { re: /\b(travel|a trip|vacation|airport|flight)\b/, scene: 'a scenic old-town street' },
+  { re: /\b(hike|hiking|trail|camping)\b/, scene: 'a sunlit mountain trail' },
+  { re: /\b(picnic)\b/, scene: 'a sunny park' },
+  { re: /\b(museum|gallery)\b/, scene: 'a modern art gallery' },
+  { re: /\b(festival)\b/, scene: 'an open-air festival at dusk' },
+  { re: /\b(concert)\b/, scene: 'a concert hall at night' },
+  { re: /\b(rooftop)\b/, scene: 'a rooftop at golden hour' },
+  { re: /\b(golf)\b/, scene: 'a green golf course' },
+  { re: /\b(tennis)\b/, scene: 'a sunlit tennis court' },
+  { re: /\b(church|chapel|service)\b/, scene: 'a quiet chapel' },
+  { re: /\b(garden|park)\b/, scene: 'a sunny park' },
+];
+
+/** Resolve the shopper's stated intent to a setting: their own words in chat
+ *  win, then the parsed occasion, else a clean studio. */
 function autoScene(occasion: string | null | undefined, msgs: StyleUpMessage[]): string {
-  const explicit = sceneFromChat(msgs); // shopper's own words win ("on a rooftop")
+  const explicit = sceneFromChat(msgs); // shopper's own words win ("by the pool")
   if (explicit) return explicit;
-  const key = (occasion ?? '').toLowerCase().trim();
-  return OCCASION_SCENE[key] ?? 'a clean studio';
+  const occ = (occasion ?? '').toLowerCase().trim();
+  if (occ) {
+    for (const { re, scene } of INTENT_SCENE) if (re.test(occ)) return scene;
+    if (OCCASION_SCENE[occ]) return OCCASION_SCENE[occ];
+  }
+  return 'a clean studio';
 }
 
 // The scene chooser's variable slots: a fresh fun spot when nothing smarter is
@@ -212,46 +248,46 @@ function autoScene(occasion: string | null | undefined, msgs: StyleUpMessage[]):
 const FUN_SCENES = ['a sunny park', 'a rooftop at golden hour', 'a city street at night', 'a minimalist loft', 'an art gallery', 'a boardwalk by the sea', 'a sidewalk café in Paris'];
 const WILD_SCENES = ['a neon Tokyo alley in the rain', 'the surface of Mars', 'a 1970s disco', 'backstage at a runway show', 'a snowy mountain peak', 'an underwater glass tunnel', 'a desert at sunset'];
 
-/** The four scene options. When the shopper's own ask points at a place (the
- *  spot they named in chat, or the occasion's backdrop), that suggestion LEADS
- *  the list so the first tap matches what they asked for ("laying out by the
- *  pool" → "A pool" first). Otherwise: Studio, Outdoor coffee shop, a fresh fun
- *  spot, and something wild. */
+/** The four scene options. When the shopper's ask points at an activity or
+ *  place (from their chat, or the parsed occasion), that suggestion LEADS the
+ *  list so the first tap always matches what they asked for ("running errands"
+ *  first, "A pool" first). Then two staples and one wild card. De-duped so a
+ *  related pick that equals a staple isn't shown twice. */
 function sceneOptions(smart: string | null): Array<{ value: string; label: string }> {
-  const cap = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
-  const wild = WILD_SCENES[Math.floor(Math.random() * WILD_SCENES.length)];
-  const staples = [
-    { value: 'a clean studio', label: 'Studio' },
-    { value: 'an outdoor coffee shop', label: 'Outdoor coffee shop' },
-  ];
-  // A genuine, related suggestion (not the neutral studio/coffee fallback)
-  // goes FIRST, aligned to the shopper's request.
-  const related = smart && !/clean studio|coffee shop/i.test(smart) ? smart : null;
-  if (related) {
-    return [
-      { value: related, label: cap(related) },
-      ...staples,
-      { value: wild, label: `${cap(wild)} 🤯` },
-    ];
+  const pick = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
+  const LABELS: Record<string, string> = {
+    'a clean studio': 'Studio',
+    'an outdoor coffee shop': 'Outdoor coffee shop',
+  };
+  const labelFor = (v: string) => LABELS[v] ?? (v.charAt(0).toUpperCase() + v.slice(1));
+  const wild = pick(WILD_SCENES);
+  const fun = pick(FUN_SCENES);
+  // The related suggestion leads whenever it's anything other than the neutral
+  // studio fallback (a coffee-run intent legitimately maps to the coffee shop).
+  const related = smart && smart.toLowerCase().trim() !== 'a clean studio' ? smart : null;
+  const ordered = related
+    ? [related, 'a clean studio', 'an outdoor coffee shop', fun]
+    : ['a clean studio', 'an outdoor coffee shop', fun];
+  const seen = new Set<string>();
+  const out: Array<{ value: string; label: string }> = [];
+  for (const v of ordered) {
+    if (out.length >= 3 || seen.has(v)) continue;
+    seen.add(v);
+    out.push({ value: v, label: labelFor(v) });
   }
-  const fun = FUN_SCENES[Math.floor(Math.random() * FUN_SCENES.length)];
-  return [
-    ...staples,
-    { value: fun, label: cap(fun) },
-    { value: wild, label: `${cap(wild)} 🤯` },
-  ];
+  out.push({ value: wild, label: `${labelFor(wild)} 🤯` });
+  return out;
 }
 
-// Scene-ish places the shopper mentioned in chat ("a beach in Italy", "rooftop
-// bar") — the most recent mention becomes one of the scene options, so the
-// setting they were already picturing is one tap away.
-const SCENE_NOUN_RE = /\b(beach|rooftop|park|garden|vineyard|villa|yacht|boat|marina|pier|boardwalk|pool|lake|mountain|ski slope|desert|forest|city street|downtown|club|bar|caf[eé]|restaurant|hotel|gallery|museum|festival|concert|wedding|picnic)\b(\s+(?:in|at|by|on|near)\s+[A-Za-z][\w'’]*(?:\s+[A-Z][\w'’]*)*)?/i;
+// The activity or place the shopper most recently mentioned ("laying out by
+// the pool", "running errands", "a rooftop bar") → the matching setting from
+// INTENT_SCENE, so the spot they were already picturing leads the options.
 function sceneFromChat(msgs: StyleUpMessage[]): string | null {
   for (let i = msgs.length - 1; i >= 0; i--) {
     const m = msgs[i];
     if (m.sender !== 'shopper' || m.kind !== 'text' || !m.body) continue;
-    const hit = m.body.match(SCENE_NOUN_RE);
-    if (hit) return `a ${hit[0].trim()}`;
+    const t = m.body.toLowerCase();
+    for (const { re, scene } of INTENT_SCENE) if (re.test(t)) return scene;
   }
   return null;
 }
@@ -372,6 +408,25 @@ function buildRenderErrorLog(
     pieces.length ? `pieces: ${pieces.map(pc => [pc.brand, pc.name].filter(Boolean).join(' ')).join(' | ')}` : null,
     `at: ${new Date().toISOString()}`,
   ].filter(Boolean).join('\n');
+}
+
+/** Shopper-facing render-error message, chosen by failure class so we never
+ *  tell someone to "try another piece" when the real cause is our render
+ *  engine (billing/infra) — swapping a piece can't fix that. Only a content
+ *  block is actually the photo/piece's fault. */
+function renderErrorMessage(r: UserGeneration | null): string {
+  const code = r?.error_code ?? '';
+  const raw = `${r?.error ?? ''} ${typeof r?.error_raw === 'string' ? r?.error_raw : JSON.stringify(r?.error_raw ?? '')}`.toLowerCase();
+  if (code === 'content_policy' || /partner_validation|content_policy|celebrity|public figure|minor|policy/.test(raw)) {
+    return 'The video engine blocked this look — usually a recognizable face or a bold logo in a photo. Try a different selfie or swap a piece.';
+  }
+  if (/exhausted balance|user is locked|top up|billing|quota|insufficient/.test(raw)) {
+    return 'Our render engine is temporarily offline — this one’s on us, not your look. Hang tight and try again shortly.';
+  }
+  if (code === 'fal_submit_error' || code === 'fal_error' || /unexpected status|timeout|no webhook|provider|5\d\d|429/.test(raw)) {
+    return 'Our render engine hit a snag — not your look. Give it another go in a moment.';
+  }
+  return 'Couldn’t render that look — try again, or swap a piece.';
 }
 
 /** Small "copy log" pill shown next to a render error, so the exact failure
@@ -1897,7 +1952,7 @@ export function StyleUpExperience({
                       <div className="su-render-status su-render-status--failed">Canceled.</div>
                     ) : failed ? (
                       <div className="su-render-status su-render-status--failed su-render-status--err">
-                        <span>Couldn&apos;t render that look, try another piece.</span>
+                        <span>{renderErrorMessage(r)}</span>
                         <CopyLogButton text={buildRenderErrorLog(m.renderGenerationId, r, pieces)} />
                       </div>
                     ) : (
