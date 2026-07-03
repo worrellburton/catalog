@@ -508,7 +508,7 @@ export async function adminListLooks(limit = 120): Promise<AdminLook[]> {
 
   const [{ data: gens }, { data: gprods }, { data: threads }] = await Promise.all([
     supabase.from('user_generations').select('id, status, video_url, created_at').in('id', genIds.length ? genIds : ['00000000-0000-0000-0000-000000000000']),
-    supabase.from('user_generation_products').select('generation_id, sort_order, products(name, brand, image_url, primary_image_url, url)').in('generation_id', genIds.length ? genIds : ['00000000-0000-0000-0000-000000000000']),
+    supabase.from('user_generation_products').select('generation_id, sort_order, products(name, brand, image_url, primary_image_url, url)').in('generation_id', genIds.length ? genIds : ['00000000-0000-0000-0000-000000000000']).order('sort_order'),
     supabase.from('style_up_threads').select(`id, shopper_user_id, ${STYLIST_JOIN}`).in('id', threadIds.length ? threadIds : ['00000000-0000-0000-0000-000000000000']),
   ]);
 
@@ -736,6 +736,17 @@ async function renderLook(
       if (ownerIdx !== undefined) return [{ ...l, roleTag: null }];    // suspect type vs confirmed owner: demote, keep
       return lastAny.get(l.roleTag) === i ? [l] : [];                  // type-only group: last pick wins
     });
+  }
+
+  // Canonical head-to-toe order — hat → jacket → top → bottoms → shoes,
+  // accessories last — so the prompt's product list, the stored sort_order,
+  // and every pieces row (chat cooking card, admin generation graph) all
+  // read top-down. Stable sort keeps arrival order within a slot.
+  {
+    const ORDER: Record<string, number> = { Hat: 0, Sunglasses: 1, Jacket: 2, Top: 3, Dress: 3, Pants: 4, Shoes: 5, Jewelry: 6, Bag: 7, Accessory: 8 };
+    lines.sort((a, b) =>
+      (ORDER[a.roleTag ?? roleTagFromName(a.name) ?? ''] ?? 9)
+      - (ORDER[b.roleTag ?? roleTagFromName(b.name) ?? ''] ?? 9));
   }
 
   let prompt = buildGenerationPrompt({
