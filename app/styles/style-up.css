@@ -813,7 +813,7 @@ html[data-shell="catalog-app"] .su-shell {
 .su-render-stop:hover { background: rgba(233,165,156,.16); border-color: rgba(233,165,156,.4); color: #f0c4bd; }
 .su-render-cook { display: flex; flex-direction: column; gap: 12px; padding-bottom: 14px; }
 /* The pieces going into the look — bob gently while it cooks. */
-.su-render-pieces { display: flex; gap: 8px; flex-wrap: wrap; padding: 0 18px; }
+.su-render-pieces { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 0 18px; }
 .su-render-pieces--done { padding: 10px 12px 2px; }
 .su-render-piece {
   width: 40px; height: 50px; border-radius: 8px; overflow: hidden;
@@ -825,6 +825,32 @@ html[data-shell="catalog-app"] .su-shell {
   0%, 100% { transform: translateY(0); }
   50% { transform: translateY(-4px); }
 }
+/* The shopper's own photos — the context refs guiding the render — orbit
+   together in CIRCLES ahead of the square piece tiles, so the whole recipe
+   reads at a glance: you + the pieces → the look. The cluster spins while
+   each photo counter-spins about its own center to keep faces upright. */
+.su-render-you { position: relative; width: 58px; height: 58px; flex: 0 0 auto; }
+.su-render-you::before {
+  content: ''; position: absolute; inset: -2px; border-radius: 50%;
+  border: 1.5px dashed rgba(212, 181, 133, .5);
+  animation: su-spin 9s linear infinite reverse;
+}
+.su-render-you-orbit { position: absolute; inset: 0; animation: su-spin 9s linear infinite; }
+.su-render-you-photo {
+  position: absolute; width: 28px; height: 28px; border-radius: 50%; overflow: hidden;
+  background: #26282d; border: 1.5px solid rgba(255, 255, 255, .32);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .45);
+  animation: su-spin 9s linear infinite reverse;
+}
+.su-render-you-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* Cluster layouts: triangle for 3, side-by-side pair for 2, centered for 1. */
+.su-render-you-photo:nth-child(1) { top: 1px; left: 15px; }
+.su-render-you-photo:nth-child(2) { top: 28px; left: 28px; }
+.su-render-you-photo:nth-child(3) { top: 28px; left: 2px; }
+.su-render-you-photo:first-child:nth-last-child(2) { top: 15px; left: 2px; }
+.su-render-you-photo:nth-child(2):nth-last-child(1) { top: 15px; left: 28px; }
+.su-render-you-photo:only-child { top: 11px; left: 11px; width: 36px; height: 36px; }
+.su-render-plus { color: #8b8e96; font-size: 15px; font-weight: 800; flex: 0 0 auto; }
 .su-render-spinner {
   width: 16px; height: 16px; flex: 0 0 auto;
   border-radius: 50%;
@@ -1230,6 +1256,9 @@ html[data-shell="catalog-app"] .su-shell {
   .su-swap-opt-media img,
   .su-choose-opt-media img,
   .su-render-piece img,
+  .su-render-you::before,
+  .su-render-you-orbit,
+  .su-render-you-photo,
   .su-tape--indeterminate .su-tape-fill,
   .su-convo-dot { animation: none; }
 }
