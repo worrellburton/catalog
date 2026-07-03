@@ -568,6 +568,7 @@ export function StyleUpExperience({
   const [chosenBySlot, setChosenBySlot] = useState<Record<string, string>>({}); // role → chosen product id
   const [rejected, setRejected] = useState<Set<string>>(new Set());   // product ids the shopper passed on
   const [chosenScene, setChosenScene] = useState<string | null>(null); // the look's setting
+  const [endConfirm, setEndConfirm] = useState(false); // in-app "end this conversation?" glass modal
   const [prefs, setPrefs] = useState<StylePrefs>(EMPTY_PREFS);
   const prefsRef = useRef<StylePrefs>(EMPTY_PREFS); // always-current copy for callbacks
   const lastRenderSigRef = useRef<string>('');      // dedupe identical re-renders (#10)
@@ -785,10 +786,15 @@ export function StyleUpExperience({
     else void loadThreads();
   }, [threadId, closeThread, loadThreads]);
 
-  // "End conversation" from inside the thread — same delete, with a confirm.
-  const endConversation = useCallback(async () => {
+  // "End conversation" from inside the thread — opens an in-app glass confirm
+  // (never the native browser dialog), then deletes on confirm.
+  const endConversation = useCallback(() => {
     if (!threadId) return;
-    if (typeof window !== 'undefined' && !window.confirm('End this conversation? This permanently deletes it.')) return;
+    setEndConfirm(true);
+  }, [threadId]);
+  const confirmEndConversation = useCallback(async () => {
+    if (!threadId) return;
+    setEndConfirm(false);
     await handleDeleteThread(threadId);
   }, [threadId, handleDeleteThread]);
 
@@ -1502,6 +1508,25 @@ export function StyleUpExperience({
     </div>
   ) : null;
 
+  // "End this conversation?" — an in-app frosted-glass confirm (NOT the native
+  // browser dialog), themed to the chat + tinted to the active stylist's accent.
+  const endConfirmOverlay = endConfirm ? (
+    <div className="su-confirm-backdrop" role="dialog" aria-modal="true" aria-label="End conversation"
+      style={{ ['--su-accent' as string]: active?.accentColor ?? '#8aa0c0' }}
+      onClick={() => setEndConfirm(false)}>
+      <div className="su-confirm" onClick={e => e.stopPropagation()}>
+        <div className="su-confirm-title">End this conversation?</div>
+        <div className="su-confirm-body">
+          This permanently deletes your chat with {active?.name ?? 'this stylist'} and the looks in it.
+        </div>
+        <div className="su-confirm-actions">
+          <button type="button" className="su-confirm-btn su-confirm-btn--cancel" onClick={() => setEndConfirm(false)}>Keep it</button>
+          <button type="button" className="su-confirm-btn su-confirm-btn--danger" onClick={() => void confirmEndConversation()}>End chat</button>
+        </div>
+      </div>
+    </div>
+  ) : null;
+
   // Product pop-up — the product counterpart of the look viewer: a slide-up
   // overlay with the gallery, fit + fabric facts, a short description, a
   // similar-products rail, and save/shop. Swipe down (from the top of the
@@ -1808,7 +1833,7 @@ export function StyleUpExperience({
               );
             })()}
           </span>
-          <button type="button" className="su-thread-end" onClick={() => void endConversation()}>End</button>
+          <button type="button" className="su-thread-end" onClick={endConversation}>End</button>
         </div>
 
         {contextCard}
@@ -2377,7 +2402,7 @@ export function StyleUpExperience({
             : pickerOpen ? <>{header(() => setPickerOpen(false))}{pickerPane}</>
             : <>{railHeader}{landingHero}{convosPane}{findStylistBar}</>}
         </div>
-        {viewerOverlay}{productOverlay}
+        {viewerOverlay}{productOverlay}{endConfirmOverlay}
       </>
     );
   }
@@ -2399,7 +2424,7 @@ export function StyleUpExperience({
             )}
           </main>
         </div>
-        {viewerOverlay}{productOverlay}
+        {viewerOverlay}{productOverlay}{endConfirmOverlay}
       </>
     );
   }
@@ -2409,7 +2434,7 @@ export function StyleUpExperience({
         {bgLayer}
         {threadId ? threadPane : <>{railHeader}{rosterPane}</>}
       </div>
-      {viewerOverlay}{productOverlay}
+      {viewerOverlay}{productOverlay}{endConfirmOverlay}
     </>
   );
 }
