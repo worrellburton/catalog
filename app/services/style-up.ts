@@ -285,6 +285,9 @@ export interface StyleUpThreadSummary {
   /** Something is cooking in this thread right now — a web hunt or an on-you
    *  render in flight. Drives the glowing pill on the conversations list. */
   working: boolean;
+  /** When a look is rendering in this thread, its timing so the conversations
+   *  list can show a live progress bar. Null for a web hunt (no render yet). */
+  workingGen: { createdAt: string; durationSeconds: number } | null;
 }
 
 /** All of the shopper's conversations that have at least one message, newest
@@ -322,17 +325,24 @@ export async function fetchMyThreads(shopperUserId: string): Promise<StyleUpThre
   // A thread whose newest message is a render may still be cooking — check the
   // generation's status in one batch (terminal = done/failed).
   const renderingThreads = new Set<string>();
+  const genTiming = new Map<string, { createdAt: string; durationSeconds: number }>(); // thread → active render timing
   if (lastRenderGen.size > 0) {
     const { data: gens } = await supabase
       .from('user_generations')
-      .select('id, status')
+      .select('id, status, created_at, duration_seconds')
       .in('id', [...lastRenderGen.values()]);
-    const active = new Set(
-      ((gens ?? []) as Array<{ id: string; status: string | null }>)
+    const activeById = new Map(
+      ((gens ?? []) as Array<{ id: string; status: string | null; created_at: string; duration_seconds: number | null }>)
         .filter(g => g.status !== 'done' && g.status !== 'failed')
-        .map(g => g.id),
+        .map(g => [g.id, g]),
     );
-    for (const [tid, gid] of lastRenderGen) if (active.has(gid)) renderingThreads.add(tid);
+    for (const [tid, gid] of lastRenderGen) {
+      const g = activeById.get(gid);
+      if (g) {
+        renderingThreads.add(tid);
+        genTiming.set(tid, { createdAt: g.created_at, durationSeconds: g.duration_seconds ?? 10 });
+      }
+    }
   }
 
   const now = Date.now();
@@ -353,6 +363,7 @@ export async function fetchMyThreads(shopperUserId: string): Promise<StyleUpThre
         lastMessage: preview.get(tid) ?? null,
         lastMessageAt: (t.last_message_at as string | null) ?? null,
         working: hunting || renderingThreads.has(tid),
+        workingGen: genTiming.get(tid) ?? null,
       };
     })
     .filter((x): x is StyleUpThreadSummary => !!x);

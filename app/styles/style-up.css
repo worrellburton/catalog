@@ -1581,11 +1581,38 @@ html[data-shell="catalog-app"] .su-shell {
   color: var(--su-accent, #8aa0c0);
   font-weight: 600;
 }
+/* Spinning accent ring around the stylist avatar while a look renders in
+   that chat, so the conversations list telegraphs "cooking" at a glance. */
+.su-stylist-avatar--spinning::after {
+  content: '';
+  position: absolute; inset: -3px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  border-top-color: var(--su-accent, #8aa0c0);
+  border-right-color: color-mix(in srgb, var(--su-accent, #8aa0c0) 55%, transparent);
+  animation: su-spin 0.9s linear infinite;
+}
+.su-convo-card .su-stylist-avatar { position: relative; }
+/* Live render progress bar under the "Generating your look…" line. */
+.su-convo-progress {
+  display: block;
+  height: 3px; margin-top: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--su-accent, #8aa0c0) 22%, transparent);
+  overflow: hidden;
+}
+.su-convo-progress-fill {
+  display: block; height: 100%;
+  border-radius: 999px;
+  background: var(--su-accent, #8aa0c0);
+  transition: width 0.6s ease;
+}
 @media (prefers-reduced-motion: reduce) {
   .su-convo-card--working {
     animation: none;
     box-shadow: 0 0 18px color-mix(in srgb, var(--su-accent, #8aa0c0) 26%, transparent);
   }
+  .su-stylist-avatar--spinning::after { animation: none; }
 }
 
 /* ── Ghost look-card — the card counterpart of the typing dots. Shown while
