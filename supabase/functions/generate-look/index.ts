@@ -468,34 +468,46 @@ async function handleRequest(req: Request): Promise<Response> {
   }
 
   // ── Gather product image URLs ──────────────────────────────────────────────
-  // Prefer products.primary_image_url (the vision-picked solo shot)
-  // so the image-to-video pipeline conditions on a clean packshot
-  // instead of an on-model frame that would composite two humans
-  // together. Falls back to the legacy image_url when no primary
-  // pick has run yet.
+  // Send the GALLERY (every catalog angle) to the video model, not just the
+  // single display packshot — more angles = a truer garment reconstruction on
+  // the person. The shopper-facing UI shows only the curated primary image;
+  // the model gets the whole gallery. Falls back to the primary / legacy image
+  // when a product has no gallery.
   const { data: productLinks } = await admin
     .from('user_generation_products')
-    .select('role_tag, sort_order, products(name, brand, image_url, primary_image_url)')
+    .select('role_tag, sort_order, products(name, brand, image_url, primary_image_url, images)')
     .eq('generation_id', generationId)
     .order('sort_order');
 
   // A Google-Shopping/SerpAPI search THUMBNAIL (encrypted-tbn*.gstatic.com,
   // serpapi.com) is tiny and often a wrong colorway — a poor image to
   // condition a video model on (this is why looks came out the wrong color).
-  // ~47% of active products have such a URL as their primary_image_url, so
-  // prefer a real merchant/storage packshot from EITHER field when one exists.
   const isThumb = (u: string | null | undefined): boolean =>
     !!u && /gstatic\.com|serpapi\.com/.test(u);
+  const galleryUrl = (it: unknown): string | null => {
+    if (typeof it === 'string') return it;
+    if (it && typeof it === 'object') {
+      const o = it as Record<string, unknown>;
+      const u = o.url ?? o.src;
+      return typeof u === 'string' ? u : null;
+    }
+    return null;
+  };
   const productEntries = (productLinks || [])
     .map(r => {
-      const p = r.products as unknown as { name: string | null; brand: string | null; image_url: string | null; primary_image_url: string | null } | null;
-      const candidates = [p?.primary_image_url, p?.image_url].filter(Boolean) as string[];
-      const chosen = candidates.find(u => !isThumb(u)) ?? candidates[0] ?? null;
-      if (!chosen) return null;
+      const p = r.products as unknown as { name: string | null; brand: string | null; image_url: string | null; primary_image_url: string | null; images: unknown } | null;
+      // Gallery first (all angles), de-duped and thumbnail-free. Fall back to
+      // the curated packshot / legacy image when no gallery exists.
+      const gallery = (Array.isArray(p?.images) ? p!.images : [])
+        .map(galleryUrl)
+        .filter((u): u is string => typeof u === 'string' && !!u && !isThumb(u));
+      const fallback = [p?.primary_image_url, p?.image_url].filter((u): u is string => typeof u === 'string' && !!u && !isThumb(u));
+      const imageUrls = [...new Set(gallery.length > 0 ? gallery : fallback)];
+      if (imageUrls.length === 0) return null;
       const label = [p?.brand, p?.name].filter(Boolean).join(' ').trim() || 'product';
-      return { role: r.role_tag || 'item', label, image_url: chosen, brand: p?.brand ?? null };
+      return { role: r.role_tag || 'item', label, imageUrls, brand: p?.brand ?? null };
     })
-    .filter((x): x is { role: string; label: string; image_url: string; brand: string | null } => !!x);
+    .filter((x): x is { role: string; label: string; imageUrls: string[]; brand: string | null } => !!x);
 
   // ── Resolve video model from platform settings ───────────────────────────
   const { data: modelSetting } = await admin
@@ -521,7 +533,7 @@ async function handleRequest(req: Request): Promise<Response> {
   // Veo and Seedance/ByteDance: always send exactly 1 face photo (randomly chosen from up to 3 available).
   const faceSlots = (isVeo || isSeedance) ? 1 : Math.min(faceSourceUrls.length, maxSlots);
   // For Veo, no product images are sent — products are described in the prompt instead.
-  const productSlots = isVeo ? 0 : Math.max(0, Math.min(maxSlots - faceSlots, productEntries.length));
+  const productImageBudget = isVeo ? 0 : Math.max(0, maxSlots - faceSlots);
   // For Veo/Seedance: pick a random face from the first 3 available; otherwise use ordered list.
   const randomFaceIdx = (isVeo || isSeedance) && faceSourceUrls.length > 1
     ? Math.floor(Math.random() * Math.min(faceSourceUrls.length, 3))
@@ -529,12 +541,33 @@ async function handleRequest(req: Request): Promise<Response> {
   const faceSourcesToUse = (isVeo || isSeedance)
     ? [faceSourceUrls[randomFaceIdx]]
     : faceSourceUrls.slice(0, faceSlots);
-  const productsToUse = productEntries.slice(0, productSlots);
+  // Flatten each product's gallery into the reference budget, distributed so
+  // every product gets at least one angle (front images first), then round-
+  // robin the rest until the budget fills. Each entry keeps its product index
+  // so the prompt can tag all of a garment's angles together.
+  const flatProductImgs: { pIdx: number; url: string }[] = [];
+  if (productImageBudget > 0 && productEntries.length > 0) {
+    const perProduct = Math.max(1, Math.floor(productImageBudget / productEntries.length));
+    productEntries.forEach((pe, pIdx) => {
+      for (const u of pe.imageUrls.slice(0, perProduct)) flatProductImgs.push({ pIdx, url: u });
+    });
+    let col = perProduct;
+    while (flatProductImgs.length < productImageBudget) {
+      let added = false;
+      for (let pIdx = 0; pIdx < productEntries.length && flatProductImgs.length < productImageBudget; pIdx++) {
+        const u = productEntries[pIdx].imageUrls[col];
+        if (u) { flatProductImgs.push({ pIdx, url: u }); added = true; }
+      }
+      if (!added) break;
+      col++;
+    }
+  }
   const ts = Date.now();
 
   await logEvent('submit_attempt', {
     face_count: faceSourcesToUse.length,
-    product_count: productsToUse.length,
+    product_count: productEntries.length,
+    product_image_count: flatProductImgs.length,
     fal_model: modelSlug,
     requested_model: gen.model ?? 'fast',
   });
@@ -565,14 +598,21 @@ async function handleRequest(req: Request): Promise<Response> {
   }
 
   const reHostedProducts = await Promise.all(
-    productsToUse.map((p, i) =>
-      reHostImage(p.image_url, `${generationId}/product_${i}_${ts}.jpg`, admin)
+    flatProductImgs.map((f, i) =>
+      reHostImage(f.url, `${generationId}/product_${i}_${ts}.jpg`, admin)
     )
   );
   await logEvent('image_rehost_products', { stats: reHostedProducts.map(r => r.stats) });
-  const goodProductUrls = reHostedProducts.map(r => r.url).filter((u): u is string => u !== null);
+  // Keep the product-index mapping only for gallery images that survived
+  // re-hosting, so prompt tags line up with the reference array.
+  const goodFlatProducts = flatProductImgs
+    .map((f, i) => ({ pIdx: f.pIdx, url: reHostedProducts[i].url }))
+    .filter((f): f is { pIdx: number; url: string } => f.url !== null);
+  const goodProductUrls = goodFlatProducts.map(f => f.url);
   const droppedProducts = reHostedProducts.length - goodProductUrls.length;
-  const productsUsed = productsToUse.filter((_, i) => reHostedProducts[i].url !== null);
+  // Distinct products that still have at least one usable angle.
+  const usedProductIdxs = [...new Set(goodFlatProducts.map(f => f.pIdx))].sort((a, b) => a - b);
+  const productsUsed = usedProductIdxs.map(i => productEntries[i]);
 
   if (droppedFaces > 0 || droppedProducts > 0) {
     await logEvent('image_preflight', {
@@ -603,11 +643,19 @@ async function handleRequest(req: Request): Promise<Response> {
         : `The person's face and identity belong ONLY to ${faceTags}.`)
     : '';
 
-  // Veo: all product entries used for prompt text even though none are sent as images.
-  const promptProducts = isVeo ? productEntries : productsUsed;
+  // Veo: describe every product in text (no product images sent). Other models:
+  // tag EACH garment with ALL of its surviving gallery slots, so the model
+  // knows those N images are the same item from different angles.
   const productClauses = isVeo
-    ? promptProducts.map(p => `${p.label} (${p.role.toLowerCase()})`)
-    : productsUsed.map((p, i) => `${p.role.toLowerCase()} (@Image${goodFaceSlots + i + 1}, ${p.label})`);
+    ? productEntries.map(p => `${p.label} (${p.role.toLowerCase()})`)
+    : usedProductIdxs.map(pIdx => {
+        const pe = productEntries[pIdx];
+        const tags = goodFlatProducts
+          .map((f, i) => (f.pIdx === pIdx ? `@Image${goodFaceSlots + i + 1}` : null))
+          .filter((t): t is string => t !== null)
+          .join('/');
+        return `${pe.role.toLowerCase()} (${tags}, ${pe.label})`;
+      });
 
   const heightClause = gen.height_label ? `Make them ${gen.height_label} tall.` : '';
   const ageClause = gen.age_label ? `They look ${gen.age_label}.` : '';

@@ -225,16 +225,12 @@ export async function fetchProductDetail(productId: string): Promise<StyleUpProd
     .maybeSingle();
   if (!data) return null;
   const r = data as Record<string, unknown>;
-  const gallery: string[] = [];
-  const push = (u: unknown) => { if (typeof u === 'string' && u && !gallery.includes(u)) gallery.push(u); };
-  push(r.primary_image_url);
-  push(r.image_url);
-  if (Array.isArray(r.images)) {
-    for (const it of r.images as unknown[]) {
-      if (typeof it === 'string') push(it);
-      else if (it && typeof it === 'object') push((it as Record<string, unknown>).url ?? (it as Record<string, unknown>).src);
-    }
-  }
+  // Display shows ONLY the primary (curated) image — never the raw gallery.
+  // The gallery angles are for the video model, not the shopper-facing pop-up.
+  const primary = (typeof r.primary_image_url === 'string' && r.primary_image_url)
+    ? r.primary_image_url
+    : (typeof r.image_url === 'string' && r.image_url ? r.image_url : null);
+  const gallery: string[] = primary ? [primary] : [];
   const fitChips = [...jsonChips(r.fit_intelligence), ...textChips(r.size_fit)].slice(0, 4);
   const fabricChips = [...jsonChips(r.materials_structured), ...textChips(r.materials_care)].slice(0, 4);
   return {
@@ -243,7 +239,7 @@ export async function fetchProductDetail(productId: string): Promise<StyleUpProd
     brand: (r.brand as string | null) ?? null,
     price: (r.price as string | null) ?? null,
     description: (r.description as string | null) ?? null,
-    images: gallery.slice(0, 8),
+    images: gallery,
     url: (r.url as string | null) ?? null,
     fitChips,
     fabricChips,
