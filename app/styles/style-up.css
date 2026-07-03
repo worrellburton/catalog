@@ -844,6 +844,10 @@ html[data-shell="catalog-app"] .su-shell {
 .su-choose-prompt { font-size: 12px; font-weight: 700; color: var(--su-accent); margin-bottom: 10px; }
 .su-choose-options { display: flex; flex-wrap: wrap; gap: 8px; }
 .su-choose-options--cards { gap: 8px; }
+/* Setting picker: one option per row, full width, so the choices stack
+   vertically instead of wrapping into an uneven 2-up grid. */
+.su-choose-options--stack { flex-direction: column; flex-wrap: nowrap; align-items: stretch; }
+.su-choose-options--stack .su-choose-opt { width: 100%; justify-content: center; }
 .su-choose-opt {
   display: inline-flex; align-items: center; gap: 7px;
   padding: 8px 14px;
@@ -883,6 +887,9 @@ html[data-shell="catalog-app"] .su-shell {
   background: #1c1d21;
   border: 1px solid #2a2c31;
 }
+/* The generation card is a stylist message — clear the absolutely-positioned
+   stylist avatar to its left, like the text bubbles do. */
+.su-msg--stylist > .su-render { margin-left: 32px; }
 /* Compact render thumbnail in the chat — tap to open the big viewer. */
 .su-render-video-btn {
   position: relative; display: block; padding: 0; border: none; background: none;

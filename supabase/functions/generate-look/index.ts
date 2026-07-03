@@ -592,6 +592,17 @@ async function handleRequest(req: Request): Promise<Response> {
   // reference_image_urls array.
   const faceTags = goodFaceUrls.map((_, i) => `@Image${i + 1}`).join(' and ');
 
+  // Identity lock — the #1 failure mode with reference-to-video is the model
+  // borrowing a FACE from a product image (product packshots are usually shot
+  // ON A MODEL). Faces are always the FIRST reference slots; this clause pins
+  // identity to those and tells the model the product images are garments
+  // only, so it never renders the product model's face instead of the shopper.
+  const identityLock = (!isVeo && goodFaceUrls.length > 0)
+    ? (productsUsed.length > 0
+        ? `The person's face, hair, skin tone, and body belong ONLY to ${faceTags} — this is who appears in the video. The remaining reference images are clothing swatches: copy the garments exactly, but completely IGNORE any person, face, model, or body shown wearing them.`
+        : `The person's face and identity belong ONLY to ${faceTags}.`)
+    : '';
+
   // Veo: all product entries used for prompt text even though none are sent as images.
   const promptProducts = isVeo ? productEntries : productsUsed;
   const productClauses = isVeo
@@ -649,6 +660,7 @@ async function handleRequest(req: Request): Promise<Response> {
     // face-cloning phrases that trigger ByteDance's content filter.
     taggedPrompt = [
       `Subject: ${faceTags}.`,
+      identityLock,
       productClauses.length > 0
         ? `The subject must be visibly wearing ALL ${productClauses.length} of these items together in the same shot — do not omit or substitute any: ${productClauses.join('; ')}.`
         : '',
@@ -662,6 +674,7 @@ async function handleRequest(req: Request): Promise<Response> {
     const cameraBlock = brandTones.length > 0 ? brandTones[0].camera : 'natural mid-shot, slow gimbal arc';
     taggedPrompt = [
       `Use ${faceTags} as the talent.`,
+      identityLock,
       heightClause,
       ageClause,
       `Dress them in: ${productClauses.join(', ')}.`,
@@ -673,6 +686,7 @@ async function handleRequest(req: Request): Promise<Response> {
     const styleSuffix = gen.style ? `, ${String(gen.style).toLowerCase()} vibe` : '';
     taggedPrompt = [
       `Use ${faceTags} as the subject.`,
+      identityLock,
       heightClause,
       ageClause,
       productClauses.length > 0
