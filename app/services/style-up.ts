@@ -726,6 +726,17 @@ async function renderLook(
   });
   // Scene/setting the shopper chose ("clean studio", "rooftop at golden hour"…).
   if (scene && scene.trim()) prompt += `\n\nSetting: ${scene.trim()}. Place the subject naturally in this environment.`;
+  // Ultra-cinematic direction, layered ON TOP of the context prompt above
+  // (face refs, build, wardrobe, pieces, setting) so every StyleUp render
+  // reads as a high-end editorial commercial instead of a static fit-cam.
+  // Deliberately brand-name-free — Bytedance's partner_validation filter
+  // rejects prompts naming commercial brands.
+  prompt += [
+    '\n\nCinematic direction: shoot this as a high-fashion editorial commercial.',
+    'Volumetric lighting — visible atmospheric light rays and soft haze, a strong motivated key with a sculpting rim light, deep contrast, rich filmic color grade.',
+    'Camera: open on a composed wide, then one slow deliberate push-in (dolly zoom toward the subject), ending tight on a face-and-product hero frame with shallow depth of field and a clean rack focus to a wardrobe detail.',
+    'The pacing and polish of a luxury fashion-house spot — confident model movement, fabric catching the light, crisp detail on every piece. Ultra high quality, sharp focus, subtle filmic grain.',
+  ].join(' ');
 
   const { data: gen, error } = await createGeneration({
     userId: shopperUserId,
