@@ -1782,6 +1782,7 @@ export function StyleUpExperience({
               const r = m.renderGenerationId ? renders[m.renderGenerationId] : null;
               const p = m.productRef;
               const pieces = p?.pieces ?? [];
+              const you = p?.you ?? [];
               const done = r?.status === 'done' && r.video_url;
               const canceled = m.renderGenerationId ? canceledIds.has(m.renderGenerationId) : false;
               const failed = r?.status === 'failed';
@@ -1828,10 +1829,24 @@ export function StyleUpExperience({
                         <div className="su-tape" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(prog?.pct ?? 0)}>
                           <div className="su-tape-fill" style={{ width: `${prog?.pct ?? 0}%` }} />
                         </div>
-                        {/* The pieces going into the look (mirrors the studio's
-                            cooking screen), float them while it renders. */}
-                        {pieces.length > 0 && (
+                        {/* The FULL generation context (mirrors the studio's
+                            cooking screen): the shopper's own photos orbit
+                            together in circles, then the pieces float after —
+                            you + the pieces → the look. */}
+                        {(you.length > 0 || pieces.length > 0) && (
                           <div className="su-render-pieces">
+                            {you.length > 0 && (
+                              <span className="su-render-you" title="Your photos — guiding this look">
+                                <span className="su-render-you-orbit">
+                                  {you.slice(0, 3).map((u, i) => (
+                                    <span className="su-render-you-photo" key={i}>
+                                      <img src={u} alt="" loading="lazy" />
+                                    </span>
+                                  ))}
+                                </span>
+                              </span>
+                            )}
+                            {you.length > 0 && pieces.length > 0 && <span className="su-render-plus" aria-hidden="true">+</span>}
                             {pieces.slice(0, 6).map((pc, i) => (
                               <span className="su-render-piece" key={pc.id || i} style={{ animationDelay: `${i * 0.18}s` }} title={[pc.brand, pc.name].filter(Boolean).join(' · ')}>
                                 {pc.image ? <img src={pc.image} alt="" loading="lazy" /> : <span className="su-product-media--empty" />}

@@ -9,7 +9,7 @@ import { supabase } from '~/utils/supabase';
 import { getUserHeightAge, getUserCustomStyle } from '~/services/profiles';
 import { getUserGender } from '~/services/genders';
 import { getUserSlots, createGeneration, buildGenerationPrompt } from '~/services/user-generations';
-import { roleForProduct } from '~/services/product-roles';
+import { roleForProduct, roleTagFromName } from '~/services/product-roles';
 import { getLookVideoQuality, getLookVideoDuration } from '~/services/dials';
 import type { StylistEngineMethod } from '~/services/dials';
 
@@ -54,6 +54,10 @@ export interface StyleUpProductRef {
   /** On a `render` caption: the pieces composited into the look, so the chat
    *  can show them while it cooks and when it's done. */
   pieces?: StyleUpProductRef[];
+  /** On a `render` caption: the shopper's own photos sent to the model as
+   *  face/body references, so the cooking card can show the FULL context of
+   *  the generation (you + the pieces). Public URLs, slot order. */
+  you?: string[];
 }
 
 export type StyleUpSender = 'shopper' | 'stylist';
@@ -707,11 +711,31 @@ async function renderLook(
   // governed `type`, so it's reliable. Keep the LAST pick per slot (the most
   // recent = the one the shopper just swapped to). Accessory/Jewelry/Bag can
   // legitimately repeat, so they're left alone.
+  //
+  // BUT a slot claim backed ONLY by the governed type can be a mislabel — a
+  // sneaker stored as type 'tops' once claimed the Top slot and silently
+  // evicted the real shirt from the render. So: a piece whose NAME confirms
+  // its role owns the slot (last such pick wins); a type-only claimant never
+  // evicts a name-confirmed piece — its suspect role is dropped and the piece
+  // is KEPT as a generic item (the reference image does the real work).
   {
     const SINGLE = new Set(['Top', 'Pants', 'Dress', 'Shoes', 'Jacket', 'Hat']);
-    const lastIdx = new Map<string, number>();
-    lines.forEach((l, i) => { if (l.roleTag && SINGLE.has(l.roleTag)) lastIdx.set(l.roleTag, i); });
-    lines = lines.filter((l, i) => !(l.roleTag && SINGLE.has(l.roleTag)) || lastIdx.get(l.roleTag) === i);
+    const confirmed = (l: typeof lines[number]) =>
+      !!l.roleTag && SINGLE.has(l.roleTag) && roleTagFromName(l.name) === l.roleTag;
+    const lastConfirmed = new Map<string, number>();
+    const lastAny = new Map<string, number>();
+    lines.forEach((l, i) => {
+      if (!l.roleTag || !SINGLE.has(l.roleTag)) return;
+      lastAny.set(l.roleTag, i);
+      if (confirmed(l)) lastConfirmed.set(l.roleTag, i);
+    });
+    lines = lines.flatMap((l, i) => {
+      if (!l.roleTag || !SINGLE.has(l.roleTag)) return [l];
+      const ownerIdx = lastConfirmed.get(l.roleTag);
+      if (confirmed(l)) return ownerIdx === i ? [l] : [];              // real duplicates: last pick wins
+      if (ownerIdx !== undefined) return [{ ...l, roleTag: null }];    // suspect type vs confirmed owner: demote, keep
+      return lastAny.get(l.roleTag) === i ? [l] : [];                  // type-only group: last pick wins
+    });
   }
 
   let prompt = buildGenerationPrompt({
@@ -763,9 +787,16 @@ async function renderLook(
     id: l.product_id, name: l.name ?? undefined, brand: l.brand ?? undefined, image: imageById.get(l.product_id),
   }));
 
+  // The shopper's reference photos, in slot order, so the cooking card can
+  // show the full generation context: you + the pieces.
+  const { data: ups } = await supabase
+    .from('user_uploads').select('id, public_url').in('id', uploadIds);
+  const urlById = new Map(((ups ?? []) as Array<{ id: string; public_url: string | null }>).map(u => [u.id, u.public_url]));
+  const you = uploadIds.map(id => urlById.get(id)).filter((u): u is string => !!u);
+
   await supabase.from('style_up_messages').insert({
     thread_id: threadId, sender: 'stylist', kind: 'render',
-    render_generation_id: gen.id, product_ref: { ...caption, pieces },
+    render_generation_id: gen.id, product_ref: { ...caption, pieces, you },
   });
   await supabase.from('style_up_threads')
     .update({ last_message_at: new Date().toISOString() }).eq('id', threadId);
