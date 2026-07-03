@@ -999,11 +999,16 @@ export function StyleUpExperience({
       return;
     }
     // Render is in flight (the progress bubble + the generations tray cover it).
-    // Re-engage while it cooks so the wait feels alive — the stylist types again
-    // and invites another look in the meantime.
+    // Re-engage while it cooks so the wait feels alive — three short messages,
+    // each with its own typing bubble + a natural pause between, so it reads
+    // like the stylist is really texting you (not one wall of text).
     setGenLook(false);
     await beat();
-    await sendStylistText(threadId, "Alright, it's cooking now — this one takes a few minutes. Want to start another look while we wait? Tell me a new vibe, or tap a piece to swap and I'll pull options.");
+    await sendStylistText(threadId, "Alright, it's cooking now — this one takes a few minutes.");
+    await beat();
+    await sendStylistText(threadId, 'Want to start another look while we wait?');
+    await beat();
+    await sendStylistText(threadId, "Tell me a new vibe, or tap a piece to swap and I'll pull a few options.");
   }, [threadId, userId, genLook, pendingRender, triggerStylist, beat]);
 
   // The pieces currently in the look, the stylist's product picks, excluding
@@ -2112,7 +2117,7 @@ export function StyleUpExperience({
               </Fragment>
             );
           })}
-          {stylistTyping && typingThreadId === threadId && !cardsIncoming && !genLook && (
+          {stylistTyping && typingThreadId === threadId && (
             <div className="su-msg su-msg--stylist su-msg--tail">
               <span className="su-msg-avatar" aria-hidden="true">
                 <StylistFace avatarUrl={active?.avatarUrl ?? null} name={active?.name} />
@@ -2124,9 +2129,10 @@ export function StyleUpExperience({
           )}
           {/* Laser indicator — same posting format as the typing dots, but a
               sweeping beam, shown when a PART or a GENERATION is on the way (not
-              a text reply). It's the teaser: the ghost card / render progress
-              module takes over once the real thing starts. */}
-          {(cardsIncoming || (genLook && !pendingRender)) && (
+              a text reply). Typing dots win while the stylist is actively
+              "typing" a text line, so a text→generation→text run reads as
+              dots → laser → dots. */}
+          {(cardsIncoming || (genLook && !pendingRender)) && !stylistTyping && (
             <div className="su-msg su-msg--stylist su-msg--tail">
               <span className="su-msg-avatar" aria-hidden="true">
                 <StylistFace avatarUrl={active?.avatarUrl ?? null} name={active?.name} />
@@ -2255,7 +2261,7 @@ export function StyleUpExperience({
                   void openThread(t.threadId, t.stylist);
                 }}
               >
-                <span className="su-stylist-avatar" aria-hidden="true">
+                <span className={`su-stylist-avatar${t.working ? ' su-stylist-avatar--spinning' : ''}`} aria-hidden="true">
                   <StylistFace avatarUrl={t.stylist.avatarUrl} name={t.stylist.name} />
                 </span>
                 <span className="su-convo-info">
@@ -2263,11 +2269,23 @@ export function StyleUpExperience({
                     <span className="su-stylist-name">{t.stylist.name}</span>
                     <span className="su-convo-time">{relativeTime(t.lastMessageAt)}</span>
                   </span>
-                  {t.working
-                    ? <span className="su-convo-preview su-convo-preview--working">Working on your look…</span>
-                    : t.lastMessage && <span className="su-convo-preview">{t.lastMessage}</span>}
+                  {t.working ? (
+                    <>
+                      <span className="su-convo-preview su-convo-preview--working">
+                        {t.workingGen ? 'Generating your look…' : 'Working on your look…'}
+                      </span>
+                      {t.workingGen && (() => {
+                        const cp = generationProgress(t.workingGen.createdAt, t.workingGen.durationSeconds);
+                        return (
+                          <span className="su-convo-progress" role="progressbar" aria-valuemin={0} aria-valuemax={100} aria-valuenow={Math.round(cp.pct)}>
+                            <span className="su-convo-progress-fill" style={{ width: `${cp.pct}%` }} />
+                          </span>
+                        );
+                      })()}
+                    </>
+                  ) : t.lastMessage && <span className="su-convo-preview">{t.lastMessage}</span>}
                 </span>
-                {threadHasNews(t) && <span className="su-convo-dot" aria-label="New message" />}
+                {threadHasNews(t) && !t.working && <span className="su-convo-dot" aria-label="New message" />}
               </button>
             </div>
           ))}
