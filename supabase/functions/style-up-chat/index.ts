@@ -186,9 +186,10 @@ STYLE OF REPLY:
 - Only set searchQueries when you're ACTUALLY surfacing pieces this turn. While you're still clarifying (asking a question), leave it empty.
 - When you do surface, keep the reply SHORT and easy, like "Let me see what I can find for this…", one relaxed line, at most a quick read of the vibe first. Do NOT explain how to tap, try on, or generate; the app shows those controls itself.
 - You CAN generate the look on them. NEVER say you can't generate photos.
+- When your reply asks the shopper a question, ALSO set quickReplies: 2-4 short tap-to-answer options (under 25 characters each, first-person where natural) that DIRECTLY answer your question. Otherwise [].
 
 Return ONLY JSON, no prose:
-{"reply":"<your text message>","searchQueries":["<one tight query per garment>", ...]}
+{"reply":"<your text message>","searchQueries":["<one tight query per garment>", ...],"quickReplies":["<tap answer>", ...]}
 searchQueries: 1-4 entries when surfacing pieces this turn, otherwise [].` : `${persona}
 
 You're texting ${shopperName} inside a styling chat. Shopper context (use it; never ask for what you already know): ${ctxBits.join('; ') || 'not provided yet'}.
@@ -202,8 +203,10 @@ STYLE OF REPLY:
 CANDIDATE PRODUCTS (id | name | brand | price | type) — only recommend from these:
 ${candList || '(none available)'}
 
+- When your reply asks the shopper a question, ALSO set quickReplies: 2-4 short tap-to-answer options (under 25 characters each, first-person where natural) that DIRECTLY answer your question. Otherwise [].
+
 Return ONLY JSON, no prose:
-{"reply":"<your text message>","productIds":["<id>", ...]}
+{"reply":"<your text message>","productIds":["<id>", ...],"quickReplies":["<tap answer>", ...]}
 productIds is optional — include it only when you're actually recommending pieces this turn (max 4).`;
 
     const mapped = turns.map(t => {
@@ -247,12 +250,16 @@ productIds is optional — include it only when you're actually recommending pie
     let reply = '';
     let productIds: string[] = [];
     let searchQueries: string[] = [];
+    let quickReplies: string[] = [];
     try {
-      const parsed = JSON.parse(text.slice(start, end + 1)) as { reply?: string; productIds?: string[]; searchQueries?: string[] };
+      const parsed = JSON.parse(text.slice(start, end + 1)) as { reply?: string; productIds?: string[]; searchQueries?: string[]; quickReplies?: string[] };
       reply = String(parsed.reply ?? '').trim();
       productIds = Array.isArray(parsed.productIds) ? parsed.productIds.map(String) : [];
       searchQueries = Array.isArray(parsed.searchQueries)
         ? parsed.searchQueries.map(q => String(q).trim()).filter(Boolean).slice(0, 4)
+        : [];
+      quickReplies = Array.isArray(parsed.quickReplies)
+        ? parsed.quickReplies.map(q => String(q).trim()).filter(Boolean).slice(0, 4).map(s => s.slice(0, 40))
         : [];
     } catch {
       reply = text || "Tell me a bit more about what you're going for?";
@@ -263,9 +270,10 @@ productIds is optional — include it only when you're actually recommending pie
     const candById = new Map(cands.map(c => [c.id, c]));
     const picks = productIds.map(id => candById.get(id)).filter((c): c is ProductCand => !!c).slice(0, 4);
 
-    // Insert the stylist's text reply, then a product message per pick.
+    // Insert the stylist's text reply (with its tap-to-answer options when the
+    // reply is a question), then a product message per pick.
     await admin.from('style_up_messages')
-      .insert({ thread_id: threadId, sender: 'stylist', kind: 'text', body: reply });
+      .insert({ thread_id: threadId, sender: 'stylist', kind: 'text', body: reply, quick_replies: quickReplies.length ? quickReplies : null });
 
     for (const p of picks) {
       await admin.from('style_up_messages').insert({

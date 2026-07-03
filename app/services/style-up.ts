@@ -67,6 +67,8 @@ export interface StyleUpMessage {
   body: string | null;
   productRef: StyleUpProductRef | null;
   renderGenerationId: string | null;
+  /** Tap-to-answer options the stylist supplied with a question. */
+  quickReplies: string[] | null;
   createdAt: string;
 }
 
@@ -99,6 +101,7 @@ function mapMessage(r: Record<string, unknown>): StyleUpMessage {
     body: (r.body as string | null) ?? null,
     productRef: (r.product_ref as StyleUpProductRef | null) ?? null,
     renderGenerationId: (r.render_generation_id as string | null) ?? null,
+    quickReplies: Array.isArray(r.quick_replies) ? (r.quick_replies as unknown[]).map(String) : null,
     createdAt: String(r.created_at),
   };
 }
@@ -520,7 +523,7 @@ export async function fetchMessages(threadId: string): Promise<StyleUpMessage[]>
   if (!supabase) return [];
   const { data, error } = await supabase
     .from('style_up_messages')
-    .select('id, thread_id, sender, kind, body, product_ref, render_generation_id, created_at')
+    .select('id, thread_id, sender, kind, body, product_ref, render_generation_id, quick_replies, created_at')
     .eq('thread_id', threadId)
     .order('created_at', { ascending: true });
   if (error || !data) return [];
@@ -536,7 +539,7 @@ export async function sendShopperMessage(
   const { data, error } = await supabase
     .from('style_up_messages')
     .insert({ thread_id: threadId, sender: 'shopper', kind: 'text', body: text.trim() })
-    .select('id, thread_id, sender, kind, body, product_ref, render_generation_id, created_at')
+    .select('id, thread_id, sender, kind, body, product_ref, render_generation_id, quick_replies, created_at')
     .single();
   if (error || !data) return null;
   await supabase
@@ -557,7 +560,7 @@ export async function sendStylistText(
   const { data, error } = await supabase
     .from('style_up_messages')
     .insert({ thread_id: threadId, sender: 'stylist', kind: 'text', body: text.trim() })
-    .select('id, thread_id, sender, kind, body, product_ref, render_generation_id, created_at')
+    .select('id, thread_id, sender, kind, body, product_ref, render_generation_id, quick_replies, created_at')
     .single();
   if (error || !data) return null;
   await supabase
@@ -991,7 +994,7 @@ export async function sendChooser(
   const { data, error } = await supabase
     .from('style_up_messages')
     .insert({ thread_id: threadId, sender: 'stylist', kind: 'product', product_ref: { choose } })
-    .select('id, thread_id, sender, kind, body, product_ref, render_generation_id, created_at')
+    .select('id, thread_id, sender, kind, body, product_ref, render_generation_id, quick_replies, created_at')
     .single();
   if (error || !data) return null;
   await supabase.from('style_up_threads')
@@ -1020,7 +1023,7 @@ export async function sendProductPick(
   const { data, error } = await supabase
     .from('style_up_messages')
     .insert({ thread_id: threadId, sender: 'stylist', kind: 'product', product_ref: product })
-    .select('id, thread_id, sender, kind, body, product_ref, render_generation_id, created_at')
+    .select('id, thread_id, sender, kind, body, product_ref, render_generation_id, quick_replies, created_at')
     .single();
   if (error || !data) return null;
   await supabase.from('style_up_threads')
@@ -1040,7 +1043,7 @@ export async function sendSwapOptions(
   const { data, error } = await supabase
     .from('style_up_messages')
     .insert({ thread_id: threadId, sender: 'stylist', kind: 'product', product_ref: { swap: { role, label, options } } })
-    .select('id, thread_id, sender, kind, body, product_ref, render_generation_id, created_at')
+    .select('id, thread_id, sender, kind, body, product_ref, render_generation_id, quick_replies, created_at')
     .single();
   if (error || !data) return null;
   await supabase.from('style_up_threads')
