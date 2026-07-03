@@ -313,6 +313,32 @@ function StylistFace({ avatarUrl, name }: { avatarUrl: string | null; name?: str
   );
 }
 
+/** One favorite-brand chip on the stylist picker: the brand's logo in a small
+ *  light disc + the name. Logo lookup falls back logo-CDN → favicon → initial
+ *  so a missing logo never leaves a broken image. */
+function BrandChip({ brand }: { brand: { name: string; domain: string } }) {
+  const [src, setSrc] = useState(`https://logo.clearbit.com/${brand.domain}`);
+  const [failed, setFailed] = useState(false);
+  return (
+    <span className="su-brand-chip" title={brand.name}>
+      {failed ? (
+        <span className="su-brand-chip-disc su-brand-chip-initial">{brand.name.slice(0, 1)}</span>
+      ) : (
+        <img
+          className="su-brand-chip-disc"
+          src={src}
+          alt=""
+          loading="lazy"
+          onError={() => (src.includes('clearbit')
+            ? setSrc(`https://www.google.com/s2/favicons?domain=${brand.domain}&sz=64`)
+            : setFailed(true))}
+        />
+      )}
+      <span className="su-brand-chip-name">{brand.name}</span>
+    </span>
+  );
+}
+
 // Per-thread "last seen" marker (localStorage), so the conversations list can
 // flag a thread that has a newer stylist message than the shopper has opened.
 const SEEN_PREFIX = 'styleup:seen:';
@@ -2107,21 +2133,26 @@ export function StyleUpExperience({
             <button
               key={s.id}
               type="button"
-              className="su-stylist-card su-person-card"
+              className="su-convo-card su-picker-pill"
               style={{ ['--su-accent' as string]: s.accentColor ?? '#8aa0c0' }}
               onClick={() => void openStylist(s)}
               disabled={opening}
             >
-              <span className="su-person-avatar" aria-hidden="true">
+              <span className="su-stylist-avatar" aria-hidden="true">
                 <StylistFace avatarUrl={s.avatarUrl} name={s.name} />
               </span>
-              <span className="su-stylist-info">
-                <span className="su-person-top">
+              <span className="su-convo-info">
+                <span className="su-convo-top">
                   <span className="su-stylist-name">{s.name}</span>
-                  {meta && <span className="su-person-meta">{meta}</span>}
+                  {meta && <span className="su-convo-time">{meta}</span>}
                 </span>
-                {s.specialty && <span className="su-stylist-specialty">{s.specialty}</span>}
-                {s.bio && <span className="su-stylist-bio">{s.bio}</span>}
+                {s.favoriteBrands.length > 0 ? (
+                  <span className="su-brand-row">
+                    {s.favoriteBrands.slice(0, 3).map(b => <BrandChip key={b.domain} brand={b} />)}
+                  </span>
+                ) : s.specialty ? (
+                  <span className="su-stylist-specialty">{s.specialty}</span>
+                ) : null}
               </span>
             </button>
           );

@@ -330,20 +330,32 @@ html[data-shell="catalog-app"] .su-shell {
 }
 .su-thread-end:hover { background: #2e2020; }
 
-/* Person (stylist) card in the Find-a-stylist picker — bigger photo, age·city. */
-.su-person-avatar {
-  flex: 0 0 auto;
-  width: 60px; height: 60px;
-  border-radius: 50%;
-  overflow: hidden;
-  display: inline-flex; align-items: center; justify-content: center;
-  color: #0a0a0a;
-  background: var(--su-accent);
+/* Find-a-stylist picker — the same rounded pill as the home conversations
+   list (avatar hugging the left), with the stylist's favorite brands as
+   logo chips where a conversation shows its preview line. */
+.su-picker-pill .su-stylist-avatar { width: 56px; height: 56px; }
+.su-brand-row { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; margin-top: 1px; }
+.su-brand-chip {
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 3px 10px 3px 4px;
+  border-radius: 999px;
+  border: 1px solid #26282d;
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 11.5px; font-weight: 650; color: #b9bcc3;
+  white-space: nowrap;
 }
-.su-person-avatar img { width: 100%; height: 100%; object-fit: cover; }
-.su-person-card { align-items: flex-start; }
-.su-person-top { display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
-.su-person-meta { font-size: 12.5px; color: #8b8e96; font-weight: 600; }
+.su-brand-chip-disc {
+  width: 18px; height: 18px; flex: 0 0 auto;
+  border-radius: 50%;
+  background: #fff;
+  object-fit: contain;
+  padding: 2px;
+}
+.su-brand-chip-initial {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0;
+  color: #0a0a0a; font-size: 10px; font-weight: 800;
+}
 
 /* Context card — the shopper's AI-look inputs. Editable; collapses to a slim
    bar as the chat scrolls. */

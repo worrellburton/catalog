@@ -28,6 +28,9 @@ export interface StyleUpStylist {
   sourceMode: 'catalog' | 'web';
   /** Marks the two stylists featured on the /style landing page (else null). */
   landingSlot: string | null;
+  /** The stylist's favorite brands, shown as logo chips on the picker.
+   *  `domain` drives the client-side logo lookup. */
+  favoriteBrands: { name: string; domain: string }[];
 }
 
 /** A product attached to a chat message (the stylist's pick). Loose by design
@@ -88,12 +91,17 @@ function mapStylist(r: Record<string, unknown>): StyleUpStylist {
     accentColor: (r.accent_color as string | null) ?? null,
     sourceMode: (r.source_mode as 'catalog' | 'web') === 'web' ? 'web' : 'catalog',
     landingSlot: (r.landing_slot as string | null) ?? null,
+    favoriteBrands: Array.isArray(r.favorite_brands)
+      ? (r.favorite_brands as Array<{ name?: unknown; domain?: unknown }>)
+          .filter(b => b && typeof b.name === 'string' && typeof b.domain === 'string')
+          .map(b => ({ name: b.name as string, domain: b.domain as string }))
+      : [],
   };
 }
 
 // Every stylist column the client maps. Centralized so every select stays in
 // sync with mapStylist (source_mode / landing_slot were easy to forget).
-const STYLIST_COLS = 'id, name, avatar_url, specialty, bio, city, age, accent_color, source_mode, landing_slot';
+const STYLIST_COLS = 'id, name, avatar_url, specialty, bio, city, age, accent_color, source_mode, landing_slot, favorite_brands';
 const STYLIST_JOIN = `stylist:style_up_stylists(${STYLIST_COLS})`;
 
 function mapMessage(r: Record<string, unknown>): StyleUpMessage {
