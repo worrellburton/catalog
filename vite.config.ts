@@ -302,7 +302,9 @@ export default defineConfig({
             route("users", "routes/admin/users.tsx");
             route("user/:name", "routes/admin/user.$name.tsx");
             route("brand/:name", "routes/admin/brand.$name.tsx");
-            route("style-up", "routes/admin/style-up.tsx");
+            route("style", "routes/admin/style.tsx");
+            // Legacy path — old links keep resolving to the same page.
+            route("style-up", "routes/admin/style.tsx", { id: "admin/style-up-legacy" });
           });
 
           // Brand partners portal (Shopify brand admins). Greenfield in this
