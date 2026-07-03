@@ -454,8 +454,12 @@ export function StyleUpExperience({
   }, []);
 
   const exit = useCallback(() => {
-    // Back always lands on the /style landing (never dumps out to the app feed).
-    navigate('/style');
+    // Top-level back leaves StyleUp for the home feed. (Thread/picker have their
+    // own back — closeThread / closePicker — that step back within StyleUp; this
+    // `exit` is only wired to the landing/roster header, so it's the "leave"
+    // action.) In the native shell the Catalog header is hidden on /style, so
+    // this is the only route back to the feed.
+    navigate('/');
   }, [navigate]);
 
   // Landing sign-in, same Google OAuth the rest of the app uses. On success
