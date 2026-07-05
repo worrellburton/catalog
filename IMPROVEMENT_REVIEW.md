@@ -1,163 +1,158 @@
 # Catalog — Product Improvement Review
-**Branch:** `main` · **Reviewed:** 2026-06-24T23:39Z · **Reviewer:** Claude Sonnet 4.6
+**Branch:** `main` (HEAD `fd8c857`) · **Reviewed:** 2026-07-05 · **Reviewer:** Claude Sonnet 5
 
-Sources examined: `CLAUDE.md`, `docs/daily-feed.md`, `docs/PENDING_QUEUE.md`,
-`docs/VIBE_AESTHETIC_SEARCH_PLAN.md`, `docs/SEARCH_ENRICHMENT_PLAN.md`,
-`docs/ENRICHMENT_FINAL_RESULTS.md`, `docs/BACKFILL_STATUS.md`,
-`supabase/functions/embed-product/index.ts` (buildDoc, SELECT column list),
-`supabase/migrations/082_search_v3_clean.sql` (trg_products_auto_embed trigger column list),
-`supabase/migrations/20260612010000_haiku_context.sql`,
-`supabase/migrations/20260618000000_haiku_context_backfill_cron.sql`,
-`supabase/migrations/20260601000001_user_seen_keys_rpc.sql`,
-`supabase/migrations/20260605000006*.sql` (search_products V7),
-`app/services/personalized-feed.ts`, `app/services/seen-feed.ts`,
-`app/services/looks.ts` (fetchSeenLookIds, reorderBySeen),
-`app/components/ContinuousFeed.tsx`, `app/components/FollowingRail.tsx`,
-`app/components/CreativeCardV2.tsx`, `app/services/session-tracker.ts`,
-`app/components/SessionTrackerHost.tsx`, and recent git log.
+Sources examined this pass: `CLAUDE.md`, `docs/daily-feed.md`, `docs/PENDING_QUEUE.md`,
+`docs/SEARCH_ENRICHMENT_PLAN.md`, `docs/SEARCH_QUALITY_ANALYSIS.md`,
+`docs/superpowers/plans/2026-07-01-styleup-engine-method-dial.md`,
+`docs/superpowers/specs/2026-06-30-style-scenarios-cockpit-design.md`, recent
+git log (`main` currently matches this session's branch exactly — no drift),
+GitHub issues/PRs (none open), plus direct reads of `app/services/dials.ts`,
+`app/services/search.ts`, `app/services/promote-generation.ts`,
+`app/services/generation-queue.ts`, `app/services/product-creative.ts`,
+`app/services/looks.ts`, `supabase/functions/embed-product/index.ts`,
+`scripts/enrich-all-descriptions.mjs`, `app/routes/admin/*.tsx` file sizes,
+and a repo-wide test-coverage / error-handling / migration-count sweep.
 
-Items #1 and #2 carried forward from prior pass (2026-06-22) — still open.
-Items #3 and #4 are new findings from this pass.
-
----
-
-## 1 · `haiku_context` is generated for every product but never enters the search index
-
-**The gap.** The `haiku-context` edge function writes a two-line visual description
-to `products.haiku_context` (line 1: plain-language category, e.g. "potted plant";
-line 2: colour + materials). A pg_cron backfill runs every 10 minutes for any
-product with a primary image. The column is already consumed by `AIStylist.tsx`,
-`type-governance.ts`, and `genders.ts` — but `embed-product/buildDoc()` does **not**
-include it (confirmed: the SELECT at `supabase/functions/embed-product/index.ts:100`
-lists `name, brand, type, description, size_fit, materials_care, fit_intelligence,
-product_taxonomy, styling_metadata` — no `haiku_context`). Semantic search is blind
-to the visual description.
-
-The compounding problem: `trg_products_auto_embed` fires on
-`AFTER INSERT OR UPDATE OF name, brand, type, description, is_active`
-(`supabase/migrations/082_search_v3_clean.sql:321`) — `haiku_context` is absent.
-When the cron sets `haiku_context` on a product that already has an embedding, the
-auto-embed trigger never fires. The search vector predates the visual description
-and is never refreshed.
-
-**Why it matters.** The design intent for `haiku_context` was to correct misleading
-scraped product names and provide a clean visual label (e.g. "oversized canvas tote"
-vs. the raw product title). That signal improves taxonomy and gender inference — but
-the embedding, which drives semantic search, was frozen before the visual description
-existed. Shoppers searching "oversized canvas", "ankle strap heel", or "waffle knit"
-get rankings that ignore the clearest per-product visual evidence for those terms.
-
-**Next step.** In `supabase/functions/embed-product/index.ts`: add `haiku_context`
-to the `SELECT` clause and insert it into `buildDoc`'s `parts` array (after
-`materials_care`, before the JSON-enriched fields). In a new migration: add
-`haiku_context` to the `trg_products_auto_embed` trigger column list and set
-`force: true` in `notify_embed_product()` when
-`NEW.haiku_context IS DISTINCT FROM OLD.haiku_context`. Then run a one-shot batch
-re-embed for `WHERE haiku_context IS NOT NULL AND embedded_at < haiku_context_at`.
+**Status check on the previous review (2026-06-24):** all four items from that
+pass are **still open** — re-verified below, none re-litigated as new findings.
+Ten days of active commits (mostly StyleUp) haven't touched search quality.
+Items #1–#4 below are new findings from this pass, in areas the prior review
+and `PENDING_QUEUE.md` don't cover.
 
 ---
 
-## 2 · Three separate `user_events` round trips fire on every feed mount — and the product-side RPC is unbounded
+## Carried forward, unchanged (re-verified, not re-argued)
 
-**The gap.** On every cold mount the consumer home page fires three independent
-Supabase queries for seen-state:
-
-| Component | Call | What it queries |
+| # | Prior finding | Status |
 |---|---|---|
-| `ContinuousFeed.tsx:354` | `fetchSeenLookIds(user.id)` | `user_events` direct — look UUIDs → `reorderBySeen` |
-| `ContinuousFeed.tsx:392` | `getSeenKeys()` | `user_seen_keys()` RPC — look + product keys → `partitionUnseen` |
-| `FollowingRail.tsx:115` | `fetchSeenLookIds(user.id)` | same `user_events` query again — unseen badge counts |
+| P1 | `haiku_context` generated for every product but never enters the search embedding (`embed-product/index.ts` SELECT/`buildDoc` still omit it; trigger still doesn't fire on that column) | **Still open** |
+| P2 | `fetchSeenLookIds` (`app/services/looks.ts:633`) has no session cache and is called independently by `ContinuousFeed` + `FollowingRail`, firing the same 50k-row query twice per mount; `user_seen_keys()` RPC remains unbounded | **Still open** |
+| P3 | Aesthetic/vibe search ("quiet luxury", "old money") has no department-gated routing — `docs/VIBE_AESTHETIC_SEARCH_PLAN.md` Phase 1 is fully scoped but no `aesthetic_intent`/`APPAREL_DEPARTMENT` migration exists | **Still open** |
+| P4 | 324/793 products have no description text and are skipped by the enrichment backfill (`scripts/enrich-all-descriptions.mjs:184-207` still just increments a `skipped` counter, no synthetic-description branch added) | **Still open** |
 
-`fetchSeenLookIds` has no caching and is called independently by both `ContinuousFeed`
-and `FollowingRail`, so the 50k-row look-impression query runs **twice in parallel**.
-Meanwhile the product-side `user_seen_keys()` RPC
-(`supabase/migrations/20260601000001_user_seen_keys_rpc.sql`) does
-`SELECT DISTINCT … FROM user_events WHERE user_id = auth.uid()` with **no `LIMIT`**.
-`fetchSeenLookIds` explicitly caps at 50,000 rows with a comment explaining the LRU
-bias — the product-side RPC has no such cap and will do a full table scan as
-impression history grows.
-
-**Why it matters.** The three round trips are serial dead weight on page load for
-any signed-in shopper. At 500 DAU × 200 impressions/session × 90 days, the
-unbounded RPC becomes a visible p99 spike. The redundant `fetchSeenLookIds` pair
-also means both callers race to build their own seen-set from potentially
-in-flight data, making the "same order every visit" symptom (`PENDING_QUEUE.md`)
-harder to isolate.
-
-**Next step.** (a) Add a session-level cache to `fetchSeenLookIds`
-(`app/services/looks.ts`) — same `Promise | null` module-level pattern as
-`looksPromise`. Both `ContinuousFeed` and `FollowingRail` share the in-flight
-result. Clear on auth change or `invalidateLooksCache()`. (b) Rewrite
-`user_seen_keys` with a `WITH recent AS (… ORDER BY created_at DESC LIMIT 50000)`
-inner query to bound the scan, mirroring the cap already in `fetchSeenLookIds`.
+These four are genuinely still worth doing — see the previous review's detail if picking one up. They aren't repeated in full here to keep this pass focused on new ground.
 
 ---
 
-## 3 · Aesthetic/vibe search routing is fully designed but unimplemented
+## 1 · Generation-pipeline failures are swallowed with no telemetry — including inside the feature just shipped this week
 
-**The gap.** Consumer search now routes correctly on category intent ("white shoes"
-→ footwear filter) and handles occasion vibes ("date night", "gym workout" — fixed
-by the enrichment pass, 83% contextual success). But _aesthetic/trend_ queries
-remain badly broken: `"quiet luxury"` returns Le Labo candles and Augustinus Bader
-face cream; `"old money"` returns _The Psychology of Money_. The cause is diagnosed
-and data-verified in `docs/VIBE_AESTHETIC_SEARCH_PLAN.md`: `taxonomy.style =
-"minimal luxury"` was applied to all premium items across every department, so
-expanding "quiet luxury" to "minimal luxury" surfaces candles and a laptop rather
-than cashmere blazers. The `search_products` function has no department gate for
-aesthetic queries.
+**The gap.** `app/services/promote-generation.ts:265` sits inside the backfill loop
+that auto-creates archived `looks` rows for completed generations — the "auto-add
+every generated look to My Catalog as Inactive" feature `PENDING_QUEUE.md` marks
+DONE. The catch around `promoteGenerationToLook()` there reads
+`catch { /* keep going — one bad generation shouldn't block the rest */ }` — a
+reasonable per-item resilience choice, but it means a *systemic* failure (a schema
+mismatch from one of the 351 migrations, a null field the promoter doesn't expect)
+fails identically and silently for every affected generation, forever, with nothing
+logged. The same pattern repeats at scale: `app/services/generation-queue.ts`
+(5 bare-comment catches, lines 78/87/109/116/120) and `app/services/product-creative.ts`
+(6 sites, e.g. 605/656/668/697/1718) — all in the paid, credit-consuming generation
+path, none emitting so much as a `console.warn`.
 
-**Why it matters.** Aesthetic queries — "quiet luxury", "clean girl", "streetwear"
-— are the highest-intent fashion vocabulary a shopper can use. Getting them badly
-wrong (a finance book for "old money") is the fastest way to lose trust in the
-search bar entirely. This failure mode is user-visible on any fashion-forward entry
-into the product.
+**Why it matters.** This is the newest, least battle-tested feature in the app
+(shipped this session per `PENDING_QUEUE.md`'s "Progress" log), sitting on top of a
+schema that's changed at a rate of ~50-120 migrations/month. If it regresses, the
+symptom a user sees is "my generated look never showed up in My Catalog" — with
+zero server-side signal pointing an engineer at the cause. Silent failure in a
+credit-consuming flow is also a support-cost risk: users who paid for a generation
+that didn't land have no trace to point to.
 
-**What's ready.** `docs/VIBE_AESTHETIC_SEARCH_PLAN.md` Phase 1 is fully scoped:
-add a third route to `search_products` that fires before the vibe fallback when an
-aesthetic term is detected via a curated regex (Appendix A), hard-filters candidates
-to `taxonomy.category IN APPAREL_DEPARTMENT`, and OR-expands the query with
-canonical apparel tokens ("quiet luxury" also matches `minimal, tailored, refined,
-cashmere`). Estimated: ~½ day, $0, low risk. Same shadow→eval→promote gate as V7.
-
-**Next step.** Implement Phase 1 from the plan doc: add the `aesthetic_intent()`
-detection branch and `APPAREL_DEPARTMENT` filter as a new `ELSIF` block in the
-`search_products` plpgsql function (new migration following `20260605000006*.sql`
-pattern). Add eval assertions from Appendix A's lexicon to
-`tests/search/eval-relevance.mjs` before promoting to canonical. Phase 2 (curating
-`taxonomy.style` to a controlled vocab, ~1 day + ~$0.10) is the next natural step
-after Phase 1 passes eval.
+**Next step.** Add a small `logSwallowedError(context: string, err: unknown)`
+helper (console.warn is enough to start — no new infra needed) and call it from
+`promote-generation.ts:265` first, since it's the newest and highest-risk site;
+extend to the `generation-queue.ts` and `product-creative.ts` sites opportunistically.
 
 ---
 
-## 4 · 324 products have no description text and are invisible to contextual search
+## 2 · `dials.ts` prefetches 7 of 23 feature flags — Daily Feed weights and video-gen config aren't warmed, and the cache never expires
 
-**The gap.** The enrichment backfill (`scripts/enrich-all-descriptions.mjs`) skipped
-324 of 793 products because `description IS NULL OR description = ''`. These products
-can match exact-name and type queries via BM25, but have zero occasion, activity, or
-style text in their embedding. They are effectively invisible to any contextual or
-aesthetic query ("casual friday", "brunch", "date night"). `description_enriched`
-correctly flags them as `false`, but no follow-up pass was ever written for the
-no-description case — the current script just increments `skipped` and continues.
+**The gap.** `app/services/dials.ts` defines 23 distinct dial keys, but
+`prefetchDials()` (lines 162-189) batches only 7 in its single `.in('key', …)`
+query: `video_still_ratio`, `products_image_only`, `show_brand_logos`,
+`comments_enabled`, `auto_editor_enabled`, `waitlist_mode`, `stylist_engine_method`.
+The other 16 — critically `feed_rules`/`feed_rules_order` (the ten Daily Feed
+ranking weights, per `docs/daily-feed.md`) and `look_video_model`/`quality`/
+`duration`/`fallback` (which model a generation actually uses) — each cost their
+own extra round-trip on first read, contradicting the file's own header comment
+that `prefetchDials()` "warms them all." Separately, `dialCache` (line 9) is a
+plain `Map` with no TTL: once a key is cached it only updates via an active
+`subscribeX()` realtime listener, so any one-shot `getX()` call can hold a stale
+value for the rest of the session even after an admin changes the dial.
 
-**Why it matters.** 324 ÷ 793 ≈ 41% of the catalog missed the enrichment lift
-entirely. If any of those are the types already sparse in the active catalog (the
-`SEARCH_QUALITY_ANALYSIS.md` noted jackets, sneakers, and accessories were thin),
-the search gaps compound: no enrichment AND low catalog depth. Products that have
-only a name and a brand are ranked purely by embedding similarity on the raw name
-text — the weakest possible semantic signal.
+**Why it matters.** Daily Feed is the product's core differentiator
+(`docs/daily-feed.md`) and reads `feed_rules` on every feed compute — that's an
+avoidable extra network hop on what should be the single most-optimized path in
+the app. The no-TTL cache is a correctness risk more than a perf one: an admin
+tuning `feed_rules` weights or `look_video_model` live (which `docs/daily-feed.md`
+and the StyleUp dial docs both describe as a normal operating pattern — "flip to
+compare") can have some already-warm sessions never pick up the change.
 
-**Next step.** Add an `elif not product.description` branch to
-`scripts/enrich-all-descriptions.mjs` (~line 204): when `description` is empty,
-call Claude Haiku with a _generation_ prompt (not the augmentation prompt used for
-existing descriptions) to produce a 2–3 sentence synthetic description from
-`name + brand + type + price + gender`. Example output: _"Casual shorts by Alo Yoga
-at $78. Great for gym workouts, yoga sessions, and outdoor activities. Priced under
-$100, ideal for everyday active wear."_ Cost: <$0.50 for 324 products at Haiku
-rates. Re-embed with the existing `scripts/reembed-enriched-products.mjs`.
+**Next step.** Add `FEED_RULES_KEY`, `FEED_RULES_ORDER_KEY`, and the four
+`LOOK_VIDEO_*_KEY` constants to the `keys` array in `prefetchDials()`
+(`app/services/dials.ts:166-174`). Separately, decide intentionally whether the
+no-TTL cache is fine (session-lifetime staleness may be acceptable for most flags)
+or whether admin-tunable dials need a max-age independent of the realtime subscription.
 
 ---
 
-_Checked against `docs/PENDING_QUEUE.md`, `CLAUDE.md`, and the recent git log
-(`3131c45`). Items D-rest, E, F, G–K (generate flow), L–T (large rebuilds), the
-feed type-clustering decision, and the `daily-feed.md` doc-staleness note are
-tracked elsewhere and not repeated here._
+## 3 · Two admin routes have outgrown what one file — or one context window — can safely hold
+
+**The gap.** `app/routes/admin/data.tsx` is 8,560 lines and
+`app/routes/admin/catalogs.tsx` is 7,686 lines — 4-5x larger than the next-biggest
+admin route (`governance.types.tsx` at 1,490 lines) and roughly 30x over this
+repo's own stated guideline in CLAUDE.md Section 6 ("Keep files < 300 lines...
+one responsibility per file"). `catalogs.tsx` in particular now holds the home
+catalog FEED ordering, the Daily Feed settings modal, and the seeding/Styling tab
+all in one file — three features this session's own commits have been actively
+extending (Daily Feed dials, StyleUp scenario seeding).
+
+**Why it matters.** This repo's primary development mode is AI-assisted editing
+(per CLAUDE.md). A file this large means any single edit either needs a huge
+context read or risks operating on a stale/partial view of surrounding logic —
+exactly the failure mode that turns a small feature add into an accidental
+regression elsewhere in the same file. It's also a growing merge-conflict surface
+if more than one workstream ever touches catalogs/data in parallel.
+
+**Next step.** Split `catalogs.tsx` along its existing tab boundaries (home
+catalog/FEED ordering, Daily Feed modal, Styling/seeding tab are already visually
+distinct sections) into `app/components/admin/catalogs/*.tsx`, kept behind the
+same route with no behavior change. Do the same triage for `data.tsx` once
+catalogs.tsx is done.
+
+---
+
+## 4 · Zero test coverage on Shopify sync, billing, and the two core AI edge functions
+
+**The gap.** Only 9 test files exist in the entire repo (`app/services/*.test.ts`
+×6, `app/utils/*.test.ts` ×3) against 96 files in `app/services` and 172 in
+`app/components`. Every existing test targets feed/dial logic (`manage-looks`,
+`feed-compose`, `dials.*`, `looks`, `search-log`) — none touches money or the two
+highest-stakes AI paths: `supabase/functions/shopify-sync`, `shopify-connect`,
+`shopify-callback` (live order/product sync with brand partners, Section 5 of
+CLAUDE.md) or `personalize-feed` (787 lines, the Daily Feed engine) and
+`style-up-chat` (427 lines, currently being A/B'd per this session's own
+`docs/superpowers/plans/2026-07-01-styleup-engine-method-dial.md`).
+
+**Why it matters.** This codebase changes fast (351 migrations, with June 2026
+alone contributing 119 — a third of all-time schema churn). Untested paths in a
+fast-moving schema are exactly where silent regressions land: a Shopify webhook
+that stops validating HMAC correctly, or a Daily Feed fallback that stops
+triggering when the Claude re-rank call fails, would ship straight to production
+with no test catching it first.
+
+**Next step.** Not full coverage — one smoke test per Shopify webhook handler
+(rejects malformed HMAC, upserts idempotently) and one test asserting
+`personalize-feed`'s fallback-to-deterministic-order path actually fires when the
+Claude re-rank call fails, since that's the one regression a shopper would
+immediately notice (a broken or empty Daily Feed).
+
+---
+
+## Bar check
+
+All 4 new findings above are grounded in direct code reads (file paths + line
+numbers cited), independently re-verified against `PENDING_QUEUE.md` and the
+StyleUp plan docs to confirm they aren't already tracked, and scoped to a
+concrete next step rather than a general recommendation. The four carried-forward
+search-quality items are listed for status only, not double-counted as new
+suggestions. No padding items were added past this list.
