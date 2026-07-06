@@ -33,7 +33,7 @@ interface BottomBarProps {
   onFilterChange: (filter: 'all' | 'men' | 'women') => void;
   searchQuery: string;
   onSearchChange: (query: string) => void;
-  onSelectSuggestion?: (query: string) => void;
+  onSelectSuggestion?: (query: string, price?: string[]) => void;
   onOpenCreators?: () => void;
   catalogName?: string;
   /** True while nl-search is resolving - shows a spinner in the input. */
@@ -474,10 +474,11 @@ function BottomBar({
     // Actually SEARCH the catalog the filters describe — compose a query from
     // the chosen occasion/type/style/etc. and run it through the same
     // semantic search the typed bar uses. Without this, Build only relabeled
-    // the feed and never searched.
+    // the feed and never searched. The budget chips ride along as a structured
+    // price predicate (search_products' filter_price) rather than being dropped.
     const query = composeFilterQuery(activeFilters);
     if (query) {
-      if (onSelectSuggestion) onSelectSuggestion(query);
+      if (onSelectSuggestion) onSelectSuggestion(query, activeFilters.price);
       else onSearchChange(query);
     }
     closeFilters();

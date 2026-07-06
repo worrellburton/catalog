@@ -62,6 +62,7 @@ export async function search(
     k?:           number;
     gender?:      string | null;
     exclude_ids?: string[];
+    price?:       string[];
     signal?:      AbortSignal;
   } = {}
 ): Promise<SearchResponse> {
@@ -90,9 +91,9 @@ export async function search(
 
 async function runSearch(
   trimmed: string,
-  options: { k?: number; gender?: string | null; exclude_ids?: string[]; signal?: AbortSignal },
+  options: { k?: number; gender?: string | null; exclude_ids?: string[]; price?: string[]; signal?: AbortSignal },
 ): Promise<SearchResponse> {
-  const { k = 24, gender = null, exclude_ids, signal } = options;
+  const { k = 24, gender = null, exclude_ids, price, signal } = options;
   let res: Response;
   try {
     res = await fetch(SEARCH_ENDPOINT, {
@@ -102,7 +103,7 @@ async function runSearch(
         Authorization:   `Bearer ${SUPABASE_ANON_KEY}`,
         apikey:          SUPABASE_ANON_KEY,
       },
-      body: JSON.stringify({ query: trimmed, k, gender, exclude_ids }),
+      body: JSON.stringify({ query: trimmed, k, gender, exclude_ids, price }),
       signal,
     });
   } catch (err) {

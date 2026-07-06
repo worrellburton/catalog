@@ -403,6 +403,10 @@ export default function Home() {
   // Enter/suggestion-click bypass the in-feed typing debounce. See
   // useSearchUrlSync.
   const { searchQuery, setSearchQuery, searchTrigger, bumpSearchTrigger, triggerSource } = useSearchUrlSync();
+  // Budget buckets from the Build-a-Catalog filters, applied to the feed search
+  // as a structured price predicate. Only a filter-apply sets this; every plain
+  // search (typed/pill/overlay) clears it so a stale budget can't linger.
+  const [searchPrice, setSearchPrice] = useState<string[]>([]);
   const [searchLoading, setSearchLoading] = useState(false);
   const handleSearchLoadingChange = useCallback((loading: boolean) => {
     setSearchLoading(loading);
@@ -2111,10 +2115,12 @@ export default function Home() {
   }, [logout]);
   const handleSearchChange = useCallback((q: string) => {
     setSearchQuery(q);
+    setSearchPrice([]);
     setCatalogName(q.trim() ? toCatalogName(q) : 'all');
   }, []);
-  const handleSelectSuggestion = useCallback((q: string) => {
+  const handleSelectSuggestion = useCallback((q: string, price: string[] = []) => {
     setSearchQuery(q.toLowerCase());
+    setSearchPrice(price);
     setCatalogName(funnyCatalogName(q));
     bumpSearchTrigger();
     // The searchTrigger effect plays the ceremony when on the hero.
@@ -2139,6 +2145,7 @@ export default function Home() {
       window.scrollTo({ top: 0, behavior: 'auto' });
     }
     setSearchQuery(query);
+    setSearchPrice([]);
     bumpSearchTrigger();
   }, [inShell, setSearchQuery, bumpSearchTrigger]);
 
@@ -2547,6 +2554,7 @@ export default function Home() {
           <ContinuousFeed
             activeFilter={activeFilter}
             searchQuery={searchQuery}
+            searchPrice={searchPrice}
             shuffleKey={shuffleKey}
             layoutMode={layoutMode}
             onOpenLook={handleOpenLook}

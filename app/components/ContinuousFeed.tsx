@@ -40,6 +40,9 @@ interface BookmarksInterface {
 interface ContinuousFeedProps {
   activeFilter: 'all' | 'men' | 'women';
   searchQuery: string;
+  /** Budget buckets from the Build-a-Catalog filters (e.g. ['50-100']). Passed
+   *  through to search_products as a structured price predicate. */
+  searchPrice?: string[];
   shuffleKey: number;
   layoutMode: number;
   onOpenLook?: (look: Look) => void;
@@ -157,6 +160,7 @@ function feedReducer(state: FeedState, action: FeedAction): FeedState {
 function ContinuousFeed({
   activeFilter,
   searchQuery,
+  searchPrice,
   shuffleKey,
   layoutMode,
   onOpenLook: onOpenLookProp,
@@ -472,7 +476,7 @@ function ContinuousFeed({
   // Always run V3 search (gte-small + BM25 + RRF over products). It runs
   // entirely in-edge with no external APIs, so warm queries land in ~60ms
   // and tier-1 still wins the first paint via the catalog_tags fast-path.
-  const semantic = useSearch(searchQuery, { gender: genderOpt, trigger: searchTrigger, enabled: true });
+  const semantic = useSearch(searchQuery, { gender: genderOpt, price: searchPrice, trigger: searchTrigger, enabled: true });
 
   // Semantic queries: commit on the loading true → false transition.
   // wasLoadingRef tracks the previous value so we only commit on the

@@ -83,6 +83,7 @@ Deno.serve(async (req: Request) => {
     k?: number;
     gender?: string | null;
     exclude_ids?: string[];
+    price?: string[];
     warmup?: boolean;
   };
   try {
@@ -113,6 +114,13 @@ Deno.serve(async (req: Request) => {
   const excludeIds = Array.isArray(body.exclude_ids)
     ? body.exclude_ids.filter((s): s is string => typeof s === 'string').slice(0, 500)
     : [];
+  // Build-a-Catalog budget chips → structured price predicate. Whitelist the
+  // bucket codes the RPC understands; empty/absent means no price filter.
+  const PRICE_BUCKETS = ['under25', '25-50', '50-100', '100-200', '200-500', '500plus'];
+  const priceBuckets = Array.isArray(body.price)
+    ? body.price.filter((b): b is string => typeof b === 'string' && PRICE_BUCKETS.includes(b))
+    : [];
+  const filterPrice = priceBuckets.length > 0 ? priceBuckets : null;
 
   // 1. Embed the query (in-edge, ~50ms warm).
   let queryEmbedding: number[];
@@ -142,6 +150,7 @@ Deno.serve(async (req: Request) => {
       k,
       filter_gender:   gender,
       exclude_ids:     excludeIds,
+      filter_price:    filterPrice,
     }),
     supabase.rpc('search_looks', {
       query_embedding: embeddingStr,

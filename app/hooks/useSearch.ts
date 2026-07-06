@@ -30,9 +30,12 @@ export interface SearchHookState {
 
 export function useSearch(
   query: string,
-  options: { gender?: string | null; trigger?: number; enabled?: boolean } = {}
+  options: { gender?: string | null; price?: string[]; trigger?: number; enabled?: boolean } = {}
 ): SearchHookState {
-  const { gender = null, trigger = 0, enabled = true } = options;
+  const { gender = null, price, trigger = 0, enabled = true } = options;
+  // Arrays get a fresh identity every render; key on the contents so the search
+  // only re-fires when the selected budget buckets actually change.
+  const priceKey = (price ?? []).join(',');
 
   const [creatives, setCreatives] = useState<SemanticCreative[]>([]);
   const [looks,     setLooks]     = useState<SemanticLook[]>([]);
@@ -59,6 +62,7 @@ export function useSearch(
       const resp = await search(q, {
         k:          PAGE_SIZE,
         gender,
+        price:       priceKey ? priceKey.split(',') : undefined,
         exclude_ids: append ? Array.from(seenProductsRef.current) : undefined,
         signal:      controller.signal,
       });
@@ -116,7 +120,7 @@ export function useSearch(
       setLoading(false);
       setError('Search unavailable');
     }
-  }, [gender]);
+  }, [gender, priceKey]);
 
   // Reset + fire on query change.
   useEffect(() => {
