@@ -1635,34 +1635,6 @@
   line-height: 1;
 }
 
-/* Saved-by social proof row. Avatars overlap left-to-right with a thin
-   ring; count sits to the right. Sized to feel like a quiet signal next to
-   the price, not a CTA. */
-.pd-saved-by {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin: 12px 0 18px;
-  color: rgba(255, 255, 255, 0.78);
-  font-size: 13px;
-}
-.pd-saved-avatars {
-  display: flex;
-  align-items: center;
-}
-.pd-saved-avatar {
-  width: 26px;
-  height: 26px;
-  border-radius: 50%;
-  object-fit: cover;
-  border: 2px solid #0a0a0a;
-  margin-left: -8px;
-  background: #1a1a1a;
-}
-.pd-saved-avatar:first-child { margin-left: 0; }
-.pd-saved-count { letter-spacing: 0.01em; }
-.pd-saved-count strong { color: #fff; font-weight: 600; }
-
 /* Shop button - sits next to Save. Tap toggles the retailer drawer. */
 .pd-shop-btn {
   display: inline-flex;
