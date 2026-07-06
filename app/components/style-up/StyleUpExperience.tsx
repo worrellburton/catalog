@@ -1817,7 +1817,11 @@ export function StyleUpExperience({
   // Contextual quick replies — one-tap suggestions above the composer, shaped
   // by what just happened (a finished render vs fresh picks vs open chat).
   const quickChips = (() => {
-    if (messages.length === 0 || sending || stylistTyping || !!huntView || genLook || pendingRender) return [] as string[];
+    if (sending || stylistTyping || !!huntView || genLook || pendingRender) return [] as string[];
+    // Empty thread: seed one-tap occasion starters so the first message is a
+    // tap, not a cold keystroke (the biggest first-session drop). Reuses the
+    // same send() path as every other chip.
+    if (messages.length === 0) return ['Date night', 'Wedding guest', 'Work week', 'A trip'];
     const last = messages[messages.length - 1];
     if (last.kind === 'product' && (last.productRef?.choose || last.productRef?.swap)) return []; // a chooser is waiting
     // The stylist asked a question → its OWN supplied answers win (the brain
