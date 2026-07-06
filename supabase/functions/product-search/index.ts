@@ -46,6 +46,16 @@ function inferGender(text: string): 'men' | 'women' | 'unisex' {
   return 'unisex';
 }
 
+// The catalog's products.gender CHECK allows only male / female / unisex, so
+// normalize SerpAPI's men/women labels (and any male/female input) before
+// insert — otherwise the ingest row is rejected by products_gender_check.
+function toCatalogGender(g: string): 'male' | 'female' | 'unisex' {
+  const v = (g || '').toLowerCase();
+  if (['men', 'man', 'mens', 'male', 'boys', 'boy'].includes(v)) return 'male';
+  if (['women', 'woman', 'womens', 'female', 'ladies', 'girls', 'girl'].includes(v)) return 'female';
+  return 'unisex';
+}
+
 function guessBrand(title: string, source: string): string {
   const known = [
     'Nike', 'Adidas', 'Jordan', 'Puma', 'Reebok', 'New Balance', 'Converse',
@@ -111,10 +121,13 @@ async function fetchImmersiveDetails(pageToken: string, apiKey: string): Promise
       ? thumbs.filter((u: unknown): u is string => typeof u === 'string' && u.startsWith('http'))
       : [];
 
-    // Walk SerpAPI's online_sellers list and pick the first non-Google merchant URL.
-    // Schema across versions: stores | online_sellers | sellers_results.online_sellers
+    // Pick the first non-Google merchant URL from the seller list. The real
+    // PDP link lives under product_results.stores[].link (verified against the
+    // live immersive schema — e.g. oldnavy.gap.com/browse/product.do?pid=…).
+    // The other shapes are kept for cross-version resilience.
     type Seller = { direct_link?: string; link?: string };
     const sellerLists: Seller[][] = [
+      json?.product_results?.stores,
       json?.sellers_results?.online_sellers,
       json?.online_sellers,
       json?.stores,
@@ -183,20 +196,16 @@ async function searchSerpApi(query: string, apiKey: string, detailLimit: number)
       if (u && !seen.has(u)) { seen.add(u); images.push(u); }
     }
 
-    // URL resolution chain (priority order):
-    //  1. immersive merchant URL (resolved via google_immersive_product sellers)
-    //  2. r.product_link / r.link if it's NOT google.com
-    //  3. any available URL as a display fallback (Google Shopping URLs allowed here;
-    //     the frontend's isLikelyProductUrl guard prevents ingesting them).
-    const candidates = [
+    // Only a real (non-Google) merchant URL counts. Google Shopping links —
+    // both /shopping/product/<id> and ?ibp=oshop&q=… — are dead ends: they
+    // render "Nothing to see here" for shoppers and the scraper can't resolve
+    // them. Prefer the immersive stores[] PDP, else the result's own
+    // product_link/link when it's a real merchant. No Google fallback.
+    const resolvedUrl = [
       details?.merchantUrl || '',
       String(r.product_link || ''),
       String(r.link || ''),
-    ];
-    // Prefer a direct (non-Google) merchant URL for ingest quality.
-    // Fall back to any valid URL so the product still appears in search results.
-    const merchantUrl = candidates.find(u => u && /^https?:\/\//i.test(u) && !isGoogleUrl(u)) || '';
-    const resolvedUrl = merchantUrl || candidates.find(u => u && /^https?:\/\//i.test(u)) || '';
+    ].find(u => u && /^https?:\/\//i.test(u) && !isGoogleUrl(u)) || '';
 
     return {
       name: title,
@@ -223,14 +232,21 @@ Deno.serve(async (req: Request) => {
     const url = new URL(req.url);
     let query = url.searchParams.get('q') || '';
     let ingest = url.searchParams.get('ingest') === 'true';
-    let ingestGender: 'men' | 'women' | 'unisex' | undefined;
+    let ingestGender: string | undefined;
+    let ingestSource: string | null = null;
+    let ingestActive = true;
     if (req.method === 'POST') {
       const body = await req.json().catch(() => ({}));
       if (!query) query = String(body.query || body.q || '');
       if (body.ingest === true) ingest = true;
-      if (body.gender && ['men', 'women', 'unisex'].includes(body.gender)) {
-        ingestGender = body.gender;
+      if (body.gender && ['men', 'women', 'unisex', 'male', 'female'].includes(String(body.gender).toLowerCase())) {
+        ingestGender = String(body.gender).toLowerCase();
       }
+      // Optional ingest provenance + visibility — the seeding orchestrator passes
+      // source:'seed_serpapi' (the deletable flag) and is_active:false so the
+      // quality gate, not the default, decides go-live.
+      if (typeof body.source === 'string') ingestSource = body.source;
+      if (typeof body.is_active === 'boolean') ingestActive = body.is_active;
     }
     query = query.trim();
     if (!query) return jsonRes({ success: false, error: 'missing query' }, 400);
@@ -275,16 +291,25 @@ Deno.serve(async (req: Request) => {
         .in('url', urls);
       const existingUrls = new Set((existing ?? []).map(r => r.url));
 
+      // Never ingest a URL-less or Google-link row: it can't be clicked out and
+      // the scraper can't enrich it. searchSerpApi already resolves the real
+      // merchant PDP (immersive stores[].link) and stores '' when there isn't
+      // one, so this filter just drops those — no dead ends in the catalog.
       const rowsToInsert = products
-        .filter(p => p.url && !existingUrls.has(p.url))
+        .filter(p => p.url && !isGoogleUrl(p.url) && !existingUrls.has(p.url))
         .map(p => ({
           name: p.name,
           brand: p.brand || null,
           price: p.price || null,
           url: p.url,
           image_url: p.image_url || null,
-          gender: ingestGender ?? p.gender,
-          is_active: true,
+          // Persist the full SerpAPI gallery (thumbnail + thumbnails +
+          // extracted_images + immersive), not just image_url — the auto-pick
+          // trigger and the ad/video generator both read products.images[].
+          images: p.image_urls.length ? p.image_urls : (p.image_url ? [p.image_url] : []),
+          gender: toCatalogGender(ingestGender ?? p.gender),
+          source: ingestSource,
+          is_active: ingestActive,
         }));
 
       if (rowsToInsert.length) {

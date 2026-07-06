@@ -244,9 +244,11 @@
    bar (which is the single search input on the hero). */
 .sfh-scroll-hint {
   position: absolute;
-  /* Lifted above the peeking feed cards at the bottom of the hero so the
-     label never overlaps their tops. */
-  bottom: calc(84px + env(safe-area-inset-bottom));
+  /* Sits low in the hero, just above the peeking feed cards — it belongs to
+     the feed below (the "scroll for your daily feed" cue), separate from the
+     search + recently-viewed cluster above it. Nudged a touch lower so that
+     separation reads clearly now that recently-viewed rides under the bar. */
+  bottom: calc(62px + env(safe-area-inset-bottom));
   left: 50%;
   transform: translateX(-50%);
   display: inline-flex;
@@ -1233,6 +1235,96 @@ html:has(.bottom-bar.search-open) .sc-name-pill { opacity: 0; pointer-events: no
   opacity: 0;
   pointer-events: none;
 }
+
+/* ── Recently viewed — a thumbnail strip riding directly UNDER the home search
+   pill (mirrors the account menu). Rendered as a SIBLING of .bottom-bar, NOT a
+   child: the bar has overflow:hidden for its pill clip, which would hide
+   anything sitting below it. Anchored off the SAME --hero-bar-bottom the bar is
+   lifted to, and faded off the same --hero-scroll-progress, so the strip stays
+   glued just under the bar through the whole hero→scroll motion. Shown only on
+   the home hero at rest; mobile only; only when there's view history. */
+.home-recent-strip { display: none; }
+@media (max-width: 768px) {
+  .app-root.home-hero:not(.hero-scrolled) .home-recent-strip {
+    display: flex;
+    flex-direction: column;
+    gap: 6px;
+    position: fixed;
+    left: 0;
+    right: 0;
+    margin-inline: auto;
+    width: min(560px, calc(100% - 48px)); /* match the search bar's width */
+    /* The bar's visual bottom edge sits at --hero-bar-bottom. Put the strip's
+       box bottom 10px under that, then translateY(100%) drops it by its own
+       height so the strip hugs just below the bar — height-independent. */
+    bottom: calc(var(--hero-bar-bottom, 36svh) - 10px);
+    transform: translateY(100%);
+    z-index: 99; /* just under the bar (z-index:100) */
+    opacity: clamp(0, calc(1.2 - var(--hero-scroll-progress, 0) * 2.4), 1);
+    transition: opacity 0.18s linear;
+  }
+  /* Match the bar: stop intercepting taps once it's faded past the threshold. */
+  .app-root.home-hero.hero-bar-faded:not(.hero-scrolled) .home-recent-strip {
+    pointer-events: none;
+  }
+  /* Hide while the search sheet is open (keyboard up). */
+  html:has(.bottom-bar.search-open) .home-recent-strip { display: none !important; }
+}
+/* Desktop renders recently-viewed IN-FLOW directly under the inline search bar
+   (.sfh-recent inside .sfh-stage — see ShoppingForHero), NOT as this fixed
+   strip, because on the home hero the VISIBLE bar is TypeAnywhere's inline copy
+   in the flex column, not the fixed global bar. So suppress this fixed strip on
+   desktop and let the in-flow one own that surface. */
+@media (min-width: 769px) {
+  .home-recent-strip { display: none !important; }
+}
+/* Desktop in-flow recently-viewed: sits in the hero flex column directly under
+   the inline search bar, capped to the bar's width and centered in the stage.
+   Hidden on mobile (the fixed .home-recent-strip covers that). The pills cloud
+   on focus overlays ABOVE the inline bar, so this never collides. */
+.sfh-recent { display: none; }
+@media (min-width: 769px) {
+  .sfh-recent {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+    width: min(560px, 100%); /* match the inline search bar */
+    margin: 20px auto 0;     /* gap below the bar; centered in the stage */
+  }
+}
+.home-recent-title {
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: rgba(255, 255, 255, 0.42);
+  padding-left: 6px;
+}
+.home-recent-row {
+  display: flex;
+  gap: 7px;
+  overflow-x: auto;
+  overflow-y: hidden;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: 2px;
+}
+.home-recent-row::-webkit-scrollbar { display: none; }
+.home-recent-tile {
+  flex: 0 0 auto;
+  width: 46px;
+  height: 46px;
+  padding: 0;
+  border-radius: 11px;
+  overflow: hidden;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  cursor: pointer;
+  transition: transform 0.12s ease;
+}
+.home-recent-tile:active { transform: scale(0.94); }
+.home-recent-tile img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.home-recent-tile-empty { display: block; width: 100%; height: 100%; }
 
 @media (max-width: 640px) {
   /* Mobile landing bar — match the new one-color glass treatment from

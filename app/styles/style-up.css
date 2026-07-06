@@ -1,0 +1,1946 @@
+/* Style Up — AI stylist chat, a consumer app feature. iMessage-style layout: a
+   stylist roster, then a thread with the shopper's context pinned at the top, a
+   scrolling chat, and a docked composer. Dark by default (the consumer app is
+   dark); --su-accent is the active stylist's color. */
+
+/* Full-screen shell — the page fills the viewport with its own top bar and an
+   internally-scrolling chat. */
+.su-shell {
+  position: fixed;
+  left: 0;
+  right: 0;
+  /* Pinned to the VisualViewport (vars set in StyleUpExperience) so the fixed
+     shell overlays exactly the visible region when iOS Safari opens the keyboard
+     — otherwise the full-height shell scrolls and drags the header/messages off
+     the top. Falls back to the full viewport (keyboard down / no VisualViewport). */
+  top: var(--su-vvt, 0px);
+  height: var(--su-vvh, 100%);
+  z-index: 100;
+  display: flex;
+  flex-direction: column;
+  background: #0a0a0a;
+  color: #e7e7ea;
+  padding-top: env(safe-area-inset-top);
+}
+/* Inside the native app shell env(safe-area-inset-top) reads ~0, so the header
+   would jam up under the status bar. Anchor to --shell-sb (the real status-bar
+   height in px, injected on <html> at document-start by the Flutter shell).
+   The native Catalog header is hidden on /style, so the status-bar height alone
+   is the correct top clearance for the shell's own su-shell-head. */
+html[data-shell="catalog-app"] .su-shell {
+  padding-top: var(--shell-sb, env(safe-area-inset-top, 0px));
+}
+.su-shell-head {
+  flex: 0 0 auto;
+  display: grid;
+  grid-template-columns: 34px 1fr 34px;   /* back · centered brand · spacer */
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px 6px;
+  /* No divider bar under the logo — it floats on the dark base. */
+}
+.su-shell-back { grid-column: 1; }
+/* Centered Catalog logo with "style" right under it. */
+.su-shell-brand {
+  grid-column: 2;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  line-height: 1;
+  min-width: 0;
+}
+.su-shell-logo {
+  height: 22px;
+  width: auto;
+  display: block;
+  color: #f2f2f4;
+}
+.su-shell-brand-style {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.24em;
+  text-transform: uppercase;
+  color: var(--su-accent, #8aa0c0);
+  padding-left: 0.24em;   /* optical-center the tracked caps */
+}
+
+/* ── Desktop: two-pane (stylist/conversation rail + active chat) ───────── */
+@media (min-width: 769px) {
+  .su-shell--split { display: grid; grid-template-columns: 360px 1fr; }
+  .su-rail {
+    display: flex; flex-direction: column; min-height: 0;
+    border-right: 1px solid #1f2024; background: #0c0d0f;
+  }
+  .su-rail .su-page { max-width: none; }
+  .su-main { display: flex; flex-direction: column; min-height: 0; min-width: 0; }
+  .su-main .su-page--thread { max-width: 760px; }
+  .su-main-empty {
+    margin: auto; padding: 32px; max-width: 34ch;
+    display: flex; flex-direction: column; align-items: center; gap: 12px;
+    text-align: center; color: #8b8e96; font-size: 15px;
+  }
+  .su-main-empty-mark { font-size: 34px; color: var(--su-accent); opacity: 0.7; }
+}
+.su-signin { margin: auto; padding: 32px; text-align: center; color: #8b8e96; max-width: 32ch; font-size: 14.5px; }
+
+.su-page {
+  --su-accent: #8aa0c0;
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 22px 18px 32px;
+}
+
+/* ── Roster ──────────────────────────────────────────────────────────── */
+.su-roster-head h1 {
+  margin: 0 0 6px;
+  font-size: 24px;
+  font-weight: 800;
+  letter-spacing: -0.02em;
+}
+.su-roster-head p {
+  margin: 0 0 22px;
+  font-size: 14px;
+  color: #8b8e96;
+  max-width: 46ch;
+}
+.su-roster { display: flex; flex-direction: column; gap: 12px; }
+.su-stylist-card {
+  --su-accent: #8aa0c0;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  width: 100%;
+  text-align: left;
+  padding: 14px 16px;
+  border-radius: 16px;
+  border: 1px solid #26282d;
+  background: #141518;
+  color: inherit;
+  cursor: pointer;
+  transition: border-color 0.16s ease, box-shadow 0.16s ease, transform 0.12s ease;
+}
+.su-stylist-card:hover { border-color: var(--su-accent); box-shadow: 0 6px 24px rgba(0, 0, 0, 0.35); }
+.su-stylist-card:active { transform: scale(0.995); }
+.su-stylist-card:disabled { opacity: 0.6; cursor: wait; }
+.su-stylist-avatar {
+  flex: 0 0 auto;
+  width: 52px;
+  height: 52px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 19px;
+  font-weight: 800;
+  color: #0a0a0a;
+  background: var(--su-accent);
+  overflow: hidden;
+}
+.su-stylist-avatar img { width: 100%; height: 100%; object-fit: cover; }
+/* Line-art portrait fallback (no photo) — inherits the avatar's dark ink. */
+.su-avatar-illus { width: 100%; height: 100%; display: block; }
+.su-stylist-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 auto; }
+.su-stylist-name { font-size: 16px; font-weight: 700; }
+.su-stylist-specialty { font-size: 13px; font-weight: 600; color: var(--su-accent); }
+.su-stylist-bio { font-size: 12.5px; color: #8b8e96; line-height: 1.4; }
+.su-stylist-cta {
+  flex: 0 0 auto;
+  align-self: center;
+  padding: 8px 14px;
+  border-radius: 999px;
+  background: #e7e7ea;
+  color: #0a0a0a;
+  font-size: 13px;
+  font-weight: 700;
+}
+.su-empty { padding: 28px; text-align: center; color: #8b8e96; }
+
+/* ── Saved conversations (roster top) ────────────────────────────────── */
+.su-convos { display: flex; flex-direction: column; gap: 10px; margin-bottom: 26px; }
+.su-section-label {
+  font-size: 11.5px; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase;
+  color: #71747c; padding-left: 4px; margin-bottom: 2px;
+}
+.su-convo-card {
+  --su-accent: #8aa0c0;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  width: 100%;
+  text-align: left;
+  padding: 10px 20px 10px 10px;   /* avatar hugs the left of the pill */
+  border-radius: 999px;           /* rounded pill */
+  border: 1px solid #26282d;
+  background: #141518;
+  color: inherit;
+  cursor: pointer;
+  transition: border-color 0.16s ease, background 0.16s ease;
+}
+.su-convo-card:hover { border-color: var(--su-accent); background: #17181c; }
+.su-convo-card:active { transform: scale(0.995); }
+.su-convo-info { display: flex; flex-direction: column; gap: 3px; min-width: 0; flex: 1 1 auto; }
+.su-convo-top { display: flex; align-items: baseline; gap: 8px; }
+.su-convo-top .su-stylist-name { flex: 1 1 auto; min-width: 0; }
+.su-convo-time { flex: 0 0 auto; font-size: 11.5px; color: #71747c; font-weight: 600; }
+.su-convo-preview {
+  font-size: 13px; color: #8b8e96; line-height: 1.35;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+}
+/* "New message" dot — a bright accent pip at the right edge of the pill. */
+.su-convo-dot {
+  flex: 0 0 auto;
+  width: 10px; height: 10px;
+  border-radius: 50%;
+  background: var(--su-accent, #8aa0c0);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--su-accent, #8aa0c0) 24%, transparent);
+}
+/* Swipe-to-delete: the card sits above a red delete action revealed on swipe. */
+.su-convo-row { position: relative; }
+.su-convo-card {
+  position: relative;
+  z-index: 1;
+  transition: transform 0.2s cubic-bezier(0.22, 1, 0.36, 1);
+  will-change: transform;
+  touch-action: pan-y;   /* let vertical scroll through; we handle horizontal */
+}
+.su-convo-card.is-swiped { transform: translateX(-96px); }
+.su-convo-delete {
+  position: absolute;
+  top: 0; right: 0;
+  height: 100%; width: 88px;
+  z-index: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  border: none;
+  border-radius: 999px;
+  background: #c0392b;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.su-convo-delete:active { background: #a83226; }
+
+/* Empty conversations state. */
+.su-convos-empty { text-align: center; color: #8b8e96; padding: 40px 20px 8px; }
+.su-convos-empty p { margin: 0 0 4px; font-size: 15px; }
+.su-convos-empty-sub { font-size: 13px; color: #71747c; }
+
+/* Docked "Find a stylist" button (landing). */
+.su-find-bar {
+  flex: 0 0 auto;
+  padding: 12px 18px calc(16px + env(safe-area-inset-bottom));
+}
+.su-find-bar .su-find-btn {
+  width: 100%;
+  max-width: 640px;
+  margin: 0 auto;
+  display: block;
+  padding: 15px;
+  border-radius: 999px;
+  border: none;
+  background: #e7e7ea;
+  color: #0a0a0a;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition: transform 0.12s ease, opacity 0.16s ease;
+}
+.su-find-bar .su-find-btn:active { transform: scale(0.985); }
+
+/* ── Thread ──────────────────────────────────────────────────────────── */
+.su-page--thread {
+  /* Pull the active stylist's accent from the shell (set inline per-thread);
+     `.su-page` above sets the fallback blue on this same element, so inherit
+     explicitly or every stylist's chat reads that fallback. */
+  --su-accent: inherit;
+  display: flex;
+  flex-direction: column;
+  flex: 1 1 auto;
+  min-height: 0;
+  width: 100%;
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 0;
+  overflow: hidden;
+  /* Zoom + fade into the conversation when it opens. */
+  transform-origin: center;
+  animation: su-thread-zoom 0.3s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes su-thread-zoom {
+  from { opacity: 0; transform: scale(0.9); }
+  to { opacity: 1; transform: scale(1); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .su-page--thread { animation: none; }
+}
+.su-thread-head {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #26282d;
+  background: #141518;
+}
+.su-back {
+  flex: 0 0 auto;
+  width: 34px; height: 34px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  border: none;
+  background: #26282d;
+  color: #e7e7ea;
+  cursor: pointer;
+}
+.su-back:hover { background: #34363c; }
+.su-thread-avatar {
+  flex: 0 0 auto;
+  width: 38px; height: 38px;
+  border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 15px; font-weight: 800; color: #0a0a0a;
+  background: var(--su-accent);
+  overflow: hidden;
+}
+.su-thread-avatar img { width: 100%; height: 100%; object-fit: cover; }
+.su-thread-id { display: flex; flex-direction: column; min-width: 0; flex: 1 1 auto; }
+.su-thread-name { font-size: 15px; font-weight: 700; }
+.su-thread-specialty { font-size: 12px; color: var(--su-accent); font-weight: 600; }
+/* End-conversation control in the thread header. */
+.su-thread-end {
+  flex: 0 0 auto;
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1px solid #3a2a2a;
+  background: #241a1a;
+  color: #e9a59c;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.su-thread-end:hover { background: #2e2020; }
+
+/* Find-a-stylist picker — the same rounded pill as the home conversations
+   list (avatar hugging the left), with the stylist's favorite brands as
+   logo chips where a conversation shows its preview line. */
+.su-picker-pill .su-stylist-avatar { width: 56px; height: 56px; }
+/* Favorite brands sit on ONE row — no wrapping. If the three chips are wider
+   than the card they scroll horizontally (scrollbar hidden), so a card never
+   grows a second line. */
+.su-brand-row {
+  display: flex; align-items: center; gap: 6px; margin-top: 1px;
+  flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.su-brand-row::-webkit-scrollbar { display: none; }
+.su-brand-chip {
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 3px 9px 3px 4px;
+  border-radius: 999px;
+  border: 1px solid #26282d;
+  background: rgba(255, 255, 255, 0.04);
+  font-size: 11px; font-weight: 650; color: #b9bcc3;
+  white-space: nowrap; flex: 0 0 auto;
+}
+.su-brand-chip-disc {
+  width: 18px; height: 18px; flex: 0 0 auto;
+  border-radius: 50%;
+  background: #fff;
+  object-fit: contain;
+  padding: 2px;
+}
+.su-brand-chip-initial {
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0;
+  color: #0a0a0a; font-size: 10px; font-weight: 800;
+}
+
+/* Context card — the shopper's AI-look inputs. Editable; collapses to a slim
+   bar as the chat scrolls. */
+.su-context {
+  position: relative;
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 12px 16px;
+  border-bottom: 1px solid #26282d;
+  background: #17181c;
+  transition: padding 0.18s ease;
+}
+.su-context--mini { padding: 0; }
+.su-context--editing { align-items: stretch; }
+
+/* Pencil — opens the inline editor. */
+.su-context-edit {
+  position: absolute;
+  top: 10px; right: 12px;
+  width: 28px; height: 28px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  border: none;
+  background: #26282d;
+  color: #c7c9cf;
+  cursor: pointer;
+}
+.su-context-edit:hover { background: #34363c; color: #e7e7ea; }
+
+/* Collapsed slim bar. */
+.su-context-minibar {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 16px;
+  background: none;
+  border: none;
+  color: #c7c9cf;
+  cursor: pointer;
+  text-align: left;
+}
+.su-context-mini-photo {
+  flex: 0 0 auto;
+  width: 26px; height: 26px;
+  border-radius: 50%;
+  overflow: hidden;
+  background: var(--su-accent);
+  color: #0a0a0a;
+  font-size: 10px; font-weight: 800;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.su-context-mini-photo img { width: 100%; height: 100%; object-fit: cover; }
+.su-context-mini-chips { flex: 1 1 auto; min-width: 0; font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.su-context-mini-chev { flex: 0 0 auto; color: #8b8e96; }
+
+/* Inline editor. */
+.su-context-editor { display: flex; flex-direction: column; gap: 10px; width: 100%; }
+.su-context-photos--edit { gap: 8px; }
+.su-context-photo--edit {
+  width: 48px; height: 48px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #1c1d21;
+  border: 1px dashed #3a3c42;
+  cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0;
+}
+.su-context-photo--edit img { width: 100%; height: 100%; object-fit: cover; }
+.su-context-photo-add { font-size: 22px; font-weight: 300; color: #71747c; line-height: 1; }
+.su-edit-fields { display: flex; flex-direction: column; gap: 8px; }
+.su-edit-row { display: flex; gap: 8px; }
+.su-edit-input {
+  flex: 1 1 0; min-width: 0;
+  height: 36px;
+  padding: 0 12px;
+  border-radius: 10px;
+  border: 1px solid #2a2c31;
+  background: #1c1d21;
+  color: #e7e7ea;
+  font-size: 13.5px;
+  outline: none;
+}
+.su-edit-input:focus { border-color: var(--su-accent); }
+.su-edit-gender { flex: 1 1 0; display: flex; gap: 6px; }
+.su-edit-gender-btn {
+  flex: 1 1 0;
+  height: 36px;
+  border-radius: 10px;
+  border: 1px solid #2a2c31;
+  background: #1c1d21;
+  color: #c7c9cf;
+  font-size: 13px; font-weight: 700;
+  cursor: pointer;
+}
+.su-edit-gender-btn.is-on { background: var(--su-accent); color: #0a0a0a; border-color: var(--su-accent); }
+.su-edit-style {
+  width: 100%;
+  min-height: 54px;
+  resize: vertical;
+  padding: 9px 12px;
+  border-radius: 10px;
+  border: 1px solid #2a2c31;
+  background: #1c1d21;
+  color: #e7e7ea;
+  font-size: 13.5px;
+  font-family: inherit;
+  outline: none;
+}
+.su-edit-style:focus { border-color: var(--su-accent); }
+.su-edit-actions { display: flex; justify-content: flex-end; gap: 8px; }
+.su-edit-btn {
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid #34363c;
+  background: #26282d;
+  color: #e7e7ea;
+  font-size: 13px; font-weight: 700;
+  cursor: pointer;
+}
+.su-edit-btn--save { background: #e7e7ea; color: #141518; border-color: #e7e7ea; }
+.su-edit-btn:disabled { opacity: 0.55; cursor: default; }
+.su-context-photos { display: flex; gap: 6px; flex: 0 0 auto; }
+.su-context-photo {
+  width: 44px; height: 44px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #26282d;
+  border: 1px solid #2a2c31;
+}
+.su-context-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.su-context-photo--empty { background: repeating-linear-gradient(45deg, #1c1d21, #1c1d21 6px, #26282d 6px, #26282d 12px); }
+.su-context-meta { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.su-context-title { font-size: 13px; font-weight: 800; letter-spacing: -0.01em; }
+.su-context-chips { display: flex; flex-wrap: wrap; gap: 5px; }
+.su-context-chip {
+  font-size: 11.5px;
+  font-weight: 600;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: #26282d;
+  color: #c7c9cf;
+  text-transform: capitalize;
+}
+.su-context-chip--muted { color: #8b8e96; background: #1c1d21; text-transform: none; }
+.su-context-chip--style { background: color-mix(in srgb, var(--su-accent) 26%, #1c1d21); color: #e7e7ea; text-transform: none; }
+.su-context-note { font-size: 11px; color: #8b8e96; }
+
+/* Chat scroller. */
+.su-chat {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;   /* iOS momentum scroll */
+  overscroll-behavior: contain;        /* don't chain to the body */
+  padding: 16px 16px 8px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  background: transparent;             /* let the blueprint show behind messages */
+}
+.su-chat-intro { margin: auto; text-align: center; color: #8b8e96; max-width: 30ch; }
+.su-chat-intro p { margin: 0 0 4px; font-size: 14px; }
+.su-chat-intro-sub { font-size: 12.5px; color: #71747c; }
+.su-msg { display: flex; }
+.su-msg--shopper { justify-content: flex-end; }
+.su-msg--stylist { justify-content: flex-start; }
+.su-bubble {
+  max-width: 76%;
+  padding: 9px 13px;
+  border-radius: 18px;
+  font-size: 14.5px;
+  line-height: 1.35;
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+.su-msg--shopper .su-bubble {
+  background: #2f6fed;
+  color: #fff;
+  border-bottom-right-radius: 6px;
+}
+.su-msg--stylist .su-bubble {
+  background: #2a2c31;
+  color: #e7e7ea;
+  border-bottom-left-radius: 6px;
+}
+
+/* Typing indicator — three bouncing dots in a stylist bubble. */
+.su-bubble--typing {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 12px 14px;
+}
+.su-bubble--typing span {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  background: #9aa0a8;
+  animation: su-typing 1.2s ease-in-out infinite;
+}
+.su-bubble--typing span:nth-child(2) { animation-delay: 0.15s; }
+.su-bubble--typing span:nth-child(3) { animation-delay: 0.3s; }
+@keyframes su-typing {
+  0%, 60%, 100% { transform: translateY(0); opacity: 0.5; }
+  30% { transform: translateY(-4px); opacity: 1; }
+}
+
+/* Laser indicator — shown IN PLACE of the three dots (same stylist-bubble
+   posting format) when what's coming is a PART or a GENERATION, not text. A
+   charged accent-color beam sweeps the bubble so "something's being fired over"
+   reads instantly, distinct from the idle typing dots. */
+.su-bubble--laser {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 13px 16px;
+}
+.su-laser {
+  position: relative;
+  width: 46px; height: 3px;
+  border-radius: 3px;
+  background: color-mix(in srgb, var(--su-accent, #8aa0c0) 22%, transparent);
+  overflow: hidden;
+}
+.su-laser::before {
+  content: '';
+  position: absolute; inset: 0;
+  width: 45%;
+  border-radius: 3px;
+  background: linear-gradient(90deg, transparent, var(--su-accent, #8aa0c0) 40%, #fff, var(--su-accent, #8aa0c0) 60%, transparent);
+  box-shadow: 0 0 9px 1px var(--su-accent, #8aa0c0);
+  animation: su-laser-sweep 1.05s cubic-bezier(0.55, 0, 0.45, 1) infinite;
+}
+@keyframes su-laser-sweep {
+  0% { transform: translateX(-120%); }
+  100% { transform: translateX(340%); }
+}
+/* Reduced motion: hold a steady lit core instead of sweeping. */
+@media (prefers-reduced-motion: reduce) {
+  .su-laser::before { animation: none; left: 28%; }
+}
+
+/* "Researching" module — shown while a web stylist searches + imports pieces,
+   so the wait reads as active work rather than a dead pause. */
+.su-hunting {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  padding: 11px 15px;
+  border-radius: 16px;
+  border: 1px solid color-mix(in srgb, var(--su-accent, #5fb6a8) 40%, #26282d);
+  background: color-mix(in srgb, var(--su-accent, #5fb6a8) 12%, #15161a);
+}
+.su-hunting-orb {
+  flex: 0 0 auto;
+  width: 14px; height: 14px;
+  border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--su-accent, #5fb6a8) 45%, transparent);
+  border-top-color: var(--su-accent, #5fb6a8);
+  animation: su-spin 0.8s linear infinite;
+}
+.su-hunting-text {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #cfd2d8;
+  background: linear-gradient(90deg, #8b8e96 25%, #fff 50%, #8b8e96 75%);
+  background-size: 200% 100%;
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  animation: su-hunting-shimmer 2.4s linear infinite;
+}
+@keyframes su-hunting-shimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+.su-hunting-eta {
+  flex: 0 0 auto;
+  font-size: 11.5px;
+  font-weight: 600;
+  color: color-mix(in srgb, var(--su-accent, #5fb6a8) 70%, #cfd2d8);
+  opacity: 0.85;
+  padding-left: 2px;
+}
+
+/* Active-generations tray — pinned at the top of the chat so a shopper can
+   start another look and still track everything that's cooking. */
+.su-gentray {
+  position: sticky;
+  top: 0;
+  z-index: 4;
+  align-self: stretch;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin: -4px 0 6px;
+  padding: 9px 12px;
+  border-radius: 14px;
+  border: 1px solid color-mix(in srgb, var(--su-accent, #8aa0c0) 34%, #26282d);
+  background: color-mix(in srgb, var(--su-accent, #8aa0c0) 12%, #141518);
+  backdrop-filter: blur(8px);
+}
+.su-gentray-title {
+  display: inline-flex; align-items: center; gap: 7px;
+  font-size: 12px; font-weight: 700; letter-spacing: 0.01em;
+  color: color-mix(in srgb, var(--su-accent, #8aa0c0) 70%, #e7e7ea);
+}
+.su-gentray-pulse {
+  width: 8px; height: 8px; border-radius: 50%;
+  background: var(--su-accent, #8aa0c0);
+  box-shadow: 0 0 0 0 color-mix(in srgb, var(--su-accent, #8aa0c0) 60%, transparent);
+  animation: su-gentray-pulse 1.6s ease-out infinite;
+}
+@keyframes su-gentray-pulse {
+  0% { box-shadow: 0 0 0 0 color-mix(in srgb, var(--su-accent, #8aa0c0) 55%, transparent); }
+  100% { box-shadow: 0 0 0 7px transparent; }
+}
+.su-gentray-chips { display: flex; gap: 8px; overflow-x: auto; scrollbar-width: none; }
+.su-gentray-chips::-webkit-scrollbar { display: none; }
+.su-gentray-chip {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; gap: 8px;
+  padding: 5px 12px 5px 5px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--su-accent, #8aa0c0) 26%, #2a2c31);
+  background: #17181c;
+  color: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s ease, transform 0.12s ease;
+}
+.su-gentray-chip:hover { border-color: var(--su-accent, #8aa0c0); }
+.su-gentray-chip:active { transform: scale(0.97); }
+.su-gentray-thumb {
+  width: 30px; height: 30px; flex: 0 0 auto;
+  border-radius: 8px; overflow: hidden;
+  background: #26282d;
+  display: inline-flex; align-items: center; justify-content: center;
+}
+.su-gentray-thumb img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.su-gentray-dot {
+  width: 12px; height: 12px; border-radius: 50%;
+  border: 2px solid color-mix(in srgb, var(--su-accent, #8aa0c0) 45%, transparent);
+  border-top-color: var(--su-accent, #8aa0c0);
+  animation: su-spin 0.8s linear infinite;
+}
+.su-gentray-meta { display: flex; flex-direction: column; line-height: 1.2; }
+.su-gentray-meta b { font-size: 12px; font-weight: 700; color: #e7e7ea; }
+.su-gentray-meta span { font-size: 11px; color: #9aa0a8; }
+@media (prefers-reduced-motion: reduce) {
+  .su-gentray-pulse, .su-gentray-dot { animation: none; }
+}
+
+/* Super-admin-only diagnostics — client-only, never shown to shoppers. */
+.su-admin-note {
+  align-self: stretch;
+  display: flex;
+  gap: 8px;
+  margin: 4px 0 2px;
+  padding: 9px 11px;
+  border-radius: 10px;
+  border: 1px dashed #5b4a2a;
+  background: rgba(120, 90, 30, 0.14);
+}
+.su-admin-note-tag {
+  flex: 0 0 auto;
+  height: fit-content;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #0a0a0a;
+  background: #e0b562;
+  border-radius: 4px;
+  padding: 2px 5px;
+}
+.su-admin-note pre {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.45;
+  color: #e6cf9a;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+/* Product card — a stylist's pick. */
+.su-product {
+  display: flex;
+  gap: 12px;
+  max-width: 82%;
+  padding: 10px;
+  border-radius: 16px;
+  background: #1c1d21;
+  border: 1px solid #2a2c31;
+}
+.su-product-media {
+  flex: 0 0 auto;
+  width: 84px; height: 104px;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #26282d;
+}
+.su-product-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.su-product-media--empty { display: block; width: 100%; height: 100%; }
+.su-product-media--tap { border: none; padding: 0; cursor: pointer; display: block; }
+.su-product-info { display: flex; flex-direction: column; min-width: 0; gap: 2px; }
+/* Tapping the image or the title opens the product page. */
+.su-product-tap {
+  display: flex; flex-direction: column; align-items: flex-start; gap: 1px;
+  background: none; border: none; padding: 0; margin: 0; width: 100%; min-width: 0;
+  text-align: left; color: inherit; cursor: pointer;
+}
+.su-product-brand { font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; color: var(--su-accent); }
+.su-product-name { font-size: 13.5px; font-weight: 600; line-height: 1.3; color: #e7e7ea; }
+.su-product-price { font-size: 13px; color: #8b8e96; margin-top: 1px; }
+.su-product-actions { display: flex; gap: 8px; margin-top: auto; padding-top: 8px; }
+.su-product-btn {
+  padding: 7px 14px;
+  border-radius: 999px;
+  border: 1px solid #34363c;
+  background: #26282d;
+  color: #e7e7ea;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+}
+.su-product-btn:hover { border-color: #4a4d54; }
+.su-product-btn--primary { background: #e7e7ea; color: #141518; border-color: #e7e7ea; }
+.su-product-btn:disabled { opacity: 0.55; cursor: default; }
+
+/* Swap picker — "pick a different pant" set of 3 options. */
+.su-swap {
+  max-width: 88%;
+  padding: 12px;
+  border-radius: 16px;
+  background: #1c1d21;
+  border: 1px solid #2a2c31;
+}
+.su-swap-label {
+  font-size: 12px; font-weight: 700; text-transform: capitalize;
+  color: var(--su-accent); margin-bottom: 9px;
+}
+.su-swap-options { display: flex; gap: 8px; }
+.su-swap-opt {
+  flex: 1 1 0; min-width: 0;
+  display: flex; flex-direction: column; gap: 6px;
+  padding: 0;
+  border-radius: 12px;
+  border: 1px solid #2a2c31;
+  background: #141518;
+  color: #e7e7ea;
+  cursor: pointer;
+  overflow: hidden;
+  text-align: left;
+  transition: border-color 0.14s ease, transform 0.1s ease;
+}
+.su-swap-opt:hover { border-color: var(--su-accent); }
+.su-swap-opt:active { transform: scale(0.97); }
+.su-swap-opt:disabled { opacity: 0.55; cursor: default; }
+.su-swap-opt-media { width: 100%; aspect-ratio: 3 / 4; background: #26282d; }
+.su-swap-opt-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.su-swap-opt-info { display: flex; flex-direction: column; gap: 1px; padding: 0 8px 9px; min-width: 0; }
+.su-swap-opt-brand { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--su-accent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.su-swap-opt-name { font-size: 11.5px; line-height: 1.25; color: #e7e7ea; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.su-swap-opt-price { font-size: 11px; color: #8b8e96; margin-top: 1px; }
+
+/* Tap-chooser — "which shoes?", "what do you want in the outfit?". */
+.su-choose {
+  max-width: 88%;
+  padding: 12px;
+  border-radius: 16px;
+  background: #1c1d21;
+  border: 1px solid #2a2c31;
+}
+.su-choose-prompt { font-size: 12px; font-weight: 700; color: var(--su-accent); margin-bottom: 10px; }
+.su-choose-options { display: flex; flex-wrap: wrap; gap: 8px; }
+.su-choose-options--cards { gap: 8px; }
+/* Setting picker: one option per row, full width, so the choices stack
+   vertically instead of wrapping into an uneven 2-up grid. */
+.su-choose-options--stack { flex-direction: column; flex-wrap: nowrap; align-items: stretch; }
+.su-choose-options--stack .su-choose-opt { width: 100%; justify-content: center; }
+.su-choose-opt {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid #34363c;
+  background: #141518;
+  color: #e7e7ea;
+  font-size: 13px; font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.14s ease, background 0.14s ease;
+}
+.su-choose-opt:hover { border-color: var(--su-accent); }
+.su-choose-opt.is-on { background: var(--su-accent); color: #0a0a0a; border-color: var(--su-accent); }
+.su-choose-opt:disabled { opacity: 0.55; cursor: default; }
+.su-choose-opt--card { flex-direction: column; gap: 6px; padding: 0; border-radius: 12px; overflow: hidden; width: 96px; align-items: stretch; }
+.su-choose-opt--card .su-choose-opt-media { width: 100%; aspect-ratio: 3 / 4; background: #26282d; }
+.su-choose-opt--card .su-choose-opt-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.su-choose-opt--card .su-choose-opt-label { padding: 0 8px 9px; font-size: 11.5px; line-height: 1.25; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.su-choose-go {
+  margin-top: 11px;
+  width: 100%;
+  padding: 9px;
+  border-radius: 12px;
+  border: none;
+  background: #e7e7ea;
+  color: #141518;
+  font-size: 13px; font-weight: 800;
+  cursor: pointer;
+}
+.su-choose-go:disabled { opacity: 0.45; cursor: default; }
+
+/* On-you render bubble. */
+.su-render {
+  max-width: 78%;
+  border-radius: 16px;
+  overflow: hidden;
+  background: #1c1d21;
+  border: 1px solid #2a2c31;
+}
+/* The generation card is a stylist message — clear the absolutely-positioned
+   stylist avatar to its left, like the text bubbles do. */
+.su-msg--stylist > .su-render { margin-left: 32px; }
+/* Compact render thumbnail in the chat — tap to open the big viewer. */
+.su-render-video-btn {
+  position: relative; display: block; padding: 0; border: none; background: none;
+  cursor: pointer; line-height: 0; border-radius: 12px; overflow: hidden;
+}
+.su-render-video { display: block; width: 150px; max-width: 46vw; aspect-ratio: 9 / 16; object-fit: cover; background: #000; }
+.su-render-expand {
+  position: absolute; top: 7px; right: 7px;
+  width: 26px; height: 26px; border-radius: 50%;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.55); color: #fff; backdrop-filter: blur(4px);
+}
+
+/* Full-screen expanded look viewer. */
+.su-viewer {
+  position: fixed; inset: 0; z-index: 200;
+  display: flex; align-items: center; justify-content: center;
+  padding: 20px; background: rgba(0,0,0,0.86);
+}
+.su-viewer-inner { position: relative; display: flex; flex-direction: column; align-items: center; gap: 14px; max-width: 460px; width: 100%; }
+.su-viewer-close {
+  position: absolute; top: -6px; right: -2px; z-index: 1;
+  width: 36px; height: 36px; border-radius: 50%; border: none;
+  background: rgba(255,255,255,0.14); color: #fff; font-size: 15px; cursor: pointer;
+}
+.su-viewer-video { width: 100%; max-height: 72vh; aspect-ratio: 9 / 16; object-fit: contain; border-radius: 16px; background: #000; }
+.su-viewer-pieces { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
+.su-viewer-piece { width: 46px; height: 58px; border-radius: 9px; overflow: hidden; border: 1px solid rgba(255,255,255,0.18); background: #1c1d21; padding: 0; cursor: pointer; }
+.su-viewer-piece img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.su-viewer-add {
+  width: 100%; max-width: 320px; padding: 13px; border-radius: 999px; border: none;
+  background: #e7e7ea; color: #141518; font-size: 14px; font-weight: 800; cursor: pointer;
+}
+.su-viewer-add:disabled { opacity: 0.6; cursor: default; }
+.su-render-status {
+  display: flex; align-items: center; gap: 10px;
+  padding: 16px 18px;
+  font-size: 13.5px; color: #8b8e96;
+}
+.su-render-status-text { display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.su-render-eta { font-size: 12px; color: #71747c; font-weight: 600; }
+.su-render-status--failed { color: #e9a59c; }
+/* Failed render: message + a copy-log pill for troubleshooting. */
+.su-render-status--err { flex-wrap: wrap; gap: 10px; }
+.su-render-log {
+  flex: 0 0 auto;
+  display: inline-flex; align-items: center; gap: 5px;
+  padding: 5px 11px;
+  border-radius: 999px;
+  border: 1px solid #3a2a2a;
+  background: rgba(233, 165, 156, 0.08);
+  color: #e9a59c;
+  font-size: 12px; font-weight: 700;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+.su-render-log:hover { background: rgba(233, 165, 156, 0.16); border-color: rgba(233, 165, 156, 0.4); }
+.su-render-log:active { transform: scale(0.96); }
+.su-render-stop {
+  margin-left: auto; flex-shrink: 0;
+  padding: 5px 12px; border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.16); background: rgba(255,255,255,.06);
+  color: #d6d8dd; font-size: 12px; font-weight: 600; cursor: pointer;
+  transition: background .15s ease, color .15s ease, border-color .15s ease;
+}
+.su-render-stop:hover { background: rgba(233,165,156,.16); border-color: rgba(233,165,156,.4); color: #f0c4bd; }
+.su-render-cook { display: flex; flex-direction: column; gap: 12px; padding-bottom: 14px; }
+/* The pieces going into the look — bob gently while it cooks. */
+.su-render-pieces { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; padding: 0 18px; }
+.su-render-pieces--done { padding: 10px 12px 2px; }
+.su-render-piece {
+  width: 40px; height: 50px; border-radius: 8px; overflow: hidden;
+  background: #26282d; border: 1px solid #2a2c31; flex: 0 0 auto;
+}
+.su-render-cook .su-render-piece { animation: su-piece-bob 1.8s ease-in-out infinite; }
+.su-render-piece img { width: 100%; height: 100%; object-fit: cover; display: block; }
+@keyframes su-piece-bob {
+  0%, 100% { transform: translateY(0); }
+  50% { transform: translateY(-4px); }
+}
+/* The shopper's own photos — the context refs guiding the render — orbit
+   together in CIRCLES ahead of the square piece tiles, so the whole recipe
+   reads at a glance: you + the pieces → the look. The cluster spins while
+   each photo counter-spins about its own center to keep faces upright. */
+.su-render-you { position: relative; width: 58px; height: 58px; flex: 0 0 auto; }
+.su-render-you::before {
+  content: ''; position: absolute; inset: -2px; border-radius: 50%;
+  border: 1.5px dashed rgba(212, 181, 133, .5);
+  animation: su-spin 9s linear infinite reverse;
+}
+.su-render-you-orbit { position: absolute; inset: 0; animation: su-spin 9s linear infinite; }
+.su-render-you-photo {
+  position: absolute; width: 28px; height: 28px; border-radius: 50%; overflow: hidden;
+  background: #26282d; border: 1.5px solid rgba(255, 255, 255, .32);
+  box-shadow: 0 2px 8px rgba(0, 0, 0, .45);
+  animation: su-spin 9s linear infinite reverse;
+}
+.su-render-you-photo img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* Cluster layouts: triangle for 3, side-by-side pair for 2, centered for 1. */
+.su-render-you-photo:nth-child(1) { top: 1px; left: 15px; }
+.su-render-you-photo:nth-child(2) { top: 28px; left: 28px; }
+.su-render-you-photo:nth-child(3) { top: 28px; left: 2px; }
+.su-render-you-photo:first-child:nth-last-child(2) { top: 15px; left: 2px; }
+.su-render-you-photo:nth-child(2):nth-last-child(1) { top: 15px; left: 28px; }
+.su-render-you-photo:only-child { top: 11px; left: 11px; width: 36px; height: 36px; }
+.su-render-plus { color: #8b8e96; font-size: 15px; font-weight: 800; flex: 0 0 auto; }
+.su-render-spinner {
+  width: 16px; height: 16px; flex: 0 0 auto;
+  border-radius: 50%;
+  border: 2px solid #34363c;
+  border-top-color: var(--su-accent);
+  animation: su-spin 0.8s linear infinite;
+}
+@keyframes su-spin { to { transform: rotate(360deg); } }
+.su-render-cap {
+  display: flex; align-items: center; justify-content: space-between; gap: 10px;
+  padding: 8px 12px;
+  font-size: 12.5px; color: #c7c9cf;
+}
+.su-render-err { align-self: center; font-size: 12.5px; color: #e9a59c; padding: 4px 8px; text-align: center; }
+.su-chat-retry {
+  align-self: center;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  margin: 4px auto;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid #4a2a26;
+  background: #2a1c1a;
+  color: #e9a59c;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.su-chat-retry-go { font-weight: 800; text-decoration: underline; }
+
+/* Look card — ALL of a pull's pieces in one card + a single generate CTA. */
+.su-lookcard {
+  max-width: 88%;
+  padding: 12px;
+  border-radius: 18px;
+  background: #1c1d21;
+  border: 1px solid #2a2c31;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+.su-lookcard-title {
+  font-size: 11.5px; font-weight: 700; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--su-accent, #8aa0c0);
+}
+.su-lookcard-items { display: flex; flex-direction: column; }
+.su-lookcard-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  padding: 8px 0;
+  border-bottom: 1px solid #26282d;
+}
+.su-lookcard-row:last-child { border-bottom: none; }
+.su-lookcard-media {
+  flex: 0 0 auto;
+  width: 52px; height: 64px;
+  border-radius: 9px;
+  overflow: hidden;
+  padding: 0;
+  border: 1px solid #2a2c31;
+  background: #26282d;
+  cursor: pointer;
+}
+.su-lookcard-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.su-lookcard-info {
+  flex: 1 1 auto; min-width: 0;
+  display: flex; flex-direction: column; gap: 1px;
+  background: none; border: none; padding: 0; margin: 0;
+  text-align: left; color: inherit; cursor: pointer;
+}
+.su-lookcard-brand { font-size: 10.5px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--su-accent, #8aa0c0); }
+.su-lookcard-name { font-size: 13px; font-weight: 600; line-height: 1.25; color: #e7e7ea; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.su-lookcard-price { font-size: 12.5px; color: #8b8e96; margin-top: 1px; }
+.su-lookcard-change {
+  flex: 0 0 auto;
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid #34363c;
+  background: #26282d;
+  color: #e7e7ea;
+  font-size: 12px; font-weight: 700;
+  cursor: pointer;
+}
+.su-lookcard-change:hover { border-color: var(--su-accent, #4a4d54); }
+.su-lookcard-generate {
+  width: 100%;
+  padding: 13px;
+  border-radius: 999px;
+  border: none;
+  background: var(--su-accent, #e7e7ea);
+  color: #0a0a0a;
+  font-size: 14.5px;
+  font-weight: 800;
+  cursor: pointer;
+  transition: transform 0.12s ease, opacity 0.16s ease;
+}
+.su-lookcard-generate:not(:disabled):active { transform: scale(0.98); }
+.su-lookcard-generate:disabled { opacity: 0.55; cursor: default; }
+
+/* Composer. */
+.su-composer {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 12px 16px calc(12px + env(safe-area-inset-bottom));
+  border-top: 1px solid #26282d;
+  background: #141518;
+}
+.su-composer-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px solid #2a2c31;
+  background: #1c1d21;
+  font-size: 14.5px;
+  color: #e7e7ea;
+  outline: none;
+}
+.su-composer-input:focus { border-color: var(--su-accent); }
+.su-composer-send {
+  flex: 0 0 auto;
+  width: 40px; height: 40px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  border: none;
+  background: #2f6fed;
+  color: #fff;
+  cursor: pointer;
+  transition: opacity 0.16s ease, transform 0.12s ease;
+}
+.su-composer-send:disabled { opacity: 0.4; cursor: default; }
+.su-composer-send:not(:disabled):active { transform: scale(0.92); }
+
+/* ── WebGL blueprint background ──────────────────────────────────────────
+   A subtle, slow field of thin "measurement" lines behind the whole StyleUp
+   surface. The canvas is pinned to the (fixed) shell so it stays put while the
+   chat scrolls. It sits at z-index:-1 so it paints above the shell's flat base
+   but BEHIND all content WITHOUT forcing any positioning on the content — the
+   chat scroller stays a plain in-flow block so its overflow scroll (and iOS
+   momentum) keeps working. */
+.su-bg {
+  position: absolute;
+  inset: 0;
+  z-index: -1;
+  overflow: hidden;
+  pointer-events: none;
+}
+.su-bg-canvas { display: block; width: 100%; height: 100%; }
+
+/* ── /style landing ─────────────────────────────────────────────────────── */
+.su-shell--landing .su-page { max-width: 640px; }
+.su-landing-hero {
+  flex: 0 0 auto;
+  text-align: center;
+  padding: 30px 20px 10px;
+  max-width: 640px;
+  margin: 0 auto;
+}
+.su-landing-eyebrow {
+  display: inline-block;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--su-accent, #8aa0c0);
+  opacity: 0.9;
+  margin-bottom: 12px;
+}
+.su-landing-title {
+  margin: 0 0 10px;
+  font-size: 30px;
+  line-height: 1.08;
+  font-weight: 800;
+  letter-spacing: -0.025em;
+}
+.su-landing-sub {
+  margin: 0 auto;
+  max-width: 44ch;
+  font-size: 14.5px;
+  line-height: 1.5;
+  color: #9a9da6;
+}
+.su-roster-head--landing { margin: 4px 0 14px; text-align: center; }
+.su-roster-head--landing h2 {
+  margin: 0;
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: #8b8e96;
+}
+
+/* Stylist preview row on the signed-out landing. */
+.su-landing-stylists {
+  display: flex;
+  justify-content: center;
+  gap: 18px;
+  margin: 22px 0 26px;
+  flex-wrap: wrap;
+}
+.su-landing-stylist {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 7px;
+  width: 130px;
+}
+.su-landing-stylist .su-stylist-avatar {
+  width: 64px; height: 64px; font-size: 22px;
+  box-shadow: 0 0 0 2px var(--su-accent, #8aa0c0), 0 8px 22px rgba(0, 0, 0, 0.4);
+}
+.su-landing-stylist-name { font-size: 15px; font-weight: 700; }
+.su-landing-stylist-spec { font-size: 12px; color: #8b8e96; line-height: 1.3; }
+
+/* Google sign-in button (landing + gate). */
+.su-google {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  margin: 8px auto 0;
+  padding: 12px 22px;
+  border-radius: 999px;
+  border: 1px solid #2a2c31;
+  background: #f5f5f7;
+  color: #16171a;
+  font-size: 14.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.12s ease, opacity 0.16s ease;
+}
+.su-google:not(:disabled):active { transform: scale(0.97); }
+.su-google:disabled { opacity: 0.6; cursor: default; }
+.su-signin-error { margin-top: 12px; color: #f0a0a0; font-size: 13px; }
+
+/* ════════════════════════════════════════════════════════════════════════
+   Aesthetic pass — atmosphere, glass, choreography, editorial type, tape
+   progress, frosted chrome, micro-interactions. Appended as one section so
+   these refinements win the cascade over the base rules above.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* Editorial serif for display moments (system Didot/Bodoni, no font loads). */
+.su-shell { --su-serif: "Didot", "Bodoni 72", "Playfair Display", Georgia, "Times New Roman", serif; }
+
+/* ── Aurora depth — a slow radial breath of the stylist's accent behind
+      everything, dimming toward the composer so focus falls on the chat. ── */
+.su-aurora {
+  position: absolute;
+  inset: -20%;
+  pointer-events: none;
+  background:
+    radial-gradient(42% 34% at 28% 18%, color-mix(in srgb, var(--su-accent, #8aa0c0) 11%, transparent), transparent 70%),
+    radial-gradient(50% 40% at 78% 64%, color-mix(in srgb, var(--su-accent, #8aa0c0) 6%, transparent), transparent 72%),
+    linear-gradient(to bottom, transparent 55%, rgba(0, 0, 0, 0.5) 100%);
+  animation: su-aurora-drift 26s ease-in-out infinite alternate;
+}
+@keyframes su-aurora-drift {
+  from { transform: translate3d(-2.5%, -1.5%, 0) scale(1); }
+  to { transform: translate3d(2.5%, 2%, 0) scale(1.06); }
+}
+
+/* ── Glass bubbles — the drape lines breathe through the stylist's side;
+      your side gets a rich dual-tone gradient. ─────────────────────────── */
+.su-msg--stylist .su-bubble {
+  background: rgba(42, 44, 49, 0.58);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+}
+.su-msg--shopper .su-bubble {
+  background: linear-gradient(135deg, #2f6fed 0%, #6a5ae0 130%);
+}
+
+/* ── Message choreography — bubbles settle in instead of popping. ──────── */
+@keyframes su-msg-in {
+  from { opacity: 0; transform: translateY(10px) scale(0.985); }
+  to { opacity: 1; transform: none; }
+}
+.su-chat .su-msg { animation: su-msg-in 0.34s cubic-bezier(0.22, 1, 0.36, 1) both; }
+
+/* ── Develop-in imagery — product photos arrive like a print developing:
+      pale mono line-state first, then full color. ──────────────────────── */
+@keyframes su-develop {
+  from { opacity: 0; filter: grayscale(1) contrast(1.3) brightness(1.12); }
+  55% { opacity: 1; }
+  to { opacity: 1; filter: none; }
+}
+.su-lookcard-media img,
+.su-swap-opt-media img,
+.su-choose-opt-media img,
+.su-render-piece img { animation: su-develop 0.85s ease both; }
+
+/* ── Editorial type — display moments go serif; chat stays sans. ───────── */
+.su-landing-title { font-family: var(--su-serif); font-weight: 500; font-size: 34px; letter-spacing: 0.005em; }
+.su-roster-head h1 { font-family: var(--su-serif); font-weight: 500; letter-spacing: 0.005em; }
+.su-lookcard-title {
+  font-family: var(--su-serif);
+  font-size: 17px;
+  font-style: italic;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  text-transform: none;
+  color: #eceff4;
+}
+
+/* ── Look card as an editorial plate — numbered pieces + a total line. ─── */
+.su-lookcard-num {
+  flex: 0 0 auto;
+  width: 18px;
+  font-size: 10.5px;
+  font-weight: 600;
+  color: #63666e;
+  font-variant-numeric: tabular-nums;
+}
+.su-lookcard-total {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  padding-top: 9px;
+  border-top: 1px solid #26282d;
+  font-size: 12.5px;
+  color: #8b8e96;
+}
+.su-lookcard-total b { font-weight: 700; color: #e7e7ea; font-variant-numeric: tabular-nums; }
+
+/* ── Measuring-tape progress — a real fill with tailor's tick marks. ───── */
+.su-tape {
+  position: relative;
+  height: 10px;
+  margin: 0 18px;
+  border-radius: 999px;
+  background: #232529;
+  overflow: hidden;
+}
+.su-render > .su-tape { margin-bottom: 14px; }
+.su-tape::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: repeating-linear-gradient(90deg, transparent 0 9px, rgba(255, 255, 255, 0.12) 9px 10px);
+  pointer-events: none;
+}
+.su-tape-fill {
+  height: 100%;
+  border-radius: 999px;
+  background: linear-gradient(90deg, color-mix(in srgb, var(--su-accent, #8aa0c0) 70%, #fff 0%), var(--su-accent, #8aa0c0));
+  transition: width 1s linear;
+}
+.su-tape--indeterminate .su-tape-fill {
+  width: 34%;
+  animation: su-tape-slide 1.5s ease-in-out infinite;
+}
+@keyframes su-tape-slide {
+  from { transform: translateX(-110%); }
+  to { transform: translateX(340%); }
+}
+.su-render-eta { font-variant-numeric: tabular-nums; }
+
+/* ── Frosted floating chrome — the composer becomes a glass pill and the
+      chat dissolves under the header instead of hard-clipping. ─────────── */
+.su-composer {
+  margin: 6px 12px calc(10px + env(safe-area-inset-bottom));
+  padding: 7px 8px 7px 10px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 999px;
+  background: rgba(18, 19, 22, 0.7);
+  -webkit-backdrop-filter: blur(18px);
+  backdrop-filter: blur(18px);
+}
+.su-composer-input { background: transparent; border-color: transparent; }
+.su-composer-input:focus { border-color: color-mix(in srgb, var(--su-accent, #2f6fed) 55%, transparent); }
+.su-composer-send { background: var(--su-accent, #2f6fed); color: #0a0a0a; }
+.su-chat {
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0, #000 22px, #000 100%);
+  mask-image: linear-gradient(to bottom, transparent 0, #000 22px, #000 100%);
+}
+
+/* ── Micro-interactions — springy chips, breathing unread dot, accent
+      avatar rings on the conversation pills. ──────────────────────────── */
+.su-choose-opt { transition: border-color 0.14s ease, background 0.14s ease, transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1); }
+.su-choose-opt:not(:disabled):active { transform: scale(0.93); }
+.su-lookcard-change:active,
+.su-thread-end:active { transform: scale(0.94); }
+.su-convo-card .su-stylist-avatar {
+  box-shadow: 0 0 0 2px #141518, 0 0 0 3.5px color-mix(in srgb, var(--su-accent, #8aa0c0) 60%, transparent);
+}
+@keyframes su-dot-breathe {
+  0%, 100% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--su-accent, #8aa0c0) 24%, transparent); }
+  50% { box-shadow: 0 0 0 6px color-mix(in srgb, var(--su-accent, #8aa0c0) 10%, transparent); }
+}
+.su-convo-dot { animation: su-dot-breathe 2.4s ease-in-out infinite; }
+
+/* Reduced motion: keep the refinements, drop the movement. */
+@media (prefers-reduced-motion: reduce) {
+  .su-aurora,
+  .su-chat .su-msg,
+  .su-lookcard-media img,
+  .su-swap-opt-media img,
+  .su-choose-opt-media img,
+  .su-render-piece img,
+  .su-render-you::before,
+  .su-render-you-orbit,
+  .su-render-you-photo,
+  .su-tape--indeterminate .su-tape-fill,
+  .su-convo-dot { animation: none; }
+}
+
+/* ── Chat UI pass — grouping, presence, quick replies, new-message pill,
+      day/new dividers, tap-to-reveal timestamps. ─────────────────────── */
+
+/* Message grouping: tight spacing within a same-sender run; the bubble tail
+   and the stylist's mini avatar sit only on the run's last bubble. */
+.su-msg--follow { margin-top: -6px; }   /* flex gap 8px − 6px → 2px inside a run */
+.su-msg { flex-wrap: wrap; }
+.su-msg--stylist { position: relative; }
+.su-msg--stylist .su-bubble { margin-left: 32px; border-bottom-left-radius: 18px; }
+.su-msg--stylist.su-msg--tail .su-bubble { border-bottom-left-radius: 6px; }
+.su-msg--shopper .su-bubble { border-bottom-right-radius: 18px; }
+.su-msg--shopper.su-msg--tail .su-bubble { border-bottom-right-radius: 6px; }
+.su-msg-avatar {
+  position: absolute;
+  left: 0; bottom: 0;
+  width: 24px; height: 24px;
+  border-radius: 50%;
+  overflow: hidden;
+  display: inline-flex; align-items: center; justify-content: center;
+  background: var(--su-accent, #8aa0c0);
+  color: #0a0a0a;
+}
+.su-msg-avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+/* Tap a bubble → its time appears beneath (flex-wrap pushes it to a new row). */
+.su-msg-time {
+  flex-basis: 100%;
+  font-size: 10.5px;
+  color: #71747c;
+  padding: 3px 6px 0;
+  font-variant-numeric: tabular-nums;
+}
+.su-msg--stylist .su-msg-time { text-align: left; padding-left: 38px; }
+.su-msg--shopper .su-msg-time { text-align: right; }
+
+/* Header presence line — online / typing… / finding pieces… / styling…. */
+.su-thread-presence {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #8b8e96;
+}
+.su-presence-dot {
+  width: 6px; height: 6px;
+  border-radius: 50%;
+  background: #39c17b;
+}
+.su-thread-presence.is-busy { color: var(--su-accent, #8aa0c0); }
+.su-thread-presence.is-busy .su-presence-dot {
+  background: var(--su-accent, #8aa0c0);
+  animation: su-presence-pulse 1.2s ease-in-out infinite;
+}
+@keyframes su-presence-pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.35; }
+}
+
+/* Quick-reply chips — a one-tap suggestion row above the composer. */
+.su-quick-row {
+  flex: 0 0 auto;
+  display: flex;
+  gap: 8px;
+  padding: 4px 14px 0;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.su-quick-row::-webkit-scrollbar { display: none; }
+.su-quick-chip {
+  flex: 0 0 auto;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(28, 29, 33, 0.75);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  color: #d8dae0;
+  font-size: 12.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: border-color 0.14s ease, transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.su-quick-chip:not(:disabled):active { transform: scale(0.93); }
+.su-quick-chip:hover { border-color: var(--su-accent, #8aa0c0); }
+.su-quick-chip:disabled { opacity: 0.5; cursor: default; }
+
+/* "↓ New message" pill — floats above the composer when scrolled up.
+   GUARD: centered with left/right + margin-inline (never translateX). */
+.su-page--thread { position: relative; }
+.su-new-pill {
+  position: absolute;
+  left: 0; right: 0;
+  margin-inline: auto;
+  width: fit-content;
+  bottom: 96px;
+  z-index: 5;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  background: rgba(24, 25, 29, 0.92);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  color: #e7e7ea;
+  font-size: 12.5px;
+  font-weight: 700;
+  cursor: pointer;
+  box-shadow: 0 6px 20px rgba(0, 0, 0, 0.45);
+  animation: su-msg-in 0.25s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* Day + "New" dividers. */
+.su-day-divider {
+  align-self: center;
+  padding: 12px 0 4px;
+}
+.su-day-divider span {
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #6b6e76;
+}
+.su-new-divider {
+  align-self: stretch;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 6px 0 2px;
+}
+.su-new-divider::before,
+.su-new-divider::after {
+  content: '';
+  flex: 1 1 auto;
+  height: 1px;
+  background: color-mix(in srgb, var(--su-accent, #8aa0c0) 40%, transparent);
+}
+.su-new-divider span {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.12em;
+  text-transform: uppercase;
+  color: var(--su-accent, #8aa0c0);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .su-thread-presence.is-busy .su-presence-dot,
+  .su-new-pill { animation: none; }
+}
+
+/* ── Working glow — a conversation with a hunt or render cooking breathes an
+      accent glow on the list so you can see it's active at a glance. ────── */
+.su-convo-card--working {
+  border-color: color-mix(in srgb, var(--su-accent, #8aa0c0) 65%, transparent);
+  animation: su-convo-glow 1.9s ease-in-out infinite;
+}
+@keyframes su-convo-glow {
+  0%, 100% {
+    box-shadow:
+      0 0 0 0 color-mix(in srgb, var(--su-accent, #8aa0c0) 30%, transparent),
+      0 0 16px color-mix(in srgb, var(--su-accent, #8aa0c0) 18%, transparent);
+  }
+  50% {
+    box-shadow:
+      0 0 0 3px color-mix(in srgb, var(--su-accent, #8aa0c0) 16%, transparent),
+      0 0 26px color-mix(in srgb, var(--su-accent, #8aa0c0) 34%, transparent);
+  }
+}
+.su-convo-preview--working {
+  color: var(--su-accent, #8aa0c0);
+  font-weight: 600;
+}
+/* Spinning accent ring around the stylist avatar while a look renders in
+   that chat, so the conversations list telegraphs "cooking" at a glance. */
+.su-stylist-avatar--spinning::after {
+  content: '';
+  position: absolute; inset: -3px;
+  border-radius: 50%;
+  border: 2px solid transparent;
+  border-top-color: var(--su-accent, #8aa0c0);
+  border-right-color: color-mix(in srgb, var(--su-accent, #8aa0c0) 55%, transparent);
+  animation: su-spin 0.9s linear infinite;
+}
+.su-convo-card .su-stylist-avatar { position: relative; }
+/* Live render progress bar under the "Generating your look…" line. */
+.su-convo-progress {
+  display: block;
+  height: 3px; margin-top: 6px;
+  border-radius: 999px;
+  background: color-mix(in srgb, var(--su-accent, #8aa0c0) 22%, transparent);
+  overflow: hidden;
+}
+.su-convo-progress-fill {
+  display: block; height: 100%;
+  border-radius: 999px;
+  background: var(--su-accent, #8aa0c0);
+  transition: width 0.6s ease;
+}
+@media (prefers-reduced-motion: reduce) {
+  .su-convo-card--working {
+    animation: none;
+    box-shadow: 0 0 18px color-mix(in srgb, var(--su-accent, #8aa0c0) 26%, transparent);
+  }
+  .su-stylist-avatar--spinning::after { animation: none; }
+}
+
+/* ── Ghost look-card — the card counterpart of the typing dots. Shown while
+      product cards are being pulled: a shimmering skeleton of the card that's
+      about to arrive, breathing gently with anticipation. ────────────────── */
+.su-cardghost {
+  position: relative;
+  width: min(78%, 340px);
+  padding: 12px;
+  border-radius: 18px;
+  background: #17181c;
+  border: 1px solid color-mix(in srgb, var(--su-accent, #8aa0c0) 26%, #2a2c31);
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  overflow: hidden;
+  animation: su-cardghost-breathe 2s ease-in-out infinite;
+}
+/* A soft sheen sweeps across the whole card. */
+.su-cardghost::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(105deg, transparent 30%, color-mix(in srgb, var(--su-accent, #8aa0c0) 10%, rgba(255, 255, 255, 0.05)) 50%, transparent 70%);
+  background-size: 220% 100%;
+  animation: su-cardghost-sheen 1.6s linear infinite;
+  pointer-events: none;
+}
+.su-cardghost-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  animation: su-cardghost-breathe 2s ease-in-out infinite;
+}
+.su-cardghost-thumb {
+  flex: 0 0 auto;
+  width: 44px; height: 54px;
+  border-radius: 9px;
+  background: #24262b;
+}
+.su-cardghost-lines {
+  flex: 1 1 auto;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+.su-cardghost-lines span {
+  height: 9px;
+  border-radius: 999px;
+  background: #24262b;
+}
+.su-cardghost-lines span:first-child { width: 72%; }
+.su-cardghost-lines span:last-child { width: 44%; }
+.su-cardghost-spark {
+  position: absolute;
+  top: 9px; right: 12px;
+  font-size: 12px;
+  color: var(--su-accent, #8aa0c0);
+  animation: su-cardghost-spark 1.4s ease-in-out infinite;
+}
+@keyframes su-cardghost-breathe {
+  0%, 100% { opacity: 0.75; }
+  50% { opacity: 1; }
+}
+@keyframes su-cardghost-sheen {
+  from { background-position: 160% 0; }
+  to { background-position: -60% 0; }
+}
+@keyframes su-cardghost-spark {
+  0%, 100% { opacity: 0.35; transform: scale(0.9) rotate(0deg); }
+  50% { opacity: 1; transform: scale(1.15) rotate(20deg); }
+}
+@media (prefers-reduced-motion: reduce) {
+  .su-cardghost,
+  .su-cardghost::after,
+  .su-cardghost-row,
+  .su-cardghost-spark { animation: none; }
+}
+
+/* ── Product pop-up — the product counterpart of the look viewer. A slide-up
+      overlay with a snap gallery + details; the chat stays underneath. ───── */
+.su-pviewer {
+  position: fixed;
+  inset: 0;
+  z-index: 200;
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  background: rgba(0, 0, 0, 0.72);
+  -webkit-backdrop-filter: blur(6px);
+  backdrop-filter: blur(6px);
+}
+.su-pviewer-inner {
+  position: relative;
+  width: 100%;
+  max-width: 520px;
+  max-height: 88vh;
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  border-radius: 22px 22px 0 0;
+  background: #141518;
+  border: 1px solid #26282d;
+  border-bottom: none;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-bottom: calc(16px + env(safe-area-inset-bottom));
+  animation: su-pviewer-up 0.32s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+@keyframes su-pviewer-up {
+  from { transform: translateY(6%); opacity: 0; }
+  to { transform: none; opacity: 1; }
+}
+.su-pviewer .su-viewer-close {
+  position: absolute;
+  top: 12px; right: 12px;
+  z-index: 2;
+  background: rgba(0, 0, 0, 0.5);
+}
+/* Horizontal snap gallery. */
+.su-pviewer-gallery {
+  display: flex;
+  gap: 0;
+  overflow-x: auto;
+  scroll-snap-type: x mandatory;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  background: #0e0f11;
+  border-radius: 22px 22px 0 0;
+}
+.su-pviewer-gallery::-webkit-scrollbar { display: none; }
+.su-pviewer-gallery img {
+  flex: 0 0 100%;
+  width: 100%;
+  aspect-ratio: 4 / 5;
+  object-fit: contain;
+  scroll-snap-align: center;
+  background: #0e0f11;
+}
+.su-pviewer-empty { flex: 0 0 100%; aspect-ratio: 4 / 5; background: repeating-linear-gradient(45deg, #1c1d21, #1c1d21 8px, #26282d 8px, #26282d 16px); }
+.su-pviewer-info { padding: 16px 18px 6px; }
+.su-pviewer-brand {
+  font-size: 11.5px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.05em;
+  color: var(--su-accent, #8aa0c0);
+  margin-bottom: 3px;
+}
+.su-pviewer-name { font-size: 17px; font-weight: 700; line-height: 1.3; }
+.su-pviewer-price { font-size: 15px; color: #b9bcc4; margin-top: 4px; font-variant-numeric: tabular-nums; }
+.su-pviewer-desc {
+  margin: 10px 0 0;
+  font-size: 13.5px;
+  line-height: 1.55;
+  color: #9a9da6;
+}
+.su-pviewer .su-viewer-add { margin: 14px 18px 0; width: auto; max-width: none; }
+@media (min-width: 769px) {
+  .su-pviewer { align-items: center; padding: 24px; }
+  .su-pviewer-inner { border-radius: 22px; border-bottom: 1px solid #26282d; }
+  .su-pviewer-gallery { border-radius: 22px 22px 0 0; }
+}
+@media (prefers-reduced-motion: reduce) {
+  .su-pviewer-inner { animation: none; }
+}
+
+/* ── Product pop-up v2 — grab handle, save, fit/fabric chips, short
+      description, similar rail, and swipe-down dissolve. ─────────────── */
+.su-pviewer-grab {
+  position: absolute;
+  top: 8px; left: 0; right: 0;
+  margin-inline: auto;
+  width: 40px; height: 4px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.28);
+  z-index: 2;
+}
+.su-pviewer-inner { touch-action: pan-y; overscroll-behavior-y: contain; }
+.su-pviewer-toprow { display: flex; align-items: flex-start; gap: 12px; }
+.su-pviewer-id { flex: 1 1 auto; min-width: 0; }
+.su-pviewer-save {
+  flex: 0 0 auto;
+  width: 40px; height: 40px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  border: 1px solid #34363c;
+  background: #1c1d21;
+  color: #c7c9cf;
+  cursor: pointer;
+  transition: transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.14s ease, border-color 0.14s ease;
+}
+.su-pviewer-save:active { transform: scale(0.88); }
+.su-pviewer-save.is-saved { color: var(--su-accent, #8aa0c0); border-color: var(--su-accent, #8aa0c0); }
+
+/* Fit / Fabric metadata chips. */
+.su-pviewer-meta {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+.su-pviewer-meta-label {
+  flex: 0 0 auto;
+  font-size: 10.5px; font-weight: 800;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: #71747c;
+  width: 44px;
+}
+.su-pviewer-chip {
+  font-size: 11.5px; font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #26282d;
+  color: #c7c9cf;
+}
+
+/* Short description — 3 lines, tap to expand. */
+.su-pviewer-desc {
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  cursor: pointer;
+}
+.su-pviewer-desc.is-open { display: block; -webkit-line-clamp: unset; }
+
+/* "More like this" — similar products from the generative search. */
+.su-pviewer-similar { padding: 14px 0 0; }
+.su-pviewer-similar-label {
+  padding: 0 18px 8px;
+  font-size: 10.5px; font-weight: 800;
+  letter-spacing: 0.08em; text-transform: uppercase;
+  color: #71747c;
+}
+.su-pviewer-similar-rail {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 0 18px 4px;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+}
+.su-pviewer-similar-rail::-webkit-scrollbar { display: none; }
+.su-pviewer-sim {
+  flex: 0 0 104px;
+  display: flex; flex-direction: column; gap: 4px;
+  padding: 0; border: none; background: none;
+  color: inherit; text-align: left; cursor: pointer;
+}
+.su-pviewer-sim-media {
+  width: 104px; height: 130px;
+  border-radius: 10px; overflow: hidden;
+  background: #26282d; border: 1px solid #2a2c31;
+}
+.su-pviewer-sim-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.su-pviewer-sim-name {
+  font-size: 11.5px; line-height: 1.25; color: #d8dae0;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.su-pviewer-sim-price { font-size: 11px; color: #8b8e96; }
+
+/* Dissolve-out for both overlays (backdrop fades, sheet sinks + dissolves). */
+.su-pviewer.is-closing,
+.su-viewer.is-closing { animation: su-overlay-fade 0.22s ease both; pointer-events: none; }
+.su-pviewer.is-closing .su-pviewer-inner,
+.su-viewer.is-closing .su-viewer-inner { animation: su-overlay-sink 0.22s ease both; }
+@keyframes su-overlay-fade { to { opacity: 0; } }
+@keyframes su-overlay-sink { to { transform: translateY(24px) scale(0.97); opacity: 0; } }
+@media (prefers-reduced-motion: reduce) {
+  .su-pviewer.is-closing,
+  .su-viewer.is-closing,
+  .su-pviewer.is-closing .su-pviewer-inner,
+  .su-viewer.is-closing .su-viewer-inner { animation-duration: 0.01s; }
+}
+
+/* ── "End this conversation?" — in-app frosted-glass confirm (never the native
+      browser dialog). Serif title + accent-tinted glass to match the chat. ── */
+.su-confirm-backdrop {
+  position: fixed; inset: 0; z-index: 400;
+  display: flex; align-items: center; justify-content: center;
+  padding: 24px;
+  background: rgba(6, 7, 9, 0.6);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  animation: su-confirm-fade 0.2s ease both;
+}
+.su-confirm {
+  width: min(360px, calc(100% - 40px));
+  padding: 22px 22px 16px;
+  border-radius: 22px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background:
+    linear-gradient(160deg,
+      color-mix(in srgb, var(--su-accent, #8aa0c0) 14%, rgba(24, 25, 29, 0.86)),
+      rgba(18, 19, 22, 0.9));
+  -webkit-backdrop-filter: blur(24px) saturate(1.3); backdrop-filter: blur(24px) saturate(1.3);
+  box-shadow: 0 24px 70px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.08);
+  animation: su-confirm-pop 0.24s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+.su-confirm-title {
+  font-family: var(--su-serif);
+  font-size: 21px; font-weight: 500; letter-spacing: 0.005em;
+  color: #f2f2f4; margin-bottom: 8px;
+}
+.su-confirm-body { font-size: 14px; line-height: 1.45; color: #b9bcc3; margin-bottom: 20px; }
+.su-confirm-actions { display: flex; gap: 10px; }
+.su-confirm-btn {
+  flex: 1 1 0;
+  padding: 12px 14px;
+  border-radius: 999px;
+  font-size: 14px; font-weight: 700;
+  cursor: pointer;
+  transition: transform 0.12s ease, background 0.15s ease, border-color 0.15s ease;
+}
+.su-confirm-btn:active { transform: scale(0.96); }
+.su-confirm-btn--cancel {
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  background: rgba(255, 255, 255, 0.06);
+  color: #e7e7ea;
+}
+.su-confirm-btn--cancel:hover { background: rgba(255, 255, 255, 0.1); }
+.su-confirm-btn--danger {
+  border: 1px solid #5a2a26;
+  background: #3a1e1b;
+  color: #f0c4bd;
+}
+.su-confirm-btn--danger:hover { background: #4a2420; border-color: #7a3a34; }
+@keyframes su-confirm-fade { from { opacity: 0; } }
+@keyframes su-confirm-pop { from { opacity: 0; transform: translateY(14px) scale(0.96); } }
+@media (prefers-reduced-motion: reduce) {
+  .su-confirm-backdrop, .su-confirm { animation: none; }
+}

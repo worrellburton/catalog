@@ -317,7 +317,7 @@ function inferRoleFromName(name: string | null): string | null {
   if (/\b(jacket|coat|parka|blazer|bomber|puffer|trench)\b/.test(lower)) return 'jacket';
   if (/\b(dress|gown)\b/.test(lower)) return 'dress';
   if (/\b(skirt)\b/.test(lower)) return 'skirt';
-  if (/\b(short|bermuda)\b/.test(lower)) return 'shorts';
+  if (/\b(shorts?(?!\s+sleeve)|bermuda)\b/.test(lower)) return 'shorts';
   if (/\b(pant|trouser|chino|jean|denim|legging|jogger)\b/.test(lower)) return 'pants';
   if (/\b(belt)\b/.test(lower)) return 'belt';
   if (/\b(sneaker|trainer|shoe|boot|heel|loafer|sandal)\b/.test(lower)) return 'shoes';
@@ -326,6 +326,21 @@ function inferRoleFromName(name: string | null): string | null {
   if (/\b(necklace|ring|earring|bracelet|chain|pendant)\b/.test(lower)) return 'jewelry';
   if (/\b(shirt|tee|top|sweater|hoodie|polo|henley|tank|sweatshirt|knit|cardigan)\b/.test(lower)) return 'top';
   return null;
+}
+
+/** True when any picked product can't be placed on a body zone — no role,
+ *  or a role with no zone mapping. Such a piece (a demoted type-mislabel, a
+ *  name with no garment word like "Y-3 Superstar") could cover ANY zone,
+ *  footwear included, so zone NEGATIVES ("bare feet", "do not render legs")
+ *  must not be asserted around it — they can directly contradict the
+ *  piece's reference image. */
+function hasUnplaceableProduct(
+  productLines: { role_tag: string | null; name: string | null }[],
+): boolean {
+  return productLines.some(p => {
+    const role = ((p.role_tag || inferRoleFromName(p.name)) || '').toLowerCase().trim();
+    return !role || !(role in ROLE_ZONES);
+  });
 }
 
 /**
@@ -346,6 +361,11 @@ function computeFraming(
   // No tags at all -> default to full body so Seedance has something
   // to compose around.
   if (zones.size === 0) {
+    return 'Frame as a centered full-body shot, head to toe.';
+  }
+  // An unplaceable piece may live in any uncovered zone — show the whole
+  // body and skip every "do not render …" / "bare feet" negative.
+  if (hasUnplaceableProduct(productLines)) {
     return 'Frame as a centered full-body shot, head to toe.';
   }
 
@@ -428,6 +448,13 @@ function computeProductOnlyWardrobe(
   const hasShoes = zones.has('feet');
 
   const base = 'Dress them in ONLY the referenced products — no other clothing, outerwear, layering, accessories, logos, or prints.';
+
+  // An unplaceable piece may be the very garment a filler would deny (the
+  // mislabeled sneaker vs "bare feet") — assert nothing about uncovered
+  // zones and let the reference images place every product.
+  if (hasUnplaceableProduct(productLines)) {
+    return `${base} Wear every referenced product where it naturally belongs on the body.`;
+  }
 
   // Neutral fillers, only for zones that the framing will actually show
   // (i.e. once there's a bottom, the torso + legs are in frame).
@@ -883,6 +910,25 @@ export async function createGeneration(
   }).catch(err => console.warn('[createGeneration] invoke exception:', err));
 
   return { data: gen as UserGeneration, error: null };
+}
+
+/**
+ * Cancel an in-flight generation — the shopper hit Stop while it was
+ * rendering. Flips a still-running row to a terminal state so the poller
+ * stops and (best-effort) the Fal result isn't promoted later. Guarded to
+ * pending/generating so it never clobbers an already-finished row. Owner-gated
+ * by RLS; the caller also tracks cancellation client-side so the UI unblocks
+ * even if the write is denied. `completed_at` is set for stuck-row reconciler
+ * bookkeeping.
+ */
+export async function cancelGeneration(id: string): Promise<{ error: string | null }> {
+  if (!supabase) return { error: 'Supabase not configured' };
+  const { error } = await supabase
+    .from('user_generations')
+    .update({ status: 'failed', error: 'Canceled', error_code: 'canceled', completed_at: new Date().toISOString() })
+    .eq('id', id)
+    .in('status', ['pending', 'generating']);
+  return { error: error?.message ?? null };
 }
 
 export async function getGeneration(id: string): Promise<UserGeneration | null> {

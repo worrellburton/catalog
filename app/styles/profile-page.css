@@ -376,9 +376,30 @@ html[data-shell="catalog-app"] .profile-page-overlay {
 /* Footer */
 .profile-page-footer {
   display: flex;
-  justify-content: center;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
   padding-top: 8px;
 }
+
+/* Legal links (Privacy · Terms) at the very bottom of the profile */
+.profile-page-legal {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.profile-page-legal-link {
+  background: none;
+  border: none;
+  color: rgba(255,255,255,0.4);
+  font-size: 12px;
+  font-family: inherit;
+  cursor: pointer;
+  padding: 4px 2px;
+  transition: color 0.15s;
+}
+.profile-page-legal-link:hover { color: rgba(255,255,255,0.7); }
+.profile-page-legal-dot { color: rgba(255,255,255,0.25); font-size: 12px; }
 
 .profile-page-logout {
   background: none;
@@ -503,3 +524,59 @@ html[data-shell="catalog-app"] .profile-page-overlay {
   color: #86efac;
 }
 .profile-page-creator-status--denied { color: rgba(255, 255, 255, 0.6); }
+
+/* ============================================
+   LEGAL PAGE - Privacy Policy / Terms of Service
+   Opens on top of the profile overlay.
+   ============================================ */
+html[data-shell="catalog-app"] .legal-page-overlay {
+  padding-top: var(--shell-sb, env(safe-area-inset-top, 44px));
+}
+
+.legal-page-overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 9001;
+  background: #111;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.legal-page-container {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 24px 20px max(40px, env(safe-area-inset-bottom));
+}
+
+.legal-page-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.legal-page-meta {
+  font-size: 12px;
+  color: rgba(255,255,255,0.4);
+  margin: 0 0 24px;
+}
+
+.legal-page-section {
+  margin-bottom: 24px;
+}
+
+.legal-page-h {
+  font-size: 16px;
+  font-weight: 600;
+  color: #fff;
+  margin: 0 0 8px;
+  letter-spacing: -0.01em;
+}
+
+.legal-page-p {
+  font-size: 14px;
+  line-height: 1.6;
+  color: rgba(255,255,255,0.7);
+  margin: 0 0 8px;
+}
+.legal-page-p:last-child { margin-bottom: 0; }

@@ -7,6 +7,7 @@ import { getUserGender, updateUserGender, type UserGender } from '~/services/gen
 import { refreshAuthUser } from '~/hooks/useAuth';
 import { supabase } from '~/utils/supabase';
 import BecomeCreatorSection from './BecomeCreatorSection';
+import LegalPage, { type LegalKind } from './LegalPage';
 import '~/styles/profile-page.css';
 
 interface ProfilePageProps {
@@ -36,7 +37,9 @@ interface ProfileData {
 }
 
 export default function ProfilePage({ user, onClose, renderSaved }: ProfilePageProps) {
-  useEscapeKey(onClose);
+  const [legal, setLegal] = useState<LegalKind | null>(null);
+  // While a legal page is open, let its own Escape handler close it first.
+  useEscapeKey(onClose, !legal);
 
   const [tab, setTab] = useState<'profile' | 'saved'>('profile');
   const [loading, setLoading] = useState(true);
@@ -143,6 +146,7 @@ export default function ProfilePage({ user, onClose, renderSaved }: ProfilePageP
   const renderedAvatar = avatarOverride || user.avatarUrl;
 
   return (
+    <>
     <div className="profile-page-overlay">
       <div className="profile-page-container">
         <div className="profile-page-header">
@@ -357,10 +361,21 @@ export default function ProfilePage({ user, onClose, renderSaved }: ProfilePageP
               >
                 Done
               </button>
+              <div className="profile-page-legal">
+                <button type="button" className="profile-page-legal-link" onClick={() => setLegal('privacy')}>
+                  Privacy Policy
+                </button>
+                <span className="profile-page-legal-dot" aria-hidden="true">·</span>
+                <button type="button" className="profile-page-legal-link" onClick={() => setLegal('terms')}>
+                  Terms of Service
+                </button>
+              </div>
             </div>
           </div>
         )}
       </div>
     </div>
+    {legal && <LegalPage kind={legal} onClose={() => setLegal(null)} />}
+    </>
   );
 }

@@ -22,20 +22,34 @@
   "workspace": {
     "packageJson": {
       "dependencies": [
+        "npm:@anthropic-ai/sdk@0.93",
+        "npm:@clerk/clerk-react@^5.61.8",
+        "npm:@playwright/test@^1.49.0",
         "npm:@remix-run/dev@^2.17.4",
         "npm:@remix-run/node@^2.17.4",
         "npm:@remix-run/react@^2.17.4",
+        "npm:@sentry/remix@^8.46.0",
         "npm:@supabase/supabase-js@^2.100.1",
         "npm:@types/node@22",
         "npm:@types/react-dom@19",
         "npm:@types/react@19",
         "npm:@vercel/analytics@^2.0.1",
+        "npm:@vercel/speed-insights@^1.0.12",
+        "npm:gsap@^3.15.0",
+        "npm:heic2any@^0.0.4",
+        "npm:hls.js@^1.6.16",
+        "npm:husky@^9.1.7",
         "npm:isbot@^5.1.36",
+        "npm:lint-staged@^15.2.11",
+        "npm:motion@^12.40.0",
         "npm:react-dom@^19.2.4",
         "npm:react@^19.2.4",
+        "npm:remix-development-tools@^4.7.7",
+        "npm:terser@^5.36.0",
         "npm:typescript@^5.7.0",
         "npm:vite-tsconfig-paths@^6.1.1",
-        "npm:vite@^6.4.1"
+        "npm:vite@^6.4.1",
+        "npm:vitest@^4.1.4"
       ]
     }
   }

@@ -6,6 +6,7 @@
 import { useEffect, useRef, useMemo, useState } from 'react';
 import { getAutoEditorConfig } from '~/services/dials';
 import TypeAnywhere from '~/components/TypeAnywhere';
+import type { Product } from '~/data/looks';
 
 // Headline rotation. First HEADLINE_BASELINE_VISITS the user sees the
 // canonical "What are you shopping for?". After that, we pick from
@@ -151,9 +152,14 @@ function bumpVisitCount(): void {
 interface ShoppingForHeroProps {
   /** Scroll the page to the home feed below (the "best sellers" hint). */
   onRevealFeed?: () => void;
+  /** Recently-viewed products — shown as a thumbnail strip directly under the
+   *  desktop inline search bar (desktop only; mobile keeps the fixed strip). */
+  recentProducts?: Product[];
+  /** Open a recently-viewed product in the detail overlay. */
+  onOpenProduct?: (product: Product) => void;
 }
 
-export default function ShoppingForHero({ onRevealFeed }: ShoppingForHeroProps) {
+export default function ShoppingForHero({ onRevealFeed, recentProducts = [], onOpenProduct }: ShoppingForHeroProps) {
   // "What is the daily feed?" centered info modal — opened by tapping the
   // "Your daily feed" heading. Escape / backdrop tap / X all close it.
   const [infoOpen, setInfoOpen] = useState(false);
@@ -306,6 +312,33 @@ export default function ShoppingForHero({ onRevealFeed }: ShoppingForHeroProps) 
             `catalog:hero-inline` event. Hidden ≤768px (mobile keeps the
             BottomBar pill) via .ai-bar-wrap's own media query. */}
         <TypeAnywhere inline />
+
+        {/* Recently viewed — in-flow directly under the inline search bar, so it
+            rides the same flex column as the spark + headline + bar and stays
+            glued to the bar on every viewport height (the fixed strip used on
+            mobile can't track the inline bar's flex position). Desktop only
+            (CSS); mobile keeps the fixed .home-recent-strip. Only when there's
+            view history. */}
+        {recentProducts.length > 0 && (
+          <div className="sfh-recent home-recent-strip-inflow" aria-label="Recently viewed">
+            <div className="home-recent-title">Recently viewed</div>
+            <div className="home-recent-row">
+              {recentProducts.slice(0, 12).map((p, i) => (
+                <button
+                  key={`${p.brand}|${p.name}|${i}`}
+                  type="button"
+                  className="home-recent-tile"
+                  onClick={() => onOpenProduct?.(p)}
+                  aria-label={p.name || 'Product'}
+                >
+                  {p.image
+                    ? <img src={p.image} alt="" loading="lazy" decoding="async" />
+                    : <span className="home-recent-tile-empty" />}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
       </div>
 
       {/* Scroll-to-your-daily-feed affordance: the "Your daily feed" heading

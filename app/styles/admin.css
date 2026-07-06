@@ -1483,6 +1483,20 @@ html.admin-on-dark-canvas .admin-topbar,
   color: #555;
 }
 
+/* Centered numeric column — header + cells line up (vs left header / right cell).
+   The header rule must out-specify `.admin-table th { text-align:left }` (0,1,1),
+   so it's scoped to `.admin-table th.admin-th-center` (0,2,1) + centers the
+   sortable inner flexbox too. */
+.admin-table th.admin-th-center { text-align: center; }
+.admin-table th.admin-th-center .admin-th-sortable-inner { justify-content: center; }
+.admin-table td.admin-cell-center {
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum';
+  color: #555;
+}
+.admin-dark .admin-table td.admin-cell-center { color: rgba(255, 255, 255, 0.55); }
+
 .admin-cell-name {
   font-weight: 600;
   color: #111 !important;
