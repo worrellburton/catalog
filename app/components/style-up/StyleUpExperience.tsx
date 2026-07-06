@@ -1890,6 +1890,22 @@ export function StyleUpExperience({
         >
           {messages.length === 0 && (
             <div className="su-chat-intro">
+              {/* Front-load the selfie ask — it unlocks "see it on me", and
+                  burying it in the context-card editor was the #1 abandonment
+                  point. Shown only until a photo exists; reuses pickPhoto(0). */}
+              {filledPhotos.length === 0 && (
+                <button type="button" className="su-chat-selfie-ask" onClick={() => pickPhoto(0)} disabled={uploadingSlot === 0}>
+                  <span className="su-chat-selfie-ask-icon" aria-hidden="true">
+                    {uploadingSlot === 0
+                      ? <span className="su-render-spinner" />
+                      : <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>}
+                  </span>
+                  <span className="su-chat-selfie-ask-text">
+                    <strong>Add a selfie</strong>
+                    <span>so {active?.name} can show the looks on you</span>
+                  </span>
+                </button>
+              )}
               <p>Say hi to {active?.name} and tell them what you&apos;re looking for.</p>
               <p className="su-chat-intro-sub">e.g. &ldquo;I need a date-night fit&rdquo; or &ldquo;help me build a capsule for work&rdquo;.</p>
             </div>
