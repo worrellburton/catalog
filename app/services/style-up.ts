@@ -174,6 +174,9 @@ export interface StyleUpProductDetail {
   price: string | null;
   description: string | null;
   images: string[];
+  /** Primary product video (hero clip) + its poster, when the product has one. */
+  video: string | null;
+  poster: string | null;
   url: string | null;
   /** Short fit facts from size_fit / fit_intelligence enrichment. */
   fitChips: string[];
@@ -220,7 +223,7 @@ export async function fetchProductDetail(productId: string): Promise<StyleUpProd
   if (!supabase) return null;
   const { data } = await supabase
     .from('products')
-    .select('id, name, display_name, brand, price, description, image_url, primary_image_url, images, url, size_fit, materials_care, fit_intelligence, materials_structured')
+    .select('id, name, display_name, brand, price, description, image_url, primary_image_url, primary_video_url, primary_video_poster_url, images, url, size_fit, materials_care, fit_intelligence, materials_structured')
     .eq('id', productId)
     .maybeSingle();
   if (!data) return null;
@@ -231,6 +234,9 @@ export async function fetchProductDetail(productId: string): Promise<StyleUpProd
     ? r.primary_image_url
     : (typeof r.image_url === 'string' && r.image_url ? r.image_url : null);
   const gallery: string[] = primary ? [primary] : [];
+  // Prefer the product's own hero video (same clip the feed plays); still image is the fallback.
+  const video = (typeof r.primary_video_url === 'string' && r.primary_video_url) ? r.primary_video_url : null;
+  const poster = (typeof r.primary_video_poster_url === 'string' && r.primary_video_poster_url) ? r.primary_video_poster_url : primary;
   const fitChips = [...jsonChips(r.fit_intelligence), ...textChips(r.size_fit)].slice(0, 4);
   const fabricChips = [...jsonChips(r.materials_structured), ...textChips(r.materials_care)].slice(0, 4);
   return {
@@ -240,6 +246,8 @@ export async function fetchProductDetail(productId: string): Promise<StyleUpProd
     price: (r.price as string | null) ?? null,
     description: (r.description as string | null) ?? null,
     images: gallery,
+    video,
+    poster,
     url: (r.url as string | null) ?? null,
     fitChips,
     fabricChips,
