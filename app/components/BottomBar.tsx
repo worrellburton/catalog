@@ -10,6 +10,7 @@ import { useShopperBody } from '~/hooks/useShopperBody';
 import { useSearchBeam } from '~/hooks/useSearchBeam';
 import FilterPanel, { ActiveFilters, getEmptyFilters, hasActiveFilters } from './FilterPanel';
 import { getSearchSuggestions, getCreators } from '~/services/looks';
+import { getRecentSearches, RECENT_SEARCH_EVENT } from '~/services/recent-searches';
 
 // Filter fields that carry real search intent (men/women are the gender
 // toggle, price/creator aren't search terms). A few tokens get humanized so
@@ -32,7 +33,7 @@ interface BottomBarProps {
   onFilterChange: (filter: 'all' | 'men' | 'women') => void;
   searchQuery: string;
   onSearchChange: (query: string) => void;
-  onSelectSuggestion?: (query: string) => void;
+  onSelectSuggestion?: (query: string, price?: string[]) => void;
   onOpenCreators?: () => void;
   catalogName?: string;
   /** True while nl-search is resolving - shows a spinner in the input. */
@@ -67,6 +68,10 @@ function BottomBar({
   const [activeFilters, setActiveFilters] = useState<ActiveFilters>(getEmptyFilters());
   // Type-ahead suggestion pool (catalog/search suggestions), loaded once.
   const [allSuggestions, setAllSuggestions] = useState<SearchSuggestion[]>([]);
+  // Recent searches — a returning shopper re-enters a past occasion ("wedding
+  // guest") in one tap instead of retyping it. Sourced from the same store the
+  // feed writes on every search (recordRecentSearch).
+  const [recentSearches, setRecentSearches] = useState<string[]>(() => getRecentSearches());
   // Drag-to-close: the top-docked search sheet can be pulled UP to dismiss,
   // with a grab-handle indicator (Apple-Maps-style sheet feel). dragOffset
   // tracks the live finger delta; dragging disables the snap transition so
@@ -350,6 +355,20 @@ function BottomBar({
     return () => { cancelled = true; };
   }, []);
 
+  // Keep the recent list fresh: re-read each time the sheet opens, and react to
+  // writes from the feed (same-tab custom event) or other tabs (storage event).
+  useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const refresh = () => setRecentSearches(getRecentSearches());
+    refresh();
+    window.addEventListener(RECENT_SEARCH_EVENT, refresh);
+    window.addEventListener('storage', refresh);
+    return () => {
+      window.removeEventListener(RECENT_SEARCH_EVENT, refresh);
+      window.removeEventListener('storage', refresh);
+    };
+  }, [searchOpen]);
+
   // Type-ahead matches: only things that actually match what's typed
   // (prefix hits first, then substring) — never unrelated "ideas".
   const suggestionMatches = useMemo(() => {
@@ -455,10 +474,11 @@ function BottomBar({
     // Actually SEARCH the catalog the filters describe — compose a query from
     // the chosen occasion/type/style/etc. and run it through the same
     // semantic search the typed bar uses. Without this, Build only relabeled
-    // the feed and never searched.
+    // the feed and never searched. The budget chips ride along as a structured
+    // price predicate (search_products' filter_price) rather than being dropped.
     const query = composeFilterQuery(activeFilters);
     if (query) {
-      if (onSelectSuggestion) onSelectSuggestion(query);
+      if (onSelectSuggestion) onSelectSuggestion(query, activeFilters.price);
       else onSearchChange(query);
     }
     closeFilters();
@@ -576,6 +596,30 @@ function BottomBar({
               {/* Catalog tags pinned to the bottom (just above the bar) via
                   .bb-pills-bottom's margin-top:auto. */}
               <div className="bb-pills-bottom">
+                {/* Recent searches — one-tap re-entry for a returning shopper.
+                    Reuses the catalog-pill styling so it blends with the cloud
+                    below it; taps re-run the search via pickCatalog. */}
+                {recentSearches.length > 0 && (
+                  <div className="catalog-pills" role="group" aria-label="Recent searches" onMouseDown={(e) => e.preventDefault()}>
+                    <div className="catalog-pills-label">Recent</div>
+                    <div className="catalog-pills-row">
+                      {recentSearches.slice(0, 8).map((q) => (
+                        <button
+                          key={`recent:${q}`}
+                          type="button"
+                          className="catalog-pill"
+                          onClick={() => pickCatalog(q)}
+                          title={`Search again: ${q}`}
+                        >
+                          <span className="catalog-pill-icon" aria-hidden="true">
+                            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><polyline points="12 7 12 12 15 14"/></svg>
+                          </span>
+                          <span className="catalog-pill-name">{q}</span>
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                )}
                 {isAdmin && (
                   <button
                     className="bb-pills-showall"

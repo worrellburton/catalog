@@ -531,6 +531,30 @@ html[data-shell="catalog-app"] .su-shell {
 .su-chat-intro { margin: auto; text-align: center; color: #8b8e96; max-width: 30ch; }
 .su-chat-intro p { margin: 0 0 4px; font-size: 14px; }
 .su-chat-intro-sub { font-size: 12.5px; color: #71747c; }
+
+/* Front-loaded selfie ask — sits above the intro copy on an empty thread so
+   the "see it on me" unlock is the first thing offered, not buried in the
+   context-card editor. Vanishes once a photo exists. */
+.su-chat-selfie-ask {
+  display: flex; align-items: center; gap: 11px;
+  width: 100%; margin: 0 0 16px; padding: 12px 14px;
+  border-radius: 14px; text-align: left; cursor: pointer;
+  border: 1px solid rgba(138, 160, 192, 0.35);
+  background: rgba(28, 29, 33, 0.75);
+  -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px);
+  transition: border-color 0.14s ease, transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1);
+}
+.su-chat-selfie-ask:not(:disabled):active { transform: scale(0.97); }
+.su-chat-selfie-ask:hover { border-color: var(--su-accent, #8aa0c0); }
+.su-chat-selfie-ask:disabled { opacity: 0.6; cursor: default; }
+.su-chat-selfie-ask-icon {
+  flex: 0 0 auto; display: grid; place-items: center;
+  width: 38px; height: 38px; border-radius: 11px;
+  color: var(--su-accent, #8aa0c0); background: rgba(138, 160, 192, 0.14);
+}
+.su-chat-selfie-ask-text { display: flex; flex-direction: column; gap: 1px; }
+.su-chat-selfie-ask-text strong { font-size: 13.5px; font-weight: 650; color: #eef0f4; }
+.su-chat-selfie-ask-text span { font-size: 12px; color: #9a9da5; }
 .su-msg { display: flex; }
 .su-msg--shopper { justify-content: flex-end; }
 .su-msg--stylist { justify-content: flex-start; }
