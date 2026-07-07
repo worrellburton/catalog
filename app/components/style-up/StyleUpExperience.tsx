@@ -391,6 +391,13 @@ interface ShopperContext {
   chips: string[];
 }
 
+/** Chatting is gated until the shopper has attached at least one photo and
+ *  filled in height + weight — the stylist needs them to style/fit looks.
+ *  Age/gender stay optional. */
+function isProfileReady(ctx: ShopperContext | null): boolean {
+  return !!ctx && ctx.photos.some(Boolean) && !!ctx.heightLabel.trim() && !!ctx.weightLabel.trim();
+}
+
 /** A stylist's avatar contents: their real photo when we have one, otherwise a
  *  clean line-art portrait (a croquis bust) — never bare initials. Sits inside a
  *  `.su-stylist-avatar` (accent background), so the line inherits the dark ink. */
@@ -1233,6 +1240,7 @@ export function StyleUpExperience({
   const send = useCallback(async (override?: string) => {
     const text = (override ?? draft).trim();
     if (!text || !threadId || sending) return;
+    if (!isProfileReady(ctx)) return; // gated: needs selfie + height + weight
     setSending(true);
     if (!override) setDraft('');
     const msg = await sendShopperMessage(threadId, text);
@@ -1257,7 +1265,7 @@ export function StyleUpExperience({
     }
     else if (wantsFullLook(text) && looks.length > 0) void askScene();
     else void triggerStylist();
-  }, [draft, threadId, sending, triggerStylist, handleSwapRequest, startOutfitFlow, askScene, lookPicks, engineMethod, active]);
+  }, [draft, threadId, sending, ctx, triggerStylist, handleSwapRequest, startOutfitFlow, askScene, lookPicks, engineMethod, active]);
 
   // Add a finished render to the shopper's own looks, promotes the generation
   // to a LIVE look (with its video + poster + pieces), associated with THIS
@@ -1416,6 +1424,16 @@ export function StyleUpExperience({
   }, [userId, ctx, loadContext]);
 
   const filledPhotos = (ctx?.photos ?? []).filter((u): u is string => !!u);
+
+  // Chat is gated until the profile has a selfie + height + weight. Spell out
+  // exactly what's still missing so the nudge is actionable.
+  const profileReady = isProfileReady(ctx);
+  const gateNeeds: string[] = [];
+  if (filledPhotos.length === 0) gateNeeds.push('a selfie');
+  if (!ctx?.heightLabel.trim()) gateNeeds.push('your height');
+  if (!ctx?.weightLabel.trim()) gateNeeds.push('your weight');
+  const gateLabel = `Add ${gateNeeds.join(' + ')} to chat`;
+
   const contextCard = (
     <div className={`su-context${ctxMini && !ctxEditing ? ' su-context--mini' : ''}${ctxEditing ? ' su-context--editing' : ''}`} aria-label="Your styling context">
       {ctxMini && !ctxEditing ? (
@@ -2287,7 +2305,7 @@ export function StyleUpExperience({
           </button>
         )}
 
-        {quickChips.length > 0 && (
+        {quickChips.length > 0 && profileReady && (
           <div className="su-quick-row">
             {quickChips.map(c => (
               <button key={c} type="button" className="su-quick-chip" disabled={sending} onClick={() => void send(c)}>
@@ -2298,16 +2316,26 @@ export function StyleUpExperience({
         )}
 
         <div className="su-composer">
-          <input
-            className="su-composer-input"
-            value={draft}
-            onChange={e => setDraft(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void send(); } }}
-            placeholder={`Message ${active?.name ?? 'your stylist'}…`}
-          />
-          <button type="button" className="su-composer-send" onClick={() => void send()} disabled={!draft.trim() || sending} aria-label="Send">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>
-          </button>
+          {profileReady ? (
+            <>
+              <input
+                className="su-composer-input"
+                value={draft}
+                onChange={e => setDraft(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void send(); } }}
+                placeholder={`Message ${active?.name ?? 'your stylist'}…`}
+              />
+              <button type="button" className="su-composer-send" onClick={() => void send()} disabled={!draft.trim() || sending} aria-label="Send">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>
+              </button>
+            </>
+          ) : (
+            // Gated: chatting is locked until the profile has a selfie + height +
+            // weight. Tapping opens the existing context editor to fill them in.
+            <button type="button" className="su-composer-gate" onClick={beginEdit}>
+              {gateLabel}
+            </button>
+          )}
         </div>
       </div>
   );
