@@ -1768,7 +1768,8 @@ html[data-shell="catalog-app"] .su-shell {
   border-radius: 22px 22px 0 0;
 }
 .su-pviewer-gallery::-webkit-scrollbar { display: none; }
-.su-pviewer-gallery img {
+.su-pviewer-gallery img,
+.su-pviewer-gallery video {
   flex: 0 0 100%;
   width: 100%;
   aspect-ratio: 4 / 5;

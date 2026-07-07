@@ -1252,7 +1252,7 @@ export function StyleUpExperience({
     const looks = lookPicks();
     if (swap && looks.length > 0) void handleSwapRequest(swap);
     else if (wantsFullOutfit(text)) {
-      if (engineMethod === 'style_engine' && active?.sourceMode !== 'web') void triggerStylist('outfit');
+      if (engineMethod !== 'legacy' && active?.sourceMode !== 'web') void triggerStylist('outfit');
       else void startOutfitFlow();
     }
     else if (wantsFullLook(text) && looks.length > 0) void askScene();
@@ -1577,7 +1577,7 @@ export function StyleUpExperience({
       brand: d?.brand ?? ref.brand ?? '',
       price: d?.price ?? ref.price ?? '',
       url: shopUrl ?? '',
-      image: gallery[0],
+      image: gallery[0] ?? d?.poster ?? undefined,
     };
     const saved = isProductBookmarked(asBookmark);
     return (
@@ -1604,9 +1604,11 @@ export function StyleUpExperience({
           <span className="su-pviewer-grab" aria-hidden="true" />
           <button type="button" className="su-viewer-close" onClick={closeProductViewer} aria-label="Close">✕</button>
           <div className="su-pviewer-gallery">
-            {gallery.length > 0
-              ? gallery.map((src, i) => <img key={i} src={src} alt={i === 0 ? (d?.name ?? ref.name ?? 'Product') : ''} loading={i > 0 ? 'lazy' : undefined} />)
-              : <span className="su-pviewer-empty" aria-hidden="true" />}
+            {d?.video
+              ? <video src={d.video} poster={d.poster ?? undefined} autoPlay loop muted playsInline />
+              : gallery[0]
+                ? <img src={gallery[0]} alt={d?.name ?? ref.name ?? 'Product'} />
+                : <span className="su-pviewer-empty" aria-hidden="true" />}
           </div>
           <div className="su-pviewer-info">
             <div className="su-pviewer-toprow">

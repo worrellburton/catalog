@@ -985,18 +985,20 @@ export default function AdminDials() {
         <div className="admin-detail-card">
           <h3>Stylist engine (Style Up)</h3>
           <p style={{ fontSize: 13, color: '#888', margin: '4px 0 16px' }}>
-            How the /style catalog stylist finds products. <b>Style engine</b> uses
-            occasion-aware search and suggests a complete look directly (no slot
-            chooser). <b>Legacy</b> restores the pre-engine behavior: the "Build your
-            outfit" chooser and the 120-newest recency scan. Flip to compare — it
-            applies to the next turn in every open chat.
+            How the /style catalog stylist finds products. <b>Stylist engine</b>{' '}
+            (default) uses occasion-aware search, suggests a complete look directly
+            (no slot chooser), and adds anti-repeat: it skips pieces already shown in
+            the thread and rotates the pool, so re-asking the same occasion returns a
+            fresh look instead of the same one. <b>Legacy</b> restores the pre-engine
+            behavior: the "Build your outfit" chooser and the 120-newest recency scan.
+            Flip to compare — it applies to the next turn in every open chat.
           </p>
           {!stylistMethodLoaded ? (
             <Skeleton height={40} radius={8} />
           ) : (
             <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 16 }}>
               <div style={{ display: 'inline-flex', border: '1px solid #e5e7eb', borderRadius: 8, overflow: 'hidden' }}>
-                {(['style_engine', 'legacy'] as const).map(opt => (
+                {(['stylist_engine', 'legacy'] as const).map(opt => (
                   <button
                     key={opt}
                     type="button"
@@ -1007,7 +1009,7 @@ export default function AdminDials() {
                       color: stylistMethod === opt ? '#fff' : '#555',
                     }}
                   >
-                    {opt === 'style_engine' ? 'Style engine' : 'Legacy'}
+                    {opt === 'stylist_engine' ? 'Stylist engine' : 'Legacy'}
                   </button>
                 ))}
               </div>
