@@ -9,7 +9,9 @@ import { supabase } from '~/utils/supabase';
 import { getUserHeightAge, getUserCustomStyle } from '~/services/profiles';
 import { getUserGender } from '~/services/genders';
 import { getUserSlots, createGeneration, buildGenerationPrompt } from '~/services/user-generations';
-import { roleForProduct } from '~/services/product-roles';
+import { roleForProduct, roleTagFromName } from '~/services/product-roles';
+import { getLookVideoQuality, getLookVideoDuration } from '~/services/dials';
+import type { StylistEngineMethod } from '~/services/dials';
 
 export interface StyleUpStylist {
   id: string;
@@ -17,12 +19,18 @@ export interface StyleUpStylist {
   avatarUrl: string | null;
   specialty: string | null;
   bio: string | null;
+  /** Where the stylist is based + how old they are (shown on the picker). */
+  city: string | null;
+  age: number | null;
   accentColor: string | null;
   /** Where this stylist's picks come from: 'catalog' = our own products,
    *  'web' = the open web (searched + auto-imported on the fly). */
   sourceMode: 'catalog' | 'web';
   /** Marks the two stylists featured on the /style landing page (else null). */
   landingSlot: string | null;
+  /** The stylist's favorite brands, shown as logo chips on the picker.
+   *  `domain` drives the client-side logo lookup. */
+  favoriteBrands: { name: string; domain: string }[];
 }
 
 /** A product attached to a chat message (the stylist's pick). Loose by design
@@ -49,6 +57,10 @@ export interface StyleUpProductRef {
   /** On a `render` caption: the pieces composited into the look, so the chat
    *  can show them while it cooks and when it's done. */
   pieces?: StyleUpProductRef[];
+  /** On a `render` caption: the shopper's own photos sent to the model as
+   *  face/body references, so the cooking card can show the FULL context of
+   *  the generation (you + the pieces). Public URLs, slot order. */
+  you?: string[];
 }
 
 export type StyleUpSender = 'shopper' | 'stylist';
@@ -62,6 +74,8 @@ export interface StyleUpMessage {
   body: string | null;
   productRef: StyleUpProductRef | null;
   renderGenerationId: string | null;
+  /** Tap-to-answer options the stylist supplied with a question. */
+  quickReplies: string[] | null;
   createdAt: string;
 }
 
@@ -72,15 +86,22 @@ function mapStylist(r: Record<string, unknown>): StyleUpStylist {
     avatarUrl: (r.avatar_url as string | null) ?? null,
     specialty: (r.specialty as string | null) ?? null,
     bio: (r.bio as string | null) ?? null,
+    city: (r.city as string | null) ?? null,
+    age: typeof r.age === 'number' ? r.age : (r.age != null ? Number(r.age) : null),
     accentColor: (r.accent_color as string | null) ?? null,
     sourceMode: (r.source_mode as 'catalog' | 'web') === 'web' ? 'web' : 'catalog',
     landingSlot: (r.landing_slot as string | null) ?? null,
+    favoriteBrands: Array.isArray(r.favorite_brands)
+      ? (r.favorite_brands as Array<{ name?: unknown; domain?: unknown }>)
+          .filter(b => b && typeof b.name === 'string' && typeof b.domain === 'string')
+          .map(b => ({ name: b.name as string, domain: b.domain as string }))
+      : [],
   };
 }
 
 // Every stylist column the client maps. Centralized so every select stays in
 // sync with mapStylist (source_mode / landing_slot were easy to forget).
-const STYLIST_COLS = 'id, name, avatar_url, specialty, bio, accent_color, source_mode, landing_slot';
+const STYLIST_COLS = 'id, name, avatar_url, specialty, bio, city, age, accent_color, source_mode, landing_slot, favorite_brands';
 const STYLIST_JOIN = `stylist:style_up_stylists(${STYLIST_COLS})`;
 
 function mapMessage(r: Record<string, unknown>): StyleUpMessage {
@@ -92,6 +113,7 @@ function mapMessage(r: Record<string, unknown>): StyleUpMessage {
     body: (r.body as string | null) ?? null,
     productRef: (r.product_ref as StyleUpProductRef | null) ?? null,
     renderGenerationId: (r.render_generation_id as string | null) ?? null,
+    quickReplies: Array.isArray(r.quick_replies) ? (r.quick_replies as unknown[]).map(String) : null,
     createdAt: String(r.created_at),
   };
 }
@@ -135,11 +157,137 @@ export async function getOrCreateThread(
   return String(data.id);
 }
 
+/** Delete a conversation (and its messages, via ON DELETE CASCADE). RLS scopes
+ *  this to the owning shopper. Returns true on success. */
+export async function deleteThread(threadId: string): Promise<boolean> {
+  if (!supabase) return false;
+  const { error } = await supabase.from('style_up_threads').delete().eq('id', threadId);
+  return !error;
+}
+
+/** Full product detail for the in-chat product pop-up: gallery, description,
+ *  fit + fabric metadata, shop link. Falls back gracefully when sparse. */
+export interface StyleUpProductDetail {
+  id: string;
+  name: string | null;
+  brand: string | null;
+  price: string | null;
+  description: string | null;
+  images: string[];
+  url: string | null;
+  /** Short fit facts from size_fit / fit_intelligence enrichment. */
+  fitChips: string[];
+  /** Short fabric/care facts from materials_structured / materials_care. */
+  fabricChips: string[];
+}
+
+/** Distill a jsonb enrichment blob (array or object of unknown shape) into a
+ *  few short display chips. */
+function jsonChips(v: unknown, max = 4): string[] {
+  const out: string[] = [];
+  const add = (s: unknown) => {
+    const t = String(s ?? '').trim();
+    if (t && t.length <= 42 && !out.includes(t) && out.length < max) out.push(t);
+  };
+  if (Array.isArray(v)) {
+    for (const it of v) {
+      if (typeof it === 'string' || typeof it === 'number') add(it);
+      else if (it && typeof it === 'object') {
+        const o = it as Record<string, unknown>;
+        const label = o.label ?? o.name ?? o.material ?? o.fit ?? o.value;
+        const qty = o.percent ?? o.percentage;
+        add(qty != null && label != null ? `${qty}% ${label}` : label);
+      }
+    }
+  } else if (v && typeof v === 'object') {
+    for (const [k, val] of Object.entries(v as Record<string, unknown>)) {
+      if (typeof val === 'string' || typeof val === 'number') {
+        add(`${k.replace(/_/g, ' ')}: ${val}`);
+      }
+    }
+  }
+  return out;
+}
+
+/** First shortish sentences of a text blob, as chips. */
+function textChips(s: unknown, max = 3): string[] {
+  if (typeof s !== 'string' || !s.trim()) return [];
+  return s.split(/(?<=[.;])\s+|\n+/).map(x => x.trim().replace(/[.;]$/, ''))
+    .filter(x => x.length > 2 && x.length <= 42).slice(0, max);
+}
+
+export async function fetchProductDetail(productId: string): Promise<StyleUpProductDetail | null> {
+  if (!supabase) return null;
+  const { data } = await supabase
+    .from('products')
+    .select('id, name, display_name, brand, price, description, image_url, primary_image_url, images, url, size_fit, materials_care, fit_intelligence, materials_structured')
+    .eq('id', productId)
+    .maybeSingle();
+  if (!data) return null;
+  const r = data as Record<string, unknown>;
+  // Display shows ONLY the primary (curated) image — never the raw gallery.
+  // The gallery angles are for the video model, not the shopper-facing pop-up.
+  const primary = (typeof r.primary_image_url === 'string' && r.primary_image_url)
+    ? r.primary_image_url
+    : (typeof r.image_url === 'string' && r.image_url ? r.image_url : null);
+  const gallery: string[] = primary ? [primary] : [];
+  const fitChips = [...jsonChips(r.fit_intelligence), ...textChips(r.size_fit)].slice(0, 4);
+  const fabricChips = [...jsonChips(r.materials_structured), ...textChips(r.materials_care)].slice(0, 4);
+  return {
+    id: String(r.id),
+    name: (r.display_name as string | null) || (r.name as string | null) || null,
+    brand: (r.brand as string | null) ?? null,
+    price: (r.price as string | null) ?? null,
+    description: (r.description as string | null) ?? null,
+    images: gallery,
+    url: (r.url as string | null) ?? null,
+    fitChips,
+    fabricChips,
+  };
+}
+
+/** Similar products via the generative similarity search (pgvector RPC),
+ *  mapped to renderable refs for the pop-up's "More like this" rail. */
+export async function fetchSimilarProducts(seedId: string, k = 8): Promise<StyleUpProductRef[]> {
+  if (!supabase) return [];
+  const { data, error } = await supabase.rpc('find_similar_products', { seed_id: seedId, k });
+  if (error || !Array.isArray(data)) return [];
+  return (data as Array<Record<string, unknown>>)
+    .filter(r => String(r.id) !== seedId)
+    .map(r => ({
+      id: String(r.id),
+      name: (r.name as string) ?? undefined,
+      brand: (r.brand as string) ?? undefined,
+      price: (r.price as string) ?? undefined,
+      image: (r.primary_image_url as string) || (r.image_url as string) || undefined,
+      url: (r.url as string) ?? undefined,
+    }));
+}
+
+/** The thread's server-side "web hunt in progress" marker (a future timestamp
+ *  while the edge function is still pulling pieces, else null/past). Drives the
+ *  working indicator so it survives refresh/navigation. */
+export async function getThreadHunting(threadId: string): Promise<string | null> {
+  if (!supabase) return null;
+  const { data } = await supabase
+    .from('style_up_threads')
+    .select('hunting_until')
+    .eq('id', threadId)
+    .maybeSingle();
+  return (data?.hunting_until as string | null) ?? null;
+}
+
 export interface StyleUpThreadSummary {
   threadId: string;
   stylist: StyleUpStylist;
   lastMessage: string | null;
   lastMessageAt: string | null;
+  /** Something is cooking in this thread right now — a web hunt or an on-you
+   *  render in flight. Drives the glowing pill on the conversations list. */
+  working: boolean;
+  /** When a look is rendering in this thread, its timing so the conversations
+   *  list can show a live progress bar. Null for a web hunt (no render yet). */
+  workingGen: { createdAt: string; durationSeconds: number } | null;
 }
 
 /** All of the shopper's conversations that have at least one message, newest
@@ -149,7 +297,7 @@ export async function fetchMyThreads(shopperUserId: string): Promise<StyleUpThre
   if (!supabase) return [];
   const { data: threads } = await supabase
     .from('style_up_threads')
-    .select(`id, last_message_at, ${STYLIST_JOIN}`)
+    .select(`id, last_message_at, hunting_until, ${STYLIST_JOIN}`)
     .eq('shopper_user_id', shopperUserId)
     .order('last_message_at', { ascending: false });
   if (!threads || threads.length === 0) return [];
@@ -157,12 +305,13 @@ export async function fetchMyThreads(shopperUserId: string): Promise<StyleUpThre
   const ids = threads.map(t => String(t.id));
   const { data: msgs } = await supabase
     .from('style_up_messages')
-    .select('thread_id, sender, kind, body, created_at')
+    .select('thread_id, sender, kind, body, render_generation_id, created_at')
     .in('thread_id', ids)
     .order('created_at', { ascending: false });
 
   const preview = new Map<string, string>();
-  for (const m of (msgs ?? []) as Array<{ thread_id: string; sender: string; kind: string; body: string | null }>) {
+  const lastRenderGen = new Map<string, string>(); // thread → gen id when the LAST message is a render
+  for (const m of (msgs ?? []) as Array<{ thread_id: string; sender: string; kind: string; body: string | null; render_generation_id: string | null }>) {
     const tid = String(m.thread_id);
     if (preview.has(tid)) continue;
     let text = m.kind === 'product' ? 'Sent a product pick'
@@ -170,8 +319,33 @@ export async function fetchMyThreads(shopperUserId: string): Promise<StyleUpThre
       : (m.body ?? '');
     if (m.sender === 'shopper') text = `You: ${text}`;
     preview.set(tid, text);
+    if (m.kind === 'render' && m.render_generation_id) lastRenderGen.set(tid, m.render_generation_id);
   }
 
+  // A thread whose newest message is a render may still be cooking — check the
+  // generation's status in one batch (terminal = done/failed).
+  const renderingThreads = new Set<string>();
+  const genTiming = new Map<string, { createdAt: string; durationSeconds: number }>(); // thread → active render timing
+  if (lastRenderGen.size > 0) {
+    const { data: gens } = await supabase
+      .from('user_generations')
+      .select('id, status, created_at, duration_seconds')
+      .in('id', [...lastRenderGen.values()]);
+    const activeById = new Map(
+      ((gens ?? []) as Array<{ id: string; status: string | null; created_at: string; duration_seconds: number | null }>)
+        .filter(g => g.status !== 'done' && g.status !== 'failed')
+        .map(g => [g.id, g]),
+    );
+    for (const [tid, gid] of lastRenderGen) {
+      const g = activeById.get(gid);
+      if (g) {
+        renderingThreads.add(tid);
+        genTiming.set(tid, { createdAt: g.created_at, durationSeconds: g.duration_seconds ?? 10 });
+      }
+    }
+  }
+
+  const now = Date.now();
   return threads
     .map(t => {
       const raw = Array.isArray(t.stylist) ? t.stylist[0] : t.stylist;
@@ -179,11 +353,17 @@ export async function fetchMyThreads(shopperUserId: string): Promise<StyleUpThre
       const tid = String(t.id);
       // Only surface threads that actually have a message.
       if (!preview.has(tid)) return null;
+      // Hunting marker counts as active while set (the server clears it when
+      // the pull lands); a 2-min stale grace covers a run that died mid-pull.
+      const hu = t.hunting_until ? new Date(String(t.hunting_until)).getTime() : null;
+      const hunting = hu != null && now < hu + 120000;
       return {
         threadId: tid,
         stylist: mapStylist(raw as Record<string, unknown>),
         lastMessage: preview.get(tid) ?? null,
         lastMessageAt: (t.last_message_at as string | null) ?? null,
+        working: hunting || renderingThreads.has(tid),
+        workingGen: genTiming.get(tid) ?? null,
       };
     })
     .filter((x): x is StyleUpThreadSummary => !!x);
@@ -343,7 +523,7 @@ export async function adminListLooks(limit = 120): Promise<AdminLook[]> {
 
   const [{ data: gens }, { data: gprods }, { data: threads }] = await Promise.all([
     supabase.from('user_generations').select('id, status, video_url, created_at').in('id', genIds.length ? genIds : ['00000000-0000-0000-0000-000000000000']),
-    supabase.from('user_generation_products').select('generation_id, sort_order, products(name, brand, image_url, primary_image_url, url)').in('generation_id', genIds.length ? genIds : ['00000000-0000-0000-0000-000000000000']),
+    supabase.from('user_generation_products').select('generation_id, sort_order, products(name, brand, image_url, primary_image_url, url)').in('generation_id', genIds.length ? genIds : ['00000000-0000-0000-0000-000000000000']).order('sort_order'),
     supabase.from('style_up_threads').select(`id, shopper_user_id, ${STYLIST_JOIN}`).in('id', threadIds.length ? threadIds : ['00000000-0000-0000-0000-000000000000']),
   ]);
 
@@ -423,7 +603,7 @@ export async function fetchMessages(threadId: string): Promise<StyleUpMessage[]>
   if (!supabase) return [];
   const { data, error } = await supabase
     .from('style_up_messages')
-    .select('id, thread_id, sender, kind, body, product_ref, render_generation_id, created_at')
+    .select('id, thread_id, sender, kind, body, product_ref, render_generation_id, quick_replies, created_at')
     .eq('thread_id', threadId)
     .order('created_at', { ascending: true });
   if (error || !data) return [];
@@ -439,7 +619,7 @@ export async function sendShopperMessage(
   const { data, error } = await supabase
     .from('style_up_messages')
     .insert({ thread_id: threadId, sender: 'shopper', kind: 'text', body: text.trim() })
-    .select('id, thread_id, sender, kind, body, product_ref, render_generation_id, created_at')
+    .select('id, thread_id, sender, kind, body, product_ref, render_generation_id, quick_replies, created_at')
     .single();
   if (error || !data) return null;
   await supabase
@@ -460,7 +640,7 @@ export async function sendStylistText(
   const { data, error } = await supabase
     .from('style_up_messages')
     .insert({ thread_id: threadId, sender: 'stylist', kind: 'text', body: text.trim() })
-    .select('id, thread_id, sender, kind, body, product_ref, render_generation_id, created_at')
+    .select('id, thread_id, sender, kind, body, product_ref, render_generation_id, quick_replies, created_at')
     .single();
   if (error || !data) return null;
   await supabase
@@ -494,11 +674,13 @@ async function renderLook(
     return { generationId: null, error: "These picks can't be rendered yet." };
   }
 
-  const [ha, gender, customStyle, slots] = await Promise.all([
+  const [ha, gender, customStyle, slots, quality, duration] = await Promise.all([
     getUserHeightAge(shopperUserId),
     getUserGender(shopperUserId),
     getUserCustomStyle(shopperUserId),
     getUserSlots(shopperUserId, MAX_REF_PHOTOS),
+    getLookVideoQuality(),   // admin dial: 'fast' | 'pro' Seedance tier
+    getLookVideoDuration(),  // admin dial: clip length in seconds
   ]);
   const uploadIds = slots.filter((x): x is string => !!x);
   if (uploadIds.length === 0) {
@@ -537,6 +719,51 @@ async function renderLook(
     lines = lines.filter(l => (seen.has(l.product_id) ? false : (seen.add(l.product_id), true)));
   }
 
+  // One piece per single-garment slot — a look with two shoes (or two tops)
+  // is never intended and the video model can't wear both. The client's
+  // one-per-slot collapse misses items whose NAME lacks a garment word (e.g.
+  // "Grand Crosscourt Tennis" → no "shoe"/"sneaker"), but here we have the
+  // governed `type`, so it's reliable. Keep the LAST pick per slot (the most
+  // recent = the one the shopper just swapped to). Accessory/Jewelry/Bag can
+  // legitimately repeat, so they're left alone.
+  //
+  // BUT a slot claim backed ONLY by the governed type can be a mislabel — a
+  // sneaker stored as type 'tops' once claimed the Top slot and silently
+  // evicted the real shirt from the render. So: a piece whose NAME confirms
+  // its role owns the slot (last such pick wins); a type-only claimant never
+  // evicts a name-confirmed piece — its suspect role is dropped and the piece
+  // is KEPT as a generic item (the reference image does the real work).
+  {
+    const SINGLE = new Set(['Top', 'Pants', 'Dress', 'Shoes', 'Jacket', 'Hat']);
+    const confirmed = (l: typeof lines[number]) =>
+      !!l.roleTag && SINGLE.has(l.roleTag) && roleTagFromName(l.name) === l.roleTag;
+    const lastConfirmed = new Map<string, number>();
+    const lastAny = new Map<string, number>();
+    lines.forEach((l, i) => {
+      if (!l.roleTag || !SINGLE.has(l.roleTag)) return;
+      lastAny.set(l.roleTag, i);
+      if (confirmed(l)) lastConfirmed.set(l.roleTag, i);
+    });
+    lines = lines.flatMap((l, i) => {
+      if (!l.roleTag || !SINGLE.has(l.roleTag)) return [l];
+      const ownerIdx = lastConfirmed.get(l.roleTag);
+      if (confirmed(l)) return ownerIdx === i ? [l] : [];              // real duplicates: last pick wins
+      if (ownerIdx !== undefined) return [{ ...l, roleTag: null }];    // suspect type vs confirmed owner: demote, keep
+      return lastAny.get(l.roleTag) === i ? [l] : [];                  // type-only group: last pick wins
+    });
+  }
+
+  // Canonical head-to-toe order — hat → jacket → top → bottoms → shoes,
+  // accessories last — so the prompt's product list, the stored sort_order,
+  // and every pieces row (chat cooking card, admin generation graph) all
+  // read top-down. Stable sort keeps arrival order within a slot.
+  {
+    const ORDER: Record<string, number> = { Hat: 0, Sunglasses: 1, Jacket: 2, Top: 3, Dress: 3, Pants: 4, Shoes: 5, Jewelry: 6, Bag: 7, Accessory: 8 };
+    lines.sort((a, b) =>
+      (ORDER[a.roleTag ?? roleTagFromName(a.name) ?? ''] ?? 9)
+      - (ORDER[b.roleTag ?? roleTagFromName(b.name) ?? ''] ?? 9));
+  }
+
   let prompt = buildGenerationPrompt({
     heightLabel: ha.heightLabel ?? '',
     weightLabel: ha.weightLabel,
@@ -545,10 +772,21 @@ async function renderLook(
     customStyle,
     gender,
     productLines: lines.map(l => ({ role_tag: l.roleTag, brand: l.brand, name: l.name })),
-    durationSeconds: 10,
+    durationSeconds: duration,
   });
   // Scene/setting the shopper chose ("clean studio", "rooftop at golden hour"…).
   if (scene && scene.trim()) prompt += `\n\nSetting: ${scene.trim()}. Place the subject naturally in this environment.`;
+  // Ultra-cinematic direction, layered ON TOP of the context prompt above
+  // (face refs, build, wardrobe, pieces, setting) so every StyleUp render
+  // reads as a high-end editorial commercial instead of a static fit-cam.
+  // Deliberately brand-name-free — Bytedance's partner_validation filter
+  // rejects prompts naming commercial brands.
+  prompt += [
+    '\n\nCinematic direction: shoot this as a high-fashion editorial commercial.',
+    'Volumetric lighting — visible atmospheric light rays and soft haze, a strong motivated key with a sculpting rim light, deep contrast, rich filmic color grade.',
+    'Camera: open on a composed wide, then one slow deliberate push-in (dolly zoom toward the subject), ending tight on a face-and-product hero frame with shallow depth of field and a clean rack focus to a wardrobe detail.',
+    'The pacing and polish of a luxury fashion-house spot — confident model movement, fabric catching the light, crisp detail on every piece. Ultra high quality, sharp focus, subtle filmic grain.',
+  ].join(' ');
 
   const { data: gen, error } = await createGeneration({
     userId: shopperUserId,
@@ -560,8 +798,8 @@ async function renderLook(
     weightLabel: ha.weightLabel,
     style: 'editorial',
     prompt,
-    durationSeconds: 10,
-    model: 'pro',
+    durationSeconds: duration,
+    model: quality,
   });
   if (error || !gen) return { generationId: null, error: error ?? 'Render failed to start' };
 
@@ -575,9 +813,16 @@ async function renderLook(
     id: l.product_id, name: l.name ?? undefined, brand: l.brand ?? undefined, image: imageById.get(l.product_id),
   }));
 
+  // The shopper's reference photos, in slot order, so the cooking card can
+  // show the full generation context: you + the pieces.
+  const { data: ups } = await supabase
+    .from('user_uploads').select('id, public_url').in('id', uploadIds);
+  const urlById = new Map(((ups ?? []) as Array<{ id: string; public_url: string | null }>).map(u => [u.id, u.public_url]));
+  const you = uploadIds.map(id => urlById.get(id)).filter((u): u is string => !!u);
+
   await supabase.from('style_up_messages').insert({
     thread_id: threadId, sender: 'stylist', kind: 'render',
-    render_generation_id: gen.id, product_ref: { ...caption, pieces },
+    render_generation_id: gen.id, product_ref: { ...caption, pieces, you },
   });
   await supabase.from('style_up_threads')
     .update({ last_message_at: new Date().toISOString() }).eq('id', threadId);
@@ -624,6 +869,7 @@ export interface RecommendOpts {
   formality?: 'dressier' | 'casual' | null; // running constraint from feedback
   avoidColors?: string[];              // colors the shopper passed on
   simpler?: boolean;                   // "keep it simple / less flashy"
+  engineMethod?: StylistEngineMethod;   // 'style_engine' (default) → style_slot_search; 'legacy' → recency
 }
 
 function priceNum(s?: string | null): number | null {
@@ -635,6 +881,30 @@ const FORMAL_RE = /\b(blazer|suit|tuxedo|oxford|loafer|derby|brogue|trouser|slac
 const CASUAL_RE = /\b(hoodie|sweatshirt|tee|t-?shirt|sneaker|trainer|shorts?|jogger|sweatpant|cargo|flip[\s-]?flop|graphic|denim|jean|tank)\b/;
 const LOUD_RE = /\b(print|printed|graphic|neon|sequin|leopard|floral|tie-?dye|logo|bold|bright|metallic)\b/;
 const kw = (s: string): string[] => (s.toLowerCase().match(/[a-z]{4,}/g) ?? []);
+
+type SwapRow = {
+  id: string; name: string | null; brand: string | null; price: string | null;
+  image_url: string | null; primary_image_url: string | null; url: string | null;
+  type: string | null; haiku_context: string | null;
+};
+
+/** Occasion-aware candidates for one slot via style_slot_search (the engine).
+ *  Returns rows in the same shape as the legacy recency select so the caller's
+ *  scoring loop is source-agnostic. */
+async function slotSearch(role: string, gender: string, occasion: string, k: number): Promise<SwapRow[]> {
+  if (!supabase) return [];
+  const noun = ROLE_QUERY_NOUN[role] ?? '';
+  const q = `${occasion} ${noun}`.trim();
+  const pGender = gender === 'male' || gender === 'female' ? gender : null;
+  const { data, error } = await supabase.rpc('style_slot_search', { p_query: q, p_k: k, p_gender: pGender });
+  if (error || !Array.isArray(data)) return [];
+  return (data as Array<Record<string, unknown>>).map(r => ({
+    id: String(r.product_id), name: (r.product_name as string) ?? null, brand: (r.product_brand as string) ?? null,
+    price: (r.product_price as string) ?? null, image_url: (r.product_image_url as string) ?? null,
+    primary_image_url: (r.product_image_url as string) ?? null, url: (r.product_url as string) ?? null,
+    type: (r.product_type as string) ?? null, haiku_context: null,
+  }));
+}
 
 /** Score + rank gender-matched, in-stock candidates for one slot (role).
  *  Folds in relevance to the shopper's style + occasion (#2), budget (#4),
@@ -649,25 +919,31 @@ export async function fetchSwapOptions(
 ): Promise<StyleUpProductRef[]> {
   if (!supabase) return [];
   const gender = await getUserGender(shopperUserId);
-  let q = supabase.from('products')
-    .select('id, name, brand, price, image_url, primary_image_url, url, type, gender, haiku_context')
-    .eq('is_active', true)              // in-stock proxy (#5)
-    .not('image_url', 'is', null)
-    .order('created_at', { ascending: false })
-    .limit(SWAP_FETCH_LIMIT);
-  if (gender === 'male') q = q.or('gender.eq.male,gender.eq.unisex');
-  else if (gender === 'female') q = q.or('gender.eq.female,gender.eq.unisex');
-  const { data } = await q;
+  const method: StylistEngineMethod = opts.engineMethod ?? 'style_engine';
+  let data: SwapRow[] | null;
+  if (method === 'style_engine') {
+    const occasion = [opts.styleText, opts.occasion].filter(Boolean).join(' ');
+    data = await slotSearch(role, gender, occasion, SWAP_FETCH_LIMIT);
+  } else {
+    let q = supabase.from('products')
+      .select('id, name, brand, price, image_url, primary_image_url, url, type, gender, haiku_context')
+      .eq('is_active', true)              // in-stock proxy (#5)
+      .not('image_url', 'is', null)
+      .order('created_at', { ascending: false })
+      .limit(SWAP_FETCH_LIMIT);
+    if (gender === 'male') q = q.or('gender.eq.male,gender.eq.unisex');
+    else if (gender === 'female') q = q.or('gender.eq.female,gender.eq.unisex');
+    data = (await q).data as SwapRow[] | null;
+  }
 
   const exclude = new Set(excludeIds);
   const styleKw = kw(opts.styleText ?? '');
   const occKw = kw(opts.occasion ?? '');
   const avoid = (opts.avoidColors ?? []).map(c => c.toLowerCase());
 
-  type Row = { id: string; name: string | null; brand: string | null; price: string | null; image_url: string | null; primary_image_url: string | null; url: string | null; type: string | null; haiku_context: string | null };
   const scored: Array<{ ref: StyleUpProductRef; score: number; idx: number }> = [];
   let idx = 0;
-  for (const p of (data ?? []) as Row[]) {
+  for (const p of (data ?? []) as SwapRow[]) {
     idx++;
     if (exclude.has(p.id)) continue;
     if (roleForProduct(p.type, p.name) !== role) continue;
@@ -847,7 +1123,7 @@ export async function sendChooser(
   const { data, error } = await supabase
     .from('style_up_messages')
     .insert({ thread_id: threadId, sender: 'stylist', kind: 'product', product_ref: { choose } })
-    .select('id, thread_id, sender, kind, body, product_ref, render_generation_id, created_at')
+    .select('id, thread_id, sender, kind, body, product_ref, render_generation_id, quick_replies, created_at')
     .single();
   if (error || !data) return null;
   await supabase.from('style_up_threads')
@@ -876,7 +1152,7 @@ export async function sendProductPick(
   const { data, error } = await supabase
     .from('style_up_messages')
     .insert({ thread_id: threadId, sender: 'stylist', kind: 'product', product_ref: product })
-    .select('id, thread_id, sender, kind, body, product_ref, render_generation_id, created_at')
+    .select('id, thread_id, sender, kind, body, product_ref, render_generation_id, quick_replies, created_at')
     .single();
   if (error || !data) return null;
   await supabase.from('style_up_threads')
@@ -896,7 +1172,7 @@ export async function sendSwapOptions(
   const { data, error } = await supabase
     .from('style_up_messages')
     .insert({ thread_id: threadId, sender: 'stylist', kind: 'product', product_ref: { swap: { role, label, options } } })
-    .select('id, thread_id, sender, kind, body, product_ref, render_generation_id, created_at')
+    .select('id, thread_id, sender, kind, body, product_ref, render_generation_id, quick_replies, created_at')
     .single();
   if (error || !data) return null;
   await supabase.from('style_up_threads')

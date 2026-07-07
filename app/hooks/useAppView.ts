@@ -168,7 +168,14 @@ export function useAppView({ user, authLoading, waitlistMode, waitlistLoading }:
   const [feedReady, setFeedReady] = useState(booted);
   useEffect(() => {
     if (typeof window === 'undefined') return;
-    if (booted || feedReady) return;
+    // Guard on feedReady ONLY, not booted. feedReady already initializes to
+    // `booted` (warm remounts start ready and bail here). Gating on `booted`
+    // too caused a cold-boot hang: reaching 'app' sets sessionStorage
+    // 'catalog:booted', so `booted` flips false→true mid-lifecycle, which
+    // cleared the pending ceiling timer and then bailed on re-run — feedReady
+    // never flipped and the auth-splash hung forever for a signed-in user
+    // (always the case inside the native shell).
+    if (feedReady) return;
     const onReady = () => setFeedReady(true);
     window.addEventListener('catalog:feed-ready', onReady);
     const ceiling = window.setTimeout(() => setFeedReady(true), 2500);
@@ -176,7 +183,7 @@ export function useAppView({ user, authLoading, waitlistMode, waitlistLoading }:
       window.removeEventListener('catalog:feed-ready', onReady);
       window.clearTimeout(ceiling);
     };
-  }, [booted, feedReady]);
+  }, [feedReady]);
 
   // Branded auth splash. Shown whenever:
   //  - we're still in 'locked' AND auth is resolving (or already has

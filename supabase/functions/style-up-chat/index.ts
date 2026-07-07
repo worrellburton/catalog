@@ -13,6 +13,7 @@
 // Secrets: ANTHROPIC_API_KEY.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { retrieveOccasionCandidates } from '../_shared/style-retrieval.ts';
 
 const MODEL = 'claude-sonnet-4-6';
 
@@ -111,21 +112,30 @@ Deno.serve(async (req: Request) => {
     if (prof?.fashion_styles) ctxBits.push(`style tags: ${prof.fashion_styles}`);
     const shopperName = (prof?.full_name ? String(prof.full_name).split(/\s+/)[0] : '') || 'there';
 
-    // Chat history (oldest first, capped).
+    // History: most recent 30, oldest-first. ascending+limit kept the OLDEST 30
+    // and dropped the shopper's newest message (also left it ending on a stylist
+    // turn). Fetch newest-first then reverse.
     const { data: history } = await admin
       .from('style_up_messages')
       .select('sender, kind, body, product_ref')
       .eq('thread_id', threadId)
-      .order('created_at', { ascending: true })
+      .order('created_at', { ascending: false })
       .limit(30);
-    const turns = (history ?? []) as Array<{ sender: string; kind: string; body: string | null; product_ref: unknown }>;
+    const turns = ((history ?? []) as Array<{ sender: string; kind: string; body: string | null; product_ref: unknown }>).reverse();
     if (turns.length === 0) return json({ success: false, error: 'nothing to reply to' }, 400);
 
-    // Candidate products to recommend FROM — gender-filtered active catalog.
-    // The model may only pick ids that appear here (we validate below). Web
-    // stylists skip this entirely (their picks come from a live web search).
+    // Retrieval method is an admin dial (app_settings.stylist_engine_method):
+    //   'style_engine' (default) → occasion-aware style_slot_search
+    //   'legacy'                 → the pre-engine 120-newest recency scan
+    const { data: methodRow } = await admin
+      .from('app_settings').select('value').eq('key', 'stylist_engine_method').maybeSingle();
+    const method = (methodRow?.value === 'legacy') ? 'legacy' : 'style_engine';
+    const mode = String(body.mode ?? '');
+
+    // Candidate products to recommend FROM. Web stylists skip this (live web search).
     let cands: ProductCand[] = [];
-    if (!isWeb) {
+    if (!isWeb && method === 'legacy') {
+      // LEGACY: the 120 most-recently-added active products, gender-filtered.
       let q = admin.from('products')
         .select('id, name, brand, price, image_url, primary_image_url, url, type')
         .eq('is_active', true)
@@ -136,6 +146,23 @@ Deno.serve(async (req: Request) => {
       else if (genderNorm === 'female') q = q.or('gender.eq.female,gender.eq.unisex');
       const { data: candRows } = await q;
       cands = (candRows ?? []) as ProductCand[];
+      console.log(`[style-up-chat] thread=${threadId} retrieval=LEGACY(recency-120) candidates=${cands.length}`);
+    } else if (!isWeb) {
+      // STYLE ENGINE: occasion-aware per-slot style_slot_search.
+      // Occasion = the recent SHOPPER asks only, NOT the whole thread. Joining
+      // every turn made the BM25 query a ~100-word blob that matched almost
+      // nothing on long threads (pool collapsed to ~1); and the 600-char slice of
+      // the joined thread kept the OLDEST text, dropping the current ask entirely.
+      const occasion = turns.filter(t => t.sender === 'shopper' && t.body)
+        .slice(-3).map(t => (t.body ?? '').trim()).join(' ').slice(0, 300);
+      const found = await retrieveOccasionCandidates(admin, {
+        occasion, gender: genderNorm, aesthetic: stylist?.specialty ?? '',
+      });
+      cands = found.filter(c => c.image).map(c => ({
+        id: c.id, name: c.name, brand: c.brand, price: c.price,
+        image_url: c.image, primary_image_url: c.image, url: c.url, type: c.type,
+      }));
+      console.log(`[style-up-chat] thread=${threadId} retrieval=ENGINE(style_slot_search) candidates=${cands.length} mode=${mode || 'default'} (occasion-aware, NOT recency scan)`);
     }
     const candList = cands.map(c =>
       `${c.id} | ${(c.name ?? '').slice(0, 70)} | ${c.brand ?? ''} | ${c.price ?? ''} | ${c.type ?? ''}`,
@@ -143,37 +170,45 @@ Deno.serve(async (req: Request) => {
 
     const persona = stylist?.persona_prompt
       || `You are ${stylist?.name ?? 'a personal stylist'}, a friendly personal stylist.`;
+    const specialty = (stylist?.specialty ?? '').trim();
+    const outfitClause = (!isWeb && method === 'style_engine' && mode === 'outfit')
+      ? `\n- The shopper wants a COMPLETE outfit this turn. Recommend ONE coherent full look from the candidates: a top (or a dress), a bottom, shoes, plus an optional layer — one piece per slot, all matching in colour, formality and season. Put every piece's id in productIds.`
+      : '';
     const system = isWeb ? `${persona}
 
 You're texting ${shopperName} inside a styling chat. Shopper context (use it; never ask for what you already know): ${ctxBits.join('; ') || 'not provided yet'}.
 
 STYLE OF REPLY:
 - Talk like texting: warm, concise, 1-3 short sentences. No markdown, no bullet lists. Never use em dashes; use commas or periods.
-- Ask a sharp clarifying question early if you don't yet know the occasion/vibe.
+- Your signature aesthetic is ${specialty || 'your own point of view'}. Treat it as the DEFAULT vibe. Once you know the occasion, do NOT ask about style or formality, just assume your own aesthetic and go straight to pieces. Only ask a question when you don't yet know the occasion itself, or it's genuinely ambiguous. Keep questions to a minimum.
 - When you're ready to surface pieces, set searchQueries: one tight query per garment (e.g. "men's sand linen short sleeve button up shirt", "white leather low top sneakers"). This is an INTERNAL field the app uses to fetch the real products; the shopper never sees it. Don't paste links or invent products.
 - CRITICAL: NEVER mention the internet, the web, online, searching, browsing, scraping, links, sources, or that pieces come from anywhere outside. To the shopper you simply know where to find things. Talk like a stylist with great taste and connections, never like a search engine.
 - Only set searchQueries when you're ACTUALLY surfacing pieces this turn. While you're still clarifying (asking a question), leave it empty.
-- When you do surface, your reply should sound like a stylist pulling pieces (e.g. "pulling these together for you 👀").
-- They can tap any piece you surface to see it on themselves, or ask you to put the whole look on them. You CAN generate the look on them. NEVER say you can't generate photos.
+- When you do surface, keep the reply SHORT and easy, like "Let me see what I can find for this…", one relaxed line, at most a quick read of the vibe first. Do NOT explain how to tap, try on, or generate; the app shows those controls itself.
+- You CAN generate the look on them. NEVER say you can't generate photos.
+- When your reply asks the shopper a question, ALSO set quickReplies: 2-4 short tap-to-answer options (under 25 characters each, first-person where natural) that DIRECTLY answer your question. Otherwise [].
 
-Return ONLY JSON, no prose:
-{"reply":"<your text message>","searchQueries":["<one tight query per garment>", ...]}
+Output ONLY the JSON object below and NOTHING else — no preamble, no reasoning, no commentary, no text before or after it. Decide silently; the shopper only sees the "reply" string.
+{"reply":"<your text message>","searchQueries":["<one tight query per garment>", ...],"quickReplies":["<tap answer>", ...]}
 searchQueries: 1-4 entries when surfacing pieces this turn, otherwise [].` : `${persona}
 
 You're texting ${shopperName} inside a styling chat. Shopper context (use it; never ask for what you already know): ${ctxBits.join('; ') || 'not provided yet'}.
 
 STYLE OF REPLY:
 - Talk like texting: warm, concise, 1-3 short sentences. No markdown, no bullet lists. Never use em dashes; use commas or periods.
-- Ask a sharp clarifying question early if you don't yet know the occasion/vibe.
-- When you're ready to recommend, pick 1-4 SPECIFIC products from the candidate list below (by id). Recommend things that actually fit their context and the conversation. Don't recommend products that aren't in the list.
-- After recommending, tell them they can tap any piece to see it on themselves, or just ask you to put the whole look on them — you CAN generate the look on them (it kicks off automatically when they ask). NEVER say you can't generate photos.
+- Your signature aesthetic is ${specialty || 'your own point of view'}. Treat it as the DEFAULT vibe. Once you know the occasion, do NOT ask about style or formality, just assume your own aesthetic and go straight to pieces. Only ask a question when you don't yet know the occasion itself, or it's genuinely ambiguous. Keep questions to a minimum.
+- When you're ready to recommend, pick SPECIFIC products from the candidate list below (by id). Recommend things that actually fit their context and the conversation. Don't recommend products that aren't in the list.
+- COMPLETE LOOKS ONLY: whenever you present a LOOK or outfit — which is the default any time they ask for something to wear, "a new one", a fresh look, or name an occasion — recommend a COMPLETE head-to-toe outfit: a top (or a dress), a bottom, and shoes, plus an optional layer. One piece per slot, all coordinated in colour, formality and season. Put every piece's id in productIds. NEVER offer a lone single piece as "a look". Recommend just one item ONLY when the shopper explicitly asked for a single garment (e.g. "just shoes", "a new jacket").
+- After recommending, tell them they can tap any piece to see it on themselves, or just ask you to put the whole look on them — you CAN generate the look on them (it kicks off automatically when they ask). NEVER say you can't generate photos.${outfitClause}
 
 CANDIDATE PRODUCTS (id | name | brand | price | type) — only recommend from these:
 ${candList || '(none available)'}
 
-Return ONLY JSON, no prose:
-{"reply":"<your text message>","productIds":["<id>", ...]}
-productIds is optional — include it only when you're actually recommending pieces this turn (max 4).`;
+- When your reply asks the shopper a question, ALSO set quickReplies: 2-4 short tap-to-answer options (under 25 characters each, first-person where natural) that DIRECTLY answer your question. Otherwise [].
+
+Output ONLY the JSON object below and NOTHING else — no preamble, no reasoning, no commentary, no text before or after it. Decide silently; the shopper only sees the "reply" string.
+{"reply":"<your text message>","productIds":["<id>", ...],"quickReplies":["<tap answer>", ...]}
+productIds is optional — include it only when you're actually recommending pieces this turn (a full look = 3-4 ids across slots; max 4).`;
 
     const mapped = turns.map(t => {
       const role: 'user' | 'assistant' = t.sender === 'shopper' ? 'user' : 'assistant';
@@ -199,38 +234,68 @@ productIds is optional — include it only when you're actually recommending pie
     if (messages.length === 0) {
       messages.push({ role: 'user', content: `Hi ${stylist?.name ?? ''}` });
     }
+    // Claude 4.6 rejects assistant-message prefill: the conversation must end on
+    // a user turn. If the stylist spoke last, nudge to continue.
+    if (messages[messages.length - 1].role === 'assistant') messages.push({ role: 'user', content: '(continue)' });
 
     const res = await callAnthropic(apiKey, { model: MODEL, max_tokens: 700, system, messages });
-    if (!res.ok) return json({ success: false, error: `anthropic ${res.status}: ${(await res.text()).slice(0, 200)}` }, 502);
+    if (!res.ok) {
+      const errBody = (await res.text()).slice(0, 300);
+      void admin.from('ai_usage_logs').insert({ platform: 'anthropic', operation: 'style-up-chat', model: MODEL, status: 'error', error_message: `${res.status}: ${errBody}` });
+      return json({ success: false, error: `anthropic ${res.status}: ${errBody}` }, 502);
+    }
     const out = await res.json() as { content?: Array<{ type: string; text?: string }>; usage?: { input_tokens?: number; output_tokens?: number } };
     const text = (out.content?.find(c => c.type === 'text')?.text ?? '').replace(/```json\s*|```\s*/g, '').trim();
-    const start = text.indexOf('{');
-    const end = text.lastIndexOf('}');
     let reply = '';
     let productIds: string[] = [];
     let searchQueries: string[] = [];
+    let quickReplies: string[] = [];
+    // Extract the FIRST balanced {...} object, so any reasoning the model tacks
+    // on before/after the JSON is ignored (lastIndexOf('}') used to swallow it,
+    // and a parse miss dumped the raw JSON + chain-of-thought into the chat).
+    const jStart = text.indexOf('{');
+    let jsonSlice = '';
+    if (jStart >= 0) {
+      let depth = 0, inStr = false, esc = false;
+      for (let i = jStart; i < text.length; i++) {
+        const ch = text[i];
+        if (inStr) { if (esc) esc = false; else if (ch === '\\') esc = true; else if (ch === '"') inStr = false; }
+        else if (ch === '"') inStr = true;
+        else if (ch === '{') depth++;
+        else if (ch === '}') { depth--; if (depth === 0) { jsonSlice = text.slice(jStart, i + 1); break; } }
+      }
+    }
     try {
-      const parsed = JSON.parse(text.slice(start, end + 1)) as { reply?: string; productIds?: string[]; searchQueries?: string[] };
+      const parsed = JSON.parse(jsonSlice) as { reply?: string; productIds?: string[]; searchQueries?: string[]; quickReplies?: string[] };
       reply = String(parsed.reply ?? '').trim();
       productIds = Array.isArray(parsed.productIds) ? parsed.productIds.map(String) : [];
       searchQueries = Array.isArray(parsed.searchQueries)
         ? parsed.searchQueries.map(q => String(q).trim()).filter(Boolean).slice(0, 4)
         : [];
+      quickReplies = Array.isArray(parsed.quickReplies)
+        ? parsed.quickReplies.map(q => String(q).trim()).filter(Boolean).slice(0, 4).map(s => s.slice(0, 40))
+        : [];
     } catch {
-      reply = text || "Tell me a bit more about what you're going for?";
+      // Malformed / truncated JSON — recover the reply + any product ids by
+      // regex rather than ever showing the raw blob to the shopper.
+      const rm = text.match(/"reply"\s*:\s*"((?:[^"\\]|\\.)*)"/);
+      if (rm) { try { reply = JSON.parse(`"${rm[1]}"`); } catch { reply = rm[1]; } }
+      productIds = [...text.matchAll(/"([0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12})"/g)].map(m => m[1]);
     }
-    if (!reply) reply = "Tell me a bit more about what you're going for?";
+    // Never surface raw JSON: if the reply still looks like the model's JSON
+    // envelope, drop it for a friendly line.
+    if (!reply || /"reply"\s*:/.test(reply) || reply.trim().startsWith('{')) {
+      reply = "Let me pull that together for you, one sec.";
+    }
 
     // Validate picks against the candidate set (no hallucinated ids).
     const candById = new Map(cands.map(c => [c.id, c]));
     const picks = productIds.map(id => candById.get(id)).filter((c): c is ProductCand => !!c).slice(0, 4);
 
-    // Insert the stylist's text reply, then a product message per pick.
-    const inserted: unknown[] = [];
-    const { data: textMsg } = await admin.from('style_up_messages')
-      .insert({ thread_id: threadId, sender: 'stylist', kind: 'text', body: reply })
-      .select('id').single();
-    if (textMsg) inserted.push(textMsg.id);
+    // Insert the stylist's text reply (with its tap-to-answer options when the
+    // reply is a question), then a product message per pick.
+    await admin.from('style_up_messages')
+      .insert({ thread_id: threadId, sender: 'stylist', kind: 'text', body: reply, quick_replies: quickReplies.length ? quickReplies : null });
 
     for (const p of picks) {
       await admin.from('style_up_messages').insert({
@@ -283,11 +348,79 @@ productIds is optional — include it only when you're actually recommending pie
       traceId = (traceRow?.id as string | undefined) ?? null;
     } catch (_e) { /* trace is best-effort */ }
 
-    // Web stylists return per-piece web search queries for the client to run
-    // (search → import → show), so the stylist's "let me surface options"
-    // actually produces products. traceId lets the client enrich the trace with
-    // the per-query search results.
-    return json({ success: true, reply, picks: picks.length, searchQueries: isWeb ? searchQueries : [], traceId });
+    // ── Web stylists: run the piece hunt SERVER-SIDE so it finishes even if the
+    // shopper refreshes or leaves the page. Products stream in via realtime; a
+    // `hunting_until` marker on the thread drives the "working" indicator. The
+    // text reply above already posted, so nothing here can break the chat. ──
+    if (isWeb && searchQueries.length > 0) {
+      // Each search+ingest realistically runs 10-15s; a low estimate made the
+      // indicator look done (or vanish) while the pull was still going.
+      const estSec = Math.max(15, searchQueries.length * 14);
+      await admin.from('style_up_threads')
+        .update({ hunting_until: new Date(Date.now() + estSec * 1000).toISOString() })
+        .eq('id', threadId);
+
+      const g = genderNorm === 'male' ? 'men' : genderNorm === 'female' ? 'women' : 'unisex';
+      const hunt = (async () => {
+        const traceSearches: unknown[] = [];
+        try {
+          const used = new Set<string>();
+          const found: Array<Record<string, unknown>> = [];
+          for (const q of searchQueries.slice(0, 4)) {
+            try {
+              const { data: sData } = await admin.functions.invoke('product-search', { body: { query: q, ingest: true, gender: g } });
+              const sResp = sData as { success?: boolean; error?: string; products?: Array<{ url?: string }> } | null;
+              const urls = (sResp?.products ?? []).map(p => p.url).filter((u): u is string => !!u).slice(0, 30);
+              let importedId: string | null = null, importedName: string | null = null;
+              if (urls.length) {
+                const { data: rows } = await admin.from('products')
+                  .select('id, name, brand, price, image_url, primary_image_url, url')
+                  .in('url', urls);
+                const byUrl = new Map(((rows ?? []) as Array<Record<string, unknown>>).map(r => [String(r.url), r]));
+                for (const u of urls) {
+                  const r = byUrl.get(u);
+                  if (r && !used.has(String(r.id))) {
+                    used.add(String(r.id)); found.push(r);
+                    importedId = String(r.id);
+                    importedName = [r.brand, r.name].filter(Boolean).join(' ') || null;
+                    break;
+                  }
+                }
+              }
+              traceSearches.push({ query: q, ok: !!sResp?.success, error: sResp?.error ?? null, rawCount: (sResp?.products ?? []).length, withUrl: urls.length, matched: importedId ? 1 : 0, importedId, importedName });
+            } catch (e) {
+              traceSearches.push({ query: q, ok: false, error: e instanceof Error ? e.message : String(e), rawCount: 0, withUrl: 0, matched: 0, importedId: null, importedName: null });
+            }
+          }
+          if (found.length) {
+            await admin.from('style_up_messages').insert({ thread_id: threadId, sender: 'stylist', kind: 'text', body: "Here's what I found. Hit Generate this look and I'll put it on you." });
+            for (const r of found) {
+              await admin.from('style_up_messages').insert({
+                thread_id: threadId, sender: 'stylist', kind: 'product',
+                product_ref: { id: r.id, name: r.name, brand: r.brand, price: r.price, image: r.primary_image_url || r.image_url, url: r.url },
+              });
+            }
+          } else {
+            await admin.from('style_up_messages').insert({ thread_id: threadId, sender: 'stylist', kind: 'text', body: "Couldn't quite pin those down. Give me a brand or a budget and I'll take another run at it." });
+          }
+          if (traceId) { try { await admin.from('style_up_traces').update({ searches: traceSearches }).eq('id', traceId); } catch (_e) { /* best-effort */ } }
+        } catch (_e) {
+          /* swallow — the reply already posted */
+        } finally {
+          await admin.from('style_up_threads')
+            .update({ hunting_until: null, last_message_at: new Date().toISOString() })
+            .eq('id', threadId);
+        }
+      })();
+
+      // Keep the function alive until the hunt finishes, even after we respond.
+      const er = (globalThis as unknown as { EdgeRuntime?: { waitUntil?: (p: Promise<unknown>) => void } }).EdgeRuntime;
+      if (er?.waitUntil) er.waitUntil(hunt);
+      else await hunt;
+    }
+
+    // searchQueries are NOT returned anymore — the hunt runs server-side.
+    return json({ success: true, reply, picks: picks.length, searchQueries: [], hunting: isWeb && searchQueries.length > 0, traceId });
   } catch (err) {
     return json({ success: false, error: err instanceof Error ? err.message : String(err) }, 500);
   }

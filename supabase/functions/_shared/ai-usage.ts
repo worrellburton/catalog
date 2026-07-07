@@ -18,10 +18,12 @@ export interface AiUsageLog {
 // Prices are in USD per token / per call. Update when vendor changes pricing.
 const PRICING: Record<string, { inputPerToken?: number; outputPerToken?: number; perUnit?: number }> = {
   // Anthropic — per token
+  'claude-opus-4-8':             { inputPerToken: 5 / 1_000_000,    outputPerToken: 25 / 1_000_000 },
   'claude-sonnet-4-6':           { inputPerToken: 3 / 1_000_000,    outputPerToken: 15 / 1_000_000 },
   'claude-sonnet-4-5':           { inputPerToken: 3 / 1_000_000,    outputPerToken: 15 / 1_000_000 },
   'claude-3-5-haiku-20241022':   { inputPerToken: 0.25 / 1_000_000, outputPerToken: 1.25 / 1_000_000 },
   'claude-haiku-4-5-20251001':   { inputPerToken: 0.8 / 1_000_000,  outputPerToken: 4 / 1_000_000 },
+  'claude-haiku-4-5':            { inputPerToken: 1 / 1_000_000,     outputPerToken: 5 / 1_000_000 },
   // Per-call services
   serpapi:                        { perUnit: 0.005 },
   rainforest:                     { perUnit: 0.01 },

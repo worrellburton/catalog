@@ -468,31 +468,58 @@ async function handleRequest(req: Request): Promise<Response> {
   }
 
   // ── Gather product image URLs ──────────────────────────────────────────────
-  // Prefer products.primary_image_url (the vision-picked solo shot)
-  // so the image-to-video pipeline conditions on a clean packshot
-  // instead of an on-model frame that would composite two humans
-  // together. Falls back to the legacy image_url when no primary
-  // pick has run yet.
+  // Send the GALLERY (every catalog angle) to the video model, not just the
+  // single display packshot — more angles = a truer garment reconstruction on
+  // the person. The shopper-facing UI shows only the curated primary image;
+  // the model gets the whole gallery. Falls back to the primary / legacy image
+  // when a product has no gallery.
   const { data: productLinks } = await admin
     .from('user_generation_products')
-    .select('role_tag, sort_order, products(name, brand, image_url, primary_image_url)')
+    .select('role_tag, sort_order, products(name, brand, image_url, primary_image_url, images)')
     .eq('generation_id', generationId)
     .order('sort_order');
 
+  // A Google-Shopping/SerpAPI search THUMBNAIL (encrypted-tbn*.gstatic.com,
+  // serpapi.com) is tiny and often a wrong colorway — a poor image to
+  // condition a video model on (this is why looks came out the wrong color).
+  const isThumb = (u: string | null | undefined): boolean =>
+    !!u && /gstatic\.com|serpapi\.com/.test(u);
+  const galleryUrl = (it: unknown): string | null => {
+    if (typeof it === 'string') return it;
+    if (it && typeof it === 'object') {
+      const o = it as Record<string, unknown>;
+      const u = o.url ?? o.src;
+      return typeof u === 'string' ? u : null;
+    }
+    return null;
+  };
   const productEntries = (productLinks || [])
     .map(r => {
-      const p = r.products as unknown as { name: string | null; brand: string | null; image_url: string | null; primary_image_url: string | null } | null;
-      const chosen = p?.primary_image_url || p?.image_url;
-      if (!chosen) return null;
+      const p = r.products as unknown as { name: string | null; brand: string | null; image_url: string | null; primary_image_url: string | null; images: unknown } | null;
+      // Gallery first (all angles), de-duped and thumbnail-free. Fall back to
+      // the curated packshot / legacy image when no gallery exists.
+      const gallery = (Array.isArray(p?.images) ? p!.images : [])
+        .map(galleryUrl)
+        .filter((u): u is string => typeof u === 'string' && !!u && !isThumb(u));
+      const fallback = [p?.primary_image_url, p?.image_url].filter((u): u is string => typeof u === 'string' && !!u && !isThumb(u));
+      const imageUrls = [...new Set(gallery.length > 0 ? gallery : fallback)];
+      if (imageUrls.length === 0) return null;
       const label = [p?.brand, p?.name].filter(Boolean).join(' ').trim() || 'product';
-      return { role: r.role_tag || 'item', label, image_url: chosen, brand: p?.brand ?? null };
+      return { role: r.role_tag || 'item', label, imageUrls, brand: p?.brand ?? null };
     })
-    .filter((x): x is { role: string; label: string; image_url: string; brand: string | null } => !!x);
+    .filter((x): x is { role: string; label: string; imageUrls: string[]; brand: string | null } => !!x);
 
   // ── Resolve video model from platform settings ───────────────────────────
   const { data: modelSetting } = await admin
-    .from('app_settings').select('value').eq('key', 'look_video_model').single();
-  const platformSlug = modelSetting?.value || 'fal-ai/veo3.1/fast/image-to-video';
+    .from('app_settings').select('value').eq('key', 'look_video_model').maybeSingle();
+  // Default to Seedance reference-to-video (sees the product packshots), NOT
+  // Veo image-to-video (which only sees the selfie and would drop the products).
+  const platformSlug = modelSetting?.value || 'bytedance/seedance-2.0/fast/reference-to-video';
+  // Fallback policy: allow the product-blind Veo face-only fallback for a
+  // product look only when an operator opts in. Default false = fail loudly.
+  const { data: fallbackSetting } = await admin
+    .from('app_settings').select('value').eq('key', 'look_video_fallback').maybeSingle();
+  const allowProductBlindFallback = fallbackSetting?.value === 'true';
   // If the platform is still set to a Seedance variant, respect the user's
   // fast/pro quality choice from gen.model; otherwise use the platform slug.
   const modelSlug = SEEDANCE_SLUGS.has(platformSlug)
@@ -506,7 +533,7 @@ async function handleRequest(req: Request): Promise<Response> {
   // Veo and Seedance/ByteDance: always send exactly 1 face photo (randomly chosen from up to 3 available).
   const faceSlots = (isVeo || isSeedance) ? 1 : Math.min(faceSourceUrls.length, maxSlots);
   // For Veo, no product images are sent — products are described in the prompt instead.
-  const productSlots = isVeo ? 0 : Math.max(0, Math.min(maxSlots - faceSlots, productEntries.length));
+  const productImageBudget = isVeo ? 0 : Math.max(0, maxSlots - faceSlots);
   // For Veo/Seedance: pick a random face from the first 3 available; otherwise use ordered list.
   const randomFaceIdx = (isVeo || isSeedance) && faceSourceUrls.length > 1
     ? Math.floor(Math.random() * Math.min(faceSourceUrls.length, 3))
@@ -514,12 +541,33 @@ async function handleRequest(req: Request): Promise<Response> {
   const faceSourcesToUse = (isVeo || isSeedance)
     ? [faceSourceUrls[randomFaceIdx]]
     : faceSourceUrls.slice(0, faceSlots);
-  const productsToUse = productEntries.slice(0, productSlots);
+  // Flatten each product's gallery into the reference budget, distributed so
+  // every product gets at least one angle (front images first), then round-
+  // robin the rest until the budget fills. Each entry keeps its product index
+  // so the prompt can tag all of a garment's angles together.
+  const flatProductImgs: { pIdx: number; url: string }[] = [];
+  if (productImageBudget > 0 && productEntries.length > 0) {
+    const perProduct = Math.max(1, Math.floor(productImageBudget / productEntries.length));
+    productEntries.forEach((pe, pIdx) => {
+      for (const u of pe.imageUrls.slice(0, perProduct)) flatProductImgs.push({ pIdx, url: u });
+    });
+    let col = perProduct;
+    while (flatProductImgs.length < productImageBudget) {
+      let added = false;
+      for (let pIdx = 0; pIdx < productEntries.length && flatProductImgs.length < productImageBudget; pIdx++) {
+        const u = productEntries[pIdx].imageUrls[col];
+        if (u) { flatProductImgs.push({ pIdx, url: u }); added = true; }
+      }
+      if (!added) break;
+      col++;
+    }
+  }
   const ts = Date.now();
 
   await logEvent('submit_attempt', {
     face_count: faceSourcesToUse.length,
-    product_count: productsToUse.length,
+    product_count: productEntries.length,
+    product_image_count: flatProductImgs.length,
     fal_model: modelSlug,
     requested_model: gen.model ?? 'fast',
   });
@@ -550,14 +598,21 @@ async function handleRequest(req: Request): Promise<Response> {
   }
 
   const reHostedProducts = await Promise.all(
-    productsToUse.map((p, i) =>
-      reHostImage(p.image_url, `${generationId}/product_${i}_${ts}.jpg`, admin)
+    flatProductImgs.map((f, i) =>
+      reHostImage(f.url, `${generationId}/product_${i}_${ts}.jpg`, admin)
     )
   );
   await logEvent('image_rehost_products', { stats: reHostedProducts.map(r => r.stats) });
-  const goodProductUrls = reHostedProducts.map(r => r.url).filter((u): u is string => u !== null);
+  // Keep the product-index mapping only for gallery images that survived
+  // re-hosting, so prompt tags line up with the reference array.
+  const goodFlatProducts = flatProductImgs
+    .map((f, i) => ({ pIdx: f.pIdx, url: reHostedProducts[i].url }))
+    .filter((f): f is { pIdx: number; url: string } => f.url !== null);
+  const goodProductUrls = goodFlatProducts.map(f => f.url);
   const droppedProducts = reHostedProducts.length - goodProductUrls.length;
-  const productsUsed = productsToUse.filter((_, i) => reHostedProducts[i].url !== null);
+  // Distinct products that still have at least one usable angle.
+  const usedProductIdxs = [...new Set(goodFlatProducts.map(f => f.pIdx))].sort((a, b) => a - b);
+  const productsUsed = usedProductIdxs.map(i => productEntries[i]);
 
   if (droppedFaces > 0 || droppedProducts > 0) {
     await logEvent('image_preflight', {
@@ -577,11 +632,30 @@ async function handleRequest(req: Request): Promise<Response> {
   // reference_image_urls array.
   const faceTags = goodFaceUrls.map((_, i) => `@Image${i + 1}`).join(' and ');
 
-  // Veo: all product entries used for prompt text even though none are sent as images.
-  const promptProducts = isVeo ? productEntries : productsUsed;
+  // Identity lock — the #1 failure mode with reference-to-video is the model
+  // borrowing a FACE from a product image (product packshots are usually shot
+  // ON A MODEL). Faces are always the FIRST reference slots; this clause pins
+  // identity to those and tells the model the product images are garments
+  // only, so it never renders the product model's face instead of the shopper.
+  const identityLock = (!isVeo && goodFaceUrls.length > 0)
+    ? (productsUsed.length > 0
+        ? `The person's face, hair, skin tone, and body belong ONLY to ${faceTags} — this is who appears in the video. The remaining reference images are clothing swatches: copy the garments exactly, but completely IGNORE any person, face, model, or body shown wearing them.`
+        : `The person's face and identity belong ONLY to ${faceTags}.`)
+    : '';
+
+  // Veo: describe every product in text (no product images sent). Other models:
+  // tag EACH garment with ALL of its surviving gallery slots, so the model
+  // knows those N images are the same item from different angles.
   const productClauses = isVeo
-    ? promptProducts.map(p => `${p.label} (${p.role.toLowerCase()})`)
-    : productsUsed.map((p, i) => `${p.role.toLowerCase()} (@Image${goodFaceSlots + i + 1}, ${p.label})`);
+    ? productEntries.map(p => `${p.label} (${p.role.toLowerCase()})`)
+    : usedProductIdxs.map(pIdx => {
+        const pe = productEntries[pIdx];
+        const tags = goodFlatProducts
+          .map((f, i) => (f.pIdx === pIdx ? `@Image${goodFaceSlots + i + 1}` : null))
+          .filter((t): t is string => t !== null)
+          .join('/');
+        return `${pe.role.toLowerCase()} (${tags}, ${pe.label})`;
+      });
 
   const heightClause = gen.height_label ? `Make them ${gen.height_label} tall.` : '';
   const ageClause = gen.age_label ? `They look ${gen.age_label}.` : '';
@@ -634,7 +708,10 @@ async function handleRequest(req: Request): Promise<Response> {
     // face-cloning phrases that trigger ByteDance's content filter.
     taggedPrompt = [
       `Subject: ${faceTags}.`,
-      productClauses.length > 0 ? `Products: ${productClauses.join(', ')}.` : '',
+      identityLock,
+      productClauses.length > 0
+        ? `The subject must be visibly wearing ALL ${productClauses.length} of these items together in the same shot — do not omit or substitute any: ${productClauses.join('; ')}.`
+        : '',
       gen.prompt,
     ].filter(Boolean).join(' ');
   } else if (gen.style === 'commercial' && productsUsed.length > 0) {
@@ -645,6 +722,7 @@ async function handleRequest(req: Request): Promise<Response> {
     const cameraBlock = brandTones.length > 0 ? brandTones[0].camera : 'natural mid-shot, slow gimbal arc';
     taggedPrompt = [
       `Use ${faceTags} as the talent.`,
+      identityLock,
       heightClause,
       ageClause,
       `Dress them in: ${productClauses.join(', ')}.`,
@@ -656,6 +734,7 @@ async function handleRequest(req: Request): Promise<Response> {
     const styleSuffix = gen.style ? `, ${String(gen.style).toLowerCase()} vibe` : '';
     taggedPrompt = [
       `Use ${faceTags} as the subject.`,
+      identityLock,
       heightClause,
       ageClause,
       productClauses.length > 0
@@ -681,12 +760,22 @@ async function handleRequest(req: Request): Promise<Response> {
   }
 
   // ── Veo fallback: if primary model fails, retry once with Veo Fast ────────
-  if ((submitResult.error || !submitResult.request_id) && !isVeo && modelSlug !== FALLBACK_VEO_SLUG) {
+  // The Veo Fast fallback is a product-BLIND, face-only animation — it renders
+  // the person in whatever they wore in the selfie, NOT the picked products.
+  // That's correct for a no-product "animate my photo" job, but for a try-on it
+  // silently produces the WRONG outfit. So we only fall back when there are no
+  // products, unless an operator explicitly opts in via the look_video_fallback
+  // dial. Otherwise the job fails loudly (below) and the shopper retries.
+  const primaryFailed = !!(submitResult.error || !submitResult.request_id);
+  const canFallback = !isVeo && modelSlug !== FALLBACK_VEO_SLUG;
+  const fallbackAllowed = productsUsed.length === 0 || allowProductBlindFallback;
+  if (primaryFailed && canFallback && fallbackAllowed) {
     await logEvent('fal_submit_fallback', {
       original_model: modelSlug,
       fallback_model: FALLBACK_VEO_SLUG,
       original_error: submitResult.error,
       original_raw_status: submitResult.raw_status,
+      product_count: productsUsed.length,
     });
     // Build a minimal Veo-compatible prompt — animate the first frame, don't describe a new character.
     const fallbackPrompt = `Animate this photo into a short cinematic video. Keep the person, outfit, and setting exactly as shown in the image — do not change their appearance or clothing. Smooth, photorealistic motion. Soft directional light, shallow depth of field. Magazine-quality fashion editorial. 9:16 portrait.`;
@@ -694,15 +783,30 @@ async function handleRequest(req: Request): Promise<Response> {
     if (!submitResult.error && submitResult.request_id) {
       effectiveModelSlug = FALLBACK_VEO_SLUG;
     }
+  } else if (primaryFailed && canFallback && !fallbackAllowed) {
+    // Deliberately NOT falling back: a product try-on would come back wrong.
+    await logEvent('fal_submit_fallback_skipped', {
+      reason: 'product_look_no_blind_fallback',
+      original_model: modelSlug,
+      original_error: submitResult.error,
+      original_raw_status: submitResult.raw_status,
+      product_count: productsUsed.length,
+    });
   }
 
   const { request_id, error: falError, raw_status, raw_body } = submitResult;
 
   if (falError || !request_id) {
+    // Shopper-facing copy stays friendly for a product try-on (the raw Fal
+    // error — e.g. an exhausted balance — is kept in error_raw for admins).
+    const friendly = productsUsed.length > 0
+      ? "Couldn't render your look right now — please try again in a moment."
+      : (falError || 'Fal submit produced no request_id');
     await admin.from('user_generations').update({
       status: 'failed',
-      error: falError || 'Fal submit produced no request_id',
+      error: friendly,
       error_code: 'fal_submit_error',
+      error_raw: falError || null,
       completed_at: new Date().toISOString(),
     }).eq('id', generationId);
     await logEvent('fal_submit_fail', {

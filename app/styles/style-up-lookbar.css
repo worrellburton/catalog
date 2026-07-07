@@ -1,0 +1,18 @@
+/* Full-look bar (engine mode): render the whole suggested look, optionally
+   dropping pieces. Sits above the composer. Kept in its own file to avoid
+   colliding with concurrent edits to style-up.css. */
+.su-lookbar { border-top: 1px solid rgba(255,255,255,.08); padding: 10px 14px; background: rgba(0,0,0,.25); }
+.su-lookbar-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.su-lookbar-title { font-size: 13px; font-weight: 600; color: #e8e8ec; }
+.su-lookbar-actions { display: flex; gap: 8px; }
+.su-lookbar-btn { font-size: 13px; font-weight: 600; padding: 7px 14px; border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.18); background: transparent; color: #e8e8ec; cursor: pointer; }
+.su-lookbar-btn--primary { background: var(--su-accent, #8aa0c0); border-color: transparent; color: #0a0a0a; }
+.su-lookbar-btn:disabled { opacity: .5; cursor: default; }
+.su-lookbar-pieces { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+.su-lookbar-piece { font-size: 12px; padding: 6px 12px; border-radius: 999px;
+  border: 1px solid rgba(255,255,255,.18); background: transparent; color: #aaa; cursor: pointer; }
+.su-lookbar-piece--on { color: #0a0a0a; background: #e8e8ec; border-color: transparent; }
+
+/* Product card's "See it on me" once it's in the look-bar tray. */
+.su-product-btn--added { background: transparent; border: 1px solid var(--su-accent, #8aa0c0); color: var(--su-accent, #8aa0c0); }

@@ -173,3 +173,34 @@
 .admin-dark .sut-search { border-color: #26282d; }
 .admin-dark .sut-search-q { color: #e7e7ea; }
 .admin-dark .sut-search-stat { color: #c7c9cf; }
+
+/* ── Style observatory tabs (Chat | Generations) ─────────────────────── */
+.sua-tabs { display: flex; gap: 8px; }
+.sua-tab {
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 8px 16px;
+  border-radius: 999px;
+  border: 1px solid #e2e3e8;
+  background: #fff;
+  color: #4b5563;
+  font-size: 13.5px; font-weight: 700;
+  cursor: pointer;
+}
+.sua-tab.is-active { background: #14151a; color: #fff; border-color: #14151a; }
+
+/* ── Generations table ───────────────────────────────────────────────── */
+.sua-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.sua-table th { text-align: left; padding: 8px 10px; color: #6b7280; font-size: 12px; border-bottom: 1px solid #ececf0; }
+.sua-table td { padding: 10px; border-bottom: 1px solid #f0f1f3; vertical-align: middle; }
+.sua-table-row { cursor: pointer; }
+.sua-table-row:hover td { background: #f6f7f9; }
+.sua-table-pieces { display: inline-flex; align-items: center; gap: 4px; color: #6b7280; }
+.sua-table-pieces img { width: 22px; height: 28px; border-radius: 4px; object-fit: cover; }
+.sua-table-video { width: 42px; height: 56px; border-radius: 6px; object-fit: cover; background: #0d0e10; }
+
+.admin-dark .sua-tab { border-color: #26282d; background: transparent; color: #9a9da6; }
+.admin-dark .sua-tab.is-active { background: #1c1d21; color: #e7e7ea; border-color: #34363c; }
+.admin-dark .sua-table th { color: #8b8e96; border-bottom-color: #26282d; }
+.admin-dark .sua-table td { border-bottom-color: #1c1d21; }
+.admin-dark .sua-table-row:hover td { background: #141518; }
+.admin-dark .sua-table-pieces { color: #8b8e96; }
