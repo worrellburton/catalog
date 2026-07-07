@@ -1158,6 +1158,24 @@ html[data-shell="catalog-app"] .su-shell {
 .su-composer-send:disabled { opacity: 0.4; cursor: default; }
 .su-composer-send:not(:disabled):active { transform: scale(0.92); }
 
+/* Chat-gate pill — shown in place of the input until the profile has a selfie
+   + height + weight. Taps open the context editor. */
+.su-composer-gate {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px dashed var(--su-accent, #2f6fed);
+  background: color-mix(in srgb, var(--su-accent, #2f6fed) 12%, #1c1d21);
+  color: #e7e7ea;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.12s ease;
+}
+.su-composer-gate:active { transform: scale(0.99); }
+
 /* ── WebGL blueprint background ──────────────────────────────────────────
    A subtle, slow field of thin "measurement" lines behind the whole StyleUp
    surface. The canvas is pinned to the (fixed) shell so it stays put while the
