@@ -1252,7 +1252,7 @@ export function StyleUpExperience({
     const looks = lookPicks();
     if (swap && looks.length > 0) void handleSwapRequest(swap);
     else if (wantsFullOutfit(text)) {
-      if (engineMethod === 'style_engine' && active?.sourceMode !== 'web') void triggerStylist('outfit');
+      if (engineMethod !== 'legacy' && active?.sourceMode !== 'web') void triggerStylist('outfit');
       else void startOutfitFlow();
     }
     else if (wantsFullLook(text) && looks.length > 0) void askScene();

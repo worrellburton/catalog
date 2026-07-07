@@ -921,7 +921,7 @@ export async function fetchSwapOptions(
   const gender = await getUserGender(shopperUserId);
   const method: StylistEngineMethod = opts.engineMethod ?? 'style_engine';
   let data: SwapRow[] | null;
-  if (method === 'style_engine') {
+  if (method !== 'legacy') {
     const occasion = [opts.styleText, opts.occasion].filter(Boolean).join(' ');
     data = await slotSearch(role, gender, occasion, SWAP_FETCH_LIMIT);
   } else {

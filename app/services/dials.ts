@@ -403,20 +403,25 @@ export function subscribeWaitlistMode(onChange: (value: boolean) => void): () =>
 }
 
 // ────────────────────────────────────────────────────────────────────
-// Stylist engine method (A/B). How the /style catalog stylist sources
+// Stylist engine method (A/B/C). How the /style catalog stylist sources
 // products:
 //   'style_engine' (default) → occasion-aware style_slot_search
+//   'stylist_engine'         → style_engine + anti-repeat: skips products already
+//                              shown in the thread and rotates the pool, so a
+//                              re-asked occasion returns a genuinely fresh look
 //   'legacy'                  → the pre-engine 120-newest recency behavior
 // Read by StyleUpExperience (client, via useStylistEngineMethod) AND the
 // style-up-chat edge fn (direct app_settings select), so both always agree.
 // ────────────────────────────────────────────────────────────────────
 
 export const STYLIST_ENGINE_METHOD_KEY = 'stylist_engine_method';
-export type StylistEngineMethod = 'style_engine' | 'legacy';
+export type StylistEngineMethod = 'style_engine' | 'stylist_engine' | 'legacy';
 export const DEFAULT_STYLIST_ENGINE_METHOD: StylistEngineMethod = 'style_engine';
 
 export function parseStylistMethod(raw: string | null | undefined): StylistEngineMethod {
-  return raw === 'legacy' ? 'legacy' : DEFAULT_STYLIST_ENGINE_METHOD;
+  if (raw === 'legacy') return 'legacy';
+  if (raw === 'stylist_engine') return 'stylist_engine';
+  return DEFAULT_STYLIST_ENGINE_METHOD;
 }
 
 export async function getStylistEngineMethod(): Promise<StylistEngineMethod> {
