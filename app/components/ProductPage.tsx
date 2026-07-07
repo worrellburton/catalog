@@ -123,21 +123,14 @@ interface ProductPageProps {
   onSearch?: (q: string) => void;
 }
 
-// Stable hash of any string → unsigned integer. Used to derive a consistent
-// dummy save count + "saved by" avatar set per product so refreshing the
-// page doesn't reshuffle the social-proof row.
+// Stable hash of any string → unsigned integer. Used to pick a deterministic
+// retailer set + price jitter per product so re-renders don't reshuffle the
+// Shop chips.
 function hashString(s: string): number {
   let h = 5381;
   for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
   return Math.abs(h);
 }
-
-// Curated avatar pool for the dummy "saved by" row. Sources from the
-// existing static creators so the avatars are real images (no third-party
-// avatar generators / extra network hops).
-const AVATAR_POOL = Object.values(staticCreators)
-  .filter(c => !!c.avatar)
-  .slice(0, 12);
 
 interface RetailerOffer {
   retailer: string;
@@ -232,19 +225,6 @@ function buildRetailerOffers(product: Product): RetailerOffer[] {
 // Brand-logo experiment removed - Brandfetch's results were inconsistent
 // (white squares for opaque-bg logos, wrong-brand fallbacks for products
 // scraped from Google Shopping). Brand text is the reliable indicator.
-
-interface SavedByDummy { count: number; avatars: { name: string; avatar: string }[] }
-function dummySavedBy(productKey: string): SavedByDummy {
-  if (AVATAR_POOL.length === 0) return { count: 0, avatars: [] };
-  const h = hashString(productKey);
-  // 47–527 is a plausible "interesting but not insane" range for a curated
-  // catalog product. Bias the low end so most products read as believable.
-  const count = 47 + (h % 481);
-  const start = h % AVATAR_POOL.length;
-  const visibleN = Math.min(5, AVATAR_POOL.length);
-  const avatars = Array.from({ length: visibleN }, (_, i) => AVATAR_POOL[(start + i) % AVATAR_POOL.length]);
-  return { count, avatars };
-}
 
 /** Compact video tile for the brand strip - small, shows a product image
  *  poster + brand/name caption so the tile is never blank, then swaps in
@@ -1167,14 +1147,6 @@ export default function ProductPage({
     }
   }, [product]);
 
-  // Dummy social proof. Stable per product so the count + avatars don't
-  // reshuffle on every re-render. Wire to a real `product_saves` table when
-  // we ship it.
-  const savedBy = useMemo(
-    () => dummySavedBy(`${product.brand}|${product.name}`),
-    [product.brand, product.name],
-  );
-
   // Retailer chips - brand site + 3 synthetic alts (same pool every time so
   // prices are consistent across re-renders). Cheapest gets a lowest /
   // discount badge.
@@ -1573,28 +1545,6 @@ export default function ProductPage({
             <h1 className="pd-name">{product.name}</h1>
             {product.price && <div className="pd-price">{product.price}</div>}
             {shopperBody.heightCm && <SizeMatchBadge product={product} body={shopperBody} />}
-
-            {/* Saved-by social-proof row. Dummy data today - wired to
-                bookmark-based save counts when the product_saves table ships. */}
-            {savedBy.avatars.length > 0 && (
-              <div className="pd-saved-by" aria-label={`Saved by ${savedBy.count} shoppers`}>
-                <div className="pd-saved-avatars">
-                  {savedBy.avatars.map((a, i) => (
-                    <img
-                      key={a.name}
-                      src={a.avatar}
-                      alt=""
-                      className="pd-saved-avatar"
-                      style={{ zIndex: savedBy.avatars.length - i }}
-                      loading="lazy"
-                    />
-                  ))}
-                </div>
-                <span className="pd-saved-count">
-                  Saved by <strong>{savedBy.count.toLocaleString()}</strong>
-                </span>
-              </div>
-            )}
 
             <div className="pd-actions">
               {retailerOffers.length > 0 && (
