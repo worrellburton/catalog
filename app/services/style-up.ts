@@ -869,7 +869,7 @@ export interface RecommendOpts {
   formality?: 'dressier' | 'casual' | null; // running constraint from feedback
   avoidColors?: string[];              // colors the shopper passed on
   simpler?: boolean;                   // "keep it simple / less flashy"
-  engineMethod?: StylistEngineMethod;   // 'style_engine' (default) → style_slot_search; 'legacy' → recency
+  engineMethod?: StylistEngineMethod;   // 'stylist_engine' (default) → style_slot_search; 'legacy' → recency
 }
 
 function priceNum(s?: string | null): number | null {
@@ -919,7 +919,7 @@ export async function fetchSwapOptions(
 ): Promise<StyleUpProductRef[]> {
   if (!supabase) return [];
   const gender = await getUserGender(shopperUserId);
-  const method: StylistEngineMethod = opts.engineMethod ?? 'style_engine';
+  const method: StylistEngineMethod = opts.engineMethod ?? 'stylist_engine';
   let data: SwapRow[] | null;
   if (method !== 'legacy') {
     const occasion = [opts.styleText, opts.occasion].filter(Boolean).join(' ');

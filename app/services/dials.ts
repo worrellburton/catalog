@@ -403,25 +403,26 @@ export function subscribeWaitlistMode(onChange: (value: boolean) => void): () =>
 }
 
 // ────────────────────────────────────────────────────────────────────
-// Stylist engine method (A/B/C). How the /style catalog stylist sources
-// products:
-//   'style_engine' (default) → occasion-aware style_slot_search
-//   'stylist_engine'         → style_engine + anti-repeat: skips products already
-//                              shown in the thread and rotates the pool, so a
-//                              re-asked occasion returns a genuinely fresh look
-//   'legacy'                  → the pre-engine 120-newest recency behavior
-// Read by StyleUpExperience (client, via useStylistEngineMethod) AND the
+// Stylist engine method (A/B). How the /style catalog stylist sources products:
+//   'stylist_engine' (default) → occasion-aware style_slot_search WITH anti-repeat:
+//                                 suggests a complete look directly, skips products
+//                                 already shown in the thread, and rotates the pool,
+//                                 so a re-asked occasion returns a fresh look.
+//   'legacy'                    → the pre-engine 120-newest recency behavior
+// The earlier 'style_engine' value (occasion-aware, no anti-repeat) was merged into
+// 'stylist_engine' and retired; any stored 'style_engine' now resolves to the new
+// default. Read by StyleUpExperience (client, via useStylistEngineMethod) AND the
 // style-up-chat edge fn (direct app_settings select), so both always agree.
 // ────────────────────────────────────────────────────────────────────
 
 export const STYLIST_ENGINE_METHOD_KEY = 'stylist_engine_method';
-export type StylistEngineMethod = 'style_engine' | 'stylist_engine' | 'legacy';
-export const DEFAULT_STYLIST_ENGINE_METHOD: StylistEngineMethod = 'style_engine';
+export type StylistEngineMethod = 'stylist_engine' | 'legacy';
+export const DEFAULT_STYLIST_ENGINE_METHOD: StylistEngineMethod = 'stylist_engine';
 
+// Only the explicit 'legacy' opt-out maps to legacy; everything else (including the
+// retired 'style_engine' string and an unset dial) resolves to the modern engine.
 export function parseStylistMethod(raw: string | null | undefined): StylistEngineMethod {
-  if (raw === 'legacy') return 'legacy';
-  if (raw === 'stylist_engine') return 'stylist_engine';
-  return DEFAULT_STYLIST_ENGINE_METHOD;
+  return raw === 'legacy' ? 'legacy' : 'stylist_engine';
 }
 
 export async function getStylistEngineMethod(): Promise<StylistEngineMethod> {

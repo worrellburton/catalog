@@ -35,8 +35,8 @@ interface RpcClient {
 
 // Rotate a ranked slot list forward by `rotate`, keeping the top ANCHOR rows
 // pinned (so the single best piece for the occasion is always offered) and
-// cycling the tail, then trim to `out`. rotate=0 is a no-op (the style_engine
-// path). Deterministic — same rotate re-runs identically, so the admin research
+// cycling the tail, then trim to `out`. rotate=0 is a no-op (an un-rotated first
+// turn). Deterministic — same rotate re-runs identically, so the admin research
 // trace stays reproducible. Exported for a unit test of the modulo/anchor math.
 const ANCHOR = 2;
 export function rotateWithAnchors<T>(rows: T[], rotate: number, out: number): T[] {
@@ -68,8 +68,8 @@ export async function retrieveOccasionCandidates(
   const k = opts.kPerSlot ?? 8;
   const exclude = opts.excludeIds ?? [];
   const rotate = opts.rotate ?? 0;
-  // Only deepen the pool when we're actually varying (exclude/rotate active) so
-  // the plain style_engine path stays byte-identical (k=8, no rotation).
+  // Only deepen the pool when we're actually varying (exclude/rotate active) so an
+  // un-rotated first turn is byte-identical to the pre-anti-repeat path (k=8).
   const fetchK = (rotate > 0 || exclude.length > 0) ? k * 3 : k;
   const aesthetic = (opts.aesthetic ?? '').toLowerCase().replace(/[&/]/g, ' ').replace(/\s+/g, ' ').trim();
 

@@ -6,7 +6,7 @@ import { rotateWithAnchors } from '../../supabase/functions/_shared/style-retrie
 describe('rotateWithAnchors (Stylist Engine pool rotation)', () => {
   const rows = [0, 1, 2, 3, 4, 5]; // ranked list; index 0-1 are the anchors
 
-  it('rotate=0 is a no-op, trimmed to out (style_engine path)', () => {
+  it('rotate=0 is a no-op, trimmed to out (un-rotated first turn)', () => {
     expect(rotateWithAnchors(rows, 0, 4)).toEqual([0, 1, 2, 3]);
   });
 

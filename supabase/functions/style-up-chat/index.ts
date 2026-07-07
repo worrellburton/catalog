@@ -125,16 +125,15 @@ Deno.serve(async (req: Request) => {
     if (turns.length === 0) return json({ success: false, error: 'nothing to reply to' }, 400);
 
     // Retrieval method is an admin dial (app_settings.stylist_engine_method):
-    //   'style_engine' (default) → occasion-aware style_slot_search
-    //   'stylist_engine'         → style_engine + anti-repeat (skip already-shown
-    //                              products, rotate the pool, avoid-list prompt)
-    //   'legacy'                 → the pre-engine 120-newest recency scan
+    //   'stylist_engine' (default) → occasion-aware style_slot_search WITH anti-repeat
+    //                                (skip already-shown products, rotate the pool,
+    //                                avoid-list prompt). The retired 'style_engine'
+    //                                value resolves here too.
+    //   'legacy'                   → the pre-engine 120-newest recency scan
     const { data: methodRow } = await admin
       .from('app_settings').select('value').eq('key', 'stylist_engine_method').maybeSingle();
-    const rawMethod = methodRow?.value;
-    const method = rawMethod === 'legacy' ? 'legacy'
-      : rawMethod === 'stylist_engine' ? 'stylist_engine' : 'style_engine';
-    const isFresh = method === 'stylist_engine';
+    const method = methodRow?.value === 'legacy' ? 'legacy' : 'stylist_engine';
+    const isFresh = method !== 'legacy';
     const mode = String(body.mode ?? '');
 
     // Candidate products to recommend FROM. Web stylists skip this (live web search).
@@ -162,8 +161,8 @@ Deno.serve(async (req: Request) => {
         .slice(-3).map(t => (t.body ?? '').trim()).join(' ').slice(0, 300);
       // Stylist Engine: skip products already shown in this thread and rotate the
       // ranked pool by shopper-turn count, so a re-asked occasion surfaces a
-      // genuinely different look instead of the same top-ranked pieces. Empty for
-      // style_engine, so that path stays byte-identical.
+      // genuinely different look instead of the same top-ranked pieces. Both are
+      // empty on the first turn (nothing shown yet), so the opening look is unchanged.
       let excludeIds: string[] = [];
       let rotate = 0;
       if (isFresh) {
@@ -190,7 +189,7 @@ Deno.serve(async (req: Request) => {
     // Stylist Engine: an avoid-list of pieces already shown in this thread, so the
     // model composes a genuinely different look on a re-asked occasion. Built from
     // the product messages in history; only real picks (kind='product' + an id),
-    // deduped, last 24. Empty for style_engine → prompt stays identical.
+    // deduped, last 24. Empty on the first turn → the opening prompt is unchanged.
     const shownLabels = isFresh
       ? [...new Set(turns
           .filter(t => t.kind === 'product' && t.product_ref)
