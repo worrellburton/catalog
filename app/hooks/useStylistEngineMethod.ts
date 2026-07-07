@@ -8,8 +8,8 @@ import {
 
 // The /style catalog stylist's retrieval method, read live from the
 // stylist_engine_method dial (app_settings). Flipping it on /admin/dials
-// switches every open stylist chat between the style engine and the legacy
-// recency behavior without a refresh.
+// switches every open stylist chat between the Stylist engine (default) and the
+// legacy recency behavior without a refresh.
 export function useStylistEngineMethod(): { method: StylistEngineMethod; loading: boolean } {
   const [method, setMethod] = useState<StylistEngineMethod>(DEFAULT_STYLIST_ENGINE_METHOD);
   const [loading, setLoading] = useState(true);

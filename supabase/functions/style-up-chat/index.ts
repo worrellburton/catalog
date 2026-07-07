@@ -125,11 +125,15 @@ Deno.serve(async (req: Request) => {
     if (turns.length === 0) return json({ success: false, error: 'nothing to reply to' }, 400);
 
     // Retrieval method is an admin dial (app_settings.stylist_engine_method):
-    //   'style_engine' (default) → occasion-aware style_slot_search
-    //   'legacy'                 → the pre-engine 120-newest recency scan
+    //   'stylist_engine' (default) → occasion-aware style_slot_search WITH anti-repeat
+    //                                (skip already-shown products, rotate the pool,
+    //                                avoid-list prompt). The retired 'style_engine'
+    //                                value resolves here too.
+    //   'legacy'                   → the pre-engine 120-newest recency scan
     const { data: methodRow } = await admin
       .from('app_settings').select('value').eq('key', 'stylist_engine_method').maybeSingle();
-    const method = (methodRow?.value === 'legacy') ? 'legacy' : 'style_engine';
+    const method = methodRow?.value === 'legacy' ? 'legacy' : 'stylist_engine';
+    const isFresh = method !== 'legacy';
     const mode = String(body.mode ?? '');
 
     // Candidate products to recommend FROM. Web stylists skip this (live web search).
@@ -155,24 +159,53 @@ Deno.serve(async (req: Request) => {
       // the joined thread kept the OLDEST text, dropping the current ask entirely.
       const occasion = turns.filter(t => t.sender === 'shopper' && t.body)
         .slice(-3).map(t => (t.body ?? '').trim()).join(' ').slice(0, 300);
+      // Stylist Engine: skip products already shown in this thread and rotate the
+      // ranked pool by shopper-turn count, so a re-asked occasion surfaces a
+      // genuinely different look instead of the same top-ranked pieces. Both are
+      // empty on the first turn (nothing shown yet), so the opening look is unchanged.
+      let excludeIds: string[] = [];
+      let rotate = 0;
+      if (isFresh) {
+        const { data: shownRows } = await admin.from('style_up_messages')
+          .select('product_ref').eq('thread_id', threadId).eq('kind', 'product');
+        excludeIds = [...new Set(((shownRows ?? []) as Array<{ product_ref: { id?: string } | null }>)
+          .map(r => r?.product_ref?.id).filter((x): x is string => !!x))];
+        rotate = Math.max(0, turns.filter(t => t.sender === 'shopper').length - 1);
+      }
       const found = await retrieveOccasionCandidates(admin, {
         occasion, gender: genderNorm, aesthetic: stylist?.specialty ?? '',
+        excludeIds, rotate,
       });
       cands = found.filter(c => c.image).map(c => ({
         id: c.id, name: c.name, brand: c.brand, price: c.price,
         image_url: c.image, primary_image_url: c.image, url: c.url, type: c.type,
       }));
-      console.log(`[style-up-chat] thread=${threadId} retrieval=ENGINE(style_slot_search) candidates=${cands.length} mode=${mode || 'default'} (occasion-aware, NOT recency scan)`);
+      console.log(`[style-up-chat] thread=${threadId} retrieval=ENGINE(${method}) candidates=${cands.length} exclude=${excludeIds.length} rotate=${rotate} mode=${mode || 'default'}`);
     }
     const candList = cands.map(c =>
       `${c.id} | ${(c.name ?? '').slice(0, 70)} | ${c.brand ?? ''} | ${c.price ?? ''} | ${c.type ?? ''}`,
     ).join('\n');
 
+    // Stylist Engine: an avoid-list of pieces already shown in this thread, so the
+    // model composes a genuinely different look on a re-asked occasion. Built from
+    // the product messages in history; only real picks (kind='product' + an id),
+    // deduped, last 24. Empty on the first turn → the opening prompt is unchanged.
+    const shownLabels = isFresh
+      ? [...new Set(turns
+          .filter(t => t.kind === 'product' && t.product_ref)
+          .map(t => { const pr = t.product_ref as { id?: string; name?: string; brand?: string };
+            return pr.id ? [pr.brand, pr.name].filter(Boolean).join(' ').trim() : ''; })
+          .filter(Boolean))]
+      : [];
+    const shownBlock = shownLabels.length
+      ? `\nALREADY SHOWN THIS THREAD — do NOT recommend these again; compose a genuinely DIFFERENT look (different pieces, ideally a different colour story or silhouette):\n${shownLabels.slice(-24).map(l => `- ${l}`).join('\n')}\n`
+      : '';
+
     const persona = stylist?.persona_prompt
       || `You are ${stylist?.name ?? 'a personal stylist'}, a friendly personal stylist.`;
     const specialty = (stylist?.specialty ?? '').trim();
-    const outfitClause = (!isWeb && method === 'style_engine' && mode === 'outfit')
-      ? `\n- The shopper wants a COMPLETE outfit this turn. Recommend ONE coherent full look from the candidates: a top (or a dress), a bottom, shoes, plus an optional layer — one piece per slot, all matching in colour, formality and season. Put every piece's id in productIds.`
+    const outfitClause = (!isWeb && method !== 'legacy' && mode === 'outfit')
+      ? `\n- The shopper wants a COMPLETE outfit this turn. Recommend ONE coherent full look from the candidates: a top (or a dress), a bottom, shoes, plus an optional layer — one piece per slot, all matching in colour, formality and season. Put every piece's id in productIds.${shownLabels.length ? ' This is a NEW-look request: it MUST be clearly different from every look already shown above, not a re-serving of the last outfit.' : ''}`
       : '';
     const system = isWeb ? `${persona}
 
@@ -203,7 +236,7 @@ STYLE OF REPLY:
 
 CANDIDATE PRODUCTS (id | name | brand | price | type) — only recommend from these:
 ${candList || '(none available)'}
-
+${shownBlock}
 - When your reply asks the shopper a question, ALSO set quickReplies: 2-4 short tap-to-answer options (under 25 characters each, first-person where natural) that DIRECTLY answer your question. Otherwise [].
 
 Output ONLY the JSON object below and NOTHING else — no preamble, no reasoning, no commentary, no text before or after it. Decide silently; the shopper only sees the "reply" string.
