@@ -160,12 +160,15 @@ async function fetchImage(rawUrl: string): Promise<Fetched> {
 
 function buildPrompt(desc: string, count: number): string {
   return [
-    `You are auditing an e-commerce product gallery. The product is: "${desc}".`,
+    `You are auditing an e-commerce product gallery. The product is EXACTLY: "${desc}".`,
+    'Match the SPECIFIC item — including its COLOR, material, and variant when the name states one',
+    '(e.g. "Khakis" → khaki/tan only; "French Blue" → that blue only; "Black" → black only).',
     `Classify EACH of the ${count} image(s) above (in order, starting at index 0) into exactly one label:`,
-    '  good     = a real photograph of THIS product (the item itself; flat, packshot, or worn on a model)',
+    '  good     = a real photo of THIS EXACT product — same item AND the same color/variant the name specifies',
     '  junk     = size chart / measurement guide / fabric swatch / color chip / packaging / logo / spec sheet / UI screenshot / blank or solid-color tile',
-    '  wrong    = a clear photo of a DIFFERENT product than the one named',
+    '  wrong    = a different product, OR the same style in a DIFFERENT COLOR/variant than the name specifies',
     '  unusable = corrupt, watermarked stock, or you cannot tell what it is',
+    'If the name does NOT specify a color, judge by item type only (any color is fine).',
     'Return ONLY JSON: {"labels":["good","junk",...]} with one label per image, in order. No prose.',
   ].join('\n');
 }
@@ -290,12 +293,19 @@ Deno.serve(async (req: Request) => {
     fetched: f,
   }));
 
-  // KEEP = live AND not junk. Good sorts first (→ becomes primary); wrong /
-  // unusable / unchecked are retained after, advisory-only. Dead + junk dropped.
-  const kept = verdicts.filter(v => v.live && v.label !== 'junk')
-    .sort((a, b) => LABEL_ORDER[a.label] - LABEL_ORDER[b.label]);
-  const goodCount = verdicts.filter(v => v.live && v.label === 'good').length;
-  const anyRemoved = verdicts.some(v => !v.live || v.label === 'junk');
+  // KEEP policy:
+  //   >=2 good  → confident set: keep ONLY good (drops off-color/variant 'wrong',
+  //               size-chart junk, dead). The gallery becomes exactly-this-product.
+  //   <2 good   → uncertain: keep live & not-junk, good first, retaining wrong/
+  //               unusable/unchecked as ADVISORY (Haiku over-flags lone thumbnails;
+  //               don't strip the gallery on a shaky single verdict).
+  const goodOnly = verdicts.filter(v => v.live && v.label === 'good');
+  const goodCount = goodOnly.length;
+  const kept = goodCount >= 2
+    ? goodOnly
+    : verdicts.filter(v => v.live && v.label !== 'junk')
+        .sort((a, b) => LABEL_ORDER[a.label] - LABEL_ORDER[b.label]);
+  const anyRemoved = kept.length < ordered.length;
   const primaryLabel = verdicts[0]?.label ?? 'unusable';
 
   // Note doubles as the reconciler's action signal when zero good images:
