@@ -1034,6 +1034,29 @@ html[data-shell="catalog-app"] .su-shell {
   font-size: 12.5px; color: #c7c9cf;
 }
 .su-render-err { align-self: center; font-size: 12.5px; color: #e9a59c; padding: 4px 8px; text-align: center; }
+
+/* Selfie rejection — warning triangle briefly flashed inside the photo slot. */
+.su-slot-warn { display: inline-flex; align-items: center; justify-content: center; color: #f0b24a; animation: su-slot-warn-pop 0.9s ease both; }
+@keyframes su-slot-warn-pop { 0% { transform: scale(0.4); opacity: 0; } 45% { transform: scale(1.14); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+.su-context-photo--edit.is-warn { border-style: solid; border-color: #e0a24a; }
+.su-chat-selfie-ask-icon.is-warn { color: #f0b24a; }
+
+/* Selfie rejection message — amber "try again" pill with a warning icon. */
+.su-photo-note {
+  align-self: center;
+  display: flex; align-items: flex-start; gap: 8px;
+  max-width: min(420px, 88%);
+  margin: 2px auto;
+  padding: 9px 12px;
+  border-radius: 12px;
+  background: rgba(224, 162, 74, 0.10);
+  border: 1px solid rgba(224, 162, 74, 0.32);
+  color: #f0c48a;
+  font-size: 12.5px; line-height: 1.45;
+  animation: su-photo-note-in 0.28s ease both;
+}
+.su-photo-note-icon { flex: 0 0 auto; color: #f0b24a; margin-top: 1px; line-height: 0; }
+@keyframes su-photo-note-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 .su-chat-retry {
   align-self: center;
   display: inline-flex;

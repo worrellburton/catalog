@@ -62,7 +62,8 @@ function applyPrefs(prev: StylePrefs, text: string): StylePrefs {
 import { getUserHeightAge, getUserCustomStyle, updateUserHeightAge, updateUserCustomStyle } from '~/services/profiles';
 import { getUserGender, updateUserGender, type UserGender } from '~/services/genders';
 import {
-  listUserUploads, getUserSlots, saveUserSlots, uploadUserPhoto, getGeneration, cancelGeneration,
+  listUserUploads, getUserSlots, saveUserSlots, uploadUserPhoto, deleteUserUpload, validateSelfie,
+  getGeneration, cancelGeneration,
   type UserGeneration,
 } from '~/services/user-generations';
 import { promoteGenerationToLook } from '~/services/promote-generation';
@@ -463,6 +464,18 @@ function buildRenderErrorLog(
  *  tell someone to "try another piece" when the real cause is our render
  *  engine (billing/infra) — swapping a piece can't fix that. Only a content
  *  block is actually the photo/piece's fault. */
+// Warning triangle — shared by the selfie-rejection note and the brief
+// per-slot flash so both read as the same "photo didn't work" signal.
+function WarnTriangleIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+      <line x1="12" y1="9" x2="12" y2="13" />
+      <line x1="12" y1="17" x2="12.01" y2="17" />
+    </svg>
+  );
+}
+
 function renderErrorMessage(r: UserGeneration | null): string {
   const code = r?.error_code ?? '';
   const raw = `${r?.error ?? ''} ${typeof r?.error_raw === 'string' ? r?.error_raw : JSON.stringify(r?.error_raw ?? '')}`.toLowerCase();
@@ -625,6 +638,8 @@ export function StyleUpExperience({
   const [edit, setEdit] = useState<{ heightLabel: string; weightLabel: string; ageLabel: string; gender: UserGender; style: string } | null>(null);
   const [savingCtx, setSavingCtx] = useState(false);
   const [uploadingSlot, setUploadingSlot] = useState<number | null>(null);
+  const [photoNote, setPhotoNote] = useState<string | null>(null); // selfie upload rejection message
+  const [rejectedSlot, setRejectedSlot] = useState<number | null>(null); // slot flashing a warning triangle
   const photoSlotRef = useRef<number>(0);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
@@ -1406,22 +1421,50 @@ export function StyleUpExperience({
     photoSlotRef.current = slot;
     fileInputRef.current?.click();
   }, []);
+  // Surface a selfie rejection: designed note in the chat + a brief warning
+  // triangle on the slot, and nudge the note into view if the user scrolled.
+  const showPhotoNote = useCallback((slot: number, msg: string) => {
+    setPhotoNote(msg);
+    setRejectedSlot(slot);
+    window.setTimeout(() => setRejectedSlot(s => (s === slot ? null : s)), 2400);
+    // Wait a tick so the note is in the DOM, then scroll it (it's the last
+    // child of the chat scroller) into view.
+    window.setTimeout(() => {
+      const el = scrollerRef.current;
+      if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    }, 60);
+  }, []);
   const onPhotoFile = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file || !userId || !ctx) return;
     const slot = photoSlotRef.current;
+    setPhotoNote(null);
+    setRejectedSlot(null);
     setUploadingSlot(slot);
     const { data, error } = await uploadUserPhoto(file, userId);
-    if (!error && data) {
-      const slots = [...ctx.slots];
-      while (slots.length < MAX_PHOTOS) slots.push(null);
-      slots[slot] = data.id;
-      await saveUserSlots(userId, slots);
-      await loadContext();
+    if (error || !data) {
+      setUploadingSlot(null);
+      showPhotoNote(slot, error ?? 'Couldn’t upload that photo — try again.');
+      return;
     }
+    // Validate against the whole try-on requirement (clear face + one real
+    // person). Hard reject → drop the upload, tell the shopper why, and don't
+    // pin the slot. Soft issues (e.g. not full-body) still accept. Fails open.
+    const check = await validateSelfie(data.public_url);
+    if (!check.ok) {
+      await deleteUserUpload(data);
+      setUploadingSlot(null);
+      showPhotoNote(slot, check.reason ?? 'That photo won’t work for a try-on — use a clear, front-facing photo of just you.');
+      return;
+    }
+    const slots = [...ctx.slots];
+    while (slots.length < MAX_PHOTOS) slots.push(null);
+    slots[slot] = data.id;
+    await saveUserSlots(userId, slots);
+    await loadContext();
     setUploadingSlot(null);
-  }, [userId, ctx, loadContext]);
+  }, [userId, ctx, loadContext, showPhotoNote]);
 
   const filledPhotos = (ctx?.photos ?? []).filter((u): u is string => !!u);
 
@@ -1451,12 +1494,14 @@ export function StyleUpExperience({
         <div className="su-context-editor">
           <div className="su-context-photos su-context-photos--edit">
             {[0, 1, 2].map(i => (
-              <button type="button" key={i} className="su-context-photo su-context-photo--edit" onClick={() => pickPhoto(i)} aria-label={`Photo ${i + 1}`}>
+              <button type="button" key={i} className={`su-context-photo su-context-photo--edit${rejectedSlot === i ? ' is-warn' : ''}`} onClick={() => pickPhoto(i)} aria-label={`Photo ${i + 1}`}>
                 {uploadingSlot === i
                   ? <span className="su-render-spinner" aria-hidden="true" />
-                  : ctx?.photos[i]
-                    ? <img src={ctx.photos[i] as string} alt="" />
-                    : <span className="su-context-photo-add" aria-hidden="true">+</span>}
+                  : rejectedSlot === i
+                    ? <span className="su-slot-warn" aria-hidden="true"><WarnTriangleIcon size={20} /></span>
+                    : ctx?.photos[i]
+                      ? <img src={ctx.photos[i] as string} alt="" />
+                      : <span className="su-context-photo-add" aria-hidden="true">+</span>}
               </button>
             ))}
           </div>
@@ -1915,10 +1960,12 @@ export function StyleUpExperience({
                   point. Shown only until a photo exists; reuses pickPhoto(0). */}
               {filledPhotos.length === 0 && (
                 <button type="button" className="su-chat-selfie-ask" onClick={() => pickPhoto(0)} disabled={uploadingSlot === 0}>
-                  <span className="su-chat-selfie-ask-icon" aria-hidden="true">
+                  <span className={`su-chat-selfie-ask-icon${rejectedSlot === 0 ? ' is-warn' : ''}`} aria-hidden="true">
                     {uploadingSlot === 0
                       ? <span className="su-render-spinner" />
-                      : <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>}
+                      : rejectedSlot === 0
+                        ? <span className="su-slot-warn"><WarnTriangleIcon size={20} /></span>
+                        : <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>}
                   </span>
                   <span className="su-chat-selfie-ask-text">
                     <strong>Add a selfie</strong>
@@ -2289,6 +2336,12 @@ export function StyleUpExperience({
             </div>
           )}
           {renderError && <div className="su-render-err">{renderError}</div>}
+          {photoNote && (
+            <div className="su-photo-note" role="alert">
+              <span className="su-photo-note-icon"><WarnTriangleIcon size={16} /></span>
+              <span>{photoNote}</span>
+            </div>
+          )}
         </div>
 
         {newBelow && (
