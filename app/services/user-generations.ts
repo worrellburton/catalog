@@ -495,6 +495,18 @@ export async function uploadUserPhoto(
 ): Promise<{ data: UserUpload | null; error: string | null }> {
   if (!supabase) return { data: null, error: 'Supabase not configured' };
 
+  // Cheap client-side gate before we burn an upload. Covers every caller.
+  // The semantic face/quality check runs after upload at the accept sites
+  // (validateSelfie). Empty MIME is allowed through — some phones send it.
+  if (file.type && !file.type.startsWith('image/')) {
+    return { data: null, error: 'That doesn’t look like an image — pick a photo.' };
+  }
+  // ponytail: generous ceiling; Supabase storage caps ~50 MB anyway. Mostly
+  // catches a mislabeled video, not real phone photos.
+  if (file.size > 40 * 1024 * 1024) {
+    return { data: null, error: 'That image is too large — try one under 40 MB.' };
+  }
+
   const ext = (file.name.split('.').pop() || 'jpg').toLowerCase();
   const path = `${userId}/${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
   const bucket = 'user-uploads';
@@ -610,6 +622,51 @@ export async function checkFacePhoto(
   } catch (err) {
     console.error('[checkFacePhoto] unexpected error', err);
     return { ok: true, reason: null, detail: null }; // fail open
+  }
+}
+
+export interface SelfieCheck {
+  /** Hard gate: clear face + exactly one person + a real photo. */
+  ok: boolean;
+  /** Soft signal — full body visible. Never blocks acceptance. */
+  fullBody: boolean;
+  /** One friendly sentence for the shopper (present on reject; may be a tip). */
+  reason: string | null;
+}
+
+/**
+ * Validate a just-uploaded selfie against the whole try-on requirement in a
+ * single Claude-vision call (the `validate-selfie` edge function): a clear,
+ * front-facing face, exactly one real person, an actual photograph. Full-body
+ * is judged too but is only a quality signal, never a hard reject.
+ *
+ * Fails OPEN — any error returns ok=true so a network/edge hiccup never blocks
+ * a legit upload (the downstream generation still guards against no face).
+ */
+export async function validateSelfie(imageUrl: string): Promise<SelfieCheck> {
+  const pass: SelfieCheck = { ok: true, fullBody: true, reason: null };
+  if (!supabase || !imageUrl) return pass;
+  try {
+    const { data, error } = await supabase.functions.invoke('validate-selfie', {
+      body: { image_url: imageUrl },
+    });
+    if (error || !data) {
+      console.error('[validateSelfie] invoke error', error?.message);
+      return pass; // fail open
+    }
+    // The client owns the accept policy — hard-reject only on the three
+    // load-bearing checks. Treat a missing key as permissive.
+    const ok = data.face_clear !== false
+      && data.exactly_one_person !== false
+      && data.is_real_photo !== false;
+    return {
+      ok,
+      fullBody: data.full_body !== false,
+      reason: typeof data.reason === 'string' ? data.reason : null,
+    };
+  } catch (err) {
+    console.error('[validateSelfie] unexpected error', err);
+    return pass; // fail open
   }
 }
 
