@@ -14,7 +14,7 @@ import { useAuth } from '~/hooks/useAuth';
 import { useStylistEngineMethod } from '~/hooks/useStylistEngineMethod';
 import { supabase } from '~/utils/supabase';
 import {
-  fetchStylists, getOrCreateThread, deleteThread, getThreadHunting, fetchProductDetail, fetchSimilarProducts, getLatestThread, fetchMyThreads, fetchMessages, sendShopperMessage,
+  fetchStylists, getOrCreateThread, deleteThread, getThreadHunting, fetchProductDetail, fetchProductVideos, fetchSimilarProducts, getLatestThread, fetchMyThreads, fetchMessages, sendShopperMessage,
   sendStylistText, startFullLookRender, fetchSwapOptions, sendSwapOptions,
   sendChooser, recommendForSlot, sendProductPick,
   webFetchSwapOptions, webRecommendForSlot,
@@ -621,6 +621,9 @@ export function StyleUpExperience({
   const [published, setPublished] = useState<Set<string>>(new Set()); // gen ids added to looks
   const [followedUp, setFollowedUp] = useState<Set<string>>(new Set()); // renders the stylist has reacted to
   const [chosenBySlot, setChosenBySlot] = useState<Record<string, string>>({}); // role → chosen product id
+  // Look-card media: product id → its hero clip (or null once fetched w/ none),
+  // so a piece with a primary video plays it in the card instead of the image.
+  const [pieceVideos, setPieceVideos] = useState<Record<string, { video: string; poster: string | null } | null>>({});
   const [rejected, setRejected] = useState<Set<string>>(new Set());   // product ids the shopper passed on
   const [chosenScene, setChosenScene] = useState<string | null>(null); // the look's setting
   const [endConfirm, setEndConfirm] = useState(false); // in-app "end this conversation?" glass modal
@@ -892,6 +895,30 @@ export function StyleUpExperience({
       setPrefs(p); prefsRef.current = p;
     } catch { setPrefs(EMPTY_PREFS); prefsRef.current = EMPTY_PREFS; }
   }, [threadId]);
+
+  // Load hero clips for the pieces shown in look cards — a product with a
+  // primary video plays it in the card (else its primary image). Batched,
+  // id-keyed, and every requested id is marked (video or null) so no id is
+  // ever re-fetched.
+  useEffect(() => {
+    const ids = [...new Set(
+      messages
+        .filter(m => m.kind === 'product' && m.productRef?.id && !m.productRef?.swap && !m.productRef?.choose)
+        .map(m => m.productRef!.id as string)
+        .filter(id => !(id in pieceVideos)),
+    )];
+    if (ids.length === 0) return;
+    let cancelled = false;
+    void fetchProductVideos(ids).then(vids => {
+      if (cancelled) return;
+      setPieceVideos(prev => {
+        const next = { ...prev };
+        for (const id of ids) if (!(id in next)) next[id] = vids[id] ?? null;
+        return next;
+      });
+    });
+    return () => { cancelled = true; };
+  }, [messages, pieceVideos]);
 
   // Persist + keep the ref current so callbacks always read fresh prefs.
   const updatePrefs = useCallback((next: StylePrefs) => {
@@ -2071,12 +2098,6 @@ export function StyleUpExperience({
               // laid out like an editorial plate: numbered rows head-to-toe + a
               // total line.
               const pieces = sortHeadToToe(lookRunPieces.get(m.id) ?? [m.productRef]);
-              let cartTotal = 0;
-              let cartPriced = 0;
-              for (const pc of pieces) {
-                const pm = (pc.price ?? '').replace(/[, ]/g, '').match(/(\d+(?:\.\d+)?)/);
-                if (pm) { cartTotal += parseFloat(pm[1]); cartPriced++; }
-              }
               return (
                 <div key={m.id} className="su-msg su-msg--stylist">
                   <div className="su-lookcard">
@@ -2088,7 +2109,9 @@ export function StyleUpExperience({
                           <div className="su-lookcard-row" key={pc.id || i}>
                             <span className="su-lookcard-num" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span>
                             <button type="button" className="su-lookcard-media" onClick={() => openProduct(pc)} aria-label={`Open ${pc.name || 'product'}`}>
-                              {pc.image ? <img src={pc.image} alt={pc.name || 'Product'} loading="lazy" /> : <span className="su-product-media--empty" />}
+                              {pc.id && pieceVideos[pc.id]
+                                ? <video src={pieceVideos[pc.id]!.video} poster={pieceVideos[pc.id]!.poster ?? pc.image ?? undefined} autoPlay loop muted playsInline />
+                                : pc.image ? <img src={pc.image} alt={pc.name || 'Product'} loading="lazy" /> : <span className="su-product-media--empty" />}
                             </button>
                             <button type="button" className="su-lookcard-info" onClick={() => openProduct(pc)}>
                               {pc.brand && <span className="su-lookcard-brand">{pc.brand}</span>}
@@ -2109,12 +2132,6 @@ export function StyleUpExperience({
                         );
                       })}
                     </div>
-                    {cartPriced > 0 && (
-                      <div className="su-lookcard-total">
-                        <span>{pieces.length} piece{pieces.length === 1 ? '' : 's'}</span>
-                        <b>${cartTotal.toFixed(2)}{cartPriced < pieces.length ? '+' : ''}</b>
-                      </div>
-                    )}
                     <button
                       type="button"
                       className="su-lookcard-generate"

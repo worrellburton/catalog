@@ -1108,7 +1108,8 @@ html[data-shell="catalog-app"] .su-shell {
   background: #26282d;
   cursor: pointer;
 }
-.su-lookcard-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.su-lookcard-media img,
+.su-lookcard-media video { width: 100%; height: 100%; object-fit: cover; display: block; }
 .su-lookcard-info {
   flex: 1 1 auto; min-width: 0;
   display: flex; flex-direction: column; gap: 1px;
@@ -1354,6 +1355,7 @@ html[data-shell="catalog-app"] .su-shell {
   to { opacity: 1; filter: none; }
 }
 .su-lookcard-media img,
+.su-lookcard-media video,
 .su-swap-opt-media img,
 .su-choose-opt-media img,
 .su-render-piece img { animation: su-develop 0.85s ease both; }
@@ -1380,17 +1382,6 @@ html[data-shell="catalog-app"] .su-shell {
   color: #63666e;
   font-variant-numeric: tabular-nums;
 }
-.su-lookcard-total {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  padding-top: 9px;
-  border-top: 1px solid #26282d;
-  font-size: 12.5px;
-  color: #8b8e96;
-}
-.su-lookcard-total b { font-weight: 700; color: #e7e7ea; font-variant-numeric: tabular-nums; }
-
 /* ── Measuring-tape progress — a real fill with tailor's tick marks. ───── */
 .su-tape {
   position: relative;
@@ -1463,6 +1454,7 @@ html[data-shell="catalog-app"] .su-shell {
   .su-aurora,
   .su-chat .su-msg,
   .su-lookcard-media img,
+  .su-lookcard-media video,
   .su-swap-opt-media img,
   .su-choose-opt-media img,
   .su-render-piece img,
