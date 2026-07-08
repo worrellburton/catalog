@@ -272,6 +272,25 @@ export async function fetchSimilarProducts(seedId: string, k = 8): Promise<Style
     }));
 }
 
+/** Batch-fetch the primary video (+poster) for products that have one, keyed
+ *  by id. The "Your look" card plays a piece's hero clip when available and
+ *  falls back to its primary image. Only rows WITH a video come back. */
+export async function fetchProductVideos(
+  ids: string[],
+): Promise<Record<string, { video: string; poster: string | null }>> {
+  const out: Record<string, { video: string; poster: string | null }> = {};
+  if (!supabase || ids.length === 0) return out;
+  const { data } = await supabase
+    .from('products')
+    .select('id, primary_video_url, primary_video_poster_url')
+    .in('id', ids)
+    .not('primary_video_url', 'is', null);
+  for (const r of (data ?? []) as Array<{ id: string; primary_video_url: string | null; primary_video_poster_url: string | null }>) {
+    if (r.primary_video_url) out[String(r.id)] = { video: r.primary_video_url, poster: r.primary_video_poster_url ?? null };
+  }
+  return out;
+}
+
 /** The thread's server-side "web hunt in progress" marker (a future timestamp
  *  while the edge function is still pulling pieces, else null/past). Drives the
  *  working indicator so it survives refresh/navigation. */

@@ -1034,6 +1034,29 @@ html[data-shell="catalog-app"] .su-shell {
   font-size: 12.5px; color: #c7c9cf;
 }
 .su-render-err { align-self: center; font-size: 12.5px; color: #e9a59c; padding: 4px 8px; text-align: center; }
+
+/* Selfie rejection — warning triangle briefly flashed inside the photo slot. */
+.su-slot-warn { display: inline-flex; align-items: center; justify-content: center; color: #f0b24a; animation: su-slot-warn-pop 0.9s ease both; }
+@keyframes su-slot-warn-pop { 0% { transform: scale(0.4); opacity: 0; } 45% { transform: scale(1.14); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+.su-context-photo--edit.is-warn { border-style: solid; border-color: #e0a24a; }
+.su-chat-selfie-ask-icon.is-warn { color: #f0b24a; }
+
+/* Selfie rejection message — amber "try again" pill with a warning icon. */
+.su-photo-note {
+  align-self: center;
+  display: flex; align-items: flex-start; gap: 8px;
+  max-width: min(420px, 88%);
+  margin: 2px auto;
+  padding: 9px 12px;
+  border-radius: 12px;
+  background: rgba(224, 162, 74, 0.10);
+  border: 1px solid rgba(224, 162, 74, 0.32);
+  color: #f0c48a;
+  font-size: 12.5px; line-height: 1.45;
+  animation: su-photo-note-in 0.28s ease both;
+}
+.su-photo-note-icon { flex: 0 0 auto; color: #f0b24a; margin-top: 1px; line-height: 0; }
+@keyframes su-photo-note-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 .su-chat-retry {
   align-self: center;
   display: inline-flex;
@@ -1085,7 +1108,8 @@ html[data-shell="catalog-app"] .su-shell {
   background: #26282d;
   cursor: pointer;
 }
-.su-lookcard-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.su-lookcard-media img,
+.su-lookcard-media video { width: 100%; height: 100%; object-fit: cover; display: block; }
 .su-lookcard-info {
   flex: 1 1 auto; min-width: 0;
   display: flex; flex-direction: column; gap: 1px;
@@ -1331,6 +1355,7 @@ html[data-shell="catalog-app"] .su-shell {
   to { opacity: 1; filter: none; }
 }
 .su-lookcard-media img,
+.su-lookcard-media video,
 .su-swap-opt-media img,
 .su-choose-opt-media img,
 .su-render-piece img { animation: su-develop 0.85s ease both; }
@@ -1357,17 +1382,6 @@ html[data-shell="catalog-app"] .su-shell {
   color: #63666e;
   font-variant-numeric: tabular-nums;
 }
-.su-lookcard-total {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  padding-top: 9px;
-  border-top: 1px solid #26282d;
-  font-size: 12.5px;
-  color: #8b8e96;
-}
-.su-lookcard-total b { font-weight: 700; color: #e7e7ea; font-variant-numeric: tabular-nums; }
-
 /* ── Measuring-tape progress — a real fill with tailor's tick marks. ───── */
 .su-tape {
   position: relative;
@@ -1440,6 +1454,7 @@ html[data-shell="catalog-app"] .su-shell {
   .su-aurora,
   .su-chat .su-msg,
   .su-lookcard-media img,
+  .su-lookcard-media video,
   .su-swap-opt-media img,
   .su-choose-opt-media img,
   .su-render-piece img,
