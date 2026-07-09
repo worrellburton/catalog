@@ -1565,7 +1565,7 @@ export function StyleUpExperience({
         }}
       >
         <button type="button" className="su-viewer-close" onClick={closeLookViewer} aria-label="Close">✕</button>
-        <video className="su-viewer-video" src={viewer.videoUrl} autoPlay loop controls playsInline />
+        <video className="su-viewer-video" src={viewer.videoUrl} autoPlay loop muted controls playsInline />
         {viewer.pieces.length > 0 && (
           <div className="su-viewer-pieces">
             {viewer.pieces.map((pc, i) => (

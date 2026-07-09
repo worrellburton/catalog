@@ -805,8 +805,11 @@ async function handleRequest(req: Request): Promise<Response> {
     submitResult = await submitToVidu(modelSlug, taggedPrompt, referenceUrls, falKey, webhookUrl);
   } else if (isGeminiOmni) {
     // Gemini Omni binds references inline via 0-indexed <IMAGE_REF_N> tags; reuse
-    // the same prompt by remapping the @Image{k} tags → <IMAGE_REF_{k-1}>.
-    const geminiPrompt = taggedPrompt.replace(/@Image(\d+)/g, (_m, n) => `<IMAGE_REF_${Number(n) - 1}>`);
+    // the same prompt by remapping the @Image{k} tags → <IMAGE_REF_{k-1}>. Gemini
+    // Omni renders WITH audio and will lip-sync/talk by default (there's no API
+    // flag to disable audio) — force a silent, non-speaking subject via the prompt.
+    const geminiPrompt = taggedPrompt.replace(/@Image(\d+)/g, (_m, n) => `<IMAGE_REF_${Number(n) - 1}>`)
+      + ' The subject does NOT speak, talk, or move their lips — keep the mouth closed with a calm neutral expression, no dialogue and no lip-sync. A silent fashion clip: no voiceover, no talking, ambient only.';
     submitResult = await submitToGeminiOmni(modelSlug, geminiPrompt, referenceUrls, durationSeconds, falKey, webhookUrl);
   } else if (SEEDANCE_SLUGS.has(modelSlug) || modelSlug.startsWith('bytedance/')) {
     submitResult = await submitToSeedance(modelSlug, taggedPrompt, referenceUrls, durationSeconds, falKey, webhookUrl, gen.user_id);
