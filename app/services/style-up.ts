@@ -827,6 +827,25 @@ async function renderLook(
       - (ORDER[b.roleTag ?? roleTagFromName(b.name) ?? ''] ?? 9));
   }
 
+  // GUARD: user_generation_products.product_id has a hard FK to `products`.
+  // Web-sourced swap options (webFetchSwapOptions) carry synthetic IDs that are
+  // NOT in `products`, so inserting one violates the FK and crashes the render
+  // ("...user_generation_products_product_id_fkey"). `byId` only holds catalog
+  // rows, so anything missing from it is a non-catalog (web) pick. Rather than
+  // silently drop it and render an incomplete look, tell the shopper plainly.
+  const nonCatalog = lines.filter(l => !byId.has(l.product_id));
+  if (nonCatalog.length > 0) {
+    const names = nonCatalog
+      .map(l => [l.brand, l.name].filter(Boolean).join(' ').trim())
+      .filter(Boolean);
+    return {
+      generationId: null,
+      error: names.length
+        ? `I can't try ${names.join(' and ')} on you yet — ${names.length > 1 ? 'those are' : "that's"} from outside our catalog. Swap in catalog pieces and I'll render the full look.`
+        : "One of those picks is from outside our catalog, so I can't put it on you yet. Choose catalog pieces and I'll render the full look.",
+    };
+  }
+
   let prompt = buildGenerationPrompt({
     heightLabel: ha.heightLabel ?? '',
     weightLabel: ha.weightLabel,
