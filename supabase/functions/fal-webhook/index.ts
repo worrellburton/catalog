@@ -109,7 +109,7 @@ Deno.serve(async (req: Request) => {
 
   const { data: gen, error: lookupErr } = await admin
     .from('user_generations')
-    .select('id, status')
+    .select('id, status, veo_model')
     .eq('fal_request_id', requestId)
     .maybeSingle();
 
@@ -175,6 +175,41 @@ Deno.serve(async (req: Request) => {
   } else {
     const rawError = extractError(body);
     const { code, message } = classifyError(rawError);
+
+    // ── Content-policy fallback: Seedance → Gemini Omni ──────────────────────
+    // Seedance's partner_validation filter blocks SOME real shopper faces (even
+    // the shopper's own, consented via end_user_id) while accepting others —
+    // it's selective, not all-or-nothing. Gemini Omni accepts every face. So on
+    // a content_policy block of a SEEDANCE render, retry the SAME look on Gemini
+    // instead of failing. Loop guard: only fall back FROM a Seedance render
+    // (veo_model starts with 'bytedance/'); a Gemini render that still blocks
+    // (rare) falls through to the normal 'failed' path below.
+    const wasSeedance = typeof gen.veo_model === 'string' && gen.veo_model.startsWith('bytedance/');
+    if (code === 'content_policy' && wasSeedance) {
+      // Reset to 'pending' and drop the Seedance request_id so a Fal retry of
+      // THIS callback can no longer match the row (prevents a double fallback).
+      await admin.from('user_generations').update({
+        status: 'pending', fal_request_id: null, error: null, error_code: null, error_raw: null,
+      }).eq('id', gen.id);
+      try {
+        await admin.from('generation_events').insert({
+          generation_id: gen.id, event: 'content_policy_fallback',
+          payload: { from: gen.veo_model, to: 'google/gemini-omni-flash/reference-to-video', raw: rawError.slice(0, 300) },
+        });
+      } catch { /* noop */ }
+      // Re-run generate-look for this gen, forcing the Gemini Omni model.
+      try {
+        await fetch(`${supabaseUrl}/functions/v1/generate-look`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${serviceKey}`, apikey: serviceKey, 'Content-Type': 'application/json' },
+          body: JSON.stringify({ generation_id: gen.id, force_model: 'google/gemini-omni-flash/reference-to-video' }),
+        });
+      } catch (e) {
+        console.error('[fal-webhook] gemini fallback invoke failed', e);
+      }
+      return jsonRes({ acknowledged: true, generation_id: gen.id, status: 'retrying_gemini' });
+    }
+
     update = {
       status: 'failed',
       error: message,           // user-facing, friendly

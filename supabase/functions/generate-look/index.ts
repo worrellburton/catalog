@@ -433,10 +433,14 @@ async function handleRequest(req: Request): Promise<Response> {
   const falKey = Deno.env.get('FAL_KEY') ?? '';
   if (!supabaseUrl || !serviceKey) return jsonRes({ error: 'Supabase env missing' }, 500);
 
-  let body: { generation_id?: string };
+  let body: { generation_id?: string; force_model?: string };
   try { body = await req.json(); } catch { return jsonRes({ error: 'Invalid JSON' }, 400); }
   const generationId = body.generation_id;
   if (!generationId) return jsonRes({ error: 'generation_id required' }, 400);
+  // Model override for the content-policy fallback: fal-webhook re-invokes this
+  // function with force_model set to Gemini Omni when Seedance blocks a real
+  // face (partner_validation). When present it wins over the platform dial.
+  const forceModel = typeof body.force_model === 'string' && body.force_model ? body.force_model : null;
 
   const admin = createClient(supabaseUrl, serviceKey);
 
@@ -547,7 +551,8 @@ async function handleRequest(req: Request): Promise<Response> {
     .from('app_settings').select('value').eq('key', 'look_video_model').maybeSingle();
   // Default to Seedance reference-to-video (sees the product packshots), NOT
   // Veo image-to-video (which only sees the selfie and would drop the products).
-  const platformSlug = modelSetting?.value || 'bytedance/seedance-2.0/fast/reference-to-video';
+  // force_model (content-policy fallback retry) overrides the dial.
+  const platformSlug = forceModel || modelSetting?.value || 'bytedance/seedance-2.0/fast/reference-to-video';
   // Fallback policy: allow the product-blind Veo face-only fallback for a
   // product look only when an operator opts in. Default false = fail loudly.
   const { data: fallbackSetting } = await admin
