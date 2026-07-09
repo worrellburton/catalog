@@ -89,9 +89,18 @@ const REF_BUCKET = 'generation-refs';
 async function gridFaceBytes(bytes: Uint8Array): Promise<Uint8Array | null> {
   try {
     const img = await Image.decode(bytes);
+    // Downsize FIRST. The detector normalizes image size, so what matters is the
+    // grid-line density on the ACTUAL uploaded pixels — a full-res grid has
+    // proportionally-thin lines and still gets detected (verified on-Fal: a
+    // 2624px grid BLOCKS on both tiers; the same face gridded at 1152px PASSES).
+    const TARGET = 1152;
+    if (Math.max(img.width, img.height) > TARGET) {
+      if (img.height >= img.width) img.resize(Image.RESIZE_AUTO, TARGET);
+      else img.resize(TARGET, Image.RESIZE_AUTO);
+    }
     const W = img.width, H = img.height;
     const n = 6;                                             // 6×6 grid (blog default)
-    const lw = Math.max(8, Math.round((Math.min(W, H) * 12) / 1152)); // 12px @1152, scaled
+    const lw = 12;                                           // 12px lines at ~1152px (verified-passing recipe)
     const white = Image.rgbaToColor(255, 255, 255, 255);
     for (let i = 1; i < n; i++) {
       const vLine = new Image(lw, H); vLine.fill(white);
