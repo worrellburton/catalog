@@ -90,27 +90,6 @@ function classifyError(raw: string): { code: string; message: string } {
   return { code: 'fal_error', message: 'Generation failed. Please try again or pick different photos / products.' };
 }
 
-// Gemini Omni renders WITH an audio track and has no API flag to disable it, so
-// strip it to a SILENT clip via Fal's ffmpeg compose (a single video-only track
-// → no audio). Best-effort: returns the original URL on any failure so a render
-// is never lost to a strip error.
-async function stripAudioToSilent(videoUrl: string, durationMs: number, falKey: string): Promise<string> {
-  try {
-    const res = await fetch('https://fal.run/fal-ai/ffmpeg-api/compose', {
-      method: 'POST',
-      headers: { Authorization: `Key ${falKey}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        tracks: [{ id: 'v', type: 'video', keyframes: [{ url: videoUrl, timestamp: 0, duration: durationMs }] }],
-      }),
-    });
-    if (!res.ok) return videoUrl;
-    const j = await res.json().catch(() => null) as { video_url?: string } | null;
-    return j?.video_url || videoUrl;
-  } catch {
-    return videoUrl;
-  }
-}
-
 Deno.serve(async (req: Request) => {
   if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS_HEADERS });
   if (req.method !== 'POST') return jsonRes({ error: 'Use POST' }, 405);
@@ -126,12 +105,11 @@ Deno.serve(async (req: Request) => {
   const requestId = body.request_id || body.gateway_request_id;
   if (!requestId) return jsonRes({ error: 'request_id missing' }, 400);
 
-  const falKey = Deno.env.get('FAL_KEY') ?? '';
   const admin = createClient(supabaseUrl, serviceKey);
 
   const { data: gen, error: lookupErr } = await admin
     .from('user_generations')
-    .select('id, status, duration_seconds, veo_model')
+    .select('id, status')
     .eq('fal_request_id', requestId)
     .maybeSingle();
 
@@ -188,13 +166,12 @@ Deno.serve(async (req: Request) => {
 
   let update: Record<string, unknown>;
   if (ok && videoUrl) {
-    // Gemini Omni look renders come with an always-on audio track — strip it to
-    // a silent clip (Seedance produced none). Only for Gemini renders; falls
-    // back to the original URL on any failure.
-    const isGemini = typeof gen.veo_model === 'string' && gen.veo_model.startsWith('google/gemini-omni');
-    const durationMs = Math.round((Number(gen.duration_seconds) || 10) * 1000);
-    const finalUrl = (isGemini && falKey) ? await stripAudioToSilent(videoUrl, durationMs, falKey) : videoUrl;
-    update = { status: 'done', video_url: finalUrl, error: null, error_code: null, completed_at: new Date().toISOString() };
+    // Store the model's clip URL as-is. (Gemini Omni renders carry a talking
+    // audio track, but that's silenced at every player via the muted PROPERTY
+    // and stripped from downloads — a server-side re-encode strip was removed:
+    // Fal's ffmpeg-compose passed the audio through unchanged while degrading
+    // the video, so it only cost latency + money.)
+    update = { status: 'done', video_url: videoUrl, error: null, error_code: null, completed_at: new Date().toISOString() };
   } else {
     const rawError = extractError(body);
     const { code, message } = classifyError(rawError);

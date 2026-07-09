@@ -72,6 +72,14 @@ import { generationProgress } from '~/services/generation-progress';
 import '~/styles/style-up.css';
 import '~/styles/style-up-lookbar.css';
 
+/** Force a look/piece <video> silent. React's `muted` JSX attribute is
+ *  unreliable with autoPlay (it sets the attribute, not the .muted PROPERTY the
+ *  browser checks), so a tap-opened viewer can end up playing the render's audio
+ *  out loud. Set the property directly, exactly like the feed video director. */
+const forceMuteVideo = (el: HTMLVideoElement | null) => {
+  if (el) { el.muted = true; el.defaultMuted = true; }
+};
+
 /** "~2 min left" / "~40s left", estimated wait from the shared generation
  *  timing model (based on typical generation durations). */
 function fmtRemaining(sec: number): string {
@@ -1565,7 +1573,7 @@ export function StyleUpExperience({
         }}
       >
         <button type="button" className="su-viewer-close" onClick={closeLookViewer} aria-label="Close">✕</button>
-        <video className="su-viewer-video" src={viewer.videoUrl} autoPlay loop muted controls playsInline />
+        <video ref={forceMuteVideo} className="su-viewer-video" src={viewer.videoUrl} autoPlay loop muted controls playsInline />
         {viewer.pieces.length > 0 && (
           <div className="su-viewer-pieces">
             {viewer.pieces.map((pc, i) => (
@@ -1644,7 +1652,7 @@ export function StyleUpExperience({
           <button type="button" className="su-viewer-close" onClick={closeProductViewer} aria-label="Close">✕</button>
           <div className="su-pviewer-gallery">
             {d?.video
-              ? <video src={d.video} poster={d.poster ?? undefined} autoPlay loop muted playsInline />
+              ? <video ref={forceMuteVideo} src={d.video} poster={d.poster ?? undefined} autoPlay loop muted playsInline />
               : gallery[0]
                 ? <img src={gallery[0]} alt={d?.name ?? ref.name ?? 'Product'} />
                 : <span className="su-pviewer-empty" aria-hidden="true" />}
@@ -2059,7 +2067,7 @@ export function StyleUpExperience({
                             <span className="su-lookcard-num" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span>
                             <button type="button" className="su-lookcard-media" onClick={() => openProduct(pc)} aria-label={`Open ${pc.name || 'product'}`}>
                               {pc.id && pieceVideos[pc.id]
-                                ? <video src={pieceVideos[pc.id]!.video} poster={pieceVideos[pc.id]!.poster ?? pc.image ?? undefined} autoPlay loop muted playsInline />
+                                ? <video ref={forceMuteVideo} src={pieceVideos[pc.id]!.video} poster={pieceVideos[pc.id]!.poster ?? pc.image ?? undefined} autoPlay loop muted playsInline />
                                 : pc.image ? <img src={pc.image} alt={pc.name || 'Product'} loading="lazy" /> : <span className="su-product-media--empty" />}
                             </button>
                             <button type="button" className="su-lookcard-info" onClick={() => openProduct(pc)}>
@@ -2117,7 +2125,7 @@ export function StyleUpExperience({
                         onClick={() => setViewer({ videoUrl: r!.video_url!, pieces, genId: m.renderGenerationId as string })}
                         aria-label="Open look"
                       >
-                        <video className="su-render-video" src={r!.video_url!} autoPlay loop muted playsInline />
+                        <video ref={forceMuteVideo} className="su-render-video" src={r!.video_url!} autoPlay loop muted playsInline />
                         <span className="su-render-expand" aria-hidden="true">
                           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
                         </span>
