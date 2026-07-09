@@ -190,5 +190,20 @@ Deno.serve(async (req: Request) => {
     .update({ images_raw: nextRaw }).eq('id', productId);
   if (updErr) return json({ success: false, error: `update: ${updErr.message}` });
 
-  return json({ success: true, depersonified_url: newUrl, images_raw_len: nextRaw.length, duration_ms: Date.now() - t0 });
+  // Chain the person-aware verify pass so it PROMOTES the new packshot to
+  // primary + sets primary_image_person_free. verify won't auto-fire on the
+  // update above (primary_image_picked_at is already set), so call it directly
+  // with our own service-role token. Best-effort — a later verify would also
+  // pick the staged candidate up.
+  let verified = false;
+  try {
+    const vr = await fetch(`${supabaseUrl}/functions/v1/verify-product-image`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${serviceRoleKey}` },
+      body: JSON.stringify({ product_id: productId }),
+    });
+    verified = vr.ok;
+  } catch { /* leave for a later verify run */ }
+
+  return json({ success: true, depersonified_url: newUrl, images_raw_len: nextRaw.length, verified, duration_ms: Date.now() - t0 });
 });
