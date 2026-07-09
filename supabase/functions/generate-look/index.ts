@@ -808,8 +808,9 @@ async function handleRequest(req: Request): Promise<Response> {
     // the same prompt by remapping the @Image{k} tags → <IMAGE_REF_{k-1}>. Gemini
     // Omni renders WITH audio and will lip-sync/talk by default (there's no API
     // flag to disable audio) — force a silent, non-speaking subject via the prompt.
-    const geminiPrompt = taggedPrompt.replace(/@Image(\d+)/g, (_m, n) => `<IMAGE_REF_${Number(n) - 1}>`)
-      + ' The subject does NOT speak, talk, or move their lips — keep the mouth closed with a calm neutral expression, no dialogue and no lip-sync. A silent fashion clip: no voiceover, no talking, ambient only.';
+    const geminiPrompt = `CRITICAL IDENTITY: <IMAGE_REF_0> is a real photograph of the EXACT person who must appear in the video. Reproduce their face identically — same facial features, face shape, eyes, nose, skin tone, hair, beard, and glasses. Do NOT beautify, restyle, age, slim, or alter their face in any way; it must clearly be the same person. `
+      + taggedPrompt.replace(/@Image(\d+)/g, (_m, n) => `<IMAGE_REF_${Number(n) - 1}>`)
+      + ' The person simply keeps their mouth closed and does NOT speak, talk, or move their lips (no dialogue, no lip-sync) — but their face and features stay exactly as in the reference. Silent clip: no voiceover, no talking, no music.';
     submitResult = await submitToGeminiOmni(modelSlug, geminiPrompt, referenceUrls, durationSeconds, falKey, webhookUrl);
   } else if (SEEDANCE_SLUGS.has(modelSlug) || modelSlug.startsWith('bytedance/')) {
     submitResult = await submitToSeedance(modelSlug, taggedPrompt, referenceUrls, durationSeconds, falKey, webhookUrl, gen.user_id);
