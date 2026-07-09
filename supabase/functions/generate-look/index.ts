@@ -468,11 +468,10 @@ async function handleRequest(req: Request): Promise<Response> {
   }
 
   // ── Gather product image URLs ──────────────────────────────────────────────
-  // Send the GALLERY (every catalog angle) to the video model, not just the
-  // single display packshot — more angles = a truer garment reconstruction on
-  // the person. The shopper-facing UI shows only the curated primary image;
-  // the model gets the whole gallery. Falls back to the primary / legacy image
-  // when a product has no gallery.
+  // Send ONLY the curated primary packshot per product (one image each). The
+  // on-model gallery angles trip ByteDance's partner_validation content policy
+  // ("likenesses of real people" — the models wearing the clothes), and one
+  // clean packshot is enough to reconstruct the garment on the shopper.
   const { data: productLinks } = await admin
     .from('user_generation_products')
     .select('role_tag, sort_order, products(name, brand, image_url, primary_image_url, images)')
@@ -496,16 +495,16 @@ async function handleRequest(req: Request): Promise<Response> {
   const productEntries = (productLinks || [])
     .map(r => {
       const p = r.products as unknown as { name: string | null; brand: string | null; image_url: string | null; primary_image_url: string | null; images: unknown } | null;
-      // Gallery first (all angles), de-duped and thumbnail-free. Fall back to
-      // the curated packshot / legacy image when no gallery exists.
-      const gallery = (Array.isArray(p?.images) ? p!.images : [])
-        .map(galleryUrl)
-        .filter((u): u is string => typeof u === 'string' && !!u && !isThumb(u));
-      const fallback = [p?.primary_image_url, p?.image_url].filter((u): u is string => typeof u === 'string' && !!u && !isThumb(u));
-      const imageUrls = [...new Set(gallery.length > 0 ? gallery : fallback)];
-      if (imageUrls.length === 0) return null;
+      // Primary packshot only. Prefer the curated primary_image_url / legacy
+      // image_url; fall back to the first non-thumbnail gallery angle if a
+      // product has neither. Exactly one image goes to the model per product.
+      const primary =
+        [p?.primary_image_url, p?.image_url].find((u): u is string => typeof u === 'string' && !!u && !isThumb(u))
+        ?? (Array.isArray(p?.images) ? p!.images.map(galleryUrl).find((u): u is string => typeof u === 'string' && !!u && !isThumb(u)) : undefined)
+        ?? null;
+      if (!primary) return null;
       const label = [p?.brand, p?.name].filter(Boolean).join(' ').trim() || 'product';
-      return { role: r.role_tag || 'item', label, imageUrls, brand: p?.brand ?? null };
+      return { role: r.role_tag || 'item', label, imageUrls: [primary], brand: p?.brand ?? null };
     })
     .filter((x): x is { role: string; label: string; imageUrls: string[]; brand: string | null } => !!x);
 
