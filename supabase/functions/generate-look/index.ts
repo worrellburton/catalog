@@ -60,6 +60,15 @@ function isVeoFalModel(slug: string): boolean {
   return slug.startsWith('fal-ai/veo');
 }
 
+// Whether the slug is Google's Gemini Omni (reference-to-video). Unlike Seedance,
+// whose ByteDance filter now blocks ALL real human faces, Gemini Omni accepts the
+// shopper's selfie — so it's the default look model. Its request body differs:
+// references bind inline in the prompt via <IMAGE_REF_0>, <IMAGE_REF_1>, …
+// (0-indexed), and duration is an INTEGER 3–10s.
+function isGeminiOmniModel(slug: string): boolean {
+  return slug.startsWith('google/gemini-omni');
+}
+
 // ── Image re-hosting helpers ──────────────────────────────────────────────────
 
 // Max bytes we'll buffer for a single reference image (15 MB — well under
@@ -269,6 +278,27 @@ async function submitToGenericFal(
     duration: durationSeconds,
     aspect_ratio: '9:16',
     resolution: '720p',
+  };
+  return falPost(`${FAL_BASE}/${modelSlug}?fal_webhook=${encodeURIComponent(webhookUrl)}`, requestBody, falKey);
+}
+
+// Gemini Omni Flash reference-to-video (Google). Sends the real face + product
+// packshots as image_urls; the prompt binds them by 0-indexed <IMAGE_REF_N> tags.
+// duration is an integer 3–10s. Returns { video: { url } } (same shape the
+// fal-webhook already reads).
+async function submitToGeminiOmni(
+  modelSlug: string,
+  prompt: string,
+  referenceImageUrls: string[],
+  durationSeconds: number,
+  falKey: string,
+  webhookUrl: string,
+): Promise<FalSubmitResult> {
+  const requestBody: Record<string, unknown> = {
+    prompt,
+    image_urls: referenceImageUrls.slice(0, 9),
+    aspect_ratio: '9:16',
+    duration: Math.round(Math.min(Math.max(durationSeconds, 3), 10)),
   };
   return falPost(`${FAL_BASE}/${modelSlug}?fal_webhook=${encodeURIComponent(webhookUrl)}`, requestBody, falKey);
 }
@@ -531,17 +561,21 @@ async function handleRequest(req: Request): Promise<Response> {
 
   const isVeo = isVeoFalModel(modelSlug);
   const isSeedance = SEEDANCE_SLUGS.has(modelSlug);
-  // Vidu: up to 3 ref slots. Veo/Seedance: 1 face image only. Others: 9.
+  const isGeminiOmni = isGeminiOmniModel(modelSlug);
+  // Models that take exactly ONE face image (products fill the remaining slots):
+  // Veo (face only, no products), Seedance, and Gemini Omni.
+  const oneFaceModel = isVeo || isSeedance || isGeminiOmni;
+  // Vidu: up to 3 ref slots. Veo: 1 (face only). Others (Seedance/Gemini Omni/generic): 9.
   const maxSlots = isViduModel(modelSlug) ? 3 : (isVeo ? 1 : 9);
-  // Veo and Seedance/ByteDance: always send exactly 1 face photo (randomly chosen from up to 3 available).
-  const faceSlots = (isVeo || isSeedance) ? 1 : Math.min(faceSourceUrls.length, maxSlots);
+  // One-face models: always send exactly 1 face photo (randomly chosen from up to 3 available).
+  const faceSlots = oneFaceModel ? 1 : Math.min(faceSourceUrls.length, maxSlots);
   // For Veo, no product images are sent — products are described in the prompt instead.
   const productImageBudget = isVeo ? 0 : Math.max(0, maxSlots - faceSlots);
-  // For Veo/Seedance: pick a random face from the first 3 available; otherwise use ordered list.
-  const randomFaceIdx = (isVeo || isSeedance) && faceSourceUrls.length > 1
+  // One-face models: pick a random face from the first 3 available; otherwise use ordered list.
+  const randomFaceIdx = oneFaceModel && faceSourceUrls.length > 1
     ? Math.floor(Math.random() * Math.min(faceSourceUrls.length, 3))
     : 0;
-  const faceSourcesToUse = (isVeo || isSeedance)
+  const faceSourcesToUse = oneFaceModel
     ? [faceSourceUrls[randomFaceIdx]]
     : faceSourceUrls.slice(0, faceSlots);
   // Only person-free packshots go to the model as images (on-model shots trip
@@ -769,6 +803,11 @@ async function handleRequest(req: Request): Promise<Response> {
     submitResult = await submitToVeoFal(modelSlug, taggedPrompt, goodFaceUrls[0], durationSeconds, falKey, webhookUrl);
   } else if (isViduModel(modelSlug)) {
     submitResult = await submitToVidu(modelSlug, taggedPrompt, referenceUrls, falKey, webhookUrl);
+  } else if (isGeminiOmni) {
+    // Gemini Omni binds references inline via 0-indexed <IMAGE_REF_N> tags; reuse
+    // the same prompt by remapping the @Image{k} tags → <IMAGE_REF_{k-1}>.
+    const geminiPrompt = taggedPrompt.replace(/@Image(\d+)/g, (_m, n) => `<IMAGE_REF_${Number(n) - 1}>`);
+    submitResult = await submitToGeminiOmni(modelSlug, geminiPrompt, referenceUrls, durationSeconds, falKey, webhookUrl);
   } else if (SEEDANCE_SLUGS.has(modelSlug) || modelSlug.startsWith('bytedance/')) {
     submitResult = await submitToSeedance(modelSlug, taggedPrompt, referenceUrls, durationSeconds, falKey, webhookUrl, gen.user_id);
   } else {
