@@ -72,6 +72,14 @@ import { generationProgress } from '~/services/generation-progress';
 import '~/styles/style-up.css';
 import '~/styles/style-up-lookbar.css';
 
+/** Force a look/piece <video> silent. React's `muted` JSX attribute is
+ *  unreliable with autoPlay (it sets the attribute, not the .muted PROPERTY the
+ *  browser checks), so a tap-opened viewer can end up playing the render's audio
+ *  out loud. Set the property directly, exactly like the feed video director. */
+const forceMuteVideo = (el: HTMLVideoElement | null) => {
+  if (el) { el.muted = true; el.defaultMuted = true; }
+};
+
 /** "~2 min left" / "~40s left", estimated wait from the shared generation
  *  timing model (based on typical generation durations). */
 function fmtRemaining(sec: number): string {
@@ -254,6 +262,7 @@ const INTENT_SCENE: Array<{ re: RegExp; scene: string }> = [
   { re: /\b(beach|seaside|shore|the ocean|by the sea)\b/, scene: 'a sandy beach at golden hour' },
   { re: /\b(coffee run|coffee shop|caf[eé])\b/, scene: 'an outdoor coffee shop' },
   { re: /\b(walking the dog|walk the dog|dog walk)\b/, scene: 'a leafy neighborhood on a dog walk' },
+  { re: /\b(morning walk|evening walk|walk|stroll|strolling|walking)\b/, scene: 'a leafy tree-lined street' },
   { re: /\b(commute|commuting|the office|office|work meeting|at work|for work)\b/, scene: 'a bright modern office' },
   { re: /\b(gym|workout|working out|training)\b/, scene: 'a bright modern gym' },
   { re: /\b(date night|date|dinner)\b/, scene: 'a candlelit restaurant' },
@@ -284,42 +293,6 @@ function autoScene(occasion: string | null | undefined, msgs: StyleUpMessage[]):
     if (OCCASION_SCENE[occ]) return OCCASION_SCENE[occ];
   }
   return 'a clean studio';
-}
-
-// The scene chooser's variable slots: a fresh fun spot when nothing smarter is
-// known, and a wild card that changes every time.
-const FUN_SCENES = ['a sunny park', 'a rooftop at golden hour', 'a city street at night', 'a minimalist loft', 'an art gallery', 'a boardwalk by the sea', 'a sidewalk café in Paris'];
-const WILD_SCENES = ['a neon Tokyo alley in the rain', 'the surface of Mars', 'a 1970s disco', 'backstage at a runway show', 'a snowy mountain peak', 'an underwater glass tunnel', 'a desert at sunset'];
-
-/** The four scene options. When the shopper's ask points at an activity or
- *  place (from their chat, or the parsed occasion), that suggestion LEADS the
- *  list so the first tap always matches what they asked for ("running errands"
- *  first, "A pool" first). Then two staples and one wild card. De-duped so a
- *  related pick that equals a staple isn't shown twice. */
-function sceneOptions(smart: string | null): Array<{ value: string; label: string }> {
-  const pick = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
-  const LABELS: Record<string, string> = {
-    'a clean studio': 'Studio',
-    'an outdoor coffee shop': 'Outdoor coffee shop',
-  };
-  const labelFor = (v: string) => LABELS[v] ?? (v.charAt(0).toUpperCase() + v.slice(1));
-  const wild = pick(WILD_SCENES);
-  const fun = pick(FUN_SCENES);
-  // The related suggestion leads whenever it's anything other than the neutral
-  // studio fallback (a coffee-run intent legitimately maps to the coffee shop).
-  const related = smart && smart.toLowerCase().trim() !== 'a clean studio' ? smart : null;
-  const ordered = related
-    ? [related, 'a clean studio', 'an outdoor coffee shop', fun]
-    : ['a clean studio', 'an outdoor coffee shop', fun];
-  const seen = new Set<string>();
-  const out: Array<{ value: string; label: string }> = [];
-  for (const v of ordered) {
-    if (out.length >= 3 || seen.has(v)) continue;
-    seen.add(v);
-    out.push({ value: v, label: labelFor(v) });
-  }
-  out.push({ value: wild, label: `${labelFor(wild)} 🤯` });
-  return out;
 }
 
 // The activity or place the shopper most recently mentioned ("laying out by
@@ -1159,37 +1132,21 @@ export function StyleUpExperience({
     await askOutfitSlots();
   }, [threadId, userId, pendingRender, lookPicks, chosenBySlot, askOutfitSlots, beat]);
 
-  // The exact pieces to render once the scene is picked — set by the look
-  // card's Generate button so EVERY piece on that card goes into the render.
-  const lookToGenerateRef = useRef<StyleUpProductRef[] | null>(null);
-
-  // Before a render: ALWAYS ask where they want to be seen. The smart option
-  // (the place they named in chat, or the occasion's backdrop via autoScene)
-  // is one tap away among Studio / coffee shop / wild. The pick echoes back as
-  // the shopper's own right-side reply (chooseWithEcho), then renders.
-  const askScene = useCallback(async (pieces?: StyleUpProductRef[]) => {
+  // Pressing Generate / "show me the full look" renders immediately — the
+  // setting is auto-derived from the shopper's message or occasion (autoScene),
+  // never asked. chosenScene is stored so a later single-piece swap reuses it.
+  const startLookRender = useCallback(async (pieces?: StyleUpProductRef[]) => {
     if (!threadId || !userId) return;
     if (pendingRender) { setRenderError('Still finishing your last look, one sec.'); return; }
-    lookToGenerateRef.current = pieces && pieces.length > 0 ? pieces : null;
-    if (!lookToGenerateRef.current && assembleLook().length === 0) { void triggerStylist(); return; }
-    const smart = autoScene(prefsRef.current.occasion, messages);
-    await beat();
-    await sendStylistText(threadId, 'Where do you want to be seen in this look?');
-    await sendChooser(threadId, { kind: 'scene', prompt: 'Pick your setting', multi: false, options: sceneOptions(smart) });
-  }, [threadId, userId, pendingRender, assembleLook, triggerStylist, messages, beat]);
+    const toRender = pieces && pieces.length > 0 ? pieces : assembleLook();
+    if (toRender.length === 0) { void triggerStylist(); return; }
+    const scene = autoScene(prefsRef.current.occasion, messages);
+    setChosenScene(scene);
+    await generateFullLook(toRender, scene);
+  }, [threadId, userId, pendingRender, assembleLook, triggerStylist, messages, generateFullLook]);
 
   const onChoose = useCallback(async (kind: string, values: string[]) => {
     if (!threadId || !userId) return;
-    if (kind === 'scene') {
-      const scene = values[0];
-      setChosenScene(scene);
-      // Render the exact pieces from the card that opened this chooser when we
-      // have them; assembleLook() (one-per-slot) only backstops text triggers.
-      const pieces = lookToGenerateRef.current ?? assembleLook();
-      lookToGenerateRef.current = null;
-      await generateFullLook(pieces, scene);
-      return;
-    }
     if (kind === 'shoes') {
       const id = values[0];
       setChosenBySlot(prev => ({ ...prev, Shoes: id }));
@@ -1220,7 +1177,7 @@ export function StyleUpExperience({
       const missing = (['Shoes', 'Top', 'Pants'] as const).find(s => !have.has(s));
       if (missing) await sendStylistText(threadId, `One more thing, you'll want ${GAP_REASON[missing]}. Say “different ${missing.toLowerCase()}” and I'll pull a few.`);
     }
-  }, [threadId, userId, lookPicks, rejected, rejectIds, askOutfitSlots, assembleLook, generateFullLook, recOpts, active, beat]);
+  }, [threadId, userId, lookPicks, rejected, rejectIds, askOutfitSlots, recOpts, active, beat]);
 
   // Echo a chooser tap into the thread as the shopper's own right-side reply
   // first, so picking "Studio" reads like you texted "Studio", then run the
@@ -1305,9 +1262,9 @@ export function StyleUpExperience({
       if (engineMethod !== 'legacy' && active?.sourceMode !== 'web') void triggerStylist('outfit');
       else void startOutfitFlow();
     }
-    else if (wantsFullLook(text) && looks.length > 0) void askScene();
+    else if (wantsFullLook(text) && looks.length > 0) void startLookRender();
     else void triggerStylist();
-  }, [draft, threadId, sending, ctx, triggerStylist, handleSwapRequest, startOutfitFlow, askScene, lookPicks, engineMethod, active]);
+  }, [draft, threadId, sending, ctx, triggerStylist, handleSwapRequest, startOutfitFlow, startLookRender, lookPicks, engineMethod, active]);
 
   // Add a finished render to the shopper's own looks, promotes the generation
   // to a LIVE look (with its video + poster + pieces), associated with THIS
@@ -1616,7 +1573,7 @@ export function StyleUpExperience({
         }}
       >
         <button type="button" className="su-viewer-close" onClick={closeLookViewer} aria-label="Close">✕</button>
-        <video className="su-viewer-video" src={viewer.videoUrl} autoPlay loop controls playsInline />
+        <video ref={forceMuteVideo} className="su-viewer-video" src={viewer.videoUrl} autoPlay loop muted controls playsInline />
         {viewer.pieces.length > 0 && (
           <div className="su-viewer-pieces">
             {viewer.pieces.map((pc, i) => (
@@ -1695,7 +1652,7 @@ export function StyleUpExperience({
           <button type="button" className="su-viewer-close" onClick={closeProductViewer} aria-label="Close">✕</button>
           <div className="su-pviewer-gallery">
             {d?.video
-              ? <video src={d.video} poster={d.poster ?? undefined} autoPlay loop muted playsInline />
+              ? <video ref={forceMuteVideo} src={d.video} poster={d.poster ?? undefined} autoPlay loop muted playsInline />
               : gallery[0]
                 ? <img src={gallery[0]} alt={d?.name ?? ref.name ?? 'Product'} />
                 : <span className="su-pviewer-empty" aria-hidden="true" />}
@@ -2110,7 +2067,7 @@ export function StyleUpExperience({
                             <span className="su-lookcard-num" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span>
                             <button type="button" className="su-lookcard-media" onClick={() => openProduct(pc)} aria-label={`Open ${pc.name || 'product'}`}>
                               {pc.id && pieceVideos[pc.id]
-                                ? <video src={pieceVideos[pc.id]!.video} poster={pieceVideos[pc.id]!.poster ?? pc.image ?? undefined} autoPlay loop muted playsInline />
+                                ? <video ref={forceMuteVideo} src={pieceVideos[pc.id]!.video} poster={pieceVideos[pc.id]!.poster ?? pc.image ?? undefined} autoPlay loop muted playsInline />
                                 : pc.image ? <img src={pc.image} alt={pc.name || 'Product'} loading="lazy" /> : <span className="su-product-media--empty" />}
                             </button>
                             <button type="button" className="su-lookcard-info" onClick={() => openProduct(pc)}>
@@ -2135,7 +2092,7 @@ export function StyleUpExperience({
                     <button
                       type="button"
                       className="su-lookcard-generate"
-                      onClick={() => void askScene(pieces)}
+                      onClick={() => void startLookRender(pieces)}
                       disabled={genLook || pendingRender}
                     >
                       {pendingRender ? 'Generating…' : 'Generate this look'}
@@ -2168,7 +2125,7 @@ export function StyleUpExperience({
                         onClick={() => setViewer({ videoUrl: r!.video_url!, pieces, genId: m.renderGenerationId as string })}
                         aria-label="Open look"
                       >
-                        <video className="su-render-video" src={r!.video_url!} autoPlay loop muted playsInline />
+                        <video ref={forceMuteVideo} className="su-render-video" src={r!.video_url!} autoPlay loop muted playsInline />
                         <span className="su-render-expand" aria-hidden="true">
                           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
                         </span>

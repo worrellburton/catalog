@@ -345,7 +345,10 @@ async function watermarkToBlob(
   video.crossOrigin = 'anonymous';
   video.src = videoUrl;
   video.playsInline = true;
-  video.muted = false;
+  // Try-on renders are silent by product design — keep the element muted so it
+  // never plays the render's audio aloud while we watermark it, and so the
+  // exported clip stays audio-free (we no longer copy its audio track in below).
+  video.muted = true;
   video.preload = 'auto';
 
   await new Promise<void>((resolve, reject) => {
@@ -374,16 +377,10 @@ async function watermarkToBlob(
     })));
   }
 
+  // Video-only stream — deliberately NO audio track. Try-on renders are silent
+  // by design; the source clip may still carry a talking/lip-sync audio track
+  // from the video model, so we do NOT copy it into the export.
   const stream = canvas.captureStream(30);
-  try {
-    const v = video as HTMLVideoElement & {
-      captureStream?: () => MediaStream;
-      mozCaptureStream?: () => MediaStream;
-    };
-    const vStream = v.captureStream?.() ?? v.mozCaptureStream?.();
-    const audio = vStream?.getAudioTracks?.()[0];
-    if (audio) stream.addTrack(audio);
-  } catch { /* silent export */ }
 
   const mime = pickMime();
   const recorder = new MediaRecorder(stream, { mimeType: mime, videoBitsPerSecond: 8_000_000 });
