@@ -163,20 +163,25 @@ function buildPrompt(desc: string, count: number): string {
     `You are auditing an e-commerce product gallery. The product is EXACTLY: "${desc}".`,
     'Match the SPECIFIC item — including its COLOR, material, and variant when the name states one',
     '(e.g. "Khakis" → khaki/tan only; "French Blue" → that blue only; "Black" → black only).',
-    `Classify EACH of the ${count} image(s) above (in order, starting at index 0) into exactly one label:`,
-    '  good     = a CLEAN photo of THIS EXACT product — same item AND the same color/variant the name specifies,',
-    '             shown on its own or worn, with NO text captions, feature bullet-points, or infographic layout on it',
-    '  junk     = NOT a clean product photo: size chart / measurement guide / fabric swatch / color chip / packaging /',
-    '             logo / spec sheet / UI screenshot / blank or solid-color tile, OR an image with feature-callout text,',
-    '             bullet captions, or an infographic/marketing layout overlaid — EVEN IF the product also appears in it',
-    '  wrong    = a different product, OR the same style in a DIFFERENT COLOR/variant than the name specifies',
-    '  unusable = corrupt, watermarked stock, or you cannot tell what it is',
-    'If the name does NOT specify a color, judge by item type only (any color is fine).',
-    'Return ONLY JSON: {"labels":["good","junk",...]} with one label per image, in order. No prose.',
+    `For EACH of the ${count} image(s) above (in order, starting at index 0) return two fields:`,
+    ' "label": exactly one of',
+    '   good     = a CLEAN photo of THIS EXACT product — same item AND the same color/variant the name specifies,',
+    '              shown on its own or worn, with NO text captions, feature bullet-points, or infographic layout on it',
+    '   junk     = NOT a clean product photo: size chart / measurement guide / fabric swatch / color chip / packaging /',
+    '              logo / spec sheet / UI screenshot / blank or solid-color tile, OR an image with feature-callout text,',
+    '              bullet captions, or an infographic/marketing layout overlaid — EVEN IF the product also appears in it',
+    '   wrong    = a different product, OR the same style in a DIFFERENT COLOR/variant than the name specifies',
+    '   unusable = corrupt, watermarked stock, or you cannot tell what it is',
+    ' "person": true if a human model/person is visible in the image; false if it is a product-only shot',
+    '           (flat-lay, packshot, laid flat, or on an invisible/ghost mannequin — no visible person).',
+    'If the name does NOT specify a color, judge the label by item type only (any color is fine).',
+    'Return ONLY JSON: {"images":[{"label":"good","person":true}, ...]} — one object per image, in order. No prose.',
   ].join('\n');
 }
 
-async function classify(apiKey: string, desc: string, imgs: Fetched[]): Promise<Label[]> {
+interface Verdict { label: Label; person: boolean | null }
+
+async function classify(apiKey: string, desc: string, imgs: Fetched[]): Promise<Verdict[]> {
   const content: unknown[] = [];
   imgs.forEach((f, i) => {
     content.push({ type: 'text', text: `Image ${i}:` });
@@ -187,16 +192,19 @@ async function classify(apiKey: string, desc: string, imgs: Fetched[]): Promise<
   const resp = await fetch(ANTHROPIC_API, {
     method: 'POST',
     headers: { 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'content-type': 'application/json' },
-    body: JSON.stringify({ model: ANTHROPIC_MODEL, max_tokens: 400, messages: [{ role: 'user', content }] }),
+    body: JSON.stringify({ model: ANTHROPIC_MODEL, max_tokens: 600, messages: [{ role: 'user', content }] }),
   });
   if (!resp.ok) throw new Error(`Claude ${resp.status}: ${(await resp.text()).slice(0, 200)}`);
   const body = await resp.json();
   const text = (body?.content?.[0]?.text || '').trim();
   const match = text.match(/\{[\s\S]*\}/);
   if (!match) throw new Error(`No JSON in Claude response: ${text.slice(0, 160)}`);
-  const parsed = JSON.parse(match[0]) as { labels?: Label[] };
-  if (!Array.isArray(parsed.labels)) throw new Error('Claude response missing labels[]');
-  return parsed.labels;
+  const parsed = JSON.parse(match[0]) as { images?: { label?: Label; person?: boolean }[] };
+  if (!Array.isArray(parsed.images)) throw new Error('Claude response missing images[]');
+  return parsed.images.map(o => ({
+    label: (o?.label ?? 'unchecked') as Label,
+    person: typeof o?.person === 'boolean' ? o.person : null,
+  }));
 }
 
 async function rehost(admin: ReturnType<typeof createClient>, productId: string, idx: number, f: Fetched): Promise<string | null> {
@@ -256,10 +264,14 @@ Deno.serve(async (req: Request) => {
   if (loadErr) return json({ success: false, error: `load: ${loadErr.message}` });
   if (!prod) return json({ success: false, error: 'product not found' });
 
-  // Candidate order: current primary first (index 0 = the hero), then the gallery.
+  // Candidate source: on a RE-verify, use the ORIGINAL scrape (images_raw) so
+  // packshots a prior run wrongly dropped get reconsidered; first-time verify
+  // (images_raw still null) uses the live gallery with the current primary first.
   const gallery: string[] = Array.isArray(prod.images) ? prod.images.filter((u: unknown): u is string => typeof u === 'string' && u.length > 0) : [];
+  const raw: string[] = Array.isArray(prod.images_raw) ? prod.images_raw.filter((u: unknown): u is string => typeof u === 'string' && u.length > 0) : [];
   const primary = typeof prod.image_url === 'string' && prod.image_url ? prod.image_url : null;
-  const ordered = [...(primary ? [primary] : []), ...gallery.filter(u => u !== primary)]
+  const source = raw.length > 0 ? raw : [...(primary ? [primary] : []), ...gallery.filter(u => u !== primary)];
+  const ordered = source
     .filter((u, i, a) => a.indexOf(u) === i)
     .slice(0, cap);
   if (ordered.length === 0) return json({ success: false, error: 'no candidate images' });
@@ -280,21 +292,26 @@ Deno.serve(async (req: Request) => {
     visionInputs.push(f);
   }
   const desc = [prod.brand, prod.name, prod.type].filter(Boolean).join(' — ') || 'this product';
-  const labelByUrl = new Map<string, Label>();
+  const metaByUrl = new Map<string, Verdict>();
   if (visionInputs.length) {
-    let labels: Label[];
-    try { labels = await classify(anthropicKey, desc, visionInputs); }
+    let results: Verdict[];
+    try { results = await classify(anthropicKey, desc, visionInputs); }
     catch (err) { return json({ success: false, error: `vision: ${err instanceof Error ? err.message : String(err)}` }); }
-    visionInputs.forEach((f, i) => labelByUrl.set(f.url, labels[i] ?? 'unchecked'));
+    visionInputs.forEach((f, i) => metaByUrl.set(f.url, results[i] ?? { label: 'unchecked', person: null }));
   }
 
   // Per-candidate verdict. live-but-unclassified → 'unchecked' (kept, not pruned).
-  const verdicts = fetched.map(f => ({
-    url: f.url,
-    live: f.ok,
-    label: (f.ok ? (labelByUrl.get(f.url) ?? 'unchecked') : 'unusable') as Label,
-    fetched: f,
-  }));
+  // person: true/false from vision, null when unknown (unchecked / not live).
+  const verdicts = fetched.map(f => {
+    const meta = f.ok ? metaByUrl.get(f.url) : undefined;
+    return {
+      url: f.url,
+      live: f.ok,
+      label: (f.ok ? (meta?.label ?? 'unchecked') : 'unusable') as Label,
+      person: meta ? meta.person : null,
+      fetched: f,
+    };
+  });
 
   // KEEP policy:
   //   >=2 good  → confident set: keep ONLY good (drops off-color/variant 'wrong',
@@ -304,12 +321,33 @@ Deno.serve(async (req: Request) => {
   //               don't strip the gallery on a shaky single verdict).
   const goodOnly = verdicts.filter(v => v.live && v.label === 'good');
   const goodCount = goodOnly.length;
-  const kept = goodCount >= 2
+  let kept = goodCount >= 2
     ? goodOnly
     : verdicts.filter(v => v.live && v.label !== 'junk')
         .sort((a, b) => LABEL_ORDER[a.label] - LABEL_ORDER[b.label]);
+
+  // Guarantee a person-free product shot survives. It's the reference the try-on
+  // video model needs (Seedance blocks non-consented human likenesses), and Haiku
+  // over-flags flat-lay packshots as 'wrong' on their flatter color — so if the
+  // kept set has no person-free shot, add the best person-free non-junk one.
+  if (!kept.some(v => v.person === false)) {
+    const pf = verdicts
+      .filter(v => v.live && v.person === false && v.label !== 'junk' && v.label !== 'unusable')
+      .sort((a, b) => LABEL_ORDER[a.label] - LABEL_ORDER[b.label])[0];
+    if (pf && !kept.includes(pf)) kept = [...kept, pf];
+  }
+
+  // Order the kept set so the PRIMARY (index 0) is render-safe: a person-free
+  // product shot leads (also a clean catalog hero), then good on-model, then rest.
+  const primaryRank = (v: { label: Label; person: boolean | null }): number => {
+    if (v.person === false && (v.label === 'good' || v.label === 'wrong')) return 0;
+    if (v.label === 'good') return 1;
+    return 2 + LABEL_ORDER[v.label];
+  };
+  kept = kept.slice().sort((a, b) => primaryRank(a) - primaryRank(b));
+
   const anyRemoved = kept.length < ordered.length;
-  const primaryLabel = verdicts[0]?.label ?? 'unusable';
+  const primaryLabel = kept[0]?.label ?? 'unusable';
 
   // Note doubles as the reconciler's action signal when zero good images:
   //   needs_review:no_good     — live images but none is a good product photo (curation/quality)
@@ -328,10 +366,12 @@ Deno.serve(async (req: Request) => {
 
   const analysis = {
     candidates: ordered.length,
-    labels: verdicts.map(v => ({ label: v.label, live: v.live, url: v.url.slice(0, 80) })),
+    labels: verdicts.map(v => ({ label: v.label, person: v.person, live: v.live, url: v.url.slice(0, 80) })),
     kept_count: kept.length,
+    kept_person_free: kept.filter(v => v.person === false).length,
     good_count: goodCount,
     primary_label: primaryLabel,
+    primary_person: kept[0]?.person ?? null,
   };
 
   if (dryRun) {
@@ -364,6 +404,11 @@ Deno.serve(async (req: Request) => {
       update.primary_image_score = 1.0;
       update.primary_image_picked_by = 'verify';
       update.primary_image_picked_at = new Date().toISOString();
+      // Is the chosen primary a person-free packshot? Drives generate-look:
+      // person-free → send the image to the video model; on-model → describe in
+      // text (Seedance blocks non-consented human likenesses). null = unknown.
+      const pp = kept[0]?.person;
+      update.primary_image_person_free = pp === false ? true : pp === true ? false : null;
       if (prod.images_raw == null) update.images_raw = prod.images ?? []; // set-once backup
     } else {
       update.image_verified = false;

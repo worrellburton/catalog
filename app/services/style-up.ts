@@ -685,6 +685,41 @@ export async function sendStylistText(
 const MAX_REF_PHOTOS = 3;
 const MAX_LOOK_PIECES = 6;
 
+// Identity-safe camera treatments. Each keeps the WHOLE outfit in frame and
+// NEVER crops tight to the face — Gemini Omni loses the shopper's identity the
+// moment it has to render a facial close-up (it invents a different face and
+// adds sunglasses). We ROTATE through them per render so a shopper's looks come
+// out as different shots (angle / pose / motion) instead of the same clip every
+// time. Random start + strict rotation = variety with no consecutive repeats.
+const SHOT_TREATMENTS: string[] = [
+  'a locked-off full-body wide — the subject does subtle model movements (weight shift, slow turn, hand in pocket), crisp and composed.',
+  'a slow orbit — the camera arcs around the subject at full-body distance, revealing the fit from several angles while they stand confidently.',
+  'a runway approach — the subject walks slowly toward a fixed full-body camera with a natural stride, the whole outfit in frame the entire time.',
+  'a three-quarter reveal — the subject starts angled away, then turns to face camera in a smooth medium-wide shot; the camera holds steady.',
+  'a lateral tracking dolly — the camera glides sideways past the subject at mid-to-full distance as they pose and shift, fabric catching the light.',
+  'a gentle handheld follow — the subject strolls through the setting, mid-to-full framing, relaxed editorial energy.',
+];
+// Module-level cursor so consecutive renders in a session don't repeat a shot.
+// ponytail: session-scoped rotation, good enough — no need to persist per-thread.
+let shotCursor = Math.floor(Math.random() * SHOT_TREATMENTS.length);
+
+// The thread's stylist specialty ("Streetwear & sneakers", "Quiet luxury") so
+// the render's setting / styling / energy matches the bot the shopper chose —
+// otherwise every bot's looks share one generic treatment even though they pick
+// different products. Best-effort: null on any miss (the prompt just skips it).
+async function getThreadStylistVibe(threadId: string): Promise<string | null> {
+  if (!supabase) return null;
+  const { data } = await supabase
+    .from('style_up_threads')
+    .select('stylist:style_up_stylists(specialty)')
+    .eq('id', threadId)
+    .maybeSingle();
+  const raw = (data as { stylist?: { specialty?: string | null } | { specialty?: string | null }[] } | null)?.stylist;
+  const s = Array.isArray(raw) ? raw[0] : raw;
+  const specialty = s?.specialty?.trim();
+  return specialty ? specialty : null;
+}
+
 async function renderLook(
   threadId: string,
   shopperUserId: string,
@@ -701,13 +736,14 @@ async function renderLook(
     return { generationId: null, error: "These picks can't be rendered yet." };
   }
 
-  const [ha, gender, customStyle, slots, quality, duration] = await Promise.all([
+  const [ha, gender, customStyle, slots, quality, duration, stylistVibe] = await Promise.all([
     getUserHeightAge(shopperUserId),
     getUserGender(shopperUserId),
     getUserCustomStyle(shopperUserId),
     getUserSlots(shopperUserId, MAX_REF_PHOTOS),
     getLookVideoQuality(),   // admin dial: 'fast' | 'pro' Seedance tier
     getLookVideoDuration(),  // admin dial: clip length in seconds
+    getThreadStylistVibe(threadId),  // the picked bot's specialty → render mood
   ]);
   const uploadIds = slots.filter((x): x is string => !!x);
   if (uploadIds.length === 0) {
@@ -791,6 +827,25 @@ async function renderLook(
       - (ORDER[b.roleTag ?? roleTagFromName(b.name) ?? ''] ?? 9));
   }
 
+  // GUARD: user_generation_products.product_id has a hard FK to `products`.
+  // Web-sourced swap options (webFetchSwapOptions) carry synthetic IDs that are
+  // NOT in `products`, so inserting one violates the FK and crashes the render
+  // ("...user_generation_products_product_id_fkey"). `byId` only holds catalog
+  // rows, so anything missing from it is a non-catalog (web) pick. Rather than
+  // silently drop it and render an incomplete look, tell the shopper plainly.
+  const nonCatalog = lines.filter(l => !byId.has(l.product_id));
+  if (nonCatalog.length > 0) {
+    const names = nonCatalog
+      .map(l => [l.brand, l.name].filter(Boolean).join(' ').trim())
+      .filter(Boolean);
+    return {
+      generationId: null,
+      error: names.length
+        ? `I can't try ${names.join(' and ')} on you yet — ${names.length > 1 ? 'those are' : "that's"} from outside our catalog. Swap in catalog pieces and I'll render the full look.`
+        : "One of those picks is from outside our catalog, so I can't put it on you yet. Choose catalog pieces and I'll render the full look.",
+    };
+  }
+
   let prompt = buildGenerationPrompt({
     heightLabel: ha.heightLabel ?? '',
     weightLabel: ha.weightLabel,
@@ -808,12 +863,26 @@ async function renderLook(
   // reads as a high-end editorial commercial instead of a static fit-cam.
   // Deliberately brand-name-free — Bytedance's partner_validation filter
   // rejects prompts naming commercial brands.
+  //
+  // Two things vary this block per render so looks aren't all the same clip:
+  //  1. `shot` — a rotating IDENTITY-SAFE camera treatment (whole outfit in
+  //     frame, never a facial close-up; Gemini Omni invents a wrong face the
+  //     moment it crops tight). Rotation gives a different angle/pose each time.
+  //  2. `stylistVibe` — the picked bot's specialty, so a Streetwear bot and a
+  //     Quiet-luxury bot produce differently-styled renders, not one template.
+  // (Body context — height/weight/age/gender — is already baked in above by
+  // buildGenerationPrompt, so it always reaches the model.)
+  const shot = SHOT_TREATMENTS[shotCursor % SHOT_TREATMENTS.length];
+  shotCursor++;
   prompt += [
     '\n\nCinematic direction: shoot this as a high-fashion editorial commercial.',
-    'Volumetric lighting — visible atmospheric light rays and soft haze, a strong motivated key with a sculpting rim light, deep contrast, rich filmic color grade.',
-    'Camera: open on a composed wide, then one slow deliberate push-in (dolly zoom toward the subject), ending tight on a face-and-product hero frame with shallow depth of field and a clean rack focus to a wardrobe detail.',
-    'The pacing and polish of a luxury fashion-house spot — confident model movement, fabric catching the light, crisp detail on every piece. Ultra high quality, sharp focus, subtle filmic grain.',
-  ].join(' ');
+    'Volumetric lighting — soft atmospheric haze, a motivated key with a sculpting rim light, rich filmic color grade.',
+    `Camera & motion: ${shot}`,
+    'Keep the ENTIRE outfit (head to shoes) in frame the whole clip; do NOT zoom, push in, or crop tight to the face.',
+    'Keep the subject exactly as the reference photo — same face, skin tone, hair, and any glasses or facial hair. Do NOT add sunglasses, hats, or anything covering the eyes or face.',
+    stylistVibe ? `Styling mood: lean into a ${stylistVibe.toLowerCase()} aesthetic across the setting, styling, and energy.` : '',
+    'Confident model movement, fabric catching the light, crisp detail on every piece. Ultra high quality, sharp focus, subtle filmic grain.',
+  ].filter(Boolean).join(' ');
 
   const { data: gen, error } = await createGeneration({
     userId: shopperUserId,
