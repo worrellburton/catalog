@@ -474,7 +474,7 @@ async function handleRequest(req: Request): Promise<Response> {
   // clean packshot is enough to reconstruct the garment on the shopper.
   const { data: productLinks } = await admin
     .from('user_generation_products')
-    .select('role_tag, sort_order, products(name, brand, image_url, primary_image_url, images)')
+    .select('role_tag, sort_order, products(name, brand, image_url, primary_image_url, images, primary_image_person_free)')
     .eq('generation_id', generationId)
     .order('sort_order');
 
@@ -494,7 +494,7 @@ async function handleRequest(req: Request): Promise<Response> {
   };
   const productEntries = (productLinks || [])
     .map(r => {
-      const p = r.products as unknown as { name: string | null; brand: string | null; image_url: string | null; primary_image_url: string | null; images: unknown } | null;
+      const p = r.products as unknown as { name: string | null; brand: string | null; image_url: string | null; primary_image_url: string | null; images: unknown; primary_image_person_free: boolean | null } | null;
       // Primary packshot only. Prefer the curated primary_image_url / legacy
       // image_url; fall back to the first non-thumbnail gallery angle if a
       // product has neither. Exactly one image goes to the model per product.
@@ -504,9 +504,13 @@ async function handleRequest(req: Request): Promise<Response> {
         ?? null;
       if (!primary) return null;
       const label = [p?.brand, p?.name].filter(Boolean).join(' ').trim() || 'product';
-      return { role: r.role_tag || 'item', label, imageUrls: [primary], brand: p?.brand ?? null };
+      // Only a CONFIRMED person-free packshot is safe to send as a visual ref —
+      // Seedance blocks non-consented human likenesses. on-model / unknown
+      // (false / null) → the product is described in the prompt text instead.
+      const personFree = p?.primary_image_person_free === true;
+      return { role: r.role_tag || 'item', label, imageUrls: [primary], brand: p?.brand ?? null, personFree };
     })
-    .filter((x): x is { role: string; label: string; imageUrls: string[]; brand: string | null } => !!x);
+    .filter((x): x is { role: string; label: string; imageUrls: string[]; brand: string | null; personFree: boolean } => !!x);
 
   // ── Resolve video model from platform settings ───────────────────────────
   const { data: modelSetting } = await admin
@@ -540,21 +544,26 @@ async function handleRequest(req: Request): Promise<Response> {
   const faceSourcesToUse = (isVeo || isSeedance)
     ? [faceSourceUrls[randomFaceIdx]]
     : faceSourceUrls.slice(0, faceSlots);
-  // Flatten each product's gallery into the reference budget, distributed so
-  // every product gets at least one angle (front images first), then round-
-  // robin the rest until the budget fills. Each entry keeps its product index
-  // so the prompt can tag all of a garment's angles together.
+  // Only person-free packshots go to the model as images (on-model shots trip
+  // Seedance's human-likeness block); the rest are described in prompt text.
+  // Flatten the eligible products' images into the reference budget, one each
+  // first, then round-robin. pIdx stays the index into the FULL productEntries
+  // so the prompt tags line up and the text-only products are identifiable.
   const flatProductImgs: { pIdx: number; url: string }[] = [];
-  if (productImageBudget > 0 && productEntries.length > 0) {
-    const perProduct = Math.max(1, Math.floor(productImageBudget / productEntries.length));
-    productEntries.forEach((pe, pIdx) => {
+  const imgEligible = productEntries
+    .map((pe, pIdx) => ({ pe, pIdx }))
+    .filter(x => x.pe.personFree);
+  if (productImageBudget > 0 && imgEligible.length > 0) {
+    const perProduct = Math.max(1, Math.floor(productImageBudget / imgEligible.length));
+    for (const { pe, pIdx } of imgEligible) {
       for (const u of pe.imageUrls.slice(0, perProduct)) flatProductImgs.push({ pIdx, url: u });
-    });
+    }
     let col = perProduct;
     while (flatProductImgs.length < productImageBudget) {
       let added = false;
-      for (let pIdx = 0; pIdx < productEntries.length && flatProductImgs.length < productImageBudget; pIdx++) {
-        const u = productEntries[pIdx].imageUrls[col];
+      for (const { pe, pIdx } of imgEligible) {
+        if (flatProductImgs.length >= productImageBudget) break;
+        const u = pe.imageUrls[col];
         if (u) { flatProductImgs.push({ pIdx, url: u }); added = true; }
       }
       if (!added) break;
@@ -643,18 +652,26 @@ async function handleRequest(req: Request): Promise<Response> {
     : '';
 
   // Veo: describe every product in text (no product images sent). Other models:
-  // tag EACH garment with ALL of its surviving gallery slots, so the model
-  // knows those N images are the same item from different angles.
+  // tag each image-backed garment with its @Image slot(s), then append the
+  // products that have NO safe reference image (on-model-only / unknown) as
+  // text-only clauses, so the model still dresses the person in them.
+  const usedIdxSet = new Set(usedProductIdxs);
   const productClauses = isVeo
     ? productEntries.map(p => `${p.label} (${p.role.toLowerCase()})`)
-    : usedProductIdxs.map(pIdx => {
-        const pe = productEntries[pIdx];
-        const tags = goodFlatProducts
-          .map((f, i) => (f.pIdx === pIdx ? `@Image${goodFaceSlots + i + 1}` : null))
-          .filter((t): t is string => t !== null)
-          .join('/');
-        return `${pe.role.toLowerCase()} (${tags}, ${pe.label})`;
-      });
+    : [
+        ...usedProductIdxs.map(pIdx => {
+          const pe = productEntries[pIdx];
+          const tags = goodFlatProducts
+            .map((f, i) => (f.pIdx === pIdx ? `@Image${goodFaceSlots + i + 1}` : null))
+            .filter((t): t is string => t !== null)
+            .join('/');
+          return `${pe.role.toLowerCase()} (${tags}, ${pe.label})`;
+        }),
+        ...productEntries
+          .map((pe, i) => ({ pe, i }))
+          .filter(x => !usedIdxSet.has(x.i))
+          .map(x => `${x.pe.role.toLowerCase()} (${x.pe.label})`),
+      ];
 
   const heightClause = gen.height_label ? `Make them ${gen.height_label} tall.` : '';
   const ageClause = gen.age_label ? `They look ${gen.age_label}.` : '';

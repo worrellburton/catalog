@@ -404,6 +404,11 @@ Deno.serve(async (req: Request) => {
       update.primary_image_score = 1.0;
       update.primary_image_picked_by = 'verify';
       update.primary_image_picked_at = new Date().toISOString();
+      // Is the chosen primary a person-free packshot? Drives generate-look:
+      // person-free → send the image to the video model; on-model → describe in
+      // text (Seedance blocks non-consented human likenesses). null = unknown.
+      const pp = kept[0]?.person;
+      update.primary_image_person_free = pp === false ? true : pp === true ? false : null;
       if (prod.images_raw == null) update.images_raw = prod.images ?? []; // set-once backup
     } else {
       update.image_verified = false;
