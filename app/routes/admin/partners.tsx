@@ -13,6 +13,17 @@ interface Invite { id: string; brand_id: string; email: string; role: string; to
 
 const ROLES = ['owner', 'admin', 'finance', 'creative'];
 
+// Hoisted above the component: both are referenced inside its JSX, and a
+// module-tail declaration is exactly the forward-ref pattern check:tdz
+// flags (Rollup may reorder chunk init and hit the TDZ in production).
+const inp: React.CSSProperties = {
+  display: 'block', width: '100%', marginTop: 5, padding: '9px 11px',
+  borderRadius: 9, border: '1px solid #e2e2e6', fontSize: 13, fontWeight: 400, color: '#1a1a1f', background: '#fff',
+};
+const linkBtn: React.CSSProperties = {
+  border: 'none', background: 'transparent', color: '#1f5fd6', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: 0,
+};
+
 export default function AdminPartners() {
   const [brands, setBrands] = useState<BrandRow[]>([]);
   const [members, setMembers] = useState<Member[]>([]);
@@ -175,11 +186,3 @@ export default function AdminPartners() {
     </div>
   );
 }
-
-const inp: React.CSSProperties = {
-  display: 'block', width: '100%', marginTop: 5, padding: '9px 11px',
-  borderRadius: 9, border: '1px solid #e2e2e6', fontSize: 13, fontWeight: 400, color: '#1a1a1f', background: '#fff',
-};
-const linkBtn: React.CSSProperties = {
-  border: 'none', background: 'transparent', color: '#1f5fd6', fontSize: 12, fontWeight: 600, cursor: 'pointer', padding: 0,
-};
