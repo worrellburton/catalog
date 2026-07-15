@@ -1373,6 +1373,7 @@ function ContinuousFeed({
                 scrollRoot={scrollRoot}
                 slotPrefix={slotPrefix}
                 feedCols={feedCols}
+                bookmarks={bookmarks}
               />
             );
           }

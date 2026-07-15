@@ -546,6 +546,21 @@
 .look-card:nth-child(4n+3) .card-shimmer { animation-delay: 0.6s; }
 .look-card:nth-child(4n+4) .card-shimmer { animation-delay: 0.9s; }
 
+/* Poster dissolves in over the shimmer instead of popping. `loaded` flips
+   on the poster's own onLoad, so this transitions exactly at first paint;
+   because each card loads when its own bytes arrive, the grid reveal
+   staggers organically (no synchronized grid-wide pop when the feed
+   resolves). The gradient/chip/price fades below already match at 0.6s. */
+.look-card .card-poster,
+.promo-card .card-poster {
+  opacity: 0;
+  transition: opacity 0.45s ease;
+}
+.look-card.loaded .card-poster,
+.promo-card.loaded .card-poster {
+  opacity: 1;
+}
+
 
 /* Skeleton scaffold inside placeholder cards. Mirrors the brand /
    name / price block real CreativeCards render in the bottom-left,

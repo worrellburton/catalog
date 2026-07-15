@@ -13,7 +13,9 @@ import { trackImpression } from '~/services/session-tracker';
 import { lookPoster } from '~/services/media-resolver';
 import { useVideoStillRatio } from '~/hooks/useVideoStillRatio';
 import { useVideoPipelineMode } from '~/hooks/useVideoPipeline';
+import { usePrefersReducedMotion } from '~/hooks/usePrefersReducedMotion';
 import { shouldBeVideo } from '~/utils/videoStillSplit';
+import { lookProductsSummary } from '~/utils/lookShopSummary';
 import {
   prefetchVideoBytes,
   prefetchHlsHead,
@@ -198,7 +200,12 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
   const dialPrefersVideo = shouldBeVideo(look.id, globalVideoRatio);
   const hasVideo  = !!videoUrl;
   const hasPoster = !!posterUrl;
-  const allowVideoForThisCard = hasVideo && (dialPrefersVideo || !hasPoster);
+  // OS-level "reduce motion" forces the still path whenever any still
+  // exists; posterless looks keep video (a flat colour block is worse).
+  const prefersReducedMotion = usePrefersReducedMotion();
+  const hasStillFallback = !!(stillImageUrl || posterUrl);
+  const allowVideoForThisCard = hasVideo && (dialPrefersVideo || !hasPoster)
+    && !(prefersReducedMotion && hasStillFallback);
   const videoActive = inActiveBand && !previewOnly && allowVideoForThisCard;
   const setVideoSlot = useTrailVideo(
     videoActive ? trailId : undefined,
@@ -278,11 +285,22 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
     if (activeHlsUrl) prefetchHlsHead(activeHlsUrl);
   }, [inRenderBand, previewOnly, allowVideoForThisCard, activeHlsUrl]);
 
+  const productsSummary = lookProductsSummary(look);
+
   return (
     <div
       ref={cardRef}
       className={`${className} ${loaded ? 'loaded' : ''}`}
       data-present-id={`card:${look.id}`}
+      role="button"
+      tabIndex={0}
+      aria-label={`Open look${look.title ? `: ${look.title}` : ''}`}
+      onKeyDown={(e) => {
+        if (e.target !== e.currentTarget) return;
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        e.preventDefault();
+        onOpenLook(look);
+      }}
       onClick={(e) => {
         if (longPressFired.current) {
           longPressFired.current = false;
@@ -290,9 +308,10 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
           e.stopPropagation();
           return;
         }
-        // A card tap ALWAYS opens the look — the creator chip is display-only
-        // (only its +/− follow badge is interactive), so nothing can hijack the
-        // tap into the wrong creator's catalog.
+        // A tap on the card body opens the look. The creator chip is its own
+        // hotspot (opens that creator's catalog — same rule as the main
+        // feed's CreativeCardV2) and stops propagation, so its taps never
+        // land here.
         // Phase 9 — snapshot the currently-playing frame so LookOverlay can
         // paint it as an instant poster behind its hero <video> slot, killing
         // the black flash between card → overlay.
@@ -368,6 +387,11 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
             onOpenCreator={onOpenCreator}
           />
         )}
+        {/* Shoppability pill — "4 products · from $58" — so a look tile
+            signals it can be shopped before the tap. */}
+        {productsSummary && (
+          <span className="card-products-pill">{productsSummary}</span>
+        )}
       </div>
       {menu && isSuperAdmin && (
         <div
@@ -429,9 +453,12 @@ const LookCard = memo(function LookCard({ look, className = 'look-card', onOpenL
  * Creator identity on a look card — avatar (+ follow badge) AND the creator
  * name in the lower-left, identical to the main feed's CreativeCardV2 chip, so
  * every look card reads the same wherever it appears (feed, creator catalog,
- * "more like this" on the look/product pages). Uses the same .card-creator-tag
- * markup + CSS as the feed; stopPropagation keeps a tap on the chip from
- * opening the look underneath.
+ * "more like this" on the look/product pages). Same interaction rule too:
+ * the chip is a tappable hotspot that opens the creator's catalog — it used
+ * to be display-only here while the main feed's identical-looking chip
+ * navigated, and the same chip doing different things per surface read as
+ * broken. stopPropagation keeps chip taps from opening the look underneath;
+ * the +/− follow badge remains its own control.
  */
 function LookCardCreatorChip({
   look,
@@ -446,11 +473,19 @@ function LookCardCreatorChip({
   const name = creatorData?.displayName
     || look.creatorDisplayName
     || (look.creator?.startsWith('user:') ? '' : look.creator || '');
-  // Display-only: a tap anywhere on the card opens the look. The avatar falls
-  // through (avatarOpensCreator=false); only the small +/− follow badge is
-  // interactive. Creator catalog is reachable from the look page.
+  const openCreator = (e: React.MouseEvent | React.KeyboardEvent) => {
+    e.stopPropagation();
+    if (look.creator) onOpenCreator(look.creator);
+  };
   return (
-    <div className="card-creator-tag">
+    <div
+      className="card-creator-tag"
+      role="button"
+      tabIndex={0}
+      aria-label={name ? `Open ${name}'s catalog` : 'Open creator catalog'}
+      onClick={openCreator}
+      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); openCreator(e); } }}
+    >
       <CreatorAvatarFollow
         handle={look.creator}
         avatarUrl={avatar}
