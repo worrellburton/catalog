@@ -513,8 +513,11 @@ def generate_ad_video(ad_id: str) -> dict:
         # Set affiliate URL from product URL if not already set
         affiliate_url = ad.get("affiliate_url") or product.get("url")
 
-        # Estimate cost (reference images = 8s duration at fast pricing)
-        cost = _estimate_cost(GENERATION_DEFAULTS["model"], GENERATION_DEFAULTS["resolution"])
+        # Cost from the model ACTUALLY used and its real duration - not the
+        # default model, which is what made every row read $0.10.
+        actual_model = ad_model or GENERATION_DEFAULTS["model"]
+        actual_duration = int(ad.get("duration_seconds") or style_cfg.get("duration", 5))
+        cost = _estimate_cost(actual_model, GENERATION_DEFAULTS["resolution"], actual_duration)
 
         # Update ad as done
         update_payload = {
@@ -531,6 +534,25 @@ def generate_ad_video(ad_id: str) -> dict:
         if mobile_video_url:
             update_payload["mobile_video_url"] = mobile_video_url
         supabase.table("product_creative").update(update_payload).eq("id", ad_id).execute()
+
+        # Spend telemetry. Without this row the monthly cap in Task 5 is
+        # fiction - ai_usage_logs had ZERO fal entries before this shipped.
+        try:
+            supabase.table("ai_usage_logs").insert({
+                "platform": "fal",
+                "operation": "product-creative",
+                "model": actual_model,
+                "units": actual_duration,
+                "estimated_cost_usd": cost,
+                "status": "success",
+                "metadata": {
+                    "product_id": ad.get("product_id"),
+                    "creative_id": ad_id,
+                    "method": method,
+                },
+            }).execute()
+        except Exception as e:
+            print(f"    ⚠ usage log failed (non-fatal): {e}")
 
         print(f"  ✓ Done — ad {ad_id} | {method} | {video_url}")
         return {
@@ -576,13 +598,34 @@ def process_pending_ads() -> list[dict]:
     return results
 
 
-def _estimate_cost(model: str, resolution: str) -> float:
-    pricing = {
-        "veo-3.1-fast-generate-preview": {"720p": 0.10, "1080p": 0.12},
-        "veo-3.1-generate-preview": {"720p": 0.40, "1080p": 0.40},
-        "veo-3.1-lite-generate-preview": {"720p": 0.05, "1080p": 0.08},
-    }
-    return pricing.get(model, {}).get(resolution, 0.10)
+# Per-SECOND pricing. Fal bills reference-to-video by duration, which the old
+# flat per-render table could not express - and it listed only 3 Veo models, so
+# every Seedance render fell through to the 0.10 default. That default is why
+# all 41 pre-2026-07-28 product_creative rows read exactly $0.1000 and why the
+# monthly budget cap could not be trusted.
+_PER_SECOND_USD = {
+    "bytedance/seedance-2.0/pro":  0.030,
+    "bytedance/seedance-2.0/fast": 0.013,
+    "google/gemini-omni-flash":    0.013,
+    "fal-ai/vidu":                 0.015,
+}
+_FLAT_USD = {
+    "veo-3.1-fast-generate-preview":  {"720p": 0.10, "1080p": 0.12},
+    "veo-3.1-generate-preview":       {"720p": 0.40, "1080p": 0.40},
+    "veo-3.1-lite-generate-preview":  {"720p": 0.05, "1080p": 0.08},
+}
+_UNKNOWN_MODEL_USD_PER_SECOND = 0.030   # conservative: assume the priciest tier
+
+
+def _estimate_cost(model: str, resolution: str, duration_seconds: int = 5) -> float:
+    """Estimated USD for one render. Conservative by design: an unpriced slug
+    is billed at the most expensive known rate so the budget cap fails safe."""
+    if model in _FLAT_USD:
+        return _FLAT_USD[model].get(resolution, 0.10)
+    for prefix, rate in _PER_SECOND_USD.items():
+        if model.startswith(prefix):
+            return round(rate * max(1, duration_seconds), 4)
+    return round(_UNKNOWN_MODEL_USD_PER_SECOND * max(1, duration_seconds), 4)
 
 
 if __name__ == "__main__":
