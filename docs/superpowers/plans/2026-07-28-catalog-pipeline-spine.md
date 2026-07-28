@@ -14,6 +14,8 @@
 - Every new cron and driver is **fail-closed**: a missing or unparseable setting means OFF.
 - Both drivers default to `dry_run = true`. Enabling is always an explicit, separate action.
 - Migrations live in `supabase/migrations/NNNN_<snake_case>.sql` and must also be applied to the live project `vtarjrnqvcqbhoclvcur`.
+- **Applying migrations is the CONTROLLER's job, via the Supabase MCP `apply_migration`.** Do NOT run `supabase migration up`, `db push`, or `migration repair`. The repo and the remote deliberately disagree on version strings — the remote records MCP-generated timestamps (`20260728133737 normalize_product_type_and_brand`) while repo files use hand-written ones (`20260728000000_…`). The CLI reads that as an unsynced history and refuses. This is the documented workflow in CLAUDE.md §7, not a defect to repair. An implementer subagent writes the migration FILE and stops; the controller applies it and runs the verification SQL.
+- Never run any command that mutates production migration history.
 - Nothing in this plan deactivates a product. `pipeline_publish` is promote-only.
 - The catalog is deliberately multi-category. Do not add an apparel-only filter anywhere.
 - Admin RPCs are `SECURITY DEFINER` with `SET search_path TO 'public'` and must check `profiles.is_admin`.
