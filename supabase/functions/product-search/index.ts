@@ -234,7 +234,13 @@ Deno.serve(async (req: Request) => {
     let ingest = url.searchParams.get('ingest') === 'true';
     let ingestGender: string | undefined;
     let ingestSource: string | null = null;
-    let ingestActive = true;
+    // Fail-closed: an ingested row is NOT live until the quality gate promotes
+    // it. This used to default true, so every caller that forgot to pass
+    // is_active:false published straight to the feed — that is how 47
+    // unenriched, unscrapeable rows from the stylist's web search went live on
+    // 2026-07-01. seed-run always passed false; the chat path never did. The
+    // safe value is the default now, and going live is the opt-in.
+    let ingestActive = false;
     if (req.method === 'POST') {
       const body = await req.json().catch(() => ({}));
       if (!query) query = String(body.query || body.q || '');
@@ -255,10 +261,19 @@ Deno.serve(async (req: Request) => {
     if (!serpKey) return jsonRes({ success: false, error: 'SERPAPI_KEY not configured' }, 500);
 
     const rawLimit = url.searchParams.get('detailLimit');
-    // Default to 5 immersive detail lookups (was 20) to reduce SerpAPI credit
-    // usage and latency. Each immersive call costs 1 credit and the merchant URL
-    // hit rate drops sharply beyond the top few results.
-    let detailLimit = rawLimit ? parseInt(rawLimit, 10) : 5;
+    // The immersive lookup is the ONLY source of both the merchant URL and the
+    // image gallery, and a result without a URL is dropped at ingest below. So
+    // detailLimit is effectively "how many products this search can contribute".
+    // Measured 2026-07-28 on "mens white leather sneakers": SerpAPI returned 20
+    // results; the 5 that got an immersive call had 9-14 images and a real
+    // merchant URL, the other 15 had exactly 1 image, no URL, and were all
+    // discarded — including Nike, lululemon, Quince and Veja. The earlier
+    // "hit rate drops sharply past the top few" note was never measured; only
+    // the top 5 were ever called. Default to the max so a search yields a full
+    // page of usable products.
+    // ponytail: 1 credit per lookup (~$0.005) — callers that need it cheaper
+    // pass ?detailLimit=N explicitly (seed-run uses 10).
+    let detailLimit = rawLimit ? parseInt(rawLimit, 10) : 20;
     if (detailLimit < 0) detailLimit = 0;
     if (detailLimit > 20) detailLimit = 20;
 
