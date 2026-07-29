@@ -57,6 +57,12 @@ generator_image = (
         "cairosvg>=2.7.0",
     )
     .add_local_file("config.py", "/root/config.py")
+    # ad_generator does `from pricing import estimate_cost`. This image mounts
+    # files EXPLICITLY by name, so omitting this line does not fail the deploy -
+    # it throws ImportError inside the container at first render, silently
+    # breaking every creative. Any new module ad_generator imports must be
+    # added here too.
+    .add_local_file("pricing.py", "/root/pricing.py")
     .add_local_file("prompts.py", "/root/prompts.py")
     .add_local_file("veo_client.py", "/root/veo_client.py")
     .add_local_file("seedance_client.py", "/root/seedance_client.py")
