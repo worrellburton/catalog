@@ -30,6 +30,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { urlAllowed } from '../_shared/ssrf-guard.ts';
+import { upgradeImageUrl, imageDims } from '../_shared/image-source.ts';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -43,6 +44,9 @@ const ANTHROPIC_MODEL = 'claude-haiku-4-5-20251001';
 const BUCKET = 'product-images';
 const MAX_IMAGES = 8;
 const MIN_BYTES = 1200;             // below this = placeholder / blank tile
+// Below this on the long edge an image is a thumbnail, not a render source.
+// 400 clears real packshots while rejecting the 232px Amazon variants.
+const MIN_LONG_EDGE_PX = 400;
 const VISION_MAX_BYTES = 4_000_000; // per-image cap for the vision call
 const VISION_BUDGET_BYTES = 18_000_000; // aggregate raw cap (~24MB base64, under Anthropic's ~32MB)
 const FETCH_TIMEOUT_MS = 20_000;
@@ -57,7 +61,10 @@ interface Fetched {
   bytes?: Uint8Array;
   contentType?: string;  // raw (for re-host / storage)
   visionType?: string | null; // normalized for Anthropic, or null if unsupported
-  reason?: string;       // why not ok: 'dead' | 'blocked' | 'notimage' | 'tiny' | 'unreachable'
+  reason?: string;       // why not ok: 'dead'|'blocked'|'notimage'|'tiny'|'lowres'|'unreachable'
+  width?: number;
+  height?: number;
+  upgradedFrom?: string; // set when the URL was rewritten to a better original
 }
 
 function json(body: unknown, status = 200): Response {
@@ -103,7 +110,9 @@ function statusReason(code: number): string {
 }
 
 async function fetchImage(rawUrl: string): Promise<Fetched> {
-  let target = urlAllowed(rawUrl);
+  // Prefer the merchant's true original over their downsized/stretched variant.
+  const upgraded = upgradeImageUrl(rawUrl);
+  let target = urlAllowed(upgraded);
   if (!target) return { url: rawUrl, ok: false, reason: 'blocked' }; // non-https / private host
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
@@ -124,7 +133,18 @@ async function fetchImage(rawUrl: string): Promise<Fetched> {
       if (!ct.toLowerCase().startsWith('image/')) return { url: rawUrl, ok: false, reason: 'notimage' };
       const buf = new Uint8Array(await res.arrayBuffer());
       if (buf.length < MIN_BYTES) return { url: rawUrl, ok: false, reason: 'tiny' };
-      return { url: rawUrl, ok: true, bytes: buf, contentType: ct, visionType: anthropicMediaType(ct) };
+      const dim = imageDims(buf);
+      // Reject by PIXELS, not just bytes. The stored render source for one book
+      // was a 232x232 square (a portrait cover, squashed) that cleared MIN_BYTES
+      // comfortably — byte size cannot catch that.
+      if (dim && Math.max(dim.width, dim.height) < MIN_LONG_EDGE_PX) {
+        return { url: rawUrl, ok: false, reason: 'lowres', width: dim.width, height: dim.height };
+      }
+      return {
+        url: rawUrl, ok: true, bytes: buf, contentType: ct, visionType: anthropicMediaType(ct),
+        width: dim?.width, height: dim?.height,
+        upgradedFrom: upgraded !== rawUrl ? rawUrl : undefined,
+      };
     }
     return { url: rawUrl, ok: false, reason: 'dead' };
   } catch {
