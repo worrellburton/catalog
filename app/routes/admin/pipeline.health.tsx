@@ -12,6 +12,18 @@ interface FunnelRow { stage: string; n: number; oldest_age: string | null }
 interface CronRow { jobname: string; schedule: string; active: boolean; last_status: string | null; last_run: string | null }
 interface LinkRow { bucket: string; n: number }
 interface SpendRow { platform: string; operation: string; calls: number; month_usd: number; total_usd: number }
+interface Ingest {
+  last_product_at: string | null;
+  added_24h: number; added_7d: number; added_30d: number;
+  scrape: Record<string, number> | null;
+  scrape_success_rate: number | null;
+  by_source: Record<string, number> | null;
+  crawl_jobs: { total: number; last_run: string | null; distinct_sites: number } | null;
+  discovered_urls: Record<string, number> | null;
+  seed_targets: Record<string, number> | null;
+  switches: Record<string, string> | null;
+  ingest_crons: Record<string, boolean> | null;
+}
 
 const LINK_BUCKET_ORDER = ['live', 'bot_blocked', 'blocked_by_policy', 'unreachable', 'dead', 'unchecked'];
 const LINK_BUCKET_LABEL: Record<string, string> = {
@@ -49,6 +61,8 @@ export default function PipelineHealth() {
   const [costError, setCostError] = useState<string | null>(null);
   const [demand, setDemand] = useState<Record<string, number>>({});
   const [demandError, setDemandError] = useState<string | null>(null);
+  const [ingest, setIngest] = useState<Ingest | null>(null);
+  const [ingestError, setIngestError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [clientError, setClientError] = useState<string | null>(null);
 
@@ -56,7 +70,7 @@ export default function PipelineHealth() {
     // F8: a missing supabase client must not leave the page spinning forever.
     if (!supabase) { setClientError('Supabase client not configured.'); setLoading(false); return; }
     void (async () => {
-      const [f, c, l, s, cap, cost, targets] = await Promise.all([
+      const [f, c, l, s, cap, cost, targets, ing] = await Promise.all([
         supabase.rpc('pipeline_funnel'),
         supabase.rpc('pipeline_cron_status'),
         supabase.rpc('link_health_summary'),
@@ -64,6 +78,7 @@ export default function PipelineHealth() {
         supabase.from('app_settings').select('value').eq('key', 'pipeline_creative_monthly_usd_cap').maybeSingle(),
         supabase.rpc('pipeline_cost_per_published'),
         supabase.from('seed_targets').select('status'),
+        supabase.rpc('pipeline_ingest_summary'),
       ]);
       // F5: every RPC's error is surfaced in its own panel now, not just the
       // cron one — a permission failure / RLS block / dropped function must
@@ -85,6 +100,8 @@ export default function PipelineHealth() {
       for (const t of (targets.data ?? []) as Array<{ status: string }>) tally[t.status] = (tally[t.status] ?? 0) + 1;
       setDemand(tally);
       setDemandError(targets.error ? targets.error.message : null);
+      setIngest((ing.data ?? null) as Ingest | null);
+      setIngestError(ing.error ? ing.error.message : null);
       setLoading(false);
     })();
   }, []);
@@ -113,6 +130,92 @@ export default function PipelineHealth() {
           Scrape → image-verify → creative → publish. Is it running, is the output good, what does it cost.
         </p>
       </div>
+
+      {/* Ingest comes FIRST in the pipeline, so it comes first on the page.
+          Previously every panel here was creative/publish/link/spend, so the
+          question "is anything coming in, and why not" had no answer. */}
+      <section className="admin-detail-card">
+        <h2>Ingest</h2>
+        {ingestError ? (
+          <p className="admin-error">Ingest summary unavailable: {ingestError}</p>
+        ) : !ingest ? (
+          <p className="admin-hint">No ingest data.</p>
+        ) : (
+          <>
+            <div className="admin-stats-grid">
+              <div className="admin-stat-card">
+                <span className="admin-stat-value">{ingest.added_24h}</span>
+                <span className="admin-stat-label">added 24h</span>
+              </div>
+              <div className="admin-stat-card">
+                <span className="admin-stat-value">{ingest.added_7d}</span>
+                <span className="admin-stat-label">added 7d</span>
+              </div>
+              <div className="admin-stat-card">
+                <span className="admin-stat-value">{ingest.added_30d}</span>
+                <span className="admin-stat-label">added 30d</span>
+              </div>
+              <div className="admin-stat-card">
+                <span className="admin-stat-value">{ingest.scrape_success_rate ?? '—'}%</span>
+                <span className="admin-stat-label">scrape success</span>
+              </div>
+              <div className="admin-stat-card">
+                <span className="admin-stat-value">{ingest.crawl_jobs?.distinct_sites ?? 0}</span>
+                <span className="admin-stat-label">sites crawled</span>
+              </div>
+            </div>
+
+            <p className="admin-hint">
+              Last product ingested:{' '}
+              {ingest.last_product_at ? new Date(ingest.last_product_at).toLocaleString() : 'never'}
+              {ingest.crawl_jobs?.last_run
+                ? ` · last crawl ${new Date(ingest.crawl_jobs.last_run).toLocaleDateString()}`
+                : ' · no crawl has ever run'}
+            </p>
+
+            {/* The switches are the answer to "why is nothing arriving". */}
+            <div className="admin-table-wrap">
+              <table className="admin-table">
+                <thead>
+                  <tr><th>Ingest switch / job</th><th>State</th></tr>
+                </thead>
+                <tbody>
+                  {Object.entries(ingest.switches ?? {}).map(([k, v]) => (
+                    <tr key={k}>
+                      <td>{k}</td>
+                      <td>{v === 'true' ? 'on' : 'OFF'}</td>
+                    </tr>
+                  ))}
+                  {Object.entries(ingest.ingest_crons ?? {}).map(([k, v]) => (
+                    <tr key={k}>
+                      <td>{k}</td>
+                      <td>{v ? 'on' : 'paused'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+
+            <p className="admin-hint">
+              Sources:{' '}
+              {Object.entries(ingest.by_source ?? {})
+                .sort((a, b) => b[1] - a[1])
+                .map(([k, v]) => `${k} ${v}`)
+                .join(' · ')}
+            </p>
+            <p className="admin-hint">
+              Scrape:{' '}
+              {Object.entries(ingest.scrape ?? {}).map(([k, v]) => `${k} ${v}`).join(' · ')}
+              {' · '}discovered URLs:{' '}
+              {Object.entries(ingest.discovered_urls ?? {}).map(([k, v]) => `${k} ${v}`).join(' · ') || 'none'}
+            </p>
+            <p className="admin-hint">
+              This panel is read-only. Ingest controls (brand queue, run-crawl, scrape retry) are not
+              built yet — see <Link to="/admin/seeding">Seeding</Link> for the demand-driven loop.
+            </p>
+          </>
+        )}
+      </section>
 
       <section className="admin-detail-card">
         <h2>Stage funnel</h2>
