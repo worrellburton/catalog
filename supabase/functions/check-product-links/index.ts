@@ -37,7 +37,14 @@ const FETCH_TIMEOUT_MS = 15_000;
 function isBlockedHost(host: string): boolean {
   const h = host.toLowerCase().replace(/^\[|\]$/g, '');
   if (h === 'localhost' || h.endsWith('.internal') || h.endsWith('.local')) return true;
-  if (h === '::1' || h.startsWith('fc') || h.startsWith('fd') || h.startsWith('fe80')) return true;
+  // IPv6 rules apply ONLY to IPv6 literals. Testing these prefixes against
+  // bare hostnames blocks real domains: fcuk.com (French Connection UK, an
+  // actual apparel brand in this catalog's space), fdny.org, anything
+  // starting fc/fd. An IPv6 literal always contains a colon; a hostname
+  // never does.
+  if (h.includes(':')) {
+    if (h === '::1' || h.startsWith('fc') || h.startsWith('fd') || h.startsWith('fe80')) return true;
+  }
   const m = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
   if (m) {
     const [a, b] = [Number(m[1]), Number(m[2])];
