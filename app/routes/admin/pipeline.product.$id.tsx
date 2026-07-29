@@ -15,6 +15,11 @@ import { supabase } from '~/utils/supabase';
 
 interface Step {
   key: string; label: string; at: string | null; detail: string; failed?: boolean;
+  kept?: string[];          // re-hosted images the product uses now
+  raw?: string[];           // what the merchant originally gave us (set-once)
+  pruned_count?: number;
+  video?: string | null;
+  poster?: string | null;
 }
 interface Creative {
   status: string; enabled: boolean; model: string | null;
@@ -54,6 +59,7 @@ export default function ProductJourney() {
   const { id } = useParams();
   const [j, setJ] = useState<Journey | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [showRaw, setShowRaw] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -148,6 +154,49 @@ export default function ProductJourney() {
                     <time className="pj-time">{fmtClock(s.at)}</time>
                   </div>
                   <p className="pj-detail">{s.detail}</p>
+
+                  {/* Verify step: show what survived, and what it removed. The
+                      kept images are re-hosted to our storage; the raw ones are
+                      the merchant's originals, so they can 403 on hotlink —
+                      those hide themselves rather than showing a broken icon. */}
+                  {s.key === 'verified' && !!s.kept?.length && (
+                    <>
+                      <div className="pj-gallery">
+                        {s.kept.map((u, k) => (
+                          <a key={u} href={u} target="_blank" rel="noreferrer"
+                             className="pj-shot" title={k === 0 ? 'primary' : `image ${k}`}>
+                            <img src={u} alt="" loading="lazy" />
+                            {k === 0 && <span className="pj-shot-tag">primary</span>}
+                          </a>
+                        ))}
+                      </div>
+                      {!!s.pruned_count && s.pruned_count > 0 && (
+                        <button type="button" className="pj-raw-toggle"
+                                onClick={() => setShowRaw(v => !v)}>
+                          {showRaw ? 'Hide' : 'Show'} {s.raw?.length ?? 0} original
+                          {(s.raw?.length ?? 0) === 1 ? '' : 's'} — {s.pruned_count} pruned
+                        </button>
+                      )}
+                      {showRaw && !!s.raw?.length && (
+                        <div className="pj-gallery pj-gallery--raw">
+                          {s.raw.map(u => (
+                            <a key={u} href={u} target="_blank" rel="noreferrer" className="pj-shot">
+                              <img src={u} alt="" loading="lazy"
+                                   onError={e => { (e.currentTarget.closest('.pj-shot') as HTMLElement).style.display = 'none'; }} />
+                            </a>
+                          ))}
+                        </div>
+                      )}
+                    </>
+                  )}
+
+                  {s.key === 'creative' && s.video && (
+                    <div className="pj-gallery">
+                      <video className="pj-video" src={s.video} poster={s.poster ?? undefined}
+                             controls muted playsInline preload="metadata" />
+                    </div>
+                  )}
+
                   {current && <span className="pj-here">you are here</span>}
                 </div>
               </li>

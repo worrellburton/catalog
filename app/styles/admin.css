@@ -7099,3 +7099,25 @@ html.eq-page .gen-queue-host { display: none; }
   border: 1px solid #e5e7eb; border-radius: 999px; padding: 1px 8px; background: #fff;
 }
 .pj-examples a:hover { border-color: #6366f1; background: #f8fafc; }
+
+/* Journey galleries — what verification kept, and what it pruned. */
+.pj-gallery { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.pj-shot {
+  position: relative; display: block; width: 56px; height: 74px;
+  border-radius: 6px; overflow: hidden; border: 1px solid #e5e7eb; background: #f4f4f5;
+}
+.pj-shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pj-shot-tag {
+  position: absolute; left: 0; right: 0; bottom: 0; text-align: center;
+  font-size: 9px; font-weight: 600; letter-spacing: .04em;
+  background: rgba(15, 23, 42, .78); color: #fff; padding: 1px 0;
+}
+/* Originals read as reference, not as the live gallery. */
+.pj-gallery--raw .pj-shot { filter: grayscale(1); opacity: .72; }
+.pj-gallery--raw .pj-shot:hover { filter: none; opacity: 1; }
+.pj-raw-toggle {
+  margin-top: 8px; padding: 0; border: 0; background: none; cursor: pointer;
+  font-size: 12px; font-weight: 500; color: #6366f1; font-family: inherit;
+}
+.pj-raw-toggle:hover { text-decoration: underline; }
+.pj-video { width: 132px; height: 176px; border-radius: 6px; border: 1px solid #e5e7eb; background: #000; object-fit: cover; }
