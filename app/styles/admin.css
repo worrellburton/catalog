@@ -1510,6 +1510,27 @@ html.admin-on-dark-canvas .admin-topbar,
   color: #999 !important;
 }
 
+/* Pipeline health page — inline explanatory note under a panel, a
+   full-width warning banner, and a highlighted table row. */
+.admin-hint {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: #999;
+}
+
+.admin-warn {
+  margin: 10px 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #fff3e0;
+  color: #e65100;
+  font-size: 12px;
+}
+
+.admin-row-warn td {
+  background: #fff8e1;
+}
+
 /* Per-product thumbnail in the analytics Products table — small,
    square, neutral chip; falls back to a placeholder square when no
    image_url. Keeps the row height tight so the table stays scannable. */
