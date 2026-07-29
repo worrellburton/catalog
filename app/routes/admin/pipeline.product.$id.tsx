@@ -133,7 +133,9 @@ export default function ProductJourney() {
               <li
                 key={s.key}
                 className={`pj-step pj-step--${state}`}
-                style={i > 0 ? { marginTop: `${gapPx(wait)}px` } : undefined}
+                // a re-run badge needs clearance from the row above it, which
+                // a zero-wait gap (12px) does not give.
+                style={i > 0 ? { marginTop: `${Math.max(gapPx(wait), rerun ? 30 : 0)}px` } : undefined}
               >
                 {i > 0 && reached && wait > 0 && (
                   <span className="pj-wait">{fmtWait(wait)}</span>

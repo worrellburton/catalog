@@ -7046,7 +7046,7 @@ html.eq-page .gen-queue-host { display: none; }
 .pj-block-why { margin: 0 0 4px; font-size: 15px; color: #0f172a; }
 .pj-block-fix { margin: 0; font-size: 13px; color: #6b7280; }
 
-.pj-spine { list-style: none; margin: 18px 0 0; padding: 0 0 0 26px; position: relative; }
+.pj-spine { list-style: none; margin: 18px 0 0; padding: 0 0 0 46px; position: relative; }
 .pj-step { position: relative; min-height: 22px; }
 /* the connecting rule, drawn INTO the gap above each step */
 .pj-step::before {
