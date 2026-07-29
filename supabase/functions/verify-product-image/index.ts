@@ -154,7 +154,44 @@ async function fetchImage(rawUrl: string): Promise<Fetched> {
   }
 }
 
-function buildPrompt(desc: string, count: number): string {
+// Product types whose ARTWORK IS THE PRODUCT. For a book, poster or print,
+// cover text and graphic layout are the thing being sold — not a merchandising
+// overlay slapped on a photo. The junk rule below was written for apparel,
+// where text on an image means a size chart or a feature callout.
+//
+// This only became visible once upgradeImageUrl() started fetching originals:
+// at 232px Haiku couldn't read a book cover, at 1694x2560 it could, and
+// correctly-by-its-own-rules called it an infographic. The catalog carries
+// books and art deliberately, so the rule has to know the difference.
+const GRAPHIC_PRODUCT_TYPES = new Set([
+  'book', 'books', 'art', 'artwork', 'print', 'prints', 'poster', 'posters',
+  'stationery', 'card', 'cards', 'magazine', 'vinyl', 'puzzle', 'puzzles',
+]);
+
+function isGraphicProduct(type: string | null | undefined): boolean {
+  return GRAPHIC_PRODUCT_TYPES.has((type || '').trim().toLowerCase());
+}
+
+function buildPrompt(desc: string, count: number, graphic = false): string {
+  if (graphic) {
+    return [
+      `You are auditing an e-commerce product gallery. The product is EXACTLY: "${desc}".`,
+      'This product is a BOOK, PRINT, POSTER or similar item whose ARTWORK AND TEXT ARE THE PRODUCT ITSELF.',
+      'Cover typography, title text, illustration and graphic layout are the thing being sold —',
+      'they are NOT a marketing overlay and must NOT be called junk.',
+      `For EACH of the ${count} image(s) above (in order, starting at index 0) return two fields:`,
+      ' "label": exactly one of',
+      '   good     = a clean shot of THIS product — the cover / print / artwork itself, front or angled,',
+      '              on its own or held, including all of its own printed text and artwork',
+      '   junk     = NOT the product: a size chart, packaging-only shot, retailer banner, star-rating or',
+      '              price graphic, "look inside" UI screenshot, blank tile, or a promotional collage that',
+      '              adds text AROUND the product rather than showing the product itself',
+      '   wrong    = a DIFFERENT title / edition / artwork than the name specifies',
+      '   unusable = corrupt, watermarked stock, or you cannot tell what it is',
+      ' "person": true if a human is visible holding or modelling it; false for a product-only shot.',
+      'Return ONLY JSON: {"images":[{"label":"good","person":false}, ...]} — one object per image, in order. No prose.',
+    ].join('\n');
+  }
   return [
     `You are auditing an e-commerce product gallery. The product is EXACTLY: "${desc}".`,
     'Match the SPECIFIC item — including its COLOR, material, and variant when the name states one',
@@ -177,13 +214,13 @@ function buildPrompt(desc: string, count: number): string {
 
 interface Verdict { label: Label; person: boolean | null }
 
-async function classify(apiKey: string, desc: string, imgs: Fetched[]): Promise<Verdict[]> {
+async function classify(apiKey: string, desc: string, imgs: Fetched[], graphic = false): Promise<Verdict[]> {
   const content: unknown[] = [];
   imgs.forEach((f, i) => {
     content.push({ type: 'text', text: `Image ${i}:` });
     content.push({ type: 'image', source: { type: 'base64', media_type: f.visionType, data: bytesToBase64(f.bytes!) } });
   });
-  content.push({ type: 'text', text: buildPrompt(desc, imgs.length) });
+  content.push({ type: 'text', text: buildPrompt(desc, imgs.length, graphic) });
 
   const resp = await fetch(ANTHROPIC_API, {
     method: 'POST',
@@ -291,7 +328,7 @@ Deno.serve(async (req: Request) => {
   const metaByUrl = new Map<string, Verdict>();
   if (visionInputs.length) {
     let results: Verdict[];
-    try { results = await classify(anthropicKey, desc, visionInputs); }
+    try { results = await classify(anthropicKey, desc, visionInputs, isGraphicProduct(prod.type)); }
     catch (err) { return json({ success: false, error: `vision: ${err instanceof Error ? err.message : String(err)}` }); }
     visionInputs.forEach((f, i) => metaByUrl.set(f.url, results[i] ?? { label: 'unchecked', person: null }));
   }
