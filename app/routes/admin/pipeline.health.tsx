@@ -9,6 +9,7 @@ import { Link } from '@remix-run/react';
 import { supabase } from '~/utils/supabase';
 
 interface FunnelRow { stage: string; n: number; oldest_age: string | null }
+interface StageExample { stage: string; id: string; brand: string | null; name: string | null }
 interface CronRow { jobname: string; schedule: string; active: boolean; last_status: string | null; last_run: string | null }
 interface LinkRow { bucket: string; n: number }
 interface SpendRow { platform: string; operation: string; calls: number; month_usd: number; total_usd: number }
@@ -61,6 +62,7 @@ export default function PipelineHealth() {
   const [costError, setCostError] = useState<string | null>(null);
   const [demand, setDemand] = useState<Record<string, number>>({});
   const [demandError, setDemandError] = useState<string | null>(null);
+  const [examples, setExamples] = useState<StageExample[]>([]);
   const [ingest, setIngest] = useState<Ingest | null>(null);
   const [ingestError, setIngestError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
@@ -70,7 +72,7 @@ export default function PipelineHealth() {
     // F8: a missing supabase client must not leave the page spinning forever.
     if (!supabase) { setClientError('Supabase client not configured.'); setLoading(false); return; }
     void (async () => {
-      const [f, c, l, s, cap, cost, targets, ing] = await Promise.all([
+      const [f, c, l, s, cap, cost, targets, ing, ex] = await Promise.all([
         supabase.rpc('pipeline_funnel'),
         supabase.rpc('pipeline_cron_status'),
         supabase.rpc('link_health_summary'),
@@ -79,6 +81,7 @@ export default function PipelineHealth() {
         supabase.rpc('pipeline_cost_per_published'),
         supabase.from('seed_targets').select('status'),
         supabase.rpc('pipeline_ingest_summary'),
+        supabase.rpc('pipeline_stage_examples', { p_per_stage: 3 }),
       ]);
       // F5: every RPC's error is surfaced in its own panel now, not just the
       // cron one — a permission failure / RLS block / dropped function must
@@ -102,6 +105,7 @@ export default function PipelineHealth() {
       setDemandError(targets.error ? targets.error.message : null);
       setIngest((ing.data ?? null) as Ingest | null);
       setIngestError(ing.error ? ing.error.message : null);
+      setExamples((ex.data ?? []) as StageExample[]);
       setLoading(false);
     })();
   }, []);
@@ -228,7 +232,19 @@ export default function PipelineHealth() {
               <tbody>
                 {funnel.map(r => (
                   <tr key={r.stage} className={r.stage === 'published_no_creative' ? 'admin-row-warn' : undefined}>
-                    <td>{r.stage}</td>
+                    <td>
+                  {r.stage}
+                  {examples.filter(e => e.stage === r.stage).length > 0 && (
+                    <span className="pj-examples">
+                      {examples.filter(e => e.stage === r.stage).map(e => (
+                        <Link key={e.id} to={`/admin/pipeline/product/${e.id}`}
+                              title={`${e.brand ?? ''} ${e.name ?? ''}`.trim()}>
+                          {(e.brand ?? e.name ?? 'product').slice(0, 18)}
+                        </Link>
+                      ))}
+                    </span>
+                  )}
+                </td>
                     <td className="admin-cell-center">{r.n}</td>
                     <td className="admin-cell-muted">{fmtAge(r.oldest_age)}</td>
                   </tr>

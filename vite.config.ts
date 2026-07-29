@@ -256,6 +256,7 @@ export default defineConfig({
             route("seeding/simulate", "routes/admin/seeding.simulate.tsx");
             route("pipeline", "routes/admin/pipeline.tsx");
             route("pipeline/health", "routes/admin/pipeline.health.tsx");
+            route("pipeline/product/:id", "routes/admin/pipeline.product.$id.tsx");
             route("daily-feed", "routes/admin/daily-feed.tsx");
             route("governance", "routes/admin/governance.tsx");
             route("governance/types", "routes/admin/governance.types.tsx");
