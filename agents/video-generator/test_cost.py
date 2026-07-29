@@ -1,7 +1,12 @@
-from ad_generator import (
-    _estimate_cost,
-    _PER_SECOND_USD,
-    _UNKNOWN_MODEL_USD_PER_SECOND,
+# F3 fix: pricing lives in the dependency-free `pricing` module (stdlib only),
+# NOT ad_generator (which pulls in httpx/supabase/veo_client/seedance_client at
+# module load) - so this test can run in a bare checkout or CI, not only
+# inside the Modal image. ad_generator.py imports the same names from here;
+# this is the ONLY copy of the pricing table in the codebase.
+from pricing import (
+    estimate_cost as _estimate_cost,
+    PER_SECOND_USD as _PER_SECOND_USD,
+    UNKNOWN_MODEL_USD_PER_SECOND as _UNKNOWN_MODEL_USD_PER_SECOND,
 )
 
 # The real slugs in use. Pro carries NO tier segment - that asymmetry is the

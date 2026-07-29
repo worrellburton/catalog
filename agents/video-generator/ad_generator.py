@@ -25,6 +25,7 @@ import httpx
 from supabase import create_client
 
 from config import STYLES, GENERATION_DEFAULTS, DEFAULT_STYLE
+from pricing import estimate_cost as _estimate_cost
 from prompts import enhance_prompt_with_gemini
 from veo_client import (
     generate_video_with_references,
@@ -254,6 +255,19 @@ def _get_ad_index_for_product(supabase, product_id: str, ad_id: str) -> int:
         if row["id"] == ad_id:
             return i
     return 0
+
+
+def _platform_for_model(model: str) -> str:
+    """Map a model slug to the ai_usage_logs platform it actually billed
+    against (F1 fix). Mirrors the routing in _generate_with_retry: fal.ai
+    slugs (Seedance, generic fal models) start with 'fal-ai/' or
+    'bytedance/'; Veo slugs (the default) start with 'veo-' or 'google/'
+    and are routed to the Google client, not fal."""
+    if model.startswith("fal-ai/") or model.startswith("bytedance/"):
+        return "fal"
+    if model.startswith("veo-") or model.startswith("google/"):
+        return "google"
+    return "unknown"
 
 
 def _generate_with_retry(
@@ -513,11 +527,14 @@ def generate_ad_video(ad_id: str) -> dict:
         # Set affiliate URL from product URL if not already set
         affiliate_url = ad.get("affiliate_url") or product.get("url")
 
-        # Cost from the model ACTUALLY used and its real duration - not the
-        # default model, which is what made every row read $0.10.
+        # Cost from the model ACTUALLY used, the resolution the ROW actually
+        # holds (not the hardcoded default), and the duration actually passed
+        # to the generator below (style_cfg["duration"] - NOT
+        # ad["duration_seconds"], which is never sent to any generate_* call).
         actual_model = ad_model or GENERATION_DEFAULTS["model"]
-        actual_duration = int(ad.get("duration_seconds") or style_cfg.get("duration", 5))
-        cost = _estimate_cost(actual_model, GENERATION_DEFAULTS["resolution"], actual_duration)
+        actual_resolution = ad.get("resolution") or GENERATION_DEFAULTS["resolution"]
+        actual_duration = int(style_cfg.get("duration", GENERATION_DEFAULTS["duration"]))
+        cost = _estimate_cost(actual_model, actual_resolution, actual_duration)
 
         # Update ad as done
         update_payload = {
@@ -537,9 +554,13 @@ def generate_ad_video(ad_id: str) -> dict:
 
         # Spend telemetry. Without this row the monthly cap in Task 5 is
         # fiction - ai_usage_logs had ZERO fal entries before this shipped.
+        # Platform is derived from the model actually used, NOT hardcoded -
+        # GENERATION_DEFAULTS["model"] defaults to a Veo (Google) slug, which
+        # _generate_with_retry routes to the Google client, not fal. A
+        # hardcoded "fal" here logged every Google render as fal spend.
         try:
             supabase.table("ai_usage_logs").insert({
-                "platform": "fal",
+                "platform": _platform_for_model(actual_model),
                 "operation": "product-creative",
                 "model": actual_model,
                 "units": actual_duration,
@@ -596,58 +617,6 @@ def process_pending_ads() -> list[dict]:
             results.append({"success": False, "ad_id": row["id"], "error": str(e)})
 
     return results
-
-
-# Per-SECOND pricing. Fal bills reference-to-video by duration, which the old
-# flat per-render table could not express - and it listed only 3 Veo models, so
-# every Seedance render fell through to the 0.10 default. That default is why
-# all 41 pre-2026-07-28 product_creative rows read exactly $0.1000 and why the
-# monthly budget cap could not be trusted.
-# Per-SECOND rates, derived from this repo's own pricing table in
-# app/constants/video-model-pricing.ts, whose header states its numbers are
-# "ballpark for a single ~5s 720p portrait clip" - so rate = costUsd / 5.
-#
-# ORDER MATTERS and the list is most-specific-first, because the Pro
-# reference-to-video slug carries NO tier segment:
-#     pro  -> bytedance/seedance-2.0/reference-to-video
-#     fast -> bytedance/seedance-2.0/fast/reference-to-video
-# A bare "bytedance/seedance-2.0" prefix therefore matches BOTH, so the fast
-# entry must be tested first. (An earlier draft keyed pro on
-# "bytedance/seedance-2.0/pro", which matches nothing that exists - pro fell
-# through to the unknown-model rate and the fast<pro ordering only held by
-# accident.)
-#
-# These remain ESTIMATES. fal does not return a price in its response, so the
-# budget cap in run_pipeline_creative_drain() is only as accurate as this
-# table - reconcile it against a real fal invoice after the first canary.
-_PER_SECOND_USD = (
-    ("bytedance/seedance-2.0/fast", 0.030),   # 0.15 / 5s
-    ("bytedance/seedance-2.0",      0.060),   # 0.30 / 5s  (pro ref-to-video)
-    ("fal-ai/veo3.1/fast",          0.024),   # 0.12 / 5s
-    ("fal-ai/veo3.1",               0.090),   # 0.45 / 5s
-    ("fal-ai/vidu",                 0.040),   # 0.20 / 5s
-    ("google/gemini-omni",          0.060),   # absent from the repo table; priced at top tier
-)
-_FLAT_USD = {
-    "veo-3.1-fast-generate-preview":  {"720p": 0.10, "1080p": 0.12},
-    "veo-3.1-generate-preview":       {"720p": 0.40, "1080p": 0.40},
-    "veo-3.1-lite-generate-preview":  {"720p": 0.05, "1080p": 0.08},
-}
-# Fail-safe: an unpriced slug bills at the HIGHEST known rate, so an unknown
-# model can only ever over-report spend and trip the cap early.
-_UNKNOWN_MODEL_USD_PER_SECOND = max(rate for _, rate in _PER_SECOND_USD)
-
-
-def _estimate_cost(model: str, resolution: str, duration_seconds: int = 5) -> float:
-    """Estimated USD for one render, by the model ACTUALLY used and its real
-    duration. Conservative by design: an unpriced slug is billed at the most
-    expensive known rate so the budget cap fails safe."""
-    if model in _FLAT_USD:
-        return _FLAT_USD[model].get(resolution, 0.10)
-    for prefix, rate in _PER_SECOND_USD:
-        if model.startswith(prefix):
-            return round(rate * max(1, duration_seconds), 4)
-    return round(_UNKNOWN_MODEL_USD_PER_SECOND * max(1, duration_seconds), 4)
 
 
 if __name__ == "__main__":

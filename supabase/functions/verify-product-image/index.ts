@@ -29,6 +29,7 @@
 // POST { product_id: string, dry_run?: boolean, max_images?: number }
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { urlAllowed } from '../_shared/ssrf-guard.ts';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -87,34 +88,9 @@ function extFor(ct?: string): string {
   return 'jpg';
 }
 
-// SSRF guard: block obviously-internal hosts. Literal private/link-local/loopback
-// IPs + localhost + *.internal/.local. ponytail: does NOT defend DNS-rebinding
-// (a public host resolving to a private IP) — Deno has no resolve-then-pin hook;
-// acceptable since candidate URLs come from our own crawl, not arbitrary input.
-function isBlockedHost(host: string): boolean {
-  const h = host.toLowerCase().replace(/^\[|\]$/g, '');
-  if (h === 'localhost' || h.endsWith('.internal') || h.endsWith('.local')) return true;
-  if (h === '::1' || h.startsWith('fc') || h.startsWith('fd') || h.startsWith('fe80')) return true;
-  const m = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
-  if (m) {
-    const [a, b] = [Number(m[1]), Number(m[2])];
-    if (a === 127 || a === 10 || a === 0) return true;
-    if (a === 169 && b === 254) return true;            // link-local / cloud metadata
-    if (a === 172 && b >= 16 && b <= 31) return true;
-    if (a === 192 && b === 168) return true;
-    if (a === 100 && b >= 64 && b <= 127) return true;  // CGNAT
-  }
-  return false;
-}
-
-function urlAllowed(u: string): URL | null {
-  try {
-    const parsed = new URL(u);
-    if (parsed.protocol !== 'https:') return null;
-    if (isBlockedHost(parsed.hostname)) return null;
-    return parsed;
-  } catch { return null; }
-}
+// SSRF guard (isBlockedHost / urlAllowed) lives in ../_shared/ssrf-guard.ts —
+// shared with the sibling check-product-links function so a fix applies to
+// both fetchers of untrusted merchant/candidate URLs at once.
 
 // Classify an HTTP status into a retire-relevant reason.
 //   dead    = the resource is gone (retire / re-source candidate)

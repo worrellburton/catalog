@@ -43,7 +43,8 @@ export default function Pipeline() {
   const [msg, setMsg] = useState<string | null>(null);
 
   const load = useCallback(async () => {
-    if (!supabase) return;
+    // F8: a missing supabase client must not leave the page spinning forever.
+    if (!supabase) { setMsg('Supabase client not configured.'); setLoading(false); return; }
     const [{ data: rows, error: rowsErr }, { data: cronRows, error: cronErr }] = await Promise.all([
       supabase.from('app_settings').select('key,value').like('key', 'pipeline\\_%'),
       supabase.rpc('pipeline_cron_status'),
@@ -75,6 +76,25 @@ export default function Pipeline() {
     await load();
   }, [load]);
 
+  const creativesPerDay = Number(settings.get('pipeline_creatives_per_day') ?? '0');
+  const monthlyCap = Number(settings.get('pipeline_creative_monthly_usd_cap') ?? '0');
+  const minImageScore = Number(settings.get('pipeline_min_image_score') ?? '0');
+  const minImages = Number(settings.get('pipeline_min_images') ?? '0');
+
+  // F9: these four fields were uncontrolled (defaultValue + onBlur) — if
+  // admin_set_pipeline_setting failed, load() refreshed `settings` but the
+  // DOM kept the typed value, so the field showed a number the DB never
+  // held. Controlled draft state + a sync effect means a failed write
+  // (settings unchanged after load()) visibly reverts the field.
+  const [creativesPerDayInput, setCreativesPerDayInput] = useState(String(creativesPerDay));
+  const [monthlyCapInput, setMonthlyCapInput] = useState(String(monthlyCap));
+  const [minImageScoreInput, setMinImageScoreInput] = useState(String(minImageScore));
+  const [minImagesInput, setMinImagesInput] = useState(String(minImages));
+  useEffect(() => setCreativesPerDayInput(String(creativesPerDay)), [creativesPerDay]);
+  useEffect(() => setMonthlyCapInput(String(monthlyCap)), [monthlyCap]);
+  useEffect(() => setMinImageScoreInput(String(minImageScore)), [minImageScore]);
+  useEffect(() => setMinImagesInput(String(minImages)), [minImages]);
+
   if (loading) return (
     <div className="admin-page">
       <span className="admin-spinner" />
@@ -85,10 +105,6 @@ export default function Pipeline() {
   const creativeEnabled = settings.get('pipeline_creative_enabled') === 'true';
   const autopublishEnabled = settings.get('pipeline_autopublish_enabled') === 'true';
   const requirePersonFree = settings.get('pipeline_require_person_free') === 'true';
-  const creativesPerDay = Number(settings.get('pipeline_creatives_per_day') ?? '0');
-  const monthlyCap = Number(settings.get('pipeline_creative_monthly_usd_cap') ?? '0');
-  const minImageScore = Number(settings.get('pipeline_min_image_score') ?? '0');
-  const minImages = Number(settings.get('pipeline_min_images') ?? '0');
 
   return (
     <div className="admin-page">
@@ -164,8 +180,13 @@ export default function Pipeline() {
         <div className="admin-detail-rows">
           <div className="admin-detail-row">
             <span>Creatives per day</span>
-            <input type="number" className="admin-date-input" min={0} step={1} defaultValue={creativesPerDay}
-              onBlur={e => { const v = Math.max(0, Math.round(Number(e.target.value) || 0)); if (v !== creativesPerDay) void setSetting('pipeline_creatives_per_day', String(v)); }} />
+            <input type="number" className="admin-date-input" min={0} step={1} value={creativesPerDayInput}
+              onChange={e => setCreativesPerDayInput(e.target.value)}
+              onBlur={() => {
+                const v = Math.max(0, Math.round(Number(creativesPerDayInput) || 0));
+                setCreativesPerDayInput(String(v));
+                if (v !== creativesPerDay) void setSetting('pipeline_creatives_per_day', String(v));
+              }} />
           </div>
           <p className="admin-hint">
             There is a hard per-run ceiling of 25 — the cron drains at most 25 per 15-minute tick
@@ -173,8 +194,13 @@ export default function Pipeline() {
           </p>
           <div className="admin-detail-row">
             <span>Monthly creative budget cap (USD)</span>
-            <input type="number" className="admin-date-input" min={0} step={1} defaultValue={monthlyCap}
-              onBlur={e => { const v = Math.max(0, Number(e.target.value) || 0); if (v !== monthlyCap) void setSetting('pipeline_creative_monthly_usd_cap', String(v)); }} />
+            <input type="number" className="admin-date-input" min={0} step={1} value={monthlyCapInput}
+              onChange={e => setMonthlyCapInput(e.target.value)}
+              onBlur={() => {
+                const v = Math.max(0, Number(monthlyCapInput) || 0);
+                setMonthlyCapInput(String(v));
+                if (v !== monthlyCap) void setSetting('pipeline_creative_monthly_usd_cap', String(v));
+              }} />
           </div>
           <p className="admin-hint">
             Costs are estimates — fal returns no price — so this cap is only as accurate as our pricing
@@ -188,13 +214,23 @@ export default function Pipeline() {
         <div className="admin-detail-rows">
           <div className="admin-detail-row">
             <span>Minimum image score</span>
-            <input type="number" className="admin-date-input" min={0} max={1} step={0.05} defaultValue={minImageScore}
-              onBlur={e => { const v = Math.min(1, Math.max(0, Number(e.target.value) || 0)); if (v !== minImageScore) void setSetting('pipeline_min_image_score', String(v)); }} />
+            <input type="number" className="admin-date-input" min={0} max={1} step={0.05} value={minImageScoreInput}
+              onChange={e => setMinImageScoreInput(e.target.value)}
+              onBlur={() => {
+                const v = Math.min(1, Math.max(0, Number(minImageScoreInput) || 0));
+                setMinImageScoreInput(String(v));
+                if (v !== minImageScore) void setSetting('pipeline_min_image_score', String(v));
+              }} />
           </div>
           <div className="admin-detail-row">
             <span>Minimum images</span>
-            <input type="number" className="admin-date-input" min={0} step={1} defaultValue={minImages}
-              onBlur={e => { const v = Math.max(0, Math.round(Number(e.target.value) || 0)); if (v !== minImages) void setSetting('pipeline_min_images', String(v)); }} />
+            <input type="number" className="admin-date-input" min={0} step={1} value={minImagesInput}
+              onChange={e => setMinImagesInput(e.target.value)}
+              onBlur={() => {
+                const v = Math.max(0, Math.round(Number(minImagesInput) || 0));
+                setMinImagesInput(String(v));
+                if (v !== minImages) void setSetting('pipeline_min_images', String(v));
+              }} />
           </div>
           <p className="admin-hint">
             2 is permissive — a 2-image gallery is often the <em>result</em> of aggressive junk pruning,

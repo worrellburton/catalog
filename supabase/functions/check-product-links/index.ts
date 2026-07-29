@@ -11,17 +11,23 @@
 //
 // SAFETY:
 //   - SSRF: only https:// URLs whose resolved host is public are fetched;
-//     a URL that fails validation is recorded url_status=0 and never fetched.
-//     Redirects are followed manually (redirect:'manual') so each hop's
-//     target is re-validated against the same rules, capped at 5 hops.
+//     a URL that fails validation is recorded url_status=-1 (blocked_by_policy)
+//     and never fetched. Redirects are followed manually (redirect:'manual')
+//     so each hop's target is re-validated against the same rules, capped at
+//     5 hops.
 //   - Every per-product check is individually try/caught - one bad URL
-//     (timeout, DNS failure, malformed response) records status 0 and the
-//     run continues to the next product.
+//     (timeout, DNS failure, malformed response) records url_status=-2
+//     (unreachable) and the run continues to the next product.
+//   - Sentinel codes (-1, -2) are distinct from real HTTP statuses so
+//     link_health_summary() can tell "we didn't fetch it" apart from a
+//     genuine 404 — see migration 20260729000010_link_health_sentinels.sql.
+//     0 is intentionally left unused.
 //
 // Triggered by cron 'pipeline-link-health' (see migration
 // 20260729000006_link_health.sql) via a service-role bearer token.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { urlAllowed } from '../_shared/ssrf-guard.ts';
 
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
            '(KHTML, like Gecko) Chrome/131.0 Safari/537.36';
@@ -29,50 +35,23 @@ const BATCH_SIZE = 50;
 const MAX_REDIRECTS = 5;
 const FETCH_TIMEOUT_MS = 15_000;
 
-// SSRF guard: block private/loopback/link-local hosts. Same ranges as the
-// sibling verify-product-image function.
-// ponytail: does NOT defend DNS-rebinding (a public host resolving to a
-// private IP) - Deno has no resolve-then-pin hook; acceptable since these
-// URLs come from our own crawled/scraped catalog, not arbitrary input.
-function isBlockedHost(host: string): boolean {
-  const h = host.toLowerCase().replace(/^\[|\]$/g, '');
-  if (h === 'localhost' || h.endsWith('.internal') || h.endsWith('.local')) return true;
-  // IPv6 rules apply ONLY to IPv6 literals. Testing these prefixes against
-  // bare hostnames blocks real domains: fcuk.com (French Connection UK, an
-  // actual apparel brand in this catalog's space), fdny.org, anything
-  // starting fc/fd. An IPv6 literal always contains a colon; a hostname
-  // never does.
-  if (h.includes(':')) {
-    if (h === '::1' || h.startsWith('fc') || h.startsWith('fd') || h.startsWith('fe80')) return true;
-  }
-  const m = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
-  if (m) {
-    const [a, b] = [Number(m[1]), Number(m[2])];
-    if (a === 127 || a === 10 || a === 0) return true;
-    if (a === 169 && b === 254) return true;           // link-local / cloud metadata
-    if (a === 172 && b >= 16 && b <= 31) return true;
-    if (a === 192 && b === 168) return true;
-    if (a === 100 && b >= 64 && b <= 127) return true;  // CGNAT
-  }
-  return false;
-}
+// SSRF guard (isBlockedHost / urlAllowed) lives in ../_shared/ssrf-guard.ts —
+// shared with the sibling verify-product-image function so a fix applies to
+// both fetchers of untrusted merchant/candidate URLs at once.
 
-function urlAllowed(u: string): URL | null {
-  try {
-    const parsed = new URL(u);
-    if (parsed.protocol !== 'https:') return null;
-    if (isBlockedHost(parsed.hostname)) return null;
-    return parsed;
-  } catch { return null; }
-}
+// Sentinel status codes — distinct from real HTTP statuses so downstream
+// buckets (link_health_summary()) don't conflate "we chose not to fetch this"
+// or "the network never answered" with a genuine dead link (404/410/etc).
+const STATUS_BLOCKED_BY_POLICY = -1;
+const STATUS_UNREACHABLE = -2;
 
-// Returns the HTTP status of the product URL, or 0 if it failed SSRF
-// validation, timed out, or could not be reached at all. Follows redirects
-// manually so every hop is re-validated; a redirect chain that exceeds
-// MAX_REDIRECTS or points at a blocked host also resolves to 0.
+// Returns the HTTP status of the product URL, STATUS_BLOCKED_BY_POLICY if it
+// (or a redirect hop) failed SSRF validation, or STATUS_UNREACHABLE if the
+// redirect chain dead-ended / exceeded MAX_REDIRECTS. Redirects are followed
+// manually so every hop is re-validated.
 async function checkLinkStatus(rawUrl: string, signal: AbortSignal): Promise<number> {
   let target = urlAllowed(rawUrl);
-  if (!target) return 0; // non-https or private/loopback host - never fetched
+  if (!target) return STATUS_BLOCKED_BY_POLICY; // non-https or private/loopback host - never fetched
 
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
     const res = await fetch(target.href, {
@@ -85,15 +64,15 @@ async function checkLinkStatus(rawUrl: string, signal: AbortSignal): Promise<num
 
     if (res.status >= 300 && res.status < 400) {
       const loc = res.headers.get('location');
-      if (!loc || hop === MAX_REDIRECTS) return 0; // dead-end / cap exceeded
+      if (!loc || hop === MAX_REDIRECTS) return STATUS_UNREACHABLE; // dead-end / cap exceeded
       const next = urlAllowed(new URL(loc, target.href).href);
-      if (!next) return 0; // redirect target failed SSRF check
+      if (!next) return STATUS_BLOCKED_BY_POLICY; // redirect target failed SSRF check
       target = next;
       continue;
     }
     return res.status;
   }
-  return 0;
+  return STATUS_UNREACHABLE;
 }
 
 Deno.serve(async () => {
@@ -112,7 +91,7 @@ Deno.serve(async () => {
 
   let checked = 0;
   for (const r of rows ?? []) {
-    let status = 0;
+    let status = STATUS_UNREACHABLE;
     try {
       const ctrl = new AbortController();
       const t = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
@@ -122,7 +101,7 @@ Deno.serve(async () => {
         clearTimeout(t);
       }
     } catch {
-      status = 0; // connection failure / timeout / abort - never let one URL kill the run
+      status = STATUS_UNREACHABLE; // connection failure / timeout / abort - never let one URL kill the run
     }
     await admin.from('products')
       .update({ url_status: status, url_checked_at: new Date().toISOString() })
