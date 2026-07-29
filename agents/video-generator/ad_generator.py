@@ -536,9 +536,21 @@ def generate_ad_video(ad_id: str) -> dict:
         actual_duration = int(style_cfg.get("duration", GENERATION_DEFAULTS["duration"]))
         cost = _estimate_cost(actual_model, actual_resolution, actual_duration)
 
-        # Update ad as done
+        # Update ad as done.
+        #
+        # `enabled` is REQUIRED here, not cosmetic. product_creative.enabled
+        # defaults to FALSE, and promote_creative_to_primary_video() only fires
+        # when status in ('live','done') AND enabled AND video_url is not null.
+        # The app's own flow pairs them (product-creative.ts sets
+        # status='live', enabled=true together) but this generator never did —
+        # so every automated render completed, was BILLED, and then failed to
+        # set products.primary_video_url. The product stayed invisible in the
+        # feed (video is a hard filter) and got re-queued forever.
+        # Measured 2026-07-29: 30 rows done+video_url+enabled=false, $3.00
+        # spent, 12 of them still recoverable.
         update_payload = {
             "status": "done",
+            "enabled": True,
             "video_url": video_url,
             "storage_path": storage_path,
             "affiliate_url": affiliate_url,
