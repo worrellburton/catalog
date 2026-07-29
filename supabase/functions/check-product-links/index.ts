@@ -31,7 +31,13 @@ import { urlAllowed } from '../_shared/ssrf-guard.ts';
 
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 ' +
            '(KHTML, like Gecko) Chrome/131.0 Safari/537.36';
-const BATCH_SIZE = 50;
+// Sequential fetching capped coverage at ~50/day, which is ~6 days to sweep a
+// 341-product catalog — long enough that the dashboard shows mostly
+// 'unchecked'. The work is I/O-bound, so a small concurrency pool lifts the
+// batch without lengthening the run. Kept modest: these are other people's
+// servers, and a burst reads like a scrape.
+const BATCH_SIZE = 150;
+const CONCURRENCY = 6;
 const MAX_REDIRECTS = 5;
 const FETCH_TIMEOUT_MS = 15_000;
 
@@ -89,25 +95,35 @@ Deno.serve(async () => {
     .order('url_checked_at', { ascending: true, nullsFirst: true })
     .limit(BATCH_SIZE);
 
+  const queue = [...(rows ?? [])];
   let checked = 0;
-  for (const r of rows ?? []) {
-    let status = STATUS_UNREACHABLE;
-    try {
-      const ctrl = new AbortController();
-      const t = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
+
+  async function worker() {
+    for (;;) {
+      const r = queue.shift();
+      if (!r) return;
+      let status = STATUS_UNREACHABLE;
       try {
-        status = await checkLinkStatus(r.url as string, ctrl.signal);
-      } finally {
-        clearTimeout(t);
+        const ctrl = new AbortController();
+        const t = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
+        try {
+          status = await checkLinkStatus(r.url as string, ctrl.signal);
+        } finally {
+          clearTimeout(t);
+        }
+      } catch {
+        status = STATUS_UNREACHABLE; // timeout / DNS / abort - one bad URL must never kill the run
       }
-    } catch {
-      status = STATUS_UNREACHABLE; // connection failure / timeout / abort - never let one URL kill the run
+      await admin.from('products')
+        .update({ url_status: status, url_checked_at: new Date().toISOString() })
+        .eq('id', r.id);
+      checked++;
     }
-    await admin.from('products')
-      .update({ url_status: status, url_checked_at: new Date().toISOString() })
-      .eq('id', r.id);
-    checked++;
   }
+
+  // Workers share one queue, so a slow host delays only its own worker rather
+  // than the whole batch.
+  await Promise.all(Array.from({ length: CONCURRENCY }, () => worker()));
 
   return new Response(JSON.stringify({ checked }), {
     headers: { 'Content-Type': 'application/json' },
