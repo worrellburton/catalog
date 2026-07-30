@@ -281,7 +281,13 @@ const CreativeCard = memo(function CreativeCard({ creative, className = 'look-ca
             // fetchpriority isn't in React's stock HTMLImageElement type
             // yet, so spread it via a literal attr.
             {...(priority ? { fetchpriority: 'high' as const } : {})}
-            onError={(e) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+            // Mark the card loaded when the poster paints — mirrors
+            // CreativeCardV2. Still-mode cards here have no <video>, so the
+            // video effect (which sets `loaded`) returns early; without this
+            // the shimmer never clears AND the .loaded card-poster fade never
+            // resolves, leaving a still card stuck on its shimmer.
+            onLoad={() => setLoaded(true)}
+            onError={(e) => { setLoaded(true); (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
             style={{ position: 'absolute', inset: 0, width: '100%', height: '100%', objectFit: 'cover', zIndex: 1 } as React.CSSProperties}
           />
         )}

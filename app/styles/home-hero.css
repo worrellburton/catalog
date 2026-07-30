@@ -249,8 +249,14 @@
      search + recently-viewed cluster above it. Nudged a touch lower so that
      separation reads clearly now that recently-viewed rides under the bar. */
   bottom: calc(62px + env(safe-area-inset-bottom));
-  left: 50%;
-  transform: translateX(-50%);
+  /* Centered per the repo's hard rule (CLAUDE.md §1): margin-inline + a
+     width, never left:50% + translateX(-50%) — the hide rules below animate
+     `transform` and were having to re-chain the translateX to avoid
+     snapping the hint off-axis. */
+  left: 0;
+  right: 0;
+  margin-inline: auto;
+  width: fit-content;
   display: inline-flex;
   flex-direction: column;
   align-items: center;
@@ -310,7 +316,11 @@
   order: 4;
   background: none;
   border: none;
-  padding: 0;
+  /* 18px icon alone is far under the 44px minimum touch target — pad the
+     hit area out and pull the same amount back with margin so the visual
+     position doesn't move. */
+  padding: 12px 20px;
+  margin: -12px -20px;
   cursor: pointer;
   color: inherit;
   display: inline-flex;
@@ -1966,7 +1976,7 @@ html:has(.bottom-bar.search-open) .sc-name-pill { opacity: 0; pointer-events: no
 .sfh-scroll-hint { transition: opacity 0.3s ease, transform 0.3s ease; }
 .app-root.home-hero:has(.bottom-bar.search-open) .sfh-scroll-hint {
   opacity: 0;
-  transform: translateX(-50%) translateY(8px);
+  transform: translateY(8px);
   pointer-events: none;
 }
 /* Desktop: the search bar is TypeAnywhere (.ai-bar-wrap — a SIBLING of
@@ -1975,7 +1985,7 @@ html:has(.bottom-bar.search-open) .sc-name-pill { opacity: 0; pointer-events: no
    so it doesn't sit behind the rising prompts panel. */
 body:has(.ai-bar-wrap:focus-within) .app-root.home-hero .sfh-scroll-hint {
   opacity: 0;
-  transform: translateX(-50%) translateY(8px);
+  transform: translateY(8px);
   pointer-events: none;
 }
 

@@ -9,6 +9,7 @@ import SearchCatalogStrip from '~/components/home/SearchCatalogStrip';
 import SplashHost from '~/components/splash/SplashHost';
 import { getSplashConfig, DEFAULT_SPLASH_CONFIG, type SplashConfig } from '~/services/splash-config';
 import ContinuousFeed from '~/components/ContinuousFeed';
+import FeedContextPill from '~/components/FeedContextPill';
 import SiteParticleHost from '~/components/SiteParticleHost';
 import ParticleBackground from '~/components/ParticleBackground';
 import BottomBar from '~/components/BottomBar';
@@ -21,7 +22,8 @@ import UserMenu from '~/components/UserMenu';
 import { Look, Product } from '~/data/looks';
 import { useBookmarks } from '~/hooks/useBookmarks';
 import { useRecentProducts } from '~/hooks/useRecentProducts';
-import { useAuth } from '~/hooks/useAuth';
+import { useAuth, isOAuthReturn } from '~/hooks/useAuth';
+import { shouldRedirectToStyle, BROWSE_FEED_KEY } from '~/utils/front-door';
 import { useOverlayRouter } from '~/hooks/useOverlayRouter';
 import { lookSlug, productSlug } from '~/utils/slug';
 import { markOverlayReturn } from '~/utils/overlay-scroll-stash';
@@ -495,6 +497,8 @@ export default function Home() {
   // Appear-on-scroll: hidden at the top of the feed, fades in once scrolling
   // begins. Inverts the creator dial (which shows at top, hides on scroll).
   const [feedDialVisible, setFeedDialVisible] = useState(false);
+  // Deep-scroll context pill (filters + back-to-top) visibility.
+  const [feedTopVisible, setFeedTopVisible] = useState(false);
   // Opening a look/product overlay locks the body with position:fixed, which
   // snaps document scroll to 0 (and fires a synthetic scroll); closing
   // restores the scroll (another synthetic scroll). Both scroll-trackers
@@ -689,6 +693,31 @@ export default function Home() {
     };
   }, []);
 
+  // Deep-scroll context pill (active filters + back-to-top): shows once the
+  // shopper is ~2 screens into the feed. Same rAF/overlay-lock discipline
+  // as the grid-density dial effect above.
+  useEffect(() => {
+    let raf = 0;
+    const onScroll = () => {
+      if (overlayScrollLockRef.current) return;
+      if (raf) return;
+      raf = requestAnimationFrame(() => {
+        raf = 0;
+        setFeedTopVisible(window.scrollY > window.innerHeight * 2);
+      });
+    };
+    onScroll();
+    window.addEventListener('scroll', onScroll, { passive: true });
+    return () => {
+      window.removeEventListener('scroll', onScroll);
+      if (raf) cancelAnimationFrame(raf);
+    };
+  }, []);
+
+  const handleBackToTop = useCallback(() => {
+    window.scrollTo({ top: 0, behavior: 'smooth' });
+  }, []);
+
   // Tap a dial segment → DIRECTLY select that column count (1 / 2 / 3) — the
   // founder wants the segments to be a direct picker, not a 1→2→3 cycle.
   // Suppressed right after a drag so the touchend-synthesized click doesn't
@@ -874,6 +903,30 @@ export default function Home() {
   // TypeAnywhere overlay (which uses navigate('/?q=…')) would then
   // appear as no-op location changes and silently drop the query.
   const navigate = useNavigate();
+
+  // Front door: StyleUp is the app's landing. A plain open of "/" redirects to
+  // the stylist picker; the feed still lives here and is revealed once the
+  // shopper chooses to browse (StyleUp's back button, the account menu, or any
+  // deep-link). Decided once at mount so the gate/feed never flash first.
+  const [redirectingToStyle] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    let browseFeed = false;
+    try { browseFeed = sessionStorage.getItem(BROWSE_FEED_KEY) === '1'; } catch { /* private mode */ }
+    return shouldRedirectToStyle({ search: window.location.search, isOAuth: isOAuthReturn(), browseFeed });
+  });
+  useEffect(() => {
+    if (redirectingToStyle) { navigate('/style', { replace: true }); return; }
+    // Feed is showing — remember it for the session so returning to "/" stays
+    // on the feed instead of bouncing to the picker. Strip a one-shot ?feed=1.
+    try { sessionStorage.setItem(BROWSE_FEED_KEY, '1'); } catch { /* private mode */ }
+    try {
+      const u = new URL(window.location.href);
+      if (u.searchParams.get('feed') === '1') {
+        u.searchParams.delete('feed');
+        window.history.replaceState({}, '', `${u.pathname}${u.search}${u.hash}`);
+      }
+    } catch { /* ignore */ }
+  }, [redirectingToStyle, navigate]);
 
   const handleLogoClick = useCallback(() => {
     // Reset every layer that could be sitting on top of the feed:
@@ -2414,6 +2467,10 @@ export default function Home() {
     return () => { cancelAnimationFrame(r1); cancelAnimationFrame(r2); };
   }, [topFrameKey]);
 
+  // Redirecting to the StyleUp landing — render nothing so the feed/gate
+  // never paints a frame before the navigate lands.
+  if (redirectingToStyle) return null;
+
   return (
     <TrailRoot>
     <TrailVideoHost>
@@ -2603,6 +2660,22 @@ export default function Home() {
                 </span>
               ))}
             </div>
+          )}
+
+          {/* Deep-scroll context pill — names the active filters (Women ·
+              My Size) and jumps back to the top. The bottom bar auto-hides
+              past the hero, so this is the only visible filter context deep
+              in the feed. Mounted only on the bare home feed (no overlays);
+              visibility follows the chrome (shows on scroll-up / rest). */}
+          {navStack.length === 0 && (
+            <FeedContextPill
+              visible={feedTopVisible && !chromeHidden}
+              filters={[
+                ...(activeFilter !== 'all' ? [activeFilter === 'men' ? 'Men' : 'Women'] : []),
+                ...(mySizeOnly ? ['My Size'] : []),
+              ]}
+              onBackToTop={handleBackToTop}
+            />
           )}
 
           <BottomBar

@@ -26,6 +26,8 @@ const navItems: NavItem[] = [
   { to: '/admin/data', label: 'Data', icon: 'M15 10l4.553-2.276A1 1 0 0 1 21 8.618v6.764a1 1 0 0 1-1.447.894L15 14M3 6h10a2 2 0 0 1 2 2v8a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2z' },
   { to: '/admin/catalogs', label: 'Catalogs', icon: 'M4 19.5A2.5 2.5 0 0 1 6.5 17H20M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z' },
   { to: '/admin/seeding', label: 'Seeding', icon: 'M12 2v8M12 10c-3 0-5 2-5 5M12 10c3 0 5 2 5 5M5 22h14M12 13v9' },
+  { to: '/admin/pipeline', label: 'Pipeline', icon: 'M6 3v12M18 9a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM6 21a3 3 0 1 0 0-6 3 3 0 0 0 0 6zM18 9a9 9 0 0 1-9 9' },
+  { to: '/admin/pipeline/health', label: 'Pipeline health', icon: 'M22 12h-4l-3 9L9 3l-3 9H2' },
   { to: '/admin/daily-feed', label: 'Daily Feed', icon: 'M3 4h18v18H3zM3 10h18M8 2v4M16 2v4' },
   { to: '/admin/style', label: 'Style', icon: 'M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z' },
   { to: '/admin/governance', label: 'Governance', icon: 'M12 2a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM5 16a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM19 16a3 3 0 1 0 0 6 3 3 0 0 0 0-6zM12 8v4M12 12l-5.5 4M12 12l5.5 4' },

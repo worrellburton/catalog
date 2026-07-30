@@ -29,6 +29,8 @@
 // POST { product_id: string, dry_run?: boolean, max_images?: number }
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
+import { urlAllowed } from '../_shared/ssrf-guard.ts';
+import { upgradeImageUrl, imageDims } from '../_shared/image-source.ts';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -42,6 +44,9 @@ const ANTHROPIC_MODEL = 'claude-haiku-4-5-20251001';
 const BUCKET = 'product-images';
 const MAX_IMAGES = 8;
 const MIN_BYTES = 1200;             // below this = placeholder / blank tile
+// Below this on the long edge an image is a thumbnail, not a render source.
+// 400 clears real packshots while rejecting the 232px Amazon variants.
+const MIN_LONG_EDGE_PX = 400;
 const VISION_MAX_BYTES = 4_000_000; // per-image cap for the vision call
 const VISION_BUDGET_BYTES = 18_000_000; // aggregate raw cap (~24MB base64, under Anthropic's ~32MB)
 const FETCH_TIMEOUT_MS = 20_000;
@@ -56,7 +61,10 @@ interface Fetched {
   bytes?: Uint8Array;
   contentType?: string;  // raw (for re-host / storage)
   visionType?: string | null; // normalized for Anthropic, or null if unsupported
-  reason?: string;       // why not ok: 'dead' | 'blocked' | 'notimage' | 'tiny' | 'unreachable'
+  reason?: string;       // why not ok: 'dead'|'blocked'|'notimage'|'tiny'|'lowres'|'unreachable'
+  width?: number;
+  height?: number;
+  upgradedFrom?: string; // set when the URL was rewritten to a better original
 }
 
 function json(body: unknown, status = 200): Response {
@@ -87,34 +95,9 @@ function extFor(ct?: string): string {
   return 'jpg';
 }
 
-// SSRF guard: block obviously-internal hosts. Literal private/link-local/loopback
-// IPs + localhost + *.internal/.local. ponytail: does NOT defend DNS-rebinding
-// (a public host resolving to a private IP) — Deno has no resolve-then-pin hook;
-// acceptable since candidate URLs come from our own crawl, not arbitrary input.
-function isBlockedHost(host: string): boolean {
-  const h = host.toLowerCase().replace(/^\[|\]$/g, '');
-  if (h === 'localhost' || h.endsWith('.internal') || h.endsWith('.local')) return true;
-  if (h === '::1' || h.startsWith('fc') || h.startsWith('fd') || h.startsWith('fe80')) return true;
-  const m = h.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
-  if (m) {
-    const [a, b] = [Number(m[1]), Number(m[2])];
-    if (a === 127 || a === 10 || a === 0) return true;
-    if (a === 169 && b === 254) return true;            // link-local / cloud metadata
-    if (a === 172 && b >= 16 && b <= 31) return true;
-    if (a === 192 && b === 168) return true;
-    if (a === 100 && b >= 64 && b <= 127) return true;  // CGNAT
-  }
-  return false;
-}
-
-function urlAllowed(u: string): URL | null {
-  try {
-    const parsed = new URL(u);
-    if (parsed.protocol !== 'https:') return null;
-    if (isBlockedHost(parsed.hostname)) return null;
-    return parsed;
-  } catch { return null; }
-}
+// SSRF guard (isBlockedHost / urlAllowed) lives in ../_shared/ssrf-guard.ts —
+// shared with the sibling check-product-links function so a fix applies to
+// both fetchers of untrusted merchant/candidate URLs at once.
 
 // Classify an HTTP status into a retire-relevant reason.
 //   dead    = the resource is gone (retire / re-source candidate)
@@ -127,7 +110,9 @@ function statusReason(code: number): string {
 }
 
 async function fetchImage(rawUrl: string): Promise<Fetched> {
-  let target = urlAllowed(rawUrl);
+  // Prefer the merchant's true original over their downsized/stretched variant.
+  const upgraded = upgradeImageUrl(rawUrl);
+  let target = urlAllowed(upgraded);
   if (!target) return { url: rawUrl, ok: false, reason: 'blocked' }; // non-https / private host
   const ctrl = new AbortController();
   const t = setTimeout(() => ctrl.abort(), FETCH_TIMEOUT_MS);
@@ -148,7 +133,18 @@ async function fetchImage(rawUrl: string): Promise<Fetched> {
       if (!ct.toLowerCase().startsWith('image/')) return { url: rawUrl, ok: false, reason: 'notimage' };
       const buf = new Uint8Array(await res.arrayBuffer());
       if (buf.length < MIN_BYTES) return { url: rawUrl, ok: false, reason: 'tiny' };
-      return { url: rawUrl, ok: true, bytes: buf, contentType: ct, visionType: anthropicMediaType(ct) };
+      const dim = imageDims(buf);
+      // Reject by PIXELS, not just bytes. The stored render source for one book
+      // was a 232x232 square (a portrait cover, squashed) that cleared MIN_BYTES
+      // comfortably — byte size cannot catch that.
+      if (dim && Math.max(dim.width, dim.height) < MIN_LONG_EDGE_PX) {
+        return { url: rawUrl, ok: false, reason: 'lowres', width: dim.width, height: dim.height };
+      }
+      return {
+        url: rawUrl, ok: true, bytes: buf, contentType: ct, visionType: anthropicMediaType(ct),
+        width: dim?.width, height: dim?.height,
+        upgradedFrom: upgraded !== rawUrl ? rawUrl : undefined,
+      };
     }
     return { url: rawUrl, ok: false, reason: 'dead' };
   } catch {
@@ -158,7 +154,44 @@ async function fetchImage(rawUrl: string): Promise<Fetched> {
   }
 }
 
-function buildPrompt(desc: string, count: number): string {
+// Product types whose ARTWORK IS THE PRODUCT. For a book, poster or print,
+// cover text and graphic layout are the thing being sold — not a merchandising
+// overlay slapped on a photo. The junk rule below was written for apparel,
+// where text on an image means a size chart or a feature callout.
+//
+// This only became visible once upgradeImageUrl() started fetching originals:
+// at 232px Haiku couldn't read a book cover, at 1694x2560 it could, and
+// correctly-by-its-own-rules called it an infographic. The catalog carries
+// books and art deliberately, so the rule has to know the difference.
+const GRAPHIC_PRODUCT_TYPES = new Set([
+  'book', 'books', 'art', 'artwork', 'print', 'prints', 'poster', 'posters',
+  'stationery', 'card', 'cards', 'magazine', 'vinyl', 'puzzle', 'puzzles',
+]);
+
+function isGraphicProduct(type: string | null | undefined): boolean {
+  return GRAPHIC_PRODUCT_TYPES.has((type || '').trim().toLowerCase());
+}
+
+function buildPrompt(desc: string, count: number, graphic = false): string {
+  if (graphic) {
+    return [
+      `You are auditing an e-commerce product gallery. The product is EXACTLY: "${desc}".`,
+      'This product is a BOOK, PRINT, POSTER or similar item whose ARTWORK AND TEXT ARE THE PRODUCT ITSELF.',
+      'Cover typography, title text, illustration and graphic layout are the thing being sold —',
+      'they are NOT a marketing overlay and must NOT be called junk.',
+      `For EACH of the ${count} image(s) above (in order, starting at index 0) return two fields:`,
+      ' "label": exactly one of',
+      '   good     = a clean shot of THIS product — the cover / print / artwork itself, front or angled,',
+      '              on its own or held, including all of its own printed text and artwork',
+      '   junk     = NOT the product: a size chart, packaging-only shot, retailer banner, star-rating or',
+      '              price graphic, "look inside" UI screenshot, blank tile, or a promotional collage that',
+      '              adds text AROUND the product rather than showing the product itself',
+      '   wrong    = a DIFFERENT title / edition / artwork than the name specifies',
+      '   unusable = corrupt, watermarked stock, or you cannot tell what it is',
+      ' "person": true if a human is visible holding or modelling it; false for a product-only shot.',
+      'Return ONLY JSON: {"images":[{"label":"good","person":false}, ...]} — one object per image, in order. No prose.',
+    ].join('\n');
+  }
   return [
     `You are auditing an e-commerce product gallery. The product is EXACTLY: "${desc}".`,
     'Match the SPECIFIC item — including its COLOR, material, and variant when the name states one',
@@ -181,13 +214,13 @@ function buildPrompt(desc: string, count: number): string {
 
 interface Verdict { label: Label; person: boolean | null }
 
-async function classify(apiKey: string, desc: string, imgs: Fetched[]): Promise<Verdict[]> {
+async function classify(apiKey: string, desc: string, imgs: Fetched[], graphic = false): Promise<Verdict[]> {
   const content: unknown[] = [];
   imgs.forEach((f, i) => {
     content.push({ type: 'text', text: `Image ${i}:` });
     content.push({ type: 'image', source: { type: 'base64', media_type: f.visionType, data: bytesToBase64(f.bytes!) } });
   });
-  content.push({ type: 'text', text: buildPrompt(desc, imgs.length) });
+  content.push({ type: 'text', text: buildPrompt(desc, imgs.length, graphic) });
 
   const resp = await fetch(ANTHROPIC_API, {
     method: 'POST',
@@ -295,7 +328,7 @@ Deno.serve(async (req: Request) => {
   const metaByUrl = new Map<string, Verdict>();
   if (visionInputs.length) {
     let results: Verdict[];
-    try { results = await classify(anthropicKey, desc, visionInputs); }
+    try { results = await classify(anthropicKey, desc, visionInputs, isGraphicProduct(prod.type)); }
     catch (err) { return json({ success: false, error: `vision: ${err instanceof Error ? err.message : String(err)}` }); }
     visionInputs.forEach((f, i) => metaByUrl.set(f.url, results[i] ?? { label: 'unchecked', person: null }));
   }

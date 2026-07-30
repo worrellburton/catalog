@@ -1510,6 +1510,27 @@ html.admin-on-dark-canvas .admin-topbar,
   color: #999 !important;
 }
 
+/* Pipeline health page — inline explanatory note under a panel, a
+   full-width warning banner, and a highlighted table row. */
+.admin-hint {
+  margin: 10px 0 0;
+  font-size: 12px;
+  color: #999;
+}
+
+.admin-warn {
+  margin: 10px 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: #fff3e0;
+  color: #e65100;
+  font-size: 12px;
+}
+
+.admin-row-warn td {
+  background: #fff8e1;
+}
+
 /* Per-product thumbnail in the analytics Products table — small,
    square, neutral chip; falls back to a placeholder square when no
    image_url. Keeps the row height tight so the table stays scannable. */
@@ -6990,3 +7011,113 @@ html.eq-page .gen-queue-host { display: none; }
 @media (max-width: 420px) {
   .admin-stats-grid { grid-template-columns: 1fr; }
 }
+
+/* ── Product journey (/admin/pipeline/product/:id) ──────────────────────────
+   The spine is the only place this page spends attention. Vertical gaps are
+   set inline from elapsed time (log-scaled in the component), so the CSS here
+   deliberately sets NO margin between steps — the data owns that axis. */
+
+.pj-head { display: flex; gap: 20px; align-items: flex-start; }
+.pj-thumb {
+  width: 96px; height: 128px; object-fit: cover;
+  border-radius: 8px; border: 1px solid #e5e7eb; background: #f4f4f5; flex: none;
+}
+.pj-head-text { min-width: 0; }
+.pj-brand {
+  font-size: 12px; font-weight: 600; letter-spacing: 0.08em;
+  text-transform: uppercase; color: #94a3b8;
+}
+.pj-name { margin: 4px 0 6px; font-size: 22px; font-weight: 600; color: #0f172a; }
+.pj-meta { margin: 0 0 10px; font-size: 13px; color: #6b7280; }
+.pj-stage {
+  display: inline-block; padding: 3px 10px; border-radius: 999px;
+  font-size: 12px; font-weight: 600; letter-spacing: 0.02em;
+  background: #f1f5f9; color: #0f172a; border: 1px solid #e5e7eb;
+}
+.pj-stage--published { background: #ecfdf5; color: #065f46; border-color: #a7f3d0; }
+.pj-stage--published_no_creative,
+.pj-stage--needs_review,
+.pj-stage--blocked-occasion { background: #fffbeb; color: #92400e; border-color: #fde68a; }
+.pj-stage--scrape_failed { background: #fef2f2; color: #991b1b; border-color: #fecaca; }
+
+.pj-block { border-left: 3px solid #6366f1; }
+.pj-block h3 { margin: 0 0 6px; font-size: 13px; text-transform: uppercase;
+  letter-spacing: 0.06em; color: #94a3b8; font-weight: 600; }
+.pj-block-why { margin: 0 0 4px; font-size: 15px; color: #0f172a; }
+.pj-block-fix { margin: 0; font-size: 13px; color: #6b7280; }
+
+.pj-spine { list-style: none; margin: 18px 0 0; padding: 0 0 0 46px; position: relative; }
+.pj-step { position: relative; min-height: 22px; }
+/* the connecting rule, drawn INTO the gap above each step */
+.pj-step::before {
+  content: ''; position: absolute; left: -18px; top: -100%; bottom: 50%;
+  width: 2px; background: #e5e7eb;
+}
+.pj-step:first-child::before { display: none; }
+.pj-step--pending::before { background: repeating-linear-gradient(
+  to bottom, #e5e7eb 0 3px, transparent 3px 7px); }
+
+.pj-node {
+  position: absolute; left: -23px; top: 4px;
+  width: 12px; height: 12px; border-radius: 50%;
+  background: #fff; border: 2px solid #cbd5e1;
+}
+.pj-step--done .pj-node { background: #0f172a; border-color: #0f172a; }
+.pj-step--current .pj-node { background: #6366f1; border-color: #6366f1;
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.18); }
+.pj-step--failed .pj-node { background: #b45309; border-color: #b45309; }
+
+.pj-wait {
+  position: absolute; left: -18px; top: -14px;
+  transform: translateX(-50%);
+  font-size: 10px; font-weight: 600; color: #94a3b8;
+  background: #fff; padding: 1px 4px; font-variant-numeric: tabular-nums;
+}
+.pj-row { display: flex; align-items: baseline; gap: 10px; flex-wrap: wrap; }
+.pj-label { font-size: 15px; font-weight: 600; color: #0f172a; }
+.pj-step--pending .pj-label { color: #94a3b8; font-weight: 500; }
+.pj-time { font-size: 12px; color: #94a3b8; font-variant-numeric: tabular-nums; }
+.pj-detail { margin: 2px 0 0; font-size: 13px; color: #6b7280; }
+.pj-here {
+  display: inline-block; margin-top: 6px; padding: 2px 8px; border-radius: 999px;
+  font-size: 11px; font-weight: 600; letter-spacing: 0.04em;
+  background: #6366f1; color: #fff;
+}
+
+@media (max-width: 640px) {
+  .pj-head { flex-direction: column; }
+  .pj-thumb { width: 72px; height: 96px; }
+}
+/* A stage whose timestamp predates the one above it: verify/enrich re-run on
+   existing products, so this is a re-check, not time flowing backwards. */
+.pj-wait--rerun { color: #6366f1; }
+/* Oldest-stuck examples per funnel stage — the doorway from an aggregate
+   count into one product's journey. */
+.pj-examples { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 5px; }
+.pj-examples a {
+  font-size: 11px; color: #6366f1; text-decoration: none;
+  border: 1px solid #e5e7eb; border-radius: 999px; padding: 1px 8px; background: #fff;
+}
+.pj-examples a:hover { border-color: #6366f1; background: #f8fafc; }
+
+/* Journey galleries — what verification kept, and what it pruned. */
+.pj-gallery { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.pj-shot {
+  position: relative; display: block; width: 56px; height: 74px;
+  border-radius: 6px; overflow: hidden; border: 1px solid #e5e7eb; background: #f4f4f5;
+}
+.pj-shot img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.pj-shot-tag {
+  position: absolute; left: 0; right: 0; bottom: 0; text-align: center;
+  font-size: 9px; font-weight: 600; letter-spacing: .04em;
+  background: rgba(15, 23, 42, .78); color: #fff; padding: 1px 0;
+}
+/* Originals read as reference, not as the live gallery. */
+.pj-gallery--raw .pj-shot { filter: grayscale(1); opacity: .72; }
+.pj-gallery--raw .pj-shot:hover { filter: none; opacity: 1; }
+.pj-raw-toggle {
+  margin-top: 8px; padding: 0; border: 0; background: none; cursor: pointer;
+  font-size: 12px; font-weight: 500; color: #6366f1; font-family: inherit;
+}
+.pj-raw-toggle:hover { text-decoration: underline; }
+.pj-video { width: 132px; height: 176px; border-radius: 6px; border: 1px solid #e5e7eb; background: #000; object-fit: cover; }
