@@ -30,10 +30,24 @@
   width: 100%;
 }
 
-/* StyleUp chat composer — the composer is a docked full-width bar. */
+/* StyleUp chat composer — three things the wrapper has to inherit, all of which
+   broke when it didn't:
+
+   1. flex: 0 0 auto — .su-composer is a flex child of the chat column. Without
+      this the wrapper got no reserved track and the composer slid off the
+      bottom of the viewport.
+   2. the composer's own margin — it's a floating glass pill inset from the
+      edges, so a full-width wrapper made the beam trace a box 12px outside the
+      visible pill on each side. Margin moves to the wrapper; the pill zeroes
+      its own so the two boxes coincide and the beam follows the 999px radius.
+   3. min-width: 0 so the input can still shrink inside the flex row. */
 .su-composer-beam {
-  display: block;
-  width: 100%;
+  flex: 0 0 auto;
+  min-width: 0;
+  margin: 6px 12px calc(10px + env(safe-area-inset-bottom));
+}
+.su-composer-beam > .su-composer {
+  margin: 0;
 }
 
 /* Create look — upload dropzone. .media-uploader-wrap stacks the zone above

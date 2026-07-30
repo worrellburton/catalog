@@ -2344,8 +2344,12 @@ export function StyleUpExperience({
         )}
 
         {/* Chat message input. 'sm' is the button/input preset — 'md' is tuned
-            for cards and reads too heavy on a composer bar. */}
-        <Beam size="sm" theme="light" className="su-composer-beam">
+            for cards and reads too heavy on a composer bar.
+
+            theme="dark": the CHAT pane is dark glass (rgba(18,19,22,.7)), even
+            though StyleUp's landing screen behind it is light. Theme follows
+            the surface the beam sits on, not the feature. */}
+        <Beam size="sm" theme="dark" className="su-composer-beam">
         <div className="su-composer">
           {profileReady ? (
             <>
