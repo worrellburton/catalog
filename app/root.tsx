@@ -38,6 +38,7 @@ import CreatorLoginToastHost from "~/components/CreatorLoginToastHost";
 import FollowToastHost from "~/components/FollowToastHost";
 import { CatalogDialogProvider } from "~/components/CatalogDialog";
 import ClerkGate from "~/components/ClerkGate";
+import { BorderBeam } from "border-beam";
 import { initSentry, captureException } from "~/utils/sentry";
 
 // Dev-only data-stream waterfall probe. Installs window.__waterfall() and
@@ -314,6 +315,54 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-se
           </filter>
         </svg>
         {children}
+        {/* Animated border beam glowing along the BOTTOM edge of the viewport —
+            every page, both web and the Flutter WebView shell. Lives in Layout
+            (not App) so it also covers the auth/password gates and the
+            ErrorBoundary, which render outside ClerkGate.
+
+            size="line" is the only variant that works at viewport scale. The
+            perimeter variants ('md'/'sm') size their colour gradients in px for
+            a ~400px card, so stretched around a full screen they cover ~14% of
+            the edge and read as nothing — measured. 'line' is built as a single
+            wide travelling bloom anchored to the bottom, which is exactly the
+            geometry we want here.
+
+            pointer-events:none is load-bearing: this sits above the bottom-bar
+            and generation-queue hosts (both z-index 9000), so without it the
+            glow would swallow every tap in the app. */}
+        <div
+          aria-hidden="true"
+          style={{
+            position: 'fixed', left: 0, right: 0, bottom: 0,
+            zIndex: 9999, pointerEvents: 'none',
+            /* The package's own documented CSS vars — NOT internal overrides.
+               Its presets are calibrated for a ~400px card on a dark surface;
+               against a full-width strip the halo comes out almost invisible,
+               so the opacity dials get pushed up and --beam-core-blur does the
+               vertical spread that makes it read as an ambient wash rather
+               than a bright line. Turn --beam-bloom-opacity down first if this
+               ever feels too strong. */
+            '--beam-bloom-opacity': '3',
+            '--beam-inner-opacity': '3',
+            '--pulse-glow-boost': '3',
+            '--beam-core-blur': '34px',
+          } as React.CSSProperties}
+        >
+          <BorderBeam
+            size="pulse-outside"
+            colorVariant="colorful"
+            strength={1}
+            borderRadius={0}
+            style={{ display: 'block', width: '100%' }}
+          >
+            {/* A full-width strip pinned to the bottom edge. 'pulse-outside'
+                blooms its halo OUTWARD from the element, so with the strip
+                sitting on the bottom edge the downward half falls off-screen
+                and the upward half washes into the viewport — the big ambient
+                bottom glow, rather than a drawn line. */}
+            <div style={{ width: '100%', height: 2 }} />
+          </BorderBeam>
+        </div>
         <GatedScrollRestoration />
         <Scripts />
         <Analytics />
