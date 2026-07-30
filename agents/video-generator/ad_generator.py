@@ -452,8 +452,20 @@ def generate_ad_video(ad_id: str) -> dict:
             image_context=image_context,
         )
 
-        # Enhance with Gemini
-        enhanced_prompt = enhance_prompt_with_gemini(raw_prompt, product, None)
+        # Enhance with Gemini — OPTIONAL, and must never fail the render.
+        #
+        # This costs ~$0.0005 and only makes the prompt more cinematic; the raw
+        # template above is already complete and usable. It was unguarded, so on
+        # 2026-07-30 an expired GOOGLE_API_KEY killed three $0.10 renders here,
+        # BEFORE model selection had even happened — meaning it also broke
+        # renders routed to fal, which need no Google credential at all. A
+        # cheap quality nicety must not be a single point of failure for the
+        # whole creative stage.
+        try:
+            enhanced_prompt = enhance_prompt_with_gemini(raw_prompt, product, None)
+        except Exception as e:
+            print(f"    ⚠ Prompt enhancement unavailable, using raw prompt: {e}")
+            enhanced_prompt = raw_prompt
         supabase.table("product_creative").update({"prompt": enhanced_prompt}).eq("id", ad_id).execute()
 
         # Respect per-ad model override (e.g. user chose Seedance instead of Veo)
