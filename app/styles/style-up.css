@@ -238,10 +238,14 @@ html[data-shell="catalog-app"] .su-shell {
 .su-find-bar {
   flex: 0 0 auto;
   padding: 12px 18px calc(16px + env(safe-area-inset-bottom));
+  /* Single source of truth for the button's width cap — beam-hosts.css needs
+     the same value so the <Beam> wrapper matches the button instead of
+     stretching to the full bar. Don't inline this number again. */
+  --su-find-btn-max: 640px;
 }
 .su-find-bar .su-find-btn {
   width: 100%;
-  max-width: 640px;
+  max-width: var(--su-find-btn-max);
   margin: 0 auto;
   display: block;
   padding: 15px;

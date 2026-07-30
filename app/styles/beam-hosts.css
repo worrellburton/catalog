@@ -62,11 +62,16 @@
   min-width: 0; /* let the input shrink inside the flex row rather than overflow */
 }
 
-/* StyleUp "Find a stylist" — .su-find-bar is a flex container and the button
-   was its only child. */
+/* StyleUp "Find a stylist" — the button is capped at --su-find-btn-max and
+   auto-centred inside a full-width bar. A wrapper at plain width:100% traced
+   the whole 1564px bar instead of the 640px button (a 924px overhang on
+   desktop, which is what the beam was drawing). The wrapper has to inherit the
+   cap AND the centring, not just the width. */
 .su-find-btn-beam {
   display: block;
   width: 100%;
+  max-width: var(--su-find-btn-max, 640px);
+  margin-inline: auto;
 }
 
 /* StyleUp chat composer — three things the wrapper has to inherit, all of which
