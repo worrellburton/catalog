@@ -132,6 +132,7 @@ export default function PipelineHealth() {
         <h1>Pipeline health</h1>
         <p className="admin-page-subtitle">
           Scrape → image-verify → creative → publish. Is it running, is the output good, what does it cost.
+          {' '}Set policy on <Link to="/admin/pipeline">Pipeline</Link>.
         </p>
       </div>
 
