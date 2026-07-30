@@ -47,16 +47,9 @@ export function isConversationalQuery(raw: string): boolean {
   return raw.trim().split(/\s+/).filter(Boolean).length >= 5;
 }
 
-/** The short garment subject of a query ("dresses") for the pick-a-catalog
- *  reasoning line, or null when no known garment is present. */
-export function searchSubject(raw: string): string | null {
-  const words = cleanSearchQuery(raw).toLowerCase().split(/\s+/).filter(Boolean);
-  const g = words.find(w => SUBJECT_PLURALS[w]);
-  return g ? SUBJECT_PLURALS[g].toLowerCase() : null;
-}
-
 // Garment / product nouns we treat as the "subject" of the catalog. Plurals
-// are normalized for the title so "dress" reads as "Dresses".
+// are normalized for the title so "dress" reads as "Dresses". Declared ABOVE
+// searchSubject (its first use) — check:tdz flags the forward-ref pattern.
 const SUBJECT_PLURALS: Record<string, string> = {
   dress: 'Dresses', dresses: 'Dresses', shoe: 'Shoes', shoes: 'Shoes',
   sneaker: 'Sneakers', sneakers: 'Sneakers', boot: 'Boots', boots: 'Boots',
@@ -69,6 +62,14 @@ const SUBJECT_PLURALS: Record<string, string> = {
   heels: 'Heels', sweater: 'Sweaters', sweaters: 'Sweaters', fit: 'Fits',
   fits: 'Fits', outfit: 'Outfits', outfits: 'Outfits',
 };
+
+/** The short garment subject of a query ("dresses") for the pick-a-catalog
+ *  reasoning line, or null when no known garment is present. */
+export function searchSubject(raw: string): string | null {
+  const words = cleanSearchQuery(raw).toLowerCase().split(/\s+/).filter(Boolean);
+  const g = words.find(w => SUBJECT_PLURALS[w]);
+  return g ? SUBJECT_PLURALS[g].toLowerCase() : null;
+}
 
 // Witty frames. {s} = subject (e.g. "Dresses"), {c} = context (e.g. "Italy").
 // Kept tasteful + on-topic so the joke is about the query, not random.

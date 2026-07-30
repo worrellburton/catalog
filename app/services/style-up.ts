@@ -984,6 +984,13 @@ type SwapRow = {
   type: string | null; haiku_context: string | null;
 };
 
+// Declared ABOVE its first use (slotSearch below) — a module-tail const
+// referenced earlier is the forward-ref pattern check:tdz flags.
+const ROLE_QUERY_NOUN: Record<string, string> = {
+  Top: 'shirt', Pants: 'pants', Jacket: 'jacket', Shoes: 'shoes', Hat: 'hat',
+  Dress: 'dress', Bag: 'bag', Sunglasses: 'sunglasses', Jewelry: 'jewelry', Accessory: 'accessory',
+};
+
 /** Occasion-aware candidates for one slot via style_slot_search (the engine).
  *  Returns rows in the same shape as the legacy recency select so the caller's
  *  scoring loop is source-agnostic. */
@@ -1075,11 +1082,6 @@ export async function fetchSwapOptions(
 // into `products` (real ids + queued embeddings), then we return those imported
 // rows as product refs. Because they now live in `products`, the exact same
 // on-you render pipeline works on them unchanged.
-
-const ROLE_QUERY_NOUN: Record<string, string> = {
-  Top: 'shirt', Pants: 'pants', Jacket: 'jacket', Shoes: 'shoes', Hat: 'hat',
-  Dress: 'dress', Bag: 'bag', Sunglasses: 'sunglasses', Jewelry: 'jewelry', Accessory: 'accessory',
-};
 
 function genderWord(gender: string): string {
   return gender === 'male' ? "men's" : gender === 'female' ? "women's" : '';

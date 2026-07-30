@@ -1,0 +1,26 @@
+-- Fail-closed publishing, at the column rather than in one edge function.
+--
+-- product-search was fixed to default is_active=false, but that covered ONE
+-- ingest path. Any other INSERT that omitted the column still published
+-- immediately. Narrower than it sounds - products_enforce_image_for_active
+-- already forces false when there is no image, so crawl inserts (url only)
+-- were never going live - but an insert arriving WITH an image and no
+-- verification did.
+--
+-- ALTER COLUMN ... SET DEFAULT changes only what future INSERTs receive when
+-- they OMIT the column. It issues no UPDATE and rewrites no rows: every
+-- currently-active product stays active.
+--   Verified: active 341 / total 455 before AND after.
+--   Verified fail-closed with a live probe - an insert carrying an image and
+--   no is_active landed is_active=false (previously would have gone live).
+--
+-- Callers that publish on purpose set it explicitly and are unaffected:
+--   lens-ingest            is_active: true
+--   rainforest.ts          is_active: true
+--   affiliate-com          is_active: false
+--   product-search/seed-run is_active: false
+--   admin/catalogs.tsx     made explicit true in the same commit - an admin
+--                          hand-picking research results into a catalog is
+--                          exactly the deliberate human decision this default
+--                          exists to require in the absence of.
+alter table public.products alter column is_active set default false;

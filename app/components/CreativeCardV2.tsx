@@ -37,6 +37,7 @@ import {
   prefetchHlsHead,
 } from '~/services/video-loading';
 import FeedWhyButton from '~/components/feed/FeedWhyButton';
+import FeedWhyShopperTag from '~/components/feed/FeedWhyShopperTag';
 import { lookPoster } from '~/services/media-resolver';
 import { posterRendition } from '~/utils/poster-prefetch';
 import { isHlsUrl } from '~/utils/hlsAttach';
@@ -51,12 +52,24 @@ import { useProductsImageOnly } from '~/hooks/useProductsImageOnly';
 import CreatorAvatarFollow from './CreatorAvatarFollow';
 import { useShowBrandLogos } from '~/hooks/useShowBrandLogos';
 import { useBrandLogo } from '~/hooks/useBrandLogoLookup';
+import { usePrefersReducedMotion } from '~/hooks/usePrefersReducedMotion';
 import { shouldBeVideo } from '~/utils/videoStillSplit';
-import type { Look } from '~/data/looks';
+import { lookProductsSummary } from '~/utils/lookShopSummary';
+import type { Look, Product } from '~/data/looks';
 import { creators } from '~/data/looks';
 import { hideLookId } from '~/hooks/useHiddenLooks';
 import { lookTrailId, normalizeLookVideoUrl } from '~/utils/trailIds';
 import { trackImpression } from '~/services/session-tracker';
+
+/** The slice of useBookmarks a card needs for its save button. Threaded
+ *  down from _index (the single source of bookmark state) so a toggle on
+ *  any card updates the header count / saved screen live. */
+export interface CardBookmarks {
+  isLookBookmarked: (lookId: number) => boolean;
+  toggleLookBookmark: (lookId: number) => void;
+  isProductBookmarked: (p: Product) => boolean;
+  toggleProductBookmark: (p: Product) => void;
+}
 
 interface CreativeCardV2Props {
   /** Provide either `creative` (product-creative card) or `look` (look card). */
@@ -88,6 +101,9 @@ interface CreativeCardV2Props {
    *  back to a product packshot. The creator catalog sets this so a posterless
    *  generated look reveals its own video frame instead of a product image. */
   lookPosterOnly?: boolean;
+  /** When provided, the card renders a save (bookmark) button so shoppers
+   *  can save without opening the detail overlay. Omitted = no button. */
+  bookmarks?: CardBookmarks;
 }
 
 /** Poster/still rendition width matches the VIDEO rendition the card
@@ -110,6 +126,7 @@ const CreativeCardV2 = memo(function CreativeCardV2({
   slotId,
   hideCreator = false,
   lookPosterOnly = false,
+  bookmarks,
 }: CreativeCardV2Props) {
   const isLook = !!look && !creative;
   // Subscribe to the global pipeline dial: a flip (hls ⇄ mp4) re-renders the
@@ -189,9 +206,14 @@ const CreativeCardV2 = memo(function CreativeCardV2({
   // primary video, no playableUrl) still honour the dials.
   const hasPrimaryVideo = !isLook && !!creative?.product?.primary_video_url;
   const forceStillForProduct = !hasPrimaryVideo && !isLook && !!productsImageOnly && !!creative && !creative.look_id && !!stillImageUrl;
-  const renderAsStill = hasPrimaryVideo
-    ? false
-    : (forceStillForProduct || (!dialPrefersVideo && !!stillImageUrl));
+  // OS-level "reduce motion" wins over every dial (including autoplay
+  // primary videos) whenever a still exists to show instead. Cards with
+  // no still at all keep video — a blank tile helps no one.
+  const prefersReducedMotion = usePrefersReducedMotion();
+  const renderAsStill = (prefersReducedMotion && !!stillImageUrl)
+    || (hasPrimaryVideo
+      ? false
+      : (forceStillForProduct || (!dialPrefersVideo && !!stillImageUrl)));
 
   // Hover-to-play: when in still mode, a mouseenter activates video for
   // this card. Stays active for the session — no revert on mouseleave.
@@ -411,12 +433,60 @@ const CreativeCardV2 = memo(function CreativeCardV2({
         || (look.creator?.startsWith('user:') ? 'User' : look.creator || ''))
     : '';
 
+  // ── Card-level save (bookmark) ──────────────────────────────────────
+  // Synthetic duplicate looks (infinite-feed padding) carry negative ids
+  // derived as -(id*1000+n); normalize back so a save on the duplicate
+  // marks the real look.
+  const canonicalLookId = isLook && look
+    ? (look.id < 0 ? Math.floor(-look.id / 1000) : look.id)
+    : null;
+  // Minimal Product for the bookmark store — same shape handleOpenCreative
+  // maps for ProductPage, so productKey (brand::name) matches a save made
+  // from the detail page.
+  const saveProduct: Product | null = !isLook && creative?.product
+    ? {
+        id: creative.product.id || undefined,
+        name: creative.product.name || 'Shop Now',
+        brand: creative.product.brand || '',
+        price: creative.product.price || '',
+        url: creative.product.url || '',
+        image: rawStillImageUrl || rawPosterUrl || undefined,
+      }
+    : null;
+  const canSave = !!bookmarks && (isLook ? canonicalLookId != null : !!saveProduct);
+  const isSaved = !!bookmarks && (isLook && canonicalLookId != null
+    ? bookmarks.isLookBookmarked(canonicalLookId)
+    : !!saveProduct && bookmarks.isProductBookmarked(saveProduct));
+  const toggleSave = () => {
+    if (!bookmarks) return;
+    if (isLook && canonicalLookId != null) bookmarks.toggleLookBookmark(canonicalLookId);
+    else if (saveProduct) bookmarks.toggleProductBookmark(saveProduct);
+  };
+
+  // "N products · from $58" shoppability pill for look tiles.
+  const productsSummary = isLook && look ? lookProductsSummary(look) : null;
+
+  const cardLabel = isLook && look
+    ? `Open look${look.title ? `: ${look.title}` : ''}${creatorName ? ` by ${creatorName}` : ''}`
+    : `Open ${[creative?.product?.brand, creative?.product?.name || 'product'].filter(Boolean).join(' ')}${creative?.product?.price ? `, ${creative.product.price}` : ''}`;
+
   return (
     <div
       ref={combinedRef}
       className={`${className} ${isLook ? '' : 'promo-card '}${loaded ? 'loaded' : ''}`}
       data-present-id={isLook && look ? `card:${look.id}` : undefined}
       style={{ position: 'relative', overflow: 'hidden' }}
+      role="button"
+      tabIndex={0}
+      aria-label={cardLabel}
+      onKeyDown={(e) => {
+        // Keyboard activation for the card itself. Keys bubbling out of the
+        // inner controls (creator chip, save, delete) are theirs to handle.
+        if (e.target !== e.currentTarget) return;
+        if (e.key !== 'Enter' && e.key !== ' ') return;
+        e.preventDefault();
+        handleClick();
+      }}
       onClick={(e) => {
         if (longPressFired.current) {
           longPressFired.current = false;
@@ -431,7 +501,9 @@ const CreativeCardV2 = memo(function CreativeCardV2({
       }}
       onMouseEnter={() => {
         handlePrefetch();
-        if (renderAsStill && !hoverPlaying) setHoverPlaying(true);
+        // Hover-to-play stays off under reduced motion — the whole point
+        // of the setting is that stills don't spontaneously start moving.
+        if (renderAsStill && !hoverPlaying && !prefersReducedMotion) setHoverPlaying(true);
       }}
       onTouchStart={(e) => { handlePrefetch(); beginLongPress(e); }}
       onTouchEnd={cancelLongPress}
@@ -458,6 +530,10 @@ const CreativeCardV2 = memo(function CreativeCardV2({
         {/* Super-admin-only "why did this show up?" affordance (center-left).
             Self-gates on role; renders nothing for shoppers. */}
         <FeedWhyButton creative={creative} look={look} />
+
+        {/* Shopper-facing reason caption (top-left) — "Because you saved
+            Nike". Self-gates: renders nothing without a strong signal. */}
+        <FeedWhyShopperTag creative={creative} look={look} />
 
 
         {/* Poster <img> — identical path for looks and products. The
@@ -493,6 +569,24 @@ const CreativeCardV2 = memo(function CreativeCardV2({
             No <video> JSX — the director owns the element lifecycle. */}
 
         <div className="card-gradient" />
+
+        {canSave && (
+          <button
+            type="button"
+            className={`card-save-btn${isSaved ? ' is-saved' : ''}`}
+            aria-label={isSaved ? 'Remove from saved' : (isLook ? 'Save look' : 'Save product')}
+            aria-pressed={isSaved}
+            title={isSaved ? 'Remove from saved' : 'Save'}
+            onClick={(e) => { e.stopPropagation(); toggleSave(); }}
+            onMouseDown={(e) => e.stopPropagation()}
+            onTouchStart={(e) => e.stopPropagation()}
+            onKeyDown={(e) => e.stopPropagation()}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill={isSaved ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+              <path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" />
+            </svg>
+          </button>
+        )}
 
         {!isLook && canDelete && onDelete && creative && (
           <button
@@ -539,12 +633,20 @@ const CreativeCardV2 = memo(function CreativeCardV2({
         )}
 
         {isLook && look && !hideCreator ? (
-          <CreatorChip
-            look={look}
-            creatorAvatar={creatorAvatar}
-            creatorName={creatorName}
-            onOpenCreator={onOpenCreator}
-          />
+          <>
+            <CreatorChip
+              look={look}
+              creatorAvatar={creatorAvatar}
+              creatorName={creatorName}
+              onOpenCreator={onOpenCreator}
+            />
+            {/* Shoppability pill — the look-mode counterpart of the product
+                card's brand/name/price row, so a look tile signals it can be
+                shopped (and from what price) before the tap. */}
+            {productsSummary && (
+              <span className="card-products-pill">{productsSummary}</span>
+            )}
+          </>
         ) : creative ? (
           <div className="promo-product-info">
             <div className="promo-product-text">

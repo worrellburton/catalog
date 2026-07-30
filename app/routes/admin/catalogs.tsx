@@ -7149,6 +7149,12 @@ export function SuggestProductsModal({
         scrape_status: 'done',
         scraped_at: nowIso,
         catalog_tags: [catalog.name],
+        // Explicit, because products.is_active now defaults to FALSE so no
+        // AUTOMATED path can publish unreviewed. This path is different: an
+        // admin hand-picked these research results into a catalog, which is
+        // exactly the deliberate human decision the default is protecting
+        // against the absence of. Keep them live as before.
+        is_active: true,
       };
     });
     const { error } = await supabase.from('products').insert(rows).select('id');

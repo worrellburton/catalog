@@ -13,6 +13,7 @@ import { useNavigate } from '@remix-run/react';
 import { useAuth } from '~/hooks/useAuth';
 import { useStylistEngineMethod } from '~/hooks/useStylistEngineMethod';
 import { supabase } from '~/utils/supabase';
+import { browseTheFeed } from '~/utils/front-door';
 import {
   fetchStylists, getOrCreateThread, deleteThread, getThreadHunting, fetchProductDetail, fetchProductVideos, fetchSimilarProducts, getLatestThread, fetchMyThreads, fetchMessages, sendShopperMessage,
   sendStylistText, startFullLookRender, fetchSwapOptions, sendSwapOptions,
@@ -68,6 +69,7 @@ import {
 } from '~/services/user-generations';
 import { promoteGenerationToLook } from '~/services/promote-generation';
 import { generationProgress } from '~/services/generation-progress';
+import Beam from '~/components/Beam';
 
 import '~/styles/style-up.css';
 import '~/styles/style-up-lookbar.css';
@@ -647,7 +649,10 @@ export function StyleUpExperience({
     // `exit` is only wired to the landing/roster header, so it's the "leave"
     // action.) In the native shell the Catalog header is hidden on /style, so
     // this is the only route back to the feed.
-    navigate('/');
+    // StyleUp is the front door now, so a bare "/" would redirect right back
+    // here. Flag this session as browsing and pass ?feed=1 (belt-and-suspenders
+    // for when sessionStorage is blocked) so the feed actually shows.
+    browseTheFeed(navigate);
   }, [navigate]);
 
   // Landing sign-in, same Google OAuth the rest of the app uses. On success
@@ -1768,6 +1773,11 @@ export function StyleUpExperience({
           {!landing && <p>Sign in to chat with a stylist and see picks on yourself.</p>}
           {googleButton}
           {signinError && <p className="su-signin-error">{signinError}</p>}
+          {landing && (
+            <button type="button" className="su-landing-browse" onClick={() => browseTheFeed(navigate)}>
+              Browse the catalog
+            </button>
+          )}
         </div>
       </div>
     );
@@ -2342,6 +2352,13 @@ export function StyleUpExperience({
           </div>
         )}
 
+        {/* Chat message input. 'sm' is the button/input preset — 'md' is tuned
+            for cards and reads too heavy on a composer bar.
+
+            theme="dark": the CHAT pane is dark glass (rgba(18,19,22,.7)), even
+            though StyleUp's landing screen behind it is light. Theme follows
+            the surface the beam sits on, not the feature. */}
+        <Beam size="sm" theme="dark" className="su-composer-beam">
         <div className="su-composer">
           {profileReady ? (
             <>
@@ -2364,6 +2381,7 @@ export function StyleUpExperience({
             </button>
           )}
         </div>
+        </Beam>
       </div>
   );
 
@@ -2445,7 +2463,11 @@ export function StyleUpExperience({
 
   const findStylistBar = (
     <div className="su-find-bar">
-      <button type="button" className="su-find-btn" onClick={() => void openPicker()}>Find a stylist</button>
+      {/* The wrapper div Beam inserts becomes the flex child here, so it has to
+          carry the button's width — see .su-find-btn-beam in style-up.css. */}
+      <Beam size="sm" theme="light" className="su-find-btn-beam">
+        <button type="button" className="su-find-btn" onClick={() => void openPicker()}>Find a stylist</button>
+      </Beam>
     </div>
   );
 

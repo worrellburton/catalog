@@ -6104,6 +6104,27 @@ export default function AdminData() {
                         <polyline points="6 9 12 15 18 9" />
                       </svg>
                     </button>
+                    {/* Straight to this product's pipeline journey — where it is,
+                        what each stage decided, and what is blocking it. Only
+                        rendered when we have an id: rows aggregated from looks
+                        or ads can lack one, and a link to /product/undefined
+                        would land on an error page. */}
+                    {p.id && (
+                      <button
+                        className="admin-btn admin-btn-secondary"
+                        title="Pipeline journey — scrape → publish"
+                        style={{ fontSize: 11, padding: '4px 10px', marginLeft: 6, display: 'inline-flex', alignItems: 'center', gap: 4 }}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          navigate(`/admin/pipeline/product/${p.id}`);
+                        }}
+                      >
+                        Journey
+                        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                          <polyline points="9 18 15 12 9 6" />
+                        </svg>
+                      </button>
+                    )}
                   </td>
                   <td style={{ textAlign: 'center' }} onClick={(e) => e.stopPropagation()}>
                     {(() => {

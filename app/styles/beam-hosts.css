@@ -1,0 +1,120 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   BEAM HOST LAYOUT SHIMS
+   ═══════════════════════════════════════════════════════════════════════
+   <Beam> (components/Beam.tsx → border-beam) renders a wrapper <div> around
+   its child. That new box lands in the middle of layouts that were written
+   without it, so a flex child stops being the flex child, a full-width block
+   collapses to shrink-wrap, and so on.
+
+   Each rule here hands the wrapper the layout role its child used to have.
+   These are LAYOUT ONLY — nothing here touches how the beam paints; the beam's
+   own look is tuned via props in Beam.tsx.
+
+   Add a rule here whenever you add a <Beam> call site, and check the child
+   didn't rely on being a direct descendant of its old parent.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── FLUID COLOUR FIELD ───────────────────────────────────────────────
+   border-beam sizes its colour blobs in PIXELS (~300px of colour in total,
+   regardless of the element). That's fine at the ~350px width the package is
+   designed around, but coverage is colour/perimeter, so it collapses as the
+   element grows:
+
+     Find-a-stylist @ phone    339x47   → 772px perimeter → ~39% covered
+     Find-a-stylist @ desktop  1564x47  → 3222px perimeter → 9.3% covered
+
+   At 9% the beam is effectively invisible, which is why nothing showed on
+   large screens. The package exposes no knob for this — sizePresets only
+   carries borderRadius/borderWidth.
+
+   The fix is a unit change, not a redesign: the package's blob POSITIONS are
+   already percentages (2% 68%, 72% -3%, 100% 27%), only the sizes are px. So
+   we re-declare the same eight blobs, same colours, same positions, with
+   percentage sizes — x relative to the element's width, y to its height — and
+   coverage now holds at any size. Everything else (the conic mask, the
+   rotation, the hue drift, the variants) is still the package's.
+
+   !important because the package injects its stylesheet INSIDE the component,
+   which puts it after this file in document order at equal specificity.
+
+   If a package upgrade changes the palette, re-read the computed
+   background-image off a live beam and update these to match. */
+.cat-beam::before,
+.cat-beam::after {
+  background-image:
+    radial-gradient(4%  40% at 2%   68%, rgba(50, 200, 80, 0.50), transparent),
+    radial-gradient(2%  18% at 2%   68%, rgba(30, 185, 170, 0.45), transparent),
+    radial-gradient(22% 20% at 72%  -3%, rgba(255, 120, 40, 0.35), transparent),
+    radial-gradient(18% 16% at 74%  100%, rgba(100, 70, 255, 0.35), transparent),
+    radial-gradient(4%  38% at 100% 27%, rgba(240, 50, 180, 0.30), transparent),
+    radial-gradient(4%  40% at 100% 27%, rgba(180, 40, 240, 0.40), transparent),
+    radial-gradient(2%  22% at 100% 27%, rgba(40, 140, 255, 0.30), transparent),
+    radial-gradient(4%  26% at 100% 27%, rgba(255, 50, 100, 0.30), transparent)
+    !important;
+}
+
+/* Home search pill — the wrapper sits inside the fixed .bottom-bar, between
+   .bottom-bar-row and .bottom-bar-inner. The inner pill is the flex row that
+   holds the filter button, input and spinner, so the wrapper has to stretch. */
+.bottom-bar-beam {
+  display: block;
+  width: 100%;
+  min-width: 0; /* let the input shrink inside the flex row rather than overflow */
+}
+
+/* StyleUp "Find a stylist" — the button is capped at --su-find-btn-max and
+   auto-centred inside a full-width bar. A wrapper at plain width:100% traced
+   the whole 1564px bar instead of the 640px button (a 924px overhang on
+   desktop, which is what the beam was drawing). The wrapper has to inherit the
+   cap AND the centring, not just the width. */
+.su-find-btn-beam {
+  display: block;
+  width: 100%;
+  max-width: var(--su-find-btn-max, 640px);
+  margin-inline: auto;
+}
+
+/* StyleUp chat composer — three things the wrapper has to inherit, all of which
+   broke when it didn't:
+
+   1. flex: 0 0 auto — .su-composer is a flex child of the chat column. Without
+      this the wrapper got no reserved track and the composer slid off the
+      bottom of the viewport.
+   2. the composer's own margin — it's a floating glass pill inset from the
+      edges, so a full-width wrapper made the beam trace a box 12px outside the
+      visible pill on each side. Margin moves to the wrapper; the pill zeroes
+      its own so the two boxes coincide and the beam follows the 999px radius.
+   3. min-width: 0 so the input can still shrink inside the flex row. */
+.su-composer-beam {
+  flex: 0 0 auto;
+  min-width: 0;
+  margin: 6px 12px calc(10px + env(safe-area-inset-bottom));
+}
+.su-composer-beam > .su-composer {
+  margin: 0;
+}
+
+/* Create look — upload dropzone. .media-uploader-wrap stacks the zone above
+   the error line, so the wrapper is a plain full-width block. */
+.media-uploader-beam {
+  display: block;
+  width: 100%;
+}
+
+/* My catalog — identity card. The hero IS a <button>, which is an inline-block
+   by default; the wrapper takes the block role so the card keeps its width. */
+.my-cat-hero-beam {
+  display: block;
+  width: 100%;
+}
+
+/* NOTE — no rule for .profile-page-section. A beam was tried there and pulled
+   back out: that class is `margin-bottom: 28px` and nothing else (no border,
+   background or radius), so the beam traced a rectangle around a region with
+   no card behind it — phantom outline, section heading sitting on the beam's
+   edge, glow washing over the form fields.
+
+   The rule for any future call site: the child must be a real bounded surface
+   (border/background/radius of its own) before a beam belongs on it. Check the
+   CSS, don't go by how the screen looks — several "cards" in this app are
+   bare layout divs whose children carry the visible chrome. */

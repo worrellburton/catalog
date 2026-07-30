@@ -25,6 +25,7 @@ import httpx
 from supabase import create_client
 
 from config import STYLES, GENERATION_DEFAULTS, DEFAULT_STYLE
+from pricing import estimate_cost as _estimate_cost
 from prompts import enhance_prompt_with_gemini
 from veo_client import (
     generate_video_with_references,
@@ -256,6 +257,19 @@ def _get_ad_index_for_product(supabase, product_id: str, ad_id: str) -> int:
     return 0
 
 
+def _platform_for_model(model: str) -> str:
+    """Map a model slug to the ai_usage_logs platform it actually billed
+    against (F1 fix). Mirrors the routing in _generate_with_retry: fal.ai
+    slugs (Seedance, generic fal models) start with 'fal-ai/' or
+    'bytedance/'; Veo slugs (the default) start with 'veo-' or 'google/'
+    and are routed to the Google client, not fal."""
+    if model.startswith("fal-ai/") or model.startswith("bytedance/"):
+        return "fal"
+    if model.startswith("veo-") or model.startswith("google/"):
+        return "google"
+    return "unknown"
+
+
 def _generate_with_retry(
     images_data: list[tuple[bytes, str]],
     prompt: str,
@@ -438,8 +452,20 @@ def generate_ad_video(ad_id: str) -> dict:
             image_context=image_context,
         )
 
-        # Enhance with Gemini
-        enhanced_prompt = enhance_prompt_with_gemini(raw_prompt, product, None)
+        # Enhance with Gemini — OPTIONAL, and must never fail the render.
+        #
+        # This costs ~$0.0005 and only makes the prompt more cinematic; the raw
+        # template above is already complete and usable. It was unguarded, so on
+        # 2026-07-30 an expired GOOGLE_API_KEY killed three $0.10 renders here,
+        # BEFORE model selection had even happened — meaning it also broke
+        # renders routed to fal, which need no Google credential at all. A
+        # cheap quality nicety must not be a single point of failure for the
+        # whole creative stage.
+        try:
+            enhanced_prompt = enhance_prompt_with_gemini(raw_prompt, product, None)
+        except Exception as e:
+            print(f"    ⚠ Prompt enhancement unavailable, using raw prompt: {e}")
+            enhanced_prompt = raw_prompt
         supabase.table("product_creative").update({"prompt": enhanced_prompt}).eq("id", ad_id).execute()
 
         # Respect per-ad model override (e.g. user chose Seedance instead of Veo)
@@ -513,12 +539,30 @@ def generate_ad_video(ad_id: str) -> dict:
         # Set affiliate URL from product URL if not already set
         affiliate_url = ad.get("affiliate_url") or product.get("url")
 
-        # Estimate cost (reference images = 8s duration at fast pricing)
-        cost = _estimate_cost(GENERATION_DEFAULTS["model"], GENERATION_DEFAULTS["resolution"])
+        # Cost from the model ACTUALLY used, the resolution the ROW actually
+        # holds (not the hardcoded default), and the duration actually passed
+        # to the generator below (style_cfg["duration"] - NOT
+        # ad["duration_seconds"], which is never sent to any generate_* call).
+        actual_model = ad_model or GENERATION_DEFAULTS["model"]
+        actual_resolution = ad.get("resolution") or GENERATION_DEFAULTS["resolution"]
+        actual_duration = int(style_cfg.get("duration", GENERATION_DEFAULTS["duration"]))
+        cost = _estimate_cost(actual_model, actual_resolution, actual_duration)
 
-        # Update ad as done
+        # Update ad as done.
+        #
+        # `enabled` is REQUIRED here, not cosmetic. product_creative.enabled
+        # defaults to FALSE, and promote_creative_to_primary_video() only fires
+        # when status in ('live','done') AND enabled AND video_url is not null.
+        # The app's own flow pairs them (product-creative.ts sets
+        # status='live', enabled=true together) but this generator never did —
+        # so every automated render completed, was BILLED, and then failed to
+        # set products.primary_video_url. The product stayed invisible in the
+        # feed (video is a hard filter) and got re-queued forever.
+        # Measured 2026-07-29: 30 rows done+video_url+enabled=false, $3.00
+        # spent, 12 of them still recoverable.
         update_payload = {
             "status": "done",
+            "enabled": True,
             "video_url": video_url,
             "storage_path": storage_path,
             "affiliate_url": affiliate_url,
@@ -531,6 +575,29 @@ def generate_ad_video(ad_id: str) -> dict:
         if mobile_video_url:
             update_payload["mobile_video_url"] = mobile_video_url
         supabase.table("product_creative").update(update_payload).eq("id", ad_id).execute()
+
+        # Spend telemetry. Without this row the monthly cap in Task 5 is
+        # fiction - ai_usage_logs had ZERO fal entries before this shipped.
+        # Platform is derived from the model actually used, NOT hardcoded -
+        # GENERATION_DEFAULTS["model"] defaults to a Veo (Google) slug, which
+        # _generate_with_retry routes to the Google client, not fal. A
+        # hardcoded "fal" here logged every Google render as fal spend.
+        try:
+            supabase.table("ai_usage_logs").insert({
+                "platform": _platform_for_model(actual_model),
+                "operation": "product-creative",
+                "model": actual_model,
+                "units": actual_duration,
+                "estimated_cost_usd": cost,
+                "status": "success",
+                "metadata": {
+                    "product_id": ad.get("product_id"),
+                    "creative_id": ad_id,
+                    "method": method,
+                },
+            }).execute()
+        except Exception as e:
+            print(f"    ⚠ usage log failed (non-fatal): {e}")
 
         print(f"  ✓ Done — ad {ad_id} | {method} | {video_url}")
         return {
@@ -574,15 +641,6 @@ def process_pending_ads() -> list[dict]:
             results.append({"success": False, "ad_id": row["id"], "error": str(e)})
 
     return results
-
-
-def _estimate_cost(model: str, resolution: str) -> float:
-    pricing = {
-        "veo-3.1-fast-generate-preview": {"720p": 0.10, "1080p": 0.12},
-        "veo-3.1-generate-preview": {"720p": 0.40, "1080p": 0.40},
-        "veo-3.1-lite-generate-preview": {"720p": 0.05, "1080p": 0.08},
-    }
-    return pricing.get(model, {}).get(resolution, 0.10)
 
 
 if __name__ == "__main__":
