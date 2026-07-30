@@ -22,7 +22,8 @@ import UserMenu from '~/components/UserMenu';
 import { Look, Product } from '~/data/looks';
 import { useBookmarks } from '~/hooks/useBookmarks';
 import { useRecentProducts } from '~/hooks/useRecentProducts';
-import { useAuth } from '~/hooks/useAuth';
+import { useAuth, isOAuthReturn } from '~/hooks/useAuth';
+import { shouldRedirectToStyle, BROWSE_FEED_KEY } from '~/utils/front-door';
 import { useOverlayRouter } from '~/hooks/useOverlayRouter';
 import { lookSlug, productSlug } from '~/utils/slug';
 import { markOverlayReturn } from '~/utils/overlay-scroll-stash';
@@ -902,6 +903,30 @@ export default function Home() {
   // TypeAnywhere overlay (which uses navigate('/?q=…')) would then
   // appear as no-op location changes and silently drop the query.
   const navigate = useNavigate();
+
+  // Front door: StyleUp is the app's landing. A plain open of "/" redirects to
+  // the stylist picker; the feed still lives here and is revealed once the
+  // shopper chooses to browse (StyleUp's back button, the account menu, or any
+  // deep-link). Decided once at mount so the gate/feed never flash first.
+  const [redirectingToStyle] = useState(() => {
+    if (typeof window === 'undefined') return false;
+    let browseFeed = false;
+    try { browseFeed = sessionStorage.getItem(BROWSE_FEED_KEY) === '1'; } catch { /* private mode */ }
+    return shouldRedirectToStyle({ search: window.location.search, isOAuth: isOAuthReturn(), browseFeed });
+  });
+  useEffect(() => {
+    if (redirectingToStyle) { navigate('/style', { replace: true }); return; }
+    // Feed is showing — remember it for the session so returning to "/" stays
+    // on the feed instead of bouncing to the picker. Strip a one-shot ?feed=1.
+    try { sessionStorage.setItem(BROWSE_FEED_KEY, '1'); } catch { /* private mode */ }
+    try {
+      const u = new URL(window.location.href);
+      if (u.searchParams.get('feed') === '1') {
+        u.searchParams.delete('feed');
+        window.history.replaceState({}, '', `${u.pathname}${u.search}${u.hash}`);
+      }
+    } catch { /* ignore */ }
+  }, [redirectingToStyle, navigate]);
 
   const handleLogoClick = useCallback(() => {
     // Reset every layer that could be sitting on top of the feed:
@@ -2441,6 +2466,10 @@ export default function Home() {
     });
     return () => { cancelAnimationFrame(r1); cancelAnimationFrame(r2); };
   }, [topFrameKey]);
+
+  // Redirecting to the StyleUp landing — render nothing so the feed/gate
+  // never paints a frame before the navigate lands.
+  if (redirectingToStyle) return null;
 
   return (
     <TrailRoot>

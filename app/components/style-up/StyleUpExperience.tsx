@@ -13,6 +13,7 @@ import { useNavigate } from '@remix-run/react';
 import { useAuth } from '~/hooks/useAuth';
 import { useStylistEngineMethod } from '~/hooks/useStylistEngineMethod';
 import { supabase } from '~/utils/supabase';
+import { browseTheFeed } from '~/utils/front-door';
 import {
   fetchStylists, getOrCreateThread, deleteThread, getThreadHunting, fetchProductDetail, fetchProductVideos, fetchSimilarProducts, getLatestThread, fetchMyThreads, fetchMessages, sendShopperMessage,
   sendStylistText, startFullLookRender, fetchSwapOptions, sendSwapOptions,
@@ -648,7 +649,10 @@ export function StyleUpExperience({
     // `exit` is only wired to the landing/roster header, so it's the "leave"
     // action.) In the native shell the Catalog header is hidden on /style, so
     // this is the only route back to the feed.
-    navigate('/');
+    // StyleUp is the front door now, so a bare "/" would redirect right back
+    // here. Flag this session as browsing and pass ?feed=1 (belt-and-suspenders
+    // for when sessionStorage is blocked) so the feed actually shows.
+    browseTheFeed(navigate);
   }, [navigate]);
 
   // Landing sign-in, same Google OAuth the rest of the app uses. On success
@@ -1769,6 +1773,11 @@ export function StyleUpExperience({
           {!landing && <p>Sign in to chat with a stylist and see picks on yourself.</p>}
           {googleButton}
           {signinError && <p className="su-signin-error">{signinError}</p>}
+          {landing && (
+            <button type="button" className="su-landing-browse" onClick={() => browseTheFeed(navigate)}>
+              Browse the catalog
+            </button>
+          )}
         </div>
       </div>
     );
