@@ -1,4 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
+import Beam from '~/components/Beam';
 
 interface MediaUploaderProps {
   onFilesSelected: (files: File[]) => void;
@@ -79,6 +80,10 @@ export default function MediaUploader({ onFilesSelected, accept, maxFiles = 10, 
 
   return (
     <div className="media-uploader-wrap">
+      {/* Upload dropzone — the primary action on Create look, so it gets the
+          beam. Frozen while disabled: a beam on a dead control reads as "this
+          is working on it" when nothing is happening. */}
+      <Beam size="md" active={!disabled} className="media-uploader-beam">
       <div
         className={`media-uploader ${dragOver ? 'drag-over' : ''} ${disabled ? 'disabled' : ''}`}
         onDrop={handleDrop}
@@ -108,6 +113,7 @@ export default function MediaUploader({ onFilesSelected, accept, maxFiles = 10, 
         <p className="media-uploader-hint">Drag & drop or click to browse</p>
         <p className="media-uploader-hint">Photos (JPG, PNG, WebP) • Videos (MP4, MOV, WebM) • Max 100MB</p>
       </div>
+      </Beam>
       {error && <p className="media-uploader-error">{error}</p>}
     </div>
   );

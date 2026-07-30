@@ -1,0 +1,59 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   BEAM HOST LAYOUT SHIMS
+   ═══════════════════════════════════════════════════════════════════════
+   <Beam> (components/Beam.tsx → border-beam) renders a wrapper <div> around
+   its child. That new box lands in the middle of layouts that were written
+   without it, so a flex child stops being the flex child, a full-width block
+   collapses to shrink-wrap, and so on.
+
+   Each rule here hands the wrapper the layout role its child used to have.
+   These are LAYOUT ONLY — nothing here touches how the beam paints; the beam's
+   own look is tuned via props in Beam.tsx.
+
+   Add a rule here whenever you add a <Beam> call site, and check the child
+   didn't rely on being a direct descendant of its old parent.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* Home search pill — the wrapper sits inside the fixed .bottom-bar, between
+   .bottom-bar-row and .bottom-bar-inner. The inner pill is the flex row that
+   holds the filter button, input and spinner, so the wrapper has to stretch. */
+.bottom-bar-beam {
+  display: block;
+  width: 100%;
+  min-width: 0; /* let the input shrink inside the flex row rather than overflow */
+}
+
+/* StyleUp "Find a stylist" — .su-find-bar is a flex container and the button
+   was its only child. */
+.su-find-btn-beam {
+  display: block;
+  width: 100%;
+}
+
+/* StyleUp chat composer — the composer is a docked full-width bar. */
+.su-composer-beam {
+  display: block;
+  width: 100%;
+}
+
+/* Create look — upload dropzone. .media-uploader-wrap stacks the zone above
+   the error line, so the wrapper is a plain full-width block. */
+.media-uploader-beam {
+  display: block;
+  width: 100%;
+}
+
+/* My catalog — identity card. The hero IS a <button>, which is an inline-block
+   by default; the wrapper takes the block role so the card keeps its width. */
+.my-cat-hero-beam {
+  display: block;
+  width: 100%;
+}
+
+/* Profile — the "About you" / "Body profile" cards. .profile-page-body stacks
+   its children with a gap; the wrapper inherits that slot, so it needs to be a
+   block AND carry the margin the section used to contribute. */
+.profile-page-section-beam {
+  display: block;
+  width: 100%;
+}

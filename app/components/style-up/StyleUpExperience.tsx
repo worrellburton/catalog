@@ -68,6 +68,7 @@ import {
 } from '~/services/user-generations';
 import { promoteGenerationToLook } from '~/services/promote-generation';
 import { generationProgress } from '~/services/generation-progress';
+import Beam from '~/components/Beam';
 
 import '~/styles/style-up.css';
 import '~/styles/style-up-lookbar.css';
@@ -2342,6 +2343,9 @@ export function StyleUpExperience({
           </div>
         )}
 
+        {/* Chat message input. 'sm' is the button/input preset — 'md' is tuned
+            for cards and reads too heavy on a composer bar. */}
+        <Beam size="sm" theme="light" className="su-composer-beam">
         <div className="su-composer">
           {profileReady ? (
             <>
@@ -2364,6 +2368,7 @@ export function StyleUpExperience({
             </button>
           )}
         </div>
+        </Beam>
       </div>
   );
 
@@ -2445,7 +2450,11 @@ export function StyleUpExperience({
 
   const findStylistBar = (
     <div className="su-find-bar">
-      <button type="button" className="su-find-btn" onClick={() => void openPicker()}>Find a stylist</button>
+      {/* The wrapper div Beam inserts becomes the flex child here, so it has to
+          carry the button's width — see .su-find-btn-beam in style-up.css. */}
+      <Beam size="sm" theme="light" className="su-find-btn-beam">
+        <button type="button" className="su-find-btn" onClick={() => void openPicker()}>Find a stylist</button>
+      </Beam>
     </div>
   );
 

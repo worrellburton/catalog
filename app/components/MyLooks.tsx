@@ -25,6 +25,7 @@ import AutoplayVideo from '~/components/AutoplayVideo';
 import { stableLookId } from '~/services/looks';
 import { lookTrailId } from '~/utils/trailIds';
 import { captureVideoFrame } from '~/services/video-loading';
+import Beam from '~/components/Beam';
 import '~/styles/my-looks.css';
 import '~/styles/creator-page.css';
 
@@ -762,6 +763,9 @@ export default function MyLooks({ onClose }: MyLooksProps) {
           affordance, but tapping anywhere on the hero — avatar, name,
           curated-by, stats — fires the same event. */}
       <div className="my-cat-top">
+      {/* Identity card. The hero IS the button, so the beam wraps the button
+          itself rather than a container — .my-cat-hero-beam carries its width. */}
+      <Beam size="md" className="my-cat-hero-beam">
       <button
         type="button"
         className="my-cat-hero my-cat-hero--button"
@@ -803,6 +807,7 @@ export default function MyLooks({ onClose }: MyLooksProps) {
             : `${counts.all} look${counts.all === 1 ? '' : 's'} · ${counts.live} live · ${counts.archived} inactive`}
         </p>
       </button>
+      </Beam>
 
       {/* Status filter pills — replace the old chip row, sit where
           CreatorPage's nav tabs do. */}

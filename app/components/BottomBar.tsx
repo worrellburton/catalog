@@ -11,6 +11,7 @@ import { useSearchBeam } from '~/hooks/useSearchBeam';
 import FilterPanel, { ActiveFilters, getEmptyFilters, hasActiveFilters } from './FilterPanel';
 import { getSearchSuggestions, getCreators } from '~/services/looks';
 import { getRecentSearches, RECENT_SEARCH_EVENT } from '~/services/recent-searches';
+import Beam from '~/components/Beam';
 
 // Filter fields that carry real search intent (men/women are the gender
 // toggle, price/creator aren't search terms). A few tokens get humanized so
@@ -637,7 +638,10 @@ function BottomBar({
       )}
 
       <div
-        className={`bottom-bar is-beam-${beam} ${searchOpen ? 'search-open' : ''} ${filtersOpen ? 'filters-open' : ''}`}
+        /* is-beam-none: the legacy pseudo-element beam system (bottom-bar.css)
+           is superseded here by <Beam> on the inner pill. Leaving the old
+           variant class on would paint two beams on the same control. */
+        className={`bottom-bar is-beam-none ${searchOpen ? 'search-open' : ''} ${filtersOpen ? 'filters-open' : ''}`}
         id="bottom-bar"
         style={searchOpen ? {
           // Centering is margin-based in CSS now (no translateX), so the
@@ -663,6 +667,14 @@ function BottomBar({
             The home feed (featured creatives) is what shows when the input
             is empty, so there's no separate "all" pill to manage. */}
         <div className="bottom-bar-row">
+        {/* Beam wraps the INNER pill, not .bottom-bar itself: that outer element
+            is position:fixed with load-bearing inline transforms, and BorderBeam's
+            wrapper would become its containing block and break the anchoring.
+
+            active is tied to the existing useSearchBeam dial so /admin/ui/search-bar
+            "Off" still turns the beam off — the six legacy is-beam-* variants are
+            superseded by this one, see is-beam-none below. */}
+        <Beam size="sm" active={beam !== 'none'} className="bottom-bar-beam">
         <div className="bottom-bar-inner search-inline">
           <button
             className={`filter-btn inline ${hasActiveFilters(activeFilters) ? 'has-filters' : ''}`}
@@ -738,6 +750,7 @@ function BottomBar({
             </span>
           )}
         </div>
+        </Beam>
         {/* Apple-Maps-style close button, beside the search pill (outside it). */}
         {searchOpen && (
           <button
