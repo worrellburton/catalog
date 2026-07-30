@@ -14,7 +14,7 @@
 // when the child's radius comes from a source it can't read.
 
 import { BorderBeam } from 'border-beam';
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import '~/styles/beam-hosts.css';
 
 /** Subset of the package's size presets we actually use. */
@@ -23,7 +23,8 @@ export type BeamSize = 'sm' | 'md' | 'pulse-inner' | 'pulse-outside';
 export default function Beam({
   children,
   size = 'md',
-  strength = 0.7,
+  strength = 1,
+  boost = 2,
   active = true,
   theme = 'dark',
   className,
@@ -32,8 +33,19 @@ export default function Beam({
   children: ReactNode;
   /** 'sm' for buttons/inputs, 'md' for cards, 'pulse-*' for a non-travelling glow. */
   size?: BeamSize;
-  /** 0–1 master opacity. First dial to reach for. */
+  /** 0–1 master opacity, and it CAPS at 1 — see `boost` for anything beyond. */
   strength?: number;
+  /**
+   * Opacity multiplier on the beam's three layers, via the package's own
+   * --beam-*-opacity vars.
+   *
+   * Needed because `strength` maxes out at 1 and the package's presets are
+   * calibrated for a small card on a flat dark surface. Against Catalog's
+   * glass-and-photography backdrops the beam at strength=1 is still only just
+   * visible, so 2 is the app's baseline. Raise for more, 1 for the package's
+   * untouched defaults.
+   */
+  boost?: number;
   /** Set false to freeze the beam without unmounting (keeps layout stable). */
   active?: boolean;
   /**
@@ -55,6 +67,13 @@ export default function Beam({
       theme={theme}
       className={className}
       borderRadius={borderRadius}
+      style={{
+        // Custom properties inherit, so setting them on the container reaches
+        // the beam's layer elements underneath.
+        '--beam-stroke-opacity': String(boost),
+        '--beam-inner-opacity': String(boost),
+        '--beam-bloom-opacity': String(boost),
+      } as CSSProperties}
     >
       {children}
     </BorderBeam>
