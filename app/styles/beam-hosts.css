@@ -14,6 +14,45 @@
    didn't rely on being a direct descendant of its old parent.
    ═══════════════════════════════════════════════════════════════════════ */
 
+/* ── FLUID COLOUR FIELD ───────────────────────────────────────────────
+   border-beam sizes its colour blobs in PIXELS (~300px of colour in total,
+   regardless of the element). That's fine at the ~350px width the package is
+   designed around, but coverage is colour/perimeter, so it collapses as the
+   element grows:
+
+     Find-a-stylist @ phone    339x47   → 772px perimeter → ~39% covered
+     Find-a-stylist @ desktop  1564x47  → 3222px perimeter → 9.3% covered
+
+   At 9% the beam is effectively invisible, which is why nothing showed on
+   large screens. The package exposes no knob for this — sizePresets only
+   carries borderRadius/borderWidth.
+
+   The fix is a unit change, not a redesign: the package's blob POSITIONS are
+   already percentages (2% 68%, 72% -3%, 100% 27%), only the sizes are px. So
+   we re-declare the same eight blobs, same colours, same positions, with
+   percentage sizes — x relative to the element's width, y to its height — and
+   coverage now holds at any size. Everything else (the conic mask, the
+   rotation, the hue drift, the variants) is still the package's.
+
+   !important because the package injects its stylesheet INSIDE the component,
+   which puts it after this file in document order at equal specificity.
+
+   If a package upgrade changes the palette, re-read the computed
+   background-image off a live beam and update these to match. */
+.cat-beam::before,
+.cat-beam::after {
+  background-image:
+    radial-gradient(4%  40% at 2%   68%, rgba(50, 200, 80, 0.50), transparent),
+    radial-gradient(2%  18% at 2%   68%, rgba(30, 185, 170, 0.45), transparent),
+    radial-gradient(22% 20% at 72%  -3%, rgba(255, 120, 40, 0.35), transparent),
+    radial-gradient(18% 16% at 74%  100%, rgba(100, 70, 255, 0.35), transparent),
+    radial-gradient(4%  38% at 100% 27%, rgba(240, 50, 180, 0.30), transparent),
+    radial-gradient(4%  40% at 100% 27%, rgba(180, 40, 240, 0.40), transparent),
+    radial-gradient(2%  22% at 100% 27%, rgba(40, 140, 255, 0.30), transparent),
+    radial-gradient(4%  26% at 100% 27%, rgba(255, 50, 100, 0.30), transparent)
+    !important;
+}
+
 /* Home search pill — the wrapper sits inside the fixed .bottom-bar, between
    .bottom-bar-row and .bottom-bar-inner. The inner pill is the flex row that
    holds the filter button, input and spinner, so the wrapper has to stretch. */

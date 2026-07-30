@@ -70,7 +70,9 @@ export default function Beam({
       strength={strength}
       active={active}
       theme={theme}
-      className={className}
+      // cat-beam is the hook the fluid-gradient override in beam-hosts.css
+      // targets — every call site gets it, the per-site class is for layout.
+      className={`cat-beam${className ? ` ${className}` : ''}`}
       borderRadius={borderRadius}
       style={{
         // Custom properties inherit, so setting them on the container reaches
