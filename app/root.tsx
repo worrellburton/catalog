@@ -345,7 +345,7 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-se
             '--beam-bloom-opacity': '3',
             '--beam-inner-opacity': '3',
             '--pulse-glow-boost': '3',
-            '--beam-core-blur': '34px',
+            '--beam-core-blur': '26px',
           } as React.CSSProperties}
         >
           <BorderBeam
