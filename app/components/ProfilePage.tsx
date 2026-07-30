@@ -8,7 +8,6 @@ import { refreshAuthUser } from '~/hooks/useAuth';
 import { supabase } from '~/utils/supabase';
 import BecomeCreatorSection from './BecomeCreatorSection';
 import LegalPage, { type LegalKind } from './LegalPage';
-import Beam from '~/components/Beam';
 import '~/styles/profile-page.css';
 
 interface ProfilePageProps {
@@ -192,7 +191,6 @@ export default function ProfilePage({ user, onClose, renderSaved }: ProfilePageP
               <span className="profile-page-avatar-hint">Tap to change photo</span>
             </div>
 
-            <Beam size="md" className="profile-page-section-beam">
             <div className="profile-page-section">
               <h2 className="profile-page-section-title">About you</h2>
 
@@ -269,12 +267,10 @@ export default function ProfilePage({ user, onClose, renderSaved }: ProfilePageP
                 </label>
               </div>
             </div>
-            </Beam>
 
             {/* Only shoppers (not creators/admins) can apply to create. */}
             {(!user.role || user.role === 'shopper') && <BecomeCreatorSection />}
 
-            <Beam size="md" className="profile-page-section-beam">
             <div className="profile-page-section">
               <h2 className="profile-page-section-title">Body profile</h2>
               <p className="profile-page-section-desc">Used to show you relevant looks and for virtual try-on.</p>
@@ -336,7 +332,6 @@ export default function ProfilePage({ user, onClose, renderSaved }: ProfilePageP
                 </label>
               </div>
             </div>
-            </Beam>
 
             {error && (
               <div className="profile-page-error" role="alert">{error}</div>

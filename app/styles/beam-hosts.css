@@ -50,10 +50,13 @@
   width: 100%;
 }
 
-/* Profile — the "About you" / "Body profile" cards. .profile-page-body stacks
-   its children with a gap; the wrapper inherits that slot, so it needs to be a
-   block AND carry the margin the section used to contribute. */
-.profile-page-section-beam {
-  display: block;
-  width: 100%;
-}
+/* NOTE — no rule for .profile-page-section. A beam was tried there and pulled
+   back out: that class is `margin-bottom: 28px` and nothing else (no border,
+   background or radius), so the beam traced a rectangle around a region with
+   no card behind it — phantom outline, section heading sitting on the beam's
+   edge, glow washing over the form fields.
+
+   The rule for any future call site: the child must be a real bounded surface
+   (border/background/radius of its own) before a beam belongs on it. Check the
+   CSS, don't go by how the screen looks — several "cards" in this app are
+   bare layout divs whose children carry the visible chrome. */

@@ -36,14 +36,19 @@ export default function Beam({
   /** 0–1 master opacity, and it CAPS at 1 — see `boost` for anything beyond. */
   strength?: number;
   /**
-   * Opacity multiplier on the beam's three layers, via the package's own
-   * --beam-*-opacity vars.
+   * Opacity multiplier on the beam's EDGE layers (stroke + bloom), via the
+   * package's own --beam-*-opacity vars.
    *
    * Needed because `strength` maxes out at 1 and the package's presets are
    * calibrated for a small card on a flat dark surface. Against Catalog's
    * glass-and-photography backdrops the beam at strength=1 is still only just
    * visible, so 2 is the app's baseline. Raise for more, 1 for the package's
    * untouched defaults.
+   *
+   * Deliberately does NOT touch --beam-inner-opacity: that layer is an inset
+   * glow that paints across the element's INTERIOR, and boosting it washes
+   * colour over whatever the card contains (it bled over the profile form
+   * fields at 2). Edges get boosted, interiors stay clean.
    */
   boost?: number;
   /** Set false to freeze the beam without unmounting (keeps layout stable). */
@@ -71,7 +76,6 @@ export default function Beam({
         // Custom properties inherit, so setting them on the container reaches
         // the beam's layer elements underneath.
         '--beam-stroke-opacity': String(boost),
-        '--beam-inner-opacity': String(boost),
         '--beam-bloom-opacity': String(boost),
       } as CSSProperties}
     >
