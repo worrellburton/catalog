@@ -855,7 +855,8 @@ html[data-shell="catalog-app"] .su-shell {
 .su-swap-opt:active { transform: scale(0.97); }
 .su-swap-opt:disabled { opacity: 0.55; cursor: default; }
 .su-swap-opt-media { width: 100%; aspect-ratio: 3 / 4; background: #26282d; }
-.su-swap-opt-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.su-swap-opt-media img,
+.su-swap-opt-media video { width: 100%; height: 100%; object-fit: cover; display: block; }
 .su-swap-opt-info { display: flex; flex-direction: column; gap: 1px; padding: 0 8px 9px; min-width: 0; }
 .su-swap-opt-brand { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--su-accent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .su-swap-opt-name { font-size: 11.5px; line-height: 1.25; color: #e7e7ea; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
@@ -1389,6 +1390,7 @@ html[data-shell="catalog-app"] .su-shell {
 .su-lookcard-media img,
 .su-lookcard-media video,
 .su-swap-opt-media img,
+.su-swap-opt-media video,
 .su-choose-opt-media img,
 .su-render-piece img { animation: su-develop 0.85s ease both; }
 
@@ -1491,6 +1493,7 @@ html[data-shell="catalog-app"] .su-shell {
   .su-lookcard-media img,
   .su-lookcard-media video,
   .su-swap-opt-media img,
+  .su-swap-opt-media video,
   .su-choose-opt-media img,
   .su-render-piece img,
   .su-render-you::before,

@@ -903,17 +903,20 @@ export function StyleUpExperience({
     } catch { setPrefs(EMPTY_PREFS); prefsRef.current = EMPTY_PREFS; }
   }, [threadId]);
 
-  // Load hero clips for the pieces shown in look cards — a product with a
-  // primary video plays it in the card (else its primary image). Batched,
-  // id-keyed, and every requested id is marked (video or null) so no id is
-  // ever re-fetched.
+  // Load hero clips for the pieces shown in look cards AND the swap-option cards
+  // — a product with a primary video plays it in the card (else its primary
+  // image). Batched, id-keyed, and every requested id is marked (video or null)
+  // so no id is ever re-fetched.
   useEffect(() => {
     const ids = [...new Set(
-      messages
-        .filter(m => m.kind === 'product' && m.productRef?.id && !m.productRef?.swap && !m.productRef?.choose)
-        .map(m => m.productRef!.id as string)
-        .filter(id => !(id in pieceVideos)),
-    )];
+      messages.flatMap(m => {
+        if (m.kind !== 'product' || !m.productRef) return [];
+        // Swap picker: the ids live in .swap.options, not on the card itself.
+        if (m.productRef.swap) return m.productRef.swap.options.map(o => o.id).filter((x): x is string => !!x);
+        if (m.productRef.choose) return [];
+        return m.productRef.id ? [m.productRef.id] : [];
+      }),
+    )].filter(id => !(id in pieceVideos));
     if (ids.length === 0) return;
     let cancelled = false;
     void fetchProductVideos(ids).then(vids => {
@@ -2099,7 +2102,9 @@ export function StyleUpExperience({
                           disabled={genLook}
                         >
                           <span className="su-swap-opt-media">
-                            {o.image ? <img src={o.image} alt={o.name || ''} loading="lazy" /> : <span className="su-product-media--empty" />}
+                            {o.id && pieceVideos[o.id]
+                              ? <video ref={forceMuteVideo} src={pieceVideos[o.id]!.video} poster={pieceVideos[o.id]!.poster ?? o.image ?? undefined} autoPlay loop muted playsInline />
+                              : o.image ? <img src={o.image} alt={o.name || ''} loading="lazy" /> : <span className="su-product-media--empty" />}
                           </span>
                           <span className="su-swap-opt-info">
                             {o.brand && <span className="su-swap-opt-brand">{o.brand}</span>}
