@@ -291,6 +291,22 @@ export async function fetchProductVideos(
   return out;
 }
 
+/** Resolve each look-card piece's garment slot from the GOVERNED type (falling
+ *  back to the name). The name heuristic alone can't place iconic sneakers whose
+ *  names carry no shoe word ("Samba OG", "Air Force 1", "Achilles Low"), so those
+ *  rows lost their "Change" affordance — this looks the type up by id and fixes
+ *  them. Only garment roles are returned; genuine non-garments are omitted. */
+export async function fetchProductRoles(ids: string[]): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  if (!supabase || ids.length === 0) return out;
+  const { data } = await supabase.from('products').select('id, type, name').in('id', ids);
+  for (const r of (data ?? []) as Array<{ id: string; type: string | null; name: string | null }>) {
+    const role = roleForProduct(r.type, r.name);
+    if (role) out[String(r.id)] = role;
+  }
+  return out;
+}
+
 /** The thread's server-side "web hunt in progress" marker (a future timestamp
  *  while the edge function is still pulling pieces, else null/past). Drives the
  *  working indicator so it survives refresh/navigation. */
