@@ -63,11 +63,13 @@ GENDER_PERSONA_MAP = {
 # ─── Generation Defaults ──────────────────────────────────────────────
 
 GENERATION_DEFAULTS = {
-    # fal-only. Was "veo-3.1-fast-generate-preview" (Google Veo); retired so a
-    # bad/absent GOOGLE_API_KEY can't break renders. Seedance-2 runs on fal.ai
-    # (needs only FAL_KEY) and matches the app's look_video_model standard; the
-    # client maps it to bytedance/seedance-2.0/{image,text}-to-video.
-    "model": "seedance-2",
+    # fal-only, and the EXACT model that produced every working ad through
+    # 2026-07-30 (Seedance-2 fast reference-to-video on fal.ai — needs only
+    # FAL_KEY). Was "veo-3.1-fast-generate-preview" (Google Veo), which broke
+    # when GOOGLE_API_KEY expired. reference-to-video treats the product photo
+    # as a reference (right for ads); do NOT shorten to "seedance-2" — that maps
+    # to image-to-video, a different endpoint that was never the working one.
+    "model": "bytedance/seedance-2.0/fast/reference-to-video",
     "duration": 5,            # seconds — Seedance range is 2–12s
     "aspect_ratio": "9:16",   # portrait; cropped to 3:4 for the feed afterwards
     "resolution": "720p",

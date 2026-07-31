@@ -234,8 +234,8 @@ def generate_video(
 def _estimate_cost(model: str, resolution: str) -> float:
     """Rough cost estimate per video in USD."""
     pricing = {
-        # fal-only default. Seedance-2 ref-to-video ≈ $0.06/s → ~$0.30 for 5s.
-        "seedance-2": {"720p": 0.30, "1080p": 0.30},
+        # fal-only default. Seedance-2 FAST ref-to-video ≈ $0.03/s → ~$0.15 for 5s.
+        "bytedance/seedance-2.0/fast/reference-to-video": {"720p": 0.15, "1080p": 0.15},
         # Retired Veo tiers, kept for legacy rows.
         "veo-3.1-fast-generate-preview": {"720p": 0.10, "1080p": 0.12},
         "veo-3.1-generate-preview": {"720p": 0.40, "1080p": 0.40},
