@@ -15,12 +15,11 @@ import os
 import time
 from datetime import datetime, timezone
 
-import httpx
 from supabase import create_client
 
 from config import STYLES, GENERATION_DEFAULTS, DEFAULT_STYLE, DEFAULT_PERSONA, GENDER_PERSONA_MAP
-from prompts import build_prompt, enhance_prompt_with_gemini
-from veo_client import generate_video_from_image, generate_video_from_text
+from prompts import build_prompt
+from seedance_client import generate_video_from_image_url as seedance_from_image_url
 from video_crop import crop_to_aspect
 
 
@@ -29,7 +28,6 @@ def generate_video(
     style: str = DEFAULT_STYLE,
     persona: str = DEFAULT_PERSONA,
     ai_model_id: str | None = None,
-    enhance_prompt: bool = True,
 ) -> dict:
     """
     Full pipeline: fetch product → fetch AI model → build prompt →
@@ -92,38 +90,31 @@ def generate_video(
     job_id = job["id"]
 
     try:
-        # 4 — Build prompt
-        raw_prompt = build_prompt(product, style, persona, ai_model)
-        prompt = enhance_prompt_with_gemini(raw_prompt, product, ai_model) if enhance_prompt else raw_prompt
+        # 4 — Build prompt. Gemini enhancement is retired (fal-only, no Google
+        # API); the template prompt is complete on its own.
+        prompt = build_prompt(product, style, persona, ai_model)
 
         supabase.table("generated_videos").update({
             "status": "generating",
             "prompt": prompt,
         }).eq("id", job_id).execute()
 
-        # 5 — Download best product image
+        # 5 — Best product image (Seedance takes a URL directly, no download).
         image_url = product["images"][0]
-        img_resp = httpx.get(image_url, timeout=30, follow_redirects=True)
-        img_resp.raise_for_status()
-        image_bytes = img_resp.content
-        mime_type = img_resp.headers.get("content-type", "image/jpeg").split(";")[0]
 
-        # 6 — Generate video via Veo
+        # 6 — Generate video via Seedance (fal.ai)
         model_name = ai_model["name"] if ai_model else "default"
         print(f"  Generating video [{style}] model={model_name} for product: {product.get('name', product_id)}")
 
-        video_bytes = generate_video_from_image(
-            image_bytes=image_bytes,
-            image_mime=mime_type,
+        video_bytes = seedance_from_image_url(
+            image_url=image_url,
             prompt=prompt,
             model=GENERATION_DEFAULTS["model"],
             duration=style_cfg["duration"],
             aspect_ratio=style_cfg["aspect_ratio"],
-            resolution=GENERATION_DEFAULTS["resolution"],
-            person_generation=GENERATION_DEFAULTS["person_generation"],
         )
 
-        # Crop to 3:4 (feed card aspect ratio) — Veo only outputs 9:16 or 16:9
+        # Crop to 3:4 (feed card aspect ratio) — Seedance outputs 9:16
         try:
             video_bytes = crop_to_aspect(video_bytes, 3, 4)
             print("  Cropped to 3:4 aspect ratio")
@@ -243,6 +234,9 @@ def generate_video(
 def _estimate_cost(model: str, resolution: str) -> float:
     """Rough cost estimate per video in USD."""
     pricing = {
+        # fal-only default. Seedance-2 ref-to-video ≈ $0.06/s → ~$0.30 for 5s.
+        "seedance-2": {"720p": 0.30, "1080p": 0.30},
+        # Retired Veo tiers, kept for legacy rows.
         "veo-3.1-fast-generate-preview": {"720p": 0.10, "1080p": 0.12},
         "veo-3.1-generate-preview": {"720p": 0.40, "1080p": 0.40},
         "veo-3.1-lite-generate-preview": {"720p": 0.05, "1080p": 0.08},

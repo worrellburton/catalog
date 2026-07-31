@@ -63,11 +63,15 @@ GENDER_PERSONA_MAP = {
 # ─── Generation Defaults ──────────────────────────────────────────────
 
 GENERATION_DEFAULTS = {
-    "model": "veo-3.1-fast-generate-preview",
-    "duration": 4,            # seconds — minimum for Veo 3.1 Fast
-    "aspect_ratio": "9:16",   # Veo generation ratio (closest portrait to 3:4)
+    # fal-only. Was "veo-3.1-fast-generate-preview" (Google Veo); retired so a
+    # bad/absent GOOGLE_API_KEY can't break renders. Seedance-2 runs on fal.ai
+    # (needs only FAL_KEY) and matches the app's look_video_model standard; the
+    # client maps it to bytedance/seedance-2.0/{image,text}-to-video.
+    "model": "seedance-2",
+    "duration": 5,            # seconds — Seedance range is 2–12s
+    "aspect_ratio": "9:16",   # portrait; cropped to 3:4 for the feed afterwards
     "resolution": "720p",
-    "person_generation": "allow_adult",  # required for image-to-video with people
+    "person_generation": "allow_adult",  # Veo-only param; unused by fal, kept for the retired path
 }
 
 # Feed card aspect ratio — videos are cropped to this after generation
