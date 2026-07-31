@@ -23,6 +23,7 @@ import {
   type StyleUpProductDetail,
 } from '~/services/style-up';
 import { roleTagFromName } from '~/services/product-roles';
+import { SCENE_PRESETS, presetForPhrase } from '~/data/style-scenes';
 import { signInWithGoogle } from '~/services/auth';
 import StyleUpBackground from './StyleUpBackground';
 import CatalogLogo from '~/components/CatalogLogo';
@@ -297,6 +298,11 @@ function autoScene(occasion: string | null | undefined, msgs: StyleUpMessage[]):
   return 'a clean studio';
 }
 
+// Sentinel for the scene chooser's freeform "Somewhere else…" card; a helper to
+// title-case a guess phrase ("a candlelit restaurant" → "A candlelit restaurant").
+const SCENE_CUSTOM = '__custom_scene__';
+const sentenceCase = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
+
 // The activity or place the shopper most recently mentioned ("laying out by
 // the pool", "running errands", "a rooftop bar") → the matching setting from
 // INTENT_SCENE, so the spot they were already picturing leads the options.
@@ -319,15 +325,21 @@ function ChooserBubble({ choose, disabled, onSubmit }: {
 }) {
   const [sel, setSel] = useState<string[]>([]);
   const [submitted, setSubmitted] = useState(false);
+  const [customMode, setCustomMode] = useState(false); // scene "Somewhere else…" → freeform field
+  const [customText, setCustomText] = useState('');
   const multi = !!choose.multi;
   const hasCards = choose.options.some(o => o.image);
   const submit = (vals: string[]) => { if (submitted || vals.length === 0) return; setSubmitted(true); onSubmit(vals); };
   const toggle = (v: string) => setSel(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]);
+  const tap = (v: string) => {
+    if (v === SCENE_CUSTOM) { setCustomMode(true); return; } // reveal the field, don't dispatch
+    if (multi) toggle(v); else submit([v]);
+  };
   return (
     <div className="su-msg su-msg--stylist">
       <div className="su-choose">
         <div className="su-choose-prompt">{choose.prompt}</div>
-        <div className={`su-choose-options${hasCards ? ' su-choose-options--cards' : ''}${choose.kind === 'scene' ? ' su-choose-options--stack' : ''}`}>
+        <div className={`su-choose-options${choose.kind === 'scene' ? ' su-choose-options--scene' : hasCards ? ' su-choose-options--cards' : ''}`}>
           {choose.options.map(o => {
             const on = sel.includes(o.value);
             return (
@@ -336,7 +348,7 @@ function ChooserBubble({ choose, disabled, onSubmit }: {
                 type="button"
                 className={`su-choose-opt${o.image ? ' su-choose-opt--card' : ''}${on ? ' is-on' : ''}`}
                 disabled={disabled || submitted}
-                onClick={() => (multi ? toggle(o.value) : submit([o.value]))}
+                onClick={() => tap(o.value)}
               >
                 {o.image && <span className="su-choose-opt-media"><img src={o.image} alt="" loading="lazy" /></span>}
                 <span className="su-choose-opt-label">{o.label}</span>
@@ -344,6 +356,22 @@ function ChooserBubble({ choose, disabled, onSubmit }: {
             );
           })}
         </div>
+        {customMode && (
+          <div className="su-choose-custom">
+            <input
+              className="su-choose-custom-input"
+              autoFocus
+              value={customText}
+              onChange={e => setCustomText(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); submit([customText.trim()]); } }}
+              placeholder="Describe the setting…"
+              disabled={submitted}
+            />
+            <button type="button" className="su-choose-go" disabled={disabled || submitted || !customText.trim()} onClick={() => submit([customText.trim()])}>
+              Set
+            </button>
+          </div>
+        )}
         {multi && (
           <button type="button" className="su-choose-go" disabled={disabled || submitted || sel.length === 0} onClick={() => submit(sel)}>
             {submitted ? 'Done' : 'Recommend these'}
@@ -605,6 +633,7 @@ export function StyleUpExperience({
   const [prefs, setPrefs] = useState<StylePrefs>(EMPTY_PREFS);
   const prefsRef = useRef<StylePrefs>(EMPTY_PREFS); // always-current copy for callbacks
   const lastRenderSigRef = useRef<string>('');      // dedupe identical re-renders (#10)
+  const pendingScenePiecesRef = useRef<StyleUpProductRef[] | null>(null); // pieces held while the scene chooser is open
   const [viewer, setViewer] = useState<{ videoUrl: string; pieces: StyleUpProductRef[]; genId: string } | null>(null); // expanded look
   const [, setNowTick] = useState(0);                // 1s heartbeat for the render ETA
   const [isDesktop, setIsDesktop] = useState(false); // desktop = two-pane layout
@@ -1137,18 +1166,32 @@ export function StyleUpExperience({
     await askOutfitSlots();
   }, [threadId, userId, pendingRender, lookPicks, chosenBySlot, askOutfitSlots, beat]);
 
-  // Pressing Generate / "show me the full look" renders immediately — the
-  // setting is auto-derived from the shopper's message or occasion (autoScene),
-  // never asked. chosenScene is stored so a later single-piece swap reuses it.
+  // Offer the scene chooser before a full-look render (founder ask): the
+  // auto-derived guess (autoScene) leads so one tap confirms it, the presets
+  // follow as thumbnail cards, and "Somewhere else…" opens a freeform field.
+  const sendSceneChooser = useCallback(async (tid: string, guess: string) => {
+    const lead = presetForPhrase(guess);
+    const ordered = lead ? [lead, ...SCENE_PRESETS.filter(s => s.id !== lead.id)] : SCENE_PRESETS;
+    const options: NonNullable<StyleUpProductRef['choose']>['options'] = [];
+    // No preset matched the guess → surface the shopper's own setting first.
+    if (!lead) options.push({ value: guess, label: sentenceCase(guess) });
+    for (const s of ordered) options.push({ value: s.phrase, label: s.label, image: s.imageUrl });
+    options.push({ value: SCENE_CUSTOM, label: 'Somewhere else…' });
+    await sendChooser(tid, { kind: 'scene', prompt: 'Where should we shoot this look?', multi: false, options });
+  }, []);
+
+  // Pressing Generate / "show me the full look" now asks WHERE first. The pieces
+  // are stashed and the scene chooser opens; onChoose('scene') resumes the
+  // render with the picked setting. chosenScene persists so a later single-piece
+  // swap reuses it (no re-ask per swap).
   const startLookRender = useCallback(async (pieces?: StyleUpProductRef[]) => {
     if (!threadId || !userId) return;
     if (pendingRender) { setRenderError('Still finishing your last look, one sec.'); return; }
     const toRender = pieces && pieces.length > 0 ? pieces : assembleLook();
     if (toRender.length === 0) { void triggerStylist(); return; }
-    const scene = autoScene(prefsRef.current.occasion, messages);
-    setChosenScene(scene);
-    await generateFullLook(toRender, scene);
-  }, [threadId, userId, pendingRender, assembleLook, triggerStylist, messages, generateFullLook]);
+    pendingScenePiecesRef.current = toRender;
+    await sendSceneChooser(threadId, autoScene(prefsRef.current.occasion, messages));
+  }, [threadId, userId, pendingRender, assembleLook, triggerStylist, messages, sendSceneChooser]);
 
   const onChoose = useCallback(async (kind: string, values: string[]) => {
     if (!threadId || !userId) return;
@@ -1181,8 +1224,18 @@ export function StyleUpExperience({
       };
       const missing = (['Shoes', 'Top', 'Pants'] as const).find(s => !have.has(s));
       if (missing) await sendStylistText(threadId, `One more thing, you'll want ${GAP_REASON[missing]}. Say “different ${missing.toLowerCase()}” and I'll pull a few.`);
+    } else if (kind === 'scene') {
+      // Scene picked (a preset phrase or a freeform setting) → render the stashed
+      // pieces there. The value IS the render phrase, so it flows straight in.
+      const scene = values[0]?.trim();
+      if (!scene) return;
+      setChosenScene(scene);
+      const pieces = pendingScenePiecesRef.current ?? assembleLook();
+      pendingScenePiecesRef.current = null;
+      if (pieces.length === 0) { void triggerStylist(); return; }
+      await generateFullLook(pieces, scene);
     }
-  }, [threadId, userId, lookPicks, rejected, rejectIds, askOutfitSlots, recOpts, active, beat]);
+  }, [threadId, userId, lookPicks, rejected, rejectIds, askOutfitSlots, recOpts, active, beat, assembleLook, triggerStylist, generateFullLook]);
 
   // Echo a chooser tap into the thread as the shopper's own right-side reply
   // first, so picking "Studio" reads like you texted "Studio", then run the
@@ -2086,14 +2139,19 @@ export function StyleUpExperience({
                               {pc.price && <span className="su-lookcard-price">{pc.price}</span>}
                             </button>
                             {role && (
-                              <button
-                                type="button"
-                                className="su-lookcard-change"
-                                onClick={() => void handleSwapRequest({ role, label: role.toLowerCase() })}
-                                aria-label={`Change the ${role.toLowerCase()}`}
-                              >
-                                Change
-                              </button>
+                              // Same travelling beam the chat composer wears
+                              // (.su-composer-beam) — the founder asked for the
+                              // Change affordance to read as one family with it.
+                              <Beam size="md" theme="dark" className="su-lookcard-change-beam">
+                                <button
+                                  type="button"
+                                  className="su-lookcard-change"
+                                  onClick={() => void handleSwapRequest({ role, label: role.toLowerCase() })}
+                                  aria-label={`Change the ${role.toLowerCase()}`}
+                                >
+                                  Change
+                                </button>
+                              </Beam>
                             )}
                           </div>
                         );
