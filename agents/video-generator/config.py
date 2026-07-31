@@ -63,11 +63,17 @@ GENDER_PERSONA_MAP = {
 # ─── Generation Defaults ──────────────────────────────────────────────
 
 GENERATION_DEFAULTS = {
-    "model": "veo-3.1-fast-generate-preview",
-    "duration": 4,            # seconds — minimum for Veo 3.1 Fast
-    "aspect_ratio": "9:16",   # Veo generation ratio (closest portrait to 3:4)
+    # fal-only, and the EXACT model that produced every working ad through
+    # 2026-07-30 (Seedance-2 fast reference-to-video on fal.ai — needs only
+    # FAL_KEY). Was "veo-3.1-fast-generate-preview" (Google Veo), which broke
+    # when GOOGLE_API_KEY expired. reference-to-video treats the product photo
+    # as a reference (right for ads); do NOT shorten to "seedance-2" — that maps
+    # to image-to-video, a different endpoint that was never the working one.
+    "model": "bytedance/seedance-2.0/fast/reference-to-video",
+    "duration": 5,            # seconds — Seedance range is 2–12s
+    "aspect_ratio": "9:16",   # portrait; cropped to 3:4 for the feed afterwards
     "resolution": "720p",
-    "person_generation": "allow_adult",  # required for image-to-video with people
+    "person_generation": "allow_adult",  # Veo-only param; unused by fal, kept for the retired path
 }
 
 # Feed card aspect ratio — videos are cropped to this after generation

@@ -375,20 +375,16 @@ class TestAgentPipeline:
         mock.rpc = MagicMock(return_value=MagicMock(execute=MagicMock()))
         return mock
 
-    @patch("agent.generate_video_from_image", return_value=FAKE_VIDEO_BYTES)
-    @patch("agent.enhance_prompt_with_gemini", return_value="enhanced cinematic prompt")
-    @patch("agent.httpx")
+    # fal-only: the looks pipeline now renders via Seedance (image URL, no
+    # download) and no longer calls Veo or Gemini — so it only patches the
+    # Seedance client + Supabase.
+    @patch("agent.seedance_from_image_url", return_value=FAKE_VIDEO_BYTES)
     @patch("agent.create_client")
-    def test_full_pipeline_success(self, mock_create_client, mock_httpx, mock_enhance, mock_veo):
+    def test_full_pipeline_success(self, mock_create_client, mock_seedance):
         from agent import generate_video
 
         mock_sb = self._mock_supabase()
         mock_create_client.return_value = mock_sb
-        mock_httpx.get.return_value = MagicMock(
-            content=b"fake_image_bytes",
-            headers={"content-type": "image/jpeg"},
-            raise_for_status=MagicMock(),
-        )
 
         result = generate_video(product_id="prod-001", style="editorial_runway", ai_model_id="model-001")
 
@@ -397,20 +393,13 @@ class TestAgentPipeline:
         assert "video_url" in result
         assert result["job_id"] == "job-001"
 
-    @patch("agent.generate_video_from_image", return_value=FAKE_VIDEO_BYTES)
-    @patch("agent.enhance_prompt_with_gemini", return_value="enhanced prompt")
-    @patch("agent.httpx")
+    @patch("agent.seedance_from_image_url", return_value=FAKE_VIDEO_BYTES)
     @patch("agent.create_client")
-    def test_pipeline_auto_selects_model(self, mock_create_client, mock_httpx, mock_enhance, mock_veo):
+    def test_pipeline_auto_selects_model(self, mock_create_client, mock_seedance):
         from agent import generate_video
 
         mock_sb = self._mock_supabase()
         mock_create_client.return_value = mock_sb
-        mock_httpx.get.return_value = MagicMock(
-            content=b"fake_image",
-            headers={"content-type": "image/jpeg"},
-            raise_for_status=MagicMock(),
-        )
 
         result = generate_video(product_id="prod-001")
         assert result["success"] is True

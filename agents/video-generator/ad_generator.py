@@ -26,7 +26,6 @@ from supabase import create_client
 
 from config import STYLES, GENERATION_DEFAULTS, DEFAULT_STYLE
 from pricing import estimate_cost as _estimate_cost
-from prompts import enhance_prompt_with_gemini
 from veo_client import (
     generate_video_with_references,
     generate_video_from_image,
@@ -452,28 +451,23 @@ def generate_ad_video(ad_id: str) -> dict:
             image_context=image_context,
         )
 
-        # Enhance with Gemini — OPTIONAL, and must never fail the render.
-        #
-        # This costs ~$0.0005 and only makes the prompt more cinematic; the raw
-        # template above is already complete and usable. It was unguarded, so on
-        # 2026-07-30 an expired GOOGLE_API_KEY killed three $0.10 renders here,
-        # BEFORE model selection had even happened — meaning it also broke
-        # renders routed to fal, which need no Google credential at all. A
-        # cheap quality nicety must not be a single point of failure for the
-        # whole creative stage.
-        try:
-            enhanced_prompt = enhance_prompt_with_gemini(raw_prompt, product, None)
-        except Exception as e:
-            print(f"    ⚠ Prompt enhancement unavailable, using raw prompt: {e}")
-            enhanced_prompt = raw_prompt
+        # Prompt enhancement via Gemini is retired — this worker is fal-only, no
+        # Google API. The raw template prompt above is already complete and
+        # usable. (An expired GOOGLE_API_KEY used to break renders here on
+        # 2026-07-30, even for fal-routed ads that need no Google credential.)
+        enhanced_prompt = raw_prompt
         supabase.table("product_creative").update({"prompt": enhanced_prompt}).eq("id", ad_id).execute()
 
-        # Respect per-ad model override (e.g. user chose Seedance instead of Veo)
+        # Respect a per-ad model override, but stay fal-only: any Google/Veo model
+        # — a stale override (the pending ads carry model="veo-3.1-fast-generate-
+        # preview") or none at all — is rewritten to the fal Seedance default so
+        # this worker never calls the Google API.
         ad_model = ad.get("model")
+        if not ad_model or ad_model.startswith("veo-") or ad_model.startswith("google/"):
+            ad_model = GENERATION_DEFAULTS["model"]
 
         # Record the model that will actually be used so UI can show it
-        if ad_model:
-            supabase.table("product_creative").update({"model": ad_model}).eq("id", ad_id).execute()
+        supabase.table("product_creative").update({"model": ad_model}).eq("id", ad_id).execute()
 
         # Generate video with retry cascade
         print(f"  Generating ad video [{style}] for: {product.get('name', 'unknown')} (model={ad_model or 'default'})")
