@@ -14,43 +14,39 @@
    didn't rely on being a direct descendant of its old parent.
    ═══════════════════════════════════════════════════════════════════════ */
 
-/* ── FLUID COLOUR FIELD ───────────────────────────────────────────────
-   border-beam sizes its colour blobs in PIXELS (~300px of colour in total,
-   regardless of the element). That's fine at the ~350px width the package is
-   designed around, but coverage is colour/perimeter, so it collapses as the
-   element grows:
+/* ── NEVER AUTO-PAUSE ──────────────────────────────────────────────────
+   border-beam ships an IntersectionObserver that sets `data-paused` (→
+   `animation-play-state: paused !important`) whenever it decides the element
+   is off-screen, to save CPU. On our always-on chrome (search bar, composer,
+   buttons) that observer misfires — near a viewport edge, behind a transform,
+   during the hero's entrance, or inside the native shell — and freezes the
+   beam mid-cycle, so it "travels, stops, then jerks back to the start" instead
+   of looping. These beams are cheap GPU-composited loops on elements that are
+   effectively always visible, so keep them running.
 
-     Find-a-stylist @ phone    339x47   → 772px perimeter → ~39% covered
-     Find-a-stylist @ desktop  1564x47  → 3222px perimeter → 9.3% covered
+   The package's pause rule is `!important` and injected AFTER this file, so a
+   plain override at equal specificity loses; the leading `html` raises
+   specificity enough to win regardless of order. */
+html [data-beam][data-paused],
+html [data-beam][data-paused]::after,
+html [data-beam][data-paused]::before,
+html [data-beam][data-paused] [data-beam-bloom] {
+  animation-play-state: running !important;
+}
 
-   At 9% the beam is effectively invisible, which is why nothing showed on
-   large screens. The package exposes no knob for this — sizePresets only
-   carries borderRadius/borderWidth.
-
-   The fix is a unit change, not a redesign: the package's blob POSITIONS are
-   already percentages (2% 68%, 72% -3%, 100% 27%), only the sizes are px. So
-   we re-declare the same eight blobs, same colours, same positions, with
-   percentage sizes — x relative to the element's width, y to its height — and
-   coverage now holds at any size. Everything else (the conic mask, the
-   rotation, the hue drift, the variants) is still the package's.
-
-   !important because the package injects its stylesheet INSIDE the component,
-   which puts it after this file in document order at equal specificity.
-
-   If a package upgrade changes the palette, re-read the computed
-   background-image off a live beam and update these to match. */
-.cat-beam::before,
-.cat-beam::after {
-  background-image:
-    radial-gradient(4%  40% at 2%   68%, rgba(50, 200, 80, 0.50), transparent),
-    radial-gradient(2%  18% at 2%   68%, rgba(30, 185, 170, 0.45), transparent),
-    radial-gradient(22% 20% at 72%  -3%, rgba(255, 120, 40, 0.35), transparent),
-    radial-gradient(18% 16% at 74%  100%, rgba(100, 70, 255, 0.35), transparent),
-    radial-gradient(4%  38% at 100% 27%, rgba(240, 50, 180, 0.30), transparent),
-    radial-gradient(4%  40% at 100% 27%, rgba(180, 40, 240, 0.40), transparent),
-    radial-gradient(2%  22% at 100% 27%, rgba(40, 140, 255, 0.30), transparent),
-    radial-gradient(4%  26% at 100% 27%, rgba(255, 50, 100, 0.30), transparent)
-    !important;
+/* ── LARGE-SCREEN INTENSITY ────────────────────────────────────────────
+   border-beam is tuned for ~350px elements; on the wide desktop bars/cards
+   the beam reads faint. The baseline strength (0.7, set per <Beam> in
+   Beam.tsx) stays for mobile, but on large screens push it up: `strength`
+   caps at 1, and the package's own --beam-*-opacity edge multipliers (default
+   1) take it beyond that. This is the responsive answer to "bigger + stronger
+   on large screens" — border-beam has no larger size preset than `md`. */
+@media (min-width: 769px) {
+  [data-beam] {
+    --beam-strength: 1 !important;
+    --beam-stroke-opacity: 2;
+    --beam-bloom-opacity: 2;
+  }
 }
 
 /* Home search pill — the wrapper sits inside the fixed .bottom-bar, between
@@ -60,6 +56,16 @@
   display: block;
   width: 100%;
   min-width: 0; /* let the input shrink inside the flex row rather than overflow */
+}
+
+/* Feed search (desktop) — TypeAnywhere's .ai-bar pill. The wrapper is a flex
+   child of .ai-bar-wrap (centred column); the pill is width:100% capped at
+   720px with a 999px radius, so the wrapper inherits the cap and the pill fills
+   it exactly. Mobile keeps the .bottom-bar pill (this layer is hidden ≤768px). */
+.ai-bar-beam {
+  display: block;
+  width: 100%;
+  max-width: 720px;
 }
 
 /* StyleUp "Find a stylist" — the button is capped at --su-find-btn-max and

@@ -674,7 +674,7 @@ function BottomBar({
             active is tied to the existing useSearchBeam dial so /admin/ui/search-bar
             "Off" still turns the beam off — the six legacy is-beam-* variants are
             superseded by this one, see is-beam-none below. */}
-        <Beam size="sm" active={beam !== 'none'} className="bottom-bar-beam">
+        <Beam size="md" active={beam !== 'none'} className="bottom-bar-beam">
         <div className="bottom-bar-inner search-inline">
           <button
             className={`filter-btn inline ${hasActiveFilters(activeFilters) ? 'has-filters' : ''}`}

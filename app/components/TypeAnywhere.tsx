@@ -2,6 +2,7 @@ import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useNavigate, useLocation } from '@remix-run/react';
 import FilterPanel, { ActiveFilters, getEmptyFilters, hasActiveFilters } from './FilterPanel';
 import PopularCatalogPills from './PopularCatalogPills';
+import Beam from '~/components/Beam';
 import { getSearchSuggestions, getCreators } from '~/services/looks';
 
 /* Desktop-only AI-style search bar.
@@ -299,6 +300,7 @@ export default function TypeAnywhere({ inline = false }: TypeAnywhereProps) {
             </button>
           </div>
         )}
+        <Beam size="md" theme="dark" className="ai-bar-beam">
         <div className="ai-bar">
           <button
             type="button"
@@ -352,6 +354,7 @@ export default function TypeAnywhere({ inline = false }: TypeAnywhereProps) {
             <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="12" y1="19" x2="12" y2="5"/><polyline points="5 12 12 5 19 12"/></svg>
           </button>
         </div>
+        </Beam>
       </div>
 
       {filtersOpen && (
