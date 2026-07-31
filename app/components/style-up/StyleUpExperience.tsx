@@ -2358,7 +2358,7 @@ export function StyleUpExperience({
             theme="dark": the CHAT pane is dark glass (rgba(18,19,22,.7)), even
             though StyleUp's landing screen behind it is light. Theme follows
             the surface the beam sits on, not the feature. */}
-        <Beam size="sm" theme="dark" className="su-composer-beam">
+        <Beam size="md" theme="dark" className="su-composer-beam">
         <div className="su-composer">
           {profileReady ? (
             <>
@@ -2465,7 +2465,7 @@ export function StyleUpExperience({
     <div className="su-find-bar">
       {/* The wrapper div Beam inserts becomes the flex child here, so it has to
           carry the button's width — see .su-find-btn-beam in style-up.css. */}
-      <Beam size="sm" theme="light" className="su-find-btn-beam">
+      <Beam size="md" theme="light" className="su-find-btn-beam">
         <button type="button" className="su-find-btn" onClick={() => void openPicker()}>Find a stylist</button>
       </Beam>
     </div>
