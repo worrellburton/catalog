@@ -15,7 +15,7 @@ import { useStylistEngineMethod } from '~/hooks/useStylistEngineMethod';
 import { supabase } from '~/utils/supabase';
 import { browseTheFeed } from '~/utils/front-door';
 import {
-  fetchStylists, getOrCreateThread, deleteThread, getThreadHunting, fetchProductDetail, fetchProductVideos, fetchSimilarProducts, getLatestThread, fetchMyThreads, fetchMessages, sendShopperMessage,
+  fetchStylists, getOrCreateThread, deleteThread, getThreadHunting, fetchProductDetail, fetchProductVideos, fetchProductRoles, fetchSimilarProducts, getLatestThread, fetchMyThreads, fetchMessages, sendShopperMessage,
   sendStylistText, startFullLookRender, fetchSwapOptions, sendSwapOptions,
   sendChooser, recommendForSlot, sendProductPick,
   webFetchSwapOptions, webRecommendForSlot,
@@ -627,6 +627,7 @@ export function StyleUpExperience({
   // Look-card media: product id → its hero clip (or null once fetched w/ none),
   // so a piece with a primary video plays it in the card instead of the image.
   const [pieceVideos, setPieceVideos] = useState<Record<string, { video: string; poster: string | null } | null>>({});
+  const [pieceRoles, setPieceRoles] = useState<Record<string, string>>({}); // look-card piece id → garment slot (from governed type)
   const [rejected, setRejected] = useState<Set<string>>(new Set());   // product ids the shopper passed on
   const [chosenScene, setChosenScene] = useState<string | null>(null); // the look's setting
   const [endConfirm, setEndConfirm] = useState(false); // in-app "end this conversation?" glass modal
@@ -929,6 +930,29 @@ export function StyleUpExperience({
     });
     return () => { cancelled = true; };
   }, [messages, pieceVideos]);
+
+  // Resolve each look-card piece's garment slot from the GOVERNED product type,
+  // so a model-named sneaker ("Samba OG", "Air Force 1", "Achilles Low") — whose
+  // name carries no shoe word — still gets a Change button. id-keyed; every
+  // requested id is marked ('' = no garment role) so none is re-fetched.
+  useEffect(() => {
+    const ids = [...new Set(
+      messages
+        .filter(m => m.kind === 'product' && m.productRef?.id && !m.productRef?.swap && !m.productRef?.choose)
+        .map(m => m.productRef!.id as string),
+    )].filter(id => !(id in pieceRoles));
+    if (ids.length === 0) return;
+    let cancelled = false;
+    void fetchProductRoles(ids).then(roles => {
+      if (cancelled) return;
+      setPieceRoles(prev => {
+        const next = { ...prev };
+        for (const id of ids) if (!(id in next)) next[id] = roles[id] ?? '';
+        return next;
+      });
+    });
+    return () => { cancelled = true; };
+  }, [messages, pieceRoles]);
 
   // Persist + keep the ref current so callbacks always read fresh prefs.
   const updatePrefs = useCallback((next: StylePrefs) => {
@@ -2129,7 +2153,9 @@ export function StyleUpExperience({
                     <div className="su-lookcard-title">Your look</div>
                     <div className="su-lookcard-items">
                       {pieces.map((pc, i) => {
-                        const role = roleTagFromName(pc.name ?? null);
+                        // Governed type (fetched by id) wins so model-named
+                        // shoes resolve; name heuristic backstops until it loads.
+                        const role = (pc.id && pieceRoles[pc.id]) || roleTagFromName(pc.name ?? null);
                         return (
                           <div className="su-lookcard-row" key={pc.id || i}>
                             <span className="su-lookcard-num" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span>
