@@ -94,10 +94,11 @@ html [data-beam][data-paused] [data-beam-bloom] {
 .su-composer-beam {
   flex: 0 0 auto;
   min-width: 0;
-  /* bottom lifted from 10px → 22px: the founder found the bar sitting a tad
-     too low. This wrapper owns the composer's outer spacing (the pill zeroes
-     its own margin below), so this is the one knob for the bar's height. */
-  margin: 6px 12px calc(22px + env(safe-area-inset-bottom));
+  /* bottom lifted 10px → 22px → 34px: the founder found the bar still sitting a
+     tad too low after the first lift. This wrapper owns the composer's outer
+     spacing (the pill zeroes its own margin below), so this is the one knob for
+     the bar's height. */
+  margin: 6px 12px calc(34px + env(safe-area-inset-bottom));
 }
 .su-composer-beam > .su-composer {
   margin: 0;
