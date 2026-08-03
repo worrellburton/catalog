@@ -959,3 +959,205 @@
 @media (max-width: 768px) {
   .feed-view-dial { display: flex; }
 }
+
+/* ── Card save (bookmark) button ──────────────────────────────────────────
+   Save without opening the detail overlay. Top-right glass circle; revealed
+   on hover/focus on desktop, always present (once the card has painted) on
+   touch. Rendered only when the parent threads the bookmarks store. */
+.card-save-btn {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 5;
+  width: 32px;
+  height: 32px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: none;
+  border-radius: 50%;
+  background: rgba(0, 0, 0, 0.45);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  color: #fff;
+  cursor: pointer;
+  padding: 0;
+  opacity: 0;
+  transition: opacity 0.25s ease, transform 0.15s ease, background 0.15s ease;
+}
+.card-save-btn:active { transform: scale(0.9); }
+.card-save-btn.is-saved { background: rgba(0, 0, 0, 0.62); }
+/* Desktop: reveal on card hover or keyboard focus; saved state stays lit. */
+@media (hover: hover) {
+  .look-card:hover .card-save-btn,
+  .look-card:focus-visible .card-save-btn,
+  .card-save-btn:focus-visible,
+  .card-save-btn.is-saved { opacity: 1; }
+}
+/* Touch: always visible once the card has painted (no hover to reveal it). */
+@media (hover: none) {
+  .look-card.loaded .card-save-btn { opacity: 0.92; }
+}
+/* Keep clear of the admin delete button (same corner) when both render. */
+.look-card:has(.creative-delete-btn) .card-save-btn { top: 46px; }
+
+/* ── Look shoppability pill — "4 products · from $58" ───────────────────
+   Bottom-right counterpart of the product card's price: signals a look can
+   be shopped (and from what price) before the tap. Display-only. */
+.card-products-pill {
+  position: absolute;
+  right: 8px;
+  bottom: 10px;
+  z-index: 4;
+  max-width: 46%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.45);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  color: rgba(255, 255, 255, 0.92);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+.look-card.loaded .card-products-pill { opacity: 1; }
+/* Densest grid drops the pill — the tiles are too small for extra chrome
+   (same rule as the creator name / product name at 3 cols). */
+.feed-section-grid[data-cols="3"] .card-products-pill { display: none !important; }
+
+/* ── Shopper-facing "why you're seeing this" caption ────────────────────
+   One short line ("Because you saved Nike") top-left on cards with a strong
+   personal signal. Non-interactive; taps fall through to the card. */
+.card-why-tag {
+  position: absolute;
+  top: 9px;
+  left: 8px;
+  z-index: 4;
+  max-width: calc(100% - 52px); /* clear of the save button */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 3px 8px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.4);
+  -webkit-backdrop-filter: blur(8px);
+  backdrop-filter: blur(8px);
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 9.5px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  pointer-events: none;
+  opacity: 0;
+  transition: opacity 0.6s ease;
+}
+.look-card.loaded .card-why-tag { opacity: 1; }
+.feed-section-grid[data-cols="3"] .card-why-tag { display: none !important; }
+
+/* ── Mobile feature tile ────────────────────────────────────────────────
+   Every HERO_PERIOD-th card on the 2-col home feed spans the full width at
+   3:2 — the mobile counterpart of the desktop 2×2 featured card. Fixed
+   cadence (not seeded) because FeedSection's DOM-windowing padding math
+   models the resulting row structure. Desktop never gets this class. */
+@media (max-width: 768px) {
+  .look-card-hero-mobile {
+    grid-column: 1 / -1;
+    aspect-ratio: 3 / 2;
+  }
+}
+
+/* ── "All caught up" pill ───────────────────────────────────────────────
+   One-time floating signal when the infinite feed starts repeating its
+   deck. Fixed-position (never a grid row, so the windowing math is
+   untouched); centered per the repo rule: margin-inline auto, no
+   translateX. */
+.feed-caughtup-pill {
+  position: fixed;
+  left: 0;
+  right: 0;
+  margin-inline: auto;
+  width: fit-content;
+  max-width: calc(100% - 48px);
+  bottom: calc(96px + env(safe-area-inset-bottom));
+  z-index: 60;
+  padding: 9px 16px;
+  border-radius: 999px;
+  background: rgba(20, 20, 24, 0.92);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  color: rgba(255, 255, 255, 0.9);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0.01em;
+  text-align: center;
+  pointer-events: none;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, 0.45);
+  animation: feed-caughtup-in 0.3s cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+@keyframes feed-caughtup-in {
+  from { opacity: 0; transform: translateY(10px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.light-mode .feed-caughtup-pill {
+  background: rgba(255, 255, 255, 0.96);
+  color: rgba(0, 0, 0, 0.8);
+  border-color: rgba(0, 0, 0, 0.08);
+}
+
+/* ── Deep-scroll context pill (filters + back to top) ───────────────────
+   Rides just under the header once the shopper is screens into the feed.
+   Centered per the repo rule (margin-inline auto — transform is free for
+   the show/hide slide). Sits below the native shell's top ~60px zone. */
+.feed-context-pill {
+  position: fixed;
+  top: calc(env(safe-area-inset-top, 0px) + 64px);
+  left: 0;
+  right: 0;
+  margin-inline: auto;
+  width: fit-content;
+  max-width: calc(100% - 48px);
+  z-index: 90;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 8px 14px;
+  border-radius: 999px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(20, 20, 24, 0.88);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  color: rgba(255, 255, 255, 0.9);
+  font-family: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  box-shadow: 0 8px 26px rgba(0, 0, 0, 0.4);
+  opacity: 0;
+  transform: translateY(-8px);
+  pointer-events: none;
+  transition: opacity 0.25s ease, transform 0.25s ease, background 0.15s ease;
+}
+.feed-context-pill.is-visible {
+  opacity: 1;
+  transform: translateY(0);
+  pointer-events: auto;
+}
+.feed-context-pill:hover { background: rgba(32, 32, 38, 0.94); }
+.feed-context-pill-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.light-mode .feed-context-pill {
+  background: rgba(255, 255, 255, 0.94);
+  color: rgba(0, 0, 0, 0.8);
+  border-color: rgba(0, 0, 0, 0.1);
+}
+.light-mode .feed-context-pill:hover { background: rgba(245, 245, 247, 0.98); }

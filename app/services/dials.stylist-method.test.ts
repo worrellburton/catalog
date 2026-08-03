@@ -5,11 +5,12 @@ describe('parseStylistMethod', () => {
   it('returns "legacy" only for the exact string', () => {
     expect(parseStylistMethod('legacy')).toBe('legacy');
   });
-  it('defaults to style_engine for anything else', () => {
-    expect(DEFAULT_STYLIST_ENGINE_METHOD).toBe('style_engine');
-    expect(parseStylistMethod('style_engine')).toBe('style_engine');
-    expect(parseStylistMethod(null)).toBe('style_engine');
-    expect(parseStylistMethod(undefined)).toBe('style_engine');
-    expect(parseStylistMethod('garbage')).toBe('style_engine');
+  it('defaults to stylist_engine for anything else (incl. the retired style_engine)', () => {
+    expect(DEFAULT_STYLIST_ENGINE_METHOD).toBe('stylist_engine');
+    expect(parseStylistMethod('stylist_engine')).toBe('stylist_engine');
+    expect(parseStylistMethod('style_engine')).toBe('stylist_engine'); // retired name -> new default
+    expect(parseStylistMethod(null)).toBe('stylist_engine');
+    expect(parseStylistMethod(undefined)).toBe('stylist_engine');
+    expect(parseStylistMethod('garbage')).toBe('stylist_engine');
   });
 });

@@ -13,8 +13,9 @@ import { useNavigate } from '@remix-run/react';
 import { useAuth } from '~/hooks/useAuth';
 import { useStylistEngineMethod } from '~/hooks/useStylistEngineMethod';
 import { supabase } from '~/utils/supabase';
+import { browseTheFeed } from '~/utils/front-door';
 import {
-  fetchStylists, getOrCreateThread, deleteThread, getThreadHunting, fetchProductDetail, fetchSimilarProducts, getLatestThread, fetchMyThreads, fetchMessages, sendShopperMessage,
+  fetchStylists, getOrCreateThread, deleteThread, getThreadHunting, fetchProductDetail, fetchProductVideos, fetchProductRoles, fetchSimilarProducts, getLatestThread, fetchMyThreads, fetchMessages, sendShopperMessage,
   sendStylistText, startFullLookRender, fetchSwapOptions, sendSwapOptions,
   sendChooser, recommendForSlot, sendProductPick,
   webFetchSwapOptions, webRecommendForSlot,
@@ -22,6 +23,7 @@ import {
   type StyleUpProductDetail,
 } from '~/services/style-up';
 import { roleTagFromName } from '~/services/product-roles';
+import { SCENE_PRESETS, presetForPhrase } from '~/data/style-scenes';
 import { signInWithGoogle } from '~/services/auth';
 import StyleUpBackground from './StyleUpBackground';
 import CatalogLogo from '~/components/CatalogLogo';
@@ -62,14 +64,24 @@ function applyPrefs(prev: StylePrefs, text: string): StylePrefs {
 import { getUserHeightAge, getUserCustomStyle, updateUserHeightAge, updateUserCustomStyle } from '~/services/profiles';
 import { getUserGender, updateUserGender, type UserGender } from '~/services/genders';
 import {
-  listUserUploads, getUserSlots, saveUserSlots, uploadUserPhoto, getGeneration, cancelGeneration,
+  listUserUploads, getUserSlots, saveUserSlots, uploadUserPhoto, deleteUserUpload, validateSelfie,
+  getGeneration, cancelGeneration,
   type UserGeneration,
 } from '~/services/user-generations';
 import { promoteGenerationToLook } from '~/services/promote-generation';
 import { generationProgress } from '~/services/generation-progress';
+import Beam from '~/components/Beam';
 
 import '~/styles/style-up.css';
 import '~/styles/style-up-lookbar.css';
+
+/** Force a look/piece <video> silent. React's `muted` JSX attribute is
+ *  unreliable with autoPlay (it sets the attribute, not the .muted PROPERTY the
+ *  browser checks), so a tap-opened viewer can end up playing the render's audio
+ *  out loud. Set the property directly, exactly like the feed video director. */
+const forceMuteVideo = (el: HTMLVideoElement | null) => {
+  if (el) { el.muted = true; el.defaultMuted = true; }
+};
 
 /** "~2 min left" / "~40s left", estimated wait from the shared generation
  *  timing model (based on typical generation durations). */
@@ -253,6 +265,7 @@ const INTENT_SCENE: Array<{ re: RegExp; scene: string }> = [
   { re: /\b(beach|seaside|shore|the ocean|by the sea)\b/, scene: 'a sandy beach at golden hour' },
   { re: /\b(coffee run|coffee shop|caf[eé])\b/, scene: 'an outdoor coffee shop' },
   { re: /\b(walking the dog|walk the dog|dog walk)\b/, scene: 'a leafy neighborhood on a dog walk' },
+  { re: /\b(morning walk|evening walk|walk|stroll|strolling|walking)\b/, scene: 'a leafy tree-lined street' },
   { re: /\b(commute|commuting|the office|office|work meeting|at work|for work)\b/, scene: 'a bright modern office' },
   { re: /\b(gym|workout|working out|training)\b/, scene: 'a bright modern gym' },
   { re: /\b(date night|date|dinner)\b/, scene: 'a candlelit restaurant' },
@@ -285,41 +298,10 @@ function autoScene(occasion: string | null | undefined, msgs: StyleUpMessage[]):
   return 'a clean studio';
 }
 
-// The scene chooser's variable slots: a fresh fun spot when nothing smarter is
-// known, and a wild card that changes every time.
-const FUN_SCENES = ['a sunny park', 'a rooftop at golden hour', 'a city street at night', 'a minimalist loft', 'an art gallery', 'a boardwalk by the sea', 'a sidewalk café in Paris'];
-const WILD_SCENES = ['a neon Tokyo alley in the rain', 'the surface of Mars', 'a 1970s disco', 'backstage at a runway show', 'a snowy mountain peak', 'an underwater glass tunnel', 'a desert at sunset'];
-
-/** The four scene options. When the shopper's ask points at an activity or
- *  place (from their chat, or the parsed occasion), that suggestion LEADS the
- *  list so the first tap always matches what they asked for ("running errands"
- *  first, "A pool" first). Then two staples and one wild card. De-duped so a
- *  related pick that equals a staple isn't shown twice. */
-function sceneOptions(smart: string | null): Array<{ value: string; label: string }> {
-  const pick = (arr: string[]) => arr[Math.floor(Math.random() * arr.length)];
-  const LABELS: Record<string, string> = {
-    'a clean studio': 'Studio',
-    'an outdoor coffee shop': 'Outdoor coffee shop',
-  };
-  const labelFor = (v: string) => LABELS[v] ?? (v.charAt(0).toUpperCase() + v.slice(1));
-  const wild = pick(WILD_SCENES);
-  const fun = pick(FUN_SCENES);
-  // The related suggestion leads whenever it's anything other than the neutral
-  // studio fallback (a coffee-run intent legitimately maps to the coffee shop).
-  const related = smart && smart.toLowerCase().trim() !== 'a clean studio' ? smart : null;
-  const ordered = related
-    ? [related, 'a clean studio', 'an outdoor coffee shop', fun]
-    : ['a clean studio', 'an outdoor coffee shop', fun];
-  const seen = new Set<string>();
-  const out: Array<{ value: string; label: string }> = [];
-  for (const v of ordered) {
-    if (out.length >= 3 || seen.has(v)) continue;
-    seen.add(v);
-    out.push({ value: v, label: labelFor(v) });
-  }
-  out.push({ value: wild, label: `${labelFor(wild)} 🤯` });
-  return out;
-}
+// Sentinel for the scene chooser's freeform "Somewhere else…" card; a helper to
+// title-case a guess phrase ("a candlelit restaurant" → "A candlelit restaurant").
+const SCENE_CUSTOM = '__custom_scene__';
+const sentenceCase = (s: string) => s.charAt(0).toUpperCase() + s.slice(1);
 
 // The activity or place the shopper most recently mentioned ("laying out by
 // the pool", "running errands", "a rooftop bar") → the matching setting from
@@ -343,15 +325,21 @@ function ChooserBubble({ choose, disabled, onSubmit }: {
 }) {
   const [sel, setSel] = useState<string[]>([]);
   const [submitted, setSubmitted] = useState(false);
+  const [customMode, setCustomMode] = useState(false); // scene "Somewhere else…" → freeform field
+  const [customText, setCustomText] = useState('');
   const multi = !!choose.multi;
   const hasCards = choose.options.some(o => o.image);
   const submit = (vals: string[]) => { if (submitted || vals.length === 0) return; setSubmitted(true); onSubmit(vals); };
   const toggle = (v: string) => setSel(prev => prev.includes(v) ? prev.filter(x => x !== v) : [...prev, v]);
+  const tap = (v: string) => {
+    if (v === SCENE_CUSTOM) { setCustomMode(true); return; } // reveal the field, don't dispatch
+    if (multi) toggle(v); else submit([v]);
+  };
   return (
     <div className="su-msg su-msg--stylist">
       <div className="su-choose">
         <div className="su-choose-prompt">{choose.prompt}</div>
-        <div className={`su-choose-options${hasCards ? ' su-choose-options--cards' : ''}${choose.kind === 'scene' ? ' su-choose-options--stack' : ''}`}>
+        <div className={`su-choose-options${choose.kind === 'scene' ? ' su-choose-options--scene' : hasCards ? ' su-choose-options--cards' : ''}`}>
           {choose.options.map(o => {
             const on = sel.includes(o.value);
             return (
@@ -360,7 +348,7 @@ function ChooserBubble({ choose, disabled, onSubmit }: {
                 type="button"
                 className={`su-choose-opt${o.image ? ' su-choose-opt--card' : ''}${on ? ' is-on' : ''}`}
                 disabled={disabled || submitted}
-                onClick={() => (multi ? toggle(o.value) : submit([o.value]))}
+                onClick={() => tap(o.value)}
               >
                 {o.image && <span className="su-choose-opt-media"><img src={o.image} alt="" loading="lazy" /></span>}
                 <span className="su-choose-opt-label">{o.label}</span>
@@ -368,6 +356,22 @@ function ChooserBubble({ choose, disabled, onSubmit }: {
             );
           })}
         </div>
+        {customMode && (
+          <div className="su-choose-custom">
+            <input
+              className="su-choose-custom-input"
+              autoFocus
+              value={customText}
+              onChange={e => setCustomText(e.target.value)}
+              onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); submit([customText.trim()]); } }}
+              placeholder="Describe the setting…"
+              disabled={submitted}
+            />
+            <button type="button" className="su-choose-go" disabled={disabled || submitted || !customText.trim()} onClick={() => submit([customText.trim()])}>
+              Set
+            </button>
+          </div>
+        )}
         {multi && (
           <button type="button" className="su-choose-go" disabled={disabled || submitted || sel.length === 0} onClick={() => submit(sel)}>
             {submitted ? 'Done' : 'Recommend these'}
@@ -389,6 +393,13 @@ interface ShopperContext {
   gender: UserGender;
   style: string;
   chips: string[];
+}
+
+/** Chatting is gated until the shopper has attached at least one photo and
+ *  filled in height + weight — the stylist needs them to style/fit looks.
+ *  Age/gender stay optional. */
+function isProfileReady(ctx: ShopperContext | null): boolean {
+  return !!ctx && ctx.photos.some(Boolean) && !!ctx.heightLabel.trim() && !!ctx.weightLabel.trim();
 }
 
 /** A stylist's avatar contents: their real photo when we have one, otherwise a
@@ -456,6 +467,18 @@ function buildRenderErrorLog(
  *  tell someone to "try another piece" when the real cause is our render
  *  engine (billing/infra) — swapping a piece can't fix that. Only a content
  *  block is actually the photo/piece's fault. */
+// Warning triangle — shared by the selfie-rejection note and the brief
+// per-slot flash so both read as the same "photo didn't work" signal.
+function WarnTriangleIcon({ size = 16 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" />
+      <line x1="12" y1="9" x2="12" y2="13" />
+      <line x1="12" y1="17" x2="12.01" y2="17" />
+    </svg>
+  );
+}
+
 function renderErrorMessage(r: UserGeneration | null): string {
   const code = r?.error_code ?? '';
   const raw = `${r?.error ?? ''} ${typeof r?.error_raw === 'string' ? r?.error_raw : JSON.stringify(r?.error_raw ?? '')}`.toLowerCase();
@@ -601,12 +624,17 @@ export function StyleUpExperience({
   const [published, setPublished] = useState<Set<string>>(new Set()); // gen ids added to looks
   const [followedUp, setFollowedUp] = useState<Set<string>>(new Set()); // renders the stylist has reacted to
   const [chosenBySlot, setChosenBySlot] = useState<Record<string, string>>({}); // role → chosen product id
+  // Look-card media: product id → its hero clip (or null once fetched w/ none),
+  // so a piece with a primary video plays it in the card instead of the image.
+  const [pieceVideos, setPieceVideos] = useState<Record<string, { video: string; poster: string | null } | null>>({});
+  const [pieceRoles, setPieceRoles] = useState<Record<string, string>>({}); // look-card piece id → garment slot (from governed type)
   const [rejected, setRejected] = useState<Set<string>>(new Set());   // product ids the shopper passed on
   const [chosenScene, setChosenScene] = useState<string | null>(null); // the look's setting
   const [endConfirm, setEndConfirm] = useState(false); // in-app "end this conversation?" glass modal
   const [prefs, setPrefs] = useState<StylePrefs>(EMPTY_PREFS);
   const prefsRef = useRef<StylePrefs>(EMPTY_PREFS); // always-current copy for callbacks
   const lastRenderSigRef = useRef<string>('');      // dedupe identical re-renders (#10)
+  const pendingScenePiecesRef = useRef<StyleUpProductRef[] | null>(null); // pieces held while the scene chooser is open
   const [viewer, setViewer] = useState<{ videoUrl: string; pieces: StyleUpProductRef[]; genId: string } | null>(null); // expanded look
   const [, setNowTick] = useState(0);                // 1s heartbeat for the render ETA
   const [isDesktop, setIsDesktop] = useState(false); // desktop = two-pane layout
@@ -618,6 +646,8 @@ export function StyleUpExperience({
   const [edit, setEdit] = useState<{ heightLabel: string; weightLabel: string; ageLabel: string; gender: UserGender; style: string } | null>(null);
   const [savingCtx, setSavingCtx] = useState(false);
   const [uploadingSlot, setUploadingSlot] = useState<number | null>(null);
+  const [photoNote, setPhotoNote] = useState<string | null>(null); // selfie upload rejection message
+  const [rejectedSlot, setRejectedSlot] = useState<number | null>(null); // slot flashing a warning triangle
   const photoSlotRef = useRef<number>(0);
   const fileInputRef = useRef<HTMLInputElement | null>(null);
   const scrollerRef = useRef<HTMLDivElement | null>(null);
@@ -649,7 +679,10 @@ export function StyleUpExperience({
     // `exit` is only wired to the landing/roster header, so it's the "leave"
     // action.) In the native shell the Catalog header is hidden on /style, so
     // this is the only route back to the feed.
-    navigate('/');
+    // StyleUp is the front door now, so a bare "/" would redirect right back
+    // here. Flag this session as browsing and pass ?feed=1 (belt-and-suspenders
+    // for when sessionStorage is blocked) so the feed actually shows.
+    browseTheFeed(navigate);
   }, [navigate]);
 
   // Landing sign-in, same Google OAuth the rest of the app uses. On success
@@ -870,6 +903,56 @@ export function StyleUpExperience({
       setPrefs(p); prefsRef.current = p;
     } catch { setPrefs(EMPTY_PREFS); prefsRef.current = EMPTY_PREFS; }
   }, [threadId]);
+
+  // Load hero clips for the pieces shown in look cards AND the swap-option cards
+  // — a product with a primary video plays it in the card (else its primary
+  // image). Batched, id-keyed, and every requested id is marked (video or null)
+  // so no id is ever re-fetched.
+  useEffect(() => {
+    const ids = [...new Set(
+      messages.flatMap(m => {
+        if (m.kind !== 'product' || !m.productRef) return [];
+        // Swap picker: the ids live in .swap.options, not on the card itself.
+        if (m.productRef.swap) return m.productRef.swap.options.map(o => o.id).filter((x): x is string => !!x);
+        if (m.productRef.choose) return [];
+        return m.productRef.id ? [m.productRef.id] : [];
+      }),
+    )].filter(id => !(id in pieceVideos));
+    if (ids.length === 0) return;
+    let cancelled = false;
+    void fetchProductVideos(ids).then(vids => {
+      if (cancelled) return;
+      setPieceVideos(prev => {
+        const next = { ...prev };
+        for (const id of ids) if (!(id in next)) next[id] = vids[id] ?? null;
+        return next;
+      });
+    });
+    return () => { cancelled = true; };
+  }, [messages, pieceVideos]);
+
+  // Resolve each look-card piece's garment slot from the GOVERNED product type,
+  // so a model-named sneaker ("Samba OG", "Air Force 1", "Achilles Low") — whose
+  // name carries no shoe word — still gets a Change button. id-keyed; every
+  // requested id is marked ('' = no garment role) so none is re-fetched.
+  useEffect(() => {
+    const ids = [...new Set(
+      messages
+        .filter(m => m.kind === 'product' && m.productRef?.id && !m.productRef?.swap && !m.productRef?.choose)
+        .map(m => m.productRef!.id as string),
+    )].filter(id => !(id in pieceRoles));
+    if (ids.length === 0) return;
+    let cancelled = false;
+    void fetchProductRoles(ids).then(roles => {
+      if (cancelled) return;
+      setPieceRoles(prev => {
+        const next = { ...prev };
+        for (const id of ids) if (!(id in next)) next[id] = roles[id] ?? '';
+        return next;
+      });
+    });
+    return () => { cancelled = true; };
+  }, [messages, pieceRoles]);
 
   // Persist + keep the ref current so callbacks always read fresh prefs.
   const updatePrefs = useCallback((next: StylePrefs) => {
@@ -1110,37 +1193,35 @@ export function StyleUpExperience({
     await askOutfitSlots();
   }, [threadId, userId, pendingRender, lookPicks, chosenBySlot, askOutfitSlots, beat]);
 
-  // The exact pieces to render once the scene is picked — set by the look
-  // card's Generate button so EVERY piece on that card goes into the render.
-  const lookToGenerateRef = useRef<StyleUpProductRef[] | null>(null);
+  // Offer the scene chooser before a full-look render (founder ask): the
+  // auto-derived guess (autoScene) leads so one tap confirms it, the presets
+  // follow as thumbnail cards, and "Somewhere else…" opens a freeform field.
+  const sendSceneChooser = useCallback(async (tid: string, guess: string) => {
+    const lead = presetForPhrase(guess);
+    const ordered = lead ? [lead, ...SCENE_PRESETS.filter(s => s.id !== lead.id)] : SCENE_PRESETS;
+    const options: NonNullable<StyleUpProductRef['choose']>['options'] = [];
+    // No preset matched the guess → surface the shopper's own setting first.
+    if (!lead) options.push({ value: guess, label: sentenceCase(guess) });
+    for (const s of ordered) options.push({ value: s.phrase, label: s.label, image: s.imageUrl });
+    options.push({ value: SCENE_CUSTOM, label: 'Somewhere else…' });
+    await sendChooser(tid, { kind: 'scene', prompt: 'Where should we shoot this look?', multi: false, options });
+  }, []);
 
-  // Before a render: ALWAYS ask where they want to be seen. The smart option
-  // (the place they named in chat, or the occasion's backdrop via autoScene)
-  // is one tap away among Studio / coffee shop / wild. The pick echoes back as
-  // the shopper's own right-side reply (chooseWithEcho), then renders.
-  const askScene = useCallback(async (pieces?: StyleUpProductRef[]) => {
+  // Pressing Generate / "show me the full look" now asks WHERE first. The pieces
+  // are stashed and the scene chooser opens; onChoose('scene') resumes the
+  // render with the picked setting. chosenScene persists so a later single-piece
+  // swap reuses it (no re-ask per swap).
+  const startLookRender = useCallback(async (pieces?: StyleUpProductRef[]) => {
     if (!threadId || !userId) return;
     if (pendingRender) { setRenderError('Still finishing your last look, one sec.'); return; }
-    lookToGenerateRef.current = pieces && pieces.length > 0 ? pieces : null;
-    if (!lookToGenerateRef.current && assembleLook().length === 0) { void triggerStylist(); return; }
-    const smart = autoScene(prefsRef.current.occasion, messages);
-    await beat();
-    await sendStylistText(threadId, 'Where do you want to be seen in this look?');
-    await sendChooser(threadId, { kind: 'scene', prompt: 'Pick your setting', multi: false, options: sceneOptions(smart) });
-  }, [threadId, userId, pendingRender, assembleLook, triggerStylist, messages, beat]);
+    const toRender = pieces && pieces.length > 0 ? pieces : assembleLook();
+    if (toRender.length === 0) { void triggerStylist(); return; }
+    pendingScenePiecesRef.current = toRender;
+    await sendSceneChooser(threadId, autoScene(prefsRef.current.occasion, messages));
+  }, [threadId, userId, pendingRender, assembleLook, triggerStylist, messages, sendSceneChooser]);
 
   const onChoose = useCallback(async (kind: string, values: string[]) => {
     if (!threadId || !userId) return;
-    if (kind === 'scene') {
-      const scene = values[0];
-      setChosenScene(scene);
-      // Render the exact pieces from the card that opened this chooser when we
-      // have them; assembleLook() (one-per-slot) only backstops text triggers.
-      const pieces = lookToGenerateRef.current ?? assembleLook();
-      lookToGenerateRef.current = null;
-      await generateFullLook(pieces, scene);
-      return;
-    }
     if (kind === 'shoes') {
       const id = values[0];
       setChosenBySlot(prev => ({ ...prev, Shoes: id }));
@@ -1170,8 +1251,18 @@ export function StyleUpExperience({
       };
       const missing = (['Shoes', 'Top', 'Pants'] as const).find(s => !have.has(s));
       if (missing) await sendStylistText(threadId, `One more thing, you'll want ${GAP_REASON[missing]}. Say “different ${missing.toLowerCase()}” and I'll pull a few.`);
+    } else if (kind === 'scene') {
+      // Scene picked (a preset phrase or a freeform setting) → render the stashed
+      // pieces there. The value IS the render phrase, so it flows straight in.
+      const scene = values[0]?.trim();
+      if (!scene) return;
+      setChosenScene(scene);
+      const pieces = pendingScenePiecesRef.current ?? assembleLook();
+      pendingScenePiecesRef.current = null;
+      if (pieces.length === 0) { void triggerStylist(); return; }
+      await generateFullLook(pieces, scene);
     }
-  }, [threadId, userId, lookPicks, rejected, rejectIds, askOutfitSlots, assembleLook, generateFullLook, recOpts, active, beat]);
+  }, [threadId, userId, lookPicks, rejected, rejectIds, askOutfitSlots, recOpts, active, beat, assembleLook, triggerStylist, generateFullLook]);
 
   // Echo a chooser tap into the thread as the shopper's own right-side reply
   // first, so picking "Studio" reads like you texted "Studio", then run the
@@ -1192,6 +1283,12 @@ export function StyleUpExperience({
     if (!threadId || !userId) return;
     setRenderError(null);
     await beat();
+    if (!swap.role) {
+      // Couldn't pin this piece to a garment slot, so we can't pull
+      // like-for-like alternates — keep the (uniform) affordance honest.
+      await sendStylistText(threadId, `Sure — tell me what you'd like instead of this piece and I'll pull some options.`);
+      return;
+    }
     await sendStylistText(threadId, `Sure thing, here are a few ${swap.label} options. Tap the one you like and I'll put it on you.`);
     // Exclude what's in the look AND anything they've already passed on (memory).
     const exclude = [...lookPicks().map(p => p.id).filter((x): x is string => !!x), ...rejected];
@@ -1233,6 +1330,7 @@ export function StyleUpExperience({
   const send = useCallback(async (override?: string) => {
     const text = (override ?? draft).trim();
     if (!text || !threadId || sending) return;
+    if (!isProfileReady(ctx)) return; // gated: needs selfie + height + weight
     setSending(true);
     if (!override) setDraft('');
     const msg = await sendShopperMessage(threadId, text);
@@ -1252,12 +1350,12 @@ export function StyleUpExperience({
     const looks = lookPicks();
     if (swap && looks.length > 0) void handleSwapRequest(swap);
     else if (wantsFullOutfit(text)) {
-      if (engineMethod === 'style_engine' && active?.sourceMode !== 'web') void triggerStylist('outfit');
+      if (engineMethod !== 'legacy' && active?.sourceMode !== 'web') void triggerStylist('outfit');
       else void startOutfitFlow();
     }
-    else if (wantsFullLook(text) && looks.length > 0) void askScene();
+    else if (wantsFullLook(text) && looks.length > 0) void startLookRender();
     else void triggerStylist();
-  }, [draft, threadId, sending, triggerStylist, handleSwapRequest, startOutfitFlow, askScene, lookPicks, engineMethod, active]);
+  }, [draft, threadId, sending, ctx, triggerStylist, handleSwapRequest, startOutfitFlow, startLookRender, lookPicks, engineMethod, active]);
 
   // Add a finished render to the shopper's own looks, promotes the generation
   // to a LIVE look (with its video + poster + pieces), associated with THIS
@@ -1398,24 +1496,62 @@ export function StyleUpExperience({
     photoSlotRef.current = slot;
     fileInputRef.current?.click();
   }, []);
+  // Surface a selfie rejection: designed note in the chat + a brief warning
+  // triangle on the slot, and nudge the note into view if the user scrolled.
+  const showPhotoNote = useCallback((slot: number, msg: string) => {
+    setPhotoNote(msg);
+    setRejectedSlot(slot);
+    window.setTimeout(() => setRejectedSlot(s => (s === slot ? null : s)), 2400);
+    // Wait a tick so the note is in the DOM, then scroll it (it's the last
+    // child of the chat scroller) into view.
+    window.setTimeout(() => {
+      const el = scrollerRef.current;
+      if (el) el.scrollTo({ top: el.scrollHeight, behavior: 'smooth' });
+    }, 60);
+  }, []);
   const onPhotoFile = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
     if (!file || !userId || !ctx) return;
     const slot = photoSlotRef.current;
+    setPhotoNote(null);
+    setRejectedSlot(null);
     setUploadingSlot(slot);
     const { data, error } = await uploadUserPhoto(file, userId);
-    if (!error && data) {
-      const slots = [...ctx.slots];
-      while (slots.length < MAX_PHOTOS) slots.push(null);
-      slots[slot] = data.id;
-      await saveUserSlots(userId, slots);
-      await loadContext();
+    if (error || !data) {
+      setUploadingSlot(null);
+      showPhotoNote(slot, error ?? 'Couldn’t upload that photo — try again.');
+      return;
     }
+    // Validate against the whole try-on requirement (clear face + one real
+    // person). Hard reject → drop the upload, tell the shopper why, and don't
+    // pin the slot. Soft issues (e.g. not full-body) still accept. Fails open.
+    const check = await validateSelfie(data.public_url);
+    if (!check.ok) {
+      await deleteUserUpload(data);
+      setUploadingSlot(null);
+      showPhotoNote(slot, check.reason ?? 'That photo won’t work for a try-on — use a clear, front-facing photo of just you.');
+      return;
+    }
+    const slots = [...ctx.slots];
+    while (slots.length < MAX_PHOTOS) slots.push(null);
+    slots[slot] = data.id;
+    await saveUserSlots(userId, slots);
+    await loadContext();
     setUploadingSlot(null);
-  }, [userId, ctx, loadContext]);
+  }, [userId, ctx, loadContext, showPhotoNote]);
 
   const filledPhotos = (ctx?.photos ?? []).filter((u): u is string => !!u);
+
+  // Chat is gated until the profile has a selfie + height + weight. Spell out
+  // exactly what's still missing so the nudge is actionable.
+  const profileReady = isProfileReady(ctx);
+  const gateNeeds: string[] = [];
+  if (filledPhotos.length === 0) gateNeeds.push('a selfie');
+  if (!ctx?.heightLabel.trim()) gateNeeds.push('your height');
+  if (!ctx?.weightLabel.trim()) gateNeeds.push('your weight');
+  const gateLabel = `Add ${gateNeeds.join(' + ')} to chat`;
+
   const contextCard = (
     <div className={`su-context${ctxMini && !ctxEditing ? ' su-context--mini' : ''}${ctxEditing ? ' su-context--editing' : ''}`} aria-label="Your styling context">
       {ctxMini && !ctxEditing ? (
@@ -1433,12 +1569,14 @@ export function StyleUpExperience({
         <div className="su-context-editor">
           <div className="su-context-photos su-context-photos--edit">
             {[0, 1, 2].map(i => (
-              <button type="button" key={i} className="su-context-photo su-context-photo--edit" onClick={() => pickPhoto(i)} aria-label={`Photo ${i + 1}`}>
+              <button type="button" key={i} className={`su-context-photo su-context-photo--edit${rejectedSlot === i ? ' is-warn' : ''}`} onClick={() => pickPhoto(i)} aria-label={`Photo ${i + 1}`}>
                 {uploadingSlot === i
                   ? <span className="su-render-spinner" aria-hidden="true" />
-                  : ctx?.photos[i]
-                    ? <img src={ctx.photos[i] as string} alt="" />
-                    : <span className="su-context-photo-add" aria-hidden="true">+</span>}
+                  : rejectedSlot === i
+                    ? <span className="su-slot-warn" aria-hidden="true"><WarnTriangleIcon size={20} /></span>
+                    : ctx?.photos[i]
+                      ? <img src={ctx.photos[i] as string} alt="" />
+                      : <span className="su-context-photo-add" aria-hidden="true">+</span>}
               </button>
             ))}
           </div>
@@ -1526,7 +1664,7 @@ export function StyleUpExperience({
         }}
       >
         <button type="button" className="su-viewer-close" onClick={closeLookViewer} aria-label="Close">✕</button>
-        <video className="su-viewer-video" src={viewer.videoUrl} autoPlay loop controls playsInline />
+        <video ref={forceMuteVideo} className="su-viewer-video" src={viewer.videoUrl} autoPlay loop muted controls playsInline />
         {viewer.pieces.length > 0 && (
           <div className="su-viewer-pieces">
             {viewer.pieces.map((pc, i) => (
@@ -1577,7 +1715,7 @@ export function StyleUpExperience({
       brand: d?.brand ?? ref.brand ?? '',
       price: d?.price ?? ref.price ?? '',
       url: shopUrl ?? '',
-      image: gallery[0],
+      image: gallery[0] ?? d?.poster ?? undefined,
     };
     const saved = isProductBookmarked(asBookmark);
     return (
@@ -1604,9 +1742,11 @@ export function StyleUpExperience({
           <span className="su-pviewer-grab" aria-hidden="true" />
           <button type="button" className="su-viewer-close" onClick={closeProductViewer} aria-label="Close">✕</button>
           <div className="su-pviewer-gallery">
-            {gallery.length > 0
-              ? gallery.map((src, i) => <img key={i} src={src} alt={i === 0 ? (d?.name ?? ref.name ?? 'Product') : ''} loading={i > 0 ? 'lazy' : undefined} />)
-              : <span className="su-pviewer-empty" aria-hidden="true" />}
+            {d?.video
+              ? <video ref={forceMuteVideo} src={d.video} poster={d.poster ?? undefined} autoPlay loop muted playsInline />
+              : gallery[0]
+                ? <img src={gallery[0]} alt={d?.name ?? ref.name ?? 'Product'} />
+                : <span className="su-pviewer-empty" aria-hidden="true" />}
           </div>
           <div className="su-pviewer-info">
             <div className="su-pviewer-toprow">
@@ -1719,6 +1859,11 @@ export function StyleUpExperience({
           {!landing && <p>Sign in to chat with a stylist and see picks on yourself.</p>}
           {googleButton}
           {signinError && <p className="su-signin-error">{signinError}</p>}
+          {landing && (
+            <button type="button" className="su-landing-browse" onClick={() => browseTheFeed(navigate)}>
+              Browse the catalog
+            </button>
+          )}
         </div>
       </div>
     );
@@ -1895,10 +2040,12 @@ export function StyleUpExperience({
                   point. Shown only until a photo exists; reuses pickPhoto(0). */}
               {filledPhotos.length === 0 && (
                 <button type="button" className="su-chat-selfie-ask" onClick={() => pickPhoto(0)} disabled={uploadingSlot === 0}>
-                  <span className="su-chat-selfie-ask-icon" aria-hidden="true">
+                  <span className={`su-chat-selfie-ask-icon${rejectedSlot === 0 ? ' is-warn' : ''}`} aria-hidden="true">
                     {uploadingSlot === 0
                       ? <span className="su-render-spinner" />
-                      : <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>}
+                      : rejectedSlot === 0
+                        ? <span className="su-slot-warn"><WarnTriangleIcon size={20} /></span>
+                        : <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M23 19a2 2 0 0 1-2 2H3a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h4l2-3h6l2 3h4a2 2 0 0 1 2 2z"/><circle cx="12" cy="13" r="4"/></svg>}
                   </span>
                   <span className="su-chat-selfie-ask-text">
                     <strong>Add a selfie</strong>
@@ -1985,7 +2132,9 @@ export function StyleUpExperience({
                           disabled={genLook}
                         >
                           <span className="su-swap-opt-media">
-                            {o.image ? <img src={o.image} alt={o.name || ''} loading="lazy" /> : <span className="su-product-media--empty" />}
+                            {o.id && pieceVideos[o.id]
+                              ? <video ref={forceMuteVideo} src={pieceVideos[o.id]!.video} poster={pieceVideos[o.id]!.poster ?? o.image ?? undefined} autoPlay loop muted playsInline />
+                              : o.image ? <img src={o.image} alt={o.name || ''} loading="lazy" /> : <span className="su-product-media--empty" />}
                           </span>
                           <span className="su-swap-opt-info">
                             {o.brand && <span className="su-swap-opt-brand">{o.brand}</span>}
@@ -2004,54 +2153,55 @@ export function StyleUpExperience({
               // laid out like an editorial plate: numbered rows head-to-toe + a
               // total line.
               const pieces = sortHeadToToe(lookRunPieces.get(m.id) ?? [m.productRef]);
-              let cartTotal = 0;
-              let cartPriced = 0;
-              for (const pc of pieces) {
-                const pm = (pc.price ?? '').replace(/[, ]/g, '').match(/(\d+(?:\.\d+)?)/);
-                if (pm) { cartTotal += parseFloat(pm[1]); cartPriced++; }
-              }
               return (
                 <div key={m.id} className="su-msg su-msg--stylist">
                   <div className="su-lookcard">
                     <div className="su-lookcard-title">Your look</div>
                     <div className="su-lookcard-items">
                       {pieces.map((pc, i) => {
-                        const role = roleTagFromName(pc.name ?? null);
+                        // Governed type (fetched by id) wins so model-named
+                        // shoes resolve; name heuristic backstops until it loads.
+                        const role = (pc.id && pieceRoles[pc.id]) || roleTagFromName(pc.name ?? null);
                         return (
                           <div className="su-lookcard-row" key={pc.id || i}>
                             <span className="su-lookcard-num" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span>
                             <button type="button" className="su-lookcard-media" onClick={() => openProduct(pc)} aria-label={`Open ${pc.name || 'product'}`}>
-                              {pc.image ? <img src={pc.image} alt={pc.name || 'Product'} loading="lazy" /> : <span className="su-product-media--empty" />}
+                              {pc.id && pieceVideos[pc.id]
+                                ? <video ref={forceMuteVideo} src={pieceVideos[pc.id]!.video} poster={pieceVideos[pc.id]!.poster ?? pc.image ?? undefined} autoPlay loop muted playsInline />
+                                : pc.image ? <img src={pc.image} alt={pc.name || 'Product'} loading="lazy" /> : <span className="su-product-media--empty" />}
                             </button>
                             <button type="button" className="su-lookcard-info" onClick={() => openProduct(pc)}>
                               {pc.brand && <span className="su-lookcard-brand">{pc.brand}</span>}
                               <span className="su-lookcard-name">{pc.name || 'Product'}</span>
                               {pc.price && <span className="su-lookcard-price">{pc.price}</span>}
                             </button>
-                            {role && (
+                            {/* Change is UNIFORM: every look piece gets it, even
+                                when we couldn't pin the garment slot (model-named
+                                shoes, brand-only pant names). Gating on `role` used
+                                to drop the button whenever classification missed —
+                                that's the inconsistency the founder flagged. A null
+                                role still opens the swap flow, which degrades to a
+                                graceful reply (see handleSwapRequest).
+                                Same travelling beam the chat composer wears
+                                (.su-composer-beam) so it reads as one family. */}
+                            <Beam size="md" theme="dark" className="su-lookcard-change-beam">
                               <button
                                 type="button"
                                 className="su-lookcard-change"
-                                onClick={() => void handleSwapRequest({ role, label: role.toLowerCase() })}
-                                aria-label={`Change the ${role.toLowerCase()}`}
+                                onClick={() => void handleSwapRequest({ role: role || '', label: (role ?? '').toLowerCase() })}
+                                aria-label={role ? `Change the ${role.toLowerCase()}` : 'Change this piece'}
                               >
                                 Change
                               </button>
-                            )}
+                            </Beam>
                           </div>
                         );
                       })}
                     </div>
-                    {cartPriced > 0 && (
-                      <div className="su-lookcard-total">
-                        <span>{pieces.length} piece{pieces.length === 1 ? '' : 's'}</span>
-                        <b>${cartTotal.toFixed(2)}{cartPriced < pieces.length ? '+' : ''}</b>
-                      </div>
-                    )}
                     <button
                       type="button"
                       className="su-lookcard-generate"
-                      onClick={() => void askScene(pieces)}
+                      onClick={() => void startLookRender(pieces)}
                       disabled={genLook || pendingRender}
                     >
                       {pendingRender ? 'Generating…' : 'Generate this look'}
@@ -2084,7 +2234,7 @@ export function StyleUpExperience({
                         onClick={() => setViewer({ videoUrl: r!.video_url!, pieces, genId: m.renderGenerationId as string })}
                         aria-label="Open look"
                       >
-                        <video className="su-render-video" src={r!.video_url!} autoPlay loop muted playsInline />
+                        <video ref={forceMuteVideo} className="su-render-video" src={r!.video_url!} autoPlay loop muted playsInline />
                         <span className="su-render-expand" aria-hidden="true">
                           <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 3 21 3 21 9"/><polyline points="9 21 3 21 3 15"/><line x1="21" y1="3" x2="14" y2="10"/><line x1="3" y1="21" x2="10" y2="14"/></svg>
                         </span>
@@ -2269,6 +2419,12 @@ export function StyleUpExperience({
             </div>
           )}
           {renderError && <div className="su-render-err">{renderError}</div>}
+          {photoNote && (
+            <div className="su-photo-note" role="alert">
+              <span className="su-photo-note-icon"><WarnTriangleIcon size={16} /></span>
+              <span>{photoNote}</span>
+            </div>
+          )}
         </div>
 
         {newBelow && (
@@ -2285,7 +2441,7 @@ export function StyleUpExperience({
           </button>
         )}
 
-        {quickChips.length > 0 && (
+        {quickChips.length > 0 && profileReady && (
           <div className="su-quick-row">
             {quickChips.map(c => (
               <button key={c} type="button" className="su-quick-chip" disabled={sending} onClick={() => void send(c)}>
@@ -2295,18 +2451,36 @@ export function StyleUpExperience({
           </div>
         )}
 
+        {/* Chat message input. 'sm' is the button/input preset — 'md' is tuned
+            for cards and reads too heavy on a composer bar.
+
+            theme="dark": the CHAT pane is dark glass (rgba(18,19,22,.7)), even
+            though StyleUp's landing screen behind it is light. Theme follows
+            the surface the beam sits on, not the feature. */}
+        <Beam size="md" theme="dark" className="su-composer-beam">
         <div className="su-composer">
-          <input
-            className="su-composer-input"
-            value={draft}
-            onChange={e => setDraft(e.target.value)}
-            onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void send(); } }}
-            placeholder={`Message ${active?.name ?? 'your stylist'}…`}
-          />
-          <button type="button" className="su-composer-send" onClick={() => void send()} disabled={!draft.trim() || sending} aria-label="Send">
-            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>
-          </button>
+          {profileReady ? (
+            <>
+              <input
+                className="su-composer-input"
+                value={draft}
+                onChange={e => setDraft(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') { e.preventDefault(); void send(); } }}
+                placeholder={`Message ${active?.name ?? 'your stylist'}…`}
+              />
+              <button type="button" className="su-composer-send" onClick={() => void send()} disabled={!draft.trim() || sending} aria-label="Send">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="22" y1="2" x2="11" y2="13" /><polygon points="22 2 15 22 11 13 2 9 22 2" /></svg>
+              </button>
+            </>
+          ) : (
+            // Gated: chatting is locked until the profile has a selfie + height +
+            // weight. Tapping opens the existing context editor to fill them in.
+            <button type="button" className="su-composer-gate" onClick={beginEdit}>
+              {gateLabel}
+            </button>
+          )}
         </div>
+        </Beam>
       </div>
   );
 
@@ -2388,7 +2562,11 @@ export function StyleUpExperience({
 
   const findStylistBar = (
     <div className="su-find-bar">
-      <button type="button" className="su-find-btn" onClick={() => void openPicker()}>Find a stylist</button>
+      {/* The wrapper div Beam inserts becomes the flex child here, so it has to
+          carry the button's width — see .su-find-btn-beam in style-up.css. */}
+      <Beam size="md" theme="light" className="su-find-btn-beam">
+        <button type="button" className="su-find-btn" onClick={() => void openPicker()}>Find a stylist</button>
+      </Beam>
     </div>
   );
 

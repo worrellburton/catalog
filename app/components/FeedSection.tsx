@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef, useMemo, useCallback, memo } from 'react';
-import CreativeCardV2 from './CreativeCardV2';
+import CreativeCardV2, { type CardBookmarks } from './CreativeCardV2';
 import { pickPosterUrl } from '~/services/video-loading';
 import { lookPoster } from '~/services/media-resolver';
 import { warmPosters, posterRendition } from '~/utils/poster-prefetch';
@@ -72,6 +72,12 @@ interface FeedSectionProps {
    * layout-driven column count).
    */
   feedCols?: number;
+  /**
+   * Bookmark store slice for the per-card save button. Threaded from
+   * _index → ContinuousFeed so a save on a card updates the header count
+   * and saved screen live. Omitted (overlay rails) = no save button.
+   */
+  bookmarks?: CardBookmarks;
 }
 
 // When we know creatives are still fetching, reserve roughly this share of
@@ -105,6 +111,14 @@ const MAX_WINDOW = 160;
 // are warmed into the HTTP cache (utils/poster-prefetch) so a hard flick
 // lands on cards whose posters paint from cache instead of black shimmer.
 const PREFETCH_AHEAD = 36;
+// Mobile editorial cadence: on the default 2-column home feed, every
+// HERO_PERIOD-th item renders as a full-width feature tile so the grid
+// gets rhythm (the mobile counterpart of the desktop 2×2 featured cards).
+// 23 items = 11 normal rows (22 cards) + 1 hero row, so each period is a
+// fixed 12 rows — the DOM-windowing padding math below depends on that
+// (windowStart snaps to period boundaries, padTop counts whole periods).
+const HERO_PERIOD = 23;
+const HERO_ROWS_PER_PERIOD = 12; // 11 normal + 1 hero
 
 // (Math.random shuffle removed - seeded shuffle below means the same
 // inputs always produce the same output, which is what useMemo needs to
@@ -131,6 +145,7 @@ function FeedSection({
   scrollRoot = null,
   slotPrefix,
   feedCols,
+  bookmarks,
 }: FeedSectionProps) {
   const batch = batchSize ?? (isInitial ? DEFAULT_BATCH : SUB_BATCH);
   const [visibleCount, setVisibleCount] = useState(batch);
@@ -144,9 +159,22 @@ function FeedSection({
   const gridRef = useRef<HTMLDivElement>(null);
   // D1: measured (columns, row height) of the mobile grid, so we can unmount
   // cards far above the viewport and replace their height with padding-top.
-  // Null until measured → windowStart stays 0 (current behaviour).
-  const [rowMetrics, setRowMetrics] = useState<{ cols: number; rowH: number } | null>(null);
+  // Null until measured → windowStart stays 0 (current behaviour). heroRow is
+  // the measured advance (height + gap) of a full-width mobile feature row,
+  // null until one has mounted.
+  const [rowMetrics, setRowMetrics] = useState<{ cols: number; rowH: number; heroRow: number | null } | null>(null);
   const layout = LAYOUT_CONFIGS[layoutMode % LAYOUT_CONFIGS.length];
+
+  // Mobile feature tiles only run on the infinite home feed at the default
+  // 2-column density — that's the one surface whose row structure the
+  // hero-aware windowing math below models. 1-col is already full-width,
+  // 3-col keeps the uniform grid, search results keep their ranked grid.
+  const heroesActive = typeof window !== 'undefined' && window.innerWidth <= 768
+    && isInitial && !searchMode && (feedCols == null || feedCols === 2);
+  const isMobileHero = useCallback(
+    (globalIndex: number) => heroesActive && globalIndex % HERO_PERIOD === HERO_PERIOD - 1,
+    [heroesActive],
+  );
 
   const gridStyle = useMemo(() => {
     if (typeof window !== 'undefined' && window.innerWidth <= 768) {
@@ -166,11 +194,13 @@ function FeedSection({
 
   // Pick a tile size variant deterministically from (layoutMode, index).
   // layoutMode steps the seed so the Remix button visibly rearranges the
-  // mosaic (different cells become featured/wide/tall). Desktop only - mobile
-  // keeps the uniform 3:4 grid.
+  // mosaic (different cells become featured/wide/tall). Mobile gets the
+  // fixed-cadence full-width feature tile instead (cadence — not a seed —
+  // because the DOM-windowing padding math needs hero rows at known
+  // positions).
   const getCardClass = useCallback((globalIndex: number) => {
     const isDesktop = typeof window !== 'undefined' && window.innerWidth > 768;
-    if (!isDesktop) return 'look-card';
+    if (!isDesktop) return isMobileHero(globalIndex) ? 'look-card look-card-hero-mobile' : 'look-card';
     // Hash the seed so distribution doesn't cluster at regular intervals.
     const seed = ((layoutMode + 1) * 31 + globalIndex * 127) % 100;
     if (seed < 8) return 'look-card look-card-featured';  // ~8%  2x2 (still 3/4)
@@ -178,7 +208,7 @@ function FeedSection({
     // look-card-wide (2x1, 16:9) and look-card-tall (1x2, 3/8) retired —
     // their landscape/portrait ratios clashed with the primary 3/4 grid
     // cell. The 2x2 featured stays: scaling both dims keeps it at 3/4.
-  }, [layoutMode]);
+  }, [layoutMode, isMobileHero]);
 
   // Build the pool by treating looks + creatives as one combined deck.
   // Each cycle emits every unique item once (shuffled); when the deck
@@ -361,9 +391,16 @@ function FeedSection({
 
   const windowStart = useMemo(() => {
     if (!mobileWindowing || !rowMetrics || visibleCount <= MAX_WINDOW) return 0;
+    if (heroesActive) {
+      // Hero cadence breaks the uniform item↔row mapping, so snap the
+      // window to whole HERO_PERIOD blocks (each exactly 12 rows) — padTop
+      // below then counts periods instead of rows.
+      const periods = Math.floor((visibleCount - MAX_WINDOW) / HERO_PERIOD);
+      return Math.max(0, periods * HERO_PERIOD);
+    }
     const startRow = Math.floor((visibleCount - MAX_WINDOW) / rowMetrics.cols);
     return Math.max(0, startRow * rowMetrics.cols);
-  }, [mobileWindowing, rowMetrics, visibleCount]);
+  }, [mobileWindowing, rowMetrics, visibleCount, heroesActive]);
 
   const displayItems = useMemo(() => pool.slice(windowStart, visibleCount), [pool, windowStart, visibleCount]);
 
@@ -381,7 +418,14 @@ function FeedSection({
   }, [pool, visibleCount]);
 
   const padTop = windowStart > 0 && rowMetrics
-    ? (windowStart / rowMetrics.cols) * rowMetrics.rowH
+    ? (heroesActive
+        // windowStart is a whole number of HERO_PERIOD blocks: each is 11
+        // normal rows plus one hero row (measured; falls back to a normal
+        // row's height until a hero has mounted — windowStart > 0 implies
+        // one has, since every displayed period contains a hero).
+        ? (windowStart / HERO_PERIOD)
+          * ((HERO_ROWS_PER_PERIOD - 1) * rowMetrics.rowH + (rowMetrics.heroRow ?? rowMetrics.rowH))
+        : (windowStart / rowMetrics.cols) * rowMetrics.rowH)
     : 0;
 
   // Measure the mobile grid's column count + row height once its cards exist,
@@ -404,8 +448,17 @@ function FeedSection({
       const nextRow = cards[cols];
       const rowH = nextRow ? nextRow.offsetTop - firstTop : cards[0].offsetHeight;
       if (rowH <= 0) return;
+      // Full-width feature rows advance by their own (taller) height — measure
+      // one when mounted so hero-aware padTop stays exact. rowH includes the
+      // row gap, so add the same gap to the hero's box height.
+      const gapY = Math.max(0, rowH - cards[0].offsetHeight);
+      const heroEl = grid.querySelector<HTMLElement>('.look-card-hero-mobile');
+      const heroRow = heroEl ? heroEl.offsetHeight + gapY : null;
       setRowMetrics(prev =>
-        prev && prev.cols === cols && Math.abs(prev.rowH - rowH) < 1 ? prev : { cols, rowH });
+        prev && prev.cols === cols && Math.abs(prev.rowH - rowH) < 1
+          && (prev.heroRow == null) === (heroRow == null)
+          && (prev.heroRow == null || heroRow == null || Math.abs(prev.heroRow - heroRow) < 1)
+          ? prev : { cols, rowH, heroRow });
     };
     // The grid-density dial dispatches a `resize` after changing --feed-cols.
     // Defer the read to the next frame so the browser has COMMITTED the grid
@@ -487,6 +540,38 @@ function FeedSection({
     setPoolCycles(1);
   }, [looks, batch]);
 
+  // ── "All caught up" cycle signal ────────────────────────────────────────
+  // The infinite home feed recycles its deck by design; nothing used to tell
+  // the shopper the content had started repeating. Watch the first REPEATED
+  // card (pool index == unique deck size) and, the first time it scrolls into
+  // view, float a one-time pill. Detection is DOM-observation only — no
+  // divider row in the grid, so the windowing/row math is untouched.
+  const [caughtUp, setCaughtUp] = useState(false);
+  const caughtUpShownRef = useRef(false);
+  const uniqueCount = isInitial && !searchMode && !creativesLoading
+    ? looks.length + (creatives?.length ?? 0)
+    : 0;
+  useEffect(() => {
+    if (caughtUpShownRef.current || uniqueCount === 0) return;
+    // The first repeat must be mounted (and not already windowed away).
+    if (visibleCount <= uniqueCount || uniqueCount < windowStart) return;
+    const el = gridRef.current?.children[uniqueCount - windowStart] as HTMLElement | undefined;
+    if (!el) return;
+    const obs = new IntersectionObserver(([entry]) => {
+      if (!entry.isIntersecting || caughtUpShownRef.current) return;
+      caughtUpShownRef.current = true;
+      setCaughtUp(true);
+      obs.disconnect();
+    }, { root: scrollRoot ?? null });
+    obs.observe(el);
+    return () => obs.disconnect();
+  }, [uniqueCount, visibleCount, windowStart, scrollRoot]);
+  useEffect(() => {
+    if (!caughtUp) return;
+    const t = window.setTimeout(() => setCaughtUp(false), 5000);
+    return () => window.clearTimeout(t);
+  }, [caughtUp]);
+
   // Infinite daily feed: keep the pool a few batches AHEAD of what's rendered,
   // driven by visibleCount (which the sentinel grows on every scroll) rather
   // than relying on the IntersectionObserver's own poolCycles bump firing at
@@ -520,7 +605,13 @@ function FeedSection({
           const globalIndex = windowStart + idx;
           if (item.type === 'placeholder') {
             return (
-              <div key={item.key} className="look-card promo-card creative-placeholder" aria-hidden="true">
+              <div
+                key={item.key}
+                // Same feature-tile cadence as real cards so the skeleton
+                // grid doesn't reflow when content arrives.
+                className={`look-card promo-card creative-placeholder${isMobileHero(globalIndex) ? ' look-card-hero-mobile' : ''}`}
+                aria-hidden="true"
+              >
                 <div className="card-inner">
                   <div className="card-shimmer" />
                   {/* Skeleton scaffold so the placeholder reads as
@@ -547,6 +638,7 @@ function FeedSection({
                 canDelete={canDeleteCreative}
                 onDelete={onDeleteCreative}
                 priority={globalIndex < 6}
+                bookmarks={bookmarks}
               />
             );
           }
@@ -561,11 +653,17 @@ function FeedSection({
               canDelete={canDeleteCreative}
               onDeleteLook={onDeleteLook}
               priority={globalIndex < 6}
+              bookmarks={bookmarks}
             />
           );
         })}
       </div>
       <div ref={sentinelRef} style={{ height: 1 }} />
+      {caughtUp && (
+        <div className="feed-caughtup-pill" role="status">
+          You&rsquo;re all caught up — showing your feed again
+        </div>
+      )}
     </div>
   );
 }

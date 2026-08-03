@@ -1,0 +1,139 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   BEAM HOST LAYOUT SHIMS
+   ═══════════════════════════════════════════════════════════════════════
+   <Beam> (components/Beam.tsx → border-beam) renders a wrapper <div> around
+   its child. That new box lands in the middle of layouts that were written
+   without it, so a flex child stops being the flex child, a full-width block
+   collapses to shrink-wrap, and so on.
+
+   Each rule here hands the wrapper the layout role its child used to have.
+   These are LAYOUT ONLY — nothing here touches how the beam paints; the beam's
+   own look is tuned via props in Beam.tsx.
+
+   Add a rule here whenever you add a <Beam> call site, and check the child
+   didn't rely on being a direct descendant of its old parent.
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* ── NEVER AUTO-PAUSE ──────────────────────────────────────────────────
+   border-beam ships an IntersectionObserver that sets `data-paused` (→
+   `animation-play-state: paused !important`) whenever it decides the element
+   is off-screen, to save CPU. On our always-on chrome (search bar, composer,
+   buttons) that observer misfires — near a viewport edge, behind a transform,
+   during the hero's entrance, or inside the native shell — and freezes the
+   beam mid-cycle, so it "travels, stops, then jerks back to the start" instead
+   of looping. These beams are cheap GPU-composited loops on elements that are
+   effectively always visible, so keep them running.
+
+   The package's pause rule is `!important` and injected AFTER this file, so a
+   plain override at equal specificity loses; the leading `html` raises
+   specificity enough to win regardless of order. */
+html [data-beam][data-paused],
+html [data-beam][data-paused]::after,
+html [data-beam][data-paused]::before,
+html [data-beam][data-paused] [data-beam-bloom] {
+  animation-play-state: running !important;
+}
+
+/* ── LARGE-SCREEN INTENSITY ────────────────────────────────────────────
+   border-beam is tuned for ~350px elements; on the wide desktop bars/cards
+   the beam reads faint. The baseline strength (0.7, set per <Beam> in
+   Beam.tsx) stays for mobile, but on large screens push it up: `strength`
+   caps at 1, and the package's own --beam-*-opacity edge multipliers (default
+   1) take it beyond that. This is the responsive answer to "bigger + stronger
+   on large screens" — border-beam has no larger size preset than `md`. */
+@media (min-width: 769px) {
+  [data-beam] {
+    --beam-strength: 1 !important;
+    --beam-stroke-opacity: 2;
+    --beam-bloom-opacity: 2;
+  }
+}
+
+/* Home search pill — the wrapper sits inside the fixed .bottom-bar, between
+   .bottom-bar-row and .bottom-bar-inner. The inner pill is the flex row that
+   holds the filter button, input and spinner, so the wrapper has to stretch. */
+.bottom-bar-beam {
+  display: block;
+  width: 100%;
+  min-width: 0; /* let the input shrink inside the flex row rather than overflow */
+}
+
+/* Feed search (desktop) — TypeAnywhere's .ai-bar pill. The wrapper is a flex
+   child of .ai-bar-wrap (centred column); the pill is width:100% capped at
+   720px with a 999px radius, so the wrapper inherits the cap and the pill fills
+   it exactly. Mobile keeps the .bottom-bar pill (this layer is hidden ≤768px). */
+.ai-bar-beam {
+  display: block;
+  width: 100%;
+  max-width: 720px;
+}
+
+/* StyleUp "Find a stylist" — the button is capped at --su-find-btn-max and
+   auto-centred inside a full-width bar. A wrapper at plain width:100% traced
+   the whole 1564px bar instead of the 640px button (a 924px overhang on
+   desktop, which is what the beam was drawing). The wrapper has to inherit the
+   cap AND the centring, not just the width. */
+.su-find-btn-beam {
+  display: block;
+  width: 100%;
+  max-width: var(--su-find-btn-max, 640px);
+  margin-inline: auto;
+}
+
+/* StyleUp chat composer — three things the wrapper has to inherit, all of which
+   broke when it didn't:
+
+   1. flex: 0 0 auto — .su-composer is a flex child of the chat column. Without
+      this the wrapper got no reserved track and the composer slid off the
+      bottom of the viewport.
+   2. the composer's own margin — it's a floating glass pill inset from the
+      edges, so a full-width wrapper made the beam trace a box 12px outside the
+      visible pill on each side. Margin moves to the wrapper; the pill zeroes
+      its own so the two boxes coincide and the beam follows the 999px radius.
+   3. min-width: 0 so the input can still shrink inside the flex row. */
+.su-composer-beam {
+  flex: 0 0 auto;
+  min-width: 0;
+  /* bottom lifted 10px → 22px → 34px: the founder found the bar still sitting a
+     tad too low after the first lift. This wrapper owns the composer's outer
+     spacing (the pill zeroes its own margin below), so this is the one knob for
+     the bar's height. */
+  margin: 6px 12px calc(34px + env(safe-area-inset-bottom));
+}
+.su-composer-beam > .su-composer {
+  margin: 0;
+}
+
+/* StyleUp look-card "Change" pill. The <Beam> wrapper becomes the flex child in
+   .su-lookcard-row, so it inherits the pill's flex role (0 0 auto, right-pinned)
+   and hugs it; the button keeps its own 999px radius so the beam traces the
+   capsule, not a rectangle. */
+.su-lookcard-change-beam {
+  flex: 0 0 auto;
+  display: inline-flex;
+}
+
+/* Create look — upload dropzone. .media-uploader-wrap stacks the zone above
+   the error line, so the wrapper is a plain full-width block. */
+.media-uploader-beam {
+  display: block;
+  width: 100%;
+}
+
+/* My catalog — identity card. The hero IS a <button>, which is an inline-block
+   by default; the wrapper takes the block role so the card keeps its width. */
+.my-cat-hero-beam {
+  display: block;
+  width: 100%;
+}
+
+/* NOTE — no rule for .profile-page-section. A beam was tried there and pulled
+   back out: that class is `margin-bottom: 28px` and nothing else (no border,
+   background or radius), so the beam traced a rectangle around a region with
+   no card behind it — phantom outline, section heading sitting on the beam's
+   edge, glow washing over the form fields.
+
+   The rule for any future call site: the child must be a real bounded surface
+   (border/background/radius of its own) before a beam belongs on it. Check the
+   CSS, don't go by how the screen looks — several "cards" in this app are
+   bare layout divs whose children carry the visible chrome. */

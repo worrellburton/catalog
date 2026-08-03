@@ -238,10 +238,14 @@ html[data-shell="catalog-app"] .su-shell {
 .su-find-bar {
   flex: 0 0 auto;
   padding: 12px 18px calc(16px + env(safe-area-inset-bottom));
+  /* Single source of truth for the button's width cap — beam-hosts.css needs
+     the same value so the <Beam> wrapper matches the button instead of
+     stretching to the full bar. Don't inline this number again. */
+  --su-find-btn-max: 640px;
 }
 .su-find-bar .su-find-btn {
   width: 100%;
-  max-width: 640px;
+  max-width: var(--su-find-btn-max);
   margin: 0 auto;
   display: block;
   padding: 15px;
@@ -851,7 +855,8 @@ html[data-shell="catalog-app"] .su-shell {
 .su-swap-opt:active { transform: scale(0.97); }
 .su-swap-opt:disabled { opacity: 0.55; cursor: default; }
 .su-swap-opt-media { width: 100%; aspect-ratio: 3 / 4; background: #26282d; }
-.su-swap-opt-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.su-swap-opt-media img,
+.su-swap-opt-media video { width: 100%; height: 100%; object-fit: cover; display: block; }
 .su-swap-opt-info { display: flex; flex-direction: column; gap: 1px; padding: 0 8px 9px; min-width: 0; }
 .su-swap-opt-brand { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--su-accent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .su-swap-opt-name { font-size: 11.5px; line-height: 1.25; color: #e7e7ea; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
@@ -868,10 +873,17 @@ html[data-shell="catalog-app"] .su-shell {
 .su-choose-prompt { font-size: 12px; font-weight: 700; color: var(--su-accent); margin-bottom: 10px; }
 .su-choose-options { display: flex; flex-wrap: wrap; gap: 8px; }
 .su-choose-options--cards { gap: 8px; }
-/* Setting picker: one option per row, full width, so the choices stack
-   vertically instead of wrapping into an uneven 2-up grid. */
-.su-choose-options--stack { flex-direction: column; flex-wrap: nowrap; align-items: stretch; }
-.su-choose-options--stack .su-choose-opt { width: 100%; justify-content: center; }
+/* Scene picker: a responsive grid of backdrop thumbnails; the text options (the
+   leading "Suggested" guess when it isn't a preset, and "Somewhere else…") span
+   the full row as pills below the cards. */
+.su-choose-options--scene {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 8px;
+  align-items: start;
+}
+.su-choose-options--scene .su-choose-opt--card { width: 100%; }
+.su-choose-options--scene .su-choose-opt:not(.su-choose-opt--card) { grid-column: 1 / -1; justify-content: center; }
 .su-choose-opt {
   display: inline-flex; align-items: center; gap: 7px;
   padding: 8px 14px;
@@ -902,6 +914,15 @@ html[data-shell="catalog-app"] .su-shell {
   cursor: pointer;
 }
 .su-choose-go:disabled { opacity: 0.45; cursor: default; }
+/* Freeform setting field revealed by the scene picker's "Somewhere else…". */
+.su-choose-custom { display: flex; gap: 8px; margin-top: 8px; }
+.su-choose-custom-input {
+  flex: 1 1 auto; min-width: 0; height: 40px; padding: 0 14px;
+  border-radius: 999px; border: 1px solid #2a2c31; background: #1c1d21;
+  font-size: 14px; color: #e7e7ea; outline: none;
+}
+.su-choose-custom-input:focus { border-color: var(--su-accent); }
+.su-choose-custom .su-choose-go { margin-top: 0; width: auto; padding: 9px 18px; border-radius: 999px; }
 
 /* On-you render bubble. */
 .su-render {
@@ -1034,6 +1055,29 @@ html[data-shell="catalog-app"] .su-shell {
   font-size: 12.5px; color: #c7c9cf;
 }
 .su-render-err { align-self: center; font-size: 12.5px; color: #e9a59c; padding: 4px 8px; text-align: center; }
+
+/* Selfie rejection — warning triangle briefly flashed inside the photo slot. */
+.su-slot-warn { display: inline-flex; align-items: center; justify-content: center; color: #f0b24a; animation: su-slot-warn-pop 0.9s ease both; }
+@keyframes su-slot-warn-pop { 0% { transform: scale(0.4); opacity: 0; } 45% { transform: scale(1.14); opacity: 1; } 100% { transform: scale(1); opacity: 1; } }
+.su-context-photo--edit.is-warn { border-style: solid; border-color: #e0a24a; }
+.su-chat-selfie-ask-icon.is-warn { color: #f0b24a; }
+
+/* Selfie rejection message — amber "try again" pill with a warning icon. */
+.su-photo-note {
+  align-self: center;
+  display: flex; align-items: flex-start; gap: 8px;
+  max-width: min(420px, 88%);
+  margin: 2px auto;
+  padding: 9px 12px;
+  border-radius: 12px;
+  background: rgba(224, 162, 74, 0.10);
+  border: 1px solid rgba(224, 162, 74, 0.32);
+  color: #f0c48a;
+  font-size: 12.5px; line-height: 1.45;
+  animation: su-photo-note-in 0.28s ease both;
+}
+.su-photo-note-icon { flex: 0 0 auto; color: #f0b24a; margin-top: 1px; line-height: 0; }
+@keyframes su-photo-note-in { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
 .su-chat-retry {
   align-self: center;
   display: inline-flex;
@@ -1085,7 +1129,8 @@ html[data-shell="catalog-app"] .su-shell {
   background: #26282d;
   cursor: pointer;
 }
-.su-lookcard-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.su-lookcard-media img,
+.su-lookcard-media video { width: 100%; height: 100%; object-fit: cover; display: block; }
 .su-lookcard-info {
   flex: 1 1 auto; min-width: 0;
   display: flex; flex-direction: column; gap: 1px;
@@ -1157,6 +1202,24 @@ html[data-shell="catalog-app"] .su-shell {
 }
 .su-composer-send:disabled { opacity: 0.4; cursor: default; }
 .su-composer-send:not(:disabled):active { transform: scale(0.92); }
+
+/* Chat-gate pill — shown in place of the input until the profile has a selfie
+   + height + weight. Taps open the context editor. */
+.su-composer-gate {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 40px;
+  padding: 0 16px;
+  border-radius: 999px;
+  border: 1px dashed var(--su-accent, #2f6fed);
+  background: color-mix(in srgb, var(--su-accent, #2f6fed) 12%, #1c1d21);
+  color: #e7e7ea;
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.12s ease;
+}
+.su-composer-gate:active { transform: scale(0.99); }
 
 /* ── WebGL blueprint background ──────────────────────────────────────────
    A subtle, slow field of thin "measurement" lines behind the whole StyleUp
@@ -1259,6 +1322,18 @@ html[data-shell="catalog-app"] .su-shell {
 .su-google:not(:disabled):active { transform: scale(0.97); }
 .su-google:disabled { opacity: 0.6; cursor: default; }
 .su-signin-error { margin-top: 12px; color: #f0a0a0; font-size: 13px; }
+.su-landing-browse {
+  display: block;
+  margin: 16px auto 0;
+  padding: 6px 8px;
+  background: none;
+  border: none;
+  color: #8b8e96;
+  font-size: 13.5px;
+  cursor: pointer;
+  transition: color 0.16s ease;
+}
+.su-landing-browse:hover { color: #c8cad0; }
 
 /* ════════════════════════════════════════════════════════════════════════
    Aesthetic pass — atmosphere, glass, choreography, editorial type, tape
@@ -1313,7 +1388,9 @@ html[data-shell="catalog-app"] .su-shell {
   to { opacity: 1; filter: none; }
 }
 .su-lookcard-media img,
+.su-lookcard-media video,
 .su-swap-opt-media img,
+.su-swap-opt-media video,
 .su-choose-opt-media img,
 .su-render-piece img { animation: su-develop 0.85s ease both; }
 
@@ -1339,17 +1416,6 @@ html[data-shell="catalog-app"] .su-shell {
   color: #63666e;
   font-variant-numeric: tabular-nums;
 }
-.su-lookcard-total {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  padding-top: 9px;
-  border-top: 1px solid #26282d;
-  font-size: 12.5px;
-  color: #8b8e96;
-}
-.su-lookcard-total b { font-weight: 700; color: #e7e7ea; font-variant-numeric: tabular-nums; }
-
 /* ── Measuring-tape progress — a real fill with tailor's tick marks. ───── */
 .su-tape {
   position: relative;
@@ -1386,7 +1452,10 @@ html[data-shell="catalog-app"] .su-shell {
 /* ── Frosted floating chrome — the composer becomes a glass pill and the
       chat dissolves under the header instead of hard-clipping. ─────────── */
 .su-composer {
-  margin: 6px 12px calc(10px + env(safe-area-inset-bottom));
+  /* Kept in sync with .su-composer-beam's bottom margin (beam-hosts.css) — the
+     wrapper zeroes this when the beam is present, so this value only applies if
+     the composer is ever rendered un-wrapped. Lifted 10px → 22px → 34px to match. */
+  margin: 6px 12px calc(34px + env(safe-area-inset-bottom));
   padding: 7px 8px 7px 10px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 999px;
@@ -1422,7 +1491,9 @@ html[data-shell="catalog-app"] .su-shell {
   .su-aurora,
   .su-chat .su-msg,
   .su-lookcard-media img,
+  .su-lookcard-media video,
   .su-swap-opt-media img,
+  .su-swap-opt-media video,
   .su-choose-opt-media img,
   .su-render-piece img,
   .su-render-you::before,
@@ -1768,7 +1839,8 @@ html[data-shell="catalog-app"] .su-shell {
   border-radius: 22px 22px 0 0;
 }
 .su-pviewer-gallery::-webkit-scrollbar { display: none; }
-.su-pviewer-gallery img {
+.su-pviewer-gallery img,
+.su-pviewer-gallery video {
   flex: 0 0 100%;
   width: 100%;
   aspect-ratio: 4 / 5;

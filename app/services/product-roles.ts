@@ -129,8 +129,12 @@ export function roleTagFromName(name: string | null): string | null {
   if (/\b(sunglass|shades|eyewear|goggles)\b/.test(lower)) return 'Sunglasses';
   // Footwear — checked early so it never leaks into Top/Jacket. Covers the
   // women's-heel family that previously slipped through (pump, stiletto, mule,
-  // wedge, slingback) plus thong/flip-flop sandals.
-  if (/\b(sneaker|trainer|shoe|boot|bootie|heel|heels|loafer|sandal|slide|mule|pump|stiletto|wedge|espadrille|flip[\s-]?flop|moccasin|oxford|derby|brogue|clog|slingback|flat|flats|thong)\b/.test(lower)) return 'Shoes';
+  // wedge, slingback) plus thong/flip-flop sandals. The trailing `s?` lets the
+  // PLURAL product names ("Sneakers", "Boots", "Loafers") match — without it the
+  // closing `\b` sits between the noun and its 's', so plurals fell through to
+  // null and lost their swap/"Change" affordance (the singular "Shirt"/"Pant"
+  // never hit this because the name carried the singular form).
+  if (/\b(sneaker|trainer|shoe|boot|bootie|heel|loafer|sandal|slide|mule|pump|stiletto|wedge|espadrille|flip[\s-]?flop|moccasin|oxford|derby|brogue|clog|slingback|flat|thong)s?\b/.test(lower)) return 'Shoes';
   // Outerwear — before tops so "shirt jacket"/"shacket" reads as a Jacket.
   if (/\b(jacket|shacket|coat|parka|blazer|hoodie|cardigan|overshirt|windbreaker|anorak|vest|gilet|bomber|trench|puffer|raincoat)\b/.test(lower)) return 'Jacket';
   if (/\b(dress|gown|frock)\b/.test(lower)) return 'Dress';

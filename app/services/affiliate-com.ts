@@ -187,16 +187,27 @@ export function productImage(p: AffiliateProduct): string | null {
   // image / image_url can be strings OR objects ({url, width, ...}).
   return asText(p.image_url) ?? asText(p.image);
 }
+/** affiliate.com hands back tracked URLs with template slots its own renderer
+ *  is supposed to fill (`camref:@@@`, `{...}`, `PUBLISHER_ID`). When the slot
+ *  arrives unsubstituted the link is dead — the one affiliate product live on
+ *  2026-07-28 was `iconic.prf.hn/click/camref:@@@/...`, which resolves to
+ *  nothing and attributes no commission. Prefer the next candidate (usually
+ *  `direct`) over a link that cannot pay out AND cannot load. */
+function hasUnfilledPlaceholder(u: string): boolean {
+  return /@@@|\{[^}]*\}|%7B[^%]*%7D|\b(YOUR_|PUBLISHER_ID|AFFILIATE_ID)/i.test(u);
+}
+
 export function productLink(p: AffiliateProduct): string | null {
   // affiliate.com nests links under `urls`: { affiliate, direct, outclick,
   // shopnomix }. `affiliate` is the monetizable tracked URL (camref
   // placeholders inside); `direct` is the bare merchant URL. Pick the
-  // tracked one first so clickouts actually pay out.
+  // tracked one first so clickouts actually pay out — unless its placeholder
+  // was never substituted, in which case it is a broken link, not a tracked one.
   const urls = (p as Record<string, unknown>).urls as Record<string, unknown> | undefined;
   if (urls) {
     for (const k of ['affiliate', 'outclick', 'shopnomix', 'direct'] as const) {
       const v = urls[k];
-      if (typeof v === 'string' && v.startsWith('http')) return v;
+      if (typeof v === 'string' && v.startsWith('http') && !hasUnfilledPlaceholder(v)) return v;
     }
   }
   return asText((p as Record<string, unknown>).commission_url)

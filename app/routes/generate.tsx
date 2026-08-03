@@ -34,6 +34,7 @@ import {
   updateGenerationCrop,
   uploadUserPhoto,
   checkFacePhoto,
+  validateSelfie,
   GENERATION_STALE_MS,
   type UserUpload,
   type UserGeneration,
@@ -1292,10 +1293,20 @@ export default function GeneratePage() {
         ? { slot: slotForProgress, pct }
         : prev);
     });
-    setUploading(false);
     setUploadProgress(null);
-    if (error) { setUploadError(error); return; }
-    if (!data) return;
+    if (error) { setUploading(false); setUploadError(error); return; }
+    if (!data) { setUploading(false); return; }
+
+    // Validate the selfie against the whole try-on requirement (clear face +
+    // one real person + a real photo). Hard reject → drop the upload and say
+    // why; keep the uploading spinner up during the ~1-2s check. Fails open.
+    const check = await validateSelfie(data.public_url);
+    setUploading(false);
+    if (!check.ok) {
+      await deleteUserUpload(data);
+      setUploadError(check.reason ?? 'That photo won’t work for a try-on — use a clear, front-facing photo of just you.');
+      return;
+    }
 
     setExistingUploads(prev => [data, ...prev]);
     setSlots(prev => {
