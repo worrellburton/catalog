@@ -1283,6 +1283,12 @@ export function StyleUpExperience({
     if (!threadId || !userId) return;
     setRenderError(null);
     await beat();
+    if (!swap.role) {
+      // Couldn't pin this piece to a garment slot, so we can't pull
+      // like-for-like alternates — keep the (uniform) affordance honest.
+      await sendStylistText(threadId, `Sure — tell me what you'd like instead of this piece and I'll pull some options.`);
+      return;
+    }
     await sendStylistText(threadId, `Sure thing, here are a few ${swap.label} options. Tap the one you like and I'll put it on you.`);
     // Exclude what's in the look AND anything they've already passed on (memory).
     const exclude = [...lookPicks().map(p => p.id).filter((x): x is string => !!x), ...rejected];
@@ -2169,21 +2175,25 @@ export function StyleUpExperience({
                               <span className="su-lookcard-name">{pc.name || 'Product'}</span>
                               {pc.price && <span className="su-lookcard-price">{pc.price}</span>}
                             </button>
-                            {role && (
-                              // Same travelling beam the chat composer wears
-                              // (.su-composer-beam) — the founder asked for the
-                              // Change affordance to read as one family with it.
-                              <Beam size="md" theme="dark" className="su-lookcard-change-beam">
-                                <button
-                                  type="button"
-                                  className="su-lookcard-change"
-                                  onClick={() => void handleSwapRequest({ role, label: role.toLowerCase() })}
-                                  aria-label={`Change the ${role.toLowerCase()}`}
-                                >
-                                  Change
-                                </button>
-                              </Beam>
-                            )}
+                            {/* Change is UNIFORM: every look piece gets it, even
+                                when we couldn't pin the garment slot (model-named
+                                shoes, brand-only pant names). Gating on `role` used
+                                to drop the button whenever classification missed —
+                                that's the inconsistency the founder flagged. A null
+                                role still opens the swap flow, which degrades to a
+                                graceful reply (see handleSwapRequest).
+                                Same travelling beam the chat composer wears
+                                (.su-composer-beam) so it reads as one family. */}
+                            <Beam size="md" theme="dark" className="su-lookcard-change-beam">
+                              <button
+                                type="button"
+                                className="su-lookcard-change"
+                                onClick={() => void handleSwapRequest({ role: role || '', label: (role ?? '').toLowerCase() })}
+                                aria-label={role ? `Change the ${role.toLowerCase()}` : 'Change this piece'}
+                              >
+                                Change
+                              </button>
+                            </Beam>
                           </div>
                         );
                       })}
