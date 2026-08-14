@@ -24,6 +24,7 @@
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
 import { Image } from 'https://deno.land/x/imagescript@1.2.15/mod.ts';
+import { isSeedanceModel, hasSeedanceTiers, seedanceSlugFor } from '../_shared/seedance-model.ts';
 
 const CORS_HEADERS = {
   'Access-Control-Allow-Origin': '*',
@@ -40,16 +41,6 @@ function jsonRes(data: unknown, status = 200) {
 }
 
 const FAL_BASE = 'https://queue.fal.run';
-// Seedance 2 fallback slugs — used when the platform model is Seedance.
-const MODEL_SLUG_FAST = 'bytedance/seedance-2.0/fast/reference-to-video';
-// Pro is the default tier on fal.ai — no `/pro/` path segment. The fast
-// tier gets its own `/fast/` subpath; everything else routes through
-// the bare endpoint.
-const MODEL_SLUG_PRO  = 'bytedance/seedance-2.0/reference-to-video';
-const SEEDANCE_SLUGS  = new Set([MODEL_SLUG_FAST, MODEL_SLUG_PRO, 'seedance-2', 'seedance-1-pro', 'seedance-1-lite']);
-function seedanceSlugFor(model: string | null | undefined): string {
-  return model === 'pro' ? MODEL_SLUG_PRO : MODEL_SLUG_FAST;
-}
 
 // Whether the given slug routes through Vidu's API (different request body).
 function isViduModel(slug: string): boolean {
@@ -618,14 +609,16 @@ async function handleRequest(req: Request): Promise<Response> {
   const { data: fallbackSetting } = await admin
     .from('app_settings').select('value').eq('key', 'look_video_fallback').maybeSingle();
   const allowProductBlindFallback = fallbackSetting?.value === 'true';
-  // If the platform is still set to a Seedance variant, respect the user's
-  // fast/pro quality choice from gen.model; otherwise use the platform slug.
-  const modelSlug = SEEDANCE_SLUGS.has(platformSlug)
+  // Seedance 2.0 (and the legacy aliases) expose fast/pro tiers, so the dial
+  // value is rewritten to honour the shopper's gen.model choice. Everything
+  // else — Seedance 2.5, Veo, Vidu, Gemini Omni — is a single endpoint and is
+  // used verbatim, which makes the fast/pro toggle a no-op on those.
+  const modelSlug = hasSeedanceTiers(platformSlug)
     ? seedanceSlugFor(gen.model)
     : platformSlug;
 
   const isVeo = isVeoFalModel(modelSlug);
-  const isSeedance = SEEDANCE_SLUGS.has(modelSlug);
+  const isSeedance = isSeedanceModel(modelSlug);
   const isGeminiOmni = isGeminiOmniModel(modelSlug);
   // Models that take exactly ONE face image (products fill the remaining slots):
   // Veo (face only, no products), Seedance, and Gemini Omni.
@@ -890,7 +883,7 @@ async function handleRequest(req: Request): Promise<Response> {
       + taggedPrompt.replace(/@Image(\d+)/g, (_m, n) => `<IMAGE_REF_${Number(n) - 1}>`)
       + ' The person simply keeps their mouth closed and does NOT speak, talk, or move their lips (no dialogue, no lip-sync) — but their face and features stay exactly as in the reference. Silent clip: no voiceover, no talking, no music.';
     submitResult = await submitToGeminiOmni(modelSlug, geminiPrompt, referenceUrls, durationSeconds, falKey, webhookUrl);
-  } else if (SEEDANCE_SLUGS.has(modelSlug) || modelSlug.startsWith('bytedance/')) {
+  } else if (isSeedance) {
     // The face reference is grid-overlaid (bypass); this cue suppresses any grid
     // artifact so the rendered person is clean, not meshed.
     const seedancePrompt = taggedPrompt
