@@ -26,8 +26,12 @@ export const VIDEO_MODEL_PRICING: ModelPricing[] = [
   { value: 'seedance-2', label: 'Seedance 2', group: 'Seedance (fal.ai)', provider: 'fal', costUsd: 0.30 },
   { value: 'bytedance/seedance-2.0/fast/image-to-video', label: 'Seedance 2 Fast', group: 'Seedance (fal.ai)', provider: 'fal', costUsd: 0.15 },
   // reference-to-video (multi-image) — what the "see it on me" try-on uses.
-  { value: 'bytedance/seedance-2.0/fast/reference-to-video', label: 'Seedance 2 Fast (ref)', group: 'Seedance (fal.ai)', provider: 'fal', costUsd: 0.15, multiImage: true, notes: 'Face + product packshots; up to 9 refs' },
-  { value: 'bytedance/seedance-2.0/reference-to-video', label: 'Seedance 2 Pro (ref)', group: 'Seedance (fal.ai)', provider: 'fal', costUsd: 0.30, multiImage: true, notes: 'Face + product packshots; up to 9 refs' },
+  // Seedance bills PER SECOND at 720p, so these are fal's published rate x5s:
+  // 2.0 fast $0.2419/s, 2.0 pro $0.3034/s, 2.5 $0.4730/s. The try-on renders a
+  // 10s clip, i.e. double these numbers per look.
+  { value: 'bytedance/seedance-2.0/fast/reference-to-video', label: 'Seedance 2 Fast (ref)', group: 'Seedance (fal.ai)', provider: 'fal', costUsd: 1.21, multiImage: true, notes: 'Face + product packshots; up to 9 refs' },
+  { value: 'bytedance/seedance-2.0/reference-to-video', label: 'Seedance 2 Pro (ref)', group: 'Seedance (fal.ai)', provider: 'fal', costUsd: 1.52, multiImage: true, notes: 'Face + product packshots; up to 9 refs' },
+  { value: 'bytedance/seedance-2.5/reference-to-video', label: 'Seedance 2.5 (ref)', group: 'Seedance (fal.ai)', provider: 'fal', costUsd: 2.37, multiImage: true, notes: 'Face + product packshots; up to 9 refs. No fast/pro tiers; 720p max' },
   { value: 'seedance-1-pro', label: 'Seedance 1 Pro', group: 'Seedance (fal.ai)', provider: 'fal', costUsd: 0.25 },
   { value: 'seedance-1-lite', label: 'Seedance 1 Lite', group: 'Seedance (fal.ai)', provider: 'fal', costUsd: 0.10 },
 
