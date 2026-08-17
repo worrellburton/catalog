@@ -381,6 +381,15 @@ function UserMenu({
     requestAnimationFrame(() => action());
   }, []);
 
+  // Resolved AFTER mount, not during render: the Remix server has no document,
+  // so a render-time check would make the server and first client render
+  // disagree and trip a hydration mismatch. Mirrors the data-shell convention
+  // used elsewhere (app/routes/_index.tsx).
+  const [inNativeShell, setInNativeShell] = useState(false);
+  useEffect(() => {
+    setInNativeShell(document.documentElement.dataset.shell === 'catalog-app');
+  }, []);
+
   // Tile click closes the menu before opening the target so the menu's
   // animation doesn't fight the overlay's entrance animation.
   const runTile = useCallback((action: () => void) => () => {
@@ -715,6 +724,22 @@ function UserMenu({
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
                   <span>Log out</span>
                 </button>
+                {/* Shell only: App Store guideline 5.1.1(v) requires an in-app
+                    path to account deletion. The confirmation and the delete
+                    itself are native — this row only opens the native screen. */}
+                {inNativeShell && (
+                  <button
+                    className="user-menu-item"
+                    onClick={runItem(() => {
+                      (window as unknown as {
+                        flutter_inappwebview?: { callHandler?: (name: string) => void };
+                      }).flutter_inappwebview?.callHandler?.('catalogDeleteAccount');
+                    })}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                    <span>Delete account</span>
+                  </button>
+                )}
               </>
             )}
             {/* Signed out → a way IN. (The trigger normally routes guests
