@@ -94,10 +94,23 @@ html [data-beam][data-paused] [data-beam-bloom] {
 .su-composer-beam {
   flex: 0 0 auto;
   min-width: 0;
-  margin: 6px 12px calc(10px + env(safe-area-inset-bottom));
+  /* bottom lifted 10px → 22px → 34px: the founder found the bar still sitting a
+     tad too low after the first lift. This wrapper owns the composer's outer
+     spacing (the pill zeroes its own margin below), so this is the one knob for
+     the bar's height. */
+  margin: 6px 12px calc(34px + env(safe-area-inset-bottom));
 }
 .su-composer-beam > .su-composer {
   margin: 0;
+}
+
+/* StyleUp look-card "Change" pill. The <Beam> wrapper becomes the flex child in
+   .su-lookcard-row, so it inherits the pill's flex role (0 0 auto, right-pinned)
+   and hugs it; the button keeps its own 999px radius so the beam traces the
+   capsule, not a rectangle. */
+.su-lookcard-change-beam {
+  flex: 0 0 auto;
+  display: inline-flex;
 }
 
 /* Create look — upload dropzone. .media-uploader-wrap stacks the zone above

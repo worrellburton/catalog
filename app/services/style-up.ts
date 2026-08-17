@@ -291,6 +291,22 @@ export async function fetchProductVideos(
   return out;
 }
 
+/** Resolve each look-card piece's garment slot from the GOVERNED type (falling
+ *  back to the name). The name heuristic alone can't place iconic sneakers whose
+ *  names carry no shoe word ("Samba OG", "Air Force 1", "Achilles Low"), so those
+ *  rows lost their "Change" affordance — this looks the type up by id and fixes
+ *  them. Only garment roles are returned; genuine non-garments are omitted. */
+export async function fetchProductRoles(ids: string[]): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  if (!supabase || ids.length === 0) return out;
+  const { data } = await supabase.from('products').select('id, type, name').in('id', ids);
+  for (const r of (data ?? []) as Array<{ id: string; type: string | null; name: string | null }>) {
+    const role = roleForProduct(r.type, r.name);
+    if (role) out[String(r.id)] = role;
+  }
+  return out;
+}
+
 /** The thread's server-side "web hunt in progress" marker (a future timestamp
  *  while the edge function is still pulling pieces, else null/past). Drives the
  *  working indicator so it survives refresh/navigation. */
@@ -1044,6 +1060,19 @@ export async function fetchSwapOptions(
   const occKw = kw(opts.occasion ?? '');
   const avoid = (opts.avoidColors ?? []).map(c => c.toLowerCase());
 
+  // Creative-media preference (founder ask): a swap card plays a product's
+  // primary VIDEO when it has one, else its photo. Nudge video-having options up
+  // so the cards more often show the richer creative media. One batched id lookup
+  // — covers both the slot-search and legacy candidate paths without touching the
+  // shared style_slot_search RPC.
+  const withVideo = new Set<string>();
+  const candidateIds = [...new Set((data ?? []).map(p => p.id).filter(Boolean))];
+  if (candidateIds.length) {
+    const { data: vids } = await supabase
+      .from('products').select('id').in('id', candidateIds).not('primary_video_url', 'is', null);
+    for (const r of (vids ?? []) as Array<{ id: string }>) withVideo.add(String(r.id));
+  }
+
   const scored: Array<{ ref: StyleUpProductRef; score: number; idx: number }> = [];
   let idx = 0;
   for (const p of (data ?? []) as SwapRow[]) {
@@ -1062,6 +1091,10 @@ export async function fetchSwapOptions(
     if (opts.formality === 'dressier') score += (CASUAL_RE.test(text) ? -3 : 0) + (FORMAL_RE.test(text) ? 1 : 0);
     if (opts.simpler && LOUD_RE.test(text)) score -= 2;          // simplicity (#3)
     score += Math.max(0, 1 - idx / SWAP_FETCH_LIMIT) * 0.5;      // gentle recency tiebreak
+    // ponytail: fixed creative-media preference weight — > the recency tiebreak
+    // (0.5) so it decides among comparable fits, < one occasion hit (+2) so a
+    // clearly better-fitting piece without a video still wins. Tune if fit regresses.
+    if (withVideo.has(p.id)) score += 1;                         // prefer creative media
 
     scored.push({
       idx,

@@ -855,7 +855,8 @@ html[data-shell="catalog-app"] .su-shell {
 .su-swap-opt:active { transform: scale(0.97); }
 .su-swap-opt:disabled { opacity: 0.55; cursor: default; }
 .su-swap-opt-media { width: 100%; aspect-ratio: 3 / 4; background: #26282d; }
-.su-swap-opt-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
+.su-swap-opt-media img,
+.su-swap-opt-media video { width: 100%; height: 100%; object-fit: cover; display: block; }
 .su-swap-opt-info { display: flex; flex-direction: column; gap: 1px; padding: 0 8px 9px; min-width: 0; }
 .su-swap-opt-brand { font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.03em; color: var(--su-accent); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .su-swap-opt-name { font-size: 11.5px; line-height: 1.25; color: #e7e7ea; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
@@ -872,10 +873,17 @@ html[data-shell="catalog-app"] .su-shell {
 .su-choose-prompt { font-size: 12px; font-weight: 700; color: var(--su-accent); margin-bottom: 10px; }
 .su-choose-options { display: flex; flex-wrap: wrap; gap: 8px; }
 .su-choose-options--cards { gap: 8px; }
-/* Setting picker: one option per row, full width, so the choices stack
-   vertically instead of wrapping into an uneven 2-up grid. */
-.su-choose-options--stack { flex-direction: column; flex-wrap: nowrap; align-items: stretch; }
-.su-choose-options--stack .su-choose-opt { width: 100%; justify-content: center; }
+/* Scene picker: a responsive grid of backdrop thumbnails; the text options (the
+   leading "Suggested" guess when it isn't a preset, and "Somewhere else…") span
+   the full row as pills below the cards. */
+.su-choose-options--scene {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(92px, 1fr));
+  gap: 8px;
+  align-items: start;
+}
+.su-choose-options--scene .su-choose-opt--card { width: 100%; }
+.su-choose-options--scene .su-choose-opt:not(.su-choose-opt--card) { grid-column: 1 / -1; justify-content: center; }
 .su-choose-opt {
   display: inline-flex; align-items: center; gap: 7px;
   padding: 8px 14px;
@@ -906,6 +914,15 @@ html[data-shell="catalog-app"] .su-shell {
   cursor: pointer;
 }
 .su-choose-go:disabled { opacity: 0.45; cursor: default; }
+/* Freeform setting field revealed by the scene picker's "Somewhere else…". */
+.su-choose-custom { display: flex; gap: 8px; margin-top: 8px; }
+.su-choose-custom-input {
+  flex: 1 1 auto; min-width: 0; height: 40px; padding: 0 14px;
+  border-radius: 999px; border: 1px solid #2a2c31; background: #1c1d21;
+  font-size: 14px; color: #e7e7ea; outline: none;
+}
+.su-choose-custom-input:focus { border-color: var(--su-accent); }
+.su-choose-custom .su-choose-go { margin-top: 0; width: auto; padding: 9px 18px; border-radius: 999px; }
 
 /* On-you render bubble. */
 .su-render {
@@ -1373,6 +1390,7 @@ html[data-shell="catalog-app"] .su-shell {
 .su-lookcard-media img,
 .su-lookcard-media video,
 .su-swap-opt-media img,
+.su-swap-opt-media video,
 .su-choose-opt-media img,
 .su-render-piece img { animation: su-develop 0.85s ease both; }
 
@@ -1434,7 +1452,10 @@ html[data-shell="catalog-app"] .su-shell {
 /* ── Frosted floating chrome — the composer becomes a glass pill and the
       chat dissolves under the header instead of hard-clipping. ─────────── */
 .su-composer {
-  margin: 6px 12px calc(10px + env(safe-area-inset-bottom));
+  /* Kept in sync with .su-composer-beam's bottom margin (beam-hosts.css) — the
+     wrapper zeroes this when the beam is present, so this value only applies if
+     the composer is ever rendered un-wrapped. Lifted 10px → 22px → 34px to match. */
+  margin: 6px 12px calc(34px + env(safe-area-inset-bottom));
   padding: 7px 8px 7px 10px;
   border: 1px solid rgba(255, 255, 255, 0.08);
   border-radius: 999px;
@@ -1472,6 +1493,7 @@ html[data-shell="catalog-app"] .su-shell {
   .su-lookcard-media img,
   .su-lookcard-media video,
   .su-swap-opt-media img,
+  .su-swap-opt-media video,
   .su-choose-opt-media img,
   .su-render-piece img,
   .su-render-you::before,
