@@ -925,6 +925,23 @@ function UserMenu({
                   <PageRow icon="logout" label="Log out" onClick={runPageItem(onLogout)} variant="danger" />
                 )}
 
+                {/* Shell only: App Store guideline 5.1.1(v) in-app account
+                    deletion. The confirm + delete are native; this row opens
+                    the native screen. Lives on the full-screen account page
+                    (what the shell actually shows) — the popover has its own. */}
+                {user && inNativeShell && (
+                  <PageRow
+                    icon="trash"
+                    label="Delete account"
+                    variant="danger"
+                    onClick={runPageItem(() => {
+                      (window as unknown as {
+                        flutter_inappwebview?: { callHandler?: (name: string) => void };
+                      }).flutter_inappwebview?.callHandler?.('catalogDeleteAccount');
+                    })}
+                  />
+                )}
+
                 {/* Super-admin entry — only visible to super_admin role, sits
                     on its own at the bottom of the consumer list. Routes to
                     the super-admin sub-section instead of cluttering the
@@ -998,7 +1015,7 @@ function UserMenu({
 // Reusable row for the mobile Account page. The icon is keyed by name so
 // the row component stays compact; the SVGs are inline so we don't drag in
 // an icon library.
-type PageRowIcon = 'bookmark' | 'grid' | 'star' | 'wallet' | 'shield' | 'import' | 'deck' | 'logout' | 'chat';
+type PageRowIcon = 'bookmark' | 'grid' | 'star' | 'wallet' | 'shield' | 'import' | 'deck' | 'logout' | 'chat' | 'trash';
 function PageRow({ icon, label, onClick, badge, trailing, variant }: {
   icon: PageRowIcon;
   label: string;
@@ -1019,6 +1036,7 @@ function PageRow({ icon, label, onClick, badge, trailing, variant }: {
         {icon === 'import' && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>}
         {icon === 'deck' && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="9" y1="4" x2="9" y2="20"/></svg>}
         {icon === 'logout' && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>}
+        {icon === 'trash' && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>}
       </span>
       <span className="user-menu-page-row-label">{label}</span>
       {badge != null && <span className="user-menu-page-row-badge">{badge}</span>}
