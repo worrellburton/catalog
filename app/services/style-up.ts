@@ -549,6 +549,46 @@ export async function adminListThreads(): Promise<AdminThread[]> {
     .filter((x): x is AdminThread => !!x);
 }
 
+/** Admin: the header row for ONE conversation. The standalone chat page can be
+ *  opened cold (pasted URL, refresh) with no list in memory, so it needs the
+ *  shopper + stylist without pulling every thread. Message count / awaiting
+ *  state are left to the caller — it already holds the live transcript. */
+export async function adminGetThread(
+  threadId: string,
+): Promise<Pick<AdminThread, 'threadId' | 'shopper' | 'stylist' | 'lastMessageAt'> | null> {
+  if (!supabase || !threadId) return null;
+  const { data: t } = await supabase
+    .from('style_up_threads')
+    .select(`id, shopper_user_id, last_message_at, ${STYLIST_JOIN}`)
+    .eq('id', threadId)
+    .maybeSingle();
+  if (!t) return null;
+  const shopperId = String(t.shopper_user_id);
+  const raw = Array.isArray(t.stylist) ? t.stylist[0] : t.stylist;
+  return {
+    threadId: String(t.id),
+    shopper: (await shopperMap([shopperId])).get(shopperId)
+      ?? { id: shopperId, name: 'Shopper', avatarUrl: null },
+    stylist: mapStylist((raw ?? {}) as Record<string, unknown>),
+    lastMessageAt: (t.last_message_at as string | null) ?? null,
+  };
+}
+
+/** Admin: status + video for the render messages inside one transcript, so the
+ *  chat page can play the look inline instead of naming its id. */
+export async function adminRenderVideos(
+  genIds: string[],
+): Promise<Map<string, { status: string; videoUrl: string | null }>> {
+  const out = new Map<string, { status: string; videoUrl: string | null }>();
+  if (!supabase || genIds.length === 0) return out;
+  const { data } = await supabase
+    .from('user_generations').select('id, status, video_url').in('id', genIds);
+  for (const g of (data ?? []) as Array<{ id: string; status: string; video_url: string | null }>) {
+    out.set(g.id, { status: g.status, videoUrl: g.video_url });
+  }
+  return out;
+}
+
 /** All StyleUp-generated looks (render messages) with their generation status,
  *  video, the shopper, stylist, and the pieces in the look. */
 export async function adminListLooks(limit = 120): Promise<AdminLook[]> {

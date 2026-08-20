@@ -204,3 +204,42 @@
 .admin-dark .sua-table td { border-bottom-color: #1c1d21; }
 .admin-dark .sua-table-row:hover td { background: #141518; }
 .admin-dark .sua-table-pieces { color: #8b8e96; }
+
+/* ── One conversation, on its own page (admin/style.$threadId) ───────────── */
+/* Anchors used as buttons/rows — no underline, no inherited link blue. */
+.sua-row-main { display: block; color: inherit; text-decoration: none; }
+a.sua-btn { display: inline-flex; align-items: center; text-decoration: none; }
+a.admin-btn { text-decoration: none; }
+
+.suc-back { display: inline-block; margin-bottom: 14px; font-size: 13px; font-weight: 700; color: #6b7280; text-decoration: none; }
+.suc-back:hover { color: #14151a; }
+.suc-head { display: flex; align-items: center; gap: 14px; margin-bottom: 18px; }
+.suc-head .sua-avatar { width: 52px; height: 52px; font-size: 20px; }
+.suc-head-id { flex: 1 1 auto; min-width: 0; }
+.suc-head .sua-title { font-size: 22px; }
+
+.suc-transcript {
+  margin-top: 18px; padding: 18px; border: 1px solid #ececf0; border-radius: 16px;
+  background: #fafbfc; display: flex; flex-direction: column; gap: 10px;
+}
+/* The bubble + its timestamp stack; the column carries the width cap so the
+   time sits under the bubble edge rather than stretching it. */
+.suc-msg-col { display: flex; flex-direction: column; min-width: 0; max-width: 80%; }
+.sua-msg--shopper .suc-msg-col { align-items: flex-end; }
+.suc-msg-col .sua-bubble { max-width: 100%; }
+.suc-msg-time { font-size: 10.5px; color: #9ca3af; margin: 3px 6px 0; }
+
+.suc-render { width: 190px; border: 1px solid #e8e9ec; border-radius: 14px; overflow: hidden; background: #fff; }
+.suc-render-video { display: block; width: 100%; aspect-ratio: 9 / 16; object-fit: cover; background: #0d0e10; }
+.suc-render-video--empty { display: flex; align-items: center; justify-content: center; color: #c7c9cf; font-size: 12px; }
+.suc-render-foot { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 8px 10px; font-size: 12px; color: #4b5563; }
+
+.suc-research { margin-top: 18px; border: 1px solid #ececf0; border-radius: 16px; background: #fff; overflow: hidden; }
+
+.admin-dark .suc-back { color: #8b8e96; }
+.admin-dark .suc-back:hover { color: #e7e7ea; }
+.admin-dark .suc-transcript { background: #0d0e10; border-color: #26282d; }
+.admin-dark .suc-msg-time { color: #6b7280; }
+.admin-dark .suc-render { background: #17181c; border-color: #26282d; }
+.admin-dark .suc-render-foot { color: #c7c9cf; }
+.admin-dark .suc-research { background: #141518; border-color: #26282d; }

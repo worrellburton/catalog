@@ -1,32 +1,32 @@
 // Admin · Style — the observatory over everything happening in StyleUp.
 // Two tabs (?tab=):
-//   chat        — every shopper↔stylist conversation, live, READ-ONLY
-//                 (transcript + research-trace drawers; no replying/deleting).
+//   chat        — index of every shopper↔stylist conversation, live. Each row
+//                 opens its own page (style.$threadId.tsx) — transcript +
+//                 research trace, READ-ONLY (no replying/deleting).
 //   generations — every on-you render in a sortable table; clicking a row
 //                 opens a node overlay showing exactly how the generation
 //                 happened (inputs → pieces → prompt → model → output).
 // Both tabs poll while open so the floor updates live.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { useSearchParams } from '@remix-run/react';
+import { Link, useSearchParams } from '@remix-run/react';
 import {
-  adminListThreads, adminListLooks, fetchMessages, adminListTraces,
-  type AdminThread, type AdminLook, type StyleUpMessage, type StyleUpTrace,
+  adminListThreads, adminListLooks,
+  type AdminThread, type AdminLook,
 } from '~/services/style-up';
 import { getGenerationDetail, type UserGeneration, type UserUpload } from '~/services/user-generations';
 import { roleTagFromName } from '~/services/product-roles';
-import StyleUpTraceDiagram from '~/components/style-up/StyleUpTraceDiagram';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
 import '~/styles/admin-style-up.css';
 
-function fmtTime(iso: string | null): string {
+export function fmtTime(iso: string | null): string {
   if (!iso) return '';
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
   return d.toLocaleString(undefined, { month: 'short', day: 'numeric', hour: 'numeric', minute: '2-digit' });
 }
 
-function statusClass(s: string): string {
+export function statusClass(s: string): string {
   if (s === 'done') return 'sua-pill sua-pill--done';
   if (s === 'failed') return 'sua-pill sua-pill--failed';
   return 'sua-pill sua-pill--pending';
@@ -145,16 +145,6 @@ export default function AdminStylePage() {
   const [looks, setLooks] = useState<AdminLook[]>([]);
   const [loading, setLoading] = useState(true);
 
-  // Read-only transcript drawer.
-  const [openThread, setOpenThread] = useState<AdminThread | null>(null);
-  const [transcript, setTranscript] = useState<StyleUpMessage[]>([]);
-
-  // Research-trace drawer.
-  const [traceThread, setTraceThread] = useState<AdminThread | null>(null);
-  const [traces, setTraces] = useState<StyleUpTrace[]>([]);
-  const [traceIdx, setTraceIdx] = useState(0);
-  const [traceLoading, setTraceLoading] = useState(false);
-
   // Generation node overlay.
   const [openLook, setOpenLook] = useState<AdminLook | null>(null);
   const [openGen, setOpenGen] = useState<UserGeneration | null>(null);
@@ -174,28 +164,6 @@ export default function AdminStylePage() {
     const h = window.setInterval(() => { void load(); }, 5000);
     return () => window.clearInterval(h);
   }, [load]);
-
-  // Live transcript while a conversation drawer is open.
-  useEffect(() => {
-    if (!openThread) return;
-    let cancelled = false;
-    const tick = async () => {
-      const msgs = await fetchMessages(openThread.threadId);
-      if (!cancelled) setTranscript(msgs);
-    };
-    void tick();
-    const h = window.setInterval(tick, 4000);
-    return () => { cancelled = true; window.clearInterval(h); };
-  }, [openThread]);
-
-  const openTraces = useCallback(async (t: AdminThread) => {
-    setTraceThread(t);
-    setTraces([]);
-    setTraceIdx(0);
-    setTraceLoading(true);
-    setTraces(await adminListTraces(t.threadId));
-    setTraceLoading(false);
-  }, []);
 
   // Open the node overlay with the FULL generation row ("everything"),
   // including the shopper photos that were sent to the model.
@@ -249,22 +217,21 @@ export default function AdminStylePage() {
                 <span className="sua-avatar" aria-hidden="true">
                   {t.shopper.avatarUrl ? <img src={t.shopper.avatarUrl} alt="" /> : (t.shopper.name[0] || '?')}
                 </span>
-                <div className="sua-row-main" onClick={() => setOpenThread(t)} role="button" tabIndex={0}
-                     onKeyDown={e => { if (e.key === 'Enter') setOpenThread(t); }}>
+                <Link className="sua-row-main" to={`/admin/style/${t.threadId}`}>
                   <div className="sua-row-top">
                     <span className="sua-row-name">{t.shopper.name}</span>
                     <span className="sua-row-with">with <b style={{ color: t.stylist.accentColor ?? '#8aa0c0' }}>{t.stylist.name}</b></span>
                     {t.awaitingStylist && <span className="sua-badge">Awaiting reply</span>}
                   </div>
                   <div className="sua-row-preview">{t.lastMessage || '—'}</div>
-                </div>
+                </Link>
                 <div className="sua-row-meta">
                   <span className="sua-row-count">{t.messageCount} msg{t.messageCount === 1 ? '' : 's'}</span>
                   <span className="sua-row-time">{fmtTime(t.lastMessageAt)}</span>
                 </div>
                 <div className="sua-row-actions">
-                  <button type="button" className="sua-btn" onClick={() => setOpenThread(t)}>Open</button>
-                  <button type="button" className="sua-btn" onClick={() => void openTraces(t)}>Research</button>
+                  <Link className="sua-btn" to={`/admin/style/${t.threadId}`}>Open</Link>
+                  <Link className="sua-btn" to={`/admin/style/${t.threadId}?view=research`}>Research</Link>
                 </div>
               </div>
             ))}
@@ -312,82 +279,6 @@ export default function AdminStylePage() {
         </section>
       )}
 
-      {/* ── Read-only transcript drawer ──────────────────────────────────── */}
-      {openThread && (
-        <div className="sua-drawer-backdrop" onClick={() => setOpenThread(null)}>
-          <div className="sua-drawer" onClick={e => e.stopPropagation()}>
-            <div className="sua-drawer-head">
-              <span className="sua-avatar" aria-hidden="true">
-                {openThread.shopper.avatarUrl ? <img src={openThread.shopper.avatarUrl} alt="" /> : (openThread.shopper.name[0] || '?')}
-              </span>
-              <div className="sua-drawer-id">
-                <span className="sua-row-name">{openThread.shopper.name}</span>
-                <span className="sua-row-with">with <b style={{ color: openThread.stylist.accentColor ?? '#8aa0c0' }}>{openThread.stylist.name}</b> · live</span>
-              </div>
-              <button type="button" className="sua-drawer-close" onClick={() => setOpenThread(null)} aria-label="Close">✕</button>
-            </div>
-            <div className="sua-transcript">
-              {transcript.map(m => {
-                if (m.kind === 'render') {
-                  return (
-                    <div key={m.id} className="sua-msg sua-msg--stylist">
-                      <div className="sua-msg-render">On-you look {m.renderGenerationId ? `(${m.renderGenerationId.slice(0, 8)})` : ''}</div>
-                    </div>
-                  );
-                }
-                if (m.kind === 'product' && m.productRef) {
-                  return (
-                    <div key={m.id} className="sua-msg sua-msg--stylist">
-                      <div className="sua-msg-product">
-                        {m.productRef.image && <img src={m.productRef.image} alt="" />}
-                        <span>{[m.productRef.brand, m.productRef.name].filter(Boolean).join(' · ') || 'Product'}</span>
-                      </div>
-                    </div>
-                  );
-                }
-                return (
-                  <div key={m.id} className={`sua-msg sua-msg--${m.sender}`}>
-                    <div className="sua-bubble">{m.body}</div>
-                  </div>
-                );
-              })}
-              {transcript.length === 0 && <div className="sua-empty">No messages.</div>}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* ── Research-trace drawer ─────────────────────────────────────────── */}
-      {traceThread && (
-        <div className="sua-drawer-backdrop" onClick={() => setTraceThread(null)}>
-          <div className="sua-drawer sua-drawer--wide" onClick={e => e.stopPropagation()}>
-            <div className="sua-drawer-head">
-              <div className="sua-drawer-id">
-                <span className="sua-row-name">Research</span>
-                <span className="sua-row-with">{traceThread.shopper.name} with <b style={{ color: traceThread.stylist.accentColor ?? '#8aa0c0' }}>{traceThread.stylist.name}</b></span>
-              </div>
-              <button type="button" className="sua-drawer-close" onClick={() => setTraceThread(null)} aria-label="Close">✕</button>
-            </div>
-            {traces.length > 1 && (
-              <div className="sua-trace-turns">
-                {traces.map((tr, i) => (
-                  <button key={tr.id} type="button" className={`sua-trace-turn${i === traceIdx ? ' is-active' : ''}`} onClick={() => setTraceIdx(i)}>
-                    {fmtTime(tr.createdAt)}{tr.sourceMode === 'web' ? ' · web' : ''}
-                  </button>
-                ))}
-              </div>
-            )}
-            <div className="sua-trace-body">
-              {traceLoading && <div className="sua-empty">Loading…</div>}
-              {!traceLoading && traces.length === 0 && (
-                <div className="sua-empty">No research traces for this conversation yet. Traces are recorded on new stylist turns.</div>
-              )}
-              {!traceLoading && traces[traceIdx] && <StyleUpTraceDiagram trace={traces[traceIdx]} />}
-            </div>
-          </div>
-        </div>
-      )}
-
       {/* ── Generation graph modal (matches the Data page's Polish graph) ── */}
       {openLook && (
         <div className="admin-modal-overlay" onClick={() => { setOpenLook(null); setOpenGen(null); }}>
@@ -400,10 +291,16 @@ export default function AdminStylePage() {
                 </span>
                 <span style={{ color: '#94a3b8', fontWeight: 500 }}> · {fmtTime(openLook.createdAt)}</span>
               </h2>
-              <button type="button" className="admin-btn admin-btn-secondary" style={{ padding: '6px 12px', fontSize: 12 }}
-                onClick={() => { setOpenLook(null); setOpenGen(null); }}>
-                Close
-              </button>
+              <div style={{ display: 'flex', gap: 8 }}>
+                <Link className="admin-btn admin-btn-secondary" style={{ padding: '6px 12px', fontSize: 12 }}
+                  to={`/admin/style/${openLook.threadId}`}>
+                  Open conversation
+                </Link>
+                <button type="button" className="admin-btn admin-btn-secondary" style={{ padding: '6px 12px', fontSize: 12 }}
+                  onClick={() => { setOpenLook(null); setOpenGen(null); }}>
+                  Close
+                </button>
+              </div>
             </div>
             {openLook.generationId && !openGen
               ? <div style={{ padding: 32, textAlign: 'center', color: '#94a3b8', fontSize: 13 }}>Loading generation…</div>

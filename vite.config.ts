@@ -306,6 +306,9 @@ export default defineConfig({
             route("user/:name", "routes/admin/user.$name.tsx");
             route("brand/:name", "routes/admin/brand.$name.tsx");
             route("style", "routes/admin/style.tsx");
+            // Each conversation is its own page (shareable / refreshable),
+            // not a drawer over the list.
+            route("style/:threadId", "routes/admin/style.$threadId.tsx");
             // Legacy path — old links keep resolving to the same page.
             route("style-up", "routes/admin/style.tsx", { id: "admin/style-up-legacy" });
           });
