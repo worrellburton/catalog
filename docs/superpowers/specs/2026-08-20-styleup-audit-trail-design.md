@@ -10,12 +10,31 @@ we can audit? Also show context about how each item is pulled?"
 Two audit gaps on `/admin/style`, verified against live data rather than inferred
 from the UI.
 
-**1. A generation is not a sequence.** `user_generations` carries `created_at` and
-`completed_at` and nothing between — no event table, no intermediate timestamps
-(confirmed against `information_schema`; the 28 columns include neither). The
-existing admin graph is three nodes (Input → Model → Output) because that is all
-the stored data supports. A four-minute render cannot be split into "sat in our
-queue" versus "Fal was slow".
+**1. A generation's real sequence is recorded but never read.** `user_generations`
+itself carries only `created_at` and `completed_at`. But `generation_events`
+(`generation_id, event, payload jsonb, created_at`) already holds a timestamped
+step log, written best-effort by `generate-look` and `fal-webhook`: **611 rows,
+12 event types, back to 2026-05-01, covering 120 of 135 generations.** A real
+render reads:
+
+```
+submit_attempt         15:58:42          model, face_count, product_count
+image_rehost_faces     15:58:45   +3.0s  bytes + public_url per face
+image_rehost_products  15:58:48   +3.3s  bytes + public_url per product
+seedance_face_grid     15:58:52   +3.1s  faces, gridded
+fal_submit_ok          15:58:53   +1.5s  request_id, model, prompt_preview
+fal_webhook            16:03:17  +264.3s status, error, fal_body
+```
+
+Eleven seconds of our own preprocessing, then 264 seconds of Fal. The admin UI
+shows none of it — it renders a three-node Input → Model → Output summary built
+from `user_generations` columns alone. **This half of the work is therefore pure
+read-side: no migration, no write change, and retroactive over 120 generations.**
+
+(Superseded design note: an earlier draft of this spec proposed a `submitted_at`
+column on `user_generations`. `fal_submit_ok.created_at` already *is* that
+timestamp, recorded 116 times historically. The column would have duplicated
+existing data and only worked going forward. Do not add it.)
 
 **2. Per-item retrieval provenance is computed and then thrown away.** This is the
 sharper of the two.
@@ -47,6 +66,13 @@ Neither is visible in any stored trace.
 - **The trace surface exists.** `style_up_traces(payload jsonb, searches jsonb)` and
   `StyleUpTraceDiagram` already render an expandable node-per-step diagram with a
   precedent for honest empty states ("No search results recorded (older turn…)").
+- **The step log already exists and is already written.** `generation_events` is
+  populated from `generate-look` (`submit_attempt`, `image_rehost_faces`,
+  `image_rehost_products`, `seedance_face_grid`, `fal_submit_ok`,
+  `fal_submit_fail`, `fal_submit_fallback`, `fal_submit_fallback_skipped`,
+  `content_policy_fallback`) and `fal-webhook` (`fal_webhook`), plus
+  `watchdog_timeout` and `name_look_fail`. Each carries a `payload jsonb` with
+  the step's real detail. Nothing needs to be written for the spine — only read.
 - **A time-proportional spine already exists.** `pipeline.product.$id.tsx` renders a
   log-scaled timeline where vertical gap encodes waiting
   ([`gapPx`](../../../app/routes/admin/pipeline.product.$id.tsx)). The generation
@@ -127,17 +153,28 @@ existing `searches` column; `retrieval` is absent on those traces.
 **Growth:** 5 KB per stylist turn, unbounded. Acceptable at 47 traces, and revisited
 with a retention policy well before 47,000. Not solved now.
 
-### 3. `user_generations.submitted_at`
+### 3. `generation_events` catch-up migration
 
-One nullable `timestamptz` column, migration
-`20260820000000_generation_submitted_at.sql`, written at
-[`generate-look/index.ts:959`](../../../supabase/functions/generate-look/index.ts)
-alongside `fal_request_id`. It splits the total elapsed time into queue wait
-(`created_at → submitted_at`) and model time (`submitted_at → completed_at`).
+The table exists in the database but has **no migration file** — it was created
+out-of-band, so the repo is not currently the source of truth for it. Add
+`20260820000000_generation_events_catchup.sql` containing a
+`create table if not exists` matching the live shape, plus the index the spine
+query needs:
 
-Null on all existing rows and on any future row where the handoff never happened.
-The spine renders an unmeasured segment in that case; it never shows a wait it
-did not observe.
+```sql
+create table if not exists public.generation_events (
+  id            bigserial primary key,
+  generation_id uuid not null references public.user_generations(id) on delete cascade,
+  event         text not null,
+  payload       jsonb,
+  created_at    timestamptz not null default now()
+);
+create index if not exists generation_events_gen_created_idx
+  on public.generation_events (generation_id, created_at);
+```
+
+`if not exists` throughout, so applying it against the live database is a no-op
+that only records the shape. No data is written or altered.
 
 ### 4. `/admin/style/g/:generationId`
 
@@ -152,19 +189,49 @@ so the page cannot leak into the consumer bundle.
 a chat (`style_up_messages` where `render_generation_id` matches), otherwise to
 `/admin/style?tab=generations`.
 
-**The spine** — six nodes, log-scaled gaps via the `pipeline.product.$id.tsx` idiom:
+**The spine** — one node per `generation_events` row for this generation, in
+`created_at` order, with log-scaled gaps via the `pipeline.product.$id.tsx` idiom.
+Nodes are rendered from the event log, not from a fixed list, so a retry, a
+fallback, or a watchdog timeout appears without any code change.
 
-| Node | Source | Detail shown |
+Each known event maps to a label and a one-line summary pulled from its payload:
+
+| `event` | Label | Summary from `payload` |
 |---|---|---|
-| Requested | `created_at`, `triggered_by_admin_id` | who kicked it off (shopper vs admin) |
-| Inputs | `user_generation_uploads`, `user_generation_products` | photo count, pieces head-to-toe |
-| Prompt built | `prompt` | length, expandable to the literal text |
-| Submitted | `submitted_at`, `fal_request_id`, `veo_model`, `model`, `duration_seconds` | request id, model slug |
-| Returned | `completed_at`, `status`, `error_code`, `error_raw` | 'ok' or the failure category |
-| Output | `video_url`, `storage_path`, `display_name` | the video, the Claude-given name |
+| `submit_attempt` | Submit attempt | `fal_model`, `face_count`, `product_count` |
+| `image_rehost_faces` | Faces re-hosted | count + total bytes from `stats[]` |
+| `image_rehost_products` | Products re-hosted | count + total bytes from `stats[]` |
+| `image_preflight` | Image preflight | payload as-is |
+| `seedance_face_grid` | Face grid built | `faces`, `gridded` |
+| `fal_submit_fallback` | Model fallback | from → to model |
+| `fal_submit_fallback_skipped` | Fallback skipped | reason |
+| `fal_submit_ok` | Submitted to Fal | `request_id`, `model`, `duration_seconds` |
+| `fal_submit_fail` | Submit failed | `error` (node marked failed) |
+| `content_policy_fallback` | Content-policy retry | payload as-is |
+| `watchdog_timeout` | Watchdog timeout | payload as-is (node marked failed) |
+| `fal_webhook` | Fal returned | `status`, `error` |
+| `name_look_fail` | Naming failed | `error` |
 
-Gaps carry labels only where both endpoints have timestamps — `created_at →
-submitted_at` as "queue wait" and `submitted_at → completed_at` as "model time".
+An **unrecognised** `event` string still renders — label falls back to the raw
+event name, summary to the first ~80 chars of the payload. A new event type added
+to an edge function shows up in the audit without a UI change; it never silently
+vanishes.
+
+Every node expands to its full `payload` JSON, same interaction as
+`StyleUpTraceDiagram`'s nodes.
+
+Two derived rows frame the log, drawn from `user_generations` because they are
+not events: **Requested** (`created_at`, `triggered_by_admin_id` → shopper vs
+admin, plus the linked uploads and pieces) at the top, and **Output**
+(`video_url`, `storage_path`, `display_name`, terminal `status`) at the bottom.
+
+Gaps are labelled from real adjacent timestamps. The `fal_submit_ok →
+fal_webhook` gap is the one that matters and gets called out as **model time**;
+everything before it is our own preprocessing.
+
+**The 15 generations with no events** (all pre-2026-05-01) render the two derived
+rows with an explicit "no step log — this render predates event capture
+(2026-05-01)" band between them. No inferred intermediate steps.
 
 Below the spine sits today's Input → Model → Output graph, **extracted** from
 `admin/style.tsx` into `app/components/style-up/GenerationDiagram.tsx` so both
@@ -227,7 +294,9 @@ both limits.
   capture)" plus the reconstruct button. Mirrors the existing `searches` empty state.
 - `style-retrace` failure → the error surfaces in the panel; nothing is written, so
   a failed reconstruction leaves no trace of itself.
-- `submitted_at` null → the spine renders the segment unmeasured. No inferred times.
+- A generation with no `generation_events` rows → the "no step log" band described
+  in §4. Never an inferred timeline.
+- An unrecognised `event` string → rendered with the raw name, never dropped.
 - A candidate id no longer in `products` → the stored `name`/`brand` still render.
 - Provenance capture is best-effort inside the existing `try` that already wraps the
   trace insert. A retrieval-recording bug must never fail a shopper's turn.
@@ -247,6 +316,17 @@ That is the branch worth pinning — it is the logic the whole provenance featur
 reports on, and it is where a silent regression would quietly mislabel every turn.
 `rank` correctness is covered incidentally by the same fixtures.
 
+A second unit test, `app/services/generation-spine.test.ts`, pins the pure
+`eventsToNodes(events)` mapper from §4:
+
+- A known event maps to its label and payload-derived summary.
+- An **unknown** event still produces a node, labelled with the raw event string —
+  the guarantee that a newly added edge-function event can never silently vanish
+  from an audit surface.
+- An empty event list produces no nodes, so the page renders the "no step log"
+  band rather than an empty spine.
+- `fal_submit_fail` and `watchdog_timeout` mark their node failed.
+
 The route pages, the spine layout, and the reconstruction round trip are verified by
 hand in the admin panel against real threads. No component-test harness exists in
 this repo and this design does not add one.
@@ -254,8 +334,6 @@ this repo and this design does not add one.
 ## Out of scope
 
 - Retention or pruning of `retrieval` payloads.
-- A `generation_events` table. `submitted_at` covers the one split that matters now;
-  the table is the upgrade path if retries or further steps need recording.
 - Backfilling reconstructions into storage — deliberately rejected in §6.
 - Any change to what the shopper sees. Every surface here is admin-only and
   read-only.
