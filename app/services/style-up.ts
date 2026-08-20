@@ -491,6 +491,19 @@ export function buildProvenanceIndex(
   return out;
 }
 
+/** Admin: replay retrieval for a trace that predates provenance capture. The
+ *  inputs are the originals; the candidate pool is today's catalog. Nothing is
+ *  stored — see the function's header comment. */
+export async function adminRetraceTrace(
+  traceId: string,
+): Promise<{ retrieval: StyleUpRetrieval; reconstructedAt: string } | { error: string }> {
+  if (!supabase) return { error: 'No database connection' };
+  const { data, error } = await supabase.functions.invoke('style-retrace', { body: { trace_id: traceId } });
+  if (error) return { error: error.message };
+  if (!data?.success) return { error: String(data?.error ?? 'retrace failed') };
+  return { retrieval: data.retrieval as StyleUpRetrieval, reconstructedAt: String(data.reconstructed_at) };
+}
+
 /** Enrich a turn's trace with the per-query web search results (client side). */
 export async function appendTraceSearches(traceId: string, searches: StyleUpTraceSearch[]): Promise<void> {
   if (!supabase || !traceId) return;
