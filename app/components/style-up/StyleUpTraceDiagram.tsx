@@ -1,5 +1,11 @@
 import { useState } from 'react';
-import type { StyleUpTrace } from '~/services/style-up';
+import type { StyleUpRetrieval, StyleUpTrace } from '~/services/style-up';
+
+export const TIER_TITLE: Record<number, string> = {
+  1: 'aesthetic + occasion (the intended query)',
+  2: 'occasion only — the stylist specialty emptied this slot',
+  3: 'occasion only, exclude list dropped — anti-repeat had exhausted the slot',
+};
 
 // Admin "view research" node diagram — a vertical flow of the steps that
 // produced one stylist turn: the context fed in, the stylist persona, exactly
@@ -51,6 +57,8 @@ export default function StyleUpTraceDiagram({ trace }: { trace: StyleUpTrace }) 
   const isWeb = trace.sourceMode === 'web';
   const searches = trace.searches ?? [];
   const importedCount = searches.filter(s => s.importedId).length;
+  const retrieval = (p.retrieval as StyleUpRetrieval | null) ?? null;
+  const pickedIds = new Set((p.product_ids as string[]) ?? []);
 
   return (
     <div className="sut">
@@ -77,6 +85,59 @@ export default function StyleUpTraceDiagram({ trace }: { trace: StyleUpTrace }) 
           </div>
         ))}
       </TraceNode>
+
+      {!isWeb && (() => {
+        // retrieval is a raw jsonb cast — absent on every trace written before
+        // this feature shipped, and null for web stylists. Slots/candidates can
+        // independently be missing on a malformed row, so every access below is
+        // guarded — this node must never throw and take out the whole page.
+        const slots = retrieval?.slots ?? [];
+        const candidates = retrieval?.candidates ?? [];
+        return (
+          <TraceNode
+            k="pool" icon="🎯" title="How the pool was pulled"
+            summary={retrieval
+              ? `${retrieval.method} · ${candidates.length} candidates · ${slots.length} slots`
+              : 'not recorded (turn predates provenance capture)'}
+            open={!!open.pool} onToggle={toggle}
+          >
+            {!retrieval ? (
+              <div className="sut-muted">
+                This turn predates provenance capture. Use “Re-run retrieval” to replay it.
+              </div>
+            ) : (
+              <>
+                <div className="sut-sub">Occasion the retrieval ran on</div>
+                <pre className="sut-pre">{retrieval.occasion || '(empty)'}</pre>
+                <div className="sut-sub">Per slot</div>
+                <table className="sup-slots">
+                  <thead><tr><th>Slot</th><th>Tier</th><th>Query</th><th>Ret.</th><th>Kept</th></tr></thead>
+                  <tbody>
+                    {slots.map(s => (
+                      <tr key={s.slot} className={s.kept === 0 ? 'is-empty' : s.tier > 1 ? 'is-fallback' : ''}>
+                        <td>{s.slot}</td>
+                        <td title={TIER_TITLE[s.tier]}>t{s.tier}</td>
+                        <td className="sup-q">{s.query}</td>
+                        <td>{s.returned}</td>
+                        <td>{s.error ? `err: ${s.error}` : s.kept}</td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+                <div className="sut-sub">Candidates ({candidates.length}) — ★ = shown to the shopper</div>
+                {candidates.map(c => (
+                  <div key={c.id} className={`sup-cand${pickedIds.has(c.id) ? ' is-picked' : ''}`}>
+                    <span className="sup-cand-slot">{c.slot ?? 'recency'}</span>
+                    <span className="sup-cand-name">{[c.brand, c.name].filter(Boolean).join(' · ') || c.id}</span>
+                    <span className="sup-cand-score">{c.score == null ? `#${c.rank ?? '?'}` : c.score.toFixed(2)}</span>
+                    {pickedIds.has(c.id) && <span className="sup-cand-star">★</span>}
+                  </div>
+                ))}
+              </>
+            )}
+          </TraceNode>
+        );
+      })()}
 
       <TraceNode k="ai" icon="💬" title="Model response" summary={reply ? reply.slice(0, 70) : '—'} open={!!open.ai} onToggle={toggle}>
         <div className="sut-sub">Reply</div>

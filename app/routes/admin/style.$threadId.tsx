@@ -9,10 +9,10 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Link, useParams, useSearchParams } from '@remix-run/react';
 import {
-  adminGetThread, adminListTraces, adminRenderVideos, fetchMessages,
-  type AdminThread, type StyleUpMessage, type StyleUpTrace,
+  adminGetThread, adminListTraces, adminRenderVideos, buildProvenanceIndex, fetchMessages,
+  type AdminThread, type RetrievalCandidate, type StyleUpMessage, type StyleUpRetrieval, type StyleUpTrace,
 } from '~/services/style-up';
-import StyleUpTraceDiagram from '~/components/style-up/StyleUpTraceDiagram';
+import StyleUpTraceDiagram, { TIER_TITLE } from '~/components/style-up/StyleUpTraceDiagram';
 import { fmtTime, statusClass } from '~/components/style-up/admin-format';
 import '~/styles/admin-style-up.css';
 
@@ -31,6 +31,55 @@ function RenderBubble({ gen, genId }: { gen: { status: string; videoUrl: string 
         <span className={statusClass(status)}>{status}</span>
       </div>
       {genId && <Link className="suc-render-audit" to={`/admin/style/g/${genId}`}>audit →</Link>}
+    </div>
+  );
+}
+
+/** A product message, with a "why this?" toggle onto its recorded retrieval
+ *  provenance — slot, rank within that slot, score, the literal query, and
+ *  the fallback tier. `hit` is undefined for anything the provenance index
+ *  couldn't join: a turn that predates capture, or a piece that wasn't
+ *  pulled from the catalog at all (e.g. a web-sourced pick). */
+function ProductBubble({ m, hit }: {
+  m: StyleUpMessage;
+  hit: { retrieval: StyleUpRetrieval; candidate: RetrievalCandidate } | undefined;
+}) {
+  const [open, setOpen] = useState(false);
+  const slot = hit?.candidate.slot
+    ? (hit.retrieval.slots ?? []).find(s => s.slot === hit.candidate.slot)
+    : undefined;
+  return (
+    <div className="suc-product">
+      <div className="sua-msg-product">
+        {m.productRef?.image && <img src={m.productRef.image} alt="" />}
+        <span>{[m.productRef?.brand, m.productRef?.name].filter(Boolean).join(' · ') || 'Product'}</span>
+      </div>
+      <button type="button" className="suc-why-btn" onClick={() => setOpen(o => !o)}>
+        {open ? 'hide' : 'why this?'}
+      </button>
+      {open && (
+        <div className="suc-why">
+          {!hit ? (
+            <span className="sut-muted">
+              Not recorded — this turn predates provenance capture, or the piece was
+              not pulled from the catalog.
+            </span>
+          ) : (
+            <dl className="sut-kv">
+              <div className="sut-kv-row"><dt>slot</dt><dd>{hit.candidate.slot ?? 'recency scan'}</dd></div>
+              <div className="sut-kv-row"><dt>rank</dt>
+                <dd>{hit.candidate.rank == null ? '—'
+                  : `${hit.candidate.rank + 1} of ${slot?.kept ?? '?'} in ${hit.candidate.slot}`}</dd></div>
+              <div className="sut-kv-row"><dt>score</dt>
+                <dd>{hit.candidate.score == null ? 'n/a (recency scan)' : hit.candidate.score.toFixed(3)}</dd></div>
+              <div className="sut-kv-row"><dt>query</dt><dd>{slot?.query ?? '—'}</dd></div>
+              <div className="sut-kv-row"><dt>tier</dt>
+                <dd>{slot ? `${slot.tier} — ${TIER_TITLE[slot.tier]}` : '—'}</dd></div>
+              <div className="sut-kv-row"><dt>occasion</dt><dd>{hit.retrieval.occasion || '(empty)'}</dd></div>
+            </dl>
+          )}
+        </div>
+      )}
     </div>
   );
 }
@@ -87,9 +136,10 @@ export default function AdminStyleConversation() {
     return () => { cancelled = true; window.clearInterval(h); };
   }, [threadId]);
 
-  // Traces are only fetched when the research view is actually opened.
+  // Traces load on mount (not gated on the research tab) — the transcript's
+  // product bubbles need them too, for the "why this?" provenance lookup.
   useEffect(() => {
-    if (view !== 'research' || !threadId || traces.length > 0) return;
+    if (!threadId || traces.length > 0) return;
     let cancelled = false;
     setTraceLoading(true);
     void (async () => {
@@ -100,11 +150,12 @@ export default function AdminStyleConversation() {
       setTraceLoading(false);
     })();
     return () => { cancelled = true; };
-  }, [view, threadId, traces.length]);
+  }, [threadId, traces.length]);
 
   const awaiting = transcript.length > 0 && transcript[transcript.length - 1].sender === 'shopper';
   const stylistColor = head?.stylist.accentColor ?? '#8aa0c0';
   const lookCount = useMemo(() => transcript.filter(m => m.kind === 'render').length, [transcript]);
+  const provenance = useMemo(() => buildProvenanceIndex(traces), [traces]);
 
   if (loading) return <div className="sua"><div className="sua-empty">Loading conversation…</div></div>;
   if (missing) {
@@ -162,10 +213,7 @@ export default function AdminStyleConversation() {
             if (m.kind === 'product' && m.productRef) {
               return (
                 <div key={m.id} className="sua-msg sua-msg--stylist">
-                  <div className="sua-msg-product">
-                    {m.productRef.image && <img src={m.productRef.image} alt="" />}
-                    <span>{[m.productRef.brand, m.productRef.name].filter(Boolean).join(' · ') || 'Product'}</span>
-                  </div>
+                  <ProductBubble m={m} hit={m.productRef.id ? provenance.get(m.productRef.id) : undefined} />
                 </div>
               );
             }

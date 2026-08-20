@@ -460,6 +460,37 @@ export interface StyleUpTrace {
   searches: StyleUpTraceSearch[] | null; // client-enriched per-query results
 }
 
+export interface RetrievalCandidate {
+  id: string; name: string | null; brand: string | null;
+  /** Null on the legacy recency scan, which has no slots or scores. */
+  slot: string | null; score: number | null; rank: number | null;
+}
+export interface RetrievalSlot {
+  slot: string; query: string; tier: 1 | 2 | 3;
+  returned: number; kept: number; error: string | null;
+}
+export interface StyleUpRetrieval {
+  method: string; occasion: string; gender: string; aesthetic: string | null;
+  exclude_ids: string[]; rotate: number;
+  slots: RetrievalSlot[]; candidates: RetrievalCandidate[];
+}
+
+/** Index every traced candidate by product id, so a product bubble in the
+ *  transcript can look up exactly how it was pulled. An exact id join — no
+ *  timestamp-proximity guessing. Later traces win, which is what you want when
+ *  the same product surfaced on more than one turn. */
+export function buildProvenanceIndex(
+  traces: StyleUpTrace[],
+): Map<string, { trace: StyleUpTrace; retrieval: StyleUpRetrieval; candidate: RetrievalCandidate }> {
+  const out = new Map<string, { trace: StyleUpTrace; retrieval: StyleUpRetrieval; candidate: RetrievalCandidate }>();
+  for (const trace of [...traces].sort((a, b) => a.createdAt.localeCompare(b.createdAt))) {
+    const retrieval = (trace.payload?.retrieval as StyleUpRetrieval | null) ?? null;
+    if (!retrieval?.candidates) continue;
+    for (const candidate of retrieval.candidates) out.set(candidate.id, { trace, retrieval, candidate });
+  }
+  return out;
+}
+
 /** Enrich a turn's trace with the per-query web search results (client side). */
 export async function appendTraceSearches(traceId: string, searches: StyleUpTraceSearch[]): Promise<void> {
   if (!supabase || !traceId) return;
