@@ -45,8 +45,8 @@ create policy "owner read"
 drop policy if exists "service role full access" on public.generation_events;
 create policy "service role full access"
   on public.generation_events for all
-  using true
-  with check true;
+  using (true)
+  with check (true);
 
 -- Admin-only read.
 --
