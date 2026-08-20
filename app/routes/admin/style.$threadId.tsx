@@ -69,6 +69,7 @@ function ProductBubble({ m, hit }: {
               <div className="sut-kv-row"><dt>slot</dt><dd>{hit.candidate.slot ?? 'recency scan'}</dd></div>
               <div className="sut-kv-row"><dt>rank</dt>
                 <dd>{hit.candidate.rank == null ? '—'
+                  : hit.candidate.slot == null ? `${hit.candidate.rank + 1} (recency scan)`
                   : `${hit.candidate.rank + 1} of ${slot?.kept ?? '?'} in ${hit.candidate.slot}`}</dd></div>
               <div className="sut-kv-row"><dt>score</dt>
                 <dd>{hit.candidate.score == null ? 'n/a (recency scan)' : hit.candidate.score.toFixed(3)}</dd></div>
