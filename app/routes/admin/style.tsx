@@ -4,8 +4,9 @@
 //                 opens its own page (style.$threadId.tsx) — transcript +
 //                 research trace, READ-ONLY (no replying/deleting).
 //   generations — every on-you render in a sortable table; clicking a row
-//                 opens a node overlay showing exactly how the generation
-//                 happened (inputs → pieces → prompt → model → output).
+//                 navigates to its own audit page (style.g.$generationId.tsx)
+//                 showing exactly how the generation happened (step log +
+//                 inputs → pieces → prompt → model → output).
 // Both tabs poll while open so the floor updates live.
 
 import { useCallback, useEffect, useMemo, useState } from 'react';

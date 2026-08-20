@@ -255,7 +255,7 @@ a.admin-btn { text-decoration: none; }
 .gsp-card { flex: 1 1 auto; min-width: 0; display: flex; align-items: baseline; gap: 10px; padding: 10px 12px;
   border: 1px solid #e4e6ea; border-radius: 12px; background: #fff; text-align: left; cursor: pointer; }
 .gsp-node.is-failed .gsp-card { border-color: #f0c9c4; background: #fdf6f5; }
-.gsp-label { flex: 0 0 auto; font-size: 13px; font-weight: 800; }
+.gsp-label { flex: 0 0 auto; font-size: 13px; font-weight: 800; color: #14151a; }
 .gsp-summary { flex: 1 1 auto; min-width: 0; font-size: 12px; color: #6b7280;
   overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .gsp-at { flex: 0 0 auto; font-size: 11px; color: #9aa0a8; }
@@ -267,6 +267,7 @@ a.admin-btn { text-decoration: none; }
 .suc-render-audit:hover { color: #14151a; }
 
 .admin-dark .gsp-card { background: #17181c; border-color: #26282d; }
+.admin-dark .gsp-label { color: #e7e7ea; }
 .admin-dark .gsp-node.is-failed .gsp-card { background: #1c1517; border-color: #4a2a26; }
 .admin-dark .gsp-dot { background: #e7e7ea; }
 .admin-dark .gsp-gap { border-color: #2a2c31; }

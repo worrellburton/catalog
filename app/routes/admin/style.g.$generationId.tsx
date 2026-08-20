@@ -12,7 +12,7 @@ import { adminGetGenerationThread } from '~/services/style-up';
 import { eventsToNodes, type SpineNode } from '~/services/generation-spine';
 import { fmtTime, fmtElapsed, statusClass } from '~/components/style-up/admin-format';
 import GenerationDiagram from '~/components/style-up/GenerationDiagram';
-import type { AdminLook } from '~/services/style-up';
+import type { AdminLook, StyleUpProductRef } from '~/services/style-up';
 import '~/styles/admin-style-up.css';
 
 // Real gaps run from ~1s of preprocessing to ~5min of model time. Linear
@@ -63,6 +63,7 @@ export default function AdminGenerationAudit() {
   const { generationId = '' } = useParams();
   const [gen, setGen] = useState<UserGeneration | null>(null);
   const [uploads, setUploads] = useState<UserUpload[]>([]);
+  const [products, setProducts] = useState<StyleUpProductRef[]>([]);
   const [nodes, setNodes] = useState<SpineNode[]>([]);
   const [origin, setOrigin] = useState<{ threadId: string; shopperName: string; stylistName: string | null } | null>(null);
   const [loading, setLoading] = useState(true);
@@ -70,6 +71,7 @@ export default function AdminGenerationAudit() {
   useEffect(() => {
     if (!generationId) return;
     let cancelled = false;
+    setLoading(true);
     void (async () => {
       const [detail, events, from] = await Promise.all([
         getGenerationDetail(generationId),
@@ -79,6 +81,17 @@ export default function AdminGenerationAudit() {
       if (cancelled) return;
       setGen(detail.generation);
       setUploads(detail.uploads);
+      // detail.products is already joined to the real products rows and
+      // ordered by sort_order — just reshape it (GenerationDiagram does its
+      // own head-to-toe sort, so this doesn't re-sort). Rows whose product
+      // was deleted (product: null) are dropped rather than shown as blanks.
+      setProducts(detail.products.flatMap(p => p.product ? [{
+        id: p.product.id,
+        name: p.product.name ?? undefined,
+        brand: p.product.brand ?? undefined,
+        image: p.product.image_url ?? undefined,
+        price: p.product.price ?? undefined,
+      }] : []));
       setNodes(eventsToNodes(events));
       setOrigin(from);
       setLoading(false);
@@ -95,7 +108,7 @@ export default function AdminGenerationAudit() {
     messageId: '', threadId: origin?.threadId ?? '', generationId,
     status: gen.status, videoUrl: gen.video_url, createdAt: gen.created_at,
     shopper: { id: gen.user_id, name: origin?.shopperName ?? 'Shopper', avatarUrl: null },
-    stylist: null, products: [],
+    stylist: null, products,
   };
 
   return (
