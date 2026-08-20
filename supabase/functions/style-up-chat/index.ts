@@ -13,7 +13,7 @@
 // Secrets: ANTHROPIC_API_KEY.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { retrieveOccasionCandidates } from '../_shared/style-retrieval.ts';
+import { retrieveOccasionCandidates, type SlotDiag } from '../_shared/style-retrieval.ts';
 
 const MODEL = 'claude-sonnet-4-6';
 
@@ -138,6 +138,7 @@ Deno.serve(async (req: Request) => {
 
     // Candidate products to recommend FROM. Web stylists skip this (live web search).
     let cands: ProductCand[] = [];
+    let slotDiags: SlotDiag[] = [];
     if (!isWeb && method === 'legacy') {
       // LEGACY: the 120 most-recently-added active products, gender-filtered.
       let q = admin.from('products')
@@ -172,10 +173,11 @@ Deno.serve(async (req: Request) => {
           .map(r => r?.product_ref?.id).filter((x): x is string => !!x))];
         rotate = Math.max(0, turns.filter(t => t.sender === 'shopper').length - 1);
       }
-      const found = await retrieveOccasionCandidates(admin, {
+      const { cands: found, slots: foundSlots } = await retrieveOccasionCandidates(admin, {
         occasion, gender: genderNorm, aesthetic: stylist?.specialty ?? '',
         excludeIds, rotate,
       });
+      slotDiags = foundSlots;
       cands = found.filter(c => c.image).map(c => ({
         id: c.id, name: c.name, brand: c.brand, price: c.price,
         image_url: c.image, primary_image_url: c.image, url: c.url, type: c.type,
