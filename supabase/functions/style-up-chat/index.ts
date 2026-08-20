@@ -48,6 +48,9 @@ async function callAnthropic(apiKey: string, payload: unknown): Promise<Response
 interface ProductCand {
   id: string; name: string | null; brand: string | null; price: string | null;
   image_url: string | null; primary_image_url: string | null; url: string | null; type: string | null;
+  // Provenance, carried through so the trace can record how each piece was
+  // pulled. Null on the legacy recency scan, which has no slots or scores.
+  slot?: string | null; score?: number | null; rank?: number;
 }
 
 Deno.serve(async (req: Request) => {
@@ -139,6 +142,12 @@ Deno.serve(async (req: Request) => {
     // Candidate products to recommend FROM. Web stylists skip this (live web search).
     let cands: ProductCand[] = [];
     let slotDiags: SlotDiag[] = [];
+    // Hoisted so the trace payload below (outside this block) can read them.
+    // The legacy branch leaves them at these defaults — it genuinely uses none
+    // of them — which is the correct, intentional provenance for that path.
+    let occasion = '';
+    let excludeIds: string[] = [];
+    let rotate = 0;
     if (!isWeb && method === 'legacy') {
       // LEGACY: the 120 most-recently-added active products, gender-filtered.
       let q = admin.from('products')
@@ -150,7 +159,9 @@ Deno.serve(async (req: Request) => {
       if (genderNorm === 'male') q = q.or('gender.eq.male,gender.eq.unisex');
       else if (genderNorm === 'female') q = q.or('gender.eq.female,gender.eq.unisex');
       const { data: candRows } = await q;
-      cands = (candRows ?? []) as ProductCand[];
+      cands = ((candRows ?? []) as ProductCand[]).map((c, i) => ({
+        ...c, slot: null, score: null, rank: i,
+      }));
       console.log(`[style-up-chat] thread=${threadId} retrieval=LEGACY(recency-120) candidates=${cands.length}`);
     } else if (!isWeb) {
       // STYLE ENGINE: occasion-aware per-slot style_slot_search.
@@ -158,14 +169,12 @@ Deno.serve(async (req: Request) => {
       // every turn made the BM25 query a ~100-word blob that matched almost
       // nothing on long threads (pool collapsed to ~1); and the 600-char slice of
       // the joined thread kept the OLDEST text, dropping the current ask entirely.
-      const occasion = turns.filter(t => t.sender === 'shopper' && t.body)
+      occasion = turns.filter(t => t.sender === 'shopper' && t.body)
         .slice(-3).map(t => (t.body ?? '').trim()).join(' ').slice(0, 300);
       // Stylist Engine: skip products already shown in this thread and rotate the
       // ranked pool by shopper-turn count, so a re-asked occasion surfaces a
       // genuinely different look instead of the same top-ranked pieces. Both are
       // empty on the first turn (nothing shown yet), so the opening look is unchanged.
-      let excludeIds: string[] = [];
-      let rotate = 0;
       if (isFresh) {
         const { data: shownRows } = await admin.from('style_up_messages')
           .select('product_ref').eq('thread_id', threadId).eq('kind', 'product');
@@ -181,6 +190,7 @@ Deno.serve(async (req: Request) => {
       cands = found.filter(c => c.image).map(c => ({
         id: c.id, name: c.name, brand: c.brand, price: c.price,
         image_url: c.image, primary_image_url: c.image, url: c.url, type: c.type,
+        slot: c.slot, score: c.score, rank: c.rank,
       }));
       console.log(`[style-up-chat] thread=${threadId} retrieval=ENGINE(${method}) candidates=${cands.length} exclude=${excludeIds.length} rotate=${rotate} mode=${mode || 'default'}`);
     }
@@ -372,6 +382,27 @@ productIds is optional — include it only when you're actually recommending pie
           system,
           messages,
           candidate_count: cands.length,
+          // How each candidate was pulled — the slot it was retrieved for, its
+          // BM25 score, its rank within that slot, and per-slot which query and
+          // fallback tier produced the pool. Names and brands are STORED, not
+          // joined: a product deleted after this turn would otherwise blank out
+          // the audit record. ~48 rows ≈ 5 KB of jsonb per stylist turn.
+          //
+          // Absent on web-sourced stylists, which never run catalog retrieval
+          // and record their provenance in the `searches` column instead.
+          retrieval: isWeb ? null : {
+            method,
+            occasion,
+            gender: genderNorm,
+            aesthetic: stylist?.specialty ?? null,
+            exclude_ids: excludeIds,
+            rotate,
+            slots: slotDiags,
+            candidates: cands.map(c => ({
+              id: c.id, name: c.name, brand: c.brand,
+              slot: c.slot ?? null, score: c.score ?? null, rank: c.rank ?? null,
+            })),
+          },
           model: MODEL,
           reply,
           product_ids: productIds,
