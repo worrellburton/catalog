@@ -60,4 +60,55 @@ describe('eventsToNodes (generation audit spine)', () => {
     expect(n.label).toBe('Face grid built');
     expect(n.summary).toBe('');
   });
+
+  it('summarises fal_submit_fallback with model transition', () => {
+    const [n] = eventsToNodes([
+      ev('fal_submit_fallback', { original_model: 'seedance-2.5', fallback_model: 'veo', original_raw_status: 'ERROR' }, '2026-08-14T15:59:00Z'),
+    ]);
+    expect(n.label).toBe('Model fallback');
+    expect(n.summary).toContain('seedance-2.5');
+    expect(n.summary).toContain('veo');
+  });
+
+  it('summarises fal_submit_fallback_skipped and marks it failed', () => {
+    const [n] = eventsToNodes([
+      ev('fal_submit_fallback_skipped', { original_model: 'seedance-2.5', reason: 'content policy violation', product_count: 3 }, '2026-08-14T15:59:30Z'),
+    ]);
+    expect(n.label).toBe('Fallback skipped');
+    expect(n.summary).toContain('content policy violation');
+    expect(n.failed).toBe(true);
+  });
+
+  it('summarises content_policy_fallback with policy transition', () => {
+    const [n] = eventsToNodes([
+      ev('content_policy_fallback', { from: 'seedance-2.5', to: 'veo', raw: 'policy check failed' }, '2026-08-14T15:59:45Z'),
+    ]);
+    expect(n.label).toBe('Content-policy retry');
+    expect(n.summary).toContain('seedance-2.5');
+    expect(n.summary).toContain('veo');
+  });
+
+  it('asserts actual summary text for all major event types', () => {
+    const nodes = eventsToNodes([
+      ev('submit_attempt', { fal_model: 'seedance-2.5', face_count: 2, product_count: 5 }, '2026-08-14T15:58:00Z'),
+      ev('seedance_face_grid', { faces: 2, gridded: 8 }, '2026-08-14T15:58:20Z'),
+      ev('fal_webhook', { status: 'failed', fal_status: 'ERROR', error_code: 'content_policy' }, '2026-08-14T15:58:50Z'),
+      ev('watchdog_timeout', { reason: 'no webhook received within 15 minutes' }, '2026-08-14T16:13:00Z'),
+      ev('name_look_fail', { error: 'request timeout' }, '2026-08-14T16:14:00Z'),
+    ]);
+
+    expect(nodes[0].summary).toContain('seedance-2.5');
+    expect(nodes[0].summary).toContain('2 face');
+    expect(nodes[0].summary).toContain('5 piece');
+
+    expect(nodes[1].summary).toContain('2 face');
+    expect(nodes[1].summary).toContain('8 grid');
+
+    expect(nodes[2].summary).toContain('failed');
+    expect(nodes[2].summary).toContain('content_policy');
+
+    expect(nodes[3].summary).toContain('no webhook received within 15 minutes');
+
+    expect(nodes[4].summary).toContain('request timeout');
+  });
 });

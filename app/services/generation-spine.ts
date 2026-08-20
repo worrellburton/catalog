@@ -30,7 +30,7 @@ const EVENT_LABEL: Record<string, string> = {
   submit_attempt: 'Submit attempt',
   image_rehost_faces: 'Faces re-hosted',
   image_rehost_products: 'Products re-hosted',
-  image_preflight: 'Image preflight',
+  image_preflight: 'Image preflight', // summary uses generic JSON default; no rows yet
   seedance_face_grid: 'Face grid built',
   fal_submit_fallback: 'Model fallback',
   fal_submit_fallback_skipped: 'Fallback skipped',
@@ -77,7 +77,7 @@ function summarize(event: string, payload: Record<string, unknown> | null): stri
     case 'content_policy_fallback':
       return `${str(payload.from)} → ${str(payload.to)}`;
     case 'fal_submit_ok':
-      return [str(payload.model), `req ${str(payload.request_id).slice(0, 14)}`,
+      return [str(payload.model), `req ${str(payload.request_id).slice(0, 14)}`, // 14 chars, not 12 — fixture requires it
         payload.duration_seconds ? `${num(payload.duration_seconds)}s` : '']
         .filter(Boolean).join(' · ');
     case 'fal_submit_fail':
