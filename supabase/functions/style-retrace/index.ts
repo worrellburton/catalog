@@ -13,10 +13,18 @@
 import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { retrieveOccasionCandidates } from '../_shared/style-retrieval.ts';
 
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Authorization, Content-Type, apikey, x-client-info',
+  'Access-Control-Max-Age': '86400',
+};
 const json = (body: unknown, status = 200) =>
-  new Response(JSON.stringify(body), { status, headers: { 'Content-Type': 'application/json' } });
+  new Response(JSON.stringify(body), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 
 Deno.serve(async (req: Request) => {
+  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
+  if (req.method !== 'POST') return json({ success: false, error: 'method not allowed' }, 405);
   try {
     const { trace_id } = await req.json();
     if (!trace_id) return json({ success: false, error: 'trace_id required' }, 400);
