@@ -1,4 +1,5 @@
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '~/utils/supabase';
+import type { GenerationEvent } from './generation-spine';
 
 // Resolve the published/promoted look that a completed generation became,
 // so the "Your looks" rail can deep-link a finished render to its look
@@ -1286,4 +1287,21 @@ export function buildGenerationPrompt(opts: {
     framing,
     `Natural motion, ${seconds}-second portrait clip${styleTag}.${occasionClause}${customStyleClause}`,
   ].join(' ');
+}
+
+/** Admin: the recorded step log for one generation, oldest first. Empty for
+ *  the 15 generations that predate event capture (2026-05-01). */
+export async function listGenerationEvents(generationId: string): Promise<GenerationEvent[]> {
+  if (!supabase || !generationId) return [];
+  const { data } = await supabase
+    .from('generation_events')
+    .select('id, event, payload, created_at')
+    .eq('generation_id', generationId)
+    .order('created_at', { ascending: true });
+  return ((data ?? []) as Array<Record<string, unknown>>).map(r => ({
+    id: Number(r.id),
+    event: String(r.event),
+    payload: (r.payload as Record<string, unknown> | null) ?? null,
+    createdAt: String(r.created_at),
+  }));
 }

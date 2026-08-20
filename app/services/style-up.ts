@@ -460,6 +460,50 @@ export interface StyleUpTrace {
   searches: StyleUpTraceSearch[] | null; // client-enriched per-query results
 }
 
+export interface RetrievalCandidate {
+  id: string; name: string | null; brand: string | null;
+  /** Null on the legacy recency scan, which has no slots or scores. */
+  slot: string | null; score: number | null; rank: number | null;
+}
+export interface RetrievalSlot {
+  slot: string; query: string; tier: 1 | 2 | 3;
+  returned: number; kept: number; error: string | null;
+}
+export interface StyleUpRetrieval {
+  method: string; occasion: string; gender: string; aesthetic: string | null;
+  exclude_ids: string[]; rotate: number;
+  slots: RetrievalSlot[]; candidates: RetrievalCandidate[];
+}
+
+/** Index every traced candidate by product id, so a product bubble in the
+ *  transcript can look up exactly how it was pulled. An exact id join — no
+ *  timestamp-proximity guessing. Later traces win, which is what you want when
+ *  the same product surfaced on more than one turn. */
+export function buildProvenanceIndex(
+  traces: StyleUpTrace[],
+): Map<string, { trace: StyleUpTrace; retrieval: StyleUpRetrieval; candidate: RetrievalCandidate }> {
+  const out = new Map<string, { trace: StyleUpTrace; retrieval: StyleUpRetrieval; candidate: RetrievalCandidate }>();
+  for (const trace of [...traces].sort((a, b) => a.createdAt.localeCompare(b.createdAt))) {
+    const retrieval = (trace.payload?.retrieval as StyleUpRetrieval | null) ?? null;
+    if (!retrieval?.candidates) continue;
+    for (const candidate of retrieval.candidates) out.set(candidate.id, { trace, retrieval, candidate });
+  }
+  return out;
+}
+
+/** Admin: replay retrieval for a trace that predates provenance capture. The
+ *  inputs are the originals; the candidate pool is today's catalog. Nothing is
+ *  stored — see the function's header comment. */
+export async function adminRetraceTrace(
+  traceId: string,
+): Promise<{ retrieval: StyleUpRetrieval; reconstructedAt: string } | { error: string }> {
+  if (!supabase) return { error: 'No database connection' };
+  const { data, error } = await supabase.functions.invoke('style-retrace', { body: { trace_id: traceId } });
+  if (error) return { error: error.message };
+  if (!data?.success) return { error: String(data?.error ?? 'retrace failed') };
+  return { retrieval: data.retrieval as StyleUpRetrieval, reconstructedAt: String(data.reconstructed_at) };
+}
+
 /** Enrich a turn's trace with the per-query web search results (client side). */
 export async function appendTraceSearches(traceId: string, searches: StyleUpTraceSearch[]): Promise<void> {
   if (!supabase || !traceId) return;
@@ -549,6 +593,46 @@ export async function adminListThreads(): Promise<AdminThread[]> {
     .filter((x): x is AdminThread => !!x);
 }
 
+/** Admin: the header row for ONE conversation. The standalone chat page can be
+ *  opened cold (pasted URL, refresh) with no list in memory, so it needs the
+ *  shopper + stylist without pulling every thread. Message count / awaiting
+ *  state are left to the caller — it already holds the live transcript. */
+export async function adminGetThread(
+  threadId: string,
+): Promise<Pick<AdminThread, 'threadId' | 'shopper' | 'stylist' | 'lastMessageAt'> | null> {
+  if (!supabase || !threadId) return null;
+  const { data: t } = await supabase
+    .from('style_up_threads')
+    .select(`id, shopper_user_id, last_message_at, ${STYLIST_JOIN}`)
+    .eq('id', threadId)
+    .maybeSingle();
+  if (!t) return null;
+  const shopperId = String(t.shopper_user_id);
+  const raw = Array.isArray(t.stylist) ? t.stylist[0] : t.stylist;
+  return {
+    threadId: String(t.id),
+    shopper: (await shopperMap([shopperId])).get(shopperId)
+      ?? { id: shopperId, name: 'Shopper', avatarUrl: null },
+    stylist: mapStylist((raw ?? {}) as Record<string, unknown>),
+    lastMessageAt: (t.last_message_at as string | null) ?? null,
+  };
+}
+
+/** Admin: status + video for the render messages inside one transcript, so the
+ *  chat page can play the look inline instead of naming its id. */
+export async function adminRenderVideos(
+  genIds: string[],
+): Promise<Map<string, { status: string; videoUrl: string | null }>> {
+  const out = new Map<string, { status: string; videoUrl: string | null }>();
+  if (!supabase || genIds.length === 0) return out;
+  const { data } = await supabase
+    .from('user_generations').select('id, status, video_url').in('id', genIds);
+  for (const g of (data ?? []) as Array<{ id: string; status: string; video_url: string | null }>) {
+    out.set(g.id, { status: g.status, videoUrl: g.video_url });
+  }
+  return out;
+}
+
 /** All StyleUp-generated looks (render messages) with their generation status,
  *  video, the shopper, stylist, and the pieces in the look. */
 export async function adminListLooks(limit = 120): Promise<AdminLook[]> {
@@ -620,6 +704,25 @@ export async function adminDeleteLook(messageId: string): Promise<{ error: strin
   if (!supabase) return { error: 'No database connection' };
   const { error } = await supabase.from('style_up_messages').delete().eq('id', messageId);
   return { error: error?.message ?? null };
+}
+
+/** Admin: the conversation a generation came out of, if any. Used by the audit
+ *  page's back link — generations started from /generate have no thread. */
+export async function adminGetGenerationThread(
+  generationId: string,
+): Promise<{ threadId: string; shopperName: string; stylistName: string | null } | null> {
+  if (!supabase || !generationId) return null;
+  // maybeSingle() is safe here: render_generation_id is a uuid column and no
+  // generation is referenced by more than one message (verified across all rows).
+  const { data: msg } = await supabase
+    .from('style_up_messages')
+    .select('thread_id')
+    .eq('render_generation_id', generationId)
+    .maybeSingle();
+  if (!msg) return null;
+  const head = await adminGetThread(String(msg.thread_id));
+  if (!head) return null;
+  return { threadId: head.threadId, shopperName: head.shopper.name, stylistName: head.stylist.name || null };
 }
 
 /** The shopper's most-recently-active thread (+ its stylist), or null. Used to
