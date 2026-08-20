@@ -13,13 +13,13 @@ import {
   type AdminThread, type StyleUpMessage, type StyleUpTrace,
 } from '~/services/style-up';
 import StyleUpTraceDiagram from '~/components/style-up/StyleUpTraceDiagram';
-import { fmtTime, statusClass } from './style';
+import { fmtTime, statusClass } from '~/components/style-up/admin-format';
 import '~/styles/admin-style-up.css';
 
 type ThreadHead = Pick<AdminThread, 'threadId' | 'shopper' | 'stylist' | 'lastMessageAt'>;
 
 /** A render message, with the actual look inline instead of just its id. */
-function RenderBubble({ gen }: { gen: { status: string; videoUrl: string | null } | undefined }) {
+function RenderBubble({ gen, genId }: { gen: { status: string; videoUrl: string | null } | undefined; genId: string | null }) {
   const status = gen?.status ?? 'pending';
   return (
     <div className="suc-render">
@@ -30,6 +30,7 @@ function RenderBubble({ gen }: { gen: { status: string; videoUrl: string | null 
         <span>On-you look</span>
         <span className={statusClass(status)}>{status}</span>
       </div>
+      {genId && <Link className="suc-render-audit" to={`/admin/style/g/${genId}`}>audit →</Link>}
     </div>
   );
 }
@@ -154,7 +155,7 @@ export default function AdminStyleConversation() {
             if (m.kind === 'render') {
               return (
                 <div key={m.id} className="sua-msg sua-msg--stylist">
-                  <RenderBubble gen={m.renderGenerationId ? renders.get(m.renderGenerationId) : undefined} />
+                  <RenderBubble gen={m.renderGenerationId ? renders.get(m.renderGenerationId) : undefined} genId={m.renderGenerationId ?? null} />
                 </div>
               );
             }

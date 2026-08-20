@@ -309,6 +309,9 @@ export default defineConfig({
             // Each conversation is its own page (shareable / refreshable),
             // not a drawer over the list.
             route("style/:threadId", "routes/admin/style.$threadId.tsx");
+            // One generation's recorded step sequence. Three segments, so it
+            // cannot collide with the two-segment style/:threadId.
+            route("style/g/:generationId", "routes/admin/style.g.$generationId.tsx");
             // Legacy path — old links keep resolving to the same page.
             route("style-up", "routes/admin/style.tsx", { id: "admin/style-up-legacy" });
           });

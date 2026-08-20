@@ -662,6 +662,25 @@ export async function adminDeleteLook(messageId: string): Promise<{ error: strin
   return { error: error?.message ?? null };
 }
 
+/** Admin: the conversation a generation came out of, if any. Used by the audit
+ *  page's back link — generations started from /generate have no thread. */
+export async function adminGetGenerationThread(
+  generationId: string,
+): Promise<{ threadId: string; shopperName: string; stylistName: string | null } | null> {
+  if (!supabase || !generationId) return null;
+  // maybeSingle() is safe here: render_generation_id is a uuid column and no
+  // generation is referenced by more than one message (verified across all rows).
+  const { data: msg } = await supabase
+    .from('style_up_messages')
+    .select('thread_id')
+    .eq('render_generation_id', generationId)
+    .maybeSingle();
+  if (!msg) return null;
+  const head = await adminGetThread(String(msg.thread_id));
+  if (!head) return null;
+  return { threadId: head.threadId, shopperName: head.shopper.name, stylistName: head.stylist.name || null };
+}
+
 /** The shopper's most-recently-active thread (+ its stylist), or null. Used to
  *  resume the ongoing conversation on open so the chat history keeps going. */
 export async function getLatestThread(

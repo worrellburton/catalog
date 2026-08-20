@@ -243,3 +243,32 @@ a.admin-btn { text-decoration: none; }
 .admin-dark .suc-render { background: #17181c; border-color: #26282d; }
 .admin-dark .suc-render-foot { color: #c7c9cf; }
 .admin-dark .suc-research { background: #141518; border-color: #26282d; }
+
+/* ── Generation audit spine (admin/style.g.$generationId) ────────────────── */
+.gsp-title { margin: 28px 0 12px; font-size: 15px; font-weight: 800; letter-spacing: -0.01em; }
+.gsp-spine { list-style: none; margin: 0; padding: 0 0 0 6px; }
+.gsp-gap { position: relative; margin-left: 5px; border-left: 2px solid #e4e6ea; display: flex; align-items: center; }
+.gsp-gap-label { padding-left: 14px; font-size: 11px; color: #9aa0a8; }
+.gsp-node { position: relative; display: flex; align-items: flex-start; gap: 10px; flex-wrap: wrap; }
+.gsp-dot { flex: 0 0 auto; margin-top: 13px; width: 12px; height: 12px; border-radius: 50%; background: #14151a; }
+.gsp-node.is-failed .gsp-dot { background: #b4453a; }
+.gsp-card { flex: 1 1 auto; min-width: 0; display: flex; align-items: baseline; gap: 10px; padding: 10px 12px;
+  border: 1px solid #e4e6ea; border-radius: 12px; background: #fff; text-align: left; cursor: pointer; }
+.gsp-node.is-failed .gsp-card { border-color: #f0c9c4; background: #fdf6f5; }
+.gsp-label { flex: 0 0 auto; font-size: 13px; font-weight: 800; }
+.gsp-summary { flex: 1 1 auto; min-width: 0; font-size: 12px; color: #6b7280;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.gsp-at { flex: 0 0 auto; font-size: 11px; color: #9aa0a8; }
+.gsp-payload { flex: 1 1 100%; margin: 6px 0 0 22px; padding: 10px; border-radius: 8px; background: #f7f8fa;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; line-height: 1.5;
+  white-space: pre-wrap; word-break: break-word; max-height: 320px; overflow-y: auto; }
+.suc-render-audit { display: inline-block; padding: 0 10px 8px; font-size: 11.5px; font-weight: 700;
+  color: #6b7280; text-decoration: none; }
+.suc-render-audit:hover { color: #14151a; }
+
+.admin-dark .gsp-card { background: #17181c; border-color: #26282d; }
+.admin-dark .gsp-node.is-failed .gsp-card { background: #1c1517; border-color: #4a2a26; }
+.admin-dark .gsp-dot { background: #e7e7ea; }
+.admin-dark .gsp-gap { border-color: #2a2c31; }
+.admin-dark .gsp-payload { background: #0d0e10; color: #c7c9cf; }
+.admin-dark .suc-render-audit { color: #8b8e96; }
