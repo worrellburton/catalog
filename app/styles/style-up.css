@@ -237,7 +237,9 @@ html[data-shell="catalog-app"] .su-shell {
 /* Docked "Find a stylist" button (landing). */
 .su-find-bar {
   flex: 0 0 auto;
-  padding: 12px 18px calc(16px + env(safe-area-inset-bottom));
+  /* Raised off the bottom so the glowing glass pill floats above the toolbar
+     zone rather than sitting flush against the screen edge. */
+  padding: 12px 18px calc(38px + env(safe-area-inset-bottom));
   /* Single source of truth for the button's width cap — beam-hosts.css needs
      the same value so the <Beam> wrapper matches the button instead of
      stretching to the full bar. Don't inline this number again. */
@@ -248,18 +250,48 @@ html[data-shell="catalog-app"] .su-shell {
   max-width: var(--su-find-btn-max);
   margin: 0 auto;
   display: block;
-  padding: 15px;
+  padding: 16px;
   border-radius: 999px;
-  border: none;
-  background: #e7e7ea;
-  color: #0a0a0a;
+  /* Glass: translucent fill + blur so the dark page reads through it, a bright
+     rim, and a soft luminous halo. The colorful animated <Beam> border rides on
+     top of this for the moving glow edge. */
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  background: rgba(255, 255, 255, 0.10);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  backdrop-filter: blur(22px) saturate(160%);
+  color: #f5f5f7;
   font-size: 15px;
   font-weight: 800;
   letter-spacing: -0.01em;
   cursor: pointer;
-  transition: transform 0.12s ease, opacity 0.16s ease;
+  box-shadow:
+    0 0 22px rgba(255, 255, 255, 0.16),
+    0 10px 34px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.30);
+  animation: su-find-glow 3.4s ease-in-out infinite;
+  transition: transform 0.12s ease, opacity 0.16s ease, background 0.2s ease;
 }
+.su-find-bar .su-find-btn:hover { background: rgba(255, 255, 255, 0.14); }
 .su-find-bar .su-find-btn:active { transform: scale(0.985); }
+
+/* Gentle breathing halo — reads as "glowing" alongside the animated beam. */
+@keyframes su-find-glow {
+  0%, 100% {
+    box-shadow:
+      0 0 20px rgba(255, 255, 255, 0.12),
+      0 10px 34px rgba(0, 0, 0, 0.5),
+      inset 0 1px 0 rgba(255, 255, 255, 0.30);
+  }
+  50% {
+    box-shadow:
+      0 0 36px rgba(255, 255, 255, 0.24),
+      0 10px 34px rgba(0, 0, 0, 0.5),
+      inset 0 1px 0 rgba(255, 255, 255, 0.30);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .su-find-bar .su-find-btn { animation: none; }
+}
 
 /* ── Thread ──────────────────────────────────────────────────────────── */
 .su-page--thread {
