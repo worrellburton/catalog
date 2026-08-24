@@ -2382,30 +2382,32 @@ html[data-app="style"] .su-saved-row-item--empty {
 
 /* Phase 6.1: Style app background presets. Applied via data-style-bg on
  * <html> from either the pre-hydration script (root.tsx) or the settings
- * route. Scoped to data-app="style" so the Catalog app is untouched. */
-html[data-app="style"][data-style-bg="plain"] body,
-html[data-app="style"][data-style-bg="plain"] .site-particle-host { background: #0a0a0a !important; }
-html[data-app="style"][data-style-bg="plain"] .site-particle-host { display: none !important; }
+ * route. Scoped to data-app="style" so the Catalog app is untouched.
+ *
+ * Any non-default preset ALSO hides the .site-particle-host (global
+ * particle canvas) AND .su-bg (the picker/thread aurora drape) so the
+ * body's background can actually be seen — those layers otherwise paint
+ * a dark canvas above z-index:-1 that covers whatever's on body. */
+html[data-app="style"]:not([data-style-bg="default"]):not([data-style-bg=""]) .site-particle-host,
+html[data-app="style"]:not([data-style-bg="default"]):not([data-style-bg=""]) .su-bg {
+  display: none !important;
+}
+
+html[data-app="style"][data-style-bg="plain"] body { background: #0a0a0a !important; }
 
 html[data-app="style"][data-style-bg="warm"] body {
-  background: radial-gradient(120% 100% at 50% -10%, #3a1810 0%, #150a0a 55%, #0a0505 100%);
+  background: radial-gradient(120% 100% at 50% -10%, #3a1810 0%, #150a0a 55%, #0a0505 100%) !important;
 }
-html[data-app="style"][data-style-bg="warm"] .site-particle-host { display: none !important; }
 
 html[data-app="style"][data-style-bg="cool"] body {
-  background: radial-gradient(120% 100% at 50% -10%, #0e2130 0%, #071018 55%, #050a0f 100%);
+  background: radial-gradient(120% 100% at 50% -10%, #0e2130 0%, #071018 55%, #050a0f 100%) !important;
 }
-html[data-app="style"][data-style-bg="cool"] .site-particle-host { display: none !important; }
 
-html[data-app="style"][data-style-bg="paper"] body,
-html[data-app="style"][data-style-bg="paper"] .site-particle-host {
-  background: #f5f2ec !important;
-}
-html[data-app="style"][data-style-bg="paper"] .site-particle-host { display: none !important; }
-html[data-app="style"][data-style-bg="paper"] { color: #1a1a1a; }
+html[data-app="style"][data-style-bg="paper"] body { background: #f5f2ec !important; color: #1a1a1a; }
 html[data-app="style"][data-style-bg="paper"] .su-apply,
 html[data-app="style"][data-style-bg="paper"] .su-showroom,
-html[data-app="style"][data-style-bg="paper"] .su-inbox { color: #1a1a1a; }
+html[data-app="style"][data-style-bg="paper"] .su-inbox,
+html[data-app="style"][data-style-bg="paper"] .su-shell { color: #1a1a1a; }
 
 /* Settings page — background picker grid. */
 .su-settings-bg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
