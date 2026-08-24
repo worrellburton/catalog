@@ -2768,6 +2768,11 @@ export function StyleUpExperience({
         })}
         {allStylists.length === 0 && <div className="su-empty">Loading stylists…</div>}
       </div>
+      {/* Phase 2.5 / 6.1: footer links on the real picker. */}
+      <div style={{ display: 'flex', gap: 12, justifyContent: 'center', padding: '20px 0 12px' }}>
+        <button type="button" className="su-become-stylist" onClick={() => navigate('/style/apply')}>Become a stylist</button>
+        <button type="button" className="su-become-stylist" onClick={() => navigate('/style/settings')}>Settings</button>
+      </div>
     </div>
   );
 
