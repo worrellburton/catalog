@@ -181,6 +181,7 @@ export default function StyleShowroomRoute() {
       <header className="su-showroom-head">
         <button type="button" className="su-apply-back" onClick={() => navigate('/style')}>← Back</button>
         <h1>{stylist.name}&apos;s showroom</h1>
+        <button type="button" className="su-apply-back" onClick={() => navigate('/style/inbox')} style={{ marginLeft: 'auto' }}>Inbox</button>
       </header>
 
       <div className="su-showroom-tabs" role="tablist">

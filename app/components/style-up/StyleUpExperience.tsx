@@ -1073,6 +1073,11 @@ export function StyleUpExperience({
   // nothing extra is needed here. Any failure surfaces a recoverable error row.
   const triggerStylist = useCallback(async (mode?: 'outfit') => {
     if (!threadId || !supabase) return;
+    // Phase 2.3: human stylist threads don't call the LLM edge fn. The
+    // shopper's message is already inserted; a real person answers from
+    // the inbox. Skip the typing bubble too — it's a lie when there's no
+    // AI on the other end.
+    if (active?.isHuman) return;
     setChatError(null);
     setAdminNote(null);
     await stylistBeat();           // human "reading" pause (1/2/3s) before typing
@@ -1099,7 +1104,7 @@ export function StyleUpExperience({
     setStylistTyping(false);
     setChatError(lastErr || 'Your stylist couldn’t respond. Tap to retry.');
     if (isSuperAdmin) setAdminNote(`style-up-chat failed: ${lastErr || 'no response (network / timeout)'}`);
-  }, [threadId, isSuperAdmin]);
+  }, [threadId, isSuperAdmin, active?.isHuman]);
 
   // "Generate the look on me", the stylist confirms in-thread, then the FULL
   // set of recommended pieces is composited onto the shopper via the existing

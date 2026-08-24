@@ -89,9 +89,13 @@ Deno.serve(async (req: Request) => {
     // Stylist persona.
     const { data: stylist } = await admin
       .from('style_up_stylists')
-      .select('name, specialty, persona_prompt, source_mode')
+      .select('name, specialty, persona_prompt, source_mode, is_human')
       .eq('id', thread.stylist_id)
       .maybeSingle();
+    // Phase 2.3: human stylists reply from the inbox — never call the LLM.
+    // Defense in depth: the client already guards this, but if any caller
+    // slips through, no-op instead of burning tokens against a human thread.
+    if (stylist?.is_human === true) return json({ success: true, humanStylist: true });
     // Web stylists (e.g. Theo) source from the open web — the client searches +
     // auto-imports their picks, so the brain never recommends from our catalog.
     const isWeb = stylist?.source_mode === 'web';
