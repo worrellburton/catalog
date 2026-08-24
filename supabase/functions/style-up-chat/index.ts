@@ -23,6 +23,14 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Authorization, Content-Type, apikey, x-client-info',
   'Access-Control-Max-Age': '86400',
 };
+// Phase 3.6: em-dashes read as AI-generated. The prompt already forbids them
+// but the model occasionally slips; strip them (both em U+2014 and en U+2013)
+// server-side so the shopper never sees one, regardless of provider.
+function stripEmDashes(s: string): string {
+  return s
+    .replace(/\s*[\u2014\u2013]\s*/g, ', ')
+    .replace(/, , /g, ', ');
+}
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 }
@@ -344,7 +352,7 @@ productIds is optional — include it only when you're actually recommending pie
     // Insert the stylist's text reply (with its tap-to-answer options when the
     // reply is a question), then a product message per pick.
     await admin.from('style_up_messages')
-      .insert({ thread_id: threadId, sender: 'stylist', kind: 'text', body: reply, quick_replies: quickReplies.length ? quickReplies : null });
+      .insert({ thread_id: threadId, sender: 'stylist', kind: 'text', body: stripEmDashes(reply), quick_replies: quickReplies.length ? quickReplies : null });
 
     for (const p of picks) {
       await admin.from('style_up_messages').insert({

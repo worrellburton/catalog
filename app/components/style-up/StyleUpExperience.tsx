@@ -10,6 +10,7 @@
 
 import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from '@remix-run/react';
+import { getAppMode } from '~/utils/app-mode';
 import { useAuth } from '~/hooks/useAuth';
 import { useStylistEngineMethod } from '~/hooks/useStylistEngineMethod';
 import { supabase } from '~/utils/supabase';
@@ -227,6 +228,16 @@ function cleanStylistText(body: string): string {
   const m = t.match(/"reply"\s*:\s*"((?:[^"\\]|\\.)*)"/);
   if (m) { try { return JSON.parse(`"${m[1]}"`); } catch { return m[1]; } }
   return body;
+}
+
+// Phase 3.6: em-dashes read as AI-generated. Server-side style-up-chat now
+// scrubs them on insert, but historical rows (and any future rows an AI
+// slip-through misses) still carry them — strip at render time so no shopper
+// eye ever sees one.
+function stripEmDashes(s: string): string {
+  return s
+    .replace(/\s*[—–]\s*/g, ', ')
+    .replace(/, , /g, ', ');
 }
 
 // Head-to-toe display order for the look card: hat → layers → top → bottoms →
@@ -600,7 +611,7 @@ export function StyleUpExperience({
   const pvDragDy = useRef(0);
   const lvDragY = useRef(0);
   const lvDragDy = useRef(0);
-  const { isProductBookmarked, toggleProductBookmark } = useBookmarks();
+  const { isProductBookmarked, toggleProductBookmark, bookmarkedProducts } = useBookmarks();
   const [newBelow, setNewBelow] = useState(false);            // "↓ New message" pill (scrolled up)
   const nearBottomRef = useRef(true);                         // is the chat pinned near the bottom?
   const prevMsgCountRef = useRef(0);                          // detect genuinely-new messages
@@ -613,6 +624,8 @@ export function StyleUpExperience({
   const [chatError, setChatError] = useState<string | null>(null);
   const [ctx, setCtx] = useState<ShopperContext | null>(null);
   const [ctxMini, setCtxMini] = useState(false);     // collapse-on-scroll
+  const [threadHeadScrolled, setThreadHeadScrolled] = useState(false);
+  const isStyleApp = typeof window !== 'undefined' && getAppMode() === 'style';
   const [ctxEditing, setCtxEditing] = useState(false);
   // Render polling: generation id → its latest row. Drives the on-you render
   // bubbles (spinner → video).
@@ -2030,7 +2043,7 @@ export function StyleUpExperience({
 
   const threadPane = (
       <div className="su-page su-page--thread">
-        <div className="su-thread-head">
+        <div className={"su-thread-head" + (threadHeadScrolled ? " is-scrolled" : "") + (isStyleApp ? " su-thread-head--style" : "")}>
           <button type="button" className="su-back" onClick={closeThread} aria-label="Back to stylists">
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
           </button>
@@ -2053,9 +2066,46 @@ export function StyleUpExperience({
               );
             })()}
           </span>
-          <button type="button" className="su-thread-end" onClick={endConversation}>End</button>
+          {isStyleApp ? (
+            <button
+              type="button"
+              className="su-thread-profile"
+              onClick={() => window.dispatchEvent(new CustomEvent('catalog:open-profile'))}
+              aria-label="Open your profile"
+            >
+              <span className="su-thread-profile-dot" />
+            </button>
+          ) : (
+            <button type="button" className="su-thread-end" onClick={endConversation}>End</button>
+          )}
         </div>
 
+        {/* Phase 3.2: saved row at top of the stylist view — a horizontal strip
+            of products you've saved in this conversation (or any prior one).
+            Style app only for now; empty state hides itself. */}
+        {isStyleApp && bookmarkedProducts.length > 0 && (
+          <div className="su-saved-row" aria-label="Saved">
+            <span className="su-saved-row-label">Saved</span>
+            <div className="su-saved-row-strip">
+              {bookmarkedProducts.slice(0, 20).map((p, i) => (
+                <button
+                  key={`${p.brand}::${p.name}::${i}`}
+                  type="button"
+                  className="su-saved-row-item"
+                  onClick={() => openProduct({
+                    id: String(p.id ?? ''), name: p.name, brand: p.brand,
+                    price: p.price, image: p.image ?? undefined, url: p.url ?? undefined,
+                  })}
+                  title={`${p.brand ? p.brand + ' — ' : ''}${p.name}`}
+                >
+                  {p.image
+                    ? <img src={p.image} alt="" loading="lazy" />
+                    : <span className="su-saved-row-item--empty" />}
+                </button>
+              ))}
+            </div>
+          </div>
+        )}
         {contextCard}
 
         <div
@@ -2063,7 +2113,8 @@ export function StyleUpExperience({
           ref={scrollerRef}
           onScroll={e => {
             const el = e.target as HTMLDivElement;
-            if (!ctxEditing) setCtxMini(el.scrollTop > 24);
+            if (!ctxEditing) setCtxMini(isStyleApp ? true : el.scrollTop > 24);
+            setThreadHeadScrolled(el.scrollTop > 8);
             const near = el.scrollHeight - el.scrollTop - el.clientHeight < 120;
             nearBottomRef.current = near;
             if (near) setNewBelow(false);
@@ -2230,6 +2281,29 @@ export function StyleUpExperience({
                                 Change
                               </button>
                             </Beam>
+                            {/* Phase 3.5: save straight from the chat, no need
+                                to open the viewer first. */}
+                            {(() => {
+                              const asBk = {
+                                id: pc.id ?? '',
+                                name: pc.name ?? 'Product',
+                                brand: pc.brand ?? '',
+                                price: pc.price ?? '',
+                                url: pc.url ?? '',
+                                image: pc.image ?? undefined,
+                              } as Product;
+                              const saved = !!pc.id && isProductBookmarked(asBk);
+                              return (
+                                <button
+                                  type="button"
+                                  className={'su-lookcard-save' + (saved ? ' is-saved' : '')}
+                                  onClick={(e) => { e.stopPropagation(); toggleProductBookmark(asBk); }}
+                                  aria-label={saved ? 'Remove from saved' : 'Save this product'}
+                                >
+                                  <svg width="14" height="14" viewBox="0 0 24 24" fill={saved ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+                                </button>
+                              );
+                            })()}
                           </div>
                         );
                       })}
@@ -2371,7 +2445,7 @@ export function StyleUpExperience({
                 )}
                 {m.body && (
                   <div className="su-bubble" onClick={() => setTimeShownId(prev => (prev === m.id ? null : m.id))}>
-                    {m.sender === 'stylist' ? cleanStylistText(m.body) : m.body}
+                    {m.sender === 'stylist' ? stripEmDashes(cleanStylistText(m.body)) : m.body}
                   </div>
                 )}
                 {timeShownId === m.id && (
