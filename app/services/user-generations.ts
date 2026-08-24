@@ -448,7 +448,7 @@ function computeProductOnlyWardrobe(
   const hasBottom = zones.has('legs') || zones.has('waist');
   const hasShoes = zones.has('feet');
 
-  const base = 'Dress them in ONLY the referenced products — no other clothing, outerwear, layering, accessories, logos, or prints.';
+  const base = 'Dress them in ONLY the referenced products — no other clothing, outerwear, layering, accessories, logos, or prints. Never render the subject nude, topless, or with exposed private areas; any body region a product does not cover is filled with plain unbranded neutral basics (white undergarments) or a tasteful natural leaf covering.';
 
   // An unplaceable piece may be the very garment a filler would deny (the
   // mislabeled sneaker vs "bare feet") — assert nothing about uncovered
@@ -457,16 +457,27 @@ function computeProductOnlyWardrobe(
     return `${base} Wear every referenced product where it naturally belongs on the body.`;
   }
 
-  // Neutral fillers, only for zones that the framing will actually show
-  // (i.e. once there's a bottom, the torso + legs are in frame).
+  // Neutral fillers, only for zones that the framing will actually show.
+  // Phase 5: never emit "bare torso" or any wording that reads as nudity.
+  // Torso without a pick gets a plain unbranded white tank/top (or bra for
+  // female frames). Legs without a bottom pick get white underwear or a
+  // tasteful foliage/leaf covering — chosen deliberately over "bare legs"
+  // so the model never renders exposed skin below the waist.
   const fillers: string[] = [];
   if (hasBottom && !hasTop) {
     fillers.push(
       gender === 'female'
         ? 'a plain seamless neutral-white bra (unbranded, no logos)'
         : gender === 'male'
-          ? 'a bare torso or a plain unbranded white tank'
-          : 'a plain unbranded neutral top',
+          ? 'a plain unbranded white tank'
+          : 'a plain unbranded neutral tank',
+    );
+  }
+  if (hasTop && !hasBottom) {
+    fillers.push(
+      gender === 'male'
+        ? 'plain white boxer-briefs (unbranded, no logos) or a tasteful foliage covering (natural leaves)'
+        : 'plain white briefs (unbranded, no logos) or a tasteful foliage covering (natural leaves)',
     );
   }
   if (hasBottom && !hasShoes) {
