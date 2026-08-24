@@ -2427,3 +2427,21 @@ html[data-app="style"][data-style-bg="paper"] .su-shell { color: #1a1a1a; }
 .su-settings-bg-info { display: flex; flex-direction: column; min-width: 0; }
 .su-settings-bg-label { font-size: 14px; color: #f0f0f0; }
 .su-settings-bg-blurb { font-size: 12px; color: rgba(255,255,255,0.55); overflow: hidden; text-overflow: ellipsis; }
+
+
+/* Phase 3.1 shell head: Style app profile chip on the right + no back. */
+.su-shell-spacer { grid-column: 1; width: 34px; height: 34px; display: block; }
+.su-shell-profile {
+  grid-column: 3;
+  width: 34px; height: 34px; border-radius: 999px;
+  background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.14);
+  color: #f0f0f0; cursor: pointer; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: background 140ms ease;
+}
+.su-shell-profile:hover { background: rgba(255,255,255,0.14); }
+.su-shell-profile-dot {
+  width: 14px; height: 14px; border-radius: 999px;
+  background: linear-gradient(135deg, #d0d0d0, #7a7a7a);
+  display: block;
+}

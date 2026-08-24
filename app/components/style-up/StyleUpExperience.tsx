@@ -1669,16 +1669,33 @@ export function StyleUpExperience({
   );
 
   // Shared top bar: the Catalog logo centered up top with "style" right under
-  // it, and a single back control. No divider bar beneath it.
+  // it. Catalog app: back button on the left. Style app (Phase 3.1): no back
+  // (the shopper is IN the Style app; there's nowhere behind to go to), and
+  // a small profile chip on the right that opens the account surface via
+  // the existing catalog:open-profile custom event.
   const header = (onBack: () => void) => (
-    <div className="su-shell-head">
-      <button type="button" className="su-back su-shell-back" onClick={onBack} aria-label="Back">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
-      </button>
+    <div className={'su-shell-head' + (isStyleApp ? ' su-shell-head--style' : '')}>
+      {isStyleApp ? (
+        <span className="su-shell-spacer" aria-hidden="true" />
+      ) : (
+        <button type="button" className="su-back su-shell-back" onClick={onBack} aria-label="Back">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
+        </button>
+      )}
       <div className="su-shell-brand">
         <CatalogLogo className="su-shell-logo" />
         <span className="su-shell-brand-style">style</span>
       </div>
+      {isStyleApp && (
+        <button
+          type="button"
+          className="su-shell-profile"
+          onClick={() => window.dispatchEvent(new CustomEvent('catalog:open-profile'))}
+          aria-label="Open your profile"
+        >
+          <span className="su-shell-profile-dot" aria-hidden="true" />
+        </button>
+      )}
     </div>
   );
   const railHeader = header(exit);
