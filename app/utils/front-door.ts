@@ -2,6 +2,14 @@
 // sends the shopper to the stylist picker at /style. The feed still lives at
 // "/" — it's revealed the moment the shopper chooses to browse (StyleUp's back
 // button / "Browse the catalog", the account menu, or any deep-link).
+//
+// Two-app split (Phase 1): the Flutter shell can force this decision by
+// passing `mode` — the Catalog flavor pins to 'catalog' (feed always wins,
+// stylist picker is unreachable from front door) and the Catalog Style
+// flavor pins to 'style' (always bounce to /style regardless of session
+// flags). Web-only visitors leave `mode` undefined and get the existing
+// browse-flag heuristic.
+import type { AppMode } from './app-mode';
 
 /** Session flag: this tab has already landed on the feed, so returning to "/"
  *  (Back from /activity, a product page, etc.) stays on the feed instead of
@@ -15,14 +23,20 @@ interface FrontDoorInput {
   isOAuth: boolean;
   /** True if BROWSE_FEED_KEY is set for this session. */
   browseFeed: boolean;
+  /** Which of the two apps this bundle is serving. 'catalog' locks the
+   *  front door to the feed; 'style' locks it to the stylist picker. */
+  mode?: AppMode;
 }
 
 /** Should a fresh mount of "/" redirect to the StyleUp landing? Returns false
  *  (stay on the feed) whenever the URL is doing real work the feed must handle:
  *  an OAuth callback, a deep-link/content target, a marketing entry, or an
  *  explicit request to browse the feed. */
-export function shouldRedirectToStyle({ search, isOAuth, browseFeed }: FrontDoorInput): boolean {
+export function shouldRedirectToStyle({ search, isOAuth, browseFeed, mode }: FrontDoorInput): boolean {
   if (isOAuth) return false;
+  // Two-app split: flavor pins the front door regardless of session flags.
+  if (mode === 'catalog') return false;
+  if (mode === 'style') return true;
   const params = new URLSearchParams(search);
   // Deep-links + marketing entries the feed route consumes itself.
   if (params.has('look') || params.has('q') || params.has('ref') || params.has('flow')) return false;

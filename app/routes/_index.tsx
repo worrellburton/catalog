@@ -24,6 +24,7 @@ import { useBookmarks } from '~/hooks/useBookmarks';
 import { useRecentProducts } from '~/hooks/useRecentProducts';
 import { useAuth, isOAuthReturn } from '~/hooks/useAuth';
 import { shouldRedirectToStyle, BROWSE_FEED_KEY } from '~/utils/front-door';
+import { getAppMode } from '~/utils/app-mode';
 import { useOverlayRouter } from '~/hooks/useOverlayRouter';
 import { lookSlug, productSlug } from '~/utils/slug';
 import { markOverlayReturn } from '~/utils/overlay-scroll-stash';
@@ -916,7 +917,7 @@ export default function Home() {
     if (typeof window === 'undefined') return false;
     let browseFeed = false;
     try { browseFeed = sessionStorage.getItem(BROWSE_FEED_KEY) === '1'; } catch { /* private mode */ }
-    return shouldRedirectToStyle({ search: window.location.search, isOAuth: isOAuthReturn(), browseFeed });
+    return shouldRedirectToStyle({ search: window.location.search, isOAuth: isOAuthReturn(), browseFeed, mode: getAppMode() });
   });
   useEffect(() => {
     if (redirectingToStyle) { navigate('/style', { replace: true }); return; }

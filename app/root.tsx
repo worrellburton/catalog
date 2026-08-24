@@ -214,6 +214,22 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-se
 })();
           `}}
         />
+        {/* Two-app split (Phase 1). The Flutter shell forces the URL hash
+            (#app for Catalog flavor, #style for Catalog Style flavor) before
+            loading the webview. Stamp data-app on <html> BEFORE hydration so
+            CSS gated on html[data-app="style"] paints correctly from first
+            frame. See app/utils/app-mode.ts. */}
+        <script
+          dangerouslySetInnerHTML={{ __html: `
+(function(){try{
+  var K='catalog:app-mode';
+  var m=(location.hash==='#style')?'style':(location.hash==='#app')?'catalog':null;
+  if(m){try{sessionStorage.setItem(K,m);}catch(_){}}
+  else{try{m=sessionStorage.getItem(K);}catch(_){}}
+  document.documentElement.dataset.app=(m==='style')?'style':'catalog';
+}catch(_){}})();
+          `}}
+        />
         {/* Above-the-fold image preload from the previous visit's cache.
             Runs during HTML parse — before the JS bundle even downloads —
             so the browser starts fetching the first few feed thumbnails
