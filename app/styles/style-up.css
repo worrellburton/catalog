@@ -2103,3 +2103,72 @@ html[data-shell="catalog-app"] .su-shell {
 @media (prefers-reduced-motion: reduce) {
   .su-confirm-backdrop, .su-confirm { animation: none; }
 }
+
+
+/* Phase 2.5: become-a-stylist application form (/style/apply). */
+.su-apply {
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 48px 20px 96px;
+  color: #f0f0f0;
+  font-family: inherit;
+  min-height: 100dvh;
+  box-sizing: border-box;
+}
+.su-apply--loading { color: rgba(255,255,255,0.5); text-align: center; padding-top: 96px; }
+.su-apply h1 { font-size: 26px; letter-spacing: -0.01em; margin: 0 0 8px; }
+.su-apply > p { color: rgba(255,255,255,0.68); margin: 0 0 24px; line-height: 1.4; }
+.su-apply-note {
+  margin: 0 0 16px; padding: 10px 12px;
+  background: rgba(220, 130, 40, 0.08);
+  border: 1px solid rgba(220, 130, 40, 0.32);
+  border-radius: 8px; font-size: 13px; color: rgba(255,255,255,0.82);
+}
+.su-apply-error {
+  margin-top: 8px; color: #ff9a9a; font-size: 13px;
+}
+.su-apply-form { display: flex; flex-direction: column; gap: 16px; }
+.su-apply-form label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: rgba(255,255,255,0.72); }
+.su-apply-form input[type="text"],
+.su-apply-form input[type="url"],
+.su-apply-form textarea {
+  appearance: none; border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.04); color: #f0f0f0;
+  padding: 10px 12px; border-radius: 8px; font-size: 15px;
+  font-family: inherit; line-height: 1.35;
+}
+.su-apply-form input:focus, .su-apply-form textarea:focus {
+  outline: none; border-color: rgba(255,255,255,0.42);
+}
+.su-apply-radios { display: flex; gap: 8px; }
+.su-apply-radio {
+  flex: 1 1 auto; display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 10px 12px; border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.04); border-radius: 8px; cursor: pointer;
+  font-size: 14px; color: rgba(255,255,255,0.72);
+}
+.su-apply-radio input { accent-color: #f0f0f0; }
+.su-apply-radio:has(input:checked) {
+  color: #0a0a0a; background: #f0f0f0; border-color: #f0f0f0;
+}
+.su-apply-actions { display: flex; gap: 8px; margin-top: 8px; }
+.su-apply-cta {
+  appearance: none; padding: 12px 18px; border-radius: 999px; border: 0;
+  background: #f0f0f0; color: #0a0a0a; font-weight: 600; font-size: 15px;
+  cursor: pointer; flex: 1 1 auto;
+}
+.su-apply-cta:disabled { opacity: 0.5; cursor: not-allowed; }
+.su-apply-back {
+  appearance: none; padding: 12px 18px; border-radius: 999px;
+  background: transparent; color: rgba(255,255,255,0.72);
+  border: 1px solid rgba(255,255,255,0.18); font-size: 15px; cursor: pointer;
+}
+
+/* Phase 2.5: picker footer link to the apply flow. */
+.su-become-stylist {
+  appearance: none; margin: 20px auto 0; display: block;
+  background: transparent; color: rgba(255,255,255,0.62);
+  border: 0; padding: 8px 12px; font-size: 13px; cursor: pointer;
+  text-decoration: underline; text-underline-offset: 3px;
+}
+.su-become-stylist:hover { color: rgba(255,255,255,0.9); }

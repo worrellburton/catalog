@@ -1960,6 +1960,14 @@ export function StyleUpExperience({
               <div className="su-empty">You&apos;re chatting with all our stylists.</div>
             )}
           </div>
+          {/* Phase 2.5: entry to the become-a-stylist form. Style app only. */}
+          <button
+            type="button"
+            className="su-become-stylist"
+            onClick={() => navigate('/style/apply')}
+          >
+            Become a stylist
+          </button>
         </div>
   );
 

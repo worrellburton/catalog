@@ -150,10 +150,14 @@ export default function TypeAnywhere({ inline = false }: TypeAnywhereProps) {
   // Suppress on /activity - the insights page is a reading surface, not a
   // search surface; the floating search bar just clutters it.
   const onActivity = location.pathname.startsWith('/activity');
+  // Suppress on Style app focused pages that own their own layout: the apply
+  // form, and (later) the showroom + stylist admin surfaces.
+  const onStyleFocused = location.pathname === '/style/apply'
+    || location.pathname.startsWith('/style/showroom');
   // The GLOBAL (fixed) copy steps aside while the hero is at the top — the
   // inline copy inside the hero owns the screen there. The inline copy itself
   // is never hidden by this (it IS the hero one).
-  const hidden = onAdmin || onPartners || onGenerate || onActivity || (!inline && heroInline);
+  const hidden = onAdmin || onPartners || onGenerate || onActivity || onStyleFocused || (!inline && heroInline);
 
   const submit = useCallback((q: string) => {
     const trimmed = q.trim();
