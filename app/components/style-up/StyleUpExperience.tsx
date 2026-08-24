@@ -581,6 +581,8 @@ export function StyleUpExperience({
   );
 
   const [stylists, setStylists] = useState<StyleUpStylist[]>([]);
+  // Phase 2: AI/human filter chips on the full picker (not landing).
+  const [rosterFilter, setRosterFilter] = useState<'all' | 'humans' | 'ai'>('all');
   const [active, setActive] = useState<StyleUpStylist | null>(null);
   const [threadId, setThreadId] = useState<string | null>(null);
   const [messages, setMessages] = useState<StyleUpMessage[]>([]);
@@ -1846,9 +1848,10 @@ export function StyleUpExperience({
           {landing && stylists.length > 0 && (
             <div className="su-landing-stylists">
               {stylists.map(s => (
-                <div key={s.id} className="su-landing-stylist" style={{ ['--su-accent' as string]: s.accentColor ?? '#8aa0c0' }}>
+                <div key={s.id} className={'su-landing-stylist' + (s.isHuman ? ' is-human' : ' is-ai')} style={{ ['--su-accent' as string]: s.accentColor ?? '#8aa0c0' }}>
                   <span className="su-stylist-avatar" aria-hidden="true">
                     <StylistFace avatarUrl={s.avatarUrl} name={s.name} />
+                    {!s.isHuman && <span className="su-stylist-bot" aria-label="AI stylist">AI</span>}
                   </span>
                   <span className="su-landing-stylist-name">{s.name}</span>
                   {s.specialty && <span className="su-landing-stylist-spec">{s.specialty}</span>}
@@ -1911,18 +1914,38 @@ export function StyleUpExperience({
               <h2>{myThreads.length > 0 ? 'Pick up where you left off' : 'Pick your stylist'}</h2>
             </div>
           )}
+          {!landing && (
+            <div className="su-roster-filter" role="tablist" aria-label="Filter stylists">
+              {(['all','humans','ai'] as const).map(f => (
+                <button
+                  key={f}
+                  type="button"
+                  role="tab"
+                  aria-selected={rosterFilter === f}
+                  className={'su-roster-chip' + (rosterFilter === f ? ' is-active' : '')}
+                  onClick={() => setRosterFilter(f)}
+                >
+                  {f === 'all' ? 'All' : f === 'humans' ? 'Humans' : 'AI'}
+                </button>
+              ))}
+            </div>
+          )}
           <div className="su-roster">
-            {stylists.filter(s => !myThreads.some(t => t.stylist.id === s.id)).map(s => (
+            {stylists
+              .filter(s => !myThreads.some(t => t.stylist.id === s.id))
+              .filter(s => landing ? true : rosterFilter === 'all' ? true : rosterFilter === 'humans' ? s.isHuman : !s.isHuman)
+              .map(s => (
               <button
                 key={s.id}
                 type="button"
-                className="su-stylist-card"
+                className={'su-stylist-card' + (s.isHuman ? ' is-human' : ' is-ai')}
                 style={{ ['--su-accent' as string]: s.accentColor ?? '#8aa0c0' }}
                 onClick={() => void openStylist(s)}
                 disabled={opening}
               >
                 <span className="su-stylist-avatar" aria-hidden="true">
                   <StylistFace avatarUrl={s.avatarUrl} name={s.name} />
+                  {!s.isHuman && <span className="su-stylist-bot" aria-label="AI stylist">AI</span>}
                 </span>
                 <span className="su-stylist-info">
                   <span className="su-stylist-name">{s.name}</span>

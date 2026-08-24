@@ -31,6 +31,13 @@ export interface StyleUpStylist {
   /** The stylist's favorite brands, shown as logo chips on the picker.
    *  `domain` drives the client-side logo lookup. */
   favoriteBrands: { name: string; domain: string }[];
+  /** Phase 2: true if a real human (curated picks, human-authored replies);
+   *  false for AI personas. Drives the picker's AI/human filter and the
+   *  visual "robot" chip on AI cards. */
+  isHuman: boolean;
+  /** Phase 2: 'men' | 'women' | 'unisex' — nullable while the roster is
+   *  still mostly AI personas that don't declare one. */
+  genderFocus: 'men' | 'women' | 'unisex' | null;
 }
 
 /** A product attached to a chat message (the stylist's pick). Loose by design
@@ -96,12 +103,16 @@ function mapStylist(r: Record<string, unknown>): StyleUpStylist {
           .filter(b => b && typeof b.name === 'string' && typeof b.domain === 'string')
           .map(b => ({ name: b.name as string, domain: b.domain as string }))
       : [],
+    isHuman: r.is_human === true,
+    genderFocus: (r.gender_focus === 'men' || r.gender_focus === 'women' || r.gender_focus === 'unisex')
+      ? r.gender_focus
+      : null,
   };
 }
 
 // Every stylist column the client maps. Centralized so every select stays in
 // sync with mapStylist (source_mode / landing_slot were easy to forget).
-const STYLIST_COLS = 'id, name, avatar_url, specialty, bio, city, age, accent_color, source_mode, landing_slot, favorite_brands';
+const STYLIST_COLS = 'id, name, avatar_url, specialty, bio, city, age, accent_color, source_mode, landing_slot, favorite_brands, is_human, gender_focus';
 const STYLIST_JOIN = `stylist:style_up_stylists(${STYLIST_COLS})`;
 
 function mapMessage(r: Record<string, unknown>): StyleUpMessage {

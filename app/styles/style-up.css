@@ -142,6 +142,37 @@ html[data-shell="catalog-app"] .su-shell {
   overflow: hidden;
 }
 .su-stylist-avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+/* Phase 2: AI/human filter chips on the picker + "AI" pip on AI avatars.
+ * Humans get no chip. Style app only — the picker is not shown outside it. */
+.su-roster-filter {
+  display: flex; gap: 8px; margin: 0 0 12px;
+}
+.su-roster-chip {
+  appearance: none; border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.04); color: rgba(255,255,255,0.72);
+  padding: 6px 12px; border-radius: 999px; font-size: 12px;
+  letter-spacing: 0.02em; cursor: pointer; transition: border-color 120ms, color 120ms, background 120ms;
+}
+.su-roster-chip:hover { color: rgba(255,255,255,0.95); border-color: rgba(255,255,255,0.28); }
+.su-roster-chip.is-active {
+  color: #0a0a0a; background: #f0f0f0; border-color: #f0f0f0;
+}
+.su-stylist-avatar { position: relative; }
+.su-stylist-bot {
+  position: absolute; right: -4px; bottom: -4px;
+  min-width: 20px; height: 20px; padding: 0 5px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 10px; font-weight: 600; letter-spacing: 0.06em;
+  color: #0a0a0a; background: #e0e0e0;
+  border-radius: 999px; border: 2px solid #0a0a0a;
+  pointer-events: none;
+}
+.su-stylist-card.is-ai .su-stylist-name::after {
+  /* Extra hint next to the name so screen-readers and glancing eyes both catch it. */
+  content: ' · AI';
+  color: rgba(255,255,255,0.42); font-weight: 400; letter-spacing: 0.04em;
+}
 /* Line-art portrait fallback (no photo) — inherits the avatar's dark ink. */
 .su-avatar-illus { width: 100%; height: 100%; display: block; }
 .su-stylist-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 auto; }
