@@ -13,6 +13,14 @@ const STORAGE_KEY = 'catalog:app-mode';
 
 export function getAppMode(): AppMode {
   if (typeof window === 'undefined') return 'catalog';
+  // Query first (survives every redirect), then hash (nice for hand-typed
+  // URLs), then sessionStorage (sticks across in-app SPA navigations that
+  // strip the query/hash).
+  const q = new URLSearchParams(window.location.search).get('app');
+  if (q === 'style' || q === 'catalog') {
+    try { sessionStorage.setItem(STORAGE_KEY, q); } catch { /* private mode */ }
+    return q;
+  }
   const hash = window.location.hash;
   if (hash === '#style' || hash === '#app') {
     const m: AppMode = hash === '#style' ? 'style' : 'catalog';

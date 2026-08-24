@@ -223,7 +223,10 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-se
           dangerouslySetInnerHTML={{ __html: `
 (function(){try{
   var K='catalog:app-mode';
-  var m=(location.hash==='#style')?'style':(location.hash==='#app')?'catalog':null;
+  var q=new URLSearchParams(location.search).get('app');
+  var m=(q==='style'||q==='catalog')?q
+       :(location.hash==='#style')?'style'
+       :(location.hash==='#app')?'catalog':null;
   if(m){try{sessionStorage.setItem(K,m);}catch(_){}}
   else{try{m=sessionStorage.getItem(K);}catch(_){}}
   document.documentElement.dataset.app=(m==='style')?'style':'catalog';
