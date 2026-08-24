@@ -2717,20 +2717,38 @@ export function StyleUpExperience({
         <h1>Find a stylist</h1>
         <p>Choose a stylist to start a new conversation.</p>
       </div>
+      {/* Phase 2.2: AI/human filter chips on the "Find a stylist" roster. */}
+      <div className="su-roster-filter" role="tablist" aria-label="Filter stylists">
+        {(['all','humans','ai'] as const).map(f => (
+          <button
+            key={f}
+            type="button"
+            role="tab"
+            aria-selected={rosterFilter === f}
+            className={'su-roster-chip' + (rosterFilter === f ? ' is-active' : '')}
+            onClick={() => setRosterFilter(f)}
+          >
+            {f === 'all' ? 'All' : f === 'humans' ? 'Humans' : 'AI'}
+          </button>
+        ))}
+      </div>
       <div className="su-roster">
-        {allStylists.map(s => {
+        {allStylists
+          .filter(s => rosterFilter === 'all' ? true : rosterFilter === 'humans' ? s.isHuman : !s.isHuman)
+          .map(s => {
           const meta = [s.age ? `${s.age}` : null, s.city].filter(Boolean).join(' · ');
           return (
             <button
               key={s.id}
               type="button"
-              className="su-convo-card su-picker-pill"
+              className={'su-convo-card su-picker-pill' + (s.isHuman ? ' is-human' : ' is-ai')}
               style={{ ['--su-accent' as string]: s.accentColor ?? '#8aa0c0' }}
               onClick={() => void openStylist(s)}
               disabled={opening}
             >
               <span className="su-stylist-avatar" aria-hidden="true">
                 <StylistFace avatarUrl={s.avatarUrl} name={s.name} />
+                {!s.isHuman && <span className="su-stylist-bot" aria-label="AI stylist">AI</span>}
               </span>
               <span className="su-convo-info">
                 <span className="su-convo-top">
