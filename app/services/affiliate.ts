@@ -44,9 +44,14 @@ export interface AffiliateContext {
   creatorHandle: string | null;
   lookId: string | null;
   surface: string;
+  /** Phase 4: when the shopper is inside a stylist thread, both are set so
+   *  the clickout attributes to that stylist for admin analytics. Null
+   *  everywhere else (feed, product page, etc.). */
+  stylistId?: string | null;
+  threadId?: string | null;
 }
 
-let context: AffiliateContext = { creatorHandle: null, lookId: null, surface: 'feed' };
+let context: AffiliateContext = { creatorHandle: null, lookId: null, surface: 'feed', stylistId: null, threadId: null };
 
 /** _index updates this as overlays open/close so a clickout knows whose
  *  surface earned it without prop-drilling through every component. */
@@ -141,6 +146,8 @@ export function affiliateRedirect(
           campaign_id: SHOPNOMIX_CONTENT_CAMPAIGN,
           wrapped: wrappable,
           rail,
+          stylist_id: context.stylistId ?? null,
+          thread_id: context.threadId ?? null,
         });
       } catch { /* telemetry must never block a clickout */ }
     })();

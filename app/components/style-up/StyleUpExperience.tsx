@@ -29,6 +29,7 @@ import { signInWithGoogle } from '~/services/auth';
 import StyleUpBackground from './StyleUpBackground';
 import CatalogLogo from '~/components/CatalogLogo';
 import { useBookmarks } from '~/hooks/useBookmarks';
+import { setAffiliateContext } from '~/services/affiliate';
 import type { Product } from '~/data/looks';
 
 // Preferences the stylist infers from chat, budget, occasion, formality lean,
@@ -753,6 +754,26 @@ export function StyleUpExperience({
 
   // Roster, scoped to the landing pair on /style, the full roster elsewhere.
   useEffect(() => { void fetchStylists({ landingOnly }).then(setStylists); }, [landingOnly]);
+
+  // Phase 4: stylist attribution for affiliate clickouts. Keep the global
+  // affiliate context in sync with the active thread so a click that fires
+  // from a stylist pick is credited to that stylist. Cleared to the picker
+  // surface (with null attribution) when no thread is open.
+  useEffect(() => {
+    if (threadId && active?.id) {
+      setAffiliateContext({
+        creatorHandle: null, lookId: null,
+        surface: 'style-thread',
+        stylistId: active.id, threadId,
+      });
+    } else {
+      setAffiliateContext({
+        creatorHandle: null, lookId: null,
+        surface: 'style-picker',
+        stylistId: null, threadId: null,
+      });
+    }
+  }, [threadId, active?.id]);
 
   // Shopper context, the SAME inputs the AI-look flow uses (face photos +
   // height / weight / age / gender + saved style). Editable here; saving writes

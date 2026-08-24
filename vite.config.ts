@@ -306,6 +306,9 @@ export default defineConfig({
             route("user/:name", "routes/admin/user.$name.tsx");
             route("brand/:name", "routes/admin/brand.$name.tsx");
             route("style", "routes/admin/style.tsx");
+            // Phase 4: stylist roster + analytics + application queue.
+            route("stylists", "routes/admin/stylists.tsx");
+            route("stylists/:id", "routes/admin/stylists.$id.tsx");
             // Each conversation is its own page (shareable / refreshable),
             // not a drawer over the list.
             route("style/:threadId", "routes/admin/style.$threadId.tsx");

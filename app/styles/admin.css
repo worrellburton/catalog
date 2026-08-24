@@ -7121,3 +7121,11 @@ html.eq-page .gen-queue-host { display: none; }
 }
 .pj-raw-toggle:hover { text-decoration: underline; }
 .pj-video { width: 132px; height: 176px; border-radius: 6px; border: 1px solid #e5e7eb; background: #000; object-fit: cover; }
+
+
+/* Phase 4: stylist admin bits — utility classes the new pages use. */
+.admin-section { margin-top: 24px; }
+.admin-section h2 { font-size: 15px; margin: 0 0 12px; }
+.admin-cell-sub { font-size: 12px; color: #888; margin-top: 2px; }
+.admin-dark .admin-cell-sub { color: rgba(255,255,255,0.5); }
+.admin-loading { padding: 24px; color: #888; }
