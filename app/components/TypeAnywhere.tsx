@@ -154,7 +154,8 @@ export default function TypeAnywhere({ inline = false }: TypeAnywhereProps) {
   // form, and (later) the showroom + stylist admin surfaces.
   const onStyleFocused = location.pathname === '/style/apply'
     || location.pathname.startsWith('/style/showroom')
-    || location.pathname.startsWith('/style/inbox');
+    || location.pathname.startsWith('/style/inbox')
+    || location.pathname.startsWith('/style/settings');
   // The GLOBAL (fixed) copy steps aside while the hero is at the top — the
   // inline copy inside the hero owns the screen there. The inline copy itself
   // is never hidden by this (it IS the hero one).

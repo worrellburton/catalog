@@ -227,6 +227,14 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-se
   if(m){try{sessionStorage.setItem(K,m);}catch(_){}}
   else{try{m=sessionStorage.getItem(K);}catch(_){}}
   document.documentElement.dataset.app=(m==='style')?'style':'catalog';
+  // Phase 6.1: apply the Style-app background preset from localStorage BEFORE
+  // hydration so no default background paints for a frame first.
+  try{
+    var bg=localStorage.getItem('catalog:style-bg');
+    if(bg && /^(default|plain|warm|cool|paper)$/.test(bg)){
+      document.documentElement.dataset.styleBg=bg;
+    }
+  }catch(_){}
 }catch(_){}})();
           `}}
         />

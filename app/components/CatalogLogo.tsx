@@ -6,6 +6,10 @@ import { CATALOG_LOGO_PATH, CATALOG_LOGO_VIEWBOX } from "~/constants/brand-logo"
 interface CatalogLogoProps {
   className?: string;
   style?: React.CSSProperties;
+  /** Optional text override — e.g. "Catalog Style" for the Style-app splash.
+   *  When set, the wordmark always renders as text (never the SVG path
+   *  variant), falling back to a system serif if no brand font is loaded. */
+  text?: string;
 }
 
 /** Fixed-width SVG of the canonical wordmark - used when variant=='original'. */
@@ -23,7 +27,7 @@ function OriginalLogo({ className, style }: CatalogLogoProps) {
 }
 
 /** Word-rendered variant - wraps "Catalog" in a span styled per BrandVariant. */
-const CatalogLogo: React.FC<CatalogLogoProps> = ({ className, style }) => {
+const CatalogLogo: React.FC<CatalogLogoProps> = ({ className, style, text }) => {
   const { variantId } = useBrandLogo();
   const variant = getVariant(variantId);
 
@@ -32,14 +36,16 @@ const CatalogLogo: React.FC<CatalogLogoProps> = ({ className, style }) => {
     if (variant.googleFontUrl) ensureBrandFont(variant.googleFontUrl);
   }, [variant.googleFontUrl]);
 
-  if (!variant.fontFamily) {
+  // A caller-supplied text override always renders as text (never the SVG
+  // path) — the SVG is a static drawing of "Catalog" and can't be relabelled.
+  if (!variant.fontFamily && !text) {
     return <OriginalLogo className={className} style={style} />;
   }
 
   // The font-rendered wordmark inherits the SVG mark's height via line-height.
   // Container's height controls the visual scale (passed via className).
   const wordStyle: React.CSSProperties = {
-    fontFamily: variant.fontFamily,
+    fontFamily: variant.fontFamily ?? 'Georgia, "Times New Roman", serif',
     fontWeight: variant.weight ?? 700,
     fontStyle: variant.italic ? 'italic' : 'normal',
     letterSpacing: variant.letterSpacing ?? '-0.02em',
@@ -61,7 +67,7 @@ const CatalogLogo: React.FC<CatalogLogoProps> = ({ className, style }) => {
       style={wordStyle}
       data-brand-variant={variant.id}
     >
-      Catalog
+      {text ?? 'Catalog'}
     </span>
   );
 };

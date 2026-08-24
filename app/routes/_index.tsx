@@ -2547,7 +2547,7 @@ export default function Home() {
           <div className="auth-splash-particles">
             <ParticleBackground speed={1} />
           </div>
-          <CatalogLogo className="auth-splash-logo" />
+          <CatalogLogo className="auth-splash-logo" text={getAppMode() === 'style' ? 'Catalog Style' : undefined} />
         </div>
       )}
       {CLERK_AUTH_ENABLED

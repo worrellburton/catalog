@@ -1999,14 +1999,23 @@ export function StyleUpExperience({
               <div className="su-empty">You&apos;re chatting with all our stylists.</div>
             )}
           </div>
-          {/* Phase 2.5: entry to the become-a-stylist form. Style app only. */}
-          <button
-            type="button"
-            className="su-become-stylist"
-            onClick={() => navigate('/style/apply')}
-          >
-            Become a stylist
-          </button>
+          {/* Phase 2.5 / 6.1: picker footer links. */}
+          <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
+            <button
+              type="button"
+              className="su-become-stylist"
+              onClick={() => navigate('/style/apply')}
+            >
+              Become a stylist
+            </button>
+            <button
+              type="button"
+              className="su-become-stylist"
+              onClick={() => navigate('/style/settings')}
+            >
+              Settings
+            </button>
+          </div>
         </div>
   );
 

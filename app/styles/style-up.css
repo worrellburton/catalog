@@ -2378,3 +2378,50 @@ html[data-app="style"] .su-saved-row-item img,
 html[data-app="style"] .su-saved-row-item--empty {
   width: 100%; height: 100%; object-fit: cover; display: block;
 }
+
+
+/* Phase 6.1: Style app background presets. Applied via data-style-bg on
+ * <html> from either the pre-hydration script (root.tsx) or the settings
+ * route. Scoped to data-app="style" so the Catalog app is untouched. */
+html[data-app="style"][data-style-bg="plain"] body,
+html[data-app="style"][data-style-bg="plain"] .site-particle-host { background: #0a0a0a !important; }
+html[data-app="style"][data-style-bg="plain"] .site-particle-host { display: none !important; }
+
+html[data-app="style"][data-style-bg="warm"] body {
+  background: radial-gradient(120% 100% at 50% -10%, #3a1810 0%, #150a0a 55%, #0a0505 100%);
+}
+html[data-app="style"][data-style-bg="warm"] .site-particle-host { display: none !important; }
+
+html[data-app="style"][data-style-bg="cool"] body {
+  background: radial-gradient(120% 100% at 50% -10%, #0e2130 0%, #071018 55%, #050a0f 100%);
+}
+html[data-app="style"][data-style-bg="cool"] .site-particle-host { display: none !important; }
+
+html[data-app="style"][data-style-bg="paper"] body,
+html[data-app="style"][data-style-bg="paper"] .site-particle-host {
+  background: #f5f2ec !important;
+}
+html[data-app="style"][data-style-bg="paper"] .site-particle-host { display: none !important; }
+html[data-app="style"][data-style-bg="paper"] { color: #1a1a1a; }
+html[data-app="style"][data-style-bg="paper"] .su-apply,
+html[data-app="style"][data-style-bg="paper"] .su-showroom,
+html[data-app="style"][data-style-bg="paper"] .su-inbox { color: #1a1a1a; }
+
+/* Settings page — background picker grid. */
+.su-settings-bg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.su-settings-bg-tile {
+  display: grid; grid-template-columns: 64px 1fr; gap: 12px; align-items: center;
+  padding: 10px; text-align: left; cursor: pointer;
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 10px; color: #f0f0f0; font-family: inherit;
+}
+.su-settings-bg-tile.is-active { border-color: #f0f0f0; background: rgba(255,255,255,0.10); }
+.su-settings-bg-swatch { width: 64px; height: 48px; border-radius: 6px; overflow: hidden; }
+.su-settings-bg-swatch[data-bg="default"] { background: radial-gradient(circle at 30% 30%, #2a2a2a 0%, #0a0a0a 100%); }
+.su-settings-bg-swatch[data-bg="plain"]   { background: #0a0a0a; border: 1px solid rgba(255,255,255,0.08); }
+.su-settings-bg-swatch[data-bg="warm"]    { background: radial-gradient(120% 100% at 50% -10%, #3a1810 0%, #150a0a 100%); }
+.su-settings-bg-swatch[data-bg="cool"]    { background: radial-gradient(120% 100% at 50% -10%, #0e2130 0%, #071018 100%); }
+.su-settings-bg-swatch[data-bg="paper"]   { background: #f5f2ec; border: 1px solid rgba(0,0,0,0.06); }
+.su-settings-bg-info { display: flex; flex-direction: column; min-width: 0; }
+.su-settings-bg-label { font-size: 14px; color: #f0f0f0; }
+.su-settings-bg-blurb { font-size: 12px; color: rgba(255,255,255,0.55); overflow: hidden; text-overflow: ellipsis; }
