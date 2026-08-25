@@ -39,7 +39,15 @@
 }
 
 /* Header */
-header {
+/* `header:not([class])`, not a bare `header`: this styles the consumer FEED
+   header, which is the one classless <header> in the app (_index.tsx). As a
+   bare element selector it also hit every other <header> — the Style app's
+   /style/settings, /showroom and /inbox heads all inherited `position: fixed;
+   top: 0` and pinned themselves under the status bar. Three places had already
+   worked around it by using a div instead of a <header> (home2, admin/gtm,
+   admin/governance); scoping it here is the actual fix. The Flutter shell's
+   injected CSS already targets `header:not([class])` for the same reason. */
+header:not([class]) {
   position: fixed;
   top: 0;
   left: 0;
@@ -82,7 +90,7 @@ header {
 /* Re-enable interactivity for the actual controls inside the
    header - the wrapper itself is pointer-events: none so the
    gradient doesn't intercept taps on cards bleeding into its area. */
-header > * {
+header:not([class]) > * {
   pointer-events: auto;
 }
 
@@ -100,7 +108,7 @@ header > * {
    expensive on iOS) and read as visual noise on top of the soft
    gradient. */
 
-.light-mode header {
+.light-mode header:not([class]) {
   background: linear-gradient(
     to bottom,
     rgba(255, 255, 255, 0.92) 0%,
@@ -151,7 +159,7 @@ header > * {
    add). It previously pulled up -28px into the header row and sat on top of
    those controls, blocking taps. High z-index so it reads as a transient
    notification over the creators rail beneath the header. */
-header > .pending-look-pill {
+header:not([class]) > .pending-look-pill {
   position: absolute;
   top: 100%;
   left: 0;
@@ -784,7 +792,7 @@ header > .pending-look-pill {
     min-width: 0 !important;
   }
 
-  header {
+  header:not([class]) {
     height: 48px;
     padding: 0 12px;
     padding-bottom: 0;

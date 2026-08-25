@@ -265,7 +265,7 @@ export default function StyleInboxRoute() {
     return (
       <div className="su-apply">
         <h1>Inbox</h1>
-        <p>You&apos;re not a stylist yet. Apply first — this is where shopper threads land once you&apos;re approved.</p>
+        <p>You&apos;re not a stylist yet. Apply first. This is where shopper threads land once you&apos;re approved.</p>
         <div className="su-apply-actions">
           <button type="button" className="su-apply-back" onClick={() => navigate('/style')}>Back</button>
           <button type="button" className="su-apply-cta" onClick={() => navigate('/style/apply')}>Apply</button>
@@ -358,7 +358,7 @@ export default function StyleInboxRoute() {
                   autoFocus
                   value={query}
                   onChange={e => setQuery(e.target.value)}
-                  placeholder={showroom.length ? 'Search the catalog…' : 'Your showroom is empty — search the catalog…'}
+                  placeholder={showroom.length ? 'Search the catalog…' : 'Your showroom is empty, search the catalog…'}
                 />
                 <button type="button" className="su-apply-back" onClick={() => { setPickerOpen(false); setQuery(''); setResults([]); }}>Cancel</button>
               </div>

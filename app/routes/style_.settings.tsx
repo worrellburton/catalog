@@ -18,7 +18,7 @@ import '~/styles/style-up.css';
 type Preset = 'default' | 'plain' | 'warm' | 'cool' | 'paper';
 
 const PRESETS: { id: Preset; label: string; blurb: string }[] = [
-  { id: 'default', label: 'Particles', blurb: 'The house look — soft moving field over black.' },
+  { id: 'default', label: 'Particles', blurb: 'The house look. Soft moving field over black.' },
   { id: 'plain',   label: 'Plain dark', blurb: 'No motion, no shine, just black.' },
   { id: 'warm',    label: 'Warm dusk',  blurb: 'Amber-into-plum radial. Cozy.' },
   { id: 'cool',    label: 'Cool tide',  blurb: 'Slate-into-teal radial. Quiet.' },
@@ -84,7 +84,7 @@ export default function StyleSettingsRoute() {
       .select('accepting_new');
     if (error || !data || data.length === 0) {
       setStylist({ ...stylist, accepting_new: prev });
-      setStylistError(error?.message ?? "Couldn't save — your account can't edit this yet.");
+      setStylistError(error?.message ?? "Couldn't save. Your account can't edit this yet.");
     }
     setSavingAccept(false);
   }, [stylist, savingAccept]);

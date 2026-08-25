@@ -167,7 +167,7 @@ export default function StyleShowroomRoute() {
     return (
       <div className="su-apply">
         <h1>Showroom</h1>
-        <p>You&apos;re not a stylist yet. Apply first — once approved, this is where your picks live.</p>
+        <p>You&apos;re not a stylist yet. Apply first. Once approved, this is where your picks live.</p>
         <div className="su-apply-actions">
           <button type="button" className="su-apply-back" onClick={() => navigate('/style')}>Back</button>
           <button type="button" className="su-apply-cta" onClick={() => navigate('/style/apply')}>Apply</button>
