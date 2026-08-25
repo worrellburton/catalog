@@ -95,6 +95,51 @@ const forceMuteVideo = (el: HTMLVideoElement | null) => {
   if (el) { el.muted = true; el.defaultMuted = true; }
 };
 
+/** A look-card piece's hero clip, mounted ONLY while it is on screen.
+ *
+ *  A thread accumulates look cards, each with 3-5 pieces, and a swap picker adds
+ *  3 more — every one of which used to be an autoplaying <video> from the moment
+ *  it rendered, whether or not it was anywhere near the viewport. Past the iOS
+ *  decoder ceiling videos simply stop painting (frozen posters) and the webview
+ *  thrashes, which reads as "slow" and "stuck loading". Off screen this renders
+ *  the poster, which is what the shopper is looking at anyway.
+ *
+ *  No wrapper element: the <img> and <video> occupy the same slot the two
+ *  branches always did, so the surrounding CSS is untouched. */
+function PieceMedia({ video, poster, alt }: { video: string; poster?: string; alt?: string }) {
+  const [inView, setInView] = useState(false);
+  const obs = useRef<IntersectionObserver | null>(null);
+  const attach = useCallback((el: Element | null) => {
+    obs.current?.disconnect();
+    if (!el) return;
+    // No IO (old webview): fall back to today's behaviour rather than a still.
+    if (typeof IntersectionObserver === 'undefined') { setInView(true); return; }
+    obs.current = new IntersectionObserver(
+      entries => setInView(entries.some(e => e.isIntersecting)),
+      // Start a beat before it scrolls in so it is already playing on arrival.
+      { rootMargin: '200px 0px' },
+    );
+    obs.current.observe(el);
+  }, []);
+  useEffect(() => () => obs.current?.disconnect(), []);
+
+  if (!inView && poster) {
+    return <img ref={attach} src={poster} alt={alt ?? ''} loading="lazy" />;
+  }
+  return (
+    <video
+      ref={el => { attach(el); forceMuteVideo(el); }}
+      src={video}
+      poster={poster}
+      autoPlay
+      loop
+      muted
+      playsInline
+      preload="none"
+    />
+  );
+}
+
 /** "~2 min left" / "~40s left", estimated wait from the shared generation
  *  timing model (based on typical generation durations). */
 function fmtRemaining(sec: number): string {
@@ -2538,7 +2583,7 @@ export function StyleUpExperience({
                         >
                           <span className="su-swap-opt-media">
                             {o.id && pieceVideos[o.id]
-                              ? <video ref={forceMuteVideo} src={pieceVideos[o.id]!.video} poster={pieceVideos[o.id]!.poster ?? o.image ?? undefined} autoPlay loop muted playsInline />
+                              ? <PieceMedia video={pieceVideos[o.id]!.video} poster={pieceVideos[o.id]!.poster ?? o.image ?? undefined} alt={o.name || ''} />
                               : o.image ? <img src={o.image} alt={o.name || ''} loading="lazy" /> : <span className="su-product-media--empty" />}
                           </span>
                           <span className="su-swap-opt-info">
@@ -2572,7 +2617,7 @@ export function StyleUpExperience({
                             <span className="su-lookcard-num" aria-hidden="true">{String(i + 1).padStart(2, '0')}</span>
                             <button type="button" className="su-lookcard-media" onClick={() => openProduct(pc)} aria-label={`Open ${pc.name || 'product'}`}>
                               {pc.id && pieceVideos[pc.id]
-                                ? <video ref={forceMuteVideo} src={pieceVideos[pc.id]!.video} poster={pieceVideos[pc.id]!.poster ?? pc.image ?? undefined} autoPlay loop muted playsInline />
+                                ? <PieceMedia video={pieceVideos[pc.id]!.video} poster={pieceVideos[pc.id]!.poster ?? pc.image ?? undefined} alt={pc.name || 'Product'} />
                                 : pc.image ? <img src={pc.image} alt={pc.name || 'Product'} loading="lazy" /> : <span className="su-product-media--empty" />}
                             </button>
                             <button type="button" className="su-lookcard-info" onClick={() => openProduct(pc)}>
