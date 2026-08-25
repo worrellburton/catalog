@@ -129,6 +129,61 @@ function mapMessage(r: Record<string, unknown>): StyleUpMessage {
   };
 }
 
+// Phase 3.6: em-dashes read as AI-generated. The edge function scrubs them on
+// insert and the transcript scrubs them at render time, but the thread lists
+// build their own previews straight off the row, so they need the same scrub.
+function stripEmDashes(s: string): string {
+  return s
+    .replace(/\s*[—–]\s*/g, ', ')
+    .replace(/, , /g, ', ');
+}
+
+// Phase 2.3 guard, at the writer level: a HUMAN stylist thread is answered by a
+// real person from the inbox, so the rule-based client stylist must never post
+// into it. style-up-chat already guards the LLM path; the four client writers
+// below (sendStylistText / sendChooser / sendProductPick / sendSwapOptions) are
+// the other half. Guarding inside the writers — not at each call site — covers
+// every current and future caller.
+//
+// It suppresses the BOT, not the stylist: the human's own inbox posts products
+// through sendProductPick (routes/style_.inbox.tsx), so a write by the thread's
+// own stylist (human_user_id === auth.uid()) must still go through — otherwise
+// "attach a product" is dead in the one UI it exists for.
+//
+// Fails OPEN (only an explicit is_human === true suppresses, same posture as the
+// edge fn) so a transient read error can't mute the AI stylists. The is_human
+// verdict is cached per thread — a single canned beat fires several writers back
+// to back — but the "it's my own thread" pass is not, since that depends on who
+// is signed in.
+const suppressWriteCache = new Map<string, boolean>();
+
+type ThreadStylistGuardRow = { is_human?: boolean; human_user_id?: string | null };
+
+async function botMustStaySilent(threadId: string): Promise<boolean> {
+  const cached = suppressWriteCache.get(threadId);
+  if (cached !== undefined) return cached;
+  if (!supabase || !threadId) return false;
+  const { data, error } = await supabase
+    .from('style_up_threads')
+    .select('stylist:style_up_stylists(is_human, human_user_id)')
+    .eq('id', threadId)
+    .maybeSingle();
+  if (error || !data) return false; // fail open, and don't cache a miss
+  const raw = (data as { stylist?: ThreadStylistGuardRow | ThreadStylistGuardRow[] | null }).stylist;
+  const s = Array.isArray(raw) ? raw[0] : raw;
+  if (s?.is_human !== true) {
+    suppressWriteCache.set(threadId, false);
+    return false;
+  }
+  // The stylist themselves, writing from their own inbox — let it through. This
+  // verdict depends on WHO is signed in, not just on the thread, so it is not
+  // cached (a stale "allowed" would survive a sign-out into a shopper session).
+  const { data: auth } = await supabase.auth.getUser();
+  if (auth?.user?.id && auth.user.id === s.human_user_id) return false;
+  suppressWriteCache.set(threadId, true);
+  return true;
+}
+
 /** The active stylist roster, in display order. Pass `landingOnly` to get just
  *  the two stylists featured on the /style landing page (landing_slot set). */
 export async function fetchStylists(opts: { landingOnly?: boolean } = {}): Promise<StyleUpStylist[]> {
@@ -411,10 +466,11 @@ export async function fetchMyThreads(shopperUserId: string): Promise<StyleUpThre
       // the pull lands); a 2-min stale grace covers a run that died mid-pull.
       const hu = t.hunting_until ? new Date(String(t.hunting_until)).getTime() : null;
       const hunting = hu != null && now < hu + 120000;
+      const last = preview.get(tid);
       return {
         threadId: tid,
         stylist: mapStylist(raw as Record<string, unknown>),
-        lastMessage: preview.get(tid) ?? null,
+        lastMessage: last != null ? stripEmDashes(last) : null,
         lastMessageAt: (t.last_message_at as string | null) ?? null,
         working: hunting || renderingThreads.has(tid),
         workingGen: genTiming.get(tid) ?? null,
@@ -595,7 +651,7 @@ export async function adminListThreads(): Promise<AdminThread[]> {
         threadId: tid,
         shopper: shoppers.get(String(t.shopper_user_id)) ?? { id: String(t.shopper_user_id), name: 'Shopper', avatarUrl: null },
         stylist: mapStylist((raw ?? {}) as Record<string, unknown>),
-        lastMessage: previewOf(lm.kind, lm.body),
+        lastMessage: stripEmDashes(previewOf(lm.kind, lm.body)),
         lastMessageAt: (t.last_message_at as string | null) ?? null,
         messageCount: count.get(tid) ?? 0,
         awaitingStylist: lm.sender === 'shopper',
@@ -698,7 +754,10 @@ export async function adminListLooks(limit = 120): Promise<AdminLook[]> {
   });
 }
 
-/** Admin: post a stylist message into any thread (reply on behalf of stylist). */
+/** Admin: post a stylist message into any thread (reply on behalf of stylist).
+ *  Inherits sendStylistText's guard, so an admin who is not the thread's own
+ *  human stylist is a no-op on a human thread (the human answers from
+ *  routes/style_.inbox.tsx, which inserts its text replies directly). */
 export async function adminSendStylistMessage(threadId: string, text: string): Promise<boolean> {
   return !!(await sendStylistText(threadId, text));
 }
@@ -794,6 +853,7 @@ export async function sendStylistText(
   text: string,
 ): Promise<StyleUpMessage | null> {
   if (!supabase || !text.trim()) return null;
+  if (await botMustStaySilent(threadId)) return null;
   const { data, error } = await supabase
     .from('style_up_messages')
     .insert({ thread_id: threadId, sender: 'stylist', kind: 'text', body: text.trim() })
@@ -971,7 +1031,7 @@ async function renderLook(
     return {
       generationId: null,
       error: names.length
-        ? `I can't try ${names.join(' and ')} on you yet — ${names.length > 1 ? 'those are' : "that's"} from outside our catalog. Swap in catalog pieces and I'll render the full look.`
+        ? `I can't try ${names.join(' and ')} on you yet, ${names.length > 1 ? 'those are' : "that's"} from outside our catalog. Swap in catalog pieces and I'll render the full look.`
         : "One of those picks is from outside our catalog, so I can't put it on you yet. Choose catalog pieces and I'll render the full look.",
     };
   }
@@ -1365,6 +1425,7 @@ export async function sendChooser(
   choose: NonNullable<StyleUpProductRef['choose']>,
 ): Promise<StyleUpMessage | null> {
   if (!supabase || choose.options.length === 0) return null;
+  if (await botMustStaySilent(threadId)) return null;
   const { data, error } = await supabase
     .from('style_up_messages')
     .insert({ thread_id: threadId, sender: 'stylist', kind: 'product', product_ref: { choose } })
@@ -1394,6 +1455,7 @@ export async function sendProductPick(
   product: StyleUpProductRef,
 ): Promise<StyleUpMessage | null> {
   if (!supabase || !product.id) return null;
+  if (await botMustStaySilent(threadId)) return null;
   const { data, error } = await supabase
     .from('style_up_messages')
     .insert({ thread_id: threadId, sender: 'stylist', kind: 'product', product_ref: product })
@@ -1414,6 +1476,7 @@ export async function sendSwapOptions(
   options: StyleUpProductRef[],
 ): Promise<StyleUpMessage | null> {
   if (!supabase || options.length === 0) return null;
+  if (await botMustStaySilent(threadId)) return null;
   const { data, error } = await supabase
     .from('style_up_messages')
     .insert({ thread_id: threadId, sender: 'stylist', kind: 'product', product_ref: { swap: { role, label, options } } })

@@ -9,6 +9,7 @@ import { useDeleteMode } from '~/hooks/useDeleteMode';
 import { AvatarUpload } from './AvatarCropModal';
 import { getWallet } from '~/services/earnings';
 import { supabase } from '~/utils/supabase';
+import { getAppMode } from '~/utils/app-mode';
 
 interface UserMenuUser {
   id?: string;
@@ -193,6 +194,8 @@ function UserMenu({
   const [deleteMode, setDeleteModeState] = useDeleteMode();
   const isSuperAdmin = user?.role === 'super_admin';
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
+  // Two-app split: the Catalog app is just the catalog. No door into /style.
+  const showStyleUp = user && getAppMode() !== 'catalog';
   const [avatarOverride, setAvatarOverride] = useState<string | null>(null);
   const renderedAvatarUrl = avatarOverride || user?.avatarUrl;
   const [cooldown, setCooldown] = useState(false);
@@ -592,8 +595,9 @@ function UserMenu({
               <span>Saved</span>
               {bookmarkCount > 0 && <span className="user-menu-badge">{bookmarkCount}</span>}
             </button>
-            {/* Style Up — AI-stylist chat. App feature (all signed-in users). */}
-            {user && (
+            {/* Style Up — AI-stylist chat. Style app only; the Catalog app
+                ships no entry point into it. */}
+            {showStyleUp && (
               <button className="user-menu-item" onClick={runItem(() => navigate('/style'))}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                 <span>StyleUp</span>
@@ -837,8 +841,9 @@ function UserMenu({
                   <PageRow icon="grid" label="My Catalog" onClick={runPageItem(onOpenMyLooks)} />
                 )}
 
-                {/* Style Up — AI-stylist chat. App feature (all signed-in users). */}
-                {user && (
+                {/* Style Up — AI-stylist chat. Style app only; the Catalog app
+                    ships no entry point into it. */}
+                {showStyleUp && (
                   <PageRow icon="chat" label="StyleUp" onClick={runPageItem(() => navigate('/style'))} />
                 )}
 

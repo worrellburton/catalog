@@ -8,7 +8,7 @@
 // edge fn), product picks, and "see it on me" renders (generate-look pipeline)
 // stream in via realtime.
 
-import { Fragment, useCallback, useEffect, useRef, useState } from 'react';
+import { Fragment, Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate } from '@remix-run/react';
 import { getAppMode } from '~/utils/app-mode';
 import { useAuth } from '~/hooks/useAuth';
@@ -23,14 +23,23 @@ import {
   type StyleUpStylist, type StyleUpMessage, type StyleUpProductRef, type StyleUpThreadSummary, type RecommendOpts,
   type StyleUpProductDetail,
 } from '~/services/style-up';
+import { listUserGenerations, getGenerationLookPosters } from '~/services/user-generations';
 import { roleTagFromName } from '~/services/product-roles';
 import { SCENE_PRESETS, presetForPhrase } from '~/data/style-scenes';
 import { signInWithGoogle } from '~/services/auth';
 import StyleUpBackground from './StyleUpBackground';
+import StyleOnboarding, { needsStyleOnboarding } from './StyleOnboarding';
 import CatalogLogo from '~/components/CatalogLogo';
 import { useBookmarks } from '~/hooks/useBookmarks';
-import { setAffiliateContext } from '~/services/affiliate';
+import { affiliateRedirect, setAffiliateContext } from '~/services/affiliate';
 import type { Product } from '~/data/looks';
+
+// The account surface (edit profile, sign out, delete account). The Catalog app
+// reaches it through _index's `catalog:open-profile` listener, but the Style app
+// never mounts _index — it renders this component at /style — so the Style
+// profile chip has to mount ProfilePage itself or it is a dead button. Apple
+// requires in-app account deletion, which lives in here.
+const ProfilePage = lazy(() => import('~/components/ProfilePage'));
 
 // Preferences the stylist infers from chat, budget, occasion, formality lean,
 // dropped colors, simplicity, applied to every recommendation (#4/#6/#7).
@@ -414,10 +423,44 @@ function isProfileReady(ctx: ShopperContext | null): boolean {
   return !!ctx && ctx.photos.some(Boolean) && !!ctx.heightLabel.trim() && !!ctx.weightLabel.trim();
 }
 
+type RosterFilter = 'all' | 'humans' | 'ai';
+
+/** The AI/humans roster chips. Paired with `emptyRosterCopy` so a filter that
+ *  matches nothing says why instead of rendering a blank pane — the roster is
+ *  all-AI today, so "Humans" legitimately matches zero rows. */
+function matchesRosterFilter(s: StyleUpStylist, f: RosterFilter): boolean {
+  return f === 'all' ? true : f === 'humans' ? s.isHuman : !s.isHuman;
+}
+function emptyRosterCopy(f: RosterFilter): string {
+  if (f === 'humans') return 'No human stylists are taking clients yet. Try AI, or apply to become one.';
+  if (f === 'ai') return 'No AI stylists available right now.';
+  return 'No stylists available yet.';
+}
+
 /** A stylist's avatar contents: their real photo when we have one, otherwise a
  *  clean line-art portrait (a croquis bust) — never bare initials. Sits inside a
- *  `.su-stylist-avatar` (accent background), so the line inherits the dark ink. */
-function StylistFace({ avatarUrl, name }: { avatarUrl: string | null; name?: string }) {
+ *  `.su-stylist-avatar` (accent background), so the line inherits the dark ink.
+ *
+ *  AI stylists never get a face. The seeded roster carries stock human portraits
+ *  (randomuser.me), which read as real people; the ask was for the AI stylists to
+ *  look like what they are, so `isHuman === false` always draws the machine mark
+ *  and the stored photo is ignored. Per-stylist differentiation comes from the
+ *  pill's `--su-accent`, which this inherits through `currentColor`. */
+function StylistFace({ avatarUrl, name, isHuman }: { avatarUrl: string | null; name?: string; isHuman?: boolean }) {
+  if (isHuman === false) {
+    return (
+      <svg className="su-avatar-illus su-robot-face" viewBox="0 0 40 40" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+        <path d="M20 6.5v4" />
+        <circle cx="20" cy="5" r="1.6" fill="currentColor" stroke="none" />
+        <rect x="9.5" y="11" width="21" height="17" rx="5.5" />
+        <circle cx="15.6" cy="18.4" r="1.9" fill="currentColor" stroke="none" />
+        <circle cx="24.4" cy="18.4" r="1.9" fill="currentColor" stroke="none" />
+        <path d="M15.8 23.4h8.4" />
+        <path d="M6.6 16.6v5.4M33.4 16.6v5.4" />
+        <path d="M13.5 28v2.2a4 4 0 0 0 4 4h5a4 4 0 0 0 4-4V28" />
+      </svg>
+    );
+  }
   if (avatarUrl) return <img src={avatarUrl} alt={name ?? ''} loading="lazy" />;
   return (
     <svg className="su-avatar-illus" viewBox="0 0 40 40" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
@@ -495,15 +538,15 @@ function renderErrorMessage(r: UserGeneration | null): string {
   const code = r?.error_code ?? '';
   const raw = `${r?.error ?? ''} ${typeof r?.error_raw === 'string' ? r?.error_raw : JSON.stringify(r?.error_raw ?? '')}`.toLowerCase();
   if (code === 'content_policy' || /partner_validation|content_policy|celebrity|public figure|minor|policy/.test(raw)) {
-    return 'The video engine blocked this look — usually a recognizable face or a bold logo in a photo. Try a different selfie or swap a piece.';
+    return 'The video engine blocked this look, usually a recognizable face or a bold logo in a photo. Try a different selfie or swap a piece.';
   }
   if (/exhausted balance|user is locked|top up|billing|quota|insufficient/.test(raw)) {
-    return 'Our render engine is temporarily offline — this one’s on us, not your look. Hang tight and try again shortly.';
+    return 'Our render engine is temporarily offline. This one is on us, not your look. Hang tight and try again shortly.';
   }
   if (code === 'fal_submit_error' || code === 'fal_error' || /unexpected status|timeout|no webhook|provider|5\d\d|429/.test(raw)) {
-    return 'Our render engine hit a snag — not your look. Give it another go in a moment.';
+    return 'Our render engine hit a snag, not your look. Give it another go in a moment.';
   }
-  return 'Couldn’t render that look — try again, or swap a piece.';
+  return 'Couldn’t render that look. Try again, or swap a piece.';
 }
 
 /** Small "copy log" pill shown next to a render error, so the exact failure
@@ -624,10 +667,20 @@ export function StyleUpExperience({
   const [stylistTyping, setStylistTyping] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
   const [ctx, setCtx] = useState<ShopperContext | null>(null);
-  const [ctxMini, setCtxMini] = useState(false);     // collapse-on-scroll
+  // Collapse-on-scroll. The Style app opens on the one-line context bar — the
+  // client asked for the context row not to need two rows, and the scroll
+  // handler below only ever sets it to true there anyway, so seeding it false
+  // just meant the first screen showed the tall card until you scrolled.
+  const [ctxMini, setCtxMini] = useState(() => typeof window !== 'undefined' && getAppMode() === 'style');
   const [threadHeadScrolled, setThreadHeadScrolled] = useState(false);
   const isStyleApp = typeof window !== 'undefined' && getAppMode() === 'style';
   const [ctxEditing, setCtxEditing] = useState(false);
+  const [profileOpen, setProfileOpen] = useState(false);   // account surface (Style app)
+  const [headScrolled, setHeadScrolled] = useState(false); // shell header hidden by scroll
+  // The looks half of the saved strip. In the Style app "saving a look" IS
+  // "add to my looks" — the shopper's own finished renders — so this reads
+  // those rather than inventing a second save concept to keep in sync.
+  const [savedLooks, setSavedLooks] = useState<{ genId: string; videoUrl: string; poster: string | null }[]>([]);
   // Render polling: generation id → its latest row. Drives the on-you render
   // bubbles (spinner → video).
   const [renders, setRenders] = useState<Record<string, UserGeneration>>({});
@@ -774,6 +827,27 @@ export function StyleUpExperience({
       });
     }
   }, [threadId, active?.id]);
+
+  // Saved looks for the strip. Style app only — the Catalog embed has its own
+  // Saved surface. Re-runs when a render is published so the row picks it up.
+  useEffect(() => {
+    if (!isStyleApp || !userId) { setSavedLooks([]); return; }
+    let alive = true;
+    void (async () => {
+      const gens = (await listUserGenerations(userId)).filter(g => g.status === 'done' && g.video_url);
+      if (!alive) return;
+      const posters = await getGenerationLookPosters(gens.map(g => g.id));
+      if (!alive) return;
+      setSavedLooks(gens.map(g => ({ genId: g.id, videoUrl: g.video_url as string, poster: posters[g.id] ?? null })));
+    })();
+    return () => { alive = false; };
+  }, [isStyleApp, userId, published]);
+
+  // Each pane mounts its OWN `.su-page` scroller, and a freshly-mounted one
+  // sits at scrollTop 0 without firing a scroll event — so without this the
+  // header stays collapsed after switching panes and the profile chip goes
+  // untappable until you scroll down and back up.
+  useEffect(() => { setHeadScrolled(false); }, [pickerOpen, threadId]);
 
   // Shopper context, the SAME inputs the AI-look flow uses (face photos +
   // height / weight / age / gender + saved style). Editable here; saving writes
@@ -1176,7 +1250,7 @@ export function StyleUpExperience({
     // like the stylist is really texting you (not one wall of text).
     setGenLook(false);
     await beat();
-    await sendStylistText(threadId, "Alright, it's cooking now — this one takes a few minutes.");
+    await sendStylistText(threadId, "Alright, it's cooking now. This one takes a few minutes.");
     await beat();
     await sendStylistText(threadId, 'Want to start another look while we wait?');
     await beat();
@@ -1327,7 +1401,7 @@ export function StyleUpExperience({
     if (!swap.role) {
       // Couldn't pin this piece to a garment slot, so we can't pull
       // like-for-like alternates — keep the (uniform) affordance honest.
-      await sendStylistText(threadId, `Sure — tell me what you'd like instead of this piece and I'll pull some options.`);
+      await sendStylistText(threadId, `Sure, tell me what you'd like instead of this piece and I'll pull some options.`);
       return;
     }
     await sendStylistText(threadId, `Sure thing, here are a few ${swap.label} options. Tap the one you like and I'll put it on you.`);
@@ -1442,7 +1516,10 @@ export function StyleUpExperience({
         setProductViewer(cur => { if (cur && cur.ref.id === p.id) setSimilarProducts(sim); return cur; });
       });
     } else if (p.url) {
-      window.open(p.url, '_blank', 'noopener');
+      // Route every style-surface clickout through the affiliate chokepoint so
+      // affiliate_clicks.stylist_id is written (the admin stylist analytics read
+      // it; a raw window.open leaves the column NULL and every count at 0).
+      window.open(affiliateRedirect(p.url, p), '_blank', 'noopener');
     }
   }, []);
 
@@ -1561,7 +1638,7 @@ export function StyleUpExperience({
     const { data, error } = await uploadUserPhoto(file, userId);
     if (error || !data) {
       setUploadingSlot(null);
-      showPhotoNote(slot, error ?? 'Couldn’t upload that photo — try again.');
+      showPhotoNote(slot, error ?? 'Couldn’t upload that photo. Try again.');
       return;
     }
     // Validate against the whole try-on requirement (clear face + one real
@@ -1571,7 +1648,7 @@ export function StyleUpExperience({
     if (!check.ok) {
       await deleteUserUpload(data);
       setUploadingSlot(null);
-      showPhotoNote(slot, check.reason ?? 'That photo won’t work for a try-on — use a clear, front-facing photo of just you.');
+      showPhotoNote(slot, check.reason ?? 'That photo won’t work for a try-on. Use a clear, front-facing photo of just you.');
       return;
     }
     const slots = [...ctx.slots];
@@ -1671,10 +1748,16 @@ export function StyleUpExperience({
   // Shared top bar: the Catalog logo centered up top with "style" right under
   // it. Catalog app: back button on the left. Style app (Phase 3.1): no back
   // (the shopper is IN the Style app; there's nowhere behind to go to), and
-  // a small profile chip on the right that opens the account surface via
-  // the existing catalog:open-profile custom event.
+  // a small profile chip on the right that mounts the account surface
+  // (ProfilePage) locally — see the lazy import at the top of this file.
+  // Every pane under the shell header scrolls its own `.su-page`, so the header
+  // gets no window scroll to react to — each one wires this up to hide it.
+  // Style app only: the Catalog embed keeps its header (and its back button) put.
+  const onPageScroll = (e: { currentTarget: HTMLDivElement }) => {
+    if (isStyleApp) setHeadScrolled(e.currentTarget.scrollTop > 8);
+  };
   const header = (onBack: () => void) => (
-    <div className={'su-shell-head' + (isStyleApp ? ' su-shell-head--style' : '')}>
+    <div className={'su-shell-head' + (isStyleApp ? ' su-shell-head--style' : '') + (isStyleApp && headScrolled ? ' is-scrolled' : '')}>
       {isStyleApp ? (
         <span className="su-shell-spacer" aria-hidden="true" />
       ) : (
@@ -1690,7 +1773,7 @@ export function StyleUpExperience({
         <button
           type="button"
           className="su-shell-profile"
-          onClick={() => window.dispatchEvent(new CustomEvent('catalog:open-profile'))}
+          onClick={() => setProfileOpen(true)}
           aria-label="Open your profile"
         >
           <span className="su-shell-profile-dot" aria-hidden="true" />
@@ -1699,6 +1782,12 @@ export function StyleUpExperience({
     </div>
   );
   const railHeader = header(exit);
+
+  const profileOverlay = profileOpen && user ? (
+    <Suspense fallback={null}>
+      <ProfilePage user={user} onClose={() => setProfileOpen(false)} />
+    </Suspense>
+  ) : null;
 
   // Expanded look viewer, the big, full-screen video + its pieces + add-to-looks.
   // Swipe down to dismiss; closing dissolves out.
@@ -1841,7 +1930,7 @@ export function StyleUpExperience({
                 role="button"
                 tabIndex={0}
               >
-                {d.description}
+                {stripEmDashes(d.description)}
               </p>
             )}
           </div>
@@ -1862,7 +1951,11 @@ export function StyleUpExperience({
             </div>
           )}
           {shopUrl && (
-            <button type="button" className="su-viewer-add" onClick={() => window.open(shopUrl, '_blank', 'noopener')}>
+            <button
+              type="button"
+              className="su-viewer-add"
+              onClick={() => window.open(affiliateRedirect(shopUrl, d ?? ref), '_blank', 'noopener')}
+            >
               Shop this piece
             </button>
           )}
@@ -1906,7 +1999,7 @@ export function StyleUpExperience({
               {stylists.map(s => (
                 <div key={s.id} className={'su-landing-stylist' + (s.isHuman ? ' is-human' : ' is-ai')} style={{ ['--su-accent' as string]: s.accentColor ?? '#8aa0c0' }}>
                   <span className="su-stylist-avatar" aria-hidden="true">
-                    <StylistFace avatarUrl={s.avatarUrl} name={s.name} />
+                    <StylistFace avatarUrl={s.avatarUrl} name={s.name} isHuman={s.isHuman} />
                     {!s.isHuman && <span className="su-stylist-bot" aria-label="AI stylist">AI</span>}
                   </span>
                   <span className="su-landing-stylist-name">{s.name}</span>
@@ -1918,7 +2011,10 @@ export function StyleUpExperience({
           {!landing && <p>Sign in to chat with a stylist and see picks on yourself.</p>}
           {googleButton}
           {signinError && <p className="su-signin-error">{signinError}</p>}
-          {landing && (
+          {/* Only on the web landing. Inside the Style app the front door pins
+              every route to /style, so this button bounces straight back and
+              reads as broken — and the two apps are separate products now. */}
+          {landing && !isStyleApp && (
             <button type="button" className="su-landing-browse" onClick={() => browseTheFeed(navigate)}>
               Browse the catalog
             </button>
@@ -1928,9 +2024,59 @@ export function StyleUpExperience({
     );
   }
 
+  // ── Saved strip: what you've saved, looks first then products, pinned to the
+  // top of both the home surface and an open conversation. Style app only (the
+  // Catalog embed has its own Saved screen). Shows an invitation when empty
+  // rather than vanishing, so the row doesn't appear out of nowhere later.
+  const savedRow = isStyleApp ? (
+    <div className="su-saved-row" aria-label="Saved">
+      <span className="su-saved-row-label">Saved</span>
+      {savedLooks.length === 0 && bookmarkedProducts.length === 0 ? (
+        <span className="su-saved-row-empty">Looks and pieces you save show up here.</span>
+      ) : (
+        <div className="su-saved-row-strip">
+          {savedLooks.slice(0, 20).map(l => (
+            <button
+              key={l.genId}
+              type="button"
+              className="su-saved-row-item su-saved-row-item--look"
+              onClick={() => setViewer({ videoUrl: l.videoUrl, pieces: [], genId: l.genId })}
+              title="Your look"
+            >
+              {l.poster
+                ? <img src={l.poster} alt="" loading="lazy" />
+                : <video src={l.videoUrl} muted playsInline preload="metadata" />}
+            </button>
+          ))}
+          {bookmarkedProducts.slice(0, 20).map((p, i) => (
+            <button
+              key={`${p.brand}::${p.name}::${i}`}
+              type="button"
+              className="su-saved-row-item"
+              onClick={() => openProduct({
+                id: String(p.id ?? ''), name: p.name, brand: p.brand,
+                price: p.price, image: p.image ?? undefined, url: p.url ?? undefined,
+              })}
+              title={`${p.brand ? p.brand + ', ' : ''}${p.name}`}
+            >
+              {p.image
+                ? <img src={p.image} alt="" loading="lazy" />
+                : <span className="su-saved-row-item--empty" />}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  ) : null;
+
   // ── Roster pane, saved conversations + the stylist list. ───────────────
+  // Stylists you don't already have a thread with, narrowed by the AI/humans
+  // chips (the landing pair ignores the chips — it has no filter row).
+  const rosterList = stylists
+    .filter(s => !myThreads.some(t => t.stylist.id === s.id))
+    .filter(s => landing || matchesRosterFilter(s, rosterFilter));
   const rosterPane = (
-        <div className="su-page">
+        <div className="su-page" onScroll={onPageScroll}>
           {/* Saved conversations, the shopper's ongoing chats live here so they
               can pick any one back up where they left off. */}
           {myThreads.length > 0 && (
@@ -1945,7 +2091,7 @@ export function StyleUpExperience({
                   onClick={() => void openThread(t.threadId, t.stylist)}
                 >
                   <span className="su-stylist-avatar" aria-hidden="true">
-                    <StylistFace avatarUrl={t.stylist.avatarUrl} name={t.stylist.name} />
+                    <StylistFace avatarUrl={t.stylist.avatarUrl} name={t.stylist.name} isHuman={t.stylist.isHuman} />
                   </span>
                   <span className="su-convo-info">
                     <span className="su-convo-top">
@@ -1987,10 +2133,7 @@ export function StyleUpExperience({
             </div>
           )}
           <div className="su-roster">
-            {stylists
-              .filter(s => !myThreads.some(t => t.stylist.id === s.id))
-              .filter(s => landing ? true : rosterFilter === 'all' ? true : rosterFilter === 'humans' ? s.isHuman : !s.isHuman)
-              .map(s => (
+            {rosterList.map(s => (
               <button
                 key={s.id}
                 type="button"
@@ -2000,7 +2143,7 @@ export function StyleUpExperience({
                 disabled={opening}
               >
                 <span className="su-stylist-avatar" aria-hidden="true">
-                  <StylistFace avatarUrl={s.avatarUrl} name={s.name} />
+                  <StylistFace avatarUrl={s.avatarUrl} name={s.name} isHuman={s.isHuman} />
                   {!s.isHuman && <span className="su-stylist-bot" aria-label="AI stylist">AI</span>}
                 </span>
                 <span className="su-stylist-info">
@@ -2014,6 +2157,10 @@ export function StyleUpExperience({
             {stylists.length === 0 && <div className="su-empty">No stylists available yet.</div>}
             {stylists.length > 0 && stylists.every(s => myThreads.some(t => t.stylist.id === s.id)) && (
               <div className="su-empty">You&apos;re chatting with all our stylists.</div>
+            )}
+            {stylists.length > 0 && rosterList.length === 0
+              && !stylists.every(s => myThreads.some(t => t.stylist.id === s.id)) && (
+              <div className="su-empty">{emptyRosterCopy(rosterFilter)}</div>
             )}
           </div>
           {/* Phase 2.5 / 6.1: picker footer links. */}
@@ -2086,7 +2233,9 @@ export function StyleUpExperience({
     if (sawRender) return ['Love it 😍', 'Different pants', 'Different shoes', 'Make it dressier'];
     if (sawPicks) return ['Something dressier', 'More casual', 'Different shoes', 'Under $200'];
     return [];
-  })();
+    // Chips can come straight from the model (`last.quickReplies`), so they go
+    // through the same scrub as the stylist's prose — no em-dashes in chat.
+  })().map(stripEmDashes);
 
   const threadPane = (
       <div className="su-page su-page--thread">
@@ -2095,7 +2244,7 @@ export function StyleUpExperience({
             <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="15 18 9 12 15 6" /></svg>
           </button>
           <span className="su-thread-avatar" aria-hidden="true">
-            <StylistFace avatarUrl={active?.avatarUrl ?? null} name={active?.name} />
+            <StylistFace avatarUrl={active?.avatarUrl ?? null} name={active?.name} isHuman={active?.isHuman} />
           </span>
           <span className="su-thread-id">
             <span className="su-thread-name">{active?.name}</span>
@@ -2117,7 +2266,7 @@ export function StyleUpExperience({
             <button
               type="button"
               className="su-thread-profile"
-              onClick={() => window.dispatchEvent(new CustomEvent('catalog:open-profile'))}
+              onClick={() => setProfileOpen(true)}
               aria-label="Open your profile"
             >
               <span className="su-thread-profile-dot" />
@@ -2127,32 +2276,7 @@ export function StyleUpExperience({
           )}
         </div>
 
-        {/* Phase 3.2: saved row at top of the stylist view — a horizontal strip
-            of products you've saved in this conversation (or any prior one).
-            Style app only for now; empty state hides itself. */}
-        {isStyleApp && bookmarkedProducts.length > 0 && (
-          <div className="su-saved-row" aria-label="Saved">
-            <span className="su-saved-row-label">Saved</span>
-            <div className="su-saved-row-strip">
-              {bookmarkedProducts.slice(0, 20).map((p, i) => (
-                <button
-                  key={`${p.brand}::${p.name}::${i}`}
-                  type="button"
-                  className="su-saved-row-item"
-                  onClick={() => openProduct({
-                    id: String(p.id ?? ''), name: p.name, brand: p.brand,
-                    price: p.price, image: p.image ?? undefined, url: p.url ?? undefined,
-                  })}
-                  title={`${p.brand ? p.brand + ' — ' : ''}${p.name}`}
-                >
-                  {p.image
-                    ? <img src={p.image} alt="" loading="lazy" />
-                    : <span className="su-saved-row-item--empty" />}
-                </button>
-              ))}
-            </div>
-          </div>
-        )}
+        {savedRow}
         {contextCard}
 
         <div
@@ -2381,7 +2505,7 @@ export function StyleUpExperience({
               return (
                 <div key={m.id} id={`gen-${m.renderGenerationId}`} className="su-msg su-msg--stylist su-msg--tail">
                   <span className="su-msg-avatar" aria-hidden="true">
-                    <StylistFace avatarUrl={active?.avatarUrl ?? null} name={active?.name} />
+                    <StylistFace avatarUrl={active?.avatarUrl ?? null} name={active?.name} isHuman={active?.isHuman} />
                   </span>
                   <div className="su-render">
                     {done ? (
@@ -2431,7 +2555,7 @@ export function StyleUpExperience({
                         {(you.length > 0 || pieces.length > 0) && (
                           <div className="su-render-pieces">
                             {you.length > 0 && (
-                              <span className="su-render-you" title="Your photos — guiding this look">
+                              <span className="su-render-you" title="Your photos, guiding this look">
                                 <span className="su-render-you-orbit">
                                   {you.slice(0, 3).map((u, i) => (
                                     <span className="su-render-you-photo" key={i}>
@@ -2487,7 +2611,7 @@ export function StyleUpExperience({
               <div key={m.id} className={`su-msg su-msg--${m.sender}${follow ? ' su-msg--follow' : ''}${tail ? ' su-msg--tail' : ''}`}>
                 {m.sender === 'stylist' && tail && (
                   <span className="su-msg-avatar" aria-hidden="true">
-                    <StylistFace avatarUrl={active?.avatarUrl ?? null} name={active?.name} />
+                    <StylistFace avatarUrl={active?.avatarUrl ?? null} name={active?.name} isHuman={active?.isHuman} />
                   </span>
                 )}
                 {m.body && (
@@ -2514,7 +2638,7 @@ export function StyleUpExperience({
           {stylistTyping && typingThreadId === threadId && (
             <div className="su-msg su-msg--stylist su-msg--tail">
               <span className="su-msg-avatar" aria-hidden="true">
-                <StylistFace avatarUrl={active?.avatarUrl ?? null} name={active?.name} />
+                <StylistFace avatarUrl={active?.avatarUrl ?? null} name={active?.name} isHuman={active?.isHuman} />
               </span>
               <div className="su-bubble su-bubble--typing" aria-label={`${active?.name ?? 'Stylist'} is typing`}>
                 <span /><span /><span />
@@ -2529,7 +2653,7 @@ export function StyleUpExperience({
           {(cardsIncoming || (genLook && !pendingRender)) && !stylistTyping && (
             <div className="su-msg su-msg--stylist su-msg--tail">
               <span className="su-msg-avatar" aria-hidden="true">
-                <StylistFace avatarUrl={active?.avatarUrl ?? null} name={active?.name} />
+                <StylistFace avatarUrl={active?.avatarUrl ?? null} name={active?.name} isHuman={active?.isHuman} />
               </span>
               <div
                 className="su-bubble su-bubble--laser"
@@ -2645,7 +2769,8 @@ export function StyleUpExperience({
   // "Find a stylist" button. No stylist roster / "Request" here — starting a new
   // chat happens through the picker. ─────────────────────────────────────────
   const convosPane = (
-    <div className="su-page su-page--convos">
+    <div className="su-page su-page--convos" onScroll={onPageScroll}>
+      {savedRow}
       {myThreads.length > 0 ? (
         <div className="su-convos">
           <div className="su-section-label">Your conversations</div>
@@ -2680,7 +2805,7 @@ export function StyleUpExperience({
                 }}
               >
                 <span className={`su-stylist-avatar${t.working ? ' su-stylist-avatar--spinning' : ''}`} aria-hidden="true">
-                  <StylistFace avatarUrl={t.stylist.avatarUrl} name={t.stylist.name} />
+                  <StylistFace avatarUrl={t.stylist.avatarUrl} name={t.stylist.name} isHuman={t.stylist.isHuman} />
                 </span>
                 <span className="su-convo-info">
                   <span className="su-convo-top">
@@ -2729,7 +2854,7 @@ export function StyleUpExperience({
 
   // The picker screen — choose from the full roster of stylists.
   const pickerPane = (
-    <div className="su-page">
+    <div className="su-page" onScroll={onPageScroll}>
       <div className="su-roster-head">
         <h1>Find a stylist</h1>
         <p>Choose a stylist to start a new conversation.</p>
@@ -2751,7 +2876,7 @@ export function StyleUpExperience({
       </div>
       <div className="su-roster">
         {allStylists
-          .filter(s => rosterFilter === 'all' ? true : rosterFilter === 'humans' ? s.isHuman : !s.isHuman)
+          .filter(s => matchesRosterFilter(s, rosterFilter))
           .map(s => {
           const meta = [s.age ? `${s.age}` : null, s.city].filter(Boolean).join(' · ');
           return (
@@ -2764,7 +2889,7 @@ export function StyleUpExperience({
               disabled={opening}
             >
               <span className="su-stylist-avatar" aria-hidden="true">
-                <StylistFace avatarUrl={s.avatarUrl} name={s.name} />
+                <StylistFace avatarUrl={s.avatarUrl} name={s.name} isHuman={s.isHuman} />
                 {!s.isHuman && <span className="su-stylist-bot" aria-label="AI stylist">AI</span>}
               </span>
               <span className="su-convo-info">
@@ -2783,7 +2908,11 @@ export function StyleUpExperience({
             </button>
           );
         })}
-        {allStylists.length === 0 && <div className="su-empty">Loading stylists…</div>}
+        {allStylists.length === 0
+          ? <div className="su-empty">Loading stylists…</div>
+          : !allStylists.some(s => matchesRosterFilter(s, rosterFilter)) && (
+            <div className="su-empty">{emptyRosterCopy(rosterFilter)}</div>
+          )}
       </div>
       {/* Phase 2.5 / 6.1: footer links on the real picker. */}
       <div style={{ display: 'flex', gap: 12, justifyContent: 'center', padding: '20px 0 12px' }}>
@@ -2803,6 +2932,15 @@ export function StyleUpExperience({
     </div>
   );
 
+  // First run: collect the shopper's context (selfie, basics, style tags, and
+  // the two fields only the stylist reads — fashion_styles + custom_style_prompt)
+  // BEFORE the picker, instead of asking for a selfie mid-chat. Waits for `ctx`
+  // so it can't flash before the profile is known, and `needsStyleOnboarding`
+  // honours the "I'll do this later" escape so it isn't a permanent wall.
+  if (ctx && needsStyleOnboarding(profileReady)) {
+    return <StyleOnboarding userId={userId} onDone={() => void loadContext()} />;
+  }
+
   // Landing (/style) → a single-column experience: hero + the two stylist cards,
   // and the full chat once a stylist is open. No two-pane rail here, it reads
   // as a focused landing rather than an inbox.
@@ -2815,7 +2953,7 @@ export function StyleUpExperience({
             : pickerOpen ? <>{header(() => setPickerOpen(false))}{pickerPane}</>
             : <>{railHeader}{landingHero}{convosPane}{findStylistBar}</>}
         </div>
-        {viewerOverlay}{productOverlay}{endConfirmOverlay}
+        {viewerOverlay}{productOverlay}{endConfirmOverlay}{profileOverlay}
       </>
     );
   }
@@ -2837,7 +2975,7 @@ export function StyleUpExperience({
             )}
           </main>
         </div>
-        {viewerOverlay}{productOverlay}{endConfirmOverlay}
+        {viewerOverlay}{productOverlay}{endConfirmOverlay}{profileOverlay}
       </>
     );
   }

@@ -4,13 +4,19 @@
 // last message. Selecting one shows the message log + a text composer that
 // posts sender='stylist' rows via the same style_up_messages table the AI
 // stylist uses; RLS added in the 20260824130000 migration lets a human
-// stylist read/write into their own threads. Product pick-and-attach is
-// deferred to a follow-up — text replies unlock the human-in-the-loop
-// flow shoppers already have.
+// stylist read/write into their own threads (it gates on thread membership
+// only, so kind='product' rows pass the same check as text).
+//
+// The composer can also attach a shoppable product — a kind='product' row
+// with the same product_ref shape the AI stylist writes, so the shopper's
+// chat renders it identically. Picks come from the stylist's own showroom
+// first; typing searches the wider catalog.
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate } from '@remix-run/react';
 import { supabase } from '~/utils/supabase';
 import { useAuth } from '~/hooks/useAuth';
+import { type StyleUpProductRef } from '~/services/style-up';
+import { searchProducts } from '~/services/manage-looks';
 import '~/styles/style-up.css';
 
 interface StylistRow { id: string; name: string; }
@@ -28,7 +34,23 @@ interface MessageRow {
   sender: 'shopper' | 'stylist';
   kind: string;
   body: string | null;
+  product_ref: StyleUpProductRef | null;
   created_at: string;
+}
+
+/** products row → the product_ref shape the stylist writers use (image, not image_url). */
+function toRef(
+  id: string,
+  p: { name?: string | null; brand?: string | null; image_url?: string | null; price?: string | null; url?: string | null } | null,
+): StyleUpProductRef {
+  return {
+    id,
+    name: p?.name ?? undefined,
+    brand: p?.brand ?? undefined,
+    image: p?.image_url ?? undefined,
+    price: p?.price ?? undefined,
+    url: p?.url ?? undefined,
+  };
 }
 
 export default function StyleInboxRoute() {
@@ -42,6 +64,11 @@ export default function StyleInboxRoute() {
   const [sending, setSending] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [pickerOpen, setPickerOpen] = useState(false);
+  const [showroom, setShowroom] = useState<StyleUpProductRef[]>([]);
+  const [query, setQuery] = useState('');
+  const [results, setResults] = useState<StyleUpProductRef[]>([]);
+  const [searching, setSearching] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   // Load the stylist row + assigned threads.
@@ -96,6 +123,45 @@ export default function StyleInboxRoute() {
     return () => { cancelled = true; };
   }, [user]);
 
+  // The stylist's own showroom — the first source offered when attaching a
+  // product. Empty showroom falls through to the catalog search below.
+  useEffect(() => {
+    if (!stylist) { setShowroom([]); return; }
+    let cancelled = false;
+    (async () => {
+      const { data } = await supabase
+        .from('stylist_showroom_products')
+        .select('product_id, sort, products(name, brand, image_url, price, url)')
+        .eq('stylist_id', stylist.id)
+        .order('sort', { ascending: true });
+      if (cancelled) return;
+      // The showroom is keyed (stylist, product, gender), so one product can
+      // appear in two bins — dedupe by product id, the picker has no gender.
+      const byId = new Map<string, StyleUpProductRef>();
+      for (const r of ((data ?? []) as unknown as Array<{
+        product_id: string;
+        products: { name: string | null; brand: string | null; image_url: string | null; price: string | null; url: string | null } | null;
+      }>)) {
+        if (!byId.has(r.product_id)) byId.set(r.product_id, toRef(r.product_id, r.products));
+      }
+      setShowroom([...byId.values()]);
+    })();
+    return () => { cancelled = true; };
+  }, [stylist]);
+
+  // Debounced catalog search — same helper the showroom editor uses.
+  useEffect(() => {
+    if (!pickerOpen || query.trim().length < 2) { setResults([]); return; }
+    const q = query.trim();
+    setSearching(true);
+    const t = setTimeout(async () => {
+      const rows = await searchProducts(q);
+      setResults(rows.map(r => toRef(r.id, r)));
+      setSearching(false);
+    }, 180);
+    return () => clearTimeout(t);
+  }, [query, pickerOpen]);
+
   // Load messages when a thread is opened. Subscribe to new inserts so the
   // stylist sees shopper replies live.
   useEffect(() => {
@@ -104,7 +170,7 @@ export default function StyleInboxRoute() {
     (async () => {
       const { data } = await supabase
         .from('style_up_messages')
-        .select('id, sender, kind, body, created_at')
+        .select('id, sender, kind, body, product_ref, created_at')
         .eq('thread_id', openId)
         .order('created_at', { ascending: true })
         .limit(500);
@@ -140,7 +206,7 @@ export default function StyleInboxRoute() {
     const { data, error } = await supabase
       .from('style_up_messages')
       .insert({ thread_id: openId, sender: 'stylist', kind: 'text', body: text })
-      .select('id, sender, kind, body, created_at')
+      .select('id, sender, kind, body, product_ref, created_at')
       .single();
     if (error) { setError(error.message); setSending(false); return; }
     await supabase.from('style_up_threads')
@@ -150,6 +216,34 @@ export default function StyleInboxRoute() {
     setReply('');
     setSending(false);
   }, [openId, stylist, reply, sending]);
+
+  // Attach a shoppable product: the exact row sendProductPick() writes
+  // (kind='product' + product_ref) plus the same last_message_at bump, but
+  // inserted here — same as send() does for text. Not via that helper: the
+  // ~/services/style-up writers exist to silence the BOT in a human stylist's
+  // thread, and they only let the stylist through by re-checking
+  // supabase.auth.getUser(). In the Flutter shell the client doesn't refresh
+  // its own token, so that call can fail on a long session and would silently
+  // swallow the pick; a direct insert either lands or surfaces the real error.
+  const sendProduct = useCallback(async (ref: StyleUpProductRef) => {
+    if (!openId || sending) return;
+    setSending(true);
+    setError(null);
+    const { data, error } = await supabase
+      .from('style_up_messages')
+      .insert({ thread_id: openId, sender: 'stylist', kind: 'product', product_ref: ref })
+      .select('id, sender, kind, body, product_ref, created_at')
+      .single();
+    if (error || !data) { setError(error?.message ?? 'Could not attach that product.'); setSending(false); return; }
+    await supabase.from('style_up_threads')
+      .update({ last_message_at: new Date().toISOString() })
+      .eq('id', openId);
+    setMessages(prev => prev.some(x => x.id === (data as MessageRow).id) ? prev : [...prev, data as MessageRow]);
+    setPickerOpen(false);
+    setQuery('');
+    setResults([]);
+    setSending(false);
+  }, [openId, sending]);
 
   const openThread = useMemo(() => threads.find(t => t.id === openId) ?? null, [threads, openId]);
 
@@ -219,12 +313,29 @@ export default function StyleInboxRoute() {
                 className={'su-inbox-msg su-inbox-msg--' + (m.sender === 'stylist' ? 'me' : 'them')}
               >
                 {m.kind === 'text' && <span className="su-inbox-msg-body">{m.body}</span>}
-                {m.kind !== 'text' && <span className="su-inbox-msg-body su-inbox-msg-nontext">[{m.kind}]</span>}
+                {m.kind === 'product' && (
+                  <span className="su-inbox-msg-body" style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+                    {m.product_ref?.image && (
+                      <img src={m.product_ref.image} alt="" width={36} height={36} style={{ borderRadius: 6, objectFit: 'cover' }} />
+                    )}
+                    {m.product_ref?.name ?? 'Product'}
+                  </span>
+                )}
+                {m.kind !== 'text' && m.kind !== 'product' && (
+                  <span className="su-inbox-msg-body su-inbox-msg-nontext">[{m.kind}]</span>
+                )}
               </div>
             ))}
           </div>
           {error && <div className="su-apply-error">{error}</div>}
           <div className="su-inbox-composer">
+            <button
+              type="button"
+              className="su-apply-back"
+              disabled={sending}
+              onClick={() => setPickerOpen(true)}
+              aria-label="Attach a product"
+            >+ Product</button>
             <textarea
               value={reply}
               onChange={e => setReply(e.target.value)}
@@ -238,6 +349,41 @@ export default function StyleInboxRoute() {
               {sending ? 'Sending…' : 'Send'}
             </button>
           </div>
+
+          {pickerOpen && (
+            <div className="su-showroom-search-sheet" role="dialog" aria-label="Attach a product">
+              <div className="su-showroom-search-head">
+                <input
+                  type="text"
+                  autoFocus
+                  value={query}
+                  onChange={e => setQuery(e.target.value)}
+                  placeholder={showroom.length ? 'Search the catalog…' : 'Your showroom is empty — search the catalog…'}
+                />
+                <button type="button" className="su-apply-back" onClick={() => { setPickerOpen(false); setQuery(''); setResults([]); }}>Cancel</button>
+              </div>
+              <div className="su-showroom-search-results">
+                {searching && <div className="su-empty">Searching…</div>}
+                {!searching && query.trim().length >= 2 && results.length === 0 && <div className="su-empty">No matches.</div>}
+                {(query.trim().length >= 2 ? results : showroom).map(p => (
+                  <button
+                    key={p.id}
+                    type="button"
+                    className="su-showroom-hit"
+                    disabled={sending}
+                    onClick={() => void sendProduct(p)}
+                  >
+                    {p.image && <img src={p.image} alt="" loading="lazy" />}
+                    <div>
+                      <div className="su-showroom-hit-name">{p.name ?? 'Untitled'}</div>
+                      {p.brand && <div className="su-showroom-hit-brand">{p.brand}{p.price ? ` · ${p.price}` : ''}</div>}
+                    </div>
+                    <span className="su-showroom-hit-add">Send</span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
         </>
       )}
     </div>

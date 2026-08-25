@@ -90,6 +90,19 @@ import "./styles/creator-toast.css";
 import "./styles/confirm-modal.css";
 import "./styles/avatar-modal.css";
 
+/* Document identity per flavor. React 19 treats <title>/<meta> as hoistables and
+ * RE-APPLIES their props on hydration — <title> text is overwritten from props,
+ * and a <meta> whose content no longer matches props is re-created as a
+ * duplicate. So the pre-hydration inline script below can't rename them alone;
+ * the render has to agree with it. Prerender (no document) yields the Catalog
+ * default, which is what lands in the static index.html for JS-off crawlers;
+ * the client render reads the mode the script already stamped on <html>.
+ * Keep this string in sync with the script's 'Catalog Style'. */
+const APP_NAME =
+  typeof document !== 'undefined' && document.documentElement.dataset.app === 'style'
+    ? 'Catalog Style'
+    : 'catalog';
+
 export function Layout({ children }: { children: React.ReactNode }) {
   return (
     <html lang="en">
@@ -124,7 +137,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             page behind it — instead of the solid WHITE pill it paints when
             it assumes a light page. Pairs with the removed theme-color above. */}
         <meta name="color-scheme" content="dark" />
-        <title>catalog</title>
+        <title>{APP_NAME}</title>
         <meta
           name="description"
           content="A creator-powered shopping platform where you discover products through curated looks."
@@ -145,8 +158,8 @@ export function Layout({ children }: { children: React.ReactNode }) {
             the admin Sharing page (/admin/sharing) so editing there
             and redeploying updates the preview everywhere. */}
         <meta property="og:type" content="website" />
-        <meta property="og:site_name" content="catalog" />
-        <meta property="og:title" content="catalog" />
+        <meta property="og:site_name" content={APP_NAME} />
+        <meta property="og:title" content={APP_NAME} />
         <meta
           property="og:description"
           content="A creator-powered shopping platform where you discover products through curated looks."
@@ -158,14 +171,14 @@ export function Layout({ children }: { children: React.ReactNode }) {
         <meta property="og:image:height" content="630" />
         <meta property="og:image:alt" content="catalog — curated looks" />
         <meta name="twitter:card" content="summary_large_image" />
-        <meta name="twitter:title" content="catalog" />
+        <meta name="twitter:title" content={APP_NAME} />
         <meta
           name="twitter:description"
           content="A creator-powered shopping platform where you discover products through curated looks."
         />
         <meta name="twitter:image" content="https://catalog.shop/og-default.svg" />
         <link rel="canonical" href="https://catalog.shop" />
-        <meta name="apple-mobile-web-app-title" content="catalog" />
+        <meta name="apple-mobile-web-app-title" content={APP_NAME} />
         <link rel="icon" type="image/svg+xml" href="/favicon.svg" />
         <link rel="preconnect" href="https://fonts.googleapis.com" />
         <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="" />
@@ -229,7 +242,21 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-se
        :(location.hash==='#app')?'catalog':null;
   if(m){try{sessionStorage.setItem(K,m);}catch(_){}}
   else{try{m=sessionStorage.getItem(K);}catch(_){}}
-  document.documentElement.dataset.app=(m==='style')?'style':'catalog';
+  var isStyle=(m==='style');
+  document.documentElement.dataset.app=isStyle?'style':'catalog';
+  // Document identity. The prerendered <title>/og/twitter/apple tags above are
+  // the Catalog defaults (so a JS-off crawler still gets a valid name); the
+  // Style flavor renames them here, before first paint, so the tab and the PWA
+  // home-screen name say "Catalog Style" from the first frame. APP_NAME (root.tsx)
+  // renders the SAME string, so hydration re-applies these values instead of
+  // reverting the title / duplicating the metas — keep the two in sync.
+  if(isStyle){
+    document.title='Catalog Style';
+    ['meta[property="og:site_name"]','meta[property="og:title"]','meta[name="twitter:title"]','meta[name="apple-mobile-web-app-title"]'].forEach(function(s){
+      var el=document.querySelector(s);
+      if(el)el.setAttribute('content','Catalog Style');
+    });
+  }
   // Phase 6.1: apply the Style-app background preset from localStorage BEFORE
   // hydration so no default background paints for a frame first.
   try{

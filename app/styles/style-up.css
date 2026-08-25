@@ -30,6 +30,23 @@
 html[data-shell="catalog-app"] .su-shell {
   padding-top: var(--shell-sb, env(safe-area-inset-top, 0px));
 }
+/* /style/apply, /style/showroom, /style/inbox and /style/settings render their
+   OWN root (not inside .su-shell), so the rule above never reaches them and
+   their headings sat under the iOS status bar. Same clearance, added on top of
+   each root's own top padding so the designed spacing survives. */
+html[data-shell="catalog-app"] .su-apply {
+  padding-top: calc(var(--shell-sb, env(safe-area-inset-top, 0px)) + 48px);
+}
+html[data-shell="catalog-app"] .su-showroom,
+html[data-shell="catalog-app"] .su-inbox {
+  padding-top: calc(var(--shell-sb, env(safe-area-inset-top, 0px)) + 24px);
+}
+/* The product-search sheet those two open is `position: fixed; inset: 0`, so
+   the root padding above can't reach it — its search field and Cancel button
+   would sit under the status bar (and half of Cancel would be untappable). */
+html[data-shell="catalog-app"] .su-showroom-search-sheet {
+  padding-top: calc(var(--shell-sb, env(safe-area-inset-top, 0px)) + 20px);
+}
 .su-shell-head {
   flex: 0 0 auto;
   display: grid;
@@ -38,6 +55,28 @@ html[data-shell="catalog-app"] .su-shell {
   gap: 12px;
   padding: 12px 14px 6px;
   /* No divider bar under the logo — it floats on the dark base. */
+  /* Auto-hide on scroll (see .is-scrolled below). max-height rather than
+     position:absolute so the head stays in flow — .su-page is the flex
+     scroller under it, and pulling the head out of flow would jump the
+     scroller's height instead of animating it. */
+  overflow: hidden;
+  max-height: 120px;
+  transition: opacity 180ms ease, transform 180ms ease,
+              max-height 180ms ease, padding 180ms ease;
+}
+/* Scrolled: slide up, fade, AND collapse the box so the chat reclaims the
+   space (a bare translate would leave a 50-ish px hole). Mirrors the
+   .su-thread-head--style.is-scrolled treatment below. */
+.su-shell-head.is-scrolled {
+  opacity: 0;
+  transform: translateY(-100%);
+  pointer-events: none;
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .su-shell-head { transition: none; }
 }
 .su-shell-back { grid-column: 1; }
 /* Centered Catalog logo with "style" right under it. */
@@ -159,13 +198,18 @@ html[data-shell="catalog-app"] .su-shell {
   color: #0a0a0a; background: #f0f0f0; border-color: #f0f0f0;
 }
 .su-stylist-avatar { position: relative; }
+/* Machine tag, not a rounded badge — squared corners + mono letterforms +
+   brushed-metal fill so "AI" reads as a stamped plate on the avatar. */
 .su-stylist-bot {
-  position: absolute; right: -4px; bottom: -4px;
-  min-width: 20px; height: 20px; padding: 0 5px;
+  position: absolute; right: -5px; bottom: -5px;
+  min-width: 21px; height: 18px; padding: 0 5px;
   display: inline-flex; align-items: center; justify-content: center;
-  font-size: 10px; font-weight: 600; letter-spacing: 0.06em;
-  color: #0a0a0a; background: #e0e0e0;
-  border-radius: 999px; border: 2px solid #0a0a0a;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em;
+  color: #10181d;
+  background: linear-gradient(150deg, #dcebf4 0%, #9db2c0 55%, #d0e1ec 100%);
+  border-radius: 5px; border: 2px solid #0a0a0a;
+  box-shadow: 0 0 6px rgba(120, 190, 230, 0.32);
   pointer-events: none;
 }
 .su-stylist-card.is-ai .su-stylist-name::after {
@@ -401,6 +445,18 @@ html[data-shell="catalog-app"] .su-shell {
    list (avatar hugging the left), with the stylist's favorite brands as
    logo chips where a conversation shows its preview line. */
 .su-picker-pill .su-stylist-avatar { width: 56px; height: 56px; }
+/* AI stylists read as machines, not people: chrome-plate fill behind the robot
+   face plus a cool ring. The ring is an OUTER box-shadow (not inset) so it
+   still shows when the avatar carries a photo — .su-stylist-avatar is
+   overflow:hidden and would clip an inset one. */
+.su-picker-pill.is-ai .su-stylist-avatar {
+  background: linear-gradient(150deg, #3b434c 0%, #171a1f 55%, #2c343d 100%);
+  color: #d8ecf7;
+  box-shadow: 0 0 0 2px rgba(150, 200, 226, 0.55), 0 0 12px rgba(110, 185, 230, 0.26);
+}
+/* The inline robot SVG (StylistFace, AI branch) — draws in currentColor, so it
+   picks up the cool ink above. */
+.su-robot-face { width: 100%; height: 100%; display: block; }
 /* Favorite brands sit on ONE row — no wrapping. If the three chips are wider
    than the card they scroll horizontally (scrollbar hidden), so a card never
    grows a second line. */
@@ -1011,11 +1067,15 @@ html[data-shell="catalog-app"] .su-shell {
   background: rgba(0,0,0,0.55); color: #fff; backdrop-filter: blur(4px);
 }
 
-/* Full-screen expanded look viewer. */
+/* Full-screen expanded look viewer.
+   Surfaces read from the Style app's background-preset tokens (set on <html>,
+   see the data-style-bg block near the end of this file) so a light preset
+   doesn't get a black sheet slammed over it. Fallbacks = the dark default,
+   so the Catalog app and the default preset are unchanged. */
 .su-viewer {
   position: fixed; inset: 0; z-index: 200;
   display: flex; align-items: center; justify-content: center;
-  padding: 20px; background: rgba(0,0,0,0.86);
+  padding: 20px; background: var(--su-scrim, rgba(0,0,0,0.86));
 }
 .su-viewer-inner { position: relative; display: flex; flex-direction: column; align-items: center; gap: 14px; max-width: 460px; width: 100%; }
 .su-viewer-close {
@@ -1025,7 +1085,7 @@ html[data-shell="catalog-app"] .su-shell {
 }
 .su-viewer-video { width: 100%; max-height: 72vh; aspect-ratio: 9 / 16; object-fit: contain; border-radius: 16px; background: #000; }
 .su-viewer-pieces { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
-.su-viewer-piece { width: 46px; height: 58px; border-radius: 9px; overflow: hidden; border: 1px solid rgba(255,255,255,0.18); background: #1c1d21; padding: 0; cursor: pointer; }
+.su-viewer-piece { width: 46px; height: 58px; border-radius: 9px; overflow: hidden; border: 1px solid var(--su-sheet-line, rgba(255,255,255,0.18)); background: var(--su-sheet-2, #1c1d21); padding: 0; cursor: pointer; }
 .su-viewer-piece img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .su-viewer-add {
   width: 100%; max-width: 320px; padding: 13px; border-radius: 999px; border: none;
@@ -1859,7 +1919,7 @@ html[data-shell="catalog-app"] .su-shell {
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.72);
+  background: var(--su-scrim, rgba(0, 0, 0, 0.72));
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
 }
@@ -1872,8 +1932,8 @@ html[data-shell="catalog-app"] .su-shell {
   flex-direction: column;
   gap: 0;
   border-radius: 22px 22px 0 0;
-  background: #141518;
-  border: 1px solid #26282d;
+  background: var(--su-sheet, #141518);
+  border: 1px solid var(--su-sheet-line, #26282d);
   border-bottom: none;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
@@ -1898,7 +1958,7 @@ html[data-shell="catalog-app"] .su-shell {
   scroll-snap-type: x mandatory;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
-  background: #0e0f11;
+  background: var(--su-sheet-2, #0e0f11);
   border-radius: 22px 22px 0 0;
 }
 .su-pviewer-gallery::-webkit-scrollbar { display: none; }
@@ -1909,7 +1969,7 @@ html[data-shell="catalog-app"] .su-shell {
   aspect-ratio: 4 / 5;
   object-fit: contain;
   scroll-snap-align: center;
-  background: #0e0f11;
+  background: var(--su-sheet-2, #0e0f11);
 }
 .su-pviewer-empty { flex: 0 0 100%; aspect-ratio: 4 / 5; background: repeating-linear-gradient(45deg, #1c1d21, #1c1d21 8px, #26282d 8px, #26282d 16px); }
 .su-pviewer-info { padding: 16px 18px 6px; }
@@ -1920,17 +1980,17 @@ html[data-shell="catalog-app"] .su-shell {
   margin-bottom: 3px;
 }
 .su-pviewer-name { font-size: 17px; font-weight: 700; line-height: 1.3; }
-.su-pviewer-price { font-size: 15px; color: #b9bcc4; margin-top: 4px; font-variant-numeric: tabular-nums; }
+.su-pviewer-price { font-size: 15px; color: var(--su-ink-2, #b9bcc4); margin-top: 4px; font-variant-numeric: tabular-nums; }
 .su-pviewer-desc {
   margin: 10px 0 0;
   font-size: 13.5px;
   line-height: 1.55;
-  color: #9a9da6;
+  color: var(--su-ink-3, #9a9da6);
 }
 .su-pviewer .su-viewer-add { margin: 14px 18px 0; width: auto; max-width: none; }
 @media (min-width: 769px) {
   .su-pviewer { align-items: center; padding: 24px; }
-  .su-pviewer-inner { border-radius: 22px; border-bottom: 1px solid #26282d; }
+  .su-pviewer-inner { border-radius: 22px; border-bottom: 1px solid var(--su-sheet-line, #26282d); }
   .su-pviewer-gallery { border-radius: 22px 22px 0 0; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1956,9 +2016,9 @@ html[data-shell="catalog-app"] .su-shell {
   width: 40px; height: 40px;
   display: inline-flex; align-items: center; justify-content: center;
   border-radius: 50%;
-  border: 1px solid #34363c;
-  background: #1c1d21;
-  color: #c7c9cf;
+  border: 1px solid var(--su-sheet-line, #34363c);
+  background: var(--su-sheet-2, #1c1d21);
+  color: var(--su-ink-2, #c7c9cf);
   cursor: pointer;
   transition: transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.14s ease, border-color 0.14s ease;
 }
@@ -1977,15 +2037,15 @@ html[data-shell="catalog-app"] .su-shell {
   flex: 0 0 auto;
   font-size: 10.5px; font-weight: 800;
   letter-spacing: 0.08em; text-transform: uppercase;
-  color: #71747c;
+  color: var(--su-ink-3, #71747c);
   width: 44px;
 }
 .su-pviewer-chip {
   font-size: 11.5px; font-weight: 600;
   padding: 4px 10px;
   border-radius: 999px;
-  background: #26282d;
-  color: #c7c9cf;
+  background: var(--su-sheet-2, #26282d);
+  color: var(--su-ink-2, #c7c9cf);
 }
 
 /* Short description — 3 lines, tap to expand. */
@@ -2004,7 +2064,7 @@ html[data-shell="catalog-app"] .su-shell {
   padding: 0 18px 8px;
   font-size: 10.5px; font-weight: 800;
   letter-spacing: 0.08em; text-transform: uppercase;
-  color: #71747c;
+  color: var(--su-ink-3, #71747c);
 }
 .su-pviewer-similar-rail {
   display: flex;
@@ -2024,14 +2084,14 @@ html[data-shell="catalog-app"] .su-shell {
 .su-pviewer-sim-media {
   width: 104px; height: 130px;
   border-radius: 10px; overflow: hidden;
-  background: #26282d; border: 1px solid #2a2c31;
+  background: var(--su-sheet-2, #26282d); border: 1px solid var(--su-sheet-line, #2a2c31);
 }
 .su-pviewer-sim-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .su-pviewer-sim-name {
-  font-size: 11.5px; line-height: 1.25; color: #d8dae0;
+  font-size: 11.5px; line-height: 1.25; color: var(--su-ink-2, #d8dae0);
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
-.su-pviewer-sim-price { font-size: 11px; color: #8b8e96; }
+.su-pviewer-sim-price { font-size: 11px; color: var(--su-ink-3, #8b8e96); }
 
 /* Dissolve-out for both overlays (backdrop fades, sheet sinks + dissolves). */
 .su-pviewer.is-closing,
@@ -2392,15 +2452,39 @@ html[data-app="style"]:not([data-style-bg="default"]):not([data-style-bg=""]) .s
 html[data-app="style"]:not([data-style-bg="default"]):not([data-style-bg=""]) .su-bg {
   display: none !important;
 }
+/* Same reason, one layer up: .su-shell is a fixed, OPAQUE #0a0a0a sheet over
+ * the whole viewport, so hiding the drape alone still left the body's preset
+ * invisible behind the picker/thread (and on "paper", #1a1a1a text on black).
+ * Let the body show through on any non-default preset. */
+html[data-app="style"]:not([data-style-bg="default"]):not([data-style-bg=""]) .su-shell {
+  background: transparent;
+}
 
+/* The look viewer (.su-viewer) and product viewer (.su-pviewer) mount OUTSIDE
+ * .su-shell as fixed full-screen layers, so they can't inherit anything from
+ * it. They read these tokens instead — set here on <html> so they reach every
+ * layer — with the dark default kept as each declaration's var() fallback.
+ * "default"/"plain" define nothing on purpose: the fallbacks already are them. */
 html[data-app="style"][data-style-bg="plain"] body { background: #0a0a0a !important; }
 
 html[data-app="style"][data-style-bg="warm"] body {
   background: radial-gradient(120% 100% at 50% -10%, #3a1810 0%, #150a0a 55%, #0a0505 100%) !important;
 }
+html[data-app="style"][data-style-bg="warm"] {
+  --su-scrim: rgba(18, 8, 6, 0.86);
+  --su-sheet: #1d1512;
+  --su-sheet-2: #140e0c;
+  --su-sheet-line: #35271f;
+}
 
 html[data-app="style"][data-style-bg="cool"] body {
   background: radial-gradient(120% 100% at 50% -10%, #0e2130 0%, #071018 55%, #050a0f 100%) !important;
+}
+html[data-app="style"][data-style-bg="cool"] {
+  --su-scrim: rgba(4, 12, 18, 0.86);
+  --su-sheet: #10191f;
+  --su-sheet-2: #0a1319;
+  --su-sheet-line: #22323d;
 }
 
 html[data-app="style"][data-style-bg="paper"] body { background: #f5f2ec !important; color: #1a1a1a; }
@@ -2408,6 +2492,30 @@ html[data-app="style"][data-style-bg="paper"] .su-apply,
 html[data-app="style"][data-style-bg="paper"] .su-showroom,
 html[data-app="style"][data-style-bg="paper"] .su-inbox,
 html[data-app="style"][data-style-bg="paper"] .su-shell { color: #1a1a1a; }
+html[data-app="style"][data-style-bg="paper"] {
+  --su-scrim: rgba(245, 242, 236, 0.92);
+  --su-sheet: #fffdf8;
+  --su-sheet-2: #ece7dd;
+  --su-sheet-line: rgba(0, 0, 0, 0.12);
+  --su-ink-2: #55524c;
+  --su-ink-3: #7c786f;
+}
+/* Paper only — the handful of bits that are light-on-dark by construction and
+ * would vanish on an off-white sheet. */
+html[data-app="style"][data-style-bg="paper"] .su-viewer,
+html[data-app="style"][data-style-bg="paper"] .su-pviewer-inner { color: #1a1a1a; }
+html[data-app="style"][data-style-bg="paper"] .su-viewer-add {
+  background: #1a1a1a; color: #f5f2ec;
+}
+html[data-app="style"][data-style-bg="paper"] .su-viewer-close {
+  background: rgba(0, 0, 0, 0.1); color: #1a1a1a;
+}
+html[data-app="style"][data-style-bg="paper"] .su-pviewer-grab { background: rgba(0, 0, 0, 0.22); }
+/* AI ring: the cool halo disappears on off-white — go slate instead. */
+html[data-app="style"][data-style-bg="paper"] .su-picker-pill.is-ai .su-stylist-avatar {
+  box-shadow: 0 0 0 2px rgba(64, 104, 133, 0.55), 0 0 10px rgba(64, 104, 133, 0.18);
+}
+html[data-app="style"][data-style-bg="paper"] .su-stylist-bot { border-color: #f5f2ec; }
 
 /* Settings page — background picker grid. */
 .su-settings-bg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
