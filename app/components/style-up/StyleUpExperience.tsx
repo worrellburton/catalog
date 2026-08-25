@@ -681,6 +681,9 @@ export function StyleUpExperience({
   const isStyleApp = typeof window !== 'undefined' && getAppMode() === 'style';
   const [ctxEditing, setCtxEditing] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);   // account surface (Style app)
+  // Which profile tab to land on. The chat's saved-count button opens straight
+  // onto Saved; the header chip opens the form.
+  const [profileTab, setProfileTab] = useState<'profile' | 'saved'>('profile');
   const [headScrolled, setHeadScrolled] = useState(false); // shell header hidden by scroll
   // The looks half of the saved strip. In the Style app "saving a look" IS
   // "add to my looks" — the shopper's own finished renders — so this reads
@@ -1773,6 +1776,11 @@ export function StyleUpExperience({
   const onPageScroll = (e: { currentTarget: HTMLDivElement }) => {
     if (isStyleApp) setHeadScrolled(e.currentTarget.scrollTop > 8);
   };
+  const openProfileAt = (t: 'profile' | 'saved') => { setProfileTab(t); setProfileOpen(true); };
+  // Looks the shopper rendered plus pieces they bookmarked — what "saved" means
+  // to them, and what the chat's count reflects.
+  const savedCount = savedLooks.length + bookmarkedProducts.length;
+
   // `showBack` is false ONLY on the Style app's home (there is nowhere behind it).
   // Every other pane keeps the back arrow, or the shopper reaches the picker and
   // has no way back to their conversations. The Catalog embed always shows it.
@@ -1793,7 +1801,7 @@ export function StyleUpExperience({
         <button
           type="button"
           className="su-shell-profile"
-          onClick={() => setProfileOpen(true)}
+          onClick={() => openProfileAt('profile')}
           aria-label="Open your profile"
         >
           <span className="su-shell-profile-dot" aria-hidden="true" />
@@ -2120,11 +2128,56 @@ export function StyleUpExperience({
     </>
   );
 
+  // Saved, at the top of home. Looks first, then bookmarked pieces. Hidden until
+  // there's something in it — an empty strip above the conversation list reads as
+  // a stray thumbnail, which is what the first version got wrong. The chat gets a
+  // count chip instead (see .su-thread-saved): a strip there would push the
+  // conversation down every time.
+  const homeSavedRow = savedCount > 0 ? (
+    <div className="su-saved-row" aria-label="Saved">
+      <button type="button" className="su-saved-row-label su-saved-row-label--btn" onClick={() => openProfileAt('saved')}>
+        Saved
+      </button>
+      <div className="su-saved-row-strip">
+        {savedLooks.slice(0, 20).map(l => (
+          <button
+            key={l.genId}
+            type="button"
+            className="su-saved-row-item su-saved-row-item--look"
+            onClick={() => openSavedLook(l)}
+            title="Your look"
+          >
+            <img src={l.poster} alt="" loading="lazy" />
+          </button>
+        ))}
+        {bookmarkedProducts.slice(0, 20).map((p, i) => (
+          <button
+            key={`${p.brand}::${p.name}::${i}`}
+            type="button"
+            className="su-saved-row-item"
+            onClick={() => openProduct({
+              id: String(p.id ?? ''), name: p.name, brand: p.brand,
+              price: p.price, image: p.image ?? undefined, url: p.url ?? undefined,
+            })}
+            title={`${p.brand ? p.brand + ', ' : ''}${p.name}`}
+          >
+            {p.image ? <img src={p.image} alt="" loading="lazy" /> : <span className="su-saved-row-item--empty" />}
+          </button>
+        ))}
+      </div>
+    </div>
+  ) : null;
+
   // Declared after renderSavedTab on purpose: this reads it at render time, and
   // a const can't be referenced before its initialiser runs.
   const profileOverlay = profileOpen && user ? (
     <Suspense fallback={null}>
-      <ProfilePage user={user} onClose={() => setProfileOpen(false)} renderSaved={renderSavedTab} />
+      <ProfilePage
+        user={user}
+        onClose={() => setProfileOpen(false)}
+        renderSaved={renderSavedTab}
+        initialTab={profileTab}
+      />
     </Suspense>
   ) : null;
 
@@ -2321,11 +2374,22 @@ export function StyleUpExperience({
               );
             })()}
           </span>
+          {isStyleApp && savedCount > 0 && (
+            <button
+              type="button"
+              className="su-thread-saved"
+              onClick={() => openProfileAt('saved')}
+              aria-label={`Saved, ${savedCount} item${savedCount === 1 ? '' : 's'}`}
+            >
+              <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" /></svg>
+              <span className="su-thread-saved-count">{savedCount}</span>
+            </button>
+          )}
           {isStyleApp ? (
             <button
               type="button"
               className="su-thread-profile"
-              onClick={() => setProfileOpen(true)}
+              onClick={() => openProfileAt('profile')}
               aria-label="Open your profile"
             >
               <span className="su-thread-profile-dot" />
@@ -2828,6 +2892,7 @@ export function StyleUpExperience({
   // chat happens through the picker. ─────────────────────────────────────────
   const convosPane = (
     <div className="su-page su-page--convos" onScroll={onPageScroll}>
+      {homeSavedRow}
       {myThreads.length > 0 ? (
         <div className="su-convos">
           <div className="su-section-label">Your conversations</div>

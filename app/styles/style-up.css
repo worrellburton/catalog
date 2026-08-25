@@ -2464,11 +2464,11 @@ html[data-app="style"] .su-saved-row-label {
   font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
   color: rgba(255,255,255,0.5);
 }
-/* Negative margin + matching pad so the strip bleeds to the screen edge and the
- * last tile doesn't look clipped mid-scroll. */
+/* No edge-bleed: this renders in two places with different gutters (the profile
+ * Saved tab and the home page), and a hardcoded negative margin only lines up
+ * with one of them. */
 html[data-app="style"] .su-saved-row-strip {
   display: flex; gap: 10px; overflow-x: auto; scrollbar-width: none;
-  margin-inline: -16px; padding-inline: 16px;
 }
 html[data-app="style"] .su-saved-row-strip::-webkit-scrollbar { display: none; }
 html[data-app="style"] .su-saved-row-item {
@@ -2476,9 +2476,27 @@ html[data-app="style"] .su-saved-row-item {
   overflow: hidden; padding: 0; border: 1px solid rgba(255,255,255,0.08);
   background: rgba(255,255,255,0.04); cursor: pointer;
 }
-html[data-app="style"] .su-saved-row-item img {
+html[data-app="style"] .su-saved-row-item img,
+html[data-app="style"] .su-saved-row-item--empty {
   width: 100%; height: 100%; object-fit: cover; display: block;
 }
+/* On home the label doubles as the way into the full Saved tab. */
+html[data-app="style"] .su-saved-row-label--btn {
+  align-self: flex-start; padding: 0; border: 0; background: none;
+  font: inherit; letter-spacing: 0.1em; text-transform: uppercase;
+  color: rgba(255,255,255,0.5); cursor: pointer;
+}
+
+/* The chat's stand-in for the strip: a bookmark + count. A strip in the thread
+   header would shove the conversation down on every new save. */
+.su-thread-saved {
+  display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto;
+  padding: 5px 9px; margin-right: 6px; border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.14); background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.82); cursor: pointer;
+}
+.su-thread-saved:hover { background: rgba(255,255,255,0.11); }
+.su-thread-saved-count { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
 
 
 /* Phase 6.1: Style app background presets. Applied via data-style-bg on

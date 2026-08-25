@@ -22,6 +22,9 @@ interface ProfilePageProps {
   /** Renders the shared Saved screen inside the "Saved" tab. When omitted,
    *  the tab is hidden (e.g. signed-out / no bookmarks plumbing). */
   renderSaved?: () => ReactNode;
+  /** Which tab to open on. Lets a caller deep-link straight to Saved (e.g. the
+   *  Style app's saved-count button) instead of landing on the form. */
+  initialTab?: 'profile' | 'saved';
 }
 
 interface ProfileData {
@@ -36,12 +39,14 @@ interface ProfileData {
   tiktok: string;
 }
 
-export default function ProfilePage({ user, onClose, renderSaved }: ProfilePageProps) {
+export default function ProfilePage({ user, onClose, renderSaved, initialTab }: ProfilePageProps) {
   const [legal, setLegal] = useState<LegalKind | null>(null);
   // While a legal page is open, let its own Escape handler close it first.
   useEscapeKey(onClose, !legal);
 
-  const [tab, setTab] = useState<'profile' | 'saved'>('profile');
+  const [tab, setTab] = useState<'profile' | 'saved'>(
+    initialTab === 'saved' && renderSaved ? 'saved' : 'profile',
+  );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [saved, setSaved] = useState(false);
