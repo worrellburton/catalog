@@ -23,7 +23,7 @@ import {
   type StyleUpStylist, type StyleUpMessage, type StyleUpProductRef, type StyleUpThreadSummary, type RecommendOpts,
   type StyleUpProductDetail,
 } from '~/services/style-up';
-import { listUserGenerations, getGenerationLookPosters, getGenerationProductImages } from '~/services/user-generations';
+import { listUserGenerations, getGenerationLookPosters, getGenerationProductImages, getGenerationDetail } from '~/services/user-generations';
 import { roleTagFromName } from '~/services/product-roles';
 import { SCENE_PRESETS, presetForPhrase } from '~/data/style-scenes';
 import { signInWithGoogle } from '~/services/auth';
@@ -1768,9 +1768,12 @@ export function StyleUpExperience({
   const onPageScroll = (e: { currentTarget: HTMLDivElement }) => {
     if (isStyleApp) setHeadScrolled(e.currentTarget.scrollTop > 8);
   };
-  const header = (onBack: () => void) => (
+  // `showBack` is false ONLY on the Style app's home (there is nowhere behind it).
+  // Every other pane keeps the back arrow, or the shopper reaches the picker and
+  // has no way back to their conversations. The Catalog embed always shows it.
+  const header = (onBack: () => void, showBack = true) => (
     <div className={'su-shell-head' + (isStyleApp ? ' su-shell-head--style' : '') + (isStyleApp && headScrolled ? ' is-scrolled' : '')}>
-      {isStyleApp ? (
+      {isStyleApp && !showBack ? (
         <span className="su-shell-spacer" aria-hidden="true" />
       ) : (
         <button type="button" className="su-back su-shell-back" onClick={onBack} aria-label="Back">
@@ -1793,7 +1796,7 @@ export function StyleUpExperience({
       )}
     </div>
   );
-  const railHeader = header(exit);
+  const railHeader = header(exit, false);
 
   const profileOverlay = profileOpen && user ? (
     <Suspense fallback={null}>
@@ -1827,8 +1830,15 @@ export function StyleUpExperience({
         {viewer.pieces.length > 0 && (
           <div className="su-viewer-pieces">
             {viewer.pieces.map((pc, i) => (
-              <button type="button" className="su-viewer-piece" key={pc.id || i} onClick={() => openProduct(pc)} title={[pc.brand, pc.name].filter(Boolean).join(' · ')}>
-                {pc.image ? <img src={pc.image} alt="" /> : <span className="su-product-media--empty" />}
+              <button type="button" className="su-viewer-piece" key={pc.id || i} onClick={() => openProduct(pc)}>
+                <span className="su-viewer-piece-media">
+                  {pc.image ? <img src={pc.image} alt="" /> : <span className="su-product-media--empty" />}
+                </span>
+                <span className="su-viewer-piece-info">
+                  {pc.brand && <span className="su-viewer-piece-brand">{pc.brand}</span>}
+                  <span className="su-viewer-piece-name">{pc.name || 'Product'}</span>
+                </span>
+                {pc.price && <span className="su-viewer-piece-price">{pc.price}</span>}
               </button>
             ))}
           </div>
@@ -2040,6 +2050,29 @@ export function StyleUpExperience({
   // top of both the home surface and an open conversation. Style app only (the
   // Catalog embed has its own Saved screen). Shows an invitation when empty
   // rather than vanishing, so the row doesn't appear out of nowhere later.
+  // Opening a saved look from the strip: show the video straight away, then fill
+  // in its pieces. Threads carry their pieces on the message, but the strip only
+  // has a generation id, so they have to be fetched or the viewer's piece list
+  // would be empty for exactly the looks this row exists to reopen.
+  // Plain function, not useCallback: this sits after an early return, so a hook
+  // here would break hook order.
+  const openSavedLook = (l: { genId: string; videoUrl: string }) => {
+    setViewer({ videoUrl: l.videoUrl, pieces: [], genId: l.genId });
+    void getGenerationDetail(l.genId).then(detail => {
+      const pieces: StyleUpProductRef[] = detail.products.flatMap(gp => gp.product
+        ? [{
+            id: gp.product.id,
+            name: gp.product.name ?? undefined,
+            brand: gp.product.brand ?? undefined,
+            price: gp.product.price ?? undefined,
+            image: gp.product.image_url ?? undefined,
+          }]
+        : []);
+      if (pieces.length === 0) return;
+      setViewer(cur => (cur && cur.genId === l.genId ? { ...cur, pieces } : cur));
+    });
+  };
+
   const savedRow = isStyleApp ? (
     <div className="su-saved-row" aria-label="Saved">
       <span className="su-saved-row-label">Saved</span>
@@ -2052,7 +2085,7 @@ export function StyleUpExperience({
               key={l.genId}
               type="button"
               className="su-saved-row-item su-saved-row-item--look"
-              onClick={() => setViewer({ videoUrl: l.videoUrl, pieces: [], genId: l.genId })}
+              onClick={() => openSavedLook(l)}
               title="Your look"
             >
               <img src={l.poster} alt="" loading="lazy" />
