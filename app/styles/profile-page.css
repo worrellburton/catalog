@@ -418,20 +418,27 @@ html[data-shell="catalog-app"] .profile-page-overlay {
 
 /* Mobile adjustments */
 @media (max-width: 480px) {
-  /* Goal: the whole profile fits one mobile viewport — no scroll. Pin
-     the overlay to the dynamic viewport height, drop the bottom
-     padding that forced a scroll, and tighten every vertical gap so
-     header → avatar → About → Body → Save → Logout all land on screen.
-     dvh (not vh) so the iOS URL bar collapsing doesn't reopen a scroll. */
+  /* Goal: the plain profile still fits one mobile viewport — header → avatar →
+     About → Body → Save → Logout all land on screen with no scroll, via
+     min-height + the body's space-between below. dvh (not vh) so the iOS URL
+     bar collapsing doesn't shift it.
+
+     min-height, NOT height, and the overlay scrolls: the page can now carry
+     more than the form (the Saved tab, and the Style app's saved row +
+     Settings / Become-a-stylist). `height: 100dvh` + `overflow: hidden`
+     hard-clipped all of that with no way to reach it — the sections rendered
+     off-screen and the page refused to scroll. When the content does fit,
+     this lays out exactly as before. */
   .profile-page-overlay {
-    overflow: hidden;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+    overscroll-behavior: contain;
   }
   .profile-page-container {
-    height: 100dvh;
+    min-height: 100dvh;
     display: flex;
     flex-direction: column;
     padding: max(12px, env(safe-area-inset-top)) 16px max(12px, env(safe-area-inset-bottom));
-    overflow: hidden;
   }
   .profile-page-header { margin-bottom: 10px; }
   .profile-page-body {
