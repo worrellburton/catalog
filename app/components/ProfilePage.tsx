@@ -191,6 +191,31 @@ export default function ProfilePage({ user, onClose, renderSaved }: ProfilePageP
               <span className="profile-page-avatar-hint">Tap to change photo</span>
             </div>
 
+            {/* The Saved tab. The switcher, its CSS and the `tab` state have
+                existed since this screen was written, but nothing ever rendered
+                them, so `renderSaved` was a dead prop and callers passing a
+                Saved screen got nothing. Only shown when a caller supplies one. */}
+            {renderSaved && (
+              <div className="profile-page-tabs" role="tablist">
+                {(['profile', 'saved'] as const).map(t => (
+                  <button
+                    key={t}
+                    type="button"
+                    role="tab"
+                    aria-selected={tab === t}
+                    className={`profile-page-tab ${tab === t ? 'is-active' : ''}`}
+                    onClick={() => setTab(t)}
+                  >
+                    {t === 'profile' ? 'Profile' : 'Saved'}
+                  </button>
+                ))}
+              </div>
+            )}
+
+            {tab === 'saved' && renderSaved ? (
+              <div className="profile-page-saved">{renderSaved()}</div>
+            ) : (
+              <>
             <div className="profile-page-section">
               <h2 className="profile-page-section-title">About you</h2>
 
@@ -352,6 +377,9 @@ export default function ProfilePage({ user, onClose, renderSaved }: ProfilePageP
                 ) : saving ? 'Saving…' : 'Save changes'}
               </button>
             </div>
+
+              </>
+            )}
 
             <div className="profile-page-footer">
               <button

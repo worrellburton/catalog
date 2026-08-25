@@ -469,23 +469,27 @@ html[data-shell="catalog-app"] .profile-page-overlay {
   gap: 6px;
   padding: 0 20px 8px;
 }
+/* Dark by default, like every other control on this screen — these were written
+   light-mode-first while the tab bar was never rendered, so on the dark profile
+   the labels came out near-invisible. Mirrors .profile-page-seg-btn. */
 .profile-page-tab {
   flex: 1;
   padding: 9px 12px;
   border-radius: 10px;
-  border: 1px solid rgba(0, 0, 0, 0.1);
+  border: 1px solid rgba(255, 255, 255, 0.12);
   background: transparent;
-  color: rgba(0, 0, 0, 0.6);
+  color: rgba(255, 255, 255, 0.55);
   font-size: 13px;
   font-weight: 600;
   font-family: inherit;
   cursor: pointer;
   transition: background 140ms ease, color 140ms ease, border-color 140ms ease;
 }
+.profile-page-tab:hover { color: rgba(255, 255, 255, 0.8); }
 .profile-page-tab.is-active {
-  background: #111;
+  background: rgba(255, 255, 255, 0.12);
   color: #fff;
-  border-color: #111;
+  border-color: rgba(255, 255, 255, 0.24);
 }
 .profile-page-saved { padding: 4px 16px 24px; }
 
