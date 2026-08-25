@@ -186,16 +186,46 @@ async function botMustStaySilent(threadId: string): Promise<boolean> {
 
 /** The active stylist roster, in display order. Pass `landingOnly` to get just
  *  the two stylists featured on the /style landing page (landing_slot set). */
+// The roster is world-readable, ~13 rows, and changes about never — but the
+// Style app's sub-pages (/style/settings, /apply, /showroom, /inbox) are SIBLING
+// routes, so leaving one unmounts the whole experience and coming back refetches
+// everything from cold. Memoise per query shape, with an in-flight guard so two
+// mounts in the same tick share one request. Same shape as dials.ts's dialCache.
+const stylistCache = new Map<string, StyleUpStylist[]>();
+const stylistInflight = new Map<string, Promise<StyleUpStylist[]>>();
+
+/** Drop the memoised roster — call after anything that edits stylists. */
+export function invalidateStylistCache(): void {
+  stylistCache.clear();
+  stylistInflight.clear();
+}
+
 export async function fetchStylists(opts: { landingOnly?: boolean } = {}): Promise<StyleUpStylist[]> {
   if (!supabase) return [];
-  let q = supabase
-    .from('style_up_stylists')
-    .select(STYLIST_COLS)
-    .eq('is_active', true);
-  if (opts.landingOnly) q = q.not('landing_slot', 'is', null);
-  const { data, error } = await q.order('sort', { ascending: true });
-  if (error || !data) return [];
-  return (data as Record<string, unknown>[]).map(mapStylist);
+  const key = opts.landingOnly ? 'landing' : 'all';
+  const cached = stylistCache.get(key);
+  if (cached) return cached;
+  const inflight = stylistInflight.get(key);
+  if (inflight) return inflight;
+
+  const sb = supabase;
+  const run = (async () => {
+    let q = sb
+      .from('style_up_stylists')
+      .select(STYLIST_COLS)
+      .eq('is_active', true);
+    if (opts.landingOnly) q = q.not('landing_slot', 'is', null);
+    const { data, error } = await q.order('sort', { ascending: true });
+    if (error || !data) return [];
+    const rows = (data as Record<string, unknown>[]).map(mapStylist);
+    // Only cache a real result — an empty list is usually a transient failure,
+    // and caching it would strand the picker on "No stylists available yet."
+    if (rows.length) stylistCache.set(key, rows);
+    return rows;
+  })().finally(() => { stylistInflight.delete(key); });
+
+  stylistInflight.set(key, run);
+  return run;
 }
 
 /** Find (or open) the shopper's ongoing thread with a stylist. One thread per

@@ -1008,6 +1008,27 @@ export async function getGeneration(id: string): Promise<UserGeneration | null> 
   return data as UserGeneration;
 }
 
+/** Just the finished look videos, for the Style app's saved strip.
+ *
+ *  listUserGenerations() below selects 25 columns with no bound because MyLooks
+ *  needs them; the strip needs two and shows at most 20, so reusing it pulled
+ *  ~100 KB to render ~9 KB and grew with every look the shopper ever made. */
+export async function listDoneLookVideos(
+  userId: string,
+  limit = 30,
+): Promise<Array<{ id: string; video_url: string }>> {
+  if (!supabase) return [];
+  const { data } = await supabase
+    .from('user_generations')
+    .select('id, video_url')
+    .eq('user_id', userId)
+    .eq('status', 'done')
+    .not('video_url', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  return (data || []) as Array<{ id: string; video_url: string }>;
+}
+
 export async function listUserGenerations(userId: string): Promise<UserGeneration[]> {
   if (!supabase) return [];
   const { data } = await supabase

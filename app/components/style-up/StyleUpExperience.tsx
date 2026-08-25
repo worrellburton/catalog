@@ -23,7 +23,7 @@ import {
   type StyleUpStylist, type StyleUpMessage, type StyleUpProductRef, type StyleUpThreadSummary, type RecommendOpts,
   type StyleUpProductDetail,
 } from '~/services/style-up';
-import { listUserGenerations, getGenerationLookPosters, getGenerationProductImages, getGenerationDetail } from '~/services/user-generations';
+import { listDoneLookVideos, getGenerationLookPosters, getGenerationProductImages, getGenerationDetail } from '~/services/user-generations';
 import { roleTagFromName } from '~/services/product-roles';
 import { SCENE_PRESETS, presetForPhrase } from '~/data/style-scenes';
 import { signInWithGoogle } from '~/services/auth';
@@ -637,6 +637,11 @@ export function StyleUpExperience({
   );
 
   const [stylists, setStylists] = useState<StyleUpStylist[]>([]);
+  // Distinguishes "still fetching" from "genuinely empty". Without it every
+  // mount flashed a wrong answer ("No stylists available yet.", "No
+  // conversations yet.") while the data was in flight, which reads as the app
+  // having lost your data rather than as loading.
+  const [stylistsLoaded, setStylistsLoaded] = useState(false);
   // Phase 2: AI/human filter chips on the full picker (not landing).
   const [rosterFilter, setRosterFilter] = useState<'all' | 'humans' | 'ai'>('all');
   const [active, setActive] = useState<StyleUpStylist | null>(null);
@@ -807,7 +812,9 @@ export function StyleUpExperience({
   }, []);
 
   // Roster, scoped to the landing pair on /style, the full roster elsewhere.
-  useEffect(() => { void fetchStylists({ landingOnly }).then(setStylists); }, [landingOnly]);
+  useEffect(() => {
+    void fetchStylists({ landingOnly }).then(rows => { setStylists(rows); setStylistsLoaded(true); });
+  }, [landingOnly]);
 
   // Phase 4: stylist attribution for affiliate clickouts. Keep the global
   // affiliate context in sync with the active thread so a click that fires
@@ -835,7 +842,7 @@ export function StyleUpExperience({
     if (!isStyleApp || !userId) { setSavedLooks([]); return; }
     let alive = true;
     void (async () => {
-      const gens = (await listUserGenerations(userId)).filter(g => g.status === 'done' && g.video_url);
+      const gens = await listDoneLookVideos(userId);
       if (!alive) return;
       const ids = gens.map(g => g.id);
       // A look's poster job can still be pending (looks_creative.thumbnail_url
@@ -850,7 +857,7 @@ export function StyleUpExperience({
       if (!alive) return;
       setSavedLooks(gens.flatMap(g => {
         const poster = posters[g.id] ?? productImages[g.id]?.[0];
-        return poster ? [{ genId: g.id, videoUrl: g.video_url as string, poster }] : [];
+        return poster ? [{ genId: g.id, videoUrl: g.video_url, poster }] : [];
       }));
     })();
     return () => { alive = false; };
@@ -1555,30 +1562,55 @@ export function StyleUpExperience({
 
   // Poll any in-flight render generations referenced by the thread until they
   // reach a terminal state, so the render bubbles promote spinner → video.
+  // Poll the generations behind the render bubbles until they finish.
+  //
+  // `renders` is deliberately NOT a dependency, and the writer below bails when
+  // nothing changed. Both matter: this effect WRITES `renders`, and the old
+  // writer allocated `{...prev}` unconditionally, so every response produced a
+  // new object reference, failed React's bail-out, re-ran the effect, cleared
+  // the interval before it could fire, and immediately called tick() again. The
+  // 3s poll was really polling at network speed — a request per generation per
+  // round trip, for the entire 30-90s of a look render, on the one connection
+  // every other query in the app shares. Read it through a ref instead.
+  const rendersRef = useRef(renders);
+  rendersRef.current = renders;
   useEffect(() => {
     const ids = messages
       .filter(m => m.kind === 'render' && m.renderGenerationId)
       .map(m => m.renderGenerationId as string);
-    const pending = ids.filter(id => {
+    const stillPending = (id: string) => {
       if (canceledIds.has(id)) return false;
-      const r = renders[id];
+      const r = rendersRef.current[id];
       return !r || (r.status !== 'done' && r.status !== 'failed');
-    });
-    if (pending.length === 0) return;
+    };
+    if (!ids.some(stillPending)) return;
     let cancelled = false;
+    let h = 0;
     const tick = async () => {
+      const pending = ids.filter(stillPending);
+      // Everything landed — stop polling instead of idling on the interval.
+      if (pending.length === 0) { window.clearInterval(h); return; }
       const rows = await Promise.all(pending.map(id => getGeneration(id)));
       if (cancelled) return;
       setRenders(prev => {
+        let changed = false;
         const next = { ...prev };
-        rows.forEach(r => { if (r) next[r.id] = r; });
-        return next;
+        for (const r of rows) {
+          if (!r) continue;
+          const cur = prev[r.id];
+          // getGeneration returns a fresh object every call, so compare the
+          // fields the UI actually reacts to rather than the reference.
+          if (cur && cur.status === r.status && cur.video_url === r.video_url) continue;
+          next[r.id] = r;
+          changed = true;
+        }
+        return changed ? next : prev;
       });
     };
     void tick();
-    const h = window.setInterval(tick, 3000);
+    h = window.setInterval(tick, 3000);
     return () => { cancelled = true; window.clearInterval(h); };
-  }, [messages, renders, canceledIds]);
+  }, [messages, canceledIds]);
 
   // 1s heartbeat while any render is in-flight so the ETA countdown ticks down.
   useEffect(() => {
@@ -2270,7 +2302,7 @@ export function StyleUpExperience({
                 <span className="su-stylist-cta">Request</span>
               </button>
             ))}
-            {stylists.length === 0 && <div className="su-empty">No stylists available yet.</div>}
+            {stylistsLoaded && stylists.length === 0 && <div className="su-empty">No stylists available yet.</div>}
             {stylists.length > 0 && stylists.every(s => myThreads.some(t => t.stylist.id === s.id)) && (
               <div className="su-empty">You&apos;re chatting with all our stylists.</div>
             )}
@@ -2942,12 +2974,12 @@ export function StyleUpExperience({
             </div>
           ))}
         </div>
-      ) : (
+      ) : bootResumed ? (
         <div className="su-convos-empty">
           <p>No conversations yet.</p>
           <p className="su-convos-empty-sub">Find a stylist to start chatting.</p>
         </div>
-      )}
+      ) : null}
     </div>
   );
 
