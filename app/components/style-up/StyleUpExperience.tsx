@@ -618,6 +618,11 @@ export interface StyleUpExperienceProps {
   /** Hero headline / subhead shown in landing mode above the roster. */
   landingTitle?: string;
   landingSubtitle?: string;
+  /** True while a /style/* child route covers this experience. It stays MOUNTED
+   *  (that is the point — Back is then free), so its background polls would
+   *  otherwise keep running against a screen nobody is looking at. Each poll
+   *  below bails on this and restarts when it clears. */
+  suspended?: boolean;
 }
 
 export function StyleUpExperience({
@@ -625,6 +630,7 @@ export function StyleUpExperience({
   landing = false,
   landingTitle = 'Meet your AI stylist',
   landingSubtitle = 'Two stylists, one feed. Tell them your vibe, they pull the pieces and put the look on you.',
+  suspended = false,
 }: StyleUpExperienceProps = {}) {
   const { user } = useAuth();
   const userId = user?.id ?? null;
@@ -949,10 +955,10 @@ export function StyleUpExperience({
   // "working" state (a hunt or render cooking in a thread) appears and clears
   // without a manual refresh.
   useEffect(() => {
-    if (!userId || threadId || pickerOpen) return;
+    if (!userId || threadId || pickerOpen || suspended) return;
     const h = window.setInterval(() => { void loadThreads(); }, 6000);
     return () => window.clearInterval(h);
-  }, [userId, threadId, pickerOpen, loadThreads]);
+  }, [userId, threadId, pickerOpen, suspended, loadThreads]);
 
   const closeThread = useCallback(() => {
     if (threadId) markThreadSeen(threadId); // leaving marks everything read
@@ -1153,7 +1159,7 @@ export function StyleUpExperience({
   // module off the thread's `hunting_until` marker (polled), so it shows for
   // whoever has the chat open and hides the moment the server clears it.
   useEffect(() => {
-    if (!threadId) { setHuntView(null); return; }
+    if (!threadId || suspended) { setHuntView(null); return; }
     let untilMs: number | null = null;
     let startMs = Date.now();
     let active = false;
@@ -1182,7 +1188,7 @@ export function StyleUpExperience({
     void tick();
     const h = window.setInterval(tick, 1000);
     return () => window.clearInterval(h);
-  }, [threadId]);
+  }, [threadId, suspended]);
 
   // Show the typing bubble for a randomized 1/2/3s before the stylist's reply
   // lands, used by the tap-driven flows (swaps, outfit, scene) so every
@@ -1583,7 +1589,7 @@ export function StyleUpExperience({
       const r = rendersRef.current[id];
       return !r || (r.status !== 'done' && r.status !== 'failed');
     };
-    if (!ids.some(stillPending)) return;
+    if (suspended || !ids.some(stillPending)) return;
     let cancelled = false;
     let h = 0;
     const tick = async () => {
@@ -1610,7 +1616,7 @@ export function StyleUpExperience({
     void tick();
     h = window.setInterval(tick, 3000);
     return () => { cancelled = true; window.clearInterval(h); };
-  }, [messages, canceledIds]);
+  }, [messages, canceledIds, suspended]);
 
   // 1s heartbeat while any render is in-flight so the ETA countdown ticks down.
   useEffect(() => {
