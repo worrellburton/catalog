@@ -40,6 +40,8 @@ import type { Product } from '~/data/looks';
 // profile chip has to mount ProfilePage itself or it is a dead button. Apple
 // requires in-app account deletion, which lives in here.
 const ProfilePage = lazy(() => import('~/components/ProfilePage'));
+// The same Saved screen the Catalog app renders in its profile.
+const SavedScreen = lazy(() => import('~/components/SavedScreen'));
 
 // Preferences the stylist infers from chat, budget, occasion, formality lean,
 // dropped colors, simplicity, applied to every recommendation (#4/#6/#7).
@@ -655,7 +657,10 @@ export function StyleUpExperience({
   const pvDragDy = useRef(0);
   const lvDragY = useRef(0);
   const lvDragDy = useRef(0);
-  const { isProductBookmarked, toggleProductBookmark, bookmarkedProducts } = useBookmarks();
+  // Keep the whole store around, not just the three members used here — the
+  // profile's Saved tab hands it to the shared SavedScreen wholesale.
+  const bookmarks = useBookmarks();
+  const { isProductBookmarked, toggleProductBookmark, bookmarkedProducts } = bookmarks;
   const [newBelow, setNewBelow] = useState(false);            // "↓ New message" pill (scrolled up)
   const nearBottomRef = useRef(true);                         // is the chat pinned near the bottom?
   const prevMsgCountRef = useRef(0);                          // detect genuinely-new messages
@@ -1798,12 +1803,6 @@ export function StyleUpExperience({
   );
   const railHeader = header(exit, false);
 
-  const profileOverlay = profileOpen && user ? (
-    <Suspense fallback={null}>
-      <ProfilePage user={user} onClose={() => setProfileOpen(false)} />
-    </Suspense>
-  ) : null;
-
   // Expanded look viewer, the big, full-screen video + its pieces + add-to-looks.
   // Swipe down to dismiss; closing dissolves out.
   const viewerOverlay = viewer ? (
@@ -2073,43 +2072,60 @@ export function StyleUpExperience({
     });
   };
 
-  const savedRow = isStyleApp ? (
-    <div className="su-saved-row" aria-label="Saved">
-      <span className="su-saved-row-label">Saved</span>
-      {savedLooks.length === 0 && bookmarkedProducts.length === 0 ? (
-        <span className="su-saved-row-empty">Looks and pieces you save show up here.</span>
-      ) : (
-        <div className="su-saved-row-strip">
-          {savedLooks.slice(0, 20).map(l => (
-            <button
-              key={l.genId}
-              type="button"
-              className="su-saved-row-item su-saved-row-item--look"
-              onClick={() => openSavedLook(l)}
-              title="Your look"
-            >
-              <img src={l.poster} alt="" loading="lazy" />
-            </button>
-          ))}
-          {bookmarkedProducts.slice(0, 20).map((p, i) => (
-            <button
-              key={`${p.brand}::${p.name}::${i}`}
-              type="button"
-              className="su-saved-row-item"
-              onClick={() => openProduct({
-                id: String(p.id ?? ''), name: p.name, brand: p.brand,
-                price: p.price, image: p.image ?? undefined, url: p.url ?? undefined,
-              })}
-              title={`${p.brand ? p.brand + ', ' : ''}${p.name}`}
-            >
-              {p.image
-                ? <img src={p.image} alt="" loading="lazy" />
-                : <span className="su-saved-row-item--empty" />}
-            </button>
-          ))}
+  // ── The Saved tab inside the profile, matching the Catalog app: saved lives
+  // behind the profile rather than pinned above the feed. The shared SavedScreen
+  // carries saved products and followed creators exactly as it does on web; the
+  // shopper's own rendered looks are a Style-only entity SavedScreen has no
+  // concept of, so they get their own strip above it.
+  //
+  // savedLooks={[]} on purpose: those are catalog FEED looks, and the Style app's
+  // front door pins every route to /style, so listing them would only produce
+  // tiles that open nothing.
+  const renderSavedTab = () => (
+    <>
+      {savedLooks.length > 0 && (
+        <div className="su-saved-row" aria-label="Your looks">
+          <span className="su-saved-row-label">Your looks</span>
+          <div className="su-saved-row-strip">
+            {savedLooks.slice(0, 20).map(l => (
+              <button
+                key={l.genId}
+                type="button"
+                className="su-saved-row-item su-saved-row-item--look"
+                onClick={() => { setProfileOpen(false); openSavedLook(l); }}
+                title="Your look"
+              >
+                <img src={l.poster} alt="" loading="lazy" />
+              </button>
+            ))}
+          </div>
         </div>
       )}
-    </div>
+      <Suspense fallback={null}>
+        <SavedScreen
+          embedded
+          bookmarks={bookmarks}
+          savedLooks={[]}
+          onOpenLook={() => {}}
+          onOpenProduct={p => {
+            setProfileOpen(false);
+            openProduct({
+              id: String(p.id ?? ''), name: p.name, brand: p.brand,
+              price: p.price, image: p.image ?? undefined, url: p.url ?? undefined,
+            });
+          }}
+          onOpenBrowser={url => window.open(affiliateRedirect(url, null), '_blank', 'noopener')}
+        />
+      </Suspense>
+    </>
+  );
+
+  // Declared after renderSavedTab on purpose: this reads it at render time, and
+  // a const can't be referenced before its initialiser runs.
+  const profileOverlay = profileOpen && user ? (
+    <Suspense fallback={null}>
+      <ProfilePage user={user} onClose={() => setProfileOpen(false)} renderSaved={renderSavedTab} />
+    </Suspense>
   ) : null;
 
   // ── Roster pane, saved conversations + the stylist list. ───────────────
@@ -2319,7 +2335,6 @@ export function StyleUpExperience({
           )}
         </div>
 
-        {savedRow}
         {contextCard}
 
         <div
@@ -2813,7 +2828,6 @@ export function StyleUpExperience({
   // chat happens through the picker. ─────────────────────────────────────────
   const convosPane = (
     <div className="su-page su-page--convos" onScroll={onPageScroll}>
-      {savedRow}
       {myThreads.length > 0 ? (
         <div className="su-convos">
           <div className="su-section-label">Your conversations</div>
