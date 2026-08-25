@@ -2413,7 +2413,9 @@ html[data-shell="catalog-app"] .su-showroom-search-sheet {
  * profile chip top-right, and shrink/hide when the chat log has scrolled.
  * Gated on data-app="style" so the Catalog app's chat (should we surface
  * one there later) is unchanged. */
-html[data-app="style"] .su-thread-head--style .su-back { display: none; }
+/* The back arrow stays in a conversation: it is the only way back to the
+   conversation list. "Eliminate the back button" applied to the app-level
+   header on home, where there is nothing behind it, not in here. */
 html[data-app="style"] .su-thread-head--style {
   transition: opacity 180ms ease, transform 180ms ease, padding 180ms ease, min-height 180ms ease;
 }
