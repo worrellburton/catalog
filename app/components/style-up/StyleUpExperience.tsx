@@ -1230,7 +1230,11 @@ export function StyleUpExperience({
       }
     }
     setStylistTyping(false);
-    setChatError(lastErr || 'Your stylist couldn’t respond. Tap to retry.');
+    // Never show the shopper the raw edge-function body — it carries upstream
+    // text like `anthropic 529: {...}`. The raw still reaches the console and
+    // the super-admin note below, so nothing is lost for debugging.
+    if (lastErr) console.warn('[style-up] stylist reply failed:', lastErr);
+    setChatError('Your stylist couldn’t respond. Tap to retry.');
     if (isSuperAdmin) setAdminNote(`style-up-chat failed: ${lastErr || 'no response (network / timeout)'}`);
   }, [threadId, isSuperAdmin, active?.isHuman]);
 
@@ -1514,7 +1518,9 @@ export function StyleUpExperience({
       });
     } catch (e) {
       setPublished(prev => { const n = new Set(prev); n.delete(genId); return n; });
-      setRenderError(e instanceof Error ? e.message : 'Could not add to your looks.');
+      // e.message here is whatever the DB threw; keep it out of the pill.
+      console.warn('[style-up] add to looks failed:', e);
+      setRenderError('Could not add that to your looks. Give it another go.');
     }
   }, [published, renders, userId, user, ctx]);
 

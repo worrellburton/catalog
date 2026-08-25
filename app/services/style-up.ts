@@ -910,6 +910,37 @@ async function getThreadStylistVibe(threadId: string): Promise<string | null> {
   return specialty ? specialty : null;
 }
 
+/** Turn a failed `createGeneration` into something a shopper can read.
+ *
+ *  Every error this returns is spoken by the stylist in chat and shown in the
+ *  render-error pill, so raw Postgres text must never reach it — a thread once
+ *  carried the literal `insert or update on table "user_generation_products"
+ *  violates foreign key constraint "user_generation_products_product_id_fkey"`
+ *  as a stylist message. Callers interpolate the result directly, so keep these
+ *  as sentence fragments that read after "Couldn't render that, ".
+ *
+ *  The raw text still goes to the console — this hides it from the shopper, it
+ *  does not throw the diagnostic away.
+ *
+ *  Note the curated errors renderLook returns before this point (non-catalog
+ *  picks, no photo on file) are already shopper-facing and bypass this. */
+export function friendlyRenderStartError(raw: string | null): string {
+  if (raw) console.warn('[style-up] render failed to start:', raw);
+  const s = (raw ?? '').toLowerCase();
+  // Belt and braces behind the non-catalog guard above: if a pick that isn't in
+  // `products` still reaches the insert, say so instead of quoting the FK.
+  if (s.includes('foreign key') || s.includes('_fkey')) {
+    return "one of those pieces isn't in our catalog yet, so I can't put it on you. Swap it out and I'll render the look.";
+  }
+  if (s.includes('duplicate key') || s.includes('already exists')) {
+    return 'that look already has that piece in it. Change one out and I\'ll render it.';
+  }
+  if (s.includes('not configured') || s.includes('network') || s.includes('fetch')) {
+    return "I couldn't reach the render service just now. Give it another go in a moment.";
+  }
+  return 'something went wrong starting that render. Give it another go in a moment.';
+}
+
 async function renderLook(
   threadId: string,
   shopperUserId: string,
@@ -1087,7 +1118,7 @@ async function renderLook(
     durationSeconds: duration,
     model: quality,
   });
-  if (error || !gen) return { generationId: null, error: error ?? 'Render failed to start' };
+  if (error || !gen) return { generationId: null, error: friendlyRenderStartError(error) };
 
   // Carry the pieces (with images) on the render caption so the chat can show
   // what went into the look while it cooks and once it's done.
