@@ -37,7 +37,7 @@ export function needsStyleOnboarding(profileReady: boolean): boolean {
 }
 
 const STEPS = [
-  { key: 'photo', title: 'Add a photo of you', sub: 'One clear, front-facing photo of just you. It’s how your stylist styles the real you — and how you see every pick on yourself.' },
+  { key: 'photo', title: 'Add a photo of you', sub: 'One clear, front-facing photo of just you. It’s how your stylist styles the real you, and how you see every pick on yourself.' },
   { key: 'body', title: 'Your basics', sub: 'So nothing they pick shows up in the wrong size.' },
   { key: 'gender', title: 'What should we shop?', sub: 'Sets which side of the catalog your stylist pulls from.' },
   { key: 'style', title: 'Your style', sub: 'Tap anything that sounds like you.' },
@@ -114,14 +114,14 @@ export default function StyleOnboarding({ userId, onDone }: { userId: string; on
     const { data, error: upErr } = await uploadUserPhoto(file, userId);
     if (upErr || !data) {
       setUploading(null);
-      setError(upErr ?? 'Couldn’t upload that photo — try again.');
+      setError(upErr ?? 'Couldn’t upload that photo. Try again.');
       return;
     }
     const check = await validateSelfie(data.public_url);
     if (!check.ok) {
       await deleteUserUpload(data);
       setUploading(null);
-      setError(check.reason ?? 'That photo won’t work for a try-on — use a clear, front-facing photo of just you.');
+      setError(check.reason ?? 'That photo won’t work for a try-on. Use a clear, front-facing photo of just you.');
       return;
     }
     const next = [...slots];

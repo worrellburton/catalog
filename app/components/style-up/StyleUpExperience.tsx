@@ -23,7 +23,7 @@ import {
   type StyleUpStylist, type StyleUpMessage, type StyleUpProductRef, type StyleUpThreadSummary, type RecommendOpts,
   type StyleUpProductDetail,
 } from '~/services/style-up';
-import { listUserGenerations, getGenerationLookPosters } from '~/services/user-generations';
+import { listUserGenerations, getGenerationLookPosters, getGenerationProductImages } from '~/services/user-generations';
 import { roleTagFromName } from '~/services/product-roles';
 import { SCENE_PRESETS, presetForPhrase } from '~/data/style-scenes';
 import { signInWithGoogle } from '~/services/auth';
@@ -680,7 +680,7 @@ export function StyleUpExperience({
   // The looks half of the saved strip. In the Style app "saving a look" IS
   // "add to my looks" — the shopper's own finished renders — so this reads
   // those rather than inventing a second save concept to keep in sync.
-  const [savedLooks, setSavedLooks] = useState<{ genId: string; videoUrl: string; poster: string | null }[]>([]);
+  const [savedLooks, setSavedLooks] = useState<{ genId: string; videoUrl: string; poster: string }[]>([]);
   // Render polling: generation id → its latest row. Drives the on-you render
   // bubbles (spinner → video).
   const [renders, setRenders] = useState<Record<string, UserGeneration>>({});
@@ -836,9 +836,21 @@ export function StyleUpExperience({
     void (async () => {
       const gens = (await listUserGenerations(userId)).filter(g => g.status === 'done' && g.video_url);
       if (!alive) return;
-      const posters = await getGenerationLookPosters(gens.map(g => g.id));
+      const ids = gens.map(g => g.id);
+      // A look's poster job can still be pending (looks_creative.thumbnail_url
+      // null) long after the video is done, so fall back to the pieces that went
+      // into the look. A bare <video> is NOT a usable fallback here: iOS paints
+      // nothing for one that has neither a poster nor a load, which is exactly
+      // the blank tile this replaces. No image at all, no tile.
+      const [posters, productImages] = await Promise.all([
+        getGenerationLookPosters(ids),
+        getGenerationProductImages(ids),
+      ]);
       if (!alive) return;
-      setSavedLooks(gens.map(g => ({ genId: g.id, videoUrl: g.video_url as string, poster: posters[g.id] ?? null })));
+      setSavedLooks(gens.flatMap(g => {
+        const poster = posters[g.id] ?? productImages[g.id]?.[0];
+        return poster ? [{ genId: g.id, videoUrl: g.video_url as string, poster }] : [];
+      }));
     })();
     return () => { alive = false; };
   }, [isStyleApp, userId, published]);
@@ -2043,9 +2055,7 @@ export function StyleUpExperience({
               onClick={() => setViewer({ videoUrl: l.videoUrl, pieces: [], genId: l.genId })}
               title="Your look"
             >
-              {l.poster
-                ? <img src={l.poster} alt="" loading="lazy" />
-                : <video src={l.videoUrl} muted playsInline preload="metadata" />}
+              <img src={l.poster} alt="" loading="lazy" />
             </button>
           ))}
           {bookmarkedProducts.slice(0, 20).map((p, i) => (
