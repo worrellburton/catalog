@@ -40,8 +40,6 @@ import type { Product } from '~/data/looks';
 // profile chip has to mount ProfilePage itself or it is a dead button. Apple
 // requires in-app account deletion, which lives in here.
 const ProfilePage = lazy(() => import('~/components/ProfilePage'));
-// The same Saved screen the Catalog app renders in its profile.
-const SavedScreen = lazy(() => import('~/components/SavedScreen'));
 
 // Preferences the stylist infers from chat, budget, occasion, formality lean,
 // dropped colors, simplicity, applied to every recommendation (#4/#6/#7).
@@ -657,10 +655,7 @@ export function StyleUpExperience({
   const pvDragDy = useRef(0);
   const lvDragY = useRef(0);
   const lvDragDy = useRef(0);
-  // Keep the whole store around, not just the three members used here — the
-  // profile's Saved tab hands it to the shared SavedScreen wholesale.
-  const bookmarks = useBookmarks();
-  const { isProductBookmarked, toggleProductBookmark, bookmarkedProducts } = bookmarks;
+  const { isProductBookmarked, toggleProductBookmark, bookmarkedProducts } = useBookmarks();
   const [newBelow, setNewBelow] = useState(false);            // "↓ New message" pill (scrolled up)
   const nearBottomRef = useRef(true);                         // is the chat pinned near the bottom?
   const prevMsgCountRef = useRef(0);                          // detect genuinely-new messages
@@ -681,9 +676,6 @@ export function StyleUpExperience({
   const isStyleApp = typeof window !== 'undefined' && getAppMode() === 'style';
   const [ctxEditing, setCtxEditing] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);   // account surface (Style app)
-  // Which profile tab to land on. The chat's saved-count button opens straight
-  // onto Saved; the header chip opens the form.
-  const [profileTab, setProfileTab] = useState<'profile' | 'saved'>('profile');
   const [headScrolled, setHeadScrolled] = useState(false); // shell header hidden by scroll
   // The looks half of the saved strip. In the Style app "saving a look" IS
   // "add to my looks" — the shopper's own finished renders — so this reads
@@ -1782,7 +1774,7 @@ export function StyleUpExperience({
   const onPageScroll = (e: { currentTarget: HTMLDivElement }) => {
     if (isStyleApp) setHeadScrolled(e.currentTarget.scrollTop > 8);
   };
-  const openProfileAt = (t: 'profile' | 'saved') => { setProfileTab(t); setProfileOpen(true); };
+  const openProfile = () => setProfileOpen(true);
   // Looks the shopper rendered plus pieces they bookmarked — what "saved" means
   // to them, and what the chat's count reflects.
   const savedCount = savedLooks.length + bookmarkedProducts.length;
@@ -1807,7 +1799,7 @@ export function StyleUpExperience({
         <button
           type="button"
           className="su-shell-profile"
-          onClick={() => openProfileAt('profile')}
+          onClick={() => openProfile()}
           aria-label="Open your profile"
         >
           <span className="su-shell-profile-dot" aria-hidden="true" />
@@ -2086,51 +2078,59 @@ export function StyleUpExperience({
     });
   };
 
-  // ── The Saved tab inside the profile, matching the Catalog app: saved lives
-  // behind the profile rather than pinned above the feed. The shared SavedScreen
-  // carries saved products and followed creators exactly as it does on web; the
-  // shopper's own rendered looks are a Style-only entity SavedScreen has no
-  // concept of, so they get their own strip above it.
-  //
-  // savedLooks={[]} on purpose: those are catalog FEED looks, and the Style app's
-  // front door pins every route to /style, so listing them would only produce
-  // tiles that open nothing.
-  const renderSavedTab = () => (
+  // Everything the profile carries below the form: the same saved row the home
+  // surface shows, then the two entries that used to sit under the stylist
+  // picker. Settings and Become-a-stylist are account-level, so the profile is
+  // where they belong; the picker is for picking a stylist.
+  const profileExtras = (
     <>
-      {savedLooks.length > 0 && (
-        <div className="su-saved-row" aria-label="Your looks">
-          <span className="su-saved-row-label">Your looks</span>
-          <div className="su-saved-row-strip">
-            {savedLooks.slice(0, 20).map(l => (
-              <button
-                key={l.genId}
-                type="button"
-                className="su-saved-row-item su-saved-row-item--look"
-                onClick={() => { setProfileOpen(false); openSavedLook(l); }}
-                title="Your look"
-              >
-                <img src={l.poster} alt="" loading="lazy" />
-              </button>
-            ))}
+      {savedCount > 0 && (
+        <div className="su-profile-section">
+          <h2 className="profile-page-section-title">Saved</h2>
+          <div className="su-saved-row" aria-label="Saved">
+            <div className="su-saved-row-strip">
+              {savedLooks.slice(0, 20).map(l => (
+                <button
+                  key={l.genId}
+                  type="button"
+                  className="su-saved-row-item su-saved-row-item--look"
+                  onClick={() => { setProfileOpen(false); openSavedLook(l); }}
+                  title="Your look"
+                >
+                  <img src={l.poster} alt="" loading="lazy" />
+                </button>
+              ))}
+              {bookmarkedProducts.slice(0, 20).map((p, i) => (
+                <button
+                  key={`${p.brand}::${p.name}::${i}`}
+                  type="button"
+                  className="su-saved-row-item"
+                  onClick={() => {
+                    setProfileOpen(false);
+                    openProduct({
+                      id: String(p.id ?? ''), name: p.name, brand: p.brand,
+                      price: p.price, image: p.image ?? undefined, url: p.url ?? undefined,
+                    });
+                  }}
+                  title={`${p.brand ? p.brand + ', ' : ''}${p.name}`}
+                >
+                  {p.image ? <img src={p.image} alt="" loading="lazy" /> : <span className="su-saved-row-item--empty" />}
+                </button>
+              ))}
+            </div>
           </div>
         </div>
       )}
-      <Suspense fallback={null}>
-        <SavedScreen
-          embedded
-          bookmarks={bookmarks}
-          savedLooks={[]}
-          onOpenLook={() => {}}
-          onOpenProduct={p => {
-            setProfileOpen(false);
-            openProduct({
-              id: String(p.id ?? ''), name: p.name, brand: p.brand,
-              price: p.price, image: p.image ?? undefined, url: p.url ?? undefined,
-            });
-          }}
-          onOpenBrowser={url => window.open(affiliateRedirect(url, null), '_blank', 'noopener')}
-        />
-      </Suspense>
+      <div className="su-profile-section">
+        <button type="button" className="su-profile-link" onClick={() => navigate('/style/settings')}>
+          <span>Settings</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6" /></svg>
+        </button>
+        <button type="button" className="su-profile-link" onClick={() => navigate('/style/apply')}>
+          <span>Become a stylist</span>
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6" /></svg>
+        </button>
+      </div>
     </>
   );
 
@@ -2141,7 +2141,7 @@ export function StyleUpExperience({
   // conversation down every time.
   const homeSavedRow = savedCount > 0 ? (
     <div className="su-saved-row" aria-label="Saved">
-      <button type="button" className="su-saved-row-label su-saved-row-label--btn" onClick={() => openProfileAt('saved')}>
+      <button type="button" className="su-saved-row-label su-saved-row-label--btn" onClick={() => openProfile()}>
         Saved
       </button>
       <div className="su-saved-row-strip">
@@ -2174,16 +2174,13 @@ export function StyleUpExperience({
     </div>
   ) : null;
 
-  // Declared after renderSavedTab on purpose: this reads it at render time, and
+  // Declared after profileExtras on purpose: this reads it at render time, and
   // a const can't be referenced before its initialiser runs.
   const profileOverlay = profileOpen && user ? (
     <Suspense fallback={null}>
-      <ProfilePage
-        user={user}
-        onClose={() => setProfileOpen(false)}
-        renderSaved={renderSavedTab}
-        initialTab={profileTab}
-      />
+      <ProfilePage user={user} onClose={() => setProfileOpen(false)}>
+        {profileExtras}
+      </ProfilePage>
     </Suspense>
   ) : null;
 
@@ -2281,23 +2278,6 @@ export function StyleUpExperience({
               <div className="su-empty">{emptyRosterCopy(rosterFilter)}</div>
             )}
           </div>
-          {/* Phase 2.5 / 6.1: picker footer links. */}
-          <div style={{ display: 'flex', gap: 12, justifyContent: 'center' }}>
-            <button
-              type="button"
-              className="su-become-stylist"
-              onClick={() => navigate('/style/apply')}
-            >
-              Become a stylist
-            </button>
-            <button
-              type="button"
-              className="su-become-stylist"
-              onClick={() => navigate('/style/settings')}
-            >
-              Settings
-            </button>
-          </div>
         </div>
   );
 
@@ -2384,7 +2364,7 @@ export function StyleUpExperience({
             <button
               type="button"
               className="su-thread-saved"
-              onClick={() => openProfileAt('saved')}
+              onClick={() => openProfile()}
               aria-label={`Saved, ${savedCount} item${savedCount === 1 ? '' : 's'}`}
             >
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z" /></svg>
@@ -2395,7 +2375,7 @@ export function StyleUpExperience({
             <button
               type="button"
               className="su-thread-profile"
-              onClick={() => openProfileAt('profile')}
+              onClick={() => openProfile()}
               aria-label="Open your profile"
             >
               <span className="su-thread-profile-dot" />
@@ -3041,11 +3021,6 @@ export function StyleUpExperience({
           : !allStylists.some(s => matchesRosterFilter(s, rosterFilter)) && (
             <div className="su-empty">{emptyRosterCopy(rosterFilter)}</div>
           )}
-      </div>
-      {/* Phase 2.5 / 6.1: footer links on the real picker. */}
-      <div style={{ display: 'flex', gap: 12, justifyContent: 'center', padding: '20px 0 12px' }}>
-        <button type="button" className="su-become-stylist" onClick={() => navigate('/style/apply')}>Become a stylist</button>
-        <button type="button" className="su-become-stylist" onClick={() => navigate('/style/settings')}>Settings</button>
       </div>
     </div>
   );

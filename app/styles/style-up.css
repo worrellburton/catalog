@@ -2482,7 +2482,28 @@ html[data-app="style"] .su-saved-row-item img,
 html[data-app="style"] .su-saved-row-item--empty {
   width: 100%; height: 100%; object-fit: cover; display: block;
 }
-/* On home the label doubles as the way into the full Saved tab. */
+/* Style-app sections appended to the shared profile page (via ProfilePage's
+   children). Matches the profile's own sections — same gutter, same 15px/600
+   heading — so these don't read as bolted on. */
+html[data-app="style"] .su-profile-section {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 20px 16px 0;
+}
+/* Row entries rather than the underlined links these were on the picker. Mirrors
+   the profile's field boxes so they sit in the same visual family. */
+html[data-app="style"] .su-profile-link {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  width: 100%; padding: 13px 14px; border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.04);
+  color: #fff; font-size: 15px; font-family: inherit; text-align: left; cursor: pointer;
+  transition: background 140ms ease;
+}
+html[data-app="style"] .su-profile-link:hover { background: rgba(255,255,255,0.08); }
+html[data-app="style"] .su-profile-link svg { color: rgba(255,255,255,0.4); flex: 0 0 auto; }
+/* The row already sits under the section's own heading here. */
+html[data-app="style"] .su-profile-section .su-saved-row { padding: 0; }
+
+/* On home the label doubles as the way into the profile's saved section. */
 html[data-app="style"] .su-saved-row-label--btn {
   align-self: flex-start; padding: 0; border: 0; background: none;
   font: inherit; letter-spacing: 0.1em; text-transform: uppercase;
