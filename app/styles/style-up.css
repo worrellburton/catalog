@@ -2429,17 +2429,15 @@ html[data-app="style"] .su-thread-head--style.is-scrolled {
 .su-thread-profile {
   margin-left: auto;
   width: 34px; height: 34px; border-radius: 999px;
-  background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.14);
+  background: transparent; border: 1px solid rgba(255,255,255,0.16);
   color: #f0f0f0; cursor: pointer;
   display: inline-flex; align-items: center; justify-content: center;
   padding: 0;
 }
 .su-thread-profile:hover { background: rgba(255,255,255,0.14); }
-.su-thread-profile-dot {
-  width: 14px; height: 14px; border-radius: 999px;
-  background: linear-gradient(135deg, #d0d0d0, #7a7a7a);
-  display: block;
-}
+/* The chip holds a real ConsumerAvatar now (the shopper's photo, or their
+   gradient initial), like the Catalog app's header — not a generic grey dot.
+   The avatar carries its own size/shape, so the chip only frames it. */
 
 
 /* Phase 3.5: save-from-chat button on each lookcard row. Sized to sit next
@@ -2624,14 +2622,12 @@ html[data-app="style"][data-style-bg="paper"] .su-stylist-bot { border-color: #f
 .su-shell-profile {
   grid-column: 3;
   width: 34px; height: 34px; border-radius: 999px;
-  background: rgba(255,255,255,0.08); border: 1px solid rgba(255,255,255,0.14);
+  background: transparent; border: 1px solid rgba(255,255,255,0.16);
   color: #f0f0f0; cursor: pointer; padding: 0;
   display: inline-flex; align-items: center; justify-content: center;
   transition: background 140ms ease;
 }
 .su-shell-profile:hover { background: rgba(255,255,255,0.14); }
-.su-shell-profile-dot {
-  width: 14px; height: 14px; border-radius: 999px;
-  background: linear-gradient(135deg, #d0d0d0, #7a7a7a);
-  display: block;
-}
+/* The chip holds a real ConsumerAvatar now (the shopper's photo, or their
+   gradient initial), like the Catalog app's header — not a generic grey dot.
+   The avatar carries its own size/shape, so the chip only frames it. */

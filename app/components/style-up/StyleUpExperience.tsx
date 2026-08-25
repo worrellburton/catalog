@@ -30,6 +30,7 @@ import { signInWithGoogle } from '~/services/auth';
 import StyleUpBackground from './StyleUpBackground';
 import StyleOnboarding, { needsStyleOnboarding } from './StyleOnboarding';
 import CatalogLogo from '~/components/CatalogLogo';
+import ConsumerAvatar from '~/components/ConsumerAvatar';
 import { useBookmarks } from '~/hooks/useBookmarks';
 import { affiliateRedirect, setAffiliateContext } from '~/services/affiliate';
 import type { Product } from '~/data/looks';
@@ -1802,7 +1803,7 @@ export function StyleUpExperience({
           onClick={() => openProfile()}
           aria-label="Open your profile"
         >
-          <span className="su-shell-profile-dot" aria-hidden="true" />
+          <ConsumerAvatar name={user?.displayName || user?.email} url={user?.avatarUrl} size={30} />
         </button>
       )}
     </div>
@@ -2378,7 +2379,7 @@ export function StyleUpExperience({
               onClick={() => openProfile()}
               aria-label="Open your profile"
             >
-              <span className="su-thread-profile-dot" />
+              <ConsumerAvatar name={user?.displayName || user?.email} url={user?.avatarUrl} size={30} />
             </button>
           ) : (
             <button type="button" className="su-thread-end" onClick={endConversation}>End</button>
