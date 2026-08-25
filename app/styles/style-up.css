@@ -1072,18 +1072,30 @@ html[data-shell="catalog-app"] .su-showroom-search-sheet {
    see the data-style-bg block near the end of this file) so a light preset
    doesn't get a black sheet slammed over it. Fallbacks = the dark default,
    so the Catalog app and the default preset are unchanged. */
+/* Scrolls when the content is taller than the screen. `align-items: center` on
+   its own clips BOTH ends unreachably once the pieces list makes the sheet
+   overflow (the close button and the CTA go with it), so centre with `margin:
+   auto` on the child instead — that centres while it fits and stays scrollable
+   when it doesn't. Top pad clears the native status bar: inside the Flutter
+   shell nothing else does, since the shell hides its header on /style. */
 .su-viewer {
   position: fixed; inset: 0; z-index: 200;
-  display: flex; align-items: center; justify-content: center;
-  padding: 20px; background: var(--su-scrim, rgba(0,0,0,0.86));
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: 20px;
+  padding-top: calc(20px + var(--shell-sb, env(safe-area-inset-top, 0px)));
+  padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  background: var(--su-scrim, rgba(0,0,0,0.86));
+  overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
 }
-.su-viewer-inner { position: relative; display: flex; flex-direction: column; align-items: center; gap: 14px; max-width: 460px; width: 100%; }
+.su-viewer-inner { position: relative; margin: auto; display: flex; flex-direction: column; align-items: center; gap: 14px; max-width: 460px; width: 100%; }
 .su-viewer-close {
   position: absolute; top: -6px; right: -2px; z-index: 1;
   width: 36px; height: 36px; border-radius: 50%; border: none;
   background: rgba(255,255,255,0.14); color: #fff; font-size: 15px; cursor: pointer;
 }
-.su-viewer-video { width: 100%; max-height: 72vh; aspect-ratio: 9 / 16; object-fit: contain; border-radius: 16px; background: #000; }
+/* 62vh, not 72: the pieces list below needs to be visible on open, not something
+   you only find by scrolling. */
+.su-viewer-video { width: 100%; max-height: 62vh; aspect-ratio: 9 / 16; object-fit: contain; border-radius: 16px; background: #000; }
 /* The pieces in a look. Was a row of bare 46x58 thumbnails, which named none of
    them; now a tappable list carrying brand, name and price, so the look reads as
    a shoppable outfit rather than four unlabelled squares. */
