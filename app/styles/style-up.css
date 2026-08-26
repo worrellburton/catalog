@@ -2517,7 +2517,12 @@ html[data-app="style"] .su-saved-row-item--empty {
    heading — so these don't read as bolted on. */
 html[data-app="style"] .su-profile-section {
   display: flex; flex-direction: column; gap: 8px;
-  padding: 20px 16px 0;
+  /* Horizontal padding is the container's job, not this block's: these rows
+     only ever render as ProfilePage children, and .profile-page-container
+     already pads (20px desktop / 16px mobile). Padding here too inset the
+     rows by a further 16px, so Settings and Become a stylist sat narrower
+     than the fields and the Save button above them. */
+  padding: 20px 0 0;
 }
 /* Row entries rather than the underlined links these were on the picker. Mirrors
    the profile's field boxes so they sit in the same visual family. */
