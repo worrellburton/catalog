@@ -807,8 +807,14 @@ header:not([class]) > .pending-look-pill {
      transparent, sitting BEHIND the chrome (pointer-events:none, z-index
      below the header's own children) without moving anything. Lives only
      in the mobile query; the Flutter shell hides <header> entirely so it
-     never shows there. */
-  header::before {
+     never shows there.
+
+     :not([class]) like the rule above it — this scrim is the HOME FEED
+     header's. Unscoped it painted a 150px fixed black gradient behind every
+     other <header> in the app on mobile (the /style sub-pages' page headers
+     among them, which read as a dark band across the top of an otherwise
+     light page). Same hijack the feed header rules were scoped for. */
+  header:not([class])::before {
     content: '';
     position: fixed;
     top: 0;
