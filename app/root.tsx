@@ -38,6 +38,7 @@ import CreatorLoginToastHost from "~/components/CreatorLoginToastHost";
 import FollowToastHost from "~/components/FollowToastHost";
 import { CatalogDialogProvider } from "~/components/CatalogDialog";
 import ClerkGate from "~/components/ClerkGate";
+import { applyAppModeToRoot, applyStyleBackground } from "~/utils/app-mode";
 import { initSentry, captureException } from "~/utils/sentry";
 
 // Dev-only data-stream waterfall probe. Installs window.__waterfall() and
@@ -258,13 +259,20 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-se
     });
   }
   // Phase 6.1: apply the Style-app background preset from localStorage BEFORE
-  // hydration so no default background paints for a frame first.
-  try{
-    var bg=localStorage.getItem('catalog:style-bg');
-    if(bg && /^(default|plain|warm|cool|paper)$/.test(bg)){
-      document.documentElement.dataset.styleBg=bg;
-    }
-  }catch(_){}
+  // hydration so no default background paints for a frame first. Only on a
+  // STYLE SURFACE — the style flavor above, or any /style route (a plain web
+  // visit to catalog.shop/style is the Style app too, it just never carried
+  // the flavor hash). Stamping it everywhere would tint the Catalog feed with
+  // the shopper's Style preset. Mirrors isStyleSurface() in utils/app-mode.ts;
+  // keep the two path patterns in sync.
+  if(isStyle||/^\/style(\/|$)/.test(location.pathname)){
+    try{
+      var bg=localStorage.getItem('catalog:style-bg');
+      if(bg && /^(default|plain|warm|cool|paper)$/.test(bg)){
+        document.documentElement.dataset.styleBg=bg;
+      }
+    }catch(_){}
+  }
 }catch(_){}})();
           `}}
         />
@@ -378,6 +386,25 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-se
 }
 
 export default function App() {
+  // The Style background preset follows the ROUTE, not the boot flavor: it
+  // paints on /style (however the shopper got there) and comes off the moment
+  // they navigate out, so a Style preference can't tint the Catalog feed. The
+  // pre-hydration script in Layout does the same for the first frame; this
+  // re-asserts it after hydration and on every navigation.
+  const { pathname } = useLocation();
+  useEffect(() => {
+    // Re-assert the flavor too. The pre-hydration script stamps data-app on
+    // <html>, but React reconciles the document element on hydration and drops
+    // attributes the render doesn't declare — verified on a PRODUCTION build:
+    // sessionStorage held 'style' (proving the script ran) while <html> was
+    // back to just lang/class/style. Every `html[data-app="style"]` rule in
+    // style-up.css was therefore dead from the moment the app hydrated, which
+    // is why the Style app's Saved row rendered as a bare white block inside
+    // the native shell.
+    applyAppModeToRoot();
+    applyStyleBackground(pathname);
+  }, [pathname]);
+
   // Lazy-init Sentry on first mount. No-op if VITE_SENTRY_DSN isn't
   // set; we don't pay the SDK bundle cost on the cold path either,
   // because the SDK is dynamically imported inside initSentry().
