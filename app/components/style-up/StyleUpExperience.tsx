@@ -28,6 +28,7 @@ import { roleTagFromName } from '~/services/product-roles';
 import { SCENE_PRESETS, presetForPhrase } from '~/data/style-scenes';
 import { signInWithGoogle } from '~/services/auth';
 import StyleUpBackground from './StyleUpBackground';
+import { BotFace } from './BotFace';
 import StyleOnboarding, { needsStyleOnboarding } from './StyleOnboarding';
 import CatalogLogo from '~/components/CatalogLogo';
 import ConsumerAvatar from '~/components/ConsumerAvatar';
@@ -493,19 +494,11 @@ function emptyRosterCopy(f: RosterFilter): string {
  *  and the stored photo is ignored. Per-stylist differentiation comes from the
  *  pill's `--su-accent`, which this inherits through `currentColor`. */
 function StylistFace({ avatarUrl, name, isHuman }: { avatarUrl: string | null; name?: string; isHuman?: boolean }) {
+  // Bots get their own face, keyed off the name so the same stylist wears the
+  // same one everywhere. They all drew one shared robot before, which left the
+  // accent colour doing all the work of telling thirteen of them apart.
   if (isHuman === false) {
-    return (
-      <svg className="su-avatar-illus su-robot-face" viewBox="0 0 40 40" fill="none" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
-        <path d="M20 6.5v4" />
-        <circle cx="20" cy="5" r="1.6" fill="currentColor" stroke="none" />
-        <rect x="9.5" y="11" width="21" height="17" rx="5.5" />
-        <circle cx="15.6" cy="18.4" r="1.9" fill="currentColor" stroke="none" />
-        <circle cx="24.4" cy="18.4" r="1.9" fill="currentColor" stroke="none" />
-        <path d="M15.8 23.4h8.4" />
-        <path d="M6.6 16.6v5.4M33.4 16.6v5.4" />
-        <path d="M13.5 28v2.2a4 4 0 0 0 4 4h5a4 4 0 0 0 4-4V28" />
-      </svg>
-    );
+    return <BotFace seed={name ?? ''} className="su-avatar-illus su-robot-face" />;
   }
   if (avatarUrl) return <img src={avatarUrl} alt={name ?? ''} loading="lazy" />;
   return (
