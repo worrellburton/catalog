@@ -10,6 +10,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useNavigate } from '@remix-run/react';
 import { supabase } from '~/utils/supabase';
 import { useAuth } from '~/hooks/useAuth';
+import { StylePageHeader } from '~/components/style-up/StylePageHeader';
 // style-up.css owns .su-apply* rules and is otherwise loaded only from inside
 // StyleUpExperience — pull it in here so the standalone apply route paints.
 import '~/styles/style-up.css';
@@ -59,6 +60,8 @@ export default function StyleApplyRoute() {
     return () => { cancelled = true; };
   }, [user]);
 
+  const back = useCallback(() => navigate('/style'), [navigate]);
+
   const canSubmit = useMemo(() =>
     form.display_name.trim().length >= 2 && !submitting,
   [form.display_name, submitting]);
@@ -102,43 +105,43 @@ export default function StyleApplyRoute() {
   }, [user, form, canSubmit]);
 
   if (authLoading || loading) {
-    return <div className="su-apply su-apply--loading">Loading…</div>;
+    return <div className="su-apply su-sub su-apply--loading">Loading…</div>;
   }
 
   if (!user) {
     return (
-      <div className="su-apply">
-        <h1>Become a stylist</h1>
-        <p>Sign in to apply.</p>
-        <button type="button" className="su-apply-back" onClick={() => navigate('/style')}>Back</button>
+      <div className="su-apply su-sub">
+        <StylePageHeader title="Become a stylist" onBack={back} backLabel="Back to Style" />
+        <p className="su-sub-lede">Sign in to apply.</p>
       </div>
     );
   }
 
   if (latest && latest.status === 'approved') {
     return (
-      <div className="su-apply">
-        <h1>You&apos;re a stylist</h1>
-        <p>You were approved on {new Date(latest.created_at).toLocaleDateString()}. Set up your showroom to start receiving requests.</p>
-        <button type="button" className="su-apply-cta" onClick={() => navigate('/style/showroom')}>Open showroom</button>
+      <div className="su-apply su-sub">
+        <StylePageHeader title="You’re a stylist" onBack={back} backLabel="Back to Style" />
+        <p className="su-sub-lede">You were approved on {new Date(latest.created_at).toLocaleDateString()}. Set up your showroom to start receiving requests.</p>
+        <div className="su-apply-actions">
+          <button type="button" className="su-apply-cta" onClick={() => navigate('/style/showroom')}>Open showroom</button>
+        </div>
       </div>
     );
   }
 
   if (latest && latest.status === 'pending') {
     return (
-      <div className="su-apply">
-        <h1>Application received</h1>
-        <p>You applied as <strong>{latest.display_name}</strong> on {new Date(latest.created_at).toLocaleDateString()}. We&apos;ll be in touch.</p>
-        <button type="button" className="su-apply-back" onClick={() => navigate('/style')}>Back to stylists</button>
+      <div className="su-apply su-sub">
+        <StylePageHeader title="Application received" onBack={back} backLabel="Back to Style" />
+        <p className="su-sub-lede">You applied as <strong>{latest.display_name}</strong> on {new Date(latest.created_at).toLocaleDateString()}. We&apos;ll be in touch.</p>
       </div>
     );
   }
 
   return (
-    <div className="su-apply">
-      <h1>Become a stylist</h1>
-      <p>Real humans styling real humans. Tell us who you are.</p>
+    <div className="su-apply su-sub">
+      <StylePageHeader title="Become a stylist" onBack={back} backLabel="Back to Style" />
+      <p className="su-sub-lede">Real humans styling real humans. Tell us who you are.</p>
       {latest && latest.status === 'rejected' && (
         <div className="su-apply-note">
           Your last application on {new Date(latest.created_at).toLocaleDateString()} wasn&apos;t approved.
@@ -196,7 +199,7 @@ export default function StyleApplyRoute() {
         </label>
         {error && <div className="su-apply-error">{error}</div>}
         <div className="su-apply-actions">
-          <button type="button" className="su-apply-back" onClick={() => navigate('/style')}>Cancel</button>
+          <button type="button" className="su-apply-back" onClick={back}>Cancel</button>
           <button type="submit" className="su-apply-cta" disabled={!canSubmit}>
             {submitting ? 'Sending…' : 'Send application'}
           </button>

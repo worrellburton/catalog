@@ -2225,29 +2225,57 @@ html[data-shell="catalog-app"] .su-showroom-search-sheet {
   margin-top: 8px; color: #ff9a9a; font-size: 13px;
 }
 .su-apply-form { display: flex; flex-direction: column; gap: 16px; }
-.su-apply-form label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: rgba(255,255,255,0.72); }
+.su-apply-form label { display: flex; flex-direction: column; gap: 6px; }
+/* Field captions match the Catalog app's .profile-page-field-label. */
+.su-apply-form > label > span {
+  font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.04em;
+  color: rgba(255,255,255,0.5);
+}
+/* Field treatment mirrors the Catalog app's .profile-page-input — same fill,
+   border, radius and focus lift — so the two forms read as one product. */
 .su-apply-form input[type="text"],
 .su-apply-form input[type="url"],
 .su-apply-form textarea {
-  appearance: none; border: 1px solid rgba(255,255,255,0.14);
-  background: rgba(255,255,255,0.04); color: #f0f0f0;
-  padding: 10px 12px; border-radius: 8px; font-size: 15px;
+  appearance: none; border: 1px solid rgba(255,255,255,0.10);
+  background: rgba(255,255,255,0.06); color: #f0f0f0;
+  padding: 10px 12px; border-radius: 10px; font-size: 15px;
   font-family: inherit; line-height: 1.35;
+  transition: border-color 0.15s, background 0.15s;
+}
+.su-apply-form textarea { resize: vertical; }
+.su-apply-form input::placeholder, .su-apply-form textarea::placeholder {
+  color: rgba(255,255,255,0.25);
 }
 .su-apply-form input:focus, .su-apply-form textarea:focus {
-  outline: none; border-color: rgba(255,255,255,0.42);
+  outline: none; border-color: rgba(255,255,255,0.25); background: rgba(255,255,255,0.08);
 }
-.su-apply-radios { display: flex; gap: 8px; }
-.su-apply-radio {
-  flex: 1 1 auto; display: flex; align-items: center; justify-content: center; gap: 6px;
-  padding: 10px 12px; border: 1px solid rgba(255,255,255,0.14);
-  background: rgba(255,255,255,0.04); border-radius: 8px; cursor: pointer;
-  font-size: 14px; color: rgba(255,255,255,0.72);
+/* Segmented control, drawn like the Catalog app's .profile-page-segmented:
+   one track, three equal segments. The native radios stay in the DOM (they're
+   the real control and keep arrow-key/screen-reader behaviour) but are painted
+   out — the segment itself shows the selection. */
+.su-apply-radios {
+  display: flex; gap: 0; padding: 3px;
+  background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 10px;
 }
-.su-apply-radio input { accent-color: #f0f0f0; }
+.su-apply-form .su-apply-radio {
+  position: relative;
+  flex: 1 1 0; min-width: 0;
+  display: flex; flex-direction: row; align-items: center; justify-content: center;
+  padding: 8px 4px; border: 0; border-radius: 8px; cursor: pointer;
+  font-size: 13px; font-weight: 600; color: rgba(255,255,255,0.45);
+  transition: background 140ms ease, color 140ms ease;
+}
+.su-apply-radio input {
+  position: absolute; width: 1px; height: 1px; opacity: 0; margin: 0; pointer-events: none;
+}
+.su-apply-radio:hover { color: rgba(255,255,255,0.7); }
 .su-apply-radio:has(input:checked) {
-  color: #0a0a0a; background: #f0f0f0; border-color: #f0f0f0;
+  color: #fff; background: rgba(255,255,255,0.12);
+  box-shadow: 0 1px 3px rgba(0,0,0,0.3);
 }
+.su-apply-radio:has(input:focus-visible) { outline: 2px solid rgba(255,255,255,0.5); outline-offset: 1px; }
 .su-apply-actions { display: flex; gap: 8px; margin-top: 8px; }
 .su-apply-cta {
   appearance: none; padding: 12px 18px; border-radius: 999px; border: 0;
@@ -2280,10 +2308,6 @@ html[data-shell="catalog-app"] .su-showroom-search-sheet {
   min-height: 100dvh;
   box-sizing: border-box;
 }
-.su-showroom-head {
-  display: flex; align-items: center; gap: 12px; margin: 0 0 20px;
-}
-.su-showroom-head h1 { font-size: 20px; margin: 0; letter-spacing: -0.01em; }
 .su-showroom-tabs {
   display: flex; gap: 8px; margin: 0 0 16px;
   border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 8px;
@@ -2625,8 +2649,8 @@ html[data-style-bg="paper"] .su-stylist-bot { border-color: #f5f2ec; }
 .su-settings-bg-swatch[data-bg="cool"]    { background: radial-gradient(120% 100% at 50% -10%, #0e2130 0%, #071018 100%); }
 .su-settings-bg-swatch[data-bg="paper"]   { background: #f5f2ec; border: 1px solid rgba(0,0,0,0.06); }
 .su-settings-bg-info { display: flex; flex-direction: column; min-width: 0; }
-.su-settings-bg-label { font-size: 14px; color: #f0f0f0; }
-.su-settings-bg-blurb { font-size: 12px; color: rgba(255,255,255,0.55); overflow: hidden; text-overflow: ellipsis; }
+.su-settings-bg-label { font-size: 14px; font-weight: 600; color: var(--su-sub-ink, #f0f0f0); }
+.su-settings-bg-blurb { font-size: 12px; color: var(--su-sub-ink-2, rgba(255,255,255,0.55)); overflow: hidden; text-overflow: ellipsis; }
 
 
 /* Phase 3.1 shell head: Style app profile chip on the right + no back. */
@@ -2643,3 +2667,164 @@ html[data-style-bg="paper"] .su-stylist-bot { border-color: #f5f2ec; }
 /* The chip holds a real ConsumerAvatar now (the shopper's photo, or their
    gradient initial), like the Catalog app's header — not a generic grey dot.
    The avatar carries its own size/shape, so the chip only frames it. */
+
+
+/* ── Sub-page chrome: settings / apply / showroom / inbox ────────────────
+   One header + section vocabulary shared by every /style/* sub-page, drawn to
+   match the main Catalog app's own sub-pages (Saved, Profile): a round chevron
+   back button, a 22px title, 15px section headings over muted descriptions,
+   and rgba-white card rows. Each route used to hand-roll a "← Back" text pill
+   and inline-style its headings, so no two of them looked alike.
+
+   Scoped through `.su-sub` (added to each sub-page root ALONGSIDE its existing
+   class) for two reasons: it beats the older element-scoped rules such as
+   `.su-apply h1` on specificity, and it's the hook the paper preset overrides
+   below — these surfaces are the only ones that need a light palette without
+   restating every rule. */
+.su-sub {
+  --su-sub-ink: #f4f4f5;
+  --su-sub-ink-2: rgba(255, 255, 255, 0.62);
+  --su-sub-fill: rgba(255, 255, 255, 0.06);
+  --su-sub-fill-hi: rgba(255, 255, 255, 0.10);
+  --su-sub-line: rgba(255, 255, 255, 0.12);
+}
+html[data-style-bg="paper"] .su-sub {
+  --su-sub-ink: #1a1a1a;
+  --su-sub-ink-2: rgba(0, 0, 0, 0.56);
+  --su-sub-fill: rgba(0, 0, 0, 0.04);
+  --su-sub-fill-hi: rgba(0, 0, 0, 0.08);
+  --su-sub-line: rgba(0, 0, 0, 0.12);
+}
+
+.su-sub .su-sub-head {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin: 0 0 24px;
+}
+/* Same 38px circle as the Catalog app's .saved-back, so the back arrow lands
+   in the same place and reads the same weight across both apps. */
+.su-sub .su-sub-back {
+  flex: 0 0 auto;
+  width: 38px; height: 38px;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  background: var(--su-sub-fill);
+  border: 1px solid var(--su-sub-line);
+  color: var(--su-sub-ink);
+  cursor: pointer;
+  transition: background 140ms ease;
+}
+.su-sub .su-sub-back:hover { background: var(--su-sub-fill-hi); }
+.su-sub .su-sub-title {
+  flex: 1 1 auto;
+  min-width: 0;
+  margin: 0;
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  color: var(--su-sub-ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.su-sub .su-sub-head-actions {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+/* Trailing links are secondary next to a page title — shrink the shared pill
+   so it doesn't compete with it. */
+.su-sub .su-sub-head-actions .su-apply-back { padding: 8px 14px; font-size: 13px; }
+
+.su-sub .su-sub-lede {
+  margin: -8px 0 24px;
+  font-size: 14.5px;
+  line-height: 1.45;
+  color: var(--su-sub-ink-2);
+}
+
+.su-sub .su-sub-section { margin: 0 0 28px; }
+.su-sub .su-sub-section:last-child { margin-bottom: 0; }
+.su-sub .su-sub-section-title {
+  margin: 0 0 4px;
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--su-sub-ink);
+}
+.su-sub .su-sub-section-desc {
+  margin: 0 0 14px;
+  font-size: 13px;
+  line-height: 1.45;
+  color: var(--su-sub-ink-2);
+}
+
+.su-sub-rows { display: flex; flex-direction: column; gap: 8px; }
+.su-sub-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  box-sizing: border-box;
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--su-sub-fill);
+  border: 1px solid var(--su-sub-line);
+  color: var(--su-sub-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: background 140ms ease;
+}
+.su-sub-row:hover { background: var(--su-sub-fill-hi); }
+.su-sub-row-label { flex: 1 1 auto; min-width: 0; font-size: 15px; font-weight: 600; }
+.su-sub-row-sub {
+  display: block;
+  margin-top: 3px;
+  font-size: 12.5px;
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--su-sub-ink-2);
+}
+.su-sub-row-chevron { flex: 0 0 auto; color: var(--su-sub-ink-2); }
+
+/* Switch — the Catalog app has no consumer-side one to borrow (the only
+   existing toggle lives in admin.css, which consumer pages must not pull in),
+   so it's built here from a native checkbox: the input stays the real control
+   and the track/thumb are painted on top. */
+.su-switch { position: relative; flex: 0 0 auto; width: 44px; height: 26px; }
+.su-switch input {
+  position: absolute; inset: 0; width: 100%; height: 100%;
+  margin: 0; opacity: 0; cursor: pointer;
+}
+.su-switch-track {
+  position: relative;
+  display: block;
+  width: 44px; height: 26px;
+  box-sizing: border-box;
+  border-radius: 999px;
+  background: var(--su-sub-fill-hi);
+  border: 1px solid var(--su-sub-line);
+  pointer-events: none;
+  transition: background 160ms ease, border-color 160ms ease;
+}
+.su-switch-track::after {
+  content: '';
+  position: absolute;
+  top: 3px; left: 3px;
+  width: 18px; height: 18px;
+  border-radius: 50%;
+  background: #f4f4f5;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+  transition: transform 160ms ease;
+}
+.su-switch input:checked + .su-switch-track { background: #22c55e; border-color: #22c55e; }
+.su-switch input:checked + .su-switch-track::after { transform: translateX(18px); }
+.su-switch input:focus-visible + .su-switch-track { box-shadow: 0 0 0 3px rgba(255, 255, 255, 0.22); }
+.su-switch input:disabled { cursor: default; }
+.su-switch input:disabled + .su-switch-track { opacity: 0.5; }
+@media (prefers-reduced-motion: reduce) {
+  .su-switch-track, .su-switch-track::after { transition: none; }
+}

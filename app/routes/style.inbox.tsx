@@ -17,6 +17,7 @@ import { supabase } from '~/utils/supabase';
 import { useAuth } from '~/hooks/useAuth';
 import { type StyleUpProductRef } from '~/services/style-up';
 import { searchProducts } from '~/services/manage-looks';
+import { StylePageHeader } from '~/components/style-up/StylePageHeader';
 import '~/styles/style-up.css';
 
 interface StylistRow { id: string; name: string; }
@@ -248,26 +249,24 @@ export default function StyleInboxRoute() {
   const openThread = useMemo(() => threads.find(t => t.id === openId) ?? null, [threads, openId]);
 
   if (authLoading || loading) {
-    return <div className="su-apply su-apply--loading">Loading…</div>;
+    return <div className="su-apply su-sub su-apply--loading">Loading…</div>;
   }
 
   if (!user) {
     return (
-      <div className="su-apply">
-        <h1>Inbox</h1>
-        <p>Sign in to see your inbox.</p>
-        <button type="button" className="su-apply-back" onClick={() => navigate('/style')}>Back</button>
+      <div className="su-apply su-sub">
+        <StylePageHeader title="Inbox" onBack={() => navigate('/style')} backLabel="Back to Style" />
+        <p className="su-sub-lede">Sign in to see your inbox.</p>
       </div>
     );
   }
 
   if (!stylist) {
     return (
-      <div className="su-apply">
-        <h1>Inbox</h1>
-        <p>You&apos;re not a stylist yet. Apply first. This is where shopper threads land once you&apos;re approved.</p>
+      <div className="su-apply su-sub">
+        <StylePageHeader title="Inbox" onBack={() => navigate('/style')} backLabel="Back to Style" />
+        <p className="su-sub-lede">You&apos;re not a stylist yet. Apply first. This is where shopper threads land once you&apos;re approved.</p>
         <div className="su-apply-actions">
-          <button type="button" className="su-apply-back" onClick={() => navigate('/style')}>Back</button>
           <button type="button" className="su-apply-cta" onClick={() => navigate('/style/apply')}>Apply</button>
         </div>
       </div>
@@ -275,16 +274,15 @@ export default function StyleInboxRoute() {
   }
 
   return (
-    <div className="su-inbox">
-      <header className="su-showroom-head">
-        <button type="button" className="su-apply-back" onClick={() => (openId ? setOpenId(null) : navigate('/style'))}>
-          {openId ? '← Threads' : '← Back'}
-        </button>
-        <h1>{openId ? (openThread?.shopper_name || 'Shopper') : `${stylist.name}'s inbox`}</h1>
-        {!openId && (
-          <button type="button" className="su-apply-back" onClick={() => navigate('/style/showroom')} style={{ marginLeft: 'auto' }}>Showroom</button>
-        )}
-      </header>
+    <div className="su-inbox su-sub">
+      <StylePageHeader
+        title={openId ? (openThread?.shopper_name || 'Shopper') : `${stylist.name}’s inbox`}
+        onBack={() => (openId ? setOpenId(null) : navigate('/style'))}
+        backLabel={openId ? 'Back to your threads' : 'Back to Style'}
+        actions={!openId
+          ? <button type="button" className="su-apply-back" onClick={() => navigate('/style/showroom')}>Showroom</button>
+          : undefined}
+      />
 
       {!openId && (
         <div className="su-inbox-list">

@@ -8,6 +8,7 @@ import { useNavigate } from '@remix-run/react';
 import { supabase } from '~/utils/supabase';
 import { useAuth } from '~/hooks/useAuth';
 import { searchProducts } from '~/services/manage-looks';
+import { StylePageHeader } from '~/components/style-up/StylePageHeader';
 import '~/styles/style-up.css';
 
 type Gender = 'men' | 'women' | 'unisex';
@@ -150,26 +151,24 @@ export default function StyleShowroomRoute() {
   const visible = useMemo(() => items.filter(i => i.gender === gender), [items, gender]);
 
   if (authLoading || loading) {
-    return <div className="su-apply su-apply--loading">Loading…</div>;
+    return <div className="su-apply su-sub su-apply--loading">Loading…</div>;
   }
 
   if (!user) {
     return (
-      <div className="su-apply">
-        <h1>Showroom</h1>
-        <p>Sign in to manage your showroom.</p>
-        <button type="button" className="su-apply-back" onClick={() => navigate('/style')}>Back</button>
+      <div className="su-apply su-sub">
+        <StylePageHeader title="Showroom" onBack={() => navigate('/style')} backLabel="Back to Style" />
+        <p className="su-sub-lede">Sign in to manage your showroom.</p>
       </div>
     );
   }
 
   if (!stylist) {
     return (
-      <div className="su-apply">
-        <h1>Showroom</h1>
-        <p>You&apos;re not a stylist yet. Apply first. Once approved, this is where your picks live.</p>
+      <div className="su-apply su-sub">
+        <StylePageHeader title="Showroom" onBack={() => navigate('/style')} backLabel="Back to Style" />
+        <p className="su-sub-lede">You&apos;re not a stylist yet. Apply first. Once approved, this is where your picks live.</p>
         <div className="su-apply-actions">
-          <button type="button" className="su-apply-back" onClick={() => navigate('/style')}>Back</button>
           <button type="button" className="su-apply-cta" onClick={() => navigate('/style/apply')}>Apply</button>
         </div>
       </div>
@@ -177,12 +176,15 @@ export default function StyleShowroomRoute() {
   }
 
   return (
-    <div className="su-showroom">
-      <header className="su-showroom-head">
-        <button type="button" className="su-apply-back" onClick={() => navigate('/style')}>← Back</button>
-        <h1>{stylist.name}&apos;s showroom</h1>
-        <button type="button" className="su-apply-back" onClick={() => navigate('/style/inbox')} style={{ marginLeft: 'auto' }}>Inbox</button>
-      </header>
+    <div className="su-showroom su-sub">
+      <StylePageHeader
+        title={`${stylist.name}’s showroom`}
+        onBack={() => navigate('/style')}
+        backLabel="Back to Style"
+        actions={
+          <button type="button" className="su-apply-back" onClick={() => navigate('/style/inbox')}>Inbox</button>
+        }
+      />
 
       <div className="su-showroom-tabs" role="tablist">
         {GENDERS.map(g => (

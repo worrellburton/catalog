@@ -9,10 +9,14 @@
 //    row (human_user_id = auth.uid()): links into their Inbox / Showroom and
 //    the accepting_new switch. Non-stylists see nothing extra; the
 //    "Become a stylist" entry lives on the picker.
+//
+// Chrome (header, section headings, rows, switch) is the shared `.su-sub`
+// vocabulary in style-up.css, which mirrors the Catalog app's own sub-pages.
 import { useCallback, useEffect, useState } from 'react';
 import { useNavigate } from '@remix-run/react';
 import { supabase } from '~/utils/supabase';
 import { useAuth } from '~/hooks/useAuth';
+import { StylePageHeader } from '~/components/style-up/StylePageHeader';
 import '~/styles/style-up.css';
 
 type Preset = 'default' | 'plain' | 'warm' | 'cool' | 'paper';
@@ -28,6 +32,10 @@ const PRESETS: { id: Preset; label: string; blurb: string }[] = [
 const KEY = 'catalog:style-bg';
 
 interface StylistRow { id: string; name: string; accepting_new: boolean }
+
+const Chevron = () => (
+  <svg className="su-sub-row-chevron" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="9 18 15 12 9 6" /></svg>
+);
 
 function readPref(): Preset {
   try { const v = localStorage.getItem(KEY); if (v && PRESETS.some(p => p.id === v)) return v as Preset; } catch { /* private */ }
@@ -90,51 +98,69 @@ export default function StyleSettingsRoute() {
   }, [stylist, savingAccept]);
 
   return (
-    <div className="su-apply">
-      <header className="su-showroom-head">
-        <button type="button" className="su-apply-back" onClick={() => navigate('/style')}>← Back</button>
-        <h1>Settings</h1>
-      </header>
-      <h2 style={{ fontSize: 15, margin: '16px 0 8px' }}>Background</h2>
-      <div className="su-settings-bg-grid">
-        {PRESETS.map(p => (
-          <button
-            key={p.id}
-            type="button"
-            className={'su-settings-bg-tile' + (pref === p.id ? ' is-active' : '')}
-            data-bg={p.id}
-            onClick={() => pick(p.id)}
-          >
-            <span className="su-settings-bg-swatch" data-bg={p.id} aria-hidden="true" />
-            <span className="su-settings-bg-info">
-              <span className="su-settings-bg-label">{p.label}</span>
-              <span className="su-settings-bg-blurb">{p.blurb}</span>
-            </span>
-          </button>
-        ))}
-      </div>
+    <div className="su-apply su-sub">
+      <StylePageHeader title="Settings" onBack={() => navigate('/style')} backLabel="Back to Style" />
+
+      <section className="su-sub-section">
+        <h2 className="su-sub-section-title">Background</h2>
+        <p className="su-sub-section-desc">Sets the backdrop for the whole Style app. Saved on this device.</p>
+        <div className="su-settings-bg-grid">
+          {PRESETS.map(p => (
+            <button
+              key={p.id}
+              type="button"
+              className={'su-settings-bg-tile' + (pref === p.id ? ' is-active' : '')}
+              data-bg={p.id}
+              aria-pressed={pref === p.id}
+              onClick={() => pick(p.id)}
+            >
+              <span className="su-settings-bg-swatch" data-bg={p.id} aria-hidden="true" />
+              <span className="su-settings-bg-info">
+                <span className="su-settings-bg-label">{p.label}</span>
+                <span className="su-settings-bg-blurb">{p.blurb}</span>
+              </span>
+            </button>
+          ))}
+        </div>
+      </section>
 
       {stylist && (
-        <>
-          <h2 style={{ fontSize: 15, margin: '24px 0 8px' }}>Stylist</h2>
-          <div className="su-apply-actions">
-            <button type="button" className="su-apply-back" onClick={() => navigate('/style/inbox')}>Inbox</button>
-            <button type="button" className="su-apply-back" onClick={() => navigate('/style/showroom')}>Showroom</button>
+        <section className="su-sub-section">
+          <h2 className="su-sub-section-title">Stylist</h2>
+          <p className="su-sub-section-desc">You&apos;re styling as {stylist.name}.</p>
+          <div className="su-sub-rows">
+            <button type="button" className="su-sub-row" onClick={() => navigate('/style/inbox')}>
+              <span className="su-sub-row-label">
+                Inbox
+                <span className="su-sub-row-sub">Shopper conversations assigned to you.</span>
+              </span>
+              <Chevron />
+            </button>
+            <button type="button" className="su-sub-row" onClick={() => navigate('/style/showroom')}>
+              <span className="su-sub-row-label">
+                Showroom
+                <span className="su-sub-row-sub">The picks you send from, by gender.</span>
+              </span>
+              <Chevron />
+            </button>
+            <label className="su-sub-row">
+              <span className="su-sub-row-label">
+                Accepting new shoppers
+                <span className="su-sub-row-sub">Off takes you out of the stylist picker. Threads you already have keep working.</span>
+              </span>
+              <span className="su-switch">
+                <input
+                  type="checkbox"
+                  checked={stylist.accepting_new}
+                  disabled={savingAccept}
+                  onChange={e => void toggleAccepting(e.target.checked)}
+                />
+                <span className="su-switch-track" aria-hidden="true" />
+              </span>
+            </label>
           </div>
-          <label style={{ display: 'flex', alignItems: 'center', gap: 10, fontSize: 14, margin: '14px 0 4px' }}>
-            <input
-              type="checkbox"
-              checked={stylist.accepting_new}
-              disabled={savingAccept}
-              onChange={e => void toggleAccepting(e.target.checked)}
-            />
-            Accepting new shoppers
-          </label>
-          <p style={{ fontSize: 12, color: 'rgba(255,255,255,0.55)', margin: 0 }}>
-            Off takes you out of the stylist picker. Threads you already have keep working.
-          </p>
           {stylistError && <div className="su-apply-error">{stylistError}</div>}
-        </>
+        </section>
       )}
     </div>
   );
