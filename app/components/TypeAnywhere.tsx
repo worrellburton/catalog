@@ -245,7 +245,12 @@ export default function TypeAnywhere({ inline = false }: TypeAnywhereProps) {
     else navigate('/#app');
   }, [text, submit, navigate]);
 
+  // Feed surfaces only. This is the CATALOG search bar; on /style, /admin and
+  // /partners it has nothing to search and no place in the layout. Rendering it
+  // nowhere else is also what lets type-anywhere.css move off the root's
+  // render-blocking stylesheet and ride with the feed route.
   if (hidden) return null;
+  if (typeof window !== 'undefined' && !isFeedSurface(window.location.pathname)) return null;
 
   return (
     <>

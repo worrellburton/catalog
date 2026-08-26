@@ -62,6 +62,27 @@ import { snapPeople } from '~/utils/peoplePanel';
 import PendingLookPill from '~/components/PendingLookPill';
 import ActivityRealtimeToasts from '~/components/ActivityRealtimeToasts';
 
+/* Home-feed chrome, moved off the root stylesheet so it stops blocking first
+   paint on /style, /admin and /partners. ORDER IS LOAD-BEARING — these sheets
+   override each other by source order (grid-view over home-hero, responsive
+   over grid-view, …), so keep this list in exactly the sequence root.tsx used.
+   See the note there. */
+import "~/styles/home-hero.css";
+import "~/styles/header.css";
+import "~/styles/bottom-bar.css";
+import "~/styles/build-catalog.css";
+import "~/styles/type-anywhere.css";
+import "~/styles/bookmarks.css";
+import "~/styles/grid-view.css";
+import "~/styles/look-overlay.css";
+import "~/styles/similar-debug.css";
+import "~/styles/brand-page.css";
+import "~/styles/light-mode.css";
+import "~/styles/responsive.css";
+import "~/styles/feed.css";
+import "~/styles/empty-catalog.css";
+
+
 // Modal/overlay surfaces split into their own chunks. None of these are part
 // of first paint - the user has to tap into them. Splitting trims the
 // consumer's initial bundle without delaying anything they actually see on

@@ -70,23 +70,16 @@ import "./styles/password-gate.css";
 import "./styles/guest-gate.css";
 import "./styles/waitlist.css";
 import "./styles/splash-screen.css";
-import "./styles/home-hero.css";
-import "./styles/header.css";
-import "./styles/bottom-bar.css";
-import "./styles/build-catalog.css";
-import "./styles/type-anywhere.css";
-import "./styles/bookmarks.css";
-import "./styles/grid-view.css";
-import "./styles/look-overlay.css";
-import "./styles/similar-debug.css";
-import "./styles/brand-page.css";
+/* The home feed's own chrome — hero, header, bottom bar, grid, look overlay,
+   their light-mode + responsive overrides — moved to routes/_index.tsx.
+   Imported here they were part of the root's render-blocking stylesheet on
+   EVERY page: ~30 KB gz of feed CSS blocking first paint on /style, /admin and
+   /partners. _index.tsx owns every surface that renders them (it serves /, /p/,
+   /l/ and /b/ alike), and they keep their original relative order there, which
+   the same-selector overrides between them depend on. */
 import "./styles/user-menu.css";
-import "./styles/light-mode.css";
-import "./styles/responsive.css";
 import "./styles/activity.css";
 import "./styles/generation-queue.css";
-import "./styles/feed.css";
-import "./styles/empty-catalog.css";
 import "./styles/creator-toast.css";
 import "./styles/confirm-modal.css";
 import "./styles/avatar-modal.css";
