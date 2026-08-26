@@ -35,11 +35,11 @@ html[data-shell="catalog-app"] .su-shell {
    their headings sat under the iOS status bar. Same clearance, added on top of
    each root's own top padding so the designed spacing survives. */
 html[data-shell="catalog-app"] .su-apply {
-  padding-top: calc(var(--shell-sb, env(safe-area-inset-top, 0px)) + 48px);
+  padding-top: calc(var(--shell-sb, env(safe-area-inset-top, 0px)) + 12px);
 }
 html[data-shell="catalog-app"] .su-showroom,
 html[data-shell="catalog-app"] .su-inbox {
-  padding-top: calc(var(--shell-sb, env(safe-area-inset-top, 0px)) + 24px);
+  padding-top: calc(var(--shell-sb, env(safe-area-inset-top, 0px)) + 12px);
 }
 /* The product-search sheet those two open is `position: fixed; inset: 0`, so
    the root padding above can't reach it — its search field and Cancel button
@@ -50,10 +50,10 @@ html[data-shell="catalog-app"] .su-showroom-search-sheet {
 .su-shell-head {
   flex: 0 0 auto;
   display: grid;
-  grid-template-columns: 34px 1fr 34px;   /* back · centered brand · spacer */
+  grid-template-columns: 38px 1fr 38px;   /* back · centered brand · spacer */
   align-items: center;
   gap: 12px;
-  padding: 12px 14px 6px;
+  padding: 12px 16px 6px;
   /* No divider bar under the logo — it floats on the dark base. */
   /* Auto-hide on scroll (see .is-scrolled below). max-height rather than
      position:absolute so the head stays in flow — .su-page is the flex
@@ -403,17 +403,25 @@ html[data-shell="catalog-app"] .su-showroom-search-sheet {
   border-bottom: 1px solid #26282d;
   background: #141518;
 }
+/* THE back button for the Style app — chat, picker, settings, apply, showroom,
+   inbox and (scoped below) the profile overlay all use this one. They used to
+   differ in size, fill and inset: a 34px solid disc in the chat, a 38px
+   translucent one on the sub-pages, and a borderless 8px-radius square on the
+   profile. Same geometry as the Catalog app's .saved-back so the two apps agree
+   too. Horizontal inset is 16px on every Style header; keep it that way or the
+   arrow visibly jumps between screens. */
 .su-back {
   flex: 0 0 auto;
-  width: 34px; height: 34px;
+  width: 38px; height: 38px;
   display: inline-flex; align-items: center; justify-content: center;
   border-radius: 50%;
-  border: none;
-  background: #26282d;
-  color: #e7e7ea;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: #f4f4f5;
   cursor: pointer;
+  transition: background 140ms ease;
 }
-.su-back:hover { background: #34363c; }
+.su-back:hover { background: rgba(255, 255, 255, 0.16); }
 .su-thread-avatar {
   flex: 0 0 auto;
   width: 38px; height: 38px;
@@ -2206,7 +2214,7 @@ html[data-shell="catalog-app"] .su-showroom-search-sheet {
 .su-apply {
   max-width: 520px;
   margin: 0 auto;
-  padding: 48px 20px 96px;
+  padding: 16px 16px 96px;
   color: #f0f0f0;
   font-family: inherit;
   min-height: 100dvh;
@@ -2303,7 +2311,7 @@ html[data-shell="catalog-app"] .su-showroom-search-sheet {
 .su-showroom {
   max-width: 720px;
   margin: 0 auto;
-  padding: 24px 20px 96px;
+  padding: 16px 16px 96px;
   color: #f0f0f0;
   min-height: 100dvh;
   box-sizing: border-box;
@@ -2393,7 +2401,7 @@ html[data-shell="catalog-app"] .su-showroom-search-sheet {
 .su-inbox {
   max-width: 720px;
   margin: 0 auto;
-  padding: 24px 20px 96px;
+  padding: 16px 16px 96px;
   color: #f0f0f0;
   min-height: 100dvh;
   box-sizing: border-box;
@@ -2654,10 +2662,10 @@ html[data-style-bg="paper"] .su-stylist-bot { border-color: #f5f2ec; }
 
 
 /* Phase 3.1 shell head: Style app profile chip on the right + no back. */
-.su-shell-spacer { grid-column: 1; width: 34px; height: 34px; display: block; }
+.su-shell-spacer { grid-column: 1; width: 38px; height: 38px; display: block; }
 .su-shell-profile {
   grid-column: 3;
-  width: 34px; height: 34px; border-radius: 999px;
+  width: 38px; height: 38px; border-radius: 999px;
   background: transparent; border: 1px solid rgba(255,255,255,0.16);
   color: #f0f0f0; cursor: pointer; padding: 0;
   display: inline-flex; align-items: center; justify-content: center;
@@ -2704,18 +2712,15 @@ html[data-style-bg="paper"] .su-sub {
 }
 /* Same 38px circle as the Catalog app's .saved-back, so the back arrow lands
    in the same place and reads the same weight across both apps. */
-.su-sub .su-sub-back {
-  flex: 0 0 auto;
-  width: 38px; height: 38px;
-  display: inline-flex; align-items: center; justify-content: center;
-  border-radius: 50%;
+/* Look comes from .su-back (the markup carries both classes). Only the paper
+   preset needs to say anything here — it repaints the shared disc for a light
+   background. */
+html[data-style-bg="paper"] .su-sub .su-back {
   background: var(--su-sub-fill);
-  border: 1px solid var(--su-sub-line);
+  border-color: var(--su-sub-line);
   color: var(--su-sub-ink);
-  cursor: pointer;
-  transition: background 140ms ease;
 }
-.su-sub .su-sub-back:hover { background: var(--su-sub-fill-hi); }
+html[data-style-bg="paper"] .su-sub .su-back:hover { background: var(--su-sub-fill-hi); }
 .su-sub .su-sub-title {
   flex: 1 1 auto;
   min-width: 0;
@@ -2828,3 +2833,22 @@ html[data-style-bg="paper"] .su-sub {
 @media (prefers-reduced-motion: reduce) {
   .su-switch-track, .su-switch-track::after { transition: none; }
 }
+
+
+/* Profile overlay, Style app only. It ships with the Catalog app's own back
+   control — borderless, 8px radius, #aaa — which read as a third back button
+   next to the chat's and the sub-pages'. Match the shared disc and the 16px
+   inset here without touching how the Catalog app draws its own profile. */
+html[data-app="style"] .profile-page-back {
+  width: 38px; height: 38px; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: #f4f4f5;
+}
+html[data-app="style"] .profile-page-back:hover {
+  background: rgba(255, 255, 255, 0.16);
+  color: #fff;
+}
+html[data-app="style"] .profile-page-container { padding-left: 16px; padding-right: 16px; }

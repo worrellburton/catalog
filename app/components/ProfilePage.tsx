@@ -156,8 +156,12 @@ export default function ProfilePage({ user, onClose, renderSaved, children }: Pr
         <div className="profile-page-header">
           <div className="profile-page-header-left">
             <button className="profile-page-back" onClick={onClose} aria-label="Back">
-              <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-                <line x1="19" y1="12" x2="5" y2="12" /><polyline points="12 19 5 12 12 5" />
+              {/* Chevron, not a long arrow: every other back control in both
+                  apps (Saved, the look and product overlays, the Style app's
+                  headers) draws this one, and the profile was the odd screen
+                  out. */}
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                <polyline points="15 18 9 12 15 6" />
               </svg>
             </button>
             <h1 className="profile-page-title">Profile</h1>
