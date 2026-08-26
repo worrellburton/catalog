@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "remix vite:dev",
-    "build": "remix vite:build",
+    "build": "remix vite:build && node scripts/inject-route-preload.mjs",
     "start": "remix-serve ./build/server/index.js",
     "lint": "npx eslint . --ext .ts,.tsx",
     "typecheck": "tsc --noEmit",
