@@ -1,4 +1,5 @@
 import { supabase } from '~/utils/supabase';
+import { isFeedSurface } from '~/utils/app-mode';
 import { registerLookTrim } from '~/utils/lookTrim';
 import { posterRendition } from '~/utils/poster-prefetch';
 import { lookPoster } from '~/services/media-resolver';
@@ -750,8 +751,12 @@ function warmAboveTheFoldLookAssets(rows: Look[]): void {
 // Effectively gives us a Remix clientLoader benefit without needing to
 // thread useLoaderData through every component that wants the data.
 //
-// Guarded to browser context only - tests and SSR paths skip it.
-if (typeof window !== 'undefined' && USE_SUPABASE) {
+// Guarded to browser context only - tests and SSR paths skip it, and to feed
+// surfaces only: this module rides in the `app-core` chunk (a static dependency
+// of the root), so without the gate the looks fetch AND its above-the-fold
+// video-byte warm ran on /style, /admin and /partners — three MP4 range
+// requests on pages with no video element in the DOM.
+if (typeof window !== 'undefined' && USE_SUPABASE && isFeedSurface(window.location.pathname)) {
   // Fire-and-forget; populates the singleton promises. Component callers
   // .then() on the same promises and get the result whenever the network
   // comes back, regardless of whether they mount before or after.

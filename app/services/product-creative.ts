@@ -1,4 +1,5 @@
 import { supabase } from '~/utils/supabase';
+import { isFeedSurface } from '~/utils/app-mode';
 import { posterRendition } from '~/utils/poster-prefetch';
 import {
   getProductSimilarityThreshold,
@@ -702,7 +703,12 @@ export function invalidateHomeFeed(): void {
 // with the React tree mounting, so by the time _index.tsx's splash
 // timer is ticking the network round-trip is already on the wire. Same
 // pattern services/looks.ts uses. Browser-only; no-op on SSR.
-if (typeof window !== 'undefined') {
+//
+// Gated on isFeedSurface: this module rides in the `app-core` chunk, a static
+// dependency of the root, so without the gate the feed fetch + brand index +
+// poster prewarm ran on /style, /admin and /partners too — pages that never
+// render a creative.
+if (typeof window !== 'undefined' && isFeedSurface(window.location.pathname)) {
   void prefetchHomeFeed().catch(() => { /* surfaced on real caller */ });
   // Warm the brand index on idle so the sync resolver in ContinuousFeed
   // can short-circuit search the moment the user types a brand name.

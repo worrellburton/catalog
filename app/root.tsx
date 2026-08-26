@@ -289,6 +289,11 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Helvetica Neue',Arial,sans-se
 (function(){
   try{
     if(typeof localStorage==='undefined'||typeof document==='undefined')return;
+    // Feed surfaces only. These are the HOME FEED's above-the-fold tiles, and
+    // this script runs on every page — so on /style, /admin and /partners it
+    // spent four image preloads on tiles that page will never render. Mirrors
+    // isFeedSurface() in utils/app-mode.ts; keep the two patterns in sync.
+    if(/^\/(style|admin|partners|studio|deck)(\/|$)/.test(location.pathname))return;
     // Must match HOME_FEED_LS_KEY in services/product-creative.ts (currently
     // v13) + its gender suffixes. A stale key here = the cache is never found,
     // so the above-the-fold images don't preload and the first open of a

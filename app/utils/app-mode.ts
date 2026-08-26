@@ -85,3 +85,28 @@ export function applyStyleBackground(pathname: string): void {
   if (bg && STYLE_BG_PRESETS.test(bg)) root.dataset.styleBg = bg;
   else delete root.dataset.styleBg;
 }
+
+// ── Feed surfaces ──────────────────────────────────────────────────────────
+// The home-feed caches warm themselves at module-parse time (see
+// services/looks.ts and services/product-creative.ts) so the network round
+// trips run in parallel with the React tree mounting. Those modules live in
+// the `app-core` chunk, which is a static dependency of the root — so the warm
+// fired on EVERY page, including the ones that never render a feed.
+//
+// Measured on the signed-out /style landing of a production build: zero <img>
+// and zero <video> in the DOM, and 43 resource fetches at ~2.2 s, three of them
+// MP4s (one took 1.19 s). That is the Style app's cold-boot bandwidth spent on
+// media it will never show.
+
+/** Routes that own their own surface and never render the home feed. */
+const NON_FEED_PATH = /^\/(style|admin|partners|studio|deck)(\/|$)/;
+
+/**
+ * True on a surface that renders home-feed content, so the module-level warms
+ * should run. Deliberately a denylist: the feed's caches are also read by the
+ * product, look, brand, creator and search surfaces, and missing one of those
+ * would cost a cold start on a page that used to be warm.
+ */
+export function isFeedSurface(pathname: string): boolean {
+  return !NON_FEED_PATH.test(pathname) && getAppMode() !== 'style';
+}

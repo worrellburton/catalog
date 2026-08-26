@@ -4,6 +4,7 @@ import FilterPanel, { ActiveFilters, getEmptyFilters, hasActiveFilters } from '.
 import PopularCatalogPills from './PopularCatalogPills';
 import Beam from '~/components/Beam';
 import { getSearchSuggestions, getCreators } from '~/services/looks';
+import { isFeedSurface } from '~/utils/app-mode';
 
 /* Desktop-only AI-style search bar.
  *
@@ -90,6 +91,13 @@ export default function TypeAnywhere({ inline = false }: TypeAnywhereProps) {
   // the creator's catalog, while plain search terms run a catalog search.
   const [allSuggestions, setAllSuggestions] = useState<Suggestion[]>([]);
   useEffect(() => {
+    // Desktop-only feature, mounted from the root on every page — so without
+    // this gate the pool's two queries (search_suggestions + creators) ran on
+    // every phone boot and on surfaces with no catalog search at all (/style,
+    // /admin, /partners), for a bar that can never open there.
+    if (typeof window === 'undefined') return;
+    if (!window.matchMedia('(min-width: 769px)').matches) return;
+    if (!isFeedSurface(window.location.pathname)) return;
     let cancelled = false;
     Promise.all([getSearchSuggestions(), getCreators()])
       .then(([sugg, creators]) => {
