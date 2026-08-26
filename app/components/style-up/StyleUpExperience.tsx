@@ -75,6 +75,7 @@ function applyPrefs(prev: StylePrefs, text: string): StylePrefs {
   return p;
 }
 import { getUserHeightAge, getUserCustomStyle, updateUserHeightAge, updateUserCustomStyle } from '~/services/profiles';
+import { matchHeight, matchWeight } from '~/constants/stats';
 import { getUserGender, updateUserGender, type UserGender } from '~/services/genders';
 import {
   listUserUploads, getUserSlots, saveUserSlots, uploadUserPhoto, deleteUserUpload, validateSelfie,
@@ -1696,7 +1697,17 @@ export function StyleUpExperience({
     if (!userId || !edit) return;
     setSavingCtx(true);
     await Promise.all([
-      updateUserHeightAge(userId, { heightLabel: edit.heightLabel || null, weightLabel: edit.weightLabel || null, ageLabel: edit.ageLabel || null }),
+      // Height/weight are typed free-text here (onboarding uses the dropdowns),
+      // so snap them to the shared option sets and write the numeric columns
+      // too — ProfilePage's Body-profile selects bind to height_cm/weight_kg
+      // and render "Select" when only the label landed. Label stays verbatim.
+      updateUserHeightAge(userId, {
+        heightCm: matchHeight(edit.heightLabel)?.cm ?? null,
+        heightLabel: edit.heightLabel || null,
+        weightKg: matchWeight(edit.weightLabel)?.kg ?? null,
+        weightLabel: edit.weightLabel || null,
+        ageLabel: edit.ageLabel || null,
+      }),
       updateUserGender(userId, edit.gender),
       updateUserCustomStyle(userId, edit.style),
     ]);

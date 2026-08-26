@@ -94,3 +94,48 @@ export const FASHION_STYLE_OPTIONS: readonly string[] = [
   'Y2K',
   'Old money',
 ];
+
+/**
+ * Free-text → option matchers. The Style chat's inline stats editor takes
+ * height/weight as typed text (the onboarding flow uses the dropdowns above),
+ * so the label alone reaches `profiles`. Readers that bind to the numeric
+ * columns — ProfilePage's Body-profile selects bind to `height_cm`/`weight_kg`
+ * — then render "Select" as if nothing was saved. These snap typed text to the
+ * nearest option so both columns get written from either surface.
+ *
+ * Nearest-match, not exact: the option sets are 1" and 5-lb steps, so "163 lb"
+ * has no exact row but is unambiguously the 165 lb one.
+ */
+
+/** Height in cm from `5'10"`, `5' 10`, `5ft10in`, `178cm`. Null if unparseable. */
+export function matchHeight(text: string): HeightOption | null {
+  const t = text.trim().toLowerCase();
+  if (!t) return null;
+  const cm = /^(\d{2,3})\s*cm\b/.exec(t);
+  const ftIn = /^(\d)\s*(?:'|’|ft|feet|foot)\s*(\d{1,2})?/.exec(t);
+  const target = cm ? Number(cm[1])
+    : ftIn ? (Number(ftIn[1]) * 12 + Number(ftIn[2] ?? 0)) * 2.54
+    : null;
+  return target === null ? null : nearest(HEIGHT_OPTIONS, o => o.cm, target);
+}
+
+/** Weight in kg from `165 lb`, `165lbs`, `165`, `75 kg`. Null if unparseable. */
+export function matchWeight(text: string): WeightOption | null {
+  const t = text.trim().toLowerCase();
+  if (!t) return null;
+  // The unit must sit against the number, not merely appear somewhere in the
+  // string: the canonical labels read "165 lb (74.8 kg)", so a loose /kg/ test
+  // would read 165 as kilograms and snap to the top of the range.
+  const m = /^(\d{2,3}(?:\.\d+)?)\s*(kgs?|kilos?|lbs?|pounds?)?/.exec(t);
+  if (!m) return null;
+  const n = Number(m[1]);
+  // Bare numbers are pounds — the labels are imperial-first because that's how
+  // shoppers self-report here.
+  const kg = /^k/.test(m[2] ?? '') ? n : n * 0.45359237;
+  return nearest(WEIGHT_OPTIONS, o => o.kg, kg);
+}
+
+function nearest<T>(options: T[], value: (o: T) => number, target: number): T {
+  return options.reduce((best, o) =>
+    Math.abs(value(o) - target) < Math.abs(value(best) - target) ? o : best);
+}
