@@ -107,8 +107,15 @@ const forceMuteVideo = (el: HTMLVideoElement | null) => {
  *  fetching the clip here is also what makes tapping the tile open instantly:
  *  fal serves these `immutable`, so the viewer's <video> reads them back out of
  *  the HTTP cache rather than off the network. */
-function SavedTileMedia({ video, poster, alt }: { video?: string; poster?: string; alt?: string }) {
-  if (!video) {
+function SavedTileMedia({ video, poster, alt, active = true }: {
+  video?: string; poster?: string; alt?: string; active?: boolean;
+}) {
+  //  `active` is false while a viewer is open over the row. The tiles are still
+  //  in the viewport — a full-screen overlay does not stop an IntersectionObserver
+  //  — so without this the four tile clips keep decoding underneath the hero and
+  //  push it past the iOS decoder ceiling, where a video simply stops painting.
+  //  That is the "opens paused" symptom: the hero was not slow, it was starved.
+  if (!video || !active) {
     return poster
       ? <img src={poster} alt={alt ?? ''} loading="lazy" />
       : <span className="su-saved-row-item--empty" />;
@@ -1964,6 +1971,8 @@ export function StyleUpExperience({
   // Looks the shopper rendered plus pieces they bookmarked — what "saved" means
   // to them, and what the chat's count reflects.
   const savedCount = savedLooks.length + bookmarkedProducts.length;
+  // Hand the decoder to whichever viewer is open — see SavedTileMedia.
+  const tilesActive = !viewer && !productViewer;
 
   // `showBack` is false ONLY on the Style app's home (there is nowhere behind it).
   // Every other pane keeps the back arrow, or the shopper reaches the picker and
@@ -2110,8 +2119,9 @@ export function StyleUpExperience({
             if (pvDragDy.current > 90) closeProductViewer();
           }}
         >
-          <span className="su-pviewer-grab" aria-hidden="true" />
-          <button type="button" className="su-viewer-close" onClick={closeProductViewer} aria-label="Close">✕</button>
+          <button type="button" className="su-viewer-back" onClick={closeProductViewer} aria-label="Back">
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6" /></svg>
+          </button>
           <div className="su-pviewer-gallery">
             {d?.video
               ? <video ref={forceMuteVideo} src={d.video} poster={d.poster ?? undefined} autoPlay loop muted playsInline />
@@ -2297,7 +2307,7 @@ export function StyleUpExperience({
                   onClick={() => { setProfileOpen(false); openSavedLook(l); }}
                   title="Your look"
                 >
-                  <SavedTileMedia video={l.videoUrl} poster={l.poster} />
+                  <SavedTileMedia video={l.videoUrl} poster={l.poster} active={tilesActive} />
                 </button>
               ))}
               {bookmarkedProducts.slice(0, 20).map((p, i) => (
@@ -2318,6 +2328,7 @@ export function StyleUpExperience({
                     video={p.id != null ? pieceVideos[String(p.id)]?.video : undefined}
                     poster={(p.id != null ? pieceVideos[String(p.id)]?.poster : null) ?? p.image ?? undefined}
                     alt={p.name || 'Product'}
+                    active={tilesActive}
                   />
                 </button>
               ))}
@@ -2357,7 +2368,7 @@ export function StyleUpExperience({
             onClick={() => openSavedLook(l)}
             title="Your look"
           >
-            <SavedTileMedia video={l.videoUrl} poster={l.poster} />
+            <SavedTileMedia video={l.videoUrl} poster={l.poster} active={tilesActive} />
           </button>
         ))}
         {bookmarkedProducts.slice(0, 20).map((p, i) => (
@@ -2375,6 +2386,7 @@ export function StyleUpExperience({
               video={p.id != null ? pieceVideos[String(p.id)]?.video : undefined}
               poster={(p.id != null ? pieceVideos[String(p.id)]?.poster : null) ?? p.image ?? undefined}
               alt={p.name || 'Product'}
+              active={tilesActive}
             />
           </button>
         ))}

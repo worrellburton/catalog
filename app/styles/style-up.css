@@ -1981,7 +1981,9 @@ html[data-shell="catalog-app"] .su-showroom-search-sheet {
   inset: 0;
   z-index: 200;
   display: flex;
-  align-items: flex-end;
+  /* Top-aligned, not bottom: this is the same full-bleed hero the look viewer
+     has, not a sheet peeking up over the chat. */
+  align-items: flex-start;
   justify-content: center;
   background: var(--su-scrim, rgba(0, 0, 0, 0.72));
   -webkit-backdrop-filter: blur(6px);
@@ -1991,14 +1993,13 @@ html[data-shell="catalog-app"] .su-showroom-search-sheet {
   position: relative;
   width: 100%;
   max-width: 520px;
-  max-height: 88vh;
+  height: 100%;
   display: flex;
   flex-direction: column;
   gap: 0;
-  border-radius: 22px 22px 0 0;
+  border-radius: 0;
   background: var(--su-sheet, #141518);
-  border: 1px solid var(--su-sheet-line, #26282d);
-  border-bottom: none;
+  border: none;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   padding-bottom: calc(16px + env(safe-area-inset-bottom));
@@ -2014,6 +2015,10 @@ html[data-shell="catalog-app"] .su-showroom-search-sheet {
   z-index: 2;
   background: rgba(0, 0, 0, 0.5);
 }
+/* The sheet scrolls, so the back button has to be fixed to the screen rather
+   than absolutely placed in the scroller — otherwise it rides up out of view
+   with the gallery. */
+.su-pviewer .su-viewer-back { position: fixed; }
 /* Horizontal snap gallery. */
 .su-pviewer-gallery {
   display: flex;
@@ -2023,17 +2028,28 @@ html[data-shell="catalog-app"] .su-showroom-search-sheet {
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
   background: var(--su-sheet-2, #0e0f11);
-  border-radius: 22px 22px 0 0;
 }
 .su-pviewer-gallery::-webkit-scrollbar { display: none; }
 .su-pviewer-gallery img,
 .su-pviewer-gallery video {
   flex: 0 0 100%;
   width: 100%;
-  aspect-ratio: 4 / 5;
-  object-fit: contain;
   scroll-snap-align: center;
   background: var(--su-sheet-2, #0e0f11);
+}
+/* The still keeps its OWN height rather than being boxed at 4/5. Product shots
+   are not one ratio: `contain` in a fixed box pillarboxed the tall ones and
+   `cover` cropped the collar and hem off them, and neither is a hero. Full
+   width, natural height, nothing lost. */
+.su-pviewer-gallery img {
+  height: auto;
+  display: block;
+}
+/* A product's hero clip is shot 9/16 like a look's, so it can have a fixed box
+   without cropping anything. */
+.su-pviewer-gallery video {
+  aspect-ratio: 9 / 16;
+  object-fit: cover;
 }
 .su-pviewer-empty { flex: 0 0 100%; aspect-ratio: 4 / 5; background: repeating-linear-gradient(45deg, #1c1d21, #1c1d21 8px, #26282d 8px, #26282d 16px); }
 .su-pviewer-info { padding: 16px 18px 6px; }
@@ -2061,17 +2077,8 @@ html[data-shell="catalog-app"] .su-showroom-search-sheet {
   .su-pviewer-inner { animation: none; }
 }
 
-/* ── Product pop-up v2 — grab handle, save, fit/fabric chips, short
-      description, similar rail, and swipe-down dissolve. ─────────────── */
-.su-pviewer-grab {
-  position: absolute;
-  top: 8px; left: 0; right: 0;
-  margin-inline: auto;
-  width: 40px; height: 4px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.28);
-  z-index: 2;
-}
+/* ── Product pop-up v2 — save, fit/fabric chips, short description, similar
+      rail, and swipe-down dissolve. ──────────────────────────────────── */
 .su-pviewer-inner { touch-action: pan-y; overscroll-behavior-y: contain; }
 .su-pviewer-toprow { display: flex; align-items: flex-start; gap: 12px; }
 .su-pviewer-id { flex: 1 1 auto; min-width: 0; }
@@ -2655,7 +2662,6 @@ html[data-style-bg="paper"] .su-viewer-close {
 }
 /* The back button sits ON the video, which is dark whatever the theme. */
 html[data-style-bg="paper"] .su-viewer-back { background: rgba(0, 0, 0, 0.45); color: #fff; }
-html[data-style-bg="paper"] .su-pviewer-grab { background: rgba(0, 0, 0, 0.22); }
 /* AI ring: the cool halo disappears on off-white — go slate instead. */
 html[data-style-bg="paper"] .su-picker-pill.is-ai .su-stylist-avatar {
   box-shadow: 0 0 0 2px rgba(64, 104, 133, 0.55), 0 0 10px rgba(64, 104, 133, 0.18);
