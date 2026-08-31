@@ -2022,6 +2022,11 @@ html[data-shell="catalog-app"] .su-showroom-search-sheet {
 /* Horizontal snap gallery. */
 .su-pviewer-gallery {
   display: flex;
+  /* Never shrink: .su-pviewer-inner is a full-height flex column, so the
+     gallery was being squeezed to fit the info block below it and clipped the
+     bottom off a natural-height still. The sheet scrolls; the hero does not
+     compress. */
+  flex: 0 0 auto;
   gap: 0;
   overflow-x: auto;
   scroll-snap-type: x mandatory;
@@ -2040,9 +2045,18 @@ html[data-shell="catalog-app"] .su-showroom-search-sheet {
 /* The still keeps its OWN height rather than being boxed at 4/5. Product shots
    are not one ratio: `contain` in a fixed box pillarboxed the tall ones and
    `cover` cropped the collar and hem off them, and neither is a hero. Full
-   width, natural height, nothing lost. */
+   width, natural height, nothing lost.
+
+   align-self is the load-bearing line. This is a flex row, so `align-items`
+   defaults to `stretch`, and `height: auto` on a flex item is exactly what
+   stretch acts on — the box was pulled to the row's cross size and, since
+   object-fit defaults to `fill`, the photo was squashed to match. contain is
+   belt and braces: with the box at the image's own ratio it changes nothing,
+   but it makes distortion impossible if anything ever sizes this box again. */
 .su-pviewer-gallery img {
   height: auto;
+  align-self: flex-start;
+  object-fit: contain;
   display: block;
 }
 /* A product's hero clip is shot 9/16 like a look's, so it can have a fixed box
