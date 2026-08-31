@@ -1089,25 +1089,44 @@ html[data-shell="catalog-app"] .su-showroom-search-sheet {
 .su-viewer {
   position: fixed; inset: 0; z-index: 200;
   display: flex; align-items: flex-start; justify-content: center;
-  padding: 20px;
-  padding-top: calc(20px + var(--shell-sb, env(safe-area-inset-top, 0px)));
-  padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  /* No top or side padding: the look itself runs edge to edge from the very top
+     of the screen, under the status bar. Only the content BELOW the video is
+     inset (see .su-viewer-pieces / .su-viewer-add), and the bottom pad still
+     clears the home indicator. */
+  padding: 0 0 calc(20px + env(safe-area-inset-bottom, 0px));
   background: var(--su-scrim, rgba(0,0,0,0.86));
   overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
 }
-.su-viewer-inner { position: relative; margin: auto; display: flex; flex-direction: column; align-items: center; gap: 14px; max-width: 460px; width: 100%; }
+/* margin-top stays 0 rather than `auto`: a short look (one with no pieces) would
+   otherwise float to the middle of the screen instead of starting at the top. */
+.su-viewer-inner { position: relative; margin: 0 auto; display: flex; flex-direction: column; align-items: center; gap: 14px; max-width: 460px; width: 100%; }
 .su-viewer-close {
   position: absolute; top: -6px; right: -2px; z-index: 1;
   width: 36px; height: 36px; border-radius: 50%; border: none;
   background: rgba(255,255,255,0.14); color: #fff; font-size: 15px; cursor: pointer;
 }
-/* 62vh, not 72: the pieces list below needs to be visible on open, not something
-   you only find by scrolling. */
-.su-viewer-video { width: 100%; max-height: 62vh; aspect-ratio: 9 / 16; object-fit: contain; border-radius: 16px; background: #000; }
+/* Back, over the top-left of the hero. Sits below the status bar — inside the
+   Flutter shell env(safe-area-inset-top) reads ~0 in the webview, so this uses
+   the pixel count the shell injects as --shell-sb and keeps the env() as the
+   browser fallback. */
+.su-viewer-back {
+  position: absolute; z-index: 2; left: 12px;
+  top: calc(10px + var(--shell-sb, env(safe-area-inset-top, 0px)));
+  width: 36px; height: 36px; border-radius: 50%; border: none;
+  display: flex; align-items: center; justify-content: center;
+  background: rgba(0,0,0,0.5); color: #fff; cursor: pointer;
+}
+/* Full-bleed hero: full width, square corners, its own 9/16 height. It used to
+   be capped at 62vh so the pieces showed without scrolling, but at full width a
+   cap letterboxes the clip inside its own box — black bars either side of the
+   thing you came to look at. The pieces sit just under the fold instead. */
+.su-viewer-video { width: 100%; aspect-ratio: 9 / 16; object-fit: cover; background: #000; display: block; }
 /* The pieces in a look. Was a row of bare 46x58 thumbnails, which named none of
    them; now a tappable list carrying brand, name and price, so the look reads as
    a shoppable outfit rather than four unlabelled squares. */
-.su-viewer-pieces { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+/* Padded here rather than on the container: the hero above is deliberately
+   edge-to-edge, so the inset belongs to the content that sits below it. */
+.su-viewer-pieces { display: flex; flex-direction: column; gap: 6px; width: 100%; padding-inline: 20px; }
 .su-viewer-piece {
   display: flex; align-items: center; gap: 10px; width: 100%;
   padding: 6px 10px 6px 6px; text-align: left; cursor: pointer;
@@ -1133,7 +1152,7 @@ html[data-shell="catalog-app"] .su-showroom-search-sheet {
 }
 .su-viewer-piece-price { flex: 0 0 auto; font-size: 13px; font-weight: 600; }
 .su-viewer-add {
-  width: 100%; max-width: 320px; padding: 13px; border-radius: 999px; border: none;
+  width: calc(100% - 40px); max-width: 320px; padding: 13px; border-radius: 999px; border: none;
   background: #e7e7ea; color: #141518; font-size: 14px; font-weight: 800; cursor: pointer;
 }
 .su-viewer-add:disabled { opacity: 0.6; cursor: default; }
@@ -2633,6 +2652,8 @@ html[data-style-bg="paper"] .su-viewer-add {
 html[data-style-bg="paper"] .su-viewer-close {
   background: rgba(0, 0, 0, 0.1); color: #1a1a1a;
 }
+/* The back button sits ON the video, which is dark whatever the theme. */
+html[data-style-bg="paper"] .su-viewer-back { background: rgba(0, 0, 0, 0.45); color: #fff; }
 html[data-style-bg="paper"] .su-pviewer-grab { background: rgba(0, 0, 0, 0.22); }
 /* AI ring: the cool halo disappears on off-white — go slate instead. */
 html[data-style-bg="paper"] .su-picker-pill.is-ai .su-stylist-avatar {

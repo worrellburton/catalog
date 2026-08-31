@@ -1975,7 +1975,9 @@ export function StyleUpExperience({
           if (lvDragDy.current > 90) closeLookViewer();
         }}
       >
-        <button type="button" className="su-viewer-close" onClick={closeLookViewer} aria-label="Close">✕</button>
+        <button type="button" className="su-viewer-back" onClick={closeLookViewer} aria-label="Back">
+          <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true"><polyline points="15 18 9 12 15 6" /></svg>
+        </button>
         <video ref={forceMuteVideo} className="su-viewer-video" src={viewer.videoUrl} autoPlay loop muted controls playsInline />
         {viewer.pieces.length > 0 && (
           <div className="su-viewer-pieces">
