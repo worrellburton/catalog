@@ -387,6 +387,27 @@ export async function fetchProductVideos(
   return out;
 }
 
+/** The curated primary image for a set of products, keyed by id.
+ *
+ *  The Saved row used to paint whatever `image` was on the bookmark in
+ *  localStorage, which is the raw image_url a chat product ref carries — so a
+ *  tile could show a different photograph from the one its own detail pop-up
+ *  opens on. This resolves the same primary_image_url (falling back to
+ *  image_url) that fetchProductDetail() shows, so the tile and the hero agree. */
+export async function fetchProductImages(ids: string[]): Promise<Record<string, string>> {
+  const out: Record<string, string> = {};
+  if (!supabase || ids.length === 0) return out;
+  const { data } = await supabase
+    .from('products')
+    .select('id, image_url, primary_image_url')
+    .in('id', ids);
+  for (const r of (data ?? []) as Array<{ id: string; image_url: string | null; primary_image_url: string | null }>) {
+    const url = r.primary_image_url || r.image_url;
+    if (url) out[String(r.id)] = url;
+  }
+  return out;
+}
+
 /** Resolve each look-card piece's garment slot from the GOVERNED type (falling
  *  back to the name). The name heuristic alone can't place iconic sneakers whose
  *  names carry no shoe word ("Samba OG", "Air Force 1", "Achilles Low"), so those

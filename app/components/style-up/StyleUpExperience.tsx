@@ -16,7 +16,7 @@ import { useStylistEngineMethod } from '~/hooks/useStylistEngineMethod';
 import { supabase } from '~/utils/supabase';
 import { browseTheFeed } from '~/utils/front-door';
 import {
-  fetchStylists, getOrCreateThread, deleteThread, getThreadHunting, fetchProductDetail, fetchProductVideos, fetchProductRoles, fetchSimilarProducts, getLatestThread, fetchMyThreads, fetchMessages, sendShopperMessage,
+  fetchStylists, getOrCreateThread, deleteThread, getThreadHunting, fetchProductDetail, fetchProductVideos, fetchProductImages, fetchProductRoles, fetchSimilarProducts, getLatestThread, fetchMyThreads, fetchMessages, sendShopperMessage,
   sendStylistText, startFullLookRender, fetchSwapOptions, sendSwapOptions,
   sendChooser, recommendForSlot, sendProductPick,
   webFetchSwapOptions, webRecommendForSlot,
@@ -785,6 +785,10 @@ export function StyleUpExperience({
   // Look-card media: product id → its hero clip (or null once fetched w/ none),
   // so a piece with a primary video plays it in the card instead of the image.
   const [pieceVideos, setPieceVideos] = useState<Record<string, { video: string; poster: string | null } | null>>({});
+  // product id → its curated primary image, for the Saved tiles. See
+  // fetchProductImages: a bookmark's cached `image` is not always the picture
+  // that product's own pop-up opens on.
+  const [savedImages, setSavedImages] = useState<Record<string, string>>({});
   const [pieceRoles, setPieceRoles] = useState<Record<string, string>>({}); // look-card piece id → garment slot (from governed type)
   const [rejected, setRejected] = useState<Set<string>>(new Set());   // product ids the shopper passed on
   const [chosenScene, setChosenScene] = useState<string | null>(null); // the look's setting
@@ -1001,6 +1005,10 @@ export function StyleUpExperience({
         for (const id of ids) if (!(id in next)) next[id] = vids[id] ?? null;
         return next;
       });
+    });
+    void fetchProductImages(ids).then(imgs => {
+      if (cancelled) return;
+      setSavedImages(prev => ({ ...imgs, ...prev }));
     });
     return () => { cancelled = true; };
   }, [bookmarkedProducts, pieceVideos]);
@@ -2326,7 +2334,7 @@ export function StyleUpExperience({
                 >
                   <SavedTileMedia
                     video={p.id != null ? pieceVideos[String(p.id)]?.video : undefined}
-                    poster={(p.id != null ? pieceVideos[String(p.id)]?.poster : null) ?? p.image ?? undefined}
+                    poster={(p.id != null ? (pieceVideos[String(p.id)]?.poster ?? savedImages[String(p.id)]) : null) ?? p.image ?? undefined}
                     alt={p.name || 'Product'}
                     active={tilesActive}
                   />
@@ -2384,7 +2392,7 @@ export function StyleUpExperience({
           >
             <SavedTileMedia
               video={p.id != null ? pieceVideos[String(p.id)]?.video : undefined}
-              poster={(p.id != null ? pieceVideos[String(p.id)]?.poster : null) ?? p.image ?? undefined}
+              poster={(p.id != null ? (pieceVideos[String(p.id)]?.poster ?? savedImages[String(p.id)]) : null) ?? p.image ?? undefined}
               alt={p.name || 'Product'}
               active={tilesActive}
             />
