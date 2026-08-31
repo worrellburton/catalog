@@ -9,8 +9,18 @@ export async function extractPosterBlob(videoUrl: string): Promise<Blob> {
     const video = document.createElement('video');
     video.crossOrigin = 'anonymous';
     video.muted = true;
+    video.defaultMuted = true;
     video.preload = 'auto';
     video.playsInline = true;
+    video.setAttribute('playsinline', '');
+    // iOS will not run the decoder for a <video> that is not in the document,
+    // so a detached element never reaches loadeddata and every extraction here
+    // timed out silently — which is why looks_creative.thumbnail_url is null on
+    // effectively every row. Parked offscreen rather than hidden: display:none
+    // and visibility:hidden stop the decoder just as surely as being detached.
+    video.style.cssText =
+      'position:fixed;left:-9999px;top:0;width:1px;height:1px;opacity:0;pointer-events:none';
+    document.body.appendChild(video);
 
     const cleanup = () => {
       video.removeAttribute('src');
@@ -45,7 +55,15 @@ export async function extractPosterBlob(videoUrl: string): Promise<Blob> {
     video.addEventListener('seeked', () => { clearTimeout(timeout); onSeeked(); }, { once: true });
     video.addEventListener('error', () => { clearTimeout(timeout); onError(); }, { once: true });
 
+    // Muted inline playback is what actually gets a frame decoded on iOS; the
+    // seek alone is not enough from a cold element. Pause again as soon as
+    // there is data — this only ever needs one frame.
+    video.addEventListener('loadedmetadata', () => {
+      void video.play().catch(() => {});
+    }, { once: true });
+
     video.addEventListener('loadeddata', () => {
+      video.pause();
       video.currentTime = Math.min(SEEK_TIME, video.duration || SEEK_TIME);
     }, { once: true });
 

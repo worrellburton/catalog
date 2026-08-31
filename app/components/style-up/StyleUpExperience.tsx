@@ -24,6 +24,7 @@ import {
   type StyleUpProductDetail,
 } from '~/services/style-up';
 import { listDoneLookVideos, getGenerationLookPosters, getGenerationProductImages, getGenerationDetail } from '~/services/user-generations';
+import { extractPosterBlob } from '~/utils/video-poster';
 import { roleTagFromName } from '~/services/product-roles';
 import { SCENE_PRESETS, presetForPhrase } from '~/data/style-scenes';
 import { signInWithGoogle } from '~/services/auth';
@@ -96,6 +97,11 @@ import '~/styles/style-up-lookbar.css';
 const forceMuteVideo = (el: HTMLVideoElement | null) => {
   if (el) { el.muted = true; el.defaultMuted = true; }
 };
+
+/** How many Saved tiles will decode their own look frame in one pass. The row
+ *  shows 20 and each decode is a video fetch; past the first screenful the
+ *  shopper has scrolled somewhere else long before it would have mattered. */
+const SAVED_POSTER_WARM_MAX = 8;
 
 /** A look-card piece's hero clip, mounted ONLY while it is on screen.
  *
@@ -731,7 +737,12 @@ export function StyleUpExperience({
   // The looks half of the saved strip. In the Style app "saving a look" IS
   // "add to my looks" — the shopper's own finished renders — so this reads
   // those rather than inventing a second save concept to keep in sync.
-  const [savedLooks, setSavedLooks] = useState<{ genId: string; videoUrl: string; poster: string }[]>([]);
+  const [savedLooks, setSavedLooks] = useState<{ genId: string; videoUrl: string; poster: string; isLookFrame: boolean }[]>([]);
+  // generation id → object URL of the frame decoded off its clip. A ref, not
+  // state: the effect below re-runs whenever a look is published, and a frame
+  // revoked on that pass would blank every tile already on screen and pay for
+  // the same video fetch again.
+  const lookFrames = useRef<Map<string, string>>(new Map());
   // Render polling: generation id → its latest row. Drives the on-you render
   // bubbles (spinner → video).
   const [renders, setRenders] = useState<Record<string, UserGeneration>>({});
@@ -890,23 +901,61 @@ export function StyleUpExperience({
       const gens = await listDoneLookVideos(userId);
       if (!alive) return;
       const ids = gens.map(g => g.id);
-      // A look's poster job can still be pending (looks_creative.thumbnail_url
-      // null) long after the video is done, so fall back to the pieces that went
-      // into the look. A bare <video> is NOT a usable fallback here: iOS paints
-      // nothing for one that has neither a poster nor a load, which is exactly
-      // the blank tile this replaces. No image at all, no tile.
+      // looks_creative.thumbnail_url is null for effectively every look, so the
+      // first paint here is a PIECE of the look (its first product image), which
+      // is what made the row read as a shelf of products rather than of looks.
+      // A bare <video> is not the fix — one inside these tiles paints black on
+      // iOS — so the real frame is decoded off-DOM below and swapped in.
       const [posters, productImages] = await Promise.all([
         getGenerationLookPosters(ids),
         getGenerationProductImages(ids),
       ]);
       if (!alive) return;
-      setSavedLooks(gens.flatMap(g => {
-        const poster = posters[g.id] ?? productImages[g.id]?.[0];
-        return poster ? [{ genId: g.id, videoUrl: g.video_url, poster }] : [];
-      }));
+      const rows = gens.flatMap(g => {
+        const lookPoster = posters[g.id] ?? lookFrames.current.get(g.id);
+        const poster = lookPoster ?? productImages[g.id]?.[0];
+        return poster
+          ? [{ genId: g.id, videoUrl: g.video_url, poster, isLookFrame: !!lookPoster }]
+          : [];
+      });
+      setSavedLooks(rows);
+
+      // Warm the real look frame for the tiles still showing a piece: pull the
+      // first frame off the clip and swap it in, so the tile shows the look.
+      // Sequential and capped — each pass costs one video fetch.
+      // ponytail: per session, in memory. This belongs in
+      // looks_creative.thumbnail_url, but nothing can write it today —
+      // uploadPoster() targets `looks/<lookId>/poster.jpg` while the look-media
+      // INSERT policy requires auth.uid() as the first path segment, so every
+      // row's thumbnail_url is null. Fix that upload path and this loop only
+      // ever runs for looks whose poster job has not landed yet.
+      for (const row of rows.filter(r => !r.isLookFrame).slice(0, SAVED_POSTER_WARM_MAX)) {
+        if (!alive) return;
+        try {
+          const blob = await extractPosterBlob(row.videoUrl);
+          if (!alive) return;
+          const url = URL.createObjectURL(blob);
+          lookFrames.current.set(row.genId, url);
+          setSavedLooks(cur => cur.map(l => (
+            l.genId === row.genId ? { ...l, poster: url, isLookFrame: true } : l
+          )));
+        } catch {
+          // Keep the piece image — a tile with the wrong picture beats no tile.
+        }
+      }
     })();
     return () => { alive = false; };
   }, [isStyleApp, userId, published]);
+
+  // The decoded frames outlive every re-run of the effect above, so they are
+  // only released when the experience itself goes away.
+  useEffect(() => {
+    const frames = lookFrames.current;
+    return () => {
+      for (const url of frames.values()) URL.revokeObjectURL(url);
+      frames.clear();
+    };
+  }, []);
 
   // Each pane mounts its OWN `.su-page` scroller, and a freshly-mounted one
   // sits at scrollTop 0 without firing a scroll event — so without this the
