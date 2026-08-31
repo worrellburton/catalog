@@ -1593,16 +1593,24 @@ export function StyleUpExperience({
   // Add a finished render to the shopper's own looks, promotes the generation
   // to a LIVE look (with its video + poster + pieces), associated with THIS
   // shopper, so it lands in My Catalog properly (not stuck Inactive/posterless).
-  const addToLooks = useCallback(async (genId: string, pieces: StyleUpProductRef[]) => {
+  //  `renders` only holds generations polled in THIS session, so a look reopened
+  //  from the Saved strip has no entry and the button silently did nothing but
+  //  set "Give it a moment to finish" on a clip that had finished days ago.
+  //  Callers that already have the URL pass it in.
+  const addToLooks = useCallback(async (
+    genId: string,
+    pieces: StyleUpProductRef[],
+    knownVideoUrl?: string,
+  ) => {
     if (!userId || published.has(genId)) return;
-    const r = renders[genId];
-    if (!r?.video_url) { setRenderError('Give it a moment to finish, then add it.'); return; }
+    const videoUrl = renders[genId]?.video_url ?? knownVideoUrl;
+    if (!videoUrl) { setRenderError('Give it a moment to finish, then add it.'); return; }
     setPublished(prev => new Set(prev).add(genId));
     try {
       await promoteGenerationToLook({
         generationId: genId,
         creatorUserId: userId, // associate the look with this shopper
-        videoUrl: r.video_url,
+        videoUrl,
         creatorLabel: user?.displayName || user?.email?.split('@')[0] || 'My',
         style: 'editorial',
         gender: ctx?.gender === 'male' ? 'men' : ctx?.gender === 'female' ? 'women' : 'unisex',
@@ -1985,7 +1993,7 @@ export function StyleUpExperience({
             ))}
           </div>
         )}
-        <button type="button" className="su-viewer-add" onClick={() => void addToLooks(viewer.genId, viewer.pieces)} disabled={published.has(viewer.genId)}>
+        <button type="button" className="su-viewer-add" onClick={() => void addToLooks(viewer.genId, viewer.pieces, viewer.videoUrl)} disabled={published.has(viewer.genId)}>
           {published.has(viewer.genId) ? 'Added to your looks ✓' : 'Add to my looks'}
         </button>
       </div>

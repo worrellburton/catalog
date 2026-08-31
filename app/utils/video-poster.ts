@@ -76,7 +76,18 @@ export async function uploadPoster(
   blob: Blob,
 ): Promise<string | null> {
   if (!supabase) return null;
-  const key = `looks/${lookId}/poster.jpg`;
+  // The look-media INSERT policy is `(storage.foldername(name))[1] =
+  // auth.uid()`, so the uploader's own id HAS to be the first path segment —
+  // the old `looks/<lookId>/poster.jpg` key put the literal string "looks"
+  // there and every upload was denied, which is why no look in the catalogue
+  // has a stored poster. Same shape addMediaToLook() already uses for the
+  // trimmer's poster. The id has to come from the session rather than from the
+  // look's creator: an admin publishing someone else's generation is the
+  // uploader, and RLS checks who is calling, not who the look belongs to.
+  const { data: auth } = await supabase.auth.getUser();
+  const uid = auth?.user?.id;
+  if (!uid) { console.warn('[poster] upload skipped: not signed in'); return null; }
+  const key = `${uid}/${lookId}/poster.jpg`;
   const { error } = await supabase.storage
     .from('look-media')
     .upload(key, blob, { contentType: 'image/jpeg', upsert: true });

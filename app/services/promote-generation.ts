@@ -58,6 +58,26 @@ export interface PromoteResult {
   created: boolean;
 }
 
+/** Warm the primary creative's poster if it has none.
+ *
+ *  The first-time-publish path below inserts the creative and warms its poster
+ *  in one go, but the republish path returns early — so a look whose poster
+ *  never landed (every look made before uploadPoster() targeted a path the
+ *  storage policy actually permits) had no second chance at one, no matter how
+ *  many times it was published. Fire-and-forget, exactly like the insert path:
+ *  a missing poster must never fail a publish. */
+async function warmPosterIfMissing(lookId: string): Promise<void> {
+  if (!supabase) return;
+  const { data } = await supabase
+    .from('looks_creative')
+    .select('id, video_url, thumbnail_url')
+    .eq('look_id', lookId)
+    .eq('is_primary', true)
+    .maybeSingle();
+  if (!data?.id || !data.video_url || data.thumbnail_url) return;
+  void generateAndStorePoster(lookId, data.id, data.video_url);
+}
+
 /**
  * Promote a user_generation into the curated catalog. Idempotent — re-running
  * for the same generationId flips the existing row to status='live' rather
@@ -77,6 +97,9 @@ export async function promoteGenerationToLook(input: PromoteInput): Promise<Prom
   const targetStatus = input.status ?? 'live';
 
   if (existing?.id) {
+    // Either way out of this branch, the look keeps the creative it already
+    // has — which is the one place a poster could have gone missing.
+    await warmPosterIfMissing(existing.id);
     // Auto-archive is idempotent and non-clobbering: if a row already exists
     // for this generation (it may already be live / published), leave its
     // status alone — the only goal is "a row exists in My Catalog".
@@ -85,7 +108,7 @@ export async function promoteGenerationToLook(input: PromoteInput): Promise<Prom
     }
     // Re-publish path: just flip the existing row to live + sync
     // creator attribution. The looks_creative row already exists, so
-    // there's nothing to re-insert.
+    // there's nothing to re-insert — only its poster is topped up, above.
     const updates: Record<string, unknown> = { status: 'live' };
     if (input.creatorUserId) {
       updates.user_id = input.creatorUserId;
