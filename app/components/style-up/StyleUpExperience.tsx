@@ -98,6 +98,24 @@ const forceMuteVideo = (el: HTMLVideoElement | null) => {
   if (el) { el.muted = true; el.defaultMuted = true; }
 };
 
+/** One Saved tile's media: the clip when there is one, the still otherwise.
+ *
+ *  Wraps PieceMedia only to keep the two Saved strips from repeating the
+ *  video-or-image choice, and to give the tiles preload="metadata" instead of
+ *  PieceMedia's "none". A tile is 84px and four are on screen at once — the
+ *  first frame has to be there the moment the row scrolls into view, and
+ *  fetching the clip here is also what makes tapping the tile open instantly:
+ *  fal serves these `immutable`, so the viewer's <video> reads them back out of
+ *  the HTTP cache rather than off the network. */
+function SavedTileMedia({ video, poster, alt }: { video?: string; poster?: string; alt?: string }) {
+  if (!video) {
+    return poster
+      ? <img src={poster} alt={alt ?? ''} loading="lazy" />
+      : <span className="su-saved-row-item--empty" />;
+  }
+  return <PieceMedia video={video} poster={poster} alt={alt} preload="metadata" />;
+}
+
 /** How many Saved tiles will decode their own look frame in one pass. The row
  *  shows 20 and each decode is a video fetch; past the first screenful the
  *  shopper has scrolled somewhere else long before it would have mattered. */
@@ -114,7 +132,9 @@ const SAVED_POSTER_WARM_MAX = 8;
  *
  *  No wrapper element: the <img> and <video> occupy the same slot the two
  *  branches always did, so the surrounding CSS is untouched. */
-function PieceMedia({ video, poster, alt }: { video: string; poster?: string; alt?: string }) {
+function PieceMedia({ video, poster, alt, preload = 'none' }: {
+  video: string; poster?: string; alt?: string; preload?: 'none' | 'metadata' | 'auto';
+}) {
   const [inView, setInView] = useState(false);
   const obs = useRef<IntersectionObserver | null>(null);
   const attach = useCallback((el: Element | null) => {
@@ -143,7 +163,7 @@ function PieceMedia({ video, poster, alt }: { video: string; poster?: string; al
       loop
       muted
       playsInline
-      preload="none"
+      preload={preload}
     />
   );
 }
@@ -766,7 +786,7 @@ export function StyleUpExperience({
   const prefsRef = useRef<StylePrefs>(EMPTY_PREFS); // always-current copy for callbacks
   const lastRenderSigRef = useRef<string>('');      // dedupe identical re-renders (#10)
   const pendingScenePiecesRef = useRef<StyleUpProductRef[] | null>(null); // pieces held while the scene chooser is open
-  const [viewer, setViewer] = useState<{ videoUrl: string; pieces: StyleUpProductRef[]; genId: string } | null>(null); // expanded look
+  const [viewer, setViewer] = useState<{ videoUrl: string; pieces: StyleUpProductRef[]; genId: string; poster?: string } | null>(null); // expanded look
   const [, setNowTick] = useState(0);                // 1s heartbeat for the render ETA
   const [isDesktop, setIsDesktop] = useState(false); // desktop = two-pane layout
   const [huntView, setHuntView] = useState<{ estSec: number; elapsed: number } | null>(null); // working module for the open thread (flag-driven)
@@ -956,6 +976,27 @@ export function StyleUpExperience({
       frames.clear();
     };
   }, []);
+
+  // Primary videos for the pieces bookmarked into the Saved row, so a product
+  // tile plays its hero clip the same way a look tile plays the look. Shares the
+  // pieceVideos map with the look cards — same key (product id), same fetch, so
+  // a piece already seen in a thread costs nothing here.
+  useEffect(() => {
+    const ids = bookmarkedProducts
+      .map(p => (p.id == null ? '' : String(p.id)))
+      .filter(id => id && !(id in pieceVideos));
+    if (ids.length === 0) return;
+    let cancelled = false;
+    void fetchProductVideos(ids).then(vids => {
+      if (cancelled) return;
+      setPieceVideos(prev => {
+        const next = { ...prev };
+        for (const id of ids) if (!(id in next)) next[id] = vids[id] ?? null;
+        return next;
+      });
+    });
+    return () => { cancelled = true; };
+  }, [bookmarkedProducts, pieceVideos]);
 
   // Each pane mounts its OWN `.su-page` scroller, and a freshly-mounted one
   // sits at scrollTop 0 without firing a scroll event — so without this the
@@ -1981,7 +2022,13 @@ export function StyleUpExperience({
         {/* No controls: the hero is a silent looping still-in-motion, not a
             player. The scrub bar and play button sat over the outfit and were
             the only reason the clip could be paused or unmuted at all. */}
-        <video ref={forceMuteVideo} className="su-viewer-video" src={viewer.videoUrl} autoPlay loop muted playsInline />
+        <video
+          ref={forceMuteVideo}
+          className="su-viewer-video"
+          src={viewer.videoUrl}
+          poster={viewer.poster}
+          autoPlay loop muted playsInline preload="auto"
+        />
         {viewer.pieces.length > 0 && (
           <div className="su-viewer-pieces">
             {viewer.pieces.map((pc, i) => (
@@ -2211,8 +2258,11 @@ export function StyleUpExperience({
   // would be empty for exactly the looks this row exists to reopen.
   // Plain function, not useCallback: this sits after an early return, so a hook
   // here would break hook order.
-  const openSavedLook = (l: { genId: string; videoUrl: string }) => {
-    setViewer({ videoUrl: l.videoUrl, pieces: [], genId: l.genId });
+  const openSavedLook = (l: { genId: string; videoUrl: string; poster?: string }) => {
+    // Hand the tile's own frame through as the hero's poster. The clip is ~2 MB
+    // and only starts downloading when this opens, so without it the viewer is
+    // a black rectangle for as long as the network takes.
+    setViewer({ videoUrl: l.videoUrl, pieces: [], genId: l.genId, poster: l.poster });
     void getGenerationDetail(l.genId).then(detail => {
       const pieces: StyleUpProductRef[] = detail.products.flatMap(gp => gp.product
         ? [{
@@ -2247,7 +2297,7 @@ export function StyleUpExperience({
                   onClick={() => { setProfileOpen(false); openSavedLook(l); }}
                   title="Your look"
                 >
-                  <img src={l.poster} alt="" loading="lazy" />
+                  <SavedTileMedia video={l.videoUrl} poster={l.poster} />
                 </button>
               ))}
               {bookmarkedProducts.slice(0, 20).map((p, i) => (
@@ -2264,7 +2314,11 @@ export function StyleUpExperience({
                   }}
                   title={`${p.brand ? p.brand + ', ' : ''}${p.name}`}
                 >
-                  {p.image ? <img src={p.image} alt="" loading="lazy" /> : <span className="su-saved-row-item--empty" />}
+                  <SavedTileMedia
+                    video={p.id != null ? pieceVideos[String(p.id)]?.video : undefined}
+                    poster={(p.id != null ? pieceVideos[String(p.id)]?.poster : null) ?? p.image ?? undefined}
+                    alt={p.name || 'Product'}
+                  />
                 </button>
               ))}
             </div>
@@ -2303,7 +2357,7 @@ export function StyleUpExperience({
             onClick={() => openSavedLook(l)}
             title="Your look"
           >
-            <img src={l.poster} alt="" loading="lazy" />
+            <SavedTileMedia video={l.videoUrl} poster={l.poster} />
           </button>
         ))}
         {bookmarkedProducts.slice(0, 20).map((p, i) => (
@@ -2317,7 +2371,11 @@ export function StyleUpExperience({
             })}
             title={`${p.brand ? p.brand + ', ' : ''}${p.name}`}
           >
-            {p.image ? <img src={p.image} alt="" loading="lazy" /> : <span className="su-saved-row-item--empty" />}
+            <SavedTileMedia
+              video={p.id != null ? pieceVideos[String(p.id)]?.video : undefined}
+              poster={(p.id != null ? pieceVideos[String(p.id)]?.poster : null) ?? p.image ?? undefined}
+              alt={p.name || 'Product'}
+            />
           </button>
         ))}
       </div>
