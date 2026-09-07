@@ -972,6 +972,38 @@ export function friendlyRenderStartError(raw: string | null): string {
   return 'something went wrong starting that render. Give it another go in a moment.';
 }
 
+/**
+ * Resolve picks that lack a valid catalog id to a real `products` row by
+ * brand+name. A stylist can surface a piece by name (no id) or as a web-hunted
+ * item (a synthetic id not in `products`); either way it must map to a catalog
+ * row to render — user_generation_products.product_id has a hard FK, and an
+ * unresolved TOP silently drops out of the render, so the wardrobe filler
+ * dresses the bare torso in a plain tank ("it didn't take the full outfit").
+ * Match is exact brand+name; anything still unmatched is returned unchanged so
+ * the existing non-catalog guard reports it plainly ("swap it and I'll render").
+ */
+async function resolvePicksToCatalog(picks: StyleUpProductRef[]): Promise<StyleUpProductRef[]> {
+  if (!supabase || picks.length === 0) return picks;
+  const ids = picks.map(p => p.id).filter((x): x is string => !!x);
+  const known = new Set<string>();
+  if (ids.length) {
+    const { data } = await supabase.from('products').select('id').in('id', ids);
+    for (const r of (data ?? []) as { id: string }[]) known.add(r.id);
+  }
+  const needing = picks.filter(p => (!p.id || !known.has(p.id)) && !!(p.name ?? '').trim());
+  if (needing.length === 0) return picks;
+  const found = new Map<StyleUpProductRef, string>();
+  await Promise.all(needing.map(async p => {
+    let q = supabase!.from('products').select('id').ilike('name', (p.name as string).trim()).limit(1);
+    if (p.brand && p.brand.trim()) q = q.ilike('brand', p.brand.trim());
+    const { data } = await q;
+    const row = ((data ?? []) as { id: string }[])[0];
+    if (row) found.set(p, row.id);
+  }));
+  if (found.size === 0) return picks;
+  return picks.map(p => (found.has(p) ? { ...p, id: found.get(p) as string } : p));
+}
+
 async function renderLook(
   threadId: string,
   shopperUserId: string,
@@ -982,9 +1014,16 @@ async function renderLook(
 ): Promise<{ generationId: string | null; error: string | null }> {
   if (!supabase) return { generationId: null, error: 'No database connection' };
 
-  const withId = picks.filter(p => !!p.id).slice(0, MAX_LOOK_PIECES);
+  // Recover catalog ids for name-only / web picks before the id filter, so a
+  // top the shopper sees in the card doesn't silently vanish into a tank.
+  const resolvedPicks = await resolvePicksToCatalog(picks);
+  const resolvedReplace = replace
+    ? { ...replace, product: (await resolvePicksToCatalog([replace.product]))[0] }
+    : replace;
+
+  const withId = resolvedPicks.filter(p => !!p.id).slice(0, MAX_LOOK_PIECES);
   // The replacement piece must be renderable even if the base set was empty.
-  if (withId.length === 0 && !replace?.product.id) {
+  if (withId.length === 0 && !resolvedReplace?.product.id) {
     return { generationId: null, error: "These picks can't be rendered yet." };
   }
 
@@ -1004,7 +1043,7 @@ async function renderLook(
 
   // Resolve product type/name/brand from the catalog so role tags + the prompt
   // stay accurate even when a chat ref only carried a name.
-  const ids = [...withId.map(p => p.id as string), ...(replace?.product.id ? [replace.product.id] : [])];
+  const ids = [...withId.map(p => p.id as string), ...(resolvedReplace?.product.id ? [resolvedReplace.product.id] : [])];
   const { data: rows } = await supabase
     .from('products').select('id, type, name, brand').in('id', ids);
   const byId = new Map(((rows ?? []) as Array<{ id: string; type: string | null; name: string | null; brand: string | null }>).map(r => [r.id, r]));
@@ -1018,12 +1057,12 @@ async function renderLook(
   });
 
   // Slot swap: drop whatever currently fills the target role and add the pick.
-  if (replace?.product.id) {
-    lines = lines.filter(l => l.roleTag !== replace.role);
-    const row = byId.get(replace.product.id);
-    const name = row?.name ?? replace.product.name ?? null;
-    const brand = row?.brand ?? replace.product.brand ?? null;
-    lines.push({ product_id: replace.product.id, roleTag: roleForProduct(row?.type ?? null, name), name, brand });
+  if (resolvedReplace?.product.id) {
+    lines = lines.filter(l => l.roleTag !== resolvedReplace.role);
+    const row = byId.get(resolvedReplace.product.id);
+    const name = row?.name ?? resolvedReplace.product.name ?? null;
+    const brand = row?.brand ?? resolvedReplace.product.brand ?? null;
+    lines.push({ product_id: resolvedReplace.product.id, roleTag: roleForProduct(row?.type ?? null, name), name, brand });
   }
 
   // De-dupe by product_id — user_generation_products has a unique (generation,
