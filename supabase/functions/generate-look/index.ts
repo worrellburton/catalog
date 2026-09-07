@@ -831,7 +831,7 @@ async function handleRequest(req: Request): Promise<Response> {
       `Subject: ${faceTags}.`,
       identityLock,
       productClauses.length > 0
-        ? `The subject must be visibly wearing ALL ${productClauses.length} of these items together in the same shot — do not omit or substitute any: ${productClauses.join('; ')}.`
+        ? `The subject must be visibly wearing ALL ${productClauses.length} of these items together in the same shot — do not omit or substitute any, and render each top or shirt as that exact worn garment, never dropped or replaced with a plain tank top or undershirt: ${productClauses.join('; ')}.`
         : '',
       gen.prompt,
     ].filter(Boolean).join(' ');
