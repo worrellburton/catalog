@@ -752,7 +752,7 @@ async function handleRequest(req: Request): Promise<Response> {
   // only, so it never renders the product model's face instead of the shopper.
   const identityLock = (!isVeo && goodFaceUrls.length > 0)
     ? (productsUsed.length > 0
-        ? `The person's face, hair, skin tone, and body belong ONLY to ${faceTags} — this is who appears in the video. The remaining reference images are clothing swatches: copy the garments exactly, but completely IGNORE any person, face, model, or body shown wearing them.`
+        ? `The person's face, hair, skin tone, and body belong ONLY to ${faceTags} — this is who appears in the video. Use ${faceTags} for their identity and build ONLY; do NOT copy the clothes they happen to wear in that photo — their entire outfit comes exclusively from the garment reference images below. The remaining reference images are clothing swatches: copy the garments exactly, but completely IGNORE any person, face, model, or body shown wearing them.`
         : `The person's face and identity belong ONLY to ${faceTags}.`)
     : '';
 
@@ -859,7 +859,7 @@ async function handleRequest(req: Request): Promise<Response> {
       heightClause,
       ageClause,
       productClauses.length > 0
-        ? `Dress them in: ${productClauses.join(', ')}. Match the colors, silhouette, and details of each reference garment.`
+        ? `Dress them in all ${productClauses.length} of these garments, worn together in the same shot — do not omit or substitute any piece, and never leave them in a plain tank top or undershirt: ${productClauses.join(', ')}. Match the colors, silhouette, and details of each reference garment.`
         : 'Dress them in the provided products.',
       `Natural full-body motion, ${durationSeconds}-second portrait clip${styleSuffix}.`,
     ].filter(Boolean).join(' ');
