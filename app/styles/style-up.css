@@ -2492,11 +2492,11 @@ html[data-app="style"] .su-thread-head--style {
   transition: opacity 180ms ease, transform 180ms ease, padding 180ms ease, min-height 180ms ease;
 }
 html[data-app="style"] .su-thread-head--style.is-scrolled {
-  opacity: 0.0;
-  transform: translateY(-100%);
-  pointer-events: none;
-  min-height: 0;
-  padding-top: 0; padding-bottom: 0;
+  /* Shrink to reclaim a little space on scroll, but STAY visible and tappable:
+     the back arrow is the only way back to the roster (see note above), and it
+     must stay reachable even while a look is generating and the transcript is
+     auto-scrolled. Hiding the whole header stranded it off-screen. */
+  padding-top: 6px; padding-bottom: 6px;
 }
 .su-thread-profile {
   margin-left: auto;
