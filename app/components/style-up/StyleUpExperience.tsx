@@ -80,7 +80,7 @@ import { matchHeight, matchWeight } from '~/constants/stats';
 import { getUserGender, updateUserGender, type UserGender } from '~/services/genders';
 import {
   listUserUploads, getUserSlots, saveUserSlots, uploadUserPhoto, deleteUserUpload, validateSelfie,
-  getGeneration, cancelGeneration,
+  getGeneration, cancelGeneration, isGenerationInFlight,
   type UserGeneration,
 } from '~/services/user-generations';
 import { promoteGenerationToLook } from '~/services/promote-generation';
@@ -821,7 +821,10 @@ export function StyleUpExperience({
     if (m.kind !== 'render' || !m.renderGenerationId) return false;
     if (canceledIds.has(m.renderGenerationId)) return false;
     const r = renders[m.renderGenerationId];
-    return !r || (r.status !== 'done' && r.status !== 'failed');
+    // A zombie 'pending' row (lost webhook / never terminalized) must stop
+    // counting as in-flight past GENERATION_STALE_MS, or the composer stays
+    // blocked forever. isGenerationInFlight applies that staleness cutoff.
+    return !r || isGenerationInFlight(r);
   });
   const pendingRender = activeGens.length > 0;
 
@@ -1409,26 +1412,33 @@ export function StyleUpExperience({
     lastRenderSigRef.current = sig;
     setGenLook(true);
     setRenderError(null);
-    await beat();
-    await sendStylistText(threadId, 'Love it, putting your full look together now ✨');
-    const { error } = await startFullLookRender({ threadId, shopperUserId: userId, products: uniq, scene });
-    if (error) {
-      setRenderError(error);
-      await sendStylistText(threadId, `Hmm, I couldn't start that render, ${error}`);
+    try {
+      await beat();
+      await sendStylistText(threadId, 'Love it, putting your full look together now ✨');
+      const { error } = await startFullLookRender({ threadId, shopperUserId: userId, products: uniq, scene });
+      if (error) {
+        setRenderError(error);
+        await sendStylistText(threadId, `Hmm, I couldn't start that render, ${error}`);
+        return;
+      }
+      // Render is in flight (the progress bubble + the generations tray cover it).
+      // Unblock the composer NOW, before the cooking chatter, so the wait feels
+      // alive — three short messages, each with its own typing bubble + a natural
+      // pause, so it reads like the stylist is really texting you.
       setGenLook(false);
-      return;
+      await beat();
+      await sendStylistText(threadId, "Alright, it's cooking now. This one takes a few minutes.");
+      await beat();
+      await sendStylistText(threadId, 'Want to start another look while we wait?');
+      await beat();
+      await sendStylistText(threadId, "Tell me a new vibe, or tap a piece to swap and I'll pull a few options.");
+    } finally {
+      // Safety net: guarantee the "styling…" gate clears even if a sendStylistText
+      // or the render call rejects — otherwise genLook stays true and the thread
+      // freezes with the composer blocked. (The mid setGenLook(false) above still
+      // handles the happy-path timing.)
+      setGenLook(false);
     }
-    // Render is in flight (the progress bubble + the generations tray cover it).
-    // Re-engage while it cooks so the wait feels alive — three short messages,
-    // each with its own typing bubble + a natural pause between, so it reads
-    // like the stylist is really texting you (not one wall of text).
-    setGenLook(false);
-    await beat();
-    await sendStylistText(threadId, "Alright, it's cooking now. This one takes a few minutes.");
-    await beat();
-    await sendStylistText(threadId, 'Want to start another look while we wait?');
-    await beat();
-    await sendStylistText(threadId, "Tell me a new vibe, or tap a piece to swap and I'll pull a few options.");
   }, [threadId, userId, genLook, pendingRender, triggerStylist, beat]);
 
   // The pieces currently in the look, the stylist's product picks, excluding
@@ -1604,14 +1614,18 @@ export function StyleUpExperience({
     setRenderError(null);
     setChosenBySlot(prev => ({ ...prev, [role]: chosen.id as string }));
     rejectIds(siblings.filter(o => o.id !== chosen.id).map(o => o.id)); // remember the passed-over options
-    await beat();
-    await sendStylistText(threadId, `Great pick, restyling you with the ${chosen.brand || chosen.name || 'new piece'} now ✨`);
-    const { error } = await startFullLookRender({ threadId, shopperUserId: userId, products: assembleLook(), replace: { role, product: chosen }, scene: chosenScene });
-    if (error) {
-      setRenderError(error);
-      await sendStylistText(threadId, `Couldn't render that, ${error}`);
+    try {
+      await beat();
+      await sendStylistText(threadId, `Great pick, restyling you with the ${chosen.brand || chosen.name || 'new piece'} now ✨`);
+      const { error } = await startFullLookRender({ threadId, shopperUserId: userId, products: assembleLook(), replace: { role, product: chosen }, scene: chosenScene });
+      if (error) {
+        setRenderError(error);
+        await sendStylistText(threadId, `Couldn't render that, ${error}`);
+      }
+    } finally {
+      // Never leave genLook stuck true on a thrown await — that freezes the thread.
+      setGenLook(false);
     }
-    setGenLook(false);
   }, [threadId, userId, genLook, pendingRender, assembleLook, rejectIds, chosenScene, beat]);
 
   // Send the composer draft — or `override` (the quick-reply chips), which
@@ -1739,7 +1753,9 @@ export function StyleUpExperience({
     const stillPending = (id: string) => {
       if (canceledIds.has(id)) return false;
       const r = rendersRef.current[id];
-      return !r || (r.status !== 'done' && r.status !== 'failed');
+      // Stop polling a stale zombie row (see isGenerationInFlight) — otherwise
+      // tick() re-queries a never-terminalizing generation every 3s forever.
+      return !r || isGenerationInFlight(r);
     };
     if (suspended || !ids.some(stillPending)) return;
     let cancelled = false;
@@ -2799,7 +2815,11 @@ export function StyleUpExperience({
                                 url: pc.url ?? '',
                                 image: pc.image ?? undefined,
                               } as Product;
-                              const saved = !!pc.id && isProductBookmarked(asBk);
+                              // Bookmarks are keyed by brand::name (id-independent),
+                              // and the toggle below never gated on id — so gating the
+                              // *display* on pc.id made id-less pieces toggle silently
+                              // with no filled state. Reflect the store directly.
+                              const saved = isProductBookmarked(asBk);
                               return (
                                 <button
                                   type="button"
@@ -2834,7 +2854,10 @@ export function StyleUpExperience({
               const you = p?.you ?? [];
               const done = r?.status === 'done' && r.video_url;
               const canceled = m.renderGenerationId ? canceledIds.has(m.renderGenerationId) : false;
-              const failed = r?.status === 'failed';
+              // A stale non-terminal row (zombie: lost webhook, never finished)
+              // flips to the error state instead of spinning forever, so Stop is
+              // no longer the only escape.
+              const failed = r?.status === 'failed' || (!!r && r.status !== 'done' && !isGenerationInFlight(r));
               const prog = !done && !failed && !canceled
                 ? generationProgress(r?.created_at ?? m.createdAt, r?.duration_seconds ?? 10)
                 : null;
