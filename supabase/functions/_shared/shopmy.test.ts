@@ -39,6 +39,8 @@ Deno.test('maps the merchant PDP, never the affiliate link', () => {
   assert(m.currency === 'USD', 'currency');
   assert(m.type === 'Clogs', 'type from Category_name');
   assert(Array.isArray(m.images) && m.images.length === 1, 'exactly one image');
+  assert(m.raw_data.shopmy.merchant_name === 'Mytheresa', `merchant_name should be the retailer, got ${m.raw_data.shopmy.merchant_name}`);
+  assert(m.raw_data.shopmy.merchant_domain === 'mytheresa.com', 'merchant_domain still present');
 });
 
 Deno.test('strips the BRAND | prefix from the title', () => {
@@ -155,5 +157,9 @@ Deno.test('keeps curation context in raw_data', () => {
   assert(m.raw_data.shopmy.collection_name === 'The Shoe Diary', 'collection name kept');
   assert(m.raw_data.shopmy.section_name === "Bobbi's Closet", 'section name kept');
   assert(m.raw_data.shopmy.curator === 'justbobbidotcom', 'curator kept');
-  assert(typeof m.raw_data.shopmy.affiliate_link !== 'undefined', 'their link kept as provenance');
+  // affiliate_link rotates between identical fetches of the same pin (verified
+  // against the live ShopMy API), so it is deliberately NOT stored - keeping it
+  // would make every re-sync look like a change and re-fire the products
+  // trigger fan-out for no reason. We never use it as our outbound link anyway.
+  assert(!('affiliate_link' in m.raw_data.shopmy), 'affiliate_link must not be stored');
 });

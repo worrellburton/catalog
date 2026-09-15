@@ -184,9 +184,12 @@ export function mapPin(pin: ShopMyPin, ctx: PinContext): MappedProduct | { skip:
         collection_id: ctx.collectionId,
         collection_name: ctx.collectionName,
         section_name: ctx.sectionName,
-        // Provenance only. Their Rakuten publisher ID - never used as our link.
-        affiliate_link: pin.affiliate_link ?? null,
+        // NOTE: ShopMy's affiliate_link is deliberately NOT stored. It rotates
+        // between identical fetches, so keeping it makes every re-sync look
+        // like a change and re-fires the products trigger fan-out. We never
+        // use it anyway — it carries ShopMy's own Rakuten publisher ID.
         merchant_domain: pin.domain ?? pin.merchant_data?.domain ?? null,
+        merchant_name: pin.merchant_data?.name ?? null,
         department: p.Department_name ?? null,
       },
     },
