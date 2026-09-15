@@ -822,6 +822,23 @@ function isNonProductLink(link: string): boolean {
   return false;
 }
 
+/**
+ * ShopMy's API hands out raw S3 URLs that are NOT publicly readable — a bare
+ * GET returns 403 AccessDenied and no header unlocks it. The browser loads the
+ * same object from their CDN. Rewrite to it, or verify-product-image marks
+ * every row needs_review:blocked and no ShopMy product can pass
+ * product_ready_for_feed.
+ *
+ *   production-shopmyshelf-<bucket>.s3.<region>.amazonaws.com/<key>
+ *     ->  https://static.shopmy.us/<bucket>/<key>
+ */
+function cdnImageUrl(raw: string): string {
+  const m = raw.match(
+    /^https?:\/\/production-shopmyshelf-([a-z0-9-]+)\.s3\.[a-z0-9-]+\.amazonaws\.com\/(.+)$/i,
+  );
+  return m ? `https://static.shopmy.us/${m[1]}/${m[2]}` : raw;
+}
+
 const CURRENCY_SYMBOL: Record<string, string> = {
   USD: '$', CAD: '$', AUD: '$', EUR: '€', GBP: '£', JPY: '¥',
 };
@@ -874,8 +891,9 @@ export function mapPin(pin: ShopMyPin, ctx: PinContext): MappedProduct | { skip:
   if (!rawTitle) return { skip: 'no_title' };
   const name = stripBrandPrefix(rawTitle, brand);
 
-  const image = pin.image ?? null;
-  if (!image) return { skip: 'no_image' };
+  const rawImage = pin.image ?? null;
+  if (!rawImage) return { skip: 'no_image' };
+  const image = cdnImageUrl(rawImage);
 
   return {
     url,

@@ -111,6 +111,23 @@ the design:
 - **Exactly one image per pin.** `image`, `original_image` and
   `detailed_image_data.image` were the same URL on every pin inspected. There is
   no gallery.
+- **The image URL the API returns is NOT publicly fetchable.** It points at a raw
+  S3 object (`production-shopmyshelf-*.s3.*.amazonaws.com/<key>`) that returns
+  `403 AccessDenied` to any anonymous GET — no `Referer`, `Origin` or User-Agent
+  unlocks it. The browser loads the same object from their CDN, and the S3 key
+  maps straight onto it:
+
+  ```
+  production-shopmyshelf-<bucket>.s3.<region>.amazonaws.com/<key>
+    ->  https://static.shopmy.us/<bucket>/<key>
+  ```
+
+  Verified 2026-09-15 for both buckets: `pins` and `uploads` return HTTP 200.
+  **The mapper must rewrite it.** Left raw, `verify-product-image` marks every
+  row `image_verified=false` / `needs_review:blocked`, which fails
+  `product_ready_for_feed` — so no ShopMy product could ever reach the feed, and
+  the image could not be re-hosted either. Found by the Task 7 one-collection
+  checkpoint, not by any dry run.
 - **No description**, no materials, no styling or occasion metadata.
 - **No gender field.** `Department_name` is "Footwear", not gendered.
 - **Roughly 14% of pins are incomplete.** In the 14-pin sample collection, two had
