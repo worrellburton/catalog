@@ -1302,21 +1302,47 @@ function isShopMyUrl(raw: string): boolean {
 
 - [ ] **Step 3: Branch in the submit handler**
 
-Reuse the existing `catalogConfirm` / `catalogAlert` helpers the panel already
-imports — no new preview markup or state. In `handleAdd`, before the existing
-`createProfileCrawlJob` call:
+First, a helper — `supabase.functions.invoke()` nulls `data` and throws
+`FunctionsHttpError` for **any** non-2xx (`FunctionsClient.js:268`), and that
+error's `.message` is the fixed string `"Edge Function returned a non-2xx status
+code"`. The real body is only on `.context`. `shopmy-ingest` returns its
+**partial-failure summary at HTTP 500**, so without this the operator is told
+"failed" and never learns that rows already landed — then re-runs, re-driving the
+whole throttled batch and its trigger fan-out.
+
+```tsx
+/** Recover an edge function's JSON body from a non-2xx invoke() error. */
+async function edgeBody(err: unknown): Promise<Record<string, any> | null> {
+  const ctx = (err as { context?: Response })?.context;
+  if (!ctx || typeof ctx.json !== 'function') return null;
+  try { return await ctx.json(); } catch { return null; }
+}
+```
+
+Add a busy flag alongside the existing `busyId` state, so the newly high-stakes
+add action cannot be double-submitted during the un-indicated dry-run round trip:
+
+```tsx
+  const [adding, setAdding] = useState(false);
+```
+
+Then in `handleAdd`, before the existing `createProfileCrawlJob` call:
 
 ```tsx
     if (isShopMyUrl(url)) {
       // ShopMy publishes a JSON API, so it never needs the AI crawl.
       // Always dry-run first, show the operator the counts, and write only on
       // an explicit confirm — one shop is ~424 products.
+      if (adding) return;
+      setAdding(true);
       try {
-        const { data: preview, error } = await supabase.functions.invoke('shopmy-ingest', {
+        const { data, error } = await supabase.functions.invoke('shopmy-ingest', {
           body: { url, dry_run: true },
         });
-        if (error) throw error;
-        if (!preview?.success) throw new Error(preview?.error ?? 'preview failed');
+        const preview = data ?? (error ? await edgeBody(error) : null);
+        if (!preview?.success) {
+          throw new Error(preview?.error ?? (error as Error)?.message ?? 'preview failed');
+        }
 
         const skipped = Object.entries(preview.skipped ?? {})
           .map(([reason, n]) => `${n} ${reason}`)
@@ -1331,22 +1357,31 @@ imports — no new preview markup or state. In `handleAdd`, before the existing
         });
         if (!ok) return;
 
-        const { data: run, error: runErr } = await supabase.functions.invoke('shopmy-ingest', {
+        const { data: runData, error: runErr } = await supabase.functions.invoke('shopmy-ingest', {
           body: { url, dry_run: false },
         });
-        if (runErr) throw runErr;
+        // A 500 here still carries inserted/merged for the batches that DID
+        // commit — read the body rather than reporting a flat failure.
+        const run = runData ?? (runErr ? await edgeBody(runErr) : null);
+        if (!run) throw runErr ?? new Error('ingest returned no response');
         void catalogAlert({
-          title: run?.success ? 'Ingest complete' : 'Ingest partially failed',
-          message: `${run?.inserted ?? 0} added, ${run?.merged ?? 0} merged.` +
-            (run?.error ? `\n\n${run.error}` : ''),
+          title: run.success ? 'Ingest complete' : 'Ingest partially failed',
+          message: `${run.inserted ?? 0} added, ${run.merged ?? 0} merged.` +
+            (run.error ? `\n\n${run.error}` : ''),
         });
         loadData();
       } catch (e) {
+        console.error('ShopMy ingest failed:', e);
         void catalogAlert({ title: 'ShopMy ingest failed', message: (e as Error).message });
+      } finally {
+        setAdding(false);
       }
       return;
     }
 ```
+
+Gate the "New Profile Crawl" button on `adding` too, matching the existing
+`busyId` pattern used by the retry and delete row buttons.
 
 The dry-run-then-confirm sequence is required: never write on first submit.
 
