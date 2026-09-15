@@ -76,6 +76,17 @@ describe('nonProductUrlReason', () => {
     expect(nonProductUrlReason('https://example.com/search')).not.toBeNull();
     expect(nonProductUrlReason('https://example.com/')).toBe('site homepage');
     expect(nonProductUrlReason('https://example.com/cart')).not.toBeNull();
+    expect(nonProductUrlReason('https://example.com/cart/items')).not.toBeNull();
+  });
+
+  it('matches bad prefixes on a path boundary, not as a substring', () => {
+    // Real product slugs that merely start with a bad prefix must pass.
+    expect(nonProductUrlReason('https://example.com/cartier-tank-watch-p12345')).toBeNull();
+    expect(nonProductUrlReason('https://example.com/about-face-blush-palette')).toBeNull();
+    expect(nonProductUrlReason('https://example.com/contactless-card-case')).toBeNull();
+    expect(nonProductUrlReason('https://example.com/newsboy-cap')).toBeNull();
+    expect(nonProductUrlReason('https://example.com/blogger-jeans')).toBeNull();
+    expect(nonProductUrlReason('https://example.com/accountancy-branded-tee')).toBeNull();
   });
 
   it('still requires /dp/ on Amazon', () => {
@@ -115,8 +126,13 @@ In `app/utils/productUrl.ts`, remove `'/s/'` from `badPrefixes` and drop the now
     '/account',
     '/customer/',
   ];
+  // Match on a path BOUNDARY only — exact, or the prefix followed by "/".
+  // A bare startsWith() would reject real product slugs: "/cartier-tank-watch"
+  // starts with "/cart", "/newsboy-cap" with "/news", "/blogger-jeans" with
+  // "/blog". The old code avoided this with an inner exact-match gate; keep
+  // that protection.
   for (const p of badPrefixes) {
-    if (path === p || path.startsWith(p + '/') || path.startsWith(p)) {
+    if (path === p || path.startsWith(p + '/')) {
       return `non-product path "${p}"`;
     }
   }
@@ -124,8 +140,9 @@ In `app/utils/productUrl.ts`, remove `'/s/'` from `badPrefixes` and drop the now
   // Amazon: real product pages contain /dp/ or /gp/product/. Amazon's own
   // search lives at /s — scoped here, not globally, because /s/<slug>/<id>
   // is Nordstrom's and Nordstrom Rack's canonical product URL format.
+  // `path` is pathname only and never contains "?", so no "/s?" case exists.
   if (host === 'amazon.com' || host.endsWith('.amazon.com')) {
-    if (path === '/s' || path.startsWith('/s/') || path.startsWith('/s?')) {
+    if (path === '/s' || path.startsWith('/s/')) {
       return 'Amazon search page';
     }
     if (!path.includes('/dp/') && !path.includes('/gp/product/')) {
