@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
+import { supabase } from '~/utils/supabase';
 import { catalogAlert, catalogConfirm } from '~/components/CatalogDialog';
 import {
   listCrawlJobs,
@@ -51,6 +52,16 @@ function timeAgo(iso: string | null): string {
   if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
   if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+/** ShopMy publishes a JSON API, so it never needs the AI crawl. */
+function isShopMyUrl(raw: string): boolean {
+  try {
+    const host = new URL(raw).hostname.toLowerCase().replace(/^www\./, '');
+    return host === 'shopmy.us' || host === 'shop.my';
+  } catch {
+    return false;
+  }
 }
 
 function AddProfileModal({
@@ -148,6 +159,46 @@ export default function ProfileCrawlsPanel() {
   }, [loadData]);
 
   const handleAdd = async (url: string, name: string) => {
+    if (isShopMyUrl(url)) {
+      // ShopMy publishes a JSON API, so it never needs the AI crawl.
+      // Always dry-run first, show the operator the counts, and write only on
+      // an explicit confirm — one shop is ~424 products.
+      try {
+        const { data: preview, error } = await supabase.functions.invoke('shopmy-ingest', {
+          body: { url, dry_run: true },
+        });
+        if (error) throw error;
+        if (!preview?.success) throw new Error(preview?.error ?? 'preview failed');
+
+        const skipped = Object.entries(preview.skipped ?? {})
+          .map(([reason, n]) => `${n} ${reason}`)
+          .join(', ') || 'none';
+
+        const ok = await catalogConfirm({
+          title: `Ingest ${preview.mapped} products from ${preview.curator}?`,
+          message:
+            `${preview.collections} collections · ${preview.pins} pins · ` +
+            `${preview.mapped} will be added.\nSkipped: ${skipped}.\n\n` +
+            `Products land inactive and still need curation before they reach the feed.`,
+        });
+        if (!ok) return;
+
+        const { data: run, error: runErr } = await supabase.functions.invoke('shopmy-ingest', {
+          body: { url, dry_run: false },
+        });
+        if (runErr) throw runErr;
+        void catalogAlert({
+          title: run?.success ? 'Ingest complete' : 'Ingest partially failed',
+          message: `${run?.inserted ?? 0} added, ${run?.merged ?? 0} merged.` +
+            (run?.error ? `\n\n${run.error}` : ''),
+        });
+        loadData();
+      } catch (e) {
+        void catalogAlert({ title: 'ShopMy ingest failed', message: (e as Error).message });
+      }
+      return;
+    }
+
     try {
       const job = await createProfileCrawlJob(url, name || undefined);
       await triggerProfileCrawl(job.id, url, name || undefined);
