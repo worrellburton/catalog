@@ -257,6 +257,11 @@ export default function ProfileCrawlsPanel() {
 
       {shopMyUrl && (
         <ShopMyIngest
+          // Force a fresh instance per URL — without this, retrying a
+          // second ShopMy row while the panel is open reuses the prior
+          // instance's job/landed/timer state (React only remounts on a
+          // key change, not a prop change).
+          key={shopMyUrl}
           url={shopMyUrl}
           onClose={() => { setShopMyUrl(null); loadData(); }}
           onDone={loadData}

@@ -27,6 +27,9 @@ interface LandedRow {
   id: string; name: string | null; brand: string | null; price: string | null;
   image_url: string | null; image_verified: boolean | null; image_verify_note: string | null;
 }
+/** The write invocation's response — a separate call from the preview, so
+ * it can report failures (and a lower mapped count) the preview never saw. */
+interface RunResult { failures?: string[]; }
 
 /** Recover an edge function's JSON body from a non-2xx invoke() error. */
 async function edgeBody(err: unknown): Promise<Record<string, unknown> | null> {
@@ -50,6 +53,7 @@ export default function ShopMyIngest({ url, onClose, onDone }:
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(true);
   const [job, setJob] = useState<CrawlJob | null>(null);
+  const [run, setRun] = useState<RunResult | null>(null);
   const [landed, setLanded] = useState<LandedRow[]>([]);
   // Non-fatal: the products list going stale (RLS change, schema drift)
   // shouldn't clobber a more important `error` or stop the progress bar,
@@ -82,8 +86,27 @@ export default function ShopMyIngest({ url, onClose, onDone }:
 
   // ── poll the job row + the products it is writing ──────────────────────
   const poll = useCallback(async (jobId: string, curator: string) => {
-    const fresh = await getCrawlJob(jobId).catch(() => null);
+    let fresh: CrawlJob | null = null;
+    let deleted = false;
+    try {
+      fresh = await getCrawlJob(jobId);
+    } catch (e) {
+      // PGRST116 = PostgREST `.single()` found 0 rows — the job row was
+      // deleted mid-run (the Delete button sits right in this panel). That's
+      // the one case worth stopping the poll for. Any other error here
+      // (network blip, cold start, timeout) is transient: swallow it and
+      // let the next tick retry — the run can still be alive server-side
+      // even when one poll request fails, and clearing the interval here
+      // would freeze the bar without ever reaching a terminal state.
+      if ((e as { code?: string })?.code === 'PGRST116') deleted = true;
+    }
     if (fresh) setJob(fresh);
+    if (deleted) {
+      if (timer.current) { clearInterval(timer.current); timer.current = null; }
+      setError('This crawl job was deleted.');
+      onDone();
+      return;
+    }
     const { data, error: productsErr } = await supabase!
       .from('products')
       .select('id, name, brand, price, image_url, image_verified, image_verify_note')
@@ -113,7 +136,7 @@ export default function ShopMyIngest({ url, onClose, onDone }:
   const start = useCallback(async () => {
     if (!preview || startingRef.current) return;
     startingRef.current = true;
-    setBusy(true); setError(null);
+    setBusy(true); setError(null); setRun(null);
     // Declared outside try so `finally` can see it — stays undefined if
     // createProfileCrawlJob itself throws, which is exactly the case the
     // finally-block re-poll below must not fire for.
@@ -134,9 +157,16 @@ export default function ShopMyIngest({ url, onClose, onDone }:
       const run = data ?? (err ? await edgeBody(err) : null);
       if (!run) throw err ?? new Error('ingest returned no response');
       if (run.error) setError(run.error);
+      // Surfaced in the terminal view below — a collection that 5xx'd past
+      // its retries lands here, and its pins never reached `mapped`.
+      setRun(run as RunResult);
     } catch (e) {
       setError((e as Error).message);
-      if (timer.current) { clearInterval(timer.current); timer.current = null; }
+      // Do NOT clear the interval here — progress lives in the crawl_jobs
+      // row precisely so a dropped invoke() response (or the function
+      // hitting its wall-clock limit mid-batch) doesn't lose a run that's
+      // still alive server-side. Let poll() keep going; it reaches a
+      // terminal status (done/failed/stuck) on its own.
     } finally {
       setBusy(false);
       startingRef.current = false;
@@ -155,6 +185,15 @@ export default function ShopMyIngest({ url, onClose, onDone }:
 
   const phase: IngestPhase | null = job ? phaseFor(job, INGEST_ESTIMATED_SECONDS) : null;
   const pct = job ? percentFor(job) : 0;
+  // `||`, not `??` — a freshly-created job row's total_urls defaults to 0,
+  // and 0 must fall through to the previewed count instead of showing "0/0".
+  const total = job ? (job.total_urls || preview?.mapped) : undefined;
+  // The write run is a SEPARATE invocation from the preview and refetches
+  // every collection — a collection that 5xx's past its retries this time
+  // pushes its pins to `failures`, and total_urls ends up lower than what
+  // the operator confirmed in the preview. Surface that gap rather than
+  // silently displaying only the (already-adjusted) smaller number.
+  const shortfall = !!job?.total_urls && preview != null && job.total_urls !== preview.mapped;
 
   return (
     <div className="admin-section">
@@ -197,7 +236,7 @@ export default function ShopMyIngest({ url, onClose, onDone }:
               }} />
             </div>
             <span className="admin-form-hint" style={{ margin: 0, whiteSpace: 'nowrap' }}>
-              {job.scraped_urls} / {job.total_urls ?? preview?.mapped ?? '?'} · {phase}
+              {job.scraped_urls} / {total ?? '?'}{shortfall ? ` (${preview?.mapped} expected)` : ''} · {phase}
             </span>
           </div>
           {phase === 'stuck' && (
@@ -210,6 +249,24 @@ export default function ShopMyIngest({ url, onClose, onDone }:
             <p className="admin-form-hint">
               Nothing new to add — these products are already in the catalog.
             </p>
+          )}
+          {phase === 'done' && job.scraped_urls > 0 && total != null && job.scraped_urls < total && (
+            <p className="admin-form-hint">
+              The bar reads 100% because the run finished — only {job.scraped_urls} of {total} needed
+              a write; the rest were already present and unchanged.
+            </p>
+          )}
+          {run?.failures && run.failures.length > 0 && (
+            <div className="admin-form-error">
+              <strong>
+                {run.failures.length} collection{run.failures.length === 1 ? '' : 's'} failed to load
+              </strong>{' '}
+              — {run.failures.length === 1 ? 'its' : 'their'} pins were not ingested and are not
+              counted above:
+              <ul style={{ margin: '4px 0 0', paddingLeft: 18 }}>
+                {run.failures.map((f) => <li key={f}>{f}</li>)}
+              </ul>
+            </div>
           )}
           {productsNote && <p className="admin-form-hint">{productsNote}</p>}
           <LandedTable rows={landed} />
