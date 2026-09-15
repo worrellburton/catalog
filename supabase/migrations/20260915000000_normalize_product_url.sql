@@ -1,0 +1,113 @@
+-- Canonical product-URL normalisation + dedup key.
+--
+-- Normalisation lives HERE and only here. A TypeScript copy would drift from
+-- the index and silently break dedup.
+--
+-- Kept: variant / color / ID / pid and friends identify the product itself;
+-- dropping them collapses genuinely different products onto one URL.
+-- Dropped: click-tracking parameters only.
+
+-- Parse the query string properly rather than regex-stripping fragments in
+-- place. An in-place `[?&]param=value` strip is ORDER-DEPENDENT: when the
+-- tracking param comes first it eats the "?" itself, so
+--   ?utm_source=a&variant=5  ->  /p&variant=5
+--   ?variant=5&utm_source=a  ->  /p?variant=5
+-- Same product, two different keys — and tracking-first is exactly how ad
+-- links (ShopMy's included) are built, so the dedup key would miss them.
+-- Splitting and re-joining also sorts the survivors, making the key
+-- independent of parameter order.
+create or replace function public.normalize_product_url(u text)
+returns text
+language sql
+immutable
+as $$
+  select case when u is null or btrim(u) = '' then null else
+    -- host + path: scheme, www., #fragment and trailing slash removed
+    rtrim(
+      split_part(split_part(regexp_replace(lower(btrim(u)), '^https?://(www\.)?', ''), '#', 1), '?', 1),
+      '/')
+    -- surviving query params, sorted so order never changes the key
+    || coalesce((
+         select '?' || string_agg(kv, '&' order by kv)
+           from unnest(string_to_array(
+                  split_part(split_part(regexp_replace(lower(btrim(u)), '^https?://(www\.)?', ''), '#', 1), '?', 2),
+                  '&')) kv
+          where kv <> ''
+            and split_part(kv, '=', 1) !~
+                '^(utm_[a-z_]*|srsltid|gclid|gbraid|wbraid|fbclid|gad_source|gad_campaignid|irclickid|ranmid|raneaid|ransiteid|cjevent|msclkid|epik|_branch_match_id)$'
+       ), '')
+  end
+$$;
+
+comment on function public.normalize_product_url(text) is
+  'Dedup key for products.url. Strips scheme/www/trailing slash and click-tracking params; KEEPS product-identifying params (variant, color, ID, pid).';
+
+-- ── merge duplicates before the unique index can exist ──────────────────────
+-- 7 colliding pairs measured 2026-09-15. Oldest row wins. Children are
+-- REPOINTED, never cascade-deleted: the losers hold 3 user_generation_products
+-- rows, which are real user data.
+do $$
+declare
+  r record;
+begin
+  for r in
+    with ranked as (
+      select id, normalize_product_url(url) n, created_at,
+             row_number() over (partition by normalize_product_url(url)
+                                order by created_at, id) rn,
+             count(*)    over (partition by normalize_product_url(url)) c
+        from public.products
+       where url is not null
+    )
+    select l.id as loser, w.id as winner
+      from ranked l
+      join ranked w on w.n = l.n and w.rn = 1
+     where l.c > 1 and l.rn > 1
+  loop
+    -- Fill any column the winner is missing from the loser.
+    update public.products w set
+      name              = coalesce(w.name,              l.name),
+      brand             = coalesce(w.brand,             l.brand),
+      description       = coalesce(w.description,       l.description),
+      price             = coalesce(w.price,             l.price),
+      currency          = coalesce(w.currency,          l.currency),
+      image_url         = coalesce(w.image_url,         l.image_url),
+      images            = coalesce(w.images,            l.images),
+      primary_image_url = coalesce(w.primary_image_url, l.primary_image_url),
+      primary_video_url = coalesce(w.primary_video_url, l.primary_video_url),
+      type              = coalesce(w.type,              l.type),
+      gender            = coalesce(w.gender,            l.gender),
+      styling_metadata  = coalesce(w.styling_metadata,  l.styling_metadata),
+      affiliate_url     = coalesce(w.affiliate_url,     l.affiliate_url),
+      is_active         = w.is_active or l.is_active
+      from public.products l
+     where w.id = r.winner and l.id = r.loser;
+
+    -- Repoint children that carry real data. The guard covers the case
+    -- where the winner is already linked to the same parent (generation /
+    -- look) as the loser — repointing would collide with the winner's own
+    -- row there, so that loser row is dropped instead of repointed.
+    update public.user_generation_products set product_id = r.winner
+     where product_id = r.loser
+       and not exists (select 1 from public.user_generation_products x
+                        where x.product_id = r.winner
+                          and x.generation_id = user_generation_products.generation_id);
+    delete from public.user_generation_products where product_id = r.loser;
+
+    update public.look_products set product_id = r.winner
+     where product_id = r.loser
+       and not exists (select 1 from public.look_products x
+                        where x.product_id = r.winner and x.look_id = look_products.look_id);
+    delete from public.look_products where product_id = r.loser;
+
+    -- catalog_products is regenerated by catalog_assign_product(); just drop.
+    delete from public.catalog_products where product_id = r.loser;
+
+    delete from public.products where id = r.loser;
+  end loop;
+end $$;
+
+-- ── the dedup key ───────────────────────────────────────────────────────────
+create unique index if not exists products_normalized_url_uidx
+  on public.products (public.normalize_product_url(url))
+  where url is not null;

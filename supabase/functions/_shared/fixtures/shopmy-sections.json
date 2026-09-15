@@ -1,0 +1,1313 @@
+{
+    "success": true,
+    "sections": [
+        {
+            "id": 2120414,
+            "title": "Favorites",
+            "previewType": "shelf",
+            "isHidden": 0,
+            "smartSectionType": null,
+            "private": 0
+        },
+        {
+            "id": 409,
+            "title": "Bobbi's Closet",
+            "previewType": "shelf",
+            "isHidden": 0,
+            "smartSectionType": null,
+            "private": 0
+        },
+        {
+            "id": 2027545,
+            "title": "Health & Wellness",
+            "previewType": "shelf",
+            "isHidden": 0,
+            "smartSectionType": null,
+            "private": 0
+        },
+        {
+            "id": 2027547,
+            "title": "Home",
+            "previewType": "shelf",
+            "isHidden": 0,
+            "smartSectionType": null,
+            "private": 0
+        },
+        {
+            "id": 2387365,
+            "title": "Dogs",
+            "previewType": "shelf",
+            "isHidden": 0,
+            "smartSectionType": null,
+            "private": 0
+        },
+        {
+            "id": 223979,
+            "title": "Substack",
+            "previewType": "editorial",
+            "isHidden": 0,
+            "smartSectionType": null,
+            "private": 0
+        },
+        {
+            "id": 18629,
+            "title": "Shop My Ig",
+            "previewType": "post",
+            "isHidden": 0,
+            "smartSectionType": null,
+            "private": 0
+        },
+        {
+            "id": 72879,
+            "title": "Jones Road",
+            "previewType": "shelf",
+            "isHidden": 0,
+            "smartSectionType": null,
+            "private": 0
+        },
+        {
+            "id": 2271067,
+            "title": "Discount Codes",
+            "previewType": "editorial",
+            "isHidden": 0,
+            "smartSectionType": null,
+            "private": 0
+        }
+    ],
+    "collections": [
+        {
+            "id": 6985085,
+            "Section_id": 409,
+            "name": "Pants",
+            "image": null,
+            "description": null,
+            "social_links": null,
+            "private": 0,
+            "createdAt": "2026-08-13T16:25:11.000Z",
+            "isArchived": 0,
+            "sortOrderRank": -1786638310000,
+            "Section_previewType": "shelf",
+            "User_id": 446,
+            "User_username": "justbobbidotcom",
+            "User_name": "Bobbi Brown",
+            "User_image": "https://production-shopmyshelf-uploads.s3.us-east-2.amazonaws.com/img-user-deres-446-1726690629276",
+            "lastUpdated": "2026-08-24T20:21:16.000Z",
+            "preview_pins": [
+                {
+                    "id": 78911874,
+                    "image": "https://production-shopmyshelf-pins.s3.us-east-2.amazonaws.com/zoom-78911874-1786638331513-Skyler-Black-1.jpg",
+                    "title": "The Skyler Travel Pant",
+                    "Collection_id": 6985085,
+                    "Product_title": null,
+                    "Product_brand": null,
+                    "Product_category": null,
+                    "Product_id": null,
+                    "imageStyle": "cover"
+                },
+                {
+                    "id": 78912265,
+                    "image": "https://production-shopmyshelf-pins.s3.us-east-2.amazonaws.com/zoom-78912265-1786638418014-ANATOMIE_-Flo_Atomic_Red__Kate_Navy_-9056.jpg",
+                    "title": "The Kate Skinny Cargo Pant",
+                    "Collection_id": 6985085,
+                    "Product_title": null,
+                    "Product_brand": null,
+                    "Product_category": null,
+                    "Product_id": null,
+                    "imageStyle": "cover"
+                },
+                {
+                    "id": 68516753,
+                    "image": "https://production-shopmyshelf-uploads.s3.us-east-2.amazonaws.com/pretty-prod-1766714458058",
+                    "title": "TODD SNYDER | Straight Fit 5-Pocket Linen Pant",
+                    "Collection_id": 6985085,
+                    "Product_title": "Straight Fit 5-Pocket Linen Pant",
+                    "Product_brand": "Todd Snyder",
+                    "Product_category": "Men's Pants",
+                    "Product_id": 422853,
+                    "detailed_image_data": {
+                        "id": 9534733,
+                        "Product_id": 422853,
+                        "image": "https://production-shopmyshelf-uploads.s3.us-east-2.amazonaws.com/pretty-prod-1766714458058",
+                        "style": "contain"
+                    },
+                    "imageStyle": "contain"
+                }
+            ],
+            "total_num_pins": 3
+        },
+        {
+            "id": 4297461,
+            "Section_id": 409,
+            "name": "Bags",
+            "image": null,
+            "description": null,
+            "social_links": null,
+            "private": 0,
+            "createdAt": "2026-03-09T14:46:16.000Z",
+            "isArchived": 0,
+            "sortOrderRank": -1773067575000,
+            "Section_previewType": "shelf",
+            "User_id": 446,
+            "User_username": "justbobbidotcom",
+            "User_name": "Bobbi Brown",
+            "User_image": "https://production-shopmyshelf-uploads.s3.us-east-2.amazonaws.com/img-user-deres-446-1726690629276",
+            "lastUpdated": "2026-04-21T15:08:18.000Z",
+            "preview_pins": [
+                {
+                    "id": 46533993,
+                    "image": "https://production-shopmyshelf-pins.s3.us-east-2.amazonaws.com/zoom-46533993-1773067889911-H-E-260128-1-LR-01_1024x1024.jpg",
+                    "title": "Hermes Evelyne Sellier TPM Bleu Navy Epsom Gold Hardware",
+                    "Collection_id": 4297461,
+                    "Product_title": "Hermes Evelyne Sellier TPM Bag",
+                    "Product_brand": "Madison Avenue Couture",
+                    "Product_category": "Crossbody & Shoulder Bags",
+                    "Product_id": 2176942,
+                    "detailed_image_data": {
+                        "id": 12154334,
+                        "Product_id": 2176942,
+                        "image": "https://madisonavenuecouture.com/cdn/shop/files/H-E-260128-1-LR-01_1024x1024.jpg?v=1770665094",
+                        "style": "contain"
+                    },
+                    "imageStyle": "contain"
+                },
+                {
+                    "id": 46544130,
+                    "image": "https://production-shopmyshelf-uploads.s3.us-east-2.amazonaws.com/pretty-prod-1757463402381",
+                    "title": "PRADA | Cleo Small Leather Shoulder Bag",
+                    "Collection_id": 4297461,
+                    "Product_title": "Cleo Small Leather Shoulder Bag",
+                    "Product_brand": "Prada",
+                    "Product_category": "Crossbody & Shoulder Bags",
+                    "Product_id": 142073,
+                    "detailed_image_data": {
+                        "id": 4263407,
+                        "Product_id": 142073,
+                        "image": "https://production-shopmyshelf-uploads.s3.us-east-2.amazonaws.com/pretty-prod-1757463402381",
+                        "style": "contain"
+                    },
+                    "imageStyle": "contain"
+                },
+                {
+                    "id": 46544170,
+                    "image": "https://production-shopmyshelf-pins.s3.us-east-2.amazonaws.com/zoom-46309065-1772917294846-burgundy-large-ns-park-tote.jpg",
+                    "title": "THE ROW (THEROW.COM) | Large Leather Bag",
+                    "Collection_id": 4297461,
+                    "Product_title": "Large Leather Bag",
+                    "Product_brand": "The Row",
+                    "Product_category": "Tote Bags",
+                    "Product_id": 113387,
+                    "imageStyle": "contain"
+                },
+                {
+                    "id": 46544219,
+                    "image": "https://production-shopmyshelf-pins.s3.us-east-2.amazonaws.com/zoom-46308949-1772917231031-black-large-slouchy-banana-bag.jpg",
+                    "title": "THE ROW | Slouchy Banana Bag",
+                    "Collection_id": 4297461,
+                    "Product_title": "Slouchy Banana Bag",
+                    "Product_brand": "The Row",
+                    "Product_category": "Crossbody & Shoulder Bags",
+                    "Product_id": 48028,
+                    "imageStyle": "contain"
+                },
+                {
+                    "id": 46544268,
+                    "image": "https://production-shopmyshelf-pins.s3.us-east-2.amazonaws.com/zoom-46518699-1773060504667-b2e896b57025b543590363ac7f9c.jpg",
+                    "title": "Herm\u00e8s\nRare 2005 Barenia Picotin 22",
+                    "Collection_id": 4297461,
+                    "Product_title": "Rare 2005 Barenia Picotin 22 (pre-Owned)",
+                    "Product_brand": "Herm\u00e8s",
+                    "Product_category": "Tote Bags",
+                    "Product_id": 2252583,
+                    "imageStyle": "contain"
+                }
+            ],
+            "total_num_pins": 9
+        },
+        {
+            "id": 4132497,
+            "Section_id": 409,
+            "name": "The Shoe Diary",
+            "image": null,
+            "description": null,
+            "social_links": null,
+            "private": 0,
+            "createdAt": "2026-02-25T18:17:00.000Z",
+            "isArchived": 0,
+            "sortOrderRank": -1772044377000,
+            "Section_previewType": "shelf",
+            "User_id": 446,
+            "User_username": "justbobbidotcom",
+            "User_name": "Bobbi Brown",
+            "User_image": "https://production-shopmyshelf-uploads.s3.us-east-2.amazonaws.com/img-user-deres-446-1726690629276",
+            "lastUpdated": "2026-09-08T16:03:44.000Z",
+            "preview_pins": [
+                {
+                    "id": 47677136,
+                    "image": "https://production-shopmyshelf-uploads.s3.us-east-2.amazonaws.com/pretty-prod-1765457335672",
+                    "title": "GUCCI | Sol GG Canvas Clog",
+                    "Collection_id": 4132497,
+                    "Product_title": "Sol GG Canvas Clog",
+                    "Product_brand": "Gucci",
+                    "Product_category": "Clogs",
+                    "Product_id": 236340,
+                    "detailed_image_data": {
+                        "id": 9035295,
+                        "Product_id": 236340,
+                        "image": "https://production-shopmyshelf-uploads.s3.us-east-2.amazonaws.com/pretty-prod-1765457335672",
+                        "style": "contain"
+                    },
+                    "imageStyle": "contain"
+                },
+                {
+                    "id": 47677080,
+                    "image": "https://static.shopmy.us/uploads/pretty-prod-1759002653032",
+                    "title": "GUCCI | Ankle Boot with Horsebit",
+                    "Collection_id": 4132497,
+                    "Product_title": "Ankle Boot with Horsebit",
+                    "Product_brand": "Gucci",
+                    "Product_category": "Boots",
+                    "Product_id": 195608,
+                    "imageStyle": "contain"
+                },
+                {
+                    "id": 46896144,
+                    "image": "https://production-shopmyshelf-pins.s3.us-east-2.amazonaws.com/zoom-46784152-1773176433758-YvoneeSilverProfile.png",
+                    "title": "Yvonne: Silver Metallic",
+                    "Collection_id": 4132497,
+                    "Product_title": "Yvonne Heel",
+                    "Product_brand": "Inez",
+                    "Product_category": "Heels",
+                    "Product_id": 287386,
+                    "imageStyle": "contain"
+                },
+                {
+                    "id": 44674352,
+                    "image": "https://production-shopmyshelf-pins.s3.us-east-2.amazonaws.com/zoom-718996-1666719132290-zoom-584765-1660840351825-c1575d61-0066-4407-9ea4-c386c011932f_020A3226-5191-47B4-80CF-C7A6C0C317B0.webp",
+                    "title": "574 Core",
+                    "Collection_id": 4132497,
+                    "Product_title": null,
+                    "Product_brand": null,
+                    "Product_category": null,
+                    "Product_id": null,
+                    "imageStyle": "contain"
+                },
+                {
+                    "id": 44675034,
+                    "image": "https://production-shopmyshelf-pins.s3.us-east-2.amazonaws.com/zoom-44675034-1772044021892-chypre-sandal--222297Z%2520C9-side-wm-4-0-0-800-800_g.jpg",
+                    "title": "Chypre sandal",
+                    "Collection_id": 4132497,
+                    "Product_title": "Chypre Sandal",
+                    "Product_brand": "Herm\u00e8s",
+                    "Product_category": "Sandals",
+                    "Product_id": 168721,
+                    "detailed_image_data": {
+                        "id": 11669134,
+                        "Product_id": 168721,
+                        "image": "https://assets.hermes.com/is/image/hermesproduct/chypre-sandal--222297Z%20C9-side-wm-4-0-0-800-800_g.jpg",
+                        "style": "cover"
+                    },
+                    "imageStyle": "cover"
+                }
+            ],
+            "total_num_pins": 14
+        },
+        {
+            "id": 4329341,
+            "Section_id": 409,
+            "name": "Jackets, Blazers, Coats",
+            "image": null,
+            "description": null,
+            "social_links": null,
+            "private": 0,
+            "createdAt": "2026-03-11T15:49:52.000Z",
+            "isArchived": 0,
+            "sortOrderRank": -1772042464375,
+            "Section_previewType": "shelf",
+            "User_id": 446,
+            "User_username": "justbobbidotcom",
+            "User_name": "Bobbi Brown",
+            "User_image": "https://production-shopmyshelf-uploads.s3.us-east-2.amazonaws.com/img-user-deres-446-1726690629276",
+            "lastUpdated": "2026-04-18T21:27:47.000Z",
+            "preview_pins": [
+                {
+                    "id": 46904654,
+                    "image": "https://production-shopmyshelf-pins.s3.us-east-2.amazonaws.com/zoom-46904654-1773244934789-nm_4961938_100106_m",
+                    "title": "ALEXANDER MCQUEEN\nCrystal Rose Embroidered Single-breasted Blazer In Black",
+                    "Collection_id": 4329341,
+                    "Product_title": "Crystal Rose Embroidered Single Breasted Blazer",
+                    "Product_brand": "McQueen",
+                    "Product_category": "Blazers",
+                    "Product_id": 1191546,
+                    "detailed_image_data": {
+                        "id": 12267175,
+                        "Product_id": 1191546,
+                        "image": "https://media.neimanmarcus.com/f_auto,q_auto,b_auto,c_pad/w_1200,h_1500/01/nm_4961938_100106_m",
+                        "style": "cover"
+                    },
+                    "imageStyle": "cover"
+                },
+                {
+                    "id": 46918150,
+                    "image": "https://production-shopmyshelf-pins.s3.us-east-2.amazonaws.com/zoom-46918150-1773248832055-chanel_2021_collarless_tweed_jacket_coral_69624_1_master.jpg",
+                    "title": "CHANEL coral pink wool 2021 21B COLLARLESS Tweed Jacket 44 fits L",
+                    "Collection_id": 4329341,
+                    "Product_title": "Collarless Tweed Jacket",
+                    "Product_brand": "CHANEL",
+                    "Product_category": "Coats",
+                    "Product_id": 2191654,
+                    "detailed_image_data": {
+                        "id": 12240042,
+                        "Product_id": 2191654,
+                        "image": "https://a.1stdibscdn.com/chanel-coral-pink-wool-2021-21b-collarless-tweed-jacket-44-fits-l-for-sale/v_13802/v_223071221710426603068/chanel_2021_collarless_tweed_jacket_coral_69624_1_master.jpg?disable=upscale&auto=webp&quality=60&width=1400",
+                        "style": "contain"
+                    },
+                    "imageStyle": "contain"
+                },
+                {
+                    "id": 46918246,
+                    "image": "https://production-shopmyshelf-pins.s3.us-east-2.amazonaws.com/zoom-46918246-1773248861747-CEL323204_1_enlarged.jpg",
+                    "title": "Celine\n\nEvening Jacket",
+                    "Collection_id": 4329341,
+                    "Product_title": "Evening Jacket (Pre-Owned)",
+                    "Product_brand": "Celine",
+                    "Product_category": "Jackets",
+                    "Product_id": 2190043,
+                    "detailed_image_data": {
+                        "id": 12233962,
+                        "Product_id": 2190043,
+                        "image": "https://product-images.therealreal.com/CEL323204_1_enlarged.jpg",
+                        "style": "contain"
+                    },
+                    "imageStyle": "contain"
+                },
+                {
+                    "id": 46918297,
+                    "image": "https://production-shopmyshelf-pins.s3.us-east-2.amazonaws.com/zoom-46918297-1773248878907-s-l400.jpg",
+                    "title": "Saint Laurent Short Jacket in Diamond Embossed Tweed",
+                    "Collection_id": 4329341,
+                    "Product_title": null,
+                    "Product_brand": null,
+                    "Product_category": null,
+                    "Product_id": null,
+                    "imageStyle": "cover"
+                },
+                {
+                    "id": 46918551,
+                    "image": "https://production-shopmyshelf-pins.s3.us-east-2.amazonaws.com/zoom-46918551-1773248967986-WOOL_TWO_BUTTON_BLAZER_NAVY",
+                    "title": "Wool Two-Button Blazer",
+                    "Collection_id": 4329341,
+                    "Product_title": "Wool Two-Button Blazer",
+                    "Product_brand": "Brooks Brothers",
+                    "Product_category": "Blazers",
+                    "Product_id": 448628,
+                    "detailed_image_data": {
+                        "id": 6259062,
+                        "Product_id": 448628,
+                        "image": "https://brooksbrothers.bynder.com/match/WebName/WJ00414_NAVY/WOOL_TWO_BUTTON_BLAZER_NAVY?preset=lg",
+                        "style": "cover"
+                    },
+                    "imageStyle": "cover"
+                }
+            ],
+            "total_num_pins": 10
+        },
+        {
+            "id": 4543483,
+            "Section_id": 409,
+            "name": "Shorts",
+            "image": null,
+            "description": null,
+            "social_links": null,
+            "private": 0,
+            "createdAt": "2026-03-26T20:09:55.000Z",
+            "isArchived": 0,
+            "sortOrderRank": -1772042463062.5,
+            "Section_previewType": "shelf",
+            "User_id": 446,
+            "User_username": "justbobbidotcom",
+            "User_name": "Bobbi Brown",
+            "User_image": "https://production-shopmyshelf-uploads.s3.us-east-2.amazonaws.com/img-user-deres-446-1726690629276",
+            "lastUpdated": "2026-04-21T15:08:43.000Z",
+            "preview_pins": [
+                {
+                    "id": 49275167,
+                    "image": "https://production-shopmyshelf-pins.s3.us-east-2.amazonaws.com/zoom-49275167-1774480008977-KULE_TerryShortsGray_2x_2fb6aae7-33c2-46b5-bf4f-1bdd71144235.png",
+                    "title": "SHOPMY | Kule Terry Cloth Shorts",
+                    "Collection_id": 4543483,
+                    "Product_title": null,
+                    "Product_brand": null,
+                    "Product_category": null,
+                    "Product_id": null,
+                    "imageStyle": "contain"
+                },
+                {
+                    "id": 52229807,
+                    "image": "https://www.net-a-porter.com/variants/images/1647597358999449/in/w1000.jpg",
+                    "title": "NILI LOTAN | Utility Short",
+                    "Collection_id": 4543483,
+                    "Product_title": "Utility Short",
+                    "Product_brand": "NILI LOTAN",
+                    "Product_category": "Shorts",
+                    "Product_id": 293328,
+                    "detailed_image_data": {
+                        "id": 13513635,
+                        "Product_id": 293328,
+                        "image": "https://www.net-a-porter.com/variants/images/1647597358999449/in/w1000.jpg",
+                        "style": "cover"
+                    },
+                    "imageStyle": null
+                }
+            ],
+            "total_num_pins": 2
+        },
+        {
+            "id": 4328881,
+            "Section_id": 409,
+            "name": "Jewelry",
+            "image": null,
+            "description": null,
+            "social_links": null,
+            "private": 0,
+            "createdAt": "2026-03-11T15:17:34.000Z",
+            "isArchived": 0,
+            "sortOrderRank": -1772042461750,
+            "Section_previewType": "shelf",
+            "User_id": 446,
+            "User_username": "justbobbidotcom",
+            "User_name": "Bobbi Brown",
+            "User_image": "https://production-shopmyshelf-uploads.s3.us-east-2.amazonaws.com/img-user-deres-446-1726690629276",
+            "lastUpdated": "2026-09-10T16:51:26.000Z",
+            "preview_pins": [
+                {
+                    "id": 46896619,
+                    "image": "https://production-shopmyshelf-pins.s3.us-east-2.amazonaws.com/zoom-46896619-1773242304339-JumingJackFlashEarrings.jpg",
+                    "title": "The Jumping Jack Flash Earrings",
+                    "Collection_id": 4328881,
+                    "Product_title": "The Jumping Jack Flash Earrings",
+                    "Product_brand": "Roxanne Assoulin",
+                    "Product_category": "Earrings",
+                    "Product_id": 1477695,
+                    "detailed_image_data": {
+                        "id": 8796919,
+                        "Product_id": 1477695,
+                        "image": "https://cdn.shopify.com/s/files/1/0998/6780/files/JumingJackFlashEarrings.jpg?v=1758649772",
+                        "style": "cover"
+                    },
+                    "imageStyle": "contain"
+                },
+                {
+                    "id": 46896658,
+                    "image": "https://production-shopmyshelf-pins.s3.us-east-2.amazonaws.com/zoom-46896658-1773242319376-JumingJackFlashNecklace_Combo.jpg",
+                    "title": "The Jumping Jack Flash Necklace Set",
+                    "Collection_id": 4328881,
+                    "Product_title": "The Jumping Jack Flash Necklace Set",
+                    "Product_brand": "Roxanne Assoulin",
+                    "Product_category": "Necklaces",
+                    "Product_id": 1440715,
+                    "detailed_image_data": {
+                        "id": 8599631,
+                        "Product_id": 1440715,
+                        "image": "https://cdn.shopify.com/s/files/1/0998/6780/files/JumingJackFlashNecklace_Combo.jpg?v=1758658461",
+                        "style": "cover"
+                    },
+                    "imageStyle": "contain"
+                },
+                {
+                    "id": 46896809,
+                    "image": "https://production-shopmyshelf-pins.s3.us-east-2.amazonaws.com/zoom-46896809-1773242365093-Twinkle_Twinkle_In_Silver_Set_Of_Three.jpg",
+                    "title": "Twinkle Twinkle Bracelets in Silver",
+                    "Collection_id": 4328881,
+                    "Product_title": null,
+                    "Product_brand": null,
+                    "Product_category": null,
+                    "Product_id": null,
+                    "imageStyle": "contain"
+                },
+                {
+                    "id": 46897110,
+                    "image": "https://production-shopmyshelf-uploads.s3.us-east-2.amazonaws.com/img-product-1737750110243",
+                    "title": "Baby Bubble Bunch",
+                    "Collection_id": 4328881,
+                    "Product_title": "Baby Bubble Bunch Bracelet",
+                    "Product_brand": "Roxanne Assoulin",
+                    "Product_category": "Bracelets",
+                    "Product_id": 219108,
+                    "detailed_image_data": {
+                        "id": 12259741,
+                        "Product_id": 219108,
+                        "image": "https://roxanneassoulin.com/cdn/shop/files/Baby_Bubble_Bracelet_Bunch_Set_of_3_365x440_crop_center@2x.jpg?v=1694800909",
+                        "style": "contain"
+                    },
+                    "imageStyle": "contain"
+                },
+                {
+                    "id": 47674190,
+                    "image": "https://production-shopmyshelf-pins.s3.us-east-2.amazonaws.com/zoom-47674190-1773674466169-2_36ed74ec-cdbe-41ab-b583-770f7f1ef116.png",
+                    "title": "Classic Silhouette Charm Necklace - Medium",
+                    "Collection_id": 4328881,
+                    "Product_title": "Silhouette Charm Necklace Medium",
+                    "Product_brand": "Le Papier Studio LLC",
+                    "Product_category": "Necklaces",
+                    "Product_id": 973470,
+                    "detailed_image_data": {
+                        "id": 5981883,
+                        "Product_id": 973470,
+                        "image": "https://cdn.shopify.com/s/files/1/0754/6053/products/2_36ed74ec-cdbe-41ab-b583-770f7f1ef116.png?v=1646255123",
+                        "style": "contain"
+                    },
+                    "imageStyle": "contain"
+                }
+            ],
+            "total_num_pins": 26
+        },
+        {
+            "id": 4132211,
+            "Section_id": 409,
+            "name": "Sweater Staples",
+            "image": null,
+            "description": null,
+            "social_links": null,
+            "private": 0,
+            "createdAt": "2026-02-25T18:01:25.000Z",
+            "isArchived": 0,
+            "sortOrderRank": -1772042456500,
+            "Section_previewType": "shelf",
+            "User_id": 446,
+            "User_username": "justbobbidotcom",
+            "User_name": "Bobbi Brown",
+            "User_image": "https://production-shopmyshelf-uploads.s3.us-east-2.amazonaws.com/img-user-deres-446-1726690629276",
+            "lastUpdated": "2026-09-10T16:51:19.000Z",
+            "preview_pins": [
+                {
+                    "id": 44670445,
+                    "image": "https://production-shopmyshelf-pins.s3.us-east-2.amazonaws.com/zoom-33346955-1764364695828-pretty-prod-1764091635483",
+                    "title": "Merino Sweater | UNIQLO US",
+                    "Collection_id": 4132211,
+                    "Product_title": "Merino Sweater",
+                    "Product_brand": "UNIQLO",
+                    "Product_category": "Sweaters",
+                    "Product_id": 205950,
+                    "imageStyle": "contain"
+                },
+                {
+                    "id": 44670539,
+                    "image": "https://production-shopmyshelf-pins.s3.us-east-2.amazonaws.com/zoom-44670539-1772042626132-cq5dam.web.hebebed.1800.1800.jpg",
+                    "title": "Cashmere crew-neck sweater",
+                    "Collection_id": 4132211,
+                    "Product_title": "Crewneck Sweater",
+                    "Product_brand": "Prada",
+                    "Product_category": "Sweaters",
+                    "Product_id": 400340,
+                    "detailed_image_data": {
+                        "id": 11670660,
+                        "Product_id": 400340,
+                        "image": "https://www.prada.com/content/dam/pradabkg_products/P/P24/P24D2P/17O0F0480/P24D2P_17O0_F0480_S_AEO_SLF.jpg/_jcr_content/renditions/cq5dam.web.hebebed.1800.1800.jpg",
+                        "style": "cover"
+                    },
+                    "imageStyle": "cover"
+                },
+                {
+                    "id": 44670882,
+                    "image": "https://production-shopmyshelf-pins.s3.us-east-2.amazonaws.com/zoom-44670882-1772042727329-bf600af6_ac20.jpg",
+                    "title": "The Boxy Crew in Cashmere | Canvas",
+                    "Collection_id": 4132211,
+                    "Product_title": "The Boxy Crew Sweater In Cashmere",
+                    "Product_brand": "Everlane",
+                    "Product_category": "Sweaters",
+                    "Product_id": 286277,
+                    "detailed_image_data": {
+                        "id": 10065150,
+                        "Product_id": 286277,
+                        "image": "https://cdn.shopify.com/s/files/1/0623/7916/3734/files/bf600af6_ac20.jpg?v=1763683203",
+                        "style": "cover"
+                    },
+                    "imageStyle": "cover"
+                },
+                {
+                    "id": 44671269,
+                    "image": "https://production-shopmyshelf-pins.s3.us-east-2.amazonaws.com/zoom-44671269-1772042853859-W-SWT-16-NVY_0089.jpg",
+                    "title": "Mongolian Cashmere Crewneck Sweater",
+                    "Collection_id": 4132211,
+                    "Product_title": "Mongolian Cashmere Crewneck Sweater",
+                    "Product_brand": "Quince",
+                    "Product_category": "Sweaters",
+                    "Product_id": 116423,
+                    "detailed_image_data": {
+                        "id": 11668787,
+                        "Product_id": 116423,
+                        "image": "https://images.quince.com/3nx6wIizGCncMxVGaSEPz4/872e5035c457da6e4a722cd554d7bdce/W-SWT-16-NVY_0089.jpg?w=662&q=50&h=828&reqOrigin=website-ssr",
+                        "style": "cover"
+                    },
+                    "imageStyle": "cover"
+                },
+                {
+                    "id": 44816797,
+                    "image": "https://production-shopmyshelf-pins.s3.us-east-2.amazonaws.com/zoom-44816797-1772119434145-who-run-the-world-crewneck8.png",
+                    "title": "\"who run the world?\" Women's Crewneck",
+                    "Collection_id": 4132211,
+                    "Product_title": "\"Who Run The World?\" Crewneck Sweater",
+                    "Product_brand": "Lingua Franca",
+                    "Product_category": "Sweaters",
+                    "Product_id": 2098886,
+                    "detailed_image_data": {
+                        "id": 11745085,
+                        "Product_id": 2098886,
+                        "image": "https://cdn.shopify.com/s/files/1/1280/1673/files/who-run-the-world-crewneck8.png?v=1727895087",
+                        "style": "contain"
+                    },
+                    "imageStyle": "contain"
+                }
+            ],
+            "total_num_pins": 15
+        },
+        {
+            "id": 4132200,
+            "Section_id": 409,
+            "name": "Short Girl Denim",
+            "image": null,
+            "description": null,
+            "social_links": null,
+            "private": 0,
+            "createdAt": "2026-02-25T18:00:47.000Z",
+            "isArchived": 0,
+            "sortOrderRank": -1772042446000,
+            "Section_previewType": "shelf",
+            "User_id": 446,
+            "User_username": "justbobbidotcom",
+            "User_name": "Bobbi Brown",
+            "User_image": "https://production-shopmyshelf-uploads.s3.us-east-2.amazonaws.com/img-user-deres-446-1726690629276",
+            "lastUpdated": "2026-08-27T20:38:56.000Z",
+            "preview_pins": [
+                {
+                    "id": 46224607,
+                    "image": "https://static.shopmy.us/uploads/7382c62e-08a4-46a8-9e29-6877d0a8aa5e_4122261181052_093_b21.webp",
+                    "title": "MOTHER | Insider Ankle Mid-Rise Straight-Leg Jeans",
+                    "Collection_id": 4132200,
+                    "Product_title": "Insider Ankle Mid-Rise Straight-Leg Jeans",
+                    "Product_brand": "MOTHER",
+                    "Product_category": "Jeans",
+                    "Product_id": 2074295,
+                    "detailed_image_data": {
+                        "id": 11595600,
+                        "Product_id": 2074295,
+                        "image": "https://static.shopmy.us/uploads/7382c62e-08a4-46a8-9e29-6877d0a8aa5e_4122261181052_093_b21.webp",
+                        "style": "cover"
+                    },
+                    "imageStyle": "cover"
+                },
+                {
+                    "id": 47677393,
+                    "image": "https://production-shopmyshelf-uploads.s3.us-east-2.amazonaws.com/pretty-prod-1772576893640",
+                    "title": "LEVI'S | 501 90's Straight Jeans",
+                    "Collection_id": 4132200,
+                    "Product_title": "Button Fly Closure Straight Jeans",
+                    "Product_brand": "Levi's",
+                    "Product_category": "Jeans",
+                    "Product_id": 120637,
+                    "detailed_image_data": {
+                        "id": 11872643,
+                        "Product_id": 120637,
+                        "image": "https://production-shopmyshelf-uploads.s3.us-east-2.amazonaws.com/pretty-prod-1772576893640",
+                        "style": "contain"
+                    },
+                    "imageStyle": "contain"
+                },
+                {
+                    "id": 47677462,
+                    "image": "https://production-shopmyshelf-uploads.s3.us-east-2.amazonaws.com/pretty-prod-1757718676021",
+                    "title": "KHAITE | Abigail High-Rise Straight Jeans",
+                    "Collection_id": 4132200,
+                    "Product_title": "Abigail Stretch Jean",
+                    "Product_brand": "KHAITE",
+                    "Product_category": "Jeans",
+                    "Product_id": 47444,
+                    "detailed_image_data": {
+                        "id": 4397189,
+                        "Product_id": 47444,
+                        "image": "https://production-shopmyshelf-uploads.s3.us-east-2.amazonaws.com/pretty-prod-1757718676021",
+                        "style": "contain"
+                    },
+                    "imageStyle": "contain"
+                },
+                {
+                    "id": 47677421,
+                    "image": "https://static.shopmy.us/uploads/c9bf2090-43cd-40c6-b790-e54c3a36b702_image-1773107907566",
+                    "title": "LEVI'S | 501 Straight Jeans",
+                    "Collection_id": 4132200,
+                    "Product_title": "501 Straight Jeans",
+                    "Product_brand": "Levi's",
+                    "Product_category": "Jeans",
+                    "Product_id": 121288,
+                    "detailed_image_data": {
+                        "id": 12145609,
+                        "Product_id": 121288,
+                        "image": "https://static.shopmy.us/uploads/c9bf2090-43cd-40c6-b790-e54c3a36b702_image-1773107907566",
+                        "style": "contain"
+                    },
+                    "imageStyle": "contain"
+                },
+                {
+                    "id": 44670330,
+                    "image": "https://static.shopmy.us/pins/zoom-44653621-1772037177794-250527_STILL_HERE_17_Tate_in_Indigo_Indigo_2213_35978f45-ddb8-4a08-8e08-8aee6bbee038.jpg",
+                    "title": "STILL HERE | Tate Jeans",
+                    "Collection_id": 4132200,
+                    "Product_title": "Tate Jeans ",
+                    "Product_brand": "Still Here",
+                    "Product_category": "Jeans",
+                    "Product_id": 146200,
+                    "imageStyle": "cover"
+                }
+            ],
+            "total_num_pins": 14
+        },
+        {
+            "id": 4145793,
+            "Section_id": 409,
+            "name": "The Frames",
+            "image": "https://production-shopmyshelf-uploads.s3.us-east-2.amazonaws.com/img-sociallink-1782415825028",
+            "description": null,
+            "social_links": null,
+            "private": 0,
+            "createdAt": "2026-02-26T15:25:43.000Z",
+            "isArchived": 0,
+            "sortOrderRank": -886020983750,
+            "Section_previewType": "shelf",
+            "User_id": 446,
+            "User_username": "justbobbidotcom",
+            "User_name": "Bobbi Brown",
+            "User_image": "https://production-shopmyshelf-uploads.s3.us-east-2.amazonaws.com/img-user-deres-446-1726690629276",
+            "lastUpdated": "2026-02-26T15:28:47.000Z",
+            "preview_pins": [
+                {
+                    "id": 44817186,
+                    "image": "https://production-shopmyshelf-pins.s3.us-east-2.amazonaws.com/zoom-40074845-1769371384619-caddis-readers-b-b-queen-reading-glasses-turtle-classic-0-00-blue-light-reading-glasses-1192254474.jpg",
+                    "title": "B.B. Queen | Reading Glasses",
+                    "Collection_id": 4145793,
+                    "Product_title": "B.B. Queen Glasses",
+                    "Product_brand": "Caddis",
+                    "Product_category": "Glasses",
+                    "Product_id": 796015,
+                    "imageStyle": "contain"
+                },
+                {
+                    "id": 44817347,
+                    "image": "https://production-shopmyshelf-pins.s3.us-east-2.amazonaws.com/zoom-44817347-1772119612073-3151c2473e517cb94e70e631f77c13c3051ff4dc",
+                    "title": "Durand",
+                    "Collection_id": 4145793,
+                    "Product_title": "Durand Eyeglasses",
+                    "Product_brand": "Warby Parker",
+                    "Product_category": "Glasses",
+                    "Product_id": 129764,
+                    "detailed_image_data": {
+                        "id": 11684522,
+                        "Product_id": 129764,
+                        "image": "https://i.warbycdn.com/s/c/3151c2473e517cb94e70e631f77c13c3051ff4dc?quality=80&width=3840",
+                        "style": "contain"
+                    },
+                    "imageStyle": "contain"
+                },
+                {
+                    "id": 44817447,
+                    "image": "https://production-shopmyshelf-pins.s3.us-east-2.amazonaws.com/zoom-44817447-1772119645032-9b5b6421ed62d65ee7e3be24d92640d08d19851d",
+                    "title": "Haskell",
+                    "Collection_id": 4145793,
+                    "Product_title": "Haskell",
+                    "Product_brand": "Warby Parker",
+                    "Product_category": "Glasses",
+                    "Product_id": 157258,
+                    "detailed_image_data": {
+                        "id": 11684715,
+                        "Product_id": 157258,
+                        "image": "https://i.warbycdn.com/s/c/9b5b6421ed62d65ee7e3be24d92640d08d19851d?quality=80&width=3840",
+                        "style": "cover"
+                    },
+                    "imageStyle": "contain"
+                },
+                {
+                    "id": 44817649,
+                    "image": "https://production-shopmyshelf-pins.s3.us-east-2.amazonaws.com/zoom-44817649-1772119712217-caddis-readers-d28-prescription-glasses-turtle-polycarbonate-classic-clear-blue-light-reading-glasses-1130688608.jpg",
+                    "title": "D28 | Prescription Glasses",
+                    "Collection_id": 4145793,
+                    "Product_title": "D28 Compact Glasses",
+                    "Product_brand": "Caddis",
+                    "Product_category": "Glasses",
+                    "Product_id": 134768,
+                    "detailed_image_data": {
+                        "id": 12521914,
+                        "Product_id": 134768,
+                        "image": "https://cdn.shopify.com/s/files/1/2633/2144/files/caddis-readers-d28-prescription-glasses-turtle-polycarbonate-classic-clear-blue-light-reading-glasses-1130688608.jpg?v=1762440296",
+                        "style": "contain"
+                    },
+                    "imageStyle": "contain"
+                },
+                {
+                    "id": 44817688,
+                    "image": "https://production-shopmyshelf-pins.s3.us-east-2.amazonaws.com/zoom-44817688-1772119726744-caddis-readers-bixby-compact-prescription-glasses-turtle-polycarbonate-classic-clear-blue-light-reading-glasses-54026044703088.jpg",
+                    "title": "Bixby | Prescription Glasses",
+                    "Collection_id": 4145793,
+                    "Product_title": "Bixby Glasses",
+                    "Product_brand": "Caddis",
+                    "Product_category": "Glasses",
+                    "Product_id": 134769,
+                    "detailed_image_data": {
+                        "id": 12521915,
+                        "Product_id": 134769,
+                        "image": "https://cdn.shopify.com/s/files/1/2633/2144/files/caddis-readers-bixby-compact-prescription-glasses-turtle-polycarbonate-classic-clear-blue-light-reading-glasses-54026044703088.jpg?v=1762440270",
+                        "style": "contain"
+                    },
+                    "imageStyle": "contain"
+                }
+            ],
+            "total_num_pins": 5
+        },
+        {
+            "id": 4165378,
+            "Section_id": 409,
+            "name": "Dresses + Skirts",
+            "image": null,
+            "description": null,
+            "social_links": null,
+            "private": 0,
+            "createdAt": "2026-02-27T20:20:53.000Z",
+            "isArchived": 0,
+            "sortOrderRank": -221485737062.5,
+            "Section_previewType": "shelf",
+            "User_id": 446,
+            "User_username": "justbobbidotcom",
+            "User_name": "Bobbi Brown",
+            "User_image": "https://production-shopmyshelf-uploads.s3.us-east-2.amazonaws.com/img-user-deres-446-1726690629276",
+            "lastUpdated": "2026-03-11T15:44:46.000Z",
+            "preview_pins": [
+                {
+                    "id": 45034718,
+                    "image": "https://production-shopmyshelf-pins.s3.us-east-2.amazonaws.com/zoom-45034718-1772223685834-R21_00126_W79_CAMI_GOWN_BLACK_f4de0ced-9724-42f4-ab6f-0e7634e30d52.jpg",
+                    "title": "NILI LOTAN | Cami Gown",
+                    "Collection_id": 4165378,
+                    "Product_title": "Cami Gown",
+                    "Product_brand": "NILI LOTAN",
+                    "Product_category": "Dresses",
+                    "Product_id": 106026,
+                    "detailed_image_data": {
+                        "id": 2093080,
+                        "Product_id": 106026,
+                        "image": "https://cdn.shopify.com/s/files/1/0021/7595/9158/files/R21_00126_W79_CAMI_GOWN_BLACK_f4de0ced-9724-42f4-ab6f-0e7634e30d52.jpg?v=1750777872",
+                        "style": "cover"
+                    },
+                    "imageStyle": "contain"
+                },
+                {
+                    "id": 46545240,
+                    "image": "https://www.net-a-porter.com/variants/images/46376663162984912/in/w2000_q60.jpg",
+                    "title": "TWP\nMy Endless Love paneled satin maxi skirt",
+                    "Collection_id": 4165378,
+                    "Product_title": "My Endless Love Satin Maxi Skirt",
+                    "Product_brand": "TWP",
+                    "Product_category": "Skirts",
+                    "Product_id": 323282,
+                    "detailed_image_data": {
+                        "id": 12158999,
+                        "Product_id": 323282,
+                        "image": "https://www.net-a-porter.com/variants/images/46376663162984912/in/w2000_q60.jpg",
+                        "style": "cover"
+                    },
+                    "imageStyle": null
+                },
+                {
+                    "id": 46900946,
+                    "image": "https://production-shopmyshelf-pins.s3.us-east-2.amazonaws.com/zoom-46900946-1773243767584-0400017022875_CHAMPAGNE",
+                    "title": "VINCE | Satin Midi-Skirt",
+                    "Collection_id": 4165378,
+                    "Product_title": "Satin Slip Skirt",
+                    "Product_brand": "Vince",
+                    "Product_category": "Skirts",
+                    "Product_id": 114462,
+                    "detailed_image_data": {
+                        "id": 2171547,
+                        "Product_id": 114462,
+                        "image": "https://cdn.saksfifthavenue.com/is/image/saks/0400017022875_CHAMPAGNE?wid=600&hei=800&qlt=90&resMode=sharp2&op_usm=0.9%2C1.0%2C8%2C0",
+                        "style": "cover"
+                    },
+                    "imageStyle": "contain"
+                },
+                {
+                    "id": 46901342,
+                    "image": "https://production-shopmyshelf-pins.s3.us-east-2.amazonaws.com/zoom-46901342-1773243885916-0400021800916_NAVY_A1",
+                    "title": "ALTUZARRA | Kinski Embellished Maxi Skirt",
+                    "Collection_id": 4165378,
+                    "Product_title": "Kinski Embellished Maxi Skirt",
+                    "Product_brand": "Altuzarra",
+                    "Product_category": "Skirts",
+                    "Product_id": 2189196,
+                    "detailed_image_data": {
+                        "id": 12230768,
+                        "Product_id": 2189196,
+                        "image": "https://cdn.saksfifthavenue.com/is/image/saks/0400021800916_NAVY_A1?wid=600&hei=800&qlt=90&resMode=sharp2&op_usm=0.9%2C1.0%2C8%2C0",
+                        "style": "contain"
+                    },
+                    "imageStyle": "contain"
+                }
+            ],
+            "total_num_pins": 4
+        },
+        {
+            "id": 4329162,
+            "Section_id": 409,
+            "name": "Cardigans",
+            "image": null,
+            "description": null,
+            "social_links": null,
+            "private": 0,
+            "createdAt": "2026-03-11T15:38:34.000Z",
+            "isArchived": 0,
+            "sortOrderRank": 443049509625,
+            "Section_previewType": "shelf",
+            "User_id": 446,
+            "User_username": "justbobbidotcom",
+            "User_name": "Bobbi Brown",
+            "User_image": "https://production-shopmyshelf-uploads.s3.us-east-2.amazonaws.com/img-user-deres-446-1726690629276",
+            "lastUpdated": "2026-03-26T20:22:36.000Z",
+            "preview_pins": [
+                {
+                    "id": 46900475,
+                    "image": "https://production-shopmyshelf-pins.s3.us-east-2.amazonaws.com/zoom-46900475-1773243625686-T000WC6446-WASHABLECASHMERESHRUNKENCARDIGAN-NAVY-5.jpg",
+                    "title": "Washable Cashmere Shrunken Cardigan",
+                    "Collection_id": 4329162,
+                    "Product_title": "Washable Cashmere Shrunken Cardigan",
+                    "Product_brand": "Tibi",
+                    "Product_category": "Cardigans",
+                    "Product_id": 323507,
+                    "detailed_image_data": {
+                        "id": 2591678,
+                        "Product_id": 323507,
+                        "image": "https://cdn.shopify.com/s/files/1/0035/7600/4654/files/T000WC6446-WASHABLECASHMERESHRUNKENCARDIGAN-NAVY-5.jpg?v=1703197057",
+                        "style": "contain"
+                    },
+                    "imageStyle": "cover"
+                },
+                {
+                    "id": 46900613,
+                    "image": "https://production-shopmyshelf-pins.s3.us-east-2.amazonaws.com/zoom-46900613-1773243669291-21244_CashmereButtonCardigan_SoftWhite_AK_02.jpg",
+                    "title": "Cashmere Crewneck Cardigan | Soft White",
+                    "Collection_id": 4329162,
+                    "Product_title": "Cashmere Blend Peplum Cardigan",
+                    "Product_brand": "White & Warren",
+                    "Product_category": "Cardigans",
+                    "Product_id": 198558,
+                    "detailed_image_data": {
+                        "id": 8365696,
+                        "Product_id": 198558,
+                        "image": "https://cdn.shopify.com/s/files/1/0052/8200/5085/files/21244_CashmereButtonCardigan_SoftWhite_AK_02.jpg?v=1757360097",
+                        "style": "cover"
+                    },
+                    "imageStyle": "cover"
+                },
+                {
+                    "id": 46901282,
+                    "image": "https://production-shopmyshelf-pins.s3.us-east-2.amazonaws.com/zoom-46901282-1773243869679-nm_4890375_100101_m",
+                    "title": "Carolina Herrera\nFloral Embroidered Crewneck Cardigan With Pearly Buttons",
+                    "Collection_id": 4329162,
+                    "Product_title": null,
+                    "Product_brand": null,
+                    "Product_category": null,
+                    "Product_id": null,
+                    "imageStyle": "cover"
+                },
+                {
+                    "id": 48656549,
+                    "image": "https://production-shopmyshelf-pins.s3.us-east-2.amazonaws.com/zoom-48656549-1774197421409-Fall2025-91.jpg",
+                    "title": "The Refined Cardi in Bordeaux",
+                    "Collection_id": 4329162,
+                    "Product_title": "The Refined Cardi",
+                    "Product_brand": "SOLD OUT NYC",
+                    "Product_category": "Cardigans",
+                    "Product_id": 621708,
+                    "detailed_image_data": {
+                        "id": 4163871,
+                        "Product_id": 621708,
+                        "image": "https://cdn.shopify.com/s/files/1/0028/9256/2467/files/Fall2025-91.jpg?v=1756495513",
+                        "style": "cover"
+                    },
+                    "imageStyle": "cover"
+                }
+            ],
+            "total_num_pins": 4
+        },
+        {
+            "id": 4145873,
+            "Section_id": 409,
+            "name": "Intimates",
+            "image": null,
+            "description": null,
+            "social_links": null,
+            "private": 0,
+            "createdAt": "2026-02-26T15:31:28.000Z",
+            "isArchived": 0,
+            "sortOrderRank": 1772120003000,
+            "Section_previewType": "shelf",
+            "User_id": 446,
+            "User_username": "justbobbidotcom",
+            "User_name": "Bobbi Brown",
+            "User_image": "https://production-shopmyshelf-uploads.s3.us-east-2.amazonaws.com/img-user-deres-446-1726690629276",
+            "lastUpdated": "2026-05-07T10:50:32.000Z",
+            "preview_pins": [
+                {
+                    "id": 44818263,
+                    "image": "https://production-shopmyshelf-uploads.s3-us-east-2.amazonaws.com/50832c2a-682b-4ae8-bfd3-0b91b52b49b9_Bottom_WhippedBoyShort_White_Ksenia_02_2048x.webp",
+                    "title": "NEGATIVE | Whipped Boy Shorts",
+                    "Collection_id": 4145873,
+                    "Product_title": "Whipped Boy Shorts",
+                    "Product_brand": "Negative",
+                    "Product_category": "Lingerie & Intimates",
+                    "Product_id": 157906,
+                    "imageStyle": "cover"
+                },
+                {
+                    "id": 44818458,
+                    "image": "https://production-shopmyshelf-pins.s3.us-east-2.amazonaws.com/zoom-44818458-1772119986733-SKIMS-PANTY-BYS-1527-RD-OCH_006.jpg",
+                    "title": "BOY SHORT",
+                    "Collection_id": 4145873,
+                    "Product_title": "Cotton Jersey Boy Short",
+                    "Product_brand": "SKIMS",
+                    "Product_category": "Lingerie & Intimates",
+                    "Product_id": 87619,
+                    "detailed_image_data": {
+                        "id": 11684301,
+                        "Product_id": 87619,
+                        "image": "https://skims.imgix.net/s/files/1/0259/5448/4284/products/SKIMS-PANTY-BYS-1527-RD-OCH_006.jpg?v=1657864543&auto=format&q=70&ixlib=react-9.11.0&w=8192",
+                        "style": "cover"
+                    },
+                    "imageStyle": "cover"
+                },
+                {
+                    "id": 46897445,
+                    "image": "https://production-shopmyshelf-pins.s3.us-east-2.amazonaws.com/zoom-46897445-1773242580060-1003273_400007_Ecomm_Detail_W_U_Air_HRBRF_4.2.26.jpg",
+                    "title": "Women's Air High Rise Brief",
+                    "Collection_id": 4145873,
+                    "Product_title": null,
+                    "Product_brand": null,
+                    "Product_category": null,
+                    "Product_id": null,
+                    "imageStyle": "cover"
+                },
+                {
+                    "id": 46902257,
+                    "image": "https://production-shopmyshelf-pins.s3.us-east-2.amazonaws.com/zoom-46902257-1773244154511-1000554_010001_Ecomm_Back_W_U_SS_BSHT_2026.jpg",
+                    "title": "Women's Second Skin Boyshort",
+                    "Collection_id": 4145873,
+                    "Product_title": null,
+                    "Product_brand": null,
+                    "Product_category": null,
+                    "Product_id": null,
+                    "imageStyle": "cover"
+                },
+                {
+                    "id": 49274838,
+                    "image": "https://production-shopmyshelf-pins.s3.us-east-2.amazonaws.com/zoom-49274838-1774479915038-26142834_fpx.tif",
+                    "title": "WACOAL | Women's Inside Job Full Coverage Underwire Bra 855345",
+                    "Collection_id": 4145873,
+                    "Product_title": null,
+                    "Product_brand": null,
+                    "Product_category": null,
+                    "Product_id": null,
+                    "imageStyle": "cover"
+                }
+            ],
+            "total_num_pins": 5
+        },
+        {
+            "id": 4393242,
+            "Section_id": 409,
+            "name": "Accessories",
+            "image": null,
+            "description": null,
+            "social_links": null,
+            "private": 0,
+            "createdAt": "2026-03-16T13:37:49.000Z",
+            "isArchived": 0,
+            "sortOrderRank": 1773668309000,
+            "Section_previewType": "shelf",
+            "User_id": 446,
+            "User_username": "justbobbidotcom",
+            "User_name": "Bobbi Brown",
+            "User_image": "https://production-shopmyshelf-uploads.s3.us-east-2.amazonaws.com/img-user-deres-446-1726690629276",
+            "lastUpdated": "2026-09-08T16:03:36.000Z",
+            "preview_pins": [
+                {
+                    "id": 47674081,
+                    "image": "https://production-shopmyshelf-pins.s3.us-east-2.amazonaws.com/zoom-47674081-1773674439438-6a1f8da53225839a4ca02b177b0d7874689b2b6f",
+                    "title": "Durand",
+                    "Collection_id": 4393242,
+                    "Product_title": "Durand Sunglasses",
+                    "Product_brand": "Warby Parker",
+                    "Product_category": "Sunglasses",
+                    "Product_id": 163097,
+                    "imageStyle": "contain"
+                },
+                {
+                    "id": 63520088,
+                    "image": "https://production-shopmyshelf-uploads.s3.us-east-2.amazonaws.com/img-lookbook_item_sibling_660363-1769465348876",
+                    "title": "Winslow - Rose",
+                    "Collection_id": 4393242,
+                    "Product_title": "Winslow Glasses",
+                    "Product_brand": "Kits",
+                    "Product_category": "Glasses",
+                    "Product_id": 1809702,
+                    "imageStyle": "contain"
+                },
+                {
+                    "id": 67423590,
+                    "image": "https://production-shopmyshelf-pins.s3.us-east-2.amazonaws.com/zoom-67423590-1782483875364-e7e12f1fb9cff7659a5a094033de331e1d794d23",
+                    "title": "Raider",
+                    "Collection_id": 4393242,
+                    "Product_title": "Raider Sunglasses",
+                    "Product_brand": "Warby Parker",
+                    "Product_category": "Sunglasses",
+                    "Product_id": 163190,
+                    "detailed_image_data": {
+                        "id": 12886936,
+                        "Product_id": 163190,
+                        "image": "https://i.warbycdn.com/s/c/e7e12f1fb9cff7659a5a094033de331e1d794d23?quality=80&width=2048",
+                        "style": "cover"
+                    },
+                    "imageStyle": "contain"
+                },
+                {
+                    "id": 56262900,
+                    "image": "https://production-shopmyshelf-pins.s3.us-east-2.amazonaws.com/zoom-56262900-1777855790853-1ed011814058baf624d38ea94803.jpg",
+                    "title": "RE-SEE | Sac Shopper Bazar Tricolore, Resort 2017",
+                    "Collection_id": 4393242,
+                    "Product_title": "Tricolor Bazar Shopper Tote Bag",
+                    "Product_brand": "Balenciaga",
+                    "Product_category": "Tote Bags",
+                    "Product_id": 2645027,
+                    "detailed_image_data": {
+                        "id": 14473846,
+                        "Product_id": 2645027,
+                        "image": "https://media-us.resee.com/media/cache/app_shop_product_index_card_col_6_v2_desktop/5f/d1/1ed011814058baf624d38ea94803.jpg",
+                        "style": "cover"
+                    },
+                    "imageStyle": "contain"
+                },
+                {
+                    "id": 80555058,
+                    "image": "https://production-shopmyshelf-pins.s3.us-east-2.amazonaws.com/zoom-80555058-1787249298608-PAIGE_BAG_PEWTER_FRONT_LEAD.jpg",
+                    "title": "Paige Rhinestone Chain Mesh Bag",
+                    "Collection_id": 4393242,
+                    "Product_title": "Paige Rhinestone Chain Mesh Bag",
+                    "Product_brand": "A.L.C.",
+                    "Product_category": "Crossbody & Shoulder Bags",
+                    "Product_id": 233167,
+                    "detailed_image_data": {
+                        "id": 6169514,
+                        "Product_id": 233167,
+                        "image": "https://cdn.shopify.com/s/files/1/0056/5306/9927/files/PAIGE_BAG_PEWTER_FRONT_LEAD.jpg?v=1759503984",
+                        "style": "contain"
+                    },
+                    "imageStyle": "cover"
+                }
+            ],
+            "total_num_pins": 6
+        },
+        {
+            "id": 4132203,
+            "Section_id": 409,
+            "name": "Favorite Tees",
+            "image": null,
+            "description": null,
+            "social_links": null,
+            "private": 0,
+            "createdAt": "2026-02-25T18:01:07.000Z",
+            "isArchived": 0,
+            "sortOrderRank": 1776270422000,
+            "Section_previewType": "shelf",
+            "User_id": 446,
+            "User_username": "justbobbidotcom",
+            "User_name": "Bobbi Brown",
+            "User_image": "https://production-shopmyshelf-uploads.s3.us-east-2.amazonaws.com/img-user-deres-446-1726690629276",
+            "lastUpdated": "2026-04-10T00:58:51.000Z",
+            "preview_pins": [
+                {
+                    "id": 44671388,
+                    "image": "https://production-shopmyshelf-uploads.s3.us-east-2.amazonaws.com/product-adjusted-1772042930503",
+                    "title": "Classic T\u00a0Shirt",
+                    "Collection_id": 4132203,
+                    "Product_title": "Classic T-Shirt",
+                    "Product_brand": null,
+                    "Product_category": "Tops",
+                    "Product_id": 2313068,
+                    "imageStyle": "cover"
+                },
+                {
+                    "id": 44671438,
+                    "image": "https://production-shopmyshelf-pins.s3.us-east-2.amazonaws.com/zoom-5235169-1716205685699-W11361_WHITE.jpg",
+                    "title": "Standard Tee",
+                    "Collection_id": 4132203,
+                    "Product_title": "Standard Tee",
+                    "Product_brand": "Cotton Citizen",
+                    "Product_category": "Tops",
+                    "Product_id": 444576,
+                    "detailed_image_data": {
+                        "id": 11670831,
+                        "Product_id": 444576,
+                        "image": "https://cottoncitizen.com/cdn/shop/files/W11361_PERM_WHITE4_300x.jpg?v=1696618207",
+                        "style": "contain"
+                    },
+                    "imageStyle": "cover"
+                },
+                {
+                    "id": 44671622,
+                    "image": "https://production-shopmyshelf-pins.s3.us-east-2.amazonaws.com/zoom-44671622-1772042979029-SKIMS-LOUNGEWEAR-AP-TSH-0649-CJ-ONX_FR.jpg",
+                    "title": "T-SHIRT",
+                    "Collection_id": 4132203,
+                    "Product_title": "T Shirt Dress",
+                    "Product_brand": "SKIMS",
+                    "Product_category": "Tops",
+                    "Product_id": 87614,
+                    "detailed_image_data": {
+                        "id": 11279699,
+                        "Product_id": 87614,
+                        "image": "https://skims.imgix.net/s/files/1/0259/5448/4284/products/SKIMS-LOUNGEWEAR-AP-TSH-0649-CJ-ONX_FR.jpg?v=1621643158&auto=format&q=70&ixlib=react-9.11.0&w=8192",
+                        "style": "cover"
+                    },
+                    "imageStyle": "cover"
+                },
+                {
+                    "id": 46518328,
+                    "image": "https://production-shopmyshelf-pins.s3.us-east-2.amazonaws.com/zoom-46518328-1773060240038-whiteCPteeSingle_01.jpg",
+                    "title": "the cotton project tee in vintage white",
+                    "Collection_id": 4132203,
+                    "Product_title": "The Cotton Project Tee Top",
+                    "Product_brand": "imogene + willie",
+                    "Product_category": "Tops",
+                    "Product_id": 332578,
+                    "detailed_image_data": {
+                        "id": 2642958,
+                        "Product_id": 332578,
+                        "image": "https://cdn.shopify.com/s/files/1/0117/3112/files/whiteCPteeSingle_01.jpg?v=1746799144",
+                        "style": "cover"
+                    },
+                    "imageStyle": "cover"
+                },
+                {
+                    "id": 48656381,
+                    "image": "https://production-shopmyshelf-pins.s3.us-east-2.amazonaws.com/zoom-48656381-1774197344772-2561x4108_1e99fada-be4c-4523-ac6e-351271a9f59a.jpg",
+                    "title": "The Linen Perfect Tee in Navy",
+                    "Collection_id": 4132203,
+                    "Product_title": "The Linen Perfect Tee",
+                    "Product_brand": "SOLD OUT NYC",
+                    "Product_category": "Tops",
+                    "Product_id": 140057,
+                    "detailed_image_data": {
+                        "id": 12674317,
+                        "Product_id": 140057,
+                        "image": "https://cdn.shopify.com/s/files/1/0028/9256/2467/files/2561x4108_1e99fada-be4c-4523-ac6e-351271a9f59a.jpg?v=1773345724",
+                        "style": "cover"
+                    },
+                    "imageStyle": "cover"
+                }
+            ],
+            "total_num_pins": 6
+        }
+    ],
+    "hasMoreCollections": false
+}
