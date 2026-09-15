@@ -7,20 +7,35 @@
 -- dropping them collapses genuinely different products onto one URL.
 -- Dropped: click-tracking parameters only.
 
+-- Parse the query string properly rather than regex-stripping fragments in
+-- place. An in-place `[?&]param=value` strip is ORDER-DEPENDENT: when the
+-- tracking param comes first it eats the "?" itself, so
+--   ?utm_source=a&variant=5  ->  /p&variant=5
+--   ?variant=5&utm_source=a  ->  /p?variant=5
+-- Same product, two different keys — and tracking-first is exactly how ad
+-- links (ShopMy's included) are built, so the dedup key would miss them.
+-- Splitting and re-joining also sorts the survivors, making the key
+-- independent of parameter order.
 create or replace function public.normalize_product_url(u text)
 returns text
 language sql
 immutable
 as $$
   select case when u is null or btrim(u) = '' then null else
+    -- host + path: scheme, www., #fragment and trailing slash removed
     rtrim(
-      regexp_replace(
-        regexp_replace(
-          regexp_replace(lower(btrim(u)), '^https?://(www\.)?', ''),
-          '[?&](utm_[a-z_]*|srsltid|gclid|gbraid|wbraid|fbclid|gad_source|gad_campaignid|irclickid|ranmid|raneaid|ransiteid|cjevent|msclkid|epik|_branch_match_id)=[^&]*',
-          '', 'g'),
-        '[?&]+$', ''),
+      split_part(split_part(regexp_replace(lower(btrim(u)), '^https?://(www\.)?', ''), '#', 1), '?', 1),
       '/')
+    -- surviving query params, sorted so order never changes the key
+    || coalesce((
+         select '?' || string_agg(kv, '&' order by kv)
+           from unnest(string_to_array(
+                  split_part(split_part(regexp_replace(lower(btrim(u)), '^https?://(www\.)?', ''), '#', 1), '?', 2),
+                  '&')) kv
+          where kv <> ''
+            and split_part(kv, '=', 1) !~
+                '^(utm_[a-z_]*|srsltid|gclid|gbraid|wbraid|fbclid|gad_source|gad_campaignid|irclickid|ranmid|raneaid|ransiteid|cjevent|msclkid|epik|_branch_match_id)$'
+       ), '')
   end
 $$;
 
