@@ -289,7 +289,7 @@ begin
      where product_id = r.loser
        and not exists (select 1 from public.user_generation_products x
                         where x.product_id = r.winner
-                          and x.user_generation_id = user_generation_products.user_generation_id);
+                          and x.generation_id = user_generation_products.generation_id);
     delete from public.user_generation_products where product_id = r.loser;
 
     update public.look_products set product_id = r.winner
