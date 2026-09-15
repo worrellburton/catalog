@@ -55,13 +55,20 @@ function timeAgo(iso: string | null): string {
 }
 
 /** ShopMy publishes a JSON API, so it never needs the AI crawl. */
-function isShopMyUrl(raw: string): boolean {
+export function isShopMyUrl(raw: string): boolean {
   try {
     const host = new URL(raw).hostname.toLowerCase().replace(/^www\./, '');
     return host === 'shopmy.us' || host === 'shop.my';
   } catch {
     return false;
   }
+}
+
+/** Recover an edge function's JSON body from a non-2xx invoke() error. */
+async function edgeBody(err: unknown): Promise<Record<string, any> | null> {
+  const ctx = (err as { context?: Response })?.context;
+  if (!ctx || typeof ctx.json !== 'function') return null;
+  try { return await ctx.json(); } catch { return null; }
 }
 
 function AddProfileModal({
@@ -141,6 +148,7 @@ export default function ProfileCrawlsPanel() {
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -163,12 +171,16 @@ export default function ProfileCrawlsPanel() {
       // ShopMy publishes a JSON API, so it never needs the AI crawl.
       // Always dry-run first, show the operator the counts, and write only on
       // an explicit confirm — one shop is ~424 products.
+      if (adding) return;
+      setAdding(true);
       try {
-        const { data: preview, error } = await supabase.functions.invoke('shopmy-ingest', {
+        const { data, error } = await supabase.functions.invoke('shopmy-ingest', {
           body: { url, dry_run: true },
         });
-        if (error) throw error;
-        if (!preview?.success) throw new Error(preview?.error ?? 'preview failed');
+        const preview = data ?? (error ? await edgeBody(error) : null);
+        if (!preview?.success) {
+          throw new Error(preview?.error ?? (error as Error)?.message ?? 'preview failed');
+        }
 
         const skipped = Object.entries(preview.skipped ?? {})
           .map(([reason, n]) => `${n} ${reason}`)
@@ -183,18 +195,24 @@ export default function ProfileCrawlsPanel() {
         });
         if (!ok) return;
 
-        const { data: run, error: runErr } = await supabase.functions.invoke('shopmy-ingest', {
+        const { data: runData, error: runErr } = await supabase.functions.invoke('shopmy-ingest', {
           body: { url, dry_run: false },
         });
-        if (runErr) throw runErr;
+        // A 500 here still carries inserted/merged for the batches that DID
+        // commit — read the body rather than reporting a flat failure.
+        const run = runData ?? (runErr ? await edgeBody(runErr) : null);
+        if (!run) throw runErr ?? new Error('ingest returned no response');
         void catalogAlert({
-          title: run?.success ? 'Ingest complete' : 'Ingest partially failed',
-          message: `${run?.inserted ?? 0} added, ${run?.merged ?? 0} merged.` +
-            (run?.error ? `\n\n${run.error}` : ''),
+          title: run.success ? 'Ingest complete' : 'Ingest partially failed',
+          message: `${run.inserted ?? 0} added, ${run.merged ?? 0} merged.` +
+            (run.error ? `\n\n${run.error}` : ''),
         });
         loadData();
       } catch (e) {
+        console.error('ShopMy ingest failed:', e);
         void catalogAlert({ title: 'ShopMy ingest failed', message: (e as Error).message });
+      } finally {
+        setAdding(false);
       }
       return;
     }
@@ -252,11 +270,11 @@ export default function ProfileCrawlsPanel() {
               }
             }}
           />
-          <button className="admin-btn admin-btn-primary" onClick={() => setShowAdd(true)}>
+          <button className="admin-btn admin-btn-primary" disabled={adding} onClick={() => setShowAdd(true)}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
             </svg>
-            New Profile Crawl
+            {adding ? 'Ingesting…' : 'New Profile Crawl'}
           </button>
         </div>
       </div>
