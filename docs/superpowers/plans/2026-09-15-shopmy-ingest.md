@@ -423,7 +423,7 @@ begin
       e->>'url'            as url,
       e->>'name'           as name,
       e->>'brand'          as brand,
-      (e->>'price')::numeric as price,
+      e->>'price'          as price,
       e->>'currency'       as currency,
       e->>'type'           as type,
       e->>'image_url'      as image_url,
@@ -642,7 +642,7 @@ Deno.test('maps the merchant PDP, never the affiliate link', () => {
   assert(m.url.includes('mytheresa.com'), 'url must be the merchant PDP');
   assert(!m.url.includes('linksynergy'), 'url must never be the Rakuten affiliate link');
   assert(m.brand === 'Gucci', `brand should prefer AllBrand_name, got ${m.brand}`);
-  assert(m.price === 820, `price from fallbackPrice, got ${m.price}`);
+  assert(m.price === '$820.00', `price formatted to catalog convention, got ${m.price}`);
   assert(m.currency === 'USD', 'currency');
   assert(m.type === 'Clogs', 'type from Category_name');
   assert(Array.isArray(m.images) && m.images.length === 1, 'exactly one image');
@@ -735,7 +735,13 @@ export interface MappedProduct {
   url: string;
   name: string;
   brand: string | null;
-  price: number | null;
+  /**
+   * DISPLAY STRING, not a number — `products.price` is `text` and every
+   * existing row is formatted ("$25.00", "$19.99"). Some render paths print
+   * it raw (app/utils/downloadLookVideo.ts:281), so a bare "820" would show
+   * with no currency symbol.
+   */
+  price: string | null;
   currency: string | null;
   type: string | null;
   image_url: string | null;
@@ -780,6 +786,21 @@ function isNonProductLink(link: string): boolean {
   return false;
 }
 
+const CURRENCY_SYMBOL: Record<string, string> = {
+  USD: '$', CAD: '$', AUD: '$', EUR: '€', GBP: '£', JPY: '¥',
+};
+
+/**
+ * ShopMy gives a number; `products.price` is text and the catalog convention
+ * is a formatted display string ("$25.00"). Match it — some render paths
+ * print the column raw.
+ */
+function formatPrice(amount: number, currency: string | null): string {
+  const symbol = CURRENCY_SYMBOL[(currency ?? 'USD').toUpperCase()];
+  const body = amount.toFixed(2);
+  return symbol ? `${symbol}${body}` : `${body} ${(currency ?? '').toUpperCase()}`.trim();
+}
+
 /** "GUCCI | Sol GG Canvas Clog" → "Sol GG Canvas Clog" */
 function stripBrandPrefix(title: string, brand: string | null): string {
   const cut = title.indexOf('|');
@@ -801,7 +822,9 @@ export function mapPin(pin: ShopMyPin, ctx: PinContext): MappedProduct | { skip:
   if (isNonProductLink(url)) return { skip: 'non_product_url' };
 
   const brand = p.AllBrand_name ?? pin.merchant_data?.name ?? null;
-  const price = typeof p.fallbackPrice === 'number' ? p.fallbackPrice : null;
+  const priceNum = typeof p.fallbackPrice === 'number' ? p.fallbackPrice : null;
+  const currency = p.fallbackPriceCurrency ?? (priceNum !== null ? 'USD' : null);
+  const price = priceNum === null ? null : formatPrice(priceNum, currency);
 
   // A pin with neither brand nor price is a bookmark, not a product.
   if (!brand && price === null) return { skip: 'no_brand_or_price' };
@@ -818,7 +841,7 @@ export function mapPin(pin: ShopMyPin, ctx: PinContext): MappedProduct | { skip:
     name,
     brand,
     price,
-    currency: p.fallbackPriceCurrency ?? (price !== null ? 'USD' : null),
+    currency,
     type: p.Category_name ?? p.Department_name ?? null,
     image_url: image,
     images: [image],
