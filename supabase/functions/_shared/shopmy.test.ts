@@ -102,6 +102,52 @@ Deno.test('skips a pin with a zero fallback price and no brand', () => {
   assert('skip' in m && m.skip === 'no_brand_or_price', `expected no_brand_or_price skip, got ${JSON.stringify(m)}`);
 });
 
+Deno.test('rewrites an uploads-bucket S3 image URL to the ShopMy CDN', () => {
+  const m = mapPin(
+    { id: 1, title: 'Thing', link: 'https://shop.example.com/a-real-item',
+      image: 'https://production-shopmyshelf-uploads.s3.us-east-2.amazonaws.com/pretty-prod-1766714458058',
+      product: { AllBrand_name: 'X', fallbackPrice: 5, fallbackPriceCurrency: 'USD' } } as any,
+    CTX,
+  ) as any;
+  assert(!('skip' in m), 'should not skip');
+  assert(m.image_url === 'https://static.shopmy.us/uploads/pretty-prod-1766714458058', `expected CDN url, got ${m.image_url}`);
+  assert(m.images[0] === m.image_url, 'images[0] must match image_url');
+});
+
+Deno.test('rewrites a pins-bucket S3 image URL to the ShopMy CDN', () => {
+  const m = mapPin(
+    { id: 1, title: 'Thing', link: 'https://shop.example.com/a-real-item',
+      image: 'https://production-shopmyshelf-pins.s3.us-east-2.amazonaws.com/zoom-78911874-Skyler-Black-1.jpg',
+      product: { AllBrand_name: 'X', fallbackPrice: 5, fallbackPriceCurrency: 'USD' } } as any,
+    CTX,
+  ) as any;
+  assert(!('skip' in m), 'should not skip');
+  assert(m.image_url === 'https://static.shopmy.us/pins/zoom-78911874-Skyler-Black-1.jpg', `expected CDN url, got ${m.image_url}`);
+  assert(m.images[0] === m.image_url, 'images[0] must match image_url');
+});
+
+Deno.test('leaves a non-S3 image URL unchanged', () => {
+  const m = mapPin(
+    { id: 1, title: 'Thing', link: 'https://shop.example.com/a-real-item',
+      image: 'https://cdn.somebrand.com/a.jpg',
+      product: { AllBrand_name: 'X', fallbackPrice: 5, fallbackPriceCurrency: 'USD' } } as any,
+    CTX,
+  ) as any;
+  assert(!('skip' in m), 'should not skip');
+  assert(m.image_url === 'https://cdn.somebrand.com/a.jpg', `must not mangle a non-ShopMy host, got ${m.image_url}`);
+});
+
+Deno.test('the fixture\'s first mappable pin gets a static.shopmy.us image, not a raw S3 url', () => {
+  let mapped: any = null;
+  for (const pin of fixture.pins) {
+    const m = mapPin(pin, CTX) as any;
+    if (!('skip' in m)) { mapped = m; break; }
+  }
+  assert(!!mapped, 'fixture must contain a mappable pin');
+  assert(mapped.image_url.startsWith('https://static.shopmy.us/'), `expected static.shopmy.us, got ${mapped.image_url}`);
+  assert(!mapped.image_url.includes('amazonaws.com'), `must not leave a raw S3 url, got ${mapped.image_url}`);
+});
+
 Deno.test('keeps curation context in raw_data', () => {
   const pin = fixture.pins[0];
   const m = mapPin(pin, CTX) as any;
