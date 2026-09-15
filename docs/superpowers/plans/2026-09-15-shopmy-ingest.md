@@ -124,7 +124,7 @@ In `app/utils/productUrl.ts`, remove `'/s/'` from `badPrefixes` and drop the now
     '/login',
     '/signin',
     '/account',
-    '/customer/',
+    '/customer',   // no trailing slash: the boundary rule appends one
   ];
   // Match on a path BOUNDARY only — exact, or the prefix followed by "/".
   // A bare startsWith() would reject real product slugs: "/cartier-tank-watch"
