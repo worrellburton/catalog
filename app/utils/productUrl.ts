@@ -51,8 +51,13 @@ export function nonProductUrlReason(rawUrl: string): string | null {
     '/account',
     '/customer/',
   ];
+  // Match on a path BOUNDARY only — exact, or the prefix followed by "/".
+  // A bare startsWith() would reject real product slugs: "/cartier-tank-watch"
+  // starts with "/cart", "/newsboy-cap" with "/news", "/blogger-jeans" with
+  // "/blog". The old code avoided this with an inner exact-match gate; keep
+  // that protection.
   for (const p of badPrefixes) {
-    if (path === p || path.startsWith(p + '/') || path.startsWith(p)) {
+    if (path === p || path.startsWith(p + '/')) {
       return `non-product path "${p}"`;
     }
   }
@@ -60,8 +65,10 @@ export function nonProductUrlReason(rawUrl: string): string | null {
   // Amazon: real product pages contain /dp/ or /gp/product/. Amazon's own
   // search lives at /s — scoped here, not globally, because /s/<slug>/<id>
   // is Nordstrom's and Nordstrom Rack's canonical product URL format.
+  // Note: path is pathname-only, never contains query params; the /s? check
+  // was unreachable and is removed.
   if (host === 'amazon.com' || host.endsWith('.amazon.com')) {
-    if (path === '/s' || path.startsWith('/s/') || path.startsWith('/s?')) {
+    if (path === '/s' || path.startsWith('/s/')) {
       return 'Amazon search page';
     }
     if (!path.includes('/dp/') && !path.includes('/gp/product/')) {

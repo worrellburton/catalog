@@ -16,6 +16,17 @@ describe('nonProductUrlReason', () => {
     expect(nonProductUrlReason('https://example.com/search')).not.toBeNull();
     expect(nonProductUrlReason('https://example.com/')).toBe('site homepage');
     expect(nonProductUrlReason('https://example.com/cart')).not.toBeNull();
+    expect(nonProductUrlReason('https://example.com/cart/items')).not.toBeNull();
+  });
+
+  it('matches bad prefixes on a path boundary, not as a substring', () => {
+    // Real product slugs that merely start with a bad prefix must pass.
+    expect(nonProductUrlReason('https://example.com/cartier-tank-watch-p12345')).toBeNull();
+    expect(nonProductUrlReason('https://example.com/about-face-blush-palette')).toBeNull();
+    expect(nonProductUrlReason('https://example.com/contactless-card-case')).toBeNull();
+    expect(nonProductUrlReason('https://example.com/newsboy-cap')).toBeNull();
+    expect(nonProductUrlReason('https://example.com/blogger-jeans')).toBeNull();
+    expect(nonProductUrlReason('https://example.com/accountancy-branded-tee')).toBeNull();
   });
 
   it('still requires /dp/ on Amazon', () => {
