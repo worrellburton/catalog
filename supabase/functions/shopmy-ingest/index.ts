@@ -26,6 +26,20 @@ const DEFAULT_BATCH = 25;
 const DEFAULT_DELAY_MS = 1500;
 const COLLECTION_CONCURRENCY = 4;
 
+// Same shape as every other browser-invoked function in this repo (see
+// verify-product-image/index.ts) — supabase.functions.invoke() sends
+// Authorization/apikey/x-client-info cross-origin, which forces a preflight.
+const CORS = {
+  'Access-Control-Allow-Origin': '*',
+  'Access-Control-Allow-Methods': 'POST, OPTIONS',
+  'Access-Control-Allow-Headers': 'Authorization, Content-Type, apikey, x-client-info',
+  'Access-Control-Max-Age': '86400',
+};
+
+function json(body: unknown, status = 200): Response {
+  return new Response(JSON.stringify(body), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
+}
+
 const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
 
 async function getJson(url: string, attempt = 0): Promise<any> {
@@ -59,7 +73,37 @@ async function pooled<T, R>(items: T[], n: number, fn: (t: T) => Promise<R>): Pr
 }
 
 Deno.serve(async (req) => {
-  if (req.method !== 'POST') return new Response('method not allowed', { status: 405 });
+  if (req.method === 'OPTIONS') return new Response(null, { status: 204, headers: CORS });
+  if (req.method !== 'POST') return json({ success: false, error: 'method not allowed' }, 405);
+
+  // Auth: service-role JWT (the controller's direct curl calls) OR an admin
+  // user JWT (the ProfileCrawlsPanel button). Same detection + admin-profile
+  // check as verify-product-image/index.ts:280-298 — this function does the
+  // same service-role writes (product inserts, each firing two net.http_post
+  // trigger fan-outs) and needs the same gate. The anon key is a legacy
+  // project-signed JWT baked into the client bundle, so verify_jwt:true alone
+  // authorizes ANY holder of the public key, not just signed-in admins.
+  const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+  const serviceRoleKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+  const authHeader = req.headers.get('Authorization');
+  if (!authHeader?.startsWith('Bearer ')) return json({ success: false, error: 'unauthorized' }, 401);
+  const token = authHeader.replace('Bearer ', '');
+  const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
+  let isServiceRole = false;
+  try {
+    const parts = token.split('.');
+    if (parts.length === 3) {
+      const payload = JSON.parse(atob(parts[1].replace(/-/g, '+').replace(/_/g, '/')));
+      if (payload?.role === 'service_role') isServiceRole = true;
+    }
+  } catch { /* fall through */ }
+  if (!isServiceRole) {
+    const { data: { user: caller } } = await admin.auth.getUser(token);
+    if (!caller) return json({ success: false, error: 'unauthorized' }, 401);
+    const { data: prof } = await admin.from('profiles').select('is_admin, role').eq('id', caller.id).maybeSingle();
+    const isAdmin = prof?.is_admin === true || prof?.role === 'admin' || prof?.role === 'super_admin';
+    if (!isAdmin) return json({ success: false, error: 'admin only' }, 403);
+  }
 
   try {
     const body = await req.json().catch(() => ({}));
@@ -79,13 +123,13 @@ Deno.serve(async (req) => {
     if (body.url) {
       const parsed = parseShopMyUrl(String(body.url));
       if (!parsed) {
-        return Response.json({ success: false, error: 'not a ShopMy URL' }, { status: 400 });
+        return json({ success: false, error: 'not a ShopMy URL' }, 400);
       }
       username = parsed.username;
       if (sectionId == null) sectionId = parsed.sectionId;
     }
     if (!username) {
-      return Response.json({ success: false, error: 'provide url or username' }, { status: 400 });
+      return json({ success: false, error: 'provide url or username' }, 400);
     }
 
     // ── 1. sections + collections ──────────────────────────────────────────
@@ -97,10 +141,15 @@ Deno.serve(async (req) => {
     const list = await getJson(listUrl.toString());
     const sections: Array<{ id: number; title: string }> = list.sections ?? [];
     let collections: Array<{ id: number; name: string; Section_id: number }> = list.collections ?? [];
+    // ShopMy paginates this list (`hasMoreCollections`); no paging parameter
+    // (offset/cursor/page) is documented or evident on the response, so we
+    // cannot request page 2. Surface the flag rather than silently ingesting
+    // only page 1 and reporting a collection count that looks complete.
+    const hasMore = list.hasMoreCollections === true;
     if (body.max_collections) collections = collections.slice(0, Number(body.max_collections));
 
     if (collections.length === 0) {
-      return Response.json({ success: false, error: `no collections for ${username}` }, { status: 404 });
+      return json({ success: false, error: `no collections for ${username}` }, 404);
     }
     const sectionName = (id: number) => sections.find((s) => s.id === id)?.title ?? null;
 
@@ -151,17 +200,15 @@ Deno.serve(async (req) => {
       sections: sections.length, collections: collections.length,
       pins: pinCount, mapped: unique.length, skipped,
       failures: failures.length ? failures : undefined,
+      has_more: hasMore,
     };
 
     if (dryRun) {
-      return Response.json({ ...summary, dry_run: true, inserted: 0, merged: 0, rows: unique });
+      return json({ ...summary, dry_run: true, inserted: 0, merged: 0, rows: unique });
     }
 
     // ── 3. throttled write ─────────────────────────────────────────────────
-    const admin = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
-    );
+    // `admin` was already created above for the auth check — reuse it.
     // Earlier batches have already written real rows, so a mid-run failure must
     // still report what landed - otherwise the operator has to query products
     // directly to find out how much of the run committed before deciding
@@ -179,13 +226,13 @@ Deno.serve(async (req) => {
       if (i + batchSize < unique.length && delayMs > 0) await sleep(delayMs);
     }
 
-    return Response.json(
+    return json(
       { ...summary, success: !writeError, dry_run: false, inserted, merged,
         batch_size: batchSize, batch_delay_ms: delayMs,
         error: writeError ?? undefined },
-      { status: writeError ? 500 : 200 },
+      writeError ? 500 : 200,
     );
   } catch (e) {
-    return Response.json({ success: false, error: String(e).slice(0, 500) }, { status: 500 });
+    return json({ success: false, error: String(e).slice(0, 500) }, 500);
   }
 });

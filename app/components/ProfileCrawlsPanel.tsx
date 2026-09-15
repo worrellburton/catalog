@@ -191,7 +191,10 @@ export default function ProfileCrawlsPanel() {
           message:
             `${preview.collections} collections · ${preview.pins} pins · ` +
             `${preview.mapped} will be added.\nSkipped: ${skipped}.\n\n` +
-            `Products land inactive and still need curation before they reach the feed.`,
+            `Products land inactive and still need curation before they reach the feed.` +
+            (preview.has_more
+              ? `\n\nShopMy reports more collections than this run covers — only the first page will be ingested.`
+              : ''),
         });
         if (!ok) return;
 
@@ -202,10 +205,17 @@ export default function ProfileCrawlsPanel() {
         // commit — read the body rather than reporting a flat failure.
         const run = runData ?? (runErr ? await edgeBody(runErr) : null);
         if (!run) throw runErr ?? new Error('ingest returned no response');
+        const failureCount = Array.isArray(run.failures) ? run.failures.length : 0;
         void catalogAlert({
           title: run.success ? 'Ingest complete' : 'Ingest partially failed',
           message: `${run.inserted ?? 0} added, ${run.merged ?? 0} merged.` +
-            (run.error ? `\n\n${run.error}` : ''),
+            (run.error ? `\n\n${run.error}` : '') +
+            (failureCount
+              ? `\n\n${failureCount} collection(s) failed and were skipped:\n${run.failures.join('\n')}`
+              : '') +
+            (run.has_more
+              ? '\n\nMore collections exist beyond this run (ShopMy paginated the list) — this run only covered the first page.'
+              : ''),
         });
         loadData();
       } catch (e) {
