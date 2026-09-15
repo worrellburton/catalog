@@ -427,7 +427,7 @@ export default function ShopMyIngest({ url, onClose, onDone }:
       .from('products')
       .select('id, name, brand, price, image_url, image_verified, image_verify_note')
       .eq('source', 'shopmy')
-      .eq('raw_data->shopmy>>curator', curator)
+      .eq('raw_data->shopmy->>curator', curator)
       .order('created_at', { ascending: false })
       .limit(60);
     if (data) setLanded(data as LandedRow[]);
@@ -561,7 +561,7 @@ function LandedTable({ rows }: { rows: LandedRow[] }) {
 
 - [ ] **Step 2: Verify the PostgREST JSON filter**
 
-`.eq('raw_data->shopmy>>curator', curator)` is PostgREST's JSON-path filter syntax and is the line most likely to be wrong. Confirm it returns rows before trusting the UI — run a read-only check via the Supabase MCP or a scratch script:
+`.eq('raw_data->shopmy->>curator', curator)` is PostgREST's JSON-path filter syntax and is the line most likely to be wrong. Confirm it returns rows before trusting the UI — run a read-only check via the Supabase MCP or a scratch script:
 
 ```sql
 select count(*) from products
