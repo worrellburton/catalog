@@ -676,6 +676,28 @@ Deno.test('skips a pin with no brand and no price', () => {
   }
 });
 
+Deno.test('does not skip product slugs that merely start with a bad prefix', () => {
+  // Boundary matching, not substring: Cartier is a real brand whose slugs
+  // start with "cart". A bare startsWith() would silently drop them.
+  for (const slug of ['cartier-love-bracelet', 'searchlight-boot', 'accountability-journal', 'checkout-lounge-chair']) {
+    const m = mapPin(
+      { id: 1, title: 'Thing', link: `https://shop.example.com/${slug}`, image: 'https://x/a.jpg',
+        product: { AllBrand_name: 'X', fallbackPrice: 5, fallbackPriceCurrency: 'USD' } } as any,
+      CTX,
+    ) as any;
+    assert(!('skip' in m), `${slug} must not be skipped, got ${JSON.stringify(m)}`);
+  }
+  // …but the real bad paths still are.
+  for (const bad of ['cart', 'cart/items', 'checkout', 'search']) {
+    const m = mapPin(
+      { id: 1, title: 'Thing', link: `https://shop.example.com/${bad}`, image: 'https://x/a.jpg',
+        product: { AllBrand_name: 'X', fallbackPrice: 5, fallbackPriceCurrency: 'USD' } } as any,
+      CTX,
+    ) as any;
+    assert('skip' in m, `/${bad} must be skipped`);
+  }
+});
+
 Deno.test('skips a pin whose link is not a product page', () => {
   const m = mapPin(
     { id: 1, title: 'Cart', link: 'https://www.amazon.com/gp/cart/view.html',
@@ -783,8 +805,13 @@ function isNonProductLink(link: string): boolean {
   const host = u.hostname.toLowerCase().replace(/^www\./, '');
   const path = u.pathname.toLowerCase();
   if (path === '' || path === '/') return true;
+  // Path BOUNDARY only — exact, or the prefix followed by "/". A bare
+  // startsWith() silently drops real products: "/cartier-love-bracelet"
+  // starts with "/cart", "/searchlight-boot" with "/search",
+  // "/accountability-journal" with "/account". Same defect as the one fixed
+  // in app/utils/productUrl.ts; do not reintroduce it here.
   for (const bad of ['/cart', '/checkout', '/search', '/login', '/account']) {
-    if (path === bad || path.startsWith(bad + '/') || path.startsWith(bad)) return true;
+    if (path === bad || path.startsWith(bad + '/')) return true;
   }
   // Amazon search / cart, mirroring app/utils/productUrl.ts. /s/ is NOT
   // global - it is Nordstrom's canonical product path.
@@ -836,7 +863,9 @@ export function mapPin(pin: ShopMyPin, ctx: PinContext): MappedProduct | { skip:
   const brand = p.AllBrand_name ?? null;
   const priceNum = typeof p.fallbackPrice === 'number' ? p.fallbackPrice : null;
   const currency = p.fallbackPriceCurrency ?? (priceNum !== null ? 'USD' : null);
-  const price = priceNum === null ? null : formatPrice(priceNum, currency);
+  // Treat 0 as absent: ShopMy uses a zero fallbackPrice for an unmatched
+  // product, and "$0.00" would otherwise defeat the no-brand-no-price skip.
+  const price = priceNum === null || priceNum <= 0 ? null : formatPrice(priceNum, currency);
 
   // A pin with neither brand nor price is a bookmark, not a product.
   if (!brand && price === null) return { skip: 'no_brand_or_price' };
