@@ -830,7 +830,10 @@ export function mapPin(pin: ShopMyPin, ctx: PinContext): MappedProduct | { skip:
   if (!url) return { skip: 'no_link' };
   if (isNonProductLink(url)) return { skip: 'non_product_url' };
 
-  const brand = p.AllBrand_name ?? pin.merchant_data?.name ?? null;
+  // Brand is the PRODUCT's brand only. merchant_data.name is the retailer —
+  // Gucci's is "Mytheresa", adidas's is "Tillys" — so using it as a fallback
+  // mislabels the retailer as the brand and defeats the no-brand-no-price skip.
+  const brand = p.AllBrand_name ?? null;
   const priceNum = typeof p.fallbackPrice === 'number' ? p.fallbackPrice : null;
   const currency = p.fallbackPriceCurrency ?? (priceNum !== null ? 'USD' : null);
   const price = priceNum === null ? null : formatPrice(priceNum, currency);

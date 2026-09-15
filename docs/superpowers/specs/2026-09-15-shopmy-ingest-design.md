@@ -167,7 +167,7 @@ path first, the AI path as fallback.
 |---|---|---|
 | `url` | `selectedGeoLink` ?? `link` ?? `product.fallbackUrl` | normalised; tracking parameters stripped |
 | `name` | `product.title` ?? `title` | strip a leading `BRAND \|` prefix from `title` |
-| `brand` | `product.AllBrand_name` ?? `merchant_data.name` | |
+| `brand` | `product.AllBrand_name` only | **Not** `merchant_data.name` — that is the RETAILER, not the brand. Gucci's is "Mytheresa", adidas's is "Tillys", and the Amazon-cart pin's is "Amazon". The retailer is kept in `raw_data` instead. |
 | `price` | `product.fallbackPrice` | |
 | `currency` | `product.fallbackPriceCurrency` | |
 | `type` | `product.Category_name` | e.g. "Clogs"; `trg_products_normalize_write` normalises it |
