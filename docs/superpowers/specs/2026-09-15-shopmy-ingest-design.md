@@ -206,6 +206,54 @@ This requires the unique index on normalised `url` that the ingest cost plan als
 calls for. It lands as part of this work, as a migration, because without it the
 upsert has no conflict target and concurrent runs will duplicate.
 
+**The index cannot be created against current data.** Measured 2026-09-15: 534
+rows normalise to 527 distinct values — **7 colliding pairs**, of which 12 of the
+14 rows are `is_active = true`:
+
+| Normalised URL | Rows | Active |
+|---|---:|---:|
+| `quince.com/men/men-s-100-linen-short-sleeve-shirt?color=…` | 2 | 2 |
+| `florsheim.com/shop/style/14427-100.html` | 2 | 2 |
+| `tommybahama.com/en/paradise-breezer-linen-short-sleeve-shirt/p/st327196-042` | 2 | 2 |
+| `americantall.com/products/mens-tall-chino-10332-shorts-…` | 2 | 2 |
+| `bananarepublicfactory.gapfactory.com/browse/product.do?pid=853468011…` | 2 | 2 |
+| `amicicloset.com/products/10-5-stretch-chino-shorts-khaki-ap006…` | 2 | 1 |
+| `boohooman.com/us/product/…_cmm24449?colour=stone&size=l` | 2 | 1 |
+
+None has a `primary_video_url`, so none is currently feed-visible and merging them
+has no user-facing effect. They must still be **merged, not deleted** — keep the
+oldest row, copy any non-null column the loser has and the winner lacks, repoint
+`catalog_products` and any other child rows, then delete the loser. This merge is
+a prerequisite step in the same migration, before the index is created.
+
+## 6a. Regression safety
+
+The `products` table carries twelve triggers. A ShopMy row (`name` and `images`
+set, `description` and `primary_image_url` null, `scrape_status='done'`) fires:
+
+| Trigger | Fires? | Consequence |
+|---|---|---|
+| `scrape-new-products` | No — `WHEN scrape_status='pending'` | the reason §5 mandates `'done'` |
+| `notify_enrich_similarity` | No — requires non-empty `description` | — |
+| `products_haiku_context` | Not at insert (needs `primary_image_url`) | but `verify-product-image` sets that column, firing it per row afterwards |
+| `trg_products_auto_verify_image` | **Yes** | `net.http_post` → Haiku call, image fetch, storage upload |
+| `trg_products_auto_embed` | **Yes** | `net.http_post` → embedding call |
+| `catalog_assign_product_trg` | **Yes** | `catalog_score_products()` runs synchronously inside the insert transaction |
+
+At 424 rows that is roughly **1,270 edge-function invocations and ~850 Anthropic
+calls**, fired as fast as the inserts commit. The Anthropic account exhausted its
+credit on 2026-09-14, and these are the same functions existing products depend
+on — so an unthrottled bulk insert degrades the rest of the catalog, not just the
+new rows.
+
+**Therefore ingest writes in throttled batches: 25 rows per batch, with a pause
+between batches, never a single bulk insert.** The batch size and delay are
+request parameters with those defaults so an operator can slow them further.
+`dry_run` remains the first step on any new creator.
+
+This constraint is the single most important thing the implementation must
+respect. It is not an optimisation.
+
 ## 7. Error handling
 
 Failures are classified rather than treated alike — the lesson from the scraper
@@ -279,11 +327,24 @@ Capturing the fixture also guards against silent upstream API drift.
 
 ## 11. Rollout
 
-1. Migration: unique index on normalised `url`.
-2. Deploy `shopmy-ingest`. Run with `dry_run: true` against Section 409 and review
-   the 123 mapped rows.
-3. Commit that section for real. Confirm the enrich chain picks the rows up —
-   `verify-product-image` re-hosts the images, occasion enrich fills
-   `styling_metadata`.
-4. Wire the `ProfileCrawlsPanel` detection.
-5. Ingest the remaining sections.
+Each step is verifiable before the next begins.
+
+1. **Merge the 7 duplicate pairs, then create the unique index** (one migration).
+   Verify: `select count(*) = count(distinct normalised_url) from products`.
+2. **Fix the `/s/` guard** in both `productUrl.ts` and `agent.py`, and re-queue the
+   34 Nordstrom rows. Verify: those rows leave `scrape_status='failed'`.
+3. **Deploy `shopmy-ingest`.** Run `dry_run: true` against Section 409 and review
+   all 123 mapped rows by eye.
+4. **Ingest one collection (14 pins) for real.** Verify the trigger fan-out behaves:
+   14 verify-product-image invocations, 14 embeds, images re-hosted to storage, no
+   Anthropic errors, nothing written to `scrape_status='pending'`.
+5. **Ingest the rest of Section 409 in throttled batches.** Watch `ai_usage_logs`
+   and edge-function logs between batches.
+6. **Wire the `ProfileCrawlsPanel` detection.** Verify a non-ShopMy profile URL
+   still routes to the existing AI crawl.
+7. **Ingest the remaining sections**, or a chosen subset (see §10 on non-apparel
+   sections).
+
+A rollback for any ingest run is `delete from products where source='shopmy' and
+created_at > <run start>` — safe precisely because these rows never enter the feed
+without a separate activation.
