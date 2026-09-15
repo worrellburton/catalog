@@ -34,7 +34,9 @@ async function getJson(url: string, attempt = 0): Promise<any> {
   if (res.status === 429 || res.status >= 500) {
     if (attempt >= 3) throw new Error(`${res.status} after ${attempt} retries: ${url}`);
     const retryAfter = Number(res.headers.get('retry-after')) || 0;
-    await sleep(retryAfter > 0 ? retryAfter * 1000 : 500 * Math.pow(2, attempt));
+    // Cap the server-supplied delay: a malformed Retry-After could otherwise
+    // stall the whole invocation until the platform timeout.
+    await sleep(retryAfter > 0 ? Math.min(retryAfter * 1000, 30_000) : 500 * Math.pow(2, attempt));
     return getJson(url, attempt + 1);
   }
   if (!res.ok) throw new Error(`${res.status} ${await res.text().catch(() => '')} — ${url}`);
@@ -63,13 +65,14 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const dryRun = body.dry_run !== false;   // safe by default: must opt IN to writing
     const batchSize = Math.min(Math.max(Number(body.batch_size) || DEFAULT_BATCH, 1), 25);
-    // `??` must sit INSIDE Number(): `Number(body.batch_delay_ms) ?? DEFAULT`
-    // never falls back, because Number(undefined) is NaN, not
-    // null/undefined — the omitted-field default (the common case) would
-    // silently resolve to NaN and defeat the inter-batch throttle pause
-    // (delayMs > 0 is false for NaN). This form keeps an explicit 0 usable
-    // while still defaulting when the field is absent.
-    const delayMs = Math.max(Number(body.batch_delay_ms ?? DEFAULT_DELAY_MS), 0);
+    // Guard with isFinite, not `??`. Two ways this silently disables the
+    // throttle: Number(undefined) is NaN and NaN is not nullish, so
+    // `Number(x) ?? DEFAULT` never falls back; and a garbage string is not
+    // nullish either, so `Number(x ?? DEFAULT)` is still NaN. Either way
+    // `delayMs > 0` is false, the pause is skipped, and the run goes
+    // unthrottled - the one thing the batching design exists to prevent.
+    const rawDelay = Number(body.batch_delay_ms ?? DEFAULT_DELAY_MS);
+    const delayMs = Math.max(Number.isFinite(rawDelay) ? rawDelay : DEFAULT_DELAY_MS, 0);
 
     let username: string | null = body.username ?? null;
     let sectionId: number | null = body.section_id ?? null;
@@ -159,17 +162,29 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_URL')!,
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!,
     );
-    let inserted = 0, merged = 0;
+    // Earlier batches have already written real rows, so a mid-run failure must
+    // still report what landed - otherwise the operator has to query products
+    // directly to find out how much of the run committed before deciding
+    // whether to re-run.
+    let inserted = 0, merged = 0, writeError: string | null = null;
     for (let i = 0; i < unique.length; i += batchSize) {
       const batch = unique.slice(i, i + batchSize);
       const { data, error } = await admin.rpc('shopmy_upsert_batch', { rows: batch });
-      if (error) throw new Error(`upsert batch ${i / batchSize}: ${error.message}`);
+      if (error) {
+        writeError = `upsert batch ${Math.floor(i / batchSize)}: ${error.message}`;
+        break;
+      }
       inserted += data?.inserted ?? 0;
       merged += data?.merged ?? 0;
       if (i + batchSize < unique.length && delayMs > 0) await sleep(delayMs);
     }
 
-    return Response.json({ ...summary, dry_run: false, inserted, merged });
+    return Response.json(
+      { ...summary, success: !writeError, dry_run: false, inserted, merged,
+        batch_size: batchSize, batch_delay_ms: delayMs,
+        error: writeError ?? undefined },
+      { status: writeError ? 500 : 200 },
+    );
   } catch (e) {
     return Response.json({ success: false, error: String(e).slice(0, 500) }, { status: 500 });
   }
