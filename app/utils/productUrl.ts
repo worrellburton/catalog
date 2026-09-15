@@ -38,7 +38,6 @@ export function nonProductUrlReason(rawUrl: string): string | null {
   // listing/help page" markers we can detect from the URL alone.
   const badPrefixes = [
     '/search',
-    '/s/',           // amazon search
     '/help',
     '/support',
     '/blog',
@@ -54,13 +53,17 @@ export function nonProductUrlReason(rawUrl: string): string | null {
   ];
   for (const p of badPrefixes) {
     if (path === p || path.startsWith(p + '/') || path.startsWith(p)) {
-      // /s and /search match even without trailing slash
-      if (p === '/search' || p === '/s/' || path === p) return `non-product path "${p}"`;
+      return `non-product path "${p}"`;
     }
   }
 
-  // Amazon: real product pages contain /dp/ or /gp/product/.
+  // Amazon: real product pages contain /dp/ or /gp/product/. Amazon's own
+  // search lives at /s — scoped here, not globally, because /s/<slug>/<id>
+  // is Nordstrom's and Nordstrom Rack's canonical product URL format.
   if (host === 'amazon.com' || host.endsWith('.amazon.com')) {
+    if (path === '/s' || path.startsWith('/s/') || path.startsWith('/s?')) {
+      return 'Amazon search page';
+    }
     if (!path.includes('/dp/') && !path.includes('/gp/product/')) {
       return 'Amazon non-product page (no /dp/ in URL)';
     }
