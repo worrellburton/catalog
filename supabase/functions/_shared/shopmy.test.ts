@@ -60,6 +60,28 @@ Deno.test('skips a pin with no brand and no price', () => {
   }
 });
 
+Deno.test('does not skip product slugs that merely start with a bad prefix', () => {
+  // Boundary matching, not substring: Cartier is a real brand whose slugs
+  // start with "cart". A bare startsWith() would silently drop them.
+  for (const slug of ['cartier-love-bracelet', 'searchlight-boot', 'accountability-journal', 'checkout-lounge-chair']) {
+    const m = mapPin(
+      { id: 1, title: 'Thing', link: `https://shop.example.com/${slug}`, image: 'https://x/a.jpg',
+        product: { AllBrand_name: 'X', fallbackPrice: 5, fallbackPriceCurrency: 'USD' } } as any,
+      CTX,
+    ) as any;
+    assert(!('skip' in m), `${slug} must not be skipped, got ${JSON.stringify(m)}`);
+  }
+  // …but the real bad paths still are.
+  for (const bad of ['cart', 'cart/items', 'checkout', 'search']) {
+    const m = mapPin(
+      { id: 1, title: 'Thing', link: `https://shop.example.com/${bad}`, image: 'https://x/a.jpg',
+        product: { AllBrand_name: 'X', fallbackPrice: 5, fallbackPriceCurrency: 'USD' } } as any,
+      CTX,
+    ) as any;
+    assert('skip' in m, `/${bad} must be skipped`);
+  }
+});
+
 Deno.test('skips a pin whose link is not a product page', () => {
   const m = mapPin(
     { id: 1, title: 'Cart', link: 'https://www.amazon.com/gp/cart/view.html',
@@ -67,6 +89,17 @@ Deno.test('skips a pin whose link is not a product page', () => {
     CTX,
   ) as any;
   assert('skip' in m, 'cart link must be skipped');
+});
+
+Deno.test('skips a pin with a zero fallback price and no brand', () => {
+  // ShopMy uses a zero fallbackPrice for an unmatched product; "$0.00" must
+  // not defeat the no-brand-no-price skip.
+  const m = mapPin(
+    { id: 1, title: 'Thing', link: 'https://shop.example.com/some-item', image: 'https://x/a.jpg',
+      product: { AllBrand_name: null, fallbackPrice: 0, fallbackPriceCurrency: 'USD' } } as any,
+    CTX,
+  ) as any;
+  assert('skip' in m && m.skip === 'no_brand_or_price', `expected no_brand_or_price skip, got ${JSON.stringify(m)}`);
 });
 
 Deno.test('keeps curation context in raw_data', () => {
