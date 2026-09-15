@@ -29,10 +29,19 @@ interface LandedRow {
 }
 
 /** Recover an edge function's JSON body from a non-2xx invoke() error. */
-async function edgeBody(err: unknown): Promise<Record<string, any> | null> {
+async function edgeBody(err: unknown): Promise<Record<string, unknown> | null> {
   const ctx = (err as { context?: Response })?.context;
   if (!ctx || typeof ctx.json !== 'function') return null;
   try { return await ctx.json(); } catch { return null; }
+}
+
+/** Best-effort display name before the preview resolves. Never throws. */
+function labelFor(raw: string): string {
+  try {
+    return new URL(raw).pathname.replace(/^\/(shop\/)?/, '') || raw;
+  } catch {
+    return raw;
+  }
 }
 
 export default function ShopMyIngest({ url, onClose, onDone }:
@@ -42,6 +51,10 @@ export default function ShopMyIngest({ url, onClose, onDone }:
   const [busy, setBusy] = useState(true);
   const [job, setJob] = useState<CrawlJob | null>(null);
   const [landed, setLanded] = useState<LandedRow[]>([]);
+  // Non-fatal: the products list going stale (RLS change, schema drift)
+  // shouldn't clobber a more important `error` or stop the progress bar,
+  // which is driven by the separately-awaited getCrawlJob call below.
+  const [productsNote, setProductsNote] = useState<string | null>(null);
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
   // Guards against a double-click firing start() twice before the first
   // click's job row / re-render lands — plain state wouldn't catch it
@@ -71,7 +84,7 @@ export default function ShopMyIngest({ url, onClose, onDone }:
   const poll = useCallback(async (jobId: string, curator: string) => {
     const fresh = await getCrawlJob(jobId).catch(() => null);
     if (fresh) setJob(fresh);
-    const { data } = await supabase!
+    const { data, error: productsErr } = await supabase!
       .from('products')
       .select('id, name, brand, price, image_url, image_verified, image_verify_note')
       .eq('source', 'shopmy')
@@ -80,7 +93,11 @@ export default function ShopMyIngest({ url, onClose, onDone }:
       .eq('raw_data->shopmy->>curator', curator)
       .order('created_at', { ascending: false })
       .limit(60);
-    if (data) setLanded(data as LandedRow[]);
+    if (productsErr) setProductsNote(`Product list may be stale: ${productsErr.message}`);
+    else {
+      setProductsNote(null);
+      if (data) setLanded(data as LandedRow[]);
+    }
     // Anything other than pending/crawling is terminal, cancelled included —
     // a job can be cancelled from the crawl-jobs table while this polls.
     if (fresh && fresh.status !== 'pending' && fresh.status !== 'crawling') {
@@ -97,14 +114,19 @@ export default function ShopMyIngest({ url, onClose, onDone }:
     if (!preview || startingRef.current) return;
     startingRef.current = true;
     setBusy(true); setError(null);
+    // Declared outside try so `finally` can see it — stays undefined if
+    // createProfileCrawlJob itself throws, which is exactly the case the
+    // finally-block re-poll below must not fire for.
+    let created: CrawlJob | undefined;
     try {
-      const created = await createProfileCrawlJob(url, preview.curator);
-      setJob(created);
-      void poll(created.id, preview.curator);
-      timer.current = setInterval(() => void poll(created.id, preview.curator), POLL_MS);
+      const createdJob = await createProfileCrawlJob(url, preview.curator);
+      created = createdJob;
+      setJob(createdJob);
+      void poll(createdJob.id, preview.curator);
+      timer.current = setInterval(() => void poll(createdJob.id, preview.curator), POLL_MS);
 
       const { data, error: err } = await supabase!.functions.invoke('shopmy-ingest', {
-        body: { url, dry_run: false, job_id: created.id },
+        body: { url, dry_run: false, job_id: createdJob.id },
       });
       // functions.invoke() nulls `data` and throws on any non-2xx — this
       // ingest returns its partial-failure summary at HTTP 500, so recovering
@@ -118,6 +140,16 @@ export default function ShopMyIngest({ url, onClose, onDone }:
     } finally {
       setBusy(false);
       startingRef.current = false;
+      // The edge function patches the job row to done/failed BEFORE it
+      // returns its response, so by the time invoke() above resolves the
+      // terminal state is already in the DB — re-poll now instead of
+      // leaving the UI to wait out the next 5s tick. Uses `created` (the
+      // local), never the `job` state var — that was the exact bug the
+      // brief's draft had (stale closure, always read the pre-setJob
+      // value). .catch swallows so a re-poll failure can't throw out of
+      // finally; the `created` guard means this never fires when
+      // createProfileCrawlJob itself failed.
+      if (created) poll(created.id, preview.curator).catch(() => {});
     }
   }, [preview, url, poll]);
 
@@ -128,7 +160,7 @@ export default function ShopMyIngest({ url, onClose, onDone }:
     <div className="admin-section">
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
         <h3 style={{ margin: 0 }}>
-          ShopMy · {preview?.curator ?? new URL(url).pathname.replace(/^\/(shop\/)?/, '')}
+          ShopMy · {preview?.curator ?? labelFor(url)}
         </h3>
         <button className="admin-btn admin-btn-secondary" onClick={onClose}>Close</button>
       </div>
@@ -165,7 +197,7 @@ export default function ShopMyIngest({ url, onClose, onDone }:
               }} />
             </div>
             <span className="admin-form-hint" style={{ margin: 0, whiteSpace: 'nowrap' }}>
-              {job.scraped_urls} / {job.total_urls || preview?.mapped || '?'} · {phase}
+              {job.scraped_urls} / {job.total_urls ?? preview?.mapped ?? '?'} · {phase}
             </span>
           </div>
           {phase === 'stuck' && (
@@ -179,6 +211,7 @@ export default function ShopMyIngest({ url, onClose, onDone }:
               Nothing new to add — these products are already in the catalog.
             </p>
           )}
+          {productsNote && <p className="admin-form-hint">{productsNote}</p>}
           <LandedTable rows={landed} />
         </>
       )}
