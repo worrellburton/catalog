@@ -1302,20 +1302,53 @@ function isShopMyUrl(raw: string): boolean {
 
 - [ ] **Step 3: Branch in the submit handler**
 
-At the top of the existing submit handler, before the current profile-crawl call:
+Reuse the existing `catalogConfirm` / `catalogAlert` helpers the panel already
+imports — no new preview markup or state. In `handleAdd`, before the existing
+`createProfileCrawlJob` call:
 
 ```tsx
     if (isShopMyUrl(url)) {
-      const { data, error } = await supabase.functions.invoke('shopmy-ingest', {
-        body: { url, dry_run: true },
-      });
-      if (error) { setError(error.message); return; }
-      setShopMyPreview(data);   // render summary + a "Ingest for real" confirm
+      // ShopMy publishes a JSON API, so it never needs the AI crawl.
+      // Always dry-run first, show the operator the counts, and write only on
+      // an explicit confirm — one shop is ~424 products.
+      try {
+        const { data: preview, error } = await supabase.functions.invoke('shopmy-ingest', {
+          body: { url, dry_run: true },
+        });
+        if (error) throw error;
+        if (!preview?.success) throw new Error(preview?.error ?? 'preview failed');
+
+        const skipped = Object.entries(preview.skipped ?? {})
+          .map(([reason, n]) => `${n} ${reason}`)
+          .join(', ') || 'none';
+
+        const ok = await catalogConfirm({
+          title: `Ingest ${preview.mapped} products from ${preview.curator}?`,
+          message:
+            `${preview.collections} collections · ${preview.pins} pins · ` +
+            `${preview.mapped} will be added.\nSkipped: ${skipped}.\n\n` +
+            `Products land inactive and still need curation before they reach the feed.`,
+        });
+        if (!ok) return;
+
+        const { data: run, error: runErr } = await supabase.functions.invoke('shopmy-ingest', {
+          body: { url, dry_run: false },
+        });
+        if (runErr) throw runErr;
+        void catalogAlert({
+          title: run?.success ? 'Ingest complete' : 'Ingest partially failed',
+          message: `${run?.inserted ?? 0} added, ${run?.merged ?? 0} merged.` +
+            (run?.error ? `\n\n${run.error}` : ''),
+        });
+        loadData();
+      } catch (e) {
+        void catalogAlert({ title: 'ShopMy ingest failed', message: (e as Error).message });
+      }
       return;
     }
 ```
 
-Add `const [shopMyPreview, setShopMyPreview] = useState<any>(null);` alongside the existing state, and render the preview with counts (`collections`, `pins`, `mapped`, `skipped`) plus a button that re-invokes with `dry_run: false`. **The confirm step is required** — never write on first submit.
+The dry-run-then-confirm sequence is required: never write on first submit.
 
 - [ ] **Step 4: Verify both paths**
 
