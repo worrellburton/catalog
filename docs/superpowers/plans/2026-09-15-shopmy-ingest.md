@@ -1004,7 +1004,11 @@ Deno.serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const dryRun = body.dry_run !== false;   // safe by default: must opt IN to writing
     const batchSize = Math.min(Math.max(Number(body.batch_size) || DEFAULT_BATCH, 1), 25);
-    const delayMs = Math.max(Number(body.batch_delay_ms) ?? DEFAULT_DELAY_MS, 0);
+    // `??` must sit INSIDE Number(): Number(undefined) is NaN, and NaN is not
+    // nullish, so `Number(x) ?? DEFAULT` yields NaN. setTimeout(fn, NaN) fires
+    // immediately - which would silently disable the throttle on every default
+    // invocation, defeating the whole point of batching.
+    const delayMs = Math.max(Number(body.batch_delay_ms ?? DEFAULT_DELAY_MS), 0);
 
     let username: string | null = body.username ?? null;
     let sectionId: number | null = body.section_id ?? null;
