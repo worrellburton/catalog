@@ -128,6 +128,20 @@ the design:
   `product_ready_for_feed` — so no ShopMy product could ever reach the feed, and
   the image could not be re-hosted either. Found by the Task 7 one-collection
   checkpoint, not by any dry run.
+- **ShopMy's `pins` CDN sends a malformed `Content-Type`.** `static.shopmy.us/pins/*`
+  responds `content-type: jpeg` instead of `image/jpeg`; `static.shopmy.us/uploads/*`
+  is correct. `verify-product-image` requires the header to start with `image/`
+  (`supabase/functions/verify-product-image/index.ts:133`), so every pins-bucket
+  image is rejected as `notimage` and rolls up to `needs_review:unfetchable` —
+  measured 11 of 11. The bytes themselves are a valid JPEG.
+
+  Fixed in the shared verifier by normalising a bare, unambiguous image subtype
+  (`jpeg`, `jpg`, `png`, `webp`, `gif`, `avif`) to `image/<subtype>`. The change is
+  **widening-only**: it accepts headers that are currently rejected and cannot
+  reject anything currently accepted. No existing catalog row was affected by this
+  bug (measured: the 13 `needs_review:unfetchable` rows were all ShopMy), so the
+  fix is ShopMy-motivated but correctly belongs in the shared path rather than a
+  ShopMy special case.
 - **No description**, no materials, no styling or occasion metadata.
 - **No gender field.** `Department_name` is "Footwear", not gendered.
 - **Roughly 14% of pins are incomplete.** In the 14-pin sample collection, two had
