@@ -89,6 +89,28 @@ Deno.serve(async (req) => {
   if (!authHeader?.startsWith('Bearer ')) return json({ success: false, error: 'unauthorized' }, 401);
   const token = authHeader.replace('Bearer ', '');
   const admin = createClient(supabaseUrl, serviceRoleKey, { auth: { persistSession: false } });
+
+  // Best-effort progress reporting. A failure here must NEVER fail the ingest —
+  // the job row is for the operator's benefit, the products are the point. A
+  // missing or invalid job_id simply means the run is unreported.
+  //
+  // Typed via `typeof admin` (not the module-level `ReturnType<typeof
+  // createClient>` used elsewhere in this repo) because that pattern fails
+  // `deno check` here: esm.sh's @supabase/supabase-js@2 resolves an older
+  // SupabaseClient<Database, SchemaName, Schema, ...> shape at this call site
+  // but a newer SupabaseClient<Database, ClientOptions, ...> shape for the
+  // bare `ReturnType<typeof createClient>` type query, so passing `admin`
+  // into a same-file helper typed that way doesn't type-check. Confirmed
+  // pre-existing and out of scope: dots-payout/index.ts, generate-look/index.ts
+  // and generate-style/index.ts already use that pattern and already fail
+  // `deno check` (39 errors on dots-payout, unmodified) for the same reason.
+  async function patchJob(jobId: string | null, patch: Record<string, unknown>): Promise<void> {
+    if (!jobId) return;
+    try {
+      await admin.from('crawl_jobs').update(patch).eq('id', jobId);
+    } catch { /* progress is not worth failing an ingest over */ }
+  }
+
   let isServiceRole = false;
   try {
     const parts = token.split('.');
@@ -117,6 +139,7 @@ Deno.serve(async (req) => {
     // unthrottled - the one thing the batching design exists to prevent.
     const rawDelay = Number(body.batch_delay_ms ?? DEFAULT_DELAY_MS);
     const delayMs = Math.max(Number.isFinite(rawDelay) ? rawDelay : DEFAULT_DELAY_MS, 0);
+    const jobId: string | null = typeof body.job_id === 'string' ? body.job_id : null;
 
     let username: string | null = body.username ?? null;
     let sectionId: number | null = body.section_id ?? null;
@@ -213,6 +236,12 @@ Deno.serve(async (req) => {
     // still report what landed - otherwise the operator has to query products
     // directly to find out how much of the run committed before deciding
     // whether to re-run.
+    await patchJob(jobId, {
+      status: 'crawling',
+      started_at: new Date().toISOString(),
+      total_urls: unique.length,
+    });
+
     let inserted = 0, merged = 0, writeError: string | null = null;
     for (let i = 0; i < unique.length; i += batchSize) {
       const batch = unique.slice(i, i + batchSize);
@@ -223,8 +252,16 @@ Deno.serve(async (req) => {
       }
       inserted += data?.inserted ?? 0;
       merged += data?.merged ?? 0;
+      await patchJob(jobId, { scraped_urls: inserted + merged });
       if (i + batchSize < unique.length && delayMs > 0) await sleep(delayMs);
     }
+
+    await patchJob(jobId, {
+      status: writeError ? 'failed' : 'done',
+      completed_at: new Date().toISOString(),
+      scraped_urls: inserted + merged,
+      error: writeError,
+    });
 
     return json(
       { ...summary, success: !writeError, dry_run: false, inserted, merged,
