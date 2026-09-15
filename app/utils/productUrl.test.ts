@@ -34,6 +34,14 @@ describe('nonProductUrlReason', () => {
     expect(nonProductUrlReason('https://www.amazon.com/gp/help/customer')).not.toBeNull();
   });
 
+  it('rejects /customer subpaths but not slugs that merely start with it', () => {
+    expect(nonProductUrlReason('https://example.com/customer')).not.toBeNull();
+    expect(nonProductUrlReason('https://example.com/customer/')).not.toBeNull();
+    expect(nonProductUrlReason('https://example.com/customer/orders')).not.toBeNull();
+    expect(nonProductUrlReason('https://example.com/customer/profile')).not.toBeNull();
+    expect(nonProductUrlReason('https://example.com/customer-favourites-tee')).toBeNull();
+  });
+
   it('isLikelyProductUrl agrees with nonProductUrlReason', () => {
     expect(isLikelyProductUrl('https://www.nordstrom.com/s/x/123')).toBe(true);
     expect(isLikelyProductUrl('https://example.com/')).toBe(false);

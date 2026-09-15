@@ -49,7 +49,7 @@ export function nonProductUrlReason(rawUrl: string): string | null {
     '/login',
     '/signin',
     '/account',
-    '/customer/',
+    '/customer',   // no trailing slash: the boundary rule appends one
   ];
   // Match on a path BOUNDARY only — exact, or the prefix followed by "/".
   // A bare startsWith() would reject real product slugs: "/cartier-tank-watch"
