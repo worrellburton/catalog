@@ -243,17 +243,24 @@ Deno.serve(async (req) => {
     });
 
     let inserted = 0, merged = 0, writeError: string | null = null;
-    for (let i = 0; i < unique.length; i += batchSize) {
-      const batch = unique.slice(i, i + batchSize);
-      const { data, error } = await admin.rpc('shopmy_upsert_batch', { rows: batch });
-      if (error) {
-        writeError = `upsert batch ${Math.floor(i / batchSize)}: ${error.message}`;
-        break;
+    try {
+      for (let i = 0; i < unique.length; i += batchSize) {
+        const batch = unique.slice(i, i + batchSize);
+        const { data, error } = await admin.rpc('shopmy_upsert_batch', { rows: batch });
+        if (error) {
+          writeError = `upsert batch ${Math.floor(i / batchSize)}: ${error.message}`;
+          break;
+        }
+        inserted += data?.inserted ?? 0;
+        merged += data?.merged ?? 0;
+        await patchJob(jobId, { scraped_urls: inserted + merged });
+        if (i + batchSize < unique.length && delayMs > 0) await sleep(delayMs);
       }
-      inserted += data?.inserted ?? 0;
-      merged += data?.merged ?? 0;
-      await patchJob(jobId, { scraped_urls: inserted + merged });
-      if (i + batchSize < unique.length && delayMs > 0) await sleep(delayMs);
+    } catch (e) {
+      // A throw here (library fault, runtime error) would otherwise skip the
+      // closing patch entirely. Turn it into a writeError so the row is closed
+      // out AND the caller still gets the partial summary.
+      writeError = `unexpected error during write: ${String(e).slice(0, 200)}`;
     }
 
     await patchJob(jobId, {
