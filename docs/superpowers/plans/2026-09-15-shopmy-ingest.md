@@ -418,8 +418,16 @@ begin
       jsonb_array_length(rows);
   end if;
 
+  -- Dedup WITHIN the batch, on the same key the index uses. Postgres raises
+  -- "ON CONFLICT DO UPDATE command cannot affect row a second time" if one
+  -- statement touches the same row twice, which would abort the whole batch
+  -- of 25 over a single duplicate. Two pins of the same product differing
+  -- only in utm_* is routine in affiliate data, so this is expected input,
+  -- not an edge case. Dedup must live here, not in the caller: only SQL has
+  -- normalize_product_url, and a JS approximation would drift from the index.
+  -- `ord` keeps the first occurrence in array order, deterministically.
   with incoming as (
-    select
+    select distinct on (public.normalize_product_url(e->>'url'))
       e->>'url'            as url,
       e->>'name'           as name,
       e->>'brand'          as brand,
@@ -429,7 +437,8 @@ begin
       e->>'image_url'      as image_url,
       e->'images'          as images,
       e->'raw_data'        as raw_data
-    from jsonb_array_elements(rows) e
+    from jsonb_array_elements(rows) with ordinality as t(e, ord)
+    order by public.normalize_product_url(e->>'url'), ord
   ),
   ins as (
     insert into public.products
@@ -1024,8 +1033,10 @@ Deno.serve(async (req) => {
       }
     });
 
-    // Deduplicate within the run — the same product appears in several
-    // collections, and one batch cannot touch the same row twice.
+    // Cheap pre-filter so the run summary can report duplicates. This is
+    // NOT the guarantee: it cannot strip tracking params the way
+    // normalize_product_url does, so utm-only variants slip through here.
+    // shopmy_upsert_batch dedups authoritatively in SQL.
     const seen = new Set<string>();
     const unique = mapped.filter((m) => {
       const key = m.url.toLowerCase().replace(/^https?:\/\/(www\.)?/, '').replace(/\/$/, '');
