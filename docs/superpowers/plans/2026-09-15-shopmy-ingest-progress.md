@@ -276,16 +276,36 @@ Inside the batch loop, after a batch commits successfully:
       await patchJob(admin, jobId, { scraped_urls: inserted + merged });
 ```
 
-On a write error, before breaking out of the loop, and at the end:
+Wrap the batch loop so the closing patch **always** runs. A bare statement after
+the loop is skipped when the loop body throws a genuine JS exception (as opposed
+to the RPC returning an `{error}` object) — control jumps to the outer catch, and
+the job row is stranded at `'crawling'` with no `completed_at` forever. That is
+exactly the failure mode this feature exists to surface:
 
 ```ts
-    await patchJob(admin, jobId, {
+    try {
+      for (let i = 0; i < unique.length; i += batchSize) {
+        // …existing loop body, unchanged…
+      }
+    } catch (e) {
+      // A throw here (library fault, runtime error) would otherwise skip the
+      // closing patch entirely. Turn it into a writeError so the row is closed
+      // out AND the caller still gets the partial summary.
+      writeError = `unexpected error during write: ${String(e).slice(0, 200)}`;
+    }
+
+    await patchJob(jobId, {
       status: writeError ? 'failed' : 'done',
       completed_at: new Date().toISOString(),
       scraped_urls: inserted + merged,
       error: writeError,
     });
 ```
+
+This also improves the non-job case: today a throw inside the loop loses the
+whole run summary to the generic 500 handler, discarding the `inserted`/`merged`
+counts for batches that already committed. Converting it to a `writeError` means
+the existing partial-summary response covers it.
 
 `scraped_urls` is `inserted + merged` — rows the run actually accounted for. Note a no-op merge increments neither (the guard in migration `20260915000002` skips it), so a fully idempotent re-run legitimately finishes at 0 of N; that is correct, not a bug, and the results table makes it obvious.
 
