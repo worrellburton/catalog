@@ -1,5 +1,4 @@
 import { useState, useEffect, useCallback } from 'react';
-import { supabase } from '~/utils/supabase';
 import { catalogAlert, catalogConfirm } from '~/components/CatalogDialog';
 import {
   listCrawlJobs,
@@ -11,6 +10,7 @@ import {
 } from '~/services/site-crawls';
 import JobProgress from '~/components/JobProgress';
 import RerunAllStuckButton from '~/components/RerunAllStuckButton';
+import ShopMyIngest from '~/components/ShopMyIngest';
 import { isStuck } from '~/utils/aiBudget';
 
 // Typical wall-clock for a profile crawl (single shopmy/ltk/linktree
@@ -62,13 +62,6 @@ export function isShopMyUrl(raw: string): boolean {
   } catch {
     return false;
   }
-}
-
-/** Recover an edge function's JSON body from a non-2xx invoke() error. */
-async function edgeBody(err: unknown): Promise<Record<string, any> | null> {
-  const ctx = (err as { context?: Response })?.context;
-  if (!ctx || typeof ctx.json !== 'function') return null;
-  try { return await ctx.json(); } catch { return null; }
 }
 
 function AddProfileModal({
@@ -148,7 +141,9 @@ export default function ProfileCrawlsPanel() {
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
-  const [adding, setAdding] = useState(false);
+  // Set once the operator submits a ShopMy URL; hands off to <ShopMyIngest>,
+  // which owns preview, confirm, progress and the write.
+  const [shopMyUrl, setShopMyUrl] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -166,64 +161,29 @@ export default function ProfileCrawlsPanel() {
     loadData();
   }, [loadData]);
 
+  // Poll loop for a running job's row. A silent refresh (no `loading` flip)
+  // so the table doesn't flash to the "Loading…" state on every tick —
+  // matches ProductCrawlsPanel's refreshSilent. Only runs while something
+  // is actually pending/crawling, so an idle admin tab doesn't poll forever.
+  const refreshSilent = useCallback(async () => {
+    try {
+      const data = await listCrawlJobs({ jobType: 'profile' });
+      setJobs(data);
+    } catch {
+      // ignore - next tick will retry
+    }
+  }, []);
+
+  useEffect(() => {
+    const active = jobs.some((j) => j.status === 'pending' || j.status === 'crawling');
+    if (!active) return;
+    const t = setInterval(() => { void refreshSilent(); }, 5_000);
+    return () => clearInterval(t);
+  }, [jobs, refreshSilent]);
+
   const handleAdd = async (url: string, name: string) => {
     if (isShopMyUrl(url)) {
-      // ShopMy publishes a JSON API, so it never needs the AI crawl.
-      // Always dry-run first, show the operator the counts, and write only on
-      // an explicit confirm — one shop is ~424 products.
-      if (adding) return;
-      setAdding(true);
-      try {
-        const { data, error } = await supabase.functions.invoke('shopmy-ingest', {
-          body: { url, dry_run: true },
-        });
-        const preview = data ?? (error ? await edgeBody(error) : null);
-        if (!preview?.success) {
-          throw new Error(preview?.error ?? (error as Error)?.message ?? 'preview failed');
-        }
-
-        const skipped = Object.entries(preview.skipped ?? {})
-          .map(([reason, n]) => `${n} ${reason}`)
-          .join(', ') || 'none';
-
-        const ok = await catalogConfirm({
-          title: `Ingest ${preview.mapped} products from ${preview.curator}?`,
-          message:
-            `${preview.collections} collections · ${preview.pins} pins · ` +
-            `${preview.mapped} will be added.\nSkipped: ${skipped}.\n\n` +
-            `Products land inactive and still need curation before they reach the feed.` +
-            (preview.has_more
-              ? `\n\nShopMy reports more collections than this run covers — only the first page will be ingested.`
-              : ''),
-        });
-        if (!ok) return;
-
-        const { data: runData, error: runErr } = await supabase.functions.invoke('shopmy-ingest', {
-          body: { url, dry_run: false },
-        });
-        // A 500 here still carries inserted/merged for the batches that DID
-        // commit — read the body rather than reporting a flat failure.
-        const run = runData ?? (runErr ? await edgeBody(runErr) : null);
-        if (!run) throw runErr ?? new Error('ingest returned no response');
-        const failureCount = Array.isArray(run.failures) ? run.failures.length : 0;
-        void catalogAlert({
-          title: run.success ? 'Ingest complete' : 'Ingest partially failed',
-          message: `${run.inserted ?? 0} added, ${run.merged ?? 0} merged.` +
-            (run.error ? `\n\n${run.error}` : '') +
-            (failureCount
-              ? `\n\n${failureCount} collection(s) failed and were skipped:\n${run.failures.join('\n')}`
-              : '') +
-            (run.has_more
-              ? '\n\nMore collections exist beyond this run (ShopMy paginated the list) — this run only covered the first page.'
-              : ''),
-        });
-        loadData();
-      } catch (e) {
-        console.error('ShopMy ingest failed:', e);
-        void catalogAlert({ title: 'ShopMy ingest failed', message: (e as Error).message });
-      } finally {
-        setAdding(false);
-      }
+      setShopMyUrl(url);   // hand off to <ShopMyIngest>; it owns preview + confirm
       return;
     }
 
@@ -238,6 +198,12 @@ export default function ProfileCrawlsPanel() {
   };
 
   const handleRetry = async (job: CrawlJob) => {
+    // A ShopMy row must never be retried through the AI crawler — that's
+    // the expensive path this feature exists to avoid.
+    if (isShopMyUrl(job.site_url)) {
+      setShopMyUrl(job.site_url);
+      return;
+    }
     setBusyId(job.id);
     try {
       await retryCrawlJob(job.id);
@@ -280,14 +246,22 @@ export default function ProfileCrawlsPanel() {
               }
             }}
           />
-          <button className="admin-btn admin-btn-primary" disabled={adding} onClick={() => setShowAdd(true)}>
+          <button className="admin-btn admin-btn-primary" onClick={() => setShowAdd(true)}>
             <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
               <line x1="12" y1="5" x2="12" y2="19" /><line x1="5" y1="12" x2="19" y2="12" />
             </svg>
-            {adding ? 'Ingesting…' : 'New Profile Crawl'}
+            New Profile Crawl
           </button>
         </div>
       </div>
+
+      {shopMyUrl && (
+        <ShopMyIngest
+          url={shopMyUrl}
+          onClose={() => { setShopMyUrl(null); loadData(); }}
+          onDone={loadData}
+        />
+      )}
 
       {loading ? (
         <div className="admin-empty">Loading profiles...</div>
