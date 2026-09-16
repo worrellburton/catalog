@@ -329,6 +329,23 @@ Deno.test('mapCurator rejects a user block with no usable username', () => {
   assert(mapCurator({ name: 'Bobbi Brown' }) === null, 'no username');
   assert(mapCurator({ username: '   ', name: 'B' }) === null, 'blank username');
   assert(mapCurator({ username: '@@@', name: 'B' }) === null, 'nothing survives normalisation');
+  // NOT covered by '@@@', which the leading-@ strip removes rather than the
+  // punctuation rule. A handle of only "." / "_" would otherwise survive as
+  // garbage and satisfy the NOT NULL constraint on creators.handle.
+  assert(mapCurator({ username: '...', name: 'B' }) === null, 'dots only');
+  assert(mapCurator({ username: '___', name: 'B' }) === null, 'underscores only');
+  assert(mapCurator({ username: '._.', name: 'B' }) === null, 'mixed punctuation only');
+  assert(mapCurator({ username: '\u65e5\u672c\u8a9e', name: 'B' }) === null, 'unicode only');
+});
+
+Deno.test('mapCurator trims edge punctuation but keeps a legitimate interior one', () => {
+  // This assertion FAILS if the leading/trailing trim is removed — without it
+  // the trim had no coverage at all.
+  assert(mapCurator({ username: ' -bobbi- ', name: 'B' })?.handle === 'bobbi', 'edge dashes trimmed');
+  assert(
+    mapCurator({ username: 'bobbi.brown_1', name: 'B' })?.handle === 'bobbi.brown_1',
+    'a real handle with a dot and an underscore must survive — do not over-reject',
+  );
 });
 
 Deno.test('pinAffiliateUrl is a pure function of the pin id, with no clickId', () => {
@@ -375,12 +392,15 @@ export interface MappedCurator {
  * "JustBobbi" and "justbobbi" both insert and then resolve ambiguously.
  */
 function normaliseHandle(raw: string): string {
-  return raw
+  const handle = raw
     .trim()
     .toLowerCase()
     .replace(/^@+/, '')
     .replace(/[^a-z0-9._-]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+    .replace(/^[-._]+|[-._]+$/g, '');
+  // A handle made of only ".", "_", "-" (e.g. "...", "._.") would otherwise
+  // survive as garbage and pass the NOT NULL constraint on creators.handle.
+  return /[a-z0-9]/.test(handle) ? handle : '';
 }
 
 /** ShopMy's `user` block (from GET /api/Collections/:id) → a creators row. */
@@ -401,8 +421,12 @@ export function mapCurator(user: ShopMyUser): MappedCurator | null {
 }
 
 /**
- * The creator's own stable ShopMy link for one pin. A permanent 302 into
- * ShopMy's redirect_click carrying `cid=user-<curatorId>-pin-<pinId>`.
+ * The creator's own stable ShopMy link for one pin: a short link at
+ * `go.shopmy.us/p-<pinId>`, nothing else — no query string. ShopMy resolves
+ * this server-side, at click time, into a redirect through their own
+ * `redirect_click` endpoint; the `cid` that hop carries is minted by ShopMy
+ * at that moment, never by us, and must never be reconstructed and stored
+ * here.
  *
  * This is why we can store a link at all. ShopMy's own `affiliate_link` field
  * embeds a fresh `clickId` UUID on every fetch, so storing THAT made each
