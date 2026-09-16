@@ -1451,7 +1451,7 @@ describe('toggleSection', () => {
   it('removes a selected section and adds an unselected one', () => {
     const off = toggleSection(base, 409);
     expect(off.selectedSections).toEqual([2387365]);
-    expect(toggleSection(off, 409).selectedSections.sort()).toEqual([409, 2387365]);
+    expect(toggleSection(off, 409).selectedSections.sort((a, b) => a - b)).toEqual([409, 2387365]);
   });
 
   it('does not mutate the input state', () => {
