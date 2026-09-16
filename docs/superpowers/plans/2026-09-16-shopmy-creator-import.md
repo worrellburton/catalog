@@ -737,6 +737,26 @@ Invoke with `creator_handle` set to that handle and `include_creator: true`, `dr
 
 Expected: HTTP 409 and `error` containing `already belongs to a non-ShopMy creator`. Confirm with SQL that the existing row's `display_name` and `avatar_url` are unchanged.
 
+> **Post-review amendments (commit `f80dd941`).** Five defects in the code
+> blocks above were found in review and fixed in the shipped function. If you
+> re-run this task, take the shipped file as authoritative:
+>
+> 1. `const captured: ShopMyUser | null = curatorUser;` does NOT fix the TS2698
+>    spread error — TypeScript narrows a new `const` from its initializer, so a
+>    wider annotation cannot re-widen it. Hold the user block in a ref object
+>    (`{ current: ShopMyUser | null }`); a property read is not narrowed that way.
+> 2. All four early returns in the creator block sit AFTER the `status:'crawling'`
+>    patch and must close the job row out through a `bail()` helper
+>    (`status:'failed'` + `completed_at` + `error`). The outer `catch` only catches
+>    throws, and `ShopMyIngest.tsx:122-128` polls a `crawling` row forever.
+> 3. `sort_order: i + j` was non-deterministic: the `pooled` callback pushed into a
+>    shared array in collection-COMPLETION order. Return the rows from the callback
+>    and `.flat()` the result — `pooled` writes `out[idx]` by pickup index.
+> 4. `Number.isFinite(pinId)` admits `Number(null) === 0`, fabricating a dead
+>    `go.shopmy.us/p-0`. Use `Number.isInteger(pinId) && pinId > 0`.
+> 5. The link RPC's `missing` count was discarded; accumulate it and report
+>    `link_missing`.
+
 - [ ] **Step 11: Commit**
 
 ```bash
