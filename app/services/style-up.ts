@@ -31,6 +31,13 @@ export interface StyleUpStylist {
   /** The stylist's favorite brands, shown as logo chips on the picker.
    *  `domain` drives the client-side logo lookup. */
   favoriteBrands: { name: string; domain: string }[];
+  /** Phase 2: true if a real human (curated picks, human-authored replies);
+   *  false for AI personas. Drives the picker's AI/human filter and the
+   *  visual "robot" chip on AI cards. */
+  isHuman: boolean;
+  /** Phase 2: 'men' | 'women' | 'unisex' — nullable while the roster is
+   *  still mostly AI personas that don't declare one. */
+  genderFocus: 'men' | 'women' | 'unisex' | null;
 }
 
 /** A product attached to a chat message (the stylist's pick). Loose by design
@@ -96,12 +103,16 @@ function mapStylist(r: Record<string, unknown>): StyleUpStylist {
           .filter(b => b && typeof b.name === 'string' && typeof b.domain === 'string')
           .map(b => ({ name: b.name as string, domain: b.domain as string }))
       : [],
+    isHuman: r.is_human === true,
+    genderFocus: (r.gender_focus === 'men' || r.gender_focus === 'women' || r.gender_focus === 'unisex')
+      ? r.gender_focus
+      : null,
   };
 }
 
 // Every stylist column the client maps. Centralized so every select stays in
 // sync with mapStylist (source_mode / landing_slot were easy to forget).
-const STYLIST_COLS = 'id, name, avatar_url, specialty, bio, city, age, accent_color, source_mode, landing_slot, favorite_brands';
+const STYLIST_COLS = 'id, name, avatar_url, specialty, bio, city, age, accent_color, source_mode, landing_slot, favorite_brands, is_human, gender_focus';
 const STYLIST_JOIN = `stylist:style_up_stylists(${STYLIST_COLS})`;
 
 function mapMessage(r: Record<string, unknown>): StyleUpMessage {
@@ -118,18 +129,103 @@ function mapMessage(r: Record<string, unknown>): StyleUpMessage {
   };
 }
 
+// Phase 3.6: em-dashes read as AI-generated. The edge function scrubs them on
+// insert and the transcript scrubs them at render time, but the thread lists
+// build their own previews straight off the row, so they need the same scrub.
+function stripEmDashes(s: string): string {
+  return s
+    .replace(/\s*[—–]\s*/g, ', ')
+    .replace(/, , /g, ', ');
+}
+
+// Phase 2.3 guard, at the writer level: a HUMAN stylist thread is answered by a
+// real person from the inbox, so the rule-based client stylist must never post
+// into it. style-up-chat already guards the LLM path; the four client writers
+// below (sendStylistText / sendChooser / sendProductPick / sendSwapOptions) are
+// the other half. Guarding inside the writers — not at each call site — covers
+// every current and future caller.
+//
+// It suppresses the BOT, not the stylist: the human's own inbox posts products
+// through sendProductPick (routes/style_.inbox.tsx), so a write by the thread's
+// own stylist (human_user_id === auth.uid()) must still go through — otherwise
+// "attach a product" is dead in the one UI it exists for.
+//
+// Fails OPEN (only an explicit is_human === true suppresses, same posture as the
+// edge fn) so a transient read error can't mute the AI stylists. The is_human
+// verdict is cached per thread — a single canned beat fires several writers back
+// to back — but the "it's my own thread" pass is not, since that depends on who
+// is signed in.
+const suppressWriteCache = new Map<string, boolean>();
+
+type ThreadStylistGuardRow = { is_human?: boolean; human_user_id?: string | null };
+
+async function botMustStaySilent(threadId: string): Promise<boolean> {
+  const cached = suppressWriteCache.get(threadId);
+  if (cached !== undefined) return cached;
+  if (!supabase || !threadId) return false;
+  const { data, error } = await supabase
+    .from('style_up_threads')
+    .select('stylist:style_up_stylists(is_human, human_user_id)')
+    .eq('id', threadId)
+    .maybeSingle();
+  if (error || !data) return false; // fail open, and don't cache a miss
+  const raw = (data as { stylist?: ThreadStylistGuardRow | ThreadStylistGuardRow[] | null }).stylist;
+  const s = Array.isArray(raw) ? raw[0] : raw;
+  if (s?.is_human !== true) {
+    suppressWriteCache.set(threadId, false);
+    return false;
+  }
+  // The stylist themselves, writing from their own inbox — let it through. This
+  // verdict depends on WHO is signed in, not just on the thread, so it is not
+  // cached (a stale "allowed" would survive a sign-out into a shopper session).
+  const { data: auth } = await supabase.auth.getUser();
+  if (auth?.user?.id && auth.user.id === s.human_user_id) return false;
+  suppressWriteCache.set(threadId, true);
+  return true;
+}
+
 /** The active stylist roster, in display order. Pass `landingOnly` to get just
  *  the two stylists featured on the /style landing page (landing_slot set). */
+// The roster is world-readable, ~13 rows, and changes about never — but the
+// Style app's sub-pages (/style/settings, /apply, /showroom, /inbox) are SIBLING
+// routes, so leaving one unmounts the whole experience and coming back refetches
+// everything from cold. Memoise per query shape, with an in-flight guard so two
+// mounts in the same tick share one request. Same shape as dials.ts's dialCache.
+const stylistCache = new Map<string, StyleUpStylist[]>();
+const stylistInflight = new Map<string, Promise<StyleUpStylist[]>>();
+
+/** Drop the memoised roster — call after anything that edits stylists. */
+export function invalidateStylistCache(): void {
+  stylistCache.clear();
+  stylistInflight.clear();
+}
+
 export async function fetchStylists(opts: { landingOnly?: boolean } = {}): Promise<StyleUpStylist[]> {
   if (!supabase) return [];
-  let q = supabase
-    .from('style_up_stylists')
-    .select(STYLIST_COLS)
-    .eq('is_active', true);
-  if (opts.landingOnly) q = q.not('landing_slot', 'is', null);
-  const { data, error } = await q.order('sort', { ascending: true });
-  if (error || !data) return [];
-  return (data as Record<string, unknown>[]).map(mapStylist);
+  const key = opts.landingOnly ? 'landing' : 'all';
+  const cached = stylistCache.get(key);
+  if (cached) return cached;
+  const inflight = stylistInflight.get(key);
+  if (inflight) return inflight;
+
+  const sb = supabase;
+  const run = (async () => {
+    let q = sb
+      .from('style_up_stylists')
+      .select(STYLIST_COLS)
+      .eq('is_active', true);
+    if (opts.landingOnly) q = q.not('landing_slot', 'is', null);
+    const { data, error } = await q.order('sort', { ascending: true });
+    if (error || !data) return [];
+    const rows = (data as Record<string, unknown>[]).map(mapStylist);
+    // Only cache a real result — an empty list is usually a transient failure,
+    // and caching it would strand the picker on "No stylists available yet."
+    if (rows.length) stylistCache.set(key, rows);
+    return rows;
+  })().finally(() => { stylistInflight.delete(key); });
+
+  stylistInflight.set(key, run);
+  return run;
 }
 
 /** Find (or open) the shopper's ongoing thread with a stylist. One thread per
@@ -336,80 +432,61 @@ export interface StyleUpThreadSummary {
 /** All of the shopper's conversations that have at least one message, newest
  *  first, each with a short preview of the last message — so the roster can
  *  surface ongoing chats to resume. */
-export async function fetchMyThreads(shopperUserId: string): Promise<StyleUpThreadSummary[]> {
+/** The shopper's conversation list, in ONE round trip.
+ *
+ *  Was three serial queries, and the middle one selected every message in every
+ *  thread — unbounded — only to keep the newest per thread for a one-line
+ *  preview. It is the first thing on the home surface and it re-runs on a 6s
+ *  poll, so that cost was paid over and over. `style_up_my_threads()` does the
+ *  DISTINCT ON server-side and joins the stylist + any still-running generation;
+ *  the transcript never leaves the database. The RPC is security INVOKER and
+ *  scopes to auth.uid(), so RLS applies exactly as it did to these selects.
+ *
+ *  Migration: supabase/migrations/20260825120000_style_up_my_threads_rpc.sql */
+export async function fetchMyThreads(_shopperUserId: string): Promise<StyleUpThreadSummary[]> {
   if (!supabase) return [];
-  const { data: threads } = await supabase
-    .from('style_up_threads')
-    .select(`id, last_message_at, hunting_until, ${STYLIST_JOIN}`)
-    .eq('shopper_user_id', shopperUserId)
-    .order('last_message_at', { ascending: false });
-  if (!threads || threads.length === 0) return [];
-
-  const ids = threads.map(t => String(t.id));
-  const { data: msgs } = await supabase
-    .from('style_up_messages')
-    .select('thread_id, sender, kind, body, render_generation_id, created_at')
-    .in('thread_id', ids)
-    .order('created_at', { ascending: false });
-
-  const preview = new Map<string, string>();
-  const lastRenderGen = new Map<string, string>(); // thread → gen id when the LAST message is a render
-  for (const m of (msgs ?? []) as Array<{ thread_id: string; sender: string; kind: string; body: string | null; render_generation_id: string | null }>) {
-    const tid = String(m.thread_id);
-    if (preview.has(tid)) continue;
-    let text = m.kind === 'product' ? 'Sent a product pick'
-      : m.kind === 'render' ? 'Sent a look'
-      : (m.body ?? '');
-    if (m.sender === 'shopper') text = `You: ${text}`;
-    preview.set(tid, text);
-    if (m.kind === 'render' && m.render_generation_id) lastRenderGen.set(tid, m.render_generation_id);
-  }
-
-  // A thread whose newest message is a render may still be cooking — check the
-  // generation's status in one batch (terminal = done/failed).
-  const renderingThreads = new Set<string>();
-  const genTiming = new Map<string, { createdAt: string; durationSeconds: number }>(); // thread → active render timing
-  if (lastRenderGen.size > 0) {
-    const { data: gens } = await supabase
-      .from('user_generations')
-      .select('id, status, created_at, duration_seconds')
-      .in('id', [...lastRenderGen.values()]);
-    const activeById = new Map(
-      ((gens ?? []) as Array<{ id: string; status: string | null; created_at: string; duration_seconds: number | null }>)
-        .filter(g => g.status !== 'done' && g.status !== 'failed')
-        .map(g => [g.id, g]),
-    );
-    for (const [tid, gid] of lastRenderGen) {
-      const g = activeById.get(gid);
-      if (g) {
-        renderingThreads.add(tid);
-        genTiming.set(tid, { createdAt: g.created_at, durationSeconds: g.duration_seconds ?? 10 });
-      }
-    }
+  const { data, error } = await supabase.rpc('style_up_my_threads');
+  if (error || !data) {
+    if (error) console.warn('[style-up] conversation list failed:', error.message);
+    return [];
   }
 
   const now = Date.now();
-  return threads
-    .map(t => {
-      const raw = Array.isArray(t.stylist) ? t.stylist[0] : t.stylist;
-      if (!raw) return null;
-      const tid = String(t.id);
-      // Only surface threads that actually have a message.
-      if (!preview.has(tid)) return null;
-      // Hunting marker counts as active while set (the server clears it when
-      // the pull lands); a 2-min stale grace covers a run that died mid-pull.
-      const hu = t.hunting_until ? new Date(String(t.hunting_until)).getTime() : null;
-      const hunting = hu != null && now < hu + 120000;
-      return {
-        threadId: tid,
-        stylist: mapStylist(raw as Record<string, unknown>),
-        lastMessage: preview.get(tid) ?? null,
-        lastMessageAt: (t.last_message_at as string | null) ?? null,
-        working: hunting || renderingThreads.has(tid),
-        workingGen: genTiming.get(tid) ?? null,
-      };
-    })
-    .filter((x): x is StyleUpThreadSummary => !!x);
+  return (data as Array<{
+    thread_id: string;
+    last_message_at: string | null;
+    hunting_until: string | null;
+    stylist: Record<string, unknown> | null;
+    last_sender: string | null;
+    last_kind: string | null;
+    last_body: string | null;
+    gen_status: string | null;
+    gen_created_at: string | null;
+    gen_duration_seconds: number | null;
+  }>).flatMap(r => {
+    if (!r.stylist) return [];
+    let text = r.last_kind === 'product' ? 'Sent a product pick'
+      : r.last_kind === 'render' ? 'Sent a look'
+      : (r.last_body ?? '');
+    if (r.last_sender === 'shopper') text = `You: ${text}`;
+    // Hunting marker counts as active while set (the server clears it when the
+    // pull lands); a 2-min stale grace covers a run that died mid-pull.
+    const hu = r.hunting_until ? new Date(r.hunting_until).getTime() : null;
+    const hunting = hu != null && now < hu + 120000;
+    // The RPC only joins a generation that is still running, so its presence
+    // IS the "rendering" signal — no second status check needed.
+    const rendering = r.gen_status != null;
+    return [{
+      threadId: r.thread_id,
+      stylist: mapStylist(r.stylist),
+      lastMessage: stripEmDashes(text),
+      lastMessageAt: r.last_message_at,
+      working: hunting || rendering,
+      workingGen: rendering && r.gen_created_at
+        ? { createdAt: r.gen_created_at, durationSeconds: r.gen_duration_seconds ?? 10 }
+        : null,
+    }];
+  });
 }
 
 // ── Admin monitoring (admin StyleUp dashboard) ──────────────────────────────
@@ -458,6 +535,50 @@ export interface StyleUpTrace {
   createdAt: string;
   payload: Record<string, unknown>;     // edge-written turn record
   searches: StyleUpTraceSearch[] | null; // client-enriched per-query results
+}
+
+export interface RetrievalCandidate {
+  id: string; name: string | null; brand: string | null;
+  /** Null on the legacy recency scan, which has no slots or scores. */
+  slot: string | null; score: number | null; rank: number | null;
+}
+export interface RetrievalSlot {
+  slot: string; query: string; tier: 1 | 2 | 3;
+  returned: number; kept: number; error: string | null;
+}
+export interface StyleUpRetrieval {
+  method: string; occasion: string; gender: string; aesthetic: string | null;
+  exclude_ids: string[]; rotate: number;
+  slots: RetrievalSlot[]; candidates: RetrievalCandidate[];
+}
+
+/** Index every traced candidate by product id, so a product bubble in the
+ *  transcript can look up exactly how it was pulled. An exact id join — no
+ *  timestamp-proximity guessing. Later traces win, which is what you want when
+ *  the same product surfaced on more than one turn. */
+export function buildProvenanceIndex(
+  traces: StyleUpTrace[],
+): Map<string, { trace: StyleUpTrace; retrieval: StyleUpRetrieval; candidate: RetrievalCandidate }> {
+  const out = new Map<string, { trace: StyleUpTrace; retrieval: StyleUpRetrieval; candidate: RetrievalCandidate }>();
+  for (const trace of [...traces].sort((a, b) => a.createdAt.localeCompare(b.createdAt))) {
+    const retrieval = (trace.payload?.retrieval as StyleUpRetrieval | null) ?? null;
+    if (!retrieval?.candidates) continue;
+    for (const candidate of retrieval.candidates) out.set(candidate.id, { trace, retrieval, candidate });
+  }
+  return out;
+}
+
+/** Admin: replay retrieval for a trace that predates provenance capture. The
+ *  inputs are the originals; the candidate pool is today's catalog. Nothing is
+ *  stored — see the function's header comment. */
+export async function adminRetraceTrace(
+  traceId: string,
+): Promise<{ retrieval: StyleUpRetrieval; reconstructedAt: string } | { error: string }> {
+  if (!supabase) return { error: 'No database connection' };
+  const { data, error } = await supabase.functions.invoke('style-retrace', { body: { trace_id: traceId } });
+  if (error) return { error: error.message };
+  if (!data?.success) return { error: String(data?.error ?? 'retrace failed') };
+  return { retrieval: data.retrieval as StyleUpRetrieval, reconstructedAt: String(data.reconstructed_at) };
 }
 
 /** Enrich a turn's trace with the per-query web search results (client side). */
@@ -540,13 +661,53 @@ export async function adminListThreads(): Promise<AdminThread[]> {
         threadId: tid,
         shopper: shoppers.get(String(t.shopper_user_id)) ?? { id: String(t.shopper_user_id), name: 'Shopper', avatarUrl: null },
         stylist: mapStylist((raw ?? {}) as Record<string, unknown>),
-        lastMessage: previewOf(lm.kind, lm.body),
+        lastMessage: stripEmDashes(previewOf(lm.kind, lm.body)),
         lastMessageAt: (t.last_message_at as string | null) ?? null,
         messageCount: count.get(tid) ?? 0,
         awaitingStylist: lm.sender === 'shopper',
       };
     })
     .filter((x): x is AdminThread => !!x);
+}
+
+/** Admin: the header row for ONE conversation. The standalone chat page can be
+ *  opened cold (pasted URL, refresh) with no list in memory, so it needs the
+ *  shopper + stylist without pulling every thread. Message count / awaiting
+ *  state are left to the caller — it already holds the live transcript. */
+export async function adminGetThread(
+  threadId: string,
+): Promise<Pick<AdminThread, 'threadId' | 'shopper' | 'stylist' | 'lastMessageAt'> | null> {
+  if (!supabase || !threadId) return null;
+  const { data: t } = await supabase
+    .from('style_up_threads')
+    .select(`id, shopper_user_id, last_message_at, ${STYLIST_JOIN}`)
+    .eq('id', threadId)
+    .maybeSingle();
+  if (!t) return null;
+  const shopperId = String(t.shopper_user_id);
+  const raw = Array.isArray(t.stylist) ? t.stylist[0] : t.stylist;
+  return {
+    threadId: String(t.id),
+    shopper: (await shopperMap([shopperId])).get(shopperId)
+      ?? { id: shopperId, name: 'Shopper', avatarUrl: null },
+    stylist: mapStylist((raw ?? {}) as Record<string, unknown>),
+    lastMessageAt: (t.last_message_at as string | null) ?? null,
+  };
+}
+
+/** Admin: status + video for the render messages inside one transcript, so the
+ *  chat page can play the look inline instead of naming its id. */
+export async function adminRenderVideos(
+  genIds: string[],
+): Promise<Map<string, { status: string; videoUrl: string | null }>> {
+  const out = new Map<string, { status: string; videoUrl: string | null }>();
+  if (!supabase || genIds.length === 0) return out;
+  const { data } = await supabase
+    .from('user_generations').select('id, status, video_url').in('id', genIds);
+  for (const g of (data ?? []) as Array<{ id: string; status: string; video_url: string | null }>) {
+    out.set(g.id, { status: g.status, videoUrl: g.video_url });
+  }
+  return out;
 }
 
 /** All StyleUp-generated looks (render messages) with their generation status,
@@ -603,7 +764,10 @@ export async function adminListLooks(limit = 120): Promise<AdminLook[]> {
   });
 }
 
-/** Admin: post a stylist message into any thread (reply on behalf of stylist). */
+/** Admin: post a stylist message into any thread (reply on behalf of stylist).
+ *  Inherits sendStylistText's guard, so an admin who is not the thread's own
+ *  human stylist is a no-op on a human thread (the human answers from
+ *  routes/style_.inbox.tsx, which inserts its text replies directly). */
 export async function adminSendStylistMessage(threadId: string, text: string): Promise<boolean> {
   return !!(await sendStylistText(threadId, text));
 }
@@ -620,6 +784,25 @@ export async function adminDeleteLook(messageId: string): Promise<{ error: strin
   if (!supabase) return { error: 'No database connection' };
   const { error } = await supabase.from('style_up_messages').delete().eq('id', messageId);
   return { error: error?.message ?? null };
+}
+
+/** Admin: the conversation a generation came out of, if any. Used by the audit
+ *  page's back link — generations started from /generate have no thread. */
+export async function adminGetGenerationThread(
+  generationId: string,
+): Promise<{ threadId: string; shopperName: string; stylistName: string | null } | null> {
+  if (!supabase || !generationId) return null;
+  // maybeSingle() is safe here: render_generation_id is a uuid column and no
+  // generation is referenced by more than one message (verified across all rows).
+  const { data: msg } = await supabase
+    .from('style_up_messages')
+    .select('thread_id')
+    .eq('render_generation_id', generationId)
+    .maybeSingle();
+  if (!msg) return null;
+  const head = await adminGetThread(String(msg.thread_id));
+  if (!head) return null;
+  return { threadId: head.threadId, shopperName: head.shopper.name, stylistName: head.stylist.name || null };
 }
 
 /** The shopper's most-recently-active thread (+ its stylist), or null. Used to
@@ -680,6 +863,7 @@ export async function sendStylistText(
   text: string,
 ): Promise<StyleUpMessage | null> {
   if (!supabase || !text.trim()) return null;
+  if (await botMustStaySilent(threadId)) return null;
   const { data, error } = await supabase
     .from('style_up_messages')
     .insert({ thread_id: threadId, sender: 'stylist', kind: 'text', body: text.trim() })
@@ -734,6 +918,37 @@ async function getThreadStylistVibe(threadId: string): Promise<string | null> {
   const s = Array.isArray(raw) ? raw[0] : raw;
   const specialty = s?.specialty?.trim();
   return specialty ? specialty : null;
+}
+
+/** Turn a failed `createGeneration` into something a shopper can read.
+ *
+ *  Every error this returns is spoken by the stylist in chat and shown in the
+ *  render-error pill, so raw Postgres text must never reach it — a thread once
+ *  carried the literal `insert or update on table "user_generation_products"
+ *  violates foreign key constraint "user_generation_products_product_id_fkey"`
+ *  as a stylist message. Callers interpolate the result directly, so keep these
+ *  as sentence fragments that read after "Couldn't render that, ".
+ *
+ *  The raw text still goes to the console — this hides it from the shopper, it
+ *  does not throw the diagnostic away.
+ *
+ *  Note the curated errors renderLook returns before this point (non-catalog
+ *  picks, no photo on file) are already shopper-facing and bypass this. */
+export function friendlyRenderStartError(raw: string | null): string {
+  if (raw) console.warn('[style-up] render failed to start:', raw);
+  const s = (raw ?? '').toLowerCase();
+  // Belt and braces behind the non-catalog guard above: if a pick that isn't in
+  // `products` still reaches the insert, say so instead of quoting the FK.
+  if (s.includes('foreign key') || s.includes('_fkey')) {
+    return "one of those pieces isn't in our catalog yet, so I can't put it on you. Swap it out and I'll render the look.";
+  }
+  if (s.includes('duplicate key') || s.includes('already exists')) {
+    return 'that look already has that piece in it. Change one out and I\'ll render it.';
+  }
+  if (s.includes('not configured') || s.includes('network') || s.includes('fetch')) {
+    return "I couldn't reach the render service just now. Give it another go in a moment.";
+  }
+  return 'something went wrong starting that render. Give it another go in a moment.';
 }
 
 async function renderLook(
@@ -857,7 +1072,7 @@ async function renderLook(
     return {
       generationId: null,
       error: names.length
-        ? `I can't try ${names.join(' and ')} on you yet — ${names.length > 1 ? 'those are' : "that's"} from outside our catalog. Swap in catalog pieces and I'll render the full look.`
+        ? `I can't try ${names.join(' and ')} on you yet, ${names.length > 1 ? 'those are' : "that's"} from outside our catalog. Swap in catalog pieces and I'll render the full look.`
         : "One of those picks is from outside our catalog, so I can't put it on you yet. Choose catalog pieces and I'll render the full look.",
     };
   }
@@ -913,7 +1128,7 @@ async function renderLook(
     durationSeconds: duration,
     model: quality,
   });
-  if (error || !gen) return { generationId: null, error: error ?? 'Render failed to start' };
+  if (error || !gen) return { generationId: null, error: friendlyRenderStartError(error) };
 
   // Carry the pieces (with images) on the render caption so the chat can show
   // what went into the look while it cooks and once it's done.
@@ -1251,6 +1466,7 @@ export async function sendChooser(
   choose: NonNullable<StyleUpProductRef['choose']>,
 ): Promise<StyleUpMessage | null> {
   if (!supabase || choose.options.length === 0) return null;
+  if (await botMustStaySilent(threadId)) return null;
   const { data, error } = await supabase
     .from('style_up_messages')
     .insert({ thread_id: threadId, sender: 'stylist', kind: 'product', product_ref: { choose } })
@@ -1280,6 +1496,7 @@ export async function sendProductPick(
   product: StyleUpProductRef,
 ): Promise<StyleUpMessage | null> {
   if (!supabase || !product.id) return null;
+  if (await botMustStaySilent(threadId)) return null;
   const { data, error } = await supabase
     .from('style_up_messages')
     .insert({ thread_id: threadId, sender: 'stylist', kind: 'product', product_ref: product })
@@ -1300,6 +1517,7 @@ export async function sendSwapOptions(
   options: StyleUpProductRef[],
 ): Promise<StyleUpMessage | null> {
   if (!supabase || options.length === 0) return null;
+  if (await botMustStaySilent(threadId)) return null;
   const { data, error } = await supabase
     .from('style_up_messages')
     .insert({ thread_id: threadId, sender: 'stylist', kind: 'product', product_ref: { swap: { role, label, options } } })

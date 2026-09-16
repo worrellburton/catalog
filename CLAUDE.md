@@ -1398,6 +1398,7 @@ The following patterns exist specifically for the Flutter shell integration. **D
 |---|---|---|
 | `window.CustomEvent('catalog:open-bookmarks')` | Flutter → Webapp | Opens the bookmarks page |
 | `window.CustomEvent('catalog:open-my-looks')` | Flutter → Webapp | Opens the my-looks page |
+| `window.CustomEvent('catalog:go-home')` | Flutter → Webapp | Native logo tap — full home reset (`handleLogoClick`): closes every overlay, clears filters, returns to the home feed |
 | `window.flutter_inappwebview.callHandler('catalogOverlayChanged', bool)` | Webapp → Flutter | Notifies Flutter when a look/product overlay opens or closes |
 | `document.documentElement.dataset.shell === 'catalog-app'` | Webapp reads | Guards logic that should only run inside the native shell |
 | `localStorage.getItem('catalog-access')` | Webapp reads | Shell pre-sets this to `'123'` to bypass the password gate |
@@ -1409,11 +1410,12 @@ The following patterns exist specifically for the Flutter shell integration. **D
 | Class | Where | Purpose |
 |---|---|---|
 | `.app-root.has-overlay` | `_index.tsx` root element | Flutter observes this via `MutationObserver` to hide/show the native header when overlays open |
+| `.user-menu-page`, `.profile-page-overlay`, `.saved-page` | Account / profile / Saved overlay roots | Also observed by the shell `MutationObserver` to hide the native header (these overlays open via bridge events with no URL path and don't set `.has-overlay`). Don't rename without updating catalog-flutter. |
 
 ## Rules for AI Tools Working in This Repo
 
 1. **Never remove `data-shell` checks.** Any code that reads `document.documentElement.dataset.shell` is gating shell-specific behaviour. Do not delete it.
-2. **Never remove or rename the bridge events** (`catalog:open-bookmarks`, `catalog:open-my-looks`, `catalogOverlayChanged`). The Flutter app depends on these exact event names.
+2. **Never remove or rename the bridge events** (`catalog:open-bookmarks`, `catalog:open-my-looks`, `catalog:go-home`, `catalogOverlayChanged`). The Flutter app depends on these exact event names.
 3. **Never remove `has-overlay` class toggling** from `.app-root`. The Flutter native header visibility depends on it.
 4. **Never restore the webapp `<header>` to `display: block`** when inside the shell. The Flutter layer draws its own header.
 5. **Never change the Supabase localStorage key** (`sb-vtarjrnqvcqbhoclvcur-auth-token`). Flutter writes to this exact key.

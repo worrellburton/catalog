@@ -44,9 +44,14 @@ export interface AffiliateContext {
   creatorHandle: string | null;
   lookId: string | null;
   surface: string;
+  /** Phase 4: when the shopper is inside a stylist thread, both are set so
+   *  the clickout attributes to that stylist for admin analytics. Null
+   *  everywhere else (feed, product page, etc.). */
+  stylistId?: string | null;
+  threadId?: string | null;
 }
 
-let context: AffiliateContext = { creatorHandle: null, lookId: null, surface: 'feed' };
+let context: AffiliateContext = { creatorHandle: null, lookId: null, surface: 'feed', stylistId: null, threadId: null };
 
 /** _index updates this as overlays open/close so a clickout knows whose
  *  surface earned it without prop-drilling through every component. */
@@ -107,21 +112,69 @@ function isWrappable(url: string): boolean {
   }
 }
 
+export interface RailProduct {
+  brand?: string | null;
+  name?: string | null;
+  id?: string | null;
+  /** The product's own merchant page. Rail 0 is gated on the opened url
+   *  matching it — see pickRail. */
+  url?: string | null;
+  /** Rail 0 — a creator's own link for this product (creator_products). */
+  affiliate_url?: string | null;
+}
+
+/** Same product page? Scheme, a `www.` prefix and a trailing slash are
+ *  noise; the path is not. Mirrors the dedup key shopmy-ingest uses on the
+ *  same URLs (supabase/functions/shopmy-ingest/index.ts). `productUrl.ts`
+ *  can't be reused here — it CLASSIFIES a URL as a PDP and exports no
+ *  normalized form to compare. */
+function sameProductUrl(a: string, b: string): boolean {
+  if (!a || !b) return false;
+  const key = (u: string) =>
+    u.trim().toLowerCase().replace(/^https?:\/\/(www\.)?/, '').replace(/\/+$/, '');
+  return key(a) === key(b);
+}
+
+/**
+ * Which rail carries this clickout, and the link if that rail returns one
+ * untouched. Extracted from affiliateRedirect so the decision — the whole
+ * feature — is unit-testable without a supabase client or crypto.
+ *
+ * Order: creator link → direct tracked link → Shopnomix wrap → bare URL.
+ */
+export function pickRail(
+  url: string,
+  product?: RailProduct | null,
+  tracked?: string | null,
+): { link: string | null; rail: string; wrappable: boolean } {
+  // Rail 0 describes ONE product page, so it may only carry a clickout to
+  // THAT page. ProductPage fabricates alternate-retailer chips (search URLs
+  // at Nordstrom, Amazon, …) that call this chokepoint with the SAME product
+  // object — ungated, "Nordstrom · $89 · Lowest" would land on the original
+  // merchant at the original price, and affiliate_clicks.product_url would
+  // record a destination the shopper never reached.
+  const creatorLink = product?.affiliate_url && sameProductUrl(url, product.url ?? '')
+    ? product.affiliate_url
+    : null;
+  if (creatorLink) return { link: creatorLink, rail: 'shopmy', wrappable: false };
+  if (tracked) return { link: tracked, rail: 'affiliate.com', wrappable: false };
+  const wrappable = isWrappable(url);
+  return { link: null, rail: wrappable ? 'shopnomix' : 'direct', wrappable };
+}
+
 /** Wraps an outbound product URL in the Shopnomix redirect and records
  *  the click (with creator attribution) under the returned cid.
  *  Synchronous by design — the redirect URL is built immediately so the
  *  popup/new-tab call keeps its user-gesture; the DB write trails async. */
 export function affiliateRedirect(
   url: string,
-  product?: { brand?: string | null; name?: string | null; id?: string | null } | null,
+  product?: RailProduct | null,
 ): string {
   loadEnabled();
   loadTracked();
   if (!url || !enabled) return url;
-  // Rail 1: a direct tracked link for THIS product wins, untouched.
-  const tracked = product?.id ? trackedByProduct.get(product.id) ?? null : null;
-  const wrappable = !tracked && isWrappable(url);
-  const rail = tracked ? 'affiliate.com' : wrappable ? 'shopnomix' : 'direct';
+  const trackedLink = product?.id ? trackedByProduct.get(product.id) ?? null : null;
+  const { link, rail, wrappable } = pickRail(url, product, trackedLink);
   const cid = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : '';
 
   if (supabase && cid) {
@@ -141,12 +194,14 @@ export function affiliateRedirect(
           campaign_id: SHOPNOMIX_CONTENT_CAMPAIGN,
           wrapped: wrappable,
           rail,
+          stylist_id: context.stylistId ?? null,
+          thread_id: context.threadId ?? null,
         });
       } catch { /* telemetry must never block a clickout */ }
     })();
   }
 
-  if (tracked) return tracked;
+  if (link) return link;
   if (!wrappable || !cid) return url;
   const params = new URLSearchParams({
     campaign_id: SHOPNOMIX_CONTENT_CAMPAIGN,

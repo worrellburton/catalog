@@ -27,7 +27,9 @@ export const DEFAULT_POLISH_PRIMARY_PROMPT = [
   'Output a crisp packshot with comfortable margin around the product.',
 ].join(' ');
 
-// Seedance 2.0 image-to-video subtle-motion prompt (generate-primary-video).
+// Seedance 2.5 image-to-video subtle-motion prompt (generate-primary-video).
+// The 3:4 line is a nudge only — 2.5 pins aspect_ratio to 'auto', so the real
+// 3:4 guarantee comes from polishing the primary image first.
 // Camera-lock language is explicit — without it Seedance interprets "subtle
 // cinematic motion" as a slow zoom-in, and the later frames of the loop
 // crop into the subject's face / chest, breaking the catalog tile.

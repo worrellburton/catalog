@@ -3,7 +3,8 @@
 // worker in agents/video-generator/ad_generator.py honours it as a
 // per-ad override and dispatches on the slug prefix:
 //   - "veo-*-generate-preview"  → Google Gen AI (direct)
-//   - "seedance-*" / "bytedance/seedance-*"  → Seedance via fal.ai
+//   - "seedance-*" / "bytedance/seedance-*"  → Seedance via fal.ai (prefix match,
+//     so a new version keeps the Seedance path incl. the face-grid bypass)
 //   - "fal-ai/*"  → generic fal.ai pipeline
 //
 // usable: true  → shown in the admin settings picker (tested & working)
@@ -35,7 +36,10 @@ export const VIDEO_MODELS: VideoModel[] = [
   { value: 'veo-3.1-generate-preview', label: 'Veo 3.1', group: 'Veo (Google)' },
   { value: 'veo-3.1-lite-generate-preview', label: 'Veo 3.1 Lite', group: 'Veo (Google)' },
 
-  // Seedance via fal.ai - single face photo sent to avoid ByteDance content filter
+  // Seedance via fal.ai - single face photo sent to avoid ByteDance content filter.
+  // 2.5 has no fast/pro tiers (one endpoint only), so the shopper's fast/pro
+  // toggle is a no-op while it's selected. Caps at 720p; 2.0 Pro goes to 4k.
+  { value: 'bytedance/seedance-2.5/reference-to-video', label: 'Seedance 2.5', group: 'Seedance (fal.ai)', usable: true },
   { value: 'bytedance/seedance-2.0/fast/reference-to-video', label: 'Seedance 2 Fast', group: 'Seedance (fal.ai)', usable: true },
   { value: 'bytedance/seedance-2.0/reference-to-video', label: 'Seedance 2 Pro', group: 'Seedance (fal.ai)', usable: true },
   { value: 'seedance-2', label: 'Seedance 2 (legacy)', group: 'Seedance (fal.ai)' },

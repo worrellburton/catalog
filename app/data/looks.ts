@@ -7,6 +7,11 @@ export interface Product {
   brand: string;
   price: string;
   url: string;
+  /** A creator's own tracked link for THIS product — today only the ShopMy
+   *  link from creator_products. Takes precedence over every other rail in
+   *  affiliateRedirect, and is returned untouched: wrapping a tracked link
+   *  breaks its attribution. */
+  affiliate_url?: string;
   image?: string;
   size_fit?: string | null;
   materials_care?: string | null;

@@ -2493,6 +2493,12 @@ export default function AdminData() {
       // poll (see pendingVideoJobsRef + useEffect below) watches the
       // products row and finishes the job only when status flips.
       const requestId = (data as { request_id?: string })?.request_id;
+      // Seedance 2.5 always renders image-to-video at the SOURCE image's aspect
+      // (aspect_ratio is pinned to 'auto'), so only a polished 3:4 primary gives
+      // a 3:4 clip. Warn rather than block — the clip is already on the queue.
+      if ((data as { source_polished?: boolean })?.source_polished === false) {
+        showToast('Heads up: primary image is not polished, so this clip will not be 3:4. Polish it and re-render for a matching tile.');
+      }
       setCrawledProducts(prev => prev.map(pp =>
         pp.id === productId
           ? ({

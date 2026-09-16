@@ -86,6 +86,21 @@ function anthropicMediaType(ct: string): string | null {
   return null;
 }
 
+/**
+ * Some CDNs return a bare subtype instead of a media type — ShopMy's
+ * static.shopmy.us/pins/* responds `content-type: jpeg` for a valid JPEG.
+ * Normalise those so a malformed header doesn't reject a real image.
+ * Widening only: anything already starting with `image/` is untouched.
+ */
+export function normalizeContentType(ct: string): string {
+  const c = ct.toLowerCase().split(';')[0].trim();
+  if (c.startsWith('image/')) return c;
+  if (['jpeg', 'jpg', 'png', 'webp', 'gif', 'avif'].includes(c)) {
+    return `image/${c === 'jpg' ? 'jpeg' : c}`;
+  }
+  return c;
+}
+
 function extFor(ct?: string): string {
   const c = (ct || '').split(';')[0].trim().toLowerCase();
   if (c === 'image/png') return 'png';
@@ -129,8 +144,8 @@ async function fetchImage(rawUrl: string): Promise<Fetched> {
         continue;
       }
       if (!res.ok) return { url: rawUrl, ok: false, reason: statusReason(res.status) };
-      const ct = res.headers.get('content-type') || '';
-      if (!ct.toLowerCase().startsWith('image/')) return { url: rawUrl, ok: false, reason: 'notimage' };
+      const ct = normalizeContentType(res.headers.get('content-type') || '');
+      if (!ct.startsWith('image/')) return { url: rawUrl, ok: false, reason: 'notimage' };
       const buf = new Uint8Array(await res.arrayBuffer());
       if (buf.length < MIN_BYTES) return { url: rawUrl, ok: false, reason: 'tiny' };
       const dim = imageDims(buf);

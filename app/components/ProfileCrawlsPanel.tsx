@@ -10,6 +10,7 @@ import {
 } from '~/services/site-crawls';
 import JobProgress from '~/components/JobProgress';
 import RerunAllStuckButton from '~/components/RerunAllStuckButton';
+import ShopMyIngest from '~/components/ShopMyIngest';
 import { isStuck } from '~/utils/aiBudget';
 
 // Typical wall-clock for a profile crawl (single shopmy/ltk/linktree
@@ -51,6 +52,16 @@ function timeAgo(iso: string | null): string {
   if (diff < 3_600_000) return `${Math.floor(diff / 60_000)}m ago`;
   if (diff < 86_400_000) return `${Math.floor(diff / 3_600_000)}h ago`;
   return d.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+}
+
+/** ShopMy publishes a JSON API, so it never needs the AI crawl. */
+export function isShopMyUrl(raw: string): boolean {
+  try {
+    const host = new URL(raw).hostname.toLowerCase().replace(/^www\./, '');
+    return host === 'shopmy.us' || host === 'shop.my';
+  } catch {
+    return false;
+  }
 }
 
 function AddProfileModal({
@@ -130,6 +141,9 @@ export default function ProfileCrawlsPanel() {
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [busyId, setBusyId] = useState<string | null>(null);
+  // Set once the operator submits a ShopMy URL; hands off to <ShopMyIngest>,
+  // which owns preview, confirm, progress and the write.
+  const [shopMyUrl, setShopMyUrl] = useState<string | null>(null);
 
   const loadData = useCallback(async () => {
     setLoading(true);
@@ -147,7 +161,32 @@ export default function ProfileCrawlsPanel() {
     loadData();
   }, [loadData]);
 
+  // Poll loop for a running job's row. A silent refresh (no `loading` flip)
+  // so the table doesn't flash to the "Loading…" state on every tick —
+  // matches ProductCrawlsPanel's refreshSilent. Only runs while something
+  // is actually pending/crawling, so an idle admin tab doesn't poll forever.
+  const refreshSilent = useCallback(async () => {
+    try {
+      const data = await listCrawlJobs({ jobType: 'profile' });
+      setJobs(data);
+    } catch {
+      // ignore - next tick will retry
+    }
+  }, []);
+
+  useEffect(() => {
+    const active = jobs.some((j) => j.status === 'pending' || j.status === 'crawling');
+    if (!active) return;
+    const t = setInterval(() => { void refreshSilent(); }, 5_000);
+    return () => clearInterval(t);
+  }, [jobs, refreshSilent]);
+
   const handleAdd = async (url: string, name: string) => {
+    if (isShopMyUrl(url)) {
+      setShopMyUrl(url);   // hand off to <ShopMyIngest>; it owns preview + confirm
+      return;
+    }
+
     try {
       const job = await createProfileCrawlJob(url, name || undefined);
       await triggerProfileCrawl(job.id, url, name || undefined);
@@ -159,6 +198,12 @@ export default function ProfileCrawlsPanel() {
   };
 
   const handleRetry = async (job: CrawlJob) => {
+    // A ShopMy row must never be retried through the AI crawler — that's
+    // the expensive path this feature exists to avoid.
+    if (isShopMyUrl(job.site_url)) {
+      setShopMyUrl(job.site_url);
+      return;
+    }
     setBusyId(job.id);
     try {
       await retryCrawlJob(job.id);
@@ -209,6 +254,19 @@ export default function ProfileCrawlsPanel() {
           </button>
         </div>
       </div>
+
+      {shopMyUrl && (
+        <ShopMyIngest
+          // Force a fresh instance per URL — without this, retrying a
+          // second ShopMy row while the panel is open reuses the prior
+          // instance's job/landed/timer state (React only remounts on a
+          // key change, not a prop change).
+          key={shopMyUrl}
+          url={shopMyUrl}
+          onClose={() => { setShopMyUrl(null); loadData(); }}
+          onDone={loadData}
+        />
+      )}
 
       {loading ? (
         <div className="admin-empty">Loading profiles...</div>

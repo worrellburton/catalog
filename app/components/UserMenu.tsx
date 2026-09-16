@@ -9,6 +9,7 @@ import { useDeleteMode } from '~/hooks/useDeleteMode';
 import { AvatarUpload } from './AvatarCropModal';
 import { getWallet } from '~/services/earnings';
 import { supabase } from '~/utils/supabase';
+import { getAppMode } from '~/utils/app-mode';
 
 interface UserMenuUser {
   id?: string;
@@ -68,6 +69,102 @@ function MiniTile({ src, label, onClick }: { src?: string; label: string; onClic
   );
 }
 
+/** Graphical content sections shared by the desktop popout AND the mobile
+ *  account page: Recently viewed, Saved looks, Saved products, Following.
+ *  Defined once so the two surfaces never drift — any future change here
+ *  shows up in both. The `.user-menu-*` classes are dark-first, so they
+ *  render correctly on the dark account page with no extra styling. `run`
+ *  wraps each action in the host surface's close-then-navigate lifecycle
+ *  (runTile in the popout, runPageItem on the page). */
+function MenuContentSections({
+  recents,
+  looks,
+  products,
+  onOpenProduct,
+  onOpenLook,
+  onOpenBookmarks,
+  onOpenCreator,
+  run,
+}: {
+  recents: Product[];
+  looks: Look[];
+  products: Product[];
+  onOpenProduct?: (product: Product) => void;
+  onOpenLook?: (look: Look) => void;
+  onOpenBookmarks: () => void;
+  onOpenCreator?: (handle: string) => void;
+  run: (action: () => void) => () => void;
+}) {
+  const showRecents = recents.length > 0 && !!onOpenProduct;
+  const showLooks = looks.length > 0 && !!onOpenLook;
+  const showProducts = products.length > 0 && !!onOpenProduct;
+  const hasStrips = showRecents || showLooks || showProducts;
+  return (
+    <>
+      {showRecents && (
+        <div className="user-menu-section">
+          <div className="user-menu-section-title">Recently viewed</div>
+          <div className="user-menu-strip">
+            {recents.map((p, i) => (
+              <MiniTile
+                key={`r-${p.brand}|${p.name}|${i}`}
+                src={p.image}
+                label={p.name || 'Product'}
+                onClick={run(() => onOpenProduct!(p))}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+      {showLooks && (
+        <div className="user-menu-section">
+          <div className="user-menu-section-title">
+            Saved looks
+            <button className="user-menu-section-link" onClick={run(onOpenBookmarks)}>See all</button>
+          </div>
+          <div className="user-menu-strip">
+            {looks.map(l => (
+              <MiniTile
+                key={`look-${l.id}`}
+                src={l.products?.[0]?.image}
+                label={l.title || 'Look'}
+                onClick={run(() => onOpenLook!(l))}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+      {showProducts && (
+        <div className="user-menu-section">
+          <div className="user-menu-section-title">
+            Saved products
+            <button className="user-menu-section-link" onClick={run(onOpenBookmarks)}>See all</button>
+          </div>
+          <div className="user-menu-strip">
+            {products.map((p, i) => (
+              <MiniTile
+                key={`p-${p.brand}|${p.name}|${i}`}
+                src={p.image}
+                label={p.name || 'Product'}
+                onClick={run(() => onOpenProduct!(p))}
+              />
+            ))}
+          </div>
+        </div>
+      )}
+      {hasStrips && <div className="user-menu-divider" />}
+      <FollowingMenuItem
+        onOpenCreator={(handle) =>
+          run(() => {
+            if (onOpenCreator) onOpenCreator(handle);
+            else if (typeof window !== 'undefined') window.location.assign(`/c/${handle}`);
+          })()
+        }
+      />
+    </>
+  );
+}
+
 function UserMenu({
   onOpenBookmarks,
   onOpenMyLooks,
@@ -97,6 +194,8 @@ function UserMenu({
   const [deleteMode, setDeleteModeState] = useDeleteMode();
   const isSuperAdmin = user?.role === 'super_admin';
   const isAdmin = user?.role === 'admin' || user?.role === 'super_admin';
+  // Two-app split: the Catalog app is just the catalog. No door into /style.
+  const showStyleUp = user && getAppMode() !== 'catalog';
   const [avatarOverride, setAvatarOverride] = useState<string | null>(null);
   const renderedAvatarUrl = avatarOverride || user?.avatarUrl;
   const [cooldown, setCooldown] = useState(false);
@@ -285,6 +384,15 @@ function UserMenu({
     requestAnimationFrame(() => action());
   }, []);
 
+  // Resolved AFTER mount, not during render: the Remix server has no document,
+  // so a render-time check would make the server and first client render
+  // disagree and trip a hydration mismatch. Mirrors the data-shell convention
+  // used elsewhere (app/routes/_index.tsx).
+  const [inNativeShell, setInNativeShell] = useState(false);
+  useEffect(() => {
+    setInNativeShell(document.documentElement.dataset.shell === 'catalog-app');
+  }, []);
+
   // Tile click closes the menu before opening the target so the menu's
   // animation doesn't fight the overlay's entrance animation.
   const runTile = useCallback((action: () => void) => () => {
@@ -461,74 +569,21 @@ function UserMenu({
 
             {/* Try it on removed; Style moved to the super-admin section below. */}
 
-            {/* Recently viewed - products tapped in the trail, newest first. */}
-            {recents.length > 0 && onOpenProduct && (
-              <div className="user-menu-section">
-                <div className="user-menu-section-title">Recently viewed</div>
-                <div className="user-menu-strip">
-                  {recents.map((p, i) => (
-                    <MiniTile
-                      key={`${p.brand}|${p.name}|${i}`}
-                      src={p.image}
-                      label={p.name || 'Product'}
-                      onClick={runTile(() => onOpenProduct(p))}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Saved looks. */}
-            {looks.length > 0 && onOpenLook && (
-              <div className="user-menu-section">
-                <div className="user-menu-section-title">
-                  Saved looks
-                  <button className="user-menu-section-link" onClick={runItem(onOpenBookmarks)}>See all</button>
-                </div>
-                <div className="user-menu-strip">
-                  {looks.map(l => (
-                    <MiniTile
-                      key={`look-${l.id}`}
-                      src={l.products?.[0]?.image}
-                      label={l.title || 'Look'}
-                      onClick={runTile(() => onOpenLook(l))}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Saved products. */}
-            {products.length > 0 && onOpenProduct && (
-              <div className="user-menu-section">
-                <div className="user-menu-section-title">
-                  Saved products
-                  <button className="user-menu-section-link" onClick={runItem(onOpenBookmarks)}>See all</button>
-                </div>
-                <div className="user-menu-strip">
-                  {products.map((p, i) => (
-                    <MiniTile
-                      key={`p-${p.brand}|${p.name}|${i}`}
-                      src={p.image}
-                      label={p.name || 'Product'}
-                      onClick={runTile(() => onOpenProduct(p))}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            <div className="user-menu-divider" />
-
-            {/* Secondary nav (following, full bookmarks, my catalog,
-                admin/decks/logout). Following sits above Bookmarks
-                so the creators you've opted into reading rank ahead
-                of the things you've passively saved. */}
-            <FollowingMenuItem onOpenCreator={(handle) => {
-              setOpen(false);
-              if (onOpenCreator) onOpenCreator(handle);
-              else if (typeof window !== 'undefined') window.location.assign(`/c/${handle}`);
-            }} />
+            {/* Recently viewed, Saved looks, Saved products, Following —
+                shared with the mobile account page via MenuContentSections so
+                the two surfaces never drift. runTile closes the popout before
+                opening the target. The My Catalog / Saved / admin nav below
+                follows the Following row, same as before. */}
+            <MenuContentSections
+              recents={recents}
+              looks={looks}
+              products={products}
+              onOpenProduct={onOpenProduct}
+              onOpenLook={onOpenLook}
+              onOpenBookmarks={onOpenBookmarks}
+              onOpenCreator={onOpenCreator}
+              run={runTile}
+            />
             {onOpenMyLooks && (
               <button className="user-menu-item" onClick={runItem(onOpenMyLooks)}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
@@ -540,8 +595,9 @@ function UserMenu({
               <span>Saved</span>
               {bookmarkCount > 0 && <span className="user-menu-badge">{bookmarkCount}</span>}
             </button>
-            {/* Style Up — AI-stylist chat. App feature (all signed-in users). */}
-            {user && (
+            {/* Style Up — AI-stylist chat. Style app only; the Catalog app
+                ships no entry point into it. */}
+            {showStyleUp && (
               <button className="user-menu-item" onClick={runItem(() => navigate('/style'))}>
                 <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg>
                 <span>StyleUp</span>
@@ -672,6 +728,22 @@ function UserMenu({
                   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>
                   <span>Log out</span>
                 </button>
+                {/* Shell only: App Store guideline 5.1.1(v) requires an in-app
+                    path to account deletion. The confirmation and the delete
+                    itself are native — this row only opens the native screen. */}
+                {inNativeShell && (
+                  <button
+                    className="user-menu-item"
+                    onClick={runItem(() => {
+                      (window as unknown as {
+                        flutter_inappwebview?: { callHandler?: (name: string) => void };
+                      }).flutter_inappwebview?.callHandler?.('catalogDeleteAccount');
+                    })}
+                  >
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>
+                    <span>Delete account</span>
+                  </button>
+                )}
               </>
             )}
             {/* Signed out → a way IN. (The trigger normally routes guests
@@ -769,8 +841,9 @@ function UserMenu({
                   <PageRow icon="grid" label="My Catalog" onClick={runPageItem(onOpenMyLooks)} />
                 )}
 
-                {/* Style Up — AI-stylist chat. App feature (all signed-in users). */}
-                {user && (
+                {/* Style Up — AI-stylist chat. Style app only; the Catalog app
+                    ships no entry point into it. */}
+                {showStyleUp && (
                   <PageRow icon="chat" label="StyleUp" onClick={runPageItem(() => navigate('/style'))} />
                 )}
 
@@ -808,6 +881,20 @@ function UserMenu({
                     )}
                   </button>
                 </div>
+                {/* Recently viewed / Saved looks / Saved products / Following —
+                    the SAME MenuContentSections the desktop popout renders, so
+                    the two surfaces stay in sync. runPageItem closes the page
+                    first, then opens the target. */}
+                <MenuContentSections
+                  recents={recents}
+                  looks={looks}
+                  products={products}
+                  onOpenProduct={onOpenProduct}
+                  onOpenLook={onOpenLook}
+                  onOpenBookmarks={onOpenBookmarks}
+                  onOpenCreator={onOpenCreator}
+                  run={runPageItem}
+                />
                 {onChangeCatalogGender && (
                   <div className="user-menu-page-row user-menu-page-row--segmented">
                     <span className="user-menu-page-row-icon">
@@ -841,6 +928,23 @@ function UserMenu({
 
                 {onLogout && user && (
                   <PageRow icon="logout" label="Log out" onClick={runPageItem(onLogout)} variant="danger" />
+                )}
+
+                {/* Shell only: App Store guideline 5.1.1(v) in-app account
+                    deletion. The confirm + delete are native; this row opens
+                    the native screen. Lives on the full-screen account page
+                    (what the shell actually shows) — the popover has its own. */}
+                {user && inNativeShell && (
+                  <PageRow
+                    icon="trash"
+                    label="Delete account"
+                    variant="danger"
+                    onClick={runPageItem(() => {
+                      (window as unknown as {
+                        flutter_inappwebview?: { callHandler?: (name: string) => void };
+                      }).flutter_inappwebview?.callHandler?.('catalogDeleteAccount');
+                    })}
+                  />
                 )}
 
                 {/* Super-admin entry — only visible to super_admin role, sits
@@ -916,7 +1020,7 @@ function UserMenu({
 // Reusable row for the mobile Account page. The icon is keyed by name so
 // the row component stays compact; the SVGs are inline so we don't drag in
 // an icon library.
-type PageRowIcon = 'bookmark' | 'grid' | 'star' | 'wallet' | 'shield' | 'import' | 'deck' | 'logout' | 'chat';
+type PageRowIcon = 'bookmark' | 'grid' | 'star' | 'wallet' | 'shield' | 'import' | 'deck' | 'logout' | 'chat' | 'trash';
 function PageRow({ icon, label, onClick, badge, trailing, variant }: {
   icon: PageRowIcon;
   label: string;
@@ -937,6 +1041,7 @@ function PageRow({ icon, label, onClick, badge, trailing, variant }: {
         {icon === 'import' && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>}
         {icon === 'deck' && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="9" y1="4" x2="9" y2="20"/></svg>}
         {icon === 'logout' && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/></svg>}
+        {icon === 'trash' && <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"/></svg>}
       </span>
       <span className="user-menu-page-row-label">{label}</span>
       {badge != null && <span className="user-menu-page-row-badge">{badge}</span>}

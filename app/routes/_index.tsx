@@ -24,6 +24,7 @@ import { useBookmarks } from '~/hooks/useBookmarks';
 import { useRecentProducts } from '~/hooks/useRecentProducts';
 import { useAuth, isOAuthReturn } from '~/hooks/useAuth';
 import { shouldRedirectToStyle, BROWSE_FEED_KEY } from '~/utils/front-door';
+import { getAppMode } from '~/utils/app-mode';
 import { useOverlayRouter } from '~/hooks/useOverlayRouter';
 import { lookSlug, productSlug } from '~/utils/slug';
 import { markOverlayReturn } from '~/utils/overlay-scroll-stash';
@@ -40,6 +41,8 @@ import { pruneStalePersistedOrders } from '~/services/personalized-feed';
 import { getGraphPairs, type GraphPair } from '~/services/graph-pairs';
 import { getLooks, getLookByUuid } from '~/services/looks';
 import { suggestCatalogs } from '~/services/catalog-suggest';
+import { getPopularCatalogPills } from '~/services/catalogs';
+import { getMyFollowing } from '~/services/follows';
 import { creativeStill, creativePoster, productPoster } from '~/services/media-resolver';
 import { pickVideoUrl, pickPlaybackSource } from '~/services/video-loading';
 import { emitSavedToast } from '~/utils/savedToast';
@@ -423,10 +426,12 @@ export default function Home() {
   // ── New home: "What are you shopping for?" hero ──────────────────────
   // The hero is the home entry; the catalog feed lives directly below it
   // (scroll reveals it). A search plays the SearchCeremony then reveals
-  // results. Skipped inside the native Flutter shell (it has its own
-  // launch UX) and once a search/catalog filter is already active.
+  // results. Shown everywhere — including inside the native Flutter shell,
+  // which now mirrors the mobile-web home: the hero's centred search bar is
+  // the repositioned #bottom-bar, and the shell hides only its resting/docked
+  // state (see bottom-bar.css) so there's no extra pill at the bottom.
   const inShell = typeof document !== 'undefined' && document.documentElement.dataset.shell === 'catalog-app';
-  const [heroMode, setHeroMode] = useState(() => !inShell);
+  const [heroMode, setHeroMode] = useState(true);
   const [heroScrolled, setHeroScrolled] = useState(false);
   // The followed-creators rail is pinned (position:fixed) at the top of the
   // hero while the page is at rest, but it lives in the high-z-index header so
@@ -824,7 +829,7 @@ export default function Home() {
     suppressCeremonyRef.current = true;
     setCeremony({ active: false, query: '', kind: 'search' });
     setCeremonyRecs([]);
-    if (!inShell) setHeroMode(false);
+    setHeroMode(false);
     setSearchQuery(q);
     bumpSearchTrigger();
     setRevealResults(true);
@@ -912,7 +917,7 @@ export default function Home() {
     if (typeof window === 'undefined') return false;
     let browseFeed = false;
     try { browseFeed = sessionStorage.getItem(BROWSE_FEED_KEY) === '1'; } catch { /* private mode */ }
-    return shouldRedirectToStyle({ search: window.location.search, isOAuth: isOAuthReturn(), browseFeed });
+    return shouldRedirectToStyle({ search: window.location.search, isOAuth: isOAuthReturn(), browseFeed, mode: getAppMode() });
   });
   useEffect(() => {
     if (redirectingToStyle) { navigate('/style', { replace: true }); return; }
@@ -936,7 +941,8 @@ export default function Home() {
     // 'catalog:close-search' event so BottomBar can drop its
     // local searchOpen state (the suggestions column).
     // Also return to the "What are you shopping for?" home hero.
-    if (!inShell) { setHeroMode(true); window.scrollTo({ top: 0, behavior: 'auto' }); }
+    setHeroMode(true);
+    window.scrollTo({ top: 0, behavior: 'auto' });
     setSearchQuery('');
     resetGenderFilter();
     setCreatorFilter(null);
@@ -996,6 +1002,17 @@ export default function Home() {
       window.scrollTo({ top: 0, behavior: 'smooth' });
     }
   }, [navigate]);
+
+  // Native shell logo tap → full home reset. The Flutter wrapper hides the web
+  // header-left (and its logo) and renders its own native logo, so it can't
+  // call handleLogoClick directly; it dispatches this bridge event instead.
+  // CRITICAL: 'catalog:go-home' is part of the shell contract (see the Bridge
+  // Events table in CLAUDE.md) — do not rename without updating catalog-flutter.
+  useEffect(() => {
+    const onGoHome = () => handleLogoClick();
+    window.addEventListener('catalog:go-home', onGoHome);
+    return () => window.removeEventListener('catalog:go-home', onGoHome);
+  }, [handleLogoClick]);
 
   // "Following" catalog pill (desktop search cloud, via TypeAnywhere)
   // hands us the resolved follow handles through a CustomEvent. Scope
@@ -1259,7 +1276,7 @@ export default function Home() {
     // redirect (creator attribution rides along via the recorded cid).
     // Analytics below keep the ORIGINAL url so per-merchant reporting
     // is unchanged.
-    const outboundUrl = affiliateRedirect(url, product as { brand?: string | null; name?: string | null; id?: string | null });
+    const outboundUrl = affiliateRedirect(url, product);
     if (!inNativeShell) {
       window.open(outboundUrl, '_blank', 'noopener,noreferrer');
     } else {
@@ -1672,6 +1689,20 @@ export default function Home() {
     void hydrateVideoPipeline();
     prefetchHiddenContent();
     getLooks().then(rows => { if (!cancelled) setLiveLooks(rows); }).catch(() => {});
+    // Warm the "Jump into a catalog" pills + Following cache while the feed
+    // loads so the search sheet renders them instantly instead of fetching on
+    // open. App-only (the native shell has no launch UX to mask the fetch);
+    // low priority, so run it on idle behind the feed.
+    if (document.documentElement.dataset.shell === 'catalog-app') {
+      const ric = (window as unknown as {
+        requestIdleCallback?: (cb: () => void, opts?: { timeout: number }) => number;
+      }).requestIdleCallback;
+      const warm = () => {
+        void getPopularCatalogPills().catch(() => {});
+        void getMyFollowing().catch(() => {});
+      };
+      ric ? ric(warm, { timeout: 2000 }) : window.setTimeout(warm, 600);
+    }
     return () => { cancelled = true; };
   }, []);
 
@@ -2163,6 +2194,22 @@ export default function Home() {
     if (m) setCommentsTarget({ type: m[1] === 'p' ? 'product' : 'look', slug: decodeURIComponent(m[2]) });
   }, []);
   const handleLogout = useCallback(async () => {
+    // In the native shell, the NATIVE Supabase session is the source of truth
+    // that drives the app's AuthGate. Logging out only on the web side leaves
+    // the app "signed in" (it just shows the web sign-in gate inside the still
+    // signed-in shell). Tell the shell to sign out natively; it re-injects and
+    // flips back to the native LoginScreen. The web logout still runs as a
+    // fallback (and is the only path on mobile web).
+    if (
+      typeof window !== 'undefined' &&
+      document.documentElement.dataset.shell === 'catalog-app' &&
+      (window as unknown as { flutter_inappwebview?: { callHandler: (n: string) => void } }).flutter_inappwebview
+    ) {
+      try {
+        (window as unknown as { flutter_inappwebview: { callHandler: (n: string) => void } })
+          .flutter_inappwebview.callHandler('catalogSignOut');
+      } catch { /* not in shell / bridge unavailable */ }
+    }
     await logout();
     setView('locked');
   }, [logout]);
@@ -2192,7 +2239,7 @@ export default function Home() {
     setCreatorFilter(null);
     setShowBookmarks(false);
     setShowMyLooks(false);
-    if (!inShell) setHeroMode(false);
+    setHeroMode(false);
     if (typeof window !== 'undefined') {
       if (window.location.pathname !== '/') window.history.replaceState({}, '', '/');
       window.scrollTo({ top: 0, behavior: 'auto' });
@@ -2319,7 +2366,13 @@ export default function Home() {
   // Trail depth: while the product/look overlay is open, the under-layer
   // (header + grid) recedes a hair (scale 0.985, 4px blur). Subtle parallax
   // that signals "what you tapped is now the focus" without feeling theatrical.
-  const overlayOpen = !!selectedProduct || !!selectedLook;
+  // brandFilter/showFollowing are full-screen overlays with NO URL path of
+  // their own, so the Flutter shell (which keys off path or .has-overlay) can't
+  // otherwise tell they're open — include them here so .has-overlay is set and
+  // the native header hides over them. On web this only adds pointer-events:none
+  // on the receding under-layer (harmless; prevents tap-through).
+  const overlayOpen =
+    !!selectedProduct || !!selectedLook || !!brandFilter || showFollowing;
 
   // Home top-edge pull → open the people & brands page. Honour it only when
   // the home feed is the active surface (no look/product/creator/brand/gate
@@ -2494,7 +2547,7 @@ export default function Home() {
           <div className="auth-splash-particles">
             <ParticleBackground speed={1} />
           </div>
-          <CatalogLogo className="auth-splash-logo" />
+          <CatalogLogo className="auth-splash-logo" text={getAppMode() === 'style' ? 'Catalog Style' : undefined} />
         </div>
       )}
       {CLERK_AUTH_ENABLED

@@ -32,7 +32,9 @@ const CORS = {
 };
 
 const FAL_QUEUE_BASE = 'https://queue.fal.run';
-const SEEDANCE_SLUG = 'bytedance/seedance-2.0/image-to-video';
+// Seedance 2.5. Note it caps at 720p (2.0 reached 4k) and bills $0.4730/s at
+// 720p vs 2.0's $0.3034/s, so a 5s clip goes ~$1.52 -> ~$2.37.
+const SEEDANCE_SLUG = 'bytedance/seedance-2.5/image-to-video';
 // Submit-only call should always return in <2s; if fal's queue gateway
 // is slow we still want to give the admin a response, not a timeout.
 const FAL_SUBMIT_TIMEOUT_MS = 15_000;
@@ -69,9 +71,16 @@ async function submitSeedance(prompt: string, imageUrl: string, falKey: string, 
       body: JSON.stringify({
         prompt,
         image_url: imageUrl,
-        // Seedance enum: auto | 21:9 | 16:9 | 4:3 | 1:1 | 3:4 | 9:16.
-        // 3:4 matches the polished primary image — no crop/letterbox.
-        aspect_ratio: '3:4',
+        // MUST be 'auto' on 2.5 image-to-video — the schema pins the field to
+        // const "auto" ("Always 'auto' for image-to-video"), so the '3:4' that
+        // 2.0 accepted now 422s the whole submit. The output instead inherits
+        // the source image's aspect, which is why the polish step matters:
+        // polish-primary-image normalizes to 3:4, so a polished primary still
+        // yields a 3:4 clip. An UNPOLISHED primary now carries its own aspect
+        // through to the video (2.0 used to force-fit it), which mismatches the
+        // 3:4 catalog tile and its extracted poster — hence source_polished in
+        // the response below.
+        aspect_ratio: 'auto',
         resolution: '720p',
         duration: '5',
         generate_audio: false,
@@ -130,7 +139,7 @@ Deno.serve(async (req: Request) => {
 
   const { data: product, error: loadErr } = await admin
     .from('products')
-    .select('id, primary_image_url')
+    .select('id, primary_image_url, primary_image_polished')
     .eq('id', productId)
     .maybeSingle();
   if (loadErr) return json({ success: false, error: loadErr.message });
@@ -163,5 +172,12 @@ Deno.serve(async (req: Request) => {
   }).eq('id', productId);
   if (updateErr) return json({ success: false, error: updateErr.message });
 
-  return json({ success: true, request_id: submit.request_id, status: 'pending' });
+  // Surfaced, not enforced: an unpolished primary still renders, it just won't
+  // be 3:4. Polish first if the tile matters.
+  return json({
+    success: true,
+    request_id: submit.request_id,
+    status: 'pending',
+    source_polished: product.primary_image_polished === true,
+  });
 });

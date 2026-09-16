@@ -1,5 +1,12 @@
-import { useState } from 'react';
-import type { StyleUpTrace } from '~/services/style-up';
+import { useEffect, useState } from 'react';
+import { adminRetraceTrace } from '~/services/style-up';
+import type { StyleUpRetrieval, StyleUpTrace } from '~/services/style-up';
+
+export const TIER_TITLE: Record<number, string> = {
+  1: 'aesthetic + occasion (the intended query)',
+  2: 'occasion only — the stylist specialty emptied this slot',
+  3: 'occasion only, exclude list dropped — anti-repeat had exhausted the slot',
+};
 
 // Admin "view research" node diagram — a vertical flow of the steps that
 // produced one stylist turn: the context fed in, the stylist persona, exactly
@@ -32,9 +39,54 @@ function TraceNode({ k, icon, title, summary, open, onToggle, children }: NodePr
   );
 }
 
+// The slot table + candidate list — shared by the recorded case (retrieval
+// read straight off the trace) and the reconstructed case (a style-retrace
+// replay). One code path so the two can't drift apart.
+function RetrievalBody({ retrieval, pickedIds }: { retrieval: StyleUpRetrieval; pickedIds: Set<string> }) {
+  const slots = retrieval.slots ?? [];
+  const candidates = retrieval.candidates ?? [];
+  return (
+    <>
+      <div className="sut-sub">Occasion the retrieval ran on</div>
+      <pre className="sut-pre">{retrieval.occasion || '(empty)'}</pre>
+      <div className="sut-sub">Per slot</div>
+      <table className="sup-slots">
+        <thead><tr><th>Slot</th><th>Tier</th><th>Query</th><th>Ret.</th><th>Kept</th></tr></thead>
+        <tbody>
+          {slots.map(s => (
+            <tr key={s.slot} className={s.kept === 0 ? 'is-empty' : s.tier > 1 ? 'is-fallback' : ''}>
+              <td>{s.slot}</td>
+              <td title={TIER_TITLE[s.tier]}>t{s.tier}</td>
+              <td className="sup-q">{s.query}</td>
+              <td>{s.returned}</td>
+              <td>{s.error ? `err: ${s.error}` : s.kept}</td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+      <div className="sut-sub">Candidates ({candidates.length}) — ★ = shown to the shopper</div>
+      {candidates.map(c => (
+        <div key={c.id} className={`sup-cand${pickedIds.has(c.id) ? ' is-picked' : ''}`}>
+          <span className="sup-cand-slot">{c.slot ?? 'recency'}</span>
+          <span className="sup-cand-name">{[c.brand, c.name].filter(Boolean).join(' · ') || c.id}</span>
+          <span className="sup-cand-score">{c.score == null ? `#${c.rank ?? '?'}` : c.score.toFixed(2)}</span>
+          {pickedIds.has(c.id) && <span className="sup-cand-star">★</span>}
+        </div>
+      ))}
+    </>
+  );
+}
+
 export default function StyleUpTraceDiagram({ trace }: { trace: StyleUpTrace }) {
   const [open, setOpen] = useState<Record<string, boolean>>({});
   const toggle = (k: string) => setOpen(o => ({ ...o, [k]: !o[k] }));
+
+  // Replay state for pre-capture traces. Reset on trace change so a
+  // reconstruction never lingers and attaches itself to a different turn.
+  const [busy, setBusy] = useState(false);
+  const [recon, setRecon] = useState<{ retrieval: StyleUpRetrieval; reconstructedAt: string } | null>(null);
+  const [reconErr, setReconErr] = useState<string | null>(null);
+  useEffect(() => { setBusy(false); setRecon(null); setReconErr(null); }, [trace.id]);
 
   const p = trace.payload || {};
   const ctx = (p.context as Record<string, unknown>) ?? {};
@@ -51,6 +103,8 @@ export default function StyleUpTraceDiagram({ trace }: { trace: StyleUpTrace }) 
   const isWeb = trace.sourceMode === 'web';
   const searches = trace.searches ?? [];
   const importedCount = searches.filter(s => s.importedId).length;
+  const retrieval = (p.retrieval as StyleUpRetrieval | null) ?? null;
+  const pickedIds = new Set((p.product_ids as string[]) ?? []);
 
   return (
     <div className="sut">
@@ -77,6 +131,53 @@ export default function StyleUpTraceDiagram({ trace }: { trace: StyleUpTrace }) 
           </div>
         ))}
       </TraceNode>
+
+      {!isWeb && (() => {
+        // retrieval is a raw jsonb cast — absent on every trace written before
+        // this feature shipped, and null for web stylists. Slots/candidates can
+        // independently be missing on a malformed row, so every access below is
+        // guarded — this node must never throw and take out the whole page.
+        const candidates = retrieval?.candidates ?? [];
+        const slots = retrieval?.slots ?? [];
+        return (
+          <TraceNode
+            k="pool" icon="🎯" title="How the pool was pulled"
+            summary={retrieval
+              ? `${retrieval.method} · ${candidates.length} candidates · ${slots.length} slots`
+              : recon
+                ? `RECONSTRUCTED · ${recon.retrieval.candidates.length} candidates · ${recon.retrieval.slots.length} slots`
+                : 'not recorded (turn predates provenance capture)'}
+            open={!!open.pool} onToggle={toggle}
+          >
+            {retrieval && <RetrievalBody retrieval={retrieval} pickedIds={pickedIds} />}
+            {!retrieval && !recon && (
+              <>
+                <div className="sut-muted">This turn predates provenance capture.</div>
+                <button type="button" className="sua-btn" disabled={busy}
+                  onClick={async () => {
+                    setBusy(true);
+                    const r = await adminRetraceTrace(trace.id);
+                    setBusy(false);
+                    if ('error' in r) setReconErr(r.error); else setRecon(r);
+                  }}>
+                  {busy ? 'Replaying…' : 'Re-run retrieval'}
+                </button>
+                {reconErr && <div className="sut-search-stat is-err">{reconErr}</div>}
+              </>
+            )}
+            {!retrieval && recon && (
+              <>
+                <div className="sup-recon-banner">
+                  ⚠ RECONSTRUCTED {new Date(recon.reconstructedAt).toLocaleString()} — the inputs are
+                  the originals, but this is today’s catalog, not the pool this turn actually saw.
+                  The stylist’s specialty is also its current value. Not stored.
+                </div>
+                <RetrievalBody retrieval={recon.retrieval} pickedIds={pickedIds} />
+              </>
+            )}
+          </TraceNode>
+        );
+      })()}
 
       <TraceNode k="ai" icon="💬" title="Model response" summary={reply ? reply.slice(0, 70) : '—'} open={!!open.ai} onToggle={toggle}>
         <div className="sut-sub">Reply</div>

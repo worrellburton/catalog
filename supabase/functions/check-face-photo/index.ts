@@ -25,10 +25,10 @@
 //   blocked                    — any other Fal rejection
 //   network_error              — couldn't reach Fal
 import { serve } from 'https://deno.land/std@0.168.0/http/server.ts';
+import { SEEDANCE_20_FAST, isSeedanceEndpoint, falAppBase } from '../_shared/seedance-model.ts';
 
 const FAL_BASE = 'https://queue.fal.run';
-const MODEL = 'bytedance/seedance-2.0/fast/reference-to-video';
-const MODEL_BASE = 'bytedance/seedance-2.0';
+const DEFAULT_MODEL = SEEDANCE_20_FAST;
 const POLL_INTERVAL_MS = 1500;
 const POLL_TIMEOUT_MS = 15000;
 
@@ -74,6 +74,8 @@ serve(async (req: Request) => {
   const falKey = Deno.env.get('FAL_KEY');
   if (!falKey) return json({ ok: false, reason: 'server_config', detail: 'FAL_KEY not configured' }, 500);
 
+  let modelSlug = DEFAULT_MODEL;
+
   // Read the configured video model from app_settings. If it's not a
   // ByteDance/Seedance model, the validation logic below is irrelevant
   // (Vidu doesn't have a "partner_validation_failed" filter), so we
@@ -93,9 +95,17 @@ serve(async (req: Request) => {
         if (!isSeedance) {
           return json({ ok: true, reason: null, detail: null });
         }
+        // Probe the model the platform will actually render with — ByteDance's
+        // partner_validation filter is per model VERSION, so validating a face
+        // against 2.0 says nothing about whether 2.5 will accept it. Legacy
+        // aliases ('seedance-2', 'seedance-1-pro', …) aren't real fal endpoints,
+        // so those keep the default probe slug.
+        if (isSeedanceEndpoint(model)) modelSlug = model;
       }
     }
   } catch { /* fall through — if we can't read settings, run the check anyway */ }
+  const MODEL = modelSlug;
+  const MODEL_BASE = falAppBase(modelSlug);
 
   let body: { image_urls?: string[]; image_url?: string; user_id?: string };
   try {

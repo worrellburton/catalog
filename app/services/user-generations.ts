@@ -1,4 +1,5 @@
 import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from '~/utils/supabase';
+import type { GenerationEvent } from './generation-spine';
 
 // Resolve the published/promoted look that a completed generation became,
 // so the "Your looks" rail can deep-link a finished render to its look
@@ -447,7 +448,7 @@ function computeProductOnlyWardrobe(
   const hasBottom = zones.has('legs') || zones.has('waist');
   const hasShoes = zones.has('feet');
 
-  const base = 'Dress them in ONLY the referenced products — no other clothing, outerwear, layering, accessories, logos, or prints.';
+  const base = 'Dress them in ONLY the referenced products — no other clothing, outerwear, layering, accessories, logos, or prints. Never render the subject nude, topless, or with exposed private areas; any body region a product does not cover is filled with plain unbranded neutral basics (white undergarments) or a tasteful natural leaf covering.';
 
   // An unplaceable piece may be the very garment a filler would deny (the
   // mislabeled sneaker vs "bare feet") — assert nothing about uncovered
@@ -456,16 +457,27 @@ function computeProductOnlyWardrobe(
     return `${base} Wear every referenced product where it naturally belongs on the body.`;
   }
 
-  // Neutral fillers, only for zones that the framing will actually show
-  // (i.e. once there's a bottom, the torso + legs are in frame).
+  // Neutral fillers, only for zones that the framing will actually show.
+  // Phase 5: never emit "bare torso" or any wording that reads as nudity.
+  // Torso without a pick gets a plain unbranded white tank/top (or bra for
+  // female frames). Legs without a bottom pick get white underwear or a
+  // tasteful foliage/leaf covering — chosen deliberately over "bare legs"
+  // so the model never renders exposed skin below the waist.
   const fillers: string[] = [];
   if (hasBottom && !hasTop) {
     fillers.push(
       gender === 'female'
         ? 'a plain seamless neutral-white bra (unbranded, no logos)'
         : gender === 'male'
-          ? 'a bare torso or a plain unbranded white tank'
-          : 'a plain unbranded neutral top',
+          ? 'a plain unbranded white tank'
+          : 'a plain unbranded neutral tank',
+    );
+  }
+  if (hasTop && !hasBottom) {
+    fillers.push(
+      gender === 'male'
+        ? 'plain white boxer-briefs (unbranded, no logos) or a tasteful foliage covering (natural leaves)'
+        : 'plain white briefs (unbranded, no logos) or a tasteful foliage covering (natural leaves)',
     );
   }
   if (hasBottom && !hasShoes) {
@@ -996,6 +1008,27 @@ export async function getGeneration(id: string): Promise<UserGeneration | null> 
   return data as UserGeneration;
 }
 
+/** Just the finished look videos, for the Style app's saved strip.
+ *
+ *  listUserGenerations() below selects 25 columns with no bound because MyLooks
+ *  needs them; the strip needs two and shows at most 20, so reusing it pulled
+ *  ~100 KB to render ~9 KB and grew with every look the shopper ever made. */
+export async function listDoneLookVideos(
+  userId: string,
+  limit = 30,
+): Promise<Array<{ id: string; video_url: string }>> {
+  if (!supabase) return [];
+  const { data } = await supabase
+    .from('user_generations')
+    .select('id, video_url')
+    .eq('user_id', userId)
+    .eq('status', 'done')
+    .not('video_url', 'is', null)
+    .order('created_at', { ascending: false })
+    .limit(limit);
+  return (data || []) as Array<{ id: string; video_url: string }>;
+}
+
 export async function listUserGenerations(userId: string): Promise<UserGeneration[]> {
   if (!supabase) return [];
   const { data } = await supabase
@@ -1286,4 +1319,21 @@ export function buildGenerationPrompt(opts: {
     framing,
     `Natural motion, ${seconds}-second portrait clip${styleTag}.${occasionClause}${customStyleClause}`,
   ].join(' ');
+}
+
+/** Admin: the recorded step log for one generation, oldest first. Empty for
+ *  the 15 generations that predate event capture (2026-05-01). */
+export async function listGenerationEvents(generationId: string): Promise<GenerationEvent[]> {
+  if (!supabase || !generationId) return [];
+  const { data } = await supabase
+    .from('generation_events')
+    .select('id, event, payload, created_at')
+    .eq('generation_id', generationId)
+    .order('created_at', { ascending: true });
+  return ((data ?? []) as Array<Record<string, unknown>>).map(r => ({
+    id: Number(r.id),
+    event: String(r.event),
+    payload: (r.payload as Record<string, unknown> | null) ?? null,
+    createdAt: String(r.created_at),
+  }));
 }

@@ -25,6 +25,27 @@ export interface OccasionCand {
   id: string; name: string | null; brand: string | null; price: string | null;
   image: string | null; url: string | null; type: string | null; gender: string | null;
   slot: Slot; score: number;
+  /** Position within this candidate's OWN slot after rotate/trim. Lets the admin
+   *  audit say "2nd of 8 in tops" as a recorded fact rather than a UI guess. */
+  rank: number;
+}
+
+/** Per-slot record of what the retrieval actually did — which query ran, which
+ *  fallback tier it took, and how many rows survived. This is the diagnostic
+ *  that makes a collapsed slot visible; without it the only evidence is a
+ *  console.log that nobody reads. */
+export interface SlotDiag {
+  slot: Slot;
+  query: string;
+  tier: 1 | 2 | 3;   // 1 aesthetic+occasion · 2 occasion only · 3 occasion, exclude ignored
+  returned: number;  // rows the RPC gave back
+  kept: number;      // after the women-only name filter + rotate/trim
+  error: string | null;
+}
+
+export interface RetrievalResult {
+  cands: OccasionCand[];
+  slots: SlotDiag[];
 }
 
 interface RpcClient {
@@ -61,7 +82,7 @@ export async function retrieveOccasionCandidates(
     // walks the ranked pool forward instead of re-serving the same top pieces.
     excludeIds?: string[]; rotate?: number;
   },
-): Promise<OccasionCand[]> {
+): Promise<RetrievalResult> {
   const { gender } = opts;
   const filterGender = gender === 'unknown' ? null : gender;
   const slots = gender === 'male' ? ALL_SLOTS.filter(s => s !== 'dresses') : ALL_SLOTS;
@@ -73,52 +94,68 @@ export async function retrieveOccasionCandidates(
   const fetchK = (rotate > 0 || exclude.length > 0) ? k * 3 : k;
   const aesthetic = (opts.aesthetic ?? '').toLowerCase().replace(/[&/]/g, ' ').replace(/\s+/g, ' ').trim();
 
-  const perSlot = await Promise.all(slots.map(async (slot) => {
+  const perSlot = await Promise.all(slots.map(async (slot): Promise<{ rows: OccasionCand[]; diag: SlotDiag }> => {
     // style_slot_search AND-s every query term, so folding the stylist's
     // specialty into the query ("occasion red carpet … shirt") zeroes the WHOLE
     // slot when that vocab isn't in the (thin) catalog — that's why a red-carpet
     // stylist returned "no pieces" while a smart-casual one worked. Query WITH
     // the aesthetic for the bias, then fall back to the occasion alone when it
     // comes back empty, so the specialty only RANKS, never empties the pool.
+    //
+    // `tier` and `query` are captured AT the point each fallback is taken, not
+    // reconstructed afterwards — the admin audit reports on exactly this.
+    let tier: 1 | 2 | 3 = 1;
+    let query = `${aesthetic} ${opts.occasion} ${SLOT_NOUN[slot]}`.trim();
     let res = await admin.rpc('style_slot_search', {
-      p_query: `${aesthetic} ${opts.occasion} ${SLOT_NOUN[slot]}`.trim(), p_k: fetchK, p_gender: filterGender, p_exclude_ids: exclude,
+      p_query: query, p_k: fetchK, p_gender: filterGender, p_exclude_ids: exclude,
     });
     if (aesthetic && (res.error || !Array.isArray(res.data) || res.data.length === 0)) {
+      tier = 2;
+      query = `${opts.occasion} ${SLOT_NOUN[slot]}`.trim();
       res = await admin.rpc('style_slot_search', {
-        p_query: `${opts.occasion} ${SLOT_NOUN[slot]}`.trim(), p_k: fetchK, p_gender: filterGender, p_exclude_ids: exclude,
+        p_query: query, p_k: fetchK, p_gender: filterGender, p_exclude_ids: exclude,
       });
     }
     // Anti-repeat exhaustion: if excluding shown ids emptied this slot (thin
     // catalog), allow repeats for THIS slot only rather than showing nothing.
     if (exclude.length > 0 && (res.error || !Array.isArray(res.data) || res.data.length === 0)) {
+      tier = 3;
+      query = `${opts.occasion} ${SLOT_NOUN[slot]}`.trim();
       res = await admin.rpc('style_slot_search', {
-        p_query: `${opts.occasion} ${SLOT_NOUN[slot]}`.trim(), p_k: fetchK, p_gender: filterGender, p_exclude_ids: [],
+        p_query: query, p_k: fetchK, p_gender: filterGender, p_exclude_ids: [],
       });
     }
     const { data, error } = res;
-    if (error || !Array.isArray(data)) return [] as OccasionCand[];
+    const errMsg = error ? String((error as { message?: unknown }).message ?? error) : null;
+    if (error || !Array.isArray(data)) {
+      return { rows: [], diag: { slot, query, tier, returned: 0, kept: 0, error: errMsg } };
+    }
+    const returned = data.length;
     let rows = (data as Array<Record<string, unknown>>).map((r) => ({
       id: String(r.product_id), name: (r.product_name as string) ?? null, brand: (r.product_brand as string) ?? null,
       price: (r.product_price as string) ?? null, image: (r.product_image_url as string) ?? null,
       url: (r.product_url as string) ?? null, type: (r.product_type as string) ?? null,
-      gender: (r.product_gender as string) ?? null, slot, score: Number(r.score ?? 0),
+      gender: (r.product_gender as string) ?? null, slot, score: Number(r.score ?? 0), rank: 0,
     } as OccasionCand));
     if (gender === 'male') rows = rows.filter(c => !WOMEN_ONLY_NAME_RE.test(c.name ?? ''));
-    return rotateWithAnchors(rows, rotate, k);
+    // Rank AFTER rotate/trim so it describes the pool the model actually saw.
+    const kept = rotateWithAnchors(rows, rotate, k).map((c, i) => ({ ...c, rank: i }));
+    return { rows: kept, diag: { slot, query, tier, returned, kept: kept.length, error: null } };
   }));
 
   const seen = new Set<string>();
   const out: OccasionCand[] = [];
-  for (const rows of perSlot) for (const c of rows) {
+  for (const { rows } of perSlot) for (const c of rows) {
     if (seen.has(c.id)) continue;
     seen.add(c.id); out.push(c);
   }
+  const diags = perSlot.map(p => p.diag);
   // Observability: proves this path (per-slot style_slot_search) produced the pool.
   console.log(
     `[style-retrieval] ENGINE via style_slot_search × ${slots.length} slots ` +
-    `[${perSlot.map((r, i) => `${slots[i]}:${r.length}`).join(' ')}] ` +
+    `[${diags.map(d => `${d.slot}:${d.kept}/t${d.tier}`).join(' ')}] ` +
     `gender=${gender} exclude=${exclude.length} rotate=${rotate} ` +
     `occasion="${opts.occasion.slice(0, 80)}" -> ${out.length} unique candidates`,
   );
-  return out;
+  return { cands: out, slots: diags };
 }

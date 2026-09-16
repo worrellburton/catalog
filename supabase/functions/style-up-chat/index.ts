@@ -13,7 +13,7 @@
 // Secrets: ANTHROPIC_API_KEY.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { retrieveOccasionCandidates } from '../_shared/style-retrieval.ts';
+import { retrieveOccasionCandidates, type SlotDiag } from '../_shared/style-retrieval.ts';
 
 const MODEL = 'claude-sonnet-4-6';
 
@@ -23,6 +23,19 @@ const CORS = {
   'Access-Control-Allow-Headers': 'Authorization, Content-Type, apikey, x-client-info',
   'Access-Control-Max-Age': '86400',
 };
+// Phase 3.6: em-dashes read as AI-generated. The prompt already forbids them
+// but the model occasionally slips; strip them (both em U+2014 and en U+2013)
+// server-side so the shopper never sees one, regardless of provider.
+function stripEmDashes(s: string): string {
+  return s
+    .replace(/\s*[\u2014\u2013]\s*/g, ', ')
+    .replace(/, , /g, ', ');
+}
+// Same scrub for optional catalog text (product names and brands carry
+// em-dashes too, and they render as chat cards).
+function stripOpt(s: string | null | undefined): string | null {
+  return s ? stripEmDashes(String(s)) : null;
+}
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), { status, headers: { ...CORS, 'Content-Type': 'application/json' } });
 }
@@ -48,6 +61,9 @@ async function callAnthropic(apiKey: string, payload: unknown): Promise<Response
 interface ProductCand {
   id: string; name: string | null; brand: string | null; price: string | null;
   image_url: string | null; primary_image_url: string | null; url: string | null; type: string | null;
+  // Provenance, carried through so the trace can record how each piece was
+  // pulled. Null on the legacy recency scan, which has no slots or scores.
+  slot?: string | null; score?: number | null; rank?: number;
 }
 
 Deno.serve(async (req: Request) => {
@@ -86,9 +102,13 @@ Deno.serve(async (req: Request) => {
     // Stylist persona.
     const { data: stylist } = await admin
       .from('style_up_stylists')
-      .select('name, specialty, persona_prompt, source_mode')
+      .select('name, specialty, persona_prompt, source_mode, is_human')
       .eq('id', thread.stylist_id)
       .maybeSingle();
+    // Phase 2.3: human stylists reply from the inbox — never call the LLM.
+    // Defense in depth: the client already guards this, but if any caller
+    // slips through, no-op instead of burning tokens against a human thread.
+    if (stylist?.is_human === true) return json({ success: true, humanStylist: true });
     // Web stylists (e.g. Theo) source from the open web — the client searches +
     // auto-imports their picks, so the brain never recommends from our catalog.
     const isWeb = stylist?.source_mode === 'web';
@@ -138,6 +158,13 @@ Deno.serve(async (req: Request) => {
 
     // Candidate products to recommend FROM. Web stylists skip this (live web search).
     let cands: ProductCand[] = [];
+    let slotDiags: SlotDiag[] = [];
+    // Hoisted so the trace payload below (outside this block) can read them.
+    // The legacy branch leaves them at these defaults — it genuinely uses none
+    // of them — which is the correct, intentional provenance for that path.
+    let occasion = '';
+    let excludeIds: string[] = [];
+    let rotate = 0;
     if (!isWeb && method === 'legacy') {
       // LEGACY: the 120 most-recently-added active products, gender-filtered.
       let q = admin.from('products')
@@ -149,7 +176,9 @@ Deno.serve(async (req: Request) => {
       if (genderNorm === 'male') q = q.or('gender.eq.male,gender.eq.unisex');
       else if (genderNorm === 'female') q = q.or('gender.eq.female,gender.eq.unisex');
       const { data: candRows } = await q;
-      cands = (candRows ?? []) as ProductCand[];
+      cands = ((candRows ?? []) as ProductCand[]).map((c, i) => ({
+        ...c, slot: null, score: null, rank: i,
+      }));
       console.log(`[style-up-chat] thread=${threadId} retrieval=LEGACY(recency-120) candidates=${cands.length}`);
     } else if (!isWeb) {
       // STYLE ENGINE: occasion-aware per-slot style_slot_search.
@@ -157,14 +186,12 @@ Deno.serve(async (req: Request) => {
       // every turn made the BM25 query a ~100-word blob that matched almost
       // nothing on long threads (pool collapsed to ~1); and the 600-char slice of
       // the joined thread kept the OLDEST text, dropping the current ask entirely.
-      const occasion = turns.filter(t => t.sender === 'shopper' && t.body)
+      occasion = turns.filter(t => t.sender === 'shopper' && t.body)
         .slice(-3).map(t => (t.body ?? '').trim()).join(' ').slice(0, 300);
       // Stylist Engine: skip products already shown in this thread and rotate the
       // ranked pool by shopper-turn count, so a re-asked occasion surfaces a
       // genuinely different look instead of the same top-ranked pieces. Both are
       // empty on the first turn (nothing shown yet), so the opening look is unchanged.
-      let excludeIds: string[] = [];
-      let rotate = 0;
       if (isFresh) {
         const { data: shownRows } = await admin.from('style_up_messages')
           .select('product_ref').eq('thread_id', threadId).eq('kind', 'product');
@@ -172,18 +199,22 @@ Deno.serve(async (req: Request) => {
           .map(r => r?.product_ref?.id).filter((x): x is string => !!x))];
         rotate = Math.max(0, turns.filter(t => t.sender === 'shopper').length - 1);
       }
-      const found = await retrieveOccasionCandidates(admin, {
+      const { cands: found, slots: foundSlots } = await retrieveOccasionCandidates(admin, {
         occasion, gender: genderNorm, aesthetic: stylist?.specialty ?? '',
         excludeIds, rotate,
       });
+      slotDiags = foundSlots;
       cands = found.filter(c => c.image).map(c => ({
         id: c.id, name: c.name, brand: c.brand, price: c.price,
         image_url: c.image, primary_image_url: c.image, url: c.url, type: c.type,
+        slot: c.slot, score: c.score, rank: c.rank,
       }));
       console.log(`[style-up-chat] thread=${threadId} retrieval=ENGINE(${method}) candidates=${cands.length} exclude=${excludeIds.length} rotate=${rotate} mode=${mode || 'default'}`);
     }
+    // Names/brands are scrubbed on the way IN too: an em-dashed candidate list
+    // is a few-shot example of the punctuation we just told the model to avoid.
     const candList = cands.map(c =>
-      `${c.id} | ${(c.name ?? '').slice(0, 70)} | ${c.brand ?? ''} | ${c.price ?? ''} | ${c.type ?? ''}`,
+      `${c.id} | ${stripEmDashes(c.name ?? '').slice(0, 70)} | ${stripOpt(c.brand) ?? ''} | ${c.price ?? ''} | ${c.type ?? ''}`,
     ).join('\n');
 
     // Stylist Engine: an avoid-list of pieces already shown in this thread, so the
@@ -194,18 +225,18 @@ Deno.serve(async (req: Request) => {
       ? [...new Set(turns
           .filter(t => t.kind === 'product' && t.product_ref)
           .map(t => { const pr = t.product_ref as { id?: string; name?: string; brand?: string };
-            return pr.id ? [pr.brand, pr.name].filter(Boolean).join(' ').trim() : ''; })
+            return pr.id ? stripEmDashes([pr.brand, pr.name].filter(Boolean).join(' ')).trim() : ''; })
           .filter(Boolean))]
       : [];
     const shownBlock = shownLabels.length
-      ? `\nALREADY SHOWN THIS THREAD — do NOT recommend these again; compose a genuinely DIFFERENT look (different pieces, ideally a different colour story or silhouette):\n${shownLabels.slice(-24).map(l => `- ${l}`).join('\n')}\n`
+      ? `\nALREADY SHOWN THIS THREAD, do NOT recommend these again; compose a genuinely DIFFERENT look (different pieces, ideally a different colour story or silhouette):\n${shownLabels.slice(-24).map(l => `- ${l}`).join('\n')}\n`
       : '';
 
     const persona = stylist?.persona_prompt
       || `You are ${stylist?.name ?? 'a personal stylist'}, a friendly personal stylist.`;
     const specialty = (stylist?.specialty ?? '').trim();
     const outfitClause = (!isWeb && method !== 'legacy' && mode === 'outfit')
-      ? `\n- The shopper wants a COMPLETE outfit this turn. Recommend ONE coherent full look from the candidates: a top (or a dress), a bottom, shoes, plus an optional layer — one piece per slot, all matching in colour, formality and season. Put every piece's id in productIds.${shownLabels.length ? ' This is a NEW-look request: it MUST be clearly different from every look already shown above, not a re-serving of the last outfit.' : ''}`
+      ? `\n- The shopper wants a COMPLETE outfit this turn. Recommend ONE coherent full look from the candidates: a top (or a dress), a bottom, shoes, plus an optional layer. One piece per slot, all matching in colour, formality and season. Put every piece's id in productIds.${shownLabels.length ? ' This is a NEW-look request: it MUST be clearly different from every look already shown above, not a re-serving of the last outfit.' : ''}`
       : '';
     const system = isWeb ? `${persona}
 
@@ -221,7 +252,7 @@ STYLE OF REPLY:
 - You CAN generate the look on them. NEVER say you can't generate photos.
 - When your reply asks the shopper a question, ALSO set quickReplies: 2-4 short tap-to-answer options (under 25 characters each, first-person where natural) that DIRECTLY answer your question. Otherwise [].
 
-Output ONLY the JSON object below and NOTHING else — no preamble, no reasoning, no commentary, no text before or after it. Decide silently; the shopper only sees the "reply" string.
+Output ONLY the JSON object below and NOTHING else: no preamble, no reasoning, no commentary, no text before or after it. Decide silently; the shopper only sees the "reply" string.
 {"reply":"<your text message>","searchQueries":["<one tight query per garment>", ...],"quickReplies":["<tap answer>", ...]}
 searchQueries: 1-4 entries when surfacing pieces this turn, otherwise [].` : `${persona}
 
@@ -231,17 +262,17 @@ STYLE OF REPLY:
 - Talk like texting: warm, concise, 1-3 short sentences. No markdown, no bullet lists. Never use em dashes; use commas or periods.
 - Your signature aesthetic is ${specialty || 'your own point of view'}. Treat it as the DEFAULT vibe. Once you know the occasion, do NOT ask about style or formality, just assume your own aesthetic and go straight to pieces. Only ask a question when you don't yet know the occasion itself, or it's genuinely ambiguous. Keep questions to a minimum.
 - When you're ready to recommend, pick SPECIFIC products from the candidate list below (by id). Recommend things that actually fit their context and the conversation. Don't recommend products that aren't in the list.
-- COMPLETE LOOKS ONLY: whenever you present a LOOK or outfit — which is the default any time they ask for something to wear, "a new one", a fresh look, or name an occasion — recommend a COMPLETE head-to-toe outfit: a top (or a dress), a bottom, and shoes, plus an optional layer. One piece per slot, all coordinated in colour, formality and season. Put every piece's id in productIds. NEVER offer a lone single piece as "a look". Recommend just one item ONLY when the shopper explicitly asked for a single garment (e.g. "just shoes", "a new jacket").
-- After recommending, tell them they can tap any piece to see it on themselves, or just ask you to put the whole look on them — you CAN generate the look on them (it kicks off automatically when they ask). NEVER say you can't generate photos.${outfitClause}
+- COMPLETE LOOKS ONLY: whenever you present a LOOK or outfit (the default any time they ask for something to wear, "a new one", a fresh look, or name an occasion), recommend a COMPLETE head-to-toe outfit: a top (or a dress), a bottom, and shoes, plus an optional layer. One piece per slot, all coordinated in colour, formality and season. Put every piece's id in productIds. NEVER offer a lone single piece as "a look". Recommend just one item ONLY when the shopper explicitly asked for a single garment (e.g. "just shoes", "a new jacket").
+- After recommending, tell them they can tap any piece to see it on themselves, or just ask you to put the whole look on them. You CAN generate the look on them (it kicks off automatically when they ask). NEVER say you can't generate photos.${outfitClause}
 
-CANDIDATE PRODUCTS (id | name | brand | price | type) — only recommend from these:
+CANDIDATE PRODUCTS (id | name | brand | price | type). Only recommend from these:
 ${candList || '(none available)'}
 ${shownBlock}
 - When your reply asks the shopper a question, ALSO set quickReplies: 2-4 short tap-to-answer options (under 25 characters each, first-person where natural) that DIRECTLY answer your question. Otherwise [].
 
-Output ONLY the JSON object below and NOTHING else — no preamble, no reasoning, no commentary, no text before or after it. Decide silently; the shopper only sees the "reply" string.
+Output ONLY the JSON object below and NOTHING else: no preamble, no reasoning, no commentary, no text before or after it. Decide silently; the shopper only sees the "reply" string.
 {"reply":"<your text message>","productIds":["<id>", ...],"quickReplies":["<tap answer>", ...]}
-productIds is optional — include it only when you're actually recommending pieces this turn (a full look = 3-4 ids across slots; max 4).`;
+productIds is optional: include it only when you're actually recommending pieces this turn (a full look = 3-4 ids across slots; max 4).`;
 
     const mapped = turns.map(t => {
       const role: 'user' | 'assistant' = t.sender === 'shopper' ? 'user' : 'assistant';
@@ -305,8 +336,10 @@ productIds is optional — include it only when you're actually recommending pie
       searchQueries = Array.isArray(parsed.searchQueries)
         ? parsed.searchQueries.map(q => String(q).trim()).filter(Boolean).slice(0, 4)
         : [];
+      // Scrubbed like the prose reply: quick-reply chips are shopper-facing too.
+      // Strip BEFORE the 40-char cap so the ', ' expansion can't push past it.
       quickReplies = Array.isArray(parsed.quickReplies)
-        ? parsed.quickReplies.map(q => String(q).trim()).filter(Boolean).slice(0, 4).map(s => s.slice(0, 40))
+        ? parsed.quickReplies.map(q => stripEmDashes(String(q)).trim()).filter(Boolean).slice(0, 4).map(s => s.slice(0, 40))
         : [];
     } catch {
       // Malformed / truncated JSON — recover the reply + any product ids by
@@ -328,13 +361,13 @@ productIds is optional — include it only when you're actually recommending pie
     // Insert the stylist's text reply (with its tap-to-answer options when the
     // reply is a question), then a product message per pick.
     await admin.from('style_up_messages')
-      .insert({ thread_id: threadId, sender: 'stylist', kind: 'text', body: reply, quick_replies: quickReplies.length ? quickReplies : null });
+      .insert({ thread_id: threadId, sender: 'stylist', kind: 'text', body: stripEmDashes(reply), quick_replies: quickReplies.length ? quickReplies : null });
 
     for (const p of picks) {
       await admin.from('style_up_messages').insert({
         thread_id: threadId, sender: 'stylist', kind: 'product',
         product_ref: {
-          id: p.id, name: p.name, brand: p.brand, price: p.price,
+          id: p.id, name: stripOpt(p.name), brand: stripOpt(p.brand), price: p.price,
           image: p.primary_image_url || p.image_url, url: p.url,
         },
       });
@@ -370,6 +403,27 @@ productIds is optional — include it only when you're actually recommending pie
           system,
           messages,
           candidate_count: cands.length,
+          // How each candidate was pulled — the slot it was retrieved for, its
+          // BM25 score, its rank within that slot, and per-slot which query and
+          // fallback tier produced the pool. Names and brands are STORED, not
+          // joined: a product deleted after this turn would otherwise blank out
+          // the audit record. ~48 rows ≈ 5 KB of jsonb per stylist turn.
+          //
+          // Absent on web-sourced stylists, which never run catalog retrieval
+          // and record their provenance in the `searches` column instead.
+          retrieval: isWeb ? null : {
+            method,
+            occasion,
+            gender: genderNorm,
+            aesthetic: stylist?.specialty ?? null,
+            exclude_ids: excludeIds,
+            rotate,
+            slots: slotDiags,
+            candidates: cands.map(c => ({
+              id: c.id, name: c.name, brand: c.brand,
+              slot: c.slot ?? null, score: c.score ?? null, rank: c.rank ?? null,
+            })),
+          },
           model: MODEL,
           reply,
           product_ids: productIds,
@@ -430,7 +484,7 @@ productIds is optional — include it only when you're actually recommending pie
             for (const r of found) {
               await admin.from('style_up_messages').insert({
                 thread_id: threadId, sender: 'stylist', kind: 'product',
-                product_ref: { id: r.id, name: r.name, brand: r.brand, price: r.price, image: r.primary_image_url || r.image_url, url: r.url },
+                product_ref: { id: r.id, name: stripOpt(r.name as string | null), brand: stripOpt(r.brand as string | null), price: r.price, image: r.primary_image_url || r.image_url, url: r.url },
               });
             }
           } else {

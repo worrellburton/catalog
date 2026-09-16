@@ -143,7 +143,17 @@ export default defineConfig({
               || id.includes('/components/CatalogLogo')
               || id.includes('/components/AvatarCropModal')
               || id.includes('/components/CountUp')
-              || id.includes('/components/SimilarDebugModal')) return 'app-core';
+              || id.includes('/components/SimilarDebugModal')
+              // CatalogDialog is imported by root.tsx itself (CatalogDialogProvider),
+              // so leaving it unpinned made the ENTIRE admin chunk a static import
+              // of root — i.e. of every page in the app, consumer and Style alike.
+              // Built proof before this line existed: root-*.js contained
+              // `import{C as B}from"./admin-vXKXFK4D.js"` for that one symbol.
+              || id.includes('/components/CatalogDialog')
+              // Beam is shared by StyleUpExperience and MyLooks; MyLooks is pinned
+              // to creator-studio, so Rollup parked Beam there and /style pulled
+              // creator-studio (+ its 98 KB render-blocking stylesheet) with it.
+              || id.includes('/components/Beam')) return 'app-core';
           // Subdivide the admin chunk: the two behemoths (data.tsx ~9.5k lines,
           // catalogs.tsx ~7.7k) + the next heaviest get their OWN chunks so a
           // light admin page (e.g. /admin/dials) no longer downloads them. The
@@ -306,6 +316,15 @@ export default defineConfig({
             route("user/:name", "routes/admin/user.$name.tsx");
             route("brand/:name", "routes/admin/brand.$name.tsx");
             route("style", "routes/admin/style.tsx");
+            // Phase 4: stylist roster + analytics + application queue.
+            route("stylists", "routes/admin/stylists.tsx");
+            route("stylists/:id", "routes/admin/stylists.$id.tsx");
+            // Each conversation is its own page (shareable / refreshable),
+            // not a drawer over the list.
+            route("style/:threadId", "routes/admin/style.$threadId.tsx");
+            // One generation's recorded step sequence. Three segments, so it
+            // cannot collide with the two-segment style/:threadId.
+            route("style/g/:generationId", "routes/admin/style.g.$generationId.tsx");
             // Legacy path — old links keep resolving to the same page.
             route("style-up", "routes/admin/style.tsx", { id: "admin/style-up-legacy" });
           });

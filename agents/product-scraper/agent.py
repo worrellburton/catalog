@@ -410,13 +410,16 @@ def _non_product_url_reason(raw_url: str) -> str | None:
         return "search engine page"
     if path in ("", "/"):
         return "site homepage"
-    if path == "/search" or path.startswith("/search/") or path == "/s" or path.startswith("/s/"):
+    if path == "/search" or path.startswith("/search/"):
         if not (host == "google.com" or host.endswith(".google.com")):
             return f'non-product path "{path}"'
-    if (host == "amazon.com" or host.endswith(".amazon.com")) and (
-        "/dp/" not in path and "/gp/product/" not in path
-    ):
-        return "Amazon non-product page (no /dp/ in URL)"
+    if (host == "amazon.com" or host.endswith(".amazon.com")):
+        # Amazon search is /s — scoped to Amazon because /s/<slug>/<id> is
+        # Nordstrom's and Nordstrom Rack's canonical product URL format.
+        if path == "/s" or path.startswith("/s/"):
+            return "Amazon search page"
+        if "/dp/" not in path and "/gp/product/" not in path:
+            return "Amazon non-product page (no /dp/ in URL)"
     return None
 
 

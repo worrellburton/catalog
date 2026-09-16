@@ -30,6 +30,23 @@
 html[data-shell="catalog-app"] .su-shell {
   padding-top: var(--shell-sb, env(safe-area-inset-top, 0px));
 }
+/* /style/apply, /style/showroom, /style/inbox and /style/settings render their
+   OWN root (not inside .su-shell), so the rule above never reaches them and
+   their headings sat under the iOS status bar. Same clearance, added on top of
+   each root's own top padding so the designed spacing survives. */
+html[data-shell="catalog-app"] .su-apply {
+  padding-top: calc(var(--shell-sb, env(safe-area-inset-top, 0px)) + 48px);
+}
+html[data-shell="catalog-app"] .su-showroom,
+html[data-shell="catalog-app"] .su-inbox {
+  padding-top: calc(var(--shell-sb, env(safe-area-inset-top, 0px)) + 24px);
+}
+/* The product-search sheet those two open is `position: fixed; inset: 0`, so
+   the root padding above can't reach it — its search field and Cancel button
+   would sit under the status bar (and half of Cancel would be untappable). */
+html[data-shell="catalog-app"] .su-showroom-search-sheet {
+  padding-top: calc(var(--shell-sb, env(safe-area-inset-top, 0px)) + 20px);
+}
 .su-shell-head {
   flex: 0 0 auto;
   display: grid;
@@ -38,6 +55,28 @@ html[data-shell="catalog-app"] .su-shell {
   gap: 12px;
   padding: 12px 14px 6px;
   /* No divider bar under the logo — it floats on the dark base. */
+  /* Auto-hide on scroll (see .is-scrolled below). max-height rather than
+     position:absolute so the head stays in flow — .su-page is the flex
+     scroller under it, and pulling the head out of flow would jump the
+     scroller's height instead of animating it. */
+  overflow: hidden;
+  max-height: 120px;
+  transition: opacity 180ms ease, transform 180ms ease,
+              max-height 180ms ease, padding 180ms ease;
+}
+/* Scrolled: slide up, fade, AND collapse the box so the chat reclaims the
+   space (a bare translate would leave a 50-ish px hole). Mirrors the
+   .su-thread-head--style.is-scrolled treatment below. */
+.su-shell-head.is-scrolled {
+  opacity: 0;
+  transform: translateY(-100%);
+  pointer-events: none;
+  max-height: 0;
+  padding-top: 0;
+  padding-bottom: 0;
+}
+@media (prefers-reduced-motion: reduce) {
+  .su-shell-head { transition: none; }
 }
 .su-shell-back { grid-column: 1; }
 /* Centered Catalog logo with "style" right under it. */
@@ -142,6 +181,42 @@ html[data-shell="catalog-app"] .su-shell {
   overflow: hidden;
 }
 .su-stylist-avatar img { width: 100%; height: 100%; object-fit: cover; }
+
+/* Phase 2: AI/human filter chips on the picker + "AI" pip on AI avatars.
+ * Humans get no chip. Style app only — the picker is not shown outside it. */
+.su-roster-filter {
+  display: flex; gap: 8px; margin: 0 0 12px;
+}
+.su-roster-chip {
+  appearance: none; border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.04); color: rgba(255,255,255,0.72);
+  padding: 6px 12px; border-radius: 999px; font-size: 12px;
+  letter-spacing: 0.02em; cursor: pointer; transition: border-color 120ms, color 120ms, background 120ms;
+}
+.su-roster-chip:hover { color: rgba(255,255,255,0.95); border-color: rgba(255,255,255,0.28); }
+.su-roster-chip.is-active {
+  color: #0a0a0a; background: #f0f0f0; border-color: #f0f0f0;
+}
+.su-stylist-avatar { position: relative; }
+/* Machine tag, not a rounded badge — squared corners + mono letterforms +
+   brushed-metal fill so "AI" reads as a stamped plate on the avatar. */
+.su-stylist-bot {
+  position: absolute; right: -5px; bottom: -5px;
+  min-width: 21px; height: 18px; padding: 0 5px;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 9.5px; font-weight: 700; letter-spacing: 0.1em;
+  color: #10181d;
+  background: linear-gradient(150deg, #dcebf4 0%, #9db2c0 55%, #d0e1ec 100%);
+  border-radius: 5px; border: 2px solid #0a0a0a;
+  box-shadow: 0 0 6px rgba(120, 190, 230, 0.32);
+  pointer-events: none;
+}
+.su-stylist-card.is-ai .su-stylist-name::after {
+  /* Extra hint next to the name so screen-readers and glancing eyes both catch it. */
+  content: ' · AI';
+  color: rgba(255,255,255,0.42); font-weight: 400; letter-spacing: 0.04em;
+}
 /* Line-art portrait fallback (no photo) — inherits the avatar's dark ink. */
 .su-avatar-illus { width: 100%; height: 100%; display: block; }
 .su-stylist-info { display: flex; flex-direction: column; gap: 2px; min-width: 0; flex: 1 1 auto; }
@@ -237,7 +312,9 @@ html[data-shell="catalog-app"] .su-shell {
 /* Docked "Find a stylist" button (landing). */
 .su-find-bar {
   flex: 0 0 auto;
-  padding: 12px 18px calc(16px + env(safe-area-inset-bottom));
+  /* Raised off the bottom so the glowing glass pill floats above the toolbar
+     zone rather than sitting flush against the screen edge. */
+  padding: 12px 18px calc(38px + env(safe-area-inset-bottom));
   /* Single source of truth for the button's width cap — beam-hosts.css needs
      the same value so the <Beam> wrapper matches the button instead of
      stretching to the full bar. Don't inline this number again. */
@@ -248,18 +325,48 @@ html[data-shell="catalog-app"] .su-shell {
   max-width: var(--su-find-btn-max);
   margin: 0 auto;
   display: block;
-  padding: 15px;
+  padding: 16px;
   border-radius: 999px;
-  border: none;
-  background: #e7e7ea;
-  color: #0a0a0a;
+  /* Glass: translucent fill + blur so the dark page reads through it, a bright
+     rim, and a soft luminous halo. The colorful animated <Beam> border rides on
+     top of this for the moving glow edge. */
+  border: 1px solid rgba(255, 255, 255, 0.24);
+  background: rgba(255, 255, 255, 0.10);
+  -webkit-backdrop-filter: blur(22px) saturate(160%);
+  backdrop-filter: blur(22px) saturate(160%);
+  color: #f5f5f7;
   font-size: 15px;
   font-weight: 800;
   letter-spacing: -0.01em;
   cursor: pointer;
-  transition: transform 0.12s ease, opacity 0.16s ease;
+  box-shadow:
+    0 0 22px rgba(255, 255, 255, 0.16),
+    0 10px 34px rgba(0, 0, 0, 0.5),
+    inset 0 1px 0 rgba(255, 255, 255, 0.30);
+  animation: su-find-glow 3.4s ease-in-out infinite;
+  transition: transform 0.12s ease, opacity 0.16s ease, background 0.2s ease;
 }
+.su-find-bar .su-find-btn:hover { background: rgba(255, 255, 255, 0.14); }
 .su-find-bar .su-find-btn:active { transform: scale(0.985); }
+
+/* Gentle breathing halo — reads as "glowing" alongside the animated beam. */
+@keyframes su-find-glow {
+  0%, 100% {
+    box-shadow:
+      0 0 20px rgba(255, 255, 255, 0.12),
+      0 10px 34px rgba(0, 0, 0, 0.5),
+      inset 0 1px 0 rgba(255, 255, 255, 0.30);
+  }
+  50% {
+    box-shadow:
+      0 0 36px rgba(255, 255, 255, 0.24),
+      0 10px 34px rgba(0, 0, 0, 0.5),
+      inset 0 1px 0 rgba(255, 255, 255, 0.30);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .su-find-bar .su-find-btn { animation: none; }
+}
 
 /* ── Thread ──────────────────────────────────────────────────────────── */
 .su-page--thread {
@@ -338,6 +445,18 @@ html[data-shell="catalog-app"] .su-shell {
    list (avatar hugging the left), with the stylist's favorite brands as
    logo chips where a conversation shows its preview line. */
 .su-picker-pill .su-stylist-avatar { width: 56px; height: 56px; }
+/* AI stylists read as machines, not people: chrome-plate fill behind the robot
+   face plus a cool ring. The ring is an OUTER box-shadow (not inset) so it
+   still shows when the avatar carries a photo — .su-stylist-avatar is
+   overflow:hidden and would clip an inset one. */
+.su-picker-pill.is-ai .su-stylist-avatar {
+  background: linear-gradient(150deg, #3b434c 0%, #171a1f 55%, #2c343d 100%);
+  color: #d8ecf7;
+  box-shadow: 0 0 0 2px rgba(150, 200, 226, 0.55), 0 0 12px rgba(110, 185, 230, 0.26);
+}
+/* The inline robot SVG (StylistFace, AI branch) — draws in currentColor, so it
+   picks up the cool ink above. */
+.su-robot-face { width: 100%; height: 100%; display: block; }
 /* Favorite brands sit on ONE row — no wrapping. If the three chips are wider
    than the card they scroll horizontally (scrollbar hidden), so a card never
    grows a second line. */
@@ -948,22 +1067,63 @@ html[data-shell="catalog-app"] .su-shell {
   background: rgba(0,0,0,0.55); color: #fff; backdrop-filter: blur(4px);
 }
 
-/* Full-screen expanded look viewer. */
+/* Full-screen expanded look viewer.
+   Surfaces read from the Style app's background-preset tokens (set on <html>,
+   see the data-style-bg block near the end of this file) so a light preset
+   doesn't get a black sheet slammed over it. Fallbacks = the dark default,
+   so the Catalog app and the default preset are unchanged. */
+/* Scrolls when the content is taller than the screen. `align-items: center` on
+   its own clips BOTH ends unreachably once the pieces list makes the sheet
+   overflow (the close button and the CTA go with it), so centre with `margin:
+   auto` on the child instead — that centres while it fits and stays scrollable
+   when it doesn't. Top pad clears the native status bar: inside the Flutter
+   shell nothing else does, since the shell hides its header on /style. */
 .su-viewer {
   position: fixed; inset: 0; z-index: 200;
-  display: flex; align-items: center; justify-content: center;
-  padding: 20px; background: rgba(0,0,0,0.86);
+  display: flex; align-items: flex-start; justify-content: center;
+  padding: 20px;
+  padding-top: calc(20px + var(--shell-sb, env(safe-area-inset-top, 0px)));
+  padding-bottom: calc(20px + env(safe-area-inset-bottom, 0px));
+  background: var(--su-scrim, rgba(0,0,0,0.86));
+  overflow-y: auto; overscroll-behavior: contain; -webkit-overflow-scrolling: touch;
 }
-.su-viewer-inner { position: relative; display: flex; flex-direction: column; align-items: center; gap: 14px; max-width: 460px; width: 100%; }
+.su-viewer-inner { position: relative; margin: auto; display: flex; flex-direction: column; align-items: center; gap: 14px; max-width: 460px; width: 100%; }
 .su-viewer-close {
   position: absolute; top: -6px; right: -2px; z-index: 1;
   width: 36px; height: 36px; border-radius: 50%; border: none;
   background: rgba(255,255,255,0.14); color: #fff; font-size: 15px; cursor: pointer;
 }
-.su-viewer-video { width: 100%; max-height: 72vh; aspect-ratio: 9 / 16; object-fit: contain; border-radius: 16px; background: #000; }
-.su-viewer-pieces { display: flex; gap: 8px; flex-wrap: wrap; justify-content: center; }
-.su-viewer-piece { width: 46px; height: 58px; border-radius: 9px; overflow: hidden; border: 1px solid rgba(255,255,255,0.18); background: #1c1d21; padding: 0; cursor: pointer; }
-.su-viewer-piece img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* 62vh, not 72: the pieces list below needs to be visible on open, not something
+   you only find by scrolling. */
+.su-viewer-video { width: 100%; max-height: 62vh; aspect-ratio: 9 / 16; object-fit: contain; border-radius: 16px; background: #000; }
+/* The pieces in a look. Was a row of bare 46x58 thumbnails, which named none of
+   them; now a tappable list carrying brand, name and price, so the look reads as
+   a shoppable outfit rather than four unlabelled squares. */
+.su-viewer-pieces { display: flex; flex-direction: column; gap: 6px; width: 100%; }
+.su-viewer-piece {
+  display: flex; align-items: center; gap: 10px; width: 100%;
+  padding: 6px 10px 6px 6px; text-align: left; cursor: pointer;
+  border-radius: 12px; border: 1px solid var(--su-sheet-line, rgba(255,255,255,0.18));
+  background: var(--su-sheet-2, #1c1d21); color: inherit;
+}
+.su-viewer-piece:active { transform: scale(0.99); }
+.su-viewer-piece-media {
+  flex: 0 0 auto; width: 46px; height: 58px; border-radius: 9px; overflow: hidden;
+  background: var(--su-sheet, #26272c); display: block;
+}
+.su-viewer-piece-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
+/* min-width:0 so a long product name ellipsizes instead of shoving the price out. */
+.su-viewer-piece-info { flex: 1 1 auto; min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.su-viewer-piece-brand {
+  font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase;
+  color: var(--su-ink-3, rgba(255,255,255,0.55));
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.su-viewer-piece-name {
+  font-size: 13px; line-height: 1.3;
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
+}
+.su-viewer-piece-price { flex: 0 0 auto; font-size: 13px; font-weight: 600; }
 .su-viewer-add {
   width: 100%; max-width: 320px; padding: 13px; border-radius: 999px; border: none;
   background: #e7e7ea; color: #141518; font-size: 14px; font-weight: 800; cursor: pointer;
@@ -1796,7 +1956,7 @@ html[data-shell="catalog-app"] .su-shell {
   display: flex;
   align-items: flex-end;
   justify-content: center;
-  background: rgba(0, 0, 0, 0.72);
+  background: var(--su-scrim, rgba(0, 0, 0, 0.72));
   -webkit-backdrop-filter: blur(6px);
   backdrop-filter: blur(6px);
 }
@@ -1809,8 +1969,8 @@ html[data-shell="catalog-app"] .su-shell {
   flex-direction: column;
   gap: 0;
   border-radius: 22px 22px 0 0;
-  background: #141518;
-  border: 1px solid #26282d;
+  background: var(--su-sheet, #141518);
+  border: 1px solid var(--su-sheet-line, #26282d);
   border-bottom: none;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
@@ -1835,7 +1995,7 @@ html[data-shell="catalog-app"] .su-shell {
   scroll-snap-type: x mandatory;
   -webkit-overflow-scrolling: touch;
   scrollbar-width: none;
-  background: #0e0f11;
+  background: var(--su-sheet-2, #0e0f11);
   border-radius: 22px 22px 0 0;
 }
 .su-pviewer-gallery::-webkit-scrollbar { display: none; }
@@ -1846,7 +2006,7 @@ html[data-shell="catalog-app"] .su-shell {
   aspect-ratio: 4 / 5;
   object-fit: contain;
   scroll-snap-align: center;
-  background: #0e0f11;
+  background: var(--su-sheet-2, #0e0f11);
 }
 .su-pviewer-empty { flex: 0 0 100%; aspect-ratio: 4 / 5; background: repeating-linear-gradient(45deg, #1c1d21, #1c1d21 8px, #26282d 8px, #26282d 16px); }
 .su-pviewer-info { padding: 16px 18px 6px; }
@@ -1857,17 +2017,17 @@ html[data-shell="catalog-app"] .su-shell {
   margin-bottom: 3px;
 }
 .su-pviewer-name { font-size: 17px; font-weight: 700; line-height: 1.3; }
-.su-pviewer-price { font-size: 15px; color: #b9bcc4; margin-top: 4px; font-variant-numeric: tabular-nums; }
+.su-pviewer-price { font-size: 15px; color: var(--su-ink-2, #b9bcc4); margin-top: 4px; font-variant-numeric: tabular-nums; }
 .su-pviewer-desc {
   margin: 10px 0 0;
   font-size: 13.5px;
   line-height: 1.55;
-  color: #9a9da6;
+  color: var(--su-ink-3, #9a9da6);
 }
 .su-pviewer .su-viewer-add { margin: 14px 18px 0; width: auto; max-width: none; }
 @media (min-width: 769px) {
   .su-pviewer { align-items: center; padding: 24px; }
-  .su-pviewer-inner { border-radius: 22px; border-bottom: 1px solid #26282d; }
+  .su-pviewer-inner { border-radius: 22px; border-bottom: 1px solid var(--su-sheet-line, #26282d); }
   .su-pviewer-gallery { border-radius: 22px 22px 0 0; }
 }
 @media (prefers-reduced-motion: reduce) {
@@ -1893,9 +2053,9 @@ html[data-shell="catalog-app"] .su-shell {
   width: 40px; height: 40px;
   display: inline-flex; align-items: center; justify-content: center;
   border-radius: 50%;
-  border: 1px solid #34363c;
-  background: #1c1d21;
-  color: #c7c9cf;
+  border: 1px solid var(--su-sheet-line, #34363c);
+  background: var(--su-sheet-2, #1c1d21);
+  color: var(--su-ink-2, #c7c9cf);
   cursor: pointer;
   transition: transform 0.16s cubic-bezier(0.34, 1.56, 0.64, 1), color 0.14s ease, border-color 0.14s ease;
 }
@@ -1914,15 +2074,15 @@ html[data-shell="catalog-app"] .su-shell {
   flex: 0 0 auto;
   font-size: 10.5px; font-weight: 800;
   letter-spacing: 0.08em; text-transform: uppercase;
-  color: #71747c;
+  color: var(--su-ink-3, #71747c);
   width: 44px;
 }
 .su-pviewer-chip {
   font-size: 11.5px; font-weight: 600;
   padding: 4px 10px;
   border-radius: 999px;
-  background: #26282d;
-  color: #c7c9cf;
+  background: var(--su-sheet-2, #26282d);
+  color: var(--su-ink-2, #c7c9cf);
 }
 
 /* Short description — 3 lines, tap to expand. */
@@ -1941,7 +2101,7 @@ html[data-shell="catalog-app"] .su-shell {
   padding: 0 18px 8px;
   font-size: 10.5px; font-weight: 800;
   letter-spacing: 0.08em; text-transform: uppercase;
-  color: #71747c;
+  color: var(--su-ink-3, #71747c);
 }
 .su-pviewer-similar-rail {
   display: flex;
@@ -1961,14 +2121,14 @@ html[data-shell="catalog-app"] .su-shell {
 .su-pviewer-sim-media {
   width: 104px; height: 130px;
   border-radius: 10px; overflow: hidden;
-  background: #26282d; border: 1px solid #2a2c31;
+  background: var(--su-sheet-2, #26282d); border: 1px solid var(--su-sheet-line, #2a2c31);
 }
 .su-pviewer-sim-media img { width: 100%; height: 100%; object-fit: cover; display: block; }
 .su-pviewer-sim-name {
-  font-size: 11.5px; line-height: 1.25; color: #d8dae0;
+  font-size: 11.5px; line-height: 1.25; color: var(--su-ink-2, #d8dae0);
   display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden;
 }
-.su-pviewer-sim-price { font-size: 11px; color: #8b8e96; }
+.su-pviewer-sim-price { font-size: 11px; color: var(--su-ink-3, #8b8e96); }
 
 /* Dissolve-out for both overlays (backdrop fades, sheet sinks + dissolves). */
 .su-pviewer.is-closing,
@@ -2040,3 +2200,434 @@ html[data-shell="catalog-app"] .su-shell {
 @media (prefers-reduced-motion: reduce) {
   .su-confirm-backdrop, .su-confirm { animation: none; }
 }
+
+
+/* Phase 2.5: become-a-stylist application form (/style/apply). */
+.su-apply {
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 48px 20px 96px;
+  color: #f0f0f0;
+  font-family: inherit;
+  min-height: 100dvh;
+  box-sizing: border-box;
+}
+.su-apply--loading { color: rgba(255,255,255,0.5); text-align: center; padding-top: 96px; }
+.su-apply h1 { font-size: 26px; letter-spacing: -0.01em; margin: 0 0 8px; }
+.su-apply > p { color: rgba(255,255,255,0.68); margin: 0 0 24px; line-height: 1.4; }
+.su-apply-note {
+  margin: 0 0 16px; padding: 10px 12px;
+  background: rgba(220, 130, 40, 0.08);
+  border: 1px solid rgba(220, 130, 40, 0.32);
+  border-radius: 8px; font-size: 13px; color: rgba(255,255,255,0.82);
+}
+.su-apply-error {
+  margin-top: 8px; color: #ff9a9a; font-size: 13px;
+}
+.su-apply-form { display: flex; flex-direction: column; gap: 16px; }
+.su-apply-form label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; color: rgba(255,255,255,0.72); }
+.su-apply-form input[type="text"],
+.su-apply-form input[type="url"],
+.su-apply-form textarea {
+  appearance: none; border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.04); color: #f0f0f0;
+  padding: 10px 12px; border-radius: 8px; font-size: 15px;
+  font-family: inherit; line-height: 1.35;
+}
+.su-apply-form input:focus, .su-apply-form textarea:focus {
+  outline: none; border-color: rgba(255,255,255,0.42);
+}
+.su-apply-radios { display: flex; gap: 8px; }
+.su-apply-radio {
+  flex: 1 1 auto; display: flex; align-items: center; justify-content: center; gap: 6px;
+  padding: 10px 12px; border: 1px solid rgba(255,255,255,0.14);
+  background: rgba(255,255,255,0.04); border-radius: 8px; cursor: pointer;
+  font-size: 14px; color: rgba(255,255,255,0.72);
+}
+.su-apply-radio input { accent-color: #f0f0f0; }
+.su-apply-radio:has(input:checked) {
+  color: #0a0a0a; background: #f0f0f0; border-color: #f0f0f0;
+}
+.su-apply-actions { display: flex; gap: 8px; margin-top: 8px; }
+.su-apply-cta {
+  appearance: none; padding: 12px 18px; border-radius: 999px; border: 0;
+  background: #f0f0f0; color: #0a0a0a; font-weight: 600; font-size: 15px;
+  cursor: pointer; flex: 1 1 auto;
+}
+.su-apply-cta:disabled { opacity: 0.5; cursor: not-allowed; }
+.su-apply-back {
+  appearance: none; padding: 12px 18px; border-radius: 999px;
+  background: transparent; color: rgba(255,255,255,0.72);
+  border: 1px solid rgba(255,255,255,0.18); font-size: 15px; cursor: pointer;
+}
+
+/* Phase 2.5: picker footer link to the apply flow. */
+.su-become-stylist {
+  appearance: none; margin: 20px auto 0; display: block;
+  background: transparent; color: rgba(255,255,255,0.62);
+  border: 0; padding: 8px 12px; font-size: 13px; cursor: pointer;
+  text-decoration: underline; text-underline-offset: 3px;
+}
+.su-become-stylist:hover { color: rgba(255,255,255,0.9); }
+
+
+/* Phase 2.4: stylist showroom (/style/showroom). */
+.su-showroom {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 24px 20px 96px;
+  color: #f0f0f0;
+  min-height: 100dvh;
+  box-sizing: border-box;
+}
+.su-showroom-head {
+  display: flex; align-items: center; gap: 12px; margin: 0 0 20px;
+}
+.su-showroom-head h1 { font-size: 20px; margin: 0; letter-spacing: -0.01em; }
+.su-showroom-tabs {
+  display: flex; gap: 8px; margin: 0 0 16px;
+  border-bottom: 1px solid rgba(255,255,255,0.08); padding-bottom: 8px;
+}
+.su-showroom-tab {
+  appearance: none; background: transparent; border: 0;
+  color: rgba(255,255,255,0.6); font-size: 14px; font-family: inherit;
+  padding: 8px 10px; cursor: pointer; display: inline-flex; gap: 6px;
+  border-radius: 6px;
+}
+.su-showroom-tab.is-active { color: #f0f0f0; background: rgba(255,255,255,0.06); }
+.su-showroom-tab-count {
+  font-size: 11px; color: rgba(255,255,255,0.5);
+  background: rgba(255,255,255,0.08); padding: 1px 6px; border-radius: 999px;
+}
+.su-showroom-grid {
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 12px;
+}
+.su-showroom-tile {
+  position: relative; border-radius: 10px;
+  background: rgba(255,255,255,0.04); overflow: hidden;
+  display: flex; flex-direction: column;
+}
+.su-showroom-tile img,
+.su-showroom-tile-placeholder {
+  width: 100%; aspect-ratio: 3/4; object-fit: cover; background: rgba(255,255,255,0.06);
+}
+.su-showroom-tile-info { padding: 8px 10px; }
+.su-showroom-tile-name {
+  display: block; font-size: 13px; color: #f0f0f0;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.su-showroom-tile-brand {
+  display: block; font-size: 11px; color: rgba(255,255,255,0.55);
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.su-showroom-tile-remove {
+  position: absolute; top: 6px; right: 6px;
+  width: 24px; height: 24px; border-radius: 999px;
+  border: 0; background: rgba(0,0,0,0.62); color: #f0f0f0; cursor: pointer;
+  font-size: 16px; line-height: 1;
+}
+.su-showroom-add {
+  border: 1px dashed rgba(255,255,255,0.18); background: transparent;
+  color: rgba(255,255,255,0.62); cursor: pointer;
+  aspect-ratio: 3/4; border-radius: 10px; font-size: 13px;
+}
+.su-showroom-add:hover { color: #f0f0f0; border-color: rgba(255,255,255,0.42); }
+
+.su-showroom-search-sheet {
+  position: fixed; inset: 0; z-index: 40;
+  background: rgba(10,10,10,0.96);
+  padding: 20px; overflow-y: auto;
+  display: flex; flex-direction: column; gap: 12px;
+}
+.su-showroom-search-head { display: flex; gap: 8px; }
+.su-showroom-search-head input {
+  flex: 1 1 auto; background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.14); border-radius: 8px;
+  padding: 10px 12px; color: #f0f0f0; font-family: inherit; font-size: 15px;
+}
+.su-showroom-search-head input:focus { outline: none; border-color: rgba(255,255,255,0.42); }
+.su-showroom-search-results { display: flex; flex-direction: column; gap: 8px; }
+.su-showroom-hit {
+  display: flex; align-items: center; gap: 12px; text-align: left;
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 8px; padding: 8px; cursor: pointer; color: #f0f0f0;
+  font-family: inherit;
+}
+.su-showroom-hit:disabled { opacity: 0.5; cursor: default; }
+.su-showroom-hit img { width: 52px; height: 52px; border-radius: 6px; object-fit: cover; background: rgba(255,255,255,0.06); }
+.su-showroom-hit > div { flex: 1 1 auto; min-width: 0; }
+.su-showroom-hit-name { font-size: 14px; color: #f0f0f0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.su-showroom-hit-brand { font-size: 12px; color: rgba(255,255,255,0.55); }
+.su-showroom-hit-add {
+  font-size: 12px; padding: 6px 10px; border-radius: 999px;
+  background: rgba(255,255,255,0.1); color: #f0f0f0;
+}
+
+
+/* Phase 2.3: stylist inbox (/style/inbox). */
+.su-inbox {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 24px 20px 96px;
+  color: #f0f0f0;
+  min-height: 100dvh;
+  box-sizing: border-box;
+  display: flex; flex-direction: column;
+}
+.su-inbox-list { display: flex; flex-direction: column; gap: 8px; }
+.su-inbox-thread {
+  display: grid; grid-template-columns: 1fr auto; grid-row-gap: 4px;
+  text-align: left; padding: 12px 14px; border-radius: 10px;
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.06);
+  color: #f0f0f0; cursor: pointer; font-family: inherit;
+}
+.su-inbox-thread:hover { background: rgba(255,255,255,0.07); }
+.su-inbox-thread-name { font-size: 15px; color: #f0f0f0; grid-column: 1; }
+.su-inbox-thread-time { font-size: 11px; color: rgba(255,255,255,0.45); grid-column: 2; align-self: start; }
+.su-inbox-thread-preview {
+  font-size: 13px; color: rgba(255,255,255,0.62); grid-column: 1 / span 2;
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+}
+.su-inbox-log {
+  flex: 1 1 auto; overflow-y: auto; padding: 8px 0 12px;
+  display: flex; flex-direction: column; gap: 6px;
+  border-bottom: 1px solid rgba(255,255,255,0.08); margin-bottom: 12px;
+}
+.su-inbox-msg { max-width: 78%; padding: 8px 12px; border-radius: 14px; font-size: 15px; line-height: 1.35; word-break: break-word; }
+.su-inbox-msg--them { align-self: flex-start; background: rgba(255,255,255,0.08); }
+.su-inbox-msg--me   { align-self: flex-end;   background: #f0f0f0; color: #0a0a0a; }
+.su-inbox-msg-nontext { color: rgba(255,255,255,0.55); font-style: italic; }
+.su-inbox-composer { display: flex; gap: 8px; align-items: flex-end; }
+.su-inbox-composer textarea {
+  flex: 1 1 auto; background: rgba(255,255,255,0.06);
+  border: 1px solid rgba(255,255,255,0.14); border-radius: 10px;
+  padding: 10px 12px; color: #f0f0f0; font-family: inherit; font-size: 15px;
+  resize: vertical; min-height: 44px;
+}
+.su-inbox-composer textarea:focus { outline: none; border-color: rgba(255,255,255,0.42); }
+.su-inbox-composer .su-apply-cta { flex: 0 0 auto; padding: 12px 18px; }
+
+
+/* Phase 3.1 / 3.4: chat header in the Style app — no back button, small
+ * profile chip top-right, and shrink/hide when the chat log has scrolled.
+ * Gated on data-app="style" so the Catalog app's chat (should we surface
+ * one there later) is unchanged. */
+/* The back arrow stays in a conversation: it is the only way back to the
+   conversation list. "Eliminate the back button" applied to the app-level
+   header on home, where there is nothing behind it, not in here. */
+html[data-app="style"] .su-thread-head--style {
+  transition: opacity 180ms ease, transform 180ms ease, padding 180ms ease, min-height 180ms ease;
+}
+html[data-app="style"] .su-thread-head--style.is-scrolled {
+  opacity: 0.0;
+  transform: translateY(-100%);
+  pointer-events: none;
+  min-height: 0;
+  padding-top: 0; padding-bottom: 0;
+}
+.su-thread-profile {
+  margin-left: auto;
+  width: 34px; height: 34px; border-radius: 999px;
+  background: transparent; border: 1px solid rgba(255,255,255,0.16);
+  color: #f0f0f0; cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  padding: 0;
+}
+.su-thread-profile:hover { background: rgba(255,255,255,0.14); }
+/* The chip holds a real ConsumerAvatar now (the shopper's photo, or their
+   gradient initial), like the Catalog app's header — not a generic grey dot.
+   The avatar carries its own size/shape, so the chip only frames it. */
+
+
+/* Phase 3.5: save-from-chat button on each lookcard row. Sized to sit next
+ * to the .su-lookcard-change beam. */
+.su-lookcard-save {
+  appearance: none; background: transparent; border: 0;
+  color: rgba(255,255,255,0.55); cursor: pointer; padding: 4px;
+  transition: color 140ms ease;
+}
+.su-lookcard-save:hover { color: #f0f0f0; }
+.su-lookcard-save.is-saved { color: #f0f0f0; }
+
+
+/* "Your looks" — the shopper's own rendered looks, a section at the top of the
+ * profile's Saved tab. This used to be an inline strip pinned above the chat,
+ * which is why the label sat beside the tiles and everything was 48px square;
+ * as a section the label reads as a heading and the tiles are portrait, since a
+ * square crop of a full-body look is mostly torso. Style app only. */
+html[data-app="style"] .su-saved-row {
+  display: flex; flex-direction: column; gap: 10px;
+  padding: 4px 0 18px;
+}
+html[data-app="style"] .su-saved-row-label {
+  font-size: 11px; letter-spacing: 0.1em; text-transform: uppercase;
+  color: rgba(255,255,255,0.5);
+}
+/* No edge-bleed: this renders in two places with different gutters (the profile
+ * Saved tab and the home page), and a hardcoded negative margin only lines up
+ * with one of them. */
+html[data-app="style"] .su-saved-row-strip {
+  display: flex; gap: 10px; overflow-x: auto; scrollbar-width: none;
+}
+html[data-app="style"] .su-saved-row-strip::-webkit-scrollbar { display: none; }
+html[data-app="style"] .su-saved-row-item {
+  flex: 0 0 auto; width: 84px; aspect-ratio: 3 / 4; border-radius: 12px;
+  overflow: hidden; padding: 0; border: 1px solid rgba(255,255,255,0.08);
+  background: rgba(255,255,255,0.04); cursor: pointer;
+}
+html[data-app="style"] .su-saved-row-item img,
+html[data-app="style"] .su-saved-row-item--empty {
+  width: 100%; height: 100%; object-fit: cover; display: block;
+}
+/* Style-app sections appended to the shared profile page (via ProfilePage's
+   children). Matches the profile's own sections — same gutter, same 15px/600
+   heading — so these don't read as bolted on. */
+html[data-app="style"] .su-profile-section {
+  display: flex; flex-direction: column; gap: 8px;
+  padding: 20px 16px 0;
+}
+/* Row entries rather than the underlined links these were on the picker. Mirrors
+   the profile's field boxes so they sit in the same visual family. */
+html[data-app="style"] .su-profile-link {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px;
+  width: 100%; padding: 13px 14px; border-radius: 12px;
+  border: 1px solid rgba(255,255,255,0.1); background: rgba(255,255,255,0.04);
+  color: #fff; font-size: 15px; font-family: inherit; text-align: left; cursor: pointer;
+  transition: background 140ms ease;
+}
+html[data-app="style"] .su-profile-link:hover { background: rgba(255,255,255,0.08); }
+html[data-app="style"] .su-profile-link svg { color: rgba(255,255,255,0.4); flex: 0 0 auto; }
+/* The row already sits under the section's own heading here. */
+html[data-app="style"] .su-profile-section .su-saved-row { padding: 0; }
+
+/* On home the label doubles as the way into the profile's saved section. */
+html[data-app="style"] .su-saved-row-label--btn {
+  align-self: flex-start; padding: 0; border: 0; background: none;
+  font: inherit; letter-spacing: 0.1em; text-transform: uppercase;
+  color: rgba(255,255,255,0.5); cursor: pointer;
+}
+
+/* The chat's stand-in for the strip: a bookmark + count. A strip in the thread
+   header would shove the conversation down on every new save. */
+.su-thread-saved {
+  display: inline-flex; align-items: center; gap: 5px; flex: 0 0 auto;
+  padding: 5px 9px; margin-right: 6px; border-radius: 999px;
+  border: 1px solid rgba(255,255,255,0.14); background: rgba(255,255,255,0.06);
+  color: rgba(255,255,255,0.82); cursor: pointer;
+}
+.su-thread-saved:hover { background: rgba(255,255,255,0.11); }
+.su-thread-saved-count { font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+
+
+/* Phase 6.1: Style app background presets. Applied via data-style-bg on
+ * <html> from either the pre-hydration script (root.tsx) or the settings
+ * route. Scoped to data-app="style" so the Catalog app is untouched.
+ *
+ * Any non-default preset ALSO hides the .site-particle-host (global
+ * particle canvas) AND .su-bg (the picker/thread aurora drape) so the
+ * body's background can actually be seen — those layers otherwise paint
+ * a dark canvas above z-index:-1 that covers whatever's on body. */
+html[data-app="style"]:not([data-style-bg="default"]):not([data-style-bg=""]) .site-particle-host,
+html[data-app="style"]:not([data-style-bg="default"]):not([data-style-bg=""]) .su-bg {
+  display: none !important;
+}
+/* Same reason, one layer up: .su-shell is a fixed, OPAQUE #0a0a0a sheet over
+ * the whole viewport, so hiding the drape alone still left the body's preset
+ * invisible behind the picker/thread (and on "paper", #1a1a1a text on black).
+ * Let the body show through on any non-default preset. */
+html[data-app="style"]:not([data-style-bg="default"]):not([data-style-bg=""]) .su-shell {
+  background: transparent;
+}
+
+/* The look viewer (.su-viewer) and product viewer (.su-pviewer) mount OUTSIDE
+ * .su-shell as fixed full-screen layers, so they can't inherit anything from
+ * it. They read these tokens instead — set here on <html> so they reach every
+ * layer — with the dark default kept as each declaration's var() fallback.
+ * "default"/"plain" define nothing on purpose: the fallbacks already are them. */
+html[data-app="style"][data-style-bg="plain"] body { background: #0a0a0a !important; }
+
+html[data-app="style"][data-style-bg="warm"] body {
+  background: radial-gradient(120% 100% at 50% -10%, #3a1810 0%, #150a0a 55%, #0a0505 100%) !important;
+}
+html[data-app="style"][data-style-bg="warm"] {
+  --su-scrim: rgba(18, 8, 6, 0.86);
+  --su-sheet: #1d1512;
+  --su-sheet-2: #140e0c;
+  --su-sheet-line: #35271f;
+}
+
+html[data-app="style"][data-style-bg="cool"] body {
+  background: radial-gradient(120% 100% at 50% -10%, #0e2130 0%, #071018 55%, #050a0f 100%) !important;
+}
+html[data-app="style"][data-style-bg="cool"] {
+  --su-scrim: rgba(4, 12, 18, 0.86);
+  --su-sheet: #10191f;
+  --su-sheet-2: #0a1319;
+  --su-sheet-line: #22323d;
+}
+
+html[data-app="style"][data-style-bg="paper"] body { background: #f5f2ec !important; color: #1a1a1a; }
+html[data-app="style"][data-style-bg="paper"] .su-apply,
+html[data-app="style"][data-style-bg="paper"] .su-showroom,
+html[data-app="style"][data-style-bg="paper"] .su-inbox,
+html[data-app="style"][data-style-bg="paper"] .su-shell { color: #1a1a1a; }
+html[data-app="style"][data-style-bg="paper"] {
+  --su-scrim: rgba(245, 242, 236, 0.92);
+  --su-sheet: #fffdf8;
+  --su-sheet-2: #ece7dd;
+  --su-sheet-line: rgba(0, 0, 0, 0.12);
+  --su-ink-2: #55524c;
+  --su-ink-3: #7c786f;
+}
+/* Paper only — the handful of bits that are light-on-dark by construction and
+ * would vanish on an off-white sheet. */
+html[data-app="style"][data-style-bg="paper"] .su-viewer,
+html[data-app="style"][data-style-bg="paper"] .su-pviewer-inner { color: #1a1a1a; }
+html[data-app="style"][data-style-bg="paper"] .su-viewer-add {
+  background: #1a1a1a; color: #f5f2ec;
+}
+html[data-app="style"][data-style-bg="paper"] .su-viewer-close {
+  background: rgba(0, 0, 0, 0.1); color: #1a1a1a;
+}
+html[data-app="style"][data-style-bg="paper"] .su-pviewer-grab { background: rgba(0, 0, 0, 0.22); }
+/* AI ring: the cool halo disappears on off-white — go slate instead. */
+html[data-app="style"][data-style-bg="paper"] .su-picker-pill.is-ai .su-stylist-avatar {
+  box-shadow: 0 0 0 2px rgba(64, 104, 133, 0.55), 0 0 10px rgba(64, 104, 133, 0.18);
+}
+html[data-app="style"][data-style-bg="paper"] .su-stylist-bot { border-color: #f5f2ec; }
+
+/* Settings page — background picker grid. */
+.su-settings-bg-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap: 12px; }
+.su-settings-bg-tile {
+  display: grid; grid-template-columns: 64px 1fr; gap: 12px; align-items: center;
+  padding: 10px; text-align: left; cursor: pointer;
+  background: rgba(255,255,255,0.04); border: 1px solid rgba(255,255,255,0.10);
+  border-radius: 10px; color: #f0f0f0; font-family: inherit;
+}
+.su-settings-bg-tile.is-active { border-color: #f0f0f0; background: rgba(255,255,255,0.10); }
+.su-settings-bg-swatch { width: 64px; height: 48px; border-radius: 6px; overflow: hidden; }
+.su-settings-bg-swatch[data-bg="default"] { background: radial-gradient(circle at 30% 30%, #2a2a2a 0%, #0a0a0a 100%); }
+.su-settings-bg-swatch[data-bg="plain"]   { background: #0a0a0a; border: 1px solid rgba(255,255,255,0.08); }
+.su-settings-bg-swatch[data-bg="warm"]    { background: radial-gradient(120% 100% at 50% -10%, #3a1810 0%, #150a0a 100%); }
+.su-settings-bg-swatch[data-bg="cool"]    { background: radial-gradient(120% 100% at 50% -10%, #0e2130 0%, #071018 100%); }
+.su-settings-bg-swatch[data-bg="paper"]   { background: #f5f2ec; border: 1px solid rgba(0,0,0,0.06); }
+.su-settings-bg-info { display: flex; flex-direction: column; min-width: 0; }
+.su-settings-bg-label { font-size: 14px; color: #f0f0f0; }
+.su-settings-bg-blurb { font-size: 12px; color: rgba(255,255,255,0.55); overflow: hidden; text-overflow: ellipsis; }
+
+
+/* Phase 3.1 shell head: Style app profile chip on the right + no back. */
+.su-shell-spacer { grid-column: 1; width: 34px; height: 34px; display: block; }
+.su-shell-profile {
+  grid-column: 3;
+  width: 34px; height: 34px; border-radius: 999px;
+  background: transparent; border: 1px solid rgba(255,255,255,0.16);
+  color: #f0f0f0; cursor: pointer; padding: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  transition: background 140ms ease;
+}
+.su-shell-profile:hover { background: rgba(255,255,255,0.14); }
+/* The chip holds a real ConsumerAvatar now (the shopper's photo, or their
+   gradient initial), like the Catalog app's header — not a generic grey dot.
+   The avatar carries its own size/shape, so the chip only frames it. */

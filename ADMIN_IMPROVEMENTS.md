@@ -106,7 +106,7 @@ standardize search on the existing `useAdminSearch()` everywhere filterable.
 
 ---
 
-## Suggested first PR
+## Suggested first PR 
 Items **1 + 4**: ship the shared loading/error/empty/toast layer and wire it
 into the stub pages (deleting or hiding the dead ones). Self-contained,
 low-risk, visible improvement on every page — a strong foundation the rest

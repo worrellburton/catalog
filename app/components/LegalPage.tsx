@@ -35,6 +35,16 @@ const PRIVACY: Section[] = [
     ],
   },
   {
+    heading: 'Photos you upload and how we use them',
+    body: [
+      'If you choose to use virtual try-on, you can upload a photo of yourself. We use it only to check that the photo is usable and to generate images and video of the outfits you are browsing rendered on you.',
+      'We do not create a faceprint, face template, or any other biometric identifier from your photo. We do not use it to identify or authenticate you, and we do not use it for advertising.',
+      'To generate try-on images we send your photo to the AI providers that run the models: Anthropic, fal.ai, and ByteDance (via fal.ai). They process it to perform the generation and are not permitted to use it for their own purposes.',
+      'Your photo is held with our cloud storage provider and is used only for the try-on features described above.',
+      'We keep your photo until you delete it or delete your account. Deleting your account removes the photos you uploaded. You can delete your account in the app from the account menu.',
+    ],
+  },
+  {
     heading: 'How we use your information',
     body: [
       'To run the app, personalize your daily feed, and remember your saved looks and products.',

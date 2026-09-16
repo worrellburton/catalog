@@ -101,7 +101,7 @@
   background: linear-gradient(to top, rgba(245, 245, 240, 0.8) 0%, rgba(245, 245, 240, 0.4) 50%, transparent 100%);
 }
 
-.light-mode header {
+.light-mode header:not([class]) {
   background: linear-gradient(to bottom, rgba(245, 245, 240, 0.8) 0%, rgba(245, 245, 240, 0.4) 50%, transparent 100%);
 }
 
@@ -728,14 +728,14 @@ html.ui-scroll-off .promo-product-info { pointer-events: none; }
    chromeHidden scroll logic in _index.tsx) — only how. Kept cheap: no
    backdrop-filter is animated, just transform + opacity (both compositor-
    friendly). The header keeps its existing `background` transition too. */
-header {
+header:not([class]) {
   transition:
     transform 0.26s cubic-bezier(0.22, 1, 0.36, 1),
     opacity 0.26s cubic-bezier(0.22, 1, 0.36, 1),
     background 200ms ease;
   will-change: transform, opacity;
 }
-.app-root.chrome-hidden header {
+.app-root.chrome-hidden header:not([class]) {
   opacity: 0;
 }
 

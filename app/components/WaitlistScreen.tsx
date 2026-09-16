@@ -51,6 +51,24 @@ export default function WaitlistScreen({ user, onApproved }: WaitlistScreenProps
   }, [user.id, onApproved]);
 
   const handleSignOut = async () => {
+    // In the native shell the NATIVE Supabase session drives the app's
+    // AuthGate. A web-only signout leaves the shell signed in and just shows
+    // the web guest gate inside it, instead of the native LoginScreen. Tell
+    // the shell to sign out natively — it flips back to LoginScreen and tears
+    // down this webview, so no reload is needed. (Mirrors handleLogout in
+    // routes/_index.tsx.)
+    if (
+      typeof window !== 'undefined' &&
+      document.documentElement.dataset.shell === 'catalog-app' &&
+      (window as unknown as { flutter_inappwebview?: { callHandler: (n: string) => void } }).flutter_inappwebview
+    ) {
+      try {
+        (window as unknown as { flutter_inappwebview: { callHandler: (n: string) => void } })
+          .flutter_inappwebview.callHandler('catalogSignOut');
+      } catch { /* not in shell / bridge unavailable */ }
+      await signOut();
+      return;
+    }
     await signOut();
     window.location.reload();
   };
