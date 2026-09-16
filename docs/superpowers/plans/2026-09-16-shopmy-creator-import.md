@@ -1156,7 +1156,7 @@ Look-derived products are listed first so an existing creator's Shop tab keeps i
 
 - [ ] **Step 6: Verify in the browser**
 
-Start the dev server with `preview_start` (`.claude/launch.json`), sign in, and open `/creator/justbobbidotcom` (the handle imported in Task 3, Step 8).
+Start the dev server with `preview_start` (`.claude/launch.json`), sign in, and open `/c/justbobbidotcom` (the handle imported in Task 3, Step 8).
 
 Expected: the hero shows Bobbi Brown's name and ShopMy avatar; the Looks tab shows its empty state; the **Shop tab shows the imported products** with a count badge. In the console, `document.querySelectorAll('.creator-nav-count')` should report a non-zero Shop count.
 
