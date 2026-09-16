@@ -201,7 +201,7 @@ select
      where proname='shopmy_link_creator_products')                                        as rpc;
 ```
 
-Expected: `cp_cols=8`, `cp_policies=1`, `creators_new_cols=2`, `rpc=1`.
+Expected: `cp_cols=9`, `cp_policies=1`, `creators_new_cols=2`, `rpc=1`.
 
 - [ ] **Step 4: Verify the RPC links and is idempotent**
 
