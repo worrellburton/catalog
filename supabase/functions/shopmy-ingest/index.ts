@@ -315,7 +315,11 @@ Deno.serve(async (req) => {
     };
 
     if (dryRun) {
-      return json({ ...summary, dry_run: true, inserted: 0, merged: 0, rows: unique });
+      // `summary.sections` is a count (matches collections/pins/mapped), not
+      // the list — the wizard's step 1→2 transition needs the actual
+      // {id, title} pairs to build the step-3 section-picker table, so the
+      // dry-run response alone also carries the full list under its own key.
+      return json({ ...summary, dry_run: true, inserted: 0, merged: 0, rows: unique, section_list: sections });
     }
 
     // ── 3. throttled write ─────────────────────────────────────────────────
