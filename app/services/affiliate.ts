@@ -116,8 +116,23 @@ export interface RailProduct {
   brand?: string | null;
   name?: string | null;
   id?: string | null;
+  /** The product's own merchant page. Rail 0 is gated on the opened url
+   *  matching it — see pickRail. */
+  url?: string | null;
   /** Rail 0 — a creator's own link for this product (creator_products). */
   affiliate_url?: string | null;
+}
+
+/** Same product page? Scheme, a `www.` prefix and a trailing slash are
+ *  noise; the path is not. Mirrors the dedup key shopmy-ingest uses on the
+ *  same URLs (supabase/functions/shopmy-ingest/index.ts). `productUrl.ts`
+ *  can't be reused here — it CLASSIFIES a URL as a PDP and exports no
+ *  normalized form to compare. */
+function sameProductUrl(a: string, b: string): boolean {
+  if (!a || !b) return false;
+  const key = (u: string) =>
+    u.trim().toLowerCase().replace(/^https?:\/\/(www\.)?/, '').replace(/\/+$/, '');
+  return key(a) === key(b);
 }
 
 /**
@@ -132,7 +147,15 @@ export function pickRail(
   product?: RailProduct | null,
   tracked?: string | null,
 ): { link: string | null; rail: string; wrappable: boolean } {
-  const creatorLink = product?.affiliate_url || null;
+  // Rail 0 describes ONE product page, so it may only carry a clickout to
+  // THAT page. ProductPage fabricates alternate-retailer chips (search URLs
+  // at Nordstrom, Amazon, …) that call this chokepoint with the SAME product
+  // object — ungated, "Nordstrom · $89 · Lowest" would land on the original
+  // merchant at the original price, and affiliate_clicks.product_url would
+  // record a destination the shopper never reached.
+  const creatorLink = product?.affiliate_url && sameProductUrl(url, product.url ?? '')
+    ? product.affiliate_url
+    : null;
   if (creatorLink) return { link: creatorLink, rail: 'shopmy', wrappable: false };
   if (tracked) return { link: tracked, rail: 'affiliate.com', wrappable: false };
   const wrappable = isWrappable(url);

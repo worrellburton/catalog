@@ -50,17 +50,31 @@ export function mapCreatorProductRows(rows: CreatorProductRow[]): Product[] {
     .filter((p): p is Product => p !== null);
 }
 
+/** PostgREST caps every response at 1000 rows (supabase/config.toml
+ *  `max_rows`) and a single ShopMy shop is ~425 products, so an unpaged
+ *  read silently drops the tail of a large creator's shop — the exact
+ *  defect migration 20260916000002_admin_creator_stats.sql fixed on the
+ *  admin side. Do not "simplify" this loop away. */
+const PAGE = 1000;
+
 export async function getImportedCreatorProducts(handle: string): Promise<Product[]> {
   if (!supabase) return [];
-  const { data, error } = await supabase
-    .from('creator_products')
-    .select(`
-      affiliate_url,
-      sort_order,
-      products ( id, name, brand, price, image_url, primary_image_url, primary_video_url, primary_hls_url, primary_video_poster_url, url, images )
-    `)
-    .eq('creator_handle', handle)
-    .order('sort_order', { ascending: true });
-  if (error || !data) return [];
-  return mapCreatorProductRows(data as unknown as CreatorProductRow[]);
+  const rows: CreatorProductRow[] = [];
+  for (let from = 0; ; from += PAGE) {
+    const { data, error } = await supabase
+      .from('creator_products')
+      .select(`
+        affiliate_url,
+        sort_order,
+        products ( id, name, brand, price, image_url, primary_image_url, primary_video_url, primary_hls_url, primary_video_poster_url, url, images )
+      `)
+      .eq('creator_handle', handle)
+      .order('sort_order', { ascending: true })
+      .range(from, from + PAGE - 1);
+    // Keep whatever already landed — a failed page 2 shouldn't blank a shop.
+    if (error || !data) break;
+    rows.push(...(data as unknown as CreatorProductRow[]));
+    if (data.length < PAGE) break;
+  }
+  return mapCreatorProductRows(rows);
 }

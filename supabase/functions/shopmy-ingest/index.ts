@@ -115,10 +115,10 @@ Deno.serve(async (req) => {
   }
 
   /** Close the job row out to a terminal state, then return the error
-   *  response. Every early return AFTER the 'crawling' patch must go
-   *  through here: the outer catch only catches throws, and a row left at
-   *  'crawling' is polled forever by ShopMyIngest and never reaches
-   *  onDone(). */
+   *  response. EVERY error exit past the body parse goes through here —
+   *  early return or outer catch, before or after the 'crawling' patch:
+   *  ShopMyIngest treats 'pending' and 'crawling' alike as non-terminal,
+   *  so a row left at either is polled forever and never reaches onDone(). */
   async function bail(
     jobId: string | null,
     status: number,
@@ -149,6 +149,12 @@ Deno.serve(async (req) => {
     if (!isAdmin) return json({ success: false, error: 'admin only' }, 403);
   }
 
+  // Hoisted out of the try so the outer catch can still close the job row:
+  // every upstream ShopMy fetch happens BEFORE the 'crawling' patch, so a
+  // throw there used to leave the client-created row at 'pending' — which
+  // ShopMyIngest polls forever, never firing onDone().
+  let jobId: string | null = null;
+
   try {
     const body = await req.json().catch(() => ({}));
     const dryRun = body.dry_run !== false;   // safe by default: must opt IN to writing
@@ -161,7 +167,7 @@ Deno.serve(async (req) => {
     // unthrottled - the one thing the batching design exists to prevent.
     const rawDelay = Number(body.batch_delay_ms ?? DEFAULT_DELAY_MS);
     const delayMs = Math.max(Number.isFinite(rawDelay) ? rawDelay : DEFAULT_DELAY_MS, 0);
-    const jobId: string | null = typeof body.job_id === 'string' ? body.job_id : null;
+    jobId = typeof body.job_id === 'string' ? body.job_id : null;
 
     let username: string | null = body.username ?? null;
     let curatorId: number | null = body.curator_id ?? null;
@@ -169,14 +175,14 @@ Deno.serve(async (req) => {
     if (body.url) {
       const parsed = parseShopMyUrl(String(body.url));
       if (!parsed) {
-        return json({ success: false, error: 'not a ShopMy URL' }, 400);
+        return bail(jobId, 400, 'not a ShopMy URL', {});
       }
       username = parsed.username;
       curatorId = parsed.curatorId;
       if (sectionId == null) sectionId = parsed.sectionId;
     }
     if (!username && curatorId == null) {
-      return json({ success: false, error: 'provide url or username or curator_id' }, 400);
+      return bail(jobId, 400, 'provide url or username or curator_id', {});
     }
     // Identifies the shop for the "no collections" 404 below — the only
     // place this is needed, since that 404 fires before there are any
@@ -221,7 +227,10 @@ Deno.serve(async (req) => {
     if (body.max_collections) collections = collections.slice(0, Number(body.max_collections));
 
     if (collections.length === 0) {
-      return json({ success: false, error: `no collections for ${curatorLabel}` }, 404);
+      // Same reason as the outer catch: a shop that resolves to nothing is
+      // the ordinary "curator does not exist" failure, and it lands here
+      // rather than in the catch — it must still close the job row.
+      return bail(jobId, 404, `no collections for ${curatorLabel}`, {});
     }
     const sectionName = (id: number) => sections.find((s) => s.id === id)?.title ?? null;
 
@@ -456,6 +465,9 @@ Deno.serve(async (req) => {
       writeError ? 500 : 200,
     );
   } catch (e) {
-    return json({ success: false, error: String(e).slice(0, 500) }, 500);
+    // Through bail(), not a bare json(): EVERY exit has to close the job row
+    // to a terminal state. patchJob no-ops on a null jobId, so a request that
+    // never sent one gets the same 500 body it always did.
+    return bail(jobId, 500, String(e).slice(0, 500), {});
   }
 });

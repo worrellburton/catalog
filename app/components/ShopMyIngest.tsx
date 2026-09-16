@@ -28,8 +28,15 @@ interface LandedRow {
   image_url: string | null; image_verified: boolean | null; image_verify_note: string | null;
 }
 /** The write invocation's response — a separate call from the preview, so
- * it can report failures (and a lower mapped count) the preview never saw. */
-interface RunResult { failures?: string[]; }
+ * it can report failures (and a lower mapped count) the preview never saw.
+ * The creator row and the per-product creator links are the whole point of
+ * the wizard, so their counts are surfaced too, not just the product ones. */
+interface RunResult {
+  failures?: string[];
+  creator_written?: boolean;
+  linked?: number;
+  link_missing?: number;
+}
 
 /** Recover an edge function's JSON body from a non-2xx invoke() error. */
 async function edgeBody(err: unknown): Promise<Record<string, unknown> | null> {
@@ -279,6 +286,18 @@ export default function ShopMyIngest({
               The bar reads 100% because the run finished — only {job.scraped_urls} of {total} needed
               a write; the rest were already present and unchanged.
             </p>
+          )}
+          {run?.creator_written && (
+            <p className="admin-form-hint">
+              Creator profile written · {run.linked ?? 0} product
+              {run.linked === 1 ? '' : 's'} linked to them.
+            </p>
+          )}
+          {!!run?.link_missing && (
+            <div className="admin-form-error">
+              {run.link_missing} product{run.link_missing === 1 ? '' : 's'} could not be attributed
+              to this creator — they are in the catalog but carry none of their links.
+            </div>
           )}
           {run?.failures && run.failures.length > 0 && (
             <div className="admin-form-error">

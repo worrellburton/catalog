@@ -5,6 +5,7 @@ describe('pickRail', () => {
   it('returns the creator ShopMy link untouched, ahead of every other rail', () => {
     const r = pickRail('https://us.etoile.com/products/vanity-case', {
       id: 'p1',
+      url: 'https://us.etoile.com/products/vanity-case',
       affiliate_url: 'https://go.shopmy.us/p-51354524',
     });
     expect(r.link).toBe('https://go.shopmy.us/p-51354524');
@@ -15,11 +16,44 @@ describe('pickRail', () => {
   it('prefers the creator link over a direct tracked link for the same product', () => {
     const r = pickRail(
       'https://us.etoile.com/products/vanity-case',
-      { id: 'p1', affiliate_url: 'https://go.shopmy.us/p-51354524' },
+      {
+        id: 'p1',
+        url: 'https://us.etoile.com/products/vanity-case',
+        affiliate_url: 'https://go.shopmy.us/p-51354524',
+      },
       'https://tracked.example/p1',
     );
     expect(r.link).toBe('https://go.shopmy.us/p-51354524');
     expect(r.rail).toBe('shopmy');
+  });
+
+  // ProductPage fabricates three alternate-retailer chips (deterministic
+  // jitter around the real price, retailer SEARCH urls) and opens all four
+  // with the SAME product object. The creator link describes ONE page, so a
+  // chip must never redirect to it — the shopper tapped "Nordstrom · $89".
+  it('withholds the creator link when a DIFFERENT url is opened', () => {
+    const product = {
+      id: 'p1',
+      url: 'https://us.etoile.com/products/vanity-case',
+      affiliate_url: 'https://go.shopmy.us/p-51354524',
+    };
+    const r = pickRail('https://www.nordstrom.com/sr?keyword=etoile%20vanity%20case', product);
+    expect(r.link).toBeNull();
+    expect(r.rail).toBe('shopnomix');
+
+    // …and still carries it for the product's own page, spelled loosely.
+    const own = pickRail('http://us.etoile.com/products/vanity-case/', product);
+    expect(own.link).toBe('https://go.shopmy.us/p-51354524');
+    expect(own.rail).toBe('shopmy');
+  });
+
+  it('withholds the creator link when the product carries no url to match', () => {
+    const r = pickRail('https://us.etoile.com/products/vanity-case', {
+      id: 'p1',
+      affiliate_url: 'https://go.shopmy.us/p-51354524',
+    });
+    expect(r.link).toBeNull();
+    expect(r.rail).toBe('shopnomix');
   });
 
   it('falls through to the direct tracked link when there is no creator link', () => {
