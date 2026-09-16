@@ -142,6 +142,7 @@ Deno.serve(async (req) => {
     const jobId: string | null = typeof body.job_id === 'string' ? body.job_id : null;
 
     let username: string | null = body.username ?? null;
+    let curatorId: number | null = body.curator_id ?? null;
     let sectionId: number | null = body.section_id ?? null;
     if (body.url) {
       const parsed = parseShopMyUrl(String(body.url));
@@ -149,21 +150,32 @@ Deno.serve(async (req) => {
         return json({ success: false, error: 'not a ShopMy URL' }, 400);
       }
       username = parsed.username;
+      curatorId = parsed.curatorId;
       if (sectionId == null) sectionId = parsed.sectionId;
     }
-    if (!username) {
-      return json({ success: false, error: 'provide url or username' }, 400);
+    if (!username && curatorId == null) {
+      return json({ success: false, error: 'provide url or username or curator_id' }, 400);
     }
+    // Identifies the shop for the "no collections" 404 below — the only
+    // place this is needed, since that 404 fires before there are any
+    // collections to resolve a real username from.
+    const curatorLabel = username ?? String(curatorId);
 
     // ── 1. sections + collections ──────────────────────────────────────────
     const listUrl = new URL(`${API}/api/Shop/Collections`);
-    listUrl.searchParams.set('Curator_username', username);
+    // Curator_username and Curator_id are distinct upstream params — one is
+    // never a substitute for the other (verified against the live API: a
+    // numeric id passed as Curator_username returns success with an empty
+    // list). Send exactly whichever identifier this shop resolved to.
+    if (username) listUrl.searchParams.set('Curator_username', username);
+    else listUrl.searchParams.set('Curator_id', String(curatorId));
     listUrl.searchParams.set('limit', '100');
     if (sectionId != null) listUrl.searchParams.set('Section_id', String(sectionId));
 
     const list = await getJson(listUrl.toString());
     const sections: Array<{ id: number; title: string }> = list.sections ?? [];
-    let collections: Array<{ id: number; name: string; Section_id: number }> = list.collections ?? [];
+    let collections: Array<{ id: number; name: string; Section_id: number; User_username?: string | null }> =
+      list.collections ?? [];
     // ShopMy paginates this list (`hasMoreCollections`); no paging parameter
     // (offset/cursor/page) is documented or evident on the response, so we
     // cannot request page 2. Surface the flag rather than silently ingesting
@@ -172,9 +184,18 @@ Deno.serve(async (req) => {
     if (body.max_collections) collections = collections.slice(0, Number(body.max_collections));
 
     if (collections.length === 0) {
-      return json({ success: false, error: `no collections for ${username}` }, 404);
+      return json({ success: false, error: `no collections for ${curatorLabel}` }, 404);
     }
     const sectionName = (id: number) => sections.find((s) => s.id === id)?.title ?? null;
+
+    // A Curator_id URL carries no username at all — recover the real one
+    // from the collections response so raw_data.shopmy.curator (and the
+    // products-table filter that reads it) stay a human username, not a
+    // numeric id string. Fall back to the id only if ShopMy genuinely didn't
+    // return one.
+    if (!username) {
+      username = collections[0]?.User_username || String(curatorId);
+    }
 
     // ── 2. pins, one request per collection ────────────────────────────────
     const skipped: Record<string, number> = {};
