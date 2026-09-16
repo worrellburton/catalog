@@ -15,6 +15,7 @@ import ParticleBackground from './ParticleBackground';
 import { getCreatorAppearance, getCreatorAppearanceById, type CatalogAppearance, DEFAULT_CATALOG_APPEARANCE } from '~/services/catalog-theme';
 import { getCreatorProductOrder, getCreatorHiddenProductIds } from '~/services/catalog-products';
 import { getCreatorCollections, type CreatorCollection } from '~/services/creator-collections';
+import { getImportedCreatorProducts } from '~/services/creator-products';
 import { startCreatorScrollDebug } from '~/utils/creator-scroll-debug';
 import '~/styles/my-looks.css';
 import '~/styles/creator-page.css';
@@ -523,17 +524,20 @@ export default function CreatorPage({
         // saved product order.
         setOwnerUserId(ownerId);
         // Aggregate products across all looks for the Shop tab, skipping any
-        // the creator has set inactive.
+        // the creator has set inactive, then append the ones imported for
+        // this creator directly (creator_products) — an imported ShopMy
+        // creator has products but no looks, so the look-derived list alone
+        // would leave their Shop tab empty.
+        const imported = await getImportedCreatorProducts(creatorName);
+        if (cancelled) return;
         const seen = new Set<string>();
         const ordered: Product[] = [];
-        for (const l of mappedLooks) {
-          for (const p of l.products) {
-            if (p.id && hiddenProductIds.has(p.id)) continue;
-            const key = `${p.brand}::${p.name}`;
-            if (seen.has(key)) continue;
-            seen.add(key);
-            ordered.push(p);
-          }
+        for (const p of [...mappedLooks.flatMap(l => l.products), ...imported]) {
+          if (p.id && hiddenProductIds.has(p.id)) continue;
+          const key = `${p.brand}::${p.name}`;
+          if (seen.has(key)) continue;
+          seen.add(key);
+          ordered.push(p);
         }
         setUserProducts(ordered);
       }
