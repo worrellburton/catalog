@@ -14,17 +14,50 @@ const CTX = { curator: 'justbobbidotcom', collectionId: 4132497,
 Deno.test('parses a shop URL with a section', () => {
   const r = parseShopMyUrl('https://shopmy.us/shop/justbobbidotcom?tab=collections&Section_id=409');
   assert(r?.username === 'justbobbidotcom', 'username');
+  assert(r?.curatorId === null, 'curatorId must be null when a path username is present');
   assert(r?.sectionId === 409, 'sectionId');
 });
 
 Deno.test('parses a shop URL without a section', () => {
   const r = parseShopMyUrl('https://shopmy.us/justbobbidotcom');
   assert(r?.username === 'justbobbidotcom', 'bare username form');
+  assert(r?.curatorId === null, 'curatorId must be null when a path username is present');
   assert(r?.sectionId === null, 'no section');
+});
+
+Deno.test('parses a shop URL keyed by numeric Curator_id (no path username)', () => {
+  const r = parseShopMyUrl('https://shopmy.us/shop?Curator_id=171052&Section_id=516840&tab=collections');
+  assert(r?.username === null, 'username must be null');
+  assert(r?.curatorId === 171052, 'curatorId');
+  assert(r?.sectionId === 516840, 'sectionId');
+});
+
+Deno.test('rejects /shop with neither a username nor a Curator_id', () => {
+  assert(parseShopMyUrl('https://shopmy.us/shop') === null, 'must reject with no identifier at all');
+  assert(parseShopMyUrl('https://shopmy.us/shop?tab=collections') === null, 'must reject with only unrelated params');
+});
+
+Deno.test('treats a non-numeric Curator_id as absent', () => {
+  assert(parseShopMyUrl('https://shopmy.us/shop?Curator_id=abc') === null, 'non-numeric Curator_id with no path username must reject');
+});
+
+Deno.test('prefers the path username over Curator_id when a URL somehow has both', () => {
+  const r = parseShopMyUrl('https://shopmy.us/shop/justbobbidotcom?Curator_id=171052');
+  assert(r?.username === 'justbobbidotcom', 'path username wins');
+  assert(r?.curatorId === null, 'curatorId dropped in favor of the path username');
 });
 
 Deno.test('rejects a non-ShopMy URL', () => {
   assert(parseShopMyUrl('https://ltk.app/someone') === null, 'must reject non-shopmy host');
+});
+
+Deno.test('rejects lookalike hosts', () => {
+  assert(parseShopMyUrl('https://notshopmy.us/drconnieyang') === null, 'must reject a host that merely contains shopmy.us');
+  assert(parseShopMyUrl('https://shopmy.us.evil.com/drconnieyang') === null, 'must reject shopmy.us as a subdomain of another host');
+});
+
+Deno.test('rejects a malformed URL', () => {
+  assert(parseShopMyUrl('not a url') === null, 'must reject unparseable input');
 });
 
 Deno.test('maps the merchant PDP, never the affiliate link', () => {

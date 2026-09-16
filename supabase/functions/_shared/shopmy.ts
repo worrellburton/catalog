@@ -50,8 +50,22 @@ export interface MappedProduct {
   raw_data: Record<string, unknown>;
 }
 
-/** Parse a ShopMy shop URL into the curator and optional section. */
-export function parseShopMyUrl(raw: string): { username: string; sectionId: number | null } | null {
+/**
+ * Parse a ShopMy shop URL into a curator identifier and optional section.
+ *
+ * ShopMy has three shop URL shapes: `/shop/<username>`, the bare
+ * `/<username>`, and `/shop?Curator_id=<digits>` (no username in the path —
+ * seen on shops shared before ShopMy assigned/exposed a username). The first
+ * two identify the curator by `username`; the third only by a numeric
+ * `curatorId`. They are DISTINCT upstream API params (`Curator_username` vs
+ * `Curator_id`) — one cannot substitute for the other — so both are carried
+ * through and the caller sends whichever is present. If a URL somehow has
+ * both, the path username wins: it's the more specific, human-meaningful
+ * identifier, and callers already resolve the real username from the API
+ * response anyway (see shopmy-ingest/index.ts).
+ */
+export function parseShopMyUrl(raw: string):
+  { username: string | null; curatorId: number | null; sectionId: number | null } | null {
   let u: URL;
   try { u = new URL(raw); } catch { return null; }
   const host = u.hostname.toLowerCase().replace(/^www\./, '');
@@ -59,12 +73,19 @@ export function parseShopMyUrl(raw: string): { username: string; sectionId: numb
 
   const parts = u.pathname.split('/').filter(Boolean);
   // /shop/<username> and the bare /<username> form are both in the wild.
-  const username = parts[0] === 'shop' ? parts[1] : parts[0];
-  if (!username) return null;
+  const username = (parts[0] === 'shop' ? parts[1] : parts[0]) || null;
+
+  // Only consulted when the path gave no username — same digits-only
+  // discipline as Section_id below, so a non-numeric value is treated as
+  // absent rather than silently sent upstream.
+  const rawCuratorId = u.searchParams.get('Curator_id');
+  const curatorId = !username && rawCuratorId && /^\d+$/.test(rawCuratorId) ? Number(rawCuratorId) : null;
+
+  if (!username && curatorId == null) return null;
 
   const rawSection = u.searchParams.get('Section_id');
   const sectionId = rawSection && /^\d+$/.test(rawSection) ? Number(rawSection) : null;
-  return { username, sectionId };
+  return { username, curatorId, sectionId };
 }
 
 /** Paths that are never a single product page. */
