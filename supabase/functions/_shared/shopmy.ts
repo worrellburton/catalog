@@ -120,12 +120,18 @@ function isNonProductLink(link: string): boolean {
  * every row needs_review:blocked and no ShopMy product can pass
  * product_ready_for_feed.
  *
- *   production-shopmyshelf-<bucket>.s3.<region>.amazonaws.com/<key>
+ * AWS has two region-host forms and ShopMy emits both:
+ *   production-shopmyshelf-<bucket>.s3.<region>.amazonaws.com/<key>   (dot)
+ *   production-shopmyshelf-<bucket>.s3-<region>.amazonaws.com/<key>  (dash, legacy)
  *     ->  https://static.shopmy.us/<bucket>/<key>
+ *
+ * The bucket capture excludes "." so it always stops at the literal dot
+ * before "s3" — it cannot swallow the region even for a hypothetical bucket
+ * name containing "s3" (e.g. "...-s3-cache.s3-us-east-2...").
  */
 function cdnImageUrl(raw: string): string {
   const m = raw.match(
-    /^https?:\/\/production-shopmyshelf-([a-z0-9-]+)\.s3\.[a-z0-9-]+\.amazonaws\.com\/(.+)$/i,
+    /^https?:\/\/production-shopmyshelf-([a-z0-9-]+)\.s3[.-][a-z0-9-]+\.amazonaws\.com\/(.+)$/i,
   );
   return m ? `https://static.shopmy.us/${m[1]}/${m[2]}` : raw;
 }
