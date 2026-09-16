@@ -47,8 +47,18 @@ function labelFor(raw: string): string {
   }
 }
 
-export default function ShopMyIngest({ url, onClose, onDone }:
-  { url: string; onClose: () => void; onDone: () => void }) {
+export default function ShopMyIngest({ url, sectionIds, creatorHandle, includeCreator, onClose, onDone }:
+  {
+    url: string;
+    /** Wizard step 3's selection. Undefined ingests whatever the URL addresses. */
+    sectionIds?: number[];
+    /** Wizard step 2's (possibly edited) handle. */
+    creatorHandle?: string;
+    /** False keeps the legacy products-only behaviour. */
+    includeCreator?: boolean;
+    onClose: () => void;
+    onDone: () => void;
+  }) {
   const [preview, setPreview] = useState<Preview | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(true);
@@ -70,7 +80,7 @@ export default function ShopMyIngest({ url, onClose, onDone }:
     setBusy(true); setError(null);
     try {
       const { data, error: err } = await supabase!.functions.invoke('shopmy-ingest', {
-        body: { url, dry_run: true },
+        body: { url, dry_run: true, section_ids: sectionIds, creator_handle: creatorHandle },
       });
       const p = data ?? (err ? await edgeBody(err) : null);
       if (!p?.success) throw new Error(p?.error ?? (err as Error)?.message ?? 'preview failed');
@@ -80,7 +90,7 @@ export default function ShopMyIngest({ url, onClose, onDone }:
     } finally {
       setBusy(false);
     }
-  }, [url]);
+  }, [url, sectionIds, creatorHandle]);
 
   useEffect(() => { void runPreview(); }, [runPreview]);
 
@@ -149,7 +159,11 @@ export default function ShopMyIngest({ url, onClose, onDone }:
       timer.current = setInterval(() => void poll(createdJob.id, preview.curator), POLL_MS);
 
       const { data, error: err } = await supabase!.functions.invoke('shopmy-ingest', {
-        body: { url, dry_run: false, job_id: createdJob.id },
+        body: {
+          url, dry_run: false, job_id: createdJob.id,
+          section_ids: sectionIds, creator_handle: creatorHandle,
+          include_creator: includeCreator === true,
+        },
       });
       // functions.invoke() nulls `data` and throws on any non-2xx — this
       // ingest returns its partial-failure summary at HTTP 500, so recovering
@@ -181,7 +195,7 @@ export default function ShopMyIngest({ url, onClose, onDone }:
       // createProfileCrawlJob itself failed.
       if (created) poll(created.id, preview.curator).catch(() => {});
     }
-  }, [preview, url, poll]);
+  }, [preview, url, poll, sectionIds, creatorHandle, includeCreator]);
 
   const phase: IngestPhase | null = job ? phaseFor(job, INGEST_ESTIMATED_SECONDS) : null;
   const pct = job ? percentFor(job) : 0;

@@ -2,12 +2,14 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from '@remix-run/react';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
 import { listAdminCreators, type AdminCreatorRow } from '~/services/creators';
+import ShopMyImportWizard from '~/components/ShopMyImportWizard';
 
 export default function AdminCreators() {
   const [activeTab, setActiveTab] = useState<'creators' | 'incoming'>('creators');
   const [rows, setRows] = useState<AdminCreatorRow[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
+  const [importing, setImporting] = useState(false);
   const { sortedData, sort, handleSort } = useSortableTable(rows);
   const navigate = useNavigate();
 
@@ -42,8 +44,16 @@ export default function AdminCreators() {
 
       {activeTab === 'creators' ? (
         <>
-          {/* Task 8 mounts the ShopMy import wizard here. `load` is already
-              defined above so the wizard's onDone can refresh this list. */}
+          {importing ? (
+            <ShopMyImportWizard
+              onClose={() => setImporting(false)}
+              onDone={() => { setImporting(false); load(); }}
+            />
+          ) : (
+            <button className="admin-btn admin-btn-primary" onClick={() => setImporting(true)}>
+              Import from ShopMy
+            </button>
+          )}
           <div className="admin-table-wrap">
             <table className="admin-table">
               <thead>
