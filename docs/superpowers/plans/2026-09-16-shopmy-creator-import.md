@@ -1142,7 +1142,9 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 **Interfaces:**
 - Consumes: `creators.source` / `source_url` (Task 1).
-- Produces: `export interface AdminCreatorRow { handle: string; display_name: string; avatar_url: string | null; source: string | null; source_url: string | null; created_at: string | null; products: number; looks: number }` and `export async function listAdminCreators(): Promise<AdminCreatorRow[]>`.
+- Produces: `export interface AdminCreatorRow { handle: string; display_name: string; avatar_url: string | null; source: string | null; source_url: string | null; created_at: string | null; products: number; looks: number }` and `export async function listAdminCreators(): Promise<AdminCreatorRow[]>`. Also a `load()` callback in `AdminCreators` that Task 8 wires to the wizard's `onDone`.
+
+**Scope note:** this task ships the list only. The **Import from ShopMy** button is mounted in Task 8, which creates `ShopMyImportWizard` — importing it here would not typecheck.
 
 - [ ] **Step 1: Write the service**
 
@@ -1207,13 +1209,11 @@ import { useEffect, useState } from 'react';
 import { useNavigate } from '@remix-run/react';
 import { useSortableTable, SortableTh } from '~/components/SortableTable';
 import { listAdminCreators, type AdminCreatorRow } from '~/services/creators';
-import ShopMyImportWizard from '~/components/ShopMyImportWizard';
 
 export default function AdminCreators() {
   const [activeTab, setActiveTab] = useState<'creators' | 'incoming'>('creators');
   const [rows, setRows] = useState<AdminCreatorRow[]>([]);
   const [loading, setLoading] = useState(true);
-  const [importing, setImporting] = useState(false);
   const { sortedData, sort, handleSort } = useSortableTable(rows);
   const navigate = useNavigate();
 
@@ -1245,17 +1245,8 @@ export default function AdminCreators() {
 
       {activeTab === 'creators' ? (
         <>
-          {importing ? (
-            <ShopMyImportWizard
-              onClose={() => setImporting(false)}
-              onDone={() => { setImporting(false); load(); }}
-            />
-          ) : (
-            <button className="admin-btn admin-btn-primary" onClick={() => setImporting(true)}>
-              Import from ShopMy
-            </button>
-          )}
-
+          {/* Task 8 mounts the ShopMy import wizard here. `load` is already
+              defined above so the wizard's onDone can refresh this list. */}
           <div className="admin-table-wrap">
             <table className="admin-table">
               <thead>
@@ -1308,7 +1299,7 @@ Run: `npm run typecheck && npm run check:routes`
 
 Expected: no errors. (`check:routes` confirms the route registration at `vite.config.ts:251` still resolves — the path does not change, only the file's contents.)
 
-Then open `/admin/creators` in the preview. Expected: the real creator count in the tab badge, ShopMy-imported creators showing `source = shopmy` with a non-zero product count, and the four fake handles gone from the sidebar.
+Then open `/admin/creators` in the preview. Expected: the real creator count in the tab badge, ShopMy-imported creators showing `source = shopmy` with a non-zero product count, and the four fake handles gone from the sidebar. There is no Import button yet — Task 8 adds it.
 
 - [ ] **Step 5: Commit**
 
@@ -1499,7 +1490,7 @@ Co-Authored-By: Claude Opus 5 <noreply@anthropic.com>"
 
 **Files:**
 - Create: `app/components/ShopMyImportWizard.tsx`
-- Modify: `app/components/ShopMyIngest.tsx` (accept the wizard's choices), `app/styles/admin.css:3568,3602`
+- Modify: `app/components/ShopMyIngest.tsx` (accept the wizard's choices), `app/routes/admin/creators.tsx` (mount the wizard), `app/styles/admin.css:3568,3602`
 
 **Interfaces:**
 - Consumes: `canAdvance`, `toggleSection`, `WizardState`, `WizardSection` (Task 7); the edge function's `creator` / `sections` dry-run response (Task 3); `ShopMyIngest` for steps 4–5.
@@ -1805,7 +1796,38 @@ export default function ShopMyImportWizard({ onClose, onDone }: { onClose: () =>
 }
 ```
 
-- [ ] **Step 3: Verify the whole flow in the browser**
+- [ ] **Step 3: Mount the wizard on `/admin/creators`**
+
+Task 6 left a placeholder comment for this. In `app/routes/admin/creators.tsx`, add the import:
+
+```tsx
+import ShopMyImportWizard from '~/components/ShopMyImportWizard';
+```
+
+add the state next to the others:
+
+```tsx
+  const [importing, setImporting] = useState(false);
+```
+
+and replace the placeholder comment inside `activeTab === 'creators'` with:
+
+```tsx
+          {importing ? (
+            <ShopMyImportWizard
+              onClose={() => setImporting(false)}
+              onDone={() => { setImporting(false); load(); }}
+            />
+          ) : (
+            <button className="admin-btn admin-btn-primary" onClick={() => setImporting(true)}>
+              Import from ShopMy
+            </button>
+          )}
+```
+
+`onDone` calls `load()` so a finished import refreshes the creator list in place.
+
+- [ ] **Step 4: Verify the whole flow in the browser**
 
 Run: `npm run typecheck && npx vitest run`, then open `/admin/creators` in the preview and click **Import from ShopMy**.
 
@@ -1817,7 +1839,7 @@ Walk the flow with `https://shopmy.us/shop/justbobbidotcom`. Expected at each st
 4. The preview's collection count matches the six sections left ticked, not all nine.
 5. The progress bar runs and the landed-products table fills.
 
-- [ ] **Step 4: Verify the untick actually excluded those sections**
+- [ ] **Step 5: Verify the untick actually excluded those sections**
 
 ```sql
 select section_name, count(*)
@@ -1828,11 +1850,11 @@ select section_name, count(*)
 
 Expected: no `Home`, `Dogs` or `Discount Codes` rows from this run. (Rows written by Task 3's `Dogs` verification run may still be present — check `created_at` to tell them apart, or delete them first with `delete from creator_products where creator_handle='justbobbidotcom' and section_name='Dogs';`.)
 
-- [ ] **Step 5: Verify a non-ShopMy collision is blocked in the UI**
+- [ ] **Step 6: Verify a non-ShopMy collision is blocked in the UI**
 
 Restart the wizard, reach step 2, and retype the handle to a creator whose `source` is null. Expected: the red conflict panel appears and **Continue** is disabled — the guard fires in the UI as well as in the edge function.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
 git add app/components/ShopMyImportWizard.tsx app/components/ShopMyIngest.tsx
