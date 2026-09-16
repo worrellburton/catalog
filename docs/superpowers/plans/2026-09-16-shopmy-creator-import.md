@@ -133,11 +133,20 @@ declare
   v_linked  int := 0;
   v_seen    int := 0;
 begin
-  if jsonb_typeof(rows) <> 'array' then
+  -- `rows is null` first: jsonb_typeof(NULL) is NULL, so `NULL <> 'array'`
+  -- is NULL and PL/pgSQL treats a NULL IF condition as false — the guard
+  -- would never fire and the function would return missing: null.
+  if rows is null or jsonb_typeof(rows) <> 'array' then
     raise exception 'rows must be a jsonb array';
   end if;
 
-  select jsonb_array_length(rows) into v_seen;
+  -- Measured on the same basis as v_linked (post-dedup), so `missing` counts
+  -- only URLs with no matching products row. Counting raw array elements here
+  -- would report a within-batch duplicate — one product pinned into two
+  -- collections, which is routine — as if the product were absent.
+  select count(*) into v_seen
+    from (select distinct public.normalize_product_url(e->>'url')
+            from jsonb_array_elements(rows) as e) t;
 
   with incoming as (
     select distinct on (public.normalize_product_url(e->>'url'))
