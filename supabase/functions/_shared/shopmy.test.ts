@@ -276,6 +276,23 @@ Deno.test('mapCurator rejects a user block with no usable username', () => {
   assert(mapCurator({ username: '@@@', name: 'B' }) === null, 'nothing survives normalisation');
 });
 
+Deno.test('mapCurator rejects a username with no alphanumeric character', () => {
+  // creators.handle is NOT NULL, so an all-punctuation username must reject,
+  // not fall through as a garbage handle like "..." or "___".
+  assert(mapCurator({ username: '...', name: 'B' }) === null, 'all dots');
+  assert(mapCurator({ username: '___', name: 'B' }) === null, 'all underscores');
+  assert(mapCurator({ username: '._.', name: 'B' }) === null, 'dots and underscores only');
+  assert(mapCurator({ username: '日本語', name: 'B' }) === null, 'unicode-only, no ascii alphanumeric');
+});
+
+Deno.test('mapCurator trims leading/trailing punctuation but keeps a legitimate interior dot/underscore handle', () => {
+  assert(mapCurator({ username: ' -bobbi- ', name: 'B' })?.handle === 'bobbi', 'leading/trailing dash trimmed');
+  assert(
+    mapCurator({ username: 'bobbi.brown_1', name: 'B' })?.handle === 'bobbi.brown_1',
+    'a real handle with dots and underscores must survive untouched',
+  );
+});
+
 Deno.test('pinAffiliateUrl is a pure function of the pin id, with no clickId', () => {
   const u = pinAffiliateUrl(51354524);
   assert(u === 'https://go.shopmy.us/p-51354524', 'exact shape');

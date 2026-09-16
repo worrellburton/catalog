@@ -245,12 +245,15 @@ export interface MappedCurator {
  * "JustBobbi" and "justbobbi" both insert and then resolve ambiguously.
  */
 function normaliseHandle(raw: string): string {
-  return raw
+  const handle = raw
     .trim()
     .toLowerCase()
     .replace(/^@+/, '')
     .replace(/[^a-z0-9._-]+/g, '-')
-    .replace(/^-+|-+$/g, '');
+    .replace(/^[-._]+|[-._]+$/g, '');
+  // A handle made of only ".", "_", "-" (e.g. "...", "._.") would otherwise
+  // survive as garbage and pass the NOT NULL constraint on creators.handle.
+  return /[a-z0-9]/.test(handle) ? handle : '';
 }
 
 /** ShopMy's `user` block (from GET /api/Collections/:id) → a creators row. */
@@ -271,8 +274,12 @@ export function mapCurator(user: ShopMyUser): MappedCurator | null {
 }
 
 /**
- * The creator's own stable ShopMy link for one pin. A permanent 302 into
- * ShopMy's redirect_click carrying `cid=user-<curatorId>-pin-<pinId>`.
+ * The creator's own stable ShopMy link for one pin: a short link at
+ * `go.shopmy.us/p-<pinId>`, nothing else — no query string. ShopMy resolves
+ * this server-side, at click time, into a redirect through their own
+ * `redirect_click` endpoint; the `cid` that hop carries is minted by ShopMy
+ * at that moment, never by us, and must never be reconstructed and stored
+ * here.
  *
  * This is why we can store a link at all. ShopMy's own `affiliate_link` field
  * embeds a fresh `clickId` UUID on every fetch, so storing THAT made each
