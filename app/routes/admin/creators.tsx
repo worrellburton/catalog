@@ -6,6 +6,7 @@ import { listAdminCreators, type AdminCreatorRow } from '~/services/creators';
 export default function AdminCreators() {
   const [activeTab, setActiveTab] = useState<'creators' | 'incoming'>('creators');
   const [rows, setRows] = useState<AdminCreatorRow[]>([]);
+  const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const { sortedData, sort, handleSort } = useSortableTable(rows);
   const navigate = useNavigate();
@@ -13,7 +14,10 @@ export default function AdminCreators() {
   const load = () => {
     setLoading(true);
     listAdminCreators()
-      .then(setRows)
+      .then(({ rows, error }) => {
+        setRows(rows);
+        setError(error);
+      })
       .finally(() => setLoading(false));
   };
   useEffect(load, []);
@@ -54,7 +58,7 @@ export default function AdminCreators() {
               </thead>
               <tbody>
                 {sortedData.map((c) => (
-                  <tr key={c.handle} onClick={() => navigate(`/admin/creators/${c.handle}`)} style={{ cursor: 'pointer' }}>
+                  <tr key={c.handle} onClick={() => navigate(`/admin/creators/${encodeURIComponent(c.handle)}`)} style={{ cursor: 'pointer' }}>
                     <td>
                       {c.avatar_url
                         ? <img src={c.avatar_url} alt="" width={28} height={28} loading="lazy" style={{ borderRadius: '50%', verticalAlign: 'middle', marginRight: 8 }} />
@@ -72,7 +76,8 @@ export default function AdminCreators() {
             </table>
           </div>
           {loading && <p className="admin-form-hint">Loading creators…</p>}
-          {!loading && rows.length === 0 && <p className="admin-form-hint">No creators yet.</p>}
+          {!loading && error && <div className="admin-form-error">Failed to load creators: {error}</div>}
+          {!loading && !error && rows.length === 0 && <p className="admin-form-hint">No creators yet.</p>}
         </>
       ) : (
         <p className="admin-form-hint">No incoming creator applications.</p>
