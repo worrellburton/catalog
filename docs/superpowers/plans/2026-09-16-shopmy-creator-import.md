@@ -1354,6 +1354,21 @@ Expected: no errors. (`check:routes` confirms the route registration at `vite.co
 
 Then open `/admin/creators` in the preview. Expected: the real creator count in the tab badge, ShopMy-imported creators showing `source = shopmy` with a non-zero product count, and the four fake handles gone from the sidebar. There is no Import button yet — Task 8 adds it.
 
+> **Post-review amendments (commit `9e5c3029`).** Three defects in the code
+> above were found in review and fixed in the shipped files. Take those as
+> authoritative:
+>
+> 1. `listAdminCreators` ignored `creatorsRes.error`, so a failed read rendered
+>    as "No creators yet." — an empty state that lies about the database. It now
+>    returns `{ rows, error }` and the page renders an `admin-form-error`.
+> 2. The row click navigated to a raw handle while the destination route
+>    (`creators.$name.tsx:29`) unconditionally `decodeURIComponent`s it. Use
+>    `encodeURIComponent(c.handle)`.
+> 3. Tallying `creator_products` and `looks` client-side breaks at PostgREST's
+>    silent 1000-row cap — and since this feature imports ~425 products per
+>    creator, that is crossed at the THIRD import, not eventually. Replaced by
+>    the `admin_creator_stats()` RPC (migration `20260916000002`).
+
 - [ ] **Step 5: Commit**
 
 ```bash
