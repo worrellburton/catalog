@@ -11,7 +11,10 @@
 // degrades every other product in the catalog, not just the new ones.
 
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2';
-import { parseShopMyUrl, mapPin, type PinContext, type MappedProduct } from '../_shared/shopmy.ts';
+import {
+  parseShopMyUrl, mapPin, mapCurator, pinAffiliateUrl,
+  type PinContext, type MappedProduct, type ShopMyUser, type MappedCurator,
+} from '../_shared/shopmy.ts';
 import { urlAllowed } from '../_shared/ssrf-guard.ts';
 
 const API = 'https://apiv3.shopmy.us';
@@ -162,25 +165,40 @@ Deno.serve(async (req) => {
     const curatorLabel = username ?? String(curatorId);
 
     // ── 1. sections + collections ──────────────────────────────────────────
-    const listUrl = new URL(`${API}/api/Shop/Collections`);
-    // Curator_username and Curator_id are distinct upstream params — one is
-    // never a substitute for the other (verified against the live API: a
-    // numeric id passed as Curator_username returns success with an empty
-    // list). Send exactly whichever identifier this shop resolved to.
-    if (username) listUrl.searchParams.set('Curator_username', username);
-    else listUrl.searchParams.set('Curator_id', String(curatorId));
-    listUrl.searchParams.set('limit', '100');
-    if (sectionId != null) listUrl.searchParams.set('Section_id', String(sectionId));
+    // ShopMy returns only the FIRST section's collections when no Section_id
+    // is given (measured: 13 of 64 for the reference shop), so a multi-section
+    // import is genuinely one list call per section, not a filter.
+    const requestedSections: (number | null)[] = Array.isArray(body.section_ids) && body.section_ids.length
+      ? body.section_ids.map(Number).filter((n: number) => Number.isFinite(n))
+      : [sectionId];
 
-    const list = await getJson(listUrl.toString());
-    const sections: Array<{ id: number; title: string }> = list.sections ?? [];
-    let collections: Array<{ id: number; name: string; Section_id: number; User_username?: string | null }> =
-      list.collections ?? [];
-    // ShopMy paginates this list (`hasMoreCollections`); no paging parameter
-    // (offset/cursor/page) is documented or evident on the response, so we
-    // cannot request page 2. Surface the flag rather than silently ingesting
-    // only page 1 and reporting a collection count that looks complete.
-    const hasMore = list.hasMoreCollections === true;
+    async function listFor(sec: number | null) {
+      const listUrl = new URL(`${API}/api/Shop/Collections`);
+      // Curator_username and Curator_id are distinct upstream params — one is
+      // never a substitute for the other (verified against the live API: a
+      // numeric id passed as Curator_username returns success with an empty
+      // list). Send exactly whichever identifier this shop resolved to.
+      if (username) listUrl.searchParams.set('Curator_username', username);
+      else listUrl.searchParams.set('Curator_id', String(curatorId));
+      listUrl.searchParams.set('limit', '100');
+      if (sec != null) listUrl.searchParams.set('Section_id', String(sec));
+      return getJson(listUrl.toString());
+    }
+
+    const lists = await pooled(requestedSections, COLLECTION_CONCURRENCY, listFor);
+    const sections: Array<{ id: number; title: string }> = lists[0]?.sections ?? [];
+    const byId = new Map<number, { id: number; name: string; Section_id: number; User_username?: string | null }>();
+    let hasMore = false;
+    for (const l of lists) {
+      // ShopMy paginates this list (`hasMoreCollections`); no paging parameter
+      // (offset/cursor/page) is documented or evident on the response, so we
+      // cannot request page 2. Surface the flag rather than silently ingesting
+      // only page 1 and reporting a collection count that looks complete.
+      if (l?.hasMoreCollections === true) hasMore = true;
+      // Dedup by collection id — a section list can legitimately repeat one.
+      for (const c of (l?.collections ?? [])) byId.set(c.id, c);
+    }
+    let collections = Array.from(byId.values());
     if (body.max_collections) collections = collections.slice(0, Number(body.max_collections));
 
     if (collections.length === 0) {
@@ -202,6 +220,7 @@ Deno.serve(async (req) => {
     const mapped: MappedProduct[] = [];
     let pinCount = 0;
     const failures: string[] = [];
+    let curatorUser: ShopMyUser | null = null;
 
     await pooled(collections, COLLECTION_CONCURRENCY, async (c) => {
       let detail: any;
@@ -218,6 +237,8 @@ Deno.serve(async (req) => {
         collectionName: c.name,
         sectionName: sectionName(c.Section_id),
       };
+      // Whichever collection lands first wins; every one carries the same user.
+      if (!curatorUser && detail.user) curatorUser = detail.user as ShopMyUser;
       for (const pin of detail.pins ?? []) {
         pinCount++;
         const m = mapPin(pin, ctx);
@@ -239,12 +260,23 @@ Deno.serve(async (req) => {
       return true;
     });
 
+    // A wizard operator may retype the handle at step 2; their choice wins
+    // over ShopMy's username, but still gets normalised by mapCurator.
+    const mappedCurator: MappedCurator | null = curatorUser
+      ? mapCurator(
+          typeof body.creator_handle === 'string' && body.creator_handle.trim()
+            ? { ...curatorUser, username: body.creator_handle }
+            : curatorUser,
+        )
+      : null;
+
     const summary = {
       success: true, curator: username, section_id: sectionId,
       sections: sections.length, collections: collections.length,
       pins: pinCount, mapped: unique.length, skipped,
       failures: failures.length ? failures : undefined,
       has_more: hasMore,
+      creator: mappedCurator,
     };
 
     if (dryRun) {
@@ -263,7 +295,42 @@ Deno.serve(async (req) => {
       total_urls: unique.length,
     });
 
-    let inserted = 0, merged = 0, writeError: string | null = null;
+    // ── 3a. creator ────────────────────────────────────────────────────────
+    // Fails CLOSED on a collision with a real creator. A creators row whose
+    // source is not 'shopmy' belongs to a signed-up person; silently
+    // overwriting their display name, avatar and bio with a scraped
+    // storefront's would be a data-loss bug, not an import.
+    let creatorWritten = false;
+    if (body.include_creator === true) {
+      if (!mappedCurator) {
+        return json({ ...summary, success: false, error: 'ShopMy returned no user block for this shop' }, 502);
+      }
+      const { data: existing, error: lookupErr } = await admin
+        .from('creators').select('handle, source').eq('handle', mappedCurator.handle).maybeSingle();
+      if (lookupErr) {
+        return json({ ...summary, success: false, error: `creator lookup failed: ${lookupErr.message}` }, 500);
+      }
+      if (existing && existing.source !== 'shopmy') {
+        return json({
+          ...summary, success: false,
+          error: `handle "${mappedCurator.handle}" already belongs to a non-ShopMy creator — choose a different handle`,
+        }, 409);
+      }
+      const { error: creatorErr } = await admin.from('creators').upsert({
+        handle: mappedCurator.handle,
+        display_name: mappedCurator.display_name,
+        avatar_url: mappedCurator.avatar_url,
+        bio: mappedCurator.bio,
+        source: 'shopmy',
+        source_url: typeof body.url === 'string' ? body.url : null,
+      }, { onConflict: 'handle' });
+      if (creatorErr) {
+        return json({ ...summary, success: false, error: `creator write failed: ${creatorErr.message}` }, 500);
+      }
+      creatorWritten = true;
+    }
+
+    let inserted = 0, merged = 0, linked = 0, writeError: string | null = null;
     try {
       for (let i = 0; i < unique.length; i += batchSize) {
         const batch = unique.slice(i, i + batchSize);
@@ -274,6 +341,33 @@ Deno.serve(async (req) => {
         }
         inserted += data?.inserted ?? 0;
         merged += data?.merged ?? 0;
+
+        // Link AFTER the upsert, per batch: the products must exist for the
+        // RPC's join on normalize_product_url to resolve them. Note this
+        // links every row in the batch, not just the ones the upsert touched
+        // — an unchanged product still belongs to this creator.
+        if (creatorWritten && mappedCurator) {
+          const linkRows = batch.map((m, j) => {
+            const sm = (m.raw_data?.shopmy ?? {}) as Record<string, unknown>;
+            const pinId = Number(sm.pin_id);
+            return {
+              url: m.url,
+              pin_id: Number.isFinite(pinId) ? pinId : null,
+              affiliate_url: Number.isFinite(pinId) ? pinAffiliateUrl(pinId) : null,
+              collection_name: (sm.collection_name as string) ?? null,
+              section_name: (sm.section_name as string) ?? null,
+              sort_order: i + j,
+            };
+          });
+          const { data: linkData, error: linkErr } = await admin
+            .rpc('shopmy_link_creator_products', { p_handle: mappedCurator.handle, rows: linkRows });
+          if (linkErr) {
+            writeError = `link batch ${Math.floor(i / batchSize)}: ${linkErr.message}`;
+            break;
+          }
+          linked += linkData?.linked ?? 0;
+        }
+
         await patchJob(jobId, { scraped_urls: inserted + merged });
         if (i + batchSize < unique.length && delayMs > 0) await sleep(delayMs);
       }
@@ -293,6 +387,7 @@ Deno.serve(async (req) => {
 
     return json(
       { ...summary, success: !writeError, dry_run: false, inserted, merged,
+        creator_written: creatorWritten, linked,
         batch_size: batchSize, batch_delay_ms: delayMs,
         error: writeError ?? undefined },
       writeError ? 500 : 200,
