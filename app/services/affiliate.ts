@@ -112,21 +112,46 @@ function isWrappable(url: string): boolean {
   }
 }
 
+export interface RailProduct {
+  brand?: string | null;
+  name?: string | null;
+  id?: string | null;
+  /** Rail 0 — a creator's own link for this product (creator_products). */
+  affiliate_url?: string | null;
+}
+
+/**
+ * Which rail carries this clickout, and the link if that rail returns one
+ * untouched. Extracted from affiliateRedirect so the decision — the whole
+ * feature — is unit-testable without a supabase client or crypto.
+ *
+ * Order: creator link → direct tracked link → Shopnomix wrap → bare URL.
+ */
+export function pickRail(
+  url: string,
+  product?: RailProduct | null,
+  tracked?: string | null,
+): { link: string | null; rail: string; wrappable: boolean } {
+  const creatorLink = product?.affiliate_url || null;
+  if (creatorLink) return { link: creatorLink, rail: 'shopmy', wrappable: false };
+  if (tracked) return { link: tracked, rail: 'affiliate.com', wrappable: false };
+  const wrappable = isWrappable(url);
+  return { link: null, rail: wrappable ? 'shopnomix' : 'direct', wrappable };
+}
+
 /** Wraps an outbound product URL in the Shopnomix redirect and records
  *  the click (with creator attribution) under the returned cid.
  *  Synchronous by design — the redirect URL is built immediately so the
  *  popup/new-tab call keeps its user-gesture; the DB write trails async. */
 export function affiliateRedirect(
   url: string,
-  product?: { brand?: string | null; name?: string | null; id?: string | null } | null,
+  product?: RailProduct | null,
 ): string {
   loadEnabled();
   loadTracked();
   if (!url || !enabled) return url;
-  // Rail 1: a direct tracked link for THIS product wins, untouched.
-  const tracked = product?.id ? trackedByProduct.get(product.id) ?? null : null;
-  const wrappable = !tracked && isWrappable(url);
-  const rail = tracked ? 'affiliate.com' : wrappable ? 'shopnomix' : 'direct';
+  const trackedLink = product?.id ? trackedByProduct.get(product.id) ?? null : null;
+  const { link, rail, wrappable } = pickRail(url, product, trackedLink);
   const cid = typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : '';
 
   if (supabase && cid) {
@@ -153,7 +178,7 @@ export function affiliateRedirect(
     })();
   }
 
-  if (tracked) return tracked;
+  if (link) return link;
   if (!wrappable || !cid) return url;
   const params = new URLSearchParams({
     campaign_id: SHOPNOMIX_CONTENT_CAMPAIGN,
