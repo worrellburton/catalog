@@ -47,13 +47,19 @@ function labelFor(raw: string): string {
   }
 }
 
-export default function ShopMyIngest({ url, sectionIds, creatorHandle, includeCreator, onClose, onDone }:
+export default function ShopMyIngest({
+  url, sectionIds, creatorHandle, creatorDisplayName, creatorBio, includeCreator, onClose, onDone,
+}:
   {
     url: string;
     /** Wizard step 3's selection. Undefined ingests whatever the URL addresses. */
     sectionIds?: number[];
     /** Wizard step 2's (possibly edited) handle. */
     creatorHandle?: string;
+    /** Wizard step 2's (possibly edited) display name. Blank keeps ShopMy's. */
+    creatorDisplayName?: string;
+    /** Wizard step 2's (possibly edited) bio. Blank keeps ShopMy's. */
+    creatorBio?: string;
     /** False keeps the legacy products-only behaviour. */
     includeCreator?: boolean;
     onClose: () => void;
@@ -80,7 +86,10 @@ export default function ShopMyIngest({ url, sectionIds, creatorHandle, includeCr
     setBusy(true); setError(null);
     try {
       const { data, error: err } = await supabase!.functions.invoke('shopmy-ingest', {
-        body: { url, dry_run: true, section_ids: sectionIds, creator_handle: creatorHandle },
+        body: {
+          url, dry_run: true, section_ids: sectionIds, creator_handle: creatorHandle,
+          creator_display_name: creatorDisplayName, creator_bio: creatorBio,
+        },
       });
       const p = data ?? (err ? await edgeBody(err) : null);
       if (!p?.success) throw new Error(p?.error ?? (err as Error)?.message ?? 'preview failed');
@@ -90,7 +99,7 @@ export default function ShopMyIngest({ url, sectionIds, creatorHandle, includeCr
     } finally {
       setBusy(false);
     }
-  }, [url, sectionIds, creatorHandle]);
+  }, [url, sectionIds, creatorHandle, creatorDisplayName, creatorBio]);
 
   useEffect(() => { void runPreview(); }, [runPreview]);
 
@@ -162,6 +171,7 @@ export default function ShopMyIngest({ url, sectionIds, creatorHandle, includeCr
         body: {
           url, dry_run: false, job_id: createdJob.id,
           section_ids: sectionIds, creator_handle: creatorHandle,
+          creator_display_name: creatorDisplayName, creator_bio: creatorBio,
           include_creator: includeCreator === true,
         },
       });
@@ -195,7 +205,7 @@ export default function ShopMyIngest({ url, sectionIds, creatorHandle, includeCr
       // createProfileCrawlJob itself failed.
       if (created) poll(created.id, preview.curator).catch(() => {});
     }
-  }, [preview, url, poll, sectionIds, creatorHandle, includeCreator]);
+  }, [preview, url, poll, sectionIds, creatorHandle, creatorDisplayName, creatorBio, includeCreator]);
 
   const phase: IngestPhase | null = job ? phaseFor(job, INGEST_ESTIMATED_SECONDS) : null;
   const pct = job ? percentFor(job) : 0;

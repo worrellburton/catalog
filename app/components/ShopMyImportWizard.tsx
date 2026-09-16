@@ -28,6 +28,10 @@ async function edgeBody(err: unknown): Promise<Record<string, unknown> | null> {
   try { return await ctx.json(); } catch { return null; }
 }
 
+/** Collision verdict for the handle currently in the step-2 box.
+ *  'unknown' = the lookup itself failed; deliberately not `null`. */
+type Existing = 'update' | 'conflict' | 'unknown' | null;
+
 const EMPTY: WizardState = {
   step: 1, url: '', handle: '', displayName: '', bio: '', sections: [], selectedSections: [],
 };
@@ -36,7 +40,7 @@ export default function ShopMyImportWizard({ onClose, onDone }: { onClose: () =>
   const [s, setS] = useState<WizardState>(EMPTY);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [existing, setExisting] = useState<string | null>(null);
+  const [existing, setExisting] = useState<Existing>(null);
 
   const blocked = canAdvance(s);
 
@@ -45,15 +49,31 @@ export default function ShopMyImportWizard({ onClose, onDone }: { onClose: () =>
   // step 2 (e.g. to dodge a collision), and typing a different real
   // creator's handle back in must re-arm the guard just as surely as the
   // first resolution did. Debounced so it doesn't fire a query per keystroke.
+  //
+  // `ignore` matters as much as the debounce: the timer is cancellable but
+  // the query it fired is not, so without it a slow lookup for handle A can
+  // resolve after a later one for handle B and overwrite B's verdict — and
+  // the stale value that wins is as likely to be `null` (no conflict) as
+  // not, which is exactly the direction this guard exists to prevent.
   useEffect(() => {
     if (s.step !== 2) return;
     const handle = s.handle.trim();
     if (!handle) { setExisting(null); return; }
+    let ignore = false;
     const t = setTimeout(() => {
       supabase!.from('creators').select('handle, source').eq('handle', handle).maybeSingle()
-        .then(({ data: hit }) => setExisting(hit ? (hit.source === 'shopmy' ? 'update' : 'conflict') : null));
+        .then(({ data: hit, error: err }) => {
+          if (ignore) return;
+          // A failed lookup is NOT "no conflict" — an RLS or network error
+          // read as `null` would silently unblock an import over a real
+          // non-ShopMy creator. Say so instead. The edge function runs the
+          // same check server-side and refuses the write, so this stays a
+          // warning rather than a dead end the operator cannot escape.
+          if (err) setExisting('unknown');
+          else setExisting(hit ? (hit.source === 'shopmy' ? 'update' : 'conflict') : null);
+        });
     }, 300);
-    return () => clearTimeout(t);
+    return () => { ignore = true; clearTimeout(t); };
   }, [s.step, s.handle]);
 
   // Step 1 → 2. One dry-run against the whole shop resolves both the creator
@@ -98,8 +118,15 @@ export default function ShopMyImportWizard({ onClose, onDone }: { onClose: () =>
         const { data, error: err } = await supabase!.functions.invoke('shopmy-ingest', {
           body: { url: s.url.trim(), dry_run: true, section_ids: [sec.id] },
         });
-        const p = (data ?? (err ? await edgeBody(err) : null)) as { collections?: number; pins?: number } | null;
-        return { ...sec, collections: p?.collections ?? 0, pins: p?.pins ?? 0 };
+        const p = (data ?? (err ? await edgeBody(err) : null)) as
+          { success?: boolean; collections?: number; pins?: number } | null;
+        // invoke() resolves with {data:null, error} rather than rejecting, so
+        // Promise.all never sees a failed probe. Shown as 0/0 it reads as an
+        // empty section, and the operator unticks content they meant to keep.
+        if (!p?.success || typeof p.collections !== 'number' || typeof p.pins !== 'number') {
+          return { ...sec, collections: 0, pins: 0, failed: true };
+        }
+        return { ...sec, collections: p.collections, pins: p.pins, failed: false };
       }));
       setS((prev) => ({ ...prev, step: 3, sections: counted }));
     } catch (e) {
@@ -115,6 +142,8 @@ export default function ShopMyImportWizard({ onClose, onDone }: { onClose: () =>
         url={s.url.trim()}
         sectionIds={s.selectedSections}
         creatorHandle={s.handle.trim()}
+        creatorDisplayName={s.displayName.trim()}
+        creatorBio={s.bio.trim()}
         includeCreator
         onClose={onClose}
         onDone={onDone}
@@ -155,6 +184,13 @@ export default function ShopMyImportWizard({ onClose, onDone }: { onClose: () =>
           {existing === 'update' && (
             <p className="admin-form-hint">Already imported — this run will update that creator.</p>
           )}
+          {existing === 'unknown' && (
+            <p className="admin-form-hint">
+              Could not check whether <strong>{s.handle}</strong> is already taken. The import itself
+              still refuses to overwrite a non-ShopMy creator, so it is safe to continue — but this
+              warning is not a clean bill of health.
+            </p>
+          )}
           {existing === 'conflict' && (
             <div className="admin-form-error">
               <strong>{s.handle}</strong> already belongs to a creator who did not come from ShopMy.
@@ -184,6 +220,12 @@ export default function ShopMyImportWizard({ onClose, onDone }: { onClose: () =>
           <p className="admin-form-hint">
             Untick anything that is not fashion — those pins are never fetched.
           </p>
+          {s.sections.some((sec) => sec.failed) && (
+            <p className="admin-form-hint">
+              A dash means that section could not be read just now — its real contents are unknown,
+              not empty. Leave it ticked unless you are sure you do not want it.
+            </p>
+          )}
           <div className="admin-table-wrap">
             <table className="admin-table">
               <thead><tr><th /><th>Section</th><th>Collections</th><th>Pins</th></tr></thead>
@@ -199,8 +241,12 @@ export default function ShopMyImportWizard({ onClose, onDone }: { onClose: () =>
                       />
                     </td>
                     <td>{sec.title}</td>
-                    <td>{sec.collections}</td>
-                    <td>{sec.pins}</td>
+                    <td title={sec.failed ? 'could not read' : undefined}>
+                      {sec.failed ? '—' : sec.collections}
+                    </td>
+                    <td title={sec.failed ? 'could not read' : undefined}>
+                      {sec.failed ? '—' : sec.pins}
+                    </td>
                   </tr>
                 ))}
               </tbody>
@@ -218,9 +264,12 @@ export default function ShopMyImportWizard({ onClose, onDone }: { onClose: () =>
             Back
           </button>
         )}
+        {/* The conflict panel only renders on step 2, so the block it explains
+            must only apply there too — otherwise Back from a conflict lands on
+            step 1 with a dead Continue button and nothing saying why. */}
         <button
           className="admin-btn admin-btn-primary"
-          disabled={busy || blocked !== null || existing === 'conflict'}
+          disabled={busy || blocked !== null || (s.step === 2 && existing === 'conflict')}
           onClick={() => {
             if (s.step === 1) return void resolve();
             if (s.step === 2) return void countSections();

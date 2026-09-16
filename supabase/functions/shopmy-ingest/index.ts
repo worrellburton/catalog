@@ -297,12 +297,27 @@ Deno.serve(async (req) => {
 
     // A wizard operator may retype the handle at step 2; their choice wins
     // over ShopMy's username, but still gets normalised by mapCurator.
-    const mappedCurator: MappedCurator | null = captured
+    const base: MappedCurator | null = captured
       ? mapCurator(
           typeof body.creator_handle === 'string' && body.creator_handle.trim()
             ? { ...captured, username: body.creator_handle }
             : captured,
         )
+      : null;
+
+    // Step 2 of the wizard lets an operator retype the handle, the display
+    // name and the bio before committing. Their values win over ShopMy's,
+    // but only when non-blank — an omitted or whitespace-only override must
+    // leave the scraped value intact, not erase it. creators.display_name is
+    // NOT NULL, so the fallback chain must never yield an empty string.
+    const nameOverride = typeof body.creator_display_name === 'string' ? body.creator_display_name.trim() : '';
+    const bioOverride = typeof body.creator_bio === 'string' ? body.creator_bio.trim() : '';
+    const mappedCurator: MappedCurator | null = base
+      ? {
+          ...base,
+          display_name: nameOverride || base.display_name,
+          bio: bioOverride || base.bio,
+        }
       : null;
 
     const summary = {

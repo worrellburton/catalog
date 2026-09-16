@@ -10,6 +10,8 @@ export interface WizardSection {
   title: string;
   collections: number;
   pins: number;
+  /** The per-section probe failed — `collections`/`pins` are unknown, not 0. */
+  failed?: boolean;
 }
 
 export interface WizardState {
