@@ -161,6 +161,47 @@ Deno.test('rewrites a pins-bucket S3 image URL to the ShopMy CDN', () => {
   assert(m.images[0] === m.image_url, 'images[0] must match image_url');
 });
 
+Deno.test('rewrites a dash-form S3 region host (s3-us-east-2, no dot) to the ShopMy CDN', () => {
+  // AWS has two legacy/region host forms: `.s3.<region>.` (dot) and
+  // `.s3-<region>.` (dash). ShopMy emits both; only the dot form was
+  // previously handled, leaving dash-form urls as unrewritten 403s.
+  const m = mapPin(
+    { id: 1, title: 'Thing', link: 'https://shop.example.com/a-real-item',
+      image: 'https://production-shopmyshelf-uploads.s3-us-east-2.amazonaws.com/eef28f3f-67c9-423f-b834-1f81840d4f4e_cnp5298_chocolate_xl_4.jpeg',
+      product: { AllBrand_name: 'X', fallbackPrice: 5, fallbackPriceCurrency: 'USD' } } as any,
+    CTX,
+  ) as any;
+  assert(!('skip' in m), 'should not skip');
+  assert(
+    m.image_url === 'https://static.shopmy.us/uploads/eef28f3f-67c9-423f-b834-1f81840d4f4e_cnp5298_chocolate_xl_4.jpeg',
+    `expected CDN url, got ${m.image_url}`,
+  );
+  assert(m.images[0] === m.image_url, 'images[0] must match image_url');
+});
+
+Deno.test('rewrites a dash-form S3 region host on the pins bucket to the ShopMy CDN', () => {
+  const m = mapPin(
+    { id: 1, title: 'Thing', link: 'https://shop.example.com/a-real-item',
+      image: 'https://production-shopmyshelf-pins.s3-us-east-2.amazonaws.com/zoom-78911874-Skyler-Black-1.jpg',
+      product: { AllBrand_name: 'X', fallbackPrice: 5, fallbackPriceCurrency: 'USD' } } as any,
+    CTX,
+  ) as any;
+  assert(!('skip' in m), 'should not skip');
+  assert(m.image_url === 'https://static.shopmy.us/pins/zoom-78911874-Skyler-Black-1.jpg', `expected CDN url, got ${m.image_url}`);
+  assert(m.images[0] === m.image_url, 'images[0] must match image_url');
+});
+
+Deno.test('does not rewrite a lookalike host that merely embeds the S3 pattern in its path', () => {
+  const raw = 'https://evil.com/production-shopmyshelf-uploads.s3-us-east-2.amazonaws.com/x';
+  const m = mapPin(
+    { id: 1, title: 'Thing', link: 'https://shop.example.com/a-real-item', image: raw,
+      product: { AllBrand_name: 'X', fallbackPrice: 5, fallbackPriceCurrency: 'USD' } } as any,
+    CTX,
+  ) as any;
+  assert(!('skip' in m), 'should not skip');
+  assert(m.image_url === raw, `must not rewrite a non-S3-host lookalike, got ${m.image_url}`);
+});
+
 Deno.test('leaves a non-S3 image URL unchanged', () => {
   const m = mapPin(
     { id: 1, title: 'Thing', link: 'https://shop.example.com/a-real-item',
